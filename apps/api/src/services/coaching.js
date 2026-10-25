@@ -24,6 +24,7 @@ const { BUILD_INTENT_LABEL_PROJECTION, detectorView } = require("./buildIntentSh
 const { detectorLabelMatch } = require("./buildIntentReaders");
 const { randomUUID } = require("node:crypto");
 const { deliverCoachingNotification } = require("./notificationDelivery");
+const { ASSIGNMENT_STATES, assignmentStateMatch, assignmentStateCounts } = require("./coachingAssignmentState");
 
 const DOC_ID = "locker";
 const CALENDAR_PREFIX = "calendar:";
@@ -1019,10 +1020,12 @@ class CoachingService {
    *
    * @param {string} userId
    * @param {{role:string,coachId?:string,studentId?:string}} coachingRole
-   * @param {{studentId?:string,page?:number,limit?:number,paginated?:boolean}|undefined} options
+   * @param {{studentId?:string,page?:number,limit?:number,paginated?:boolean,state?:string}|undefined} options
    */
   async listAssignments(userId, coachingRole, options) {
     const context = await this._assignmentContext(userId, coachingRole);
+    const now = this._assignmentNow();
+    if (options?.state && !ASSIGNMENT_STATES.includes(options.state)) throw coachingError(400, "invalid_assignment_state", "Choose active, upcoming, ended or cancelled.");
     /** @type {Record<string, any>} */
     const filter = { kind: ASSIGNMENT_KIND };
     const requestedStudentId = safeIdentity(options && options.studentId);
@@ -1054,23 +1057,22 @@ class CoachingService {
         relationships = relationships.filter((item) => item.studentId === requestedStudentId);
       }
       if (relationships.length === 0) {
-        return paginated ? { assignments: [], page, limit, hasMore: false } : [];
+        return paginated ? { assignments: [], page, limit, hasMore: false, counts: { all: 0, active: 0, upcoming: 0, ended: 0, cancelled: 0 } } : [];
       }
       filter.$or = relationships;
     }
     const requestedLimit = paginated ? limit : ASSIGNMENT_LIST_CAP;
-    const docs = await this.db.coaching
-      .find(filter)
+    const [docs, counts] = await Promise.all([this.db.coaching
+      .find({ ...filter, ...assignmentStateMatch(options?.state, now) })
       .sort({ createdAt: -1, _id: -1 })
       .skip(paginated ? (page - 1) * limit : 0)
       .limit(requestedLimit + (paginated ? 1 : 0))
-      .toArray();
-    const now = this._assignmentNow();
+      .toArray(), paginated ? assignmentStateCounts(this.db.coaching, filter, now) : Promise.resolve(null)]);
     const assignments = await Promise.all(docs.slice(0, requestedLimit).map((doc) =>
       this._assignmentResponse(doc, context.roster, now, { includeGames: false }),
     ));
     return paginated
-      ? { assignments, page, limit, hasMore: docs.length > limit }
+      ? { assignments, page, limit, hasMore: docs.length > limit, counts }
       : assignments;
   }
 
@@ -1092,19 +1094,23 @@ class CoachingService {
     const page = boundedPositiveInteger(options && options.page, 1, 10_000, 1);
     const limit = boundedPositiveInteger(options && options.limit, 1, 100, 25);
     const match = assignmentGameMatch(assignment);
-    const [total, rows] = await Promise.all([
+    const [total, rows, wins, losses] = await Promise.all([
       this.db.games.countDocuments(match),
       this.db.games.find(match, { projection: assignmentGameProjection() })
         .sort({ date: -1, _id: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
         .toArray(),
+      this.db.games.countDocuments({ ...match, result: /^(victory|win)$/i }),
+      this.db.games.countDocuments({ ...match, result: /^(defeat|loss)$/i }),
     ]);
     return {
       assignmentId: assignment.id,
       page,
       limit,
       total,
+      wins,
+      losses,
       hasMore: page * limit < total,
       games: rows.map((game) => serializeAssignmentGame(assignment.id, game)),
     };
@@ -1322,15 +1328,10 @@ class CoachingService {
       }));
     const match = assignmentGameMatch(assignment);
     const groupExpression = assignmentGroupExpression(requirement);
-    const countPipeline = groupExpression
-      ? [
-        { $match: match },
-        { $group: { _id: groupExpression, playedGames: { $sum: 1 } } },
-      ]
-      : [
-        { $match: match },
-        { $count: "playedGames" },
-      ];
+    const countPipeline = [
+      { $match: match },
+      { $group: { _id: groupExpression, playedGames: { $sum: 1 }, lastGameAt: { $max: "$date" } } },
+    ];
     const includeGames = !options || options.includeGames !== false;
     const [countRows, gameRows] = await Promise.all([
       this.db.games.aggregate(countPipeline).toArray(),
@@ -1344,6 +1345,7 @@ class CoachingService {
         : Promise.resolve([]),
     ]);
     const counts = assignmentCountsByBucket(requirement, countRows);
+    const lastGameTime = countRows.reduce((latest, row) => Math.max(latest, toDate(row.lastGameAt).getTime()), 0);
     const gamesTruncated = gameRows.length > ASSIGNMENT_GAME_LIST_CAP;
     const replayGames = gameRows
       .slice(0, ASSIGNMENT_GAME_LIST_CAP)
@@ -1398,6 +1400,7 @@ class CoachingService {
       games: currentGames,
       replayGames,
       replayGameCount: playedGames,
+      lastGameAt: lastGameTime > 0 ? new Date(lastGameTime).toISOString() : null,
       gamesTruncated,
     };
   }

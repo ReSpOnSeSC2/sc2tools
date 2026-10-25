@@ -169,6 +169,49 @@ describe("coaching game assignments", () => {
     expect(progress.games.map((g) => g.gameId)).toEqual(["visible"]);
   });
 
+  test("filters stored UTC state boundaries and counts only the same live accepted grant without extra progress", async () => {
+    const created = await service.createAssignment("coach-user", coachRole, "student-1", definition());
+    const base = await assignmentDoc(created.id);
+    await db.coaching.deleteOne({ _id: base._id });
+    const now = new Date("2026-09-04T16:00:00.000Z"), later = new Date("2026-09-05T16:00:00.000Z");
+    const row = (id, status, startsAt, endsAt, extra = {}) => ({ ...base, _id: `assignment:${id}`, id, clientRequestId: id, status, requirement: { ...base.requirement, startsAt, endsAt }, ...extra });
+    await db.coaching.insertMany([
+      row("active", "active", now, later), row("upcoming", "active", later, new Date("2026-09-06T16:00:00Z")),
+      row("ended", "active", new Date("2026-09-01T04:00:00Z"), now), row("cancelled", "cancelled", now, later, { cancelledAt: now }),
+      row("old-grant", "active", now, later, { practiceSharingGrantId: "revoked-grant" }),
+      row("other-coach", "active", now, later, { studentId: "student-2", studentUserId: "student-user-2", coachId: "coach-2", coachUserId: "other-coach-user", practiceSharingGrantId: "grant-student-2" }),
+    ]);
+    const progress = jest.spyOn(service, "_assignmentProgress");
+    const active = await service.listAssignments("coach-user", coachRole, { state: "active", paginated: true });
+    expect(active.counts).toEqual({ all: 4, active: 1, upcoming: 1, ended: 1, cancelled: 1 });
+    expect(active.assignments.map(item => item.id)).toEqual(["active"]); expect(progress).toHaveBeenCalledTimes(1);
+    for (const state of ["upcoming", "ended", "cancelled"]) {
+      const result = await service.listAssignments("coach-user", coachRole, { state, paginated: true });
+      expect(result.assignments.map(item => item.id)).toEqual([state]); expect(result.counts).toEqual(active.counts);
+    }
+    await expect(service.listAssignments("coach-user", coachRole, { state: "invented", paginated: true })).rejects.toMatchObject({ status: 400 });
+    progress.mockRestore();
+  });
+
+  test("derives last qualifying game in the existing count aggregation and evidence W-L over all pages", async () => {
+    const created = await service.createAssignment("coach-user", coachRole, "student-1", definition());
+    await assignmentDoc(created.id);
+    const empty = await service.listAssignments("coach-user", coachRole, { paginated: true });
+    expect(empty.assignments[0].progress.lastGameAt).toBeNull();
+    await game("first-win", { date: new Date("2026-09-03T13:00:00Z") });
+    await game("second-win", { result: "WIN", date: new Date("2026-09-04T12:00:00Z") });
+    await game("one-loss", { result: "Defeat", date: new Date("2026-09-04T13:00:00Z") });
+    await game("tie", { result: "Tie", date: new Date("2026-09-04T14:00:00Z") });
+    await game("hidden-late", { excluded: true, date: new Date("2026-09-04T15:00:00Z") });
+    const aggregate = jest.spyOn(db.games, "aggregate"), find = jest.spyOn(db.games, "find");
+    const listed = await service.listAssignments("coach-user", coachRole, { paginated: true });
+    expect(listed.assignments[0].progress.lastGameAt).toBe("2026-09-04T14:00:00.000Z");
+    expect(aggregate).toHaveBeenCalledTimes(1); expect(find).not.toHaveBeenCalled();
+    const evidence = await service.assignmentGames("coach-user", coachRole, created.id, { page: 2, limit: 1 });
+    expect(evidence).toMatchObject({ total: 4, wins: 2, losses: 1, page: 2 });
+    expect(evidence.games).toHaveLength(1); aggregate.mockRestore(); find.mockRestore();
+  });
+
   test("requires explicit account-bound student consent and enforces revocation immediately", async () => {
     await db.coaching.updateOne(
       { _id: "locker" },
@@ -1215,6 +1258,12 @@ describe("coaching game assignments", () => {
         paginated: true,
       }),
     );
+    await request(app).get("/v1/coaching/assignments?state=ended").expect(200);
+    expect(coaching.listAssignments).toHaveBeenLastCalledWith("coach-user", coachRole, expect.objectContaining({ state: "ended" }));
+    const allowedCalls = coaching.listAssignments.mock.calls.length;
+    await request(app).get("/v1/coaching/assignments?state=unknown").expect(400);
+    await request(app).get("/v1/coaching/assignments?state=active&state=ended").expect(400);
+    expect(coaching.listAssignments).toHaveBeenCalledTimes(allowedCalls);
     await request(app)
       .post("/v1/coaching/students/student-1/assignments")
       .send(definition())

@@ -1,27 +1,23 @@
 "use client";
 
-/* eslint-disable max-lines -- the assignment workflow and evidence card share one state boundary */
-
 import { useAuth } from "@clerk/nextjs";
 import {
-  CalendarDays,
-  CheckCircle2,
   CircleDot,
-  Gamepad2,
   ListChecks,
   Plus,
   ShieldCheck,
   Target,
-  XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ReplayDownloadButton } from "@/components/analyzer/ReplayDownloadButton";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Field } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Select";
 import { AssignmentModal } from "./AssignmentModal";
+import { AssignmentCard } from "./AssignmentCard";
+import { PracticeSharingPanel } from "./PracticeSharingPanel";
+import { PracticeRoster } from "./PracticeRoster";
 import { assignmentTimeZone, rememberAssignmentTimeZone } from "./coachingAssignmentPreferences";
 import { useToast } from "@/components/ui/Toast";
 import { apiCall, useApi } from "@/lib/clientApi";
@@ -34,30 +30,28 @@ import {
   addDays,
   buildId,
   buildSuggestionKey,
-  cadenceNoun,
-  formatGameDate,
-  formatWindow,
   localDateKey,
-  progressStateLabel,
+  nextWindowDraft,
   requestId,
-  requirementDetail,
   requirementTitle,
-  statePill,
   validateAssignmentDraft,
   type AssignmentDraft,
-  type AssignmentGamesPayload,
+  type AssignmentFilter,
   type AssignmentsPayload,
   type BuildSuggestion,
   type CoachingRole,
   type LockerStatePayload,
   type PracticeAssignment,
   type PracticeSharingPayload,
-  type PracticeSharingRelationship,
   type SlimGame,
-  type Student,
 } from "./coachingPracticeModel";
 
 export default function CoachingPractice({ role }: { role: CoachingRole }) {
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  return isLoaded && isSignedIn && userId ? <PracticeWorkspace key={userId} role={role} /> : <PracticeSkeleton />;
+}
+
+function PracticeWorkspace({ role }: { role: CoachingRole }) {
   const canManage = role === "admin" || role === "coach";
   const timeZone = useLocalTimeZone();
   const roster = useApi<LockerStatePayload>(canManage ? "/v1/coaching/state" : null);
@@ -67,6 +61,9 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
   });
   const [studentId, setStudentId] = useState("");
   const [assignmentPage, setAssignmentPage] = useState(1);
+  const [stateFilter, setStateFilter] = useState<AssignmentFilter | null>(null);
+  const allPlayers = canManage && !studentId;
+  const filterQuery = (stateFilter ?? "active") === "all" ? "" : `&state=${stateFilter ?? "active"}`;
   const selectedSharing = sharing.data?.relationships.find(
     (relationship) => relationship.student.id === studentId,
   ) || null;
@@ -74,14 +71,16 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
     ? selectedSharing
     : sharing.data?.relationships[0] || null;
   const assignmentsPath = canManage
-    ? (studentId && selectedSharing?.status === "accepted"
-      ? `/v1/coaching/assignments?studentId=${encodeURIComponent(studentId)}&page=${assignmentPage}&limit=20`
+    ? (allPlayers ? "/v1/coaching/assignments?state=active&limit=100" : studentId && selectedSharing?.status === "accepted"
+      ? `/v1/coaching/assignments?studentId=${encodeURIComponent(studentId)}&page=${assignmentPage}&limit=20${filterQuery}`
       : null)
-    : `/v1/coaching/assignments?page=${assignmentPage}&limit=20`;
+    : `/v1/coaching/assignments?page=${assignmentPage}&limit=20${filterQuery}`;
   const assignments = useApi<AssignmentsPayload>(assignmentsPath, {
     revalidateOnFocus: true,
     refreshInterval: 30_000,
-  });
+    keepPreviousData: false,
+  }, { timeoutMs: 20_000 });
+  const now = assignments.data?.serverTime ? Date.parse(assignments.data.serverTime) : Date.now();
   const students = useMemo(
     () => (roster.data?.state?.students || []).filter((student) => student?.id),
     [roster.data],
@@ -93,7 +92,10 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
   const [sharingBusy, setSharingBusy] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
   const previousCounts = useRef<Map<string, number> | null>(null);
-  const { getToken } = useAuth();
+  const { getToken: authToken } = useAuth();
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const getToken = useCallback(async () => { if (!mounted.current) throw new Error("Account changed."); const token = await authToken(); if (!mounted.current) throw new Error("Account changed."); return token; }, [authToken]);
   const { toast } = useToast();
 
   const selectedRosterStudent = students.find((student) => student.id === studentId) || null;
@@ -110,7 +112,7 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
     return linkedStudents.filter((student) => accepted.has(student.id));
   }, [linkedStudents, sharing.data]);
   const canAssignSelected = Boolean(
-    selectedRosterStudent?.userId && selectedSharing?.status === "accepted",
+    allPlayers ? assignableStudents.length > 0 : selectedRosterStudent?.userId && selectedSharing?.status === "accepted",
   );
   const assignmentDisabledReason = !selectedRosterStudent
     ? "Select a student first"
@@ -131,9 +133,12 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
   }, [sharingBusy]);
 
   useEffect(() => {
-    if (studentId && students.some((student) => student.id === studentId)) return;
-    if (students[0]) setStudentId(students[0].id);
+    if (studentId && !students.some((student) => student.id === studentId)) setStudentId("");
   }, [studentId, students]);
+
+  useEffect(() => {
+    if (!allPlayers && stateFilter === null && assignments.data?.counts) setStateFilter(assignments.data.counts.active > 0 ? "active" : "all");
+  }, [allPlayers, stateFilter, assignments.data?.counts]);
 
   const visibleAssignments = useMemo(() => {
     const rows = assignments.data?.assignments || [];
@@ -167,12 +172,16 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
           body: JSON.stringify({ expectedRev: sharing.data.rev }),
         },
       );
+      if (!mounted.current) return;
       await sharing.mutate();
+      if (!mounted.current) return;
       toast.success("Practice sharing request sent", {
         description: `${selectedRosterStudent.name} can review it in Coaching.`,
       });
     } catch (error) {
+      if (!mounted.current) return;
       await sharing.mutate();
+      if (!mounted.current) return;
       toast.error("Request was not sent", { description: apiMessage(error) });
     } finally {
       setSharingBusy(false);
@@ -191,10 +200,14 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
           decision,
         }),
       });
+      if (!mounted.current) return;
       await Promise.all([sharing.mutate(), assignments.mutate()]);
+      if (!mounted.current) return;
       toast.success(decision === "accepted" ? "Practice sharing enabled" : "Request declined");
     } catch (error) {
+      if (!mounted.current) return;
       await sharing.mutate();
+      if (!mounted.current) return;
       toast.error("Your choice was not saved", { description: apiMessage(error) });
     } finally {
       setSharingBusy(false);
@@ -212,14 +225,18 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
           coachId: practiceRelationship.coach.id,
         }),
       });
+      if (!mounted.current) return;
       setConfirmRevoke(false);
       await Promise.all([sharing.mutate(), assignments.mutate()]);
+      if (!mounted.current) return;
       toast.success("Practice sharing revoked", {
         description: "Your coach can no longer open assignment evidence or replays.",
       });
     } catch (error) {
+      if (!mounted.current) return;
       setConfirmRevoke(false);
       await sharing.mutate();
+      if (!mounted.current) return;
       toast.error("Access was not revoked", { description: apiMessage(error) });
     } finally {
       setSharingBusy(false);
@@ -253,6 +270,7 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
     canManage && draft && selectedStudent?.userId
       ? `/v1/coaching/students/${encodeURIComponent(selectedStudent.userId)}/games`
       : null,
+    { keepPreviousData: false }, { timeoutMs: 20_000 },
   );
   const buildSuggestions = useMemo(() => {
     const byIdentity = new Map<string, BuildSuggestion>();
@@ -272,15 +290,15 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
       const id = typeof game.bid === "string" ? game.bid.trim() : "";
       add(game.b, id, id ? "slug" : "name");
     }
-    for (const assignment of assignments.data?.assignments || []) {
-      if (assignment.student.id !== suggestionStudentId) continue;
-      const build = assignment.requirement.build;
-      add(build?.name, build?.id, build?.matchBy === "slug" ? "slug" : "name");
-    }
     return Array.from(byIdentity.values())
       .sort((a, b) => a.name.localeCompare(b.name) || a.matchBy.localeCompare(b.matchBy))
       .slice(0, 100);
-  }, [assignments.data, observedGames.data, suggestionStudentId]);
+  }, [observedGames.data]);
+
+  useEffect(() => {
+    if (!draft || !observedGames.data || observedGames.isPreviousData || observedGames.isLoading || !draft.buildSelection || draft.buildSelection === "manual") return;
+    if (!buildSuggestions.some(build => buildSuggestionKey(build) === draft.buildSelection)) setDraft({ ...draft, buildSelection: "", buildName: "", unavailableBuild: true });
+  }, [draft, observedGames.data, observedGames.isPreviousData, observedGames.isLoading, buildSuggestions]);
 
   const openCreate = () => {
     const student = selectedRosterStudent || assignableStudents[0];
@@ -310,6 +328,12 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
       note: "",
       clientRequestId: requestId(),
     });
+  };
+
+  const openAgain = (assignment: PracticeAssignment) => {
+    if (!assignableStudents.some(student => student.id === assignment.student.id)) return;
+    const today = localDateKey(new Date(Date.now()), assignment.requirement.timeZone);
+    setDraft({ ...nextWindowDraft(assignment, today), clientRequestId: requestId() });
   };
 
   const saveAssignment = async () => {
@@ -352,15 +376,19 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
           }),
         },
       );
+      if (!mounted.current) return;
       rememberAssignmentTimeZone(draft.studentId, draft.timeZone);
       setDraft(null);
       setStudentId(draft.studentId);
       setAssignmentPage(1);
+      setStateFilter("active");
       await assignments.mutate();
+      if (!mounted.current) return;
       toast.success("Practice plan assigned", {
         description: "Eligible 1v1 games and archived replays will appear automatically.",
       });
     } catch (error) {
+      if (!mounted.current) return;
       toast.error("Practice plan was not saved", { description: apiMessage(error) });
     } finally {
       setSaving(false);
@@ -383,11 +411,15 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
           }),
         },
       );
+      if (!mounted.current) return;
       setCancelTarget(null);
       await assignments.mutate();
+      if (!mounted.current) return;
       toast.success("Practice plan cancelled");
     } catch (error) {
+      if (!mounted.current) return;
       await assignments.mutate();
+      if (!mounted.current) return;
       setCancelTarget(null);
       toast.error("Practice plan was not cancelled", { description: apiMessage(error) });
     } finally {
@@ -477,9 +509,11 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
               onChange={(event) => {
                 setStudentId(event.target.value);
                 setAssignmentPage(1);
+                setStateFilter(null);
               }}
               aria-label="Practice plan player"
             >
+              <option value="">All players</option>
               {students.map((student) => (
                 <option key={student.id} value={student.id}>{student.name}</option>
               ))}
@@ -503,7 +537,9 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
         onRevoke={() => setConfirmRevoke(true)}
       />
 
-      {canManage && students.length === 0 ? (
+      {!allPlayers && assignments.data?.counts ? <div role="group" aria-label="Practice plan state" className="flex flex-wrap gap-2">{(["active", "upcoming", "ended", "cancelled", "all"] as const).map(state => <Button key={state} className="min-h-11" size="sm" variant={(stateFilter ?? "active") === state ? "primary" : "secondary"} aria-pressed={(stateFilter ?? "active") === state} onClick={() => { setStateFilter(state); setAssignmentPage(1); }}>{state[0].toUpperCase() + state.slice(1)} ({assignments.data?.counts?.[state] ?? 0})</Button>)}</div> : null}
+
+      {allPlayers && students.length > 0 ? <PracticeRoster students={assignableStudents} assignments={visibleAssignments} now={now} truncated={!!assignments.data?.hasMore} onSelect={id => { setStudentId(id); setAssignmentPage(1); setStateFilter(null); }} /> : canManage && students.length === 0 ? (
         <Card>
           <div className="py-9 text-center">
             <ListChecks className="mx-auto h-8 w-8 text-text-dim" aria-hidden />
@@ -526,6 +562,8 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
                 assignment={assignment}
                 canManage={canManage}
                 onCancel={() => setCancelTarget(assignment)}
+                onAssignAgain={() => openAgain(assignment)}
+                now={now}
               />
             ))}
           </div>
@@ -629,363 +667,6 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
         loading={sharingBusy}
       />
     </div>
-  );
-}
-
-function PracticeSharingPanel({
-  canManage,
-  relationship,
-  selectedStudent,
-  busy,
-  onRequest,
-  onRespond,
-  onRevoke,
-}: {
-  canManage: boolean;
-  relationship: PracticeSharingRelationship | null;
-  selectedStudent: Student | null;
-  busy: boolean;
-  onRequest: () => void;
-  onRespond: (decision: "accepted" | "rejected") => void;
-  onRevoke: () => void;
-}) {
-  if (canManage) {
-    if (!selectedStudent?.userId) return null;
-    const accepted = relationship?.status === "accepted";
-    const waiting = relationship?.status === "pending" && Boolean(relationship.requestedAt);
-    return (
-      <Card className={accepted ? "border-success/35 bg-success/5" : "border-accent/30 bg-accent/5"}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            {accepted ? (
-              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden />
-            ) : (
-              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-accent-cyan" aria-hidden />
-            )}
-            <div>
-              <p className="font-display text-caption font-extrabold text-text">
-                {accepted
-                  ? `${selectedStudent.name} approved practice sharing`
-                  : waiting
-                    ? `Waiting for ${selectedStudent.name}`
-                    : `${selectedStudent.name}'s approval is required`}
-              </p>
-              <p className="mt-0.5 text-caption text-text-muted">
-                {accepted
-                  ? "You can assign plans, review qualifying 1v1 details, and download their archived original replays."
-                  : waiting
-                    ? "They can accept or decline the request from their Coaching page."
-                    : "Send a clear, revocable request before assigning games or opening replay evidence."}
-              </p>
-            </div>
-          </div>
-          {!accepted ? (
-            <Button
-              size="sm"
-              variant={waiting ? "secondary" : "primary"}
-              onClick={onRequest}
-              loading={busy}
-              disabled={waiting}
-            >
-              {waiting ? "Request sent" : "Request approval"}
-            </Button>
-          ) : null}
-        </div>
-      </Card>
-    );
-  }
-
-  if (!relationship) return null;
-  if (relationship.status === "pending") {
-    return (
-      <Card variant="feature" className="border-accent/40">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
-            <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0 text-accent-cyan" aria-hidden />
-            <div>
-              <p className="font-display text-h4 font-extrabold text-text">
-                Review practice sharing with {relationship.coach.name}
-              </p>
-              <p className="mt-1 max-w-2xl text-caption text-text-muted">
-                Allowing access lets your coach assign targets, see each qualifying future
-                ladder or custom 1v1 game’s map, opponent, result, and detected build,
-                and download its archived original replay. You can revoke access anytime.
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <Button variant="secondary" disabled={busy} onClick={() => onRespond("rejected")}>
-              Not now
-            </Button>
-            <Button loading={busy} onClick={() => onRespond("accepted")}>
-              Allow sharing
-            </Button>
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
-  if (relationship.status === "accepted") {
-    return (
-      <Card className="border-success/35 bg-success/5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden />
-            <div>
-              <p className="font-display text-caption font-extrabold text-text">Practice sharing is on</p>
-              <p className="mt-0.5 text-caption text-text-muted">
-                {relationship.coach.name} can review qualifying assignment evidence and archived replays.
-              </p>
-            </div>
-          </div>
-          <Button variant="ghost" size="sm" disabled={busy} onClick={onRevoke}>
-            Revoke access
-          </Button>
-        </div>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="border-border bg-bg-elevated/30">
-      <div className="flex items-start gap-3">
-        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-text-dim" aria-hidden />
-        <div>
-          <p className="font-display text-caption font-extrabold text-text">Practice sharing is off</p>
-          <p className="mt-0.5 text-caption text-text-muted">
-            {relationship.coach.name} cannot open assignment evidence or archived replays.
-            They can send you a new request if you want to enable it later.
-          </p>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function AssignmentCard({
-  assignment,
-  canManage,
-  onCancel,
-}: {
-  assignment: PracticeAssignment;
-  canManage: boolean;
-  onCancel: () => void;
-}) {
-  const progress = assignment.progress;
-  const bucket = progress.currentBucket
-    || (progress.state === "met" || progress.state === "missed"
-      ? progress.buckets.at(-1)
-      : progress.buckets[0])
-    || null;
-  const played = bucket?.playedGames ?? progress.playedGames;
-  const required = bucket?.requiredGames
-    ?? (progress.requiredGamesTotal || assignment.requirement.requiredGames);
-  const percentage = required > 0 ? Math.min(100, (played / required) * 100) : 0;
-  const recurring = assignment.requirement.recurrence !== "once";
-  const title = assignment.requirement.title?.trim() || requirementTitle(assignment);
-  const status = progressStateLabel(progress.state);
-  const remaining = Math.max(0, required - played);
-  const targetCopy = progress.state === "cancelled"
-    ? (played > 0 ? `${played} recorded before cancellation` : "No games counted")
-    : remaining === 0
-      ? "Target reached"
-      : `${remaining} to go`;
-  const cancellable = assignment.status === "active"
-    && (progress.state === "active" || progress.state === "upcoming");
-
-  return (
-    <Card className="flex min-h-full flex-col" padded={false}>
-      <div className="flex flex-1 flex-col p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={statePill(progress.state)}>{status}</span>
-              {canManage ? (
-                <span className="text-micro font-bold uppercase tracking-wider text-text-dim">
-                  {assignment.student.name}
-                </span>
-              ) : null}
-            </div>
-            <h3 className="mt-2 font-display text-h4 font-extrabold text-text">{title}</h3>
-            <p className="mt-1 text-caption text-text-muted">{requirementDetail(assignment)}</p>
-          </div>
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-bg-elevated text-accent-cyan">
-            {assignment.requirement.type === "build"
-              ? <Target className="h-5 w-5" aria-hidden />
-              : <Gamepad2 className="h-5 w-5" aria-hidden />}
-          </span>
-        </div>
-
-        <div className="mt-5 rounded-xl border border-border bg-bg-elevated/45 p-4">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <p className="text-micro font-bold uppercase tracking-wider text-text-dim">
-                {recurring ? `This ${cadenceNoun(assignment.requirement.recurrence)}` : "Progress"}
-              </p>
-              <p className="mt-1 font-display text-h3 font-extrabold tabular-nums text-text">
-                {played}<span className="text-body text-text-muted"> / {required}</span>
-              </p>
-            </div>
-            <p className="text-right text-caption font-bold text-text-muted">
-              {targetCopy}
-            </p>
-          </div>
-          <div
-            className="mt-3 h-2 overflow-hidden rounded-full bg-bg-subtle"
-            role="progressbar"
-            aria-label={`${title}${canManage ? ` for ${assignment.student.name}` : ""}: ${played} of ${required} games`}
-            aria-valuemin={0}
-            aria-valuemax={required}
-            aria-valuenow={Math.min(played, required)}
-          >
-            <div
-              className={[
-                "h-full rounded-full transition-[width]",
-                played >= required ? "bg-success" : "bg-accent-cyan",
-              ].join(" ")}
-              style={{ width: `${percentage}%` }}
-            />
-          </div>
-          {recurring ? (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-micro text-text-dim">
-              <span>{progress.completedBuckets} of {progress.totalBuckets} periods complete</span>
-              {bucket ? <span>{formatWindow(bucket.startsAt, bucket.endsAt, assignment.requirement.timeZone)}</span> : null}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="mt-4 flex items-start gap-2 text-caption text-text-muted">
-          <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-text-dim" aria-hidden />
-          <span>{formatWindow(assignment.requirement.window.startsAt, assignment.requirement.window.endsAt, assignment.requirement.timeZone)}</span>
-        </div>
-        {assignment.requirement.note ? <p className="mt-3 text-caption text-text-muted">{assignment.requirement.note}</p> : null}
-
-        <ReplayEvidence assignment={assignment} />
-      </div>
-      {canManage && cancellable ? (
-        <div className="flex justify-end border-t border-border bg-bg-elevated/30 px-5 py-3">
-          <Button variant="ghost" size="sm" onClick={onCancel} iconLeft={<XCircle className="h-4 w-4" />}>
-            Cancel plan
-          </Button>
-        </div>
-      ) : null}
-    </Card>
-  );
-}
-
-function ReplayEvidence({ assignment }: { assignment: PracticeAssignment }) {
-  const [open, setOpen] = useState(false);
-  const [page, setPage] = useState(1);
-  const evidence = useApi<AssignmentGamesPayload>(
-    open
-      ? `/v1/coaching/assignments/${encodeURIComponent(assignment.id)}/games?page=${page}&limit=25`
-      : null,
-    {
-      revalidateOnFocus: true,
-      refreshInterval: open ? 30_000 : 0,
-    },
-  );
-  const games = evidence.data?.games || [];
-  const total = evidence.data?.total ?? assignment.progress.replayGameCount
-    ?? assignment.progress.playedGames;
-  const totalPages = Math.max(1, Math.ceil(total / (evidence.data?.limit || 25)));
-  const assignmentLabel = assignment.requirement.title?.trim() || requirementTitle(assignment);
-  return (
-    <details
-      className="group mt-4 border-t border-border pt-4"
-      onToggle={(event) => {
-        const nextOpen = event.currentTarget.open;
-        setOpen(nextOpen);
-        if (!nextOpen) setPage(1);
-      }}
-    >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg py-1 text-caption font-bold text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-        <span className="flex items-center gap-2">
-          <ListChecks className="h-4 w-4 text-accent-cyan" aria-hidden />
-          Games and replay evidence
-        </span>
-        <span className="rounded-full border border-border bg-bg-elevated px-2.5 py-0.5 font-mono text-micro tabular-nums text-text-muted">
-          {total}
-        </span>
-      </summary>
-      <div className="mt-3 space-y-2">
-        {evidence.isLoading && !evidence.data ? (
-          <div className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-caption text-text-dim">
-            Loading replay evidence…
-          </div>
-        ) : evidence.error ? (
-          <div className="rounded-xl border border-dashed border-danger/40 px-4 py-5 text-center text-caption text-danger">
-            Replay evidence could not load. Close and reopen this list to retry.
-          </div>
-        ) : games.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-caption text-text-dim">
-            No eligible 1v1 replays have landed in this timeframe yet.
-          </div>
-        ) : games.map((game) => (
-          <div
-            key={game.gameId}
-            className="flex items-center gap-3 rounded-xl border border-border bg-bg-elevated/35 px-3 py-2.5"
-          >
-            <span className={[
-              "grid h-8 w-8 shrink-0 place-items-center rounded-lg border font-mono text-micro font-extrabold",
-              /victory|win/i.test(game.result)
-                ? "border-success/35 bg-success/10 text-success"
-                : /defeat|loss/i.test(game.result)
-                  ? "border-danger/35 bg-danger/10 text-danger"
-                  : "border-border text-text-dim",
-            ].join(" ")}>
-              {/victory|win/i.test(game.result) ? "W" : /defeat|loss/i.test(game.result) ? "L" : "—"}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-caption font-bold text-text">
-                {game.map || "Unknown map"}{game.opponent ? ` · vs ${game.opponent}` : ""}
-              </p>
-              <p className="truncate text-micro text-text-dim">
-                {formatGameDate(game.date, assignment.requirement.timeZone)}
-                {game.myBuild ? ` · ${game.myBuild}` : ""}
-                {game.isLadderGame === true
-                  ? " · Ladder 1v1"
-                  : game.isLadderGame === false
-                    ? " · Custom 1v1"
-                    : " · 1v1"}
-              </p>
-            </div>
-            <ReplayDownloadButton
-              gameId={game.gameId}
-              available={game.replayAvailable}
-              showLabel
-              contextLabel={`${game.map || "game"} on ${formatGameDate(game.date, assignment.requirement.timeZone)}`}
-              downloadPath={`/v1/coaching/assignments/${encodeURIComponent(assignment.id)}/games/${encodeURIComponent(game.gameId)}/replay-download`}
-              unavailableMessage="This student replay is not archived yet. Ask the student to update the desktop agent and run Re-sync."
-            />
-          </div>
-        ))}
-        {totalPages > 1 ? (
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={page <= 1}
-              aria-label={`Newer games for ${assignmentLabel}`}
-              onClick={() => setPage((value) => Math.max(1, value - 1))}
-            >
-              Newer
-            </Button>
-            <span className="text-micro text-text-dim">Page {page} of {totalPages}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={!evidence.data?.hasMore}
-              aria-label={`Older games for ${assignmentLabel}`}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              Older
-            </Button>
-          </div>
-        ) : null}
-      </div>
-    </details>
   );
 }
 
