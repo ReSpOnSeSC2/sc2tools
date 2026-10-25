@@ -76,6 +76,9 @@ const { MultichatSoundsService } = require("./services/multichatSounds");
 const { MultichatEngagementService } = require("./services/multichatEngagement");
 const { MultichatViewersService } = require("./services/multichatViewers");
 const { TickerFactsService } = require("./services/tickerFacts");
+const { ChatStatsService } = require("./services/chatStats");
+const { ChatCommandService } = require("./services/chatCommandService");
+const { buildChatCommandsOwnerRouter } = require("./routes/chatCommandsOwner");
 const { TwitchChatBotService } = require("./services/twitchChatBot");
 const { buildChatBotSettingsRouter } = require("./routes/chatBotSettings");
 const { buildMultichatRouter } = require("./routes/multichat");
@@ -600,12 +603,18 @@ function makeServices(deps, clerk, adminClerkIds) {
   // Nightbot/StreamElements custom-API lines (!opponent/!mmr/!build) —
   // the overlay token in the URL path is the credential, same trust
   // model as the OBS Browser Source.
+  const seasons = new SeasonsService();
+  const chatStats = new ChatStatsService(deps.db, { seasons });
   const chatbot = new ChatbotService(deps.db, {
     overlayTokens,
     liveGameBroker,
     games,
+    chatStats,
+    engagement: multichatEngagement,
+    studio: multichatStudio,
     logger: deps.logger,
   });
+  const chatCommands = new ChatCommandService({ chatbot, users, overlayTokens });
   // The bot that talks back IN chat (Twitch IRC). Reuses the
   // ChatbotService line composers for !mmr/!opponent/!build and the
   // engagement service for !rank + vote/XP ingest. Engagement
@@ -617,6 +626,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     overlayTokens,
     engagement: multichatEngagement,
     chatbot,
+    chatCommands,
     logger: deps.logger,
   });
   overlayTokens.rotation.onCompleted = (userId, from, to) => twitchChatBot.replaceOverlayToken(userId, from, to);
@@ -806,7 +816,6 @@ function makeServices(deps, clerk, adminClerkIds) {
     aggregations,
     builds,
   });
-  const seasons = new SeasonsService();
   const arcade = new ArcadeService(deps.db, { games, gameDetails });
   // Replay Review Exchange (docs/reviews.md). Built unconditionally —
   // REVIEWS_ENABLED only gates the routes — so GDPR export/deletion and
@@ -886,14 +895,14 @@ function makeServices(deps, clerk, adminClerkIds) {
   const gameControls = new GameControlsService(deps.db, { gdpr, onChanged: async (userId) => {
     games.invalidateForUser(userId);
     // Each owner-aware invalidator fences late in-flight cache completion.
-    for (const service of [overlayLive, rivals, gameContext, tickerFacts, community, aggregations.trendsRequests]) {
+    for (const service of [overlayLive, rivals, gameContext, tickerFacts, chatStats, community, aggregations.trendsRequests]) {
       service.invalidateForUser(userId);
     }
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
     deps.io?.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "game-control" });
   } });
   return {
-    jobLedger, adminAudit, gameControls,
+    jobLedger, adminAudit, gameControls, chatStats, chatCommands,
     users,
     opponents,
     opponentIdentityMatcher,
@@ -1200,8 +1209,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   // headers; the overlay token in the path is the credential).
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildChatbotRouter({ chatbot: services.chatbot, logger: deps.logger }),
+    buildChatbotRouter({ chatbot: services.chatbot, commands: services.chatCommands, logger: deps.logger }),
   );
+  app.use(SERVICE.ROUTE_PREFIX, buildChatCommandsOwnerRouter({ auth, commands: services.chatCommands }));
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildChatBotSettingsRouter({
@@ -1420,6 +1430,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       alertMedia: buildAlertMediaStore(deps.config.r2),
       tiktokRelay: services.tiktokChatRelay,
       studio: services.multichatStudio,
+      commands: services.chatCommands,
       sounds: services.multichatSounds,
       engagement: services.multichatEngagement,
       viewers: services.multichatViewers,

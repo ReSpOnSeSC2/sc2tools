@@ -90,6 +90,18 @@ class SeasonsService {
     };
   }
 
+  /** Cache-only boundary lookup for chat. Never refreshes a catalog or map pool.
+   * @param {string} region */
+  cachedCurrent(region) {
+    const now = this.now();
+    const aliases = region === "NA" ? ["NA", "US", "1"] : region === "KR" ? ["KR", "TW", "3"] : [region];
+    return (this._cache?.items || []).filter(season => {
+      const start = season.start ? Date.parse(season.start) : NaN;
+      const end = season.end ? Date.parse(season.end) : Infinity;
+      return aliases.includes(season.region.toUpperCase()) && Number.isFinite(start) && start <= now && end > now;
+    }).sort((a, b) => b.battlenetId - a.battlenetId)[0] || null;
+  }
+
   /**
    * @returns {Promise<{
    *   maps: string[],
