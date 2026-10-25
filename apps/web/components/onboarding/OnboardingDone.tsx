@@ -10,9 +10,11 @@ import { useApi } from "@/lib/clientApi";
 import type { PairedDevice } from "./pairingTypes";
 import type { OnboardingGoal, WelcomeMe } from "./welcomeState";
 import { AGENT_ONLINE_WINDOW_MS } from "@/components/dashboard/AgentUpgradeNotice";
+import { safeReturnPath } from "@/lib/safeReturnPath";
 
 /** The final step keeps live import progress visible while suggesting a next action. */
-export function OnboardingDone({ me, goals }: { me?: WelcomeMe; goals: OnboardingGoal[] }) {
+export function OnboardingDone({ me, goals, returnTo }: { me?: WelcomeMe; goals: OnboardingGoal[]; returnTo?: string | null }) {
+  const destination = safeReturnPath(returnTo);
   const progress = useImportStatus();
   const devices = useApi<{ items: PairedDevice[] }>(me?.agentPaired ? "/v1/devices" : null, { refreshInterval: 5000 });
   const games = useApi<{ items: { gameId: string }[] }>(me?.games.total ? "/v1/games?limit=1" : null);
@@ -40,7 +42,7 @@ export function OnboardingDone({ me, goals }: { me?: WelcomeMe; goals: Onboardin
         <NextAction title="Open the crash course" href="/stream-studio/learn#crash-course" slug="obs-auto-scene-switching">Follow the Stream Studio setup course.</NextAction>
       </> : null}
     </div>
-    <Link href="/app" className="inline-flex rounded-full bg-accent px-5 py-3 font-semibold text-white focus-visible:ring-2 focus-visible:ring-accent">Open your dashboard →</Link>
+    <Link href={destination ?? "/app"} className="inline-flex rounded-full bg-accent px-5 py-3 font-semibold text-white focus-visible:ring-2 focus-visible:ring-accent">{destination ? "Continue where you left off →" : "Open your dashboard →"}</Link>
   </section>;
 }
 

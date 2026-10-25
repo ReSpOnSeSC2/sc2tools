@@ -1,6 +1,5 @@
-/** Preserve guide context for existing accounts. auth-return-to-context
- * (wave 5) will unify this with the onboarding return flow. */
+import { signInHref } from "@/lib/authLinks";
+/** Guide prompts share the application's post-auth context validator. */
 export function guideSignInHref(path: string | null): string {
-  return path && /^\/guides(?:\/[a-z0-9-]+){0,3}$/.test(path)
-    ? `/sign-in?redirect_url=${encodeURIComponent(path)}` : "/sign-in";
+  return path && /^\/guides(?:[/?]|$)/.test(path) ? signInHref(path) : "/sign-in";
 }

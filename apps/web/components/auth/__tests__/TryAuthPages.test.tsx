@@ -9,8 +9,8 @@ vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams({
 vi.mock("@/lib/instant/localStore", () => ({ countTryGames: mocks.count }));
 vi.mock("@/lib/whatsNew", () => ({ get WHATS_NEW() { return mocks.entries; } }));
 vi.mock("@clerk/nextjs", () => ({
-  SignUp: ({ forceRedirectUrl }: { forceRedirectUrl: string }) => <form aria-label="Sign up" data-redirect={forceRedirectUrl}><label>Email<input type="email" /></label></form>,
-  SignIn: ({ forceRedirectUrl }: { forceRedirectUrl?: string }) => <form aria-label="Sign in" data-redirect={forceRedirectUrl}><label>Email<input type="email" /></label></form>,
+  SignUp: ({ forceRedirectUrl, signInForceRedirectUrl }: { forceRedirectUrl: string; signInForceRedirectUrl: string }) => <form aria-label="Sign up" data-redirect={forceRedirectUrl} data-switch-redirect={signInForceRedirectUrl}><label>Email<input type="email" /></label></form>,
+  SignIn: ({ forceRedirectUrl, signUpForceRedirectUrl }: { forceRedirectUrl: string; signUpForceRedirectUrl: string }) => <form aria-label="Sign in" data-redirect={forceRedirectUrl} data-switch-redirect={signUpForceRedirectUrl}><label>Email<input type="email" /></label></form>,
 }));
 vi.mock("next/link", () => ({ default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a> }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -48,4 +48,25 @@ it("uses only the newest general-audience update, or renders no card", () => {
   rerender(<LatestUpdate />);
   expect(screen.getByRole("link", { name: "Newest update" }).getAttribute("href")).toBe("/changelog#new");
   expect(screen.getByText("Oct 23, 2026")).toBeTruthy();
+});
+
+it.each(["/admin", "/builds?publish=1", "https://evil.invalid", "//evil.invalid", "/help/%2f%2fevil.invalid", "/settings?tab=security"])("forces safe defaults on both Clerk forms for rejected input %s", async redirect => {
+  mocks.redirect = redirect;
+  const view = render(<SignInPage />);
+  const signIn = await screen.findByRole("form", { name: "Sign in" });
+  expect(signIn.getAttribute("data-redirect")).toBe("/app"); expect(signIn.getAttribute("data-switch-redirect")).toBe("/welcome");
+  view.unmount(); render(<SignUpPage />);
+  const signUp = await screen.findByRole("form", { name: "Sign up" });
+  expect(signUp.getAttribute("data-redirect")).toBe("/welcome"); expect(signUp.getAttribute("data-switch-redirect")).toBe("/app");
+});
+
+it("preserves a guide destination through sign-in, sign-up setup and form switching", async () => {
+  mocks.redirect = "/guides/pvz/forge-expand";
+  const welcome = "/welcome?next=%2Fguides%2Fpvz%2Fforge-expand";
+  const view = render(<SignInPage />);
+  expect((await screen.findByRole("form")).getAttribute("data-redirect")).toBe(mocks.redirect);
+  expect(screen.getByRole("form").getAttribute("data-switch-redirect")).toBe(welcome);
+  view.unmount(); render(<SignUpPage />);
+  expect((await screen.findByRole("form")).getAttribute("data-redirect")).toBe(welcome);
+  expect(screen.getByRole("form").getAttribute("data-switch-redirect")).toBe(mocks.redirect);
 });

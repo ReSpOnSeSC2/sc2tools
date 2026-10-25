@@ -8,7 +8,10 @@ const harness = vi.hoisted(() => ({
   signedIn: false,
 }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/guides/pvz" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/guides/pvz",
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock("@clerk/nextjs", () => ({
   SignedIn: ({ children }: { children: ReactNode }) => (harness.signedIn ? <>{children}</> : null),
   SignedOut: ({ children }: { children: ReactNode }) => (harness.signedIn ? null : <>{children}</>),
@@ -143,8 +146,8 @@ describe("Header", () => {
     expect(download.className).toContain("xl:inline-flex");
     expect(within(nav).queryByRole("link", { name: "Build library" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
-    expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/sign-in");
-    expect(screen.getByRole("link", { name: "Get started" }).getAttribute("href")).toBe("/sign-up");
+    expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/sign-in?redirect_url=%2Fguides%2Fpvz");
+    expect(screen.getByRole("link", { name: "Get started" }).getAttribute("href")).toBe("/sign-up?redirect_url=%2Fguides%2Fpvz");
     expect(screen.queryByRole("link", { name: "Open app" })).toBeNull();
     expect(document.querySelector('a[href="/app"]')).toBeNull();
   });

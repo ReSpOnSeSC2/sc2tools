@@ -13,21 +13,21 @@
  *   signUpHref("https://evil.test");  // -> "/sign-up"
  */
 
-/** True for a path on this site ("/x"), never "//host" or a full URL. */
-function isSitePath(path: string): boolean {
-  return path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\");
-}
+import { safeReturnPath } from "./safeReturnPath";
+export { safeReturnPath } from "./safeReturnPath";
+export { useReturnTo } from "./authReturnHooks";
 
-function authHref(page: "/sign-in" | "/sign-up", returnTo: string): string {
-  return isSitePath(returnTo) ? `${page}?redirect_url=${encodeURIComponent(returnTo)}` : page;
+function authHref(page: "/sign-in" | "/sign-up", returnTo?: string | null): string {
+  const path = safeReturnPath(returnTo);
+  return path ? `${page}?redirect_url=${encodeURIComponent(path)}` : page;
 }
 
 /** /sign-in that returns to `returnTo` afterwards. */
-export function signInHref(returnTo: string): string {
+export function signInHref(returnTo?: string | null): string {
   return authHref("/sign-in", returnTo);
 }
 
 /** /sign-up that carries `returnTo` along. */
-export function signUpHref(returnTo: string): string {
+export function signUpHref(returnTo?: string | null): string {
   return authHref("/sign-up", returnTo);
 }

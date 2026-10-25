@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { AuthContextLink } from "@/components/auth/AuthContextLink";
 import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Menu } from "lucide-react";
@@ -107,12 +108,12 @@ export function Header() {
             </div>
             <SignedOut>
               <div className="hidden items-center gap-2 lg:flex">
-                <Link href="/sign-in" className={SECONDARY_LINK_CLS}>
+                <AuthContextLink kind="sign-in" className={SECONDARY_LINK_CLS}>
                   Sign in
-                </Link>
-                <Link href="/sign-up" className={PRIMARY_LINK_CLS}>
+                </AuthContextLink>
+                <AuthContextLink kind="sign-up" className={PRIMARY_LINK_CLS}>
                   Get started
-                </Link>
+                </AuthContextLink>
               </div>
             </SignedOut>
             <SignedIn>
