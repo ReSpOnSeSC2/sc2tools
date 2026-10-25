@@ -754,6 +754,7 @@ async function ensureReviewIndexes(ctx) {
 
   await ctx.reviewComments.createIndex({ requestId: 1, createdAt: 1, _id: 1 });
   await ctx.reviewComments.createIndex({ authorId: 1, createdAt: -1 });
+  await ctx.reviewComments.createIndex({ authorId: 1, upvotes: -1, createdAt: -1, _id: -1 });
   await ctx.reviewComments.createIndex({ parentId: 1 }, { sparse: true });
 
   // One reward per (comment, kind, actor). GDPR anonymisation clears a
