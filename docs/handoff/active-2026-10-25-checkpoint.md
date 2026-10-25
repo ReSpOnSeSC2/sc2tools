@@ -23,7 +23,7 @@ roadmap remains incomplete; docs/SETUP_GUIDE.md is still required at the end.
   fixture bundle checks). PR750 is closed as superseded. Vercel production UI
   confirms 9b7ef88 Ready at deployment2GDVmsfS7sYi6dHw7uLnf2hEAn4t.
 
-## Status page: merged, production deployment in progress
+## Status page: shipped and hostname repaired
 
 The owner confirms no status provider was ever configured. Public
 status.sc2tools.com currently returns Vercel DEPLOYMENT_NOT_FOUND. The hostname
@@ -53,15 +53,19 @@ resolves to Vercel but is absent from the sc2tools project's Domains list.
   Main's automatic deployment was absent, so root created ONE normal Production
   deployment for verified mainc7 through the authenticated Vercel UI. It was
   accepted and Building as sc2tools-5ay50jl2x-jonathan-laymans-projects.vercel.app.
-  Primary/status was still404 during its build. Verify it becomes200 before
-  attaching the alias. No plan change, second provider, account, deployment
-  deletion or repeated retry occurred. No hostname/config mutation yet.
+  Once primary/status became200, root attached exactstatus.sc2tools.com to the
+  existing project's Production environment. Valid Configuration confirmed;
+  aliasroot and syntheticpath/query return308 to cleanhttps://sc2tools.com/status.
+  ActualChrome showed both Website/API Reachable and manualRefresh updated
+  timestamps19:16:30→19:16:36EDT. Live screenshot inspected. No plan change,
+  second provider/account, deployment deletion, DNS/credential change or repeated
+  retry occurred. Status repair is COMPLETE.
 - Chrome Vercel browser session is authenticated: tab1160793790, session
   Status repair, team jonathan-laymans-projects/project sc2tools. It is currently
-  at the Production Deployments list after creating that deployment. Reacquire only if
+  at Domains settings after successful alias attachment. Reacquire only if
   stale, refresh computer-use docs after compaction. No credentials were read.
-- Next verify production /status, attach exact alias, verify308+live
-  browser results and record evidence in PR755. No paid infrastructure needed.
+- Public deliverable Chrome tab1160793908 is at primary/status and marked to
+  remain open. PR755/sourcecheckpoint contain live evidence. No paid service.
 
 ## Active source work — preserve all files
 

@@ -75,8 +75,32 @@ checks the existing OBS and new status entries independently of editorial order.
 All seven FAQ/sitemap checks and strict test-file lint pass. Runtime code and
 the validated production build are unchanged by this correction.
 
-Vercel currently reports a daily deployment rate limit for the preview. The
-existing production deployment remains Ready on main9b7ef88 (opponent columns).
-Do not upgrade plans or repeatedly submit deployments. The next required CI
-head will receive its normal Git deployment attempt; no domain/config change
-has been performed while the primary status page is unavailable.
+The first preview hit Vercel's rolling deployment limit. The required FAQ-fix
+head later deployed normally and passed its exact-head web/responsive/Vercel
+checks. PR755 squash-merged as `c7bf67e7e9cbf8ea8eac4706844b96d4a3ba7696`,
+with fresh merge-tree equality verified before merge.
+
+## Live verification — 2026-10-25
+
+Production did not automatically create a deployment for the merged head. Root
+created one normal Production deployment for verified mainc7 through the
+existing authenticated Vercel project. It was accepted without changing plans
+or environments: `sc2tools-5ay50jl2x-jonathan-laymans-projects.vercel.app`.
+No preview was promoted with potentially different environment variables.
+
+After primary `/status` returned200 with the expected status heading, root
+attached the exact `status.sc2tools.com` hostname to that project's Production
+environment. Vercel reports Valid Configuration; both pre-existing primary
+domains remain. No DNS, credentials, paid service or account change was needed.
+
+- HTTPS alias root returns308 to `https://sc2tools.com/status`.
+- A synthetic `/app/example?probe=synthetic` also returns308 to the same clean
+  URL, proving incoming path/query are discarded.
+- Primary status returns200, with honest Unknown results in initial HTML.
+- Actual Chrome visit through the alias lands on primary `/status`. Website
+  and API both showed Reachable at19:16:30EDT; manual Refresh updated both
+  timestamps to19:16:36EDT and retained Reachable results.
+- Root inspected the completed live screenshot and left the public status tab
+  as a deliverable. No auth boundary or app chrome rendered.
+
+PR755 is shipped and the reported DEPLOYMENT_NOT_FOUND issue is resolved.
