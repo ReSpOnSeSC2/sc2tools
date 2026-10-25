@@ -2,12 +2,9 @@
  * Overlay theming — the streamer-facing customization layer for the
  * OBS Browser Source widgets.
  *
- * The theme travels in the overlay URL itself
- * (``/overlay/<token>?theme=<base64url json>``) so an existing Browser
- * Source keeps working with zero re-auth and zero server changes: the
- * Settings page composes the URL, the overlay clients decode the param
- * once at mount and translate it into CSS custom properties that
- * ``WidgetShell`` consumes with the stock values as fallbacks.
+ * Saved token profiles supply the live theme through overlay:config.
+ * Existing ``?theme=<base64url json>`` values remain explicit overrides;
+ * Settings previews use the same validated CSS variable conversion.
  *
  * SECURITY: the ``?theme=`` string arrives on an UNAUTHENTICATED page
  * and must be treated as hostile. Everything here is strict-validated:
@@ -22,12 +19,24 @@
  *     silently falls back to the default theme.
  */
 
+import profileRules from "./overlayProfileRules.json";
+
 export const OVERLAY_THEME_VERSION = 1;
 export const OVERLAY_THEME_PARAM = "theme";
 
+/** A malformed/repeated explicit override keeps precedence over the live profile. */
+export function overlayThemeParamFromSearch(search: Record<string, string | string[] | undefined>): string | null {
+  if (!Object.hasOwn(search, OVERLAY_THEME_PARAM)) return null;
+  const value = search[OVERLAY_THEME_PARAM];
+  return typeof value === "string" ? value : "";
+}
+
 /** Allowed widget zoom factors — a fixed allowlist, not a free range. */
-export const OVERLAY_THEME_SCALES = [0.8, 0.9, 1, 1.1, 1.25] as const;
-export type OverlayThemeScale = (typeof OVERLAY_THEME_SCALES)[number];
+export type OverlayThemeScale = 0.8 | 0.9 | 1 | 1.1 | 1.25;
+export const OVERLAY_THEME_SCALES = Object.freeze(profileRules.theme.scales) as readonly OverlayThemeScale[];
+export type OverlayDurationSeconds = 5 | 10 | 15 | 20 | 30 | 45 | 60;
+/** The API validator and Display select consume this one authored list. */
+export const OVERLAY_WIDGET_DURATION_SECONDS = Object.freeze(profileRules.durationSeconds) as readonly OverlayDurationSeconds[];
 
 export type OverlayThemeRadius = "sharp" | "rounded" | "pill";
 export type OverlayThemeFont = "default" | "condensed" | "mono";
@@ -214,11 +223,7 @@ export const OVERLAY_THEME_STYLE_OPTIONS: readonly {
   { value: "terran-foundry", label: "Terran foundry" },
 ];
 
-const OVERLAY_THEME_STYLE_VALUES = new Set<OverlayThemeStyle>(
-  OVERLAY_THEME_STYLE_OPTIONS
-    .map((option) => option.value)
-    .filter((value): value is OverlayThemeStyle => value !== "classic"),
-);
+const OVERLAY_THEME_STYLE_VALUES = new Set(profileRules.theme.styles as OverlayThemeStyle[]);
 
 function clamp01(n: number): number {
   if (n < 0) return 0;

@@ -7,6 +7,7 @@ import { Save, RotateCcw } from "lucide-react";
 
 export interface SaveBarProps {
   visible: boolean;
+  buttonClassName?: string;
   saving?: boolean;
   saveDisabled?: boolean;
   /** Keep long messages and save labels readable on narrow screens. */
@@ -31,6 +32,7 @@ export interface SaveBarProps {
  */
 export function SaveBar({
   visible,
+  buttonClassName,
   saving = false,
   saveDisabled = false,
   stackOnMobile = false,
@@ -67,9 +69,10 @@ export function SaveBar({
           />
           <span className="truncate">{message}</span>
         </div>
-        <div className="flex flex-shrink-0 items-center justify-end gap-2">
+        <div className={`flex flex-shrink-0 items-center justify-end gap-2 ${stackOnMobile ? "flex-wrap" : ""}`}>
           {onReset ? (
             <Button
+              className={buttonClassName}
               variant="ghost"
               size="sm"
               onClick={onReset}
@@ -80,6 +83,7 @@ export function SaveBar({
             </Button>
           ) : null}
           <Button
+            className={buttonClassName}
             variant="primary"
             size="sm"
             onClick={onSave}
