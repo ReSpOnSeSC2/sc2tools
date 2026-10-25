@@ -91,13 +91,13 @@ function outcome(me: StoryLoss, opp: StoryLoss, estimated: boolean): Pick<StoryF
  * An explicit empty ledger is authoritative; only an absent ledger estimates. */
 export function storyFights(input: GameStoryInput): StoryFight[] {
   if (!Array.isArray(input.casualtyEvents)) return detectBattles(input.statsEvents, input.oppStatsEvents).map((battle, i) => {
-    const me = { ...emptyLoss(), estimatedValue: battle.myLoss, supply: null }, opp = { ...emptyLoss(), estimatedValue: battle.oppLoss, supply: null };
-    const bothMeasured = [input.statsEvents, input.oppStatsEvents].every(rows => {
+    const measured = [input.statsEvents, input.oppStatsEvents].map(rows => {
       const measured = (rows ?? []).filter(row => nonnegative(row.time) && nonnegative(row.army_value)).slice().sort((a, b) => a.time - b.time);
       const first = measured.findLastIndex(row => row.time <= battle.start), last = measured.findIndex(row => row.time >= battle.end);
       return first >= 0 && last > first && measured.slice(first + 1, last + 1).every((row, index) => row.time - measured[first + index].time <= 30);
     });
-    return { id: `estimated:${i}:${battle.start}`, start: battle.start, end: battle.end, duration: battle.end - battle.start, me, opp, estimated: true, ...(bothMeasured ? outcome(me, opp, true) : { tradeRatio: null, outcome: "unknown" as const, label: "Estimated fight · one side unmeasured" }) };
+    const me = { ...emptyLoss(), ...(measured[0] ? { estimatedValue: battle.myLoss } : {}), supply: null }, opp = { ...emptyLoss(), ...(measured[1] ? { estimatedValue: battle.oppLoss } : {}), supply: null };
+    return { id: `estimated:${i}:${battle.start}`, start: battle.start, end: battle.end, duration: battle.end - battle.start, me, opp, estimated: true, ...(measured.every(Boolean) ? outcome(me, opp, true) : { tradeRatio: null, outcome: "unknown" as const, label: "Estimated fight · one side unmeasured" }) };
   });
   const events = (input.casualtyEvents as readonly CasualtyEvent[]).filter(event => nonnegative(event.time) && (event.owner === "me" || event.owner === "opp") && ["workers", "units", "buildings"].includes(event.category) && typeof event.name === "string" && event.name.length > 0).slice().sort((a, b) => a.time - b.time || a.owner.localeCompare(b.owner) || a.name.localeCompare(b.name));
   const fights: StoryFight[] = [];

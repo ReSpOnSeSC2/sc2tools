@@ -66,6 +66,8 @@ describe("game story fixed rules", () => {
   it("requires measurements bracketing this estimated fight, not just samples somewhere in the game", () => {
     const input = { gameId: "disjoint", statsEvents: [sample(0, 1200), sample(30, 200)], oppStatsEvents: [sample(100, 1000), sample(130, 900)] };
     expect(storyFights(input)[0]).toMatchObject({ estimated: true, outcome: "unknown" });
+    expect(storyFights(input)[0].opp.estimatedValue).toBeUndefined();
+    expect(storyFights(input)[0].me.estimatedValue).toBe(1000);
     expect(storyFights({ ...input, oppStatsEvents: [sample(0, 1000), sample(90, 900)] })[0].outcome).toBe("unknown");
   });
 
