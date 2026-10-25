@@ -114,7 +114,7 @@ export function battleReportFacts(input: BattleReportInput): StoryFacts {
   const moments: SnapshotMoment[] = [];
   const moment = (id: string, time: number, caption: string, minimum = false) => {
     if (!within(time) || moments.some(row => Math.abs(row.time - time) < (minimum ? .001 : 5))) return;
-    const marker = playback?.battles?.filter(row => Math.abs(row.t - time) <= 10).sort((a, b) => Math.abs(a.t - time) - Math.abs(b.t - time))[0];
+    const marker = playback?.battles?.filter(row => within(row.t) && Math.abs(row.t - time) <= 10).sort((a, b) => Math.abs(a.t - time) - Math.abs(b.t - time))[0];
     moments.push({ id, time, caption, ...(marker && finite(marker.x) && finite(marker.y) ? { point: { x: marker.x, y: marker.y } } : {}) });
   };
   if (fights[0]) moment("first-clash", fights[0].start, fights[0].estimated ? "First estimated fight window" : "First recorded casualty cluster");

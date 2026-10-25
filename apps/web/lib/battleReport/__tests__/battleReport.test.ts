@@ -4,6 +4,8 @@ import { planBattleReport, renderFact, reportText } from "../plan";
 import { lintTemplate, phrasebank, type FactPattern } from "../phrasebank";
 import { reportFixtures } from "./fixtures";
 import { gameStory } from "../../gameStory";
+import { sanitizeMapPlayback } from "../../mapReplay";
+import { rawPayload } from "@/components/analyzer/game/replay/__tests__/fixtures";
 
 const tones: ReportTone[] = ["battle", "caster", "tactical"];
 const beats: ReportBeat[] = ["setting", "opening", "turning", "aftermath"];
@@ -67,6 +69,13 @@ describe("deterministic battle reports", () => {
     expect(facts.story.fights.every(row => row.end <= 100)).toBe(true);
     const futureOnly = battleReportFacts({ game: { gameId: "future-only", durationSec: 100 }, breakdown: { ok: true, casualty_events: [{ time: 120, owner: "me", killer: "opp", name: "Marine", category: "units" }] } });
     expect(futureOnly.entries["first-clash"]).toBeUndefined(); expect(futureOnly.moments.every(row => row.time <= 100)).toBe(true);
+  });
+
+  it("does not borrow an out-of-range battle marker's location for a nearby final frame", () => {
+    const playback = sanitizeMapPlayback(rawPayload())!;
+    playback.battles = [{ ...playback.battles[0], t: 105, x: 7, y: 8 }];
+    const facts = battleReportFacts({ game: { gameId: "future-marker", durationSec: 100 }, playback });
+    expect(facts.moments.find(row => row.id === "end")?.point).toBeUndefined();
   });
 
   it("does not clip an injected story's future losses or use future lead to manufacture a comeback", () => {
