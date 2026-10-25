@@ -3,9 +3,12 @@
 import { useState } from "react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
-import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
+import { Skeleton } from "@/components/ui/Card";
 import { QueryState } from "@/components/ui/QueryState";
 import { MacroSummaryCard } from "./MacroSummaryCard";
+import { MacroEmptyState } from "./MacroEmptyState";
+import { MechanicsTrendCard } from "./MechanicsTrendCard";
+import { useMacroBackfill } from "./useMacroBackfill";
 import { FocusCard } from "./macro/report/FocusCard";
 import { ScoreBucketsCard } from "./macro/report/ScoreBucketsCard";
 import { SegmentsCard } from "./macro/report/SegmentsCard";
@@ -38,10 +41,12 @@ export function MacroTab() {
   const report = useApi<MacroReportData>(
     `/v1/macro/report${filtersToQuery(filters)}#${dbRev}`,
   );
+  const backfill = useMacroBackfill(() => { void report.mutate(); });
 
   return (
     <div className="space-y-4">
-      <MacroSummaryCard />
+      <MacroSummaryCard backfill={backfill} />
+      <MechanicsTrendCard />
       <QueryState
         q={report}
         skeleton={<Skeleton rows={6} />}
@@ -49,12 +54,7 @@ export function MacroTab() {
         filtered
         isEmpty={(data) => !data || data.gamesScored === 0}
         empty={
-          <Card>
-            <EmptyState
-              title="No scored games yet"
-              sub="Macro scores arrive with agent uploads — or use the backfill above to score older replays."
-            />
-          </Card>
+          <MacroEmptyState backfill={backfill} />
         }
       >
         {(data) => (

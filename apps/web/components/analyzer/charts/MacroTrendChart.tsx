@@ -1,184 +1,41 @@
 "use client";
 
-import { useMemo } from "react";
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  Area,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceLine,
-} from "recharts";
-import { Card, EmptyState } from "@/components/ui/Card";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Period } from "@/lib/timeseries";
-import { ChartTooltip } from "./ChartTooltip";
+import { mechanicsGeometry, mechanicsPoints, MECHANICS_METRICS, type MechanicsBucket, type MechanicsMetric } from "@/lib/mechanicsTrend";
 
-const COLOR_CYAN = "#3ce0d6"; // --accent-cyan (dark theme)
-const COLOR_SUCCESS = "#3ec07a";
-const COLOR_WARNING = "#e6b450";
-const COLOR_GRID = "#1f2533";
-const COLOR_TEXT_DIM = "#6b7280";
-const COLOR_BG_SURFACE = "#11141b";
-const COLOR_BORDER_STRONG = "#2a3142";
+export type MechanicsReference = { value: number; label: string };
+const number = (value: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
 
-/**
- * Macro score over time. Consumes the same /v1/timeseries series the
- * Trends tab already fetched (each bucket now carries avgMacroScore),
- * so this chart costs zero extra requests. Buckets whose games all
- * predate macro scoring come back null and the line skips them via
- * connectNulls instead of plunging to zero.
- *
- * Reference bands mirror the score tones used everywhere else
- * (lib/macro.ts scoreTone): ≥75 success, 50–74 warning, <50 danger.
- */
-export function MacroTrendChart({ series }: { series: Period[] }) {
-  const rows = useMemo(
-    () =>
-      series.map((p) => ({
-        date: p.date,
-        score: typeof p.avgMacroScore === "number" ? p.avgMacroScore : null,
-        games: p.games,
-      })),
-    [series],
-  );
-  const hasAny = rows.some((r) => r.score != null);
-
-  if (!hasAny) {
-    return (
-      <Card title="Macro score over time">
-        <EmptyState
-          title="No macro scores yet"
-          sub="Scores appear once your agent uploads games with a macro breakdown — the Macro tab can backfill older replays."
-        />
-      </Card>
-    );
-  }
-
-  return (
-    <Card title="Macro score over time">
-      <p className="-mt-1 mb-3 text-caption text-text-dim">
-        Average macro score per period · 75+ is clean macro, under 50 means
-        the leaks are costing you games. Drill into any single game on the
-        Macro tab.
-      </p>
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
-            data={rows}
-            margin={{ top: 8, right: 24, bottom: 4, left: 4 }}
-          >
-            <defs>
-              <linearGradient id="macroTrendFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={COLOR_CYAN} stopOpacity={0.3} />
-                <stop offset="100%" stopColor={COLOR_CYAN} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
-            <XAxis
-              dataKey="date"
-              stroke={COLOR_TEXT_DIM}
-              fontSize={11}
-              minTickGap={28}
-              tickMargin={6}
-            />
-            <YAxis
-              stroke={COLOR_TEXT_DIM}
-              fontSize={11}
-              domain={[0, 100]}
-              ticks={[0, 25, 50, 75, 100]}
-              width={36}
-              tickMargin={4}
-            />
-            <ReferenceLine
-              y={75}
-              stroke={COLOR_SUCCESS}
-              strokeOpacity={0.45}
-              strokeDasharray="4 4"
-              label={{
-                value: "75",
-                position: "right",
-                fill: COLOR_SUCCESS,
-                fontSize: 10,
-              }}
-            />
-            <ReferenceLine
-              y={50}
-              stroke={COLOR_WARNING}
-              strokeOpacity={0.4}
-              strokeDasharray="4 4"
-              label={{
-                value: "50",
-                position: "right",
-                fill: COLOR_WARNING,
-                fontSize: 10,
-              }}
-            />
-            <Tooltip
-              cursor={{ stroke: COLOR_CYAN, strokeDasharray: "3 3" }}
-              content={({ active, payload, label }) => {
-                if (!active || !payload || payload.length === 0) return null;
-                const row = payload[0].payload as {
-                  score: number | null;
-                  games: number;
-                };
-                if (row.score == null) return null;
-                return (
-                  <ChartTooltip
-                    header={String(label)}
-                    rows={[
-                      {
-                        key: "score",
-                        label: "Avg macro score",
-                        value: row.score,
-                        dot: COLOR_CYAN,
-                      },
-                      {
-                        key: "games",
-                        label: "Games",
-                        value: row.games,
-                        dot: COLOR_TEXT_DIM,
-                      },
-                    ]}
-                  />
-                );
-              }}
-            />
-            <Area
-              type="monotone"
-              dataKey="score"
-              stroke="none"
-              fill="url(#macroTrendFill)"
-              connectNulls
-              isAnimationActive={false}
-              activeDot={false}
-              legendType="none"
-            />
-            <Line
-              type="monotone"
-              dataKey="score"
-              stroke={COLOR_CYAN}
-              strokeWidth={2.5}
-              connectNulls
-              dot={{ r: 3, strokeWidth: 0, fill: COLOR_CYAN }}
-              activeDot={{
-                r: 5,
-                strokeWidth: 2,
-                stroke: COLOR_BG_SURFACE,
-                fill: COLOR_CYAN,
-              }}
-              isAnimationActive={false}
-            />
-            <ReferenceLine
-              y={0}
-              stroke={COLOR_BORDER_STRONG}
-              strokeWidth={1}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-    </Card>
-  );
+/** Fixed calendar positions, straight observed segments and visible sample
+ * counts. Missing metrics and missing periods always interrupt the line. */
+export function MacroTrendChart({ series, metric = "macro", bucket = "week", reference = null }: { series: Period[]; metric?: MechanicsMetric; bucket?: MechanicsBucket; reference?: MechanicsReference | null }) {
+  const plot = useRef<HTMLDivElement>(null), labelId = useId();
+  const [width, setWidth] = useState(640), [selected, setSelected] = useState("");
+  useEffect(() => {
+    const resize = () => { const size = plot.current?.getBoundingClientRect().width; if (size) setWidth(Math.max(240, size)); };
+    resize();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resize);
+    if (plot.current) observer?.observe(plot.current);
+    window.addEventListener("resize", resize);
+    return () => { observer?.disconnect(); window.removeEventListener("resize", resize); };
+  }, []);
+  const points = useMemo(() => mechanicsPoints(series, metric, bucket), [series, metric, bucket]);
+  const line = mechanicsGeometry(points, metric, reference?.value ?? null, width);
+  const current = points.find(point => point.date === selected) ?? points.at(-1);
+  const name = MECHANICS_METRICS[metric].label;
+  if (!points.some(point => point.value !== null)) return <p className="py-8 text-caption text-text-muted">No measured {name.toLowerCase()} in these periods. Missing measurements stay empty.</p>;
+  return <figure className="space-y-3" aria-labelledby={labelId}>
+    <div ref={plot} className="min-w-0">
+      <svg role="img" aria-label={`${name} by calendar ${bucket}. Hollow points have fewer than five measured games or an unknown sample count.`} viewBox={`0 0 ${width} 220`} className="h-[220px] w-full" data-testid="mechanics-trend-chart">
+        {[0, .5, 1].map(fraction => <g key={fraction}><line x1={44} x2={width - 20} y1={line.y(line.upper * fraction)} y2={line.y(line.upper * fraction)} stroke="rgb(var(--border))" strokeDasharray="3 3" /><text x={36} y={line.y(line.upper * fraction) + 4} textAnchor="end" fill="rgb(var(--text-dim))" fontSize={11}>{number(line.upper * fraction)}</text></g>)}
+        {reference ? <line data-testid="mechanics-reference" x1={44} x2={width - 20} y1={line.y(reference.value)} y2={line.y(reference.value)} stroke="rgb(var(--warning))" strokeWidth={1.5} strokeDasharray="5 4" /> : null}
+        <path d={line.path} fill="none" stroke="rgb(var(--accent))" strokeWidth={2} data-testid="mechanics-trend-line" />
+        {points.filter(point => point.value !== null).map(point => <circle key={point.date} data-date={point.date} data-n={point.n ?? "unknown"} data-hollow={String(point.hollow)} cx={line.x(point.time)} cy={line.y(point.value!)} r={point.date === current?.date ? 5 : 4} stroke="rgb(var(--accent))" strokeWidth={2} fill={point.hollow ? "rgb(var(--bg-surface))" : "rgb(var(--accent))"} onClick={() => setSelected(point.date)}><title>{point.date}: {number(point.value!)} · {point.n === null ? "sample count unavailable" : `${point.n} measured games`}</title></circle>)}
+        <text x={44} y={214} fill="rgb(var(--text-dim))" fontSize={11}>{points[0].date}</text><text x={width - 20} y={214} textAnchor="end" fill="rgb(var(--text-dim))" fontSize={11}>{points.at(-1)!.date}</text>
+      </svg>
+    </div>
+    <div className="flex flex-wrap items-center gap-2"><label htmlFor={`${labelId}-period`} className="text-micro text-text-muted">Inspect period</label><select id={`${labelId}-period`} value={current?.date ?? ""} onChange={event => setSelected(event.target.value)} className="min-h-11 max-w-full rounded-md border border-border bg-bg-surface px-2 text-caption">{points.map(point => <option key={point.date} value={point.date}>{point.date}</option>)}</select><p className="text-caption text-text" aria-live="polite">{current?.value === null ? "Not measured" : current ? number(current.value!) : "—"} · {current?.n == null ? "sample count unavailable" : `${current.n} measured ${current.n === 1 ? "game" : "games"}`}</p></div>
+    <figcaption id={labelId} className="space-y-1 text-micro text-text-muted"><p>Average per calendar {bucket}. Hollow points: fewer than 5 measured games, or a count unavailable in older data. Gaps remain unmeasured; games without this metric do not lower the average.</p>{reference ? <p className="text-warning">Dashed line: {reference.label}, {number(reference.value)}. A population comparison, not a personal target.</p> : null}</figcaption>
+  </figure>;
 }
