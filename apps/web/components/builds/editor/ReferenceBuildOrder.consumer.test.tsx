@@ -20,6 +20,7 @@ describe("actual reference consumers", () => {
   it("saves an untimed unknown reference without classifying it and blocks a malformed clock", async () => {
     render(<BuildEditorModal open onClose={vi.fn()} events={[]} race="Protoss" vsRace="Any" defaultName="Reference plan" initialDraft={{ buildOrder: order }} />);
     expect(screen.getByRole("tab", { name: "Build order" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("combobox", { name: "Skill level" })).toBeTruthy();
     expect((screen.getByRole("button", { name: "Save build" }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: "Save & re-match" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByRole("textbox", { name: "Step 1 time" }), { target: { value: "7:99" } });
