@@ -71,7 +71,8 @@ def test_scouting_mouse_activation_accepts_click_without_activating_or_eating_it
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows native Qt event delivery")
-def test_hidden_native_scouting_control_receives_mouse_activation_without_focus(tmp_path):
+@pytest.mark.parametrize("checkable", [True, False])
+def test_hidden_native_scouting_control_receives_mouse_activation_without_focus(tmp_path, checkable):
     import os
     from pathlib import Path
     import subprocess
@@ -81,6 +82,7 @@ def test_hidden_native_scouting_control_receives_mouse_activation_without_focus(
     environment["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
     result = subprocess.run([sys.executable, "-c", textwrap.dedent('''
         import ctypes
+        import sys
         from ctypes import wintypes
         from PySide6 import QtCore, QtWidgets
         from sc2tools_agent.ui.overlay_input import NativeClickThrough, build_scouting_control, _StyleApi, INPUT_STYLES
@@ -88,9 +90,11 @@ def test_hidden_native_scouting_control_receives_mouse_activation_without_focus(
         window = QtWidgets.QWidget()
         window.setWindowFlag(QtCore.Qt.FramelessWindowHint, True)
         window.setAttribute(QtCore.Qt.WA_TranslucentBackground)
-        source = QtWidgets.QToolButton(window)
+        controls = QtWidgets.QWidget(window)
+        source = QtWidgets.QToolButton(controls)
         source.setObjectName("opponentCardScout")
         source.setAccessibleName("Toggle scouting panel")
+        source.setCheckable(sys.argv[1] == "checkable")
         source.resize(22, 22)
         control = build_scouting_control(source, QtCore=QtCore, QtWidgets=QtWidgets)
         native = NativeClickThrough(api=_StyleApi())
@@ -99,12 +103,14 @@ def test_hidden_native_scouting_control_receives_mouse_activation_without_focus(
         user32.SendMessageW.restype = ctypes.c_ssize_t
         try:
             handle = int(control.winId())
+            assert control.isWindow() and control.parentWidget() is controls
             original = native._api.style(int(window.winId()))
             assert original & 0x80000
             assert native.set_click_through(int(window.winId()), True)
             assert native._api.style(int(window.winId())) & INPUT_STYLES == INPUT_STYLES
             assert not native._api.style(handle) & 0x20
             assert native._api.style(handle) & 0x08000000
+            assert control.isCheckable() == source.isCheckable()
             assert user32.SendMessageW(handle, 0x0021, int(window.winId()), (0x0201 << 16) | 1) == 3
             assert not window.isVisible() and not control.isVisible()
             assert native.set_click_through(int(window.winId()), False)
@@ -113,7 +119,7 @@ def test_hidden_native_scouting_control_receives_mouse_activation_without_focus(
             native.restore_all()
             control.close()
             window.close()
-    ''')], capture_output=True, text=True, timeout=30, env=environment)
+    '''), "checkable" if checkable else "momentary"], capture_output=True, text=True, timeout=30, env=environment)
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -663,7 +669,7 @@ def test_collapsing_companion_keeps_one_pinned_identity_and_one_live_control(tmp
             controller.refresh()
             assert window.isVisible() and page.compact_card.isVisible()
             assert not opponent.isVisible()
-            active = list(controller._scouting_controls.values())
+            active = [widget for widget in controller._scouting_controls.values() if widget.isVisible()]
             assert len(active) == 1 and active[0].isVisible()
             window.hide()
             assert not active[0].isVisible()
