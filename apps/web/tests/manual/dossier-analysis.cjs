@@ -114,4 +114,3 @@ const server = http.createServer((req, res) => {
     expect(writes).toEqual([]); console.log(`${checks} real analysis browser checks passed; all writes and nonlocal traffic blocked`);
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; server.close(); });
-

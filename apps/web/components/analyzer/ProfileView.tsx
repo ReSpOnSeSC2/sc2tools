@@ -547,4 +547,3 @@ export function buildOpponentReplayHistoryQuery(
   }
   return query;
 }
-
