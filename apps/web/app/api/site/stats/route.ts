@@ -4,7 +4,8 @@ import { parseSiteStats } from "@/lib/siteStats";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const headers = { "Cache-Control": "private, no-store, max-age=0" };
+const headers = { "Cache-Control": "public, s-maxage=15, stale-while-revalidate=60" };
+const unavailableHeaders = { "Cache-Control": "private, no-store, max-age=0" };
 
 export async function GET() {
   const apiBase = (
@@ -23,7 +24,7 @@ export async function GET() {
   } catch {
     return NextResponse.json(
       { error: "site_stats_unavailable" },
-      { status: 503, headers },
+      { status: 503, headers: unavailableHeaders },
     );
   }
 }

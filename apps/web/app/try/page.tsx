@@ -18,6 +18,7 @@ import { getInstantImportMode, type InstantImportMode } from "@/lib/instant/flag
 import { guidesEnabled } from "@/lib/guides/flags";
 import { fetchPublishedGuidePaths } from "@/lib/guides/api";
 import { buildReportGuideLinks } from "@/lib/instant/reportGuideLinks";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
 /**
  * Page metadata per rollout mode: none when "off" (the route is a plain
@@ -29,6 +30,7 @@ import { buildReportGuideLinks } from "@/lib/instant/reportGuideLinks";
 function tryMetadata(mode: InstantImportMode): Metadata {
   if (mode === "off") return {};
   return {
+    ...pageMetadata({ title: "SC2 Replay Analyzer", shareTitle: "Free SC2 Replay Analyzer | SC2 Tools", description: "Analyze your StarCraft II replays privately in your browser. No download, no account.", canonical: "/try", routeOgImage: true }),
     // Leads with the query people search ("sc2 replay analyzer"); the page's
     // H1 carries the same phrase.
     // Already branded, so it skips the root title template.

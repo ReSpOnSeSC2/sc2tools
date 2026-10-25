@@ -23,8 +23,10 @@ import { helpCategory } from "@/lib/help/categories";
 import { helpInlinePlainText } from "@/lib/help/inline";
 import { helpArticleCrumbs, helpArticleJsonLd } from "@/lib/help/jsonLd";
 import { siteTitle } from "@/lib/siteTitle";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
+import { siteOrigin } from "@/lib/seo/absoluteUrl";
 
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com").replace(/\/+$/, "");
+const SITE_URL = siteOrigin();
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -45,22 +47,17 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const shareTitle = siteTitle(title);
   const description = helpInlinePlainText(article.summary);
   const canonical = helpArticlePath(article.slug);
+  const metadata = pageMetadata({ title, description, canonical, shareTitle });
   return {
-    title,
-    description,
-    alternates: { canonical },
+    ...metadata,
     // Invite-only features stay out of search engines (and the sitemap).
     ...(article.noindex ? { robots: { index: false, follow: true } } : {}),
     openGraph: {
+      ...metadata.openGraph,
       type: "article",
       siteName: "SC2 Tools",
-      url: canonical,
-      title: shareTitle,
-      description,
       modifiedTime: article.updated,
-      images: [{ url: "/og.jpg", width: 1200, height: 630, alt: "SC2 Tools Help" }],
     },
-    twitter: { card: "summary_large_image", title: shareTitle, description, images: ["/og.jpg"] },
   };
 }
 

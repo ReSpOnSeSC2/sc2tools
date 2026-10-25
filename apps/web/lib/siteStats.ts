@@ -40,7 +40,6 @@ export function parseSiteStats(value: unknown): SiteStats {
 
 export async function fetchSiteStats(url = "/api/site/stats"): Promise<SiteStats> {
   const response = await fetch(url, {
-    cache: "no-store",
     signal: AbortSignal.timeout(8_000),
   });
   if (!response.ok) throw new Error("Site statistics are temporarily unavailable");

@@ -244,3 +244,17 @@ Keep `/v1/public/preview-replay`, its health route and the preview CLI wiring fo
   bundle, with version and source/bundle identity checks. Missing Python hides
   the sample instead of retaining stale data. No private replay should be used
   to build the public sample artifact.
+
+## Optional public Community cache (ADR 0056)
+
+No environment value, integration, collection, index, migration or provider is
+enabled by this change. API `COMMUNITY_REVALIDATE_URL` and the shared server-only
+`COMMUNITY_REVALIDATE_SECRET` in API/web are optional and must be configured
+together later by the owner. See `docs/DEPLOYMENT_GUIDE.md` for the exact signed
+protocol and local validation. Unset API configuration sends nothing; unset web
+secret keeps user-derived public reads/share cards uncached. General configured
+Community data uses300-second tags; best-effort purge has no guaranteed seconds
+to visibility. Opponent API/fetch/page always remain no-store, with a bounded
+one-hour service LRU behind fresh floor/removal admission. No six-hour rendered
+opponent cache is enabled. Rollback is a source revert; no data conversion or
+production mutation is required.

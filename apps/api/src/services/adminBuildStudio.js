@@ -8,8 +8,9 @@ const { catalog, validatePolicy, applyPolicy, presetScope } = require("./presetP
 const EDITABLE = new Set(PUBLIC_BUILD_FIELDS);
 
 class AdminBuildStudioService {
-  /** @param {import('../db/connect').DbContext} db @param {{customBuilds:import('./customBuilds').CustomBuildsService,policies:import('./presetPolicies').PresetPoliciesService}} deps */
-  constructor(db, deps) { this.db = db; this.customBuilds = deps.customBuilds; this.policies = deps.policies; }
+  /** @param {import('../db/connect').DbContext} db @param {{customBuilds:import('./customBuilds').CustomBuildsService,policies:import('./presetPolicies').PresetPoliciesService,onCommunityChanged?:()=>void}} deps */
+  constructor(db, deps) { this.db = db; this.customBuilds = deps.customBuilds; this.policies = deps.policies; this.onCommunityChanged = deps.onCommunityChanged || null; }
+  notifyCommunityChanged() { try { this.onCommunityChanged?.(); } catch { /* Public commit/unknown outcome remains authoritative. */ } }
 
   /** Stable keyset traversal exposes every definition, without a first-page cap masquerading as the catalog.
    * @param {string} scope @param {{after?:string,owner?:string}} [options] */
@@ -84,11 +85,13 @@ class AdminBuildStudioService {
         const title = input.title === undefined ? current.title : input.title;
         const description = input.description === undefined ? current.description : input.description;
         if (typeof title !== "string" || !title.trim() || title.length > 120 || typeof description !== "string" || description.length > 4000) throw problem(400, "invalid_build_definition");
-        const saved = await this.db.communityBuilds.updateOne({ _id: objectId(id), ownerUserId: current.owner, ...(input.expectedRevision === 0 ? { $or: [{ publicationSequence: 0 }, { publicationSequence: { $exists: false } }] } : { publicationSequence: input.expectedRevision }) }, /** @type {import('mongodb').Document} */ ({
+        let saved;
+        try { saved = await this.db.communityBuilds.updateOne({ _id: objectId(id), ownerUserId: current.owner, ...(input.expectedRevision === 0 ? { $or: [{ publicationSequence: 0 }, { publicationSequence: { $exists: false } }] } : { publicationSequence: input.expectedRevision }) }, /** @type {import('mongodb').Document} */ ({
           $set: { build: publicBuildSnapshot(build), title, description, updatedAt: new Date(), publicationRevision: randomUUID() }, $inc: { publicationSequence: 1 },
           $push: { _definitionHistory: { $each: [{ revision: current.revision, savedAt: new Date(), build: current.build, title: current.title, description: current.description }], $slice: -10 } },
-        }));
+        })); } catch (error) { this.notifyCommunityChanged(); throw error; }
         if (!saved.matchedCount) throw problem(409, "build_definition_changed");
+        this.notifyCommunityChanged();
       }
       await lease.assert();
       return this.detail(scope, id);

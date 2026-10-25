@@ -1,7 +1,7 @@
 import { BookMarked, Calendar } from "lucide-react";
 import { StatCard } from "@/components/ui/Stat";
 import { Icon } from "@/components/ui/Icon";
-import { fmtMonthYear } from "@/lib/format";
+import { publicDate } from "@/lib/seo/publicDate";
 import { coerceRace, raceIconName } from "@/lib/race";
 
 export interface AuthorStatsStripProps {
@@ -80,7 +80,7 @@ export function AuthorStatsStrip({
         label="Publishing since"
         value={
           firstPublishedAt || joinedAt ? (
-            <span className="text-h3">{fmtMonthYear(firstPublishedAt || joinedAt)}</span>
+            <span className="text-h3">{publicDate(firstPublishedAt || joinedAt)}</span>
           ) : (
             <span className="text-text-muted">—</span>
           )
