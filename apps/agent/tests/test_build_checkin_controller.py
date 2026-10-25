@@ -524,9 +524,9 @@ def test_randomizer_strip_roll_now_and_rolled_chip(h: Harness) -> None:
 
     h.ctl.roll_now(key)
     h.pump()
-    assert h.api.live_actions()[-1] == "release"
+    assert h.api.calls_to("roll_live_randomizer") == [((key, "PvZ"), {})]
     strip = _loading(h).randomizer
-    assert strip.label == RANDOMIZER_ROLLING
+    assert strip.label == "🎲 Randomizer: DT into 3 Gate"
     assert strip.can_roll_now is False
 
     h.api.live[key]["randomizer"] = {
@@ -548,7 +548,54 @@ def test_roll_now_is_sent_once(h: Harness) -> None:
     h.ctl.roll_now(key)
     h.ctl.roll_now(key)
     h.pump()
-    assert h.api.live_actions().count("release") == 1
+    assert len(h.api.calls_to("roll_live_randomizer")) == 1
+
+
+def test_failed_randomize_request_restores_retry_and_success_clears_the_error(request):
+    from sc2tools_agent.build_checkin.models import STATUS_RANDOMIZER_REQUEST_FAILED
+    harness = request.getfixturevalue("h")
+    key = harness.new_key()
+    harness.send(envelope("match_loading", key))
+    harness.api.fail_next("roll_live_randomizer", api_error(503, "unavailable"))
+    harness.ctl.roll_now(key)
+    harness.pump()
+    assert _loading(harness).randomizer.can_roll_now
+    assert _loading(harness).status == STATUS_RANDOMIZER_REQUEST_FAILED
+    harness.ctl.roll_now(key)
+    harness.pump()
+    assert not _loading(harness).randomizer.can_roll_now
+    assert _loading(harness).randomizer.rolled_key == "custom:dt-3-gate"
+    assert not _loading(harness).status
+
+
+def test_released_hold_without_widget_result_still_allows_explicit_randomize(request):
+    harness = request.getfixturevalue("h")
+    key = harness.new_key()
+    harness.send(envelope("match_loading", key))
+    harness.ctl._games[key].released = True
+    harness.ctl.roll_now(key)
+    harness.pump()
+    assert _loading(harness).randomizer.rolled_key == "custom:dt-3-gate"
+
+
+def test_pending_randomize_has_a_choosing_state_without_animating_or_requiring_a_widget():
+    executor = ManualExecutor()
+    harness = Harness(executor=executor).boot()
+    executor.run_all()
+    harness.pump()
+    key = harness.new_key()
+    harness.send(envelope("match_loading", key))
+    executor.run_all()
+    harness.pump()
+    executor.run_all()
+    harness.pump()
+    harness.ctl.roll_now(key)
+    harness.pump()
+    assert _loading(harness).randomizer.label == RANDOMIZER_ROLLING
+    assert not _loading(harness).randomizer.can_roll_now
+    executor.run_all()
+    harness.pump()
+    assert _loading(harness).randomizer.rolled_key == "custom:dt-3-gate"
 
 
 def test_no_strip_without_randomizer(h: Harness) -> None:

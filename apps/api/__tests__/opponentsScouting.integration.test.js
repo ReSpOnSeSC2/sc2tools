@@ -148,6 +148,30 @@ describe("OpponentsService last5GamesScouting", () => {
     expect(out.last5GamesScouting.length).toBe(5);
     const ids = out.last5GamesScouting.map((g) => g.gameId);
     expect(ids).toEqual(["g5", "g4", "g3", "g2", "g1"]);
+    expect(out.playerCard).toMatchObject({ sampleSize: 5, totalGames: 5, sampleLimit: 100, sampled: false });
+    expect(out.playerCard.axes.find((axis) => axis.key === "economy")).toMatchObject({ value: 100, matches: 5, samples: 5 });
+  });
+
+  test("player card respects the requested date window and caller's private history", async () => {
+    await seedFixture();
+    await db.games.insertMany(makeFiveGameFixture("another-user", { pulseId, displayName }));
+    const out = await opponents.get(userId, pulseId, { since: new Date("2026-04-13T00:00:00Z") });
+    expect(out.playerCard).toMatchObject({ sampleSize: 2, totalGames: 2, sampled: false });
+    expect(out.playerCard.axes.every((axis) => axis.samples <= 2)).toBe(true);
+    expect(out.last5GamesScouting).toHaveLength(5);
+    expect(await opponents.get("not-the-owner", pulseId)).toBeNull();
+  });
+
+  test("player card uses the analytical sample beyond the sixty scouting envelopes", async () => {
+    await seedFixture();
+    const example = makeFiveGameFixture(userId, { pulseId, displayName })[0];
+    await db.games.insertMany(Array.from({ length: 60 }, (_, i) => ({
+      ...example, gameId: `extra-${i}`, date: new Date(Date.UTC(2026, 3, 15, 0, i)),
+    })));
+    const out = await opponents.get(userId, pulseId);
+    expect(out.gamesScouting).toHaveLength(60);
+    expect(out.playerCard).toMatchObject({ sampleSize: 65, totalGames: 65, sampled: false });
+    expect(out.playerCard.axes.find((axis) => axis.key === "economy").samples).toBe(65);
   });
 
   test("per-game envelopes carry real build-order events with timestamps", async () => {
@@ -205,5 +229,7 @@ describe("OpponentsService last5GamesScouting", () => {
     const out = await opponents.get(userId, pulseId);
     expect(out).not.toBeNull();
     expect(out.last5GamesScouting).toEqual([]);
+    expect(out.playerCard.sampleSize).toBe(0);
+    expect(out.playerCard.axes.every((axis) => axis.value === null)).toBe(true);
   });
 });

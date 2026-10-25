@@ -6,16 +6,20 @@ ID durably saved by PairBackend before any cloud request.
 from __future__ import annotations
 
 from urllib.parse import urlparse
+from contextlib import contextmanager
+import hashlib
 import re
+import threading
 
 import requests
 
 
 class CloudStreamError(ValueError):
-    def __init__(self, message, *, http_status=None, connection_invalid=False):
+    def __init__(self, message, *, http_status=None, connection_invalid=False, pairing_changed=False):
         super().__init__(message)
         self.http_status = http_status if type(http_status) is int and 100 <= http_status <= 599 else None
         self.connection_invalid = connection_invalid is True
+        self.pairing_changed = pairing_changed is True
 
 
 def validated_obs_connection(value, stream_id):
@@ -39,14 +43,19 @@ def validated_obs_connection(value, stream_id):
 
 
 class CloudStreamingClient:
-    def __init__(self, connection_provider, *, transport=None, guard=None):
+    def __init__(self, connection_provider, *, transport=None, identity_provider=None, guard=None):
         self.connection_provider = connection_provider
+        self.identity_provider = identity_provider
         self.transport = transport or requests.request
         self.guard = guard
+        self._operation_context = threading.local()
 
     def bound(self, connection, *, guard=None):
+        expected = self.context()
+        if expected["connection"] != connection:
+            raise CloudStreamError("SC2Tools pairing changed. Refresh connections before continuing.", pairing_changed=True)
         return CloudStreamingClient(lambda: connection, transport=self.transport,
-            guard=lambda: self.connection_provider() == connection and (guard is None or guard()))
+            guard=lambda: self.context() == expected and (guard is None or guard()))
 
     def title_session(self):
         result = self._request("GET", "/v1/agent/streaming/session")
@@ -54,10 +63,43 @@ class CloudStreamingClient:
             raise CloudStreamError("Stream-title statistics are unavailable on this server.")
         return result
 
+    def context(self):
+        if self.identity_provider is not None:
+            base, token, account = self.identity_provider()
+        else:
+            base, token = self.connection_provider()
+            account = token
+        connection_key = hashlib.sha256((base + "\0" + token).encode("utf-8")).hexdigest() if token else None
+        account_key = hashlib.sha256((base + "\0" + account).encode("utf-8")).hexdigest() if token and account else None
+        return {"connection": (base, token), "accountKey": account_key, "connectionKey": connection_key}
+
+    def assert_context(self, expected):
+        if self.context() != expected or self.guard is not None and not self.guard():
+            raise CloudStreamError("SC2Tools pairing changed. Refresh connections before continuing; existing broadcasts are preserved.",
+                connection_invalid=True, pairing_changed=True)
+
+    @contextmanager
+    def operation(self, expected=None):
+        previous = getattr(self._operation_context, "value", None)
+        captured = previous or expected or self.context()
+        if expected is not None and captured != expected:
+            self.assert_context(expected)
+            raise CloudStreamError("SC2Tools pairing changed. Refresh connections before continuing.", pairing_changed=True)
+        self.assert_context(captured)
+        self._operation_context.value = captured
+        try:
+            yield captured
+            self.assert_context(captured)
+        except Exception:
+            self.assert_context(captured)
+            raise
+        finally:
+            self._operation_context.value = previous
+
     def _request(self, method, path, *, params=None, body=None):
-        if self.guard is not None and not self.guard():
-            raise CloudStreamError("The paired account changed. Review automatic title settings again.")
-        base, token = self.connection_provider()
+        captured = getattr(self._operation_context, "value", None) or self.context()
+        self.assert_context(captured)
+        base, token = captured["connection"]
         if not token:
             raise CloudStreamError("Pair this agent with your SC2Tools account first.")
         parsed = urlparse(base)
@@ -69,6 +111,7 @@ class CloudStreamingClient:
             response = self.transport(method, base.rstrip("/") + path,
                 headers={"Authorization": "Bearer " + token, "Accept": "application/json"},
                 params=params, json=body, timeout=(5, 25), allow_redirects=False)
+            self.assert_context(captured)
             if response.status_code == 404:
                 raise CloudStreamError("Stream controls are not available on this SC2Tools server yet.", http_status=404)
             if response.status_code in {401, 403}:
@@ -80,14 +123,15 @@ class CloudStreamingClient:
             if not 200 <= response.status_code < 300:
                 raise CloudStreamError("SC2Tools could not verify the stream request. Check the session before trying again.", http_status=response.status_code)
             result = response.json()
-            if self.guard is not None and not self.guard():
-                raise CloudStreamError("The paired account changed. Review automatic title settings again.")
+            self.assert_context(captured)
             if not isinstance(result, (dict, list)):
                 raise CloudStreamError("SC2Tools returned incomplete stream information.")
             return result
         except CloudStreamError:
+            self.assert_context(captured)
             raise
         except Exception:
+            self.assert_context(captured)
             raise CloudStreamError("The stream request could not be verified. Existing broadcasts are preserved; recover before preparing again.") from None
 
     def statuses(self):

@@ -437,7 +437,7 @@ function buildMeRouter(deps) {
         try {
           // Build check-in switches reach the agent as a user-room ping;
           // randomizer pools change which builds are check-in options.
-          deps.buildIntents.preferencesChanged(auth.userId, type);
+            await deps.buildIntents.preferencesChanged(auth.userId, type);
         } catch {
           // Advisory: clients also refresh on their own.
         }

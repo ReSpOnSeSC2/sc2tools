@@ -28,7 +28,13 @@ class StreamTitleController:
         return provider() if callable(provider) else ("", "")
 
     def owner(self):
-        return connection_key(self.connection()) if self.service.account_mode == "sc2tools" else ""
+        if self.service.account_mode != "sc2tools":
+            return ""
+        read = getattr(self.service.cloud_client, "context", None)
+        if callable(read):
+            context = read()
+            return connection_key((context.get("accountKey") or "", context.get("connectionKey") or ""))
+        return connection_key(self.connection())
 
     def _current(self):
         owner = self.owner()
@@ -94,6 +100,7 @@ class StreamTitleController:
             if service.stop_event.is_set() or self.owner() != owner:
                 return
             self._current()
+            service._sync_cloud_owner(service._connection_context())
             self.stats = stats
             self.message = "Preview uses your synced cloud session and recorded ladder history."
             if automatic and self.settings["enabled"]:

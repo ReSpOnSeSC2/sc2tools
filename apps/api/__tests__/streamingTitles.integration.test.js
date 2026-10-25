@@ -80,7 +80,7 @@ describe("real buildApp paired-agent stream control boundary", () => {
     const session = jest.spyOn(services.games, "todaySession").mockResolvedValue({ wins: 1, losses: 0, mmrCurrent: 5001, league: "Grandmaster", region: "NA" });
     await db.games.insertMany([
       { userId: owner, gameId: "title-fixture", date: new Date(), isLadderGame: true, myRace: "Protoss", myMmr: 5000,
-        myToonHandle: "1-S2-1-10", result: "win", opponent: { race: "Zerg", displayName: "private-name" } },
+        myToonHandle: "1-S2-1-10", result: "Victory", opponent: { race: "Zerg", displayName: "private-name" } },
       { userId: "other-owner", gameId: "foreign-fixture", date: new Date(), isLadderGame: true, myMmr: 8000, result: "win" },
     ]);
     try {

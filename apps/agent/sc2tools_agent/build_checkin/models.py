@@ -45,8 +45,8 @@ INTRO_TEXT = (
     "even if the game goes sideways."
 )
 WAITING_FOR_MATCHUP = "Waiting for matchup…"
-RANDOMIZER_WILL_ROLL = "🎲 Randomizer will roll — pick a build to skip it"
-RANDOMIZER_ROLLING = "🎲 Rolling the randomizer…"
+RANDOMIZER_WILL_ROLL = "🎲 Randomize a build or choose your own"
+RANDOMIZER_ROLLING = "🎲 Choosing a build…"
 RANDOMIZER_ROLLED = "🎲 Randomizer: {name}"
 LOCKED_IN = "Locked in: {name}"
 PICKED_ON_WEB = "Picked on sc2tools.com: {name}"
@@ -60,6 +60,7 @@ STATUS_DECLARE_OFFLINE = (
     "Couldn't reach sc2tools.com. We'll confirm your pick after the game."
 )
 STATUS_DECLARE_UNAVAILABLE = "That build isn't available for this matchup."
+STATUS_RANDOMIZER_REQUEST_FAILED = "Couldn't select a build. Check the connection and try Randomize again."
 STATUS_REPLAY_UNAVAILABLE = (
     "Couldn't check your replay. You can still pick a build."
 )
@@ -613,7 +614,7 @@ class RandomizerStripModel:
     rolled_key: Optional[str] = None
     rolled_name: Optional[str] = None
     can_roll_now: bool = False
-    """Show **Roll now** (releases the hold so the widget spins)."""
+    """Show **Randomize** to select and save the shared build choice."""
 
 
 @dataclass(frozen=True)
@@ -625,7 +626,7 @@ class LoadingCardModel:
 
     Actions: a row → ``declare(game_key, key)``; **Change** →
     ``undeclare`` (reopens the list; the pick stands on the server until
-    another row or **Not now**); **Roll now** → ``roll_now``; **Not
+    another row or **Not now**); **Randomize** → ``roll_now``; **Not
     now** → ``not_now``; "Don't ask at loading" → ``disable("loading")``;
     the intro's close → ``dismiss_intro()``.
     """
@@ -912,6 +913,7 @@ __all__ = [
     "SIDE_YOU",
     "STATUS_DECLARE_OFFLINE",
     "STATUS_DECLARE_UNAVAILABLE",
+    "STATUS_RANDOMIZER_REQUEST_FAILED",
     "STATUS_OPTIONS_FAILED",
     "STATUS_REPLAY_UNAVAILABLE",
     "STATUS_SAVE_FAILED",

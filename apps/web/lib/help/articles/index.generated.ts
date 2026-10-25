@@ -38,14 +38,17 @@ import builds_randomizer from "./builds/randomizer";
 import builds_readingGuideStats from "./builds/reading-guide-stats";
 import builds_rulesExplained from "./builds/rules-explained";
 import desktopApp_desktopAppActivityLog from "./desktop-app/desktop-app-activity-log";
+import desktopApp_desktopAppImport from "./desktop-app/desktop-app-import";
 import desktopApp_desktopAppInstall from "./desktop-app/desktop-app-install";
 import desktopApp_desktopAppOverview from "./desktop-app/desktop-app-overview";
 import desktopApp_desktopAppPerformance from "./desktop-app/desktop-app-performance";
+import desktopApp_desktopAppRecentGames from "./desktop-app/desktop-app-recent-games";
 import desktopApp_desktopAppStatus from "./desktop-app/desktop-app-status";
 import desktopApp_desktopAppSyncProblems from "./desktop-app/desktop-app-sync-problems";
 import desktopApp_desktopAppSyncRange from "./desktop-app/desktop-app-sync-range";
 import desktopApp_desktopAppTray from "./desktop-app/desktop-app-tray";
 import desktopApp_desktopAppUpdates from "./desktop-app/desktop-app-updates";
+import desktopApp_desktopCompanion from "./desktop-app/desktop-companion";
 import desktopApp_desktopScouting from "./desktop-app/desktop-scouting";
 import desktopApp_desktopStreamTitles from "./desktop-app/desktop-stream-titles";
 import desktopApp_pairingTroubleshooting from "./desktop-app/pairing-troubleshooting";
@@ -112,14 +115,17 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   builds_readingGuideStats,
   builds_rulesExplained,
   desktopApp_desktopAppActivityLog,
+  desktopApp_desktopAppImport,
   desktopApp_desktopAppInstall,
   desktopApp_desktopAppOverview,
   desktopApp_desktopAppPerformance,
+  desktopApp_desktopAppRecentGames,
   desktopApp_desktopAppStatus,
   desktopApp_desktopAppSyncProblems,
   desktopApp_desktopAppSyncRange,
   desktopApp_desktopAppTray,
   desktopApp_desktopAppUpdates,
+  desktopApp_desktopCompanion,
   desktopApp_desktopScouting,
   desktopApp_desktopStreamTitles,
   desktopApp_pairingTroubleshooting,

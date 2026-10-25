@@ -7,6 +7,8 @@ def apply_title(service, title, description, platforms, *, client=None):
     if service.stop_event.is_set():
         return
     if "youtube" in platforms:
+        if client and not service._setup_matches(service._connection_context()):
+            raise ValueError("Save YouTube setup for this account before updating its title. Existing broadcasts are preserved.")
         previous_api = service.backend.api
         if client:
             from .cloud_client import CloudGoogleAPI
@@ -46,6 +48,8 @@ def apply_title(service, title, description, platforms, *, client=None):
             service.platform_results[name] = {"ok": verified or offline, "message": message,
                 "title_verified": verified, "title_status": status.get("titleStatus", "verified" if verified else "unverified")}
         except Exception as error:
+            if getattr(error, "pairing_changed", False):
+                raise
             if getattr(error, "connection_invalid", False) is True:
                 service.platform_status[name] = {"platform": name, "connected": False, "reason": "Stream-control permission must be reconnected."}
             service.platform_results[name] = {"ok": False, "message": "Title request could not be verified. Check the platform before trying again."}

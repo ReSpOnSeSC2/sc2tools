@@ -1,6 +1,7 @@
 "use strict";
 
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
+const { resultBucket } = require("../util/parseQuery");
 const RACES = new Map([["Protoss", "P"], ["Terran", "T"], ["Zerg", "Z"]]);
 const LEAGUES = new Set(["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"]);
 const HISTORY_LIMIT = 512;
@@ -32,10 +33,11 @@ async function streamTitleSession(db, games, userId) {
       peak = Math.max(peak ?? 0, row.myMmr);
     }
     const mine = RACES.get(row.myRace), theirs = RACES.get(row.opponent?.race);
-    if (!mine || !theirs || !["win", "loss"].includes(row.result)) continue;
+    const result = resultBucket(row.result);
+    if (!mine || !theirs || !result) continue;
     const key = `${mine}v${theirs}`;
     const counts = winRates[key] || (winRates[key] = { wins: 0, losses: 0 });
-    counts[row.result === "win" ? "wins" : "losses"] += 1;
+    counts[result === "win" ? "wins" : "losses"] += 1;
   }
   return { schema: 1, generatedAt: now.toISOString(),
     session: { wins: session.wins, losses: session.losses },

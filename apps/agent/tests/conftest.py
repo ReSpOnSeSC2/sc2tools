@@ -2,9 +2,23 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from sc2tools_agent import replay_finder
+
+
+@pytest.fixture(autouse=True)
+def _flush_qt_deferred_deletes():
+    yield
+    core = sys.modules.get("PySide6.QtCore")
+    widgets = sys.modules.get("PySide6.QtWidgets")
+    application_type = getattr(widgets, "QApplication", None)
+    if core is not None and application_type is not None:
+        application = application_type.instance()
+        if application is not None:
+            core.QCoreApplication.sendPostedEvents(None, core.QEvent.DeferredDelete)
 
 
 @pytest.fixture(autouse=True)

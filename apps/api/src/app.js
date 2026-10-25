@@ -50,6 +50,8 @@ const { AtlasInfrastructureClient } = require("./services/atlasInfrastructure");
 const { BackupStatusService } = require("./services/backupStatus");
 const { CustomBuildsService } = require("./services/customBuilds");
 const { BuildIntentsService } = require("./services/buildIntents");
+const { GhostExamplesService } = require("./services/ghostExamples");
+const { GhostReferencesService } = require("./services/ghostReferences");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { PlatformIntegrationsService } = require("./services/platformIntegrations");
@@ -159,6 +161,7 @@ const { buildCoachingService } = require("./services/coaching");
 const { buildOpponentsRouter } = require("./routes/opponents");
 const { buildGamesRouter } = require("./routes/games");
 const { buildBuildIntentsRouter } = require("./routes/buildIntents");
+const { buildGhostBuildsRouter } = require("./routes/ghostBuilds");
 const { buildReplaysRouter } = require("./routes/replays");
 const { buildReplayFilesRouter } = require("./routes/replayFiles");
 const { buildPlaybackArtifactsRouter } = require("./routes/playbackArtifacts");
@@ -656,6 +659,8 @@ function makeServices(deps, clerk) {
   // drop the cached lists so "Add new build" can confirm the new build at once.
   customBuilds.onDefinitionsChanged = (userId) => buildIntents.invalidateOptions(userId);
   const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
+  const ghostExamples = new GhostExamplesService({ db: deps.db, gameDetails });
+  const ghostReferences = new GhostReferencesService({ db: deps.db, gameDetails });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const imports = new ImportService(deps.db, { io: deps.io, notifications, logger: deps.logger });
   const spatial = new SpatialService(deps.db);
@@ -867,6 +872,8 @@ function makeServices(deps, clerk) {
     infrastructureUsage,
     customBuilds,
     buildIntents,
+    ghostExamples,
+    ghostReferences,
     pairings,
     overlayTokens,
     platformIntegrations,
@@ -1523,6 +1530,10 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildBuildIntentsRouter({ buildIntents: services.buildIntents, auth }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildGhostBuildsRouter({ auth, isAdmin, examples: services.ghostExamples, references: services.ghostReferences }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,

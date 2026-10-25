@@ -81,14 +81,14 @@ def loading_model(
         or (options is not None and options.randomizer_enabled)
     )
     strip: Optional[RandomizerStripModel] = None
-    if matchup and randomizer_on and locked is None:
+    if matchup and (randomizer_on or roll is not None) and locked is None:
         if roll is not None:
             strip = RandomizerStripModel(
                 label=RANDOMIZER_ROLLED.format(name=roll.name),
                 rolled_key=roll.key,
                 rolled_name=roll.name,
             )
-        elif game.released:
+        elif game.randomizer_request_inflight:
             strip = RandomizerStripModel(label=RANDOMIZER_ROLLING)
         else:
             strip = RandomizerStripModel(

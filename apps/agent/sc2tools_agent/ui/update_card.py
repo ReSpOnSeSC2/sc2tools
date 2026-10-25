@@ -3,6 +3,7 @@
 def build_update_card(parent, *, QtCore, QtWidgets, install, later, download, help_button):
     from PySide6 import QtGui
     from . import palette
+    from .qt_helpers import build_flow_layout
 
     def arrow_icon(expanded):
         pixmap = QtGui.QPixmap(12, 12)
@@ -26,7 +27,7 @@ def build_update_card(parent, *, QtCore, QtWidgets, install, later, download, he
             self.message = QtWidgets.QLabel()
             self.message.setWordWrap(True)
             layout.addWidget(self.message)
-            row = QtWidgets.QHBoxLayout()
+            row = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets)
             self.notes_button = QtWidgets.QPushButton("What's new")
             self.notes_button.setCheckable(True)
             self.notes_button.setIcon(arrow_icon(False))
@@ -43,7 +44,6 @@ def build_update_card(parent, *, QtCore, QtWidgets, install, later, download, he
             self.download_button.clicked.connect(download)
             row.addWidget(self.download_button)
             row.addWidget(help_button)
-            row.addStretch(1)
             layout.addLayout(row)
             self.notes = QtWidgets.QTextBrowser()
             self.notes.setOpenExternalLinks(True)

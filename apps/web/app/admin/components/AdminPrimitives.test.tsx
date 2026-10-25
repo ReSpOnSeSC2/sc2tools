@@ -21,10 +21,11 @@ describe("admin navigation and page primitives", () => {
     render(<AdminShell>Page</AdminShell>);
     expect(mocks.scroll.mock.calls.every(([options]) => options.behavior === "auto")).toBe(true);
   });
-  it("has five labelled groups, thirteen unique icons, longest-prefix selection and mobile scrolling", () => {
+  it("has five labelled groups, unique routes, longest-prefix selection and mobile scrolling", () => {
     expect(NAV_GROUPS).toHaveLength(5);
     const items = NAV_GROUPS.flatMap((group) => [...group.items]);
-    expect(items).toHaveLength(14);
+    expect(items).toHaveLength(15);
+    expect(new Set(items.map((item) => item.href)).size).toBe(15);
     expect(new Set(items.map((item) => item.icon)).size).toBe(14);
     const { rerender } = render(<AdminShell>Page</AdminShell>);
     expect(screen.getByRole("list", { name: "Community" })).toBeTruthy();
@@ -36,6 +37,9 @@ describe("admin navigation and page primitives", () => {
     expect(within(mobile).getByRole("link", { name: "Global trends" }).getAttribute("aria-current")).toBe("page");
     expect(mocks.scroll).toHaveBeenCalledTimes(2);
     expect(within(screen.getByRole("list", { name: "Content" })).getByRole("link", { name: "Announcements" }).getAttribute("href")).toBe("/admin/announcements");
+    expect(within(screen.getByRole("list", { name: "Content" })).getByRole("link", { name: "Ghost examples" }).getAttribute("href")).toBe("/admin/ghost-examples");
+    mocks.pathname = "/admin/ghost-examples"; rerender(<AdminShell>Page</AdminShell>);
+    expect(within(mobile).getByRole("link", { name: "Ghost examples" }).getAttribute("aria-current")).toBe("page");
     mocks.pathname = "/admin/announcements"; rerender(<AdminShell>Page</AdminShell>);
     expect(within(mobile).getByRole("link", { name: "Announcements" }).getAttribute("aria-current")).toBe("page");
   });

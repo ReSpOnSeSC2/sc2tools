@@ -4,10 +4,10 @@ const { streamTitleSession } = require("../src/services/streamTitleSession");
 
 test("uses shared owner session and a bounded projected ladder read without detail hydration", async () => {
   const rows = [
-    { myToonHandle: "1-S2-1-11", myRace: "Protoss", myMmr: 5000, result: "win", opponent: { race: "Zerg" } },
-    { myToonHandle: "2-S2-1-22", myRace: "Protoss", myMmr: 6500, result: "loss", opponent: { race: "Zerg" } },
+    { myToonHandle: "1-S2-1-11", myRace: "Protoss", myMmr: 5000, result: "Victory", opponent: { race: "Zerg" } },
+    { myToonHandle: "2-S2-1-22", myRace: "Protoss", myMmr: 6500, result: "Defeat", opponent: { race: "Zerg" } },
     { myToonHandle: "1-S2-1-11", myRace: "Terran", myMmr: 6000, result: "win", opponent: { race: "Protoss" } },
-    { myToonHandle: "1-S2-1-11", myRace: "Protoss", myMmr: 5100, result: "draw", opponent: { race: "Zerg" } },
+    { myToonHandle: "1-S2-1-11", myRace: "Protoss", myMmr: 5100, result: "Tie", opponent: { race: "Zerg" } },
   ];
   const cursor = { sort: jest.fn().mockReturnThis(), limit: jest.fn().mockReturnThis(), toArray: jest.fn(async () => rows) };
   const db = { games: { find: jest.fn(() => cursor) } };

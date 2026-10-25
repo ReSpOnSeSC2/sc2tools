@@ -1,14 +1,19 @@
 "use client";
 
 import { MapArtwork } from "@/components/maps/MapArtwork";
+import { Icon } from "@/components/ui/Icon";
+import { humanizeRuleEntity } from "@/lib/build-rules-copy";
 import type {
   LiveGameEnvelope,
   LiveGameEnvelopeProfile,
   LiveGamePayload,
+  PerGameScoutingEnvelope,
+  ScoutingTechMilestone,
 } from "../types";
 import { Dim, RevealedTag, WidgetShell } from "../WidgetShell";
 import { scoutingStartTriggerKey } from "../gameStartTrigger";
 import { ofLastGames, phaseLine } from "../scoutingCopy";
+import { ScoutingRadarPanel } from "./ScoutingRadarPanel";
 
 /**
  * Scouting Report card — visual rebuild matching the legacy SPA's
@@ -18,12 +23,13 @@ import { ofLastGames, phaseLine } from "../scoutingCopy";
  *   1. Header: large opponent name + small W-L H2H record / win-rate.
  *   2. Familiar / Rival label (gold) — only when this is a repeat
  *      opponent (`rival` populated by the cloud).
- *   3. Private opponent notes — always visual when set, independent of
+ *   3. Replay-observed tendencies radar, with an explicit sample size.
+ *   4. Private opponent notes — always visual when set, independent of
  *      whether the streamer enabled read-aloud for this opponent.
- *   4. "LAST GAMES" list — newest-first rows of (result-chip, length,
+ *   5. "LAST GAMES" list — newest-first rows of (result-chip, length,
  *      map, YOU build, OPP build) for this matchup. Driven by the new
  *      cloud-derived `live.recentGames` field.
- *   5. Optional "YOUR BEST ANSWER", "CHEESE" and "GAMES USUALLY END"
+ *   6. Optional "YOUR BEST ANSWER", "CHEESE" and "GAMES USUALLY END"
  *      rows (kept compact for the bottom of the card so the LAST GAMES
  *      list dominates). The last one is the cloud's phase forecast
  *      (``opponentPhases``) in a single line: "Mid/Late game · Your army:
@@ -176,6 +182,8 @@ export function ScoutingWidget({
         </div>
       ) : null}
 
+      <ScoutingRadarPanel payload={effective} />
+
       {opponentNoteText ? (
         <OpponentNotesCallout text={opponentNoteText} />
       ) : null}
@@ -201,6 +209,10 @@ export function ScoutingWidget({
             ))}
           </div>
         </div>
+      ) : null}
+
+      {effective.last5GamesScouting?.[0] ? (
+        <ScoutingTechTimeline game={effective.last5GamesScouting[0]} />
       ) : null}
 
       {bestAnswer ? (
@@ -262,6 +274,60 @@ export function ScoutingWidget({
         </FooterRow>
       ) : null}
     </WidgetShell>
+  );
+}
+
+function ScoutingTechTimeline({ game }: { game: PerGameScoutingEnvelope }) {
+  return (
+    <section aria-label="Last game tech timeline" style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.4, opacity: 0.65, marginBottom: 7 }}>
+        LAST MEETING · TECH TIMELINE
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 12 }}>
+        <TechMilestoneSide label="YOU" build={game.myBuild} milestones={game.myTechMilestones} color="#3ec0c7" />
+        <TechMilestoneSide label="OPP" build={game.oppStrategy || ""} milestones={game.oppTechMilestones} color="#e6b450" />
+      </div>
+    </section>
+  );
+}
+
+function TechMilestoneSide({
+  label,
+  build,
+  milestones,
+  color,
+}: {
+  label: string;
+  build: string;
+  milestones?: ScoutingTechMilestone[];
+  color: string;
+}) {
+  const rows = milestones || [];
+  const visible = rows.length > 8 ? [...rows.slice(0, 5), ...rows.slice(-3)] : rows;
+  return (
+    <div aria-label={`${label} tech milestones`} style={{ minWidth: 0 }}>
+      <BuildLine side={label} sideColor={color} build={build} />
+      {rows.length === 0 ? (
+        <div style={{ fontSize: 11, opacity: 0.5, marginTop: 7 }}>Tech timings unavailable</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 7 }}>
+          {visible.map((milestone, index) => (
+            <div key={`${milestone.name}-${milestone.timeSec}-${index}`} style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+              <Icon name={milestone.name} kind={milestone.kind} size={22} decorative />
+              <span style={{ color, fontSize: 11, fontWeight: 800, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+                {Math.floor(milestone.timeSec / 60)}:{String(Math.floor(milestone.timeSec % 60)).padStart(2, "0")}
+              </span>
+              <span style={{ fontSize: 11, lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={humanizeRuleEntity(milestone.name)}>
+                {humanizeRuleEntity(milestone.name)} <span style={{ opacity: 0.5 }}>{milestone.timing}</span>
+              </span>
+            </div>
+          ))}
+          {rows.length > visible.length ? (
+            <span style={{ fontSize: 10, opacity: 0.5 }}>{rows.length - visible.length} intermediate steps omitted</span>
+          ) : null}
+        </div>
+      )}
+    </div>
   );
 }
 

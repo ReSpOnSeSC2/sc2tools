@@ -39,7 +39,7 @@ def test_archive_lane_waits_for_gate_then_drains_same_durable_task(tmp_path):
     done=threading.Event();api=SimpleNamespace(upload_replay_file_durable=lambda *_args:(done.set() or True))
     queue=UploadQueue(cfg=_cfg(tmp_path),state=AgentState(),api=api)
     path=tmp_path/"one.SC2Replay";path.write_bytes(b"fixture")
-    task=ReplayArchiveTask(path,"game")
+    task=ReplayArchiveTask(path,"game",queue._archive_owner(queue._upload_context()))
     queue._archive_journal.enqueue_many([task])
     queue.set_activity_gate(gate)
     queue.start()

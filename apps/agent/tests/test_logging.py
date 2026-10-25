@@ -263,6 +263,31 @@ def test_configure_logging_installs_rotating_agent_log_and_prunes(
     assert not stale.exists()
 
 
+def test_obs_sdk_credentials_and_repeated_errors_do_not_reach_agent_logs(
+    tmp_path, restore_root_logger, monkeypatch, capsys,
+) -> None:
+    from sc2tools_agent import runner
+
+    sdk = logging.getLogger("obsws_python")
+    monkeypatch.setattr(sdk, "handlers", [])
+    monkeypatch.setattr(sdk, "propagate", True)
+    monkeypatch.setenv("SC2TOOLS_LOG_LEVEL", "DEBUG")
+    cfg = AgentConfig(api_base="http://localhost:0", state_dir=tmp_path,
+                      replay_folder=None, poll_interval_sec=10, parse_concurrency=2)
+    log_dir = runner._configure_logging(cfg)
+    logging.getLogger("obsws_python.baseclient").info("password=private-test-password")
+    logging.getLogger("obsws_python.baseclient").error("SDK connection refused private-test-password")
+    logging.getLogger("sc2tools_agent.live.obs_client").warning("obs_connect_failed reason=auth_failed")
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+    content = (log_dir / runner.LOG_FILENAME).read_text(encoding="utf-8")
+    captured = capsys.readouterr()
+    assert "private-test-password" not in content + captured.out + captured.err
+    assert "SDK connection refused" not in content + captured.out + captured.err
+    assert "obs_connect_failed reason=auth_failed" in content
+    assert "obs_connect_failed reason=auth_failed" in captured.err
+
+
 def test_prune_worker_logs_removes_only_worker_files(tmp_path) -> None:
     """Pruning deletes ``agent-worker-*.log*`` (including rotated
     backups) and leaves the parent's ``agent.log`` family untouched."""

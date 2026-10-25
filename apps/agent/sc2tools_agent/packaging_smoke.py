@@ -4,10 +4,18 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from time import time
 
 from . import __version__
 
 SMOKE_REPORT_ENV = "SC2TOOLS_GUI_SMOKE_REPORT"
+
+
+def _request_gui_quit(ui, app):
+    if ui._window is not None:
+        ui._window._on_quit_requested()
+    else:
+        app.quit()
 
 
 def _exercise_gui(report):
@@ -37,8 +45,9 @@ def _exercise_gui(report):
     ui = GuiUI(
         version=__version__, dashboard_url="", pairing_url="", api_base="",
         log_dir=directory, log_file=directory / "absent-smoke-log.txt",
-        replay_folders=[], initial_paused=True, initial_paired=False,
-        initial_user_id=None, initial_settings=SettingsPayload(),
+        replay_folders=[], initial_paused=True, initial_paired=True,
+        initial_user_id="packaging-fixture", initial_settings=SettingsPayload(),
+        recent_games_enabled=True,
         on_pause=inert, on_resync=inert, on_choose_folder=inert,
         on_check_updates=inert, on_save_settings=inert, on_quit=app.quit,
         stream_status_provider=lambda: snapshot, on_stream_action=None,
@@ -60,6 +69,27 @@ def _exercise_gui(report):
             if streams_index is None:
                 raise RuntimeError("The bundled Streams page did not construct.")
             window.resize(1120, 850)
+            report["stage"] = "dashboard_recent_paint"
+            from datetime import datetime, timezone
+            at = datetime.now(timezone.utc).isoformat()
+            ui.on_recent_snapshot({"owner": "packaging-fixture", "rows": [{"path": "fixture.SC2Replay",
+                "gameId": "offline-fixture", "dateIso": at, "status": "uploaded", "result": "Victory",
+                "races": {"own": "Protoss", "opponent": "Zerg"}, "oppName": "Sample opponent", "map": "Sample map"}],
+                "facts": {"synced": 1, "syncedToday": 1}, "today": {"wins": 1, "losses": 0, "games": 1}})
+            ui.on_import_progress({"phase": "importing", "total": 12, "completed": 4, "remaining": 8})
+            app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+            window._refresh_stats()
+            if window._game_dashboard.last_id != "offline-fixture" or window._game_dashboard.bar.maximum() != 12:
+                raise RuntimeError("The bundled game summary or import card did not render.")
+            for page in ("dashboard", "recent"):
+                window._go_to_page(page)
+                app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+                if window.grab().isNull():
+                    raise RuntimeError("The bundled game dashboard did not paint.")
+            if not isinstance(window._recent_table.model(), QtCore.QAbstractTableModel) or window._recent_table.model().rowCount() != 1:
+                raise RuntimeError("The bundled recent-game model did not load.")
+            if window._recent_table.horizontalHeader().sectionResizeMode(3) != QtWidgets.QHeaderView.Interactive:
+                raise RuntimeError("The bundled opponent column could not be resized.")
             window._nav_group.button(streams_index).setChecked(True)
             stack.setCurrentIndex(streams_index)
             app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
@@ -75,12 +105,95 @@ def _exercise_gui(report):
                 if not card.is_preview or not card.isVisible() or card.grab().isNull():
                     raise RuntimeError("The bundled check-in preview did not paint.")
                 card._dismiss_preview()
+            companion_index = next(
+                (index for index in range(stack.count())
+                 if stack.widget(index).objectName() == "companionDesk"), None,
+            )
+            if companion_index is None:
+                raise RuntimeError("The bundled Companion page did not construct.")
+            window._nav_group.button(companion_index).setChecked(True)
+            stack.setCurrentIndex(companion_index)
+            app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+            if window.grab().isNull():
+                raise RuntimeError("The bundled Companion page did not paint.")
+            companion = window._companion_page
+            companion.set_density("full")
+            for index in range(companion.workspace_tabs.count()):
+                companion.workspace_tabs.setCurrentIndex(index)
+                app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+                if not companion.workspace_tabs.currentWidget().isVisible() or window.grab().isNull():
+                    raise RuntimeError("A bundled Companion tool did not paint.")
+            report["stage"] = "window_layouts_and_race_skins"
+            if not window.windowFlags() & QtCore.Qt.FramelessWindowHint:
+                raise RuntimeError("The bundled agent still uses native window chrome.")
+            for title in ("Compact", "Standard", "Detailed", "Full workspace"):
+                if not window._set_window_size(title):
+                    raise RuntimeError("A bundled Companion layout could not open.")
+                app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+                if window.grab().isNull():
+                    raise RuntimeError("A bundled Companion layout did not paint.")
+            from .ui.race_artwork import create_race_artwork
+            artwork = create_race_artwork(QtCore=QtCore, QtGui=QtGui)
+            for skin in ("protoss", "terran", "zerg"):
+                if artwork.image_for_skin(skin) is None:
+                    raise RuntimeError("Bundled race frame artwork is missing or invalid.")
+            for skin in ("default", "protoss", "terran", "zerg"):
+                window._set_window_size("Compact")
+                companion.appearance_skin.setCurrentIndex(companion.appearance_skin.findData(skin))
+                window._set_window_size("Standard")
+                app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+                if companion.compact_card.property("raceSkin") != skin or window.grab().isNull():
+                    raise RuntimeError("A bundled race skin did not paint.")
+                effects = window._race_effects
+                effects.set_motion_enabled(False)
+                if effects.timer.isActive():
+                    raise RuntimeError("Disabling animation did not stop its timer.")
+                effects.set_motion_enabled(True)
+            companion.appearance_skin.setCurrentIndex(companion.appearance_skin.findData("default"))
+            report["stage"] = "pinned_panels_and_team_roster"
+            companion.session_panel.update_session({"paired": True, "accountKey": "packaging-fixture",
+                "source": "overlay-session", "receivedAt": time(),
+                "session": {"wins": 2, "losses": 1, "games": 3, "region": "EU", "sessionStartedAt": at},
+                "ownRating": {"mmr": 5157, "source": "overlay-session", "status": "latest-known"}})
+            companion.session_panel.set_enabled(True)
+            app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+            if companion.session_panel.wins_label.text() != "2W" or companion.session_panel._presentation["mmr"] != 5157:
+                raise RuntimeError("The bundled Session record or own rating did not paint.")
+            panels = [*companion.overlays.values(), companion.ghost_page.panel, companion.session_panel]
+            for panel in panels:
+                if not panel.windowFlags() & QtCore.Qt.FramelessWindowHint or panel.grab().isNull():
+                    raise RuntimeError("A bundled pinned panel did not paint with themed chrome.")
+                if any(panel.findChild(QtWidgets.QToolButton, name) is None
+                       for name in ("windowMinimize", "windowClose")):
+                    raise RuntimeError("A bundled pinned panel is missing its window controls.")
+            from .team_roster import TeamRoster
+            roster = TeamRoster()
+            roster.update({"paired": True, "accountKey": "packaging-fixture", "liveGame": {
+                "phase": "match_in_progress", "gameKey": "offline-team-fixture", "isReplay": False,
+                "capturedAt": time(), "displayTime": 60, "user": {"name": "Sample player"},
+                "players": [{"id": index + 1, "name": name, "race": race, "type": "user"}
+                            for index, (name, race) in enumerate((("Sample player", "Protoss"),
+                                ("Sample teammate", "Terran"), ("Sample enemy one", "Zerg"),
+                                ("Sample enemy two", "Terran")))]}})
+            keys = {row["name"]: row["key"] for row in roster.players}
+            roster.confirm(keys["Sample player"], [keys["Sample enemy one"], keys["Sample enemy two"]])
+            window._set_window_size("Detailed")
+            app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+            companion.team_roster_widget.render(roster, [], {})
+            companion.team_roster_widget.show()
+            app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+            if (not roster.ready or len(companion.team_roster_widget._buttons) != 2
+                    or companion.team_roster_widget.grab().isNull() or window.grab().isNull()):
+                raise RuntimeError("The bundled confirmed team roster did not paint.")
             report.update(qt_version=QtCore.qVersion(), qt_platform=app.platformName(),
-                          page_count=stack.count(), streams_painted=True, checkin_previews_painted=True)
+                          page_count=stack.count(), streams_painted=True, companion_painted=True,
+                          checkin_previews_painted=True, dashboard_recent_painted=True,
+                          window_chrome_painted=True, companion_layouts_painted=4, race_skins_painted=4,
+                          race_artwork_loaded=3, pinned_panels_painted=4, session_panel_painted=True, team_roster_painted=True)
         except Exception as error:
             callback["error"] = error
         finally:
-            app.quit()
+            _request_gui_quit(ui, app)
 
     report["stage"] = "window_startup"
     timer = QtCore.QTimer()
@@ -97,6 +210,7 @@ def _exercise_gui(report):
         timer.stop()
         if ui._window is not None:
             ui._window._checkin_host.close()
+            ui._window._companion_page.session_panel.shutdown()
             for child_timer in ui._window.findChildren(QtCore.QTimer):
                 child_timer.stop()
             ui._window.hide()

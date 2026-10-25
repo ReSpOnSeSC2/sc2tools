@@ -139,6 +139,8 @@ describe("services/overlayLive.buildFromOpponentName — opponentPhases", () => 
     });
     // Every game ended in "mid" so finalPhaseDistribution.mid is 4.
     expect(p.opponentPhases.trajectory.finalPhaseDistribution.mid).toBe(4);
+    expect(p.playerCard).toMatchObject({ sampleSize: 4, totalGames: null, sampleLimit: 5, sampled: true });
+    expect(p.playerCard.axes.find((axis) => axis.key === "earlyFinish").samples).toBe(4);
   });
 
   test("omits typicalLateComp when the modal phase is below 'mid'", async () => {

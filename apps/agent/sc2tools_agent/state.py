@@ -22,8 +22,10 @@ import threading
 from dataclasses import dataclass, field, asdict, replace
 from pathlib import Path
 from typing import Dict, List, Optional
+from .companion_modes import normalize_modes
 
 STATE_FILENAME = "agent.json"
+COMPANION_SKINS = frozenset({"default", "protoss", "terran", "zerg"})
 
 # Every subsystem shares one mutable AgentState and persists the whole object.
 # Atomic replace protects readers from partial JSON, but without writer
@@ -92,7 +94,11 @@ class AgentState:
     # ---- GUI preferences (introduced with the PySide6 main window) ----
 
     window_geometry: Optional[str] = None
+    window_information_layout: str = "standard"
     window_page: Optional[str] = None
+    companion_skin: str = "default"
+    companion_animations: bool = True
+    companion_session_enabled: bool = False
 
     api_base_override: Optional[str] = None
     """If set, takes precedence over the ``SC2TOOLS_API_BASE`` env var
@@ -113,6 +119,18 @@ class AgentState:
     start_minimized: bool = False
     """When True, the GUI starts hidden - only the tray icon shows.
     Useful when the agent is set to launch on login."""
+
+    notify_every_game: bool = False
+    """Opt-in local notification for newly synced live games; never history imports."""
+
+    companion_preferences: Dict[str, bool] = field(default_factory=dict)
+    """Native Companion panel and speech switches. Missing switches default to off."""
+
+    companion_modes: Dict[str, object] = field(default_factory=dict)
+    """Local presentation profiles and optional global hide/show shortcut."""
+
+    companion_ghost: Dict[str, object] = field(default_factory=dict)
+    """Local Ghost targets by matchup and the independent enabled switch."""
 
     parse_concurrency_override: Optional[int] = None
     """How many parse threads the watcher's ThreadPoolExecutor runs.
@@ -299,6 +317,7 @@ class AgentState:
     # Appended to preserve existing positional AgentState constructor fields.
     last_known_race: Optional[str] = None
     last_known_race_at: Optional[str] = None
+    companion_panel_positions: Dict[str, List[int]] = field(default_factory=dict)
 
     @property
     def is_paired(self) -> bool:
@@ -409,11 +428,28 @@ def load_state(state_dir: Path) -> AgentState:
             raw.get("replay_folders_excluded"),
         ),
         window_geometry=_coerce_geometry(raw.get("window_geometry")),
+        window_information_layout=_coerce_information_layout(raw.get("window_information_layout")),
         window_page=_coerce_window_page(raw.get("window_page")),
+        companion_skin=_coerce_companion_skin(raw.get("companion_skin")),
+        companion_animations=raw.get("companion_animations") if type(raw.get("companion_animations")) is bool else True,
+        companion_session_enabled=raw.get("companion_session_enabled") is True,
         api_base_override=_coerce_str(raw.get("api_base_override")),
         log_level_override=_coerce_str(raw.get("log_level_override")),
         autostart_enabled=bool(raw.get("autostart_enabled") or False),
         start_minimized=bool(raw.get("start_minimized") or False),
+        notify_every_game=raw.get("notify_every_game") is True,
+        companion_preferences={
+            key: value for key, value in (
+                raw.get("companion_preferences")
+                if isinstance(raw.get("companion_preferences"), dict) else {}
+            ).items()
+            if key in {"overlaysEnabled", "opponentOverlay", "scoutingOverlay", "scoutingReadAloud"}
+            and type(value) is bool
+        },
+        companion_ghost=(
+            dict(raw["companion_ghost"]) if isinstance(raw.get("companion_ghost"), dict) else {}
+        ),
+        companion_modes=normalize_modes(raw.get("companion_modes")),
         parse_concurrency_override=_coerce_int(
             raw.get("parse_concurrency_override"),
         ),
@@ -455,6 +491,7 @@ def load_state(state_dir: Path) -> AgentState:
         show_scouting_at_loading=raw.get("show_scouting_at_loading") is not False,
         last_known_race=raw.get("last_known_race") if raw.get("last_known_race") in ("Protoss", "Terran", "Zerg") else None,
         last_known_race_at=_coerce_str(raw.get("last_known_race_at")),
+        companion_panel_positions=_coerce_panel_positions(raw.get("companion_panel_positions")),
     )
 
 
@@ -518,9 +555,17 @@ def _snapshot(state: AgentState) -> dict:
     stable = replace(
         state,
         window_geometry=_coerce_geometry(state.window_geometry),
+        window_information_layout=_coerce_information_layout(state.window_information_layout),
         window_page=_coerce_window_page(state.window_page),
+        companion_skin=_coerce_companion_skin(state.companion_skin),
+        companion_animations=state.companion_animations if type(state.companion_animations) is bool else True,
+        companion_session_enabled=state.companion_session_enabled is True,
+        companion_panel_positions=_coerce_panel_positions(state.companion_panel_positions),
         uploaded=dict(state.uploaded),
         path_by_game_id=dict(state.path_by_game_id),
+        companion_preferences=dict(state.companion_preferences),
+        companion_modes=normalize_modes(state.companion_modes),
+        companion_ghost=dict(state.companion_ghost),
         release_seen=dict(state.release_seen),
         replay_folders_override=list(state.replay_folders_override),
         replay_folders_excluded=list(state.replay_folders_excluded),
@@ -553,7 +598,7 @@ def _coerce_geometry(value: object) -> Optional[str]:
 
 def _coerce_window_page(value: object) -> Optional[str]:
     return value if isinstance(value, str) and value in {
-        "dashboard", "recent", "log", "settings", "streams",
+        "dashboard", "recent", "log", "settings", "streams", "companion",
     } else None
 
 
@@ -574,6 +619,14 @@ def _coerce_mmr(value: object) -> Optional[int]:
     if 500 <= n <= 9999:
         return n
     return None
+
+
+def _coerce_information_layout(value: object) -> str:
+    return value if isinstance(value, str) and value in {"compact", "standard", "detailed", "full"} else "standard"
+
+
+def _coerce_companion_skin(value: object) -> str:
+    return value if isinstance(value, str) and value in COMPANION_SKINS else "default"
 
 
 def _coerce_int(value: object) -> Optional[int]:
@@ -682,6 +735,12 @@ def _coerce_positions(value: object) -> Dict[str, List[int]]:
         ):
             out[key] = [int(point[0]), int(point[1])]
     return out
+
+
+def _coerce_panel_positions(value: object) -> Dict[str, List[int]]:
+    from .panel_positions import normalize_panel_positions
+
+    return normalize_panel_positions(value)
 
 
 _CHECKIN_PREF_KEYS = ("enabled", "askAtLoading", "askAfterGame")

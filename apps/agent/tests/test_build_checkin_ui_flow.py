@@ -121,12 +121,29 @@ def test_roll_now_and_not_now(flow) -> None:
     assert card.strip.isVisibleTo(card)
     card.roll_now.click()
     h.pump()
-    assert "release" in h.api.live_actions()
-    assert card.strip_label.text() == "🎲 Rolling the randomizer…"
+    assert h.api.calls_to("roll_live_randomizer") == [((key, "PvZ"), {})]
+    assert card.strip_label.text() == "🎲 Randomizer: DT into 3 Gate"
     assert not card.roll_now.isVisibleTo(card)
     card.not_now.click()
     h.pump()
     assert not card.isVisible()
+
+
+def test_randomizer_mode_switch_hides_and_blocks_only_the_draw_control(flow):
+    harness, host = flow
+    key = harness.new_key()
+    harness.send(envelope("match_loading", key))
+    card = host.window(LOADING)
+    host.set_feature_gates({"preGameSelector": True, "postGameSelector": True, "randomizer": False})
+    assert card.isVisible() and not card.strip.isVisibleTo(card)
+    host.act("roll_now", key)
+    harness.pump()
+    assert not harness.api.calls_to("roll_live_randomizer")
+    host.set_feature_gates({"preGameSelector": True, "postGameSelector": True, "randomizer": True})
+    assert card.strip.isVisibleTo(card)
+    card.roll_now.click()
+    harness.pump()
+    assert harness.api.calls_to("roll_live_randomizer")
 
 
 def test_dont_ask_at_loading_turns_the_preference_off(flow) -> None:

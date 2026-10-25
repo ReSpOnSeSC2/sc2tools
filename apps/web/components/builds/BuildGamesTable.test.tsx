@@ -16,6 +16,8 @@ vi.mock("@/lib/clientApi", () => ({
   useApi: vi.fn(() => ({ data: undefined, isLoading: false, error: null })),
 }));
 
+vi.mock("./StarGhostReplayButton", () => ({ StarGhostReplayButton: () => <button type="button">Use as Ghost</button> }));
+
 vi.mock("@/components/maps/MapArtwork", () => ({
   MapLabel: ({ name }: { name?: string | null }) => <span>{name}</span>,
 }));
@@ -170,7 +172,7 @@ describe("BuildGamesTable actions, sorting and recovery", () => {
     fireEvent.click(screen.getByRole("button", { name: "Wins 0" }));
     expect(screen.getByText("No games match this filter")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
-    fireEvent.click(within(container.querySelector('[data-game-row-id="competitive-game"]') as HTMLElement).getByRole("button"));
+    fireEvent.click(within(container.querySelector('[data-game-row-id="competitive-game"]') as HTMLElement).getByRole("button", { name: /^Build order from/ }));
     expect(screen.queryByText("private raw failure")).toBeNull();
     expect(screen.getAllByText("Couldn't load this game's build order.")).toHaveLength(2);
     expect(screen.getAllByText("Error ID: req-build-order")).toHaveLength(2);
@@ -221,7 +223,7 @@ describe("BuildGamesTable check-in markers", () => {
       '[data-game-card-id="planned-game"]',
     ) as HTMLElement;
     expect(within(card).getByTestId("planned-badge")).toBeTruthy();
-    fireEvent.click(within(card).getByRole("button"));
+    fireEvent.click(card.querySelector('button[aria-controls]') as HTMLButtonElement);
     expect(within(card).getByText("Check-in note")).toBeTruthy();
   });
 });

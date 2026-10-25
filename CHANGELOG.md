@@ -14,6 +14,169 @@ corresponding GitHub Release.
 ### Desktop stream titles
 
 - Streams previews MMR, league, session record, streak and matchup tokens. Optional automatic updates start off, target only selected connected platforms, skip unchanged titles and run at most once every ten minutes after a live replay syncs.
+### Agent 0.24.4 - One Compact opponent display
+- Fold Compact into the visible pinned opponent HUD, preserving its position and
+  one scouting control; reopen the main Agent in Standard.
+- Remove obsolete scouting input controls and hide them with their source window
+  so collapsing does not leave an extra icon on the desktop or over a game.
+- Refresh the visible Companion library between games so new uploads appear
+  automatically, preserving browsing context and avoiding extra match-time requests.
+
+### Agent 0.24.3 - Reduce game-time background and UI work
+- Refresh Companion panels once per live snapshot, reuse unchanged icon-chain
+  layouts, and avoid rewriting state for unchanged window preferences.
+- Hold replay-library scans as well as history parsing during matches when the
+  in-game history pause is enabled, preserving queued resyncs and live file events.
+
+### Agent 0.24.2 - Working Compact expansion
+- Make the race button expand the main Companion when scouting is unavailable;
+  retain its live-game scouting toggle and protected game clicks.
+- Reopen the main app in Standard from the tray or shortcut, keeping the pinned
+  opponent strip compact and preserving automatic background startup.
+- Fit two or three readable build steps per row in narrow scouting cards instead
+  of leaving space beside a single icon, including the floating scouting report.
+
+### Agent 0.24.1 - Compact scouting and reliable Randomize
+- Open/close the detailed floating scouting report from compact. Only its scouting
+  button accepts clicks while StarCraft II has focus; other overlay areas pass
+  clicks through. Restore normal controls with Alt+Tab.
+- Simplify compact into transparent opponent/stat text with one race-themed control;
+  keep expand, minimize, close and Agent options in its context menu.
+- Select and save one build directly from check-in's Randomize button, even when
+  no Randomizer widget is open. Reuse the same result in every display; keep
+  animation, sounds and speech in the separate widget. Show failures and allow retry.
+- Skip unavailable pool entries without changing saved preferences, and refresh
+  connected widgets when Randomizer settings change.
+- Reuse Detailed view's paired build cards, icons, upgrades, time ranges and Ghost
+  reference actions in the report; keep its replay tied to the live opponent.
+- Clear compact opponent identity and record between matches or stale telemetry.
+- Use the same Agent dropdown on Companion and every Agent page. Include update
+  checks, help, appearance and quit; show update progress/results on Dashboard
+  and prevent duplicate checks while a request is running.
+
+### Agent 0.24.0 - Account recovery and remembered panel positions
+- Isolate Companion, Ghost, check-in, replay archives and Streams work across
+  account changes. Recover stuck selectors and save retries while preserving
+  same-account drafts and completed post-game cards.
+- Stop hidden Randomizer settings from polling; keep draws and audio widget-only.
+- Fix narrow Scouting, Settings and recovery layouts and harden installer
+  download validation, redirects, transfer limits and interrupted-file cleanup.
+- Remember native panel positions, recover safely when monitors change and add
+  an Assistance reset action without changing panel sizes or feature switches.
+
+### Agent 0.23.1 - Responsive Companion layouts
+- Fix clipped text and controls when switching Companion sizes, including build
+  selectors, Ghost, Randomizer, assistance modes and team rosters. Preserve the
+  approved window sizes and saved selections; use vertical scrolling and natural
+  control wrapping instead of squeezing content.
+- Keep the Session timer readable above the themed bottom border at all supported
+  display scales and when the panel is resized.
+
+### Agent 0.23.0 - Native Session record and game-safe panels
+- Add an optional, default-off Session panel using the OBS widget's canonical
+  four-hour-inactivity W-L record and elapsed time, with matching race artwork.
+  The master assistance switch hides it without resetting its record or choice.
+- Label your own latest-known MMR and rating region honestly; active server
+  detection is unavailable from SC2's local API. Missing fields stay unavailable,
+  rather than showing zero, an opponent rating or a guessed current server.
+- Session reuses an owned overlay token; creating missing access requires an
+  explicit setup confirmation, never an automatic polling or reconnect action.
+- Make pinned panels and main Compact click-through only while verified SC2 is
+  foreground. Alt+Tab away unlocks them; Standard stays interactive. Existing
+  minimize, close-to-tray and pinned-panel behavior is unchanged.
+- Keep Randomizer draws, visuals, sounds and spoken results widget-only. Native
+  Companion offers silent pool configuration and a read-only result, not a
+  current-game Randomizer popup or engine. Check-ins display the widget's saved
+  result; native scouting voice is unaffected.
+
+### Agent 0.22.1 - Replay unit icons and installer verification
+- Show bundled unit icons for replay steps whose source category is unknown,
+  including Sentry and Phoenix, without inventing event categories or timings.
+- Fix the clipped Standard opponent profile with a scrollable card and narrow
+  tool navigation; expose Border & animations directly in the Companion menu.
+- Give the expanded packaged-GUI verification a bounded 60-second cold-start
+  budget and sanitized failure diagnostics on Windows build runners.
+
+### Agent 0.22.0 - Hybrid team Companion and history recovery
+- Add Hybrid team scouting: Compact follows one selected enemy; expanded views
+  show the enemy roster. Confirm your identity and teammate/enemy assignments
+  when the live client does not provide authoritative team IDs. Historical 1v1
+  MMR and records are labeled, never presented as current team-ladder ratings.
+- Explicitly arm a temporary Ghost target for the current confirmed team game;
+  local team replays can preview a chosen human player's build. Team play never
+  automatically selects a 1v1 Ghost slot, check-in, or randomizer pick.
+- Pinned panels share the frameless race-art appearance and matching minimize
+  and close controls. Default retains the purple design unchanged.
+- Gradually enrich incomplete legacy Recent games receipts from owned cloud
+  metadata, preserving upload history, source paths, pairing, and replay files
+  without resyncing. Played dates restore chronological history and Today stats.
+- Suppress credential-bearing third-party OBS logs and repetitive connection
+  tracebacks while retaining sanitized managed connection status.
+- Update the local verification preview's how-to and illustrated landing section;
+  this is not a claim that a signed stable release has been published.
+
+### Agent 0.21.3 - Compact opponent bar and expandable build orders
+- Slim horizontal Compact bar, smaller Standard/Detailed layouts, responsive
+  navigation, and themed window controls instead of the Windows title bar.
+- Three-, six-, ten-minute, and full stored replay build-order icon chains with
+  optional worker/supply events, repeated production, and explicit preview states.
+- Preserve tray behavior, settings drafts, selected encounters, and Ghost targets.
+- Optional race skins use original generated textured artwork: gold-and-cyan
+  Protoss, blue-steel Terran, and organic Zerg. Responsive frames preserve corner
+  details across Compact, Standard, Detailed, and Full workspace. Default keeps
+  the purple design unchanged.
+- Optional expansion animations add Protoss energy warp, Terran mechanical
+  deployment, and Zerg morphing; turning them off keeps size changes instant.
+
+### Agent 0.21.2 - Consistent desktop console
+- Extend the Companion's purple console styling across every agent page,
+  shared control, check-in card, and pinned game panel.
+- Keep navigation and settings drafts stable when switching pages, and clarify
+  the master assistance switch and always-on-top opponent/scouting controls.
+
+### Agent 0.21.1 - Companion console and scouting voice
+- Reference-led purple dossier UI with portrait-based Compact, W–L and win
+  percentage, icon build chains, and context-preserving screen navigation.
+- Optional native scouting speech independent of OBS and pinned panels, with
+  saved on/off controls, manual repeat, immediate Stop, and stale-game guards.
+- Agent package, website version fallback, preview guidance, and desktop
+  screenshots are updated together. Unsigned verification builds remain test
+  artifacts, separate from the signed public stable download.
+
+### Agent 0.21.0 - Companion build tools
+
+- Pre-game and post-game build selectors, the build randomizer, and Build Order
+  Ghost join scouting in the native Companion. Each feature can be switched on
+  or off independently; the master switch hides game panels and pauses native
+  assistance while preserving individual choices and targets.
+- Local replay picking, per-build starred references, and explicitly curated
+  admin examples make practice targets easy to choose without sharing private
+  replay files. Native-first how-to articles and actual desktop screenshots
+  introduce the workspace on the landing page.
+- Saved play-mode presets, an optional global hide/show shortcut, replay-picker
+  filters, safe reference history/Undo, and post-game timing comparisons make
+  the Companion easier to use during both ladder and practice sessions.
+- Compact, Standard, Detailed, and Full workspace change information density,
+  not just dimensions. Compact shows opponent name, race and MMR with a small
+  expand button; larger layouts progressively reveal build and replay detail.
+- Windows CI checks Retry-After scheduling with a deterministic clock to avoid
+  intermittent floating-point assertion failures.
+
+### Agent 0.20.0 - Native Companion
+
+- The existing desktop agent gains an interactive **Companion** with opponent
+  browsing, meeting selection, build comparisons, private notes, and recorded
+  tech milestones for both players, with local SC2 icons and explicit start
+  and completion timings.
+- Independently pinned Opponent and Scouting panels follow the active match,
+  keep working while the agent is in the tray, and can be disabled together.
+  Pairing, replay sync, existing build check-in, and saved settings are retained.
+- Includes the desktop history, pairing recovery, safe update scheduling,
+  window restoration, and installer improvements merged since agent 0.19.0.
+
+### Desktop game history
+
+- The desktop Dashboard shows game summaries, local Today W–L/MMR and replay-history progress. Recent games survives restarts with 200 private local outcomes, status/date filters, skipped reasons and selective retries. Re-sync moves to Settings Maintenance; optional game-result notifications exclude history imports.
 
 ### Build supply and exports
 

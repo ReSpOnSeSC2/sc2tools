@@ -186,7 +186,7 @@ function ConnectedOverlayWidgetClient({
   const [connectionStatus, setConnectionStatus] =
     useState<OverlayConnectionStatus>("connecting");
   // Build check-in state only matters to the randomizer source.
-  const [buildIntents, onBuildIntent] = useOverlayBuildIntents();
+  const [buildIntents, onBuildIntent] = useOverlayBuildIntents(token);
 
   const socketRef = useOverlayWidgetSocket(
     token,

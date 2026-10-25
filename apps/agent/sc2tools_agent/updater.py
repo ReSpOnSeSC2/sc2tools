@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import http.client
+import ipaddress
 import json
 import logging
 import os
@@ -52,6 +54,7 @@ DEFAULT_POLL_INTERVAL_SEC = 12 * 60 * 60  # twice daily
 USER_AGENT = f"sc2tools-agent/{__version__} updater"
 HTTP_TIMEOUT_SEC = 30
 DOWNLOAD_CHUNK = 1024 * 256
+MAX_INSTALLER_BYTES = 1024 * 1024 * 1024
 INSTALLER_LAUNCH_DELAY_SEC = 3
 # UploadQueue deliberately lets a throttled/in-flight cloud request finish
 # during shutdown (its longest bounded request is 150 seconds).  Keep the
@@ -265,25 +268,50 @@ def _assert_trusted_download(
     artifact: ReleaseArtifact,
     trusted_hosts: Optional[Iterable[str]],
 ) -> None:
-    """Refuse download URLs outside the allowlist.
+    """Require trusted HTTPS, except explicitly permitted loopback development."""
+    _assert_trusted_download_url(artifact.download_url, trusted_hosts)
 
-    Trusted by default: github.com and *.githubusercontent.com over
-    https. ``trusted_hosts`` extends the set (the runner passes the API
-    host; tests pass loopback). Extra hosts are exempt from the https
-    requirement so the localhost test fixtures keep working — GitHub
-    hosts always require https.
-    """
-    parsed = urllib.parse.urlparse(artifact.download_url)
-    host = (parsed.hostname or "").lower()
+
+def _assert_trusted_download_url(url: str, trusted_hosts: Optional[Iterable[str]]) -> None:
+    if not isinstance(url, str) or re.search(r"[\x00-\x20\x7f]", url):
+        raise UpdateError("invalid_download_url")
+    try:
+        parsed = urllib.parse.urlparse(url)
+        host = (parsed.hostname or "").lower()
+        parsed.port
+    except ValueError as exc:
+        raise UpdateError("invalid_download_url") from exc
+    if parsed.username is not None or parsed.password is not None or parsed.fragment:
+        raise UpdateError("invalid_download_url")
     extra = {h.lower() for h in (trusted_hosts or ()) if h}
-    if host in extra:
-        return
     github_host = host in GITHUB_DOWNLOAD_HOSTS or any(
         host.endswith(suffix) for suffix in GITHUB_DOWNLOAD_HOST_SUFFIXES
     )
-    if github_host and parsed.scheme == "https":
+    if parsed.scheme == "https" and (github_host or host in extra):
+        return
+    loopback = host == "localhost"
+    with contextlib.suppress(ValueError):
+        loopback = ipaddress.ip_address(host).is_loopback
+    if parsed.scheme == "http" and host in extra and loopback:
         return
     raise UpdateError(f"untrusted_download_host: {host or '<none>'}")
+
+
+class _InstallerRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def __init__(self, trusted_hosts):
+        super().__init__()
+        self._trusted_hosts = trusted_hosts
+
+    def redirect_request(self, request, response, code, message, headers, new_url):
+        _assert_trusted_download_url(new_url, self._trusted_hosts)
+        return super().redirect_request(request, response, code, message, headers, new_url)
+
+
+def _validate_artifact_metadata(artifact: ReleaseArtifact) -> None:
+    if (not isinstance(artifact.sha256, str) or not re.fullmatch(r"[a-fA-F0-9]{64}", artifact.sha256)
+            or (artifact.size_bytes is not None and (type(artifact.size_bytes) is not int
+                or not 0 < artifact.size_bytes <= MAX_INSTALLER_BYTES))):
+        raise UpdateError("invalid_artifact_metadata")
 
 
 def install_release(
@@ -303,7 +331,9 @@ def install_release(
     if not release.artifact:
         raise UpdateError("no artifact for current platform")
     artifact = release.artifact
+    trusted_hosts = tuple(trusted_hosts or ())
     _assert_trusted_download(artifact, trusted_hosts)
+    _validate_artifact_metadata(artifact)
     target = (
         download_dir or Path(tempfile.gettempdir())
     ) / _artifact_filename(artifact)
@@ -316,7 +346,7 @@ def install_release(
         # alone; both the advertised size and SHA-256 must match.
         selected = target if _artifact_matches(target, artifact) else None
         if selected is None:
-            staged = _download_to_staging(artifact, target)
+            staged = _download_to_staging(artifact, target, trusted_hosts=trusted_hosts)
             try:
                 _validate_artifact(staged, artifact)
                 selected = _publish_staged_artifact(staged, target, artifact)
@@ -337,6 +367,8 @@ def install_release(
 def _download_to_staging(
     artifact: ReleaseArtifact,
     target: Path,
+    *,
+    trusted_hosts: Optional[Iterable[str]] = None,
 ) -> Path:
     """Download into an exclusively-created sibling staging file."""
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -351,27 +383,37 @@ def _download_to_staging(
         headers={"User-Agent": USER_AGENT, "Accept": "application/octet-stream"},
     )
     ctx = ssl.create_default_context()
+    completed = False
     try:
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC, context=ctx) as resp:
+        opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx),
+                                            _InstallerRedirectHandler(tuple(trusted_hosts or ())))
+        with opener.open(req, timeout=HTTP_TIMEOUT_SEC) as resp:
             with os.fdopen(fd, "wb") as fh:
                 fd = -1
+                written = 0
+                limit = artifact.size_bytes if artifact.size_bytes is not None else MAX_INSTALLER_BYTES
                 while True:
-                    chunk = resp.read(DOWNLOAD_CHUNK)
+                    chunk = resp.read(min(DOWNLOAD_CHUNK, limit - written + 1))
                     if not chunk:
                         break
+                    written += len(chunk)
+                    if written > limit:
+                        if artifact.size_bytes is not None:
+                            raise UpdateError(f"size_mismatch: expected={limit} got_at_least={written}")
+                        raise UpdateError("download_too_large")
                     fh.write(chunk)
                 fh.flush()
                 os.fsync(fh.fileno())
-    except urllib.error.URLError as exc:
-        if fd >= 0:
-            os.close(fd)
-        _remove_quietly(staged)
+        completed = True
+    except (urllib.error.URLError, http.client.HTTPException) as exc:
         raise UpdateError(f"download_failed: {exc}") from exc
     except OSError as exc:
+        raise UpdateError(f"download_io_failed: {exc}") from exc
+    finally:
         if fd >= 0:
             os.close(fd)
-        _remove_quietly(staged)
-        raise UpdateError(f"download_io_failed: {exc}") from exc
+        if not completed:
+            _remove_quietly(staged)
     return staged
 
 
@@ -380,6 +422,8 @@ def _validate_artifact(path: Path, artifact: ReleaseArtifact) -> None:
         actual_size = path.stat().st_size
     except OSError as exc:
         raise UpdateError(f"artifact_unreadable: {exc}") from exc
+    if actual_size > MAX_INSTALLER_BYTES:
+        raise UpdateError("download_too_large")
     if artifact.size_bytes is not None and actual_size != artifact.size_bytes:
         raise UpdateError(
             f"size_mismatch: expected={artifact.size_bytes} got={actual_size}",
@@ -571,13 +615,15 @@ def _coerce_release(payload: Dict[str, Any], *, fallback_current: str) -> Releas
     artifact: Optional[ReleaseArtifact] = None
     if isinstance(artifact_raw, dict):
         with contextlib.suppress(Exception):
-            artifact = ReleaseArtifact(
+            candidate = ReleaseArtifact(
                 platform=str(artifact_raw.get("platform", "")),
                 download_url=str(artifact_raw.get("downloadUrl", "")),
                 sha256=str(artifact_raw.get("sha256", "")),
-                size_bytes=_coerce_int(artifact_raw.get("sizeBytes")),
+                size_bytes=artifact_raw.get("sizeBytes"),
                 signature=_coerce_str(artifact_raw.get("signature")),
             )
+            _validate_artifact_metadata(candidate)
+            artifact = candidate
     return ReleaseInfo(
         channel=str(payload.get("channel", "stable")),
         update_available=bool(payload.get("update_available")),
@@ -619,13 +665,6 @@ def _coerce_str(value: Any) -> Optional[str]:
     if value is None or value == "":
         return None
     return str(value)
-
-
-def _coerce_int(value: Any) -> Optional[int]:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _artifact_filename(artifact: ReleaseArtifact) -> str:
