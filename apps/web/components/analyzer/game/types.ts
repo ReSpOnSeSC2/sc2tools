@@ -19,6 +19,8 @@ export interface GameOpponentSummary {
 
 export interface GameSummary {
   gameId: string;
+  excluded?: boolean;
+  exclusionReason?: string | null;
   /** ISO date-time of the replay's end. */
   date?: string | null;
   /** "Victory" | "Defeat" | "Tie" on slim rows. */

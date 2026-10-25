@@ -157,6 +157,18 @@ describe("coaching game assignments", () => {
     return db.coaching.findOne({ _id: `assignment:${id}` });
   }
 
+  test("hidden games leave assignment progress while explicit replay sharing remains; deletion markers block both", async () => {
+    const created = await service.createAssignment("coach-user", coachRole, "student-1", definition());
+    const stored = await assignmentDoc(created.id);
+    await game("visible"); await game("hidden", { excluded: true });
+    await game("deleted", { _deleted: true }); await game("pending", { _deletionPending: true });
+    const replay = (id) => service.assignmentReplayOwner("coach-user", coachRole, created.id, id);
+    expect(await replay("hidden")).toMatchObject({ userId: "student-user-1", gameId: "hidden" });
+    for (const id of ["deleted", "pending"]) await expect(replay(id)).rejects.toMatchObject({ code: "replay_not_found" });
+    const progress = await service._assignmentProgress(stored, new Date("2026-09-04T16:00:00Z"));
+    expect(progress.games.map((g) => g.gameId)).toEqual(["visible"]);
+  });
+
   test("requires explicit account-bound student consent and enforces revocation immediately", async () => {
     await db.coaching.updateOne(
       { _id: "locker" },

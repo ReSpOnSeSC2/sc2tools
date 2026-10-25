@@ -115,10 +115,12 @@ export function Modal({
       ].join(" ")}
       role="presentation"
     >
+      {/* Keep mouse focus inside when a busy caller blocks dismissal. */}
       <button
         type="button"
         aria-label="Close dialog"
         tabIndex={-1}
+        onMouseDown={event => event.preventDefault()}
         onClick={onScrimClick}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
       />

@@ -30,6 +30,7 @@ import {
 import { listSeasons, currentSeason, seasonRange, formatSeasonRange } from "@/lib/seasonCatalog";
 import type { LogicalSeason } from "@/lib/useSeasons";
 import { AnalyzerViewsButton } from "./AnalyzerViewsButton";
+import { AccountFilterPicker } from "./AccountFilterPicker";
 
 const SEASONS_TO_SHOW = 16;
 
@@ -42,7 +43,7 @@ export function FilterBar() {
     update(); media?.addEventListener?.("change", update);
     return () => media?.removeEventListener?.("change", update);
   }, []);
-  const extra = <><MapPoolToggle /><GameSizeToggle /><GameLengthFilter /><ExcludeTooShortToggle /><LazyHelpLink slug="analyzer-filters">How filters work</LazyHelpLink></>;
+  const extra = <><AccountFilterPicker /><MapPoolToggle /><GameSizeToggle /><GameLengthFilter /><ExcludeTooShortToggle /><LazyHelpLink slug="analyzer-filters">How filters work</LazyHelpLink></>;
   return <div className="space-y-3">
     <div className="flex items-center gap-3">
       <p className="min-w-0 flex-1 text-caption text-text-muted" aria-label="Current filters">{summarizeFilters(filters, seasons)}</p>

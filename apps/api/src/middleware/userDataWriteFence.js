@@ -4,6 +4,9 @@ const LEASE_MS = 15 * 60 * 1000;
 // All authenticated user writes participate in erasure exclusion. These
 // operations own their own exclusive fence or act on a different target user.
 const UNFENCED_PATH = /^\/(?:v1\/)?(?:admin(?:\/|$)|webhooks(?:\/|$)|me(?:$|\/(?:backups|repair|games\/wipe)(?:\/|$)))/;
+// These exact owner controls acquire their own exclusive GDPR lease. Nested
+// replay upload/build-intent paths keep the ordinary authenticated write fence.
+const GAME_CONTROL_PATH = /^\/(?:v1\/)?games\/[^/]+$/;
 
 /** @param {import('mongodb').Collection<any>} users @param {string} userId */
 async function claimUserDataLease(users, userId) {
@@ -38,7 +41,9 @@ function withUserDataWriteFence(auth, users) {
   const registered = new WeakSet();
   return (req, res, next) => auth(req, res, (error) => {
     if (error) { next(error); return; }
-    if (!req.auth || !["POST", "PUT", "PATCH", "DELETE"].includes(req.method) || UNFENCED_PATH.test(req.originalUrl.split("?", 1)[0]) || registered.has(req)) { next(); return; }
+    const path = req.originalUrl.split("?", 1)[0];
+    const exclusiveGameControl = ["PATCH", "DELETE"].includes(req.method) && GAME_CONTROL_PATH.test(path);
+    if (!req.auth || !["POST", "PUT", "PATCH", "DELETE"].includes(req.method) || UNFENCED_PATH.test(path) || exclusiveGameControl || registered.has(req)) { next(); return; }
     void claimUserDataLease(users, req.auth.userId).then(async (lease) => {
       if (res.destroyed) { await lease.release(); return; }
       registered.add(req);

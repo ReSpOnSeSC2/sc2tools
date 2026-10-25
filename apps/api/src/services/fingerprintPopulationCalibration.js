@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+
 const { VERSION_KEY } = require("../db/schemaVersioning");
 const {
   WINDOW_GAMES: PLAYER_WINDOW_GAMES,
@@ -235,7 +237,7 @@ function buildPlayerWindowsPipeline() {
     {
       $match: {
         userId: { $type: "string", $ne: "" },
-        isResumedFromReplay: { $ne: true },
+        ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
         myRace: { $type: "string" },
         "opponent.race": { $type: "string" },
         $or: [

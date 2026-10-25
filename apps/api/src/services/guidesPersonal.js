@@ -1,4 +1,5 @@
 "use strict";
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 
 /**
  * The signed-in caller's own numbers for one build guide
@@ -90,7 +91,7 @@ async function myRecord(games, userId, matchup, buildKey) {
 async function myTimings(samples, userHash, matchup, buildKey) {
   const rows = await samples
     .find(
-      { userHash, matchup, buildKey, era: GUIDE_CURRENT_ERA, eraRule: PATCH_ERA_RULE },
+      { ...STATS_GAME_MATCH, userHash, matchup, buildKey, era: GUIDE_CURRENT_ERA, eraRule: PATCH_ERA_RULE },
       { projection: { _id: 0, milestones: 1 }, maxTimeMS: QUERY_MAX_MS },
     )
     // Most recently PLAYED first (older rows without ``playedOn`` last, by

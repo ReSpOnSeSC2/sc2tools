@@ -1,18 +1,38 @@
 "use strict";
+const { OwnerRevisions } = require("../util/gameVisibility");
 
 const MAX_PENDING = 256;
 const MAX_JOIN_AGE_MS = 30000;
+
+/** The date-range call uses its Mongo match as the second key part; chart
+ * calls use the owner string directly.
+ * @param {unknown[]} parts @returns {string} */
+function requestOwner(parts) {
+  const value = parts[1];
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "userId" in value && typeof value.userId === "string") return value.userId;
+  return "";
+}
 
 /** Share work that is currently running on one service instance. Completed
  * responses are cached only when explicitly requested for lightweight metadata.
  * Keys include the method, authenticated user, filters, and all chart options. */
 class TrendsRequests {
   constructor() {
-    /** @type {Map<string, {startedAt: number, promise: Promise<any>}>} */
+    /** @type {Map<string, {startedAt: number, promise: Promise<any>, owner: string}>} */
     this.pending = new Map();
-    /** @type {Map<string, {expiresAt: number, sequence: number, value: any}>} */
+    /** @type {Map<string, {expiresAt: number, sequence: number, value: any, owner: string}>} */
     this.completed = new Map();
     this.cacheSequence = 0;
+    this.revisions = new OwnerRevisions();
+  }
+
+  /** @param {string} userId */
+  invalidateForUser(userId) {
+    this.revisions.invalidate(userId);
+    for (const cache of [this.pending, this.completed]) {
+      for (const [key, value] of cache) if (value.owner === userId) cache.delete(key);
+    }
   }
 
   /** Optional short cache for metadata shared between browser tabs. Normal
@@ -20,6 +40,7 @@ class TrendsRequests {
    * @template T @param {unknown[]} parts @param {() => Promise<T>} work
    * @param {number} ttlMs @returns {Promise<T>} */
   cached(parts, work, ttlMs) {
+    const owner = requestOwner(parts), revision = this.revisions.get(owner);
     const key = requestKey(parts);
     if (key === null) return this.run(parts, work);
     const now = Date.now();
@@ -31,6 +52,7 @@ class TrendsRequests {
     return this.run(parts, async () => {
       const sequence = ++this.cacheSequence;
       const value = await work();
+      if (!this.revisions.current(owner, revision)) return value;
       // An aged request may finish after its replacement. Keep the newer answer.
       if ((this.completed.get(key)?.sequence ?? 0) > sequence) return value;
       this.completed.delete(key);
@@ -39,7 +61,7 @@ class TrendsRequests {
         if (oldest === undefined) break;
         this.completed.delete(oldest);
       }
-      this.completed.set(key, { expiresAt: Date.now() + ttlMs, sequence, value: cloneResult(value) });
+      this.completed.set(key, { expiresAt: Date.now() + ttlMs, sequence, value: cloneResult(value), owner });
       return value;
     });
   }
@@ -49,6 +71,7 @@ class TrendsRequests {
    * @param {() => Promise<T>} work
    * @returns {Promise<T>} */
   run(parts, work) {
+    const owner = requestOwner(parts);
     const now = Date.now();
     for (const [key, entry] of this.pending) {
       if (now - entry.startedAt >= MAX_JOIN_AGE_MS) this.pending.delete(key);
@@ -60,7 +83,7 @@ class TrendsRequests {
     const previous = this.pending.get(key);
     if (previous) return previous.promise.then(cloneResult);
     if (this.pending.size >= MAX_PENDING) return work();
-    const entry = { startedAt: now, promise: /** @type {Promise<T>} */ (Promise.resolve()) };
+    const entry = { startedAt: now, promise: /** @type {Promise<T>} */ (Promise.resolve()), owner };
     const release = () => {
       // An aged-out request must not remove its newer replacement.
       if (this.pending.get(key) === entry) this.pending.delete(key);

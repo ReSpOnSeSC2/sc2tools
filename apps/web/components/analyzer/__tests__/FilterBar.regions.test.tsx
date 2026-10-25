@@ -14,6 +14,7 @@ import {
   type AnalyzerFilters,
 } from "@/lib/filterContext";
 import { FilterBar } from "../FilterBar";
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "owner" }) }));
 
 // The bar's Matchup picker asks which races you have played; these tests
 // cover other controls, so it answers "none yet".

@@ -2,6 +2,7 @@
 
 const rules = require("../config/analyzerViews.json");
 const { parseExactMapNames } = require("./exactMapFilter");
+const { parseAccounts } = require("./accountFilter");
 const plain = (/** @type {unknown} */ value) => !!value && typeof value === "object" && !Array.isArray(value);
 const clean = (/** @type {unknown} */ value, /** @type {number} */ max) => typeof value === "string" && value.length <= max && !/[\u0000-\u001f\u007f]/.test(value) ? value.trim() : "";
 
@@ -28,6 +29,7 @@ function sanitizeViewFilters(raw) {
     if (choices.includes(value)) out[key] = value;
   }
   if (typeof source.exclude_too_short === "boolean") out.exclude_too_short = source.exclude_too_short;
+  if (source.accounts !== undefined) { const accounts = parseAccounts(source.accounts); if (accounts) out.accounts = accounts.join(","); }
   if (typeof source.regions === "string") {
     const values = new Set(source.regions.split(",").map((value) => value.trim().toUpperCase()));
     const regions = rules.regions.filter((value) => values.has(value));

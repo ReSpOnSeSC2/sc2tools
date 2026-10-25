@@ -58,6 +58,21 @@ test("uses only the latest50 earlier owner ranked1v1s in the same concrete match
   expect(JSON.stringify(response.body)).not.toMatch(/userId|gameId|buildLog|pulseId/);
 });
 
+test("hidden replay context stays readable but its baseline excludes hidden/deleted/pending contributions", async () => {
+  await h.db.games.insertMany([game("current", 0, { excluded: true }), game("visible", -10, { macroScore: 60 }),
+    game("hidden", -1, { excluded: true, macroScore: 999 }), game("deleted", -2, { _deleted: true, macroScore: 999 }),
+    game("pending", -3, { _deletionPending: true, macroScore: 999 })]);
+  expect((await endpoint()).body.personal).toMatchObject({ n: 1, metrics: { macroScore: { median: 60 } } });
+  await h.db.games.updateOne({ gameId: "hidden" }, { $unset: { excluded: "" } });
+  h.services.gameContext.invalidateForUser("u_owner");
+  expect((await endpoint()).body.personal.n).toBe(2);
+  for (const flag of ["_deleted", "_deletionPending"]) {
+    await h.db.games.updateOne({ gameId: "current" }, { $set: { [flag]: true } });
+    expect((await endpoint()).status).toBe(404);
+    await h.db.games.updateOne({ gameId: "current" }, { $unset: { [flag]: "" } });
+  }
+});
+
 test("null/missing metrics keep individual n, with no zero invented; legacy two-player 1v1 is supported", async () => {
   const legacy = game("legacy", -2, { apm: null, spq: undefined }); delete legacy.matchFormat;
   await h.db.games.insertMany([game("current", 0), legacy, game("prior", -1, { macroScore: null, durationSec: null })]);

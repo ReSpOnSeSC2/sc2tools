@@ -95,7 +95,11 @@ function buildReplaysRouter(deps) {
 function parseReplayListQuery(raw) {
   const query = raw && typeof raw === "object" ? raw : {};
   return {
-    filters: parseFilters(query),
+    filters: {
+      ...parseFilters(query),
+      ...(query.include_excluded === "1" ? { includeExcluded: true } : {}),
+      ...(query.include_excluded === "1" && query.excluded_only === "1" ? { excludedOnly: true } : {}),
+    },
     limit: firstQueryValue(query.limit),
     cursor: firstQueryValue(query.cursor),
     search: firstQueryValue(query.search),

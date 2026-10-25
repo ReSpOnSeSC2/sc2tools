@@ -10,6 +10,7 @@
 
 const { PATCH_ERA_AFTER, PATCH_ERA_BEFORE, buildEraMatch } = require("./patchEra");
 const { parseExactMapNames } = require("./exactMapFilter");
+const { parseAccounts, accountMatchHandles } = require("./accountFilter");
 const {
   REGION_HANDLE_PREFIX,
   REGION_LABELS,
@@ -43,6 +44,9 @@ const REGION_CODES = new Set(REGION_LABELS);
  *   maxMinutes?: number,
  *   excludeTooShort?: boolean,
  *   regions?: string[],
+ *   accounts?: string[],
+ *   includeExcluded?: boolean,
+ *   excludedOnly?: boolean,
  *   mapPool?: 'ladder'|'nonladder',
  *   gameSize?: '1v1'|'team',
  * }} GlobalFilters
@@ -62,6 +66,7 @@ function parseFilters(q) {
   /** @type {GlobalFilters} */
   const out = {};
   if (!q || typeof q !== "object") return out;
+  if (q.accounts !== undefined) out.accounts = parseAccounts(q.accounts);
   const since = parseDate(q.since);
   if (since) out.since = since;
   const until = parseDate(q.until);
@@ -234,8 +239,13 @@ function parseRegionList(raw) {
  */
 function gamesMatchStage(userId, filters) {
   /** @type {Record<string, any>} */
-  const match = { userId, isResumedFromReplay: { $ne: true } };
+  const match = { userId, isResumedFromReplay: { $ne: true }, _deleted: { $ne: true }, _deletionPending: { $ne: true } };
   const f = filters || {};
+  // Only owner-only replay-list routes may set these internal flags. Public
+  // stats routes never parse them from an arbitrary query.
+  if (f.excludedOnly) match.excluded = true;
+  else if (!f.includeExcluded) match.excluded = { $ne: true };
+  if (f.accounts) match.myToonHandle = { $in: accountMatchHandles(f.accounts) };
   if (f.since || f.until) {
     /** @type {Record<string, Date>} */
     const range = {};

@@ -1,4 +1,5 @@
 "use strict";
+const { LIVE_GAME_MATCH, STATS_GAME_MATCH } = require("../util/gameVisibility");
 
 const crypto = require("crypto");
 const { sanitizePlaySignature } = require("../validation/playSignature");
@@ -123,6 +124,8 @@ const GAME_SLIM_FIELDS = new Set([
 // it protects current reads from legacy rows written before the storage
 // allowlist existed, not just future writes.
 const PUBLIC_GAME_PROJECTION = Object.freeze({
+  excluded: 1,
+  exclusionReason: 1,
   _id: 0,
   gameId: 1,
   date: 1,
@@ -238,6 +241,9 @@ class GamesService {
     this._sessionResolutionGate = new SessionResolutionGate();
   }
 
+  /** @param {string} userId */
+  invalidateForUser(userId) { this._sessionResolutionGate.invalidate(userId); }
+
   /**
    * Insert or update a game record. Returns true if it was new.
    *
@@ -263,14 +269,20 @@ class GamesService {
    * boolean continue to use `upsert` above.
    * @param {string} userId
    * @param {{gameId: string, date: string | Date} & Record<string, unknown>} game
-   * @returns {Promise<{created: boolean, customBuildRevision: string, spatial?: Record<string, any>}>}
+   * @returns {Promise<{created: boolean, customBuildRevision: string, spatial?: Record<string, any>, excluded?: boolean}>}
    */
   async upsertWithRevision(userId, game) {
     if (!game || !game.gameId) throw new Error("gameId required");
+    const controls = await this.db.games.findOne({ userId, gameId: game.gameId }, { projection: { _id: 0, _deleted: 1, _deletionPending: 1, excluded: 1 } });
+    if (controls?._deleted || controls?._deletionPending) throw require("../util/deletedGames").gameDeletedError();
     const date = game.date instanceof Date ? game.date : new Date(game.date);
     if (Number.isNaN(date.getTime())) throw new Error("invalid game.date");
     /** @type {Record<string, any>} */
     const doc = { ...game, userId, date };
+    // Uploads cannot forge, undo, or replace owner-authored visibility/deletion.
+    for (const key of Object.keys(doc)) {
+      if (["excluded", "excludedAt", "exclusionReason", "_deleted", "deletedAt", "_deletionPending", "_cleanupRequired"].some(field => key === field || key.startsWith(`${field}.`))) delete doc[key];
+    }
     // Raw policy evidence is evaluated by ingest only, never a slim-row field.
     delete doc.presetEvidence;
     delete doc._id;
@@ -432,6 +444,8 @@ class GamesService {
         {
           userId,
           gameId: game.gameId,
+          _deleted: { $ne: true },
+          _deletionPending: { $ne: true },
           $or: [
             { _opponentBuildOrderWriteLease: { $exists: false } },
             { "_opponentBuildOrderWriteLease.leaseUntil": { $lte: now } },
@@ -443,8 +457,9 @@ class GamesService {
       if (res.matchedCount > 0 || res.upsertedCount > 0) break;
       const existing = await this.db.games.findOne(
         { userId, gameId: game.gameId },
-        { projection: { _id: 1 } },
+        { projection: { _id: 1, _deleted: 1, _deletionPending: 1 } },
       );
+      if (existing?._deleted || existing?._deletionPending) throw require("../util/deletedGames").gameDeletedError();
       if (!existing) {
         res = await this.db.games.updateOne(
           { userId, gameId: game.gameId },
@@ -460,6 +475,7 @@ class GamesService {
     return {
       created: res.upsertedCount === 1,
       customBuildRevision,
+      excluded: controls?.excluded === true,
       spatial: slimSet.spatial,
     };
   }
@@ -479,6 +495,8 @@ class GamesService {
    * }>}
    */
   async quarantineResumedReplay(userId, game) {
+    const deleted = await this.db.games.findOne({ userId, gameId: String(game.gameId), $or: [{ _deleted: true }, { _deletionPending: true }] }, { projection: { _id: 1 } });
+    if (deleted) throw require("../util/deletedGames").gameDeletedError();
     if (!game || !game.gameId) throw new Error("gameId required");
     const date = game.date instanceof Date ? game.date : new Date(game.date);
     if (Number.isNaN(date.getTime())) throw new Error("invalid game.date");
@@ -592,7 +610,7 @@ class GamesService {
   async list(userId, opts = {}) {
     const limit = clampLimit(opts.limit, LIMITS.GAMES_LIST_DEFAULT);
     /** @type {Record<string, any>} */
-    const filter = { userId, isResumedFromReplay: { $ne: true } };
+    const filter = { userId, ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true } };
     if (opts.oppPulseId) filter.oppPulseId = opts.oppPulseId;
     if (opts.before instanceof Date && !Number.isNaN(opts.before.getTime())) {
       filter.date = { $lt: opts.before };
@@ -642,7 +660,7 @@ class GamesService {
     const limit = clampAnalysisLimit(opts.limit);
     const cursor = decodeAnalysisCursor(opts.cursor);
     /** @type {Record<string, any>} */
-    const filter = { userId, isResumedFromReplay: { $ne: true } };
+    const filter = { userId, ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true } };
     if (cursor) {
       filter.$or = analysisCursorLowerBranches(cursor);
     }
@@ -674,7 +692,7 @@ class GamesService {
    */
   async get(userId, gameId) {
     const row = await this.db.games.findOne(
-      { userId, gameId },
+      { userId, gameId, _deleted: { $ne: true }, _deletionPending: { $ne: true } },
       {
         projection: PUBLIC_GAME_PROJECTION,
       },
@@ -709,6 +727,7 @@ class GamesService {
         {
           userId,
           gameId: { $in: ids },
+          ...LIVE_GAME_MATCH,
           isResumedFromReplay: { $ne: true },
         },
         {
@@ -763,7 +782,7 @@ class GamesService {
    * @returns {Promise<{total: number, latest: Date|null}>}
    */
   async stats(userId) {
-    const competitive = { userId, isResumedFromReplay: { $ne: true } };
+    const competitive = { userId, ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true } };
     const total = await this.db.games.countDocuments(competitive);
     const latest = await this.db.games
       .find(competitive, { projection: { date: 1, _id: 0 } })
@@ -909,6 +928,7 @@ class GamesService {
       {
         $match: {
           userId,
+          ...LIVE_GAME_MATCH,
           isResumedFromReplay: { $ne: true },
           myToonHandle: { $exists: true, $type: "string", $ne: "" },
         },
@@ -995,6 +1015,7 @@ class GamesService {
       .find(
         {
           userId,
+          ...STATS_GAME_MATCH,
           date: { $gte: cutoff, $lte: now },
           isResumedFromReplay: { $ne: true },
         },

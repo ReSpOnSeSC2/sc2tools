@@ -660,7 +660,7 @@ describe("HTTP integration", () => {
       const res = await withAuth(request(app).get("/v1/export.csv"));
       expect(res.status).toBe(200);
       expect(res.headers["content-type"]).toContain("text/csv");
-      expect(res.text.startsWith("gameId,date,result")).toBe(true);
+      expect(res.text.startsWith("\uFEFFgameId,date,result")).toBe(true);
     });
 
     test("/playback returns a 501 with the local-only hint", async () => {

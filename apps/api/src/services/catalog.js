@@ -2,8 +2,8 @@
 
 const fs = require("fs");
 const path = require("path");
-const { LIMITS, PYTHON } = require("../config/constants");
-const { gamesMatchStage } = require("../util/parseQuery");
+const { PYTHON } = require("../config/constants");
+const { prepareReplayCsv, streamReplayCsv } = require("./replayCsv");
 const { resolveProjectDir } = require("../util/pythonRunner");
 
 /**
@@ -109,66 +109,13 @@ class CatalogService {
    * @returns {AsyncGenerator<string, void, void>}
    */
   async *exportCsv(userId, filters) {
-    const headers = [
-      "gameId",
-      "date",
-      "result",
-      "myRace",
-      "myBuild",
-      "map",
-      "durationSec",
-      "macroScore",
-      "apm",
-      "spq",
-      "opponent",
-      "oppRace",
-      "oppMmr",
-      "oppLeague",
-      "oppStrategy",
-      "oppPulseId",
-    ];
-    yield headers.join(",") + "\n";
-    const cursor = this.db.games
-      .find(gamesMatchStage(userId, filters), {
-        projection: {
-          _id: 0,
-          gameId: 1,
-          date: 1,
-          result: 1,
-          myRace: 1,
-          myBuild: 1,
-          map: 1,
-          durationSec: 1,
-          macroScore: 1,
-          apm: 1,
-          spq: 1,
-          opponent: 1,
-        },
-      })
-      .sort({ date: -1 })
-      .limit(LIMITS.CSV_EXPORT_MAX_ROWS);
-    for await (const g of cursor) {
-      const opp = g.opponent || {};
-      const cells = [
-        g.gameId,
-        toIso(g.date),
-        g.result,
-        g.myRace,
-        g.myBuild,
-        g.map,
-        g.durationSec,
-        g.macroScore,
-        g.apm,
-        g.spq,
-        opp.displayName,
-        opp.race,
-        opp.mmr,
-        opp.leagueId,
-        opp.strategy,
-        opp.pulseId,
-      ];
-      yield cells.map(csvCell).join(",") + "\n";
-    }
+    yield* streamReplayCsv(this.db.games, userId, filters);
+  }
+
+  /** @param {string} userId @param {object} filters
+   * @param {{search?:unknown,result?:unknown,matchup?:unknown,sort?:unknown,signal?:AbortSignal}} [opts] */
+  prepareCsv(userId, filters, opts = {}) {
+    return prepareReplayCsv(this.db.games, userId, filters, opts);
   }
 
   /**
@@ -347,22 +294,9 @@ function filenameVariants(mapName) {
   return out;
 }
 
-/** @param {unknown} value */
-function csvCell(value) {
-  if (value === null || value === undefined) return "";
-  const s = typeof value === "string" ? value : String(value);
-  if (/[",\n\r]/.test(s)) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
-}
 
-/** @param {unknown} value */
-function toIso(value) {
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "string") return value;
-  return "";
-}
+
+
 
 /** @param {string} name */
 function sanitiseFilename(name) {

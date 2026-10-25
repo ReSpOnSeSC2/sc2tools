@@ -18,6 +18,8 @@ describe("GamesService.findMany", () => {
       {
         userId: "u1",
         gameId: { $in: ["b", "a", "missing"] },
+        _deleted: { $ne: true },
+        _deletionPending: { $ne: true },
         isResumedFromReplay: { $ne: true },
       },
       {
@@ -47,6 +49,8 @@ describe("GamesService.findMany", () => {
       {
         userId: "u1",
         gameId: { $in: ["g1"] },
+        _deleted: { $ne: true },
+        _deletionPending: { $ne: true },
         isResumedFromReplay: { $ne: true },
       },
       {
