@@ -72,6 +72,8 @@ import type { RandomizerConfig } from "@/lib/randomizer/types";
 import { sanitizeRandomizerConfig } from "@/lib/randomizer/config";
 import { useRevealAudioUnlock } from "@/components/randomizer/reveals/revealSound";
 import { decodeOverlayTheme, themeToCssVars } from "@/lib/overlayTheme";
+import { useOverlayProfile, type OverlayProfileConfig } from "@/lib/useOverlayProfile";
+import type { OverlayProfile } from "@/lib/overlayProfile";
 import {
   mergeLiveGameStreamerHistory,
   type StickyStreamerHistory,
@@ -131,7 +133,8 @@ function ConnectedOverlayClient({
   showCredit?: boolean;
 }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
-  const testLayer = useOverlayTestLayer(token);
+  const { themeVars, optionsRef, receiveProfile } = useOverlayProfile(token, themeParam);
+  const testLayer = useOverlayTestLayer(token, optionsRef);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [enabled, setEnabled] = useState<Set<WidgetId>>(
@@ -160,6 +163,7 @@ function ConnectedOverlayClient({
     testLayer.clear,
     setConnectionStatus,
     onBuildIntent,
+    receiveProfile,
   );
 
   // Mirror the per-widget client's stale-clear behaviour so the
@@ -186,13 +190,8 @@ function ConnectedOverlayClient({
     setVisibleLive,
     setSessionVisible,
     randomizerAnchor: randomizerCheckin.windowAnchor,
+    optionsRef,
   });
-
-  // Theme vars, decoded once at mount. Default theme → empty object →
-  // zero style overrides, so untouched URLs render exactly as before.
-  const themeVars = useMemo(() => {
-    return themeToCssVars(decodeOverlayTheme(themeParam));
-  }, [themeParam]);
 
   // Single-widget mode (OBS users place each widget in its own
   // Browser Source). Read from URL search param, defaulting to "all".
@@ -358,6 +357,7 @@ function useOverlaySocket(
   onClear: (msg: TestClear) => void,
   setConnectionStatus: (status: OverlayConnectionStatus) => void,
   onBuildIntent: (msg: unknown) => void,
+  receiveProfile: (msg: OverlayProfileConfig) => void,
 ): RefObject<Socket | null> {
   const socketRef = useRef<Socket | null>(null);
   // Sticky cache of the latest enriched ``streamerHistory`` keyed by
@@ -415,7 +415,8 @@ function useOverlaySocket(
         enabledWidgets?: string[];
         voicePrefs?: VoicePrefs;
         randomizer?: unknown;
-      }) => {
+      } & OverlayProfileConfig) => {
+        receiveProfile(msg);
         if (msg && Array.isArray(msg.enabledWidgets)) {
           setEnabled(new Set(msg.enabledWidgets as WidgetId[]));
         }
@@ -457,6 +458,7 @@ function useOverlaySocket(
     onClear,
     setConnectionStatus,
     onBuildIntent,
+    receiveProfile,
   ]);
   return socketRef;
 }
@@ -478,6 +480,7 @@ function useWidgetTimers({
   setVisibleLive,
   setSessionVisible,
   randomizerAnchor,
+  optionsRef,
 }: {
   live: LiveGamePayload | null;
   liveGame: LiveGameEnvelope | null;
@@ -485,6 +488,7 @@ function useWidgetTimers({
   setVisibleLive: (updater: (prev: Set<WidgetId>) => Set<WidgetId>) => void;
   setSessionVisible: (visible: boolean) => void;
   randomizerAnchor: RandomizerWindowAnchor | null;
+  optionsRef: RefObject<OverlayProfile["widgetOptions"]>;
 }) {
   // Track all in-flight timeouts so we can cancel them on unmount AND
   // when a fresh payload supersedes the previous one. Per-widget
@@ -533,10 +537,10 @@ function useWidgetTimers({
     if (existing !== undefined) window.clearTimeout(existing);
     liveTimers.current.delete(id);
     liveDeadlines.current.delete(id);
-    const duration = resolveWidgetDurationMs(id, isTest);
+    const duration = resolveWidgetDurationMs(id, isTest, optionsRef.current);
     if (duration === null) return;
     scheduleHide(id, Date.now() + duration);
-  }, [scheduleHide]);
+  }, [scheduleHide, optionsRef]);
 
   // Back-to-back queues can rotate keys without passing through menu.
   const liveGameKey =
@@ -643,11 +647,11 @@ function useWidgetTimers({
   useEffect(() => {
     if (anchorAtMs === null) return;
     const deadline = liveDeadlines.current.get("randomizer");
-    const duration = resolveWidgetDurationMs("randomizer", false);
+    const duration = resolveWidgetDurationMs("randomizer", false, optionsRef.current);
     if (deadline === undefined || duration === null) return;
     const extended = extendStartWindow(deadline, anchorAtMs, duration, Date.now());
     if (extended !== deadline) scheduleHide("randomizer", extended);
-  }, [anchorAtMs, randomizerStartKey, scheduleHide]);
+  }, [anchorAtMs, randomizerStartKey, scheduleHide, optionsRef]);
 
   // The cloud already enriches active envelopes with these cards' data.
   // Open each card once when its content arrives, without restarting its
@@ -669,13 +673,13 @@ function useWidgetTimers({
       sessionTimer.current = null;
     }
     const isTest = Boolean(session.isTest);
-    const duration = resolveWidgetDurationMs("session", isTest);
+    const duration = resolveWidgetDurationMs("session", isTest, optionsRef.current);
     if (duration === null) return;
     sessionTimer.current = window.setTimeout(() => {
       setSessionVisible(false);
       sessionTimer.current = null;
     }, duration);
-  }, [session, setSessionVisible]);
+  }, [session, setSessionVisible, optionsRef]);
 
   // Drain any in-flight timers when the host component unmounts so
   // a fast scene swap in OBS doesn't leak timeouts past the lifetime

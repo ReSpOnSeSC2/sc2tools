@@ -59,3 +59,15 @@ it("uses the query as the section authority and retains shareable navigation lin
   state.query = "tab=overlay&section=look"; render(<Preview />); expect(screen.getByRole("link", { name: /^Look$/ }).getAttribute("aria-current")).toBe("page");
   expect(screen.getByRole("link", { name: "Dock & bot" }).getAttribute("href")).toContain("section=dock");
 });
+
+
+it("new copies follow the saved profile and each real card exposes the shared duration choices", () => {
+  const change = vi.fn(); const view = render(<WidgetList {...props} theme={{ accent: "#abcdef" }} profile={{ v: 1, theme: {}, widgetOptions: { scouting: { durationSec: 45 } } }} onDurationChange={change} />);
+  const card = view.container.querySelector('[data-widget-id="scouting"]')!;
+  expect(new URL(within(card as HTMLElement).getByRole("link", { name: "Drag into OBS" }).getAttribute("href")!).searchParams.has("theme")).toBe(false);
+  fireEvent.click(within(card as HTMLElement).getByRole("button", { name: "Display for Scouting tells" }));
+  const select = screen.getByLabelText("Display time for Scouting tells") as HTMLSelectElement;
+  expect(select.value).toBe("45"); fireEvent.change(select, { target: { value: "" } }); expect(change).toHaveBeenCalledWith("scouting", null);
+  fireEvent.pointerDown(screen.getByRole("button", { name: "Display for Session record" })); fireEvent.click(screen.getByRole("button", { name: "Display for Session record" }));
+  expect((screen.getByLabelText("Display time for Session record") as HTMLSelectElement).disabled).toBe(true);
+});

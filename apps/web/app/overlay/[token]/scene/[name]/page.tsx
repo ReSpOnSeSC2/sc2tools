@@ -1,3 +1,4 @@
+import { overlayThemeParamFromSearch } from "@/lib/overlayTheme";
 import { OverlaySceneClient } from "@/components/overlay/scenes/OverlaySceneClient";
 import {
   isValidScene,
@@ -56,6 +57,7 @@ export default async function OverlayScenePage({
     <OverlaySceneClient
       token={token}
       scene={name}
+      themeParam={overlayThemeParamFromSearch(sp)}
       staticMode={staticMode}
       demo={demo}
       showCredit={!isOverlayCreditHidden(sp[OVERLAY_CREDIT_PARAM])}

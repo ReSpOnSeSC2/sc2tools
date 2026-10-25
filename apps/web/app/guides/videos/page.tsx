@@ -6,6 +6,7 @@ import { guidePaths } from "@/components/guides/guideMetadata";
 import { guideMetadata, guideUnavailableMetadata } from "@/components/guides/guideSeo";
 import { fetchGuideVideos } from "@/lib/guides/api";
 import { guidesEnabled } from "@/lib/guides/flags";
+import { filterGuideVideos, parseVideoMatchup } from "@/lib/guides/videoFilters";
 
 // Fetch per request so an API outage at build time cannot freeze this page.
 // fetchGuideVideos still shares the guide data cache and revalidation tag.
@@ -30,8 +31,11 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-export default async function GuideVideosPage() {
+export default async function GuideVideosPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const result = await loadVideos();
   if (result.kind === "unavailable") return <GuideUnavailable title="Build order videos are temporarily unavailable" />;
-  return <GuideVideosList payload={result.data} />;
+  const query = await searchParams;
+  const initialMatchup = parseVideoMatchup(query?.matchup);
+  const initialVideos = filterGuideVideos(result.data.videos, initialMatchup);
+  return <GuideVideosList payload={result.data} initialMatchup={initialMatchup} initialVideos={initialVideos} />;
 }

@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Live overlay display
+
+- Save an overlay theme and per-widget display times to its token. Connected OBS sources receive changes without re-copying URLs; existing `?theme=` URLs keep working and retain their explicit look. Previous browser themes can be moved into a draft with an explicit Save.
+
 ### Local widget playground
 
 - Preview every widget with sample scenarios and theme presets, alone or together, in Stream Studio, the widget guides and Settings. Silent local previews use no account or overlay token; Test in OBS remains the check for a real source.
@@ -68,6 +72,10 @@ corresponding GitHub Release.
 
 - Compare builds, strategies, maps and matchups with replay-rated expected wins, sortable wins above expected, visible rating coverage and Wilson win-rate ranges. Sparse history stays unknown; fewer than ten games are marked as thin samples.
 - Trends shows matchup performance-rating windows over each pair's latest 50 decided ranked 1v1 games. Missing ratings and unbounded all-win/all-loss windows remain gaps. A bounded daily calibration uses only aggregate replay-time rating evidence, with a documented Elo fallback.
+
+### Guide video library
+
+- Filter current build-order videos by matchup, search their titles and reveal 24 cards at a time. Matchup links open with the same filter, and unique matches can link directly to a published build guide.
 
 ### Agent 0.24.5 - Opt-in game-screen assistance
 - Default build selectors and loading-screen scouting to off, matching the
