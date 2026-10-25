@@ -152,6 +152,7 @@ describe("/v1/admin", () => {
       ["GET", "/v1/admin/infrastructure"],
       ["GET", "/v1/admin/backups"],
       ["GET", "/v1/admin/users"],
+      ["GET", "/v1/admin/users/export.csv"],
       ["GET", "/v1/admin/users/u_1"],
       ["GET", "/v1/admin/users/u_1/opponents"],
       ["GET", "/v1/admin/users/u_1/opponents/p_1/games"],

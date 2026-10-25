@@ -48,7 +48,7 @@ export type MongoDatabaseStorageStatus = {
   atlas: AtlasInfrastructureStatus;
 };
 
-export type UserListFilter = "all" | "with_games" | "no_games" | "with_agent";
+export type UserListFilter = "all" | "with_games" | "no_games" | "with_agent" | "signed_up_7d" | "agent_inactive_14d" | "admins";
 
 export type AdminUserRow = {
   userId: string;
@@ -60,10 +60,15 @@ export type AdminUserRow = {
   firstActivity: string | null;
   hasAgent: boolean;
   agentLastSeenAt: string | null;
-  storageEstimateBytes: number;
+  createdAt: string | null;
+  isAdmin: boolean;
 };
 
 export type UsersListResp = {
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
   items: AdminUserRow[];
   nextBefore: string | null;
 };
@@ -83,6 +88,7 @@ export type AdminUserDetail = {
     firstActivity: string | null;
     lastActivity: string | null;
   };
+  recentGames: Array<{ gameId: string; date: string | null; map: string | null; result: string | null; opponent: { name: string | null; pulseId: string | null } }>;
   opponents: {
     total: number;
     /** Five most recently seen opponents, newest first. */
