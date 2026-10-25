@@ -21,6 +21,8 @@ import type {
   DefinitionGuideLink,
   DefinitionGuideLinks,
 } from "@/lib/guides/definitionLinks";
+import { publicBuildVariantIntent } from "@/lib/buildVariantIntent";
+import { BuildVariantContinuation } from "./BuildVariantContinuation";
 import { raceIconName, raceTint, type Race } from "@/lib/race";
 import { PracticeButton } from "@/components/practice/PracticeButton";
 
@@ -58,6 +60,8 @@ export function DefinitionsCatalog({
 } = {}) {
   const searchParams = useSearchParams();
   const encodedParams = searchParams.toString();
+  const variantId = publicBuildVariantIntent(new URLSearchParams(encodedParams));
+  const variant = BUILD_DEFINITIONS.find(definition => definition.id === variantId);
   const initial = readFilters(new URLSearchParams(encodedParams));
   const [query, setQuery] = useState(initial.query);
   const [race, setRace] = useState<Race | "All">(initial.race);
@@ -77,6 +81,7 @@ export function DefinitionsCatalog({
   useEffect(() => {
     if (incomingNavigation) return;
     const params = new URLSearchParams();
+    if (variantId) params.set("variant", variantId);
     if (query) params.set("q", query);
     if (race !== "All") params.set("race", race[0]);
     if (matchup && matchup !== "All") params.set("matchup", matchup);
@@ -86,7 +91,7 @@ export function DefinitionsCatalog({
     if (search !== window.location.search.slice(1)) {
       window.history.replaceState(null, "", `/definitions${search ? `?${search}` : ""}${window.location.hash}`);
     }
-  }, [query, race, matchup, incomingNavigation]);
+  }, [query, race, matchup, incomingNavigation, variantId]);
 
   const filtered = useMemo(
     () => filterDefinitions(BUILD_DEFINITIONS, query, race, matchup),
@@ -130,6 +135,7 @@ export function DefinitionsCatalog({
 
   return (
     <div className="space-y-5">
+      {variant ? <BuildVariantContinuation id={variant.id} name={variant.name} /> : null}
       <Card>
         <div className="space-y-3">
           <Field label="Search builds and strategies" htmlFor="def-search">

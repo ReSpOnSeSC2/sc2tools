@@ -25,6 +25,7 @@ import { BuildPublishIntent } from "./BuildPublishIntent";
 import type { BuildStats, CustomBuild, DecoratedBuild } from "./types";
 import type { BuildEditorSaveResult } from "./editor/BuildEditor.types";
 import { BuildStartCards, type BuildStartChoice } from "./BuildStartCards";
+import { buildVariantContinuationHref, knownBuildVariantId } from "@/lib/buildVariantIntent";
 
 // Editors and charts are only needed after a library action. Keep them out
 // of the route's first load, including for signed-out visitors.
@@ -94,11 +95,9 @@ export function BuildsLibrary() {
   const searchParams = useSearchParams();
   if (!isLoaded || !isSignedIn) {
     const params = new URLSearchParams(buildFiltersQuery(readBuildFilters(searchParams)));
-    const definition = searchParams.get("definition");
-    if (searchParams.get("create") === "detected" && definition && /^[a-z0-9-]{1,160}$/.test(definition)) {
-      params.set("create", "detected"); params.set("definition", definition);
-    }
-    return <BuildsPublicIntro returnTo={`/builds${params.size ? `?${params}` : ""}`} />;
+    const definition = knownBuildVariantId(searchParams.get("definition"));
+    const returnTo = searchParams.get("create") === "detected" && definition ? buildVariantContinuationHref(definition) : `/builds${params.size ? `?${params}` : ""}`;
+    return <BuildsPublicIntro returnTo={returnTo} />;
   }
   return <BuildsLibraryInner key={userId} />;
 }

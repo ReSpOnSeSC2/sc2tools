@@ -213,7 +213,7 @@ describe("BuildsLibrary pagination", () => {
     harness.isSignedIn = false; harness.query = "create=detected&definition=zerg-12-pool&sort=games&next=https://untrusted.test";
     render(<BuildsLibrary />);
     const target = new URL(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")!, "https://local.test").searchParams.get("redirect_url");
-    expect(target).toBe("/builds?sort=games&create=detected&definition=zerg-12-pool");
+    expect(target).toBe("/definitions?variant=zerg-12-pool");
   });
   it("consumes the detected-variant intent without dropping the current library filters", async () => {
     harness.query = "create=detected&definition=zerg-12-pool&sort=games&q=pool";

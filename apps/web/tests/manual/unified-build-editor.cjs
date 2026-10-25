@@ -101,6 +101,15 @@ async function chooseToken(page,token){const input=page.getByRole('combobox',{na
       }
       expect(errors).toEqual([]);checks++;await context.close();console.log(JSON.stringify({width,theme,checks,captures}));
     }
+    const authContext=await browser.newContext({viewport:{width:300,height:960}}),authPage=await authContext.newPage();
+    await authContext.addInitScript(()=>{window.fixtureInitialAuth=sessionStorage.getItem('fixture-auth')||null;window.fixturePersistAuth=true});
+    await authContext.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
+    await authPage.goto(`${origin}/builds?create=detected&definition=zerg-12-pool&sort=games`);
+    const returnTo=new URL(await authPage.getByRole('link',{name:'Sign in',exact:true}).getAttribute('href'),origin).searchParams.get('redirect_url');expect(returnTo).toBe('/definitions?variant=zerg-12-pool');checks++;
+    const beforePublic=calls.length;await authPage.goto(origin+returnTo);await expect(authPage.getByRole('link',{name:'Sign in to create this variant'})).toBeVisible();expect(calls).toHaveLength(beforePublic);checks+=2;
+    await authPage.evaluate(()=>window.fixtureAuth('synthetic-a'));await expect(authPage.getByRole('link',{name:'Continue private variant'})).toBeVisible();expect(new URL(authPage.url()).pathname).toBe('/definitions');expect(calls).toHaveLength(beforePublic);checks+=3;
+    await geometry(authPage);await shot(authPage,'variant-return-light-300');await authPage.evaluate(()=>document.documentElement.dataset.theme='dark');await shot(authPage,'variant-return-dark-300');
+    const writes=calls.filter(call=>call.method==='PUT').length;await authPage.getByRole('link',{name:'Continue private variant'}).click();await expect(authPage.getByRole('dialog',{name:'Start from a detected build'})).toBeVisible();await expect(authPage.getByRole('combobox',{name:'Detected build'})).toHaveValue('Zerg - 12 Pool');expect(calls.filter(call=>call.method==='PUT')).toHaveLength(writes);checks+=3;await authContext.close();
     expect(unexpected).toEqual([]);expect(calls.filter(call=>call.path.endsWith('/preview-matches')).every(call=>call.body.rules.every(rule=>rule.name!=='not-a-known-action'))).toBe(true);checks+=2;
     console.log(JSON.stringify({result:'PASS',checks,captures,requests:calls.length}));
   }finally{releaseDetail?.();releaseSave?.();await browser.close();server.closeAllConnections();server.close()}

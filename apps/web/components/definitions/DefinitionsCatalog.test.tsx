@@ -10,9 +10,9 @@ import { StrategyTendencyChart } from "@/components/analyzer/StrategyTendencyCha
 
 const router = vi.hoisted(() => ({ replace: vi.fn(), params: "" }));
 vi.mock("next/navigation", () => ({ useRouter: () => router, useSearchParams: () => new URLSearchParams(router.params) }));
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: vi.fn(), userId: "definitions-test-user" }) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: vi.fn(), userId: "definitions-test-user", isLoaded: true, isSignedIn: true }) }));
 vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: undefined, isLoading: false }) }));
-beforeEach(() => { router.params = ""; window.history.replaceState({}, "", "/definitions"); });
+beforeEach(() => { router.params = ""; router.replace.mockClear(); window.history.replaceState({}, "", "/definitions"); });
 
 afterEach(() => {
   cleanup();
@@ -27,6 +27,14 @@ function card(id: string): HTMLElement {
 }
 
 describe("DefinitionsCatalog", () => {
+  it("preserves a valid public continuation and waits for an explicit private action", async () => {
+    router.params = "variant=zerg-12-pool"; window.history.replaceState({}, "", `/definitions?${router.params}`);
+    render(<DefinitionsCatalog />);
+    expect(screen.getByRole("region", { name: "Continue build variant" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Continue private variant" }).getAttribute("href")).toBe("/builds?create=detected&definition=zerg-12-pool");
+    await waitFor(() => expect(window.location.search).toBe("?variant=zerg-12-pool"));
+    expect(router.replace).not.toHaveBeenCalled();
+  });
   it("lists the labels the engine catalog used to lack", () => {
     render(<DefinitionsCatalog />);
     expect(within(card("zerg-hatch-first")).getByText("Zerg - Hatch First")).toBeTruthy();

@@ -10,7 +10,9 @@ augments. ADR0055 records the catalog and request boundaries.
   reference-build-order predecessor is implemented. First run also offers
   Copy a Community build at the existing `/community` index.
 - Definitions links exact catalog ids to a private variant. Its bounded intent
-  and recognized library filters survive sign-in. No write happens on a link
+  survives sign-in through public `/definitions?variant=<id>` and an explicit
+  signed-in continuation CTA. Private library filters do not enter that public
+  URL; unknown params and unknown/invalid ids are refused. No write happens on a link
   visit, picker selection or local preview.
 - The existing private replay listing supplies 20 rows per cursor page with
   race/opponent/build filters. Only the selected build order is requested.
@@ -49,13 +51,17 @@ augments. ADR0055 records the catalog and request boundaries.
   Today 238.2/240, Builds 197.8/270, game 310.5/440, opponent 447.7/500,
   Dock 214.6/225, dedicated widget 318.7/325 kB. Existing unrelated lint warnings
   remain; changed-source lint is strict and clean.
-- Real-source browser matrix: 320 checks, 44 captures, ten light/dark contexts
+- Real-source browser matrix: 330 checks, 46 captures, ten light/dark contexts
   at 300/320/390/768/1440. Actual Library/creation flow/rich modal/Definitions/
   legacy launcher/replay Save consumer, production CSS/fonts, real SWR/API
   transport, explicit synthetic auth/Next/API data and blocked external traffic.
   Covers picker point hit-testing/44px options, no horizontal overflow, Escape
   and dirty confirmation, keyboard/AX Save with a held response, local-owner/source resets, malformed
   Retry, held selected reads across filter/owner ABA, and chooser axe scans.
+  A separate synthetic auth-return context verifies no private request or
+  write occurs on the public continuation before the explicit signed-in CTA.
+  The isolated auth compatibility delta has 67 focused passing cases and a
+  197-id catalog-parity allowlist of 1,294 bytes gzip, without catalog prose.
 - Real Next/webpack public ReplayDemo: nine checks. First editor chunk is
   deliberately aborted, local Retry loads the actual editor/timeline, the same
   failed URL is requested twice and preview selection remains one request.

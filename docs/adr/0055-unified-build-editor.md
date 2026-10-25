@@ -32,3 +32,13 @@ and game consumers do not eagerly import the complete picker catalog.
 
 No API schema expansion, provider calls, migrations, new infrastructure, AI,
 production activation or native release is required.
+
+Auth return compatibility uses only the public `/definitions?variant=<id>`
+continuation. Its exact generated catalog-id allowlist is separate from catalog
+prose (1,294 bytes gzip), so auth helpers need not import all descriptions.
+The catalog preserves only a single valid variant intent and shows an explicit
+signed-in continuation link. No private redirect or write runs automatically,
+and private library filters never enter that public continuation. The Auth pack
+keeps private `/builds` excluded from its allowlist and owns the corresponding
+public-path sanitizer integration. `npm run definitions:gen` regenerates the
+tiny IDs through its post script; catalog parity is tested.
