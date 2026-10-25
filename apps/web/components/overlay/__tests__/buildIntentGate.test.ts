@@ -21,6 +21,16 @@ describe("parseOverlayBuildIntent", () => {
       .toEqual({ gameKey: "a|b|1", suppressRandomizer: true, holdRemainingMs: 4200 });
   });
 
+  it("retains a bounded canonical pick through the ledger", () => {
+    const randomizer = { key: "pvt-blink-stalkers", name: "Canonical build", source: "catalog" as const };
+    const event = parseOverlayBuildIntent({ gameKey: "g1", holdRemainingMs: 0, randomizer });
+    const ledger = recordBuildIntent(EMPTY_BUILD_INTENT_LEDGER, event!, 1000);
+    expect(randomizerIntentGate(ledger, "g1")?.randomizer).toEqual(randomizer);
+    expect(randomizerIntentGate(ledger, "g2")?.randomizer).toBeUndefined();
+    expect(parseOverlayBuildIntent({ gameKey: "g1", randomizer: { ...randomizer, key: "x".repeat(201) } })?.randomizer).toBeUndefined();
+    expect(parseOverlayBuildIntent({ gameKey: "g1", randomizer: { ...randomizer, source: "admin" } })?.randomizer).toBeUndefined();
+  });
+
   it.each([null, undefined, "x", 3, [], {}, { gameKey: "" }, { gameKey: 7 }, { gameKey: "k".repeat(401) }])(
     "rejects an unusable payload (%j)",
     (msg) => {

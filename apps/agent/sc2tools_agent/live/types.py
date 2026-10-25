@@ -194,6 +194,7 @@ class LivePlayer:
     race: str  # "Zerg" | "Protoss" | "Terran" | "random"/"?"
     result: str  # "Undecided" | "Victory" | "Defeat" | "Tie"
     player_id: Optional[int] = None
+    team_id: Optional[int] = None
 
     @property
     def is_user(self) -> bool:
@@ -223,6 +224,7 @@ class LiveGameState:
     is_replay: bool = False
     players: List[LivePlayer] = field(default_factory=list)
     captured_at: float = field(default_factory=time.time)
+    is_observer: bool = False
 
     def user_for(self, user_name: Optional[str]) -> Optional[LivePlayer]:
         """Pick the local human player without guessing in team games.
@@ -365,7 +367,10 @@ def envelope_for(event: LiveLifecycleEvent) -> Dict[str, Any]:
     if event.game_state is not None:
         payload["displayTime"] = event.game_state.display_time
         payload["isReplay"] = event.game_state.is_replay
-        payload["players"] = to_jsonable(event.game_state.players)
+        if event.game_state.is_observer:
+            payload["isObserver"] = True
+        payload["players"] = [{key: value for key, value in to_jsonable(player).items()
+                               if key != "team_id" or value is not None} for player in event.game_state.players]
     if event.ui_state is not None:
         payload["uiScreens"] = list(event.ui_state.active_screens)
     return payload

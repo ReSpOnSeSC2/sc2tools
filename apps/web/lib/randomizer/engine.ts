@@ -152,9 +152,15 @@ export function spinResult(
   cfg: MatchupConfig | undefined,
   rng: () => number = Math.random,
   avoidStyle?: RevealStyle | null,
+  winnerOverride?: RandomizerBuild,
 ): SpinOutcome | null {
   if (!cfg || !cfg.enabled) return null;
-  const pool = cfg.builds.filter((b) => b && typeof b.name === "string");
+  const configured = cfg.builds.filter((b) => b && typeof b.name === "string");
+  const pool = winnerOverride
+    ? configured.some((build) => build.id === winnerOverride.id)
+      ? configured.map((build) => build.id === winnerOverride.id ? winnerOverride : build)
+      : [winnerOverride]
+    : configured;
   if (pool.length === 0) return null;
 
   const weights = pool.map((b) => effectiveWeight(b, cfg.useCustomWeights));
@@ -163,7 +169,7 @@ export function spinResult(
   // Preserve the original RNG ordering: build winner first, build reveal
   // style second. Opening-unit draws are appended only after both decisions.
   const style = pickRevealStyle(rng, avoidStyle);
-  const winner = pool[winnerIndex];
+  const winner = winnerOverride ? pool.find((build) => build.id === winnerOverride.id)! : pool[winnerIndex];
 
   return {
     matchup,

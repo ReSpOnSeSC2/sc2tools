@@ -253,6 +253,7 @@ export function BuildDossier({
       <section id={sectionNavigation ? "games" : undefined} className="scroll-mt-24 space-y-4" aria-label="Build games">
       <Last5AndRecent
         data={data}
+        ghostSide={phasePerspective}
         filterGameIds={activeGameFilter?.gameIds}
         filterLabel={activeGameFilter?.label}
         onClearFilter={() => setGameFilter(null)}
@@ -475,11 +476,13 @@ function MacroAggregate({ macro }: { macro?: BuildDossierData["macro"] }) {
 
 function Last5AndRecent({
   data,
+  ghostSide,
   filterGameIds,
   filterLabel,
   onClearFilter,
 }: {
   data: BuildDossierData;
+  ghostSide?: "you" | "opponent";
   filterGameIds?: string[];
   filterLabel?: string;
   onClearFilter?: () => void;
@@ -507,6 +510,8 @@ function Last5AndRecent({
           onClear={onClearFilter}
         />
       ) : <BuildGamesTable
+        ghostSide={ghostSide}
+        buildKey={data.slug || data.name}
         games={data.recent ?? []}
         resumedGames={data.resumedRecent ?? []}
         resumedCount={data.resumedCount ?? 0}

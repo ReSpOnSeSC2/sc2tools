@@ -32,6 +32,19 @@ def test_window_preferences_roundtrip_and_reject_junk(tmp_path):
         assert loaded.window_geometry is None and loaded.window_page is None
     save_state(tmp_path, AgentState(window_geometry="invalid!", window_page="unknown"))
     assert load_state(tmp_path).window_geometry is None
+
+
+@pytest.mark.parametrize("layout", ["compact", "standard", "detailed", "full"])
+def test_information_layout_roundtrips_independently_of_window_geometry(tmp_path, layout):
+    save_state(tmp_path, AgentState(window_information_layout=layout))
+    loaded = load_state(tmp_path)
+    assert loaded.window_information_layout == layout
+
+
+@pytest.mark.parametrize("invalid", [None, True, [], "huge"])
+def test_invalid_information_layout_defaults_to_standard(tmp_path, invalid):
+    (tmp_path / "agent.json").write_text(json.dumps({"window_information_layout": invalid}), encoding="utf-8")
+    assert load_state(tmp_path).window_information_layout == "standard"
     assert load_state(tmp_path).window_page is None
 
 

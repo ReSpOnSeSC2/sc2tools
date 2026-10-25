@@ -33,6 +33,7 @@ import {
 } from "@/components/landing/ProductShowcases";
 import { getInstantImportMode } from "@/lib/instant/flag";
 import { PRODUCT_FACTS } from "@/lib/productFacts";
+import { CompanionShowcase } from "@/components/landing/CompanionShowcase";
 
 export function LandingPageContent() {
   return (
@@ -41,6 +42,7 @@ export function LandingPageContent() {
       <RealGameShowcase />
       <OutcomeRail />
       <ImprovementChapter />
+      <CompanionShowcase />
       <PracticeChapter />
       <ReplaySection />
       <StreamChapter />

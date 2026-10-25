@@ -4,9 +4,9 @@ const article: HelpArticle = {
   slug: "randomizer",
   title: "Build randomizer: let a draw pick your build",
   summary:
-    "Choose which builds can come up in each matchup and how likely each one is, and an animated draw picks your build on stream when a new game loads.",
+    "Configure a shared pool, then Randomize from check-in even without an open widget. Every display uses one saved result; animation, sounds and speech stay in the widget.",
   category: "builds",
-  audience: "streamer",
+  audience: "player",
   signedInOnly: true,
   order: 50,
   keywords: [
@@ -25,22 +25,23 @@ const article: HelpArticle = {
     "live preview",
     "roll now",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-24",
   body: [
+    { type: "callout", tone: "info", title: "Agent 0.24.1 and later", text: "Update the [Windows agent](/download) for the check-in Randomize control. The separate widget handles animated reveals and audio. See [Desktop Companion](/help/desktop-companion)." },
     {
       type: "paragraph",
-      text: "The build randomizer is an overlay widget that draws a build for you, and your viewers, at the start of each new game. You decide which builds can come up in each matchup and how often.",
+      text: "**Companion → Randomizer** silently configures the shared account settings and shows the saved pick. In the loading check-in, **Randomize** selects and saves one build even without an open widget. The widget uses that same result for animation, sound effects and speech. Native scouting voice is a separate feature and remains available.",
     },
     { type: "heading", text: "Set it up", anchor: "setup" },
     {
       type: "steps",
       items: [
-        "Open [Settings → Randomizer](/settings?tab=randomizer) and pick a matchup.",
+        "Open **Companion → Randomizer** and choose a matchup. Your current concrete matchup is selected when a game arrives.",
         "Turn on **Enable randomizer for this matchup**.",
-        "Tick the builds it may draw: **Catalog builds** that come with SC2 Tools, and **Your custom builds** that fit the matchup. Search to find one.",
-        "Leave **Use custom weights** off for an equal chance per build, or turn it on and use the sliders to make some builds come up more often.",
-        "Press **Save changes**. Repeat for every matchup you want drawn.",
-        "In [Settings → Overlay](/settings?tab=overlay), copy the **Build randomizer** URL into an OBS Browser Source, or use the all-in-one overlay that already includes it.",
+        "Check the eligible builds and press **Save selected pool**. Turn the matchup switch on or off whenever you want; these changes are saved to your account.",
+        "Click **Randomize** in the loading check-in to select a build. Open the **Build randomizer** widget from [Settings → Overlay](/settings?tab=overlay) if you want its animated reveal and audio; the check-in button works when the widget is closed.",
+        "For custom weights, search and the animated preview, open [Settings → Randomizer](/settings?tab=randomizer). Leave **Use custom weights** off for equal odds or adjust each weight, then press **Save changes**.",
+        "Use the widget's controls for Randomizer visuals, sound effects and spoken results. Companion's Randomizer configuration page is silent; its scouting voice setting does not enable Randomizer speech.",
       ],
     },
     {
@@ -50,7 +51,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Opening Gateway draw (Protoss)", anchor: "gateway-draw" },
     {
       type: "paragraph",
-      text: "After a 1 Gate or 2 Gate build wins the draw and its reveal clears, the widget can draw one opening unit (1 Gate) or two (2 Gate). Each build keeps its own unit odds.",
+      text: "The Randomizer widget can follow a 1 Gate or 2 Gate build reveal with one opening unit (1 Gate) or two (2 Gate). Each build keeps its own unit odds. Companion only shows the saved build pick; the animated opening-unit sequence belongs to the widget and website preview.",
     },
     { type: "heading", text: "Try it before you go live", anchor: "preview" },
     {
@@ -65,8 +66,8 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "When the desktop app reports a new game in a matchup you've set up, the widget draws a build and reveals it, then clears for the game.",
-        "With [Build check-in](/help/build-check-in) asking at the loading screen, the card reads *Randomizer will roll*. Pick a build yourself and the draw is skipped for that game; press **Roll now** to draw right away, or wait a few seconds.",
+        "The widget respects the loading check-in's decision hold when configured. **Randomize** selects and saves a build directly and releases that hold. The native app does not open a Randomizer animation window or play Randomizer audio.",
+        "A build you declared yourself takes priority. A retry, refresh or second connected display reuses the first saved pick for the game. The widget reveals the saved selection instead of choosing a second build.",
         "The drawn build is marked **Rolled** and is suggested as your plan after the game. It only counts toward a build's record once you confirm the check-in.",
       ],
     },
@@ -74,14 +75,14 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "Check that you pressed **Save changes** and that this exact matchup is enabled with at least one build ticked.",
-        "Games against Random have no known matchup at the start, so there's no draw.",
-        "The desktop app must be running: the draw starts when it reports the new game.",
+        "Enable this exact matchup and save at least one eligible build. Unavailable entries are skipped without deleting your preferences. If selection fails, check the message and press **Randomize** again after correcting the pool or connection.",
+        "The matchup must be concrete. Random or unresolved races wait; finished games, replays, team games and games against the computer do not trigger a current-game widget draw.",
+        "The paired desktop agent must be running and reporting the current game. Opening the configuration page alone does not select a build. Use **Randomize** in check-in; open the separate widget only for its visuals and audio.",
       ],
     },
     { type: "settingsLink", label: "Open Settings → Randomizer", href: "/settings?tab=randomizer" },
   ],
-  related: ["build-check-in", "practice-ghost-build", "obs-overlay-setup", "custom-builds"],
+  related: ["desktop-companion", "build-check-in", "practice-ghost-build", "obs-overlay-setup", "custom-builds"],
 };
 
 export default article;

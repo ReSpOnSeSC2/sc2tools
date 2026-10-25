@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from ..state import AgentState, save_state
 from .controller import BuildCheckinController
@@ -48,6 +48,8 @@ def start_build_checkin(
     state_dir: Path,
     dashboard_url: str,
     view: Optional[BuildCheckinView] = None,
+    connection_provider: Optional[Callable[[], tuple]] = None,
+    identity_provider: Optional[Callable[[], tuple]] = None,
 ) -> Optional[BuildCheckinController]:
     """Construct the controller, subscribe it to ``bus`` and start it."""
 
@@ -75,6 +77,8 @@ def start_build_checkin(
             on_prefs_changed=remember_prefs,
             show_scouting_at_loading=state.show_scouting_at_loading,
             on_scouting_changed=remember_scouting,
+            connection_provider=connection_provider,
+            identity_provider=identity_provider,
         )
         bind = getattr(view, "bind_controller", None)
         if callable(bind):

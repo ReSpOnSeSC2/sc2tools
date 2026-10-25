@@ -19,7 +19,8 @@ const { BuildIntentLive } = require("./buildIntentLive");
 const { BuildIntentGameState } = require("./buildIntentGameState");
 const { BuildIntentBind } = require("./buildIntentBind");
 const { BuildIntentNotifier } = require("./buildIntentCommon");
-const { CHECKIN_PREF_TYPE } = require("./buildIntentPrefs");
+const { CHECKIN_PREF_TYPE, readBuildIntentPrefs } = require("./buildIntentPrefs");
+const { overlayRandomizerConfig } = require("./overlayRandomizerConfig");
 
 class BuildIntentsService {
   /**
@@ -82,7 +83,15 @@ class BuildIntentsService {
       this.notifier.changed(userId, { prefs: true });
     } else if (type === "randomizer") {
       this.options.invalidate(userId);
+      return this.overlayRandomizerConfig(userId).then((config) =>
+        this.notifier.overlay(userId, { randomizer: config }, "overlay:config"));
     }
+  }
+
+  /** @param {string} userId */
+  async overlayRandomizerConfig(userId) {
+    const prefs = await readBuildIntentPrefs(this.live.users, userId);
+    return overlayRandomizerConfig(this.options, userId, prefs.randomizer);
   }
 
   /**
@@ -98,6 +107,11 @@ class BuildIntentsService {
   /** @param {string} userId @param {string} gameKey */
   getLive(userId, gameKey) {
     return this.live.get(userId, gameKey);
+  }
+
+  /** @param {string} userId @param {string} gameKey @param {{matchup:string,releaseHold:boolean,revealInWidget?:boolean}} body */
+  rollNativeRandomizer(userId, gameKey, body) {
+    return this.live.nativeRoll(userId, gameKey, body);
   }
 
   /** @param {string} userId @param {unknown} envelope */

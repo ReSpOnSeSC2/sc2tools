@@ -14,6 +14,7 @@ const {
   hasTendencies,
   tendenciesFromLegacyOpenings,
 } = require("./scouting/opponentTendencies");
+const { computePlayerCard } = require("./scouting/playerCard");
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 
 const { bucketResult } = aggregations;
@@ -770,6 +771,27 @@ class OverlayLiveService {
       );
       if (phases) payload.opponentPhases = phases;
     } catch { /* swallow */ }
+
+    // Per-game scouting envelopes for the overlay's "Last 5 games"
+    // block. Best-effort guard as above.
+    try {
+      const scouting = await aggregations.last5GamesScouting(
+        this.db.games, this.gameDetails, userId, tendencyIdentity, myRace, opponentRace,
+      );
+      if (scouting.length > 0) payload.last5GamesScouting = scouting;
+      // This query is matchup-scoped; the opponent's lifetime counters are
+      // not its denominator. The UI explicitly describes this recent sample.
+      payload.playerCard = computePlayerCard(
+        scouting.map((row) => /** @type {{opponentTendencies?: import('./scouting/playerCard').Tendencies}} */ (row).opponentTendencies),
+        { totalGames: null, sampleLimit: 5, sampled: true },
+      );
+    } catch (err) {
+      const e = /** @type {{ message?: unknown }} */ (err);
+      console.warn(
+        "overlayLive: last5GamesScouting failed for userId=%s: %s",
+        userId, (e && e.message) || e,
+      );
+    }
 
     // Best answer vs the opponent's most-likely opening.
     const favOpeningStrategy = payload.favOpening?.name;

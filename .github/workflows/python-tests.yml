@@ -68,10 +68,14 @@ jobs:
       - name: Test
         run: .venv/bin/python -m pytest tests/ -ra
 
-  agent:
-    name: Pytest (apps/agent, Windows)
+  agent-tests:
+    name: Agent ${{ matrix.suite }} tests (Windows)
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [core, ui]
     defaults:
       run:
         working-directory: apps/agent
@@ -87,7 +91,31 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt pytest
       - name: Test
-        run: python -m pytest -ra
+        env:
+          AGENT_TEST_SUITE: ${{ matrix.suite }}
+        run: |
+          $uiPattern = '^test_(companion|gui|opponent_card|overlay_input|race_artwork|window_sizes|compact_transparency)'
+          if ($env:AGENT_TEST_SUITE -notin @('core', 'ui')) { throw 'Unknown Agent test partition.' }
+          $isUiSuite = $env:AGENT_TEST_SUITE -eq 'ui'
+          $files = @(Get-ChildItem tests -Recurse -File -Filter 'test_*.py' |
+            Sort-Object FullName |
+            Where-Object { ($_.Name -match $uiPattern) -eq $isUiSuite } |
+            ForEach-Object FullName)
+          if (-not $files.Count) { throw 'Agent test partition is empty.' }
+          Write-Host "Testing $($files.Count) files in the $env:AGENT_TEST_SUITE partition."
+          python -m pytest @files -ra --durations=15
+
+  agent:
+    name: Pytest (apps/agent, Windows)
+    needs: agent-tests
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require both Windows test groups
+        env:
+          AGENT_TEST_RESULT: ${{ needs.agent-tests.result }}
+        run: test "$AGENT_TEST_RESULT" = success
 
   instant-parity:
     name: Instant Analysis parity (CPython + Pyodide)
