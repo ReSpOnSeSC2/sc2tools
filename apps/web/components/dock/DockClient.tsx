@@ -73,6 +73,7 @@ import { loadGameDesk } from "./dockLazyLoaders";
 import { DockLazyPanel } from "./DockLazyPanel";
 const loadScout = () => import("./DockScout").then(module => module.DockScout);
 const loadTwitchAutomation = () => import("./DockTwitchAutomation").then(module => module.DockTwitchAutomation);
+const loadSeries = () => import("./DockSeries").then(module => module.DockSeries);
 
 /** Platform config re-read cadence — same as the OBS widget. */
 const CONFIG_REFRESH_MS = DOCK_CONFIG_REFRESH_MS;
@@ -369,14 +370,18 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
   const [dockUrl, setDockUrl] = useState("");
   useEffect(() => { setDockUrl(window.location.href); }, []);
   const { layout, setOpen, togglePin, setBrollOpen, reset } = useDockLayout();
+  const [seriesSummary, setSeriesSummary] = useState({ summary: "No active series", active: false });
+  const receiveSeriesSummary = useCallback((summary: string, active: boolean) => setSeriesSummary(old => old.summary === summary && old.active === active ? old : { summary, active }), []);
   const ordered = orderedDockSections(layout);
   const [headerHeight, setHeaderHeight] = useState(64);
   const { active, jumpTo } = useDockScrollSpy(setOpen, headerHeight);
   const tally = usePollTally(moderatedMessages, studio.poll);
   const summaries = useDockSummaries(studio, studioSnapshotReady, platforms, loaded,
     tally?.total ?? 0, engagement.clipMoments.length, engagementReady);
+  summaries["dock-series"] = seriesSummary;
   const panels: Record<DockSectionId, ReactNode> = {
     "dock-game": <><DockLazyPanel label="game desk" loader={loadGameDesk} componentProps={{ token, live: updates?.liveGame ?? null, lastLiveAt: updates?.lastLiveAt ?? null, gameStatus: updates?.gameStatus ?? null, session: updates?.session ?? null, studio, engagement, ready: studioSnapshotReady && engagementReady, busy, onPost: postStudioAction }} /><DockLazyPanel label="Twitch prediction controls" loader={loadTwitchAutomation} componentProps={{ token, onInvalid }} /></>,
+    "dock-series": <DockLazyPanel label="Series controls" loader={loadSeries} componentProps={{ token, rawEvent: updates?.seriesEvent, live: updates?.liveGame ?? null, lastOpponent: updates?.lastOpponent ?? null, onInvalid, onSummary: receiveSeriesSummary }} />,
     "dock-scout": <DockLazyPanel label="live scouting" loader={loadScout} componentProps={{ live: updates?.liveGame ?? null, lastUpdatedAt: updates?.lastLiveAt ?? null }} />,
     "dock-chat": <>
 <DockChat embedded

@@ -89,7 +89,9 @@ const ROLL_REPORT_WINDOW_MS = 60_000;
  *   }>,
  *   resolveVoicePrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveRandomizerPrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
+ *   resolveGhostPrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveStudioState?: (token: string) => Promise<Record<string, unknown> | null>,
+ *   resolveSeries?: (token: string, owner: string) => Promise<Record<string, unknown> | null>,
  *   resolvePlatformEvents?: (userId: string) => Promise<Array<Record<string, unknown>>>,
  *   resolveLiveSnapshot?: (userId: string) => {
  *     prelude?: object|null,
@@ -230,7 +232,7 @@ function attachSocketAuth(io, opts) {
           .resolveOverlayToken(t)
           .then(async (info) => {
             if (!info) return;
-            /** @type {{ enabledWidgets?: string[], voicePrefs?: Record<string, unknown>, randomizer?: Record<string, unknown>,profile?:unknown,profileRevision?:number }} */
+            /** @type {{ enabledWidgets?: string[], voicePrefs?: Record<string, unknown>, randomizer?: Record<string, unknown>,ghost?:Record<string, unknown>,profile?:unknown,profileRevision?:number }} */
             const config = {};
             if (Array.isArray(info.enabledWidgets)) {
               config.enabledWidgets = info.enabledWidgets;
@@ -264,7 +266,14 @@ function attachSocketAuth(io, opts) {
             if (opts.resolveBuildIntent) {
               await replayOverlayBuildIntent(socket, opts.resolveBuildIntent, info.userId);
             }
-            if (config.enabledWidgets || config.voicePrefs || config.randomizer || config.profile) {
+            if (opts.resolveGhostPrefs) {
+              try {
+                const ghost = await opts.resolveGhostPrefs(info.userId);
+                if (ghost) config.ghost = ghost;
+              } catch { /* Optional; legacy fragment URLs still work. */ }
+            }
+            if (socket.connected === false) return;
+            if (config.enabledWidgets || config.voicePrefs || config.randomizer || config.profile || config.ghost) {
               socket.emit("overlay:config", config);
             }
           })
@@ -292,6 +301,7 @@ function attachSocketAuth(io, opts) {
       if (t && opts.resolveStudioState) {
         replayOverlayStudioState(socket, opts.resolveStudioState, t);
       }
+      if (t && u && opts.resolveSeries) replayOverlaySeries(socket, opts.resolveSeries, t, u);
       if (u && opts.resolvePlatformEvents) {
         replayOverlayPlatformEvents(socket, opts.resolvePlatformEvents, u);
       }
@@ -372,6 +382,12 @@ function attachSocketAuth(io, opts) {
           return;
         }
         if (socket.connected === false) return;
+        if (opts.resolveGhostPrefs) {
+          try {
+            const ghost = await opts.resolveGhostPrefs(userId);
+            if (ghost && !socket.disconnected) socket.emit("overlay:config", { ghost });
+          } catch { /* A later reconnect/resync can recover. */ }
+        }
         if (opts.resolveSession) {
           opts
             .resolveSession(userId, socket.data.timezone)
@@ -386,6 +402,7 @@ function attachSocketAuth(io, opts) {
         if (t && opts.resolveStudioState) {
           replayOverlayStudioState(socket, opts.resolveStudioState, t);
         }
+        if (t && opts.resolveSeries) replayOverlaySeries(socket, opts.resolveSeries, t, userId);
         if (opts.resolvePlatformEvents) {
           replayOverlayPlatformEvents(socket, opts.resolvePlatformEvents, userId);
         }
@@ -610,6 +627,17 @@ function replayOverlayStudioState(socket, resolveStudioState, token) {
       // The client's GET + slow poll remain as a fallback. Studio state must
       // never make an otherwise healthy overlay socket fail to connect.
     });
+}
+
+/** Series snapshots have monotonic revisions, including manual controls and
+ * new Start, so a held bootstrap cannot overwrite a newer live event.
+ * @param {{data:Record<string,any>,connected?:boolean,emit:(event:string,payload:unknown)=>unknown}} socket
+ * @param {(token:string,owner:string)=>Promise<Record<string,unknown>|null>} resolve
+ * @param {string} token @param {string} owner */
+function replayOverlaySeries(socket, resolve, token, owner) {
+  Promise.resolve().then(() => resolve(token, owner)).then(series => {
+    if (socket.connected !== false && socket.data.overlayToken === token && socket.data.overlayUserId === owner) socket.emit("overlay:series", series);
+  }).catch(() => {});
 }
 
 /**

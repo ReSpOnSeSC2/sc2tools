@@ -5,7 +5,7 @@
  * matching test compares them with the real registries and catches drift.
  */
 export const PRODUCT_FACTS = {
-  overlayWidgets: 31,
+  overlayWidgets: 32,
   arcadeModes: 18,
   virtualSets: 7,
   chatPlatforms: 4,

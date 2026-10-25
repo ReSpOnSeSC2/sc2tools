@@ -1,4 +1,7 @@
 "use client";
+import dynamic from "next/dynamic";
+import { useOverlaySeriesState } from "@/components/overlay/useOverlaySeriesState";
+const LazySeriesWidget = dynamic(() => import("@/components/overlay/widgets/SeriesWidget").then(module => module.SeriesWidget), { ssr: false });
 
 import {
   useCallback,
@@ -96,7 +99,9 @@ import {
   decodeGhostBuildConfig,
   decodeGhostTarget,
   readGhostBuildParamFromHash,
+  type GhostBuildConfig,
 } from "@/lib/ghostBuild";
+import { normalizeGhostSnapshot } from "@/lib/ghostSyncModel";
 
 /**
  * Per-widget Browser Source.
@@ -166,6 +171,7 @@ function ConnectedOverlayWidgetClient({
   const testLayer = useOverlayTestLayer(token, optionsRef);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
+  const { series, receiveSeries } = useOverlaySeriesState(token);
   const receiveSession = useCallback((next: SessionSummary | null) => setSession(current => next ? newerSession(current, next) : null), []);
   const [enabled, setEnabled] = useState<boolean>(true);
   const [widgetConfig, setWidgetConfig] = useState<{ token: string; widget: string; enabled: boolean } | null>(null);
@@ -176,6 +182,12 @@ function ConnectedOverlayWidgetClient({
   const [visible, setVisible] = useState<boolean>(false);
   const [voicePrefs, setVoicePrefs] = useState<VoicePrefs | null>(null);
   const [randomizer, setRandomizer] = useState<RandomizerConfig | null>(null);
+  const [ghostSnapshot, setGhostSnapshot] = useState<{ token: string; config: GhostBuildConfig } | null>(null);
+  const ghostConfig = ghostSnapshot?.token === token ? ghostSnapshot.config : undefined;
+  const receiveGhost = useCallback((input: unknown) => {
+    const config = normalizeGhostSnapshot(input);
+    if (config) setGhostSnapshot(previous => previous?.token === token && (previous.config.revision ?? 0) > (config.revision ?? 0) ? previous : { token, config });
+  }, [token]);
   // Latest raw ``overlay:multichat`` studio payload — validated by the
   // studio widgets themselves (useStudioState re-sanitizes it).
   const { gameWidgetsPaused, receivePause, resetPause } = useGameWidgetsPaused(token);
@@ -215,6 +227,7 @@ function ConnectedOverlayWidgetClient({
     applyWidgetEnabled,
     setVoicePrefs,
     setRandomizer,
+    receiveGhost,
     setStudioEvent,
     setEngagementEvent,
     setConnectionStatus,
@@ -225,6 +238,7 @@ function ConnectedOverlayWidgetClient({
     receiveProfile,
     resetPause,
     receiveMoment,
+    receiveSeries,
   );
   useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
   const showingTest = testLayer.targets(widget as WidgetId);
@@ -278,10 +292,11 @@ function ConnectedOverlayWidgetClient({
     () =>
       widget === "ghost-build"
       && (
-        decodeGhostBuildConfig(effectiveGhostParam) !== null
+        (ghostConfig !== undefined ? Object.keys(ghostConfig.slots).length > 0 : decodeGhostBuildConfig(effectiveGhostParam) !== null
         || decodeGhostTarget(effectiveGhostParam) !== null
+        )
       ),
-    [widget, effectiveGhostParam],
+    [widget, effectiveGhostParam, ghostConfig],
   );
   const effectiveEnabled = widget === "ghost-build" ? true
     : widget === "build-profile"
@@ -372,8 +387,10 @@ function ConnectedOverlayWidgetClient({
         onRandomizerSpin={randomizerCheckin.onSpin}
         visible={visible && !pausedHere}
         ghostParam={effectiveGhostParam}
+        ghostConfig={ghostConfig}
         studioEvent={studioEvent}
         engagementEvent={engagementEvent}
+        series={series}
         momentEvent={momentEvent}
         voicePrefs={voicePrefs}
       />
@@ -390,8 +407,10 @@ function ConnectedOverlayWidgetClient({
         onRandomizerSpin={() => {}}
         visible={true}
         ghostParam={effectiveGhostParam}
+        ghostConfig={ghostConfig}
         studioEvent={studioEvent}
         engagementEvent={engagementEvent}
+        series={series}
         momentEvent={momentEvent}
         voicePrefs={voicePrefs}
       />
@@ -425,6 +444,7 @@ const SELF_DRIVEN_WIDGETS: ReadonlySet<WidgetId> = new Set<WidgetId>([
   "stats-ticker",
   "countdown-timer",
   "build-profile",
+  "series",
 ]);
 
 export function WidgetRenderer({
@@ -438,10 +458,12 @@ export function WidgetRenderer({
   onRandomizerSpin,
   visible,
   ghostParam,
+  ghostConfig,
   studioEvent,
   engagementEvent,
   momentEvent,
   voicePrefs,
+  series,
 }: {
   widget: WidgetId;
   token: string;
@@ -453,6 +475,7 @@ export function WidgetRenderer({
   onRandomizerSpin: (spin: RandomizerSpinEvent) => void;
   visible: boolean;
   ghostParam: string | null;
+  ghostConfig?: GhostBuildConfig;
   studioEvent: unknown;
   engagementEvent: unknown;
   momentEvent?: unknown;
@@ -460,6 +483,7 @@ export function WidgetRenderer({
    *  chosen voice instead of the engine default (Microsoft David on
    *  Windows). */
   voicePrefs: VoicePrefs | null;
+  series?: unknown;
 }) {
   const intel = liveIntelPayload(live, liveGame);
   switch (widget) {
@@ -519,6 +543,7 @@ export function WidgetRenderer({
           live={live}
           liveGame={liveGame}
           ghostParam={ghostParam}
+          socketConfig={ghostConfig}
           voicePrefs={voicePrefs}
         />
       );
@@ -587,6 +612,8 @@ export function WidgetRenderer({
       return <LowerThirdWidget live={live} />;
     case "build-profile":
       return <BuildProfileWidget token={token} studioEvent={studioEvent} />;
+    case "series":
+      return <LazySeriesWidget rawSeries={series} preview={live?.isTest === true} visible={visible} />;
     case "countdown-timer":
       // Standalone dock-set countdown — studio-driven, show anytime.
       return (
@@ -628,6 +655,7 @@ function useOverlayWidgetSocket(
   setEnabled: (on: boolean) => void,
   setVoicePrefs: (prefs: VoicePrefs | null) => void,
   setRandomizer: (cfg: RandomizerConfig | null) => void,
+  receiveGhost: (input: unknown) => void,
   setStudioEvent: (msg: unknown) => void,
   setEngagementEvent: (msg: unknown) => void,
   setConnectionStatus: (status: OverlayConnectionStatus) => void,
@@ -638,6 +666,7 @@ function useOverlayWidgetSocket(
   receiveProfile: (msg: OverlayProfileConfig) => void,
   resetPause: () => void,
   receiveMoment: (payload: unknown) => void,
+  receiveSeries: (payload: unknown) => void,
 ): RefObject<Socket | null> {
   const socketRef = useRef<Socket | null>(null);
   // The latest gameKey we've observed in either ``live`` or
@@ -667,6 +696,7 @@ function useOverlayWidgetSocket(
     const connection = createOverlaySocket(token, { surface: "widget", widget, onStatus: setConnectionStatus });
     const socket = connection.socket;
     socketRef.current = socket;
+    socket.on("overlay:series", receiveSeries);
     socket.on("overlay:live", (msg: LiveGamePayload) => {
       // A token's Browser Sources all share this room. Per-widget Test
       // events carry their destination so neighbouring sources do not
@@ -731,6 +761,7 @@ function useOverlayWidgetSocket(
         enabledWidgets?: string[];
         voicePrefs?: VoicePrefs;
         randomizer?: unknown;
+        ghost?: unknown;
       } & OverlayProfileConfig) => {
         receiveProfile(msg);
         if (msg && Array.isArray(msg.enabledWidgets)) {
@@ -742,6 +773,7 @@ function useOverlayWidgetSocket(
         if (msg && msg.randomizer && typeof msg.randomizer === "object") {
           setRandomizer(sanitizeRandomizerConfig(msg.randomizer));
         }
+        if (socketRef.current === socket && msg && Object.prototype.hasOwnProperty.call(msg, "ghost")) receiveGhost(msg.ghost);
       },
     );
     socket.on("overlay:session", (msg: SessionSummary) => {
@@ -799,6 +831,7 @@ function useOverlayWidgetSocket(
     setEnabled,
     setVoicePrefs,
     setRandomizer,
+    receiveGhost,
     setStudioEvent,
     setEngagementEvent,
     setConnectionStatus,
@@ -809,6 +842,7 @@ function useOverlayWidgetSocket(
     receiveProfile,
     resetPause,
     receiveMoment,
+    receiveSeries,
   ]);
   return socketRef;
 }

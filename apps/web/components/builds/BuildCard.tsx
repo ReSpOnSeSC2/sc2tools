@@ -17,6 +17,7 @@ import Link from "next/link";
 import {
   Eye,
   Copy,
+  Crosshair,
   ExternalLink,
   Link2,
   Loader2,
@@ -41,6 +42,8 @@ import {
 } from "@/lib/race";
 import type { DecoratedBuild } from "./types";
 import { useBuildPublicationActions } from "./BuildPublicationActions";
+import { PracticeButton } from "@/components/practice/PracticeButton";
+import type { PracticeSource } from "@/lib/practiceAssignment";
 
 export interface BuildCardProps {
   build: DecoratedBuild;
@@ -159,6 +162,7 @@ export function BuildCard({
               slug={build.slug}
               name={build.name || "Untitled build"}
               isPublic={!!build.isPublic}
+              practiceBuild={build}
               onEdit={onEdit}
               onDelete={onDelete}
               onPublish={onPublish}
@@ -253,6 +257,7 @@ function BuildStatsRow({
 }
 
 interface BuildKebabProps {
+  practiceBuild?: PracticeSource;
   slug: string;
   name: string;
   isPublic: boolean;
@@ -305,6 +310,7 @@ function visibleViewport() {
 }
 
 export function BuildKebab({
+  practiceBuild,
   slug,
   name,
   isPublic,
@@ -319,12 +325,13 @@ export function BuildKebab({
   reclassifyDisabled = false,
 }: BuildKebabProps) {
   const [open, setOpen] = useState(false);
+  const [practiceOpen, setPracticeOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLUListElement>(null);
   const initialFocusRef = useRef<"first" | "last">("first");
   const menuId = useId();
-  const menuItemCount = (compact ? 0 : 4 + (onReclassify ? 1 : 0)) + (onDuplicate ? 1 : 0) + (isPublic ? 3 : 0);
+  const menuItemCount = (compact ? 0 : 4 + (onReclassify ? 1 : 0)) + (onDuplicate ? 1 : 0) + (isPublic ? 3 : 0) + (practiceBuild ? 1 : 0);
   const actions = useBuildPublicationActions({ slug, name, enabled: open && isPublic, onChanged });
   const listingState = actions.publication.error ? "Unavailable" : actions.publication.data?.published === false ? "Not published" : "Loading…";
 
@@ -615,6 +622,7 @@ export function BuildKebab({
                 }}
               /> : null}
               {onDuplicate ? <KebabItem icon={<Copy className="h-4 w-4" aria-hidden />} label="Duplicate" onClick={() => { closeMenu(false); onDuplicate(slug); }} /> : null}
+              {practiceBuild ? <KebabItem icon={<Crosshair className="h-4 w-4" aria-hidden />} label="Practice this" onClick={() => { closeMenu(false); setPracticeOpen(true); }} /> : null}
               {!compact && onReclassify ? (
                 <KebabItem
                   icon={
@@ -662,6 +670,7 @@ export function BuildKebab({
         : null}
     </div>
     {actions.dialogs}
+    {practiceOpen && practiceBuild ? <PracticeButton build={practiceBuild} privateBuild startOpen onClose={() => { setPracticeOpen(false); triggerRef.current?.focus({ preventScroll: true }); }} /> : null}
     </>
   );
 }

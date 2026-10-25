@@ -56,7 +56,7 @@ def test_explicit_choices_and_fixed_scaled_ticker():
     assert [item.share_key for item in chosen] == ["during_game:ghost-build", "during_game:randomizer", "during_game:stats-ticker"]
     assert (chosen[-1].rect.y, chosen[-1].rect.w, chosen[-1].rect.h) == (512, 960, 28)
     assert not any((item.share_key or "") == "during_game:overlay" for item in items)
-    assert any("Ghost Build starts unassigned" in warning for warning in plan(Obs(), during_game_widgets=["ghost-build"]).warnings)
+    assert any("Ghost Build uses your account assignments" in warning for warning in plan(Obs(), during_game_widgets=["ghost-build"]).warnings)
     with pytest.raises(ValueError):
         plan(Obs(), during_game_widgets=["../untrusted"])
 

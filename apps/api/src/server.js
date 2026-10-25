@@ -150,6 +150,7 @@ async function main() {
       /** @type {any} */ (services).users.getPreferences(userId, "voice"),
     resolveRandomizerPrefs: (userId) =>
       /** @type {any} */ (services).buildIntents.overlayRandomizerConfig(userId),
+    resolveGhostPrefs: (userId) => /** @type {any} */ (services).ghostConfig.get(userId),
     // Build check-in: the current live game's hold / suppress state (no
     // build names), replayed to overlays on connect and resync, and the
     // randomizer widget's roll reports.
@@ -162,6 +163,7 @@ async function main() {
     // the manual Starting Soon / BRB cover.
     resolveStudioState: (token) =>
       /** @type {any} */ (services).multichatStudio.get(token),
+    resolveSeries: (token, owner) => /** @type {any} */ (services).streamSeries.get(token, owner),
     resolvePlatformEvents: (userId) =>
       /** @type {any} */ (services).platformIntegrations.recentEvents(userId),
     // Synchronous broker-snapshot accessor used by the overlay

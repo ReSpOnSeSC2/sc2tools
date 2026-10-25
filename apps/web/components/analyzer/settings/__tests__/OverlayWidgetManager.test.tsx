@@ -18,7 +18,9 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 it("groups and searches real widget cards, filters enabled items, and keeps unknown IDs harmless", () => {
   state.query += "&widget=unknown"; const view = render(<WidgetList {...props} />);
-  expect(view.container.querySelectorAll("[data-widget-id]")).toHaveLength(31);
+  expect(view.container.querySelectorAll("[data-widget-id]")).toHaveLength(32);
+  const series = view.container.querySelector('[data-widget-id="series"]') as HTMLElement;
+  expect(within(series).getByRole("switch", { name: "Enable Series scoreboard" }).getAttribute("aria-checked")).toBe("false");
   fireEvent.click(screen.getByRole("checkbox", { name: "Enabled only" })); expect(view.container.querySelectorAll("[data-widget-id]")).toHaveLength(3);
   fireEvent.change(screen.getByRole("searchbox", { name: "Find a widget" }), { target: { value: "session" } }); expect(view.container.querySelectorAll("[data-widget-id]")).toHaveLength(1);
   const card = screen.getByRole("heading", { name: /^Session record$/ }).closest("article")!;
@@ -31,6 +33,14 @@ it("groups and searches real widget cards, filters enabled items, and keeps unkn
 it("retains theme and Ghost data when adding the documented OBS URL-drop parameters", () => {
   const parsed = new URL(obsWidgetDropUrl("https://example.invalid/overlay/synthetic/widget/ghost-build?theme=abc#ghost=private", "Ghost", 640, 900));
   expect(parsed.searchParams.get("theme")).toBe("abc"); expect(parsed.searchParams.get("layer-height")).toBe("900"); expect(parsed.hash).toBe("#ghost=private");
+});
+it("new Ghost source URLs remain permanent when account assignments change", () => {
+  const target = { v: 1 as const, name: "First", steps: [{ supply: null, t: 30, name: "Gateway" }] };
+  const view = render(<WidgetList {...props} ghostConfig={{ v: 2, slots: { PvT: target } }} />);
+  const href = () => within(view.container.querySelector('[data-widget-id="ghost-build"]') as HTMLElement).getByRole("link", { name: "Drag into OBS" }).getAttribute("href");
+  const original = href(); expect(new URL(original!).hash).toBe("");
+  view.rerender(<WidgetList {...props} ghostConfig={{ v: 2, slots: { PvT: { ...target, name: "Other browser" } } }} />);
+  expect(href()).toBe(original);
 });
 it("deep links focus Copy for the requested widget", async () => {
   state.query += "&widget=scouting"; const view = render(<WidgetList {...props} />);

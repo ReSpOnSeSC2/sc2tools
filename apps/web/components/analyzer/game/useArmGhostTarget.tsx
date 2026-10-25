@@ -1,42 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useToastOptional } from "@/components/ui/Toast";
-import { armGhostTargetForMatchup, clearGhostTarget, emptyGhostBuildConfig, fromBuildLog,
-  ghostMatchupKey, readArmedGhostConfig, selectGhostTarget, writeArmedGhostConfig, type GhostTarget } from "@/lib/ghostBuild";
-
-export const GHOST_ARMED_EVENT = "sc2tools:ghost-build-armed";
+import { fromBuildLog, ghostMatchupKey, saveGhostBuild, selectGhostTarget, type GhostTarget } from "@/lib/ghostBuild";
+import { useGhostPractice } from "@/lib/useGhostPractice";
+import { GHOST_SYNC_EVENT } from "@/lib/ghostSyncModel";
+export const GHOST_ARMED_EVENT = GHOST_SYNC_EVENT;
 
 export function useArmGhostTarget({ name, lines, myRace, opponentRace, gameId }: {
   name: string; lines: ReadonlyArray<string>; myRace?: string | null; opponentRace?: string | null; gameId?: string;
 }) {
   const toast = useToastOptional()?.toast;
+  const practice = useGhostPractice();
   const matchup = ghostMatchupKey(myRace, opponentRace);
-  const [target, setTarget] = useState<GhostTarget | null>(null);
+  const scope = `${practice.owner ?? ""}:${matchup ?? ""}:${gameId ?? ""}`;
+  const currentScope = useRef(scope); currentScope.current = scope;
+  const target = selectGhostTarget(practice.config, myRace, opponentRace);
   const [replacement, setReplacement] = useState<GhostTarget | null>(null);
-  useEffect(() => {
-    const read = () => setTarget(selectGhostTarget(readArmedGhostConfig(), myRace, opponentRace));
-    read(); window.addEventListener(GHOST_ARMED_EVENT, read);
-    return () => window.removeEventListener(GHOST_ARMED_EVENT, read);
-  }, [myRace, opponentRace]);
-  const changed = () => window.dispatchEvent(new Event(GHOST_ARMED_EVENT));
-  const save = () => {
-    const snapshot = readArmedGhostConfig() ?? emptyGhostBuildConfig();
+  useEffect(() => { currentScope.current = scope; setReplacement(null); return () => { currentScope.current = ""; }; }, [scope]);
+  const save = async () => {
+    const snapshot = target;
     const next = fromBuildLog(name, lines, { sourceGameId: gameId });
-    if (!next || !matchup || !armGhostTargetForMatchup(myRace, opponentRace, next)) {
-      toast?.error("Couldn't arm this build", { description: "A concrete matchup, timed steps and available browser storage are required." });
-      return;
-    }
-    changed(); setReplacement(null);
+    if (!next || !matchup) { toast?.error("Couldn't arm this build", { description: "A concrete matchup and timed steps are required." }); return; }
+    if (!await practice.assign(matchup, next, snapshot)) return;
+    if (currentScope.current !== scope) return;
+    saveGhostBuild(matchup, next); window.dispatchEvent(new Event(GHOST_ARMED_EVENT)); setReplacement(null);
     toast?.success(`Armed for ${matchup}`, { description: <span>
-      Your next games in {matchup} will be graded against this build. Copy the overlay URL in Settings → Overlay. {" "}
-      <button className="min-h-11 underline" onClick={() => { if (writeArmedGhostConfig(snapshot)) changed(); }}>Undo</button>
+      Your next {matchup} games will be graded against this build. Your Ghost URL updates automatically. {" "}
+      <button className="min-h-11 underline" onClick={() => { void practice.assign(matchup, snapshot, next); }}>Undo</button>
     </span> });
   };
   return { matchup, replacement, target, armed: !!gameId && target?.sourceGameId === gameId,
-    arm: () => { const current = selectGhostTarget(readArmedGhostConfig(), myRace, opponentRace);
-      if (current && (!gameId || current.sourceGameId !== gameId)) setReplacement(current); else save(); },
+    saving: practice.saving, loading: practice.loading || !!practice.readError, error: practice.error ?? (practice.readError ? "Couldn't load practice assignments." : null), retry: practice.retry, signedIn: !!practice.owner,
+    arm: () => { if (target && (!gameId || target.sourceGameId !== gameId)) setReplacement(target); else void save(); },
     confirm: save, cancel: () => setReplacement(null),
-    disarm: () => { if (matchup && writeArmedGhostConfig(clearGhostTarget(readArmedGhostConfig() ?? emptyGhostBuildConfig(), matchup))) changed(); },
+    disarm: () => { if (matchup) void practice.assign(matchup, null, target); },
   };
 }

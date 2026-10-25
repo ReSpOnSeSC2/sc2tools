@@ -13,6 +13,7 @@ const { browserUploadStatusOf } = require("../services/replayFilesCors");
 const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
 const { sanitizeRivals } = require("../util/rivalsPreferences");
 const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("../services/twitchAutomationPolicy");
+const { sanitizeChatCommands } = require("../services/chatCommands");
 const {
   CHECKIN_PREF_TYPE,
   sanitizeCheckinPrefs,
@@ -73,6 +74,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   isAdminEmail?: (email: string) => boolean,
  *   onAdminGranted?: (clerkUserId: string) => void,
  *   buildIntents?: { preferencesChanged(userId: string, type: string): void } | null,
+ *   ghostConfig?: import('../services/ghostConfig').GhostConfigService,
    *   onRivalsChanged?: (userId:string) => void,
  *   logger?: import('pino').Logger,
  * }} deps
@@ -396,9 +398,11 @@ function buildMeRouter(deps) {
     "randomizer",
     "onboarding",
     "multichat",
+    "chatCommands",
     "analyzerViews",
     "rivals",
     TWITCH_PREF_TYPE,
+    "ghost",
     CHECKIN_PREF_TYPE,
   ]);
 
@@ -415,16 +419,22 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
-      if (type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE) res.set("Cache-Control", "private, no-store");
+      if (type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands") res.set("Cache-Control", "private, no-store");
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
+        return;
+      }
+      if (type === "ghost") {
+        if (!deps.ghostConfig) { res.sendStatus(503); return; }
+        res.json(await deps.ghostConfig.get(auth.userId));
         return;
       }
       const prefs = await deps.users.getPreferences(auth.userId, type);
       res.json(type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(prefs)
         : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(prefs)
           : type === "analyzerViews" ? sanitizeAnalyzerViews(prefs)
-            : type === "rivals" ? sanitizeRivals(prefs) : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(prefs) : prefs);
+            : type === "rivals" ? sanitizeRivals(prefs) : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(prefs)
+              : type === "chatCommands" ? sanitizeChatCommands(prefs) : prefs);
     } catch (err) {
       next(err);
     }
@@ -435,7 +445,7 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
-      if (type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE) res.set("Cache-Control", "private, no-store");
+      if (type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands") res.set("Cache-Control", "private, no-store");
       if (type === TWITCH_PREF_TYPE && auth.source !== "clerk") { res.status(403).json({ error: { code: "clerk_required" } }); return; }
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
@@ -443,6 +453,11 @@ function buildMeRouter(deps) {
       }
       if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
         res.status(400).json({ error: { code: "invalid_body" } });
+        return;
+      }
+      if (type === "ghost") {
+        if (!deps.ghostConfig) { res.sendStatus(503); return; }
+        res.json(await deps.ghostConfig.replace(auth.userId, req.body));
         return;
       }
       if (type === "onboarding" && req.body.goals !== undefined &&
@@ -454,7 +469,8 @@ function buildMeRouter(deps) {
       const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body)
         : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(req.body)
           : type === "analyzerViews" ? sanitizeAnalyzerViews(req.body, true)
-            : type === "rivals" ? sanitizeRivals(req.body, true) : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(req.body, true) : req.body;
+            : type === "rivals" ? sanitizeRivals(req.body, true) : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(req.body, true)
+              : type === "chatCommands" ? sanitizeChatCommands(req.body, true) : req.body;
       const saved = await deps.users.updatePreferences(auth.userId, type, body);
       if (type === "rivals") {
         try { deps.onRivalsChanged?.(auth.userId); } catch { /* Advisory cache refresh; preferences are already saved. */ }
@@ -472,6 +488,15 @@ function buildMeRouter(deps) {
     } catch (err) {
       next(err);
     }
+  });
+
+  router.patch("/me/preferences/ghost", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      res.set("Cache-Control", "private, no-store");
+      if (!deps.ghostConfig) { res.sendStatus(503); return; }
+      res.json(await deps.ghostConfig.patch(req.auth.userId, req.body));
+    } catch (error) { next(error); }
   });
 
   // ── Uploaded multichat alert sounds ──
@@ -919,4 +944,3 @@ module.exports = {
   buildMeRouter,
   _internals: { withReplayResyncState },
 };
-

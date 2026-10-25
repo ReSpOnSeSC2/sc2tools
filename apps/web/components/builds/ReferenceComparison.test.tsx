@@ -4,7 +4,7 @@ import { ReferenceComparison, type ReferenceComparisonResponse } from "./Referen
 import { useApi } from "@/lib/clientApi";
 
 vi.mock("@/lib/clientApi", () => ({ useApi: vi.fn() }));
-vi.mock("@/components/analyzer/game/useArmGhostTarget", () => ({ GHOST_ARMED_EVENT: "ghost-target-changed" }));
+vi.mock("@/lib/ghostPracticeEvents", () => ({ GHOST_SYNC_EVENT: "ghost-target-changed" }));
 vi.mock("@/components/ui/Icon", () => ({ Icon: () => null }));
 
 const mutate = vi.fn();
