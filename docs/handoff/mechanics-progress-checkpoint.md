@@ -1,6 +1,6 @@
 # Mechanics progress over time
 
-Implements `mechanics-progress` and its macro-score-trend-and-dedupe augment on `codex/wave3-mechanics-progress`, reusing the clean preserved `wave3-my-reviews` worktree. Main through PR706 and the stable game-benchmarks foundation `9e4695d5` are integrated. The prior reviews branch is preserved. Remote checks and merge remain required before calling this shipped.
+Implements `mechanics-progress` and its macro-score-trend-and-dedupe augment on `codex/wave3-mechanics-progress`, reusing the clean preserved `wave3-my-reviews` worktree. Main through PR707 and the reviewed game-benchmarks foundation `e13a2098` are integrated. Merge after PR708. The prior reviews branch is preserved. Remote checks and merge remain required before calling this shipped.
 
 ## Behavior and data
 
