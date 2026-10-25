@@ -44,6 +44,8 @@ class ScoutingIdentitiesService {
   clear() { this.cache.clear(); this.preferences.clear(); this.revisions = new OwnerRevisions(); }
   /** A synchronous hint for the enrichment key; expiry forces an admitted refresh. @param {string} userId @param {string|null} cid @param {string|null} toon */
   cacheKey(userId, cid, toon) {
+    const pref = this.preferences.get(userId);
+    if (pref && this.now() - pref.at < TTL_MS && pref.value === false) return "single:preference-off";
     const hit = this.cache.get(`${userId}|${cid || ""}|${toon || ""}`)
       || (cid ? [...this.cache].find(([key]) => key.startsWith(`${userId}|${cid}|`))?.[1] : null);
     return hit && this.now() - hit.at < TTL_MS ? `${hit.value.groupKey}:${hit.value.pulseIds.join(",")}` : "unresolved";
@@ -90,7 +92,7 @@ class ScoutingIdentitiesService {
     const accountIds = [...new Set(cached.map(row => row.accountId).filter(value => typeof value === "string" && value.length <= 100))];
     const keys = [...exact, ...accountIds.map(id => `acct:${id}`)];
     const approved = this.db.playerIdentities ? await this.db.playerIdentities.find({ active: true, $or: [{ sourceKeys: { $in: keys } }, { targetKeys: { $in: keys } }] },
-      { projection: { _id: 0, groupKey: 1, sourceKeys: { $slice: 41 }, targetKeys: { $slice: 41 } }, maxTimeMS: 1000 }).limit(21).toArray() : [];
+      { projection: { _id: 0, groupKey: 1, revision: 1, "target.key": 1, "target.pulseId": 1, "target.pulseCharacterId": 1, "target.toonHandle": 1, "target.displayName": 1, "target.race": 1, "target.region": 1, sourceKeys: { $slice: 41 }, targetKeys: { $slice: 41 } }, maxTimeMS: 1000 }).limit(21).toArray() : [];
     const groups = [...new Set(approved.map(row => row.groupKey).filter(value => typeof value === "string" && value.length <= 200))];
     if (approved.length > 20 || groups.length > 1 || accountIds.length > 1
       || approved.some(row => (row.sourceKeys || []).length > 40 || (row.targetKeys || []).length > 40)) return single;
@@ -119,7 +121,10 @@ class ScoutingIdentitiesService {
     const rows = await this.db.opponents.find({ userId, $or: [{ pulseCharacterId: { $in: ids } }, { pulseId: { $in: handles } }] },
       { projection, maxTimeMS: 1000 }).sort({ pulseCharacterId: 1, pulseId: 1 }).limit(MAX_ACCOUNTS).toArray();
     // The live row remains authoritative and first even if the catalog cap is hit.
-    return identityContext(doc, rows, groupKey);
+    const target = approved[0]?.target ? playerIdentity(approved[0].target) : null;
+    return { ...identityContext(doc, rows, groupKey), ...(target ? { globalIdentity: {
+      groupKey, displayName: target.displayName, target, revision: count(approved[0].revision),
+    } } : {}) };
   }
 }
 

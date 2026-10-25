@@ -24,6 +24,18 @@ function strategy(row) {
 /** @param {number} n */
 function confidence(n) { return n < 3 ? "Low" : n < 8 ? "Medium" : "High"; }
 
+/** Shared eligible metadata window for the posterior and replay-observed rating. @param {any[]} rows @param {{myRace?:unknown,oppRace?:unknown}} context */
+function matchingForecastRows(rows, context) {
+  const myRace = race(context.myRace), oppRace = race(context.oppRace);
+  if (!myRace || !oppRace || myRace === "R" || oppRace === "R") return [];
+  return (Array.isArray(rows) ? rows : []).slice(0, 1000).filter(row => {
+    const label = strategy(row), duration = Number(row?.durationSec);
+    return row && row.excluded !== true && row._deleted !== true && row._deletionPending !== true
+      && row.isResumedFromReplay !== true && race(row.myRace) === myRace && race(row.opponent?.race) === oppRace
+      && !(Number.isFinite(duration) && duration > 0 && duration < TOO_SHORT_SECONDS) && !TOO_SHORT_LABEL_RE.test(label);
+  }).slice(0, FORECAST_LIMIT);
+}
+
 /** @param {any} prior @param {string|null} matchup */
 function priorDistribution(prior, matchup) {
   if (!prior || prior.matchup !== matchup || !Number.isFinite(prior.n) || prior.n < 50 || !Array.isArray(prior.openers) || prior.openers.length > 12) return null;
@@ -55,12 +67,7 @@ function priorDistribution(prior, matchup) {
 function openingForecast(rows, context = {}) {
   const myRace = race(context.myRace), oppRace = race(context.oppRace), map = text(context.map);
   const matchup = myRace && oppRace && myRace !== "R" && oppRace !== "R" ? `${myRace}v${oppRace}` : null;
-  const personal = matchup ? (Array.isArray(rows) ? rows : []).slice(0, 1000).filter(row => {
-    const label = strategy(row), duration = Number(row?.durationSec);
-    return row && row.excluded !== true && row._deleted !== true && row._deletionPending !== true
-      && row.isResumedFromReplay !== true && race(row.myRace) === myRace && race(row.opponent?.race) === oppRace
-      && !(Number.isFinite(duration) && duration > 0 && duration < TOO_SHORT_SECONDS) && !TOO_SHORT_LABEL_RE.test(label);
-  }).slice(0, FORECAST_LIMIT) : [];
+  const personal = matchingForecastRows(rows, context);
   const prior = priorDistribution(context.prior, matchup ? `${oppRace}v${myRace}` : null);
   const weighted = new Map(), plain = new Map(), last5 = new Map(), byMap = new Map();
   let effectiveN = 0, onMap = 0;
@@ -93,4 +100,4 @@ function openingForecast(rows, context = {}) {
   };
 }
 
-module.exports = { openingForecast, FORECAST_LIMIT, HALF_LIFE_GAMES, MAP_WEIGHT, PRIOR_GAMES };
+module.exports = { openingForecast, matchingForecastRows, FORECAST_LIMIT, HALF_LIFE_GAMES, MAP_WEIGHT, PRIOR_GAMES };

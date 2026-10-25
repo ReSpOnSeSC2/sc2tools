@@ -29,6 +29,7 @@ class OwnerRevisions {
   }
   /** @param {string} owner */
   invalidate(owner) { this.owners.delete(owner); return this.get(owner); }
+  clear() { this.owners.clear(); }
   /** @param {string} owner @param {{id:number}} token */
   current(owner, token) { return this.owners.get(owner) === token; }
 }

@@ -2,7 +2,7 @@
 
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 
-const { attachOpponentIdsToFilter } = require("../util/opponentIdentity");
+const { attachScoutingIdsToFilter: attachOpponentIdsToFilter } = require("../util/opponentIdentity");
 const {
   computeCompositions,
   prepareCompositionGame,
@@ -228,6 +228,7 @@ async function recentGamesForOpponent(games, userId, opp, myRace, oppRace, exclu
   /** @type {Record<string, any>} */
   const filter = { userId, ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true } };
   const attached = attachOpponentIdsToFilter(filter, {
+    ...opp,
     pulseId: opp.pulseId,
     pulseCharacterId: opp.pulseCharacterId,
   });
@@ -512,6 +513,7 @@ async function opponentPhaseProfile(games, gameDetails, userId, opp, myRace, opp
   /** @type {Record<string, any>} */
   const filter = { userId, ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true } };
   const attached = attachOpponentIdsToFilter(filter, {
+    ...opp,
     pulseId: opp.pulseId,
     pulseCharacterId: opp.pulseCharacterId,
   });
@@ -667,6 +669,10 @@ const TENDENCY_PROJECTION = Object.freeze({
   date: 1,
   durationSec: 1,
   myRace: 1,
+  myMmr: 1,
+  map: 1,
+  gameVersion: 1,
+  gameBuild: 1,
   "opponent.race": 1,
   "opponent.strategy": 1,
   ...OPP_INTENT_LABEL_PROJECTION,
@@ -704,18 +710,23 @@ function sameRaceInitial(stored, wanted) {
  * @param {string} userId
  * @param {{pulseId?: string|null, pulseCharacterId?: string|null} | null | undefined} identity
  * @param {{myRace?: string, oppRace?: string}} [matchup]
+ * @param {import('./scoutingForecast').ScoutingForecastService|null} [forecasts]
+ * @param {{myMmr?:unknown,map?:unknown}} [context]
  * @returns {Promise<import('./scouting/opponentTendencies').OpponentTendencies>}
  */
-async function opponentTendencies(games, userId, identity, matchup = {}) {
+async function opponentTendencies(games, userId, identity, matchup = {}, forecasts = null, context = {}) {
   /** @type {Record<string, any>} */
   const filter = { userId, ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true } };
   const attached = userId && identity
     ? attachOpponentIdsToFilter(filter, {
+        ...identity,
         pulseId: identity.pulseId,
         pulseCharacterId: identity.pulseCharacterId,
       })
     : null;
   if (!attached) return summarizeOpponentTendencies([]);
+  if (matchup.myRace) filter.myRace = { $regex: `^${escapeRegex(matchup.myRace.charAt(0))}`, $options: "i" };
+  if (matchup.oppRace) filter["opponent.race"] = { $regex: `^${escapeRegex(matchup.oppRace.charAt(0))}`, $options: "i" };
   const rows = await games
     .find(filter, { projection: TENDENCY_PROJECTION })
     .sort({ date: -1 })
@@ -725,7 +736,10 @@ async function opponentTendencies(games, userId, identity, matchup = {}) {
   const inMatchup = rows.filter((r) =>
     sameRaceInitial(r.myRace, matchup.myRace)
     && sameRaceInitial(r.opponent && r.opponent.race, matchup.oppRace));
-  return summarizeOpponentTendencies(inMatchup);
+  const tendencies = summarizeOpponentTendencies(inMatchup);
+  if (!forecasts) return tendencies;
+  const forecast = await forecasts.forecast(inMatchup, { ...context, ...matchup });
+  return { ...tendencies, openingForecast: forecast };
 }
 
 /**
