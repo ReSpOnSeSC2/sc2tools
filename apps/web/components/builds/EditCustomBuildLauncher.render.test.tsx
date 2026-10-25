@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({ call: vi.fn(), getToken: vi.fn(async () => "token") }));
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: api.getToken }) }));
-vi.mock("@/lib/clientApi", () => ({ apiCall: api.call }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: api.getToken, isLoaded: true, isSignedIn: true, userId: "test-owner" }) }));
+vi.mock("@/lib/clientApi", async original => ({ ...await original<typeof import("@/lib/clientApi")>(), apiCall: api.call }));
 vi.mock("@/lib/useMyDisplayName", () => ({ useMyDisplayName: () => "" }));
 import { ToastProvider } from "@/components/ui/Toast";
 import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
