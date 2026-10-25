@@ -1,0 +1,40 @@
+import { useState } from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Combobox, type ComboboxOption } from "../Combobox";
+const options: ComboboxOption[] = [
+  { value: "BuildGateway", label: "Gateway", description: "Protoss building", searchTerms: ["production"] },
+  { value: "BuildPylon", label: "Pylon", disabled: true },
+  { value: "BuildStargate", label: "Stargate", icon: <span>icon</span> },
+];
+function Harness({ spy = vi.fn() }: { spy?: (value: string) => void }) {
+  const [value, setValue] = useState("BuildGateway");
+  return <><Combobox label="Build action" value={value} options={options} onChange={next => { spy(next); setValue(next); }} /><button type="button">Next field</button></>;
+}
+afterEach(cleanup);
+describe("Combobox keyboard and selection contract", () => {
+  it("keeps focus in the input, skips disabled choices and commits with Enter", () => {
+    const spy = vi.fn(); render(<Harness spy={spy} />); const input = screen.getByRole("combobox"); input.focus();
+    fireEvent.keyDown(input, { key: "ArrowDown" }); fireEvent.keyDown(input, { key: "ArrowDown" });
+    const active = input.getAttribute("aria-activedescendant"); expect(document.getElementById(active!)?.textContent).toContain("Stargate"); expect(document.activeElement).toBe(input);
+    fireEvent.keyDown(input, { key: "Enter" }); expect(spy).toHaveBeenLastCalledWith("BuildStargate"); expect((input as HTMLInputElement).value).toBe("Stargate"); expect(input.getAttribute("aria-expanded")).toBe("false");
+  });
+  it("searches friendly names, tokens and aliases without saving a query", () => {
+    const spy = vi.fn(); render(<Harness spy={spy} />); const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "production" } }); expect(screen.getAllByRole("option")).toHaveLength(1); expect(spy).not.toHaveBeenCalled();
+    fireEvent.change(input, { target: { value: "BuildStargate" } }); fireEvent.mouseDown(screen.getByRole("option")); fireEvent.click(screen.getByRole("option"));
+    expect(spy).toHaveBeenLastCalledWith("BuildStargate");
+  });
+  it("closes with Escape, Tab and outside focus without trapping or changing the value", () => {
+    const spy = vi.fn(); render(<Harness spy={spy} />); const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "none" } }); expect(screen.getByRole("status").textContent).toContain("No matching"); fireEvent.keyDown(input, { key: "Escape" }); expect(screen.queryByRole("listbox")).toBeNull();
+    fireEvent.focus(input); fireEvent.keyDown(input, { key: "End" }); expect(document.getElementById(input.getAttribute("aria-activedescendant")!)?.textContent).toContain("Stargate");
+    fireEvent.keyDown(input, { key: "Tab" }); expect(screen.queryByRole("listbox")).toBeNull();
+    fireEvent.focus(input); fireEvent.pointerDown(screen.getByRole("button", { name: "Next field" })); expect(screen.queryByRole("listbox")).toBeNull(); expect(spy).not.toHaveBeenCalled();
+  });
+  it("bounds large lists and exposes invalid or disabled states", () => {
+    const view = render(<Combobox label="Many" value="unknown" onChange={vi.fn()} options={Array.from({ length: 100 }, (_, index) => ({ value: `v${index}`, label: `Option ${index}` }))} invalid describedBy="error" />);
+    const input = screen.getByRole("combobox"); fireEvent.focus(input); expect(screen.getAllByRole("option")).toHaveLength(60); expect(screen.getByRole("status").textContent).toContain("Type more"); expect(input.getAttribute("aria-invalid")).toBe("true");
+    view.rerender(<Combobox label="Many" value="unknown" onChange={vi.fn()} options={options} disabled />); expect(input.getAttribute("aria-expanded")).toBe("false"); expect(screen.queryByRole("listbox")).toBeNull();
+  });
+});

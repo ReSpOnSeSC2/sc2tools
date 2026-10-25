@@ -1,0 +1,26 @@
+# ADR0055: One rich build editor and a bounded action picker
+
+Status: Accepted foundation
+
+Every create path will reach the existing rich BuildEditorModal. Its explicit
+Save, create-only collision checks, locked edit slug, source provenance,
+publication controls and unsaved-close guard remain authoritative. A Start
+from chooser supplies a game, detected label or blank seed. Paste remains
+clearly unavailable until reference-build-order lands; Community remains a
+separate copy-to-library route.
+
+The reusable Combobox uses the ARIA 1.2 input/listbox pattern, keeps keyboard
+focus in the input, supports ordinary Tab navigation, and renders at most 60
+filtered choices. TokenPicker supplies a deterministic generated catalog from
+the existing unit/icon metadata and explicit upgrade aliases. Friendly labels
+are displayed while existing canonical event tokens are retained. Race and
+proxy metadata constrain choices without changing the evaluator.
+
+Unknown persisted tokens remain visible for correction. The editor blocks Save
+and live preview for unknown draft actions instead of silently omitting them.
+The shared structural rule reader remains compatible with existing stored
+data. Catalog validation lives in the lazy editor path so unrelated dashboard
+and game consumers do not eagerly import the complete picker catalog.
+
+No API schema expansion, provider calls, migrations, new infrastructure, AI,
+production activation or native release is required.
