@@ -15,6 +15,8 @@ import { WIDGETS } from "./overlayWidgetMeta";
 import type { OverlayProfile } from "@/lib/overlayProfile";
 import { OverlayWidgetDisplay } from "./OverlayWidgetDisplay";
 import type { OverlayToken } from "./OverlayTokenHeader";
+import { WidgetPresenceBadge } from "./OverlayHealthBoard";
+
 import { WidgetPreviewButton } from "./WidgetPreviewButton";
 
 /** OBS's documented URL-drop contract. Query parameters stay before Ghost's fragment. */
@@ -65,6 +67,7 @@ export function WidgetList({ token, origin, theme, ghostConfig, busy, onToggleWi
           <Image src={`/images/widget-examples/${guide.id}.webp`} alt={`${guide.name} illustrative example`} width={1400} height={900} sizes="(min-width:1280px) 40vw, 85vw" className="mb-3 aspect-[14/9] w-full rounded-lg object-cover" />
           <div className="flex flex-wrap items-start justify-between gap-2"><h4 className="text-body font-semibold">{guide.name}</h4>{metadata.urlArmed ? <Badge variant="cyan">URL enabled</Badge> : <Toggle checked={isOn} disabled={busy} onChange={on => onToggleWidget(guide.id, on)} label={`Enable ${guide.name}`} />}</div>
           <p className="mt-2 break-words text-caption text-text-muted">{guide.summary}</p><div className="my-2 flex flex-wrap items-center justify-between gap-2"><p className="font-mono text-caption tabular-nums">Recommended {width} × {height}</p>{onDurationChange ? <OverlayWidgetDisplay id={guide.id} name={guide.name} durationSec={profile?.widgetOptions[guide.id]?.durationSec} disabled={profileSaving} onChange={seconds => onDurationChange(guide.id, seconds)} /> : null}</div>
+          <WidgetPresenceBadge widget={guide.id} enabled={isOn} />
           {guide.id === "ghost-build" ? <div className="my-3 space-y-2 text-caption text-text-muted"><p>{Object.keys(ghostConfig.slots).length}/9 matchups assigned. Choose builds in Look before copying.</p><label className="flex items-center gap-2"><input type="checkbox" checked={ghostVoice} onChange={event => { const on = event.target.checked; setGhostVoice(on); try { localStorage.setItem(GHOST_VOICE_STORAGE_KEY, on ? "1" : "0"); } catch { /* Still works this visit. */ } }} />Voice coach (copy again after changing)</label></div> : null}
           <UrlRow url={url} compact onTest={metadata.noTest ? undefined : () => onTestWidget(guide.id)} testing={isTesting} testDisabled={(testingWidget !== null && !isTesting) || !isOn} testTitle={isTesting ? "Stop this test" : isOn ? "Preview this widget, with confirmation before a live test" : "Enable this widget first"} />
           <div className="mt-3 flex flex-wrap gap-3 text-caption"><a href={dropUrl} draggable onClick={event => event.preventDefault()} onDragStart={event => { event.dataTransfer.setData("text/uri-list", dropUrl); event.dataTransfer.setData("text/plain", dropUrl); }} className="inline-flex min-h-11 items-center rounded border border-border px-3 font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Drag into OBS</a><Link href={`/stream-studio/learn?widget=${encodeURIComponent(guide.id)}#widget-library`} target="_blank" rel="noopener noreferrer" aria-label={`${guide.name}: how it works (opens in a new tab)`} className="inline-flex min-h-11 items-center text-accent underline">How it works</Link><WidgetPreviewButton widget={guide.id} name={guide.name} /></div>

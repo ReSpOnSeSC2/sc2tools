@@ -67,6 +67,7 @@ import { useDockScrollSpy } from "./useDockScrollSpy";
 import { useDockSummaries } from "./useDockSummaries";
 import { usePollTally } from "./usePollTally";
 export { DockButton } from "./DockControls";
+import { DockPresenceStrip } from "./DockPresenceStrip";
 
 /** Platform config re-read cadence — same as the OBS widget. */
 const CONFIG_REFRESH_MS = DOCK_CONFIG_REFRESH_MS;
@@ -513,6 +514,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
 
   return (
     <div className={`${styles.root} mx-auto min-h-screen w-full max-w-6xl p-2 font-sans text-text sm:p-3`}>
+      <DockPresenceStrip token={token} />
       {/* Narrow-mode sticky jump tabs — the OBS dock has no room for
           a permanent two-column layout. */}
       <nav aria-label="Dock sections" className="sticky top-0 z-10 -mx-2 mb-2 flex items-center gap-1 overflow-x-auto border-b border-border bg-bg px-2 py-1.5 lg:hidden">
