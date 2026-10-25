@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import Link from "next/link";
+import { GameAnalysisLink } from "@/components/analyzer/GameAnalysisLink";
 import { ChevronDown, ChevronRight, ExternalLink, StickyNote } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
@@ -359,7 +359,7 @@ function GameResultBadge({ game }: { game: BuildRecentGame }) {
 }
 
 function OpenGameLink({ game, mobile = false }: { game: BuildRecentGame; mobile?: boolean }) {
-  return <Link href={`/app/game/${encodeURIComponent(game.gameId)}`} aria-label={`Open game vs ${game.opponent || "unknown opponent"} on ${game.map || "unknown map"}`} className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{mobile ? "Open game" : <ExternalLink className="h-4 w-4" aria-hidden />}</Link>;
+  return <GameAnalysisLink gameId={game.gameId} aria-label={`Open game vs ${game.opponent || "unknown opponent"} on ${game.map || "unknown map"}`} className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{mobile ? "Open game" : <ExternalLink className="h-4 w-4" aria-hidden />}</GameAnalysisLink>;
 }
 
 /** "Planned" badge, plus a note icon when the check-in has notes. */

@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { GameAnalysisLink } from "./GameAnalysisLink";
+import { OpponentLink } from "./OpponentLink";
 import { ArrowUpRight } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { fmtDate, fmtMinutes, raceColour } from "@/lib/format";
@@ -25,7 +26,6 @@ import { useGameVodLinks } from "./useGameVodLinks";
 import { ReplayDownloadButton } from "./ReplayDownloadButton";
 import { PlannedBadge, PlayedBuildBadge } from "@/components/build-checkin/PlannedBadge";
 import {
-  gameAnalysisHref,
   type OpponentNavigationContext,
 } from "@/lib/opponentNavigation";
 
@@ -307,7 +307,7 @@ function GameRow({
         </td>
         {showPlayers ? (
           <td className="px-2 py-1">
-            <PlayersCell myName={myName} opponent={game.opponent} />
+            <PlayersCell myName={myName} opponent={game.opponent} pulseId={game.opponent_pulse_id || opponentContext?.pulseId} />
           </td>
         ) : null}
         <td className="px-2 py-1 text-text">
@@ -414,7 +414,9 @@ function GameRow({
 function PlayersCell({
   myName,
   opponent,
+  pulseId,
 }: {
+  pulseId?: string | null;
   myName?: string | null;
   opponent?: string | null;
 }) {
@@ -426,9 +428,7 @@ function PlayersCell({
         {me}
       </span>
       <span className="text-text-dim">vs</span>
-      <span className="max-w-[14ch] truncate font-medium text-text" title={opp}>
-        {opp}
-      </span>
+      <OpponentLink pulseId={pulseId} name={opp} className="max-w-[14ch] font-medium" />
     </span>
   );
 }
@@ -449,8 +449,9 @@ function GameDeepDiveLink({
 }) {
   if (!gameId) return null;
   return (
-    <Link
-      href={gameAnalysisHref(gameId, opponentContext)}
+    <GameAnalysisLink
+      gameId={gameId}
+      opponentContext={opponentContext}
       onClick={(e) => e.stopPropagation()}
       aria-label="Open game analysis: timeline, mechanics, build orders, and Ghost Build"
       title="Open game analysis"
@@ -468,7 +469,7 @@ function GameDeepDiveLink({
         ) : null}
       </span>
       <ArrowUpRight className="h-4 w-4 flex-none" aria-hidden />
-    </Link>
+    </GameAnalysisLink>
   );
 }
 
@@ -601,7 +602,7 @@ function GameMobileCard({
             </div>
             {showPlayers ? (
               <div className="text-micro">
-                <PlayersCell myName={myName} opponent={game.opponent} />
+                <PlayersCell myName={myName} opponent={game.opponent} pulseId={game.opponent_pulse_id || opponentContext?.pulseId} />
               </div>
             ) : null}
             {game.map ? (

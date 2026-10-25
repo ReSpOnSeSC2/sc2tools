@@ -61,11 +61,11 @@ afterEach(() => {
 });
 
 describe("TodayView", () => {
-  it("places Daily Pulse above Ladder Pulse", () => {
+  it("places Daily Pulse above Ladder Pulse", async () => {
     render(<TodayView />);
 
     const daily = screen.getByTestId("daily-pulse");
-    const ladder = screen.getByTestId("ladder-pulse");
+    const ladder = await screen.findByTestId("ladder-pulse");
     expect(
       daily.compareDocumentPosition(ladder) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

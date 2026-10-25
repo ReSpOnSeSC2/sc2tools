@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Icon } from "@/components/ui/Icon";
+import Image from "next/image";
 import { opponentProfileHref } from "@/lib/opponentNavigation";
 import { raceColour } from "@/lib/format";
 
@@ -16,5 +16,5 @@ export function OpponentLink({ pulseId, name, race, className = "" }: {
 
 export function RaceChip({ race }: { race: string }) {
   const full = ({ T: "Terran", P: "Protoss", Z: "Zerg", R: "Random" } as Record<string, string>)[race.trim().charAt(0).toUpperCase()];
-  return full ? <span className="inline-flex items-center" style={{ color: raceColour(race) }} role="img" aria-label={full}><Icon name={full} kind="race" size={14} fallback="" decorative /></span> : null;
+  return full ? <span className="inline-flex items-center" style={{ color: raceColour(race) }} role="img" aria-label={full}><Image src={`/icons/sc2/races/${full.toLowerCase()}.svg`} width={14} height={14} alt="" /></span> : null;
 }

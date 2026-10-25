@@ -1,5 +1,7 @@
 "use client";
 
+import { OpponentLink } from "../OpponentLink";
+
 import { useEffect, useMemo, useState } from "react";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import {
@@ -324,7 +326,7 @@ function HighlightCard({
         <div className="mt-2 flex items-end justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-text" title={opponentName(opponent)}>
-              {opponentName(opponent)}
+              <OpponentLink pulseId={opponent.pulseId} name={opponentName(opponent)} />
             </p>
             <p className="text-micro tabular-nums text-text-dim">
               {opponent.pairs.toLocaleString()} pair{opponent.pairs === 1 ? "" : "s"}
@@ -365,7 +367,7 @@ function OpponentImpactTable({ items }: { items: NetMmrOpponentRow[] }) {
               className="border-t border-border transition-colors hover:bg-accent/5"
             >
               <th scope="row" className="max-w-[12rem] px-2 py-2 text-left font-medium text-text">
-                <span className="block truncate" title={opponentName(opponent)}>{opponentName(opponent)}</span>
+                <OpponentLink pulseId={opponent.pulseId} name={opponentName(opponent)} />
                 {opponent.pulseCharacterId || opponent.toonHandle ? (
                   <span className="block truncate text-micro font-normal text-text-dim">
                     {opponent.pulseCharacterId || opponent.toonHandle}

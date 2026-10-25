@@ -1,3 +1,4 @@
+import { REPLAY_SHORTCUTS } from "@/lib/replayControls";
 import type { HelpArticle } from "@/lib/help/types";
 
 const article: HelpArticle = {
@@ -35,6 +36,8 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "Click any game, in [Replays](/app/replays), in an opponent's dossier or on [Today](/app), to open its game page. It shows that one game and ignores the filter bar.",
     },
+    { type: "heading", text: "Moving between games", anchor: "moving-between-games" },
+    { type: "paragraph", text: "Older and Newer step through your games with the active list filters. Choose all games, the same opponent, matchup or effective checked-in build; the scope is remembered on this device. Alt + Left and Alt + Right also step through games while you are not typing. A game opened from an opponent starts with that opponent unless you already chose a scope. Back to Replays, Macro, Builds or the opponent returns to the originating filtered list; when the browser exposes the matching previous entry, it also restores its scroll position. Copied links keep a normal backlink. The H2H chip counts recorded wins and losses against this opponent across all time when that record is available." },
     { type: "heading", text: "The header", anchor: "header" },
     {
       type: "list",
@@ -67,6 +70,8 @@ const article: HelpArticle = {
     { type: "paragraph", text: "Watch at timestamps, build-order steps and the game-time slider all use one replay clock. A jump pauses playback, reveals the replay and highlights it briefly. During playback the chart cursor and current build steps follow the same time. Follow current step scrolls only the build list and starts off. Copy link at the clock, or in replay display settings, shares a link with that game time. The address updates after a jump or pause, so moving between sections keeps playback mounted." },
     { type: "heading", text: "Replay controls", anchor: "replay-controls" },
     { type: "paragraph", text: "Play, pause, speed and display settings are explained in [Map replay](/help/game-page-replay#controls). Minerals and gas appear only when measured. The upgrade chips show completed upgrades at the current time." },
+    { type: "table", head: ["Key", "Action"], rows: REPLAY_SHORTCUTS },
+    { type: "paragraph", text: "Click or Tab to the replay player before using shortcuts. Text fields, native controls and dialogs keep their own keys. Speed, rail visibility, production side, build filter, worker and auto-scroll choices, music volume and the phone panel choice are remembered on this device. The phone panel stays collapsed or expanded as you chose it." },
     { type: "heading", text: "Build orders", anchor: "build-orders" },
     { type: "paragraph", text: "Both players' build steps show their replay time. Select a step to watch it; the current step follows the shared game clock. Save as new build keeps the opening for later, and a Ghost target can be armed for practice." },
     { type: "heading", text: "Save the build", anchor: "save-build" },
