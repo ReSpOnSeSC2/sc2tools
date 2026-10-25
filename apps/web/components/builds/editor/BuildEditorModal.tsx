@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useId, useMemo, useRef, useState } from "react";
+import { readReferenceBuildOrder } from "@/lib/buildOrderReference";
+import { referenceFromGame } from "@/lib/buildOrderReferenceEditing";
+import { BuildOrderEditor } from "./BuildOrderEditor";
 import {
   deriveDefaultName,
   eventsToSourceRows,
@@ -19,6 +22,7 @@ import { BuildEditorRules } from "./BuildEditorRules";
 import { BuildEditorPreview } from "./BuildEditorPreview";
 import { BuildEditorSaveBar } from "./BuildEditorSaveBar";
 import { BuildEditorToasts } from "./BuildEditorToasts";
+import { firstBuildTokenError } from "@/lib/buildTokenSelection";
 
 export interface BuildEditorModalProps {
   open: boolean;
@@ -119,6 +123,8 @@ export function BuildEditorModal({
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLElement>(null);
   const sourceRows = useMemo(() => eventsToSourceRows(events), [events]);
+  const tabsId = useId();
+  const [tab, setTab] = useState<"rules" | "order">(initialDraft?.buildOrder && !initialDraft.rules?.length ? "order" : "rules");
   // Edit mode rebuilds the timeline from the saved rules' deadlines
   // (EditCustomBuildLauncher.docToEvents), so two rows of a token are two
   // rules, not two Stargates, and must not be counted.
@@ -156,6 +162,7 @@ export function BuildEditorModal({
       transitionsInto: initialDraft?.transitionsInto ?? [],
       rules: initialDraft?.rules ?? [],
       sourceReplayId: initialDraft?.sourceReplayId ?? gameId,
+      ...(initialDraft?.buildOrder ? { buildOrder: initialDraft.buildOrder } : mode === "create" && !timelineFromSavedBuild && gameId && events.length ? { buildOrder: referenceFromGame(events, gameId) } : {}),
     }),
     [
       initialDraft,
@@ -163,6 +170,7 @@ export function BuildEditorModal({
       race,
       vsRace,
       gameId,
+      mode, timelineFromSavedBuild, events,
     ],
   );
 
@@ -253,9 +261,7 @@ export function BuildEditorModal({
         description={
           editor.draft.rules.length === 0 ? (
             <>
-              Add rules below to capture the signature of this build.
-              Click <span className="font-semibold">+</span> on a starred
-              event to start, or use the “Add a rule” buttons.
+              {editor.draft.buildOrder?.steps.length ? `${editor.draft.buildOrder.steps.length} reference steps. Match rules are optional and stay separate from this practice plan.` : <>Add rules below to capture the signature of this build. Click <span className="font-semibold">+</span> on a starred event to start, or write a reference plan in Build order.</>}
             </>
           ) : (
             <>
@@ -278,7 +284,9 @@ export function BuildEditorModal({
             onSave={editor.save}
             mode={mode}
             hasSignature={!!sourceSignature?.length}
+            hasReference={!!readReferenceBuildOrder(editor.draft.buildOrder)?.steps.length}
             demoMode={demoMode}
+            ruleError={firstBuildTokenError(editor.draft.rules, editor.draft.race) || (editor.draft.buildOrder && !readReferenceBuildOrder(editor.draft.buildOrder) ? "Check the reference build-order fields before saving." : null) || (!demoMode && !editor.requestReady ? "Sign in again before saving this build." : null)}
           />
         }
       >
@@ -320,9 +328,19 @@ export function BuildEditorModal({
             />
           </div>
           <div className="min-w-0">
+            <div role="tablist" aria-label="Build definition" className="mb-4 flex flex-wrap gap-2">
+              {([['rules', 'Match rules'], ['order', 'Build order']] as const).map(([id, label]) => <button type="button" key={id} role="tab" id={`${tabsId}-${id}`} aria-controls={`${tabsId}-${id}-panel`} aria-selected={tab === id} tabIndex={tab === id ? 0 : -1} disabled={editor.saving || editor.savedOk} className={`min-h-11 rounded-lg border px-3 text-caption font-semibold ${tab === id ? "border-accent text-accent" : "border-border text-text-muted"}`} onClick={() => setTab(id)} onKeyDown={event => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) { event.preventDefault(); const next = event.key === 'Home' ? 'rules' : event.key === 'End' ? 'order' : id === 'rules' ? 'order' : 'rules'; setTab(next); document.getElementById(`${tabsId}-${next}`)?.focus(); } }}>{label}</button>)}
+            </div>
+            <div role="tabpanel" id={`${tabsId}-order-panel`} aria-labelledby={`${tabsId}-order`} hidden={tab !== "order"}>
+              <BuildOrderEditor value={editor.draft.buildOrder} onChange={buildOrder => editor.setDraft(draft => ({ ...draft, buildOrder }))} race={editor.draft.race}
+                sourceEvents={mode === "edit" || timelineFromSavedBuild ? [] : events} sourceGameId={editor.draft.buildOrder?.sourceGameId || editor.draft.sourceReplayId || gameId} perspective={perspective}
+                disabled={editor.saving || editor.savedOk} error={editor.errors.buildOrder} />
+            </div>
+            <div role="tabpanel" id={`${tabsId}-rules-panel`} aria-labelledby={`${tabsId}-rules`} hidden={tab !== "rules"}>
             {legacySignature && editor.draft.rules.length === 0 ? <p role="note" className="mb-4 rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 p-3 text-caption text-text-muted">This build uses the older signature format. Click a timeline row to turn it into a rule. Until you add one, it keeps matching by its signature.</p> : null}
             <BuildEditorRules
               draft={editor.draft}
+              disabled={editor.saving || editor.savedOk}
               errors={editor.errors}
               sourceRows={sourceRows}
               countRepeats={countRepeats}
@@ -333,6 +351,7 @@ export function BuildEditorModal({
               addRuleFromEvent={editor.addRuleFromEvent}
               addCustomRule={editor.addCustomRule}
             />
+            </div>
           </div>
           </fieldset>
         </form>

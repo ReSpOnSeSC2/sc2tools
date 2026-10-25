@@ -142,9 +142,7 @@ describe("BuildEditorRules wording", () => {
     expect((checkbox as HTMLInputElement).checked).toBe(true);
     fireEvent.click(checkbox);
     expect(updateRule).toHaveBeenCalledWith(0, { proxy: false });
-    const ruleName = screen.getAllByTitle(
-      "Event token (e.g. BuildStargate, ResearchBlink)",
-    )[0];
+    const ruleName = screen.getAllByRole("combobox", { name: "Rule 1 action" })[0];
     ruleName.focus();
     fireEvent.change(ruleName, { target: { value: "BuildMarine" } });
     expect(updateRule).toHaveBeenCalledWith(0, {
@@ -182,9 +180,7 @@ describe("BuildEditorRules wording", () => {
     }
 
     render(<StatefulRules />);
-    const input = screen.getByTitle(
-      "Event token (e.g. BuildStargate, ResearchBlink)",
-    ) as HTMLInputElement;
+    const input = screen.getByRole("combobox", { name: "Rule 1 action" }) as HTMLInputElement;
     input.focus();
     fireEvent.change(input, { target: { value: "B" } });
     expect(document.activeElement).toBe(input);
@@ -248,7 +244,7 @@ describe("BuildEditorRules wording", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Exactly" }));
     expect(document.activeElement).toBe(
-      screen.getByRole("textbox", { name: "Unit, building or upgrade" }),
+      screen.getByRole("combobox", { name: "Rule 1 action" }),
     );
     expect(liveRegion()?.textContent).toBe(
       "Added a blank “Exactly” rule. Enter a unit, building or upgrade.",

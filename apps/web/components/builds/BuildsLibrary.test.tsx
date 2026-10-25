@@ -132,7 +132,7 @@ vi.mock("./BuildFilterBar", () => ({
   </>,
 }));
 vi.mock("./BuildDossierModal", () => ({ BuildDossierModal: () => null }));
-vi.mock("./BuildEditorSheet", () => ({ BuildEditorSheet: () => null }));
+vi.mock("./BuildStartFlow", () => ({ BuildStartFlow: ({ initialChoice, definitionId }: { initialChoice?: string; definitionId?: string }) => <div role="dialog" aria-label="Start flow">{initialChoice || "choose"}:{definitionId}</div> }));
 vi.mock("./EditCustomBuildLauncher", () => ({
   EditCustomBuildLauncher: ({
     build,
@@ -209,6 +209,19 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("BuildsLibrary pagination", () => {
+  it("retains a bounded detected-variant intent through sign in and excludes unknown return parameters", () => {
+    harness.isSignedIn = false; harness.query = "create=detected&definition=zerg-12-pool&sort=games&next=https://untrusted.test";
+    render(<BuildsLibrary />);
+    const target = new URL(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")!, "https://local.test").searchParams.get("redirect_url");
+    expect(target).toBe("/definitions?variant=zerg-12-pool");
+  });
+  it("consumes the detected-variant intent without dropping the current library filters", async () => {
+    harness.query = "create=detected&definition=zerg-12-pool&sort=games&q=pool";
+    render(<BuildsLibrary />); await act(async () => { await vi.dynamicImportSettled(); });
+    expect(screen.getByRole("dialog", { name: "Start flow" }).textContent).toBe("detected:zerg-12-pool");
+    expect(harness.replace).toHaveBeenCalledWith("/builds?sort=games&q=pool", { scroll: false });
+    expect(harness.apiCall).not.toHaveBeenCalled();
+  });
   it("consumes the publish picker URL, then opens the selected build's publication window", async () => {
     harness.query = "publish=1&sort=games"; render(<BuildsLibrary />);
     await act(async () => { await vi.dynamicImportSettled(); });
@@ -438,9 +451,12 @@ describe("BuildsLibrary loading failures", () => {
     view.rerender(<BuildsLibrary />);
 
     expect(screen.getByText("No custom builds yet")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Create your first build" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /From one of my games/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /From a detected build/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Blank build/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Copy a Community build/ }).getAttribute("href")).toBe("/community");
     // Points at the real entry point (a game's build order), not opponent profiles.
-    expect(screen.getByText(/From any game’s build order, click ‘Save as new build’/)).toBeTruthy();
+    expect(screen.getByText(/From a game’s build order, you can also use “Save as new build”/)).toBeTruthy();
     expect(screen.queryByText(/opponent profile/)).toBeNull();
   });
 });

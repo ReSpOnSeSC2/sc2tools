@@ -10,9 +10,9 @@ import { StrategyTendencyChart } from "@/components/analyzer/StrategyTendencyCha
 
 const router = vi.hoisted(() => ({ replace: vi.fn(), params: "" }));
 vi.mock("next/navigation", () => ({ useRouter: () => router, useSearchParams: () => new URLSearchParams(router.params) }));
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: vi.fn(), userId: "definitions-test-user" }) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: vi.fn(), userId: "definitions-test-user", isLoaded: true, isSignedIn: true }) }));
 vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: undefined, isLoading: false }) }));
-beforeEach(() => { router.params = ""; window.history.replaceState({}, "", "/definitions"); });
+beforeEach(() => { router.params = ""; router.replace.mockClear(); window.history.replaceState({}, "", "/definitions"); });
 
 afterEach(() => {
   cleanup();
@@ -27,6 +27,14 @@ function card(id: string): HTMLElement {
 }
 
 describe("DefinitionsCatalog", () => {
+  it("preserves a valid public continuation and waits for an explicit private action", async () => {
+    router.params = "variant=zerg-12-pool"; window.history.replaceState({}, "", `/definitions?${router.params}`);
+    render(<DefinitionsCatalog />);
+    expect(screen.getByRole("region", { name: "Continue build variant" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Continue private variant" }).getAttribute("href")).toBe("/builds?create=detected&definition=zerg-12-pool");
+    await waitFor(() => expect(window.location.search).toBe("?variant=zerg-12-pool"));
+    expect(router.replace).not.toHaveBeenCalled();
+  });
   it("lists the labels the engine catalog used to lack", () => {
     render(<DefinitionsCatalog />);
     expect(within(card("zerg-hatch-first")).getByText("Zerg - Hatch First")).toBeTruthy();
@@ -63,9 +71,15 @@ describe("DefinitionsCatalog", () => {
     });
     expect(single.textContent).toBe("Guide");
     expect(single.getAttribute("href")).toBe("/guides/pvz/stargate-into-glaives");
-    const pool = within(card("zerg-12-pool")).getAllByRole("link");
+    const pool = within(card("zerg-12-pool")).getAllByRole("link", { name: /guide for/ });
     expect(pool.map((link) => link.textContent)).toEqual(["ZvP guide", "ZvT guide"]);
-    expect(within(card("pvz-robo-opener")).queryByRole("link")).toBeNull();
+    expect(within(card("pvz-robo-opener")).queryByRole("link", { name: /guide for/ })).toBeNull();
+  });
+
+  it("opens a private variant by exact catalog id without carrying the public catalog filters", () => {
+    render(<DefinitionsCatalog />);
+    const variant = within(card("pvz-stargate-into-glaives")).getByRole("link", { name: "Make my own variant of PvZ - Stargate into Glaives" });
+    expect(variant.getAttribute("href")).toBe("/builds?create=detected&definition=pvz-stargate-into-glaives");
   });
 
   it("shows the 8-worker patch name and finds the label by it", () => {
