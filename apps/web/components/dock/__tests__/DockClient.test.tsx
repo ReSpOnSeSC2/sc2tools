@@ -60,6 +60,7 @@ beforeEach(() => {
   studioState = { ...EMPTY_STUDIO };
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (String(url).includes("/series")) return { ok: true, json: async () => null };
     if (String(url).includes("/config")) {
       return { ok: true, json: async () => ({ config: configState }) };
     }
@@ -200,6 +201,7 @@ describe("DockClient", () => {
     studioState = { ...EMPTY_STUDIO, goals: [{ label: "First draft", current: 1, target: 10 }] };
     let failSave = true;
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/series")) return { ok: true, json: async () => null };
       if (String(url).includes("/config")) return { ok: true, json: async () => ({ config: CONFIG }) };
       if (String(url).includes("/studio") && init?.method === "POST") {
         if (failSave) return { ok: false, status: 503 };

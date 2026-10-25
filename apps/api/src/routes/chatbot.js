@@ -4,6 +4,7 @@ const { createHash } = require("crypto");
 const express = require("express");
 const rateLimitModule = require("express-rate-limit");
 const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
+const { sanitiseRequestUrl } = require("../middleware/requestLogging");
 
 const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
@@ -39,6 +40,7 @@ const rateLimit =
  *
  * @param {{
  *   chatbot: import('../services/chatbot').ChatbotService,
+ *   commands?: import('../services/chatCommandService').ChatCommandService,
  *   logger?: import('pino').Logger,
  * }} deps
  */
@@ -79,52 +81,51 @@ function buildChatbotRouter(deps) {
 
   router.use("/chatbot/:token", globalLimiter);
 
-  /**
-   * Shared GET handler wrapper: plain-text content type, no-store,
-   * 404 for a null line (invalid/revoked token), 500 text (never a
-   * JSON error envelope) on the unexpected-throw path.
-   *
-   * @param {(token: string) => Promise<string|null>} produce
-   * @returns {import('express').RequestHandler}
-   */
-  const lineHandler = (produce) => async (req, res) => {
-    res.set("Cache-Control", "no-store");
-    res.set("Content-Type", "text/plain; charset=utf-8");
+  router.get("/chatbot/:token/:command", limiter, async (req, res, next) => {
+    if (!deps.commands) {
+      // Compatibility for embedders using the original three-line service.
+      const legacy = { opponent: "opponentLine", mmr: "mmrLine", build: "buildLine" };
+      const method = /** @type {keyof typeof legacy} */ (req.params.command);
+      if (!legacy[method]) { res.status(404).type("text").send("Unknown command."); return; }
+      const produce = /** @type {any} */ (deps.chatbot)[legacy[method]].bind(deps.chatbot);
+      return legacyLineHandler(produce, deps.logger)(req, res, next);
+    }
+    res.set("Cache-Control", "no-store").type("text/plain; charset=utf-8");
     try {
-      const line = await produce(String(req.params.token || ""));
-      if (line === null || line === undefined) {
-        res.status(404).send("Unknown token.");
-        return;
-      }
-      res.status(200).send(line);
-    } catch (err) {
-      if (deps.logger && typeof deps.logger.warn === "function") {
-        deps.logger.warn({ err, path: req.path }, "chatbot_line_failed");
-      }
+      const reply = await deps.commands.answer(req.params.token, { command: req.params.command,
+        argument: typeof req.query.args === "string" ? req.query.args : "",
+        user: typeof req.query.user === "string" ? req.query.user : "", platform: "nightbot" });
+      if (!reply) { res.status(404).send("Unknown token."); return; }
+      if (reply.status === "unknown") { res.status(404).send("Unknown command."); return; }
+      if (!reply.text) { res.status(204).end(); return; }
+      res.send(reply.text);
+    } catch (error) {
+      deps.logger?.warn({ err: error, path: sanitiseRequestUrl(req.path) }, "chatbot_line_failed");
       res.status(500).send("Temporarily unavailable.");
     }
-  };
-
-  router.get(
-    "/chatbot/:token/opponent",
-    limiter,
-    lineHandler((token) => deps.chatbot.opponentLine(token)),
-  );
-  router.get(
-    "/chatbot/:token/mmr",
-    limiter,
-    lineHandler((token) => deps.chatbot.mmrLine(token)),
-  );
-  router.get(
-    "/chatbot/:token/build",
-    limiter,
-    lineHandler((token) => deps.chatbot.buildLine(token)),
-  );
+  });
 
   return router;
 }
 
 const CHATBOT_RATE_LIMIT_PER_MIN = 30;
+
+/** Original embedders retain plain-text error responses as well.
+ * @param {(token:string)=>Promise<string|null>} produce @param {import('pino').Logger} [logger]
+ * @returns {import('express').RequestHandler} */
+function legacyLineHandler(produce, logger) {
+  return async (req, res) => {
+    res.set("Cache-Control", "no-store").type("text/plain; charset=utf-8");
+    try {
+      const line = await produce(String(req.params.token || ""));
+      if (line === null || line === undefined) { res.status(404).send("Unknown token."); return; }
+      res.send(line);
+    } catch (error) {
+      logger?.warn({ err: error, path: sanitiseRequestUrl(req.path) }, "chatbot_line_failed");
+      res.status(500).send("Temporarily unavailable.");
+    }
+  };
+}
 
 /** @param {unknown} value */
 function hashLimiterCredential(value) {

@@ -142,12 +142,55 @@ required URL setup. See `/help/obs-auto-scene-switching` and
 used disposable fixtures and fake/offscreen OBS boundaries; no production OBS or
 account integration was run.
 
+# Chat commands v2
+
+No new environment variable, secret, collection, index, migration or paid
+service is required. Deploy the API and web together. In Settings → Overlay →
+Multi-platform chat → Chat commands, explicitly open the editor, choose
+availability/alias/cooldown and Save. Custom replies allow only `{user}`,
+`{mmr}`, `{record}`, `{opponent}` and `{streak}`. Try shows the saved command's
+exact reply with the selected existing overlay token and never sends it.
+Copy Nightbot snippet copies that token's private credential URL; paste it
+only into the intended bot configuration. Existing integration switches remain
+off until the owner enables them separately. No account was enabled or used to
+publish a message during implementation.
+
+The record is a UTC calendar day, and uptime is time since Start new session,
+not a claim that Twitch has been live. Season replies need an already-cached
+current regional season boundary; a cold/unavailable catalog gives an honest
+unavailable line without starting provider traffic. History replies can be
+up to30seconds old and disclose safety-limited cohorts. Chat and on-stream
+cooldowns run independently so each surface can answer the same viewer once.
+
 
 # Stream Dock Game desk
 
 Deploy API and web together, then refresh existing Dock and overlay Browser Sources once so their game-widget hiding and manual-result labels update. No environment variable, service, collection, index or migration is added. Game is the first Dock section; its sticky header keeps scene, active opponent, session and connection visible. Current desktop agents omit the live map, so that field correctly says unavailable.
 
 At stream start, confirm Start new session to reset the account's session boundary and this token's clip timestamp mark. Hide game widgets is reversible and keeps chat/scenes running; verify your refreshed sources hide and resume before relying on it live. Crystal Ball manual/cancel controls never award points or accuracy. Shout-outs use only reviewed exact opponent channels; a configured matching Twitch bot queues them, otherwise Copy shout-out is available. Validation used synthetic loopback data and no actual bot or provider posts.
+
+## Series mode (Wave 4)
+
+Deploy API and web together, then refresh existing Dock and overlay Browser
+Sources. No environment variable, collection, index, job or provider connection
+is added. In the Dock's Series section, choose an opponent, best-of format and
+optional ordered maps, then explicitly Start. In Settings → Overlay → Widgets,
+enable Series for All-in-one or copy its dedicated 640×420 Browser Source.
+It starts off and stays transparent until a series exists.
+
+Automatic scoring requires a matching replay with a recorded exact start after
+Start. Old uploads without that field remain manual-only; known account
+mismatches never fall back to a shared name. Use ±1 to correct a score and End
+to stop scoring. Eighty retained replay receipts pause automatic scoring until
+the next Start. Lifetime H2H is unavailable without an exact recorded account.
+The shared Chat commands editor controls `!series` aliases, platforms and
+cooldown; no bot is enabled and no message is posted automatically.
+
+Use the silent local preview or Test in OBS to inspect the scorecard; tests do
+not start or score a series. Roll back by ending the series and disabling its
+widget, then reverting the feature commit if needed. Stored Studio state can
+remain safely bounded. Implementation verification uses synthetic local owners,
+replays and socket traffic only.
 
 ## Game moment alerts (Wave 4)
 

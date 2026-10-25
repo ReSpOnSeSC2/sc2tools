@@ -72,6 +72,11 @@ export const WIDGETS: ReadonlyArray<WidgetMeta> = [
     noTest: true,
   },
   {
+    id: "series",
+    label: "Series scoreboard",
+    hint: "Opt in for cups or showmatches. Start Bo1/3/5/7 in the Dock, count matching replays and correct scores manually. Test is a silent sample and never changes your series.",
+  },
+  {
     id: "session-recap",
     label: "Session recap card",
     hint: "A W-L + net-MMR recap card you fire on demand from the Stream Dock. Test fires a sample recap.",

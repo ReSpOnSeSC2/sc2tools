@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, Suspense, createElement, lazy, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { Component, createElement, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { DockButton } from "./DockControls";
 
 class IslandBoundary extends Component<{ label: string; retry: () => void; children: ReactNode }, { failed: boolean }> {
@@ -14,23 +14,25 @@ class IslandBoundary extends Component<{ label: string; retry: () => void; child
   }
 }
 
-/** A new lazy identity on Retry reruns import(), rather than rethrowing its cached rejection. */
+/** Imports stay outside render. Retry invokes the stable factory again, while
+ * a held/failed optional chunk cannot keep an initially suspended Dock in an
+ * endless retry cycle as other control snapshots commit. */
 export function DockLazyPanel<Props extends object>({ loader, label, componentProps }: {
   loader: () => Promise<ComponentType<Props>>; label: string; componentProps: Props;
 }) {
   const [attempt, retry] = useState(0);
-  const Loaded = useMemo(() => lazy(async () => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const component = await Promise.race([loader(), new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new Error(`Optional Dock panel load ${attempt + 1} timed out`)), 20_000);
-      })]);
-      return { default: component };
-    } finally { clearTimeout(timer); }
-  }), [loader, attempt]);
+  const [loaded, setLoaded] = useState<{ loader: typeof loader; attempt: number; component: ComponentType<Props> | null; failed: boolean } | null>(null);
+  useEffect(() => {
+    let current = true;
+    const timer = setTimeout(() => { if (current) { current = false; setLoaded({ loader, attempt, component: null, failed: true }); } }, 20_000);
+    Promise.resolve().then(loader).then(component => {
+      if (current) { clearTimeout(timer); setLoaded({ loader, attempt, component, failed: false }); }
+    }).catch(() => { if (current) { clearTimeout(timer); setLoaded({ loader, attempt, component: null, failed: true }); } });
+    return () => { current = false; clearTimeout(timer); };
+  }, [loader, attempt]);
+  const ready = loaded?.loader === loader && loaded.attempt === attempt ? loaded : null;
   return <IslandBoundary key={attempt} label={label} retry={() => retry(value => value + 1)}>
-    <Suspense fallback={<p role="status" className="text-caption text-text-muted">Loading {label}…</p>}>
-      {createElement(Loaded, componentProps)}
-    </Suspense>
+    {ready?.failed ? <div role="alert" className="space-y-2 text-caption text-text-muted"><p>Couldn&apos;t load {label}. Your other Dock controls still work.</p><DockButton onClick={() => retry(value => value + 1)}>Retry {label}</DockButton></div>
+      : ready?.component ? createElement(ready.component, componentProps) : <p role="status" className="text-caption text-text-muted">Loading {label}…</p>}
   </IslandBoundary>;
 }
