@@ -27,14 +27,16 @@ function buildTwitchAutomationRouter(deps) {
   const tokenAuth = async (req, res, next) => {
     try {
       const owner = await deps.tokens.resolve(String(req.params.token));
-      if (!owner) { res.status(401).json({ error: { code: "invalid_overlay_token" } }); return; }
+      if (!owner) { res.status(401).json({ error: { code: await deps.tokens.isReplaced?.(String(req.params.token)) ? "overlay_token_replaced" : "invalid_overlay_token" } }); return; }
       res.locals.twitchOwner = owner.userId; next();
     } catch (error) { next(error); }
   };
-  router.get("/multichat/:token/twitch-automation", tokenAuth, limiter("status", 1, 5000), async (_req, res, next) => {
+  router.get("/multichat/:token/twitch-automation", tokenAuth, limiter("status", 1, 5000), async (req, res, next) => {
     try {
       const status = await deps.status.get(res.locals.twitchOwner, false);
-      res.json({ current: status.current, reason: status.reason, predictionPermission: status.predictionPermission,
+      const owner = await deps.tokens.resolve(String(req.params.token));
+      if (!owner || owner.userId !== res.locals.twitchOwner) { res.status(401).json({ error: { code: await deps.tokens.isReplaced?.(String(req.params.token)) ? "overlay_token_replaced" : "invalid_overlay_token" } }); return; }
+      res.json({ current: status.current, reason: status.reason, serverEnabled: status.serverEnabled, predictionPermission: status.predictionPermission,
         rankedQueueSupported: status.rankedQueueSupported, capabilityReason: status.capabilityReason,
         predictionsEnabled: status.preferences.predictionsEnabled, markersEnabled: status.preferences.markersEnabled });
     } catch (error) { next(error); }

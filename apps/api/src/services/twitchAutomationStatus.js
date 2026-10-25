@@ -43,7 +43,7 @@ class TwitchAutomationStatus {
       eligible: observed?.eligible ?? null, isLive: observed?.isLive ?? null,
       reason: this.automation.deps.enabled !== true ? "server_not_enabled" : !connection?.connected ? "connect_twitch" : observed?.reason || (observed?.eligible === false ? "affiliate_or_partner_required" : observed?.isLive === false ? "channel_offline" : null),
       rankedQueueSupported: false, capabilityReason: "ranked_status_unavailable",
-      current: row ? { gameKey: row.gameKey, ...receiptStatus(row) } : null };
+      current: row ? { gameKey: row.gameKey, ...receiptStatus(row), ...(row.accountId !== identity ? { canCancel: false, canResolve: false, reason: "prediction_account_changed" } : {}) } : null };
   }
 }
 module.exports = { TwitchAutomationStatus };

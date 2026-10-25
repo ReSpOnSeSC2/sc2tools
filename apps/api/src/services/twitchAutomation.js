@@ -18,7 +18,7 @@ function opponentKey(accountId, opponent, myRace) {
 function receiptStatus(row) {
   if (!row) return null;
   const prediction = row.prediction || {}, marker = row.marker || {};
-  return { prediction: prediction.status, marker: marker.status, reason: prediction.reason || row.reason || null,
+  return { prediction: prediction.status, marker: marker.status, reason: prediction.reason || marker.reason || row.reason || null,
     canCancel: ["pending", "creating", "active", "locked"].includes(prediction.status) || prediction.status === "unknown" && Boolean(prediction.predictionId),
     canResolve: ["active", "locked", "unknown"].includes(prediction.status) && row.settlement?.action === "resolve" && Boolean(prediction.winId && prediction.lossId),
     deadlineAt: row.deadlineAt instanceof Date ? row.deadlineAt.toISOString() : null };

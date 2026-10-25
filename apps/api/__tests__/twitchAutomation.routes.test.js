@@ -87,10 +87,22 @@ test("an expired/replaced token after preflight cannot enter the action callback
   automation.deps.enabled = true; await active(); tokens.resolve.mockResolvedValueOnce({ userId: "owner-A" }).mockResolvedValueOnce(null);
   await request(app).post("/v1/multichat/owned/twitch-automation").send({ action: "cancel", gameKey: key, confirmed: true }).expect(401); expect(provider.endPrediction).not.toHaveBeenCalled();
 });
+test.each([true, false])("a held Dock status cannot return private data after token rotation/revocation: %j", async replaced => {
+  let release, entered; const held = new Promise(resolve => { release = resolve; }), started = new Promise(resolve => { entered = resolve; });
+  jest.spyOn(status, "get").mockImplementation(async () => { entered(); await held; return { current: { gameKey: "private-held-game" }, preferences: {} }; });
+  const read = request(app).get("/v1/multichat/owned/twitch-automation").then(response => response); await started;
+  tokens.resolve.mockResolvedValue(null); tokens.isReplaced = async () => replaced; release(); const response = await read;
+  expect(response.status).toBe(401); expect(response.body.error.code).toBe(replaced ? "overlay_token_replaced" : "invalid_overlay_token"); expect(JSON.stringify(response.body)).not.toContain("private-held-game");
+});
 test("previous open prediction remains reachable when current rematch is skipped", async () => {
   await active(); status.broker.currentGameKey = () => "new-game";
   await automation.deps.receipts.reserve("owner-A", "new-game", { accountId: "42", connectionRevision: "private-revision", opponentKey: "hashed-opponent", prediction: "skipped", marker: "disabled", reason: "rematch_cooldown" });
   const response = await request(app).get("/v1/multichat/owned/twitch-automation"); expect(response.body.current).toMatchObject({ gameKey: key, prediction: "active" });
+});
+test("an old broadcaster's open receipt cannot advertise controls under a replacement account", async () => {
+  await active(); connection.platformUserId = "99";
+  const response = await request(app).get("/v1/multichat/owned/twitch-automation"); expect(response.body.current).toMatchObject({ prediction: "active", canCancel: false, canResolve: false, reason: "prediction_account_changed" });
+  expect(JSON.stringify(response.body)).not.toMatch(/private-provider-id|private-win|private-secret/);
 });
 test("registered provider journal is purge-only; erasure deletes only this owner and snapshots cannot restore it", async () => {
   expect(GDPR_CLASSIFICATION.TWITCH_AUTOMATION_RECEIPTS).toBe("purge_only"); expect(COLLECTIONS.TWITCH_AUTOMATION_RECEIPTS).toBe("twitch_automation_receipts");
