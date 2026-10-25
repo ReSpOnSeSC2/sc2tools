@@ -15,6 +15,7 @@
  */
 
 const { LIMITS } = require("../config/constants");
+const { strengthPipeline, matchupRatingStages, shapeMatchupRating } = require("./strengthAdjusted");
 
 /** @typedef {Awaited<ReturnType<import('./types').AggregationsService['matchupTimeseries']>>['points'][number]} MatchupTimeseriesPoint */
 
@@ -26,6 +27,7 @@ const { LIMITS } = require("../config/constants");
  *   pickInterval: (raw: unknown) => 'day' | 'week' | 'month',
  *   pickTimezone: (raw: unknown) => string,
  *   fitInterval?: (match: object, requested: 'day'|'week'|'month') => Promise<'day'|'week'|'month'>,
+ *   mmrExpectation?: Pick<import('./mmrExpectation').MmrExpectationService,'curve'>,
  * }} deps
  * @param {string} userId
  * @param {{interval?: 'day'|'week'|'month', tz?: string, groupByOwnRace?: boolean}} opts
@@ -40,14 +42,14 @@ async function matchupTimeseries(deps, userId, opts, filters) {
   const interval = typeof deps.fitInterval === "function"
     ? await deps.fitInterval(match, requestedInterval)
     : requestedInterval;
-  const rows = /** @type {Array<Omit<MatchupTimeseriesPoint, 'winRate'>>} */ (await deps.games
-    .aggregate([
+  const curve = await deps.mmrExpectation?.curve() || null;
+  const pipeline = [
       { $match: match },
       { $addFields: { _bucket: deps.bucketSwitch() } },
       {
         $addFields: {
           _oppRace: raceLetterExpr("$opponent.race"),
-          ...(groupByOwnRace ? { _myRace: raceLetterExpr("$myRace") } : {}),
+          _myRace: raceLetterExpr("$myRace"),
         },
       },
       {
@@ -80,14 +82,19 @@ async function matchupTimeseries(deps, userId, opts, filters) {
           total: 1,
         },
       },
-    ])
-    .toArray());
+    ];
+  const [doc] = await deps.games.aggregate([
+    ...strengthPipeline(pipeline.slice(0, 3), curve),
+    { $facet: { points: pipeline.slice(3), ratingSeries: matchupRatingStages() } },
+  ]).toArray();
+  const rows = /** @type {Array<Omit<MatchupTimeseriesPoint, 'winRate'>>} */ (doc?.points || []);
   return {
     interval,
     points: rows.map((r) => ({
       ...r,
       winRate: r.total ? r.wins / r.total : 0,
     })),
+    ratingSeries: (doc?.ratingSeries || []).map((/** @type {Record<string,any>} */ row) => shapeMatchupRating(row, curve)),
   };
 }
 

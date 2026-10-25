@@ -5,6 +5,7 @@ const { gamesMatchStage } = require("../util/parseQuery");
 const trendsAgg = require("./trendsAggregations");
 const trendsInsights = require("./trendsInsights");
 const { TrendsRequests } = require("./trendsRequests");
+const { strengthPipeline, finishStrength } = require("./strengthAdjusted");
 const { trendsExplorer } = require("./trendsExplorer");
 const {
   attachRecentByMap,
@@ -34,9 +35,11 @@ const RESULT_BUCKET_BRANCHES = [
  * /build-vs-strategy, /random-summary, and /timeseries endpoints.
  */
 class AggregationsService {
-  /** @param {{games: import('mongodb').Collection, gameDetails?: import('mongodb').Collection}} db */
-  constructor(db) {
+  /** @param {{games: import('mongodb').Collection, gameDetails?: import('mongodb').Collection}} db
+   * @param {{mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'>}} [opts] */
+  constructor(db, opts = {}) {
     this.db = db;
+    this.mmrExpectation = opts.mmrExpectation;
     this.trendsRequests = new TrendsRequests();
   }
 
@@ -125,17 +128,18 @@ class AggregationsService {
    */
   async _matchupsOnce(userId, filters) {
     const match = gamesMatchStage(userId, filters);
+    const curve = await this.mmrExpectation?.curve() || null;
     const rows = await this.db.games
-      .aggregate([
+      .aggregate(strengthPipeline([
         { $match: match },
         { $addFields: { _bucket: bucketSwitch() } },
         ...matchupFacet().map(stripFacetWrappers).flat(),
-      ])
+      ], curve))
       .toArray();
     return finalizeRows(
       // The $project in matchupFacet guarantees ``name`` on every row;
       // the driver only knows ``Document``.
-      await attachRecentByMatchup(this.db, userId, filters, /** @type {Array<{name: string} & Record<string, any>>} */ (rows)),
+      await attachRecentByMatchup(this.db, userId, filters, /** @type {Array<{name: string} & Record<string, any>>} */ (rows.map(row => finishStrength(row, curve)))),
     );
   }
 
@@ -201,17 +205,18 @@ class AggregationsService {
    */
   async _mapsOnce(userId, filters) {
     const match = gamesMatchStage(userId, filters);
+    const curve = await this.mmrExpectation?.curve() || null;
     const rows = await this.db.games
-      .aggregate([
+      .aggregate(strengthPipeline([
         { $match: match },
         { $addFields: { _bucket: bucketSwitch() } },
         ...mapFacet().map(stripFacetWrappers).flat(),
-      ])
+      ], curve))
       .toArray();
     return finalizeRows(
       // The $project in mapFacet guarantees ``name`` on every row; the
       // driver only knows ``Document``.
-      await attachRecentByMap(this.db, userId, filters, /** @type {Array<{name: string} & Record<string, any>>} */ (rows)),
+      await attachRecentByMap(this.db, userId, filters, /** @type {Array<{name: string} & Record<string, any>>} */ (rows.map(row => finishStrength(row, curve)))),
     );
   }
 
@@ -235,8 +240,9 @@ class AggregationsService {
    */
   async _mapMatchupsOnce(userId, filters) {
     const match = gamesMatchStage(userId, filters);
+    const curve = await this.mmrExpectation?.curve() || null;
     const rows = await this.db.games
-      .aggregate([
+      .aggregate(strengthPipeline([
         { $match: match },
         { $addFields: { _bucket: bucketSwitch() } },
         {
@@ -261,9 +267,9 @@ class AggregationsService {
           },
         },
         { $sort: { map: 1, total: -1 } },
-      ])
+      ], curve))
       .toArray();
-    return rows.map(addWinRate);
+    return rows.map(row => addWinRate(finishStrength(row, curve)));
   }
 
   /**
@@ -285,8 +291,9 @@ class AggregationsService {
    */
   async _buildVsStrategyOnce(userId, filters) {
     const match = gamesMatchStage(userId, filters);
+    const curve = await this.mmrExpectation?.curve() || null;
     const rows = await this.db.games
-      .aggregate([
+      .aggregate(strengthPipeline([
         { $match: match },
         { $addFields: { _bucket: bucketSwitch() } },
         {
@@ -311,9 +318,9 @@ class AggregationsService {
           },
         },
         { $sort: { total: -1 } },
-      ])
+      ], curve))
       .toArray();
-    return rows.map(addWinRate);
+    return rows.map(row => addWinRate(finishStrength(row, curve)));
   }
 
   /**
@@ -717,6 +724,7 @@ class AggregationsService {
   _trendsDeps() {
     return {
       games: this.db.games,
+      mmrExpectation: this.mmrExpectation,
       gamesMatchStage,
       bucketSwitch,
       pickInterval,

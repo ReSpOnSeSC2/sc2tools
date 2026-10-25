@@ -2,6 +2,7 @@
 
 const { gamesMatchStage } = require("../util/parseQuery");
 const { computeDossierExtras } = require("./buildDossier");
+const { strengthPipeline, finishStrength } = require("./strengthAdjusted");
 const {
   BUILD_INTENT_LABEL_PROJECTION,
   COUNTED_BY_CHECKIN_EXPR,
@@ -60,9 +61,11 @@ const BUCKET_BRANCHES = [
  * for corrected opponent builds on ``opponent.strategy``.
  */
 class BuildsService {
-  /** @param {{games: import('mongodb').Collection}} db */
-  constructor(db) {
+  /** @param {{games: import('mongodb').Collection}} db
+   * @param {{mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'>}} [opts] */
+  constructor(db, opts = {}) {
     this.db = db;
+    this.mmrExpectation = opts.mmrExpectation;
   }
 
   /**
@@ -71,8 +74,9 @@ class BuildsService {
    */
   async list(userId, filters) {
     const match = gamesMatchStage(userId, filters);
-    return this.db.games
-      .aggregate([
+    const curve = await this.mmrExpectation?.curve() || null;
+    const rows = await this.db.games
+      .aggregate(strengthPipeline([
         { $match: match },
         { $addFields: { _bucket: bucketSwitch() } },
         {
@@ -100,8 +104,9 @@ class BuildsService {
           },
         },
         { $sort: { total: -1 } },
-      ])
+      ], curve))
       .toArray();
+    return rows.map(row => finishStrength(row, curve));
   }
 
   /**
@@ -281,8 +286,9 @@ class BuildsService {
    */
   async oppStrategies(userId, filters) {
     const match = gamesMatchStage(userId, filters);
-    return this.db.games
-      .aggregate([
+    const curve = await this.mmrExpectation?.curve() || null;
+    const rows = await this.db.games
+      .aggregate(strengthPipeline([
         { $match: match },
         { $addFields: { _bucket: bucketSwitch() } },
         {
@@ -308,8 +314,9 @@ class BuildsService {
           },
         },
         { $sort: { total: -1 } },
-      ])
+      ], curve))
       .toArray();
+    return rows.map(row => finishStrength(row, curve));
   }
 }
 
