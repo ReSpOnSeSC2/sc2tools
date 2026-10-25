@@ -28,6 +28,7 @@ import type { CommunityBuildDetail } from "@/components/community/types";
 import { RulesSummary } from "@/components/builds/RulesSummary";
 import { SKILL_LEVELS, coerceSavedRules } from "@/lib/build-rules";
 import { SavedBuildExportMenu } from "@/components/builds/SavedBuildExportMenu";
+import { PracticeButton } from "@/components/practice/PracticeButton";
 import { serializeJsonLd } from "@/lib/reviewJsonLd";
 import { communityDescription } from "@/lib/communityDescription";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
@@ -240,6 +241,7 @@ export default async function CommunityBuildPage({
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+          <div className="hidden lg:block"><PracticeButton build={{ ...data.build, name: data.title }} /></div>
           <Card className="hidden lg:block">
             <CommunityVotePanel
               slug={data.slug}

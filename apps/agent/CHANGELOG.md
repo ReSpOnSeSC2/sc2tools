@@ -5,12 +5,16 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 ## 0.24.6
 
 ### Fixed - Reduce game-start and match-time load
+- Defer hidden scouting timelines and their icons until the relevant view opens.
+  Compact and hidden Companion windows no longer build full replay-history views
+  when opponent data arrives; visible views still refresh when selections change.
 - Avoid repeated native overlay style and ownership checks while focus and
   visible windows are unchanged; revalidate periodically and after window changes
   so click-through recovers if Windows or Qt changes the native handle or style.
 - Keep queued historical uploads paused during matches when Pause history imports
   in game is enabled, preserving fresh replay priority and resuming queued work
-  afterwards.
+  afterwards. Limit fresh-replay overflow to eight pending jobs so bulk file
+  events retain backpressure; defer larger bursts safely for a later sweep.
 - Coordinate the web Randomizer performance update: bound animated motion fields
   to 12 contenders and 30 frames per second, retaining the full weighted draw,
   selected winner, reveal timing, sound and voice. Correct frame-dependent motion.

@@ -121,7 +121,14 @@ def test_range_survives_snapshot_refresh_and_layout_changes_without_refetch(cont
     for density in ("detailed", "full", "compact", "standard"):
         page.set_density(density)
         assert page.build_time_range.currentData() == 600
-        assert all(chain.time_range() == 600 for chain in [*page.build_chains.values(), *page.upgrade_chains.values()])
+    page.hide()
+    _set_range(page, 360)
+    assert page.build_time_range.currentData() == 360
+    _set_range(page, 600)
+    assert page.build_time_range.currentData() == 600
+    page.show()
+    app.processEvents()
+    assert all(chain.time_range() == 600 for chain in [*page.build_chains.values(), *page.upgrade_chains.values()])
     state["snapshot"]["liveGame"]["displayTime"] = 91
     page.refresh()
     wait_until(app, lambda: page._snapshot.get("liveGame", {}).get("displayTime") == 91)

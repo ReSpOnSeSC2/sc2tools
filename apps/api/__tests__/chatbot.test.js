@@ -320,7 +320,7 @@ describe("GET /v1/chatbot/:token/*", () => {
     expect(res.status).toBe(200);
     expectChatLine(res);
     expect(res.text).toContain("MMR 4325");
-    expect(res.text).toContain("(+25 today)");
+    expect(res.text).toContain("(+25 this session)");
     expect(res.text).toContain("Session 2W-0L");
     expect(res.text).toContain("(W2 streak)");
   });

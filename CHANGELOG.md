@@ -12,6 +12,8 @@ corresponding GitHub Release.
 ## [Unreleased]
 
 ### Agent 0.24.6 and Randomizer game-start performance
+- Build scouting timelines and load their icons when the relevant view opens,
+  avoiding full hidden-history hydration in Compact or hidden Companion windows.
 - Bound the OBS Randomizer's motion simulations to 12 visual contenders and
   30 FPS, retaining the complete weighted selection pool, chosen result, reveal
   timing, sound and voice. Keep movement speed independent of refresh rate.
@@ -19,10 +21,19 @@ corresponding GitHub Release.
   periodic and window-event recovery of click-through styles.
 - Pause queued historical uploads during matches when game-time import pausing
   is enabled, while keeping fresh replay priority and queued history intact.
+  Bound fresh-replay overflow to eight pending jobs during large backlogs.
 
 ### Added
+- Configure optional Twitch Predictions and live-game stream markers with separate permissions, explicit opt-ins and confirmed Dock controls. A separate server gate defaults off; current desktop telemetry cannot prove ranked queue status, so automatic Predictions remain unavailable.
+- Opt in to nine recorded ladder achievements in Event alerts, with per-moment visuals and sounds, local tests, clip timestamps and optional posts through an already connected bot. Supporter alerts keep priority; replay starting MMR and confirmed league evidence remain explicit.
+- Chat commands now share saved aliases, availability and cooldowns across the Twitch bot, Nightbot and on-stream answers. New commands show recorded daily and season stats, recent opponent meetings, prediction leaders and stream-session uptime; owners can add bounded plain-text custom replies with supported variables.
 - Analyzer tables now support keyboard build opening, global matchup chips, a matchup-scoped heatmap and a Strategy games sheet that stays open as filters change. CSV exports save the displayed Builds, Strategy pairs, Matchups, Maps and pool cells with their scope and local date.
 - Live scouting on Today and a large second-screen page reuse your recorded opponent history, with bounded opening counts, recent replay links and an exact-account note popover. The Stream Dock Scout view omits private notes and replay/account actions.
+- Ghost practice assignments now sync to your account, with Practice actions on build and guide pages, a quick-disarm chip, explicit browser migration and a permanent OBS coach URL. Legacy Ghost links remain compatible; native Companion controls stay separate.
+
+### PvZ air opening timing
+
+- Require the 2-Stargate Void Ray and 2/3-Stargate Phoenix openings to establish their Stargates, two bases and four real air units by 7:00, with matching build definitions.
 
 ### Admin Users
 
@@ -34,6 +45,7 @@ corresponding GitHub Release.
 
 ### Stream Dock
 
+- Run an opt-in best-of series with an exact opponent, scheduled maps and manual score corrections. Accepted replays with a recorded start update the score once; the Series widget and shared `!series` command show the same score without posting automatically.
 - The new Game section and sticky status header show match and session context, Crystal Ball votes and safe round controls, a confirmed session reset, reversible game-widget hiding, and approved opponent shout-outs. Manual results earn no oracle points or accuracy; verified scoring recovers safely after interrupted writes.
 - Collapse panels into live summaries, pin frequently used sections, and keep the layout in this browser. Dock controls now show connection text and keyboard focus, give touch users larger targets, and offer selected text when clipboard access is unavailable.
 

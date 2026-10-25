@@ -407,11 +407,19 @@ normal priority), each limited by CPU count. Save and restart to apply the worke
 count. Existing custom worker limits remain until a speed is saved. On POSIX,
 background workers request nice(10).
 
+Companion defers hidden scouting timelines and their icons until that view opens.
+Keeping the app hidden or Compact does not build the full replay-history views
+when opponent data arrives. Opening a scouting page uses the selected replay,
+time range and worker/supply filter.
+
 Pause history import while I'm in a game is on by default. The shared live-game
 gate holds new history parses, queued historical uploads and archive jobs through
 loading/play and for 20 seconds after the match ends. An upload already in flight
 finishes durably; the next historical batch waits. Fresh rank-zero replays retain
 their priority lane.
+A reserved overflow of up to eight pending priority games keeps fresh results
+moving when history fills the primary upload queue. Larger new bursts defer for
+a later sweep; already accepted retries remain retained.
 Automatic accurate replay capture does not start mid-match. Pause on battery also
 holds background work. A 120-second event silence or 45-minute match safety limit
 releases the gate; --no-live disables it. Manual Pause holds all queued syncing.

@@ -10,7 +10,7 @@ into Robo, grabbed them on nothing more than "Robo + one Stargate unit".
 
 The fix narrows the Void Ray rule's Robo guard to an EARLY window
 (before 6:00 / 360s). The defining signal for a Void Ray build is the
-4+ Void Rays by 10:00 -- a genuine Stargate->Robo transition never has
+4+ Void Rays by 7:00 -- a genuine Stargate->Robo transition never has
 that many Void Rays out, so a LATER Robo behind a committed air force
 is support, not a tech switch, and must not reclassify the game. An
 EARLY Robo (before 6:00, before the air is even on the field) is still
@@ -58,7 +58,7 @@ def _unit(name: str, time: int) -> Dict[str, Any]:
 
 
 def _voidray_opener_with_robo_at(robo_time: int) -> List[Dict[str, Any]]:
-    """Stargate-first, exactly 2 Stargates, 2 bases, 4 Void Rays by 10:00,
+    """Stargate-first, exactly 2 Stargates, 2 bases, 4 Void Rays by 7:00,
     no Glaives -- with a Robotics Facility started at ``robo_time``."""
     return [
         _building("Nexus", 0),
@@ -68,14 +68,14 @@ def _voidray_opener_with_robo_at(robo_time: int) -> List[Dict[str, Any]]:
         _building("CyberneticsCore", 100),
         _building("Nexus", 150),
         _building("Stargate", 200),   # FIRST tech building -> stargate-first
-        _building("Stargate", 260),   # exactly 2 Stargates by 10:00
+        _building("Stargate", 260),   # exactly 2 Stargates by 7:00
         _building("RoboticsFacility", robo_time),
         # Stargate exists before every Void Ray, so none are filtered as
-        # Sentry hallucinations. 4 by 10:00 = the headline air commitment.
+        # Sentry hallucinations. 4 by 7:00 = the headline air commitment.
         _unit("VoidRay", 300),
         _unit("VoidRay", 345),
         _unit("VoidRay", 390),
-        _unit("VoidRay", 435),
+        _unit("VoidRay", 420),
     ]
 
 

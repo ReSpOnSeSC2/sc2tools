@@ -82,6 +82,7 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *     keyFile: string|null,
  *   },
  *   platformIntegrations: ReturnType<typeof parsePlatformIntegrationsConfig>,
+ *   twitchAutomationEnabled: boolean,
  *   reviewsEnabled: "off" | "admins" | "on",
  *   guidesEnabled: boolean,
  *   guidesRevalidateUrl: string|null,
@@ -152,6 +153,9 @@ function loadConfig(env = process.env) {
     renderAdmin: parseRenderAdminConfig(env),
     analytics: parseAnalyticsConfig(env),
     platformIntegrations: parsePlatformIntegrationsConfig(env),
+    // Separate from configured credentials and explicit user opt-ins.
+    // This implementation never changes the operator's environment.
+    twitchAutomationEnabled: env.TWITCH_AUTOMATION_ENABLED === "true",
     reviewsEnabled: parseReviewsRollout(env.REVIEWS_ENABLED),
     ...parseGuidesConfig(env),
   };

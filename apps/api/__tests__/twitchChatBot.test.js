@@ -59,6 +59,29 @@ describe("services/twitchChatBot", () => {
   let deps;
   let bot;
 
+  test.each(["rotation", "stop", "reconfigure"])("held registry replies cannot cross %s", async action => {
+    const ws = await connectBot();
+    let release;
+    bot.chatCommands = { answer: jest.fn(() => new Promise(resolve => { release = resolve; })) };
+    ws.serverSays("@id=held;display-name=Alice :alice!alice@a.tmi.twitch.tv PRIVMSG #response :!record");
+    await flush(); expect(bot.chatCommands.answer).toHaveBeenCalled();
+    if (action === "rotation") bot.replaceOverlayToken("u1", "tokA", "new-token");
+    else if (action === "stop") bot.stop("u1");
+    else await bot.configure("u1", CFG);
+    release({ text: "Old credential reply", status: "reply", command: "record" });
+    await flush(); await drainSends();
+    expect(ws.sent.filter(line => line.startsWith("PRIVMSG"))).toHaveLength(0);
+    expect(sockets.flatMap(socket => socket.sent).join(" ")).not.toContain("Old credential reply");
+  });
+
+  test("queued replies are discarded when the exact token rotates", async () => {
+    const ws = await connectBot(); const conn = bot._conns.get("u1");
+    bot._say(conn, "Old queued reply"); expect(conn.sendQueue).toHaveLength(1);
+    bot.replaceOverlayToken("u1", "tokA", "new-token"); await drainSends();
+    expect(ws.sent.filter(line => line.startsWith("PRIVMSG"))).toHaveLength(0);
+    expect(conn.sendQueue).toHaveLength(0);
+  });
+
   test("rotation swaps only the existing exact owner credential without provider reconnect", async () => {
     await bot.configure("u1", CFG);
     const conn = bot._conns.get("u1"), socket = sockets[0];

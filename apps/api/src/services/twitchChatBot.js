@@ -80,6 +80,7 @@ class TwitchChatBotService {
    *   overlayTokens: {resolve: (token: string) => Promise<{userId: string}|null>, list: (userId: string) => Promise<Array<Record<string, any>>>},
    *   engagement?: import('./multichatEngagement').MultichatEngagementService,
    *   chatbot?: import('./chatbot').ChatbotService,
+ *   chatCommands?: import('./chatCommandService').ChatCommandService,
    *   logger?: import('pino').Logger | null,
    *   wsFactory?: (url: string) => any,
    *   now?: () => number,
@@ -91,6 +92,7 @@ class TwitchChatBotService {
     this.overlayTokens = deps.overlayTokens;
     this.engagement = deps.engagement || null;
     this.chatbot = deps.chatbot || null;
+    this.chatCommands = deps.chatCommands;
     this.logger = deps.logger || null;
     this.wsFactory =
       deps.wsFactory ||
@@ -116,6 +118,10 @@ class TwitchChatBotService {
     this._say(conn, text);
     return true;
   }
+
+  /** Existing configured connection/queue only; no provider is enabled here.
+   * @param {string} userId @param {string} token @param {string} text */
+  queueGameMoments(userId, token, text) { return this.queueShoutout(userId, token, text); }
 
   /**
    * Boot-time restore: reconnect every streamer whose saved config is
@@ -212,6 +218,9 @@ class TwitchChatBotService {
     if (!conn || conn.stopped) return;
     if (conn.resolvingOverlayToken && conn.rotationReceipts.size < 16) conn.rotationReceipts.set(from, to);
     if (conn.overlayToken === from || !conn.overlayToken && conn.pendingOverlayToken === from) {
+      conn.sendQueue.length = 0;
+      if (conn.sendTimer) clearTimeout(conn.sendTimer);
+      conn.sendTimer = null;
       conn.overlayToken = to; conn.pendingOverlayToken = null;
     }
   }
@@ -425,6 +434,9 @@ class TwitchChatBotService {
    */
   async _handleChatMessage(conn, msg) {
     if (!msg) return;
+    const token = conn.overlayToken;
+    const current = () => !conn.stopped && this._conns.get(conn.userId) === conn && conn.overlayToken === token;
+    if (!current()) return;
     const nick = msg.nick || "";
     if (!nick || nick.toLowerCase() === conn.cfg.username.toLowerCase()) return;
     const text = String(msg.trailing ?? "").trim();
@@ -433,22 +445,23 @@ class TwitchChatBotService {
     // Engagement ingest — XP, !win/!loss picks, spike detection. The
     // IRC tag id matches what the browser Twitch engine reports, so
     // the shared unique index dedupes when both surfaces are open.
-    if (this.engagement && conn.overlayToken) {
+    if (this.engagement && token) {
       this._ircIdSeq += 1;
       const id = msg.tags.id || `irc-${this.now()}-${this._ircIdSeq}`;
       try {
-        await this.engagement.ingest(conn.overlayToken, [
+        await this.engagement.ingest(token, [
           { platform: "twitch", id, user: display, text, atMs: this.now() },
         ]);
       } catch {
         /* engagement is additive — never break the reply path */
       }
     }
-    if (!conn.cfg.replyCommands) return;
+    if (!current() || !conn.cfg.replyCommands) return;
     if (!text.startsWith("!")) return;
     const command = text.slice(1).split(/\s+/, 1)[0].toLowerCase();
-    const reply = await this._answerCommand(conn, command, display);
-    if (!reply) return;
+    const reply = await this._answerCommand(conn, command, display, text.slice(1 + command.length).trim());
+    if (!reply || !current()) return;
+    if (this.chatCommands && !["rank", "level", "xp", "commands", "help", "so"].includes(command)) { this._say(conn, reply); return; }
     const nowMs = this.now();
     if (nowMs - (conn.cmdCooldown.get(command) ?? 0) < COMMAND_COOLDOWN_MS) return;
     if (nowMs - (conn.viewerCooldown.get(nick) ?? 0) < VIEWER_COOLDOWN_MS) return;
@@ -462,11 +475,16 @@ class TwitchChatBotService {
    * @param {Record<string, any>} conn
    * @param {string} command
    * @param {string} display viewer display name
+   * @param {string} [argument]
    * @returns {Promise<string|null>}
    */
-  async _answerCommand(conn, command, display) {
+  async _answerCommand(conn, command, display, argument = "") {
     const token = conn.overlayToken;
     try {
+      if (this.chatCommands && token && !["rank", "level", "xp", "commands", "help", "so"].includes(command)) {
+        const reply = await this.chatCommands.answer(token, { command, argument, platform: "twitch", user: display });
+        return reply?.text || null;
+      }
       if (command === "so") return this.shoutoutLine ? this.shoutoutLine(conn.userId) : null;
       if (command === "rank" || command === "level" || command === "xp") {
         if (!this.engagement || !token) return null;
@@ -514,7 +532,7 @@ class TwitchChatBotService {
    * @param {string} text
    */
   _say(conn, text) {
-    if (conn.state !== "connected") return;
+    if (conn.state !== "connected" || conn.stopped || this._conns.get(conn.userId) !== conn) return;
     const line = `PRIVMSG #${conn.cfg.channel.toLowerCase()} :${text.slice(0, MAX_CHAT_CHARS)}`;
     conn.sendQueue.push(line);
     while (conn.sendQueue.length > SEND_QUEUE_MAX) conn.sendQueue.shift();
@@ -524,12 +542,13 @@ class TwitchChatBotService {
   /** @param {Record<string, any>} conn */
   _drainSendQueue(conn) {
     if (conn.sendTimer || conn.sendQueue.length === 0) return;
+    const token = conn.overlayToken;
     const nowMs = this.now();
     const wait = Math.max(0, conn.lastSentAt + SEND_GAP_MS - nowMs);
     conn.sendTimer = setTimeout(() => {
       conn.sendTimer = null;
       const line = conn.sendQueue.shift();
-      if (line && conn.state === "connected") {
+      if (line && conn.state === "connected" && !conn.stopped && this._conns.get(conn.userId) === conn && conn.overlayToken === token) {
         conn.lastSentAt = this.now();
         this._raw(conn, line);
       }
