@@ -66,3 +66,8 @@ copy callbacks have the same retirement guards.
 No production game/check-in was edited, no replay reanalysis was requested and
 no new service, release, version or tag was created. Final current-main merge
 proof and exact-head CI remain required before shipping.
+
+The game-page and build-check-in Help articles now document correcting an
+accidental selection, including No set build and the Macro Breakdown editor.
+All 77 Help checks pass; the 88-article generated index remains unchanged,
+and both edited articles pass strict lint.
