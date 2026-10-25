@@ -54,31 +54,35 @@ export function useApi<T>(
   requestOptions?: ClientApiRequestOptions,
 ): ApiResponse<T> {
   const { getToken, isLoaded, isSignedIn, userId } = useAuth();
+  const owner = isLoaded && isSignedIn && userId ? userId : null;
+  const runOwned = useOwnerRequestScope(owner, getToken);
   // An authenticated response belongs to one Clerk account. Keeping userId in
   // the SWR identity prevents a late response or warm cache from account A
   // being read after the browser switches to account B. The request path sent
   // to the API remains unchanged.
-  const key = isLoaded && isSignedIn && userId && path
-    ? (["authenticated-api", userId, path] as const)
+  const key = owner && path
+    ? (["authenticated-api", owner, path] as const)
     : null;
   const result = useSWR<T, ClientApiError>(
     key,
-    async ([, , requestPath]: readonly [string, string, string]) => {
-      const fetchResource = async (signal?: AbortSignal) => {
-        const token = await getToken();
-        signal?.throwIfAborted();
+    async ([, requestOwner, requestPath]: readonly [string, string, string]) =>
+      runOwned(requestOwner, async (scopedToken, signal, assertCurrent) => {
+        const token = await scopedToken();
         const res = await trackedFetch(requestPath, `${API_BASE}${requestPath}`, {
           headers: token ? { authorization: `Bearer ${token}` } : undefined,
           cache: "no-store",
-          ...(signal ? { signal } : {}),
+          signal,
         });
-        if (!res.ok) throw noteFailure(requestPath, await buildApiError(res));
-        return res.json();
-      };
-      return requestOptions?.timeoutMs
-        ? boundedApiRequest(fetchResource, requestOptions.timeoutMs)
-        : fetchResource();
-    },
+        assertCurrent();
+        if (!res.ok) {
+          const error = await buildApiError(res);
+          assertCurrent();
+          throw noteFailure(requestPath, error);
+        }
+        const data: T = await res.json();
+        assertCurrent();
+        return data;
+      }, requestOptions?.timeoutMs),
     config,
   );
   const resolvePrevious = usePreviousDataScope(
@@ -92,11 +96,79 @@ export function useApi<T>(
     request: <R = unknown>(init: RequestInit): Promise<R> => {
       if (!path) return Promise.reject(new Error("No resource selected."));
       if (!key) return Promise.reject(new Error("You need to sign in again."));
-      return requestOptions?.timeoutMs
-        ? boundedApiRequest((signal) => apiCall<R>(getToken, path, { ...init, signal }), requestOptions.timeoutMs, init.signal)
-        : apiCall<R>(getToken, path, init);
+      return runOwned(key[1], async (scopedToken, signal, assertCurrent) => {
+        const data = await apiCall<R>(scopedToken, path, { ...init, signal });
+        assertCurrent();
+        return data;
+      }, requestOptions?.timeoutMs, init.signal);
     },
   });
+}
+
+type OwnerScope = { owner: string | null; active: boolean; controllers: Set<AbortController> };
+const retiredRequest = () => new DOMException("This account request is no longer current.", "AbortError");
+
+/** The SWR key owns the response, even if Clerk changes while JWT/body awaits.
+ * A fresh object for each auth transition also rejects an A→B→A completion. */
+export function useOwnerRequestScope(owner: string | null, getToken: () => Promise<string | null>) {
+  const ref = useRef<OwnerScope>({ owner, active: !!owner, controllers: new Set() });
+  if (ref.current.owner !== owner) {
+    ref.current.active = false;
+    ref.current = { owner, active: !!owner, controllers: new Set() };
+  }
+  const scope = ref.current;
+  useLayoutEffect(() => {
+    scope.active = !!owner;
+    return () => {
+      scope.active = false;
+      for (const controller of scope.controllers) controller.abort();
+      scope.controllers.clear();
+    };
+  }, [owner, scope]);
+  return async <T,>(requestOwner: string, operation: (
+    scopedToken: () => Promise<string | null>, signal: AbortSignal, assertCurrent: () => void,
+  ) => Promise<T>, timeoutMs?: number, callerSignal?: AbortSignal | null): Promise<T> => {
+    const controller = new AbortController();
+    const assertCurrent = (signal = controller.signal) => {
+      if (!scope.active || ref.current !== scope || scope.owner !== requestOwner || signal.aborted) throw retiredRequest();
+    };
+    const abortFromCaller = () => controller.abort(callerSignal?.reason);
+    assertCurrent();
+    if (callerSignal?.aborted) abortFromCaller();
+    else callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
+    scope.controllers.add(controller);
+    const run = async (signal: AbortSignal) => {
+      const assert = () => assertCurrent(signal);
+      assert();
+      const value = await abortableRequest(operation(async () => {
+        assert();
+        const token = await getToken();
+        assert();
+        return token;
+      }, signal, assert), signal);
+      assert();
+      return value;
+    };
+    try {
+      return timeoutMs
+        ? await boundedApiRequest(run, timeoutMs, controller.signal)
+        : await run(controller.signal);
+    } finally {
+      scope.controllers.delete(controller);
+      callerSignal?.removeEventListener("abort", abortFromCaller);
+    }
+  };
+}
+
+/** Cleanup must settle a held JWT or body even when an adapter ignores abort. */
+function abortableRequest<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  let listener: () => void;
+  const stopped = new Promise<never>((_resolve, reject) => {
+    listener = () => reject(retiredRequest());
+    if (signal.aborted) listener();
+    else signal.addEventListener("abort", listener, { once: true });
+  });
+  return Promise.race([promise, stopped]).finally(() => signal.removeEventListener("abort", listener));
 }
 
 type ScopedData = { data: unknown; isPreviousData: boolean };
