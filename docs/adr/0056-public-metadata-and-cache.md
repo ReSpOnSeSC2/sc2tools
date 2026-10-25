@@ -29,9 +29,10 @@ icon directories into the community image function. Satori uses separate
 backgroundColor/backgroundImage, as in the existing Guide image renderer.
 
 Public image data reads have a 2.5-second deadline covering headers and JSON.
-Unavailable/stalled reads produce a neutral branded card cached for 60 seconds;
-successful public cards use the existing 300-second cache window. No user
-token, integration or new service is involved.
+Unavailable/stalled reads produce a neutral branded card with a 60-second
+window; successful public cards use 300 seconds. Community build/author cards
+honor the later purge-configuration guard below and use no-store when unset.
+No user token, integration or new service is involved.
 
 ## Validation
 
@@ -48,8 +49,10 @@ PR B adds the following cache contract without activating operator configuration
 - General Community server reads use a 300-second data cache tagged `community`
   and, for a valid public slug, `community-build:<slug>`. Without the web purge
   secret these reads and user-derived social cards remain uncached. Detail
-  outages throw into the existing unavailable boundary, preserving a last-good
-  ISR render rather than replacing it with an outage or a false 404.
+  outages throw into the existing unavailable boundary. The native data cache
+  retains a prior successful response when a timed background refresh fails,
+  allowing the page to render its last-good public data. An uncached failure
+  remains unavailable rather than becoming a false missing resource.
 - Successful public Community API responses use `s-maxage=60` and
   `stale-while-revalidate=600`. Private, owner, admin, missing and error responses
   remain `private, no-store`. The site-stats proxy uses 15/60 seconds; its upstream
@@ -78,3 +81,12 @@ one narrow GDPR callback. No new query, durable revision, index, worker or servi
 is introduced. Purge is best effort, so publication copy promises no fixed
 seconds-to-visibility guarantee. Configuration and its limits are documented in
 the deployment guide; no production secret or environment value is changed.
+
+The existing Community loading boundaries can send HTTP 200 before a child
+`notFound()` supplies Next's 404 fallback and noindex. PR B preserves this
+streaming behavior, including absence of the prior content, rather than
+claiming a raw HTTP status improvement. The API's missing-resource responses
+remain strict 404/no-store. Production HTTP tests compare the three affected
+cases against the exact released-main build. They also age only a synthetic
+fetch artifact to prove timed last-good behavior, then start the same compiled
+app without the secret to prove the uncached default despite a warm disk cache.

@@ -27,10 +27,35 @@ original mutation rejection. Review also identified the unsafe configured Next
 opponent cache; both HTTP and rendered opponent reads now stay uncached. No
 remaining API/privacy blocker was found in the corrected source.
 
-Current local proof includes 21 disposable-Mongo lifecycle regressions, the
-bounded sender/LRU tests, 83 affected web assertions in 12 files, API types and
-36 related game-controls/backups/GDPR tests. An existing Admin Studio lease
-fixture failed once; isolated and complete 13-case reruns passed unchanged.
-Production HTTP behavior, current-main integration, unchanged budgets and final
-remote checks remain required before merge. No production account is used for
-validation.
+Current-main integration preserves released Reference validation/projection and
+the passive dossier scrolling fix. The sole editor merge conflict was additive;
+the resulting hook equals released main exactly. Integrated cache/lifecycle API
+proof passes 89 cases in eight suites; affected web and editor/reference proof
+passes 125 in 15 files, plus four scoped cold-error recovery cases. Types and
+strict new-source lint pass. An existing Admin Studio lease fixture failed once;
+isolated and complete 13-case reruns passed unchanged, as did the final run.
+
+Required engine `25b300818c31d41b` smoke and production build pass, with every
+unchanged budget: Community184.6/190, Today238.7/240, opponent448.2/500,
+Dock215.7/225 and widget323.8/325 kB. No budget or engine source is changed.
+
+The owned `tests/manual/public-cache-http.cjs` first starts the parent's exact
+main9f production build (`--baseline`; override its path with
+`PUBLIC_CACHE_BASELINE_WEB`), using only synthetic API fixtures. Nine checks
+establish existing streamed200 +Next404 fallback/noindex and no prior content
+for floor/removal/missing-build cases. It then starts this branch and passes
+33 actual HTTP checks: current admission and no-store after a failed purge,
+real signed tag refresh, site15/60 vs503no-store, and last-good public data after
+a timed background503. It ages only the synthetic fetch artifact's timestamp
+and restarts memory; no clock, source or real data changes. The same compiled
+app with runtime secretunset bypasses a previously warm cache, reads new public
+versions, returns503 from the receiver and emits an uncached actual social PNG.
+Both loopback servers exit;3210/8080 are released.
+
+An initial strict web HTTP404 assumption failed on both this branch and exact
+main. The final assertions preserve the measured baseline and strict API404,
+fallback/noindex/no-content checks. No loading restructure is included. An
+unconditional route-ISR addition was rejected by automatic approval review for
+its uncached-default risk and remains unapplied. Native timed data-cache
+behavior proves last-good content without that change. Final remote checks
+remain merge gates. No production account is used for validation.

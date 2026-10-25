@@ -362,9 +362,16 @@ unpublish, moderation, rounded vote-score changes, admin edits and game
 visibility/deletion/restore/GDPR changes notify the receiver. Unknown mutation
 outcomes invalidate conservatively. Delivery is best effort: a failed or
 unavailable purge can leave a general list/build cached until its normal
-refresh, so the UI makes no unconditional "within seconds" promise. A detail
-outage preserves the last successful ISR render; an uncached failure uses the
-unavailable/retry boundary, while a confirmed missing resource remains a 404.
+refresh, so the UI makes no unconditional "within seconds" promise. A failed
+timed background refresh retains successful tagged data for the last-good
+detail content. An uncached failure uses the unavailable/retry boundary; a
+confirmed missing resource takes the existing not-found path.
+
+Community's existing loading boundaries may already have streamed HTTP 200
+when a child resource is found missing; Next then sends its 404 fallback and
+noindex without the old content. Cache work preserves that behavior, not a raw
+HTTP404 improvement. The API still answers strict 404/no-store on a missing,
+removed or below-floor resource.
 
 Successful general public API responses use `public, s-maxage=60,
 stale-while-revalidate=600`; owner/admin data, missing resources and errors stay
