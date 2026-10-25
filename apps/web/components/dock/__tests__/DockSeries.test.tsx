@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SERIES_SAMPLE } from "@/lib/streamSeries";
 import { DockSeries } from "../DockSeries";
-vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: () => <a href="/help/series-mode">Series help</a> }));
+vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: () => <span>Series help</span> }));
 let fetcher: ReturnType<typeof vi.fn>;
 const response = (value: unknown) => new Response(JSON.stringify(value), { status: 200 });
 const input = { token: "one", live: null, onInvalid: vi.fn() };

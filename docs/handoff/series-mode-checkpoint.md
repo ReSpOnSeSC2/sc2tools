@@ -38,8 +38,21 @@ full API/web typechecks pass. Local Dock consumer sweep passes164 tests,
 overlay sweep706, actual dedicated/AIO Series transport4, and shared Chat15.
 The actual sample widget image and87-article generated Help index are current.
 
-Responsive browser proof, required engine/production build and unchanged bundle
-budgets remain final local gates. Exact-head GitHub/Vercel and independent
-source/visual review remain PR gates. No actual account/provider/OBS operation,
+The standalone local browser harness passes145 checks with eight production-font
+light/dark captures at320/390/768/1440. It covers default-off displays, explicit
+Start, exact scoring, ties/duplicate/mismatched account rejection, held older
+events, sample/real isolation, manual completion/correction, held map-pool draft
+protection and default-Cancel keyboard End. There are no page errors, external
+requests or horizontal overflow. Captures live under `screenshots/series-mode-*`;
+rerun from `apps/web` with `node tests/manual/series-mode.mjs`.
+
+Required engine build/smoke passes f96c086eb83fdc40 (223files/79pyc). Production
+Next build and every unchanged budget pass:landing214.8/215,Today238.9/240,
+Dock215.1/225,AIO238.2/240,dedicatedWidget322.7/325,guide169.1/175kB.
+Native source-size/OBS layout compatibility passes86 offscreen tests. The new
+size32 catalog assertion includes the Series640×420 source explicitly.
+
+Exact-head GitHub/Vercel and independent final source/visual review remain PR
+gates. No actual account/provider/OBS operation,
 production job/migration, infrastructure or budget increase, release/version
 action or AI/model call was performed.
