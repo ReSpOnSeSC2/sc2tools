@@ -65,7 +65,10 @@ describe("accurate replay refresh", () => {
     expect(state.config.refreshInterval).toBe(0);
     expect(screen.getByRole("status").textContent).toContain("still processing");
     view.rerender(<MapReplaySection gameId="game2" />);
-    expect(screen.getByRole("status").textContent).toContain("the desktop agent records new and re-synced games");
-    expect(screen.getByRole("status").textContent).toContain("significantly more CPU");
+    expect(screen.queryByRole("status")).toBeNull();
+    const explainer = screen.getByText(/With automatic Map replay enabled/);
+    expect(explainer.textContent).toContain("the desktop agent records new and re-synced games");
+    expect(explainer.textContent).toContain("significantly more CPU");
+    expect(explainer.closest("details")).toBeTruthy();
   });
 });
