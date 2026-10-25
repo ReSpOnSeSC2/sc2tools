@@ -228,3 +228,20 @@ def test_opt_in_state_is_strict_and_default_off(tmp_path):
     assert load_state(tmp_path).obs_website_add_enabled is False
     save_state(tmp_path, AgentState(obs_website_add_enabled=True))
     assert load_state(tmp_path).obs_website_add_enabled is True
+
+
+def test_website_add_uses_the_same_environment_connection_precedence_as_switching(monkeypatch):
+    from types import SimpleNamespace
+    from sc2tools_agent import runner
+    state = AgentState(device_token="paired-A", obs_website_add_enabled=True, obs_host="saved-host", obs_port=4455, obs_password="saved-password")
+    cfg, cell = SimpleNamespace(api_base="https://api.example.test"), SimpleNamespace(gui=object(), no_obs=False)
+    monkeypatch.setenv("SC2TOOLS_OBS_HOST", " synthetic-stream-pc ")
+    monkeypatch.setenv("SC2TOOLS_OBS_PORT", "4456")
+    monkeypatch.setenv("SC2TOOLS_OBS_PASSWORD", "synthetic-env-password")
+    assert runner._obs_website_scope(cfg, state, cell)[2:] == ("synthetic-stream-pc", 4456, "synthetic-env-password")
+    calls = []
+    monkeypatch.setattr(runner, "ObsClient", lambda **kwargs: calls.append(kwargs))
+    runner._obs_website_controller(cfg, state, cell).client_factory()
+    assert calls == [{"host": "synthetic-stream-pc", "port": 4456, "password": "synthetic-env-password", "subscribe_events": False}]
+    monkeypatch.setenv("SC2TOOLS_OBS_PORT", "invalid")
+    assert runner._effective_obs_connection(state)[1] == 4455
