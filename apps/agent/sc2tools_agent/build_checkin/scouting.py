@@ -7,6 +7,7 @@ desktop still checks the game key before accepting it. No Qt, HTTP or disk I/O.
 from __future__ import annotations
 
 import re
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -66,6 +67,10 @@ class ScoutingBrief:
     note: str = ""
     pulse_id: Optional[str] = None
     dossier_path: str = "/app/opponents"
+    forecast_share: Optional[float] = None
+    forecast_confidence: str = ""
+    forecast_effective_n: Optional[float] = None
+    also_plays_as: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -88,6 +93,13 @@ def parse_scouting_brief(raw: Any, game_key: str) -> Optional[ScoutingBrief]:
     answer = raw.get("bestAnswer") if isinstance(raw.get("bestAnswer"), dict) else {}
     samples, n = _count(forecast.get("samples")), _count(forecast.get("n"))
     opening_valid = samples is not None and n is not None and 0 < samples <= n
+    share, effective_n = forecast.get("share"), forecast.get("effectiveN")
+    confidence = forecast.get("confidence")
+    posterior = (forecast.get("method") == "posterior" and confidence in ("Low", "Medium", "High")
+                 and type(share) in (int, float) and math.isfinite(share) and 0 <= share <= 1
+                 and type(effective_n) in (int, float) and math.isfinite(effective_n) and 0 <= effective_n <= 75)
+    if forecast.get("method") == "posterior":
+        opening_valid = bool(posterior and samples is not None and n is not None and 0 <= samples <= n <= 50)
     pulse_id = toon_identity(raw.get("pulseId"))
     # Build the one permitted dossier path from the validated identity; never
     # open a server-provided arbitrary URL, scheme, host or query string.
@@ -105,6 +117,10 @@ def parse_scouting_brief(raw: Any, game_key: str) -> Optional[ScoutingBrief]:
         best_build=plain_text(answer.get("build"), 160),
         best_record=_record(answer), note=plain_text(raw.get("note"), 500) if pulse_id else "",
         pulse_id=pulse_id, dossier_path=path,
+        forecast_share=float(share) if posterior and opening_valid else None,
+        forecast_confidence=confidence if posterior and opening_valid else "",
+        forecast_effective_n=float(effective_n) if posterior and opening_valid else None,
+        also_plays_as=tuple(dict.fromkeys(plain_text(value, 120) for value in raw.get("alsoPlaysAs", [])[:3] if isinstance(value, str) and value.strip())) if isinstance(raw.get("alsoPlaysAs"), list) else (),
     )
 
 
@@ -120,7 +136,12 @@ def scouting_model(brief: ScoutingBrief, now: float) -> ScoutingStripModel:
         record += f" · last met {age}" + (f" ({detail})" if detail else "")
     opening = "Opening history not available"
     if brief.opening:
-        opening = f"Usually: {brief.opening} ({brief.opening_samples} of last {brief.opening_n})"
+        if brief.forecast_confidence and brief.forecast_share is not None and brief.forecast_effective_n is not None:
+            opening = f"Forecast: {brief.opening} ({int(brief.forecast_share * 100 + 0.5)}% · {brief.forecast_confidence} confidence · effective n={brief.forecast_effective_n:.1f})"
+        else:
+            opening = f"Usually: {brief.opening} ({brief.opening_samples} of last {brief.opening_n})"
+    if brief.also_plays_as:
+        record += " · also: " + ", ".join(brief.also_plays_as)
     if brief.best_build and brief.best_record is not None:
         wins, losses = brief.best_record
         opening += f" · Best: {brief.best_build} {wins}–{losses}"

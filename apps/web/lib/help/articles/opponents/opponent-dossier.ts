@@ -124,14 +124,14 @@ const article: HelpArticle = {
       text: "Once at least 5 different SC2 Tools players have faced this opponent, a **Community profile** button appears in the header. That page is open to everyone and combines all of those players' games: race, record, strategies seen and maps, counted from the opponent's side. It never shows names, battle tags, or who contributed.",
     },
     { type: "heading", text: "Group the same player", anchor: "group-same-player" },
-    { type: "paragraph", text: "The Opponents list's **Group same player** choice also applies to the dossier. When enabled, identities linked by SC2Pulse or a confirmed shared identity are combined within your own history. The header lists their account names and records. All-time first and last meeting dates span those linked accounts; switching the choice changes the dossier scope, without exposing another user's private history." },
+    { type: "paragraph", text: "**Group same player** is saved to your signed-in account from the list or dossier, and also applies to live scouting across devices. Approved shared identities and already-cached Battle.net account links combine up to 20 of your accounts within your own history. The header lists their names and records. First/last meeting dates span those accounts; notes remain attached to the exact current account. A matching name alone never merges players. See [alternate accounts](/help/opponent-scouting#alternate-accounts)." },
     { type: "heading", text: "How much data it needs", anchor: "sample-size" },
     {
       type: "list",
       items: [
         "Everything works from one game, but tendencies and predictions mean little until you've played someone a few times.",
         "Map rows with fewer than 2 games are marked as a low sample in H2H trends.",
-        "Likely strategies next counts your last 10 games against them double, so a recent change of style shows up quickly.",
+        "Likely strategies next uses the shared recency/map-weighted opening forecast, with effective n, a confidence label and count-only reasons. Its explanation describes the fixed formula and optional three-game cached ladder prior. An incomplete source stays unavailable. See [how the forecast works](/help/opponent-scouting#how-the-forecast-works).",
       ],
     },
     {

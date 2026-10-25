@@ -30,11 +30,9 @@ import {
   useFilters,
   type AnalyzerFilters,
 } from "@/lib/filterContext";
-import { useLocalStorageState } from "@/lib/useLocalStorageState";
+import { useOpponentScoutingPreference } from "@/lib/useOpponentScoutingPreference";
+import { GroupingPreference } from "./opponents/GroupingPreference";
 import { useMyDisplayName } from "@/lib/useMyDisplayName";
-import {
-  LS_GROUP_BY_PLAYER,
-} from "@/lib/opponentGroups";
 import { Card, EmptyState, Stat, WrBar } from "@/components/ui/Card";
 import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { isNotFoundError } from "@/lib/requestErrors";
@@ -126,14 +124,11 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
   // on, the API folds every identity SC2Pulse links to this player
   // into ONE profile — merged games, totals, and timelines — and the
   // header shows the per-name breakdown below.
-  const [groupByPlayer] = useLocalStorageState<boolean>(
-    LS_GROUP_BY_PLAYER,
-    true,
-    (raw): raw is boolean => typeof raw === "boolean",
-  );
+  const grouping = useOpponentScoutingPreference();
+  const { groupByPlayer } = grouping;
   const profileQuery = buildProfileQuery(filters, groupByPlayer);
   const profile = useApi<OpponentProfileResp>(
-    `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}#${debouncedDbRev}`,
+    grouping.loading ? null : `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}#${debouncedDbRev}`,
     { keepPreviousData: true, shouldRetryOnError: false },
   );
   const { data, mutate } = profile;
@@ -316,6 +311,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
       </header>
 
       <div className="flex flex-wrap items-center gap-2 text-caption text-text-muted"><span>Showing {summarizeFilters(filters, seasons)}</span><Button variant="ghost" onClick={() => setAllTime(value => !value)}>{allTime ? "Use analyzer dates" : "Show all time"}</Button><LazyHelpLink slug="opponent-dossier">How to read this page</LazyHelpLink></div>
+      <GroupingPreference preference={grouping} />
       {data.games?.length === 0 && !!data.series?.games.length ? <p className="text-caption text-text-muted">No games in this range.{data.series.lastSeen ? ` You last met on ${new Date(data.series.lastSeen).toLocaleDateString()}.` : ""} <button type="button" className="min-h-11 px-2 text-accent underline" onClick={() => setAllTime(true)}>Show all time</button></p> : null}
       {profile.error ? <div role="status" className="flex items-center gap-3 text-caption text-warning">
         <span>Couldn't refresh after your last game</span><Button variant="ghost" size="sm" onClick={() => mutate()}>Retry</Button>
@@ -390,7 +386,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
       </div>
 
       </section>
-      <section id="dossier-timings" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Timings and phases</h2><DossierOnView key={`${profileQuery}:${debouncedDbRev}`} label="Timing and phase analysis"><DossierAnalysisSection path={`/v1/opponents/${encodeURIComponent(pulseId)}/analysis${profileQuery}#${debouncedDbRev}`} sourceFilters={profileQuery} scopeLabel={summarizeFilters(filters, seasons)} predictions={profile.isPreviousData ? null : data.predictedStrategies || []} selected={selectedTiming} onSelect={setSelectedTiming} /></DossierOnView></section>
+      <section id="dossier-timings" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Timings and phases</h2><DossierOnView key={`${profileQuery}:${debouncedDbRev}`} label="Timing and phase analysis"><DossierAnalysisSection path={`/v1/opponents/${encodeURIComponent(pulseId)}/analysis${profileQuery}#${debouncedDbRev}`} sourceFilters={profileQuery} scopeLabel={summarizeFilters(filters, seasons)} predictions={profile.isPreviousData ? null : data.predictedStrategies || []} forecast={profile.isPreviousData ? undefined : data.openingForecast} selected={selectedTiming} onSelect={setSelectedTiming} /></DossierOnView></section>
       <section id="dossier-history" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-5"><h2 className="text-h3 font-semibold">History</h2>
       <OpponentReplayHistory
         // A query-scope or database revision change must reset cursor history

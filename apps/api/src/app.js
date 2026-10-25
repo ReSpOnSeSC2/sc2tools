@@ -26,6 +26,8 @@ const { sanitiseRequestForLog, sanitiseResponseForLog } = require("./middleware/
 const { UsersService } = require("./services/users");
 const { buildClerkClient, noopClerkClient } = require("./services/clerkClient");
 const { OpponentsService } = require("./services/opponents");
+const { ScoutingIdentitiesService } = require("./services/scoutingIdentities");
+const { ScoutingForecastService } = require("./services/scoutingForecast");
 const { RivalsService } = require("./services/rivals");
 const { RivalsPulseService } = require("./services/rivalsPulse");
 const { buildRivalsRouter } = require("./routes/rivals");
@@ -459,6 +461,8 @@ function makeServices(deps, clerk, adminClerkIds) {
   // served PUBLICLY by routes/ladderMeta.js for the analyzer's Ladder
   // Pulse (the old /meta page now redirects to the /guides pages).
   const ladderMeta = new LadderMetaService(deps.db, { logger: deps.logger });
+  const scoutingIdentities = new ScoutingIdentitiesService(deps.db);
+  const scoutingForecast = new ScoutingForecastService(ladderMeta);
   // Skill Fingerprint — replay-derived build, game-length, and matchup
   // tendencies plus a player-population-calibrated archetype for Trends.
   const fingerprintPopulationCalibration =
@@ -481,6 +485,8 @@ function makeServices(deps, clerk, adminClerkIds) {
       pulseDirectory,
       pulseLinks,
       playerIdentities,
+      scoutingIdentities,
+      scoutingForecast,
     },
   );
   // Private unresolved-barcode matcher. It reads compact behavior evidence
@@ -573,7 +579,10 @@ function makeServices(deps, clerk, adminClerkIds) {
     gameDetails,
     pulseMmr,
     rivals,
+    scoutingIdentities,
+    scoutingForecast,
   });
+  playerIdentities.onChanged = () => overlayLive.clearEnrichmentCache();
   // LiveGameBroker — in-process pub/sub for the agent → web SSE
   // bridge AND the agent → OBS overlay Socket.io fan-out.
   // Constructed once at app boot so every agent POST shares the
@@ -959,6 +968,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     fingerprintPopulationCalibration,
     skillFingerprint,
     ladderMeta,
+    scoutingIdentities,
+    scoutingForecast,
     guideSamples,
     guideSamplesBackfill,
     guideStats,
@@ -1336,6 +1347,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       onAdminGranted,
       buildIntents: services.buildIntents,
       onRivalsChanged: (userId) => { services.overlayLive.invalidateForUser(userId); services.rivals.invalidateForUser(userId); },
+      onScoutingChanged: (userId) => services.overlayLive.invalidateForUser(userId),
       logger: deps.logger,
     }),
   );

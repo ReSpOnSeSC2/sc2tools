@@ -283,6 +283,8 @@ class OpponentsService {
    *   pulseDirectory?: import('./pulseDirectory').PulseDirectoryService | null,
    *   pulseLinks?: import('./pulseCharacterLinks').PulseCharacterLinkService | null,
    *   playerIdentities?: {resolveMany: (identities: any[]) => Promise<any[]>} | null,
+   *   scoutingIdentities?: import('./scoutingIdentities').ScoutingIdentitiesService|null,
+   *   scoutingForecast?: import('./scoutingForecast').ScoutingForecastService|null,
    * }} [opts]
    *        When provided, the profile loader hydrates ``buildLog`` /
    *        ``oppBuildLog`` from the detail store for any game whose
@@ -334,6 +336,8 @@ class OpponentsService {
     // Approved global identity links are a read-time overlay. Stored
     // opponent names, toon handles, games, and private notes stay intact.
     this.playerIdentities = opts.playerIdentities || null;
+    this.scoutingIdentities = opts.scoutingIdentities || null;
+    this.scoutingForecast = opts.scoutingForecast || null;
   }
 
   /**
@@ -1092,6 +1096,13 @@ class OpponentsService {
    * } | null>}
    */
   async _resolveLinkedIdentities(userId, doc) {
+    if (this.scoutingIdentities) {
+      const group = await this.scoutingIdentities.resolve(userId, doc);
+      if (group.globalIdentity) doc.globalIdentity = group.globalIdentity;
+      if (group.mergedAccounts <= 1) return null;
+      return { identities: group.identities.map(serializeLinkedIdentity), pulseIds: group.pulseIds,
+        characterIds: group.characterIds, mainName: null, revealedName: null };
+    }
     if (!this.pulseLinks && !this.playerIdentities) return null;
     const selfCid =
       typeof doc.pulseCharacterId === "string" && doc.pulseCharacterId
@@ -1570,7 +1581,7 @@ class OpponentsService {
     /** @type {Array<any>} */
     const fetchedGames = await this.db.games
       .find(gamesFilter, { projection: PROFILE_GAME_PROJECTION })
-      .sort({ date: -1 })
+      .sort({ date: -1, _id: -1 })
       // Hard cap: an opponent faced hundreds/thousands of times would
       // otherwise load every shared game — plus a detail-blob fetch
       // per game below — into memory on every profile view. date:-1
@@ -1650,7 +1661,12 @@ class OpponentsService {
     const dna = computeDnaFields(filteredGames, null);
     // Predictions and the most-recent-5 list ignore date bounds but
     // remain inside the active analyzer cohort — see method jsdoc.
-    const predictedStrategies = Dna.recencyWeightedStrategies(allGames);
+    const forecast = this.scoutingForecast ? await this.scoutingForecast.forecast(scopedRawGames, {
+      myRace: filters.race || scopedRawGames[0]?.myRace,
+      oppRace: filters.oppRace || scopedRawGames[0]?.opponent?.race,
+      map: filters.map,
+    }, { sourceTruncated: gamesTruncated }) : null;
+    const predictedStrategies = forecast ? forecast.top.map(row => ({ strategy: row.name, probability: row.probability })) : Dna.recencyWeightedStrategies(allGames);
     const last5Games = allGames.slice(0, 5);
     // "Last MMR" overlay — same race-aware contract as the list path.
     // The column means "the opponent's rating in the race they played
@@ -1720,6 +1736,8 @@ class OpponentsService {
       byStrategy: aggregates.byStrategy,
       topStrategies: dna.topStrategies,
       predictedStrategies,
+      ...(forecast ? { openingForecast: forecast } : {}),
+      ...(linked ? { mergedAccounts: linked.identities.length, alsoPlaysAs: linked.identities.filter(row => row.pulseId !== pulseId).map(row => row.name).filter(Boolean).slice(0, 19) } : {}),
       myRace: dna.myRace,
       oppRaceModal: dna.oppRaceModal,
       matchupLabel: dna.matchupLabel,

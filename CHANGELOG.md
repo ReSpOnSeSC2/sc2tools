@@ -20,6 +20,10 @@ corresponding GitHub Release.
 
 - Browse exact totals with sortable pages and signup, admin and inactive-agent filters. Export matching accounts as a bounded private CSV, inspect recent games/activity, and copy account IDs with a manual fallback.
 
+### Linked scouting and opening forecasts
+
+- Save same-player grouping across devices and recognise approved or already-cached alternate accounts in live scouting. Dossier, live and desktop briefs share a deterministic opening forecast with confidence, sample size and count-based explanations; missing or incomplete history stays explicit.
+
 ### Stream Dock
 
 - Collapse panels into live summaries, pin frequently used sections, and keep the layout in this browser. Dock controls now show connection text and keyboard focus, give touch users larger targets, and offer selected text when clipboard access is unavailable.

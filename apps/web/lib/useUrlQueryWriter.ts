@@ -42,4 +42,3 @@ export function useUrlQueryWriter() {
   }, []);
   return { path, search, epoch, owned, capture, update };
 }
-

@@ -14,6 +14,7 @@ import { Dim, RevealedTag, WidgetShell } from "../WidgetShell";
 import { scoutingStartTriggerKey } from "../gameStartTrigger";
 import { ofLastGames, phaseLine } from "../scoutingCopy";
 import { ScoutingRadarPanel } from "./ScoutingRadarPanel";
+import { parseOpeningForecast, scoutingAliases } from "@/lib/openingForecast";
 
 /**
  * Scouting Report card — visual rebuild matching the legacy SPA's
@@ -106,6 +107,7 @@ export function ScoutingWidget({
     && effective.cheeseProbability >= 0.4;
   const cheeseHistory = effective.cheeseHistory;
   const phases = effective.opponentPhases ? phaseLine(effective.opponentPhases) : null;
+  const forecast = parseOpeningForecast(effective.openingForecast), aliases = scoutingAliases(effective.alsoPlaysAs);
 
   const hasAnyContent =
     Boolean(effective.oppName)
@@ -167,6 +169,8 @@ export function ScoutingWidget({
         </span>
       </div>
 
+      {aliases.length ? <div style={{ fontSize: 13, opacity: .8, overflowWrap: "anywhere", marginTop: 6 }}>also: {aliases.slice(0, 3).join(", ")}{aliases.length > 3 ? ` +${aliases.length - 3} more` : ""}</div> : null}
+      {forecast?.top[0] ? <div style={{ marginTop: 8, fontSize: 14, overflowWrap: "anywhere" }}><strong>Forecast: {forecast.top[0].name} · {Math.round(forecast.top[0].probability * 100)}%</strong><div style={{ opacity: .8, fontSize: 12 }}>{forecast.confidence} confidence · effective n={forecast.effectiveN.toFixed(1)} · {forecast.sampleSize} eligible observations</div></div> : null}
       {rivalNote ? (
         <div
           style={{
