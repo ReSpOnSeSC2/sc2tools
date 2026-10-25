@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "durationSeconds": [5, 10, 15, 20, 30, 45, 60],
+  "theme": {
+    "scales": [0.8, 0.9, 1, 1.1, 1.25],
+    "radii": ["sharp", "rounded", "pill"],
+    "fonts": ["default", "condensed", "mono"],
+    "styles": ["command-grid", "neon-arcade", "arena-broadcast", "void-nebula", "terran-foundry"]
+  },
+  "widgetDurationMs": {
+    "opponent": 15000,
+    "match-result": 15000,
+    "post-game": 15000,
+    "mmr-delta": 10000,
+    "streak": 8000,
+    "cheese": 15000,
+    "rematch": 15000,
+    "rival": 15000,
+    "rank": 12000,
+    "meta": 12000,
+    "topbuilds": null,
+    "fav-opening": 15000,
+    "best-answer": 15000,
+    "scouting": 15000,
+    "session": null,
+    "randomizer": 32000,
+    "ghost-build": null,
+    "multichat": null,
+    "chat-highlight": null,
+    "chat-poll": null,
+    "chat-alerts": null,
+    "stream-goals": null,
+    "session-recap": null,
+    "stream-scene": null,
+    "chat-oracle": null,
+    "supporter-wall": null,
+    "clip-flag": null,
+    "lower-third": 14000,
+    "stats-ticker": null,
+    "countdown-timer": null,
+    "build-profile": null
+  }
+}

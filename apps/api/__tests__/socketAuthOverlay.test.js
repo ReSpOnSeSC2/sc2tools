@@ -399,3 +399,12 @@ describe("attachSocketAuth (overlay)", () => {
     expect(cfg.payload.voicePrefs).toBeUndefined();
   });
 });
+
+
+test("connect includes the token's saved display profile and its revision", async () => {
+  const io = setupIo(), profile = { v: 1, theme: { accent: "#abcdef" }, widgetOptions: { scouting: { durationSec: 30 } } };
+  attachSocketAuth(io, { secretKey: "sk_test", resolveOverlayToken: async () => ({ userId: "owner", label: "test", profile, profileRevision: 4 }) });
+  const socket = await io.runHandshake({ auth: { overlayToken: "synthetic-profile-token" } });
+  io.runConnect(socket); await new Promise(resolve => setImmediate(resolve));
+  expect(socket.emitted.find(entry => entry.event === "overlay:config")?.payload).toMatchObject({ profile, profileRevision: 4 });
+});

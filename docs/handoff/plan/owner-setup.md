@@ -82,3 +82,8 @@ No environment variable, collection, migration or paid service is required. The 
 
 `shareable-views` needs no new environment variables, services, indexes, jobs or migration. The existing private preferences API stores up to twelve named filter/section views. A single indexed user read supplies first-visit saved-view/default-tab behavior. Deploy the API and web changes normally; no production account settings were changed during validation.
 
+
+
+### Live overlay profiles
+
+Deploy the API and web together for `overlay-profile-sync`. The API Dockerfile includes the authored `overlayProfileRules.json` at its flattened runtime path; no environment variable, collection, index, migration or paid service is added. Existing tokens default safely until their owner explicitly saves a profile. In Settings → Overlay, choose a theme in Look or a timed widget's Display time, then Save overlay display. Confirm the connected Browser Source updates without changing its URL. A previously copied `?theme=` URL deliberately keeps its explicit look; remove that one override if the source should follow saved changes. Persistent/self-driven widgets keep their own visibility, and test events remain capped at 20 seconds. The previous browser theme banner only fills a draft; opening Settings never silently writes it to a token.

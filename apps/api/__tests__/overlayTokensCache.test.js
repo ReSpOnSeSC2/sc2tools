@@ -41,6 +41,7 @@ describe("OverlayTokensService resolve burst control", () => {
       userId: "user-1",
       label: "Live",
       enabledWidgets: ["multichat"],
+      profile: { v: 1, theme: {}, widgetOptions: {} }, profileRevision: 0,
     }));
     expect(collection.findOne).toHaveBeenCalledTimes(1);
     expect(

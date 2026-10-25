@@ -27,7 +27,9 @@
  * to show. It is opt-in and never reachable from a real game.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useOverlayProfile, type OverlayProfileConfig } from "@/lib/useOverlayProfile";
+import type { OverlayTheme } from "@/lib/overlayTheme";
 import { attachOverlayResilience, createOverlaySocket, hasActiveOverlayGame, type OverlayConnectionStatus } from "../overlayResilience";
 import { OverlayCheckBadge, OverlaySetupCard } from "../OverlaySetupCard";
 import { ReconnectDot } from "../ReconnectDot";
@@ -87,6 +89,7 @@ export function OverlaySceneClient({
   staticMode = false,
   demo = false,
   showCredit = true,
+  themeParam = null,
 }: {
   token: string;
   scene: OverlaySceneVariant;
@@ -98,6 +101,7 @@ export function OverlaySceneClient({
    * or the transparent manual cover). Off for ``?credit=0``.
    */
   showCredit?: boolean;
+  themeParam?: string | null;
 }) {
   // Virtual sets are deliberately independent of live-game and Stream Dock
   // state. Their named URL always paints the same camera backdrop and opens no
@@ -114,23 +118,17 @@ export function OverlaySceneClient({
       staticMode={staticMode}
       demo={demo}
       showCredit={showCredit}
+      themeParam={themeParam}
     />
   );
 }
 
-function DockDrivenOverlaySceneClient({
-  token,
-  scene,
-  staticMode,
-  demo,
-  showCredit,
-}: {
-  token: string;
-  scene: DockDrivenSceneVariant;
-  staticMode: boolean;
-  demo: boolean;
-  showCredit: boolean;
-}) {
+type DockSceneProps = { token: string; scene: DockDrivenSceneVariant; staticMode: boolean; demo: boolean; showCredit: boolean; themeParam?: string | null };
+function DockDrivenOverlaySceneClient(props: DockSceneProps) {
+  const { themeVars, theme, receiveProfile } = useOverlayProfile(props.token, props.themeParam);
+  return <div data-overlay-scene-frame style={themeVars as CSSProperties}><DockDrivenSceneContent {...props} theme={theme} receiveProfile={receiveProfile} /></div>;
+}
+function DockDrivenSceneContent({ token, scene, staticMode, demo, showCredit, theme, receiveProfile }: DockSceneProps & { theme: OverlayTheme; receiveProfile: (message: OverlayProfileConfig) => void }) {
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [live, setLive] = useState<LiveGamePayload | null>(null);
   const [studioEvent, setStudioEvent] = useState<unknown>(null);
@@ -143,6 +141,7 @@ function DockDrivenOverlaySceneClient({
     setLiveGame(null); setLive(null); setStudioEvent(null); gameKeyRef.current = null;
     const connection = createOverlaySocket(token, { surface: "scene", widget: scene, onStatus: setConnectionStatus });
     const socket = connection.socket;
+    socket.on("overlay:config", receiveProfile);
     const detachResilience = attachOverlayResilience(socket, { latestGameKey: () => gameKeyRef.current });
 
     socket.on("overlay:liveGame", (msg: LiveGameEnvelope) => {
@@ -171,7 +170,7 @@ function DockDrivenOverlaySceneClient({
       socket.removeAllListeners();
       connection.dispose();
     };
-  }, [token, demo, scene]);
+  }, [token, demo, scene, receiveProfile]);
 
   // Demo renders sample values and never consults the dock, so there
   // is nothing for the studio poll to feed.
@@ -190,10 +189,11 @@ function DockDrivenOverlaySceneClient({
   const variant: BackdropVariant = fallbackVariant;
 
   const accent = useMemo(() => {
+    if (theme.accent) return theme.accent;
     if (demo) return accentForRace("zerg");
     const race = liveGame?.opponent?.race ?? live?.oppRace ?? null;
     return race ? accentForRace(race) : DEFAULT_BACKDROP_ACCENT;
-  }, [demo, liveGame?.opponent?.race, live?.oppRace]);
+  }, [demo, liveGame?.opponent?.race, live?.oppRace, theme.accent]);
 
   // Only a real dock countdown ticks, and only while it is on screen.
   //

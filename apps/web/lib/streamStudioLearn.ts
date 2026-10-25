@@ -1,4 +1,4 @@
-import type { WidgetId } from "@/components/overlay/widgetLifecycle";
+import { WIDGET_DURATION_MS, type WidgetId } from "@/components/overlay/widgetLifecycle";
 import widgetSizes from "./widgetRecommendedSizes.json";
 
 export type WidgetGuide = {
@@ -513,6 +513,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
 export const WIDGET_GUIDES: readonly WidgetGuide[] = WIDGET_GUIDE_CONTENT.map(guide => ({
   ...guide,
   recommendedSize: widgetSizes[guide.id],
+  appears: WIDGET_DURATION_MS[guide.id] === null ? guide.appears : `${guide.appears} Default display time: ${WIDGET_DURATION_MS[guide.id]! / 1000}s. Change it in Settings → Overlay → Widgets → Display, then Save overlay display. Tests are capped at 20s.`,
   placement: `${guide.placement} Recommended standalone Browser Source: ${widgetSizes[guide.id].width} × ${widgetSizes[guide.id].height}.`,
   settingsHref: `/settings?tab=overlay&section=widgets&widget=${encodeURIComponent(guide.id)}`,
 }));

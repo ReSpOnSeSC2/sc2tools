@@ -1,6 +1,6 @@
 import { localOverlaySample } from "@/lib/overlayDemo.server";
 import { OverlayWidgetClient } from "@/components/OverlayWidgetClient";
-import { OVERLAY_THEME_PARAM } from "@/lib/overlayTheme";
+import { overlayThemeParamFromSearch } from "@/lib/overlayTheme";
 import { GHOST_BUILD_PARAM } from "@/lib/ghostBuild";
 import { OverlaySetupCard, OverlayCheckBadge } from "@/components/overlay/OverlaySetupCard";
 import { closestOverlayName } from "@/components/overlay/overlayNames";
@@ -71,9 +71,7 @@ export default async function OverlayWidgetPage({
   // Raw pass-through; the client strict-validates and falls back to
   // the stock look silently on any malformed value.
   const sp = await searchParams;
-  const themeParam = typeof sp[OVERLAY_THEME_PARAM] === "string"
-    ? (sp[OVERLAY_THEME_PARAM] as string)
-    : null;
+  const themeParam = overlayThemeParamFromSearch(sp);
   // Legacy ``?ghost=`` compatibility path (see lib/ghostBuild.ts). New v2
   // loadouts use ``#ghost=`` and are read entirely by the client because URL
   // fragments are never sent to this server route. Query values still pass

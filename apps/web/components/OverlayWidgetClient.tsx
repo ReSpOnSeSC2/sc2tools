@@ -88,6 +88,8 @@ import type { RandomizerConfig } from "@/lib/randomizer/types";
 import { sanitizeRandomizerConfig } from "@/lib/randomizer/config";
 import { useRevealAudioUnlock } from "@/components/randomizer/reveals/revealSound";
 import { decodeOverlayTheme, themeToCssVars } from "@/lib/overlayTheme";
+import { useOverlayProfile, type OverlayProfileConfig } from "@/lib/useOverlayProfile";
+import type { OverlayProfile } from "@/lib/overlayProfile";
 import {
   decodeGhostBuildConfig,
   decodeGhostTarget,
@@ -158,7 +160,8 @@ function ConnectedOverlayWidgetClient({
   ghostParam?: string | null;
 }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
-  const testLayer = useOverlayTestLayer(token);
+  const { themeVars, optionsRef, receiveProfile } = useOverlayProfile(token, themeParam);
+  const testLayer = useOverlayTestLayer(token, optionsRef);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [enabled, setEnabled] = useState<boolean>(true);
@@ -204,6 +207,7 @@ function ConnectedOverlayWidgetClient({
     testLayer.receiveSession,
     testLayer.clear,
     widget === "randomizer" ? onBuildIntent : null,
+    receiveProfile,
   );
   useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
   const showingTest = testLayer.targets(widget as WidgetId);
@@ -217,6 +221,7 @@ function ConnectedOverlayWidgetClient({
     session,
     setVisible,
     randomizerCheckin.windowAnchor,
+    optionsRef,
   );
   // Pre-warm the reveal AudioContext the moment the randomizer source
   // loads — well before a Test fire — so the streamer's first Test isn't
@@ -241,12 +246,6 @@ function ConnectedOverlayWidgetClient({
   // working, including legacy single-build links that show migration guidance.
   const effectiveGhostParam =
     widget === "ghost-build" ? fragmentGhostParam ?? ghostParam : ghostParam;
-
-  // Theme vars, decoded once at mount. Default theme → empty object →
-  // zero style overrides, so untouched URLs render exactly as before.
-  const themeVars = useMemo(() => {
-    return themeToCssVars(decodeOverlayTheme(themeParam));
-  }, [themeParam]);
 
   // Ghost Build is a URL-armed persistent HUD: a valid Ghost URL value
   // IS the opt-in, so it bypasses two gates the other widgets
@@ -614,6 +613,7 @@ function useOverlayWidgetSocket(
   onTestSession: (msg: SessionSummary) => void,
   onClear: (msg: TestClear) => void,
   onBuildIntent: ((msg: unknown) => void) | null,
+  receiveProfile: (msg: OverlayProfileConfig) => void,
 ): RefObject<Socket | null> {
   const socketRef = useRef<Socket | null>(null);
   // The latest gameKey we've observed in either ``live`` or
@@ -707,7 +707,8 @@ function useOverlayWidgetSocket(
         enabledWidgets?: string[];
         voicePrefs?: VoicePrefs;
         randomizer?: unknown;
-      }) => {
+      } & OverlayProfileConfig) => {
+        receiveProfile(msg);
         if (msg && Array.isArray(msg.enabledWidgets)) {
           setEnabled(msg.enabledWidgets.includes(widget));
         }
@@ -769,6 +770,7 @@ function useOverlayWidgetSocket(
     onTestSession,
     onClear,
     onBuildIntent,
+    receiveProfile,
   ]);
   return socketRef;
 }
@@ -794,6 +796,7 @@ export function useWidgetVisibility(
   session: SessionSummary | null,
   setVisible: (visible: boolean) => void,
   randomizerAnchor: RandomizerWindowAnchor | null = null,
+  optionsRef?: RefObject<OverlayProfile["widgetOptions"]>,
 ) {
   const timerRef = useRef<number | null>(null);
   // Keep the original deadline after a transient idle/menu tick unmounts
@@ -852,7 +855,7 @@ export function useWidgetVisibility(
         return;
       }
       const identity = `${widget}:${startKey}`;
-      const duration = resolveWidgetDurationMs(widget, isTest);
+      const duration = resolveWidgetDurationMs(widget, isTest, optionsRef?.current);
       let deadline = startDeadlines.current.get(identity);
       if (deadline === undefined) {
         deadline = duration === null ? Infinity : Date.now() + duration;
@@ -895,7 +898,7 @@ export function useWidgetVisibility(
     // ``pinThroughMatch``). The natural timer fires for everything
     // else, including the scouting card during gameplay.
     if (pinThroughMatch) return;
-    const duration = resolveWidgetDurationMs(widget, isTest);
+    const duration = resolveWidgetDurationMs(widget, isTest, optionsRef?.current);
     if (duration === null) return;
     timerRef.current = window.setTimeout(() => {
       setVisible(false);
@@ -911,6 +914,7 @@ export function useWidgetVisibility(
     startKey,
     anchorAtMs,
     setVisible,
+    optionsRef,
   ]);
 
   useEffect(
