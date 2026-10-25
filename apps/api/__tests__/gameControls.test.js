@@ -168,6 +168,27 @@ test("post-cleanup failure preserves only cleanup requirements and fails closed 
   expect(await h.db.games.findOne({ userId: owner, gameId: ID })).not.toHaveProperty("_cleanupRequired");
 });
 
+test("pre-tombstone cleanup keeps required store flags across a retry with a missing backend", async () => {
+  const replay = { delete: jest.fn(async () => {}) }, playback = { deleteMany: jest.fn().mockRejectedValueOnce(new Error("playback_backend_failed")).mockResolvedValue(undefined) };
+  h.services.gdpr.replayFiles = replay; h.services.gdpr.playbackArtifacts = playback;
+  await expect(h.services.gameControls.deleteGame(owner, ID)).rejects.toThrow("playback_backend_failed");
+  expect(await h.db.games.findOne({ userId: owner, gameId: ID })).toMatchObject({ _deletionPending: true, _cleanupRequired: { replay: true, playback: true, details: true } });
+  h.services.gdpr.playbackArtifacts = null;
+  await expect(h.services.gameControls.deleteGame(owner, ID)).rejects.toMatchObject({ status: 503, code: "game_cleanup_unavailable" });
+  expect(await h.db.games.findOne({ userId: owner, gameId: ID })).not.toHaveProperty("_deleted");
+  h.services.gdpr.playbackArtifacts = playback;
+  expect(await h.services.gameControls.deleteGame(owner, ID)).toMatchObject({ deleted: true });
+  expect(await h.db.games.findOne({ userId: owner, gameId: ID })).not.toHaveProperty("_cleanupRequired");
+});
+
+test("existing artifact markers fail closed even when that store is absent on the first delete", async () => {
+  h.services.gdpr.replayFiles = { delete: jest.fn(async () => {}) };
+  h.services.gdpr.playbackArtifacts = null;
+  await h.db.games.updateOne({ userId: owner, gameId: ID }, { $set: { playbackArtifact: { artifactId: "existing-private-object" } } });
+  await expect(h.services.gameControls.deleteGame(owner, ID)).rejects.toMatchObject({ status: 503, code: "game_cleanup_unavailable" });
+  expect(await h.db.games.findOne({ userId: owner, gameId: ID })).not.toHaveProperty("_deletionPending");
+});
+
 test("a delayed detail writer cannot recreate a deleted blob or metadata row", async () => {
   let release;
   const paused = new Promise(resolve => { release = resolve; });

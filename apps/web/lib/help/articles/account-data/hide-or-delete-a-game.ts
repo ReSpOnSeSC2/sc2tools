@@ -8,6 +8,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Hide a game from statistics", anchor: "hide" },
     { type: "steps", items: ["Open a game and choose More game actions, or select replays in the Replay archive.", "Choose Hide from stats and a reason: friend played, disconnect or bug, off-race practice, or other.", "Confirm Hide from stats. Your own statistics and scouting history refresh. The replay and its analysis remain available to you."] },
     { type: "paragraph", text: "Hiding affects only your copy and contribution. Another player who synced the same match keeps their own copy. Existing global benchmark and guide reference tables update on their normal recompute schedule; their displayed sample date still applies." },
+    { type: "paragraph", text: "For privacy, hiding or deleting a game temporarily clears all current public guide examples from your sharing profile. Eligible examples can return after the next scheduled update." },
     { type: "steps", items: ["To restore a hidden game, open Settings → Backups & data → Hidden games.", "Choose Unhide. Its saved analysis and guide sample become eligible again, and the affected opponent record is recounted."] },
     { type: "heading", text: "Permanently delete a game", anchor: "delete" },
     { type: "paragraph", text: "Delete game removes the cloud game record, build orders and charts, original cloud replay, and playback artifacts. Active replay-review grants close; existing discussion text stays. Your original replay file on your computer is retained." },

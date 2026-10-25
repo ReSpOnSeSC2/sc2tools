@@ -8,7 +8,8 @@ const controlRules = require("../config/gameControls.json");
 
 const HIDE_REASONS = Object.freeze(controlRules.reasons.map(reason => reason.value));
 const CONTROL_PROJECTION = Object.freeze({ _id: 0, gameId: 1, "opponent.pulseId": 1,
-  _deleted: 1, _deletionPending: 1, deletedAt: 1, _cleanupRequired: 1 });
+  _deleted: 1, _deletionPending: 1, deletedAt: 1, _cleanupRequired: 1,
+  "replayFile.storedAt": 1, "replayUpload.uploadId": 1, "playbackArtifact.artifactId": 1, "playbackUpload.artifactId": 1 });
 
 /** Per-owner replay controls. The existing owner/game unique index also owns
  * minimal deletion tombstones; no collection or startup migration is needed. */
@@ -99,7 +100,9 @@ class GameControlsService {
       if (!game) return null;
       changedGame = game;
       const cleanupRequired = game._cleanupRequired || {
-        replay: Boolean(this.gdpr.replayFiles), playback: Boolean(this.gdpr.playbackArtifacts), details: Boolean(this.gdpr.gameDetails),
+        replay: Boolean(this.gdpr.replayFiles || game.replayFile?.storedAt || game.replayUpload?.uploadId),
+        playback: Boolean(this.gdpr.playbackArtifacts || game.playbackArtifact?.artifactId || game.playbackUpload?.artifactId),
+        details: Boolean(this.gdpr.gameDetails),
       };
       if ((cleanupRequired.replay && !this.gdpr.replayFiles) || (cleanupRequired.playback && !this.gdpr.playbackArtifacts)
         || (cleanupRequired.details && !this.gdpr.gameDetails)) throw failure("game_cleanup_unavailable", 503);
@@ -109,7 +112,7 @@ class GameControlsService {
       if (!game._deleted) {
         // Pending deletion is owner-controlled and cannot be undone by ingest
         // or Unhide if object storage fails before the operation completes.
-        await this.db.games.updateOne({ userId, gameId }, { $set: { excluded: true, _deletionPending: true } });
+        await this.db.games.updateOne({ userId, gameId }, { $set: { excluded: true, _deletionPending: true, _cleanupRequired: cleanupRequired } });
         await this.recountOpponent(userId, game.opponent?.pulseId);
       }
       await this.purgePayloads(userId, gameId);
