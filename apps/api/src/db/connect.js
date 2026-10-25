@@ -33,6 +33,7 @@ const { ensureGuideIndexes, startBackgroundIndexBuilds } = require("./guideIndex
  *   youtubeCreateOperations: import('mongodb').Collection,
  *   platformWebhookReceipts: import('mongodb').Collection,
  *   platformEvents: import('mongodb').Collection,
+ *   twitchAutomationReceipts: import('mongodb').Collection<any>,
  *   importJobs: import('mongodb').Collection,
  *   macroJobs: import('mongodb').Collection,
  *   agentReleases: import('mongodb').Collection,
@@ -129,6 +130,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     youtubeCreateOperations: db.collection(COLLECTIONS.YOUTUBE_CREATE_OPERATIONS),
     platformWebhookReceipts: db.collection(COLLECTIONS.PLATFORM_WEBHOOK_RECEIPTS),
     platformEvents: db.collection(COLLECTIONS.PLATFORM_EVENTS),
+    twitchAutomationReceipts: db.collection(COLLECTIONS.TWITCH_AUTOMATION_RECEIPTS),
     importJobs: db.collection(COLLECTIONS.IMPORT_JOBS),
     macroJobs: db.collection(COLLECTIONS.MACRO_JOBS),
     agentReleases: db.collection(COLLECTIONS.AGENT_RELEASES),
@@ -550,6 +552,7 @@ async function ensureIndexes(ctx, opts = {}) {
     { expiresAt: 1 },
     { expireAfterSeconds: 0 },
   );
+  await new (require("../services/twitchAutomationReceipts").TwitchAutomationReceipts)({ collection: ctx.twitchAutomationReceipts }).ensureIndexes();
 
   await ctx.deviceTokens.createIndex({ tokenHash: 1 }, { unique: true });
   await ctx.deviceTokens.createIndex({ userId: 1, lastSeenAt: -1 });

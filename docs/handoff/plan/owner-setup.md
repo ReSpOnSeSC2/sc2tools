@@ -16,6 +16,16 @@ the guide's era and equivalent first-start milestones, so absence can be correct
 Both Help sections explain those limits. Rollback is an API/web revert; no stored
 data conversion or cleanup is required.
 
+## Twitch Predictions and game markers (Wave 4)
+
+Deploy API before web. The new `TWITCH_AUTOMATION_ENABLED` server gate defaults off and accepts only the exact value `true`; this work has not set it or activated any integration. Keeping the gate off makes lifecycle hooks, recovery and Dock provider controls inert even if a saved user opt-in is true. Owner enablement is a separate operational decision. No new service, paid plan or production data migration was executed. The bounded `twitch_automation_receipts` metadata collection uses normal startup index definitions (owner/game unique, TTL and bounded recovery/owner lookups), and account erasure removes its owner rows. It is excluded from snapshot restore.
+
+Current desktop telemetry does not prove live ranked queue status. Automatic Predictions therefore remain unavailable even after owner enablement and user consent; do not infer ranked status from Pulse/MMR or advertise that the current desktop can open them. A future supported queue adapter needs explicit end-to-end verification before changing that capability. Fresh known live two-human 1v1 starts can create saved, consented stream markers; Twitch requires a live channel with VODs enabled.
+
+Each eligible affiliate/partner streamer must approve the incremental Predictions permission (`channel:manage:predictions`) or marker permission (`channel:manage:broadcast`), then explicitly Save Twitch automation. Connecting alone enables neither switch. Same-broadcaster reconnects preserve separately consented scopes. In Dock → Game, inspect the confirmed prediction state before using Resolve or Cancel/refund; missing provider IDs require a manual Twitch dashboard check. No real account, provider prediction, stream marker, OBS session or installer was used in validation.
+
+For rollback, turn both user switches off and Save. Before disabling the server gate or disconnecting Twitch, inspect any open native prediction and settle or cancel it in Twitch; the disabled gate also pauses automatic timeout recovery. Retain receipts rather than deleting them to replay old games.
+
 ## Synced Ghost practice
 
 Deploy the API before the web so `/v1/me/preferences/ghost` GET/PUT/PATCH and

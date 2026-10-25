@@ -67,6 +67,11 @@ const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { PlatformIntegrationsService } = require("./services/platformIntegrations");
 const { StreamingTitlesService } = require("./services/streamingTitles");
+const { TwitchAutomationService } = require("./services/twitchAutomation");
+const { TwitchAutomationProvider } = require("./services/twitchAutomationProvider");
+const { TwitchAutomationReceipts } = require("./services/twitchAutomationReceipts");
+const { TwitchAutomationStatus } = require("./services/twitchAutomationStatus");
+const { buildTwitchAutomationRouter } = require("./routes/twitchAutomation");
 const { buildAgentStreamingRouter } = require("./routes/agentStreaming");
 const { YoutubeStreamingService } = require("./services/youtubeStreaming");
 const { buildYoutubeCreateLedger } = require("./services/youtubeCreateOperationLedger");
@@ -611,6 +616,18 @@ function makeServices(deps, clerk, adminClerkIds) {
       return { ...enriched, opponentChannels: channels };
     },
   });
+  // A separate server gate defaults false. Merely configuring Twitch or saving
+  // a user preference cannot activate these hooks. No environment is changed.
+  const twitchAutomation = deps.db.twitchAutomationReceipts ? new TwitchAutomationService({
+    enabled: deps.config.twitchAutomationEnabled === true,
+    users, usersCollection: deps.db.users, integrations: platformIntegrations,
+    receipts: new TwitchAutomationReceipts({ collection: deps.db.twitchAutomationReceipts }),
+    provider: new TwitchAutomationProvider({ clientId: deps.config.platformIntegrations?.twitch?.clientId || "" }),
+    isCurrent: (userId, envelope) => {
+      const latest = liveGameBroker.latest(userId);
+      return liveGameBroker.currentGameKey(userId) === envelope.gameKey && Boolean(latest && ["match_loading", "match_started", "match_in_progress"].includes(String(latest.phase)));
+    },
+  }) : null;
   // Nightbot/StreamElements custom-API lines (!opponent/!mmr/!build) —
   // the overlay token in the URL path is the credential, same trust
   // model as the OBS Browser Source.
@@ -926,7 +943,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     deps.io?.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "game-control" });
   } });
   return {
-    jobLedger, adminAudit, gameControls, gameMoments, chatStats, chatCommands,
+    jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
     users,
     opponents,
     opponentIdentityMatcher,
@@ -1289,6 +1306,10 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     streamingTitles: new StreamingTitlesService({ integrations: services.platformIntegrations }),
     titleSession: (userId) => require("./services/streamTitleSession").streamTitleSession(deps.db, services.games, userId),
   }));
+  if (services.twitchAutomation) app.use(SERVICE.ROUTE_PREFIX, buildTwitchAutomationRouter({
+    auth, automation: services.twitchAutomation, tokens: services.overlayTokens,
+    status: new TwitchAutomationStatus({ automation: services.twitchAutomation, broker: services.liveGameBroker }),
+  }));
   const youtubeLedgerCollection = deps.db.youtubeCreateOperations;
   app.use(SERVICE.ROUTE_PREFIX, buildYoutubeStreamingRouter({
     auth,
@@ -1613,6 +1634,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       ladderMapPool: services.seasons ? services.seasons.ladderMapPool : undefined,
       series: services.streamSeries,
       gameMoments: services.gameMoments,
+      twitchAutomation: services.twitchAutomation || undefined,
       replayFiles: services.replayFiles || undefined,
       io: deps.io,
       guideSamples: services.guideSamples,
@@ -1734,6 +1756,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       engagement: services.multichatEngagement,
       overlayTokens: services.overlayTokens,
       buildIntents: services.buildIntents,
+      twitchAutomation: services.twitchAutomation || undefined,
       logger: deps.logger,
     }),
   );
