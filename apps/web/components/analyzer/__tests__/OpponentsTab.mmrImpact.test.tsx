@@ -14,6 +14,13 @@ vi.mock("@/lib/csvExport", async importOriginal => ({ ...await importOriginal<ty
 
 vi.mock("@/lib/useRivals", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/useRivals")>(), useRivals: () => useRivalsMock() }));
 vi.mock("@/lib/useRivalSummary", () => ({ useRivalSummary: (...args: unknown[]) => useRivalSummaryMock(...args) }));
+vi.mock("@/lib/useOpponentScoutingPreference", async () => {
+  const { useState } = await import("react");
+  return { useOpponentScoutingPreference: () => {
+    const [groupByPlayer, set] = useState(true);
+    return { groupByPlayer, setGroupByPlayer: async (next: boolean) => { set(next); return true; }, loading: false, saving: false, unavailable: false, error: "", retry: vi.fn() };
+  } };
+});
 
 vi.mock("../usePlayerChannels", () => ({
   usePlayerChannels: (...args: unknown[]) => usePlayerChannelsMock(...args),
