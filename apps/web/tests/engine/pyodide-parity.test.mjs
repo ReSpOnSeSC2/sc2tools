@@ -226,6 +226,29 @@ test("built bundle: both Archon Drop labels require real completion proof by 6:0
   }
 });
 
+test("built bundle: early PvT DT commitment precedes Charge without invented late rushes", { timeout: SLOW_TIMEOUT_MS }, async () => {
+  const { pyodide } = await engine();
+  const fixture = await readJson(path.join(REPO_DIR, "apps/replay-engine/tests/fixtures/pvt_dt_priority.json"));
+  const rows = JSON.parse(pyodide.runPython([
+    "import copy, json",
+    "from core.strategy_detector_user import UserBuildDetector",
+    `fixture = json.loads(${JSON.stringify(JSON.stringify(fixture))})`,
+    "results = []",
+    "for case in fixture['cases']:",
+    "    events = copy.deepcopy(fixture['events']) + copy.deepcopy(case.get('append', []))",
+    "    events = [event for event in events if event['name'] not in case.get('remove', [])]",
+    "    for event in events:",
+    "        event['time'] = case.get('times', {}).get(event['name'], event['time'])",
+    "        if event['name'] == case.get('hallucinated'):",
+    "            event['hallucinated'] = True",
+    "    label = UserBuildDetector(custom_builds=[]).detect_my_build('vs Terran', events, my_race='Protoss', game_length_seconds=900)",
+    "    results.append(label)",
+    "json.dumps(results)",
+  ].join("\n")));
+  assert.equal(rows.length, fixture.cases.length);
+  fixture.cases.forEach((example, index) => assert.equal(rows[index], example.expected, example.id));
+});
+
 test(
   "built bundle: envelopes are identical to the CPython goldens",
   {
