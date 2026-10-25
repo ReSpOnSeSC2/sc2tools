@@ -4,6 +4,7 @@ import { useChromeBreadcrumb } from "@/components/chrome/ChromeContext";
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import type { TimingHistoryFilter } from "@/lib/dossierTypes";
 import type { OpponentProfileResp } from "./ProfileView.types";
 import { MergedToonsChip, MergedIdentitiesLine, ProfilePulseLine, PublicProfileLink } from "./DossierHeaderDetails";
 import { useSWRConfig } from "swr";
@@ -41,6 +42,7 @@ import {
   isBarcodeName,
 } from "@/lib/sc2pulse";
 import { OpponentReplayHistory } from "./OpponentReplayHistory";
+const DossierAnalysisSection = dynamic(() => import("./DossierAnalysisSection").then(module => module.DossierAnalysisSection), { ssr: false });
 const ScoutingBriefCard = dynamic(() => import("./ScoutingBriefCard").then(module => module.ScoutingBriefCard));
 const OpponentSeriesStrip = dynamic(() => import("./OpponentSeriesStrip").then(module => module.OpponentSeriesStrip));
 const LadderContextCard = dynamic(() => import("./LadderContextCard").then(module => module.LadderContextCard));
@@ -51,12 +53,9 @@ import {
   type PulseLadderRating,
 } from "./OpponentRaceMmr";
 import type { ProfileGame } from "./Last5GamesTimeline";
-import { PredictedStrategiesList } from "./PredictedStrategiesList";
 import { H2HTrendsSection } from "./h2h/H2HTrendsSection";
 import type { BuildMatchupSelection } from "./h2h/BuildMatrix";
 import { gameOutcome } from "@/lib/h2hSeries";
-import { WhereGamesEndBar } from "./WhereGamesEndBar";
-import type { BuildPhasePayload } from "@/lib/serverApi";
 import {
   OpponentNotesCard,
   type OpponentNotesValue,
@@ -160,6 +159,8 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
   // table and the by-map / by-strategy summary cards below it. The
   // chips inside the H2H header surface the active filter and clear
   // it on tap.
+  const [selectedTiming, setSelectedTiming] = useState<TimingHistoryFilter | null>(null);
+  useEffect(() => { setSelectedTiming(null); }, [profileQuery, debouncedDbRev]);
   const [selectedStrategy, setSelectedStrategy] = useState<string | null>(null);
   const [selectedMap, setSelectedMap] = useState<string | null>(null);
   const [selectedBuildMatchup, setSelectedBuildMatchup] =
@@ -169,8 +170,10 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
 
   const games: ProfileGame[] = useMemo(() => data?.games || [], [data?.games]);
   const filteredGames = useMemo(() => {
-    if (!selectedMap && !selectedBuildMatchup && !selectedStrategy) return games;
+    if (!selectedMap && !selectedBuildMatchup && !selectedStrategy && !selectedTiming) return games;
+    const timingIds = selectedTiming ? new Set(selectedTiming.gameIds) : null;
     return games.filter((g) => {
+      if (timingIds && (!g.id || !timingIds.has(g.id))) return false;
       if (selectedMap && (g.map || "") !== selectedMap) return false;
       if (selectedStrategy && g.opp_strategy !== selectedStrategy) return false;
       if (selectedBuildMatchup) {
@@ -179,13 +182,14 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
       }
       return true;
     });
-  }, [games, selectedMap, selectedBuildMatchup, selectedStrategy]);
+  }, [games, selectedMap, selectedBuildMatchup, selectedStrategy, selectedTiming]);
   const replayHistoryQuery = buildOpponentReplayHistoryQuery(
     filters,
     groupByPlayer,
     selectedMap,
     selectedBuildMatchup,
     selectedStrategy,
+    selectedTiming?.gameIds,
   );
   const replayHistoryPath =
     `/v1/opponents/${encodeURIComponent(pulseId)}/games${replayHistoryQuery}`;
@@ -215,7 +219,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
     );
   }
   if (!data) return <OpponentNotFound />;
-  const filterActive = !!selectedMap || !!selectedBuildMatchup || !!selectedStrategy;
+  const filterActive = !!selectedMap || !!selectedBuildMatchup || !!selectedStrategy || !!selectedTiming;
   const t = filterActive
     ? totalsFromGames(filteredGames)
     : data.totals || { wins: 0, losses: 0, total: 0, winRate: 0 };
@@ -315,12 +319,13 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         <span>Couldn't refresh after your last game</span><Button variant="ghost" size="sm" onClick={() => mutate()}>Retry</Button>
       </div> : null}
       <DossierFilterBar filters={[
+        ...(selectedTiming ? [{ key: "timing", label: "Analyzed timing sample", value: `${selectedTiming.label} · ${selectedTiming.gameIds.length} games`, clear: () => setSelectedTiming(null) }] : []),
         ...(selectedMap ? [{ key: "map", label: "Map", value: selectedMap, clear: () => setSelectedMap(null) }] : []),
         ...(selectedStrategy ? [{ key: "strategy", label: "Their strategy", value: selectedStrategy, clear: () => setSelectedStrategy(null) }] : []),
         ...(selectedBuildMatchup ? [{ key: "build", label: "Build", value: `${selectedBuildMatchup.myBuild} vs ${selectedBuildMatchup.oppStrategy}`, clear: () => setSelectedBuildMatchup(null) }] : []),
-      ]} onClear={() => { setSelectedMap(null); setSelectedStrategy(null); setSelectedBuildMatchup(null); }} />
+      ]} onClear={() => { setSelectedMap(null); setSelectedStrategy(null); setSelectedBuildMatchup(null); setSelectedTiming(null); }} />
       {filterActive && data.gamesTruncated ? <p className="text-caption text-text-muted">Filtered summary uses the latest analyzed games. Replay history below searches your full history.</p> : null}
-      <SectionNav variant="bar" aria-label="Dossier sections" items={[{ id: "dossier-brief", label: "Brief" }, { id: "dossier-tendencies", label: "Tendencies" }, { id: "dossier-history", label: "History" }, { id: "dossier-ladder", label: "Ladder" }, { id: "dossier-identity", label: "Identity" }]} />
+      <SectionNav variant="bar" aria-label="Dossier sections" items={[{ id: "dossier-brief", label: "Brief" }, { id: "dossier-tendencies", label: "Tendencies" }, { id: "dossier-timings", label: "Timings" }, { id: "dossier-history", label: "History" }, { id: "dossier-ladder", label: "Ladder" }, { id: "dossier-identity", label: "Identity" }]} />
       <section id="dossier-brief" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Brief</h2><ScoutingBriefCard profile={data} /></section>
       <section id="dossier-tendencies" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-5"><h2 className="text-h3 font-semibold">Tendencies</h2>
       <H2HTrendsSection
@@ -382,11 +387,8 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         </Card>
       </div>
 
-      <Card title={<span>Likely strategies next{filterActive ? <small className="ml-2 font-normal text-text-dim">All games, not filtered</small> : null}</span>}><PredictedStrategiesList predictions={data.predictedStrategies || []} /></Card>
-      <WhereGamesEndSection
-        filtered={filterActive}
-        finalPhaseDistribution={data.phases?.finalPhaseDistribution}
-      />      </section>
+      </section>
+      <section id="dossier-timings" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Timings and phases</h2><DossierOnView key={`${profileQuery}:${debouncedDbRev}`} label="Timing and phase analysis"><DossierAnalysisSection path={`/v1/opponents/${encodeURIComponent(pulseId)}/analysis${profileQuery}#${debouncedDbRev}`} sourceFilters={profileQuery} scopeLabel={summarizeFilters(filters, seasons)} predictions={profile.isPreviousData ? null : data.predictedStrategies || []} selected={selectedTiming} onSelect={setSelectedTiming} /></DossierOnView></section>
       <section id="dossier-history" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-5"><h2 className="text-h3 font-semibold">History</h2>
       <OpponentReplayHistory
         // A query-scope or database revision change must reset cursor history
@@ -522,8 +524,9 @@ export function buildOpponentReplayHistoryQuery(
   selectedMap?: string | null,
   selectedBuildMatchup?: BuildMatchupSelection | null,
   selectedStrategy?: string | null,
+  analysisGameIds?: string[],
 ): string {
-  return buildProfileQuery(
+  const query = buildProfileQuery(
     {
       ...filters,
       ...(selectedMap ? { map: selectedMap } : {}),
@@ -537,31 +540,10 @@ export function buildOpponentReplayHistoryQuery(
     },
     mergeLinked,
   );
-}
-
-/**
- * "Where games end" — stacked outcome distribution over the same
- * date-filtered matched games that drive the other panels on this
- * page. Renders nothing when the API hasn't returned any phase data
- * (or the sum is zero), so first-meeting opponents don't see an
- * empty card.
- */
-function WhereGamesEndSection({
-  finalPhaseDistribution, filtered,
-}: {
-  finalPhaseDistribution?: BuildPhasePayload["finalPhaseDistribution"];
-  filtered?: boolean;
-}) {
-  const total =
-    (finalPhaseDistribution?.early || 0) +
-    (finalPhaseDistribution?.earlyMid || 0) +
-    (finalPhaseDistribution?.mid || 0) +
-    (finalPhaseDistribution?.midLate || 0) +
-    (finalPhaseDistribution?.late || 0);
-  if (total === 0) return null;
-  return (
-    <Card title={<span>Where games end{filtered ? <small className="ml-2 font-normal text-text-dim">All games, not filtered</small> : null}</span>}>
-      <WhereGamesEndBar finalPhaseDistribution={finalPhaseDistribution} />
-    </Card>
-  );
+  if (analysisGameIds) {
+    const params = new URLSearchParams(query.replace(/^\?/, ""));
+    params.set("analysisGameIds", JSON.stringify(analysisGameIds));
+    return `?${params}`;
+  }
+  return query;
 }

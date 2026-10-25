@@ -147,6 +147,17 @@ export interface OpponentsService {
       mergeLinked?: boolean;
     },
   ): Promise<object | null>;
+  getAnalysis(
+    userId: string,
+    pulseId: string,
+    opts?: {
+      filters?: Record<string, unknown>;
+      since?: Date;
+      until?: Date;
+      mergeLinked?: boolean;
+      includeProfile?: boolean;
+    },
+  ): Promise<object | null>;
   updateNotes(
     userId: string,
     pulseId: string,
@@ -166,8 +177,13 @@ export interface OpponentsService {
       limit?: number;
       cursor?: string;
       result?: unknown;
+      analysisGameIds?: string[];
     },
-  ): Promise<{ items: object[]; nextCursor: string | null } | null>;
+  ): Promise<{
+    items: object[];
+    nextCursor: string | null;
+    membership?: { scope: "analysis_sample"; requestedGameCount: number };
+  } | null>;
   recordGame(
     userId: string,
     game: {

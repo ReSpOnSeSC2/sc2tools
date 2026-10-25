@@ -171,7 +171,7 @@ class CompanionClient:
                 raise CompanionError("Select an opponent first.")
             path = "/v1/opponents/" + quote(pulse_id, safe="")
             if action == "opponent":
-                return self._request("GET", path)
+                return self._request("GET", path + "/analysis", params={"includeProfile": "1"})
             text = request.get("text")
             read_aloud = request.get("readAloud", False)
             if (not isinstance(text, str) or len(text.encode("utf-16-le")) // 2 > 500

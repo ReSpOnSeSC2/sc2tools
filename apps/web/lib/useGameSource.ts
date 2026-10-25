@@ -5,15 +5,15 @@ import { safeGameSource, type GameSource } from "./gameNavigation";
 import { gameSourceFilters } from "./gameSourceFilters";
 import { filtersToQuery, useFilters } from "./filterContext";
 
-const SourceContext = createContext<{ label?: string; filters?: string; replace?: boolean }>({});
+const SourceContext = createContext<{ label?: string; filters?: string; replace?: boolean; sampled?: boolean }>({});
 
 /** A modal or build dossier can supply the exact cohort behind its displayed rows. */
-export function GameSourceProvider({ label, filters, replace = false, children }: {
-  label?: string; filters?: string; replace?: boolean; children: ReactNode;
+export function GameSourceProvider({ label, filters, replace = false, sampled, children }: {
+  label?: string; filters?: string; replace?: boolean; sampled?: boolean; children: ReactNode;
 }) {
   const parent = useContext(SourceContext);
   const value = useMemo(() => ({ label: label ?? parent.label, replace: replace || parent.replace,
-    filters: gameSourceFilters(replace ? undefined : parent.filters, filters) }), [label, filters, replace, parent]);
+    sampled: sampled ?? parent.sampled, filters: gameSourceFilters(replace ? undefined : parent.filters, filters) }), [label, filters, replace, sampled, parent]);
   return createElement(SourceContext.Provider, { value }, children);
 }
 
@@ -34,6 +34,6 @@ export function useGameSource(label?: string, query?: string): GameSource | null
   const globalQuery = analyzerSection && !context.replace ? filtersToQuery(filters) : undefined;
   return useMemo(() => {
     const source = safeGameSource(href, label ?? context.label);
-    return source ? { ...source, filters: gameSourceFilters(context.replace ? undefined : new URL(href, "https://sc2tools.invalid").search, globalQuery, context.filters, query) } : null;
+    return source ? { ...source, filters: gameSourceFilters(context.replace ? undefined : new URL(href, "https://sc2tools.invalid").search, globalQuery, context.filters, query), ...(context.sampled ? { sampled: true } : {}) } : null;
   }, [href, label, globalQuery, context, query]);
 }

@@ -9,6 +9,8 @@ import { gameSourceFilters } from "@/lib/gameSourceFilters";
 
 const state = vi.hoisted(() => ({ push: vi.fn(), prefetch: vi.fn(), mutate: vi.fn(), path: "", loading: false, previous: false, error: false, data: { prev: { gameId: "older/id", map: "Old map" }, next: { gameId: "newer", map: "New map" }, h2h: { wins: 3, losses: 2 } } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: state.push, prefetch: state.prefetch }) }));
+let ownerId = "owner-a";
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: ownerId }) }));
 vi.mock("@/lib/clientApi", () => ({ useApi: (path: string) => {
   state.path = path; return { data: state.data, isPreviousData: state.previous, error: state.error ? { status: 503 } : undefined, isLoading: state.loading, mutate: state.mutate };
 } }));
@@ -16,6 +18,31 @@ beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); state.previous = fa
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("owner game navigation", () => {
+  it("requires a fresh sample opt-in after a cohort or owner change", () => {
+    ownerId = "owner-a";
+    const source = safeGameSource("/app/opponents/123", "Sample", "race=P", true)!;
+    const view = render(<GameNavigation game={{ gameId: "current" }} source={source} />);
+    fireEvent.click(screen.getByRole("button", { name: "Use selected scope" }));
+    expect(state.path).toContain("race=P");
+    view.rerender(<GameNavigation game={{ gameId: "current" }} source={{ ...source, filters: "race=T" }} />);
+    expect(state.path).toBeNull(); expect(screen.queryByRole("link", { name: "Newer ›" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Use selected scope" }));
+    ownerId = "owner-b";
+    view.rerender(<GameNavigation game={{ gameId: "current" }} source={{ ...source, filters: "race=T" }} />);
+    expect(state.path).toBeNull(); expect(screen.queryByRole("link", { name: "Newer ›" })).toBeNull();
+    ownerId = "owner-a";
+  });
+  it("keeps analyzed-sample stepping explicit and makes no broader request until selected", () => {
+    const source = safeGameSource("/app/opponents/123", "Analyzed sample history", "race=P", true)!;
+    render(<GameNavigation game={{ gameId: "current" }} source={source} opponentContext={{ pulseId: "123" }} />);
+    expect(state.path).toBeNull(); expect(screen.queryByRole("link", { name: "‹ Older" })).toBeNull();
+    fireEvent.keyDown(document.body, { key: "ArrowRight", altKey: true }); expect(state.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Use selected scope" }));
+    expect(state.path).toBe("/v1/games/current/neighbors?scope=opponent&race=P");
+    const next = new URL(screen.getByRole("link", { name: "Newer ›" }).getAttribute("href")!, "https://example.test");
+    expect(next.searchParams.has("fromSample")).toBe(false);
+    expect(next.searchParams.get("from")).toBe(source.href);
+  });
   it("defaults opponent entries to that opponent, preserves source filters, prefetches next and shows recorded H2H", () => {
     const source = safeGameSource("/app/replays?race=P&map=Blackrock&tab=replays#recent")!;
     render(<GameNavigation game={{ gameId: "current" }} source={source} opponentContext={{ pulseId: "123", displayName: "Player" }} />);
@@ -64,6 +91,13 @@ describe("owner game navigation", () => {
 });
 
 describe("durable game sources", () => {
+  it("round-trips an analyzed-sample marker without putting sampled replay IDs into the URL", () => {
+    const source = safeGameSource("/app/opponents/123", "Analyzed sample history", "race=P", true)!;
+    const href = gameAnalysisHref("one", { pulseId: "123" }, source);
+    expect(new URL(href, "https://example.test").searchParams.get("fromSample")).toBe("1");
+    expect(gameSourceFromQuery(Object.fromEntries(new URL(href, "https://example.test").searchParams))).toEqual(source);
+    expect(href).not.toContain("analysisGameIds");
+  });
   it("a replacement cohort excludes both global and incoming URL dates while retaining the durable Back URL", () => {
     const original = "/app/opponents/123?since=2026-10-01&until=2026-10-24&map=Old";
     window.history.replaceState(null, "", original);

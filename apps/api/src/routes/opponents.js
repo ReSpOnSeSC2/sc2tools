@@ -3,6 +3,7 @@
 const express = require("express");
 const { LIMITS } = require("../config/constants");
 const { parseFilters } = require("../util/parseQuery");
+const { parseAnalysisGameIds } = require("../util/opponentAnalysisMembership");
 
 /**
  * /v1/opponents — list and detail.
@@ -196,9 +197,9 @@ function buildOpponentsRouter(deps) {
   });
 
   // Complete, metadata-only replay history for one opponent. Kept separate
-  // from the analytics profile below: that response intentionally caps and
-  // hydrates games for aggregate computation, while this feed pages every
-  // matching row without touching the detail store.
+  // from the capped brief and its explicit analysis: this feed pages every
+  // matching row without touching the detail store. A bounded timing-sample
+  // selection uses the same owner, identity and analyzer-filter query.
   router.get("/opponents/:pulseId/games", async (req, res, next) => {
     try {
       const auth = req.auth;
@@ -212,6 +213,7 @@ function buildOpponentsRouter(deps) {
           limit: parseLimit(req.query.limit),
           cursor: parseCursor(req.query.cursor),
           result: req.query.result,
+          analysisGameIds: parseAnalysisGameIds(req.query.analysisGameIds),
         },
       );
       if (!result) {
@@ -272,7 +274,28 @@ function buildOpponentsRouter(deps) {
     }
   });
 
+  router.get("/opponents/:pulseId/analysis", async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store");
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const analysis = await deps.opponents.getAnalysis(auth.userId, String(req.params.pulseId), {
+        filters: parseFilters(req.query),
+        mergeLinked: req.query.mergeLinked === "1",
+        includeProfile: req.query.includeProfile === "1",
+      });
+      if (!analysis) {
+        res.status(404).json({ error: { code: "not_found" } });
+        return;
+      }
+      res.set("Cache-Control", "private, no-store").json(analysis);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/opponents/:pulseId", async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store");
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
@@ -290,10 +313,16 @@ function buildOpponentsRouter(deps) {
       // only when it does. Cached in the community service and run in
       // parallel with the profile; a failure just hides the link.
       const [opp, communityAvailable] = await Promise.all([
-        deps.opponents.get(auth.userId, pulseId, {
-          filters,
-          mergeLinked: req.query.mergeLinked === "1",
-        }),
+        // Installed Companions still request this original URL. Their
+        // trusted device-auth identity keeps the rich contract while the
+        // Clerk web dossier opts into bounded analysis through /analysis.
+        auth.source === "device"
+          ? deps.opponents.getAnalysis(auth.userId, pulseId, {
+            filters, mergeLinked: req.query.mergeLinked === "1", includeProfile: true,
+          })
+          : deps.opponents.get(auth.userId, pulseId, {
+            filters, mergeLinked: req.query.mergeLinked === "1",
+          }),
         deps.community
           ? deps.community.opponentProfileAvailable(pulseId).catch(() => false)
           : Promise.resolve(false),
@@ -302,7 +331,7 @@ function buildOpponentsRouter(deps) {
         res.status(404).json({ error: { code: "not_found" } });
         return;
       }
-      res.json({ ...opp, communityAvailable });
+      res.set("Cache-Control", "private, no-store").json({ ...opp, communityAvailable });
     } catch (err) {
       next(err);
     }

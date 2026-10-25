@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/clientApi";
 import { gameAnalysisHref, type OpponentNavigationContext } from "@/lib/opponentNavigation";
 import { isGameNeighborScope, type GameNeighborScope, type GameSource } from "@/lib/gameNavigation";
@@ -25,14 +26,20 @@ export function GameNavigation({ game, source, opponentContext, buildLabel }: {
   game: GameSummary; source?: GameSource | null; opponentContext?: OpponentNavigationContext | null;
 }) {
   const router = useRouter();
+  const { userId } = useAuth();
   const [scope, setScope] = useState<GameNeighborScope>(opponentContext ? "opponent" : "all");
+  const sampleKey = JSON.stringify([userId, source?.href, source?.filters, source?.sampled]);
+  const [acceptedSample, setAcceptedSample] = useState<string | null>(null);
+  const broaderScope = acceptedSample === sampleKey;
+  const samplePending = !!source?.sampled && !broaderScope;
+  const navigationSource = source?.sampled && broaderScope ? { ...source, sampled: false } : source;
   const selectId = useId();
   useEffect(() => {
     try { const saved = localStorage.getItem(SCOPE_KEY); if (isGameNeighborScope(saved)) setScope(saved); } catch { /* Optional device preference. */ }
   }, []);
-  const request = useApi<Neighbors>(`${ownerNeighborPath(game.gameId, scope, source)}${scope === "build" ? `#${encodeURIComponent(buildLabel ?? game.myBuild ?? "")}` : ""}`, { revalidateOnFocus: false, keepPreviousData: false });
-  const data = request.isPreviousData || request.error ? undefined : request.data;
-  const href = (neighbor?: GameSummary | null) => neighbor ? gameAnalysisHref(neighbor.gameId, opponentContext, source) : null;
+  const request = useApi<Neighbors>(samplePending ? null : `${ownerNeighborPath(game.gameId, scope, navigationSource)}${scope === "build" ? `#${encodeURIComponent(buildLabel ?? game.myBuild ?? "")}` : ""}`, { revalidateOnFocus: false, keepPreviousData: false });
+  const data = samplePending || request.isPreviousData || request.error ? undefined : request.data;
+  const href = (neighbor?: GameSummary | null) => neighbor ? gameAnalysisHref(neighbor.gameId, opponentContext, navigationSource) : null;
   const olderHref = href(data?.prev); const newerHref = href(data?.next);
   useEffect(() => { if (newerHref) router.prefetch?.(newerHref); }, [newerHref, router]);
   useEffect(() => {
@@ -54,6 +61,6 @@ export function GameNavigation({ game, source, opponentContext, buildLabel }: {
       <option value="all">All games</option><option value="opponent">Same opponent</option><option value="matchup">Same matchup</option><option value="build">Same build</option>
     </select>
     {record && Number.isInteger(record.wins) && Number.isInteger(record.losses) && record.wins >= 0 && record.losses >= 0 ? <span className="rounded-full border border-border bg-bg-surface px-3 py-1 tabular-nums" title="Your recorded wins and losses against this opponent, across all time">H2H {record.wins}–{record.losses} all-time</span> : null}
-    {request.error ? <p role="status" className="text-text-muted">Couldn't load nearby games. <button type="button" onClick={() => { void request.mutate(); }} className="inline-flex min-h-11 items-center text-accent underline">Retry</button></p> : request.isLoading ? <span role="status" className="text-text-dim">Finding nearby games…</span> : null}
+    {samplePending ? <p className="basis-full text-text-muted">This replay came from an analyzed sample. Return to history for that sample, or use the selected scope for Older and Newer games. <button type="button" onClick={() => setAcceptedSample(sampleKey)} className="inline-flex min-h-11 px-2 text-accent underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Use selected scope</button></p> : request.error ? <p role="status" className="text-text-muted">Couldn't load nearby games. <button type="button" onClick={() => { void request.mutate(); }} className="inline-flex min-h-11 items-center text-accent underline">Retry</button></p> : request.isLoading ? <span role="status" className="text-text-dim">Finding nearby games…</span> : null}
   </nav>;
 }
