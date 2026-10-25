@@ -83,6 +83,8 @@ const { buildMultichatRouter } = require("./routes/multichat");
 const { buildAlertMediaStore } = require("./services/alertMediaStore");
 const { OverlayLiveService } = require("./services/overlayLive");
 const { LiveGameBroker } = require("./services/liveGameBroker");
+const { OpponentChannelsCache } = require("./services/opponentChannels");
+const { GameDeskService } = require("./services/gameDesk");
 const { AggregationsService } = require("./services/aggregations");
 const { MacroReportService } = require("./services/macroReport");
 const { StreakService } = require("./services/streak");
@@ -591,12 +593,18 @@ function makeServices(deps, clerk, adminClerkIds) {
   // Without enrichment the scouting widget pre-game can only show
   // the opponent's identity + Pulse MMR; with it, the pre-game card
   // matches the post-game one.
+  const opponentChannels = new OpponentChannelsCache(playerChannels);
   const liveGameBroker = new LiveGameBroker({
     io: deps.io,
     overlayTokens,
     logger: deps.logger,
-    enrich: (userId, envelope) =>
-      overlayLive.enrichEnvelope(userId, envelope),
+    enrich: async (userId, envelope) => {
+      const [enriched, channels] = await Promise.all([
+        overlayLive.enrichEnvelope(userId, envelope),
+        opponentChannels.forMatch(userId, envelope),
+      ]);
+      return { ...enriched, opponentChannels: channels };
+    },
   });
   // Nightbot/StreamElements custom-API lines (!opponent/!mmr/!build) —
   // the overlay token in the URL path is the credential, same trust
@@ -624,6 +632,10 @@ function makeServices(deps, clerk, adminClerkIds) {
   multichatEngagement.onEvent = (token, msg) => {
     void twitchChatBot.handleEngagementEvent(token, msg).catch(() => {});
   };
+  const gameDesk = new GameDeskService({ users: deps.db.users, studio: multichatStudio,
+    engagement: multichatEngagement, games, broker: liveGameBroker, channels: opponentChannels,
+    tokens: overlayTokens, bot: twitchChatBot, io: deps.io });
+  twitchChatBot.shoutoutLine = userId => gameDesk.shoutoutLine(userId);
   // Reconnect every enabled bot on boot — best-effort, non-blocking.
   void twitchChatBot.restoreAll();
   const aggregations = new AggregationsService(deps.db, { mmrExpectation });
@@ -923,6 +935,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     liveGameBroker,
     tiktokChatRelay,
     multichatStudio,
+    gameDesk,
     multichatSounds,
     multichatEngagement,
     multichatViewers,
@@ -1424,6 +1437,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       alertMedia: buildAlertMediaStore(deps.config.r2),
       tiktokRelay: services.tiktokChatRelay,
       studio: services.multichatStudio,
+      gameDesk: services.gameDesk,
       sounds: services.multichatSounds,
       engagement: services.multichatEngagement,
       viewers: services.multichatViewers,

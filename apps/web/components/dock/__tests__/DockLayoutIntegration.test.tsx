@@ -68,7 +68,8 @@ describe("Real Dock layout consumers", () => {
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: scroll, configurable: true });
     try {
       const view = render(<DockClient token="token" />); await drain();
-      expect(watched.mock.calls.filter(([element]) => (element as HTMLElement).hasAttribute("data-dock-section"))).toHaveLength(DOCK_SECTIONS.length);
+      // Header measurement recreates the observer with its actual offset.
+      expect(new Set(watched.mock.calls.filter(([element]) => (element as HTMLElement).hasAttribute("data-dock-section")).map(([element]) => (element as HTMLElement).id)).size).toBe(DOCK_SECTIONS.length);
       const nav = within(screen.getByRole("navigation", { name: "Dock sections" }));
       act(() => observe?.([{ target: document.getElementById("dock-goals")!, isIntersecting: true, boundingClientRect: { top: 90 } } as unknown as IntersectionObserverEntry], {} as IntersectionObserver));
       expect(nav.getByRole("button", { name: "Goals" }).getAttribute("aria-current")).toBe("location");

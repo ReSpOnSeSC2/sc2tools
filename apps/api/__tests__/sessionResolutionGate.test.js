@@ -18,6 +18,19 @@ function deferred() {
 }
 
 describe("SessionResolutionGate", () => {
+  test("manual reset discards a held pre-reset result for original subscribers", async () => {
+    const gate = new SessionResolutionGate();
+    const work = deferred();
+    const old = gate.resolve("owner", "UTC", { reuseRecent: true }, () => work.promise);
+    await new Promise(resolve => setImmediate(resolve));
+    gate.invalidate("owner", { discardPending: true });
+    const assertion = expect(old).rejects.toMatchObject({ code: "SESSION_RESOLUTION_STALE" });
+    const next = gate.resolve("owner", "UTC", { reuseRecent: true }, async () => ({ games: 0 }));
+    work.resolve({ games: 99 });
+    await assertion;
+    await expect(next).resolves.toEqual({ games: 0 });
+    await expect(gate.resolve("owner", "UTC", { reuseRecent: true }, () => { throw new Error("must use reset cache"); })).resolves.toEqual({ games: 0 });
+  });
   test("coalesces a many-socket reconnect burst into one computation", async () => {
     const gate = new SessionResolutionGate();
     const work = deferred();

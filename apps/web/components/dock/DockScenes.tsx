@@ -11,7 +11,7 @@ import { DockInput, DockButton } from "./DockControls";
  */
 
 import { useEffect, useRef, useState } from "react";
-import { formatCountdown } from "@/components/overlay/widgets/StreamSceneWidget";
+import { formatCountdown } from "@/lib/multichat/countdown";
 import type {
   StudioBrollConfig,
   StudioScene,
@@ -256,7 +256,7 @@ export function DockScenes({
                 ? "border-accent-cyan/50 bg-accent-cyan/10 text-accent-cyan"
                 : clipCount > 0
                   ? "border-border text-text-muted"
-                  : "border-danger/40 text-danger"
+                  : "border-danger/40 text-text"
             }`}
             aria-live="polite"
           >

@@ -11,7 +11,7 @@ export function SectionCard({ id, title, summary, active = false, loading = fals
   children: ReactNode; padded?: boolean;
 }) {
   const toggleId = `${id}-toggle`, bodyId = `${id}-body`;
-  return <section id={id} data-dock-section={id} data-pinned={pinned} className="min-w-0 scroll-mt-20 rounded-lg border border-border bg-bg-surface">
+  return <section id={id} data-dock-section={id} data-pinned={pinned} style={{ scrollMarginTop: "calc(var(--dock-sticky-height, 64px) + 8px)" }} className="min-w-0 rounded-lg border border-border bg-bg-surface">
     <div className="flex min-w-0 items-center gap-1 border-b border-border px-2 py-1.5">
       <h2 className="min-w-0 flex-1">
         <DockButton id={toggleId} aria-expanded={open} aria-controls={bodyId} variant="ghost" fullWidth onClick={onToggle} className="min-w-0 justify-start rounded-md px-1.5 text-left font-sans font-semibold">

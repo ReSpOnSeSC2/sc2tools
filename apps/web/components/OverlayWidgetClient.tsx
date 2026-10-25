@@ -11,6 +11,8 @@ import {
 } from "react";
 import { OverlayLocalPreviewFrame, localPreviewRandomizer } from "@/components/overlay/OverlayLocalPreviewFrame";
 import { OverlayPreviewContext } from "@/lib/overlayPreviewContext";
+import { useGameWidgetsPaused, isGameWidget } from "@/components/overlay/useGameWidgetsPaused";
+import { newerSession } from "@/lib/multichat/sessionSnapshot";
 import { useOverlayTestLayer, type TestClear } from "@/components/overlay/useOverlayTestLayer";
 import type { Socket } from "socket.io-client";
 import type {
@@ -166,6 +168,7 @@ function ConnectedOverlayWidgetClient({
   const testLayer = useOverlayTestLayer(token, optionsRef);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
+  const receiveSession = useCallback((next: SessionSummary | null) => setSession(current => next ? newerSession(current, next) : null), []);
   const [enabled, setEnabled] = useState<boolean>(true);
   const [widgetConfig, setWidgetConfig] = useState<{ token: string; widget: string; enabled: boolean } | null>(null);
   const applyWidgetEnabled = useCallback((on: boolean) => {
@@ -183,11 +186,13 @@ function ConnectedOverlayWidgetClient({
   }, [token]);
   // Latest raw ``overlay:multichat`` studio payload — validated by the
   // studio widgets themselves (useStudioState re-sanitizes it).
+  const { gameWidgetsPaused, receivePause, resetPause } = useGameWidgetsPaused(token);
   const [studioEventSnapshot, setStudioEventSnapshot] = useState<{ token: string; payload: unknown } | null>(null);
   const studioEvent = studioEventSnapshot?.token === token ? studioEventSnapshot.payload : null;
   const setStudioEvent = useCallback((payload: unknown) => {
+    receivePause(payload);
     setStudioEventSnapshot({ token, payload });
-  }, [token]);
+  }, [token, receivePause]);
   // Latest raw ``overlay:engagement`` payload — re-sanitized by the
   // engagement widgets themselves (useEngagementState).
   const [engagementEvent, setEngagementEvent] = useState<unknown>(null);
@@ -204,7 +209,7 @@ function ConnectedOverlayWidgetClient({
     widget,
     setLive,
     setLiveGame,
-    setSession,
+    receiveSession,
     applyWidgetEnabled,
     setVoicePrefs,
     setRandomizer,
@@ -217,6 +222,7 @@ function ConnectedOverlayWidgetClient({
     testLayer.clear,
     widget === "randomizer" ? onBuildIntent : null,
     receiveProfile,
+    resetPause,
   );
   useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
   const showingTest = testLayer.targets(widget as WidgetId);
@@ -296,7 +302,8 @@ function ConnectedOverlayWidgetClient({
   // line two or three times. The all-in-one overlay (OverlayClient)
   // owns voice for that mode. Mirrors the legacy
   // `voice-readout.js` which was only included from scouting.html.
-  const enableVoiceHere = widget === "scouting";
+  const pausedHere = gameWidgetsPaused && isGameWidget(widget);
+  const enableVoiceHere = widget === "scouting" && !pausedHere;
   const voice = useVoiceReadout(
     enableVoiceHere ? shownLive : null,
     enableVoiceHere ? voicePrefs : null,
@@ -311,7 +318,7 @@ function ConnectedOverlayWidgetClient({
   // running sequence through a brief loading/menu/reconnect transition.
   const retainRandomizer = widget === "randomizer";
   if ((connectionStatus === "invalid" || connectionStatus === "replaced")) return <><OverlaySetupCard reason={connectionStatus === "replaced" ? "replaced" : "invalid-token"} /><OverlayCheckBadge status={connectionStatus} /></>;
-  if (!effectiveEnabled || (!showingTest && !visible && !ghostArmed && !alwaysVisible && !retainRandomizer)) {
+  if (pausedHere && !retainRandomizer || !effectiveEnabled || (!showingTest && !visible && !ghostArmed && !alwaysVisible && !retainRandomizer)) {
     return (
       <>
         <div style={{ background: "transparent" }} />
@@ -336,7 +343,7 @@ function ConnectedOverlayWidgetClient({
           minHeight: "100vh",
           width: "100%",
           background: "transparent",
-          display: retainRandomizer && !visible && !showingTest ? "none" : undefined,
+          display: pausedHere || retainRandomizer && !visible && !showingTest ? "none" : undefined,
           ...themeVars,
         } as CSSProperties
       }
@@ -362,7 +369,7 @@ function ConnectedOverlayWidgetClient({
         randomizer={randomizer}
         randomizerIntent={randomizerCheckin.intent}
         onRandomizerSpin={randomizerCheckin.onSpin}
-        visible={visible}
+        visible={visible && !pausedHere}
         ghostParam={effectiveGhostParam}
         ghostConfig={ghostConfig}
         studioEvent={studioEvent}
@@ -630,6 +637,7 @@ function useOverlayWidgetSocket(
   onClear: (msg: TestClear) => void,
   onBuildIntent: ((msg: unknown) => void) | null,
   receiveProfile: (msg: OverlayProfileConfig) => void,
+  resetPause: () => void,
 ): RefObject<Socket | null> {
   const socketRef = useRef<Socket | null>(null);
   // The latest gameKey we've observed in either ``live`` or
@@ -748,6 +756,9 @@ function useOverlayWidgetSocket(
     // Stream Studio state (highlight / poll / goals / recap trigger) —
     // stored raw; the studio widgets defensively re-sanitize it via
     // useStudioState before rendering anything.
+    socket.on("connect", resetPause); socket.on("disconnect", resetPause);
+    const resetOnResync = (event: string) => { if (event === "overlay:resync") resetPause(); };
+    socket.onAnyOutgoing?.(resetOnResync);
     socket.on("overlay:multichat", (msg: unknown) => {
       if (msg && typeof msg === "object") setStudioEvent(msg);
     });
@@ -768,6 +779,8 @@ function useOverlayWidgetSocket(
       latestGameKey: () => gameKeyRef.current,
     });
     return () => {
+      socket.offAnyOutgoing?.(resetOnResync);
+      socket.off("connect", resetPause); socket.off("disconnect", resetPause);
       detachResilience();
       connection.dispose();
       if (socketRef.current === socket) socketRef.current = null;
@@ -790,6 +803,7 @@ function useOverlayWidgetSocket(
     onClear,
     onBuildIntent,
     receiveProfile,
+    resetPause,
   ]);
   return socketRef;
 }
