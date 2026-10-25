@@ -45,6 +45,7 @@ interface Blob {
 
 export function HungrySwarmReveal({
   pool,
+  visualPool = pool,
   winner,
   winnerProbability,
   spinId,
@@ -58,12 +59,14 @@ export function HungrySwarmReveal({
     () => seededShuffle(pool.filter((b) => b.id !== winner.id), spinId).map((b) => b.id),
     [pool, winner.id, spinId],
   );
+  const trackedIds = useMemo(() => new Set(visualPool.map((build) => build.id)), [visualPool]);
   const { eliminated, settled, nextOutId } = useEliminationSchedule(
     spinId,
     loserOrder,
     DURATION_MS,
     reducedMotion,
     onComplete,
+    trackedIds,
   );
 
   useRevealSound({
@@ -76,13 +79,13 @@ export function HungrySwarmReveal({
     ),
   });
 
-  const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
+  const sprites = useMemo(() => assignPoolSprites(visualPool), [visualPool]);
   const blobsRef = useRef<Blob[]>([]);
   const [, force] = useState(0);
 
   useMemo(() => {
-    blobsRef.current = pool.map((b, i) => {
-      const angle = (i / pool.length) * Math.PI * 2;
+    blobsRef.current = visualPool.map((b, i) => {
+      const angle = (i / visualPool.length) * Math.PI * 2;
       return {
         id: b.id,
         build: b,
@@ -94,7 +97,7 @@ export function HungrySwarmReveal({
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spinId, pool]);
+  }, [spinId, visualPool]);
 
   useRaf(!reducedMotion && !settled, spinId, (dt) => {
     const speed = dt / 16;
@@ -103,8 +106,8 @@ export function HungrySwarmReveal({
     for (const b of blobs) {
       if (b.id === winner.id) continue;
       if (eliminated.has(b.id)) continue;
-      b.x += b.vx * dt * speed;
-      b.y += b.vy * dt * speed;
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
       if (b.x < BASE_R) { b.x = BASE_R; b.vx = Math.abs(b.vx); }
       if (b.x > W - BASE_R) { b.x = W - BASE_R; b.vx = -Math.abs(b.vx); }
       if (b.y < BASE_R) { b.y = BASE_R; b.vy = Math.abs(b.vy); }
@@ -122,7 +125,7 @@ export function HungrySwarmReveal({
     force((n) => (n + 1) % 1000000);
   });
 
-  const eatenCount = [...eliminated].filter((id) => id !== winner.id).length;
+  const eatenCount = visualPool.filter((build) => eliminated.has(build.id) && build.id !== winner.id).length;
   const winnerR = BASE_R + eatenCount * GROW;
 
   return (
@@ -160,7 +163,7 @@ export function HungrySwarmReveal({
             <BlobChip key={b.id} blob={b} r={winnerR} isOut={false} isWinner />
           ))}
       </div>
-      <SpriteLegend pool={pool} sprites={sprites} eliminated={eliminated} />
+      <SpriteLegend pool={visualPool} sprites={sprites} eliminated={eliminated} />
       <WinnerCard
         winner={winner}
         rarity={rarity}

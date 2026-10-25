@@ -35,6 +35,7 @@ interface Racer {
 
 export function HorseRaceReveal({
   pool,
+  visualPool = pool,
   winner,
   winnerProbability,
   spinId,
@@ -51,14 +52,14 @@ export function HorseRaceReveal({
     onComplete,
   );
 
-  const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
+  const sprites = useMemo(() => assignPoolSprites(visualPool), [visualPool]);
   const racers = useMemo<Racer[]>(() => {
     let s = spinId | 0;
     const rng = () => {
       s = (s * 1664525 + 1013904223) | 0;
       return Math.abs(s) / 0x7fffffff;
     };
-    return pool.map((b) => ({
+    return visualPool.map((b) => ({
       build: b,
       src: sprites.get(b.id) ?? null,
       finalProgress: b.id === winner.id ? 1 : 0.7 + rng() * 0.24,
@@ -66,7 +67,7 @@ export function HorseRaceReveal({
       wobbleFreq: 5 + rng() * 4,
       phase: rng() * Math.PI * 2,
     }));
-  }, [pool, winner.id, spinId, sprites]);
+  }, [visualPool, winner.id, spinId, sprites]);
 
   const trackW = W - SPRITE - 28;
   const p = Math.min(1, elapsed / DURATION_MS);
