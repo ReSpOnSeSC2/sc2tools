@@ -29,6 +29,9 @@ Ghost website Add is disabled and its API command rejected because the private
 assigned build fragment cannot travel in the widget-only request. The optional
 builder Ghost source warns visibly that it starts unassigned. Website additions
 preserve the priority of existing authenticated cover/alert anchors.
+New references start disabled, receive their transform/priority, then become
+visible after one final account/expiry/program-scene check. Failed setup can
+leave a disabled source for inspection; it never flashes above a live cover.
 
 The native reference ticker is a 1920×56 scene strip; website standalone Add uses
 the shared recommended size JSON (1920×180). Tests exercise fake clients and

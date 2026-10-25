@@ -11,6 +11,11 @@ from .obs_layout import PlannedItem, Rect, _browser_settings, _overlay_url, _ove
 from .widget_sizes import widget_sizes
 
 
+class _RequestStopped(Exception):
+    def __init__(self, code):
+        self.code = code
+
+
 class ObsWebsiteAdd:
     def __init__(self, *, scope: Callable, client_factory: Callable, token_provider: Callable,
                  confirm: Callable, base_url: Callable, clock=time.time):
@@ -56,6 +61,19 @@ class ObsWebsiteAdd:
                 return reply("owner_changed")
             if not isinstance(token, str) or not token:
                 return reply("token_unavailable")
+            def checkpoint():
+                if self.scope() != initial_scope:
+                    raise _RequestStopped("owner_changed")
+                if self.clock() * 1000 >= raw["expiresAt"]:
+                    raise _RequestStopped("expired")
+            def settings(name):
+                checkpoint()
+                return client.get_input_settings(name)
+            def current_scene_checkpoint():
+                current_scene = client.current_program_scene()
+                checkpoint()
+                if current_scene != scene:
+                    raise _RequestStopped("scene_changed")
             with OBS_GAME_WRITE_LOCK:
                 if self.scope() != initial_scope:
                     return reply("owner_changed")
@@ -71,21 +89,30 @@ class ObsWebsiteAdd:
                 rows = client.get_scene_item_list(scene)
                 if len(rows) > 2000:
                     return reply("obs_unavailable")
-                if any(row.get("input_kind") == "browser_source" and _overlay_url_key(
-                    client.get_input_settings(str(row.get("source_name") or "")).get("url", ""),
-                ) == _overlay_url_key(item.browser_path) for row in rows):
+                already_present = any(row.get("input_kind") == "browser_source" and _overlay_url_key(
+                    settings(str(row.get("source_name") or "")).get("url", ""),
+                ) == _overlay_url_key(item.browser_path) for row in rows)
+                if already_present:
+                    current_scene_checkpoint()
                     return reply("already_present")
-                existing = matching_game_input(client, item)
-                anchor = cover_anchor_index(client, rows, item.browser_path, widget)
+                existing = matching_game_input(client, item, before_read=checkpoint)
+                anchor = cover_anchor_index(client, rows, item.browser_path, widget, before_read=checkpoint)
+                actual_name = existing or _unique_input_name(client, item.input_name)
+                # Inventory/OBS reads may have waited while pairing/settings changed.
+                current_scene_checkpoint()
                 if existing:
-                    new_id = client.create_scene_item(scene_name=scene, source_name=existing)
+                    new_id = client.create_scene_item(scene_name=scene, source_name=existing, enabled=False)
                 else:
-                    new_id = client.create_input(scene_name=scene, input_name=_unique_input_name(client, item.input_name),
-                                                 input_kind="browser_source", settings=_browser_settings(item))
+                    new_id = client.create_input(scene_name=scene, input_name=actual_name,
+                                                 input_kind="browser_source", settings=_browser_settings(item), enabled=False)
                 client.set_scene_item_transform(scene_name=scene, item_id=new_id, transform=_transform_for(item.rect))
                 if anchor is not None:
                     client.set_scene_item_index(scene_name=scene, item_id=new_id, index=anchor)
+                current_scene_checkpoint()
+                client.set_scene_item_enabled(scene_name=scene, item_id=new_id, enabled=True)
             return reply("added")
+        except _RequestStopped as stopped:
+            return reply(stopped.code)
         except Exception:
             # No retry after an uncertain write; the user can inspect OBS first.
             return reply("local_error")

@@ -41,7 +41,7 @@ def planned_game_widgets(sx: float, sy: float, selected: Optional[Sequence[str]]
     ) for key in selected_game_widgets(selected)]
 
 
-def matching_game_input(client: Any, item) -> Optional[str]:
+def matching_game_input(client: Any, item, *, before_read=None) -> Optional[str]:
     """Reuse an existing renderer for the exact origin/token/route.
 
     Its settings are never changed. A scene reference can be placed without
@@ -56,12 +56,14 @@ def matching_game_input(client: Any, item) -> Optional[str]:
         if row.get("kind") != BROWSER_INPUT_KIND:
             continue
         name = row.get("name")
+        if before_read:
+            before_read()
         if name and _overlay_url_key(client.get_input_settings(name).get("url", "")) == expected:
             return str(name)
     return None
 
 
-def cover_anchor_index(client: Any, rows, url: str, widget_id: str) -> Optional[int]:
+def cover_anchor_index(client: Any, rows, url: str, widget_id: str, *, before_read=None) -> Optional[int]:
     """Keep the existing authenticated cover/alerts above a newly added source."""
     from .obs_layout import _chat_alerts_url_from_manual_url, _manual_override_url_from_overlay_url, _overlay_url_key
     manual = _manual_override_url_from_overlay_url(
@@ -70,10 +72,14 @@ def cover_anchor_index(client: Any, rows, url: str, widget_id: str) -> Optional[
     if not manual:
         return None
     keys = {_overlay_url_key(manual), _overlay_url_key(_chat_alerts_url_from_manual_url(manual))}
-    indices = [int(row.get("index", index)) for index, row in enumerate(rows)
-               if row.get("input_kind") == "browser_source" and _overlay_url_key(
-                   client.get_input_settings(str(row.get("source_name") or "")).get("url", ""),
-               ) in keys]
+    indices = []
+    for index, row in enumerate(rows):
+        if row.get("input_kind") != "browser_source":
+            continue
+        if before_read:
+            before_read()
+        if _overlay_url_key(client.get_input_settings(str(row.get("source_name") or "")).get("url", "")) in keys:
+            indices.append(int(row.get("index", index)))
     return min(indices) if indices else None
 
 
@@ -110,11 +116,12 @@ def add_missing_game_sources(client: Any, plan, scene_names: Sequence[str]) -> l
                 shared[item.share_key] = existing
             widget_id = item.share_key.split(":", 1)[1]
             anchor = cover_anchor_index(client, rows, item.browser_path, widget_id)
-            new_id = _create_item(client, scene.name, item, shared_browser_inputs=shared)
+            new_id = _create_item(client, scene.name, item, shared_browser_inputs=shared, enabled=False)
             if new_id is None:
                 continue
             client.set_scene_item_transform(scene_name=scene.name, item_id=new_id, transform=_transform_for(item.rect))
             if anchor is not None:
                 client.set_scene_item_index(scene_name=scene.name, item_id=new_id, index=anchor)
+            client.set_scene_item_enabled(scene_name=scene.name, item_id=new_id, enabled=True)
             added.append(item.label)
     return added

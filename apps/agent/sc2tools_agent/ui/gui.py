@@ -2462,9 +2462,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             btns.addWidget(self._obs_status)
             outer.addLayout(btns)
 
-            self._obs_website_add_check = QtWidgets.QCheckBox("Allow website requests to add an OBS source (asks here each time)")
+            self._obs_website_add_check = QtWidgets.QCheckBox("Allow website requests to add an OBS source")
             self._obs_website_add_check.setToolTip("Off by default. Only this paired account can request a source. Every request still needs your local confirmation.")
             outer.addWidget(self._obs_website_add_check)
+            website_note = QtWidgets.QLabel("Off by default. Every request asks for confirmation here before adding a source to the current program scene.")
+            website_note.setWordWrap(True)
+            website_note.setObjectName("muted")
+            outer.addWidget(website_note)
 
             scenes_form = QtWidgets.QFormLayout()
             scenes_form.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)

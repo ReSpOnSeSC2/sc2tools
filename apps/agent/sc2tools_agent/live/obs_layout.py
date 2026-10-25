@@ -3443,19 +3443,20 @@ def _create_item(
     item: PlannedItem,
     *,
     shared_browser_inputs: Dict[str, str],
+    enabled: bool = True,
 ) -> Optional[int]:
     if item.source_name:
         # Reference the user's existing input. Not a copy — OBS shares
         # the capture between scenes at no extra cost.
         return client.create_scene_item(
-            scene_name=scene_name, source_name=item.source_name,
+            scene_name=scene_name, source_name=item.source_name, enabled=enabled,
         )
     if item.browser_path and item.input_name:
         if item.share_key and item.share_key.startswith("during_game:"):
             from .obs_game_overlay import matching_game_input
             matched = matching_game_input(client, item)
             if matched:
-                return client.create_scene_item(scene_name=scene_name, source_name=matched)
+                return client.create_scene_item(scene_name=scene_name, source_name=matched, enabled=enabled)
         existing_name = (
             shared_browser_inputs.get(item.share_key)
             if item.share_key
@@ -3465,6 +3466,7 @@ def _create_item(
             return client.create_scene_item(
                 scene_name=scene_name,
                 source_name=existing_name,
+                enabled=enabled,
             )
         actual_name = _unique_input_name(client, item.input_name)
         item_id = client.create_input(
@@ -3472,6 +3474,7 @@ def _create_item(
             input_name=actual_name,
             input_kind=BROWSER_INPUT_KIND,
             settings=_browser_settings(item),
+            enabled=enabled,
         )
         if item.share_key:
             shared_browser_inputs[item.share_key] = actual_name

@@ -46,6 +46,11 @@ corresponding GitHub Release.
 - Filter analyzer views by up to twenty SC2 accounts, including saved views, shared filter links and replay navigation.
 - Export the current replay filters and sort order as a formula-safe UTF-8 CSV, with a shared column dictionary and a visible 50,000-row cap.
 
+### OBS game sources
+
+- Build scenes with the all-in-one game overlay and optional coach, randomizer and ticker sources. Additive updates reuse existing renderers and preserve custom sources and cover priority.
+- Request a widget from the website through an opted-in paired agent, with a default-Cancel confirmation naming the current OBS program scene. Offline agents explain why Add is disabled; Ghost assignments use Copy or Drag.
+
 ### Opponents list and rivals
 
 - Find regular opponents with Wilson-based rivalry cards, private stars and a saved-rivals view showing measured streaks, usual openers and cached public ladder movement. Fresh public cache observations can mark an approved channel Live now.

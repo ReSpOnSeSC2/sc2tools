@@ -257,7 +257,9 @@ OBS credentials. The agent resolves its paired account's default overlay URL.
 Use Copy/Drag for a particular token, theme or Ghost configuration. Ghost Add
 stays disabled: its assigned build fragment must come from Copy/Drag. The
 builder's optional Ghost source visibly warns that it starts unassigned. New
-website references sit below existing same-token covers and alerts. Availability
+website references sit below existing same-token covers and alerts.
+New references remain disabled until placement and a final scope check finish;
+an interrupted setup may leave a disabled source for inspection. Availability
 is one shared 30-second private request for the entire widget list. Requests have
 one pending slot per owner, 64 total, a 45-second cloud acknowledgement deadline
 and a 40-second native confirmation wait. The `--no-obs` boundary also blocks

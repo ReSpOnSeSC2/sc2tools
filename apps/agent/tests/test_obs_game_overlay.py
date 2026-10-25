@@ -26,6 +26,7 @@ class Obs(FakeObs):
         return deepcopy(self.rows.get(scene_name, []))
     def create_input(self, **kwargs):
         result = super().create_input(**kwargs)
+        self.created_inputs[-1]["enabled_at_create"] = kwargs.get("enabled", True)
         self.rows.setdefault(kwargs["scene_name"], []).append({"source_name": kwargs["input_name"], "input_kind": "browser_source", "index": 0})
         return result
     def create_scene_item(self, **kwargs):
@@ -67,6 +68,8 @@ def test_additive_update_reuses_renderer_and_preserves_cover_and_all_existing_se
     before = deepcopy(obs.input_settings)
     assert add_missing_game_sources(obs, plan(obs), [SCENE_IN_GAME]) == ["All-in-one overlay"]
     assert obs.created_items[0]["source"] == "Renamed overlay"
+    assert obs.created_items[0]["enabled"] is False
+    assert obs.enabled_updates[-1]["enabled"] is True
     assert obs.indexes[0]["index"] == 7
     assert obs.input_settings == before
     assert obs.created_inputs == obs.removed_items == obs.input_setting_updates == []
@@ -150,6 +153,8 @@ def test_confirmed_remote_add_uses_shared_standalone_size_and_idempotent_url_mem
     settings = obs.created_inputs[0]["settings"]
     assert (settings["width"], settings["height"]) == (1920, 180)
     assert settings["shutdown"] is settings["restart_when_active"] is False
+    assert obs.created_inputs[0]["enabled_at_create"] is False
+    assert obs.enabled_updates[-1]["enabled"] is True
     assert controller.handle(raw, "paired-A")["code"] == "already_present"
     assert len(obs.created_inputs) == 1
 
@@ -165,6 +170,56 @@ def test_remote_new_full_canvas_widget_stays_below_existing_same_token_cover_and
     assert obs.indexes[-1]["index"] == 5
     assert all(obs.input_settings[name] == value for name, value in before.items())
     assert obs.removed_items == obs.input_setting_updates == []
+
+
+@pytest.mark.parametrize("boundary", ["owner_changed", "expired", "scene_changed"])
+@pytest.mark.parametrize("target_row", [False, True])
+def test_slow_inventory_rechecks_scope_deadline_and_program_scene_before_write_or_noop_ack(boundary, target_row):
+    controller, obs, raw, active, _ = fixture()
+    obs._inputs.append({"name": "Unrelated browser", "kind": "browser_source"})
+    if target_row:
+        obs.rows[obs.current] = [{"source_name": "Unrelated browser", "input_kind": "browser_source"}]
+    def read(_name):
+        if boundary == "owner_changed":
+            active[0] = ("api", "paired-B")
+        elif boundary == "expired":
+            controller.clock = lambda: 141
+        else:
+            obs.current = "New program scene"
+        return {"url": "https://sc2tools.com/overlay/synthetic/widget/stats-ticker" if target_row else "https://example.invalid/unrelated"}
+    obs.get_input_settings = read
+    assert controller.handle(raw, "paired-A")["code"] == boundary
+    assert obs.created_inputs == obs.created_items == []
+
+
+def test_slow_input_name_discovery_cannot_send_a_write_under_a_changed_pairing():
+    controller, obs, raw, active, _ = fixture()
+    original = obs.get_input_list
+    def inventory(kind=None):
+        if kind is None:  # The collision-name read happens after renderer lookup.
+            active[0] = ("api", "paired-B")
+        return original(kind)
+    obs.get_input_list = inventory
+    assert controller.handle(raw, "paired-A")["code"] == "owner_changed"
+    assert obs.created_inputs == obs.created_items == []
+
+
+@pytest.mark.parametrize("boundary", ["owner_changed", "expired", "scene_changed"])
+def test_new_source_stays_disabled_if_scope_changes_during_geometry_setup(boundary):
+    controller, obs, raw, active, _ = fixture()
+    original = obs.set_scene_item_transform
+    def transform(**kwargs):
+        original(**kwargs)
+        if boundary == "owner_changed":
+            active[0] = ("api", "paired-B")
+        elif boundary == "expired":
+            controller.clock = lambda: 141
+        else:
+            obs.current = "Other program scene"
+    obs.set_scene_item_transform = transform
+    assert controller.handle(raw, "paired-A")["code"] == boundary
+    assert len(obs.created_inputs) == 1 and obs.created_inputs[0]["enabled_at_create"] is False
+    assert obs.enabled_updates == []
 
 
 def test_opt_in_state_is_strict_and_default_off(tmp_path):
