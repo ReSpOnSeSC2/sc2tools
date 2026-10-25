@@ -9,6 +9,8 @@ const harness = vi.hoisted(() => ({
   mutate: vi.fn(async () => undefined),
   loading: false,
   authLoaded: true,
+  assignments: [] as unknown[],
+  assignmentsError: false,
   relationships: [] as Array<{ student: { id: string; name: string }; coach: { id: string; name: string }; status: string }>,
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: harness.authLoaded, isSignedIn: true }), RedirectToSignIn: () => null }));
@@ -19,8 +21,8 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string) => ({
-    data: path === "/v1/coaching/practice-sharing" ? { relationships: harness.relationships } : path === "/v1/coaching/alerts" ? { unreadCount: 2 } : harness.loading ? undefined : { role: harness.role, coachId: harness.role === "coach" ? "coach-1" : null, studentId: null },
-    error: undefined,
+    data: path === "/v1/coaching/assignments?state=active&limit=100" ? { assignments: harness.assignments, serverTime: "2026-09-06T12:00:00Z", hasMore: false } : path === "/v1/coaching/practice-sharing" ? { relationships: harness.relationships } : path === "/v1/coaching/alerts" ? { unreadCount: 2 } : harness.loading ? undefined : { role: harness.role, coachId: harness.role === "coach" ? "coach-1" : null, studentId: null },
+    error: path === "/v1/coaching/assignments?state=active&limit=100" && harness.assignmentsError ? { message: "Unavailable" } : undefined,
     isLoading: harness.loading,
     mutate: harness.mutate,
   }),
@@ -52,9 +54,19 @@ afterEach(() => {
   harness.replace.mockClear();
   harness.mutate.mockClear();
   harness.loading = false; harness.authLoaded = true; harness.relationships = [];
+  harness.assignments = []; harness.assignmentsError = false;
 });
 
 describe("CoachingWorkspace", () => {
+  it("counts distinct behind-schedule players for coaches and withholds stale flags after an error", () => {
+    const plan = (id: string, playedGames: number) => ({ status: "active", student: { id, name: id }, progress: { currentBucket: { startsAt: "2026-09-01T00:00:00Z", endsAt: "2026-09-08T00:00:00Z", requiredGames: 5, playedGames }, lastGameAt: null } });
+    harness.assignments = [plan("Alex", 0), plan("Alex", 1), plan("Blair", 5)];
+    const view = render(<CoachingWorkspace />);
+    expect(screen.getByText("1 player behind schedule")).toBeTruthy();
+    harness.assignmentsError = true; view.rerender(<CoachingWorkspace />);
+    expect(screen.queryByText("1 player behind schedule")).toBeNull();
+  });
+
   it("opens a direct Practice link without eagerly mounting Locker", () => {
     harness.search = "view=practice";
     render(<CoachingWorkspace />);

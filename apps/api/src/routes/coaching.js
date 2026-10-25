@@ -3,6 +3,7 @@
 const express = require("express");
 const { parseFilters } = require("../util/parseQuery");
 const { REGION_LABELS } = require("../util/regionFromToonHandle");
+const { ASSIGNMENT_STATES } = require("../services/coachingAssignmentState");
 
 // Whole-state payloads carry embedded media (voice memos, images,
 // small replays) as base64. Body parsing is owned by the app-level
@@ -384,10 +385,14 @@ function buildCoachingRouter(deps) {
         : undefined;
       const page = Number(req.query.page);
       const limit = Number(req.query.limit);
+      const state = req.query.state;
+      if (state !== undefined && (typeof state !== "string" || !ASSIGNMENT_STATES.includes(state))) {
+        res.status(400).json({ error: { code: "invalid_assignment_state", message: "Choose active, upcoming, ended or cancelled." } }); return;
+      }
       const result = await deps.coaching.listAssignments(
         auth.userId,
         cr,
-        { studentId, page, limit, paginated: true },
+        { studentId, page, limit, paginated: true, state },
       );
       const pageResult = Array.isArray(result)
         ? {
