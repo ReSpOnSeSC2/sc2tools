@@ -71,3 +71,9 @@ The game-page and build-check-in Help articles now document correcting an
 accidental selection, including No set build and the Macro Breakdown editor.
 All 77 Help checks pass; the 88-article generated index remains unchanged,
 and both edited articles pass strict lint.
+
+Integrated with the PvT DT opening correction in PR756. The combined production
+build and every unchanged budget pass at the values above with required engine
+fc21ebe5bf52a53c. Full web CI initially passed 8006 tests; two guide artifact
+consistency failures from the new label were repaired separately. Final-head
+CI remains required before merge.

@@ -32,10 +32,10 @@ No production replay reanalysis or data mutation is authorized or performed.
 
 ## Evidence and verification plan
 
-The reported case is an 8:12 PvT on Eternity's Edge LE with a proxy Shrine
-displayed at 3:17 and DT rows around 3:54–4:04. The exact raw replay/debug has
-not been recovered locally. The regression fixture is clearly synthetic and
-uses raw engine building-start/unit-appearance clocks, not display rewinds.
+The reported pattern is an early ground DT opening followed by Charge and a
+fast third. Private production observations are excluded from this checkpoint.
+The regression fixture is clearly synthetic and uses raw engine
+building-start/unit-appearance clocks, not display rewinds.
 
 Source tests cover all Charge variants, real ground/drop priority, missing/
 late/hallucinated transport, cutoff boundaries, missing tech, late transition,
@@ -64,4 +64,11 @@ Public catalogs contain 189 engine labels and 198 build variant IDs.
 Engine version remains 1.6.12 with a normal content-addressed hash change.
 No version, tag, installer or binary release is part of this task. No production
 reanalysis is performed. Commit/integration/CI and production delivery remain
-root-owned gates; the exact reported game is still awaiting its debug URL.
+root-owned gates; no decoded production replay is claimed.
+
+Integrated with the Macro build editor in PR756. The combined production build
+passes all unchanged budgets and rebuilds the same fc21 engine. Initial full
+web CI passed 8006 tests but caught two generated guide-catalog/slug-lock
+consistency failures. Both API artifacts are now refreshed, and guides:catalog
+updates them together. The 24 guide/definition parity checks and strict script
+lint pass; final-head CI remains required.
