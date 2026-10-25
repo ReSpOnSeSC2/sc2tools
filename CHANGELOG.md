@@ -24,6 +24,7 @@ corresponding GitHub Release.
   Bound fresh-replay overflow to eight pending jobs during large backlogs.
 
 ### Added
+- Configure optional Twitch Predictions and live-game stream markers with separate permissions, explicit opt-ins and confirmed Dock controls. A separate server gate defaults off; current desktop telemetry cannot prove ranked queue status, so automatic Predictions remain unavailable.
 - Opt in to nine recorded ladder achievements in Event alerts, with per-moment visuals and sounds, local tests, clip timestamps and optional posts through an already connected bot. Supporter alerts keep priority; replay starting MMR and confirmed league evidence remain explicit.
 - Chat commands now share saved aliases, availability and cooldowns across the Twitch bot, Nightbot and on-stream answers. New commands show recorded daily and season stats, recent opponent meetings, prediction leaders and stream-session uptime; owners can add bounded plain-text custom replies with supported variables.
 - Analyzer tables now support keyboard build opening, global matchup chips, a matchup-scoped heatmap and a Strategy games sheet that stays open as filters change. CSV exports save the displayed Builds, Strategy pairs, Matchups, Maps and pool cells with their scope and local date.

@@ -1,0 +1,22 @@
+{
+  "defaults": {
+    "predictionsEnabled": false,
+    "markersEnabled": false,
+    "windowSec": 120,
+    "titleTemplate": "Will {me} beat {opp} ({oppRace} {oppMmr})?"
+  },
+  "variables": ["me", "opp", "oppRace", "oppMmr"],
+  "limits": {
+    "windowMinSec": 30,
+    "windowMaxSec": 300,
+    "templateChars": 140,
+    "predictionTitleChars": 45,
+    "markerChars": 140,
+    "loadingFreshMs": 15000,
+    "rematchMs": 600000,
+    "resultTimeoutMs": 1200000,
+    "receiptTtlMs": 604800000,
+    "leaseMs": 30000,
+    "recoveryBatch": 25
+  }
+}

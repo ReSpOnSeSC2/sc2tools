@@ -38,7 +38,7 @@ function buildPlatformIntegrationsRouter(deps) {
       const platform = parsePlatform(req.params.platform);
       res.set("Cache-Control", "no-store");
       const purpose = req.body?.purpose === undefined ? "alerts" : req.body.purpose;
-      if (purpose !== "alerts" && purpose !== "streaming") {
+      if (!["alerts", "streaming", "predictions"].includes(purpose) || purpose === "predictions" && platform !== "twitch") {
         throw new PlatformIntegrationError(400, "oauth_purpose_invalid", "Unsupported account connection purpose.");
       }
       res.json(await deps.integrations.begin(session.userId, platform, { purpose }));
