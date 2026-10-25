@@ -217,6 +217,11 @@ corresponding GitHub Release.
 - The game page includes the complete macro report, priced leaks and Recompute analysis, with section links that keep the replay mounted. Bank joins the chart metrics, and this browser remembers your selection.
 - Supply blocks, loss causes, macro moments and build steps seek one replay clock. Playback follows through the chart and current build step; timestamp links, completed upgrades and measured banked resources give each moment context.
 
+### Game navigation and replay controls
+
+- Step through older and newer games with remembered all, opponent, matchup or build scope, optional recorded head-to-head totals and Alt+arrow shortcuts. Back links retain the originating list, filters and named build context; opponent names open their dossiers where an identity is available.
+- Focus the replay for keyboard seeking, slow motion, event jumps, fullscreen and a shortcut sheet. Replay display choices, speed, volume and mobile panels are remembered on this device, and seeks are announced to screen readers.
+
 ### Shared game analysis
 
 - Back keeps archive filters and page context; older/newer games and arrow-key navigation follow the same filtered list.

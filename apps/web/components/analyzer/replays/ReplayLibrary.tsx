@@ -35,6 +35,7 @@ import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
 import { filtersToQuery, useFilters } from "@/lib/filterContext";
 import { ReplayList } from "./ReplayList";
 import type { ReplayLibraryResponse, ReplaySharingResponse } from "./types";
+import { useReplayListFilters } from "@/lib/useReplayListFilters";
 
 const PAGE_SIZE = 25;
 
@@ -44,11 +45,8 @@ type SortFilter = "date_desc" | "date_asc";
 /** Signed-in replay archive mounted at /app/replays. */
 export function ReplayLibrary() {
   const { filters, dbRev } = useFilters();
-  const [search, setSearch] = useState("");
+  const { search, setSearch, result, setResult, matchup, setMatchup, sort, setSort, reset: resetReplayFilters } = useReplayListFilters();
   const deferredSearch = useDeferredValue(search.trim());
-  const [result, setResult] = useState<ResultFilter>("all");
-  const [matchup, setMatchup] = useState("all");
-  const [sort, setSort] = useState<SortFilter>("date_desc");
   const [cursor, setCursor] = useState<string | null>(null);
   const [cursorHistory, setCursorHistory] = useState<Array<string | null>>([]);
 
@@ -95,13 +93,6 @@ export function ReplayLibrary() {
 
   const playerName = data?.profile.displayName?.trim() || "You";
   const hasReplayFilters = search.length > 0 || result !== "all" || matchup !== "all" || sort !== "date_desc";
-
-  function resetReplayFilters() {
-    setSearch("");
-    setResult("all");
-    setMatchup("all");
-    setSort("date_desc");
-  }
 
   function goOlder() {
     const next = data?.page.nextCursor;
@@ -197,7 +188,7 @@ export function ReplayLibrary() {
           ) : error ? (
             <ReplayError error={error} onRetry={() => void mutate()} />
           ) : data ? (
-            <ReplayList items={data.items} owner playerName={playerName} />
+            <ReplayList items={data.items} owner playerName={playerName} listQuery={path.split("?", 2)[1]} />
           ) : null}
         </div>
 

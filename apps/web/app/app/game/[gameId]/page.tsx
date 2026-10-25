@@ -5,6 +5,7 @@ import type { GameSummary } from "@/components/analyzer/game/types";
 import { apiFetch } from "@/lib/api";
 import { newBuildSideFromQuery } from "@/lib/buildIntentLinks";
 import { opponentContextFromQuery } from "@/lib/opponentNavigation";
+import { gameSourceFromQuery } from "@/lib/gameNavigation";
 import { replayTimeFromQuery } from "@/lib/replayLink";
 
 /**
@@ -52,6 +53,7 @@ export default async function GameDetailRoute({
     <GameDetailPage
       gameId={safeDecode(route.gameId || "")}
       opponentContext={opponentContextFromQuery(query)}
+      source={gameSourceFromQuery(query)}
       initialTimeSec={replayTimeFromQuery(query)}
       initialNewBuild={newBuildSideFromQuery(query)}
     />

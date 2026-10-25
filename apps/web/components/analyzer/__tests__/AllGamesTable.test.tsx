@@ -9,6 +9,10 @@ import {
   within,
 } from "@testing-library/react";
 import { AllGamesTable } from "../AllGamesTable";
+import { FiltersContext } from "@/lib/filterContext";
+import { gameSourceFromQuery } from "@/lib/gameNavigation";
+import { ownerNeighborPath } from "../game/GameNavigation";
+import { ReportGamesModal } from "../macro/report/ReportGamesModal";
 
 const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
@@ -519,4 +523,36 @@ it("discloses that a non-date sort applies only to the current replay page", () 
   expect(screen.queryByText(/Sorting applies/)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: /^Map/ }));
   expect(screen.getByRole("status").textContent).toBe("Sorting applies to this game only");
+});
+
+it("uses the actual global cohort and keeps mobile opponent links outside the disclosure button", () => {
+  window.history.replaceState(null, "", "/app/macro?keep=1#leaks");
+  render(<FiltersContext.Provider value={{ filters: { race: "P", opp_race: "Z", since: "2026-10-01", map: "Alcyone", build: "Blink" }, dbRev: 0, bumpRev: vi.fn(), setFilters: vi.fn(), seasons: [] }}>
+    <AllGamesTable games={[{ id: "one", opponent: "Known Rival", opponent_pulse_id: "rival-123", date: "2026-10-20" }]} />
+  </FiltersContext.Provider>);
+  const link = screen.getAllByRole("link", { name: /Open game analysis:/i })[0];
+  const source = gameSourceFromQuery(Object.fromEntries(new URL(link.getAttribute("href")!, "https://sc2tools.test").searchParams))!;
+  expect(source.href).toBe("/app/macro?keep=1#leaks");
+  expect(Object.fromEntries(new URL(ownerNeighborPath("one", "all", source), "https://sc2tools.test").searchParams)).toMatchObject({ scope: "all", race: "P", opp_race: "Z", since: "2026-10-01", map: "Alcyone", build: "Blink" });
+  const rivalLinks = screen.getAllByRole("link", { name: "Known Rival" });
+  for (const rival of rivalLinks) expect(rival.closest("button")).toBeNull();
+  const toggle = screen.getByRole("button", { name: "Toggle build order" });
+  rivalLinks[1].addEventListener("click", (event) => event.preventDefault());
+  fireEvent.click(rivalLinks[1]);
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(toggle); expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  window.history.replaceState(null, "", "/");
+});
+
+it("carries the exact report drill cohort through its real games modal", () => {
+  window.history.replaceState(null, "", "/app/macro#leaks");
+  useApiMock.mockImplementation((path: string | null) => ({ data: path?.startsWith("/v1/games-list") ? { total: 1, games: [{ id: "drill-game", opponent: "Rival", date: "2026-10-20" }] } : undefined, isLoading: false }));
+  render(<FiltersContext.Provider value={{ filters: { race: "P", opp_race: "Z" }, dbRev: 0, bumpRev: vi.fn(), setFilters: vi.fn(), seasons: [] }}>
+    <ReportGamesModal drill={{ title: "Supply blocks", params: { leak: "Supply blocks", opp_race: "T", macro_max: 70 } }} onClose={vi.fn()} />
+  </FiltersContext.Provider>);
+  const href = screen.getAllByRole("link", { name: /Open game analysis:/i })[0].getAttribute("href")!;
+  const source = gameSourceFromQuery(Object.fromEntries(new URL(href, "https://sc2tools.test").searchParams))!;
+  expect(source.href).toBe("/app/macro#leaks");
+  expect(Object.fromEntries(new URL(ownerNeighborPath("drill-game", "all", source), "https://sc2tools.test").searchParams)).toEqual({ scope: "all", race: "P", opp_race: "T", leak: "Supply blocks", macro_max: "70" });
+  window.history.replaceState(null, "", "/");
 });

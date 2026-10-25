@@ -42,6 +42,8 @@ const SIZE_CLASSES: Record<ModalSize, string> = {
 };
 
 export interface ModalProps {
+  /** Keep a dialog inside a fullscreen player when supplied. */
+  portalContainer?: Element | null;
   open: boolean;
   onClose: () => void;
   title: ReactNode;
@@ -68,6 +70,7 @@ export interface ModalProps {
 }
 
 export function Modal({
+  portalContainer,
   open,
   onClose,
   title,
@@ -178,7 +181,7 @@ export function Modal({
         ) : null}
       </div>
     </div>,
-    document.body,
+    portalContainer ?? document.body,
   );
 }
 

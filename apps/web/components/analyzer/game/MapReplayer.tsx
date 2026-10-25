@@ -51,7 +51,7 @@ import { ME_ARMY, OPP_ARMY, STAGE_VIEWPORT_FRACTION, STAGE_MIN_H_PX, STAGE_MAX_H
 
 export type { ReplayMapMarker };
 
-const SPEEDS = [1, 4, 8, 16] as const;
+import { REPLAY_SPEEDS as SPEEDS } from "@/lib/replayControls";
 
 /** A pointer that travelled further than this is a drag, not a tap. */
 const TAP_SLOP_PX = 6;

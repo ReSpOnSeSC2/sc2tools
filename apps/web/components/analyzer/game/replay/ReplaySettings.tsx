@@ -102,6 +102,7 @@ export function ReplaySettings({
       {open ? (
         <div
           id={menuId}
+          data-replay-popover=""
           role="group"
           aria-label="Replay display settings"
           className="absolute bottom-full right-0 z-20 mb-2 w-56 overflow-hidden rounded-lg border border-border bg-bg-elevated py-1 shadow-card"

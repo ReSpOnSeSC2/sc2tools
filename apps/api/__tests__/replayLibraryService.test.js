@@ -72,7 +72,7 @@ describe("ReplayLibraryService", () => {
     };
   }
 
-  test("returns strict public rows and separate bounded VOD sources", async () => {
+  test("returns safe owner rows and bounded VOD sources, keeping pulse identity out of public rows", async () => {
     await db.games.insertOne(game("g-safe", new Date("2026-08-20T12:00:00Z"), {
       gameVersion: "5.0.16.97425",
       gameBuild: 97_425,
@@ -106,6 +106,7 @@ describe("ReplayLibraryService", () => {
         race: "Terran",
         mmr: 4_250,
         strategy: "2-1-1",
+        pulseId: "private-pulse-id",
       },
       matchup: "PvT",
       replayAvailable: true,
@@ -121,7 +122,11 @@ describe("ReplayLibraryService", () => {
         }),
       }),
     );
-    const publicJson = JSON.stringify(page.items);
+    const ownerJson = JSON.stringify(page.items);
+    for (const secret of ["private-sha", "private-object-key", "private-heavy-detail", "userId", "toonHandle", "pulseCharacterId"]) expect(ownerJson).not.toContain(secret);
+    const publicPage = await service.list("owner", { view: "detector" });
+    expect(publicPage.items[0].opponent).not.toHaveProperty("pulseId");
+    const publicJson = JSON.stringify(publicPage.items);
     expect(publicJson).not.toContain("private-pulse-id");
     expect(publicJson).not.toContain("private-sha");
     expect(publicJson).not.toContain("private-object-key");

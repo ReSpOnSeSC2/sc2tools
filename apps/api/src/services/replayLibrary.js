@@ -55,6 +55,8 @@ const REPLAY_LIBRARY_PROJECTION = Object.freeze({
   "opponent.race": 1,
   "opponent.mmr": 1,
   "opponent.strategy": 1,
+  // Owner-only dossier link identity; detector/public DTOs omit it below.
+  "opponent.pulseId": 1,
   // These two values are private orchestration inputs. They are copied only
   // into `sourceGames`, which routes must use server-side for VOD resolution
   // and omit from JSON. They never enter the public item serializer below.
@@ -77,7 +79,7 @@ const REPLAY_LIBRARY_PROJECTION = Object.freeze({
 /**
  * Compact replay-library reads shared by the authenticated and shareable
  * routes. Privacy/visibility gates stay in the route layer; this service
- * always scopes reads to the resolved owner id and emits the same safe DTO.
+ * always scopes reads to the resolved owner id and emits a view-specific safe DTO.
  */
 class ReplayLibraryService {
   /** @param {{games: import('mongodb').Collection}} db */
@@ -385,6 +387,8 @@ function serializeReplayLibraryGame(row, view = "owner") {
   const replaySizeBytes = safePositiveInteger(replayFile.sizeBytes);
   const myRace = boundedOutputString(row?.myRace, 24);
   const opponentRace = boundedOutputString(opponent.race, 24);
+  const ownerPulseId = view === "owner" && typeof opponent.pulseId === "string" && opponent.pulseId.length <= 200
+    ? boundedIdentityString(opponent.pulseId, 200) : null;
   return {
     gameId: cleanGameId(row?.gameId),
     date: outputDate(row?.date),
@@ -404,6 +408,7 @@ function serializeReplayLibraryGame(row, view = "owner") {
       race: opponentRace,
       mmr: safeBoundedNumber(opponent.mmr, 0, 9_999, true),
       strategy: boundedOutputString(replayOpponentStrategy(row, view), 200),
+      ...(ownerPulseId ? { pulseId: ownerPulseId } : {}),
     },
     matchup: matchupLabel(myRace, opponentRace),
     replayAvailable:
@@ -620,6 +625,7 @@ function matchupLabel(myRace, opponentRace) {
 }
 
 module.exports = {
+  buildReplayLibraryMatch,
   resultMatchClause,
   ReplayLibraryService,
   REPLAY_LIBRARY_LIST_DEFAULT,

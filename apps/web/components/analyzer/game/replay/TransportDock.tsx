@@ -27,15 +27,15 @@
  */
 
 import { memo, type CSSProperties, type ReactNode } from "react";
-import { Pause, Play, SkipBack } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward, RotateCcw, RotateCw } from "lucide-react";
 import { formatClock, type TimelineMarker } from "@/lib/replayHud";
 import type { PhaseBand } from "@/lib/replayHud";
 import type { ReplayMusicApi } from "@/lib/replayMusic";
 import { MusicControl } from "./MusicControl";
 import { SIDE_COLOR } from "./replayTheme";
 
-export const REPLAY_SPEEDS = [1, 4, 8, 16] as const;
-export type ReplaySpeed = (typeof REPLAY_SPEEDS)[number];
+import { adjacentReplayMarker, adjacentReplaySpeed, type ReplaySpeed } from "@/lib/replayControls";
+export { REPLAY_SPEEDS, type ReplaySpeed } from "@/lib/replayControls";
 
 /**
  * A cluster of review comments on the timeline (Replay Review Exchange).
@@ -49,8 +49,7 @@ export type CommentTimelineMarker = {
 };
 
 export function nextSpeed(speed: ReplaySpeed): ReplaySpeed {
-  const i = REPLAY_SPEEDS.indexOf(speed);
-  return REPLAY_SPEEDS[(i + 1) % REPLAY_SPEEDS.length];
+  return adjacentReplaySpeed(speed, 1, true);
 }
 
 const MARKER_COLOR: Readonly<Record<TimelineMarker["kind"], string>> = {
@@ -59,7 +58,7 @@ const MARKER_COLOR: Readonly<Record<TimelineMarker["kind"], string>> = {
 };
 
 const DOCK_BUTTON_CLASS =
-  "inline-flex h-9 min-w-[2.25rem] shrink-0 items-center justify-center rounded-md border border-border bg-bg-elevated px-2 text-caption font-semibold text-text transition-colors hover:border-border-strong hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan";
+  "inline-flex h-11 min-w-11 shrink-0 items-center justify-center rounded-md border border-border bg-bg-elevated px-2 text-caption font-semibold text-text transition-colors hover:border-border-strong hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan";
 
 /** Clamp to [0, 100] so a marker past the last stats sample — or a
  *  ``gameLength`` of 0 — cannot escape the strip. */
@@ -214,7 +213,8 @@ function TransportDockImpl({
           type="button"
           onClick={() => onSeek(0)}
           aria-label="Skip to start"
-          title="Skip to start"
+          title="Skip to start (Home)"
+          aria-keyshortcuts="Home"
           className={DOCK_BUTTON_CLASS}
         >
           <SkipBack className="h-4 w-4" aria-hidden />
@@ -229,7 +229,8 @@ function TransportDockImpl({
           }}
           aria-label={playing ? "Pause" : "Play"}
           aria-pressed={playing}
-          title={playing ? "Pause" : "Play"}
+          title={playing ? "Pause (Space / K)" : "Play (Space / K)"}
+          aria-keyshortcuts="Space K"
           className={`${DOCK_BUTTON_CLASS} border-accent-cyan/50 bg-accent-cyan/15 hover:border-accent-cyan hover:bg-accent-cyan/25`}
         >
           {playing ? (
@@ -242,11 +243,21 @@ function TransportDockImpl({
           type="button"
           onClick={() => onSpeedChange(nextSpeed(speed))}
           aria-label={`Playback speed ${speed} times. Click to cycle.`}
-          title="Playback speed"
+          title="Playback speed ([ / ])"
+          aria-keyshortcuts="[ ]"
           className={`${DOCK_BUTTON_CLASS} tabular-nums`}
         >
           {speed}×
         </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Replay jumps">
+        <button type="button" className={DOCK_BUTTON_CLASS} title="Back 10 seconds (J)" aria-label="Back 10 seconds" aria-keyshortcuts="J" onClick={() => onSeek(Math.max(0, t - 10))}><RotateCcw className="h-4 w-4" aria-hidden /><span className="text-micro">10</span></button>
+        <button type="button" className={DOCK_BUTTON_CLASS} title="Forward 10 seconds (L)" aria-label="Forward 10 seconds" aria-keyshortcuts="L" onClick={() => onSeek(Math.min(gameLength, t + 10))}><span className="text-micro">10</span><RotateCw className="h-4 w-4" aria-hidden /></button>
+        {([-1, 1] as const).map((direction) => {
+          const target = adjacentReplayMarker(markers, t, direction);
+          const label = direction === -1 ? "Previous event" : "Next event";
+          return <button key={direction} type="button" className={`${DOCK_BUTTON_CLASS} disabled:opacity-40`} title={`${label} (${direction === -1 ? "P" : "N"})`} aria-label={label} aria-keyshortcuts={direction === -1 ? "P" : "N"} disabled={target === null} onClick={() => { if (target !== null) onSeek(Math.max(0, Math.min(gameLength, target))); }}>{direction === -1 ? <SkipBack className="h-4 w-4" aria-hidden /> : <SkipForward className="h-4 w-4" aria-hidden />}</button>;
+        })}
       </div>
 
       {/* A separate timeline row on phones. The basis also lets it wrap
