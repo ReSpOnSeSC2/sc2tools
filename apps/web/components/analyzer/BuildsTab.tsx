@@ -6,7 +6,9 @@ import { RefreshCcw } from "lucide-react";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { Button } from "@/components/ui/Button";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
-import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
+import { useLocalStoragePositiveInt, useLocalStorageState } from "@/lib/useLocalStorageState";
+import { isMechanicsBucket, type MechanicsBucket } from "@/lib/mechanicsTrend";
+import { MixOverTimeChart } from "./charts/MixOverTimeChart";
 import { pct1, wrColor } from "@/lib/format";
 import { checkinsText } from "@/lib/buildIntent";
 import { Card, Skeleton, WrBar } from "@/components/ui/Card";
@@ -15,12 +17,14 @@ import { usePersistentSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
 import { BuildEditorModal } from "./BuildEditorModal";
+import { StrengthCell, StrengthGuide, StrengthHeader, WinRateRange } from "./StrengthAdjusted";
+import type { StrengthFields } from "@/lib/strengthAdjusted";
 import { NoFilterMatches } from "./EmptyStates";
 import { BuildMmrPanel } from "./mmr/BuildMmrPanel";
 import { BuildAgingCurve } from "./mmr/BuildAgingCurve";
 import { MmrProgressionByBuild } from "./mmr/MmrProgressionByBuild";
 
-type BuildRow = {
+type BuildRow = StrengthFields & {
   name: string;
   total: number;
   wins: number;
@@ -40,6 +44,7 @@ export function BuildsTab() {
   const [search, setSearch] = useState("");
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_BUILDS, 1);
   const [editing, setEditing] = useState<string | null>(null);
+  const [bucket, setBucket] = useLocalStorageState<MechanicsBucket>("analyzer.trends.bucket", "week", isMechanicsBucket);
   const sort = usePersistentSort(LS_BUILDS_SORT, "total", "desc");
 
   const { data, isLoading, error, mutate } = useApi<BuildRow[]>(
@@ -88,6 +93,7 @@ export function BuildsTab() {
           onChange={(e) => setSearch(e.target.value)}
         />
         <MinGamesPicker value={minGames} onChange={setMinGames} />
+        <button type="button" className="min-h-11 rounded-lg border border-border px-3 text-caption" aria-pressed={sort.sortBy === "winsAboveExpected"} onClick={() => sort.setSortExplicit("winsAboveExpected", sort.sortBy === "winsAboveExpected" && sort.sortDir === "desc" ? "asc" : "desc")}>Vs expected {sort.sortBy === "winsAboveExpected" ? sort.sortDir === "desc" ? "↓" : "↑" : ""}</button>
         <WinRateSortToggle
           dir={sort.sortBy === "winRate" ? sort.sortDir : "desc"}
           active={sort.sortBy === "winRate"}
@@ -99,6 +105,7 @@ export function BuildsTab() {
       </div>
 
       {data || !error ? <Card>
+        <div className="mb-3"><StrengthGuide /></div>
         {rows.length === 0 ? (
           <NoFilterMatches
             title="No builds match these filters"
@@ -149,6 +156,8 @@ export function BuildsTab() {
                     <div className="w-full">
                       <WrBar wins={b.wins} losses={b.losses} />
                     </div>
+                    <WinRateRange row={b} total={b.total} />
+                    <StrengthCell row={b} />
                   </button>
                 </li>
               ))}
@@ -159,13 +168,14 @@ export function BuildsTab() {
                   numeric cols don't grab equal shares of leftover space
                   and push WR off the right edge — see StrategiesTabBuildVs
                   for the same treatment. */}
-              <table className="w-full table-fixed text-sm">
+              <table className="w-full min-w-[40rem] table-fixed text-sm">
                 <colgroup>
                   <col />
                   <col style={{ width: "3.5rem" }} />
                   <col style={{ width: "3.5rem" }} />
                   <col style={{ width: "4.5rem" }} />
                   <col style={{ width: "4.5rem" }} />
+                  <col style={{ width: "8rem" }} />
                   <col style={{ width: "8rem" }} />
                 </colgroup>
                 <thead className="bg-bg-elevated">
@@ -175,6 +185,7 @@ export function BuildsTab() {
                     <SortableTh col="losses" label="L" {...sort} align="right" />
                     <SortableTh col="total" label="Games" {...sort} align="right" />
                     <SortableTh col="winRate" label="WR" {...sort} align="right" />
+                    <StrengthHeader sort={sort} />
                     <th className="px-3 py-2 text-left text-micro uppercase text-text-dim">
                       Trend
                     </th>
@@ -199,7 +210,9 @@ export function BuildsTab() {
                         style={{ color: wrColor(b.winRate, b.total) }}
                       >
                         {pct1(b.winRate)}
+                        <WinRateRange row={b} total={b.total} />
                       </td>
+                      <td className="px-2 py-1.5 text-right"><StrengthCell row={b} /></td>
                       <td className="px-3 py-1.5">
                         <WrBar wins={b.wins} losses={b.losses} />
                       </td>
@@ -213,6 +226,7 @@ export function BuildsTab() {
       </Card> : null}
 
       <BuildMmrPanel />
+      <div className="space-y-2"><label className="flex items-center gap-2 text-caption text-text-muted">Group build mix by<select aria-label="Build mix period" value={bucket} onChange={event => setBucket(event.target.value as MechanicsBucket)} className="min-h-11 rounded-md border border-border bg-bg-surface px-2 text-text"><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></select></label><MixOverTimeChart endpoint="timeseries/my-builds" title="Build mix over time" caption="Recorded game counts per build and calendar period." bucket={bucket} /></div>
 
       {/* ``[&>*]:min-w-0`` style applied per-child below — see each
           chart wrapper. Without it the long build labels in the chart

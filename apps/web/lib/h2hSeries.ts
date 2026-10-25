@@ -396,3 +396,18 @@ export function totalsOf(games: H2HGame[]): {
   const total = wins + losses;
   return { wins, losses, total, winRate: total > 0 ? wins / total : 0 };
 }
+
+/** Newest-first history; ties and unknown results neither extend nor break a run. */
+export function currentAndBestStreak(games: H2HGame[]): {
+  current: { result: "W" | "L"; count: number } | null; bestWin: number; bestLoss: number;
+} {
+  let previous: GameOutcome = "U", run = 0, bestWin = 0, bestLoss = 0;
+  for (const game of chronological(decidedOnly(games))) {
+    const result = gameOutcome(game);
+    if (result === "U") continue;
+    run = previous === result ? run + 1 : 1; previous = result;
+    if (result === "W") bestWin = Math.max(bestWin, run);
+    else bestLoss = Math.max(bestLoss, run);
+  }
+  return { current: previous === "U" ? null : { result: previous, count: run }, bestWin, bestLoss };
+}

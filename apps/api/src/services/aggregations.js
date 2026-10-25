@@ -5,6 +5,7 @@ const { gamesMatchStage } = require("../util/parseQuery");
 const trendsAgg = require("./trendsAggregations");
 const trendsInsights = require("./trendsInsights");
 const { TrendsRequests } = require("./trendsRequests");
+const { strengthPipeline, finishStrength } = require("./strengthAdjusted");
 const { trendsExplorer } = require("./trendsExplorer");
 const {
   attachRecentByMap,
@@ -34,9 +35,11 @@ const RESULT_BUCKET_BRANCHES = [
  * /build-vs-strategy, /random-summary, and /timeseries endpoints.
  */
 class AggregationsService {
-  /** @param {{games: import('mongodb').Collection, gameDetails?: import('mongodb').Collection}} db */
-  constructor(db) {
+  /** @param {{games: import('mongodb').Collection, gameDetails?: import('mongodb').Collection}} db
+   * @param {{mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'>}} [opts] */
+  constructor(db, opts = {}) {
     this.db = db;
+    this.mmrExpectation = opts.mmrExpectation;
     this.trendsRequests = new TrendsRequests();
   }
 
@@ -125,17 +128,18 @@ class AggregationsService {
    */
   async _matchupsOnce(userId, filters) {
     const match = gamesMatchStage(userId, filters);
+    const curve = await this.mmrExpectation?.curve() || null;
     const rows = await this.db.games
-      .aggregate([
+      .aggregate(strengthPipeline([
         { $match: match },
         { $addFields: { _bucket: bucketSwitch() } },
         ...matchupFacet().map(stripFacetWrappers).flat(),
-      ])
+      ], curve))
       .toArray();
     return finalizeRows(
       // The $project in matchupFacet guarantees ``name`` on every row;
       // the driver only knows ``Document``.
-      await attachRecentByMatchup(this.db, userId, filters, /** @type {Array<{name: string} & Record<string, any>>} */ (rows)),
+      await attachRecentByMatchup(this.db, userId, filters, /** @type {Array<{name: string} & Record<string, any>>} */ (rows.map(row => finishStrength(row, curve)))),
     );
   }
 
@@ -201,17 +205,18 @@ class AggregationsService {
    */
   async _mapsOnce(userId, filters) {
     const match = gamesMatchStage(userId, filters);
+    const curve = await this.mmrExpectation?.curve() || null;
     const rows = await this.db.games
-      .aggregate([
+      .aggregate(strengthPipeline([
         { $match: match },
         { $addFields: { _bucket: bucketSwitch() } },
         ...mapFacet().map(stripFacetWrappers).flat(),
-      ])
+      ], curve))
       .toArray();
     return finalizeRows(
       // The $project in mapFacet guarantees ``name`` on every row; the
       // driver only knows ``Document``.
-      await attachRecentByMap(this.db, userId, filters, /** @type {Array<{name: string} & Record<string, any>>} */ (rows)),
+      await attachRecentByMap(this.db, userId, filters, /** @type {Array<{name: string} & Record<string, any>>} */ (rows.map(row => finishStrength(row, curve)))),
     );
   }
 
@@ -235,8 +240,9 @@ class AggregationsService {
    */
   async _mapMatchupsOnce(userId, filters) {
     const match = gamesMatchStage(userId, filters);
+    const curve = await this.mmrExpectation?.curve() || null;
     const rows = await this.db.games
-      .aggregate([
+      .aggregate(strengthPipeline([
         { $match: match },
         { $addFields: { _bucket: bucketSwitch() } },
         {
@@ -261,9 +267,9 @@ class AggregationsService {
           },
         },
         { $sort: { map: 1, total: -1 } },
-      ])
+      ], curve))
       .toArray();
-    return rows.map(addWinRate);
+    return rows.map(row => addWinRate(finishStrength(row, curve)));
   }
 
   /**
@@ -285,8 +291,9 @@ class AggregationsService {
    */
   async _buildVsStrategyOnce(userId, filters) {
     const match = gamesMatchStage(userId, filters);
+    const curve = await this.mmrExpectation?.curve() || null;
     const rows = await this.db.games
-      .aggregate([
+      .aggregate(strengthPipeline([
         { $match: match },
         { $addFields: { _bucket: bucketSwitch() } },
         {
@@ -311,9 +318,9 @@ class AggregationsService {
           },
         },
         { $sort: { total: -1 } },
-      ])
+      ], curve))
       .toArray();
-    return rows.map(addWinRate);
+    return rows.map(row => addWinRate(finishStrength(row, curve)));
   }
 
   /**
@@ -467,6 +474,11 @@ class AggregationsService {
             // macro scoring simply come back null instead of dragging
             // the average toward zero.
             avgMacroScore: { $avg: "$macroScore" },
+            avgApm: { $avg: "$apm" },
+            avgSpq: { $avg: "$spq" },
+            macroN: { $sum: { $cond: [{ $isNumber: "$macroScore" }, 1, 0] } },
+            apmN: { $sum: { $cond: [{ $isNumber: "$apm" }, 1, 0] } },
+            spqN: { $sum: { $cond: [{ $isNumber: "$spq" }, 1, 0] } },
           },
         },
         // Keep the most recent N buckets (not the oldest). Users with
@@ -483,20 +495,18 @@ class AggregationsService {
             losses: 1,
             total: 1,
             avgMacroScore: 1,
+            avgApm: 1,
+            avgSpq: 1,
+            macroN: 1,
+            apmN: 1,
+            spqN: 1,
           },
         },
       ])
       .toArray();
     return {
       interval,
-      points: rows.map((r) => ({
-        ...r,
-        winRate: r.total ? r.wins / r.total : 0,
-        avgMacroScore:
-          typeof r.avgMacroScore === "number"
-            ? Math.round(r.avgMacroScore * 10) / 10
-            : null,
-      })),
+      points: rows.map(shapeTimeseriesPoint),
     };
   }
 
@@ -717,6 +727,7 @@ class AggregationsService {
   _trendsDeps() {
     return {
       games: this.db.games,
+      mmrExpectation: this.mmrExpectation,
       gamesMatchStage,
       bucketSwitch,
       pickInterval,
@@ -1006,6 +1017,20 @@ async function applyRaceGrouping(filters, runOnce) {
     out[race] = await runOnce({ ...base, race: letterMap[race] });
   }
   return out;
+}
+
+/** Round measured means without converting missing data into zero.
+ * @param {Record<string, any>} row */
+function shapeTimeseriesPoint(row) {
+  /** @type {Record<string, any>} */
+  const point = { ...row, winRate: row.total ? row.wins / row.total : 0 };
+  for (const key of ["avgMacroScore", "avgApm", "avgSpq"]) {
+    point[key] = typeof row[key] === "number" && Number.isFinite(row[key]) ? Math.round(row[key] * 10) / 10 : null;
+  }
+  for (const key of ["macroN", "apmN", "spqN"]) {
+    point[key] = Number.isInteger(row[key]) && row[key] >= 0 ? row[key] : 0;
+  }
+  return point;
 }
 
 module.exports = {

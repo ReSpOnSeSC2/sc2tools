@@ -1,0 +1,8 @@
+{
+  "binWidth": 25,
+  "minimumDelta": -600,
+  "maximumDelta": 600,
+  "minimumBinGames": 200,
+  "eloScale": 400,
+  "binPrior": 0.5
+}

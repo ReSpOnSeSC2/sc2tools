@@ -21,7 +21,7 @@ const GLOBAL_HISTORY_PROJECTION = Object.freeze({
   _id: 1, userId: 1, gameId: 1, date: 1, startedAt: 1, updatedAt: 1,
   myToonHandle: 1, myRace: 1, myLadderRace: 1, myMmr: 1, myMmrSource: 1,
   isLadderGame: 1, isResumedFromReplay: 1, playerCount: 1, matchFormat: 1,
-  result: 1, durationSec: 1, map: 1, myBuild: DETECTOR_MY_BUILD_FIELD, macroScore: 1,
+  result: 1, durationSec: 1, map: 1, myBuild: DETECTOR_MY_BUILD_FIELD, macroScore: 1, apm: 1, spq: 1,
   "top3Leaks.name": 1, "replayFile.sha256": 1,
   "opponent.race": 1, "opponent.mmr": 1, "opponent.strategy": DETECTOR_OPP_STRATEGY_FIELD,
   "opponent.displayName": 1, "opponent.pulseId": 1, "opponent.pulseCharacterId": 1,

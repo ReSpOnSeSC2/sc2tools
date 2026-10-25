@@ -338,11 +338,11 @@ describe("services/aggregations", () => {
 
   test("matchupTimeseries computes winRate per (bucket, race) row", async () => {
     const games = buildGames([
-      () => [
+      () => [{ points: [
         { bucket: new Date("2026-04-01"), race: "P", wins: 3, losses: 1, total: 4 },
         { bucket: new Date("2026-04-01"), race: "Z", wins: 1, losses: 3, total: 4 },
         { bucket: new Date("2026-04-08"), race: "T", wins: 2, losses: 0, total: 2 },
-      ],
+      ], ratingSeries: [] }],
     ]);
     const svc = new AggregationsService({ games });
     const out = /** @type {any} */ (

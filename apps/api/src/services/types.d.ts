@@ -867,6 +867,18 @@ export interface AggregationsService {
       total: number;
       winRate: number;
     }>;
+    ratingSeries?: Array<{
+      myRace: string;
+      race: string;
+      matchup: string;
+      totalGames: number;
+      sampleGames: number;
+      windowGames: number;
+      ratedGames: number;
+      excludedNoMmr: number;
+      perfRating: number | null;
+      points: Array<{ date: Date; games: number; ratedGames: number; excludedNoMmr: number; perfRating: number | null }>;
+    }>;
   }>;
   dayHourHeatmap(userId: string, opts: object, filters: object): Promise<object>;
   lengthBuckets(userId: string, filters: object): Promise<{

@@ -8,7 +8,7 @@ const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
 const mutateMock = vi.fn();
 const getToken = vi.fn();
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken }) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "owner-a", isLoaded: true, isSignedIn: true, getToken }) }));
 vi.mock("@/lib/clientApi", () => ({ useApi: (...args: unknown[]) => useApiMock(...args), apiCall: (...args: unknown[]) => apiCallMock(...args) }));
 
 const SOURCE: IdentityPlayer = { key: "toon:1-S2-1-123", pulseId: "1-S2-1-123", toonHandle: "1-S2-1-123", displayName: "IIIIllll", race: "Protoss", region: "US" };
@@ -87,6 +87,8 @@ describe("opponent identity submissions", () => {
   it("submits only the selected identity key and evidence, then shows pending status", async () => {
     apiCallMock.mockImplementation(async () => ({ ...context, submission: PROPOSAL }));
     render(<OpponentIdentitySubmission pulseId={SOURCE.pulseId} />);
+    expect(screen.queryByLabelText("Known player")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Know who this is? Suggest an identity" }));
     await chooseKnownPlayer();
     fireEvent.change(screen.getByLabelText("Why is this the same player?"), { target: { value: PROPOSAL.reason } });
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));

@@ -22,19 +22,12 @@ type MixResponse = {
 
 const OTHER_KEY = "__other";
 const OTHER_LABEL = "Other";
-const OTHER_COLOR = "#3a4252";
+const OTHER_COLOR = "var(--border-strong)";
 
-// Distinct, accessible palette tuned for the dark surface. Order is
-// stable so the same series gets the same colour across re-renders.
+// Existing theme tokens keep categorical series readable in both themes.
 const PALETTE = [
-  "#7c8cff", // accent
-  "#3ec07a", // success
-  "#e6b450", // warning
-  "#ff6b6b", // danger
-  "#a78bfa", // violet
-  "#22d3ee", // cyan
-  "#f472b6", // pink
-  "#fb923c", // orange
+  "var(--accent)", "var(--success)", "var(--warning)", "var(--danger)",
+  "var(--race-protoss)", "var(--editorial)", "var(--player-you)", "var(--text-muted)",
 ];
 
 const TOP_N_OPTIONS = [4, 6, 8] as const;
@@ -262,7 +255,7 @@ export function MixOverTimeChart({
                           : `${s.label} · ${c.date} · no games`
                       }
                       className={[
-                        "grid h-6 min-w-6 max-w-9 flex-1 basis-6 select-none place-items-center rounded-[5px] text-[10px] font-semibold tabular-nums text-white/90",
+                        "grid h-6 min-w-6 max-w-9 flex-1 basis-6 select-none place-items-center rounded-[5px] text-[10px] font-semibold tabular-nums text-text",
                         datum ? "" : "bg-bg-elevated/40",
                         isActiveCol ? "ring-1 ring-accent/60" : "",
                       ].join(" ")}
@@ -448,7 +441,7 @@ function RowLabel({ series }: { series: SeriesDef }) {
       <div className="flex items-center gap-1.5">
         <span
           className="h-2.5 w-2.5 shrink-0 rounded-sm"
-          style={{ background: series.color }}
+          style={{ background: `rgb(${series.color})` }}
         />
         <span
           className="min-w-0 truncate text-caption text-text-muted"
@@ -523,7 +516,7 @@ function ActiveBreakdown({
               <li key={e.key} className="flex items-center gap-2 text-caption">
                 <span
                   className="inline-block h-2.5 w-2.5 flex-none rounded-sm"
-                  style={{ background: e.color }}
+                  style={{ background: `rgb(${e.color})` }}
                 />
                 <span
                   className="min-w-0 flex-1 truncate text-text-muted"
@@ -584,19 +577,16 @@ function cellKey(date: string, seriesKey: string): string {
 
 /**
  * Cell fill opacity. When every cell is a single game there's no
- * volume gradient worth encoding, so paint at near-full strength;
- * otherwise ramp from a clearly-visible floor to full.
+ * volume gradient worth encoding. Keep fills translucent so the actual
+ * count retains strong text contrast on both theme surfaces.
  */
 function cellAlpha(count: number, maxCellCount: number): number {
-  if (maxCellCount <= 1) return 0.85;
-  return 0.35 + 0.55 * (count / maxCellCount);
+  if (maxCellCount <= 1) return 0.4;
+  return 0.13 + 0.27 * (count / maxCellCount);
 }
 
-function withAlpha(hex: string, alpha: number): string {
-  const r = Number.parseInt(hex.slice(1, 3), 16);
-  const g = Number.parseInt(hex.slice(3, 5), 16);
-  const b = Number.parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
+function withAlpha(channels: string, alpha: number): string {
+  return `rgb(${channels} / ${alpha.toFixed(2)})`;
 }
 
 const MONTHS = [

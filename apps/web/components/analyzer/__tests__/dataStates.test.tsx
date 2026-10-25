@@ -20,7 +20,7 @@ vi.mock("@/lib/netMmrOpponents", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/netMmrOpponents")>()),
   useAllNetMmrOpponents: () => ({ items: [], summary: null, isLoading: false, error: null, hitMaxPages: false }),
 }));
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, getToken: async () => "t" }) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "owner-a", isLoaded: true, isSignedIn: true, getToken: async () => "t" }) }));
 vi.mock("../usePlayerChannels", () => ({ usePlayerChannels: () => () => undefined }));
 vi.mock("@/lib/useMyDisplayName", () => ({ useMyDisplayName: () => "Me" }));
 // Panels with their own requests, covered elsewhere.
@@ -95,7 +95,7 @@ describe("failed requests show Retry, not an empty state", () => {
 
   it("Macro: the report", async () => {
     render(<MacroTab />);
-    expect(screen.getByTestId("request-error")).toBeTruthy();
+    expect(screen.getAllByTestId("request-error")).toHaveLength(2);
     expect(screen.queryByText("No scored games yet")).toBeNull();
     await pressFirstRetry();
     expect(harness.mutate).toHaveBeenCalledTimes(1);
@@ -131,10 +131,10 @@ describe("opponent dossier", () => {
   it("a 503 renders Retry, not 'not found'", async () => {
     mockProfile(failing({ status: 503, code: "opponent_profile_busy", message: "opponent profile analysis is busy" }));
     render(<ProfileView pulseId="2-S2-1-12345" onBack={() => {}} />);
-    expect(screen.getByText("The dossier is busy, try again in a moment")).toBeTruthy();
+    expect(screen.getByText("Analyzing… retrying")).toBeTruthy();
     expect(screen.queryByText(/couldn't find this opponent/i)).toBeNull();
     expect(screen.queryByText(/not found/i)).toBeNull();
-    await pressFirstRetry();
+    fireEvent.click(screen.getByRole("button", { name: "Retry now" }));
     expect(harness.mutate).toHaveBeenCalledTimes(1);
   });
 
@@ -148,7 +148,7 @@ describe("opponent dossier", () => {
   it("a 404 says the opponent isn't in your replays and links back", () => {
     mockProfile(failing({ status: 404, code: "not_found", message: "Not found." }));
     render(<ProfileView pulseId="2-S2-1-12345" onBack={() => {}} />);
-    expect(screen.getByText("We couldn't find this opponent in your replays")).toBeTruthy();
+    expect(screen.getByText("Not in your history")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Back to opponents" }).getAttribute("href")).toBe("/app/opponents");
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });

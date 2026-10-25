@@ -30,6 +30,7 @@ import analyzer_stockMarketLeaderboard from "./analyzer/stock-market-leaderboard
 import analyzer_strategies from "./analyzer/strategies";
 import analyzer_today from "./analyzer/today";
 import analyzer_trends from "./analyzer/trends";
+import analyzer_vsExpected from "./analyzer/vs-expected";
 import builds_buildCheckIn from "./builds/build-check-in";
 import builds_buildGuides from "./builds/build-guides";
 import builds_buildOrdersExport from "./builds/build-orders-export";
@@ -112,6 +113,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_strategies,
   analyzer_today,
   analyzer_trends,
+  analyzer_vsExpected,
   builds_buildCheckIn,
   builds_buildGuides,
   builds_buildOrdersExport,

@@ -6,6 +6,8 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
+import { StrengthCell, StrengthGuide, StrengthHeader, WinRateRange } from "./StrengthAdjusted";
+import type { StrengthFields } from "@/lib/strengthAdjusted";
 import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { usePersistentSort, SortableTh, type SortState } from "@/components/ui/SortableTh";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
@@ -30,7 +32,7 @@ import type { BuildPhasePayload } from "@/lib/serverApi";
 
 const LS_BVS_SORT = "analyzer.strategies.bvs.sort";
 
-export type BvsCell = {
+export type BvsCell = StrengthFields & {
   my_build: string;
   opp_strat: string;
   wins: number;
@@ -119,6 +121,7 @@ export function BuildVsStrategyView({
           onChange={(e) => setSearch(e.target.value)}
         />
         {renderMinGamesPicker(minGames, setMinGames)}
+        {view === "table" && <button type="button" className="min-h-11 rounded-lg border border-border px-3 text-caption" aria-pressed={sort.sortBy === "winsAboveExpected"} onClick={() => sort.setSortExplicit("winsAboveExpected", sort.sortBy === "winsAboveExpected" && sort.sortDir === "desc" ? "asc" : "desc")}>Vs expected {sort.sortBy === "winsAboveExpected" ? sort.sortDir === "desc" ? "↓" : "↑" : ""}</button>}
         {view === "table" ? (
           <WinRateSortToggle
             dir={sort.sortBy === "winRate" ? sort.sortDir : "desc"}
@@ -699,6 +702,7 @@ function BvsTable({
 }) {
   return (
     <Card>
+      <div className="mb-3"><StrengthGuide /></div>
       {/* Mobile (< md): stacked cards per row. The desktop table-fixed
           layout below keeps WR from being pushed off-screen on mid-width
           viewports, but on a phone the build / strategy columns still
@@ -739,6 +743,8 @@ function BvsTable({
                   {pct1(c.winRate)}
                 </span>
               </div>
+              <WinRateRange row={c} total={c.total} />
+              <StrengthCell row={c} />
             </button>
           </li>
         ))}
@@ -751,7 +757,7 @@ function BvsTable({
             aligned inside a 300 px-wide cell). With fixed widths,
             numerics pack into their content size and the two text
             columns absorb the rest. */}
-        <table className="w-full table-fixed text-sm">
+        <table className="w-full min-w-[42rem] table-fixed text-sm">
           <colgroup>
             <col />
             <col />
@@ -759,6 +765,7 @@ function BvsTable({
             <col style={{ width: "3.5rem" }} />
             <col style={{ width: "4.5rem" }} />
             <col style={{ width: "4.5rem" }} />
+            <col style={{ width: "8rem" }} />
           </colgroup>
           <thead className="bg-bg-elevated">
             <tr>
@@ -768,6 +775,7 @@ function BvsTable({
               <SortableTh col="losses" label="L" {...sort} align="right" />
               <SortableTh col="total" label="Games" {...sort} align="right" />
               <SortableTh col="winRate" label="WR" {...sort} align="right" />
+              <StrengthHeader sort={sort} />
             </tr>
           </thead>
           <tbody>
@@ -795,7 +803,9 @@ function BvsTable({
                   style={{ color: wrColor(c.winRate, c.total) }}
                 >
                   {pct1(c.winRate)}
+                  <WinRateRange row={c} total={c.total} />
                 </td>
+                <td className="px-2 py-1.5 text-right"><StrengthCell row={c} /></td>
               </tr>
             ))}
           </tbody>

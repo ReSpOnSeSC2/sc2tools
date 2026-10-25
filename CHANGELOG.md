@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Opponent dossier
+
+- Read and copy a six-line scouting brief, follow the all-time meeting series, and move through the dossier with sticky section links. Date overrides stay local to this opponent; history remains directly above private notes.
+- Identity and data quality share one disclosure, normal identity forms wait until requested, and ladder ratings share one card. Busy analysis retries with backoff, while missing history and network failures have distinct recovery states.
 ### Battle reports
 
 - Read a short, fixed-rule account of a replay in Battle report, Caster or Tactical tone, with known timestamps linked to the same game clock. Copy it as plain text or Markdown.
@@ -34,6 +38,11 @@ corresponding GitHub Release.
 ### Game benchmarks
 
 - Compare each game's macro score, APM, spending quotient and length with your earlier ranked matchup games and cached league percentiles, with visible sample sizes and update dates. League distributions stay hidden below 50 samples per measurement; personal build timings now reach the late-expansion loss analysis when five earlier natural timings are available.
+
+### Results given who you played
+
+- Compare builds, strategies, maps and matchups with replay-rated expected wins, sortable wins above expected, visible rating coverage and Wilson win-rate ranges. Sparse history stays unknown; fewer than ten games are marked as thin samples.
+- Trends shows matchup performance-rating windows over each pair's latest 50 decided ranked 1v1 games. Missing ratings and unbounded all-win/all-loss windows remain gaps. A bounded daily calibration uses only aggregate replay-time rating evidence, with a documented Elo fallback.
 
 ### Agent 0.24.5 - Opt-in game-screen assistance
 - Default build selectors and loading-screen scouting to off, matching the
@@ -249,6 +258,11 @@ corresponding GitHub Release.
 
 - Game pages summarize measured lead changes, replay highlights and recorded fight trades, with exact or explicitly estimated losses. Timestamp controls seek the shared replay, and narrow screens use readable fight cards.
 - Wins and draws use the same story view, wins retain their top macro leak, and loss pages keep Why you lost selected alongside Game story. Games without meaningful observations give Mechanics the full row.
+
+### Mechanics progress
+
+- Macro tracks macro score, APM and SQ over calendar periods with measured-game counts, small-sample markers, honest gaps and an optional matchup-specific opponent-bracket median.
+- Build stats includes Build mix over time with the shared grouping preference. Macro keeps one leak ledger and offers a working score-older-games action or desktop setup when no scores exist.
 
 ### Shared game analysis
 

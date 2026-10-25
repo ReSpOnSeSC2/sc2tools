@@ -1,8 +1,9 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-const harness = vi.hoisted(() => ({ rev: 7, error: null as unknown, api: vi.fn(), retry: vi.fn(), refresh: vi.fn(async (_predicate?: unknown) => []), toast: vi.fn() }));
+const harness = vi.hoisted(() => ({ ownerId: "owner-a" as string | null, filters: {} as import("@/lib/filterContext").AnalyzerFilters, rev: 7, error: null as unknown, api: vi.fn(), retry: vi.fn(), refresh: vi.fn(async (_predicate?: unknown) => []), toast: vi.fn() }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: harness.ownerId, isLoaded: true, isSignedIn: !!harness.ownerId, getToken: async () => "token" }) }));
 vi.mock("swr", () => ({ useSWRConfig: () => ({ mutate: harness.refresh }) }));
-vi.mock("@/lib/filterContext", async (load) => ({ ...await load<typeof import("@/lib/filterContext")>(), useFilters: () => ({ filters: {}, dbRev: harness.rev }) }));
+vi.mock("@/lib/filterContext", async (load) => ({ ...await load<typeof import("@/lib/filterContext")>(), useFilters: () => ({ filters: harness.filters, seasons: [], dbRev: harness.rev }) }));
 vi.mock("@/lib/useMyDisplayName", () => ({ useMyDisplayName: () => "Me" }));
 vi.mock("@/lib/useLocalStorageState", () => ({ useLocalStorageState: () => [true, vi.fn()] }));
 vi.mock("@/components/ui/Toast", () => ({ useToastOptional: () => ({ toast: { success: harness.toast, info: harness.toast } }) }));
@@ -22,18 +23,18 @@ const profile = { name: "Rival", pulseCharacterId: "123", totals: { total: 2, wi
   byMap: { Alcyone: { wins: 1, losses: 0 }, River: { wins: 0, losses: 1 } }, byStrategy: { Macro: { wins: 1, losses: 0 }, Cheese: { wins: 0, losses: 1 } },
   games: [{ id: "one", map: "Alcyone", my_build: "Blink", opp_strategy: "Macro", result: "Victory" }, { id: "two", map: "River", my_build: "Expand", opp_strategy: "Cheese", result: "Defeat" }],
   phases: { finalPhaseDistribution: { mid: 2 } } };
-beforeEach(() => { harness.rev = 7; harness.error = null; harness.refresh.mockClear(); harness.toast.mockClear(); harness.retry.mockClear(); harness.api.mockReset();
+beforeEach(() => { harness.ownerId = "owner-a"; window.history.replaceState(null, "", "/app/opponents/target"); harness.filters = {}; harness.rev = 7; harness.error = null; harness.refresh.mockClear(); harness.toast.mockClear(); harness.retry.mockClear(); harness.api.mockReset();
   harness.api.mockImplementation((path: string | null) => path?.startsWith("/v1/opponents/target?")
     ? { data: profile, error: harness.error, isLoading: false, mutate: harness.retry } : { data: undefined }); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 it("debounces database revisions, retains data after refresh errors, and retries", () => {
   vi.useFakeTimers(); const view = render(<ProfileView pulseId="target" onBack={() => undefined} />);
-  expect(harness.api).toHaveBeenCalledWith("/v1/opponents/target?mergeLinked=1#7", { keepPreviousData: true });
+  expect(harness.api).toHaveBeenCalledWith("/v1/opponents/target?mergeLinked=1#7", { keepPreviousData: true, shouldRetryOnError: false });
   harness.rev = 8; view.rerender(<ProfileView pulseId="target" onBack={() => undefined} />);
   expect(harness.api.mock.calls.some(([path]) => String(path).endsWith("#8"))).toBe(false);
   act(() => vi.advanceTimersByTime(2000));
-  expect(harness.api).toHaveBeenCalledWith("/v1/opponents/target?mergeLinked=1#8", { keepPreviousData: true });
+  expect(harness.api).toHaveBeenCalledWith("/v1/opponents/target?mergeLinked=1#8", { keepPreviousData: true, shouldRetryOnError: false });
   harness.error = { status: 503 }; view.rerender(<ProfileView pulseId="target" onBack={() => undefined} />);
   expect(screen.getByRole("heading", { name: "Rival" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Retry" })); expect(harness.retry).toHaveBeenCalledOnce();
@@ -42,7 +43,7 @@ it("shows clearable map/strategy/build filters and keeps replay history immediat
   render(<ProfileView pulseId="target" onBack={() => undefined} />);
   fireEvent.click(screen.getByRole("button", { name: /Alcyone/ }));
   expect(screen.getByText("Games (filtered)")).toBeTruthy();
-  expect(screen.getAllByText("All games, not filtered")).toHaveLength(3);
+  expect(screen.getAllByText("All games, not filtered")).toHaveLength(2);
   expect(screen.getByLabelText("Replay history").getAttribute("data-path")).toContain("map=Alcyone");
   fireEvent.click(screen.getByRole("button", { name: "Remove map filter Alcyone" }));
   fireEvent.click(screen.getByRole("button", { name: /Cheese/ }));
@@ -57,10 +58,57 @@ it("shows clearable map/strategy/build filters and keeps replay history immediat
 });
 it("refreshes all of this opponent's resources and channels after Pulse retry", async () => {
   render(<ProfileView pulseId="target" onBack={() => undefined} />);
-  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Finish Pulse retry" })));
+  fireEvent.click(screen.getByRole("link", { name: "Data looks wrong?" }));
+  await act(async () => fireEvent.click(await screen.findByRole("button", { name: "Finish Pulse retry" })));
   const predicate = harness.refresh.mock.calls[0][0] as (key: unknown) => boolean;
   expect(predicate(["authenticated-api", "user", "/v1/opponents/target/pulse-races"])).toBe(true);
   expect(predicate(["authenticated-api", "user", "/v1/opponents/other"])).toBe(false);
   expect(predicate(["player-channels", "identities"])).toBe(true);
   expect(harness.toast).toHaveBeenCalledWith("Pulse data refreshed");
+});
+
+it("keeps Show all time local and resets it for another opponent", () => {
+  harness.filters = { preset: "custom", since: "2026-10-01T00:00:00.000Z", race: "P" };
+  const view = render(<ProfileView pulseId="target" onBack={() => undefined} />);
+  fireEvent.click(screen.getByRole("button", { name: /^Show all time$/ }));
+  const paths = harness.api.mock.calls.map(([path]) => String(path)).filter(path => path.startsWith("/v1/opponents/target?"));
+  expect(paths.at(-1)).toContain("race=P"); expect(paths.at(-1)).not.toContain("since=");
+  expect(harness.filters.since).toBe("2026-10-01T00:00:00.000Z");
+  view.rerender(<ProfileView pulseId="other" onBack={() => undefined} />);
+  expect(harness.api.mock.calls.some(([path]) => String(path).startsWith("/v1/opponents/other?") && String(path).includes("since="))).toBe(true);
+});
+it("provides one page heading and a sticky section navigation without a duplicate back action", () => {
+  render(<ProfileView pulseId="target" onBack={() => undefined} />);
+  expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  expect(within(screen.getByRole("navigation", { name: "Dossier sections" })).getByRole("link", { name: "Brief" }).getAttribute("aria-current")).toBe("true");
+  expect(screen.queryByRole("link", { name: "All opponents" })).toBeNull();
+  expect(screen.queryByText(/Build tendencies/)).toBeNull();
+});
+it("shows busy analysis retries and distinguishes a missing history record", () => {
+  harness.retry.mockResolvedValue(undefined);
+  harness.api.mockImplementation((path: string | null) => path?.startsWith("/v1/opponents/target?") ? { error: { status: 503, code: "opponent_profile_busy" }, isLoading: false, mutate: harness.retry } : { data: undefined });
+  const view = render(<ProfileView pulseId="target" onBack={() => undefined} />);
+  expect(screen.getByText("Analyzing… retrying")).toBeTruthy();
+  expect(screen.queryByText("Not in your history")).toBeNull();
+  harness.api.mockImplementation((path: string | null) => path?.startsWith("/v1/opponents/target?") ? { error: { status: 404 }, isLoading: false, mutate: harness.retry } : { data: undefined });
+  view.rerender(<ProfileView pulseId="target" onBack={() => undefined} />);
+  expect(screen.getByText("Not in your history")).toBeTruthy();
+});
+
+it("forgets local cohort and open panels when a warm cached opponent switches account", () => {
+  harness.filters = { preset: "custom", since: "2026-10-01T00:00:00.000Z", race: "P" };
+  const view = render(<ProfileView pulseId="target" onBack={() => undefined} />);
+  fireEvent.click(screen.getByRole("button", { name: /^Show all time$/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Alcyone/ }));
+  fireEvent.click(screen.getByRole("link", { name: "Data looks wrong?" }));
+  expect(screen.getByRole("region", { name: "Active dossier filters" })).toBeTruthy();
+  expect(screen.getByText("Identity & data quality").closest("details")?.open).toBe(true);
+  harness.ownerId = "owner-b"; view.rerender(<ProfileView pulseId="target" onBack={() => undefined} />);
+  expect(screen.queryByRole("region", { name: "Active dossier filters" })).toBeNull();
+  expect(screen.getByRole("button", { name: /^Show all time$/ })).toBeTruthy();
+  expect(screen.getByText("Identity & data quality").closest("details")?.open).toBe(false);
+  const callCount = harness.api.mock.calls.length;
+  harness.ownerId = null; view.rerender(<ProfileView pulseId="target" onBack={() => undefined} />);
+  expect(screen.getByText("Sign in to view opponent history.")).toBeTruthy();
+  expect(harness.api).toHaveBeenCalledTimes(callCount);
 });

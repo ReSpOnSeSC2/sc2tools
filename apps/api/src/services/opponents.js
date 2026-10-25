@@ -8,6 +8,7 @@ const { hmac } = require("../util/hash");
 const { expectedVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { parseExactMapNames } = require("../util/exactMapFilter");
+const { opponentSeries } = require("./opponentSeries");
 const { eraForGame } = require("../util/patchEra");
 const { opponentGamesFilter } = require("../util/opponentIdentity");
 const {
@@ -1106,7 +1107,7 @@ class OpponentsService {
               _id: 0,
               pulseId: 1, pulseCharacterId: 1, toonHandle: 1,
               displayNameSample: 1, revealedName: 1,
-              wins: 1, losses: 1, gameCount: 1, lastSeen: 1,
+              wins: 1, losses: 1, gameCount: 1, firstSeen: 1, lastSeen: 1,
             },
           },
         )
@@ -1541,6 +1542,7 @@ class OpponentsService {
       .toArray();
     const gamesTruncated = fetchedGames.length > OPPONENT_PROFILE_MAX_GAMES;
     const rawGames = fetchedGames.slice(0, OPPONENT_PROFILE_MAX_GAMES);
+    const series = opponentSeries(rawGames, linked ? linked.identities : [doc], OPPONENT_PROFILE_MAX_GAMES, gamesTruncated);
     // Keep this full table cohort slim. The separate analytical selection
     // below is the only path allowed to read replay detail fields.
     // Apply every non-date analyzer facet before deriving profile
@@ -1761,6 +1763,7 @@ class OpponentsService {
         ? { region: mmrOverlay.region }
         : {}),
       mergedToonHandles,
+      series,
       totals,
       byMap: aggregates.byMap,
       byStrategy: aggregates.byStrategy,
@@ -3474,6 +3477,7 @@ function serializeLinkedIdentity(r) {
     wins: Number(r.wins) || 0,
     losses: Number(r.losses) || 0,
     games: Number(r.gameCount) || 0,
+    firstSeen: r.firstSeen instanceof Date ? r.firstSeen : null,
     lastSeen: r.lastSeen instanceof Date ? r.lastSeen : null,
   };
 }

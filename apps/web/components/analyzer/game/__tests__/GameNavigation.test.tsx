@@ -64,6 +64,14 @@ describe("owner game navigation", () => {
 });
 
 describe("durable game sources", () => {
+  it("a replacement cohort excludes both global and incoming URL dates while retaining the durable Back URL", () => {
+    const original = "/app/opponents/123?since=2026-10-01&until=2026-10-24&map=Old";
+    window.history.replaceState(null, "", original);
+    render(<GameSourceLabelProvider label="Opponent history" filters="race=P&map=New" replace><GameSourceLabelProvider label="Opponent history" filters="result=loss"><GameAnalysisLink gameId="one">Open scoped game</GameAnalysisLink></GameSourceLabelProvider></GameSourceLabelProvider>);
+    const query = new URL(screen.getByRole("link", { name: "Open scoped game" }).getAttribute("href")!, "https://example.test").searchParams;
+    expect(query.get("from")).toBe(original);
+    expect(new URLSearchParams(query.get("fromFilters")!)).toEqual(new URLSearchParams("race=P&map=New&result=loss"));
+  });
   it("bounds filter snapshots, omits credentials and pagination, and preserves them across neighbor links", () => {
     expect(gameSourceFilters("race=P&search=Rival&cursor=private&token=secret&limit=25&scope=opponent", "race=T&result=loss")).toBe("race=T&q=Rival&result=loss");
     expect(gameSourceFilters(`q=${"x".repeat(257)}&map=ok`)).toBe("map=ok");

@@ -17,6 +17,7 @@ const mapMatchups = [
     losses: 1,
     total: 5,
     winRate: 0.8,
+    ratedGames: 5, ratedWins: 4, expectedWins: 2.5, winsAboveExpected: 1.5,
   },
   {
     map: "Ancient Cistern",
@@ -25,6 +26,7 @@ const mapMatchups = [
     losses: 1,
     total: 2,
     winRate: 0.5,
+    ratedGames: 2, ratedWins: 1, expectedWins: 1, winsAboveExpected: 0,
   },
   {
     map: "Ruby Rock",
@@ -33,6 +35,7 @@ const mapMatchups = [
     losses: 3,
     total: 5,
     winRate: 0.4,
+    ratedGames: 5, ratedWins: 2, expectedWins: 3, winsAboveExpected: -1,
   },
   {
     map: "Custom Practice Map",
@@ -41,6 +44,7 @@ const mapMatchups = [
     losses: 0,
     total: 3,
     winRate: 1,
+    ratedGames: 3, ratedWins: 3, expectedWins: 1, winsAboveExpected: 2,
   },
   {
     map: "Hidden Training Map",
@@ -193,7 +197,7 @@ describe("BattlefieldTab map performance", () => {
     const select = screen.getByRole("combobox", { name: "Sort maps by" });
     expect(
       within(select).getAllByRole("option").map((option) => option.textContent),
-    ).toEqual(["Map", "Win rate", "Games", "Wins", "Losses"]);
+    ).toEqual(["Map", "Win rate", "Games", "Wins", "Losses", "Vs expected"]);
     expect(mapOrder()[0]).toContain("Custom Practice Map");
 
     fireEvent.change(select, { target: { value: "map" } });
@@ -208,6 +212,7 @@ describe("BattlefieldTab map performance", () => {
       ["total", "Custom Practice Map"],
       ["wins", "Ruby Rock"],
       ["losses", "Custom Practice Map"],
+      ["winsAboveExpected", "Ruby Rock"],
     ]) {
       fireEvent.change(select, { target: { value: metric } });
       expect(mapOrder()[0]).toContain(firstMap);
