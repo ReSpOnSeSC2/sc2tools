@@ -13,7 +13,7 @@ import { API_BASE } from "@/lib/clientApi";
 import { previewableSound } from "./SettingsMultiChatSounds";
 
 function MomentSwitch({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return <Button role="switch" aria-label={label} aria-checked={checked} variant="secondary" fullWidth className="min-h-11 justify-between gap-3 text-left" onClick={() => onChange(!checked)}>
+  return <Button role="switch" aria-label={label} aria-checked={checked} variant="secondary" fullWidth className="min-h-11 justify-between gap-3 text-left" style={{ height: "auto", paddingBlock: 8 }} onClick={() => onChange(!checked)}>
     <span className="min-w-0 break-words">{label}</span><span aria-hidden className="shrink-0">{checked ? "On" : "Off"}</span>
   </Button>;
 }

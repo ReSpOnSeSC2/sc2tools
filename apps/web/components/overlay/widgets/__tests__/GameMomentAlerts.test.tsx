@@ -31,6 +31,7 @@ describe("real Ladder/provider alert consumers", () => {
   it("labels recorded moments as Ladder and never submits them as provider intake", () => {
     render(<ChatAlertsWidget token="owner" momentEvent={moment()} />);
     expect(screen.getByText("Five recorded wins")).toBeTruthy(); expect(screen.getByText("Ladder")).toBeTruthy(); expect(screen.queryByText("TW")).toBeNull();
+    expect(screen.getByLabelText("Ladder: Five recorded wins")).toBeTruthy();
     expect(fixture.play.mock.calls.filter(([kind]) => kind === "reward")).toHaveLength(1);
     expect(fixture.reporter.mock.calls.every(call => (call[2] as unknown[]).length === 0)).toBe(true);
   });

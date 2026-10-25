@@ -96,6 +96,7 @@ export function ChatAlertCard({
     `ca-preset-${preset.id}`,
     hasRenderedMedia ? "ca-has-rendered-media" : "",
     preview ? "ca-preview" : "",
+    sourceLabel ? "ca-ladder" : "",
   ].filter(Boolean).join(" ");
 
   return (
@@ -106,7 +107,7 @@ export function ChatAlertCard({
       data-alert-layout={preset.layout}
       data-alert-motion={motion}
       data-alert-rendered-media={hasRenderedMedia ? "true" : undefined}
-      aria-label={`${EVENT_KIND_LABEL[event.kind]} from ${event.user}`}
+      aria-label={sourceLabel ? `${sourceLabel}: ${event.user}` : `${EVENT_KIND_LABEL[event.kind]} from ${event.user}`}
     >
       <style>{CHAT_ALERT_CARD_CSS}</style>
       <DecorationField decorations={preset.decorations} />
@@ -565,6 +566,8 @@ export const CHAT_ALERT_CARD_CSS = `
   .ca-eyebrow { display: flex; min-width: 0; align-items: center; gap: 7px; }
   .ca-platform { display: inline-flex; align-items: center; justify-content: center; min-width: 27px; height: 17px; padding: 0 5px; border-radius: 4px; font-size: 9px; font-weight: 900; letter-spacing: .05em; flex: 0 0 auto; }
   .ca-kind { color: var(--ca-accent-alt); font-size: 10px; line-height: 1; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; white-space: nowrap; }
+  .ca-ladder .ca-eyebrow { flex-wrap: wrap; row-gap: 5px; }
+  .ca-ladder .ca-kind { flex: 1 1 120px; min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
   .ca-callout { flex: 1 1 auto; min-width: 0; overflow: hidden; color: rgba(255,255,255,.64); font-size: 9px; line-height: 1; font-weight: 800; letter-spacing: .1em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
   .ca-amount { margin-left: auto; flex: 0 0 auto; max-width: 62%; padding: 4px 9px; overflow-wrap: normal; word-break: normal; hyphens: none; border: 1px solid color-mix(in srgb, var(--ca-accent) 46%, transparent); border-radius: 12px; color: #fff5b8; background: color-mix(in srgb, var(--ca-accent) 16%, rgba(0,0,0,.3)); font-size: 12px; line-height: 1.18; font-weight: 900; font-variant-numeric: tabular-nums; text-align: center; text-wrap: balance; }
   .ca-user { margin-top: 7px; overflow-wrap: break-word; hyphens: auto; color: #fff; font-size: clamp(18px, 4.4vw, 26px); line-height: 1.08; font-weight: 950; letter-spacing: -.025em; text-shadow: 0 2px 7px rgba(0,0,0,.55); }

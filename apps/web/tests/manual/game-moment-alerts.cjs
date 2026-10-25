@@ -69,13 +69,14 @@ async function send(page,kind,id){return moment(tokens[0],kind,id,await page.eva
       const before=calls.filter(call=>call.method==='PUT').length;
       await panel.getByRole('button',{name:'Test Five or ten wins',exact:true}).click();await visible(page,'TEST · Local preview');
       expect(calls.filter(call=>call.method==='PUT')).toHaveLength(before);checks++;
+      expect(await panel.locator('.ca-kind').evaluate(node=>node.scrollWidth<=Math.ceil(node.getBoundingClientRect().width))).toBe(true);checks++;
       if(width===300||width===1440){await panel.getByText('TEST · Local preview',{exact:true}).scrollIntoViewIfNeeded();await shot(page,`preview-${theme}-${width}`)}
-      for(const rule of rules.kinds){const control=panel.getByRole('switch',{name:rule.label,exact:true});await control.click();expect(await control.getAttribute('aria-checked')).toBe('true');expect(await control.evaluate(node=>node.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);checks+=2}
+      for(const rule of rules.kinds){const control=panel.getByRole('switch',{name:rule.label,exact:true});await control.click();expect(await control.getAttribute('aria-checked')).toBe('true');expect(await control.evaluate(node=>node.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);expect(await control.evaluate(node=>{const box=node.getBoundingClientRect(),label=node.firstElementChild.getBoundingClientRect();return label.top>=box.top&&label.bottom<=box.bottom})).toBe(true);checks+=3}
       const sound=panel.getByRole('combobox',{name:'Sound for Five or ten wins',exact:true});await sound.selectOption('victory');
       await panel.getByRole('combobox',{name:'MMR milestone spacing',exact:true}).selectOption('250');
       expect(await panel.getByRole('switch',{name:'Post moments through the configured Twitch bot',exact:true}).getAttribute('aria-checked')).toBe('false');checks++;
       await noOverflow(page);await panel.locator('summary').scrollIntoViewIfNeeded();await shot(page,`settings-${theme}-${width}`);
-      await page.getByRole('button',{name:'Save chat settings',exact:true}).click();await visible(page,'Chat settings saved');
+      await page.getByRole('button',{name:'Save',exact:true}).click();await visible(page,'Chat settings saved');
       expect(prefs.get(tokens[0]).alerts.gameMoments).toMatchObject({mmrStep:250,botPost:false,moments:{winStreak:{enabled:true,sound:'victory'}}});checks++;
       const sourceCount=connections.filter(row=>row.token===tokens[0]&&row.widget==='chat-alerts').length,configCount=calls.filter(call=>call.path===`/v1/multichat/${tokens[0]}/config`).length;
       const widget=await context.newPage();widget.on('pageerror',error=>errors.push(error.message));await widget.clock.install();await widget.goto(`${origin}/fixture?view=widget&theme=${theme}`);
