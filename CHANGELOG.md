@@ -14,6 +14,11 @@ corresponding GitHub Release.
 ### Desktop stream titles
 
 - Streams previews MMR, league, session record, streak and matchup tokens. Optional automatic updates start off, target only selected connected platforms, skip unchanged titles and run at most once every ten minutes after a live replay syncs.
+### My reviews dashboard
+
+- My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
+- Your reviewer profile shows verified leagues, badges, karma and synced-game eligibility. Leaderboard and weekly digest preferences live together there and restore their previous value if saving fails.
+
 ### Agent 0.24.4 - One Compact opponent display
 - Fold Compact into the visible pinned opponent HUD, preserving its position and
   one scouting control; reopen the main Agent in Standard.

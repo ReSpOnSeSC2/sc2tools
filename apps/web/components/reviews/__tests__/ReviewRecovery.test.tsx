@@ -23,6 +23,7 @@ vi.mock("../ReviewReplayPanel", async () => {
 import { ReviewPage } from "../ReviewPage";
 import { ReviewBoardLoader } from "../ReviewBoardLoader";
 import { ReviewLeaderboard } from "../ReviewBoardSidebar";
+import { MyReviewerProfile } from "../MyReviewerProfile";
 
 function fixture(): ReviewPageData {
   return {
@@ -43,7 +44,8 @@ function fixture(): ReviewPageData {
 beforeEach(() => {
   h.page = fixture(); h.apiCall.mockReset(); h.mutate.mockReset(); h.mutate.mockResolvedValue(undefined);
   h.apiCall.mockResolvedValue({ id: "CCCCCCCCCCCCCCCC" }); h.status = 0; h.reviewerError = false;
-  h.reviewer = { stats: { karma: 0 }, badges: [], verified: null, leaderboardOptIn: false, weeklyDigest: false } as unknown as ReviewerMe;
+  h.reviewer = { name: "Reviewer", stats: { karma: 0, reviews: 0, helpful: 0, best: 0, upvotes: 0, removed: 0 }, badges: [], verified: null,
+    flair: null, leaderboardOptIn: false, weeklyDigest: false, syncedGames: 0, requiredGames: 20, canComment: false };
   h.reviewerMutate.mockReset(); h.reviewerMutate.mockImplementation(async (data) => { if (data) h.reviewer = data; });
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -76,12 +78,38 @@ describe("review recovery", () => {
 
   it("rolls an optimistic reviewer preference back after the PATCH fails", async () => {
     h.apiCall.mockRejectedValueOnce(new Error("offline"));
-    render(<ReviewLeaderboard initial={null} />);
-    const checkbox = screen.getByRole("checkbox", { name: "Show my name on the leaderboard" }) as HTMLInputElement;
-    await act(async () => fireEvent.click(checkbox));
+    render(<MyReviewerProfile />);
+    const toggle = screen.getByRole("switch", { name: "Show my name on the weekly leaderboard" });
+    await act(async () => fireEvent.click(toggle));
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Couldn't save that setting. Try again.");
     expect(h.reviewerMutate.mock.calls[0][0].leaderboardOptIn).toBe(true);
-    expect(checkbox.checked).toBe(false);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(h.reviewerMutate.mock.calls.at(-1)?.[0].leaderboardOptIn).toBe(false);
+  });
+
+  it("links the board's karma summary to the reviewer profile instead of duplicating preferences", () => {
+    h.reviewer!.stats.karma = 42;
+    render(<ReviewLeaderboard initial={null} />);
+    expect(screen.getByText("42 karma")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Reviewer profile & settings →" }).getAttribute("href")).toBe("/reviews/mine#reviewer-profile");
+    expect(screen.queryByRole("checkbox")).toBeNull(); expect(screen.queryByRole("switch")).toBeNull();
+  });
+
+  it.each([
+    ["leaderboardOptIn", "Show my name on the weekly leaderboard"],
+    ["weeklyDigest", "Weekly digest of open requests in my matchups"],
+  ])("saves the %s preference optimistically from the profile", async (key, label) => {
+    let finish!: (value: ReviewerMe) => void;
+    h.apiCall.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    render(<MyReviewerProfile />);
+    const toggle = screen.getByRole("switch", { name: label });
+    await act(async () => fireEvent.click(toggle));
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    expect(toggle).toHaveProperty("disabled", true);
+    expect(h.apiCall).toHaveBeenCalledWith(expect.any(Function), "/v1/me/reviewer", { method: "PATCH", body: JSON.stringify({ [key]: true }) });
+    await act(async () => finish(h.reviewer!));
+    expect(toggle).toHaveProperty("disabled", false);
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
   });
 
   it("keeps the root pin when a separately pinned reply is posted", async () => {

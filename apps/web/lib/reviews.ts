@@ -124,17 +124,23 @@ export type ReviewCard = {
 export type ReviewBoardResponse = { items: ReviewCard[]; nextCursor: string | null };
 
 /** ``GET /v1/me/reviews``: your requests, and your reviews on others'. */
+export type MyReviewTab = "needs" | "waiting" | "answered" | "closed" | "all";
+export type WrittenReview = {
+  request: ReviewCard;
+  commentId: string;
+  snippet: string;
+  helpful: boolean;
+  best: boolean;
+  upvotes: number;
+  createdAt: string | null;
+};
+export type MyReviewPage<T> = { items: T[]; nextCursor: string | null };
 export type MyReviewsResponse = {
   asked: ReviewCard[];
-  answered: Array<{
-    request: ReviewCard;
-    commentId: string;
-    snippet: string;
-    helpful: boolean;
-    best: boolean;
-    upvotes: number;
-    createdAt: string | null;
-  }>;
+  answered: WrittenReview[];
+  counts: Record<MyReviewTab, number>;
+  askedNextCursor: string | null;
+  answeredNextCursor: string | null;
 };
 
 /** ``GET /v1/me/review-blocks``. */
@@ -266,6 +272,7 @@ export type ReviewerMe = {
   badges: Array<{ key: string; label: string }>;
   flair: string | null;
   verified: ReviewerVerified | null;
+  verificationReason?: "not_enough_ladder_games" | null;
   canComment: boolean;
   syncedGames: number;
   requiredGames: number;
