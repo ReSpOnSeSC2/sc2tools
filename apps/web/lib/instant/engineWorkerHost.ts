@@ -42,6 +42,7 @@ export interface BootedRuntime {
 export interface EngineHostDeps {
   boot(pointerUrl: string): Promise<BootedRuntime>;
   now?: () => number;
+  refreshPolicy?: (runtime: EngineRuntime) => Promise<void>;
 }
 
 type FileRequest = PlayersRequest | ParseWorkerRequest | UnzipRequest;
@@ -130,6 +131,7 @@ function runSafely(runtime: EngineRuntime, request: FileRequest, started: number
 /** Boots once, then answers file requests; see `createEngineWorkerHost`. */
 class EngineWorkerHost {
   private booting: Promise<BootedRuntime> | null = null;
+  private refreshPolicy = true;
   private readonly now: () => number;
 
   constructor(
@@ -156,7 +158,10 @@ class EngineWorkerHost {
     const started = this.now();
     this.progress(base);
     try {
-      this.booting ??= this.deps.boot(request.pointerUrl);
+      if (!this.booting) {
+        this.refreshPolicy = request.refreshPolicy !== false;
+        this.booting = this.deps.boot(request.pointerUrl);
+      }
       const booted = await this.booting;
       this.progress({ ...base, ms: this.elapsed(started), ok: true });
       this.port.post({ type: "ready", info: booted.info, heapBytes: booted.runtime.heapBytes() });
@@ -177,6 +182,8 @@ class EngineWorkerHost {
     const base = { phase: request.type, index: request.index, total: request.total, fileName: request.fileName };
     const started = this.now();
     this.progress(base);
+    // Refresh is advisory: the runtime retains its last validated policy.
+    if (request.type === "parse" && this.refreshPolicy) await this.deps.refreshPolicy?.(booted.runtime).catch(() => undefined);
     const result = runSafely(booted.runtime, request, started, this.now);
     const done: EngineProgress = { ...base, ms: this.elapsed(started), ok: result.ok };
     if (result.errorKind) done.errorKind = result.errorKind;

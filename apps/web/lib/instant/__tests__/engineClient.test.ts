@@ -135,6 +135,13 @@ afterEach(() => {
 });
 
 describe("createEngineClient: boot", () => {
+  it("retains visitor no-refresh mode when workers are recycled", async () => {
+    const { client, workers } = harness(reply, { refreshPolicy: false, recycleEvery: 1 });
+    expect(kinds(await client.parseFiles(parseRequests(2)))).toEqual(["ok", "ok"]);
+    expect(workers).toHaveLength(2);
+    for (const worker of workers) expect(worker.received[0]).toMatchObject({ type: "boot", refreshPolicy: false });
+    client.dispose();
+  });
   it("creates the worker lazily and dedupes concurrent boots", async () => {
     const { client, workers } = harness(reply);
     expect(workers).toHaveLength(0);

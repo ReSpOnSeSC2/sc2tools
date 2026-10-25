@@ -166,6 +166,11 @@ class ApiClient:
         return self._interactive("GET", "/v1/games/" + encoded)
 
     # ---------------- Game ingest ----------------
+    def get_preset_policy(self) -> Dict[str, Any]:
+        """Public shared policy: one bounded-deadline attempt, no device token."""
+        return self._request("GET", "/v1/build-policy?evaluator=1", auth=False,
+                             attempts=1, interactive=True, read_timeout=2.0)
+
     def upload_game(self, game: Dict[str, Any]) -> Dict[str, Any]:
         if not self.device_token:
             raise PermissionError("agent_not_paired")

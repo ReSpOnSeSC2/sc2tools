@@ -37,6 +37,7 @@ const { buildAdminOpsRouter, requireKnownUser } = require("./adminOps");
 const { analyticsRange } = require("../services/analytics");
 const { buildAdminGlobalTrendsRouter } = require("./adminGlobalTrends");
 const { buildAdminGuidesRouter } = require("./adminGuides");
+const { buildAdminBuildStudioRouter } = require("./adminBuildStudio");
 const {
   ADMIN_STATUS_MAX_AGE_MS,
   browserUploadStatusOf,
@@ -44,6 +45,7 @@ const {
 
 /**
  * @param {{
+ *   buildStudio?: Parameters<typeof buildAdminBuildStudioRouter>[0],
  *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   adminAudit?: import("../services/adminAudit").AdminAuditService,
  *   pairings?: import("../services/devicePairings").DevicePairingsService,
@@ -95,6 +97,7 @@ function buildAdminRouter(deps) {
   });
 
   if (deps.jobLedger && deps.adminAudit) router.use("/admin", buildAdminOpsRouter(deps));
+  if (deps.buildStudio) router.use("/admin/build-studio", buildAdminBuildStudioRouter(deps.buildStudio));
 
   router.use("/admin/global-trends", buildAdminGlobalTrendsRouter(deps.adminGlobalTrends));
   // SC2 Tools Guides admin (notes, runs, backfill, videos). Mounted

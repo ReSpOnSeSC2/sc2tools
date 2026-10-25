@@ -25,6 +25,7 @@ from .strategy_detector_helpers import (
     too_short_label,
 )
 from .strategy_detector_race import classify_by_race
+from .preset_policy import apply_policy
 
 
 class OpponentStrategyDetector(BaseStrategyDetector):
@@ -39,6 +40,8 @@ class OpponentStrategyDetector(BaseStrategyDetector):
         my_race: str = None,
         eight_worker: bool = False,
     ) -> str:
+        self.custom_match = False
+        self.released_label = None
         # ``eight_worker`` (the replay was played on the 8-worker patch
         # 5.0.16) only picks the build durations custom v3 rules rewind
         # by; see BaseStrategyDetector.check_custom_rules.
@@ -86,6 +89,7 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                     rules, buildings, units, upgrades, main_loc,
                     eight_worker=eight_worker,
                 ):
+                    self.custom_match = True
                     return cb["name"]
 
         # 2. Hardcoded race decision tree -- shared with the user-side
@@ -93,4 +97,8 @@ class OpponentStrategyDetector(BaseStrategyDetector):
         # way regardless of who built it. ``my_race`` is the opponent's
         # matchup partner (the user), so the Terran/Zerg per-matchup
         # detectors fire correctly.
-        return classify_by_race(race, enemy_events, self, opp_race=my_race)
+        self.released_label = classify_by_race(race, enemy_events, self, opp_race=my_race)
+        return apply_policy(
+            self.preset_policy, self.released_label,
+            race, my_race, enemy_events, self, eight_worker, surface="opponent",
+        )

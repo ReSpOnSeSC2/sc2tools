@@ -256,3 +256,43 @@ test(
     }
   },
 );
+
+test("built bundle: active policy hashes, recorded clocks and detector surfaces match the shared runtime contract", { timeout: SLOW_TIMEOUT_MS }, async () => {
+  const { pyodide } = await engine();
+  const fixture = await readJson(path.join(REPO_DIR, "apps/replay-engine/tests/fixtures/preset_policy.json"));
+  const result = pyodide.runPython([
+    "import json, copy",
+    "from core.preset_policy import validate_policy, apply_policy, policy_snapshot",
+    "from core.strategy_detector import UserBuildDetector",
+    `cases = json.loads(${JSON.stringify(JSON.stringify(fixture.cases))})`,
+    "prior = policy_snapshot()",
+    "results = []",
+    "try:",
+    "    for case in cases:",
+    "        verified = validate_policy(case['policy'], verify_hash=False)",
+    "        installed = _sc2t_policy(json.dumps(verified))",
+    "        label = apply_policy(policy_snapshot(), case['baseline'], case['race'], case['opponentRace'], case['events'], UserBuildDetector([]), case.get('eightWorker', False), case.get('surface', 'you'))",
+    "        results.append({'hash': installed, 'label': label})",
+    "    last_hash = policy_snapshot()['hash']",
+    "    broken = copy.deepcopy(policy_snapshot())",
+    "    broken['evaluatorVersion'] = 999",
+    "    try:",
+    "        _sc2t_policy(json.dumps(broken))",
+    "        raise AssertionError('incompatible policy accepted')",
+    "    except ValueError:",
+    "        pass",
+    "    assert policy_snapshot()['hash'] == last_hash",
+    "finally:",
+    "    _sc2t_policy(json.dumps(prior))",
+    "json.dumps(results)",
+  ].join("\n"));
+  const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+  const rows = JSON.parse(result);
+  assert.equal(rows.length, fixture.cases.length);
+  for (const [index, row] of rows.entries()) {
+    const policy = { ...fixture.cases[index].policy }; delete policy.hash;
+    assert.equal(row.hash, createHash("sha256").update(JSON.stringify(canonical(policy))).digest("hex"), fixture.cases[index].name);
+    assert.equal(row.label, fixture.cases[index].expected, fixture.cases[index].name);
+  }
+  assert.equal(rows[0].hash, fixture.hash);
+});

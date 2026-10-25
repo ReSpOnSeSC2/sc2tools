@@ -20,6 +20,8 @@ export interface BootRequest {
   type: "boot";
   /** Absolute same-origin URL of `/engine/current.json`. */
   pointerUrl: string;
+  /** Visitor-only analysis may forbid all API-origin requests. */
+  refreshPolicy?: boolean;
 }
 
 interface FileEnvelope {
