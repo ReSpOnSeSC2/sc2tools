@@ -24,6 +24,7 @@ const {
   withDetectorLabels,
 } = require("./buildIntentShape");
 const { publicVerification } = require("./reviewerReputation");
+const { mineReviews } = require("./reviewMine");
 
 const ID_RE = /^[A-Za-z0-9_-]{16}$/;
 const ACTIVE_STATUSES = Object.freeze(["open", "answered"]);
@@ -555,42 +556,11 @@ class ReviewsService {
    *
    * @param {string} userId
    */
-  async mine(userId) {
-    const [asked, authored] = await Promise.all([
-      this.db.reviewRequests
-        .find({ userId, status: { $ne: "removed" } })
-        .sort({ createdAt: -1 })
-        .limit(50)
-        .toArray(),
-      this.db.reviewComments
-        .find({ authorId: userId, parentId: null, isAskerComment: { $ne: true }, status: { $in: ["visible", "hidden"] } })
-        .sort({ createdAt: -1 })
-        .limit(50)
-        .toArray(),
-    ]);
-    const requestIds = [...new Set(authored.map((c) => c.requestId))];
-    const requests = requestIds.length
-      ? await this.db.reviewRequests.find({ _id: { $in: requestIds }, status: { $ne: "removed" } }).toArray()
-      : [];
-    const byId = new Map(requests.map((r) => [r._id, r]));
-    const ready = await this._replayReady([...asked, ...requests]);
-    return {
-      // Only the asker's own list says a request is hidden pending review.
-      asked: asked.map((doc) => ({ ...cardView(doc, ready.has(doc._id)), visibility: doc.visibility, hidden: doc.hidden === true, isOwn: true })),
-      answered: authored.flatMap((comment) => {
-        const doc = byId.get(comment.requestId);
-        if (!doc || (doc.hidden && doc.userId !== userId)) return [];
-        return [{
-          request: cardView(doc, ready.has(doc._id)),
-          commentId: comment._id,
-          snippet: snippet(comment.body),
-          helpful: comment.helpful === true,
-          best: comment.best === true,
-          upvotes: Number(comment.upvotes) || 0,
-          createdAt: iso(comment.createdAt),
-        }];
-      }),
-    };
+  async mine(userId, query = {}) {
+    return mineReviews(this.db, userId, query, {
+      card: cardView, encode: encodeCursor, decode: decodeCursor, snippet,
+      replayReady: (docs) => this._replayReady(docs),
+    });
   }
 
   /**

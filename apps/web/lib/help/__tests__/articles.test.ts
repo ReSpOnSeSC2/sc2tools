@@ -281,6 +281,8 @@ describe("reviews and coaching articles", () => {
       "writing-a-review",
       "who-can-review",
       "karma-and-badges",
+      "your-reviewer-profile",
+      "my-reviews",
       "closing-and-sharing",
       "blocking-and-reporting",
     ]);

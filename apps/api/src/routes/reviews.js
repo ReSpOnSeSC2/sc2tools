@@ -324,7 +324,7 @@ function buildReviewsRouter(deps) {
 
   router.get("/me/reviews", ...signedIn, handle(async (req, res) => {
     privateNoStore(res);
-    res.json(await deps.reviews.mine(signedViewer(req).userId));
+    res.json(await deps.reviews.mine(signedViewer(req).userId, req.query));
   }));
 
   router.get("/me/reviewer", ...signedIn, handle(async (req, res) => {
