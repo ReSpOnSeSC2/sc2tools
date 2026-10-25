@@ -1,6 +1,6 @@
 # Game story and fight ledger
 
-Implements `game-story-fight-ledger` from the final plan on `codex/wave3-game-story`. The calculation core and its regressions are paired with the lazy game-page consumer. Main through PR703 is integrated. Remote checks and merge are still required before calling this shipped.
+Implements `game-story-fight-ledger` from the final plan on `codex/wave3-game-story`. The calculation core and its regressions are paired with the lazy game-page consumer. Main through PR703 and reviewed playback PR705 head `b27058d5` are integrated. Merge after PR705; remote checks and merge are still required before calling this shipped.
 
 ## Behavior
 
@@ -12,9 +12,9 @@ Wins and draws replace the old Result filler. Wins retain their largest macro le
 
 ## Verification
 
-- Integrated pure calculation and real game-page/UI consumer tests: 51 passing assertions across five suites (14 calculation, 37 consumer), including irregular elapsed-time geometry, estimated-value coverage, empty draws, shared-clock seeks, default loss selection, keyboard tabs and chunk retry without remounting Mechanics.
+- Integrated pure calculation and real game-page/UI/playback consumer tests: 72 passing assertions across eight suites, including irregular elapsed-time geometry, estimated-value coverage, empty draws, shared-clock seeks, default loss selection, keyboard tabs, playback host selection and chunk retry without remounting Mechanics.
 - Full web TypeScript and strict changed-source ESLint passed. Help index generation is reproducible; all 77 Help assertions pass, including the updated `game-page#game-story` entry.
-- Required-engine production build and every unchanged bundle budget pass: landing 214.1/215 kB, game 320.3/440, opponent 498.9/500. The heavy story math, price catalog and ledger remain outside the eager page chunk. Existing repository lint warnings are unchanged.
+- Required-engine production build and every unchanged bundle budget pass after playback integration: landing 214.1/215 kB, game 313/440, opponent 490.4/500. The heavy story math, price catalog and ledger remain outside the eager page chunk. Existing repository lint warnings are unchanged.
 - The local browser fixture passes 64 checks at 320/390/768/1440 in light and dark themes. It verifies default loss selection, responsive table/cards, unknown prices, replay seeking and focus, minimum 44-pixel controls, no horizontal overflow, wins/draws/empty stories and labeled estimates. Inspected overview and ledger screenshots show readable wrapping and the shared page layout.
 
 The browser fixture runs actual story, page and replay components with committed fonts and production CSS, explicit synthetic auth/API/Next boundaries and blocked non-local requests. Reproduce from `apps/web` with `node tests/manual/game-story.cjs` after a production build. Screenshots are stored in `docs/handoff/screenshots/game-story-*.png`.
