@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Opponent page position
+
+- Keep your reading position when recorded compositions finish loading. Active phase and section chips scroll only within their own horizontal strips; section links still navigate when selected.
+
 ### Reference build orders
 - Write, paste or capture a bounded reference plan in the rich build editor,
   separately from the rules that classify replays. Supply-only steps keep an
