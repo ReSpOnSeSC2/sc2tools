@@ -13,7 +13,9 @@ const {
 const { computeTransitions } = require("./buildTransitions");
 const { publicBuildMongoExpression } = require("./communityBuildSnapshot");
 const { ruleNameFromUnit } = require("./knownBuildings");
-const TimingCatalog = require("./timingCatalog");
+const { hydrateDossierTimings } = require("./buildDossierTimingSample");
+const { planFacets, finishPlan } = require("./buildPlanSurvival");
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 const {
   CUSTOM_BUILD_PAGE_SIZE,
   CUSTOM_BUILD_MAX_PAGE_SIZE,
@@ -1336,6 +1338,7 @@ class CustomBuildsService {
    *   timingSampleGames: number,
    *   timingSampleLimit: number,
    *   timingsTruncated: boolean,
+   *   plan: Record<string,any>|null,
    * }>}
    */
   async evaluateBuild(userId, slug, opts = {}) {
@@ -1346,12 +1349,12 @@ class CustomBuildsService {
     const perspective = buildPerspective(build);
     const provenanceField = customBuildProvenanceField(perspective);
     const baseMatch = {
-      userId,
+      userId, ...STATS_GAME_MATCH,
       [provenanceField]: slug,
       isResumedFromReplay: { $ne: true },
     };
     const resumedMatch = {
-      userId,
+      userId, ...STATS_GAME_MATCH,
       [provenanceField]: slug,
       isResumedFromReplay: true,
     };
@@ -1373,6 +1376,7 @@ class CustomBuildsService {
         { $addFields: { _customBuildResult: customBuildResultBucket() } },
         {
           $facet: {
+            ...(ownBuild ? planFacets("$_customBuildResult") : {}),
             totals: [
               {
                 $group: {
@@ -1481,6 +1485,7 @@ class CustomBuildsService {
     return {
       slug: build.slug,
       name: build.name || build.slug,
+      plan: ownBuild ? finishPlan(doc) : null,
       totals: {
         ...totals,
         checkins,
@@ -1514,54 +1519,7 @@ class CustomBuildsService {
    * @returns {Promise<Array<Record<string, any> & {buildLog: string[], oppBuildLog: string[]}>>}
    */
   async _hydrateClassifiedTimingSample(userId, games, signal) {
-    if (!Array.isArray(games) || games.length === 0) return [];
-    const gameDetails = /** @type {any} */ (this.perGame)?.gameDetails;
-    const compact = [];
-    for (const game of games) {
-      if (signal?.aborted) throw abortError();
-      const gameId = String(game.gameId || "");
-      /** @type {Record<string, any>} */
-      let blob = {};
-      if (gameDetails && gameId) {
-        const one = await gameDetails.findMany(userId, [gameId], {
-          fields: ["buildLog", "oppBuildLog"],
-          concurrency: 1,
-          signal,
-        });
-        blob = one.get(gameId) || {};
-      }
-      if (signal?.aborted) throw abortError();
-
-      // Pre-detail-store rows can still have inline logs. Fetch at most one
-      // such row at a time, and only when object storage did not supply both
-      // selected fields, so raw logs never accumulate across the sample.
-      /** @type {Record<string, any>} */
-      let legacy = {};
-      if (
-        gameId
-        && (!Array.isArray(blob.buildLog) || !Array.isArray(blob.oppBuildLog))
-      ) {
-        legacy = await this._gamesCollection().findOne(
-          { userId, gameId },
-          {
-            projection: { _id: 0, buildLog: 1, oppBuildLog: 1 },
-            ...(signal ? { signal } : {}),
-          },
-        ) || {};
-      }
-      compact.push({
-        ...game,
-        buildLog: compactDossierTimingLog(
-          Array.isArray(blob.buildLog) ? blob.buildLog : legacy.buildLog,
-        ),
-        oppBuildLog: compactDossierTimingLog(
-          Array.isArray(blob.oppBuildLog)
-            ? blob.oppBuildLog
-            : legacy.oppBuildLog,
-        ),
-      });
-    }
-    return compact;
+    return hydrateDossierTimings({ games: this._gamesCollection(), details: /** @type {any} */ (this.perGame)?.gameDetails }, userId, games, signal);
   }
 
   /**
@@ -3442,55 +3400,6 @@ function classifiedDossierProjection(opts = {}) {
     projection.oppBuildLog = 1;
   }
   return projection;
-}
-
-const DOSSIER_TIMING_TOKENS = Object.freeze(
-  Object.values(TimingCatalog.RACE_BUILDINGS)
-    .flat()
-    .map((row) => String(row.token || "").toLowerCase())
-    .filter(Boolean),
-);
-
-// Legacy detail objects pre-date the ingest validator and may contain a very
-// large log string. Inspect only a small prefix and synthesize a canonical
-// timing row; never lowercase or retain the full untrusted input line.
-const DOSSIER_TIMING_PREFIX_SCAN_LENGTH = 256;
-const DOSSIER_TIMING_LINE_RE = /^\[(\d{1,5}):([0-5]\d)\]\s+([A-Za-z0-9_]{1,64})(?=\s|$)/;
-
-/**
- * Dossier timing code uses only first occurrence, so keep at most one line per
- * catalog token after the small detail sample has been hydrated.
- * @param {unknown} value
- */
-function compactDossierTimingLog(value) {
-  if (!Array.isArray(value)) return [];
-  const seen = new Set();
-  const out = [];
-  for (const raw of value) {
-    if (typeof raw !== "string") continue;
-    const match = DOSSIER_TIMING_LINE_RE.exec(
-      raw.slice(0, DOSSIER_TIMING_PREFIX_SCAN_LENGTH),
-    );
-    if (!match) continue;
-    // V8 may represent String#slice / regex captures as views into the giant
-    // parent string. Round-trip the <=64-byte ASCII token so retained output
-    // cannot keep the legacy multi-megabyte backing store alive.
-    const safeName = Buffer.from(match[3], "ascii").toString("ascii");
-    const lower = safeName.toLowerCase();
-    let keep = false;
-    for (const token of DOSSIER_TIMING_TOKENS) {
-      if (seen.has(token) || !lower.includes(token)) continue;
-      seen.add(token);
-      keep = true;
-    }
-    if (keep) {
-      // dnaTimings only needs the timestamp and token. Normalizing the minute
-      // field also guarantees every retained row is tiny and parser-safe.
-      const seconds = String(Number(match[2])).padStart(2, "0");
-      out.push(`[${Number(match[1])}:${seconds}] ${safeName}`);
-    }
-  }
-  return out;
 }
 
 /** @param {{wins?: number, losses?: number}} row */

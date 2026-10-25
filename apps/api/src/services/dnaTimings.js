@@ -19,6 +19,7 @@
 
 const TimingCatalog = require("./timingCatalog");
 const { toStartSeconds } = require("./buildDurations");
+const { resultBucket } = require("../util/parseQuery");
 
 const TIMING_LINE_RE = /^\[(\d+):(\d{2})\]\s+(\w+)/;
 const TREND_ABS_SECONDS = 5.0;
@@ -65,6 +66,10 @@ const TREND_REL_FRACTION = 0.05;
  *   lastSeenSeconds: number|null,
  *   lastSeenDisplay: string,
  *   winRateWhenBuilt: number|null,
+ *   winnerMedianSeconds: number|null,
+ *   loserMedianSeconds: number|null,
+ *   winnerSampleCount: number,
+ *   loserSampleCount: number,
  *   trend: "unknown"|"stable"|"later"|"earlier",
  *   source: "build_log"|"opp_build_log",
  *   samples: TimingSample[],
@@ -85,6 +90,18 @@ function median(arr) {
   const s = [...arr].sort((a, b) => a - b);
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/** Both sides need five actual decided outcomes from these same observations.
+ * A draw/unknown result never becomes a losing sample. No further read occurs.
+ * @param {TimingSample[]} samples */
+function timingOutcomeMedians(samples) {
+  const valid = samples.filter(sample => Number.isFinite(sample.seconds) && sample.seconds >= 0);
+  const winners = valid.filter(sample => resultBucket(sample.result) === "win").map(sample => sample.seconds);
+  const losers = valid.filter(sample => resultBucket(sample.result) === "loss").map(sample => sample.seconds);
+  const enough = winners.length >= 5 && losers.length >= 5;
+  return { winnerMedianSeconds: enough ? median(winners) : null, loserMedianSeconds: enough ? median(losers) : null,
+    winnerSampleCount: winners.length, loserSampleCount: losers.length };
 }
 
 /** @param {number[]} sortedAsc @param {number} p @returns {number|null} */
@@ -135,6 +152,7 @@ function emptyTokenRow(token, source) {
     lastSeenSeconds: null,
     lastSeenDisplay: "-",
     winRateWhenBuilt: null,
+    ...timingOutcomeMedians([]),
     trend: "unknown",
     source,
     samples: [],
@@ -238,7 +256,7 @@ function gameResult(g) {
 
 /** @param {unknown} result @returns {boolean} */
 function isWonResult(result) {
-  return result === "Win" || result === "Victory";
+  return resultBucket(result) === "win";
 }
 
 /** @param {any} g @returns {string} */
@@ -483,6 +501,7 @@ function finaliseSamples(samples, ordering, ownInternalSet) {
       trend: computeTrend(secondsList),
       source,
       samples: list2.slice().reverse(),
+      ...timingOutcomeMedians(list2),
       displayName: tk.displayName,
       iconFile: tk.iconFile,
     };
@@ -573,6 +592,7 @@ function topStrategiesFromBy(byStrategy, limit = 5) {
 module.exports = {
   formatSeconds,
   median,
+  timingOutcomeMedians,
   percentileInclusive,
   computeTrend,
   emptyTokenRow,

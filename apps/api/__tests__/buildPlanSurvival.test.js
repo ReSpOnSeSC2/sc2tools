@@ -72,7 +72,10 @@ test("unmeasured/invalid lengths do not become zero-minute observations and draw
 test("a malformed or unconfirmed intent never inflates the declared sample", async () => {
   await games.insertMany([row("pending", null, { buildIntent: { status: "pending", build: declared } }),
     row("missing", null, { buildIntent: { status: "confirmed", build: null } }),
-    row("empty", null, { buildIntent: { status: "confirmed", build: { name: "" } } })]);
+    row("empty", null, { buildIntent: { status: "confirmed", build: { name: "" } } }),
+    row("too-short", null, { myBuild: "PvZ - Game Too Short", _customBuildSlug: null,
+      buildIntent: { status: "confirmed", applied: false, build: declared, detected: null } }),
+  ]);
   expect(await aggregate()).toMatchObject({ declared: 0, heldRate: null, heldWR: null, knockedOffWR: null, knockedInto: [], knockedBy: [] });
 });
 

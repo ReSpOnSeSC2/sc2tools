@@ -642,7 +642,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const aggregations = new AggregationsService(deps.db, { mmrExpectation });
   const macroReport = new MacroReportService(deps.db);
   const streak = new StreakService(deps.db);
-  const builds = new BuildsService(deps.db, { mmrExpectation });
+  const builds = new BuildsService(deps.db, { mmrExpectation, gameDetails });
   const buildsMmrStats = new BuildsMmrStatsService(deps.db);
   const catalog = new CatalogService(deps.db);
   // Eager-load the JSON catalog so the first build-order /

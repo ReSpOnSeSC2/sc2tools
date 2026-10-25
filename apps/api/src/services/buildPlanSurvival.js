@@ -8,6 +8,11 @@ const DECLARED_NAME = stringValue("$buildIntent.build.name");
 const DECLARED_SLUG = stringValue("$buildIntent.build.slug");
 const DETECTED_NAME = stringValue(DETECTOR_BUILD_EXPR);
 const DETECTED_SLUG = stringValue(DETECTOR_SLUG_EXPR);
+/** @param {unknown} name @param {unknown} slug */
+const sameReference = (name, slug) => ({ $cond: [
+  { $and: [{ $ne: [DECLARED_SLUG, ""] }, { $ne: [slug, ""] }] },
+  { $eq: [DECLARED_SLUG, slug] }, { $eq: [DECLARED_NAME, name] },
+] });
 
 // A confirmed reference is the declared cohort. Performance still includes
 // ordinary detected games; this predicate is used only inside the plan facet.
@@ -15,18 +20,18 @@ const PLAN_DECLARED_EXPR = Object.freeze({ $and: [
   { $eq: ["$buildIntent.status", "confirmed"] },
   { $eq: [{ $type: "$buildIntent.build" }, "object"] },
   { $ne: [DECLARED_NAME, ""] },
+  // Too-short games can hold an unapplied confirmed answer while their
+  // effective label still names another build. Never attribute that answer
+  // to the different build whose performance cohort is being grouped.
+  sameReference(stringValue("$myBuild"), stringValue("$_customBuildSlug")),
 ] });
 
 // A stable custom identity wins over a mutable display name when both are
 // recorded. Otherwise compare exact labels. Missing detection is explicitly
 // "no different build recorded", not proof of successful execution/causality.
-const PLAN_HELD_EXPR = Object.freeze({ $cond: [
-  { $and: [{ $ne: [DECLARED_SLUG, ""] }, { $ne: [DETECTED_SLUG, ""] }] },
-  { $eq: [DECLARED_SLUG, DETECTED_SLUG] },
-  { $or: [
-    { $and: [{ $eq: [DETECTED_NAME, ""] }, { $eq: [DETECTED_SLUG, ""] }] },
-    { $eq: [DECLARED_NAME, DETECTED_NAME] },
-  ] },
+const PLAN_HELD_EXPR = Object.freeze({ $or: [
+  { $and: [{ $eq: [DETECTED_NAME, ""] }, { $eq: [DETECTED_SLUG, ""] }] },
+  sameReference(DETECTED_NAME, DETECTED_SLUG),
 ] });
 
 /** Add to an existing grouped slim aggregation; no extra read or log hydration. */
