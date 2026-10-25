@@ -52,6 +52,7 @@ const fetchMock = vi.fn();
 let studioState: Record<string, unknown> = { ...EMPTY_STUDIO };
 
 beforeEach(() => {
+  localStorage.clear();
   connection.status = "connected";
   engagementSpy.mockClear();
   multiChatSpy.mockClear();
@@ -245,7 +246,7 @@ describe("DockClient", () => {
     render(<DockClient token="tok_test" />);
     expect(await screen.findByText("gg wp")).toBeTruthy();
     expect(screen.getByText("Viewer")).toBeTruthy();
-    expect(await screen.findByText("Twitch")).toBeTruthy();
+    expect(await screen.findByText(/Twitch ·/)).toBeTruthy();
   });
 
   it("preserves chat-engine configuration identity when only alert presentation changes", async () => {
@@ -636,7 +637,7 @@ describe("DockClient", () => {
     await screen.findByText("great game!");
     // Scoped to the feed — the narrow-mode jump tabs also say "Highlight".
     const list = within(screen.getByTestId("dock-chat-list"));
-    fireEvent.click(list.getByRole("button", { name: "Highlight" }));
+    fireEvent.click(list.getByRole("button", { name: /^Highlight message from/ }));
     await waitFor(() => {
       expect(studioPosts()).toEqual([
         {
@@ -666,10 +667,10 @@ describe("DockClient", () => {
     };
     render(<DockClient token="tok_test" />);
     await screen.findByText("buy followers");
-    const block = screen.getByRole("button", { name: "Block" });
+    const block = screen.getByRole("button", { name: /^Block / });
     fireEvent.click(block); // arms
     expect(studioPosts()).toEqual([]);
-    fireEvent.click(screen.getByRole("button", { name: "Confirm?" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Confirm block / }));
     await waitFor(() => {
       expect(studioPosts()).toEqual([{ blockedUsers: ["Spammer"] }]);
     });
@@ -767,7 +768,7 @@ describe("DockClient", () => {
       target: { value: "Next game in" },
     });
     const before = Date.now();
-    fireEvent.click(screen.getByRole("button", { name: "⏱ Start timer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start timer" }));
     await waitFor(() => {
       expect(studioPosts()).toHaveLength(1);
     });
@@ -786,7 +787,7 @@ describe("DockClient", () => {
     render(<DockClient token="tok_test" />);
     const before = Date.now();
     fireEvent.click(
-      await screen.findByRole("button", { name: "⏺ Mark stream start" }),
+      await screen.findByRole("button", { name: "Mark stream start" }),
     );
     await waitFor(() => {
       expect(studioPosts()).toHaveLength(1);
@@ -854,4 +855,6 @@ describe("DockClient", () => {
     expect(link.getAttribute("href")).toBe("/settings?tab=overlay");
     expect(link.getAttribute("target")).toBe("_blank");
   });
+
+
 });

@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Stream Dock
+
+- Collapse panels into live summaries, pin frequently used sections, and keep the layout in this browser. Dock controls now show connection text and keyboard focus, give touch users larger targets, and offer selected text when clipboard access is unavailable.
+
 ### Overlay health
 
 - Check connected game, chat and Dock sources before going live. Widget cards show identified connections, unknown older pages and possible duplicate audio; failed checks keep an honest unavailable state. The Dock has a counts-only source strip.

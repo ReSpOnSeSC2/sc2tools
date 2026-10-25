@@ -208,8 +208,9 @@ export function sanitizeEngagement(raw: unknown): EngagementSummary {
 export function useEngagementState(
   token: string,
   engagementEvent: unknown,
-): { summary: EngagementSummary; lastEvent: Record<string, unknown> | null } {
+): { summary: EngagementSummary; lastEvent: Record<string, unknown> | null; loaded: boolean } {
   const preview = useOverlayPreview();
+  const [loadedToken, setLoadedToken] = useState<string | null>(null);
   const [summary, setSummary] = useState<EngagementSummary>(EMPTY_ENGAGEMENT);
   const [lastEvent, setLastEvent] = useState<Record<string, unknown> | null>(null);
   const lastEventAtRef = useRef(0);
@@ -228,6 +229,7 @@ export function useEngagementState(
         const body: unknown = await res.json();
         if (cancelled || lastEventAtRef.current > startedAt) return;
         setSummary(sanitizeEngagement(body));
+        setLoadedToken(token);
       } catch {
         /* transient — next tick retries */
       }
@@ -277,5 +279,5 @@ export function useEngagementState(
     });
   }, [engagementEvent]);
 
-  return { summary, lastEvent };
+  return { summary, lastEvent, loaded: !!preview || loadedToken === token };
 }

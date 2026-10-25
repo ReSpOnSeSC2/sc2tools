@@ -1,4 +1,6 @@
 "use client";
+
+import { DockInput, DockButton } from "./DockControls";
 import { useState } from "react";
 import { normalizedBlockedUserSet } from "@/lib/multichat/appearance";
 import { DOCK_BLOCKLIST_MAX } from "./dockConstants";
@@ -15,12 +17,12 @@ export function DockBlockedUsers({ users, managedUsers, busy, ready, onUnblock }
     <summary className="cursor-pointer text-caption font-semibold text-text">Blocked users ({all.length})</summary>
     <p className="mt-2 text-micro text-text-muted">{users.length} of {DOCK_BLOCKLIST_MAX} Dock blocks</p>
     <label className="mt-2 block text-caption text-text-muted">Search blocked users
-      <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} className="mt-1 w-full rounded border border-border bg-bg-elevated px-2 py-1 text-text" />
+      <DockInput type="search" value={query} onChange={(e) => setQuery(e.target.value)} className="mt-1 w-full rounded border border-border bg-bg-elevated px-2 py-1 text-text" />
     </label>
     <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto">{shown.map((user) => <li key={user} className="flex flex-wrap items-center justify-between gap-2 text-caption text-text">
       <span className="break-all">{user}</span>
       {managed.has(user) ? <a className="text-text-muted underline" href="/settings?tab=overlay" target="_blank" rel="noopener noreferrer">Managed in Settings → Overlay</a>
-        : <button type="button" disabled={busy || !ready} onClick={() => onUnblock(user)} className="rounded border border-border px-2 py-1 disabled:opacity-50">Unblock <span className="sr-only">{user}</span></button>}
+        : <DockButton type="button" disabled={busy || !ready} onClick={() => onUnblock(user)} className="rounded border border-border px-2 py-1 disabled:opacity-50">Unblock <span className="sr-only">{user}</span></DockButton>}
     </li>)}</ul>
     {!shown.length ? <p className="mt-2 text-caption text-text-muted">{all.length ? "No matching users." : "No blocked users."}</p> : null}
   </details>;
