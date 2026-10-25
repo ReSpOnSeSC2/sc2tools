@@ -9,9 +9,10 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: harness.getToken }),
+  useAuth: () => ({ getToken: harness.getToken, userId: "test-owner", isLoaded: true, isSignedIn: true }),
 }));
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@/lib/clientApi", async original => ({
+  ...await original<typeof import("@/lib/clientApi")>(),
   apiCall: (...args: unknown[]) => harness.apiCall(...args),
   useApi: () => ({ data: undefined, error: undefined, isLoading: false }),
 }));
