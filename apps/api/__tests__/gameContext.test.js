@@ -40,6 +40,8 @@ test("uses only the latest50 earlier owner ranked1v1s in the same concrete match
     game("team", -1, { matchFormat: "team", playerCount: 4, macroScore: 999 }),
     game("resumed", -1, { isResumedFromReplay: true, macroScore: 999 }),
     game("other-matchup", -1, { opponent: { race: "Terran" }, macroScore: 999 }),
+    game("invalid-race-prefix", -1, { myRace: "Psionic", macroScore: 999 }),
+    game("invalid-opponent-prefix", -1, { opponent: { race: "Zerg-like" }, macroScore: 999 }),
   ]);
   const aggregate = jest.spyOn(h.db.games, "aggregate");
   const response = await endpoint();

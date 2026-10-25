@@ -15,6 +15,7 @@ const TIMING_CACHE_LIMIT = 1000;
 const MAX_CONTEXT_WORK = 4;
 const CONTEXT_INDEX = Object.freeze({ userId: 1, date: -1, _id: -1 });
 const TOWNHALL = Object.freeze({ P: "Nexus", T: "CommandCenter", Z: "Hatchery" });
+const RACE_MATCH = Object.freeze({ P: /^(P|Protoss)$/i, T: /^(T|Terran)$/i, Z: /^(Z|Zerg)$/i });
 const CURRENT_FIELDS = Object.freeze({ _id: 0, gameId: 1, date: 1, myRace: 1, myBuild: 1,
   _customBuildSlug: 1, "opponent.race": 1, "opponent.leagueId": 1,
   macroScore: 1, apm: 1, spq: 1, durationSec: 1, ...BUILD_INTENT_LABEL_PROJECTION });
@@ -33,7 +34,12 @@ function finite(raw) { return typeof raw === "number" && Number.isFinite(raw) ? 
 function priorMatch(userId, current) {
   const mine = raceLetter(current.myRace), theirs = raceLetter(current.opponent?.race);
   if (!mine || !theirs || !(current.date instanceof Date) || !Number.isFinite(current.date.getTime())) return null;
-  return gamesMatchStage(userId, { mapPool: "ladder", gameSize: "1v1", race: mine, oppRace: theirs, until: current.date });
+  const match = gamesMatchStage(userId, { mapPool: "ladder", gameSize: "1v1", until: current.date });
+  // Upload race strings are bounded but not enum-constrained. Prefix filters
+  // alone would count arbitrary legacy values such as "Psionic" as Protoss.
+  match.myRace = RACE_MATCH[mine];
+  match["opponent.race"] = RACE_MATCH[theirs];
+  return match;
 }
 
 /** @param {Record<string,any>} match */
