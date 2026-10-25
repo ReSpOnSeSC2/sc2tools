@@ -1,14 +1,17 @@
 "use client";
 
-import { useApi } from "@/lib/clientApi";
-import type { DossierAnalysis } from "@/lib/dossierTypes";
-import type { OwnTimingContext } from "@/lib/buildTimingComparison";
+import type { BuildExecution } from "@/lib/buildExecution";
 import { BuildOrderColumns, type BuildOrderColumnsProps } from "./BuildOrderColumns";
+import { BuildExecutionCard } from "./BuildExecutionCard";
 
-/** One owner-scoped dossier SWR resource for every row. The same key can reuse
- * an already visited dossier; failed or previous responses supply no baseline. */
-export function GameBuildOrderColumns({ timingContext, ...props }: BuildOrderColumnsProps & { timingContext?: OwnTimingContext }) {
+/** The parent owns one execution request for the card, timeline and rail.
+ * No second dossier GET or timing hydration is issued by this lazy section. */
+export function GameBuildOrderColumns({ gameId, execution, executionLoading, executionError, onExecutionRetry, ...props }: BuildOrderColumnsProps & {
+  gameId?: string; execution?: BuildExecution; executionLoading?: boolean; executionError?: unknown; onExecutionRetry?: () => unknown;
+}) {
   const canCompare = !props.loading && !props.error && props.myStatus !== "not_extracted" && props.myStatus !== "empty" && Array.isArray(props.myEvents) && props.myEvents.length > 0;
-  const result = useApi<DossierAnalysis>(canCompare ? timingContext?.path ?? null : null, { keepPreviousData: false, dedupingInterval: 60_000, revalidateOnFocus: false, shouldRetryOnError: false });
-  return <BuildOrderColumns {...props} myTimingBaseline={canCompare && timingContext && !result.error && !result.isPreviousData && result.data ? { data: result.data, matchup: timingContext.matchup } : undefined} />;
+  const usable = canCompare && !executionError && !executionLoading ? execution : undefined;
+  return <div className="space-y-4">{gameId ? <BuildExecutionCard data={usable} gameId={gameId} events={props.myEvents} loading={props.loading || executionLoading} error={executionError} unavailable={!canCompare && !props.loading} onRetry={onExecutionRetry} onSeek={props.onSeek} /> : null}
+    <BuildOrderColumns {...props} myExecutionTimings={usable?.matchup && !usable.unavailable ? { rows: usable.timings, matchup: usable.matchup } : undefined} />
+  </div>;
 }

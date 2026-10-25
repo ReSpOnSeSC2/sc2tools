@@ -69,6 +69,13 @@ function compactDossierTimingLog(value, game) {
       if (!lower.includes(token) || (first.get(token)?.seconds ?? Infinity) <= seconds) continue;
       first.set(token, { line, seconds });
     }
+    // The starting town hall must not erase the first constructed natural.
+    // Keep one additional tiny line, using the same >10s convention as the
+    // existing personal expansion comparison. No additional detail read.
+    if (/^(Nexus|Hatchery|CommandCenter)$/i.test(safeName) && seconds > 10) {
+      const key = `natural:${lower}`;
+      if ((first.get(key)?.seconds ?? Infinity) > seconds) first.set(key, { line, seconds });
+    }
   }
   return [...new Set([...first.values()].sort((a, b) => a.seconds - b.seconds).map(row => row.line))];
 }

@@ -39,6 +39,7 @@ corresponding GitHub Release.
 
 - Read matchup timing quartiles, trends, decided-game win rates and winner/loser medians from a bounded replay sample. Exact published guide milestones can show a Community comparison; a game's first building occurrence can compare with your own cached median.
 - Inspect declared-plan Held and Knocked-off counts, their separate win rates and bounded recorded examples. Small declaration samples stay hidden, and labels and full-game duration estimates make no claim about execution or causality.
+- Owned games show saved rule counts, distinct event/deadline evidence, shared-clock jumps and private timing ranges after three observations. Unknown rules withhold the percentage; catalog builds show timings only. Practice reuses the existing explicit Ghost controls.
 
 ### Build editor request ownership
 

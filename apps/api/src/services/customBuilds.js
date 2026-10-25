@@ -14,6 +14,7 @@ const { computeTransitions } = require("./buildTransitions");
 const { publicBuildMongoExpression } = require("./communityBuildSnapshot");
 const { ruleNameFromUnit } = require("./knownBuildings");
 const { hydrateDossierTimings } = require("./buildDossierTimingSample");
+const { naturalTimingBaselines } = require("./buildExecutionTimings");
 const { readCommunityTimings } = require("./buildCommunityTimings");
 const { planFacets, finishPlan, planGroupFields, planHeldRate } = require("./buildPlanSurvival");
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
@@ -1342,6 +1343,7 @@ class CustomBuildsService {
    *   timingsTruncated: boolean,
    *   plan: Record<string,any>|null,
    *   communityTimings: Record<string,any>,
+   *   naturalTimings: Record<string,any>,
    * }>}
    */
   async evaluateBuild(userId, slug, opts = {}) {
@@ -1488,6 +1490,7 @@ class CustomBuildsService {
     return {
       slug: build.slug,
       name: build.name || build.slug,
+      naturalTimings: ownBuild ? naturalTimingBaselines(timingGames) : {},
       plan: ownBuild ? finishPlan(doc) : null,
       communityTimings: ownBuild ? await readCommunityTimings(/** @type {any} */ (this.db).guideStats, build.name || build.slug, timingGames, opts.signal) : {},
       totals: {
@@ -3451,6 +3454,7 @@ function toClassifiedRecent(game) {
 
 module.exports = {
   CustomBuildsService,
+  extractRules,
   CUSTOM_BUILD_PAGE_SIZE,
   CUSTOM_BUILD_MAX_PAGE_SIZE,
   CUSTOM_BUILD_CLASSIFIER_BATCH_SIZE,

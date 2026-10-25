@@ -211,3 +211,11 @@ replays and socket traffic only.
 - Comparative facts use one bounded slim replay read and exact account/race context. Recorded MMR is game-start MMR. Current regional season data is cache-only; missing/incomplete evidence suppresses a season peak. Only actual Pulse league snapshots establish league changes.
 - A conditional receipt on the existing game row prevents duplicate posts on reprocessing. Historical imports, resumed, hidden and deleted games do not create moments. Delivery is best effort after the receipt, so a crash can miss an alert rather than repeat it.
 - Rollback: turn moments and bot posting off in Settings, Save, then revert the feature commit if needed. Existing receipts are harmless; do not remove them to replay history.
+
+## Private build execution (Wave 4)
+
+- Deploy API before web; no environment variables, collections, indexes, jobs, migrations or provider setup.
+- Open an owned game → Builds. Applied check-ins select the build before detection. Custom rules show observed/unmet/unknown counts; catalog and zero-rule builds have no percentage.
+- One private request supplies card, timeline and rail. A bounded existing25-log sample provides timing medians after three observations; public/Community floors are unchanged. Natural skips the starting base; first gas/tech name the observed structure.
+- Missing/unknown rule evidence withholds the overall percentage. Event chips seek observations; Deadline chips mark windows. Practice remains explicit and uses the existing Ghost controls.
+- Reanalysis/log replacement, edits, check-ins and owner visibility changes retire five-minute bounded memory caches. No evidence is added to coach, review, public or overlay routes. Rollback is an API/web revert with no data conversion.

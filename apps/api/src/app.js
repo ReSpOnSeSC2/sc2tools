@@ -44,6 +44,7 @@ const { deletedGameIds } = require("./util/deletedGames");
 const { GameControlsService } = require("./services/gameControls");
 const { buildGameControlsRouter } = require("./routes/gameControls");
 const { GameContextService } = require("./services/gameContext");
+const { BuildExecutionService } = require("./services/buildExecution");
 const { buildStoreFromConfig } = require("./services/gameDetailsStore");
 const { buildReplayFilesFromConfig } = require("./services/replayFiles");
 const {
@@ -698,6 +699,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     perGame,
     logger: deps.logger,
     onReclassified: (userId, result) => {
+      gameExecution.invalidateForUser(userId);
       if (!deps.io) return;
       const changed = Number(result?.tagged || 0) + Number(result?.cleared || 0);
       if (changed > 0) {
@@ -705,6 +707,8 @@ function makeServices(deps, clerk, adminClerkIds) {
       }
     },
   });
+  const gameExecution = new BuildExecutionService(deps.db, { perGame, builds, customBuilds });
+  gameDetails.onBuildLogsChanged = (userId) => gameExecution.invalidateForUser(userId);
   const buildStudio = new AdminBuildStudioService(deps.db, { customBuilds, policies: presetPolicies });
   // Opponent-log recomputes replace data consumed by opponent-perspective
   // custom rules. Coalesce a fresh all-build pass after the detail write so a
@@ -731,7 +735,11 @@ function makeServices(deps, clerk, adminClerkIds) {
   });
   // A saved, renamed or deleted custom build changes the check-in options:
   // drop the cached lists so "Add new build" can confirm the new build at once.
-  customBuilds.onDefinitionsChanged = (userId) => buildIntents.invalidateOptions(userId);
+  customBuilds.onDefinitionsChanged = (userId) => {
+    buildIntents.invalidateOptions(userId);
+    gameExecution.invalidateForUser(userId);
+  };
+  buildIntents.notifier.onGamesChanged = (userId) => gameExecution.invalidateForUser(userId);
   const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
   const ghostExamples = new GhostExamplesService({ db: deps.db, gameDetails });
   const ghostReferences = new GhostReferencesService({ db: deps.db, gameDetails });
@@ -936,7 +944,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const gameControls = new GameControlsService(deps.db, { gdpr, onChanged: async (userId) => {
     games.invalidateForUser(userId);
     // Each owner-aware invalidator fences late in-flight cache completion.
-    for (const service of [overlayLive, rivals, gameContext, tickerFacts, chatStats, community, aggregations.trendsRequests, streamSeries]) {
+    for (const service of [overlayLive, rivals, gameContext, gameExecution, tickerFacts, chatStats, community, aggregations.trendsRequests, streamSeries]) {
       service.invalidateForUser(userId);
     }
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
@@ -1009,6 +1017,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     leaguePercentiles,
     mmrExpectation,
     gameContext,
+    gameExecution,
     fingerprintPopulationCalibration,
     skillFingerprint,
     ladderMeta,
@@ -1622,6 +1631,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     buildGamesRouter({
       games: services.games,
       gameContext: services.gameContext,
+      gameExecution: services.gameExecution,
       gameVods: services.gameVods,
       opponents: services.opponents,
       users: services.users,

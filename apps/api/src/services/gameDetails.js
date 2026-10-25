@@ -69,6 +69,8 @@ class GameDetailsService {
     if (!store) throw new Error("GameDetailsService: store required");
     this.store = store;
     this.deletedGameIds = opts.deletedGameIds;
+    /** @type {((userId:string,gameId:string)=>void)|null} */
+    this.onBuildLogsChanged = null;
   }
 
   /**
@@ -111,6 +113,7 @@ class GameDetailsService {
       return;
     }
     await this.store.write(userId, gameId, date, blob, opts);
+    if (blob.buildLog !== undefined || blob.oppBuildLog !== undefined) this.onBuildLogsChanged?.(userId, gameId);
     if (await isDeleted()) {
       await this.store.delete(userId, gameId);
       throw require("../util/deletedGames").gameDeletedError();

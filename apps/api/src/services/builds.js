@@ -3,6 +3,7 @@
 const { gamesMatchStage } = require("../util/parseQuery");
 const { computeDossierExtras } = require("./buildDossier");
 const { hydrateDossierTimings } = require("./buildDossierTimingSample");
+const { naturalTimingBaselines } = require("./buildExecutionTimings");
 const { readCommunityTimings } = require("./buildCommunityTimings");
 const { planFacets, finishPlan, planGroupFields, planHeldRate } = require("./buildPlanSurvival");
 const { strengthPipeline, finishStrength } = require("./strengthAdjusted");
@@ -127,15 +128,18 @@ class BuildsService {
    * @param {string} userId
    * @param {string} name
    * @param {object} filters
+   * @param {{signal?:AbortSignal,catalogOnly?:boolean}} [options]
    * @returns {Promise<object | null>}
    */
-  async detail(userId, name, filters) {
+  async detail(userId, name, filters, options = {}) {
     if (!name) return null;
-    const baseMatch = { ...gamesMatchStage(userId, filters), myBuild: name };
+    const provenance = options.catalogOnly ? { _customBuildSlug: { $in: [null, ""] } } : {};
+    const baseMatch = { ...gamesMatchStage(userId, filters), myBuild: name, ...provenance };
     const resumedMatch = {
       ...gamesMatchStage(userId, filters),
       isResumedFromReplay: true,
       myBuild: name,
+      ...provenance,
     };
     const cursor = this.db.games.aggregate([
       { $match: baseMatch },
@@ -277,10 +281,11 @@ class BuildsService {
       : [];
     const timingCandidates = totals.total ? await this.db.games.find({ $and: [baseMatch, AGREES_WITH_DETECTOR_MATCH] },
       { projection: DOSSIER_PROJECTION }).sort({ date: -1 }).limit(25).toArray() : [];
-    const timingGames = await hydrateDossierTimings({ games: this.db.games, details: this.gameDetails }, userId, timingCandidates);
+    const timingGames = await hydrateDossierTimings({ games: this.db.games, details: this.gameDetails }, userId, timingCandidates, options.signal);
     const extras = computeDossierExtras(dossierGames, { timingGames: timingGames.filter(agreesWithDetector) });
     return {
       name,
+      naturalTimings: naturalTimingBaselines(timingGames.filter(agreesWithDetector)),
       plan: finishPlan(doc),
       communityTimings: await readCommunityTimings(this.db.guideStats, name, timingGames),
       timingSampleGames: timingGames.filter(game => game.buildLog.length > 0 || game.oppBuildLog.length > 0).length,

@@ -249,6 +249,17 @@ class PerGameComputeService {
     return { slim, blob };
   }
 
+  /** Narrow owner-only evidence reader. Shares the exact parser, proxy
+   * annotation and era-aware construction clock used by rule classification.
+   * @param {string} userId @param {string} gameId
+   * @param {{signal?:AbortSignal}} [options] */
+  async buildExecutionEvents(userId, gameId, options = {}) {
+    const { slim, blob } = await this._readGameWithDetails(userId, gameId, { fields: ["buildLog"], signal: options.signal });
+    if (!slim) return null;
+    const available = Array.isArray(blob.buildLog) && blob.buildLog.length > 0;
+    return { available, events: available ? eventsToStartTime(parseBuildLogWithProxies(blob.buildLog, this.catalog, slim.spatial, "my"), slim) : null };
+  }
+
   /**
    * Return the parsed build-order timeline for a single game.
    *

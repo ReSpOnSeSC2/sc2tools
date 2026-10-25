@@ -8,6 +8,8 @@ import type { GameBuildOrderResponse, GameSummary } from "../types";
 import type { GameIntentState } from "@/lib/buildIntent";
 import { rawPayload } from "../replay/__tests__/fixtures";
 import type { GameContext } from "@/lib/benchmarks";
+import type { BuildExecution } from "@/lib/buildExecution";
+import { executionFixture } from "./buildExecutionFixtures";
 
 const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
@@ -66,6 +68,7 @@ afterEach(() => {
   getTokenMock.mockClear();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 const SLIM: GameSummary = {
@@ -164,6 +167,8 @@ function mockEndpoints({
   playback = false,
   buildOrder = BUILD_ORDER,
   context,
+  execution,
+  executionError,
 }: {
   slim?: GameSummary;
   macro?: MacroBreakdownData | null;
@@ -173,11 +178,14 @@ function mockEndpoints({
   playback?: boolean;
   buildOrder?: GameBuildOrderResponse;
   context?: GameContext;
+  execution?: BuildExecution;
+  executionError?: { status: number; message: string };
 } = {}) {
   const encodedId = encodeURIComponent(slim.gameId);
   useApiMock.mockImplementation((path: string | null) => {
     if (!path) return { data: undefined, error: undefined, isLoading: false };
     if (path.startsWith(`/v1/games/${encodedId}/context?`)) return { data: context, isLoading: false, mutate: vi.fn() };
+    if (path.startsWith(`/v1/games/${encodedId}/build-execution?`)) return { data: execution, error: executionError, isLoading: false, mutate: vi.fn() };
     if (playback && path === `/v1/games/${encodedId}/map-playback/manifest`) {
       return { data: rawPayload(), error: undefined, isLoading: false, mutate: vi.fn() };
     }
@@ -209,6 +217,35 @@ function mockEndpoints({
 }
 
 describe("GameDetailPage", () => {
+  it("shares one execution resource across the scorecard, timeline and rail and seeks the mounted clock", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    window.localStorage.clear();
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("min-width: 1280px"), addEventListener() {}, removeEventListener() {} }));
+    mockEndpoints({ execution: executionFixture(), playback: true });
+    render(<GameDetailPage gameId="g1" />);
+    const card = await screen.findByRole("region", { name: "Private build execution evidence" });
+    const stage = await screen.findByTestId("replay-stage");
+    expect(within(stage).getAllByText("50% match").length).toBeGreaterThan(0);
+    fireEvent.click(within(card).getByRole("button", { name: "At 4:50" }));
+    await waitFor(() => expect(within(stage).getByLabelText(/Game clock 4:50 of/)).toBeTruthy());
+    expect(screen.getByTestId("replay-stage")).toBe(stage);
+    const paths = useApiMock.mock.calls.map(call => call[0]).filter((path): path is string => typeof path === "string");
+    expect([...new Set(paths.filter(path => path.includes("/build-execution?")))]).toEqual(["/v1/games/g1/build-execution?revision=0"]);
+    expect(paths.some(path => /^\/v1\/(?:builds|custom-builds)\//.test(path))).toBe(false);
+  });
+
+  it("withholds a failed cached execution percentage and never requests execution for missing own logs", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    mockEndpoints({ execution: executionFixture(), executionError: { status: 503, message: "busy" }, playback: true });
+    const view = render(<GameDetailPage gameId="g1" />);
+    await screen.findByText("Build evidence couldn't be loaded");
+    expect(screen.queryByText("50% match")).toBeNull();
+    view.unmount(); useApiMock.mockClear();
+    mockEndpoints({ buildOrder: { ...BUILD_ORDER, events: [], my_status: "not_extracted" } });
+    render(<GameDetailPage gameId="g1" />);
+    await screen.findByText(/Rules are unknown until an own build log/);
+    expect(useApiMock.mock.calls.some(call => typeof call[0] === "string" && call[0].includes("/build-execution"))).toBe(false);
+  });
   it("connects the report's known timestamps to the same mounted replay and game clock", async () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     mockEndpoints({ playback: true });

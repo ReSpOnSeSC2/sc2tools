@@ -15,6 +15,7 @@ import { withBuildSupply, type BuildExportMeta } from "@/lib/gameExport";
 import { Input } from "@/components/ui/Input";
 import type { DossierAnalysis } from "@/lib/dossierTypes";
 import { ownTimingDeltas, type OwnTimingDelta } from "@/lib/buildTimingComparison";
+import { executionTimingDeltas, type ExecutionTiming } from "@/lib/buildExecution";
 
 type Workspace = {
   myMeta: BuildExportMeta; oppMeta: BuildExportMeta;
@@ -25,6 +26,7 @@ type Workspace = {
 
 export interface BuildOrderColumnsProps {
   myTimingBaseline?: { data: DossierAnalysis; matchup: string };
+  myExecutionTimings?: { rows: ExecutionTiming[]; matchup: string };
   workspace?: Workspace;
   onSeek?: (time: number) => void;
   currentTime?: number;
@@ -72,6 +74,7 @@ function visibleRows(rows: BuildEventRow[], workers: boolean, supplyBuildings: b
  */
 export function BuildOrderColumns({
   myTimingBaseline,
+  myExecutionTimings,
   error, onRetry, workspace,
   myEvents,
   oppEvents,
@@ -92,7 +95,7 @@ export function BuildOrderColumns({
   const enhanced = !!workspace, myStats = workspace?.myStats, oppStats = workspace?.oppStats;
   const myRows = useMemo(() => { const rows = normalizeBuildEvents(enhanced ? withBuildSupply(myEvents || [], myStats) : myEvents); return enhanced ? rows.sort((a, b) => a.time - b.time) : rows; }, [myEvents, myStats, enhanced]);
   const oppRows = useMemo(() => { const rows = normalizeBuildEvents(enhanced ? withBuildSupply(oppEvents || [], oppStats) : oppEvents); return enhanced ? rows.sort((a, b) => a.time - b.time) : rows; }, [oppEvents, oppStats, enhanced]);
-  const timingDeltas = useMemo(() => ownTimingDeltas(myRows, myTimingBaseline?.data, myTimingBaseline?.matchup ?? ""), [myRows, myTimingBaseline]);
+  const timingDeltas = useMemo(() => myExecutionTimings ? executionTimingDeltas(myRows, myExecutionTimings.rows, myExecutionTimings.matchup) : ownTimingDeltas(myRows, myTimingBaseline?.data, myTimingBaseline?.matchup ?? ""), [myRows, myTimingBaseline, myExecutionTimings]);
   const mine = useMemo(() => enhanced ? visibleRows(myRows, workers, supplyBuildings, filter) : myRows, [myRows, enhanced, workers, supplyBuildings, filter]);
   const theirs = useMemo(() => enhanced ? visibleRows(oppRows, workers, supplyBuildings, filter) : oppRows, [oppRows, enhanced, workers, supplyBuildings, filter]);
   const slots = useMemo(() => {
@@ -135,7 +138,7 @@ export function BuildOrderColumns({
         <Input aria-label="Filter steps" placeholder="Filter steps…" value={filter} onChange={event => setFilter(event.target.value)} className="w-full sm:w-56" />
         <p className="w-full text-micro text-text-muted">Supply ≈ uses the last recorded sample before the step. Missing supply stays —.</p>
       </div> : null}
-      {timingDeltas.size ? <p className="mb-3 text-micro text-text-muted">Your median compares the first construction start with the recorded {myTimingBaseline?.matchup} dossier sample. It is an observation, not an execution grade.</p> : null}
+      {timingDeltas.size ? <p className="mb-3 text-micro text-text-muted">Your median compares the recorded construction start with the {myExecutionTimings?.matchup || myTimingBaseline?.matchup} dossier sample. A natural skips the starting base. It is an observation, not an execution grade.</p> : null}
       <div className="grid gap-4 md:grid-cols-2">
         <BuildColumn
           timingDeltas={timingDeltas}

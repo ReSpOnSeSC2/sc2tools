@@ -86,6 +86,7 @@ const article: HelpArticle = {
     { type: "table", head: ["Key", "Action"], rows: REPLAY_SHORTCUTS },
     { type: "paragraph", text: "Click or Tab to the replay player before using shortcuts. Text fields, native controls and dialogs keep their own keys. Speed, rail visibility, production side, build filter, worker and auto-scroll choices, music volume and the phone panel choice are remembered on this device. The phone panel stays collapsed or expanded as you chose it." },
     { type: "heading", text: "Build orders", anchor: "build-orders" },
+    { type: "paragraph", text: "Your private **Build execution** card shows saved rule counts, unknown evidence and timing ranges from the same bounded sample used by the timeline. It checks custom rules only; catalog builds show timings. Event/deadline chips seek the shared clock. See [Grading a game](/help/build-check-in#grading-a-game) for the three-observation private floor, exact windows and Practice action." },
     { type: "paragraph", text: "Both players' build steps show their replay time. Select a step to watch it; the current step follows the shared game clock. Save as new build keeps the opening for later, and a Ghost target can be armed for practice." },
     { type: "heading", text: "Save the build", anchor: "save-build" },
     {
