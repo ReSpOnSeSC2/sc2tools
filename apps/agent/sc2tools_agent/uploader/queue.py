@@ -59,6 +59,11 @@ log = logging.getLogger(__name__)
 # submitting new parses while the queue is congested.
 _BACKPRESSURE_TIMEOUT_SEC = 15.0
 
+# One match normally creates one priority replay. Copied/restored folders can
+# generate many such events, so only a small number of NEW priority payloads
+# may bypass a full primary queue. Previously admitted retries remain lossless.
+_PRIORITY_OVERFLOW_LIMIT = 8
+
 # A process parse pool completes jobs in small, slightly staggered waves.  An
 # immediate non-blocking drain therefore produced a median batch of only two
 # games even when the user selected 50.  Historical work may wait briefly for
@@ -368,6 +373,10 @@ class UploadQueue:
         # queued replay as "not uploaded" and parses/enqueues it again
         # for as long as a congested backlog takes to drain.
         self._pending_paths: set[str] = set()
+        # Admission slots follow pending reservations through dequeue/retry.
+        # Prune lazily on overflow so every existing terminal path can release
+        # them through its normal pending-path/owner cleanup.
+        self._priority_overflow_paths: set[str] = set()
         # Lifecycle lock for ``start`` / ``stop`` / ``set_concurrency``.
         # Prevents two GUI button clicks racing into overlapping
         # restart sequences (which would leak threads).
@@ -545,16 +554,18 @@ class UploadQueue:
         loop that could repeat indefinitely on a backfill of N>>1k
         replays.
 
-        The fix: ``put`` with a generous timeout. Blocks the caller
+        Historical work uses ``put`` with a bounded timeout. It blocks the caller
         (the parse-pool done-callback thread) until the upload worker
         drains a slot. ``ProcessPoolExecutor`` gracefully accumulates
         completed-but-not-yet-callback'd futures during the block, so
         nothing is lost — parses just queue up in memory until the
-        upload thread catches up. The 5-minute timeout is a safety
+        upload thread catches up. The short timeout is a safety
         net for a wedged upload thread (e.g. a hung HTTPS connection
         the connection pool hasn't reaped yet); we'd rather log the
         symptom and drop one job than block the entire pipeline
-        forever.
+        forever. Fresh priority games may use a small reserved overflow
+        allowance when history fills the primary lane. That allowance lasts
+        until the job's pending reservation ends, including through retries.
         """
         path_key = str(job.file_path)
         with self._lock:
@@ -575,12 +586,18 @@ class UploadQueue:
             item = self._queue_item(job)
             if job.priority:
                 # History may fill the bounded lane while a match holds it.
-                # Keep a fresh game in the existing non-dropping priority
-                # lane instead of blocking it behind that paused history.
+                # Keep a bounded number of fresh games in the existing
+                # non-dropping retry lane instead of behind paused history.
                 try:
                     self._q.put_nowait(item)
                 except queue.Full:
-                    self._retry_q.put_nowait(item)
+                    with self._lock:
+                        self._priority_overflow_paths.intersection_update(self._pending_paths)
+                        self._priority_overflow_paths.intersection_update(self._pending_owners)
+                        if len(self._priority_overflow_paths) >= _PRIORITY_OVERFLOW_LIMIT:
+                            raise queue.Full
+                        self._priority_overflow_paths.add(path_key)
+                        self._retry_q.put_nowait(item)
                 self._retry_wake.set()
             else:
                 self._q.put(item, timeout=_BACKPRESSURE_TIMEOUT_SEC)
