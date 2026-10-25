@@ -230,6 +230,11 @@ corresponding GitHub Release.
 - Step through older and newer games with remembered all, opponent, matchup or build scope, optional recorded head-to-head totals and Alt+arrow shortcuts. Back links retain the originating list, filters and named build context; opponent names open their dossiers where an identity is available.
 - Focus the replay for keyboard seeking, slow motion, event jumps, fullscreen and a shortcut sheet. Replay display choices, speed, volume and mobile panels are remembered on this device, and seeks are announced to screen readers.
 
+### Game story and fight ledger
+
+- Game pages summarize measured lead changes, replay highlights and recorded fight trades, with exact or explicitly estimated losses. Timestamp controls seek the shared replay, and narrow screens use readable fight cards.
+- Wins and draws use the same story view, wins retain their top macro leak, and loss pages keep Why you lost selected alongside Game story. Games without meaningful observations give Mechanics the full row.
+
 ### Shared game analysis
 
 - Back keeps archive filters and page context; older/newer games and arrow-key navigation follow the same filtered list.
