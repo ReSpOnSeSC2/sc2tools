@@ -425,6 +425,26 @@ def test_obs_add_handler_carries_authenticated_socket_provenance_and_rebinds_it(
     assert calls[-1] == ({"widget": "session"}, "paired-B")
 
 
+def test_obs_capability_publish_tolerates_a_pairing_disconnect_closing_its_loop(monkeypatch):
+    from types import SimpleNamespace
+    from sc2tools_agent.socket_client import SocketClient
+    emissions = []
+    async def emit(_event, _payload):
+        pass
+    def tracked_emit(*args):
+        emission = emit(*args)
+        emissions.append(emission)
+        return emission
+    client = SocketClient(base_url="https://example.test", device_token="paired-A",
+        on_recompute_games=lambda _: None, on_recompute_opp_build=lambda _: None)
+    client._sio = SimpleNamespace(emit=tracked_emit)
+    client._loop = SimpleNamespace(is_closed=lambda: False)
+    client._device_connected = True
+    monkeypatch.setattr("sc2tools_agent.socket_client.asyncio.run_coroutine_threadsafe", lambda *_: (_ for _ in ()).throw(RuntimeError("loop closed")))
+    client.publish_obs_capabilities()
+    assert emissions[0].cr_frame is None
+
+
 def test_build_intent_ping_forwards_only_the_ids() -> None:
     import asyncio
 
