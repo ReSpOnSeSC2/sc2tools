@@ -87,10 +87,10 @@ describe("Footer audiences", () => {
 describe("Footer status link", () => {
   it("is a neutral link to the status page, not a live health light", () => {
     const { container } = render(<Footer />);
-    const status = screen.getByRole("link", { name: "System status (opens in a new tab)" });
+    const status = screen.getByRole("link", { name: "System status" });
     expect(status.getAttribute("href")).toBe(STATUS_PAGE_URL);
-    expect(status.getAttribute("target")).toBe("_blank");
-    expect(status.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(STATUS_PAGE_URL).toBe("/status");
+    expect(status.getAttribute("target")).toBeNull();
     expect(container.querySelector(".animate-ping, .motion-safe\\:animate-ping")).toBeNull();
     expect(status.querySelector(".bg-success")).toBeNull();
   });

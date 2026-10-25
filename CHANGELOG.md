@@ -19,6 +19,7 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Replace the broken status link with a public website and API reachability page, with separate results, timestamps and manual refresh. The status page works without signing in.
 - The desktop scouting report's X and minimize buttons now work while StarCraft II has focus, alongside the scouting icon. Other report content continues to pass game clicks through.
 
 ### Opponent page position

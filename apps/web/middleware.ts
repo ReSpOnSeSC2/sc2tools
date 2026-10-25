@@ -1,7 +1,8 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server";
 import { lowercaseGuidePath } from "./lib/guides/canonicalPath";
 import { isSharedReplayDetailPath } from "./lib/replayRouteAccess";
+import { isPublicStatusRequest, statusHostRedirect } from "./lib/publicStatusRoute";
 
 const PERMANENT_REDIRECT = 308;
 
@@ -37,13 +38,22 @@ const isProtected = createRouteMatcher([
   "/admin(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
+const authenticatedMiddleware = clerkMiddleware(async (auth, req) => {
   const guideRedirect = guideCaseRedirect(req);
   if (guideRedirect) return guideRedirect;
   if (isProtected(req) || isSharedReplayDetailPath(req.nextUrl.pathname)) {
     await auth.protect();
   }
 });
+
+export default function middleware(req: NextRequest, event: NextFetchEvent) {
+  const statusRedirect = statusHostRedirect(req.url);
+  if (statusRedirect) return NextResponse.redirect(statusRedirect, PERMANENT_REDIRECT);
+  // Only the status page and the no-database website ping bypass Clerk.
+  // Existing private surfaces and replay-detail guards still use the wrapper.
+  if (isPublicStatusRequest(req.nextUrl.pathname)) return NextResponse.next();
+  return authenticatedMiddleware(req, event);
+}
 
 export const config = {
   matcher: [
