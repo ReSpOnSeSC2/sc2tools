@@ -98,3 +98,39 @@ checks and 122 real dossier checks. The exact retained live section order and
 Brief/History navigation pass at all four widths in both themes; no API write
 or nonlocal traffic is allowed. Cached rerun captures preserve all eleven
 previously unstaged screenshots. Final exact-head remote gates still apply.
+
+## Released main and overlay dependency budget
+
+Actual Reference/passive-scroll main `9f9e6439` is preserved at `556a2087`.
+The resulting overlay initially measured 240.5/240 kB: a display-only scouting
+label imported the full rule-copy module and the new reference-order validator.
+`3eaa9589` extracts the unchanged name function, overrides and verb matcher into
+dependency-free `build-rule-entity.ts`. The old `build-rules-copy` export remains
+the same function. No rule validation or rendered labels change; apostrophe and
+unknown legacy label compatibility is covered alongside the existing callers.
+All 101 copy/rule/scouting assertions in seven suites and strict scoped lint pass.
+The built initial overlay no longer includes the reference validator.
+
+Actual combined metadata/cache main `5dee4be9` is integrated cleanly at
+`e0ffa261`. The preference route is unchanged from the reviewed Nav source;
+its owner-only/default-off guards and owner native upload barrier are retained.
+Both final typechecks and all 49 concrete scouting/Twitch/Ghost/Chat preference
+assertions in four suites pass. The final URL/copy/scouting run passes 85 cases.
+The final isolated production build, web type validation and every unchanged
+budget pass: landing 190/215, Today 232.2/240, Dossier 449.3/500, Dock 216.4/225,
+Overlay 233.7/240 and Widget 317.9/325 kB. Required engine artifact
+`25b300818c31d41b` is retained without another engine-source build.
+
+Final combined-source browser proof passes 232 navigation checks, 53 actual
+phase/section autoscroll checks and 122 real dossier checks. All four widths and
+both themes retain Brief → Tendencies → Timings → History → Ladder → Identity,
+with History replay content above Notes. Passive analysis arrival keeps document
+scroll/focus in place; explicit navigation and keyboard tab-strip movement work.
+No API write or nonlocal traffic is allowed. The new navigation captures use
+`NAV_SHOTS_DIR` in local cache. The inspected dossier runner explicitly asserts
+the retained six-section order; only its capture destination is redirected into
+a separate cache copy. Representative 320px light Opponents, 1440px dark Strategy
+sheet and 390px light/1440px dark dossier images were opened and inspected.
+No blank capture, clipping or layout blocker was found. SHA-256 checks confirm
+all eleven pre-existing dirty PNGs are unchanged. No 3210/8080 listener was used.
+Final exact-head GitHub/Vercel and root-coordinated fresh-main merge gates remain.
