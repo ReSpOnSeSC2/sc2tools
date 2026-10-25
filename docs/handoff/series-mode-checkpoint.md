@@ -53,8 +53,8 @@ the controls, DTO, widget/sample layers, token/revision/CAS fences and light
 
 Required engine build/smoke passes f96c086eb83fdc40 (223 files / 79 pyc).
 Production Next build and every unchanged budget pass: landing 214.8/215,
-Today 238.9/240, Dock 215.1/225, AIO 238.2/240, dedicated widget 322.7/325 and
-guide 169.1/175 kB. Native source-size/OBS layout compatibility passes 86
+Today 239/240, Dock 215.2/225, AIO 238.3/240, dedicated widget 322.4/325 and
+guide 168.6/175 kB. Native source-size/OBS layout compatibility passes 86
 offscreen tests. The 32-entry size catalog asserts Series 640×420 explicitly.
 
 PR #737 first-head full web passed 7,543 tests and failed only two stale widget
@@ -66,3 +66,12 @@ manager/product/page tests pass. Exact-head GitHub/Vercel and the shared Chat
 No actual account/provider/OBS operation, production job/migration,
 infrastructure or budget increase, release/version action or AI/model call was
 performed.
+
+Actual Ghost main b2f49312 is integrated, retaining both Ghost/Chat preference
+routes and the exact current-main native assembly barrier. Combined validation
+passes 124 API, 53 web and 95 native tests plus both typechecks. The required
+f96 engine smoke, combined Next build/all unchanged budgets and repeat 145-check
+browser run pass. First count-fix head had no GitHub runs because the actual
+main merge conflicts blocked its workflows; the resolved integration requires
+fresh expected-head gates. No deployment-quota bypass was attempted.
+
