@@ -2,6 +2,9 @@
 
 Authorized Wave 4 `unified-build-editor`, including its first-run and Help
 augments. ADR0055 records the catalog and request boundaries.
+Integrated source is `62ed2d1b`, including frozen generic PR743 `de9f98e9`
+and its shared-read StrictMode correction `1b56cbf6`. The strict unknown-token
+preview/save gates remain additive to the generic request fence.
 
 ## Scope
 
@@ -36,20 +39,23 @@ augments. ADR0055 records the catalog and request boundaries.
 
 ## Validation
 
-- 381 affected web/Builds/Definitions/Help/landing/game consumer tests passed
-  after fresh-main integration, including the final held-save regression.
+- 695 affected web/Builds/Definitions/Community/Help/shared-query/review and
+  catalog/variant/parity tests passed after final PR743 integration, including
+  the final held-save regression and real root StrictMode shared-query cases.
   Portalled choices explicitly mirror the
   disabled fieldset while Save is pending, including AX activation that leaves
   focus in the input.
   Includes malformed/held responses, owner/filter ABA, known-token coverage,
   exact canonical storage, legacy signature rows, source-safe saves, modal
   keyboard behavior and rejected-import recovery. Web types and changed-source
-  strict lint pass. Generated catalog and 85-article Help index are current.
-- Explicit required engine prebuild/smoke passed `f96c086eb83fdc40`: 223 files,
-  79 pyc, Python 3.14.2 and a 142,939-byte parse payload. No engine source change.
-- Final integrated production Next build passes all unchanged budgets: landing 189.6/215,
-  Today 238.2/240, Builds 197.8/270, game 310.5/440, opponent 447.7/500,
-  Dock 214.6/225, dedicated widget 318.7/325 kB. Existing unrelated lint warnings
+  strict lint pass. Generated catalog and 87-article Help index are current.
+- The reviewed seven-minute cutoff dependency supplies engine
+  `25b300818c31d41b`; its required prebuild/smoke passed with 223 files, 79 pyc,
+  Python 3.14.2 and a 142,939-byte parse payload. The final shared-query
+  integration changed no engine source, so its build was Next-only.
+- Final integrated production Next build passes all unchanged budgets: landing 190.1/215,
+  Today 238.8/240, Builds 199.9/270, game 311.1/440, opponent 448.2/500,
+  Dock 215.7/225, dedicated widget 322.8/325, overlay 238.6/240 kB. Existing unrelated lint warnings
   remain; changed-source lint is strict and clean.
 - Real-source browser matrix: 330 checks, 46 captures, ten light/dark contexts
   at 300/320/390/768/1440. Actual Library/creation flow/rich modal/Definitions/
@@ -62,6 +68,10 @@ augments. ADR0055 records the catalog and request boundaries.
   write occurs on the public continuation before the explicit signed-in CTA.
   The isolated auth compatibility delta has 67 focused passing cases and a
   197-id catalog-parity allowlist of 1,294 bytes gzip, without catalog prose.
+  Final PR743 integration reran all 330 checks with current production CSS
+  and 115 synthetic loopback requests. The optional `UNIFIED_NO_SHOTS=1`
+  harness switch preserved the 46 existing captures because no editor UI
+  classes changed.
 - Real Next/webpack public ReplayDemo: nine checks. First editor chunk is
   deliberately aborted, local Retry loads the actual editor/timeline, the same
   failed URL is requested twice and preview selection remains one request.
@@ -75,7 +85,7 @@ response validator above. A separate read-only review cleared the validator,
 lazy retries, eager caller changes and bounded auth return. Representative
 captures are under `docs/handoff/screenshots/unified-build-editor-*.png`.
 
-PR and final CI/merge remain pending at this checkpoint. Preserve incoming
+PR738 is open; its final integrated push and CI/merge remain pending. Preserve incoming
 owner work and the actual Moments #735 squash `b2212bbd` on integration. PR #738
 includes main `b2f49312` (owner `7ada26b8` plus Ghost #734). The single native
 test conflict retained the incoming owner's deterministic assembly barrier
@@ -85,5 +95,6 @@ passed again after retaining the incoming variant. The initial full web CI had
 7,543 passing cases and one passive-effect focus timing assertion in the shared
 URL-row test; that assertion now waits for focus and full selection, retains
 all token masking checks, and its two cases pass. No URL-row runtime code changed.
-No migration, new infrastructure, AI, provider activation, account operation,
+The actual PR743 squash must be reconciled before the final push; unchanged
+merged trees do not need another build. No migration, new infrastructure, AI, provider activation, account operation,
 version bump or release is part of this pack.
