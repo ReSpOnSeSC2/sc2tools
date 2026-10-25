@@ -45,6 +45,16 @@ describe("Twitch automation explicit settings", () => {
   it("StrictMode performs no automatic mutation or duplicate consent", async () => {
     render(<StrictMode><SettingsTwitchAutomation /></StrictMode>); await loaded(); expect(fetcher.mock.calls.every(call => !call[1]?.method)).toBe(true);
   });
+  it("separate consent flows close the old named popup before opening its replacement", async () => {
+    const popups: Array<{ closed: boolean; close: () => void; location: { replace: ReturnType<typeof vi.fn> } }> = [];
+    vi.spyOn(window, "open").mockImplementation(() => {
+      const existing = popups.at(-1); if (existing && !existing.closed) return existing as unknown as Window;
+      const popup = { closed: false, close() { this.closed = true; }, location: { replace: vi.fn() } }; popups.push(popup); return popup as unknown as Window;
+    });
+    fetcher.mockImplementation(async (_url: string, init?: RequestInit) => init?.method === "POST" ? json({ authorizeUrl: "https://id.twitch.tv/oauth2/authorize?state=fixture" }) : json(ready));
+    render(<SettingsTwitchAutomation />); await loaded(); fireEvent.click(screen.getByRole("button", { name: "Reconnect Predictions" })); await screen.findByText(/Complete the Twitch connection in its window/);
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect markers" })); await waitFor(() => expect(popups).toHaveLength(2)); await waitFor(() => expect(popups[1].location.replace).toHaveBeenCalledTimes(1)); expect(popups[0].closed).toBe(true); expect(popups[1].closed).toBe(false);
+  });
   it("loading/signed-out with a stale userId hides settings and blocks held JWT reads", async () => {
     const token = deferred<string>(); auth.value.getToken.mockReturnValue(token.promise); const view = render(<SettingsTwitchAutomation />);
     auth.value = { ...auth.value, isLoaded: false }; view.rerender(<SettingsTwitchAutomation />); await act(async () => token.resolve("late-token")); expect(fetcher).not.toHaveBeenCalled(); expect(screen.queryByRole("switch")).toBeNull();

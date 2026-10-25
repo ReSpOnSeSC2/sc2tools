@@ -59,9 +59,12 @@ export function useTwitchAutomationSettings() {
   };
   const connect = async (purpose: "predictions" | "streaming") => {
     const scope = scopeRef.current; if (!scope?.active || ownerRef.current !== scope.owner || state?.busy || !state?.status?.serverEnabled) return;
+    // A named popup may be reused by window.open. Close our previous flow
+    // before opening, otherwise closing it afterward can close the new flow.
+    scope.popup?.close(); scope.popup = null;
     const popup = window.open("", "sc2tools-twitch-automation", "popup,width=620,height=760");
     if (!popup) { failure(scope, new Error("Allow popups for SC2Tools, then try again.")); return; }
-    scope.popup?.close(); scope.popup = popup;
+    scope.popup = popup;
     const closePopup = () => { if (scope.popup === popup) { scope.popup = null; popup.close(); } };
     try {
       const { result, controller } = await request(scope, "/v1/me/integrations/twitch/connect", { method: "POST", body: JSON.stringify({ purpose }) });
