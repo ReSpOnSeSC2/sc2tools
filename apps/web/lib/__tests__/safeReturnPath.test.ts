@@ -18,4 +18,11 @@ describe("safeReturnPath", () => {
   it("uses a friendly page label without publishing a private query or slug", () => {
     expect(returnPathLabel("/guides/PvZ/private-name?secret=value")).toBe("Build guide");
   });
+  it("preserves one known public build variant without allowing the private library", () => {
+    expect(safeReturnPath("/definitions?variant=zerg-12-pool")).toBe("/definitions?variant=zerg-12-pool");
+    expect(returnPathLabel("/definitions?variant=zerg-12-pool")).toBe("Build variant");
+  });
+  it.each(["/builds", "/builds?create=1", "/definitions", "/definitions/private?variant=zerg-12-pool", "/definitions?variant=unknown", "/definitions?variant=zerg-12-pool&next=/app", "/definitions?variant=zerg-12-pool&variant=zerg-12-pool", "/definitions?variant=zerg-12-pool&race=Z", "/definitions?Variant=zerg-12-pool"])("rejects expanded or unknown variant continuations %s", path => {
+    expect(safeReturnPath(path)).toBeNull();
+  });
 });

@@ -1,3 +1,5 @@
+import { publicBuildVariantIntent } from "./buildVariantIntent";
+
 /** Post-auth destinations are an explicit set of public/action pages. */
 const ROOTS = ["community", "guides", "reviews", "p", "players", "try", "stream-studio", "download", "donate", "help"];
 export const RETURN_PATH_LIMIT = 512;
@@ -19,6 +21,8 @@ export function safeReturnPath(value: unknown): string | null {
     if (url.origin !== "https://return.invalid" || url.hash || url.username || url.password) return null;
     if (url.pathname === "/settings") {
       if (!["overlay", "profile"].includes(url.searchParams.get("tab") || "") || [...url.searchParams.keys()].length !== 1) return null;
+    } else if (url.pathname === "/definitions") {
+      if (!publicBuildVariantIntent(url.searchParams)) return null;
     } else if (!ROOTS.some(root => url.pathname === `/${root}` || url.pathname.startsWith(`/${root}/`))) return null;
     // Preserve the existing claim hand-off's narrow contract.
     if (url.pathname === "/try" && url.search && (url.searchParams.get("resume") !== "1" || [...url.searchParams.keys()].length !== 1)) return null;
@@ -30,5 +34,5 @@ export function safeReturnPath(value: unknown): string | null {
 /** A stable, non-personal label for the wizard's continuation banner. */
 export function returnPathLabel(path: string): string {
   const root = path.split(/[/?]/)[1];
-  return ({ community: "Community build", guides: "Build guide", reviews: "Replay review", p: "Player page", players: "Player page", try: "Replay report", "stream-studio": "Stream Studio", download: "Download", donate: "Donate page", help: "Help article", settings: "Settings" } as Record<string, string>)[root] || "Your page";
+  return ({ community: "Community build", guides: "Build guide", definitions: "Build variant", reviews: "Replay review", p: "Player page", players: "Player page", try: "Replay report", "stream-studio": "Stream Studio", download: "Download", donate: "Donate page", help: "Help article", settings: "Settings" } as Record<string, string>)[root] || "Your page";
 }

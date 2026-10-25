@@ -4,12 +4,11 @@
  * accounts through the /welcome setup wizard first, so there the value
  * is a hint only (see app/sign-up).
  *
- * Only same-site paths are passed through. Anything else (an absolute
- * URL, a protocol-relative "//host") falls back to the bare auth page,
- * so these helpers can never build an open redirect.
+ * Only allowlisted public/action paths are passed through. Unsupported
+ * private paths and unsafe destinations fall back to the bare auth page.
  *
  * Example:
- *   signInHref("/builds/proxy-gate"); // -> "/sign-in?redirect_url=%2Fbuilds%2Fproxy-gate"
+ *   signInHref("/guides/pvp/blink"); // -> "/sign-in?redirect_url=%2Fguides%2Fpvp%2Fblink"
  *   signUpHref("https://evil.test");  // -> "/sign-up"
  */
 

@@ -47,3 +47,27 @@ pass. Exact-head remote gates remain required before merging. The PR depends on
 Ghost734; retarget to main after that feature lands and check the actual merge
 tree before merge. No infrastructure, release, version or integration activation
 is part of this work.
+
+## Final main and fixture compatibility
+
+Current main's owner-written native upload barrier is retained exactly; its
+nine gate tests pass. The own-build Ghost controls retain the explicit auth
+resume behavior when merged with the released practice feature.
+
+Responsive fixture navigation modules now export reactive pathname and search
+hooks, matching the production auth-context link contract. The publishing
+smoke expectation uses the public `/community?publish=1` continuation. Actual
+responsive verification passes 46 checks with two expected skips across all
+three configured viewports.
+
+The Unified Editor's reviewed, recoverable lazy modal boundary is reused for
+the existing landing/replay entry points. This leaves room for an exact known
+catalog-ID allowlist for `/definitions?variant=...`, with no private `/builds`
+continuation. The shared helper, generated 197 IDs and parity test match PR738.
+Unknown IDs, additional/duplicate parameters and nested paths are rejected.
+The resumed Definitions page exposes its own explicit private-variant action;
+no hidden navigation or creation is introduced by the auth helper.
+
+These additions pass 104 affected web consumer assertions, full web types and
+strict new-source lint. The integrated production build passes every unchanged
+budget: landing 189.5/215, Today 238.2/240 and widget 318.8/325 kB.
