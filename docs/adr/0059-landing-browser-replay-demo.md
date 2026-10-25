@@ -1,6 +1,6 @@
 # ADR 0059: Intent-loaded browser replay demo
 
-Status: implementation in progress
+Status: accepted; implementation and local verification complete
 
 The Wave 5 `landing-demo-in-browser` pack moves the home-page one-replay build editor demo onto the existing Instant Analysis runtime when `NEXT_PUBLIC_INSTANT_IMPORT=all`. This changes source behavior behind the existing build-time flag; it changes no environment, rollout setting, release or production data.
 
@@ -19,3 +19,5 @@ After a full release has exercised the `all` path, a separate explicit retiremen
 ## Verification
 
 Required proof includes mocked-engine real-session lifecycle tests, both-perspective mapping, rejected/held/rendering chunk recovery, cancellation/stale completion, compatibility mode, API-free actual Chromium fixture parsing on the landing page, narrow/theme captures, types/lint and unchanged production bundle budgets. The engine source remains unchanged at `25b300818c31d41b`; any required prebuild is coordinated with the other worktrees.
+
+The final local production build passes all existing budgets, including landing 191.1/215 kB gzip. The actual Next/Webpack worker test passes on desktop and mobile with both real build orders and no API traffic. The production-CSS fixture matrix passes 212 checks and 36 captures across four widths and both themes. These are signed-out public demo fixtures; the capture harness uses explicit local Next/auth/analytics boundaries and a Worker URL adapter, while the separate production Next test exercises Webpack's real Worker URL. Remote exact-head checks are required before merging.
