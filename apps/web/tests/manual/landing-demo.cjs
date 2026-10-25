@@ -30,6 +30,7 @@ async function check(value) { expect(await value).toBe(true); checks++; }
 async function capture(page, name, target) { await target.scrollIntoViewIfNeeded(); await page.evaluate(() => document.fonts.ready); await check(target.evaluate(node => { const r = node.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; })); await page.screenshot({ path: `${shots}/landing-demo-${name}.png` }); captures++; }
 async function noOverflow(page) { await check(page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)); }
 async function target44(locator) { const r = await locator.boundingBox(); expect(r && r.width >= 44 && r.height >= 44).toBeTruthy(); checks++; }
+async function hitTest(locator) { await check(locator.evaluate(node => { const r = node.getBoundingClientRect(); const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return r.x >= 0 && r.y >= 0 && r.right <= innerWidth && r.bottom <= innerHeight && !!hit && node.contains(hit); })); }
 async function main() {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); origin = `http://127.0.0.1:${server.address().port}`;
   execFileSync(process.execPath, ['tests/manual/landing-demo-fixture.cjs'], { cwd: root, env: { ...process.env, LANDING_DEMO_FIXTURE_ORIGIN: origin }, stdio: 'pipe' });
@@ -49,11 +50,14 @@ async function main() {
       await target44(page.getByRole('button', { name: /ReSpOnSe.*Protoss/ })); await capture(page, `chooser-${theme}-${width}`, page.getByRole('heading', { name: 'Which player are you?' }));
       await page.getByRole('button', { name: /ReSpOnSe.*Protoss/ }).click();
       let editor = page.getByRole('dialog', { name: /Save as new build/ }); await expect(editor).toBeVisible({ timeout: 120_000 }); checks++;
+      await hitTest(editor.getByRole('heading', { name: /Save as new build/ })); await hitTest(editor.getByRole('button', { name: 'Close', exact: true }).first());
       await expect(editor.getByText(/Pylon/).first()).toBeVisible(); checks++;
       await noOverflow(page); await capture(page, `editor-${theme}-${width}`, editor);
       await editor.getByRole('button', { name: 'Close', exact: true }).last().click();
       const other = page.getByRole('button', { name: /· Zerg/ }); await target44(other);
-      await other.click(); editor = page.getByRole('dialog', { name: /Save as new build/ }); await expect(editor.getByText(/Hatchery|Spawning Pool|SpawningPool/).first()).toBeVisible(); checks++;
+      await expect(page.getByRole('button', { name: /ReSpOnSe.*Protoss/ })).toBeFocused(); checks++;
+      await page.keyboard.press('Tab'); await expect(other).toBeFocused(); checks++;
+      await page.keyboard.press('Enter'); editor = page.getByRole('dialog', { name: /Save as new build/ }); await expect(editor.getByText(/Hatchery|Spawning Pool|SpawningPool/).first()).toBeVisible(); checks++;
       await capture(page, `opponent-${theme}-${width}`, editor);
       expect(api.length - startApi).toBe(0); checks++;
       await editor.getByRole('button', { name: 'Close', exact: true }).last().click(); await expect(editor).toBeHidden(); checks++;
