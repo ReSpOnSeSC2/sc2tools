@@ -12,7 +12,13 @@ export function ShareReportButton({ report }: { report: InstantReport }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const attempt = useRef(0);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
   useEffect(() => () => { attempt.current += 1; }, []);
+  useEffect(() => {
+    if (wasOpen.current && !open) trigger.current?.focus({ preventScroll: true });
+    wasOpen.current = open;
+  }, [open]);
   async function show() {
     if (Dialog) { setOpen(true); return; }
     const current = ++attempt.current;
@@ -27,7 +33,7 @@ export function ShareReportButton({ report }: { report: InstantReport }) {
     } catch { if (attempt.current === current) setError("Could not load the share preview. Try again."); }
     finally { clearTimeout(timer); if (attempt.current === current) setLoading(false); }
   }
-  return <><Button variant="secondary" disabled={loading} onClick={() => void show()}>{loading ? "Loading preview…" : error ? "Retry share preview" : "Share report"}</Button>
+  return <><Button ref={trigger} variant="secondary" disabled={loading} onClick={() => void show()}>{loading ? "Loading preview…" : error ? "Retry share preview" : "Share report"}</Button>
     {error ? <p role="alert" className="text-caption text-text-muted">{error}</p> : null}
     {Dialog && open ? <Dialog report={report} onClose={() => setOpen(false)} /> : null}</>;
 }

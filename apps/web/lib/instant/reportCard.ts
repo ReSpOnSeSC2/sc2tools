@@ -56,5 +56,13 @@ function drawMatchup(ctx: CanvasRenderingContext2D, row: ReportCardModel["matchu
 }
 
 export function reportPng(canvas: HTMLCanvasElement): Promise<Blob> {
-  return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Could not create the PNG. Try again.")), "image/png"));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("PNG creation took too long. Try again.")), 20_000);
+    try {
+      canvas.toBlob((blob) => {
+        clearTimeout(timer);
+        if (blob) resolve(blob); else reject(new Error("Could not create the PNG. Try again."));
+      }, "image/png");
+    } catch (error) { clearTimeout(timer); reject(error); }
+  });
 }

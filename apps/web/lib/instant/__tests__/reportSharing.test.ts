@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { buildInstantReport } from "../report";
 import { realWin } from "./fixtures/reportGames";
 import { defaultReportSelection, reportCardModel, reportCardText } from "../reportSharing";
-import { drawReportCard } from "../reportCard";
+import { drawReportCard, reportPng } from "../reportCard";
 
 function report(games = 3) {
   return buildInstantReport(Array.from({ length: games }, (_, index) => ({ ...realWin(), gameId: `unit-${index}` })), new Date("2026-10-01T00:00:00Z"));
@@ -44,5 +44,15 @@ describe("private report sharing projection", () => {
     expect([canvas.width, canvas.height]).toEqual([1200, 630]);
     expect(calls).toContain("sc2tools.com/try — analyze yours free");
     expect(calls.join(" ")).not.toMatch(/Squirtuoz|Tourmaline|267727/);
+  });
+
+  it("settles a browser encoder that never calls back without delivering an image", async () => {
+    vi.useFakeTimers();
+    try {
+      const png = reportPng({ toBlob: () => {} } as unknown as HTMLCanvasElement);
+      const rejected = expect(png).rejects.toThrow("PNG creation took too long");
+      await vi.advanceTimersByTimeAsync(20_000);
+      await rejected;
+    } finally { vi.useRealTimers(); }
   });
 });

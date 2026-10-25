@@ -63,6 +63,6 @@ export function ShareReportDialog({ report, onClose }: ShareReportDialogProps) {
     <p className="mt-2 text-caption text-text-muted">1200 × 630 PNG · best opener requires at least three games · win/loss bars use decided games.</p>
     <div className="mt-4 flex flex-wrap gap-2"><Button disabled={busy || empty} onClick={() => void deliver("web_share")}>Share PNG</Button><Button variant="secondary" disabled={busy || empty} onClick={() => void deliver("download")}>Download PNG</Button><Button variant="secondary" disabled={busy || empty} onClick={() => void deliver("text")}>Copy text</Button></div>
     <p role="status" className="mt-3 text-caption text-text-muted">{empty ? "Select at least one row." : status}</p>
-    <details className="mt-3"><summary className="min-h-11 cursor-pointer font-semibold">Report text</summary><pre className="whitespace-pre-wrap break-words text-caption">{text}</pre></details>
+    <details className="mt-3"><summary tabIndex={0} className="min-h-11 cursor-pointer font-semibold">Report text</summary><pre className="whitespace-pre-wrap break-words text-caption">{text}</pre></details>
   </Modal>;
 }

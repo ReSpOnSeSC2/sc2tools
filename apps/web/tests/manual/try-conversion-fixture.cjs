@@ -16,7 +16,7 @@ const mocks = {
   '@sentry/nextjs': 'export function captureException(){}export function captureMessage(){}export function addBreadcrumb(){}',
   '@/lib/instant/flag': `export function getInstantImportMode(){return new URLSearchParams(location.search).get('mode')||'all'}`,
   '@/lib/instant/useInstantImport': `export function useInstantImport(){const q=new URLSearchParams(location.search);return{enabled:q.get('admin')==='yes',loading:false}}`,
-  '@/lib/instant/localStore': `export const TRY_TTL_DAYS=7;export async function loadTryGames(){return ${JSON.stringify(games)}}export async function saveTryGames(){throw Error('Local fixture forbids persistence')}export async function clearTryData(){}`,
+  '@/lib/instant/localStore': `export const TRY_TTL_DAYS=7;export async function loadTryGames(){return new URLSearchParams(location.search).get('case')==='empty'?[]:${JSON.stringify(games)}}export async function saveTryGames(){throw Error('Local fixture forbids persistence')}export async function clearTryData(){}`,
   '@/lib/instant/useInstantSession': `const idle={phase:'idle',files:[],parsed:[],parsedWithFiles:[],failed:[],truncatedCount:0,expanding:false,lastIntake:null,busy:false,dateWindow:{kind:'all'},estimate:null,progress:null,candidates:[],meMode:null,chosenToon:null,error:null,engineInfo:null,prewarm(){window.__warm++},reset(){},cancel(){},choose(){},setDateWindow(){},async addFiles(){throw Error('No parsing in conversion fixture')},async start(){throw Error('No parsing in conversion fixture')}};export function useInstantSession(){return idle}`,
 };
 const plugin = { name: 'local-conversion-boundaries', setup(builder) {
