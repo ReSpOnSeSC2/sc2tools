@@ -4,11 +4,10 @@
 /**
  * GET /v1/community/sitemap — published community build slugs and the
  * opt-in public profile handles (owners of a named, published build) for
- * the web sitemap. Public, cached like the guides, slugs/handles/dates only.
+ * the web sitemap. Public Community cache policy, slugs/handles/dates only.
  */
 
 const request = require("supertest");
-const { GUIDE_CACHE_CONTROL } = require("../src/config/guides");
 const { COMMUNITY_SITEMAP_MAX } = require("../src/services/communitySitemap");
 const { createGuidesHarness } = require("./helpers/guidesHarness");
 
@@ -46,7 +45,7 @@ describe("GET /v1/community/sitemap", () => {
     ]);
     const res = await get();
     expect(res.status).toBe(200);
-    expect(res.headers["cache-control"]).toBe(GUIDE_CACHE_CONTROL);
+    expect(res.headers["cache-control"]).toBe("public, s-maxage=60, stale-while-revalidate=600");
     expect(res.body.builds).toEqual([
       { slug: "build-b", lastModified: day(7).toISOString() },
       { slug: "build-f", lastModified: day(6).toISOString() },

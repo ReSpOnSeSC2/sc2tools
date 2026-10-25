@@ -14,13 +14,14 @@ import Link from "next/link";
 import { LegalLayout, LegalHeading, legalSectionId } from "@/components/legal/LegalLayout";
 import { CookieSettingsButton } from "@/components/legal/CookieSettingsButton";
 import { ISSUES_URL } from "@/lib/siteLinks";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
-export const metadata = {
-  alternates: { canonical: "/legal/privacy" },
+export const metadata = pageMetadata({
+  canonical: "/legal/privacy",
   title: "Privacy Policy",
   description:
     "How SC2 Tools processes replay data, connected streaming accounts, and private StarCraft II replay files.",
-};
+});
 
 const LAST_UPDATED = "2026-10-23";
 /** Settings tab with export, history deletion and account deletion. */

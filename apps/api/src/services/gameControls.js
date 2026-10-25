@@ -76,10 +76,12 @@ class GameControlsService {
       if (game._deletionPending) throw failure("game_deletion_pending", 409);
       await this.gdpr._drainOpponentBuildOrderWriters(userId, gameId);
       await fence.assert();
+      // The driver can reject after committing this owner-only visibility
+      // write. Its finally path must still retire cached contributions.
+      changedGame = game;
       await this.db.games.updateOne({ userId, gameId, _deleted: { $ne: true } }, input.excluded
         ? { $set: { excluded: true, exclusionReason: input.reason, excludedAt: new Date() } }
         : { $unset: { excluded: "", exclusionReason: "", excludedAt: "" } });
-      changedGame = game;
       await this.recountOpponent(userId, game.opponent?.pulseId);
       if (this.gdpr.guideSamples) await this.gdpr.guideSamples.setExcluded(userId, gameId, input.excluded);
       // Public guide example slots never retain an owner's hidden contribution.

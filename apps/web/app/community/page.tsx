@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Users } from "lucide-react";
 import { getJsonWithStatus } from "@/lib/serverApi";
+import { communityCacheOptions } from "@/lib/communityCache";
 import { Banner } from "@/components/Banner";
 import { Card } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
@@ -17,12 +18,13 @@ import { PublishCta } from "@/components/community/PublishCta";
 import { LazyMyPublishedBuilds } from "@/components/community/LazyMyPublishedBuilds";
 import type { CommunityBuildListResponse } from "@/components/community/types";
 import { clearCommunityFilters, communityEmptyTitle, communityHref, COMMUNITY_PAGE_SIZE, parseCommunityQuery, type CommunityQuery } from "@/lib/communityQuery";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
-const METADATA: Metadata = {
-  alternates: { canonical: "/community" }, title: "Community builds",
+const METADATA: Metadata = pageMetadata({
+  canonical: "/community", title: "Community builds",
   description: "Player-published StarCraft II builds and the Stock Market weekly leaderboard. Filter by race, opponent and skill level, search or sort by votes, publication or updates, and save builds to your private library.",
-  openGraph: { title: "Community builds — SC2 Tools", description: "Player-published StarCraft II build orders + the Stock Market weekly P&L leaderboard.", images: [{ url: "/og.jpg", width: 1200, height: 630 }] },
-};
+  shareTitle: "Community builds — SC2 Tools",
+});
 type CommunitySearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 /** Every filter is part of the request URL; outages remain distinct from empty results. */
@@ -34,7 +36,7 @@ function loadBuilds(query: CommunityQuery) {
   params.set("sort", query.sort);
   if (query.search) params.set("q", query.search);
   params.set("limit", String(COMMUNITY_PAGE_SIZE)); params.set("offset", String(query.offset));
-  return getJsonWithStatus<CommunityBuildListResponse>("/v1/community/builds?" + params.toString());
+  return getJsonWithStatus<CommunityBuildListResponse>("/v1/community/builds?" + params.toString(), communityCacheOptions());
 }
 
 export async function generateMetadata({ searchParams }: { searchParams: CommunitySearchParams }): Promise<Metadata> {

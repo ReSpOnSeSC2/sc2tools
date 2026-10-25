@@ -49,7 +49,8 @@ export async function generateMetadata({ searchParams }: { searchParams: SearchP
     alternates: { canonical: `/reviews${boardQuery({ ...filters, sort: "hot", band: filters.band, tag: filters.tag, unanswered: false })}` },
     robots: rollout === "on" ? { index: true, follow: true } : { index: false, follow: false },
     // Social cards get no title template, so they carry the brand themselves.
-    openGraph: { title: siteTitle(title), description, url: "/reviews" },
+    openGraph: { title: siteTitle(title), description, url: "/reviews", images: [{ url: "/og.jpg", width: 1200, height: 630, alt: siteTitle(title) }] },
+    twitter: { card: "summary_large_image", title: siteTitle(title), description, images: ["/og.jpg"] },
   };
 }
 
