@@ -1,4 +1,7 @@
 "use client";
+import dynamic from "next/dynamic";
+import { useOverlaySeriesState } from "@/components/overlay/useOverlaySeriesState";
+const LazySeriesWidget = dynamic(() => import("@/components/overlay/widgets/SeriesWidget").then(module => module.SeriesWidget), { ssr: false });
 
 import {
   useCallback,
@@ -142,6 +145,7 @@ function ConnectedOverlayClient({
   const testLayer = useOverlayTestLayer(token, optionsRef);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
+  const { series, receiveSeries } = useOverlaySeriesState(token);
   const receiveSession = useCallback((next: SessionSummary | null) => setSession(current => next ? newerSession(current, next) : null), []);
   const [enabled, setEnabled] = useState<Set<WidgetId>>(
     () => new Set(ALL_WIDGETS),
@@ -172,6 +176,7 @@ function ConnectedOverlayClient({
     receiveProfile,
     receivePause,
     resetPause,
+    receiveSeries,
   );
 
   // Mirror the per-widget client's stale-clear behaviour so the
@@ -241,6 +246,7 @@ function ConnectedOverlayClient({
     // source transparent instead of firing generic neighbouring cards.
     if (!payloadTargetsWidget(live, id)) return false;
     if (!enabled.has(id)) return false;
+    if (id === "series") return !!series && series.status !== "ended";
     if (id === "session") return sessionVisible;
     return visibleLive.has(id);
   }
@@ -272,6 +278,7 @@ function ConnectedOverlayClient({
       {shouldShow("best-answer") && realSlot("best-answer", <BestAnswerWidget live={intel} />)}
       {shouldShow("scouting") && realSlot("scouting", <ScoutingWidget live={live} liveGame={liveGame} />)}
       {shouldShow("session") && realSlot("session", <SessionWidget live={live} session={session} />)}
+      {shouldShow("series") && realSlot("series", <LazySeriesWidget rawSeries={series} composite />)}
       {/* Preserve the spin ledger through timed hides and brief bridge
           interruptions, so recovering the same match cannot replay it. */}
       {enabled.has("randomizer") && (!singleWidget || singleWidget === "randomizer") && (
@@ -352,6 +359,7 @@ function useOverlaySocket(
   receiveProfile: (msg: OverlayProfileConfig) => void,
   receivePause: (raw: unknown) => void,
   resetPause: () => void,
+  receiveSeries: (raw: unknown) => void,
 ): RefObject<Socket | null> {
   const socketRef = useRef<Socket | null>(null);
   // Sticky cache of the latest enriched ``streamerHistory`` keyed by
@@ -371,6 +379,7 @@ function useOverlaySocket(
     const connection = createOverlaySocket(token, { ...legacyCompositePresence(new URLSearchParams(window.location.search).get("w")), onStatus: setConnectionStatus });
     const socket = connection.socket;
     socketRef.current = socket;
+    socket.on("overlay:series", receiveSeries);
     socket.on("overlay:live", (msg: LiveGamePayload) => {
       if (msg?.isTest) { onTestLive(msg); return; }
       setLive(msg);
@@ -461,6 +470,7 @@ function useOverlaySocket(
     receiveProfile,
     receivePause,
     resetPause,
+    receiveSeries,
   ]);
   return socketRef;
 }

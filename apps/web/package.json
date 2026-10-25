@@ -17,6 +17,7 @@
     "backgrounds:export": "node scripts/export-stream-backgrounds.mjs",
     "scenes:render": "node scripts/render-scene.mjs",
     "guides:catalog": "node scripts/export-guide-catalog.mjs",
+    "commands:catalog": "node scripts/gen-chat-command-catalog.mjs",
     "help:index": "node scripts/gen-help-index.mjs",
     "perf:budget": "node scripts/check-perf-budget.mjs",
     "definitions:gen": "node scripts/gen-build-definitions.mjs",
