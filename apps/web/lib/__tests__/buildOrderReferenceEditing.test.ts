@@ -3,9 +3,19 @@ import { collapseReferenceArmy, parseReferenceClock, referenceFromGame } from ".
 import { referenceBuildToMarkdown, referenceBuildToText } from "../gameExport";
 import { referenceOrderPracticeTarget } from "../practiceTarget";
 import { sanitiseDraft, type BuildEditorDraft } from "../build-rules";
+import type { BuildOrderEvent } from "../build-events";
 
 const meta = { title: "Reference", matchup: "PvT", sourceUrl: "/builds/reference" };
 describe("reference editing, export and practice", () => {
+  it("does not crash a source-created editor on malformed or oversized legacy event rows", () => {
+    const raw = [null, {}, { time: 18, name: "x".repeat(100000) }, { time: "18", name: "Pylon" }, { time: 20, name: "Pylon", is_building: true }];
+    expect(referenceFromGame(raw as unknown as BuildOrderEvent[]).steps).toEqual([{ t: 20, supply: null, action: "BuildPylon" }]);
+  });
+  it("fills upgrade completion checkpoints, retaining a start note when completion is unavailable", () => {
+    const order = referenceFromGame([{ time: 100, name: "BlinkTech", category: "upgrade", complete_time: 200, supply: 22 }, { time: 150, name: "Gateway", is_building: true }, { time: 250, name: "Charge", category: "upgrade" }]);
+    expect(order.steps).toEqual([{ t: 150, supply: null, action: "BuildGateway" }, { t: 200, supply: null, action: "ResearchBlinkTech", note: "Start recorded at 1:40 (supply 22)." }, { t: null, supply: null, action: "ResearchCharge", note: "Start recorded at 4:10; completion not supplied." }]);
+    expect(referenceOrderPracticeTarget("Upgrade clocks", order, "P")?.steps.map(row => row.t)).toEqual([150, 200]);
+  });
   it("folds worker rows while preserving recorded exact/approximate supply and ordered clocks", () => {
     expect(referenceFromGame([{ time: 28, name: "Gateway", is_building: true, supply: 15, supplyApprox: true }, { time: 5, name: "Probe", supply: 13 }, { time: 18, name: "Pylon", is_building: true, supply: 14 }], "private"))
       .toEqual({ v: 1, source: "game", sourceGameId: "private", steps: [{ t: 18, supply: 14, action: "BuildPylon" }, { t: 28, supply: 15, action: "BuildGateway", supplyApprox: true }] });
