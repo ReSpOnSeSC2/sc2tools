@@ -32,6 +32,13 @@ const BASE_PROPS = {
 };
 
 describe("OpponentReplayHistory", () => {
+  it("labels timing membership as an analyzed sample instead of full replay history", () => {
+    useApiMock.mockReturnValue({ data: { items: [{ id: "one" }], nextCursor: null, membership: { scope: "analysis_sample", requestedGameCount: 2 } }, isLoading: false });
+    render(<OpponentReplayHistory {...BASE_PROPS} path='/v1/opponents/opp-a/games?analysisGameIds=%5B%22one%22%2C%22two%22%5D' />);
+    expect(screen.getByRole("heading", { name: "Analyzed sample replays (1) · newest first" })).toBeTruthy();
+    expect(screen.getByText("Selected analyzed sample · 2 linked games.")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /^All replays/ })).toBeNull();
+  });
   it("replaces bounded pages and walks back with Newer/Older controls", () => {
     const mutate = vi.fn();
     useApiMock.mockImplementation((path: string) => {

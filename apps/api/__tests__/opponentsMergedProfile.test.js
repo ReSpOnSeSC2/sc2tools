@@ -153,6 +153,20 @@ describe("Merged player profile via SC2Pulse linkage", () => {
     expect(fromBarcode.name).toBe("MainName");
   });
 
+  test("explicit analysis shares the linked identities and active facet cohort", async () => {
+    await seedLinkedPair();
+    const opts = { mergeLinked: true, filters: { since: new Date("2026-01-03") } };
+    const profile = await service().get("u1", TOON_A, opts);
+    const analysis = await service().getAnalysis("u1", TOON_A, opts);
+    expect(analysis.analyzedGameIds).toEqual(profile.games.map((game) => game.id));
+    expect(analysis.analyzedGameIds).toEqual(["b1", "a3"]);
+    expect(analysis.analysisCohortSize).toBe(2);
+    expect(analysis.buildOrdersTotal).toBe(2);
+    expect(analysis.buildOrdersAvailable).toBe(0);
+    expect(analysis).not.toHaveProperty("games");
+    expect(await service().getAnalysis("other-owner", TOON_A, opts)).toBeNull();
+  });
+
   test("series keeps all-time document dates and linked slim games when the scoped view is empty", async () => {
     await seedLinkedPair();
     await db.opponents.updateOne({ userId: "u1", pulseId: TOON_B }, { $set: { firstSeen: new Date("2020-01-01"), lastSeen: new Date("2026-02-01") } });

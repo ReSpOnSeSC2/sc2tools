@@ -524,4 +524,3 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
     </div>
   );
 }
-

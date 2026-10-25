@@ -272,7 +272,7 @@ describe("OpponentsService phase + transition envelope", () => {
 
   test("envelope carries ``phases`` and ``transitions`` fields", async () => {
     await seedFixture();
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     expect(out).not.toBeNull();
     expect(out.phases).toBeDefined();
     expect(out.transitions).toBeDefined();
@@ -286,7 +286,7 @@ describe("OpponentsService phase + transition envelope", () => {
 
   test("phases.sampleSize counts every game at every reached phase", async () => {
     await seedFixture();
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     const ss = out.phases.sampleSize;
     // All 5 games pass through Early on their way to their final
     // phase. Four reach Late (the makeMacroLate fixture is
@@ -301,7 +301,7 @@ describe("OpponentsService phase + transition envelope", () => {
 
   test("phases.finalPhaseDistribution matches the fixture (4 late, 1 mid)", async () => {
     await seedFixture();
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     const dist = out.phases.finalPhaseDistribution;
     expect(dist.late).toBe(4);
     expect(dist.mid).toBe(1);
@@ -312,7 +312,7 @@ describe("OpponentsService phase + transition envelope", () => {
 
   test("phases.medianCrossings + durationP95Sec are populated", async () => {
     await seedFixture();
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     const c = out.phases.medianCrossings;
     // Every "late" game crosses earlyMid / mid; the late game also
     // crosses midLate + lateAt. Medians are non-null finite seconds.
@@ -326,7 +326,7 @@ describe("OpponentsService phase + transition envelope", () => {
 
   test("transitions Sankey uses the opponent column scheme", async () => {
     await seedFixture();
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     const t = out.transitions.transitions;
     const col0 = t.nodes.filter((n) => n.column === 0);
     expect(col0).toHaveLength(1);
@@ -373,7 +373,7 @@ describe("OpponentsService phase + transition envelope", () => {
 
   test("transitions Sankey traces the dominant opponent → race → strategy → finalPhase path", async () => {
     await seedFixture();
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     const findEdge = (from, to) =>
       out.transitions.transitions.edges.find(
         (e) => e.from === from && e.to === to,
@@ -393,7 +393,7 @@ describe("OpponentsService phase + transition envelope", () => {
     // prevents a future change to ``serializeGameForProfile`` from
     // re-leaking the ~6 kB-per-game blob into the JSON envelope.
     await seedFixture();
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     expect(out.games).toBeDefined();
     expect(out.games.length).toBe(5);
     for (const g of out.games) {
@@ -421,7 +421,7 @@ describe("OpponentsService phase + transition envelope", () => {
       { $set: { replayFile: { version: 1, sizeBytes: 64_000 } } },
     );
 
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     const archived = out.games.find((g) => g.id === "g5");
     const incomplete = out.games.find((g) => g.id === "g4");
 
@@ -442,7 +442,7 @@ describe("OpponentsService phase + transition envelope", () => {
 
   test("phases.byStrategy groups games by opponent strategy with full per-phase envelopes", async () => {
     await seedFixture();
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     expect(Array.isArray(out.phases.byStrategy)).toBe(true);
     // The fixture has 4 games of "Zerg - Hydra Comp" + 1 of
     // "Zerg - Roach All-In" — both kept because the cap is 6.
@@ -494,7 +494,7 @@ describe("OpponentsService phase + transition envelope", () => {
       firstSeen: new Date("2026-04-10T00:00:00Z"),
       lastSeen: new Date("2026-04-10T00:00:00Z"),
     });
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     expect(out).not.toBeNull();
     expect(out.phases).toBeDefined();
     expect(out.phases.sampleSize.early).toBe(0);

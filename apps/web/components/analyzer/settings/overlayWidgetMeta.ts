@@ -112,4 +112,3 @@ export const WIDGETS: ReadonlyArray<WidgetMeta> = [
     hint: "Full-screen scene with countdown — switch between Live, BRB, and Starting Soon from the Stream Dock. Test shows a Starting Soon demo.",
   },
 ];
-

@@ -121,7 +121,8 @@ describe("OpponentsService profile analyzer scope", () => {
   });
 
   test("ladder 1v1 scope removes custom and multiplayer games everywhere", async () => {
-    const out = await opponents.get(userId, pulseId, {
+    const out = await opponents.getAnalysis(userId, pulseId, {
+      includeProfile: true,
       filters: { mapPool: "ladder", gameSize: "1v1" },
     });
 
