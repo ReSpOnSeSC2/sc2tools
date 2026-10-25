@@ -91,6 +91,7 @@ function captureGuideSample(guideSamples, userId, game, customTag, created) {
  *   liveGameBroker?: import('../services/liveGameBroker').LiveGameBroker,
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
  *   series?: import('../services/streamSeries').StreamSeriesService,
+ *   gameMoments?: import('../services/gameMoments').GameMomentsService,
  *   gameVods?: {
  *     resolveForGames: (userId: string, games: Array<Record<string, any>>, opts?: {includeOpponent?: boolean}) => Promise<{
  *       configuredPlatforms: string[],
@@ -1021,6 +1022,7 @@ function buildGamesRouter(deps) {
               freshGame,
               deps.liveGameBroker || null,
               deps.engagement || null,
+              deps.gameMoments || null,
             ).catch((err) => {
               if (req.log) {
                 req.log.warn(
@@ -1371,6 +1373,7 @@ function pickFreshOverlayGame(incoming, accepted) {
  * @param {Record<string, any>} game
  * @param {import('../services/liveGameBroker').LiveGameBroker|null} broker
  * @param {import('../services/multichatEngagement').MultichatEngagementService|null} [engagement]
+ * @param {import('../services/gameMoments').GameMomentsService|null} [gameMoments]
  */
 async function emitOverlayLive(
   io,
@@ -1380,6 +1383,7 @@ async function emitOverlayLive(
   game,
   broker,
   engagement = null,
+  gameMoments = null,
 ) {
   if (!io || !overlayLive || !overlayTokens || !userId || !game) return;
   // ``buildFromGame`` is declared ``Promise<object|null>`` on the
@@ -1410,6 +1414,12 @@ async function emitOverlayLive(
     if (t.revokedAt || t.rotationPending) continue;
     activeTokens.push(t.token);
     io.to(`overlay:${t.token}`).emit("overlay:live", payload);
+  }
+  // Only this freshly inserted game reaches the moment path. Its durable
+  // conditional receipt also protects a concurrent/restarted caller.
+  if (gameMoments) {
+    try { await gameMoments.process(userId, game, payload, activeTokens, { created: true }); }
+    catch { /* Optional celebrations cannot break verified settlement. */ }
   }
   // Engagement hooks — settle Crystal Ball predictions against the
   // replay-verified result, and flag clip-worthy game moments. Both
