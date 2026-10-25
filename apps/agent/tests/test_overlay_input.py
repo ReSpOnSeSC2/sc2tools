@@ -103,7 +103,7 @@ def test_hidden_native_scouting_control_receives_mouse_activation_without_focus(
         user32.SendMessageW.restype = ctypes.c_ssize_t
         try:
             handle = int(control.winId())
-            assert control.isWindow() and control.parentWidget() is controls
+            assert control.isWindow() and control.parentWidget() is window
             original = native._api.style(int(window.winId()))
             assert original & 0x80000
             assert native.set_click_through(int(window.winId()), True)

@@ -9,8 +9,9 @@ The whole report HWND was intentionally click-through; only the icon had
 a separate non-activating native input surface.
 
 The report's X and minimize actions now use the same small input surfaces.
-The rest of the report remains click-through. Proxies retain the source's
-stylesheet ancestry and checkable state, reject hidden/stale activation,
+The rest of the report remains click-through. Proxies copy the source's parent
+and button styles and checkable state, retain their existing window ownership,
+reject hidden/stale activation,
 and preserve `WindowDoesNotAcceptFocus`, `WA_ShowWithoutActivating` and
 `WM_MOUSEACTIVATE -> MA_NOACTIVATE`. Close uses the existing saved pin
 preference; the scouting icon can reopen the report for the current match.
@@ -23,9 +24,14 @@ Verification:
   minimize, stale/hidden clicks, Alt-Tab, geometry and shutdown cleanup.
 - Windows hidden-HWND tests verify native transparency, no-activation styles
   and actual `WM_MOUSEACTIVATE` reply for both toggle and momentary buttons.
-- Related overlay input, Compact scouting, pinned chrome and window chrome
-  suites: 49 passing tests. The two hidden-HWND cases also pass with an
+- Related overlay input, Compact scouting, pinned chrome, window chrome and
+  unchanged Compact transparency suites: 50 passing tests. The two hidden-HWND cases also pass with an
   intermediate source-controls parent, matching the report header hierarchy.
+- Initial head `8d865118` passed full web, responsive, engine/parity and Vercel
+  checks; Windows UI had 804 passes and one Compact child-control assertion
+  failure. Restoring the legacy proxy window ownership fixes that unchanged
+  regression; parent/button style copying preserves identical header rendering.
+  The corrected head must pass its own full remote checks before merge.
 - Help registry/content/preview: 29 passing tests; generated index unchanged;
   strict Help-leaf lint and Python compilation pass.
 - `screenshots/scouting-close-in-game.png` uses synthetic replay data and

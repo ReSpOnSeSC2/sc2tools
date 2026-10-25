@@ -159,9 +159,9 @@ def build_scouting_control(source, *, QtCore, QtWidgets):
         def __init__(self):
             flags = (QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint
                      | QtCore.Qt.WindowDoesNotAcceptFocus)
-            # Keep the source's stylesheet ancestry, including themed window
-            # controls, while the Tool flag gives this button its own HWND.
-            super().__init__(source.parentWidget())
+            # Keep native proxies outside the compact card's child controls.
+            # Header styling is copied in sync without changing ownership.
+            super().__init__(source.window())
             self.setWindowFlags(flags)
             self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
             self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
@@ -182,7 +182,10 @@ def build_scouting_control(source, *, QtCore, QtWidgets):
             source.click()
 
         def sync(self):
-            signature = (source.icon().cacheKey(), source.iconSize().toTuple(), source.styleSheet(),
+            parent = source.parentWidget()
+            inherited = parent.styleSheet() if parent is not None and parent is not source.window() else ""
+            stylesheet = "\n".join(style for style in (inherited, source.styleSheet()) if style)
+            signature = (source.icon().cacheKey(), source.iconSize().toTuple(), stylesheet,
                          source.toolTip(), source.isChecked(), source.text(), source.toolButtonStyle(),
                          source.isCheckable())
             if signature != self._signature:
@@ -190,7 +193,7 @@ def build_scouting_control(source, *, QtCore, QtWidgets):
                 self.setIconSize(source.iconSize())
                 self.setText(source.text())
                 self.setToolButtonStyle(source.toolButtonStyle())
-                self.setStyleSheet(source.styleSheet())
+                self.setStyleSheet(stylesheet)
                 self.setToolTip(source.toolTip())
                 self.setCheckable(source.isCheckable())
                 self.setChecked(source.isChecked())

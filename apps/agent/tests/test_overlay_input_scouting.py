@@ -101,7 +101,8 @@ def test_only_window_actions_gain_non_activating_input_and_inherit_themed_chrome
         assert control.windowFlags() & QtCore.Qt.WindowDoesNotAcceptFocus
         assert control.testAttribute(QtCore.Qt.WA_ShowWithoutActivating)
         assert control.focusPolicy() == QtCore.Qt.NoFocus
-        assert control.parentWidget() is source.parentWidget()
+        assert control.parentWidget() is source.window()
+        assert source.parentWidget().styleSheet() in control.styleSheet()
         assert control.geometry().topLeft() == source.mapToGlobal(QtCore.QPoint())
         assert control.size() == source.size()
     assert panel.games not in controller._scouting_controls
