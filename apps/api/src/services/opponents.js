@@ -5,6 +5,7 @@ const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { hmac } = require("../util/hash");
 const { expectedVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
+const { parseExactMapNames } = require("../util/exactMapFilter");
 const { eraForGame } = require("../util/patchEra");
 const { opponentGamesFilter } = require("../util/opponentIdentity");
 const {
@@ -3795,6 +3796,7 @@ function hasFilters(f) {
       || f.race
       || f.oppRace
       || f.map
+      || f.mapExact !== undefined
       || typeof f.mmrMin === "number"
       || typeof f.mmrMax === "number"
       || f.oppStrategy
@@ -3887,6 +3889,7 @@ function serializeCompactProfileGame(g) {
  */
 function filterGamesByAnalyzerScope(games, f) {
   if (!f || typeof f !== "object") return games;
+  const exactMaps = f.mapExact === undefined ? null : new Set(parseExactMapNames(JSON.stringify(f.mapExact)));
   return games.filter((g) => {
     if (!g || typeof g !== "object") return false;
     const opp = g.opponent || {};
@@ -3895,10 +3898,10 @@ function filterGamesByAnalyzerScope(games, f) {
     if (f.oppRace && canonicalRaceLetter(opp.race) !== f.oppRace) {
       return false;
     }
-    if (
+    if (exactMaps ? !exactMaps.has(g.map) : (
       f.map
       && !String(g.map || "").toLowerCase().includes(String(f.map).toLowerCase())
-    ) {
+    )) {
       return false;
     }
 

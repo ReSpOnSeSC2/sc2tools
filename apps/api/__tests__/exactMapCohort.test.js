@@ -14,7 +14,7 @@ function game(gameId, map, offset, patch = {}) {
 }
 beforeAll(async () => { h = await createHarness(); await h.seedUser("owner"); await h.seedUser("other"); });
 afterAll(async () => { await h.close(); });
-beforeEach(async () => { jest.restoreAllMocks(); await h.db.games.deleteMany({}); });
+beforeEach(async () => { jest.restoreAllMocks(); await h.db.games.deleteMany({}); await h.db.opponents.deleteMany({}); });
 
 test("one exact alias cohort selects the displayed combined map record across list, map stats and neighbors", async () => {
   await h.db.games.insertMany([
@@ -40,6 +40,21 @@ test("an edition's drilldown excludes distinct Roman-numeral prefix names and re
   await h.db.games.insertMany([game("two", "Sanctuary II", -2), game("three", "Sanctuary III", -1), game("literal", "A.* LE", 0), game("regex", "Anything LE", 1)]);
   expect((await get("games-list", ["Sanctuary II"], { map: "Sanctuary II" })).body.games.map((row) => row.id)).toEqual(["two"]);
   expect((await get("games-list", ["A.* LE"])).body.games.map((row) => row.id)).toEqual(["literal"]);
+});
+
+test("global exact-map filters agree across cached opponent profile panels and the filtered opponent list", async () => {
+  const pulseId = "1-S2-1-424242", opponent = { pulseId, toonHandle: pulseId, displayName: "Fixture rival", race: "Zerg" };
+  await h.db.opponents.insertOne({ userId: "u_owner", pulseId, toonHandle: pulseId, displayNameSample: "Fixture rival", race: "Z", gameCount: 99, wins: 99, losses: 0, firstSeen: new Date(at), lastSeen: new Date(at) });
+  await h.db.games.insertMany([game("alias", "Alpha", -2, { opponent }), game("edition", "Alpha LE", -1, { opponent }), game("prefix", "Alphabet", 0, { opponent })]);
+  const profile = await get(`opponents/${pulseId}`, ["Alpha LE", "Alpha"], { map: "Alpha LE" });
+  expect(profile.status).toBe(200); expect(profile.body.totals.total).toBe(2);
+  expect(profile.body.games.map((row) => row.id)).toEqual(["edition", "alias"]);
+  expect(Object.keys(profile.body.byMap).sort()).toEqual(["Alpha", "Alpha LE"]);
+  // No legacy substring param: exact-map alone must invalidate lifetime counters.
+  const list = await get("opponents", ["Alpha LE", "Alpha"]);
+  expect(list.status).toBe(200); expect(list.body.items[0].gameCount).toBe(2);
+  const empty = await get(`opponents/${pulseId}`, ["Absent"]);
+  expect(empty.body.totals.total).toBe(0); expect(empty.body.games).toEqual([]);
 });
 
 test.each(["{}", "[]", "null", "not-json", JSON.stringify([" "]), JSON.stringify(["bad\u0000name"]), JSON.stringify(["x".repeat(201)]),
