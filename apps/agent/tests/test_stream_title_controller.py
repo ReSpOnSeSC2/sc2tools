@@ -181,10 +181,12 @@ def test_account_change_discards_old_queued_game_before_new_explicit_opt_in(serv
     configure(instance)
     instance.titles.worker.pending = 1200
     instance.titles.worker.ready = True
+    instance.titles.worker.accepted_receipts = [(1200, 1200)]
     connection[1] = "new-fixture-owner-token"
     instance._publish()
     assert instance.titles.worker.pending is None
     assert instance.titles.worker.ready is False
+    assert instance.titles.worker.accepted_receipts == []
     configure(instance)
     instance.titles.worker.run_once()
     assert not any(call[0] == "POST" for call in calls)

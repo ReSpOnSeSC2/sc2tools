@@ -8,6 +8,7 @@ import time
 
 REFRESH_SECONDS = 10 * 60
 REPLAY_MATCH_SECONDS = 120
+MAX_ACCEPTED_RECEIPTS = 4
 
 
 class GameTitleAutomation:
@@ -22,7 +23,25 @@ class GameTitleAutomation:
         self.pending = None
         self.ready = False
         self.seen = []
+        self.accepted_receipts = []
+        self.consumed_receipts = []
         self.preview_pending = True
+
+    def reset(self):
+        """Discard all queued work when its paired owner/connection changes."""
+        with self.lock:
+            self.last_attempt = 0
+            self.pending = None
+            self.ready = False
+            self.seen = []
+            self.accepted_receipts = []
+            self.consumed_receipts = []
+            self.preview_pending = True
+        self.wake.set()
+
+    def _remember_consumed(self, ended_at):
+        self.consumed_receipts = (self.consumed_receipts + [ended_at])[-32:]
+        self.accepted_receipts = [row for row in self.accepted_receipts if row[0] != ended_at]
 
     def on_event(self, event):
         if (getattr(event, "phase", None) != "match_ended"
@@ -31,18 +50,34 @@ class GameTitleAutomation:
         key = getattr(event, "game_key", None)
         if not isinstance(key, str) or not key:
             return
+        try:
+            captured = float(event.captured_at)
+        except (ValueError, TypeError, AttributeError):
+            return
+        if not math.isfinite(captured):
+            return
         with self.lock:
             if key in self.seen:
                 return
             self.seen = (self.seen + [key])[-32:]
-            self.pending = float(event.captured_at)
+            self.pending = captured
             self.ready = False
+            self.accepted_receipts = [row for row in self.accepted_receipts
+                if abs(self.clock() - row[1]) <= REPLAY_MATCH_SECONDS]
+            matches = [row[0] for row in self.accepted_receipts
+                if abs(row[0] - captured) <= REPLAY_MATCH_SECONDS]
+            if matches:
+                self._remember_consumed(min(matches, key=lambda end: abs(end - captured)))
+                self.ready = True
+        self.wake.set()
 
     def on_game_accepted(self, _path, game, *_accepted):
         # UploadQueue invokes this only after a priority/live replay is accepted.
         # date_iso is the replay END timestamp. History and resumed branches
         # must not authorize an update for the pending live match.
-        if getattr(game, "is_resumed_from_replay", False):
+        row = _accepted[1] if len(_accepted) > 1 and isinstance(_accepted[1], dict) else {}
+        if (getattr(game, "is_resumed_from_replay", False) or getattr(game, "is_history", False)
+                or row.get("isHistory") is True):
             return
         try:
             ended = datetime.fromisoformat(game.date_iso.replace("Z", "+00:00"))
@@ -51,9 +86,17 @@ class GameTitleAutomation:
         except (AttributeError, TypeError, ValueError):
             return
         with self.lock:
-            if self.pending is None or abs(ended_at - self.pending) > REPLAY_MATCH_SECONDS:
+            if self.stop_event.is_set() or ended_at in self.consumed_receipts:
                 return
-            self.ready = True
+            if self.pending is not None and abs(ended_at - self.pending) <= REPLAY_MATCH_SECONDS:
+                self._remember_consumed(ended_at)
+                self.ready = True
+            elif abs(self.clock() - ended_at) <= REPLAY_MATCH_SECONDS:
+                # A fast live upload can beat the next lifecycle poll. Retain
+                # only a few fresh receipts until its game-end event arrives.
+                self.accepted_receipts = [entry for entry in self.accepted_receipts
+                    if entry[0] != ended_at and abs(self.clock() - entry[1]) <= REPLAY_MATCH_SECONDS]
+                self.accepted_receipts = (self.accepted_receipts + [(ended_at, self.clock())])[-MAX_ACCEPTED_RECEIPTS:]
         self.wake.set()
 
     def run_once(self):

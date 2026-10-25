@@ -68,6 +68,62 @@ def test_burst_coalesces_to_latest_synced_game_and_obeys_exact_ten_minute_limit(
     assert worker.run_once() is False
 
 
+def test_accepted_live_receipt_before_end_schedules_once_and_duplicates_cannot_rearm():
+    calls = []
+    worker = GameTitleAutomation(calls.append, clock=lambda: 1000)
+    worker.run_once()
+    worker.on_game_accepted(None, accepted())
+    assert worker.run_once() is False
+    worker.on_event(ended())
+    assert worker.run_once() is True
+    assert calls == [False, True]
+    worker.on_game_accepted(None, accepted())
+    worker.on_event(ended())
+    assert worker.run_once() is False
+    # A different event key still needs a new receipt; the consumed prior
+    # upload cannot authorize a second nearby game during the cooldown.
+    worker.on_event(ended(1050, key="different-game"))
+    assert not worker.ready and not worker.accepted_receipts
+
+
+def test_reverse_order_receipts_are_bounded_and_unrelated_expired_history_or_resumed_do_not_match():
+    now = [1000]
+    worker = GameTitleAutomation(lambda _automatic: None, clock=lambda: now[0])
+    worker.run_once()
+    worker.on_game_accepted(None, accepted(resumed=True))
+    history = accepted()
+    history.is_history = True
+    worker.on_game_accepted(None, history)
+    worker.on_game_accepted(None, accepted(), "fixture", {"isHistory": True})
+    assert worker.accepted_receipts == []
+    for end in range(990, 1000):
+        worker.on_game_accepted(None, accepted(end))
+    assert len(worker.accepted_receipts) == 4
+    worker.on_event(ended(1200, key="unrelated"))
+    assert worker.run_once() is False
+    now[0] = 1201
+    worker.on_event(ended(1000, key="stale-event"))
+    assert not worker.ready and not worker.accepted_receipts
+
+
+def test_restart_or_owner_reset_discards_reverse_order_receipts_without_replaying_game_end():
+    calls = []
+    worker = GameTitleAutomation(calls.append, clock=lambda: 1000)
+    worker.run_once()
+    worker.on_game_accepted(None, accepted())
+    assert worker.accepted_receipts
+    worker.reset()
+    assert not worker.accepted_receipts and not worker.consumed_receipts
+    worker.on_event(ended())
+    assert worker.run_once() is True  # new-owner preview only
+    assert calls == [False, False]
+    restarted = GameTitleAutomation(calls.append, clock=lambda: 1000, last_attempt=900)
+    restarted.run_once()
+    restarted.on_event(ended())
+    assert restarted.run_once() is False
+    assert not restarted.ready
+
+
 def test_replay_viewing_other_phases_and_unidentified_game_do_not_schedule():
     worker = GameTitleAutomation(lambda automatic: None, clock=lambda: 1000)
     worker.run_once()

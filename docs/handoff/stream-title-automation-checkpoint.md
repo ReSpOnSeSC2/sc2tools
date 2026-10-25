@@ -39,7 +39,7 @@ verification use mocked provider calls; no actual account publication occurs.
 - Integrated current main through PR700 (`7464cecd`), preserving current
   Companion/upload/Streams account fences and all changelog/Help entries.
 - Initial native focused run: **142 passed**; integrated account/service/UI
-  cases: **115 passed**; final controller/account/worker cases: **31 passed**;
+  cases: **115 passed**; final controller/account/worker cases: **34 passed**;
   controller/packaging-diagnostic source cases: **24 passed**.
 - API/session/real-Mongo ownership integration suites: **137 passed**. All
   provider calls are mocked or forbidden; no production credential is loaded.
@@ -61,6 +61,10 @@ verification use mocked provider calls; no actual account publication occurs.
   per-platform durable attempt marking. Failed YouTube setup does not suppress
   untouched Twitch/Kick attempts. Account changes also clear queued old games
   before a new account may explicitly opt in.
+- Accepted live replay receipts can arrive before the lifecycle end poll.
+  Four fresh timestamp-matched receipts cover either ordering; consumed receipts
+  cannot rearm a game. History/resumed/unrelated/stale receipts are excluded.
+  Reset and restart discard queued receipts, with deterministic regressions.
 
 PR703 is created/attached and initially pushed at `e6c9be4f`. Final CI is running;
 the local full native suite is progressing through current main's expanded GUI
