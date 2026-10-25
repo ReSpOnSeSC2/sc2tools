@@ -15,8 +15,8 @@ from .strategy_detector_helpers import (
     PROXY_2_GATE_GATEWAY_DEADLINE_SECONDS,
     DetectionContext,
     base_count_at,
-    count_started_before,
     nth_base_start,
+    start_times,
 )
 
 
@@ -151,10 +151,11 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     carrier_time = ctx.unit_time("Carrier")
     tempest_time = ctx.unit_time("Tempest")
     first_capital_time = min(carrier_time, tempest_time)
-    air_window = min(600, first_capital_time)
+    # Both Void Ray and Phoenix openings must be established by 7:00.
+    air_window = min(420, first_capital_time)
     # Extracted times are whole seconds. Air units appearing in the same
     # second count toward the existing opening; no finer ordering is known.
-    sg_count_air_window = count_started_before(buildings, "Stargate", air_window)
+    sg_count_air_window = sum(t <= air_window for t in start_times(buildings, "Stargate"))
     nexus_count_air_window = base_count_at(buildings, "Nexus", air_window)
     void_ray_opening = (
         sg_count_air_window >= 2

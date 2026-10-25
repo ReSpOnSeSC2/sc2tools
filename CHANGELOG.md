@@ -30,6 +30,10 @@ corresponding GitHub Release.
 - Live scouting on Today and a large second-screen page reuse your recorded opponent history, with bounded opening counts, recent replay links and an exact-account note popover. The Stream Dock Scout view omits private notes and replay/account actions.
 - Ghost practice assignments now sync to your account, with Practice actions on build and guide pages, a quick-disarm chip, explicit browser migration and a permanent OBS coach URL. Legacy Ghost links remain compatible; native Companion controls stay separate.
 
+### PvZ air opening timing
+
+- Require the 2-Stargate Void Ray and 2/3-Stargate Phoenix openings to establish their Stargates, two bases and four real air units by 7:00, with matching build definitions.
+
 ### Admin Users
 
 - Browse exact totals with sortable pages and signup, admin and inactive-agent filters. Export matching accounts as a bounded private CSV, inspect recent games/activity, and copy account IDs with a manual fallback.
