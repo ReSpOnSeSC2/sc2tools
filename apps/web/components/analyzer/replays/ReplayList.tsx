@@ -1,5 +1,8 @@
 "use client";
 
+import { OpponentLink } from "../OpponentLink";
+import { useGameSource } from "@/lib/useGameSource";
+import { gameAnalysisHref } from "@/lib/opponentNavigation";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import {
@@ -134,8 +137,9 @@ interface RowProps {
 }
 
 function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery }: RowProps) {
+  const source = useGameSource(undefined, owner ? listQuery : undefined);
   const analysisHref = owner
-    ? `/app/game/${encodeURIComponent(game.gameId)}`
+    ? gameAnalysisHref(game.gameId, null, source)
     : sharedAnalysisHref(publicRoot || "", game.gameId, listQuery);
   return (
     <tr className="group bg-bg-surface transition-colors hover:bg-bg-elevated/55">
@@ -143,7 +147,7 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, p
         <ResultBadge result={game.result} />
       </td>
       <td className="px-3 py-3 align-middle text-text-muted"><ReplayDate value={game.date} /></td>
-      <td className="px-3 py-3 align-middle"><Matchup game={game} playerName={playerName} />{game.streams?.length ? <GameStreamLinks links={game.streams} compact ariaLabel={`Streams for ${replayContext(game)}`} sharedPlayerName={owner ? undefined : playerName} className="mt-2" /> : null}</td>
+      <td className="px-3 py-3 align-middle"><Matchup game={game} playerName={playerName} owner={owner} />{game.streams?.length ? <GameStreamLinks links={game.streams} compact ariaLabel={`Streams for ${replayContext(game)}`} sharedPlayerName={owner ? undefined : playerName} className="mt-2" /> : null}</td>
       <td className="px-3 py-3 align-middle">
         {game.map ? (
           <MapLabel name={game.map} size="xs" preview className="max-w-48" />
@@ -191,8 +195,9 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, p
 }
 
 function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery }: RowProps) {
+  const source = useGameSource(undefined, owner ? listQuery : undefined);
   const analysisHref = owner
-    ? `/app/game/${encodeURIComponent(game.gameId)}`
+    ? gameAnalysisHref(game.gameId, null, source)
     : sharedAnalysisHref(publicRoot || "", game.gameId, listQuery);
   return (
     <li className={["relative border-l-4 px-4 py-4", resultRail(game.result)].join(" ")}>
@@ -205,7 +210,7 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, p
               {game.durationSec ? fmtMinutes(game.durationSec) : "—"}
             </span>
           </div>
-          <Matchup game={game} playerName={playerName} />
+          <Matchup game={game} playerName={playerName} owner={owner} />
         </div>
         {owner ? <Link
           href={analysisHref}
@@ -260,7 +265,7 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, p
   );
 }
 
-function Matchup({ game, playerName }: { game: ReplayLibraryItem; playerName: string }) {
+function Matchup({ game, playerName, owner }: { game: ReplayLibraryItem; playerName: string; owner: boolean }) {
   const format = replayFormatLabel(game);
   const opponent = opponentLabel(game);
   return (
@@ -269,6 +274,7 @@ function Matchup({ game, playerName }: { game: ReplayLibraryItem; playerName: st
       <PlayerLine
         name={format ? `Primary opponent: ${opponent}` : opponent}
         race={game.opponent?.race}
+        pulseId={owner ? game.opponent?.pulseId : undefined}
       />
       {format ? (
         <span className="inline-flex rounded-full border border-border bg-bg-elevated px-2 py-0.5 text-micro font-semibold text-text-muted">
@@ -279,7 +285,7 @@ function Matchup({ game, playerName }: { game: ReplayLibraryItem; playerName: st
   );
 }
 
-function PlayerLine({ name, race, muted = false }: { name: string; race?: string | null; muted?: boolean }) {
+function PlayerLine({ name, race, pulseId, muted = false }: { name: string; race?: string | null; pulseId?: string | null; muted?: boolean }) {
   const normalized = race ? coerceRace(race) : null;
   const tint = normalized ? raceTint(normalized) : null;
   return (
@@ -294,9 +300,7 @@ function PlayerLine({ name, race, muted = false }: { name: string; race?: string
       ) : (
         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-border text-[10px] text-text-dim">?</span>
       )}
-      <span className={["truncate", muted ? "text-text-muted" : "font-semibold text-text"].join(" ")} title={name}>
-        {name}
-      </span>
+      {pulseId ? <OpponentLink pulseId={pulseId} name={name} className="font-semibold" /> : <span className={["truncate", muted ? "text-text-muted" : "font-semibold text-text"].join(" ")} title={name}>{name}</span>}
     </div>
   );
 }

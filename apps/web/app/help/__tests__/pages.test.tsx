@@ -131,6 +131,8 @@ describe("/help/[slug]", () => {
     expect(desktopLinks.length).toBeGreaterThan(0);
     desktopLinks.forEach((link) => expect(link.getAttribute("href")).toBe("/download"));
     expect(screen.getByRole("heading", { name: /Find requests you can answer/ }).id).toBe("finding-requests");
+    expect(screen.getByRole("heading", { name: /Your reviewer profile/ }).id).toBe("your-reviewer-profile");
+    expect(screen.getByRole("heading", { name: /Track your requests and written reviews/ }).id).toBe("my-reviews");
   });
 
   it("keeps the invite-only coaching article out of search engines", async () => {

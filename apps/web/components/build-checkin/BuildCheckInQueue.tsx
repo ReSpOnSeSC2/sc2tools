@@ -1,5 +1,7 @@
 "use client";
 
+import { GameAnalysisLink } from "@/components/analyzer/GameAnalysisLink";
+
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
@@ -411,14 +413,13 @@ function QueueItem({
               .join(" · ")}
           </p>
         </div>
-        <Link
-          href={`/app/game/${encodeURIComponent(item.gameId)}`}
+        <GameAnalysisLink gameId={item.gameId}
           onClick={onOpenGame}
           className="inline-flex min-h-11 items-center gap-1 rounded px-1 text-caption font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           Open game
           <ArrowUpRight className="h-4 w-4" aria-hidden />
-        </Link>
+        </GameAnalysisLink>
       </div>
 
       <div className="mt-2 space-y-1">

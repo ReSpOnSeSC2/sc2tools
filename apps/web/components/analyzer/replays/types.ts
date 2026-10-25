@@ -7,6 +7,8 @@ import type {
 
 /** Public-safe player identity attached to one replay row. */
 export interface ReplayOpponent {
+  /** Owner-only dossier identity; omitted from public replay responses. */
+  pulseId?: string | null;
   displayName?: string | null;
   race?: string | null;
   mmr?: number | null;

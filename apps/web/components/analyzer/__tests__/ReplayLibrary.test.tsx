@@ -11,6 +11,8 @@ import type {
   ReplaySharingResponse,
 } from "../replays/types";
 import { ReplayLibrary } from "../replays/ReplayLibrary";
+import { gameSourceFromQuery } from "@/lib/gameNavigation";
+import { ownerNeighborPath } from "../game/GameNavigation";
 
 const mocks = vi.hoisted(() => ({
   apiCall: vi.fn(),
@@ -131,6 +133,7 @@ function latestReplayParams(): URLSearchParams {
 }
 
 beforeEach(() => {
+  window.history.replaceState(null, "", "/");
   replayState = "ready";
   sharingState = { enabled: false, handle: null };
   for (const mock of Object.values(mocks)) mock.mockReset();
@@ -197,6 +200,34 @@ afterEach(() => {
 });
 
 describe("ReplayLibrary", () => {
+  it("carries real global and local filters into game neighbors and restores them from the durable backlink", async () => {
+    window.history.replaceState({ existing: true }, "", "/app/replays?keep=1#archive");
+    const view = render(<ReplayLibrary />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Search replays" }), { target: { value: "Rival build" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by result" }), { target: { value: "loss" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by matchup" }), { target: { value: "PvT" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Sort replays" }), { target: { value: "date_asc" } });
+    await waitFor(() => expect(latestReplayParams().get("search")).toBe("Rival build"));
+    const link = screen.getAllByRole("link", { name: /Open.*analysis/i })[0];
+    const query = new URL(link.getAttribute("href")!, "https://sc2tools.test").searchParams;
+    const source = gameSourceFromQuery(Object.fromEntries(query))!;
+    expect(source.href).toBe(`${location.pathname}${location.search}${location.hash}`);
+    expect(Object.fromEntries(new URL(ownerNeighborPath("game-1", "all", source), "https://sc2tools.test").searchParams)).toEqual({
+      scope: "all", since: "2026-08-01", regions: "NA", map_pool: "ladder", game_size: "1v1", q: "Rival build", result: "loss", matchup: "PvT",
+    });
+    expect(source.filters).not.toMatch(/limit|cursor|sort|keep/);
+    view.unmount();
+    window.history.replaceState(window.history.state, "", source.href);
+    render(<ReplayLibrary />);
+    expect((screen.getByRole("textbox", { name: "Search replays" }) as HTMLInputElement).value).toBe("Rival build");
+    expect((screen.getByRole("combobox", { name: "Filter by result" }) as HTMLSelectElement).value).toBe("loss");
+    expect((screen.getByRole("combobox", { name: "Filter by matchup" }) as HTMLSelectElement).value).toBe("PvT");
+    expect((screen.getByRole("combobox", { name: "Sort replays" }) as HTMLSelectElement).value).toBe("date_asc");
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(location.pathname + location.search + location.hash).toBe("/app/replays?keep=1#archive");
+    expect(window.history.state).toEqual({ existing: true });
+  });
+
   it("maps the owner response and composes global filters, local filters, and cursor paging", async () => {
     render(<ReplayLibrary />);
 

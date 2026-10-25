@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Phase, PhaseSignature } from "@/components/analyzer/PhaseCompositionTabs";
 import type { BuildPhasePayload } from "./types";
 import type { BuildDossierData } from "./BuildDossier";
+import { gameSourceFromQuery } from "@/lib/gameNavigation";
+import { ownerNeighborPath } from "@/components/analyzer/game/GameNavigation";
 
 const harness = vi.hoisted(() => ({
   paths: [] as Array<string | null>,
@@ -150,6 +152,28 @@ afterEach(() => {
 });
 
 describe("BuildDossier composition integration", () => {
+  it("keeps a named build and its actual cohort separate from the durable list URL", () => {
+    window.history.replaceState(null, "", "/app/builds#games");
+    render(<BuildDossier apiPath="/v1/builds/Test?opp_race=T&regions=EU#17" showMacro={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Inspect unit games" }));
+    const href = screen.getByRole("link", { name: "Open game" }).getAttribute("href")!;
+    const source = gameSourceFromQuery(Object.fromEntries(new URL(href, "https://sc2tools.test").searchParams))!;
+    expect(source).toMatchObject({ href: "/app/builds#games", label: "Test build" });
+    expect(Object.fromEntries(new URL(ownerNeighborPath("shared-replay", "all", source), "https://sc2tools.test").searchParams)).toEqual({ scope: "all", opp_race: "T", regions: "EU", build: "Test build" });
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("does not mistake a custom definition name for its games' stored build label", () => {
+    window.history.replaceState(null, "", "/builds/custom#games");
+    render(<BuildDossier apiPath="/v1/custom-builds/custom/matches?opp_race=T" showMacro={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Inspect unit games" }));
+    const href = screen.getByRole("link", { name: "Open game" }).getAttribute("href")!;
+    const source = gameSourceFromQuery(Object.fromEntries(new URL(href, "https://sc2tools.test").searchParams))!;
+    expect(source.label).toBe("Test build");
+    expect(Object.fromEntries(new URL(ownerNeighborPath("shared-replay", "all", source), "https://sc2tools.test").searchParams)).toEqual({ scope: "all", opp_race: "T" });
+    window.history.replaceState(null, "", "/");
+  });
+
   it("loads classified build phases with every filter and the cache revision preserved", () => {
     const apiPath = "/v1/builds/PvT%20-%202%20Base?since=2026-08-01&regions=EU%2CKR&opp_race=T&map=Golden%20Aura%20LE&mmr_min=4200&opp_strategy=Bio#17";
     render(<BuildDossier apiPath={apiPath} showMacro={false} />);

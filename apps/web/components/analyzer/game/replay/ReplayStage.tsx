@@ -54,7 +54,7 @@
  * the light theme.
  */
 
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Keyboard } from "lucide-react";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MapPlayback } from "@/lib/mapReplay";
 import type { PatchEra } from "@/lib/meta";
@@ -70,9 +70,13 @@ import { clampReplayTime } from "@/lib/replayLink";
 import { MapReplayer, type ReplayMapMarker } from "../MapReplayer";
 import { ReplayTopBar } from "./ReplayTopBar";
 import { ProductionRail, type ProductionTab } from "./ProductionRail";
-import { BuildOrderRail, type BuildFilter } from "./BuildOrderRail";
+import { BuildOrderRail } from "./BuildOrderRail";
 import { ReplaySettings } from "./ReplaySettings";
 import { TransportDock, type CommentTimelineMarker, type ReplaySpeed } from "./TransportDock";
+import { useReplayPreferences } from "@/lib/useReplayPreferences";
+import { useReplayShortcuts } from "@/lib/useReplayShortcuts";
+import { formatClock } from "@/lib/replayHud";
+import { ReplayShortcutSheet } from "./ReplayShortcutSheet";
 import { REPLAY_SCOPE_CLASS, STAGE_BG } from "./replayTheme";
 
 export function ReplayStage({
@@ -172,32 +176,42 @@ export function ReplayStage({
   const [playing, setPlaying] = useState(false);
   const currentTime = useRef(time); currentTime.current = time;
   useEffect(() => { onPlaybackStateChange?.(playing, currentTime.current); }, [playing, onPlaybackStateChange]);
-  const [speed, setSpeed] = useState<ReplaySpeed>(8);
+  const { preferences, update } = useReplayPreferences(defaultShowProduction);
+  const { speed, productionSide, buildFilter, showWorkers, autoScroll, panelTab } = preferences;
   useEffect(() => { onPlaybackSpeedChange?.(speed); }, [speed, onPlaybackSpeedChange]);
-
-  const [showProduction, setShowProduction] = useState(defaultShowProduction);
-  const [showBuildOrder, setShowBuildOrder] = useState(true);
-  const [productionSide, setProductionSide] = useState<ReplaySide>("me");
+  const showProduction = preferences.rails.production;
+  const showBuildOrder = preferences.rails.build;
+  const setShowProduction = useCallback((production: boolean) => update({ rails: { production, build: showBuildOrder } }), [update, showBuildOrder]);
+  const setShowBuildOrder = useCallback((build: boolean) => update({ rails: { production: showProduction, build } }), [update, showProduction]);
+  const setProductionSide = useCallback((side: ReplaySide) => update({ productionSide: side }), [update]);
+  const setBuildFilter = useCallback((filter: typeof buildFilter) => update({ buildFilter: filter }), [update]);
+  const setShowWorkers = useCallback((value: boolean) => update({ showWorkers: value }), [update]);
+  const setAutoScroll = useCallback((value: boolean) => update({ autoScroll: value }), [update]);
+  const setPanelTab = useCallback((value: typeof panelTab) => update({ panelTab: value }), [update]);
   const [productionTab, setProductionTab] = useState<ProductionTab>("queue");
-  const [buildFilter, setBuildFilter] = useState<BuildFilter>("both");
   const [wide, setWide] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [panelTab, setPanelTab] = useState<"production" | "build">("production");
+  const [responsivePanelOpen, setResponsivePanelOpen] = useState(false);
+  const panelOpen = preferences.panelOpen ?? responsivePanelOpen;
   const panelId = useId();
+  const stageRef = useRef<HTMLElement>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [seekAnnouncement, setSeekAnnouncement] = useState("");
   useEffect(() => {
     const desktop = window.matchMedia?.("(min-width: 1280px)") ?? { matches: window.innerWidth >= 1280, addEventListener: undefined, removeEventListener: undefined };
     const phone = window.matchMedia?.("(max-width: 767px)") ?? { matches: window.innerWidth < 768, addEventListener: undefined, removeEventListener: undefined };
-    const update = () => { setWide(desktop.matches); setPanelOpen(!phone.matches); };
-    update(); desktop.addEventListener?.("change", update); phone.addEventListener?.("change", update);
-    return () => { desktop.removeEventListener?.("change", update); phone.removeEventListener?.("change", update); };
+    const updateSize = () => { setWide(desktop.matches); setResponsivePanelOpen(!phone.matches); };
+    updateSize(); desktop.addEventListener?.("change", updateSize); phone.addEventListener?.("change", updateSize);
+    return () => { desktop.removeEventListener?.("change", updateSize); phone.removeEventListener?.("change", updateSize); };
   }, []);
-  const [showWorkers, setShowWorkers] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true);
 
   // The background score. It reads the clock (for the battle swell)
   // but drives nothing — the replay is unaware of it, and it is
   // impossible for it to stall or throw into the render path.
-  const music = useReplayMusic({ playback, gameId, myRace, time, speed });
+  const musicState = useReplayMusic({ playback, gameId, myRace, time, speed });
+  const { setVolume: setMusicVolume } = musicState;
+  useEffect(() => { if (preferences.volume !== undefined) setMusicVolume(preferences.volume); }, [preferences.volume, setMusicVolume]);
+  const setVolume = useCallback((volume: number) => { setMusicVolume(volume); update({ volume }); }, [setMusicVolume, update]);
+  const music = { ...musicState, setVolume };
   const { setPlaying: setMusicPlaying } = music;
 
   // Echoed back to MapReplayer VERBATIM — it compares by identity to
@@ -215,8 +229,14 @@ export function ReplayStage({
     },
     [setMusicPlaying],
   );
-  const onSpeedChange = useCallback((next: ReplaySpeed) => setSpeed(next), []);
-  const onUserSeek = useCallback((next: number) => { seek(next); onPlayingChange(false); onStageSeek?.(next); }, [seek, onPlayingChange, onStageSeek]);
+  const onSpeedChange = useCallback((next: ReplaySpeed) => update({ speed: next }), [update]);
+  const onUserSeek = useCallback((next: number) => {
+    const target = Math.max(0, Math.min(model.gameLength, next));
+    seek(target); onPlayingChange(false); onStageSeek?.(target);
+    setSeekAnnouncement(`Playback at ${formatClock(target)} of ${formatClock(model.gameLength)}`);
+  }, [seek, onPlayingChange, onStageSeek, model.gameLength]);
+  const onReplayKeyDown = useReplayShortcuts({ root: stageRef, time, gameLength: model.gameLength, playing, speed, markers: model.markers,
+    onSeek: onUserSeek, onPlay: onPlayingChange, onSpeed: onSpeedChange, onMusic: () => music.setEnabled(!music.enabled), onHelp: () => setShortcutsOpen(true), helpOpen: shortcutsOpen });
 
   // Pause and seek before the browser can tick the old playing position.
   // External seek-and-pause. Keyed on ``seq`` so asking for the same
@@ -242,13 +262,18 @@ export function ReplayStage({
   return (
     <section
       data-testid="replay-stage"
+      ref={stageRef}
+      onKeyDown={onReplayKeyDown}
+      onPointerDown={(event) => {
+        if (event.target instanceof Element && !event.target.closest("button,a,input,select,textarea,summary,[contenteditable],[data-replay-popover]")) stageRef.current?.focus({ preventScroll: true });
+      }}
       /* The fullscreen target. ``MapReplayer``'s ⤢ walks up to the
          nearest ``[data-replay-stage]`` so the top bar, both rails and
          the transport dock go fullscreen with the canvas instead of a
          bare, chrome-less map. Absent (compact host, bare replayer) the
          replayer falls back to its own root. */
       data-replay-stage=""
-      tabIndex={-1}
+      tabIndex={0}
       /* Stable label: hosts and their tests have keyed off
          ``aria-label="Map replay"`` since the replayer shipped. The map
          name is in the top bar. */
@@ -268,6 +293,8 @@ export function ReplayStage({
         ...(maxHeightPx ? { height: `${maxHeightPx}px` } : null),
       }}
     >
+      <span role="status" aria-live="polite" className="sr-only">{seekAnnouncement}</span>
+      <ReplayShortcutSheet container={stageRef.current} open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <ReplayTopBar
         t={time}
         gameLength={model.gameLength}
@@ -359,6 +386,7 @@ export function ReplayStage({
         onSpeedChange={onSpeedChange}
         music={music}
       >
+        <button type="button" aria-label="Replay keyboard shortcuts" aria-keyshortcuts="Shift+/" title="Keyboard shortcuts (?)" onClick={() => setShortcutsOpen(true)} className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-border bg-bg-elevated text-text"><Keyboard className="h-4 w-4" aria-hidden /></button>
         <ReplaySettings
           footer={clockLink}
           showProductionRail={showProduction}
@@ -374,7 +402,7 @@ export function ReplayStage({
       </div>
       {!wide && !mobileCompact ? <section data-testid="replay-mobile-panel" className="border-t border-border">
         <button className="flex min-h-11 w-full items-center justify-between px-3 text-caption md:hidden"
-          aria-expanded={panelOpen} onClick={() => setPanelOpen((open) => !open)}>Show production &amp; build order {panelOpen ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}</button>
+          aria-expanded={panelOpen} onClick={() => update({ panelOpen: !panelOpen })}>Show production &amp; build order {panelOpen ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}</button>
         {panelOpen ? <>
           <div role="tablist" aria-label="Replay panels" className="flex gap-2 p-2">
             {(["production", "build"] as const).map((tab) => <button key={tab} role="tab"

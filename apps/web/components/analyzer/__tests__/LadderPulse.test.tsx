@@ -188,7 +188,7 @@ describe("LadderPulse", () => {
     ).toBeTruthy();
     const close = screen.getByRole("button", { name: "Close Ladder Pulse" });
     expect(close.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText("vs Alpha")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /vs Alpha/ })).toBeTruthy();
 
     fireEvent.click(close);
     expect(
@@ -196,7 +196,7 @@ describe("LadderPulse", () => {
         "aria-expanded",
       ),
     ).toBe("false");
-    expect(screen.queryByText("vs Alpha")).toBeNull();
+    expect(screen.queryByRole("heading", { name: /vs Alpha/ })).toBeNull();
     expect(
       window.localStorage.getItem("analyzer.ladderPulse.collapsed"),
     ).toBe("1");
@@ -209,7 +209,7 @@ describe("LadderPulse", () => {
         "aria-expanded",
       ),
     ).toBe("true");
-    expect(screen.getByText("vs Alpha")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /vs Alpha/ })).toBeTruthy();
     expect(
       window.localStorage.getItem("analyzer.ladderPulse.collapsed"),
     ).toBe("0");
@@ -225,7 +225,7 @@ describe("LadderPulse", () => {
         "aria-expanded",
       ),
     ).toBe("false");
-    expect(screen.queryByText("vs Alpha")).toBeNull();
+    expect(screen.queryByRole("heading", { name: /vs Alpha/ })).toBeNull();
   });
 
   it("renders the newest real replay, verified MMR delta, daily replay, and live meta movement", () => {
@@ -242,7 +242,7 @@ describe("LadderPulse", () => {
     );
 
     expect(screen.getByText(/Victory secured/)).toBeTruthy();
-    expect(screen.getByText("vs Alpha")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /vs Alpha/ })).toBeTruthy();
     expect(screen.getByText("Just in")).toBeTruthy();
     const mmr = screen.getByText("MMR 4,122 · +22 vs prior");
     expect(mmr).toBeTruthy();

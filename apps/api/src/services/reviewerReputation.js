@@ -402,6 +402,7 @@ class ReviewerReputationService {
       badges: badgesFor(stats),
       flair: flairFor(stats, publicVerified),
       verified: publicVerified,
+      verificationReason: publicVerified ? null : "not_enough_ladder_games",
       canComment: games >= REVIEWS.MIN_SYNCED_GAMES_TO_COMMENT,
       syncedGames: games,
       requiredGames: REVIEWS.MIN_SYNCED_GAMES_TO_COMMENT,
