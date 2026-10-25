@@ -21,7 +21,7 @@ describe("shared visible overlay health", () => {
     render(<Fixture />); expect(await screen.findByText("Duplicate audio · 2 sources")).toBeTruthy();
     expect(screen.getByText("Connected")).toBeTruthy(); expect(screen.getByText(/1 unknown source/)).toBeTruthy();
     expect(fetchSpy).toHaveBeenCalledTimes(1); expect(document.body.textContent).not.toContain("synthetic-token");
-    expect(screen.getByText("Chat source").closest("li")?.textContent).toContain("Optional · not added");
+    expect(screen.getByText("Chat source").closest("li")?.textContent).toContain("Optional · unknown source");
     expect(fetchSpy.mock.calls[0][0]).toContain("/v1/overlay-tokens/synthetic-token/presence");
   });
   it("does no work for a hidden Settings section or a source outside the viewport", async () => {

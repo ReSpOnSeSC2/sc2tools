@@ -14,6 +14,9 @@ describe("honest overlay source status", () => {
     expect(widgetPresence(snapshot(), "multichat", true)).toEqual({ count: 0, audio: false, unknown: true });
     const withChat = snapshot(); withChat.widgets.multichat = { count: 1, oldestConnectedAt: null };
     expect(widgetPresence(withChat, "multichat", true)).toEqual({ count: 1, audio: false, unknown: false });
+    const withRandomizer = snapshot(); withRandomizer.widgets.randomizer = { count: 1, oldestConnectedAt: null };
+    expect(widgetPresence(withRandomizer, "randomizer", true)).toEqual({ count: 2, audio: true, unknown: false });
+    expect(widgetPresence(withRandomizer, "randomizer", false)).toEqual({ count: 1, audio: false, unknown: false });
   });
   it("keeps unknown legacy connections distinct from not added", () => {
     expect(widgetPresence(snapshot(), "rank", false).unknown).toBe(true);

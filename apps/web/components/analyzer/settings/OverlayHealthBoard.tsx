@@ -15,9 +15,9 @@ export function OverlayHealthBoard() {
   const chat = snapshot ? widgetPresence(snapshot, "multichat", health.enabledWidgets.includes("multichat")).count : 0;
   const checks = [
     { label: "Agent", ready: snapshot?.agent.online, value: snapshot?.agent.online ? "Connected" : "No connected agent" },
-    { label: "Game overlay", ready: game > 0, value: game ? `${game} connected` : "Not added" },
-    { label: "Chat source", ready: chat > 0, value: chat ? `${chat} connected` : "Optional · not added" },
-    { label: "Stream Dock", ready: count("dock") > 0, value: count("dock") ? `${count("dock")} connected` : "Optional · not open" },
+    { label: "Game overlay", ready: game > 0, value: game ? `${game} connected` : count("unknown") ? "Unknown source" : "Not added" },
+    { label: "Chat source", ready: chat > 0, value: chat ? `${chat} connected` : count("unknown") ? "Optional · unknown source" : "Optional · not added" },
+    { label: "Stream Dock", ready: count("dock") > 0, value: count("dock") ? `${count("dock")} connected` : count("unknown") ? "Optional · unknown source" : "Optional · not open" },
   ];
   return <section aria-label="Overlay health" className="min-w-0 space-y-3 rounded-xl border border-border bg-bg-surface p-4">
     <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-body-lg font-semibold">Ready to go live?</h2><Button variant="secondary" size="sm" onClick={refresh} disabled={loading} className="min-h-11">Refresh sources</Button></div>
