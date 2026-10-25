@@ -71,7 +71,9 @@ describe("UrlRow", () => {
     const first = "https://sc2tools.com/dock/first-private", second = "https://sc2tools.com/dock/second-private";
     const view = render(<UrlRow url={first} compact />); fireEvent.click(view.getByRole("button", { name: "Copy" }));
     const field = await view.findByRole("textbox", { name: "Copy this private URL" }) as HTMLInputElement;
-    expect(field.value).toBe(first); expect(document.activeElement).toBe(field); expect(field.selectionEnd).toBe(first.length);
+    expect(field.value).toBe(first);
+    // The fallback mounts before its passive effect focuses/selects it.
+    await waitFor(() => { expect(document.activeElement).toBe(field); expect(field.selectionStart).toBe(0); expect(field.selectionEnd).toBe(first.length); });
     view.rerender(<UrlRow url={second} compact />); expect(view.queryByRole("textbox")).toBeNull(); expect(view.container.querySelector("code")!.textContent).not.toContain("second-private");
     fireEvent.click(view.getByRole("button", { name: "Reveal" })); view.rerender(<UrlRow url={first} compact />); expect(view.container.querySelector("code")!.textContent).not.toContain("first-private");
   });

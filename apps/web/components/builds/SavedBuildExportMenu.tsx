@@ -3,10 +3,13 @@
 import { coerceSavedRules } from "@/lib/build-rules";
 import type { BuildExportMeta, ExportStep } from "@/lib/gameExport";
 import { BuildExportMenu } from "./BuildExportMenu";
+import { readReferenceBuildOrder } from "@/lib/buildOrderReference";
 
 /** A saved definition's deadlines are never presented as recorded production. */
 export function SavedBuildExportMenu({ build, meta }: { build: object; meta: BuildExportMeta }) {
   const source = build as Record<string, unknown>, rules = coerceSavedRules(source.rules);
+  const reference = readReferenceBuildOrder(source.buildOrder);
+  if (reference?.steps.length) return <BuildExportMenu steps={[]} reference={reference} meta={meta} />;
   const steps: ExportStep[] = [];
   let deadlines = false;
   if (!rules.length && Array.isArray(source.signature)) {

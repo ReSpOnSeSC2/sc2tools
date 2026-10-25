@@ -19,6 +19,7 @@ const article: HelpArticle = {
       "**Use as Ghost Build target** uses the existing replacement confirmation and Undo. **Save as new build** opens the build editor, where you can review and save the captured order.",
     ] },
     { type: "heading", text: "Custom and Community definitions", anchor: "saved-builds" },
+    { type: "paragraph", text: "A supplied reference build order takes priority for text, Markdown and .txt exports. It retains authored row order, unknown clocks, approximate supply and shareable instructions. See [Write or paste a build order](/help/build-order-paste). Reference steps remain separate from the rules used for classification." },
     { type: "paragraph", text: "The same **⋯** export control appears on custom and Community builds. A rule-only build copies the same condition sentences shown on the page, including exclusions; it does not invent timed production steps. SALT and supply-first copy require timed steps. Older signature definitions include counts and identify their times as deadlines, rather than recorded production times." },
     { type: "heading", text: "Download replay data", anchor: "replay-data" },
     { type: "list", items: [

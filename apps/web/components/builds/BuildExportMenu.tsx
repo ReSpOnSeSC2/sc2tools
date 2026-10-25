@@ -5,11 +5,12 @@ import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
 import type { BuildExportMeta, ExportStep } from "@/lib/gameExport";
 import type { BuildRule } from "@/lib/build-rules";
+import type { ReferenceBuildOrder } from "@/lib/buildOrderReference";
 import { useToastOptional } from "@/components/ui/Toast";
 
 /** Native disclosure keeps Tab order and source focus; formatters load on demand. */
-export function BuildExportMenu({ steps, meta, rules = [], extraActions }: {
-  steps: readonly ExportStep[]; meta: BuildExportMeta; rules?: readonly BuildRule[]; extraActions?: ReactNode;
+export function BuildExportMenu({ steps, meta, rules = [], extraActions, reference }: {
+  steps: readonly ExportStep[]; meta: BuildExportMeta; rules?: readonly BuildRule[]; extraActions?: ReactNode; reference?: ReferenceBuildOrder;
 }) {
   const root = useRef<HTMLDetailsElement>(null), trigger = useRef<HTMLElement>(null), fallbackInput = useRef<HTMLTextAreaElement>(null);
   const id = useId();
@@ -34,16 +35,18 @@ export function BuildExportMenu({ steps, meta, rules = [], extraActions }: {
     const frame = requestAnimationFrame(() => { try { window.print(); } finally { setPrintText(""); } });
     return () => cancelAnimationFrame(frame);
   }, [printText]);
-  const copy = async (kind: "text" | "supply" | "markdown" | "salt" | "print") => {
+  const copy = async (kind: "text" | "supply" | "markdown" | "salt" | "print" | "download") => {
     const ticket = ++operation.current, current = () => ticket === operation.current;
     setMessage(""); setFallback(""); setSkipped([]);
     try {
       const format = await import("@/lib/gameExport"); if (!current()) return; const metadata = absoluteMeta();
       let text: string;
-      if (kind === "salt") { const result = format.buildToSalt(steps, metadata); text = result.salt; setSkipped(result.skipped); }
+      if (reference) text = kind === "markdown" ? format.referenceBuildToMarkdown(reference.steps, metadata) : format.referenceBuildToText(kind === "print" ? reference.steps.slice(0, 60) : reference.steps, metadata);
+      else if (kind === "salt") { const result = format.buildToSalt(steps, metadata); text = result.salt; setSkipped(result.skipped); }
       else if (kind === "markdown") text = format.buildToMarkdownTable(steps, metadata, rules);
       else text = format.buildToText(kind === "print" ? steps.slice().sort((a, b) => a.time - b.time).slice(0, 60) : steps, metadata, kind === "supply" ? "supply-clock" : "clock", rules);
-      if (kind === "print") { setPrintText(text + (steps.length > 60 ? `\n\nFirst 60 of ${steps.length} steps. Copy build order includes every step.` : "")); return; }
+      if (kind === "print") { const total = reference ? reference.steps.length : steps.length; setPrintText(text + (total > 60 ? `\n\nFirst 60 of ${total} steps. Copy build order includes every step.` : "")); return; }
+      if (kind === "download") { const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = `${format.gameExportFilename(null, meta.matchup, meta.title)}.txt`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); setMessage("Text file prepared"); return; }
       try { await navigator.clipboard.writeText(text); if (current()) { setMessage("Copied"); toast?.toast.success("Build order copied"); } }
       catch { if (current()) setFallback(text); }
     } catch { if (current()) setMessage("Couldn't prepare this export. Please try again."); }
@@ -58,9 +61,10 @@ export function BuildExportMenu({ steps, meta, rules = [], extraActions }: {
         if ((event.target as Element).closest("button")) { if (root.current) root.current.open = false; trigger.current?.focus(); }
       }}>
         <button type="button" className={buttonClass} onClick={() => void copy("text")}>Copy build order</button>
-        <button type="button" className={buttonClass} disabled={!steps.length} onClick={() => void copy("supply")}>Copy as supply build</button>
+        {!reference ? <button type="button" className={buttonClass} disabled={!steps.length} onClick={() => void copy("supply")}>Copy as supply build</button> : null}
         <button type="button" className={buttonClass} onClick={() => void copy("markdown")}>Copy Markdown</button>
-        <button type="button" className={buttonClass} disabled={!steps.length} title={!steps.length ? "Rules describe conditions; SALT needs timed build steps." : undefined} onClick={() => void copy("salt")}>Copy SALT</button>
+        {!reference ? <button type="button" className={buttonClass} disabled={!steps.length} title={!steps.length ? "Rules describe conditions; SALT needs timed build steps." : undefined} onClick={() => void copy("salt")}>Copy SALT</button> : null}
+        <button type="button" className={buttonClass} onClick={() => void copy("download")}>Download .txt</button>
         <button type="button" className={buttonClass} onClick={() => void copy("print")}>Print cheat sheet</button>
         {extraActions ? <div className="border-t border-border pt-1">{extraActions}</div> : null}
       </div>
