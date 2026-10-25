@@ -814,6 +814,8 @@ export interface OverlayTokensService {
       lastSeenAt?: Date | null;
       revokedAt?: Date | null;
       enabledWidgets: string[];
+      profile?: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }> };
+      profileRevision?: number;
     }>
   >;
   resolve(token: string): Promise<
@@ -821,6 +823,8 @@ export interface OverlayTokensService {
         userId: string;
         label: string;
         enabledWidgets: string[];
+        profile?: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }> };
+        profileRevision?: number;
       }
     | null
   >;
@@ -832,6 +836,7 @@ export interface OverlayTokensService {
     enabled: boolean,
   ): Promise<{ enabledWidgets: string[] }>;
   setEnabledWidgets(userId: string, token: string, enabled: unknown, expectedEnabled?: unknown): Promise<{ enabledWidgets: string[] }>;
+  setProfile(userId: string, token: string, profile: unknown, expectedRevision: unknown): Promise<{ profile: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }> }; profileRevision: number }>;
   tokenBelongsToUser(userId: string, token: string): Promise<boolean>;
 }
 

@@ -43,10 +43,9 @@ import {
 /**
  * Settings · Overlay tab · Theme section.
  *
- * Restyles the OBS widgets without any server round-trip: the chosen
- * theme is encoded into the copyable overlay URLs (``?theme=…``) by the
- * parent SettingsOverlay, so an OBS Browser Source needs no re-auth —
- * just a re-copied URL. The live preview renders real widget components
+ * Previews the shared profile draft before an explicit Save applies it
+ * to connected OBS sources. Previously copied ?theme= URLs retain their
+ * explicit override. The live preview renders real widget components
  * with static sample data (no sockets) over a checkerboard so streamers
  * can judge compositing before touching OBS.
  */
@@ -143,7 +142,7 @@ export function OverlayThemeSection({
   return (
     <Section
       title="Overlay theme"
-      description="Restyle every widget — structural frame, texture, accent colour, panel opacity, corners, size and type. The theme travels inside the URLs above, so after changing it re-copy the URLs into your OBS Browser Sources (no re-auth needed)."
+      description="Restyle every widget — structural frame, texture, accent colour, panel opacity, corners, size and type. Save overlay display to update connected sources. Existing URLs with a ?theme= override keep that look; remove the override once to follow saved changes."
     >
       <Card>
         <div className="space-y-5 px-2 py-2">

@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { fmtAgo } from "@/lib/format";
 import { appendOverlayCreditToUrl } from "@/lib/overlayCredit";
-import { appendOverlayThemeToUrl, type OverlayTheme } from "@/lib/overlayTheme";
+import type { OverlayTheme } from "@/lib/overlayTheme";
+import type { OverlayProfile } from "@/lib/overlayProfile";
 import { AgentStatusIndicator } from "./AgentStatusIndicator";
 import { OverlayCreditToggle } from "./OverlayCreditToggle";
 import { UrlRow } from "./OverlayUrlRow";
@@ -25,6 +26,8 @@ export type OverlayToken = {
   lastSeenAt?: string | null;
   revokedAt?: string | null;
   enabledWidgets?: string[];
+  profile?: OverlayProfile;
+  profileRevision?: number;
 };
 
 export function ActiveTokenHeader({
@@ -102,12 +105,11 @@ export function AllInOneRow({
   origin?: string;
   theme: OverlayTheme;
 }) {
-  // Non-default themes ride along in the URL itself so the OBS Browser
-  // Source needs no re-auth — default themes leave the URL untouched. A
-  // hidden credit adds ``credit=0`` the same way (lib/overlayCredit).
+  // New copies follow the saved profile; old explicit theme URLs still work.
+  void theme;
   const [showCredit, setShowCredit] = useOverlayCreditPreference();
   const url = appendOverlayCreditToUrl(
-    appendOverlayThemeToUrl(`${origin ?? ""}/overlay/${token.token}`, theme),
+    `${origin ?? ""}/overlay/${token.token}`,
     showCredit,
   );
   return (

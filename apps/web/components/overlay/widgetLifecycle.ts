@@ -1,3 +1,5 @@
+import profileRules from "@/lib/overlayProfileRules.json";
+
 // Per-widget visibility lifecycle for the OBS overlay.
 //
 // The cloud broadcasts a single `overlay:live` payload per game and a
@@ -99,71 +101,7 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
  * defaults so streamers swapping over from the local app see the same
  * cadence.
  */
-export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
-  // Opponent dossier — pinned visibly during the active phases of a
-  // match (loading / started / in-progress, see `useWidgetVisibility`),
-  // then naturally hides after `match_ended` so the streamer's scene
-  // clears for the next queue. The legacy 6-minute duration was a hack
-  // to bridge "queue-into-next-match" gaps, but the cloud now clears
-  // `live` on `match_loading` (see `useClearStalePostGameOnNewMatch`)
-  // so the dossier is replaced by the new opponent's data the moment
-  // SC2 reports the next loading screen.
-  "opponent": 15 * 1000,
-  // Post-game chips and panels — unified at 15 s on streamer request
-  // ("match result and scouting widget should both only stay 15 or
-  // 20 seconds"). Anything that fires off the post-game ``overlay:live``
-  // payload clears within 15 s of the result so the OBS scene is
-  // ready for the next queue. Previously these ranged from 8 to 22 s,
-  // which made the post-game wave feel uneven on stream — some
-  // widgets snapped away while others lingered.
-  "match-result": 15 * 1000,
-  "post-game": 15 * 1000,
-  "mmr-delta": 10 * 1000,
-  "streak": 8 * 1000,
-  "cheese": 15 * 1000,
-  "rematch": 15 * 1000,
-  "rival": 15 * 1000,
-  "rank": 12 * 1000,
-  "meta": 12 * 1000,
-  "fav-opening": 15 * 1000,
-  "best-answer": 15 * 1000,
-  "scouting": 15 * 1000,
-  // Persistent panels — HUDs that should stay on screen.
-  "topbuilds": null,
-  "session": null,
-  // Ghost Build coach — a persistent practice HUD. The target build is
-  // armed via the widget URL's ``?ghost=`` param (see lib/ghostBuild),
-  // so the panel shows a compact "armed" card between games and the
-  // step coach during them; it must never flicker off on a timer.
-  // Test fires still cap it via the generic test-mode rule below.
-  "ghost-build": null,
-  // Randomizer is a two-act reveal: first the build (up to ~11 s for the
-  // fighter brawl / sumo styles), then—after the build card has fully
-  // cleared—the selected build's one- or two-Gateway opening-unit draw.
-  // Thirty-two seconds leaves a readable result hold without either act
-  // overlapping or being clipped by the production lifecycle.
-  "randomizer": 32 * 1000,
-  // Multi-platform chat feed — a persistent, fully self-driven HUD.
-  // It never consumes game payloads, so no timer applies.
-  "multichat": null,
-  // Stream Studio widgets — persistent, self-driven sources gated by
-  // the studio state (Stream Dock) rather than game payloads. Each
-  // renders transparent until the dock gives it something to show, so
-  // no payload timer applies.
-  "chat-highlight": null,
-  "chat-poll": null,
-  "chat-alerts": null,
-  "stream-goals": null,
-  "session-recap": null,
-  "stream-scene": null,
-  "chat-oracle": null,
-  "supporter-wall": null,
-  "clip-flag": null,
-  "lower-third": 14 * 1000,
-  "stats-ticker": null,
-  "countdown-timer": null,
-  "build-profile": null,
-};
+export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = profileRules.widgetDurationMs;
 
 /**
  * Test-mode duration cap. Used when an `overlay:live` (or
@@ -201,8 +139,11 @@ export function payloadTargetsWidget(
 export function resolveWidgetDurationMs(
   id: WidgetId,
   isTest: boolean,
+  options?: Record<string, { durationSec?: number | null }>,
 ): number | null {
-  const prod = WIDGET_DURATION_MS[id];
+  const seconds = options?.[id]?.durationSec;
+  const prod = WIDGET_DURATION_MS[id] !== null && typeof seconds === "number" && profileRules.durationSeconds.includes(seconds)
+    ? seconds * 1000 : WIDGET_DURATION_MS[id];
   if (!isTest) return prod;
   if (prod === null) return TEST_DURATION_MS;
   return Math.min(prod, TEST_DURATION_MS);

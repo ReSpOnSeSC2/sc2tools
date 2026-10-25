@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Live overlay display
+
+- Save an overlay theme and per-widget display times to its token. Connected OBS sources receive changes without re-copying URLs; existing `?theme=` URLs keep working and retain their explicit look. Previous browser themes can be moved into a draft with an explicit Save.
+
 ### Local widget playground
 
 - Preview every widget with sample scenarios and theme presets, alone or together, in Stream Studio, the widget guides and Settings. Silent local previews use no account or overlay token; Test in OBS remains the check for a real source.
