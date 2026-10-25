@@ -6,11 +6,13 @@ const { dossier } = require('./build-dossier-insights-fixture.cjs');
 execFileSync(process.execPath, ['tests/manual/build-dossier-insights-fixture.cjs'], { stdio: 'inherit' });
 const root = process.cwd(), origin = 'http://127.0.0.1:3262', calls = [];
 const evidence = path.resolve('../../.cache/build-dossier-insights-evidence'); fs.mkdirSync(evidence, { recursive: true });
+const captureCSS = 'nav.fixed,header.sticky,nav[aria-label="Build sections"]{visibility:hidden!important}';
 const css = fs.readdirSync('.next/static/css').filter(name => name.endsWith('.css')).map(name => fs.readFileSync(path.join('.next/static/css', name), 'utf8')).join('\n');
 const fonts = "@font-face{font-family:FixtureSans;src:url('/fonts/hanken-grotesk-latin.woff2')}@font-face{font-family:FixtureDisplay;src:url('/fonts/bricolage-grotesque-latin.woff2')}:root{--font-sans:FixtureSans;--font-display:FixtureDisplay;--font-serif:serif}";
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, origin), owner = (req.headers.authorization || '').replace(/^Bearer /, ''), json = value => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value)); };
   if (url.pathname.startsWith('/v1/')) calls.push({ path: url.pathname, search: url.search, method: req.method, owner });
+  if (url.pathname === '/v1/builds') return json([{ name: 'Held most', total: 20, wins: 12, losses: 8, winRate: .6, planHeldRate: .8 }, { name: 'Measured zero', total: 5, wins: 2, losses: 3, winRate: .4, planHeldRate: 0 }, { name: 'Small sample', total: 4, wins: 2, losses: 2, winRate: .5, planHeldRate: null }]);
   if (url.pathname.startsWith('/v1/builds/') && !url.pathname.endsWith('/phases')) {
     const value = dossier(owner, url.searchParams.has('small') || owner === 'fixture-owner-b');
     if (owner === 'fixture-owner-b') Object.assign(value.matchupTimingsLegacy.PvZ.timings.Stargate, { medianSeconds: 360, p25Seconds: 340, p75Seconds: 385 });
@@ -38,7 +40,7 @@ const server = http.createServer((req, res) => {
       await page.goto(origin + '/builds/fixture'); await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
       const timing = page.getByRole('region', { name: 'Build key timings', exact: true }), plan = page.getByRole('region', { name: 'Declared build plan survival', exact: true });
       await expect(timing.getByText('12 s slower than community')).toBeVisible(); checks++;
-      await expect(timing.getByText(/Based on your last 25 games/)).toBeVisible(); checks++;
+      await expect(timing.getByText(/Based on your last 25 eligible games/)).toBeVisible(); checks++;
       await expect(plan.getByRole('img')).toHaveAttribute('aria-label', '12 held and 8 knocked off among 20 declared games'); checks++;
       expect(await page.getByRole('navigation', { name: 'Build sections' }).getByRole('link').evaluateAll(nodes => nodes.map(node => node.getAttribute('href')))).toEqual(['#overview', '#timings', '#plan', '#army', '#matchups', '#games']); checks++;
       await timing.getByRole('button', { name: /Stargate.*inspect games/ }).focus(); await page.keyboard.press('Enter');
@@ -53,7 +55,7 @@ const server = http.createServer((req, res) => {
       await timing.getByRole('button', { name: 'PvZ', exact: true }).click();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); checks++;
       expect(await timing.locator('button').evaluateAll(nodes => nodes.every(node => node.getBoundingClientRect().height >= 43))).toBe(true); checks++;
-      await page.addStyleTag({ content: 'nav.fixed{visibility:hidden!important}' });
+      await page.addStyleTag({ content: captureCSS });
       await page.evaluate(() => document.fonts.ready); await timing.screenshot({ path: path.join(evidence, `timings-${theme}-${width}.png`) }); await plan.screenshot({ path: path.join(evidence, `plan-${theme}-${width}.png`) });
       await page.goto(origin + '/builds/fixture?small=1'); await expect(page.getByRole('heading', { name: 'Key timings', exact: true })).toBeVisible(); await expect(page.getByRole('heading', { name: 'Plan survival', exact: true })).toHaveCount(0); checks++;
       await page.goto(origin + '/app/game/fixture'); await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
@@ -61,7 +63,16 @@ const server = http.createServer((req, res) => {
       await expect(page.getByTestId('build-column-opp').getByText(/vs your median/)).toHaveCount(0); checks++;
       await page.getByTestId('build-column-me').getByRole('button', { name: 'Jump to 5:12 Stargate' }).click(); expect(await page.evaluate(() => window.fixtureLastSeek)).toBe(312); checks++;
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); checks++;
-      await page.addStyleTag({ content: 'nav.fixed{visibility:hidden!important}' }); await page.getByTestId('build-order-columns').screenshot({ path: path.join(evidence, `game-${theme}-${width}.png`) });
+      await page.addStyleTag({ content: captureCSS }); await page.getByTestId('build-order-columns').screenshot({ path: path.join(evidence, `game-${theme}-${width}.png`) });
+      await page.goto(origin + '/app/builds/summary'); await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+      await expect(page.getByText('Held 62%', { exact: true })).toBeVisible(); checks++;
+      await expect(page.locator('table thead').getByText('Plan held', { exact: true })).toHaveCount(1); checks++;
+      if (width >= 768) { await page.locator('table').getByRole('button', { name: 'Plan held', exact: true }).click(); await expect(page.locator('table tbody tr').first()).toContainText('Held most'); checks++; }
+      else { await expect(page.getByText('Held 0%', { exact: true })).toBeVisible(); checks++; }
+      await page.getByRole('searchbox', { name: 'Search builds' }).fill('Small sample'); await expect(page.locator('table thead').getByText('Plan held', { exact: true })).toHaveCount(0); checks++;
+      await page.getByRole('searchbox', { name: 'Search builds' }).fill('');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); checks++;
+      await page.addStyleTag({ content: captureCSS }); await page.getByTestId('build-summary-preview').screenshot({ path: path.join(evidence, `summary-${theme}-${width}.png`) });
       expect(errors).toEqual([]); checks++; await context.close();
     }
     const context = await browser.newContext({ viewport: { width: 390, height: 1000 }, reducedMotion: 'reduce' });
@@ -73,7 +84,7 @@ const server = http.createServer((req, res) => {
     await page.evaluate(() => window.fixtureAuth('fixture-owner-a')); await expect(page.getByText('12 s slower than community')).toBeVisible(); await expect(page.getByRole('region', { name: 'Selected sample games' })).toHaveCount(0); checks++;
     await page.addScriptTag({ path: require.resolve('axe-core/axe.min.js') }); const axe = await page.evaluate(async () => window.axe.run(document.querySelector('main'), { rules: { 'color-contrast': { enabled: false } } })); expect(axe.violations).toEqual([]); checks++;
     expect(calls.every(call => call.method === 'GET')).toBe(true); checks++;
-    fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ checks, captures: 24, calls, externalTraffic: false, writes: 0 }, null, 2));
-    console.log(JSON.stringify({ checks, captures: 24, evidence, writes: 0 })); await context.close();
+    fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ checks, captures: 32, calls, externalTraffic: false, writes: 0 }, null, 2));
+    console.log(JSON.stringify({ checks, captures: 32, evidence, writes: 0 })); await context.close();
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

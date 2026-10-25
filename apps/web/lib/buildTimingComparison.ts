@@ -18,7 +18,9 @@ export function ownTimingContext(state: GameIntentState | undefined, gameId: str
   const ref = declared ?? state.detected;
   if (!ref || !safeText(ref.name) || !safeText(ref.key)) return undefined;
   const custom = declared ? declared.source === "custom" : !!ref.slug;
-  if (custom && (!safeText(ref.slug) || !/^[a-z0-9][a-z0-9-]{0,99}$/.test(ref.slug))) return undefined;
+  // Match the existing bounded private-build alphabet, including legacy case,
+  // underscores and dots. Literal URL dot segments cannot identify a resource.
+  if (custom && (!safeText(ref.slug) || !/^[a-zA-Z0-9._-]{1,80}$/.test(ref.slug) || ref.slug === "." || ref.slug === "..")) return undefined;
   const path = custom ? `/v1/custom-builds/${encodeURIComponent(ref.slug!)}/matches` : `/v1/builds/${encodeURIComponent(ref.name)}`;
   return { path: `${path}#${Math.max(0, Math.floor(revision) || 0)}`, matchup: `${my}v${opp}` };
 }

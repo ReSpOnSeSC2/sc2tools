@@ -15,6 +15,7 @@ describe("owner timing context", () => {
   it("uses the loaded exact build identity and the existing revision cache suffix", () => {
     expect(ownTimingContext(state(), "game-a", "Protoss", "z", 7)).toEqual({ path: "/v1/builds/PvZ%20-%20Stargate#7", matchup: "PvZ" });
     expect(ownTimingContext(state({ detected: { name: "Private name", key: "custom:my-private", slug: "my-private" } }), "game-a", "p", "Zerg", 2)).toEqual({ path: "/v1/custom-builds/my-private/matches#2", matchup: "PvZ" });
+    expect(ownTimingContext(state({ detected: { name: "Legacy private build", key: "custom:2Rax_SCV.v1", slug: "2Rax_SCV.v1" } }), "game-a", "Terran", "Zerg", 2)).toEqual({ path: "/v1/custom-builds/2Rax_SCV.v1/matches#2", matchup: "TvZ" });
     expect(ownTimingContext(state({ status: "confirmed", applied: true, build: { source: "custom", slug: "my-checkin", key: "custom:my-checkin", name: "Declared" } }), "game-a", "P", "Z", 0)?.path).toBe("/v1/custom-builds/my-checkin/matches#0");
   });
   it("does not guess a same-name definition for deleted, unknown or stale intent data", () => {
@@ -23,6 +24,7 @@ describe("owner timing context", () => {
     expect(context(state(), "game-a", "Random")).toBeUndefined();
     expect(context(state({ detected: { name: "Private name", key: null, slug: null } }))).toBeUndefined();
     expect(context(state({ detected: { name: "Private name", key: "custom:x", slug: "../other" } }))).toBeUndefined();
+    expect(context(state({ detected: { name: "Invalid path", key: "custom:..", slug: ".." } }))).toBeUndefined();
     expect(context(state({ status: "confirmed", applied: true, build: { source: "custom", name: "Deleted", slug: "gone", key: "custom:gone", deleted: true } }))).toBeUndefined();
   });
   it("uses detection when a confirmed answer was not applied", () => {

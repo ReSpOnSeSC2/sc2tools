@@ -1337,6 +1337,7 @@ class CustomBuildsService {
    *   scannedGames: number,
    *   ruleCount: number,
    *   timingSampleGames: number,
+   *   timingSampleSelected: number,
    *   timingSampleLimit: number,
    *   timingsTruncated: boolean,
    *   plan: Record<string,any>|null,
@@ -1505,6 +1506,7 @@ class CustomBuildsService {
       timingSampleGames: timingGames.filter((game) => (
         game.buildLog.length > 0 || game.oppBuildLog.length > 0
       )).length,
+      timingSampleSelected: timingGames.length,
       timingSampleLimit: CLASSIFIED_TIMING_SAMPLE_LIMIT,
       timingsTruncated: totals.total > CLASSIFIED_TIMING_SAMPLE_LIMIT,
       ...extras,

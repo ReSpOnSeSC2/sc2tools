@@ -44,6 +44,7 @@ import type { DecoratedBuild } from "./types";
 import { useBuildPublicationActions } from "./BuildPublicationActions";
 import { PracticeButton } from "@/components/practice/PracticeButton";
 import type { PracticeSource } from "@/lib/practiceAssignment";
+import { measuredPlanHeldRate, PlanHeldBadge } from "./PlanHeldBadge";
 
 export interface BuildCardProps {
   build: DecoratedBuild;
@@ -245,6 +246,7 @@ function BuildStatsRow({
           ) : null}
         </div>
       </div>
+      {!statsPending && !statsUnavailable && build.perspective !== "opponent" && measuredPlanHeldRate(stats?.planHeldRate) ? <div><dt className="sr-only">Plan held</dt><dd><PlanHeldBadge rate={stats?.planHeldRate} /></dd></div> : null}
       <div className="text-right">
         {latest ? (
           <div title={new Date(latest).toLocaleString()} className="mt-1 text-micro text-text-dim">

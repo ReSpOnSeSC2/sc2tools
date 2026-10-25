@@ -62,6 +62,8 @@ export interface BuildStats {
   lastPlayed?: string | null;
   /** Games counted here only because of a confirmed build check-in. */
   checkins?: number;
+  /** Null/absent below five confirmed declarations. */
+  planHeldRate?: number | null;
 }
 
 /** Decorated build = CustomBuild + optional aggregate stats. */

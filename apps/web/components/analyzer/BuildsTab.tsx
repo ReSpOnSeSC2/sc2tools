@@ -25,6 +25,7 @@ import { NoFilterMatches } from "./EmptyStates";
 import { BuildMmrPanel } from "./mmr/BuildMmrPanel";
 import { BuildAgingCurve } from "./mmr/BuildAgingCurve";
 import { MmrProgressionByBuild } from "./mmr/MmrProgressionByBuild";
+import { measuredPlanHeldRate, PlanHeldBadge } from "@/components/builds/PlanHeldBadge";
 
 type BuildRow = StrengthFields & {
   name: string;
@@ -35,16 +36,18 @@ type BuildRow = StrengthFields & {
   myMatchups?: Record<string, number>;
   /** Games counted here only because of a confirmed build check-in. */
   checkins?: number;
+  planHeldRate?: number | null;
 };
 
 const LS_MIN_BUILDS = "analyzer.builds.minGames";
 const LS_BUILDS_SORT = "analyzer.builds.sort";
-const BUILD_COLUMNS: readonly (CsvColumn<BuildRow> & { sortKey?: string; strength?: boolean })[] = [
+const BUILD_COLUMNS: readonly (CsvColumn<BuildRow> & { sortKey?: string; strength?: boolean; plan?: boolean })[] = [
   { key: "name", label: "Build", sortKey: "name" },
   { key: "wins", label: "W", sortKey: "wins" },
   { key: "losses", label: "L", sortKey: "losses" },
   { key: "total", label: "Games", sortKey: "total" },
   { key: "winRate", label: "WR", sortKey: "winRate" },
+  { key: "planHeldRate", label: "Plan held", sortKey: "planHeldRate", plan: true, format: value => measuredPlanHeldRate(value) ? value : null },
   { key: "winsAboveExpected", label: "Vs expected", strength: true,
     format: (value, row) => (row.ratedGames ?? 0) > 0 && typeof value === "number" && Number.isFinite(value) ? value : null },
   { key: "wlSplit", label: "W/L split", format: (_value, row) => `${row.wins}W ${row.losses}L` },
@@ -69,8 +72,10 @@ export function BuildsTab() {
     const s = search.trim().toLowerCase();
     if (s) r = r.filter((b) => b.name.toLowerCase().includes(s));
     if (minGames > 1) r = r.filter((b) => (b.total || 0) >= minGames);
-    return sort.sortRows(r, (row, col) => (row as any)[col]);
+    return sort.sortRows(r, (row, col) => col === "planHeldRate" ? measuredPlanHeldRate(row.planHeldRate) ? row.planHeldRate : null : (row as any)[col]);
   }, [data, search, minGames, sort]);
+  const showPlan = rows.some(row => measuredPlanHeldRate(row.planHeldRate));
+  const columns = BUILD_COLUMNS.filter(column => !column.plan || showPlan);
 
   const hiddenByMinGames = useMemo(() => {
     if (minGames <= 1) return 0;
@@ -86,7 +91,7 @@ export function BuildsTab() {
     const exportedAt = new Date();
     const globalScope = describeActiveFilters(filters, { seasons }).map(item => `${item.label}: ${item.value}`).join(" · ") || "Default filters";
     const scope = `Builds · ${globalScope} · search ${search.trim() || "(none)"} · min games ${minGames} · sort ${sort.sortBy} ${sort.sortDir}${error ? " · last loaded results (refresh failed)" : ""}`;
-    downloadCsv(csvFilename("builds", exportedAt), toCsv({ columns: BUILD_COLUMNS, rows, scope, exportedAt }));
+    downloadCsv(csvFilename("builds", exportedAt), toCsv({ columns, rows, scope, exportedAt }));
   };
 
   if (isLoading && !error) return <Skeleton rows={6} />;
@@ -162,6 +167,7 @@ export function BuildsTab() {
                     </button>
                     <MatchupChips counts={b.myMatchups} selected={filters.opp_race} onSelect={race => setFilters(withOppRace(filters, race))} />
                     <CheckinsNote count={b.checkins} />
+                    <PlanHeldBadge rate={b.planHeldRate} />
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
                       <span className="text-success">{b.wins}W</span>
                       <span className="text-danger">{b.losses}L</span>
@@ -190,19 +196,20 @@ export function BuildsTab() {
                   numeric cols don't grab equal shares of leftover space
                   and push WR off the right edge — see StrategiesTabBuildVs
                   for the same treatment. */}
-              <table className="w-full min-w-[40rem] table-fixed text-sm">
+              <table className={`w-full ${showPlan ? "min-w-[46rem]" : "min-w-[40rem]"} table-fixed text-sm`}>
                 <colgroup>
                   <col />
                   <col style={{ width: "3.5rem" }} />
                   <col style={{ width: "3.5rem" }} />
                   <col style={{ width: "4.5rem" }} />
                   <col style={{ width: "4.5rem" }} />
+                  {showPlan ? <col style={{ width: "6rem" }} /> : null}
                   <col style={{ width: "8rem" }} />
                   <col style={{ width: "8rem" }} />
                 </colgroup>
                 <thead className="bg-bg-elevated">
                   <tr>
-                    {BUILD_COLUMNS.map(column => column.strength ? <StrengthHeader key={String(column.key)} sort={sort} />
+                    {columns.map(column => column.strength ? <StrengthHeader key={String(column.key)} sort={sort} />
                       : column.sortKey ? <SortableTh key={String(column.key)} col={column.sortKey} label={column.label} {...sort} align={column.sortKey === "name" ? "left" : "right"} />
                       : <th key={String(column.key)} className="px-3 py-2 text-left text-micro uppercase text-text-dim">{column.label}</th>)}
                   </tr>
@@ -229,6 +236,7 @@ export function BuildsTab() {
                         {pct1(b.winRate)}
                         <WinRateRange row={b} total={b.total} />
                       </td>
+                      {showPlan ? <td className="px-2 py-1.5 text-right tabular-nums" title="No different detector label among at least five confirmed declarations">{measuredPlanHeldRate(b.planHeldRate) ? pct1(b.planHeldRate) : "—"}</td> : null}
                       <td className="px-2 py-1.5 text-right"><StrengthCell row={b} /></td>
                       <td className="px-3 py-1.5">
                         <WrBar wins={b.wins} losses={b.losses} />

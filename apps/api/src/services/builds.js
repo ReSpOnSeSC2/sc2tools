@@ -284,6 +284,7 @@ class BuildsService {
       plan: finishPlan(doc),
       communityTimings: await readCommunityTimings(this.db.guideStats, name, timingGames),
       timingSampleGames: timingGames.filter(game => game.buildLog.length > 0 || game.oppBuildLog.length > 0).length,
+      timingSampleSelected: timingGames.length,
       timingSampleLimit: 25,
       timingsTruncated: totals.total > 25,
       totals: { ...totals, winRate: totals.total ? totals.wins / totals.total : 0 },

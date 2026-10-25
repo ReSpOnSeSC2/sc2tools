@@ -31,6 +31,17 @@ afterEach(() => {
 });
 
 describe("BuildCard replay-stat states", () => {
+  it("shows a measured Held summary only for current own-perspective stats", () => {
+    const stats = { name: "PvT 3 Gate", total: 8, wins: 4, losses: 4, winRate: .5, planHeldRate: 0 };
+    const view = render(<BuildCard build={build({ stats, statsState: "ready" })} {...callbacks} />);
+    expect(screen.getByText("Held 0%")).toBeTruthy();
+    view.rerender(<BuildCard build={build({ stats: { ...stats, planHeldRate: .625 }, statsState: "ready" })} {...callbacks} />);
+    expect(screen.getByText("Held 63%")).toBeTruthy();
+    for (const patch of [{ statsState: "loading" as const }, { statsState: "unavailable" as const }, { perspective: "opponent" as const }]) {
+      view.rerender(<BuildCard build={build({ stats, ...patch })} {...callbacks} />); expect(screen.queryByText(/Held/)).toBeNull();
+    }
+    view.rerender(<BuildCard build={build({ stats: { ...stats, planHeldRate: null } })} {...callbacks} />); expect(screen.queryByText(/Held/)).toBeNull();
+  });
   it("does not describe an unfinished request as zero matches", () => {
     render(<BuildCard build={build({ statsState: "loading" })} {...callbacks} />);
 

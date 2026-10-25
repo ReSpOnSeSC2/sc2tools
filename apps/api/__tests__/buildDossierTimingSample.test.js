@@ -54,7 +54,7 @@ test.each(["catalog", "custom"])("%s timings use at most25 split-store logs whil
     ? await new BuildsService(deps, { gameDetails: deps.details }).detail(owner, ref.name, {})
     : await new CustomBuildsService(deps, { perGame: /** @type {any} */ ({ gameDetails: deps.details }) }).evaluateBuild(owner, ref.slug);
   expect(result).toMatchObject({ totals: { total: 30, wins: 15, losses: 15 },
-    macro: { gamesWithScore: 30, avgMacroScore: 14.5 }, timingSampleGames: 25, timingSampleLimit: 25, timingsTruncated: true,
+    macro: { gamesWithScore: 30, avgMacroScore: 14.5 }, timingSampleGames: 25, timingSampleSelected: 25, timingSampleLimit: 25, timingsTruncated: true,
     plan: { declared: 2, held: 1, knockedOff: 1 } });
   expect(/** @type {any} */ (result).medianTimingsLegacy.Gateway).toMatchObject({ sampleCount: 25, medianSeconds: 210 });
   expect(read).toHaveBeenCalledTimes(25);
@@ -74,6 +74,18 @@ test.each(["catalog", "custom"])("%s detail cannot map a same-name private class
     ? await new BuildsService(db, { gameDetails: deps.details }).detail(owner, buildName, {})
     : await new CustomBuildsService(db, { perGame: /** @type {any} */ ({ gameDetails: deps.details }) }).evaluateBuild(owner, ref.slug);
   expect(result).toMatchObject({ communityTimings: {} }); expect(find).not.toHaveBeenCalled();
+});
+
+test.each(["catalog", "custom"])("%s exposes actual selected timing coverage when most performance games are check-ins", async source => {
+  const deps = await fixture(), read = jest.spyOn(deps.details, "findMany");
+  await deps.games.updateMany({ userId: owner, gameId: { $in: Array.from({ length: 25 }, (_, index) => `game-${index}`) } }, { $set: { buildIntent: {
+    status: "confirmed", applied: true, build: ref, detected: { name: "Another opening", slug: "another" },
+  } } });
+  const result = source === "catalog"
+    ? await new BuildsService(deps, { gameDetails: deps.details }).detail(owner, ref.name, {})
+    : await new CustomBuildsService(deps, { perGame: /** @type {any} */ ({ gameDetails: deps.details }) }).evaluateBuild(owner, ref.slug);
+  expect(result).toMatchObject({ totals: { total: 30 }, timingSampleSelected: 5, timingSampleGames: 5, timingSampleLimit: 25 });
+  expect(read).toHaveBeenCalledTimes(5);
 });
 
 test("library stats reuse the same live declared denominator without hydration or list fanout", async () => {

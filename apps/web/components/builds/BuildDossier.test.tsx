@@ -162,7 +162,7 @@ describe("BuildDossier composition integration", () => {
     harness.data!.plan = { declared: 5, held: 3, knockedOff: 2, heldRate: .6, heldWR: 2 / 3, knockedOffWR: .5, heldDecided: 3, knockedOffDecided: 2,
       knockedInto: [{ name: "Ground follow-up", count: 2, sampleGameIds: ["plan-game"], sampleLimit: 20, sampleTruncated: true }], knockedBy: [], medianKnockedOffDurationSec: null, durationSamples: 0, durationEstimated: true };
     const view = render(<BuildDossier apiPath="/v1/builds/Test" sectionNavigation showMacro={false} />);
-    fireEvent.click(await screen.findByRole("button", { name: /Stargate.*recorded sample games/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Stargate.*1 recorded sample game/ }));
     expect(screen.getByRole("region", { name: "Selected sample games" }).textContent).toContain("Stargate timings · PvZ");
     expect(screen.getByRole("link", { name: "Key timings" }).getAttribute("href")).toBe("#timings");
     fireEvent.click(await screen.findByRole("button", { name: /Ground follow-up/ }));

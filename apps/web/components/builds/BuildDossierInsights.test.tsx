@@ -14,7 +14,7 @@ function timings(): BuildDossierInsightsData {
     displayName: "Stargate", trend: "earlier" as const, winRateWhenBuilt: 0.5, winRateSampleCount: 10,
     winnerMedianSeconds: 290, loserMedianSeconds: 310, winnerSampleCount: 5, loserSampleCount: 5,
     samples: [{ gameId: "older-game" }, { gameId: "recent-game" }] };
-  return { timingSampleGames: 25, timingSampleLimit: 25, timingsTruncated: true, medianTimingsOrder: ["Stargate", "Gateway"],
+  return { timingSampleGames: 25, timingSampleSelected: 25, timingSampleLimit: 25, timingsTruncated: true, medianTimingsOrder: ["Stargate", "Gateway"],
     matchupTimingsLegacy: { PvZ: { order: ["Stargate", "Gateway"], timings: { Gateway: { ...row, displayName: "Gateway" }, Stargate: row, SpawningPool: { ...row, displayName: "Spawning Pool", source: "opp_build_log" } } },
       PvT: { order: ["Gateway"], timings: { Gateway: { ...row, displayName: "Gateway", samples: [{ gameId: "pvt-game" }] } } } },
     communityTimings: { PvZ: { href: "/guides/pvz/stargate", era: "after", computedAt: "2026-10-01T00:00:00Z",
@@ -31,7 +31,7 @@ describe("Key timings", () => {
     render(<KeyTimingsCard data={timings()} onSelect={vi.fn()} />);
     const rows = within(screen.getByRole("list", { name: "Build key timing rows" })).getAllByRole("listitem");
     expect(rows[0].textContent).toContain("Stargate"); expect(rows[1].textContent).toContain("Gateway");
-    expect(screen.getByText(/Based on your last 25 games/)).toBeTruthy();
+    expect(screen.getByText(/Based on your last 25 eligible games/)).toBeTruthy();
     expect(within(rows[0]).getByRole("img").getAttribute("aria-label")).toContain("Middle half 4:40 to 5:20; median 5:00");
     expect(within(rows[0]).getByText("Your WR when built: 50.0% · 10 decided")).toBeTruthy();
     expect(within(rows[0]).getByText(/Your wins: 4:50 median \(n=5\) · Your losses: 5:10 median \(n=5\)/)).toBeTruthy();
@@ -68,9 +68,14 @@ describe("Key timings", () => {
     expect(screen.getAllByText("20:00").length).toBeGreaterThan(0);
     cleanup(); render(<KeyTimingsCard data={{}} onSelect={vi.fn()} />);
     expect(screen.getByText(/Not enough recorded timings/)).toBeTruthy();
-    expect(screen.getByText(/Recent recorded timing sample/)).toBeTruthy();
+    expect(screen.getByText(/Recent eligible timing sample \(up to 25 games\)/)).toBeTruthy();
     expect(screen.queryByText(/0 games with/)).toBeNull();
     expect(timingAxis([NaN, Infinity, -1, 610])).toBe(660);
+  });
+  it("reports actual selected and logged coverage when check-ins leave fewer than25 eligible games", () => {
+    render(<KeyTimingsCard data={{ ...timings(), timingSampleSelected: 5, timingSampleGames: 3 }} onSelect={vi.fn()} />);
+    expect(screen.getByText(/Based on your last 5 eligible games \(up to 25\); 3 had recorded timing logs/)).toBeTruthy();
+    expect(screen.queryByText(/Based on your last 25 eligible games/)).toBeNull();
   });
 });
 

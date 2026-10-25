@@ -10,7 +10,7 @@ export type BuildPlan = {
 export type CommunityTiming = { token: string; p25Seconds: number; medianSeconds: number; p75Seconds: number; sampleCount: number; users: number; event: "start" };
 export type CommunityTimings = Record<string, { href: string; era: string; computedAt: string | null; rows: CommunityTiming[] }>;
 export type BuildDossierInsightsData = DossierAnalysis & {
-  timingSampleGames?: number; timingSampleLimit?: number; timingsTruncated?: boolean;
+  timingSampleGames?: number; timingSampleSelected?: number; timingSampleLimit?: number; timingsTruncated?: boolean;
   communityTimings?: CommunityTimings; plan?: BuildPlan | null;
 };
 
