@@ -37,11 +37,16 @@ function exportRow(game) {
   };
 }
 
-/** @param {import('mongodb').Collection} games @param {Record<string,any>} match @param {{signal?:AbortSignal,sort?:unknown}} [opts] */
+/** @param {unknown} raw */
+function exportLimit(raw) {
+  return typeof raw === "number" && Number.isSafeInteger(raw) && raw > 0 ? Math.min(raw, LIMITS.CSV_EXPORT_MAX_ROWS) : LIMITS.CSV_EXPORT_MAX_ROWS;
+}
+
+/** @param {import('mongodb').Collection} games @param {Record<string,any>} match @param {{signal?:AbortSignal,sort?:unknown,maxRows?:number}} [opts] */
 async function* streamRows(games, match, opts = {}) {
   yield `\uFEFF${columns.map(column => column.key).join(",")}\r\n`;
   const cursor = games.find(match, { projection: PROJECTION, maxTimeMS: 30_000, ...(opts.signal ? { signal: opts.signal } : {}) })
-    .sort(opts.sort === "date_asc" ? { date: 1, _id: 1 } : { date: -1, _id: -1 }).limit(LIMITS.CSV_EXPORT_MAX_ROWS).batchSize(100);
+    .sort(opts.sort === "date_asc" ? { date: 1, _id: 1 } : { date: -1, _id: -1 }).limit(exportLimit(opts.maxRows)).batchSize(100);
   try {
     for await (const game of cursor) {
       opts.signal?.throwIfAborted();
@@ -54,11 +59,14 @@ async function* streamRows(games, match, opts = {}) {
 /** A bounded metadata-only sentinel establishes the HTTP truncation header
  * before streaming starts. No replay payloads or complete arrays are loaded.
  * @param {import('mongodb').Collection} games @param {string} userId @param {object} filters
- * @param {{search?:unknown,result?:unknown,matchup?:unknown,sort?:unknown,signal?:AbortSignal}} [opts] */
+ * `trustedMatch` is constructed by an owned service, never copied from query
+ * JSON. It can only narrow the existing owner/visibility/global scope.
+ * @param {{search?:unknown,result?:unknown,matchup?:unknown,sort?:unknown,signal?:AbortSignal,maxRows?:number,trustedMatch?:Record<string,any>}} [opts] */
 async function prepareReplayCsv(games, userId, filters, opts = {}) {
-  const match = buildReplayLibraryMatch(userId, { filters, search: opts.search, result: opts.result, matchup: opts.matchup, view: "owner" });
+  const libraryMatch = buildReplayLibraryMatch(userId, { filters, search: opts.search, result: opts.result, matchup: opts.matchup, view: "owner" });
+  const match = opts.trustedMatch ? { $and: [libraryMatch, opts.trustedMatch] } : libraryMatch;
   const sentinel = await games.find(match, { projection: { _id: 1 }, maxTimeMS: 5000, ...(opts.signal ? { signal: opts.signal } : {}) })
-    .sort(opts.sort === "date_asc" ? { date: 1, _id: 1 } : { date: -1, _id: -1 }).skip(LIMITS.CSV_EXPORT_MAX_ROWS).limit(1).toArray();
+    .sort(opts.sort === "date_asc" ? { date: 1, _id: 1 } : { date: -1, _id: -1 }).skip(exportLimit(opts.maxRows)).limit(1).toArray();
   return { truncated: sentinel.length > 0, stream: streamRows(games, match, opts) };
 }
 

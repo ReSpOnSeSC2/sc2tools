@@ -26,6 +26,9 @@ const { sanitiseRequestForLog, sanitiseResponseForLog } = require("./middleware/
 const { UsersService } = require("./services/users");
 const { buildClerkClient, noopClerkClient } = require("./services/clerkClient");
 const { OpponentsService } = require("./services/opponents");
+const { RivalsService } = require("./services/rivals");
+const { RivalsPulseService } = require("./services/rivalsPulse");
+const { buildRivalsRouter } = require("./routes/rivals");
 const {
   OpponentIdentityMatcherService,
 } = require("./services/opponentIdentityMatcher");
@@ -542,6 +545,7 @@ function makeServices(deps, clerk) {
     tiktokRelay: tiktokChatRelay,
     log: deps.logger,
   });
+  const rivals = new RivalsService(deps.db, { users, pulse: new RivalsPulseService(pulseIntel), channels: playerChannels, viewers: multichatViewers, identities: playerIdentities });
   const multichatStudio = new MultichatStudioService(deps.db, { io: deps.io });
   const multichatSounds = new MultichatSoundsService(deps.db);
   // users + overlayTokens let the service resolve the streamer's own
@@ -563,6 +567,7 @@ function makeServices(deps, clerk) {
   const overlayLive = new OverlayLiveService(deps.db, {
     gameDetails,
     pulseMmr,
+    rivals,
   });
   // LiveGameBroker — in-process pub/sub for the agent → web SSE
   // bridge AND the agent → OBS overlay Socket.io fan-out.
@@ -874,7 +879,7 @@ function makeServices(deps, clerk) {
   const gameControls = new GameControlsService(deps.db, { gdpr, onChanged: async (userId) => {
     games.invalidateForUser(userId);
     // Each owner-aware invalidator fences late in-flight cache completion.
-    for (const service of [overlayLive, gameContext, tickerFacts, community, aggregations.trendsRequests]) {
+    for (const service of [overlayLive, rivals, gameContext, tickerFacts, community, aggregations.trendsRequests]) {
       service.invalidateForUser(userId);
     }
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
@@ -885,6 +890,7 @@ function makeServices(deps, clerk) {
     users,
     opponents,
     opponentIdentityMatcher,
+    rivals,
     games,
     browserIngestQuota,
     replayLibrary,
@@ -1321,6 +1327,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       isAdminEmail,
       onAdminGranted,
       buildIntents: services.buildIntents,
+      onRivalsChanged: (userId) => { services.overlayLive.invalidateForUser(userId); services.rivals.invalidateForUser(userId); },
       logger: deps.logger,
     }),
   );
@@ -1499,6 +1506,10 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
+    buildRivalsRouter({ rivals: services.rivals, auth }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
     buildOpponentsRouter({
       opponents: services.opponents,
       identityMatcher: services.opponentIdentityMatcher,
@@ -1640,7 +1651,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildCatalogRouter({ catalog: services.catalog, auth }),
+    buildCatalogRouter({ catalog: services.catalog, opponents: services.opponents, auth }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
