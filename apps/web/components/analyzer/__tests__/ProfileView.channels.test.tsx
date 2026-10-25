@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { ProfileView } from "../ProfileView";
 import type { PulseRaceBreakdown } from "../OpponentRaceMmr";
 import type { GlobalPlayerIdentity } from "@/lib/opponentGroups";
@@ -7,6 +7,7 @@ import type { GlobalPlayerIdentity } from "@/lib/opponentGroups";
 const useApiMock = vi.fn();
 const usePlayerChannelsMock = vi.fn();
 const channelsForMock = vi.fn();
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "owner-a", isLoaded: true, isSignedIn: true, getToken: async () => "token" }) }));
 vi.mock("@/lib/clientApi", () => ({ useApi: (...args: unknown[]) => useApiMock(...args) }));
 vi.mock("../usePlayerChannels", () => ({ usePlayerChannels: (...args: unknown[]) => usePlayerChannelsMock(...args) }));
 vi.mock("@/lib/useMyDisplayName", () => ({ useMyDisplayName: () => "Me" }));
@@ -17,7 +18,7 @@ vi.mock("../OpponentIdentityCandidates", () => ({ OpponentIdentityCandidates: ()
 vi.mock("../OpponentIdentitySubmission", () => ({ OpponentIdentitySubmission: () => <section aria-label="Player identity review" /> }));
 vi.mock("../OpponentDiagnosticsPanel", () => ({ OpponentDiagnosticsPanel: () => null }));
 vi.mock("@/components/ui/Icon", () => ({ Icon: () => <span /> }));
-vi.mock("../LadderContextCard", () => ({ LadderContextCard: () => null }));
+vi.mock("../LadderContextCard", () => ({ LadderContextCard: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 vi.mock("../StrategyTendencyChart", () => ({ StrategyTendencyChart: () => null }));
 vi.mock("../PredictedStrategiesList", () => ({ PredictedStrategiesList: () => null }));
 vi.mock("../h2h/H2HTrendsSection", () => ({ H2HTrendsSection: () => null }));
@@ -81,7 +82,7 @@ describe("opponent profile channel placement", () => {
     expect(screen.queryByRole("link", { name: /Twitch|YouTube/ })).toBeNull();
   });
 
-  it("keeps the recorded barcode and account link beside its approved AKA and channel labels", () => {
+  it("keeps the recorded barcode and account link beside its approved AKA and channel labels", async () => {
     useApiMock.mockImplementation((path: string) => ({
       data: path.includes("pulse-races") ? confirmedRaces : confirmedProfile,
       isLoading: false,
@@ -89,7 +90,9 @@ describe("opponent profile channel placement", () => {
     channelsForMock.mockReturnValue({ twitch: "https://www.twitch.tv/strange" });
     render(<ProfileView pulseId="8703807" onBack={vi.fn()} />);
     const header = screen.getByLabelText("Opponent profile");
-    expect(screen.getByLabelText("Player identity review")).toBeTruthy();
+    expect(screen.queryByLabelText("Player identity review")).toBeNull();
+    fireEvent.click(screen.getByRole("link", { name: "Data looks wrong?" }));
+    expect(await screen.findByLabelText("Player identity review")).toBeTruthy();
     expect(within(header).getByRole("heading", { name: "IIIIllll" })).toBeTruthy();
     expect(within(header).queryByRole("heading", { name: "Strange" })).toBeNull();
     const aka = within(header).getByTitle("Confirmed by an admin");
@@ -100,15 +103,15 @@ describe("opponent profile channel placement", () => {
     expect(within(header).getByText("· toon 2-S2-2-240434")).toBeTruthy();
     expect(within(header).getByRole("link", { name: "Visit Strange's Twitch channel" })).toBeTruthy();
     // No communityAvailable in this payload: the public profile link stays hidden.
-    expect(within(header).queryByRole("link", { name: /Public profile/ })).toBeNull();
+    expect(within(header).queryByRole("link", { name: /Community profile/ })).toBeNull();
     expect(usePlayerChannelsMock).toHaveBeenCalledWith([{ pulseId: "8703807", pulseCharacterId: "8703807", toonHandle: "2-S2-2-240434" }]);
     expect(within(header).getByRole("note", { name: "Protoss MMR 6100 for Strange's main profile" }).getAttribute("title")).toBe("Highest-rated race on Strange's confirmed main profile (SC2Pulse)");
-    expect(screen.getByRole("link", { name: "View SC2Pulse profile" }).getAttribute("href")).toContain("id=236671");
+    expect((await screen.findByRole("link", { name: "View SC2Pulse profile" })).getAttribute("href")).toContain("id=236671");
     expect(screen.queryByText("Old Pulse label")).toBeNull();
     expect(screen.queryByText("5,275")).toBeNull();
   });
 
-  it("withholds cached barcode ratings until the confirmed account's MMR response arrives", () => {
+  it("withholds cached barcode ratings until the confirmed account's MMR response arrives", async () => {
     let races: PulseRaceBreakdown = {
       resolved: true, topRace: "Random", topMmr: 5275,
       races: [{ race: "Random", mmr: 5275, games: 10, league: "Master", region: "EU" }],
@@ -128,8 +131,8 @@ describe("opponent profile channel placement", () => {
     races = confirmedRaces;
     rerender(<ProfileView pulseId="8703807" onBack={vi.fn()} />);
     expect(screen.getByRole("note", { name: "Protoss MMR 6100 for Strange's main profile" })).toBeTruthy();
-    expect(screen.getByText("MMR by race")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "View SC2Pulse profile" }).getAttribute("href")).toContain("id=236671");
+    expect(await screen.findByText("MMR by race")).toBeTruthy();
+    expect((await screen.findByRole("link", { name: "View SC2Pulse profile" })).getAttribute("href")).toContain("id=236671");
     expect(screen.getByRole("link", { name: "8703807" }).getAttribute("href")).toContain("id=8703807");
   });
 
@@ -161,11 +164,11 @@ describe("opponent profile public-profile link", () => {
     channelsForMock.mockReturnValue(undefined);
     render(<ProfileView pulseId="8703807" onBack={vi.fn()} />);
     const header = screen.getByLabelText("Opponent profile");
-    const link = within(header).getByRole("link", { name: "Public profile" });
+    const link = within(header).getByRole("link", { name: "Community profile" });
     expect(link.getAttribute("href")).toBe("/community/opponents/8703807");
     expect(link.getAttribute("title")).toContain("at least 5 different players");
     expect(link.getAttribute("aria-describedby")).toBe("public-profile-tip");
-    expect(screen.queryByRole("link", { name: /community profile/ })).toBeNull();
+
   });
 
   it("hides the link when the public profile doesn't exist yet", () => {
@@ -175,6 +178,6 @@ describe("opponent profile public-profile link", () => {
     }));
     channelsForMock.mockReturnValue(undefined);
     render(<ProfileView pulseId="8703807" onBack={vi.fn()} />);
-    expect(screen.queryByRole("link", { name: /Public profile/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Community profile/ })).toBeNull();
   });
 });

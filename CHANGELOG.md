@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Opponent dossier
+
+- Read and copy a six-line scouting brief, follow the all-time meeting series, and move through the dossier with sticky section links. Date overrides stay local to this opponent; history remains directly above private notes.
+- Identity and data quality share one disclosure, normal identity forms wait until requested, and ladder ratings share one card. Busy analysis retries with backoff, while missing history and network failures have distinct recovery states.
 ### Battle reports
 
 - Read a short, fixed-rule account of a replay in Battle report, Caster or Tactical tone, with known timestamps linked to the same game clock. Copy it as plain text or Markdown.

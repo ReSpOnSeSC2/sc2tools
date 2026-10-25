@@ -79,13 +79,14 @@ const LEAGUE_TINT: Record<string, string> = {
   Grandmaster: "rgb(var(--warning))",
 };
 
-export function LadderContextCard({ pulseId, confirmedIdentity }: {
+export function LadderContextCard({ pulseId, confirmedIdentity, children }: {
   pulseId: string;
   confirmedIdentity?: GlobalPlayerIdentity | null;
+  children?: import("react").ReactNode;
 }) {
   const intelApi = useApi<PulseIntelResp>(
     `/v1/opponents/${encodeURIComponent(pulseId)}/pulse-intel`,
-    { revalidateOnFocus: false },
+    { revalidateOnFocus: false, ...(confirmedIdentity ? { revalidateIfStale: false } : {}) },
   );
   const { data } = intelApi;
 
@@ -102,14 +103,15 @@ export function LadderContextCard({ pulseId, confirmedIdentity }: {
     return (
       <Card title="Ladder context">
         <QueryState q={intelApi} skeleton={<Skeleton rows={2} />} />
+        {children}
       </Card>
     );
   }
   const intel = intelApi.data.intel;
-  if (!intel) return null;
+  if (!intel) return children ? <Card title="Ladder context">{children}</Card> : null;
   // SWR may still hold the barcode's previous response while the
   // approval refreshes. A confirmed main profile must match exactly.
-  if (confirmedIdentity && intel.characterId !== confirmedIdentity.target.pulseCharacterId) return null;
+  if (confirmedIdentity && intel.characterId !== confirmedIdentity.target.pulseCharacterId) return children ? <Card title="Ladder context">{children}</Card> : null;
 
   const league = intel.league;
   const tint = league ? LEAGUE_TINT[league.label] : undefined;
@@ -259,6 +261,7 @@ export function LadderContextCard({ pulseId, confirmedIdentity }: {
           </figure>
         ) : null}
       </div>
+      {children}
     </Card>
   );
 }

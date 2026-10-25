@@ -276,7 +276,7 @@ export function MatchByMatchTimeline({
             <span>(—)</span>
           )}
           <span aria-hidden>·</span>
-          <span>{activePoint.cumulativeWrPct}% lifetime</span>
+          <span>{activePoint.cumulativeWrPct}% so far in this view</span>
           <span aria-hidden>·</span>
           <span>
             {activePoint.rollingWrPct == null
@@ -321,7 +321,7 @@ function TimelineHeader({
         className="tabular-nums"
         style={{ color: wrColor(overallWrPct / 100, totalGames) }}
       >
-        {overallWrPct}% lifetime ({totalGames} game{totalGames === 1 ? "" : "s"})
+        {overallWrPct}% in this view ({totalGames} game{totalGames === 1 ? "" : "s"})
       </span>
       <span className="tabular-nums text-text-dim">
         {rollingLabel}: {rollingWrPct == null ? "—" : `${rollingWrPct}%`}
