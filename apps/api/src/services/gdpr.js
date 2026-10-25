@@ -1272,6 +1272,11 @@ class GdprService {
         );
       const activeWrites = Array.isArray(blocked?._dataMutations)
         && blocked._dataMutations.some((mutation) => mutation?.leaseUntil instanceof Date && mutation.leaseUntil > now);
+      // The last writer can release between the failed CAS and this read.
+      // Retry the same guarded claim; a new writer/erasure still blocks it.
+      if (blocked && !blocked._gdprMutation && !activeCoaching && !activeWrites && Date.now() < deadline) {
+        continue;
+      }
       if ((activeCoaching || activeWrites) && !blocked?._gdprMutation && Date.now() < deadline) {
         await wait(50);
         continue;
