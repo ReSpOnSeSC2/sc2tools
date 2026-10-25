@@ -5,6 +5,8 @@
 // the engagement service's parsePick, and poll.ts.)
 
 import { RANK_LADDERS, type RankRace } from "./rankLadders";
+import catalog from "./chatCommandCatalog.generated.json";
+import type { ChatCommandPreferences } from "./chatCommandPreferences";
 
 export interface CommandEntry {
   /** e.g. "!rank" */
@@ -67,11 +69,8 @@ export const COMMAND_GROUPS: readonly CommandGroup[] = [
     emoji: "📊",
     title: "Live stats",
     intro: "Ask about the game — the overlay answers on stream, no bot needed.",
-    commands: [
-      { syntax: "!opponent", description: "who I'm facing + my history vs them" },
-      { syntax: "!mmr", description: "my current MMR" },
-      { syntax: "!build", description: "what build I'm playing" },
-    ],
+    commands: catalog.commands.map(command => ({ syntax: `!${command.id}${"argument" in command ? ` ${command.argument}` : ""}`, description: command.description,
+      ...(command.aliases.length ? { aliases: command.aliases.map(alias => `!${alias}`).join(" / ") } : {}) })),
   },
 ];
 
@@ -80,7 +79,16 @@ export const COMMAND_GROUPS: readonly CommandGroup[] = [
  * streamer's chosen loyalty ladder. Plain text on purpose: bios
  * don't render markdown.
  */
-export function buildBioText(rankRace: RankRace): string {
+export function commandGroups(preferences?: ChatCommandPreferences): readonly CommandGroup[] {
+  if (!preferences) return COMMAND_GROUPS;
+  const commands = catalog.commands.map(command => ({ ...command, ...preferences.builtins.find(row => row.id === command.id) })).filter(command => command.enabled !== false && (!command.platforms || command.platforms.length > 0));
+  const rows: CommandEntry[] = commands.map(command => ({ syntax: `!${command.trigger || command.id}${"argument" in command ? ` ${command.argument}` : ""}`, description: command.description,
+    aliases: [...new Set([command.id, ...command.aliases])].filter(alias => alias !== (command.trigger || command.id)).map(alias => `!${alias}`).join(" / ") }));
+  rows.push(...preferences.custom.filter(command => command.enabled && command.platforms.length > 0).map(command => ({ syntax: `!${command.trigger}`, description: "custom channel reply" })));
+  return COMMAND_GROUPS.map(group => group.id === "stats" ? { ...group, commands: rows } : group);
+}
+
+export function buildBioText(rankRace: RankRace, preferences?: ChatCommandPreferences): string {
   const ladder = RANK_LADDERS[rankRace];
   const ladderLine = `${ladder.slice(0, ladder.length - 1).join(" → ")} → ${ladder[ladder.length - 1].toUpperCase()}`;
   const lines: string[] = [
@@ -100,9 +108,7 @@ export function buildBioText(rankRace: RankRace): string {
     "!1 / !2 / !3 — vote for that option (or !vote 2). Your latest vote counts until it closes.",
     "",
     "📊 STATS — ask about the game live:",
-    "!opponent — who I'm facing + my history against them",
-    "!mmr — my current MMR",
-    "!build — what build I'm playing",
+    ...commandGroups(preferences).find(group => group.id === "stats")!.commands.map(command => `${command.syntax} — ${command.description}${command.aliases ? ` (also ${command.aliases})` : ""}`),
   ];
   return lines.join("\n");
 }

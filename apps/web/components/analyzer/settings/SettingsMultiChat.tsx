@@ -430,7 +430,7 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
               </p>
             </div>
 
-            <ChatCommandsCard rankRace={draft.rankRace} />
+            <ChatCommandsCard rankRace={draft.rankRace} editable token={token} />
 
 
 

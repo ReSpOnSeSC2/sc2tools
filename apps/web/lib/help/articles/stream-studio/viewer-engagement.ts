@@ -22,7 +22,7 @@ const article: HelpArticle = {
     "chat bot",
     "bio",
   ],
-  updated: "2026-10-22",
+  updated: "2026-10-25",
   body: [
     {
       type: "paragraph",
@@ -30,13 +30,17 @@ const article: HelpArticle = {
     },
     { type: "widget", widget: "chat-commands" },
     {
+      type: "paragraph",
+      text: "The stats commands above come from the same registry as the chat bot, on-stream answers and Nightbot endpoint. In **Settings → Overlay → Multi-platform chat → Chat command settings**, change a command's alias, enabled state, cooldown, platforms and on-stream answers. Canonical names and default aliases stay available; disabling a built-in disables all of its names. Use **Try it** after saving to see the exact reply without sending a message.",
+    },
+    {
       type: "callout",
       tone: "info",
       title: "Tip",
-      text: "The same card in **Overlay → Multi-platform chat** copies the bio text with YOUR saved rank race. Enable the **Chat bot** there too and the answers post right in Twitch chat — it also counts `!win`/`!loss` calls and XP with the dock closed, and announces Crystal Ball results and level-ups.",
+      text: "The same card in **Overlay → Multi-platform chat** copies the bio text with your saved commands and rank race. When you separately enable the **Chat bot**, it posts answers in Twitch chat and counts `!win`/`!loss` calls and XP with the dock closed. Platform connection and bot activation are separate from saving command settings.",
     },
   ],
-  related: ["multi-platform-chat", "stream-dock"],
+  related: ["multi-platform-chat", "stream-dock", "custom-chat-commands"],
 };
 
 export default article;
