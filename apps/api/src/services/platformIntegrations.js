@@ -24,6 +24,15 @@ class PlatformIntegrationError extends Error {
   }
 }
 
+/** @param {Record<string,any>|null} row @param {{required:readonly string[],consents:string[]}} authorization */
+function requireProviderGrant(row, authorization) {
+  if (!row || authorization.consents.some(key => row.metadata?.[key] !== true)
+    || authorization.required.some(scope => !row.scopes.includes(scope))) {
+    throw integrationError(403, "streaming_consent_required", "Connect this account's stream controls on SC2Tools first.");
+  }
+  return row;
+}
+
 class PlatformIntegrationsService {
   /**
    * @param {{
@@ -116,6 +125,7 @@ class PlatformIntegrationsService {
         platformUserName: "",
         scopes: [],
         streamingConsent: false,
+        predictionsConsent: false,
         expiresAt: null,
         connectedAt: null,
         lastSyncedAt: null,
@@ -139,6 +149,32 @@ class PlatformIntegrationsService {
    * @returns {Promise<T>}
    */
   async withStreamingGrant(userId, platform, callback) {
+    return this._withProviderGrant(userId, platform, callback,
+      { required: oauthDefault.STREAMING_SCOPES[platform], consents: ["streamingConsent"] });
+  }
+
+  /** Same fenced provider grant for explicit Twitch automation purposes. Reads
+   * request no new consent; prediction and marker writes require their own
+   * completed grant. A callback is never retried after it starts.
+   * @template T
+   * @param {string} userId @param {{predictions?:boolean,markers?:boolean}} permissions
+   * @param {(grant:{accessToken:string,platformUserId:string,platformUserName:string,connectionRevision:string,fetchImpl:typeof fetch,boundedFetch:typeof fetch,assertCurrent:()=>Promise<void>})=>Promise<T>} callback */
+  async withTwitchAutomationGrant(userId, permissions, callback) {
+    if (!permissions || Object.keys(permissions).some(key => !["predictions", "markers"].includes(key))
+      || Object.values(permissions).some(value => typeof value !== "boolean")) {
+      throw integrationError(400, "twitch_automation_permission_invalid", "Use supported Twitch automation permissions.");
+    }
+    return this._withProviderGrant(userId, "twitch", callback, {
+      required: [...oauthDefault.TWITCH_SCOPES, ...(permissions.predictions ? ["channel:manage:predictions"] : []), ...(permissions.markers ? ["channel:manage:broadcast"] : [])],
+      consents: [...(permissions.predictions ? ["predictionsConsent"] : []), ...(permissions.markers ? ["streamingConsent"] : [])],
+    });
+  }
+
+  /** @template T
+   * @param {string} userId @param {Platform} platform
+   * @param {(grant:{accessToken:string,platformUserId:string,platformUserName:string,connectionRevision:string,fetchImpl:typeof fetch,boundedFetch:typeof fetch,assertCurrent:()=>Promise<void>})=>Promise<T>} callback
+   * @param {{required:readonly string[],consents:string[]}} authorization */
+  async _withProviderGrant(userId, platform, callback, authorization) {
     this._requireConfigured(platform);
     if (!userId || typeof callback !== "function") {
       throw integrationError(401, "auth_required", "A paired account is required.");
@@ -148,13 +184,9 @@ class PlatformIntegrationsService {
       throw integrationError(503, "streaming_coordination_unavailable", "Stream control coordination is unavailable.");
     }
     return this._withConnectionLock(userId, platform, async () => {
-      const found = await vault.getConnection(userId, platform);
+      const found = requireProviderGrant(await vault.getConnection(userId, platform), authorization);
       const lease = this.connectionLeaseContext.getStore();
-      const required = oauthDefault.STREAMING_SCOPES[platform];
-      if (!found || found.metadata?.streamingConsent !== true
-        || required.some((scope) => !found.scopes.includes(scope))) {
-        throw integrationError(403, "streaming_consent_required", "Connect this account's stream controls on SC2Tools first.");
-      }
+      const required = authorization.required;
       /** @type {Record<string,any>} */
       let row = found;
       if (!lease || lease.userId !== userId || lease.platform !== platform || lease.revision !== row.connectionRevision) {
@@ -183,16 +215,16 @@ class PlatformIntegrationsService {
             : AbortSignal.any([lease.signal, AbortSignal.timeout(12_000)]) });
       });
       if (row.expiresAt instanceof Date && row.expiresAt.getTime() <= this.now() + 60_000) {
-        row = await this._refreshStreamingConnection(userId, platform, row, boundedFetch);
+        row = await this._refreshStreamingConnection(userId, platform, row, boundedFetch, required);
       }
       try {
-        await this._validateStreamingIdentity(platform, row, boundedFetch);
+        await this._validateStreamingIdentity(platform, row, boundedFetch, required);
       } catch (error) {
         // A rejected access token may be refreshed before callback entry.
         // Never retry caller work, especially broadcast insertion.
         if (!providerStatusIs(error, 401) || !row.refreshToken) throw error;
-        row = await this._refreshStreamingConnection(userId, platform, row, boundedFetch);
-        await this._validateStreamingIdentity(platform, row, boundedFetch);
+        row = await this._refreshStreamingConnection(userId, platform, row, boundedFetch, required);
+        await this._validateStreamingIdentity(platform, row, boundedFetch, required);
       }
       await assertCurrent();
       const result = await callback({ accessToken: row.accessToken,
@@ -201,11 +233,11 @@ class PlatformIntegrationsService {
         boundedFetch, assertCurrent });
       await assertCurrent();
       return result;
-    });
+    }, authorization.consents.length === 0);
   }
 
-  /** @param {string} userId @param {Platform} platform @param {Record<string,any>} row @param {typeof fetch} fetchImpl */
-  async _refreshStreamingConnection(userId, platform, row, fetchImpl) {
+  /** @param {string} userId @param {Platform} platform @param {Record<string,any>} row @param {typeof fetch} fetchImpl @param {readonly string[]} [required] */
+  async _refreshStreamingConnection(userId, platform, row, fetchImpl, required = oauthDefault.STREAMING_SCOPES[platform]) {
     if (!row.refreshToken) {
       throw integrationError(403, "streaming_reconnect_required", "Reconnect stream controls to renew authorization.");
     }
@@ -220,7 +252,7 @@ class PlatformIntegrationsService {
       }
       scopes = info.scopes;
     }
-    if (oauthDefault.STREAMING_SCOPES[platform].some((scope) => !scopes.includes(scope))) {
+    if (required.some((scope) => !scopes.includes(scope))) {
       throw integrationError(403, "streaming_scopes_missing", "Stream control permission is missing. Reconnect this account.");
     }
     const stored = await this._vault().updateTokens(userId, platform,
@@ -231,21 +263,21 @@ class PlatformIntegrationsService {
     return { ...row, ...tokens, scopes };
   }
 
-  /** @param {Platform} platform @param {Record<string,any>} row @param {typeof fetch} fetchImpl */
-  async _validateStreamingIdentity(platform, row, fetchImpl) {
+  /** @param {Platform} platform @param {Record<string,any>} row @param {typeof fetch} fetchImpl @param {readonly string[]} [required] */
+  async _validateStreamingIdentity(platform, row, fetchImpl, required = oauthDefault.STREAMING_SCOPES[platform]) {
     /** @type {{userId:string}} */
     let identity;
     if (platform === "twitch") {
       const twitchIdentity = await this.oauth.validateTwitchUserToken(row.accessToken, fetchImpl);
       identity = twitchIdentity;
       if (twitchIdentity.clientId !== this.config.twitch.clientId
-        || oauthDefault.STREAMING_SCOPES.twitch.some((scope) => !twitchIdentity.scopes.includes(scope))) {
+        || required.some((scope) => !twitchIdentity.scopes.includes(scope))) {
         throw integrationError(403, "streaming_client_mismatch", "Reconnect Twitch stream controls using the SC2Tools app.");
       }
     } else if (platform === "kick") {
       const info = await this.oauth.getKickTokenInfo(row.accessToken, fetchImpl);
       if (info.clientId !== this.config.kick.clientId
-        || oauthDefault.STREAMING_SCOPES.kick.some((scope) => !info.scopes.includes(scope))) {
+        || required.some((scope) => !info.scopes.includes(scope))) {
         throw integrationError(403, "streaming_client_mismatch", "Reconnect Kick stream controls using the SC2Tools app.");
       }
       identity = await this.oauth.getKickCurrentUser(row.accessToken, fetchImpl);
@@ -509,14 +541,17 @@ class PlatformIntegrationsService {
     return updated ? { accessToken: refreshed.accessToken } : null;
   }
 
-  /** @param {string} userId @param {Platform} platform @param {{purpose?:'alerts'|'streaming'}} [options] */
+  /** @param {string} userId @param {Platform} platform @param {{purpose?:'alerts'|'streaming'|'predictions'}} [options] */
   async begin(userId, platform, options = {}) {
     this._requireConfigured(platform);
     const vault = this._vault();
     if (!userId) throw integrationError(401, "auth_required", "Sign in first");
     const purpose = options.purpose || "alerts";
-    const requiredScopes = oauthDefault.scopesForPurpose(platform, purpose);
-    if (purpose === "streaming" && !vault.supportsStreamingLeases()) {
+    const existing = platform === "twitch" && (purpose === "predictions" || purpose === "streaming")
+      ? (await vault.statuses(userId)).find(row => row.platform === platform) : null;
+    const existingScopes = (existing?.scopes || []).filter(scope => scope !== "channel:manage:predictions" || existing?.predictionsConsent === true);
+    const requiredScopes = oauthDefault.scopesForPurpose(platform, purpose, existingScopes);
+    if ((purpose === "streaming" || purpose === "predictions") && !vault.supportsStreamingLeases()) {
       throw integrationError(503, "streaming_coordination_unavailable", "Stream control is unavailable until server coordination is ready.");
     }
     const provider = this.config[platform];
@@ -537,7 +572,8 @@ class PlatformIntegrationsService {
     });
     let authorizeUrl;
     if (platform === "twitch") {
-      authorizeUrl = this.oauth.buildTwitchAuthorizeUrl(provider, state, purpose);
+      authorizeUrl = purpose === "predictions" || purpose === "streaming" && existingScopes.includes("channel:manage:predictions")
+        ? this.oauth.buildTwitchAuthorizeUrl(provider, state, purpose, existingScopes) : this.oauth.buildTwitchAuthorizeUrl(provider, state, purpose);
     } else if (platform === "kick") {
       authorizeUrl = this.oauth.buildKickAuthorizeUrl(provider, state, challenge || "", purpose);
     } else {
@@ -601,8 +637,8 @@ class PlatformIntegrationsService {
       if (!token.scopes.length && pending.purpose !== "streaming") token.scopes = [...this.oauth.YOUTUBE_SCOPES];
     }
 
-    if (pending.purpose === "streaming") {
-      const required = oauthDefault.scopesForPurpose(platform, "streaming");
+    if (pending.purpose === "streaming" || pending.purpose === "predictions") {
+      const required = oauthDefault.scopesForPurpose(platform, pending.purpose);
       if (platform === "kick") {
         // Verify the active user grant and actual scopes even when the token
         // exchange does not report scopes. Introspection is authoritative.
@@ -615,7 +651,7 @@ class PlatformIntegrationsService {
       }
       if (!Array.isArray(pending.requiredScopes)
         || required.some((scope) => !pending.requiredScopes.includes(scope))
-        || required.some((scope) => !token.scopes.includes(scope))) {
+        || pending.requiredScopes.some((scope) => !token.scopes.includes(scope))) {
         throw integrationError(403, "streaming_scopes_missing", "Stream control permissions were not granted. Connect stream controls again.");
       }
       if (platform === "twitch" && identity.clientId !== provider.clientId) {
@@ -646,12 +682,17 @@ class PlatformIntegrationsService {
    *   provider:{clientId:string,clientSecret:string,redirectUri:string,callbackUrl?:string,webhookSecret?:string},
    *   token:{accessToken:string,refreshToken?:string|null,expiresAt?:Date|null,scopes?:string[]},
    *   identity:{userId:string,userName?:string},
-   *   purpose?:'alerts'|'streaming',
+   *   purpose?:'alerts'|'streaming'|'predictions',
    * }} input
    */
   async _installConnection(input) {
     const vault = this._vault();
     const previous = await vault.getConnection(input.userId, input.platform);
+    const sameIdentity = previous?.platformUserId === String(input.identity.userId);
+    const streamingConsent = input.purpose === "streaming" || input.purpose === "predictions" && sameIdentity
+      && previous?.metadata?.streamingConsent === true && (input.token.scopes || []).includes("channel:manage:broadcast");
+    const predictionsConsent = input.platform === "twitch" && (input.purpose === "predictions" || sameIdentity
+      && previous?.metadata?.predictionsConsent === true && (input.token.scopes || []).includes("channel:manage:predictions"));
     const changedIdentity = previous
       && previous.platformUserId !== String(input.identity.userId);
     const replacedRevocableToken = previous
@@ -678,11 +719,12 @@ class PlatformIntegrationsService {
       platformUserName: input.identity.userName,
       metadata: input.platform === "youtube"
         ? { youtubeInitialized: false, youtubeSeenIds: [], lastError: null,
-          streamingConsent: input.purpose === "streaming" }
+          streamingConsent }
         : {
           subscriptionsReady: false,
           lastError: null,
-          streamingConsent: input.purpose === "streaming",
+          streamingConsent,
+          predictionsConsent,
           ...(input.platform === "twitch"
             ? { lastTokenValidatedAt: new Date(this.now()) }
             : {}),
@@ -1288,16 +1330,17 @@ class PlatformIntegrationsService {
    * @param {string} userId
    * @param {Platform} platform
    * @param {() => Promise<T>} task
+   * @param {boolean} [forceLease]
    * @returns {Promise<T>}
    */
-  async _withConnectionLock(userId, platform, task) {
+  async _withConnectionLock(userId, platform, task, forceLease = false) {
     const key = `${userId}:${platform}`;
     const previous = this.connectionLocks.get(key) || Promise.resolve();
     const run = previous.catch(() => {}).then(async () => {
       const vault = this.vault;
       const info = vault?.getStreamingLeaseInfo
         ? await vault.getStreamingLeaseInfo(userId, platform) : null;
-      if (!info?.streamingConsent) return task();
+      if (!info || !info.streamingConsent && !info.predictionsConsent && !forceLease) return task();
       if (!vault || !vault.supportsStreamingLeases()) {
         throw integrationError(503, "streaming_coordination_unavailable", "Stream control coordination is unavailable.");
       }
