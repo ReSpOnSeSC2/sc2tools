@@ -675,6 +675,7 @@ class OverlayLiveService {
       && (opponentToonHandle === notePulseId || (oppRow && payload.opponentIdentityMatched))) {
       payload.oppPulseId = notePulseId;
     }
+    payload.opponentNotesWritable = Boolean(oppRow && payload.opponentIdentityMatched && oppRow.pulseId === notePulseId);
 
     if (oppRow) {
       const wins = Number(oppRow.wins) || 0;

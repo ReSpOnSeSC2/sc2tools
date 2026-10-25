@@ -43,4 +43,10 @@ describe("live SSE owner and match boundaries", () => {
     expect(auth.getToken).toHaveBeenCalledOnce(); expect(fetch).not.toHaveBeenCalled();
     await act(async () => { await vi.advanceTimersByTimeAsync(500); }); expect(auth.getToken).toHaveBeenCalledTimes(2);
   });
+  it("catches a rejected body cancellation when headers arrive after unmount", async () => {
+    let finish!: (value: unknown) => void; const cancel = vi.fn().mockRejectedValue(new Error("Body already aborted"));
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(resolve => { finish = resolve; })));
+    const view = renderHook(() => useLiveGame()); await waitFor(() => expect(auth.getToken).toHaveBeenCalled()); view.unmount();
+    await act(async () => finish({ ok: true, body: { cancel } })); expect(cancel).toHaveBeenCalledOnce();
+  });
 });

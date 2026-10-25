@@ -68,6 +68,8 @@ import { useDockSummaries } from "./useDockSummaries";
 import { usePollTally } from "./usePollTally";
 export { DockButton } from "./DockControls";
 import { DockPresenceStrip } from "./DockPresenceStrip";
+import { DockLazyPanel } from "./DockLazyPanel";
+const loadScout = () => import("./DockScout").then(module => module.DockScout);
 
 /** Platform config re-read cadence — same as the OBS widget. */
 const CONFIG_REFRESH_MS = DOCK_CONFIG_REFRESH_MS;
@@ -368,6 +370,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
   const summaries = useDockSummaries(studio, studioSnapshotReady, platforms, loaded,
     tally?.total ?? 0, engagement.clipMoments.length, engagementReady);
   const panels: Record<DockSectionId, ReactNode> = {
+    "dock-scout": <DockLazyPanel label="live scouting" loader={loadScout} componentProps={{ live: updates?.liveGame ?? null, lastUpdatedAt: updates?.lastLiveAt ?? null }} />,
     "dock-chat": <>
 <DockChat embedded
             loaded={loaded}
@@ -543,7 +546,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
       ) : null}
 
       {/* A single keyed parent preserves each panel's draft when pin order changes. */}
-      <div className={`${styles.grid} grid min-w-0 gap-3`} data-chat-pinned={layout.pinned.includes("dock-chat")} style={{ "--dock-controls": Math.max(1, 8 - layout.pinned.filter(id => id !== "dock-chat").length) } as CSSProperties}>
+      <div className={`${styles.grid} grid min-w-0 gap-3`} data-chat-pinned={layout.pinned.includes("dock-chat")} style={{ "--dock-controls": Math.max(1, DOCK_SECTIONS.length - 1 - layout.pinned.filter(id => id !== "dock-chat").length) } as CSSProperties}>
         {ordered.map(id => {
           const section = DOCK_SECTIONS.find(value => value.id === id)!;
           return <SectionCard key={id} id={id} title={section.label} {...summaries[id]}

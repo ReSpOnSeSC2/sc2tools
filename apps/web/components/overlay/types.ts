@@ -74,6 +74,8 @@ export type LiveGamePayload = {
   /** Exact resolved current opponent toon; never inferred from a name alone. */
   oppPulseId?: string;
   opponentIdentityMatched?: boolean;
+  /** The exact current toon already has an owned opponent row for note writes. */
+  opponentNotesWritable?: boolean;
   /**
    * SC2Pulse "revealed" identity behind a barcode / anonymised account
    * — the pro/main nickname the community linked on
@@ -576,6 +578,7 @@ export interface LiveGameEnvelope {
     | "oppName"
     | "oppPulseId"
     | "opponentIdentityMatched"
+    | "opponentNotesWritable"
     | "oppRevealedName"
     | "oppMmr"
     | "matchup"

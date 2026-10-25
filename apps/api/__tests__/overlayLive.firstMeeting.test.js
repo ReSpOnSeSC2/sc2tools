@@ -68,6 +68,13 @@ describe("overlayLive first-meeting signal", () => {
     expect(p.rematch).toBeUndefined();
     expect(p.favOpening).toBeUndefined();
     expect(p.recentGames).toBeUndefined();
+    expect(p.opponentNotesWritable).toBe(false);
+  });
+
+  test("an exact new live toon identifies the opponent without unlocking an impossible note save", async () => {
+    const p = await svc.buildFromOpponentName("u1", "New opponent", "Zerg", 12345, "Protoss", "1-S2-1-12345");
+    expect(p.oppPulseId).toBe("1-S2-1-12345"); expect(p.opponentNotesWritable).toBe(false);
+    expect(p.headToHead).toEqual({ wins: 0, losses: 0 });
   });
 
   test("enrichEnvelope attaches the 0-0 headToHead under streamerHistory for a new opponent", async () => {

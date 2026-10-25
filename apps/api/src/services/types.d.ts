@@ -161,7 +161,7 @@ export interface OpponentsService {
   updateNotes(
     userId: string,
     pulseId: string,
-    input: { notes: string; notesReadAloud: boolean },
+    input: { notes: string } & ({ notesReadAloud: boolean; preserveReadAloud?: never } | { preserveReadAloud: true; notesReadAloud?: never }),
   ): Promise<{
     notes: string;
     notesReadAloud: boolean;

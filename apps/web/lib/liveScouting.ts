@@ -33,8 +33,8 @@ export function projectDockScouting(live: LiveGameEnvelope | null): DockScouting
     aka: text(opponent.revealedName || history.oppRevealedName, 120), mmr, league: text(profile.league, 32),
     h2h: wins !== null && losses !== null ? { wins, losses } : null,
     enriched: Object.keys(history).length > 0,
-    rival: record(history.rival).tier === "rival" ? "Rival" : record(history.rival).tier === "familiar" ? "Familiar" : "",
-    rematch: !!history.rematch,
+    rival: Object.keys(record(history.rival)).length ? record(history.rival).starred === true || (wins ?? 0) + (losses ?? 0) >= 6 ? "Rival" : "Familiar" : "",
+    rematch: record(history.rematch).isRematch === true,
     openings, answer: text(record(history.bestAnswer).build),
     cheese: typeof cheese === "number" && Number.isFinite(cheese) && cheese >= .4 && cheese <= 1 ? cheese : null,
   };
@@ -47,6 +47,8 @@ function matchedHistory(live: LiveGameEnvelope | null) {
 function sameOpponentHistory(live: LiveGameEnvelope | null) {
   const history = record(live?.streamerHistory), name = text(live?.opponent?.name, 120).toLowerCase();
   if (!name || name !== text(history.oppName, 120).toLowerCase()) return {};
+  const toon = live?.opponent?.toonHandle;
+  if (typeof toon === "string" && /^\d+-S2-\d+-\d+$/.test(toon) && history.oppPulseId !== toon) return {};
   return history;
 }
 
@@ -55,7 +57,8 @@ export function privateScouting(live: LiveGameEnvelope | null) {
   const source = sameOpponentHistory(live), history = matchedHistory(live), rawId = source.oppPulseId;
   const pulseId = typeof rawId === "string" && /^\d+-S2-\d+-\d+$/.test(rawId) && rawId.length <= 80 ? rawId : null;
   return {
-    pulseId, note: pulseId ? text(record(source.opponentNotes).text, 500) : "",
+    pulseId, writable: source.opponentNotesWritable === true,
+    note: pulseId ? text(record(source.opponentNotes).text, 500) : "",
     readAloud: record(source.opponentNotes).readAloud === true,
     recent: list(history.recentGames).filter(row => ["Win", "Loss", "Tie"].includes(String(row.result))).map(row => ({
       result: String(row.result),

@@ -133,7 +133,7 @@ export function useLiveGame(): LiveGameState {
       // hello immediately) — reset back-off so subsequent transient
       // closes don't keep doubling the delay.
       attempt = 0;
-      if (cancelled) { void res.body.cancel(); return; }
+      if (cancelled) { void res.body.cancel().catch(() => {}); return; }
       commit((prev) => ({ ...prev, connected: true }));
       const reader = res.body.getReader();
       const cancelReader = () => { void reader.cancel().catch(() => {}); };
