@@ -73,6 +73,8 @@ import { sanitizeRandomizerConfig } from "@/lib/randomizer/config";
 import { useRevealAudioUnlock } from "@/components/randomizer/reveals/revealSound";
 import { decodeOverlayTheme, themeToCssVars } from "@/lib/overlayTheme";
 import { useOverlayProfile, type OverlayProfileConfig } from "@/lib/useOverlayProfile";
+import presenceRules from "@/lib/overlayPresenceRules.json";
+import { legacyCompositePresence } from "@/lib/overlayPresence";
 import type { OverlayProfile } from "@/lib/overlayProfile";
 import {
   mergeLiveGameStreamerHistory,
@@ -305,24 +307,7 @@ function compositeCreditVisible(
 }
 
 /** The widgets this all-in-one source renders (keep in step with the JSX above). */
-const COMPOSITE_WIDGETS: ReadonlyArray<WidgetId> = [
-  "opponent",
-  "match-result",
-  "post-game",
-  "mmr-delta",
-  "streak",
-  "cheese",
-  "rematch",
-  "rival",
-  "rank",
-  "meta",
-  "topbuilds",
-  "fav-opening",
-  "best-answer",
-  "scouting",
-  "session",
-  "randomizer",
-];
+const COMPOSITE_WIDGETS = presenceRules.compositeWidgets as ReadonlyArray<WidgetId>;
 
 /**
  * Subscribe to the overlay socket and push the event streams into the
@@ -374,7 +359,7 @@ function useOverlaySocket(
   // against this to detect silently-dropped events.
   const gameKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    const connection = createOverlaySocket(token, { surface: "all-in-one", onStatus: setConnectionStatus });
+    const connection = createOverlaySocket(token, { ...legacyCompositePresence(new URLSearchParams(window.location.search).get("w")), onStatus: setConnectionStatus });
     const socket = connection.socket;
     socketRef.current = socket;
     socket.on("overlay:live", (msg: LiveGamePayload) => {

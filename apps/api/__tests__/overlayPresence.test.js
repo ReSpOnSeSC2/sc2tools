@@ -1,6 +1,6 @@
 // @ts-nocheck
 "use strict";
-const { overlayDescriptor, summarizeOverlayPresence, readOverlayPresence } = require("../src/services/overlayPresence");
+const { overlayDescriptor, overlayHandshakeDescriptor, summarizeOverlayPresence, readOverlayPresence } = require("../src/services/overlayPresence");
 const { attachSocketAuth } = require("../src/socket/auth");
 const { LiveGameBroker } = require("../src/services/liveGameBroker");
 
@@ -24,10 +24,15 @@ describe("overlay surface descriptors", () => {
     attachSocketAuth({ use: fn => { middleware = fn; }, on: (_event, fn) => { connect = fn; } }, {
       resolveOverlayToken: async () => ({ userId: "owner", label: "Owned overlay" }), secretKey: "synthetic",
     });
-    const socket = { handshake: { auth: { overlayToken: "secret", surface: "widget", widget: "scouting", connectedAt: 1 } }, data: {}, join: jest.fn(), on: jest.fn() };
+    const socket = { handshake: { auth: { overlayToken: "secret", surface: "widget", widget: "scouting", presenceVersion: 1, connectedAt: 1 } }, data: {}, join: jest.fn(), on: jest.fn() };
     await new Promise((resolve, reject) => middleware(socket, error => error ? reject(error) : resolve()));
     expect(socket.data.overlayPresence).toEqual({ surface: "widget", widget: "scouting" });
     connect(socket); expect(socket.data.overlayConnectedAt).toBeGreaterThan(1);
+  });
+  test("older cached descriptors remain unknown until refreshed", () => {
+    expect(overlayHandshakeDescriptor({ surface: "all-in-one" })).toEqual({ surface: "unknown", widget: null });
+    expect(overlayHandshakeDescriptor({ surface: "widget", widget: "session", presenceVersion: 0 })).toEqual({ surface: "unknown", widget: null });
+    expect(overlayHandshakeDescriptor({ surface: "widget", widget: "session", presenceVersion: 1 })).toEqual({ surface: "widget", widget: "session" });
   });
 });
 
@@ -39,10 +44,12 @@ describe("owned presence counts", () => {
       source("widget", "scouting", 2000), source("widget", "scouting", 4000), source("dock"), source("all-in-one"), source("scene", "brb"), source("unknown"),
       { ...source("widget", "scouting"), data: { ...source("widget", "scouting").data, overlayUserId: "another-owner" } },
       { ...source("widget", "scouting"), data: { ...source("widget", "scouting").data, overlayToken: "another-token" } },
+      { ...source("dock"), data: { ...source("dock").data, overlayControlOnly: true } },
     ], [{ data: { kind: "device", userId: "owner" } }], "secret", "owner", now - 3000, now);
     expect(result.totalSources).toBe(6);
     expect(result.widgets.scouting).toEqual({ count: 2, oldestConnectedAt: new Date(now - 4000).toISOString() });
     expect(result.surfaces.unknown.count).toBe(1); expect(result.scenes.brb.count).toBe(1); expect(result.agent.online).toBe(true);
+    expect(result.surfaces.dock.count).toBe(1);
     expect(result.lastLiveAt).toBe(new Date(now - 3000).toISOString());
     expect(JSON.stringify(result)).not.toMatch(/private-socket-id|secret|another-owner|another-token|owner/);
   });

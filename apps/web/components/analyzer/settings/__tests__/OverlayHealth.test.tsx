@@ -8,7 +8,7 @@ vi.mock("@clerk/nextjs", () => ({ useAuth: () => auth }));
 const fetchSpy = vi.fn();
 const payload = () => ({ surfaces: { "all-in-one": { count: 1 }, dock: { count: 1 }, unknown: { count: 1 } }, widgets: { scouting: { count: 1 } }, scenes: {}, agent: { online: true }, totalSources: 4, sampledAt: new Date().toISOString(), lastLiveAt: null });
 function Fixture({ token = "synthetic-token", enabled = true }: { token?: string; enabled?: boolean }) {
-  return <SWRConfig value={{ provider: () => new Map(), shouldRetryOnError: false }}><OverlayHealthProvider token={token} enabled={enabled}><OverlayHealthBoard /><WidgetPresenceBadge widget="scouting" enabled /></OverlayHealthProvider></SWRConfig>;
+  return <SWRConfig value={{ provider: () => new Map(), shouldRetryOnError: false }}><OverlayHealthProvider token={token} enabled={enabled} enabledWidgets={["multichat"]}><OverlayHealthBoard /><WidgetPresenceBadge widget="scouting" enabled /></OverlayHealthProvider></SWRConfig>;
 }
 beforeEach(() => {
   auth.isLoaded = true; auth.isSignedIn = true; auth.userId = "owner"; auth.getToken.mockResolvedValue("owner-jwt");
@@ -21,6 +21,7 @@ describe("shared visible overlay health", () => {
     render(<Fixture />); expect(await screen.findByText("Duplicate audio · 2 sources")).toBeTruthy();
     expect(screen.getByText("Connected")).toBeTruthy(); expect(screen.getByText(/1 unknown source/)).toBeTruthy();
     expect(fetchSpy).toHaveBeenCalledTimes(1); expect(document.body.textContent).not.toContain("synthetic-token");
+    expect(screen.getByText("Chat source").closest("li")?.textContent).toContain("Optional · not added");
     expect(fetchSpy.mock.calls[0][0]).toContain("/v1/overlay-tokens/synthetic-token/presence");
   });
   it("does no work for a hidden Settings section or a source outside the viewport", async () => {

@@ -14,6 +14,14 @@ function overlayDescriptor(raw) {
   return { surface, widget: null };
 }
 
+/** Old cached clients can label a filtered source as a whole composite.
+ * They must refresh once before contributing to identified readiness.
+ * @param {unknown} raw */
+function overlayHandshakeDescriptor(raw) {
+  const auth = raw && typeof raw === "object" ? /** @type {Record<string,unknown>} */ (raw) : {};
+  return auth.presenceVersion === 1 ? overlayDescriptor(auth) : { surface: "unknown", widget: null };
+}
+
 /** Counts only: never serialize a socket, room, bearer token or user identity.
  * @param {Array<{data?:Record<string,any>}>} overlaySockets
  * @param {Array<{data?:Record<string,any>}>} userSockets
@@ -34,7 +42,7 @@ function summarizeOverlayPresence(overlaySockets, userSockets, token, userId, la
   let totalSources = 0;
   for (const socket of overlaySockets) {
     const data = socket.data;
-    if (!data || data.kind !== "overlay" || data.overlayToken !== token || data.overlayUserId !== userId) continue;
+    if (!data || data.kind !== "overlay" || data.overlayToken !== token || data.overlayUserId !== userId || data.overlayControlOnly === true) continue;
     const descriptor = overlayDescriptor(data.overlayPresence);
     const stamp = data.overlayConnectedAt;
     const connectedAt = typeof stamp === "number" && Number.isFinite(stamp) && stamp > 0 && stamp <= now ? new Date(stamp).toISOString() : null;
@@ -61,4 +69,4 @@ async function readOverlayPresence(io, token, userId, broker) {
     return summarizeOverlayPresence(overlaySockets, userSockets, token, userId, broker?.latestOverlayLiveAt?.(userId) ?? null);
   } finally { clearTimeout(timer); }
 }
-module.exports = { overlayDescriptor, summarizeOverlayPresence, readOverlayPresence };
+module.exports = { overlayDescriptor, overlayHandshakeDescriptor, summarizeOverlayPresence, readOverlayPresence };

@@ -59,7 +59,7 @@ export function ConnectionCheck({
     setResult(null);
     await new Promise<void>((resolve) => {
       const socket = io(API_BASE, {
-        auth: { overlayToken: token, timezone: clientTimezone() },
+        auth: { overlayToken: token, timezone: clientTimezone(), controlOnly: true, presenceVersion: 1 },
         transports: ["websocket", "polling"],
         reconnection: false,
       });

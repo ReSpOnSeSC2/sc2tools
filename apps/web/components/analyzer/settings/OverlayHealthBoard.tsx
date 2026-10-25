@@ -12,7 +12,7 @@ export function OverlayHealthBoard() {
   const stale = !snapshot || !!error || Date.now() - Date.parse(snapshot.sampledAt) > 35_000;
   const count = (id: string) => snapshot?.surfaces[id]?.count ?? 0;
   const game = count("all-in-one") + WIDGET_GUIDES.filter(guide => ["game", "results", "practice"].includes(guide.group)).reduce((total, guide) => total + (snapshot?.widgets[guide.id]?.count ?? 0), 0);
-  const chat = (snapshot?.widgets.multichat?.count ?? 0) + (health.enabledWidgets.includes("multichat") ? count("all-in-one") : 0);
+  const chat = snapshot ? widgetPresence(snapshot, "multichat", health.enabledWidgets.includes("multichat")).count : 0;
   const checks = [
     { label: "Agent", ready: snapshot?.agent.online, value: snapshot?.agent.online ? "Connected" : "No connected agent" },
     { label: "Game overlay", ready: game > 0, value: game ? `${game} connected` : "Not added" },

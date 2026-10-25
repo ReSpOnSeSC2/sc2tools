@@ -23,6 +23,25 @@
     "scouting",
     "multichat",
     "chat-alerts",
-    "ghost-build"
+    "ghost-build",
+    "randomizer"
+  ],
+  "compositeWidgets": [
+    "opponent",
+    "match-result",
+    "post-game",
+    "mmr-delta",
+    "streak",
+    "cheese",
+    "rematch",
+    "rival",
+    "rank",
+    "meta",
+    "topbuilds",
+    "fav-opening",
+    "best-answer",
+    "scouting",
+    "session",
+    "randomizer"
   ]
 }

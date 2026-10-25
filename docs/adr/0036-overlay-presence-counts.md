@@ -8,4 +8,6 @@ The owner endpoint checks the active token's ownership, then reads the existing 
 
 Agent connected means a current authenticated device socket exists. The recent game publication clock reuses the broker's existing cache and becomes unknown on expiry/restart. Connection counts cannot prove OBS visibility/audio. Duplicate-audio warnings describe multiple possible audio sources and keep disabled widgets neutral.
 
+Composite counts use the actual16 rendered all-in-one widgets, shared with its renderer and checked against the guide catalog. Dedicated chat/studio widgets never inherit that count. Legacy `?w=session` and `?w=scouting` sources label themselves as only that widget; unsupported filters stay unknown. Settings-only control subscriptions and connection probes explicitly opt out of source counts, so opening Settings cannot make a missing Dock or game source appear connected. This advisory label never changes authorization.
+
 One owner-scoped Settings resource supplies the checklist and all badges. Settings and Dock poll every15seconds only while the relevant surface/document is visible, with bounded authentication/body deadlines and no previous-token/owner display. Failed or stale reads never turn into zero or green readiness. The small Dock strip is designed to move into the later Game desk header.

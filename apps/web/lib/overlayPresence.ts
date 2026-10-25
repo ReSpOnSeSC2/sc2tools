@@ -15,7 +15,13 @@ export function normalizePresence(raw: unknown): OverlayPresence | null {
   return { surfaces: buckets(value.surfaces), widgets: buckets(value.widgets), scenes: buckets(value.scenes), totalSources: presenceCount(value.totalSources), agent: { online: record(value.agent).online === true }, lastLiveAt: typeof value.lastLiveAt === "string" && Number.isFinite(Date.parse(value.lastLiveAt)) ? value.lastLiveAt : null, sampledAt: value.sampledAt };
 }
 export function widgetPresence(snapshot: OverlayPresence, id: string, enabled: boolean) {
-  const count = (snapshot.widgets[id]?.count ?? 0) + (enabled && id !== "ghost-build" ? snapshot.surfaces["all-in-one"]?.count ?? 0 : 0);
+  const count = (snapshot.widgets[id]?.count ?? 0) + (enabled && rules.compositeWidgets.includes(id) ? snapshot.surfaces["all-in-one"]?.count ?? 0 : 0);
   const audio = enabled && rules.audioWidgets.includes(id) && count > 1;
   return { count, audio, unknown: !count && (snapshot.surfaces.unknown?.count ?? 0) > 0 };
+}
+
+/** The legacy filtered composite URL cannot stand for every widget. */
+export function legacyCompositePresence(widget: string | null): { surface: "all-in-one" } | { surface: "widget"; widget: string } {
+  if (!widget) return { surface: "all-in-one" };
+  return { surface: "widget", widget: rules.compositeWidgets.includes(widget) ? widget : "unknown" };
 }
