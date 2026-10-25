@@ -11,6 +11,13 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Added
+- Live scouting on Today and a large second-screen page reuse your recorded opponent history, with bounded opening counts, recent replay links and an exact-account note popover. The Stream Dock Scout view omits private notes and replay/account actions.
+
+### Stream Dock
+
+- Collapse panels into live summaries, pin frequently used sections, and keep the layout in this browser. Dock controls now show connection text and keyboard focus, give touch users larger targets, and offer selected text when clipboard access is unavailable.
+
 ### Overlay health
 
 - Check connected game, chat and Dock sources before going live. Widget cards show identified connections, unknown older pages and possible duplicate audio; failed checks keep an honest unavailable state. The Dock has a counts-only source strip.
@@ -53,6 +60,11 @@ corresponding GitHub Release.
 - Hide a replay from your own statistics and scouting, then Unhide it from Settings. Single-game and page-limited bulk deletion require an exact typed confirmation, retain local files, and keep incomplete cloud cleanup available for retry.
 - Filter analyzer views by up to twenty SC2 accounts, including saved views, shared filter links and replay navigation.
 - Export the current replay filters and sort order as a formula-safe UTF-8 CSV, with a shared column dictionary and a visible 50,000-row cap.
+
+### OBS game sources
+
+- Build scenes with the all-in-one game overlay and optional coach, randomizer and ticker sources. Additive updates reuse existing renderers and preserve custom sources and cover priority.
+- Request a widget from the website through an opted-in paired agent, with a default-Cancel confirmation naming the current OBS program scene. Offline agents explain why Add is disabled; Ghost assignments use Copy or Drag.
 
 ### Opponents list and rivals
 

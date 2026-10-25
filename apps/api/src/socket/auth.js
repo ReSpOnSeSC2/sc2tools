@@ -162,6 +162,10 @@ function attachSocketAuth(io, opts) {
         socket.data.kind = "device";
         // Stable pairing identity survives reconnects; never expose bearer hashes.
         socket.data.deviceId = hit.deviceId;
+        socket.data.obsAddSource = {
+          supported: socket.handshake.auth.obsAddSource?.supported === true,
+          enabled: socket.handshake.auth.obsAddSource?.enabled === true,
+        };
         next();
         return;
       }
@@ -435,6 +439,9 @@ function attachSocketAuth(io, opts) {
         socket.join(`user:${u}`);
         socket.join(scoutingDeviceRoom(u));
       }
+      socket.on("obs:capabilities", (payload) => {
+        socket.data.obsAddSource = { supported: payload?.supported === true, enabled: payload?.enabled === true };
+      });
       socket.on("map-playback:status", (payload) => {
         if (!u || !payload || typeof payload.gameId !== "string" || typeof payload.requestId !== "string") return;
         // A device can only update an existing request in its authenticated

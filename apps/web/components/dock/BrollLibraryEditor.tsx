@@ -1,5 +1,7 @@
 "use client";
 
+import { DockInput, DockButton } from "./DockControls";
+
 import { useState } from "react";
 import type {
   StudioBrollClip,
@@ -207,6 +209,7 @@ function libraryJson(clips: StudioBrollClip[]): string {
 }
 
 export function BrollLibraryEditor({
+  embedded = false,
   broll,
   busy,
   studioReady = true,
@@ -215,6 +218,7 @@ export function BrollLibraryEditor({
   broll: StudioBrollConfig;
   busy: boolean;
   studioReady?: boolean;
+  embedded?: boolean;
   onPost: DockPost;
 }) {
   const [source, setSource] = useState("");
@@ -320,63 +324,63 @@ export function BrollLibraryEditor({
   if (!studioReady) return <DockSnapshotState />;
 
   return (
-    <fieldset disabled={busy || pending} className="min-w-0"><details className="mt-2 border-t border-border pt-2">
-      <summary className="cursor-pointer select-none text-caption font-medium text-text hover:text-accent-cyan">
+    <fieldset disabled={busy || pending} className="min-w-0"><details open={embedded || undefined} className="mt-2 border-t border-border pt-2">
+      <summary hidden={embedded} className={embedded ? "hidden" : "flex min-h-8 cursor-pointer items-center [@media(pointer:coarse)]:min-h-10 select-none text-caption font-medium text-text hover:text-accent-cyan"}>
         Manage highlight library
       </summary>
 
       <div className="mt-2 space-y-2">
         <DockActionNotice message={notice} />
         <div className="grid grid-cols-2 gap-1.5">
-          <input
+          <DockInput
             type="text"
             value={source}
             onChange={(event) => setSource(event.target.value)}
             placeholder="YouTube URL or video ID"
             aria-label="YouTube URL or video ID"
-            className="col-span-2 min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text placeholder:text-text-muted focus:border-accent focus:outline-none sm:col-span-1"
+            className="col-span-2 min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text placeholder:text-text-muted focus:border-accent sm:col-span-1"
           />
-          <input
+          <DockInput
             type="text"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder={`Title (Highlight ${broll.clips.length + 1})`}
             aria-label="B-roll clip title"
             maxLength={MAX_TITLE_LENGTH}
-            className="col-span-2 min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text placeholder:text-text-muted focus:border-accent focus:outline-none sm:col-span-1"
+            className="col-span-2 min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text placeholder:text-text-muted focus:border-accent sm:col-span-1"
           />
           <label className="flex items-center gap-1 text-caption text-text-dim">
             Start
-            <input
+            <DockInput
               type="text"
               value={start}
               onChange={(event) => setStart(event.target.value)}
               placeholder="0:00"
               aria-label="B-roll start time"
-              className="min-w-0 flex-1 rounded-md border border-border bg-bg-elevated px-2 py-1 tabular-nums text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-border bg-bg-elevated px-2 py-1 tabular-nums text-text placeholder:text-text-muted focus:border-accent"
             />
           </label>
           <label className="flex items-center gap-1 text-caption text-text-dim">
             End
-            <input
+            <DockInput
               type="text"
               value={end}
               onChange={(event) => setEnd(event.target.value)}
               placeholder="1:30"
               aria-label="B-roll end time"
-              className="min-w-0 flex-1 rounded-md border border-border bg-bg-elevated px-2 py-1 tabular-nums text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-border bg-bg-elevated px-2 py-1 tabular-nums text-text placeholder:text-text-muted focus:border-accent"
             />
           </label>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
+          <DockButton
             type="button"
             disabled={busy}
             onClick={() => void run("add")}
             className="rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-caption font-medium text-text transition-colors hover:border-accent disabled:opacity-50"
           >
             + Add highlight
-          </button>
+          </DockButton>
           <span className="text-micro text-text-dim">
             Tip: after adding, the end time becomes the next start time.
           </span>
@@ -405,7 +409,7 @@ export function BrollLibraryEditor({
                     {clip.vertical ? " · Vertical paired" : " · Horizontal only"}
                   </span>
                 </span>
-                <button
+                <DockButton
                   type="button"
                   disabled={busy}
                   aria-label={`Remove ${clip.title}`}
@@ -415,14 +419,14 @@ export function BrollLibraryEditor({
                   className="rounded border border-danger/40 px-2 py-1 text-micro text-danger hover:bg-danger/10 disabled:opacity-50"
                 >
                   Remove
-                </button>
+                </DockButton>
               </li>
             ))}
           </ol>
         ) : null}
 
         <details className="rounded border border-border/70 p-2">
-          <summary className="cursor-pointer select-none text-caption text-text-muted hover:text-text">
+          <summary className="flex min-h-8 cursor-pointer items-center [@media(pointer:coarse)]:min-h-10 select-none text-caption text-text-muted hover:text-text">
             Import / export JSON
           </summary>
           <div className="mt-2 space-y-1.5">
@@ -433,11 +437,11 @@ export function BrollLibraryEditor({
               aria-label="B-roll library JSON"
               rows={5}
               spellCheck={false}
-              className="w-full resize-y rounded-md border border-border bg-bg-elevated px-2 py-1 font-mono text-micro text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+              className="w-full resize-y rounded-md border border-border bg-bg-elevated px-2 py-1 font-mono text-micro text-text placeholder:text-text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent"
             />
             <label className="block text-micro text-text-dim">
               Import a .json library file
-              <input
+              <DockInput
                 type="file"
                 accept=".json,application/json"
                 aria-label="Import b-roll library JSON file"
@@ -451,21 +455,21 @@ export function BrollLibraryEditor({
               />
             </label>
             <div className="flex flex-wrap gap-1.5">
-              <button
+              <DockButton
                 type="button"
                 onClick={() => void exportJson()}
                 className="rounded border border-border px-2 py-1 text-caption text-text-muted hover:border-accent hover:text-text"
               >
                 Copy current JSON
-              </button>
-              <button
+              </DockButton>
+              <DockButton
                 type="button"
                 disabled={busy || !jsonDraft.trim()}
                 onClick={() => void importLibraryJson(jsonDraft)}
                 className="rounded border border-border px-2 py-1 text-caption text-text-muted hover:border-accent hover:text-text disabled:opacity-50"
               >
                 Replace library from JSON
-              </button>
+              </DockButton>
             </div>
             {transferStatus ? (
               <p

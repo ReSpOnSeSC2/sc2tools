@@ -167,6 +167,7 @@ class SettingsPayload:
         "obs_scene_map",
         "obs_switch_debounce_sec",
         "obs_switch_on_replays",
+        "obs_website_add_enabled",
     )
 
     def __init__(
@@ -199,6 +200,7 @@ class SettingsPayload:
         obs_scene_map: Optional[dict] = None,
         obs_switch_debounce_sec: Optional[float] = None,
         obs_switch_on_replays: Optional[bool] = None,
+        obs_website_add_enabled: Optional[bool] = None,
     ) -> None:
         self.background_import_speed = background_import_speed
         self.pause_history_in_game = pause_history_in_game
@@ -256,6 +258,7 @@ class SettingsPayload:
         self.obs_scene_map = obs_scene_map
         self.obs_switch_debounce_sec = obs_switch_debounce_sec
         self.obs_switch_on_replays = obs_switch_on_replays
+        self.obs_website_add_enabled = obs_website_add_enabled
 
 
 # ---------------------------------------------------------------------
@@ -442,6 +445,22 @@ class GuiUI:
             getattr(self._signals,name).emit(*args)
 
     # ---------------- public sink interface ----------------
+
+    def confirm_obs_add_source(self, payload):
+        import time
+        if not self._ui_ready or self._signals is None:
+            return False
+        from ..live.widget_sizes import widget_sizes
+        if payload.get("widget") not in widget_sizes():
+            return False
+        deadline = min(payload["expiresAt"] / 1000, time.time() + 40)
+        request = dict(payload, expiresAt=deadline * 1000, done=threading.Event(), accepted=False,
+                       label={"opponent": "Opponent identity", "ghost-build": "Ghost Build coach"}.get(payload["widget"], payload["widget"].replace("-", " ").title()))
+        self._signals.obsAddConfirmation.emit(request)
+        request["done"].wait(max(0, deadline - time.time()))
+        accepted = request["done"].is_set() and request["accepted"]
+        request["done"].set()
+        return True if accepted else "expired" if time.time() >= deadline else False
 
     def choose_folder(self):
         self._dispatch("chooseFolderRequested")
@@ -720,6 +739,7 @@ def _make_signals():
         # payload dict carries ``kind`` plus whatever that operation
         # discovered; see ``_on_obs_probe_done``.
         obsProbeDone = QtCore.Signal(dict)
+        obsAddConfirmation = QtCore.Signal(object)
         # Build check-in view calls from the controller's state thread:
         # (BuildCheckinView method name, args tuple of frozen models).
         buildCheckin = QtCore.Signal(str, object)
@@ -738,8 +758,8 @@ def _ObsBuildDialog(
 ):  # noqa: N802
     """Confirm-before-write dialog for the scene builder.
 
-    The builder is the only code in the agent that writes to a user's
-    OBS, so nothing is sent until they have seen which sources will be
+    The builder changes a user's OBS, so nothing is sent until they
+    have seen which sources will be
     used and what will be created. Source pickers rather than
     auto-detection: guessing wrong puts the desktop on stream.
     """
@@ -753,7 +773,14 @@ def _ObsBuildDialog(
                 else "Build SC2 Tools scenes"
             )
             self.setMinimumWidth(460)
-            v = QtWidgets.QVBoxLayout(self)
+            outer = QtWidgets.QVBoxLayout(self)
+            scroll = QtWidgets.QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+            contents = QtWidgets.QWidget()
+            scroll.setWidget(contents)
+            outer.addWidget(scroll)
+            v = QtWidgets.QVBoxLayout(contents)
             v.setContentsMargins(20, 18, 20, 18)
             v.setSpacing(12)
 
@@ -772,15 +799,12 @@ def _ObsBuildDialog(
             )
             if update_existing:
                 intro.setText(
-                    "This adds one shared Stream Dock cover to the top of "
-                    "your existing SC2 Tools Between Games and In Game "
-                    "scenes. It stays transparent during normal play, then "
-                    "covers the camera, chat and every other source when "
-                    "you select Starting Soon or BRB.\n\n"
-                    "The update keeps your current layout and every source "
-                    "you added. Nothing is removed, rebuilt, or created. A "
-                    "missing generated scene can be built separately after "
-                    "this update."
+                    "This adds only the selected missing during-game sources "
+                    "to your existing SC2 Tools In Game scene. Existing sources, "
+                    "settings and their relative order stay in place.\n\n"
+                    "A matching Browser Source is reused to avoid duplicate "
+                    "audio. Nothing is removed or rebuilt. A missing generated "
+                    "scene can be built separately."
                 )
             intro.setWordWrap(True)
             v.addWidget(intro)
@@ -814,6 +838,26 @@ def _ObsBuildDialog(
                 self._game.setCurrentIndex(1)
             form.addRow("Game capture", self._game)
             v.addLayout(form)
+
+            from ..live.obs_game_overlay import GAME_WIDGETS, GAME_WIDGET_LABELS
+            during = QtWidgets.QGroupBox("During games")
+            during_layout = QtWidgets.QVBoxLayout(during)
+            self._during_game = {}
+            for key in GAME_WIDGETS:
+                label = GAME_WIDGET_LABELS[key] + (" (1920 × 56)" if key == "stats-ticker" else "")
+                if key == "ghost-build":
+                    label += " (URL setup needed)"
+                checkbox = QtWidgets.QCheckBox(label)
+                checkbox.setChecked(key == "overlay")
+                self._during_game[key] = checkbox
+                during_layout.addWidget(checkbox)
+            self._show_credit = QtWidgets.QCheckBox("Show SC2 Tools credit on the all-in-one overlay")
+            self._show_credit.setChecked(True)
+            during_layout.addWidget(self._show_credit)
+            ghost_note = QtWidgets.QLabel("Ghost Build starts unassigned. Assign a timed build in website Look, then Copy its URL into the source before coaching.")
+            ghost_note.setWordWrap(True)
+            during_layout.addWidget(ghost_note)
+            v.addWidget(during)
 
             if not webcams or not games:
                 warn = QtWidgets.QLabel(
@@ -850,15 +894,32 @@ def _ObsBuildDialog(
             buttons.button(QtWidgets.QDialogButtonBox.Ok).setText(
                 "Update" if update_existing else "Build",
             )
+            buttons.button(QtWidgets.QDialogButtonBox.Cancel).setDefault(True)
+            buttons.button(QtWidgets.QDialogButtonBox.Cancel).setFocus()
+            self._cancel = buttons.button(QtWidgets.QDialogButtonBox.Cancel)
             buttons.accepted.connect(self.accept)
             buttons.rejected.connect(self.reject)
-            v.addWidget(buttons)
+            outer.addWidget(buttons)
+            screen = self.screen()
+            height = min(720, screen.availableGeometry().height() - 60) if screen else 640
+            self.resize(560, max(300, height))
+
+        def showEvent(self, event):
+            super().showEvent(event)
+            self._cancel.setDefault(True)
+            self._cancel.setFocus()
 
         def webcam(self) -> str:
             return self._webcam.currentData() or ""
 
         def game(self) -> str:
             return self._game.currentData() or ""
+
+        def during_game_widgets(self):
+            return [key for key, checkbox in self._during_game.items() if checkbox.isChecked()]
+
+        def show_overlay_credit(self):
+            return self._show_credit.isChecked()
 
         def rebuild(self) -> bool:
             return self._rebuild.isChecked()
@@ -2249,6 +2310,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._obs_debounce_spin.setValue(
                     float(initial.obs_switch_debounce_sec),
                 )
+            self._obs_website_add_check.setChecked(getattr(initial, "obs_website_add_enabled", False) is True)
             self._obs_replay_check.setChecked(
                 bool(initial.obs_switch_on_replays),
             )
@@ -2400,6 +2462,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             btns.addWidget(self._obs_status)
             outer.addLayout(btns)
 
+            self._obs_website_add_check = QtWidgets.QCheckBox("Allow website requests to add an OBS source")
+            self._obs_website_add_check.setToolTip("Off by default. Only this paired account can request a source. Every request still needs your local confirmation.")
+            outer.addWidget(self._obs_website_add_check)
+            website_note = QtWidgets.QLabel("Off by default. Every request asks for confirmation here before adding a source to the current program scene.")
+            website_note.setWordWrap(True)
+            website_note.setObjectName("muted")
+            outer.addWidget(website_note)
+
             scenes_form = QtWidgets.QFormLayout()
             scenes_form.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
             scenes_form.setHorizontalSpacing(20)
@@ -2522,6 +2592,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "webcam_source": confirm.webcam(),
                 "game_source": confirm.game(),
                 "rebuild": confirm.rebuild(),
+                "during_game_widgets": confirm.during_game_widgets(),
+                "show_overlay_credit": confirm.show_overlay_credit(),
                 # Carry the exact names shown by Test connection so the
                 # backend never infers permission to edit an existing scene.
                 "update_existing_scenes": list(
@@ -2546,7 +2618,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if result.get("kind") == "probe":
                 self._obs_manual_update_scenes = [
                     str(name) for name in (
-                        result.get("manual_override_update_scenes") or []
+                        result.get("generated_update_scenes", result.get("manual_override_update_scenes")) or []
                     )
                 ]
                 self._obs_needs_manual_update = bool(
@@ -2661,6 +2733,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             signals.settingsStatus.connect(self._on_settings_status)
             signals.settingsSaveDone.connect(self._on_settings_save_done)
             signals.obsProbeDone.connect(self._on_obs_probe_done)
+            from .obs_confirmation import show_obs_confirmation
+            signals.obsAddConfirmation.connect(lambda request: show_obs_confirmation(request, parent=self, QtCore=QtCore, QtWidgets=QtWidgets))
             signals.buildCheckin.connect(self._on_build_checkin)
             signals.quitRequested.connect(self._on_quit_requested)
             signals.showRequested.connect(self._on_show_requested)
@@ -3574,6 +3648,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                     self._obs_debounce_spin.value(),
                 ),
                 obs_switch_on_replays=self._obs_replay_check.isChecked(),
+                obs_website_add_enabled=self._obs_website_add_check.isChecked(),
             )
             context = dict(api_base=api_base, preset=preset, since_iso=since_iso,
                            until_iso=until_iso, removals=self._folders_removed,
