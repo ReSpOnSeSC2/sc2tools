@@ -22,7 +22,7 @@ import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { API_BASE, boundedApiRequest } from "@/lib/clientApi";
 import { getInstantImportMode } from "@/lib/instant/flag";
-import { BuildEditorModal } from "@/components/builds/editor";
+import { LazyBuildEditorModal as BuildEditorModal } from "@/components/builds/editor/LazyBuildEditorModal";
 import { buildLogToEvents } from "@/lib/build-events";
 import type { RaceLite, VsRaceLite } from "@/lib/build-rules";
 import { ReplayDemoBrowserIsland } from "./ReplayDemoBrowserIsland";
