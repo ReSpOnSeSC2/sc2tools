@@ -16,7 +16,7 @@ const routerReplaceMock = vi.fn();
 const editorHarness = vi.hoisted(() => ({ props: null as BuildEditorModalProps | null }));
 
 // Compile the real lazy chunks before assertions; bundler work is not UI latency.
-beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns"), import("../BuildWorkspaceActions"), import("../replay/ReplayStage"), import("../GameStoryCard")]); });
+beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns"), import("../BuildWorkspaceActions"), import("../replay/ReplayStage"), import("../GameStoryCard"), import("@/components/battleReport/GameBattleReport")]); });
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: getTokenMock, isLoaded: true, isSignedIn: true }),
@@ -209,6 +209,22 @@ function mockEndpoints({
 }
 
 describe("GameDetailPage", () => {
+  it("connects the report's known timestamps to the same mounted replay and game clock", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    mockEndpoints({ playback: true });
+    render(<GameDetailPage gameId="g1" />);
+    const report = (await screen.findByRole("heading", { name: "Battle report" })).closest("section")!;
+    const stage = document.getElementById("replay")!;
+    await waitFor(() => expect(stage.querySelector("canvas")).toBeTruthy()); const canvas = stage.querySelector("canvas");
+    const link = within(report).getAllByRole("link", { name: /^Seek replay to/ }).find((item) => Number(new URL(item.getAttribute("href")!, "https://example.test").searchParams.get("t")) > 0)!;
+    expect(link).toBeTruthy();
+    const time = Number(new URL(link.getAttribute("href")!, "https://example.test").searchParams.get("t"));
+    fireEvent.click(link);
+    await waitFor(() => expect((screen.getByLabelText("Scrub game time") as HTMLInputElement).value).toBe(String(time)));
+    expect(stage.querySelector("canvas")).toBe(canvas); expect((stage.querySelector("[data-replay-stage]") ?? stage).hasAttribute("data-clock-seek")).toBe(true);
+    expect(within(screen.getByRole("navigation", { name: "Game sections" })).getByRole("link", { name: "Battle report" }).getAttribute("href")).toBe("#battle-report");
+  });
+
   it("wires effective-build expansion medians into the real loss-autopsy rule", () => {
     mockEndpoints({ macro: { ok: true, race: "Zerg", raw: {}, all_leaks: [] },
       buildOrder: { ...BUILD_ORDER, events: [{ time: 0, name: "Hatchery" }, { time: 220, name: "Hatchery" }] },

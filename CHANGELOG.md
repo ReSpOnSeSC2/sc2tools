@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Battle reports
+
+- Read a short, fixed-rule account of a replay in Battle report, Caster or Tactical tone, with known timestamps linked to the same game clock. Copy it as plain text or Markdown.
+- Revisit captioned map stills with race-colored unit dots and side labels. Army-value charts cover moments without complete map frames; unknown samples stay gaps and partial recordings do not rewrite the account.
+
 ### Maps and veto planning
 
 - Compare the current ladder pool by matchup with sample sizes, Wilson ranges and community context. Choose one to three suggested vetoes from maps with at least five decided games; stale pool data and failed refreshes pause recommendations.
