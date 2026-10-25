@@ -95,5 +95,24 @@ reads for absent own logs. All other UI/sample/first-occurrence/count shaping
 was independently reviewed without another blocker. The inherited shared-useApi
 JWT fence is being repaired separately; integrate its reviewed source before
 the next combined production/head verification.
+
+The reviewed generic editor/request ownership dependency `de9f98e9` is now
+integrated locally at `f0803583`. Only the adjacent changelog entries conflicted;
+both packs are retained. Its editor/private/public/review-page source is exact,
+and the live opponent section order has no delta. Final combined verification
+passes 230 web consumers, 105 affected API cases and one snapshot, both complete
+typechecks, strict web/new-helper lint and configured API lint (zero errors;
+existing large-service warnings remain). Help generation is unchanged.
+
+The isolated Next-only production build reuses the verified 25b engine and
+passes every unchanged budget: landing 190.1/215, Today 238.8/240,
+game 312.3/440, opponent 448.2/500, Builds 197.5/270, Dock 215.7/225,
+AIO 238.7/240 and widget 322.8/325 kB. The final actual-source browser run passes
+197 checks/32 captures, including the absent-log read gate, with blocked external
+traffic and zero writes. All eight representative images were inspected; three
+are refreshed from this exact combined output. Full independent UI/visual review
+and the actual generic squash integration remain prerequisites for the final
+coordinated push and expected-head checks.
+
 No production or provider operations were performed. Never run an old f96
 engine prebuild; shared engine writes must remain coordinated on 25b source.
