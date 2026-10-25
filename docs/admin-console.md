@@ -218,7 +218,9 @@ silently overwritten by their bounded projection; they require a reviewed repair
 The shared runtime contract is **schema 1 / evaluator 1** (`preset-policy-v1`),
 not a promise that an old installed executable supports it. Compatible desktop
 engines refresh the anonymous global manifest after healthy heartbeats. Browser
-engines refresh before analysis, at most once per minute. A validated last-good
+signed-in import engines refresh before analysis, at most once per minute. The
+visitor-only `/try` flow retains its no-API-before-save promise and uses bundled
+classification rules. A validated last-good
 manifest survives outages; fresh installs fall back to their bundled released
 trees. Hash/schema/label incompatibility never installs an unverified policy.
 Older clients and incomplete raw evidence keep their uploaded classification;

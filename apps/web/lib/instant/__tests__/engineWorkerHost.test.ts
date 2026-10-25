@@ -151,3 +151,13 @@ it("waits for the latest policy before parsing, and keeps parsing with a prior p
   expect(runtime.calls).toHaveLength(2); expect(events.filter(event => event.type === "parsed")).toHaveLength(2);
   expect(refresh).toHaveBeenNthCalledWith(1, runtime); expect(refresh).toHaveBeenNthCalledWith(2, runtime);
 });
+
+it("keeps visitor analysis on bundled policy without any API refresh", async () => {
+  const runtime = fakeRuntime(), refresh = vi.fn(async () => {});
+  const handle = createEngineWorkerHost({ post: () => {} }, { boot: async () => ({ runtime, info: INFO }), refreshPolicy: refresh });
+  await handle({ type: "boot", pointerUrl: POINTER_URL, refreshPolicy: false });
+  // Duplicate boot messages must not silently change the session's privacy mode.
+  await handle({ type: "boot", pointerUrl: POINTER_URL });
+  await handle(parseRequest()); await handle(parseRequest({ id: 8 }));
+  expect(runtime.calls).toHaveLength(2); expect(refresh).not.toHaveBeenCalled();
+});
