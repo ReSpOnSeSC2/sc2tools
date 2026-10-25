@@ -127,7 +127,11 @@ class SocketClient:
 
     def publish_obs_capabilities(self):
         if self._sio is not None and self._loop is not None and not self._loop.is_closed() and self._device_connected:
-            asyncio.run_coroutine_threadsafe(self._sio.emit("obs:capabilities", self.obs_capabilities()), self._loop)
+            emission = self._sio.emit("obs:capabilities", self.obs_capabilities())
+            try:
+                asyncio.run_coroutine_threadsafe(emission, self._loop)
+            except RuntimeError:  # A pairing/disconnect can close the loop after the check.
+                emission.close()
 
     def session_snapshot(self) -> Dict[str, Any]:
         with self._session_lock:

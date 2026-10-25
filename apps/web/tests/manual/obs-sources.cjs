@@ -34,7 +34,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method !== 'GET') { unexpectedWrites.push({ path: pathname, method: req.method }); return json({ error: { code: 'write_blocked' } }, 405); }
     if (pathname === '/v1/devices/obs') return json({ devices: catalog });
-    if (pathname === '/v1/overlay-tokens') return json({ items: [{ token: secret, label: 'Local fixture', createdAt: '2026-10-25T00:00:00Z', lastSeenAt: null, revokedAt: null, enabledWidgets: ['session', 'opponent', 'randomizer'] }] });
+    if (pathname === `/v1/overlay-tokens/${secret}/presence`) return json({ surfaces: Object.fromEntries(['all-in-one', 'widget', 'scene', 'dock', 'unknown'].map(id => [id, { count: 0, oldestConnectedAt: null }])), widgets: {}, scenes: {}, totalSources: 0, agent: { online: catalog.length > 0 }, lastLiveAt: null, sampledAt: new Date().toISOString() });
+    if (pathname === '/v1/overlay-tokens') return json({ items: [{ token: secret, label: 'Local fixture', createdAt: '2026-10-25T00:00:00Z', lastSeenAt: null, revokedAt: null, enabledWidgets: ['session', 'opponent', 'randomizer'], profile: { v: 1, theme: {}, widgetOptions: {} }, profileRevision: 0 }] });
     if (pathname === '/v1/me') return json({ userId: 'synthetic-local-fixture', isAdmin: false, games: { total: 14 } });
     if (pathname === '/v1/me/profile') return json({ displayName: 'Fixture player' });
     if (pathname === '/v1/me/preferences/multichat') return json({ twitch: { enabled: false, channel: 'fixturechannel' } });
@@ -55,7 +56,7 @@ const server = http.createServer(async (req, res) => {
 (async () => {
   await new Promise(resolve => server.listen(3247, '127.0.0.1', resolve)); const browser = await chromium.launch({ headless: true }); let checks = 0;
   try {
-    for (const width of [320, 390, 768, 1440]) for (const theme of ['light', 'dark']) {
+    for (const width of process.env.OBS_QUICK ? [320] : [320, 390, 768, 1440]) for (const theme of process.env.OBS_QUICK ? ['light'] : ['light', 'dark']) {
       catalog = []; ack = 'added'; held = null;
       const context = await browser.newContext({ viewport: { width, height: 1000 }, reducedMotion: 'reduce' });
       await context.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
@@ -70,8 +71,12 @@ const server = http.createServer(async (req, res) => {
       expect(calls.filter(call => call.path === '/v1/devices/obs').length - beforeGet).toBe(1); checks++;
       await control({ catalog: 'disabled' }); await page.getByRole('button', { name: 'Check again', exact: true }).click(); await expect(page.getByText('Enable website OBS requests in an updated desktop agent.', { exact: false })).toBeVisible(); await expect(add).toBeDisabled(); checks += 2;
       await control({ catalog: 'one', ack: 'declined' }); await page.getByRole('button', { name: 'Check again', exact: true }).click(); await expect(add).toBeEnabled();
-      await add.scrollIntoViewIfNeeded();
-      expect(await add.evaluate(node => { const r = node.getBoundingClientRect(); return r.height >= 44 && r.width >= 44 && node.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)); })).toBe(true); checks++;
+      // The fixed mobile nav overlays the layout viewport's bottom edge.
+      // Center the in-flow control as a user scroll would; retain the actual point hit-test.
+      await add.evaluate(node => node.scrollIntoView({ block: 'center' }));
+      const target = await add.evaluate(node => { const r = node.getBoundingClientRect(), hit = document.elementFromPoint(r.x+r.width/2,r.y+r.height/2); return { valid: r.height >= 44 && r.width >= 44 && node.contains(hit), x:r.x,y:r.y,w:r.width,h:r.height,hit:hit?.outerHTML.slice(0,400) }; });
+      if (!target.valid) { console.log(JSON.stringify({ target })); await page.screenshot({ path: '.tmp/obs-health-button-hit.png' }); }
+      expect(target.valid).toBe(true); checks++;
       const before = posts().length; await add.click(); await expect(page.getByRole('status').filter({ hasText: 'Cancelled on the desktop' })).toBeVisible(); expect(posts()).toHaveLength(before + 1); expect(posts().at(-1).body).toEqual({ widget: 'opponent', deviceId: devices[0].id }); checks += 3;
       await control({ ack: 'scene_changed' }); await add.click(); await expect(page.getByRole('status').filter({ hasText: 'program scene changed' })).toBeVisible(); checks++;
       await control({ ack: 'hold' }); await add.click(); await expect(card.getByRole('button', { name: 'Waiting for desktop…' })).toBeDisabled(); await expect(page.getByRole('status').filter({ hasText: 'Confirm Add source' })).toBeVisible(); checks += 2;

@@ -5,6 +5,7 @@ import sharp from "sharp";
 import { ALL_WIDGETS } from "@/components/overlay/widgetLifecycle";
 import { getArticle } from "@/lib/help";
 import { WIDGET_GROUPS, WIDGET_GUIDES } from "@/lib/streamStudioLearn";
+import presenceRules from "@/lib/overlayPresenceRules.json";
 
 function source(path: string) {
   return readFileSync(resolve(process.cwd(), path), "utf8");
@@ -40,11 +41,9 @@ describe("Stream Studio learning catalog", () => {
 
   it("only recommends All-in-one for widgets it actually renders", () => {
     const client = source("components/OverlayClient.tsx");
-    const composite = client.match(/const COMPOSITE_WIDGETS:[\s\S]*?= \[([\s\S]*?)\n\];/)?.[1];
-    expect(composite).toBeTruthy();
-    const ids = [...composite!.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+    expect(client).toMatch(/const COMPOSITE_WIDGETS[^=]*= presenceRules\.compositeWidgets/);
     const recommended = WIDGET_GUIDES.filter((guide) => guide.source === "all-in-one").map((guide) => guide.id);
-    expect([...recommended].sort()).toEqual([...ids].sort());
+    expect([...recommended].sort()).toEqual([...presenceRules.compositeWidgets].sort());
   });
 
   it("keeps instructions complete, navigable, and free of token URLs", () => {
