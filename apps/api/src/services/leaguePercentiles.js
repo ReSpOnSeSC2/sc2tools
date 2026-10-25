@@ -384,6 +384,11 @@ function percentileOf(table, metric, value) {
   const d = m.deciles;
   if (!Array.isArray(d) || d.length !== DECILE_PS.length) return null;
 
+  // Equal quantiles occupy an interval. Match the web foundation's midpoint
+  // treatment, including the all-tied case (p50, rather than the p10 edge).
+  const first = d.indexOf(value), last = d.lastIndexOf(value);
+  if (first >= 0) return Math.round(10 * ((first + last) / 2 + 1));
+
   let pct;
   if (value <= d[0]) {
     const width = d[1] - d[0];
