@@ -39,7 +39,7 @@ policy-history inspection/restore as a new immutable version. Reference steps ar
 not detection criteria. Procedural defaults do not fabricate steps from stubs.
 Mobile and desktop use the shared focus-trapped editor sheet/panel.
 
-Final integration is based on current main96a55ecd, including Dashboard701 and
+Final integration includes current main7464cecd (My Reviews700), Dashboard701 and
 subsequent owner Companion changes. Both Heartbeat paths retain policy state_dir
 alongside the new dashboard/history callbacks. Ghost examples and Build Studio
 both remain in Content navigation and API services.
@@ -63,8 +63,9 @@ Validation on the integrated source:
   and transaction503 edits,55 Studio/policy tests passed again. Full API types
   and strict new source/test lint pass. Local Mongo tests require unsandboxed
   process/loopback access; the sandbox startup timeout was infrastructure only.
-- Web:32 tests across seven Studio/admin navigation/worker/cache suites; full
-  types and changed source strict lint pass. Delayed-cache regression proves
+- Web:32 Studio/admin navigation/worker/cache tests;103 updated privacy/import/
+  session/worker/Studio consumer tests after the visitor no-refresh correction.
+  Full types and changed source strict lint pass. Delayed-cache regression proves
   successful saves reset the draft before cache acknowledgement.
 - Reproducible browser fixture: `node apps/web/tests/manual/build-studio.cjs`.
   Both390/1440 touch/keyboard flows pass with production CSS: actual released
@@ -72,9 +73,16 @@ Validation on the integrated source:
   discard guard, success focus restoration, private/removed-community details,
   zero horizontal overflow, JS errors or external requests. Screenshots were
   visually inspected and are in docs/screenshots/admin-build-studio-{390,1440}.png.
-- Current integrated full native suite and production build/budgets are running;
-  final outcomes will be recorded before readiness/merge. Earlier native2158/1
-  skip evidence is superseded by this pending current-main run.
+- Native runner/cache/replay-pipeline/Dashboard/history integration:300 passed.
+  The complete3293-test native suite is running. Earlier native2158/1 skip
+  evidence is superseded by the pending current-main run/Windows CI partitions.
+- Integrated production build and all unchanged budgets passed (/app235.1/240,
+  opponents493.2/500). The final My Reviews/privacy integration rebuild is running.
+- First702 CI found that an anonymous policy GET broke `/try`'s no-API-before-save
+  contract. The visitor session now explicitly disables refresh through worker
+  boot/recycling; signed-in imports and Folder Sync retain live policy refresh.
+  Unit consumer regressions pass; existing strict `/try` E2E is unchanged and
+  will be rerun against the rebuilt production app before readiness.
 
 No production policy edits, account publication, user messages, database changes,
 restores, deletes or migrations were executed. No version/tag/sign/release work.
