@@ -6,7 +6,7 @@ import { sanitizeStudioState, type StudioState } from "./useStudioState";
 import type { LiveGameEnvelope, LiveGamePayload } from "@/components/overlay/types";
 import { mergeLiveGameStreamerHistory, type StickyStreamerHistory } from "@/components/overlay/mergeLiveGameStreamerHistory";
 import { newerSession } from "./sessionSnapshot";
-export type DockGameStatus = { gameKey: string | null; phase: LiveGameEnvelope["phase"]; isReplay: boolean; verified: boolean };
+export type DockGameStatus = { gameKey: string | null; phase: LiveGameEnvelope["phase"]; isReplay: boolean; verified: boolean; endedGameKey?: string | null; endedAt?: number };
 type StudioLiveFacts = { gameStatus: DockGameStatus | null; engagementEvent: unknown; token: string; liveGame: LiveGameEnvelope | null; lastLiveAt: number | null; session: LiveGamePayload["session"] | null };
 
 /** Timestamp ordering shared by the two manual control surfaces. */
@@ -53,9 +53,14 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
       if (value.type !== "liveGameState" || !["idle", "menu", "match_loading", "match_started", "match_in_progress", "match_ended"].includes(value.phase)) return;
       const active = ["match_loading", "match_started", "match_in_progress"].includes(value.phase) && !value.isReplay;
       const merged = active ? mergeLiveGameStreamerHistory(value, sticky) : null; sticky = merged?.sticky ?? null;
-      const gameKey = typeof value.gameKey === "string" && value.gameKey.length <= 120 ? value.gameKey : null;
+      const gameKey = typeof value.gameKey === "string" && value.gameKey.trim().length > 0 && value.gameKey.length <= 120 ? value.gameKey : null;
+      const endedAt = typeof value.lastEndedGame?.endedAt === "number" && Number.isFinite(value.lastEndedGame.endedAt) ? value.lastEndedGame.endedAt : null;
+      const endedGameKey = endedAt !== null && Date.now() - endedAt <= 30 * 60_000
+        && typeof value.lastEndedGame?.gameKey === "string" && value.lastEndedGame.gameKey.length <= 120 ? value.lastEndedGame.gameKey : null;
       setFacts(previous => ({ ...(previous.token === token ? previous : { token, session: null, engagementEvent: null }), liveGame: merged?.envelope ?? null, lastLiveAt: Date.now(),
-        gameStatus: { gameKey, phase: value.phase, isReplay: value.isReplay === true, verified: previous.token === token && previous.gameStatus?.gameKey === gameKey && previous.gameStatus.verified === true } }));
+        gameStatus: { gameKey, phase: value.phase, isReplay: value.isReplay === true,
+          verified: previous.token === token && (previous.gameStatus?.gameKey ?? previous.gameStatus?.endedGameKey) === (gameKey ?? endedGameKey) && previous.gameStatus?.verified === true,
+          ...(endedAt !== null ? { endedGameKey, endedAt } : {}) } }));
     };
     const receiveSession = (raw: unknown) => {
       if (!current() || !raw || typeof raw !== "object" || Array.isArray(raw)) return;
@@ -72,7 +77,7 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
       if (!current() || !raw || typeof raw !== "object" || Array.isArray(raw)) return;
       const value = raw as Record<string, unknown>;
       if (!["win", "loss"].includes(String(value.result)) || typeof value.gameKey !== "string") return;
-      setFacts(previous => previous.token === token && previous.gameStatus && previous.gameStatus.gameKey === value.gameKey
+      setFacts(previous => previous.token === token && previous.gameStatus && (previous.gameStatus.gameKey ?? previous.gameStatus.endedGameKey) === value.gameKey
         ? { ...previous, gameStatus: { ...previous.gameStatus, verified: true } } : previous);
     };
     const receiveEngagement = (raw: unknown) => {

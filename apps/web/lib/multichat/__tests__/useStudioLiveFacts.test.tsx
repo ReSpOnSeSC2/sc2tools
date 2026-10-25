@@ -42,4 +42,11 @@ describe("Dock live facts share the existing socket", () => {
     act(() => events.get("overlay:session")?.({ wins: 20, losses: 3, games: 23 })); expect(view.result.current.session?.games).toBe(0);
     act(() => sockets[0].outgoing?.("overlay:resync")); expect(view.result.current.gameStatus).toBeNull(); expect(view.result.current.session).toBeNull();
   });
+  it("rehydrates a cloud-stamped ended round from menu without opponent data and tracks its verified result", () => {
+    const view = renderHook(() => useStudioUpdates("one", vi.fn())); const events = sockets[0].events;
+    act(() => events.get("overlay:liveGame")?.(live({ phase: "menu", gameKey: undefined, opponent: undefined, lastEndedGame: { gameKey: "one", endedAt: Date.now() } })));
+    expect(view.result.current.liveGame).toBeNull(); expect(view.result.current.gameStatus).toMatchObject({ phase: "menu", gameKey: null, endedGameKey: "one", verified: false });
+    act(() => events.get("overlay:live")?.({ gameKey: "one", result: "win" })); expect(view.result.current.gameStatus?.verified).toBe(true);
+    act(() => events.get("overlay:liveGame")?.(live({ gameKey: "two", phase: "match_started" }))); expect(view.result.current.gameStatus?.endedGameKey).toBeUndefined();
+  });
 });

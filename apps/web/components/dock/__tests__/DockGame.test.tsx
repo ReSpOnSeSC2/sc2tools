@@ -37,6 +37,14 @@ it("requires confirmation of exact manual result and defaults to safe Cancel", a
   await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Resolve manually" })));
   expect(p.onPost).toHaveBeenCalledWith({ action: "predictionResolve", gameKey: "game", result: "loss" });
 });
+it("keeps a matched ended-round control usable in menu, then disables it on expiry or a new game", () => {
+  const p = props(); p.live = null; p.gameStatus = { gameKey: null, phase: "menu", isReplay: false, verified: false, endedGameKey: "game", endedAt: NOW };
+  const view = render(<DockGame {...p} />); expect((screen.getByRole("button", { name: "Resolve Win" }) as HTMLButtonElement).disabled).toBe(false);
+  expect(screen.queryByText("Public Opponent", { selector: "p.text-body" })).toBeNull();
+  act(() => vi.advanceTimersByTime(31 * 60_000)); expect((screen.getByRole("button", { name: "Resolve Win" }) as HTMLButtonElement).disabled).toBe(true);
+  view.rerender(<DockGame {...p} gameStatus={{ gameKey: "next", phase: "match_started", isReplay: false, verified: false }} />);
+  expect((screen.getByRole("button", { name: "Resolve Win" }) as HTMLButtonElement).disabled).toBe(true);
+});
 it("a warm owner/cohort change closes confirmation and drops late shoutout receipts", async () => {
   const p = props(); let finish!: (value: typeof DEFAULT_STUDIO_STATE) => void;
   p.onPost = vi.fn(() => new Promise<typeof DEFAULT_STUDIO_STATE>(resolve => { finish = resolve; }));

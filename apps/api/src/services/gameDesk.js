@@ -36,9 +36,12 @@ class GameDeskService {
     if (body.action === "predictionCancel") {
       if (!await engagement._cancelAdmitted(token, gameKey)) throw deskError(409, "prediction_changed");
     } else if (body.action === "predictionResolve") {
-      const live = broker.latest(userId);
+      const live = /** @type {Record<string,any>|null} */ (broker.latest(userId));
       const verified = /** @type {Record<string,any>|null} */ (broker.latestOverlayLive(userId));
-      if (!live || live.isReplay || live.phase !== "match_ended" || live.gameKey !== gameKey
+      const endedKey = live?.lastEndedGame?.gameKey ?? (live?.phase === "match_ended" ? live.gameKey : null);
+      const endedAt = live?.lastEndedGame?.endedAt ?? this.now();
+      if (!live || live.isReplay || !["match_ended", "menu", "idle"].includes(live.phase) || endedKey !== gameKey
+        || typeof endedAt !== "number" || !Number.isFinite(endedAt) || this.now() - endedAt > 30 * 60_000
         || (verified?.gameKey === gameKey && ["win", "loss"].includes(verified.result))) throw deskError(409, "prediction_manual_unavailable");
       if (!["win", "loss"].includes(body.result)) throw deskError(400, "invalid_prediction_result");
       if (!await engagement._manualSettleAdmitted(token, gameKey, body.result)) throw deskError(409, "prediction_changed");

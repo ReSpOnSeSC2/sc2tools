@@ -33,7 +33,7 @@ const article: HelpArticle = {
       type: "callout",
       tone: "info",
       title: "Crystal Ball fair play",
-      text: "Only replay-verified results award oracle points or affect accuracy. In Stream Dock → Game, Cancel round awards nothing. After a matching game ends without a verified result, the streamer can confirm Resolve Win or Resolve Loss; viewers see **resolved manually**, with no points or accuracy change. Voting locks early in the game, and a late verified replay cannot score a cancelled or manually resolved round.",
+      text: "Only replay-verified results award oracle points or affect accuracy. In Stream Dock → Game, Cancel round awards nothing. For 30 minutes after a matching game ends without a verified result, before another match starts, the streamer can confirm Resolve Win or Resolve Loss; viewers see **resolved manually**, with no points or accuracy change. Voting locks early in the game, and a late verified replay cannot score a cancelled or manually resolved round.",
     },
     {
       type: "paragraph",

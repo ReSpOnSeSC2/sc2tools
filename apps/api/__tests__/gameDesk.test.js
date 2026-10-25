@@ -55,6 +55,16 @@ test("manual resolve rejects replay, mismatched key, verified result and malform
   verified = null;
   expect((await post({ action: "predictionResolve", gameKey: live.gameKey, result: "draw" })).status).toBe(400);
 });
+test("a bounded observed end remains resolvable in menu, without any live opponent", async () => {
+  await round(); live = { type: "liveGameState", phase: "menu", lastEndedGame: { gameKey: "game-one", endedAt: Date.now() } };
+  expect((await post({ action: "predictionResolve", gameKey: "game-one", result: "win" })).status).toBe(200);
+});
+test("expired observed ends and a new active game cannot resolve the old round", async () => {
+  await round(); live = { type: "liveGameState", phase: "menu", lastEndedGame: { gameKey: "game-one", endedAt: Date.now() - 31 * 60_000 } };
+  expect((await post({ action: "predictionResolve", gameKey: "game-one", result: "win" })).status).toBe(409);
+  live = { type: "liveGameState", phase: "match_started", gameKey: "game-two", lastEndedGame: { gameKey: "game-one", endedAt: Date.now() } };
+  expect((await post({ action: "predictionResolve", gameKey: "game-one", result: "win" })).status).toBe(409);
+});
 test("manual reveal is terminal, awards no points and never enters recap accuracy", async () => {
   await round(); expect((await post({ action: "predictionResolve", gameKey: live.gameKey, result: "win" })).status).toBe(200);
   expect(events.find(e => e.payload.manual)?.payload).toMatchObject({ type: "prediction-settled", manual: true, pointsEach: 0 });

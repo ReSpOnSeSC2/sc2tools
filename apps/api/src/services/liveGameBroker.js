@@ -1,4 +1,5 @@
 "use strict";
+const { withEndedGameControl } = require("./liveGameEndedControl");
 
 const { buildScoutingBrief, scoutingDeviceRoom } = require("./agentScouting");
 
@@ -265,6 +266,7 @@ class LiveGameBroker {
     }
     const publishRevision = (this._publishRevision.get(userId) || 0) + 1;
     this._publishRevision.set(userId, publishRevision);
+    envelope = withEndedGameControl(envelope, this._latest.get(userId)?.envelope, receivedAt);
     // Stamp the publish-time gameKey BEFORE the partial broadcast so
     // the enrich callback (which fires on the same envelope) sees the
     // up-to-date "current" key. A new key implicitly invalidates any

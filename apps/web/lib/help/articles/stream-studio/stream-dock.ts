@@ -33,7 +33,7 @@ const article: HelpArticle = {
       type: "callout",
       tone: "info",
       title: "Crystal Ball fair play",
-      text: "The Game card shows votes and the voting-lock countdown. **Cancel round** closes the selected round with no points. **Resolve Win/Loss** requires confirmation and is available only after that matching game ends without a replay-verified result. Its reveal says **resolved manually**, awards no oracle points, and is excluded from oracle accuracy. Verified results remain the scoring source.",
+      text: "The Game card shows votes and the voting-lock countdown. **Cancel round** closes the selected round with no points. **Resolve Win/Loss** requires confirmation and is available for 30 minutes after that matching game ends without a replay-verified result, until a new match starts. Its reveal says **resolved manually**, awards no oracle points, and is excluded from oracle accuracy. Verified results remain the scoring source.",
     },
     {
       type: "paragraph",

@@ -512,6 +512,8 @@ export interface LiveGameEnvelopeProfile {
 export interface LiveGameEnvelope {
   /** Cloud-reviewed exact identity links. Agent assertions are stripped. */
   opponentChannels?: { twitch?: string; youtube?: string };
+  /** Cloud-observed ended match, with no opponent data. Key expires after 30min. */
+  lastEndedGame?: { gameKey?: string; endedAt: number };
   /** Optional live source data; current desktop agents may omit it. */
   map?: string;
   type: "liveGameState";
