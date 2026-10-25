@@ -47,6 +47,7 @@ corresponding GitHub Release.
   Bound fresh-replay overflow to eight pending jobs during large backlogs.
 
 ### Added
+- Change or clear your planned build directly from Macro Breakdown, in both the score popup and the full game page. The game header and other check-in views stay in sync.
 - Create builds from a replay, a detected label or a blank draft in one rich editor. The first-run library also links Community copies; searchable race-aware action pickers show friendly names, proxy eligibility and unknown-action errors.
 - Configure optional Twitch Predictions and live-game stream markers with separate permissions, explicit opt-ins and confirmed Dock controls. A separate server gate defaults off; current desktop telemetry cannot prove ranked queue status, so automatic Predictions remain unavailable.
 - Opt in to nine recorded ladder achievements in Event alerts, with per-moment visuals and sounds, local tests, clip timestamps and optional posts through an already connected bot. Supporter alerts keep priority; replay starting MMR and confirmed league evidence remain explicit.
