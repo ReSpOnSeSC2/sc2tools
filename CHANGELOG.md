@@ -35,6 +35,10 @@ corresponding GitHub Release.
 
 - Save same-player grouping across devices and recognise approved or already-cached alternate accounts in live scouting. Dossier, live and desktop briefs share a deterministic opening forecast with confidence, sample size and count-based explanations; missing or incomplete history stays explicit.
 
+### PvZ air opening timing
+
+- Require the 2-Stargate Void Ray and 2/3-Stargate Phoenix openings to establish their Stargates, two bases and four real air units by 7:00, with matching build definitions.
+
 ### Admin Users
 
 - Browse exact totals with sortable pages and signup, admin and inactive-agent filters. Export matching accounts as a bounded private CSV, inspect recent games/activity, and copy account IDs with a manual fallback.
