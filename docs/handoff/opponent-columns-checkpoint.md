@@ -81,12 +81,18 @@ download fence `8bcc0e55`, API summaries `677d9591`, cutover correction
 - Independent reviews found and verified corrections for stale downloads,
   account context, picker/table containment and storage-cutover coverage;
   no remaining source blocker was reported.
+- Exact-head CI caught two old download-consumer mocks missing the real owner
+  scope export. Corrected the accounts-source unit fixture and coaching browser
+  fixture, plus the same latent omission (and bounded request helper) in two
+  existing manual game fixtures. Runtime source was unchanged. The focused
+  consumer pack passed 111 tests across seven suites, coaching passed all nine
+  browser cases at 360/768/1280, and both manual bundles compiled successfully.
 
 ## Integration / remaining gates
 
-The column PR is stacked on #753 so both reviewed changes can be tested as
-one final tree. Merge #753 only after its corrected exact head is green, then
-retarget columns to main and verify its merge tree/checks. #750 is included;
+#753 merged after its corrected exact head passed every check. The column PR
+is now reconciled with that main and targets main directly. Verify its fresh
+head's merge tree and remote checks after the test-only mock corrections. #750 is included;
 close it as superseded only after the combined preference/columns work merges.
 No migration, real download, provider write, release, installer execution,
 version bump or tag occurred. Older unindexed build-order dates remain
