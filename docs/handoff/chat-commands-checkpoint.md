@@ -41,3 +41,18 @@ Final-head remote checks/Vercel and a fresh main merge tree remain PR gates.
 
 No infrastructure or budget change, production mutation, actual chat post,
 integration enabling, release/version action or AI/model call.
+
+Actual main b2f49312 (Ghost734 plus owner7ada scouting/queue work) is
+integrated. The exact current-main native upload assembly barrier is retained;
+both Ghost and Chat preferences keep their dedicated validation and private
+no-store routes. No Series feature or ProfileView change is included.
+
+Final combined integration passes 86 API tests, 36 web tests, 9 native gate
+tests and both full typechecks. Required f96 engine smoke and the final
+Next-only production build/all unchanged budgets pass: landing214.8/215,
+Today239/240,Dock214.7/225,AIO236/240,widget320.1/325kB. Existing independent
+source/visual review and232-check browser evidence remain applicable; this
+merge adds only already-shipped Ghost/owner code and preserves both contracts.
+Current expected-head checks and Vercel remain required; no deployment quota
+bypass, provider action, integration enabling or production mutation occurred.
+
