@@ -83,7 +83,7 @@ export function SendToPcCard() {
         <a
           href={sendToPcMailto()}
           onClick={() => gaEvent("download_link_sent", { method: "email" })}
-          className={`${BUTTON_CLASS} bg-accent-cyan text-white hover:bg-accent-cyan/90`}
+          className={`${BUTTON_CLASS} bg-accent text-white hover:bg-accent-hover`}
         >
           <Mail className="h-5 w-5" aria-hidden />
           Email me the link

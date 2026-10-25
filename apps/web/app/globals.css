@@ -129,15 +129,15 @@
 
   --accent: 14 125 140;       /* #0e7d8c — deep teal, white text ~4.3:1 */
   --accent-hover: 9 104 117;  /* #096875 */
-  --accent-ink: 10 115 122;   /* #0a737a */
+  --accent-ink: 8 102 109;    /* #08666d — also passes common 15% selected fills */
   --accent-ink-hover: 9 104 117; /* #096875 */
-  --accent-cyan: 10 115 122;  /* #0a737a */
+  --accent-cyan: 8 102 109;   /* #08666d */
 
   --signal: 143 92 12;        /* #8f5c0c */
   --signal-hover: 122 78 10;  /* #7a4e0a */
 
   /* Editorial clay-rose, darkened for AA on the light paper ground. */
-  --editorial: 178 79 58;         /* #b24f3a — clay rose on light */
+  --editorial: 165 72 52;         /* #a54834 — clay rose on light */
   --editorial-soft: 157 79 59;    /* #9d4f3b */
 
   --success: 21 122 67;       /* #157a43 */

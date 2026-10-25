@@ -21,7 +21,7 @@ const PAGES: Array<{ path: string; expectText: RegExp }> = [
   { path: "/legal/accessibility", expectText: /Accessibility/ },
   { path: "/help", expectText: /How can we help/ },
   { path: "/help/appearance", expectText: /Accessibility & appearance/ },
-  { path: "/definitions", expectText: /build definitions/i },
+  { path: "/definitions", expectText: /Build & Strategy Definitions/i },
   { path: "/reviews", expectText: /replay reviews/i },
   { path: "/community/builds/fixture-community-polish", expectText: /Fixture safe opening/ },
   { path: "/community/authors/fixture-community-author", expectText: /FixtureBuilder/ },

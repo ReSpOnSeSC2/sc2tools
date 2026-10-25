@@ -178,14 +178,12 @@ export function ImprovementPreview() {
           </div>
           <dl className="mt-6 space-y-4">
             {FINGERPRINT_TRACKS.map((track) => (
-              <div key={track.label}>
-                <div className="flex items-baseline justify-between gap-3">
+              <div key={track.label} className="grid grid-cols-[1fr_auto] items-baseline gap-x-3">
                   <dt className="text-caption font-semibold text-text">{track.label}</dt>
                   <dd className="text-micro text-text-dim">{track.detail}</dd>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-bg-subtle">
+                <dd aria-hidden className="col-span-2 mt-2 h-2 overflow-hidden rounded-full bg-bg-subtle">
                   <div className="h-full rounded-full bg-accent-cyan" style={{ width: `${track.value}%` }} />
-                </div>
+                </dd>
               </div>
             ))}
           </dl>
@@ -205,7 +203,7 @@ export function ImprovementPreview() {
               </div>
               <span className="font-mono text-caption font-bold text-success">+214</span>
             </div>
-            <div className="mt-4 flex h-24 items-end gap-1" aria-label="Sample rising MMR trend">
+            <div role="img" className="mt-4 flex h-24 items-end gap-1" aria-label="Sample rising MMR trend">
               {TREND_BARS.map((height, i) => (
                 <span key={`${height}-${i}`} className="min-w-0 flex-1 rounded-t-sm bg-accent-cyan/70" style={{ height: `${height}%` }} />
               ))}
@@ -355,7 +353,7 @@ const CHAT_LINES = [
 
 export function StreamStudioPreview() {
   return (
-    <figure className="overflow-hidden rounded-md border-2 border-line bg-[#080b10] shadow-hard">
+    <figure className="replay-scope overflow-hidden rounded-md border-2 border-line bg-[#080b10] shadow-hard">
       <div className="grid xl:grid-cols-[minmax(0,1.25fr)_22rem]">
         <div className="relative min-h-[430px] overflow-hidden border-b border-white/10 xl:border-b-0 xl:border-r">
           <Image
@@ -442,7 +440,7 @@ export function StreamStudioPreview() {
 function DockAction({ icon: Icon, label, value }: { icon: typeof Video; label: string; value: string }) {
   return (
     <div className="rounded-md border border-white/10 bg-white/[.04] p-2.5">
-      <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[.1em] text-white/45">
+      <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[.1em] text-white/55">
         <Icon className="h-3.5 w-3.5 text-[#3ce0d6]" aria-hidden /> {label}
       </div>
       <p className="mt-1 text-[11px] font-semibold text-white/85">{value}</p>

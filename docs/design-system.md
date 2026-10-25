@@ -40,12 +40,12 @@ public editorial layouts a separate accent.
 | `--text-dim` | `#86929f` | `#515b6b` | Low-priority text |
 | `--accent` | `#157d8c` | `#0e7d8c` | Primary fill |
 | `--accent-hover` | `#096875` | `#096875` | Primary hover fill |
-| `--accent-ink` | `#1f9eaf` | `#0a737a` | Accent text |
+| `--accent-ink` | `#1f9eaf` | `#08666d` | Accent text |
 | `--accent-ink-hover` | `#3ce0d6` | `#096875` | Accent hover text |
-| `--accent-cyan` | `#3ce0d6` | `#0a737a` | Cyan emphasis |
+| `--accent-cyan` | `#3ce0d6` | `#08666d` | Cyan emphasis |
 | `--signal` | `#f5b84a` | `#8f5c0c` | Rare warm emphasis |
 | `--signal-hover` | `#fac86e` | `#7a4e0a` | Warm hover |
-| `--editorial` | `#d6846e` | `#b24f3a` | Editorial accent |
+| `--editorial` | `#d6846e` | `#a54834` | Editorial accent |
 | `--editorial-soft` | `#e8b2a2` | `#9d4f3b` | Editorial secondary accent |
 | `--success` | `#3ec884` | `#157a43` | Success/win text |
 | `--warning` | `#e89c38` | `#8f5f0f` | Caution text |
@@ -122,12 +122,12 @@ here are rounded; tests compare the unrounded values.
 | text | 15.22:1 | 17.35:1 | 15.06:1 | 4.5:1 |
 | text-muted | 7.84:1 | 8.54:1 | 8.92:1 | 4.5:1 |
 | text-dim | 5.68:1 | 6.35:1 | 6.15:1 | 4.5:1 |
-| accent-ink | 5.63:1 | 5.18:1 | 5.46:1 | 4.5:1 |
+| accent-ink | 5.63:1 | 6.20:1 | 5.46:1 | 4.5:1 |
 | accent-ink-hover | 10.99:1 | 5.97:1 | 10.66:1 | 4.5:1 |
-| accent-cyan | 10.99:1 | 5.18:1 | 10.67:1 | 4.5:1 |
+| accent-cyan | 10.99:1 | 6.20:1 | 10.67:1 | 4.5:1 |
 | signal | 10.14:1 | 5.24:1 | 9.84:1 | 4.5:1 |
 | signal-hover | 11.61:1 | 6.64:1 | 11.27:1 | 4.5:1 |
-| editorial | 6.33:1 | 4.77:1 | 6.14:1 | 4.5:1 |
+| editorial | 6.33:1 | 5.43:1 | 6.14:1 | 4.5:1 |
 | editorial-soft | 9.70:1 | 5.37:1 | 9.41:1 | 4.5:1 |
 | success | 8.40:1 | 4.98:1 | 8.15:1 | 4.5:1 |
 | warning | 7.92:1 | 5.09:1 | 7.68:1 | 4.5:1 |
