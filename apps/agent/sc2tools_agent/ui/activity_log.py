@@ -24,35 +24,35 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
             self.search_index = 0
             layout = QtWidgets.QVBoxLayout(self)
             layout.setContentsMargins(28, 24, 28, 24)
-            top = QtWidgets.QHBoxLayout()
-            title = QtWidgets.QLabel("Activity log")
-            title.setObjectName("h1")
-            top.addWidget(title)
-            top.addWidget(help_button(QtWidgets, "Activity log", open_help))
-            top.addStretch(1)
+            self.header_panel = QtWidgets.QWidget()
+            self.header_panel.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+            self._header_layout = QtWidgets.QGridLayout(self.header_panel)
+            self._header_layout.setContentsMargins(0, 0, 0, 0)
+            self.header_title = QtWidgets.QLabel("Activity log")
+            self.header_title.setObjectName("h1")
+            self.header_help = help_button(QtWidgets, "Activity log", open_help)
             self.filter_combo = QtWidgets.QComboBox()
             for label, value in [("Everything", "all"), ("Info and above", "info"),
                                  ("Warnings and errors", "warnings"), ("Errors only", "errors")]:
                 self.filter_combo.addItem(label, value)
             self.filter_combo.currentIndexChanged.connect(self.rebuild)
-            top.addWidget(self.filter_combo)
-            open_button = QtWidgets.QPushButton("Open log folder")
-            open_button.clicked.connect(open_folder)
-            top.addWidget(open_button)
-            layout.addLayout(top)
+            self.open_folder_button = QtWidgets.QPushButton("Open log folder")
+            self.open_folder_button.clicked.connect(open_folder)
+            layout.addWidget(self.header_panel)
 
-            toolbar = QtWidgets.QHBoxLayout()
+            self.toolbar_panel = QtWidgets.QWidget()
+            self.toolbar_panel.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+            self._toolbar_layout = QtWidgets.QGridLayout(self.toolbar_panel)
+            self._toolbar_layout.setContentsMargins(0, 0, 0, 0)
+            self._controls_signature = None
             self.search = QtWidgets.QLineEdit()
             self.search.setPlaceholderText("Search log")
             self.search.setAccessibleName("Search log")
             self.search.textChanged.connect(self._search_changed)
-            toolbar.addWidget(self.search, 1)
             self.match_count = QtWidgets.QLabel("")
-            toolbar.addWidget(self.match_count)
             self.follow = QtWidgets.QCheckBox("Follow new lines")
             self.follow.setChecked(True)
             self.follow.toggled.connect(lambda value: self.jump_to_latest() if value else None)
-            toolbar.addWidget(self.follow)
             self.copy_button = QtWidgets.QToolButton()
             self.copy_button.setText("Copy")
             self.copy_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
@@ -61,8 +61,7 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
             self.copy_menu.addAction("Copy last 200 lines", self.copy_tail)
             self.copy_menu.aboutToShow.connect(lambda: self.copy_selection_action.setEnabled(self.view.textCursor().hasSelection()))
             self.copy_button.setMenu(self.copy_menu)
-            toolbar.addWidget(self.copy_button)
-            layout.addLayout(toolbar)
+            layout.addWidget(self.toolbar_panel)
             self.jump_button = QtWidgets.QPushButton()
             self.jump_button.setVisible(False)
             self.jump_button.clicked.connect(self.jump_to_latest)
@@ -93,6 +92,48 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
             escape = QtGui.QShortcut(QtGui.QKeySequence("Escape"), self)
             escape.setContext(QtCore.Qt.WidgetWithChildrenShortcut)
             escape.activated.connect(self.search.clear)
+            self._reflow_controls()
+
+        def _reflow_controls(self):
+            if not hasattr(self, "copy_button"):
+                return
+            available = max(1, self.width() - self.layout().contentsMargins().left() - self.layout().contentsMargins().right())
+            header = [self.header_title, self.header_help, self.filter_combo, self.open_folder_button]
+            toolbar = [self.search, self.match_count, self.follow, self.copy_button]
+            header_width = sum(widget.minimumSizeHint().width() for widget in header) + 4 * max(0, self._header_layout.horizontalSpacing())
+            toolbar_width = sum(widget.minimumSizeHint().width() for widget in toolbar) + 3 * max(0, self._toolbar_layout.horizontalSpacing())
+            signature = (available < header_width, available < toolbar_width)
+            if signature == self._controls_signature:
+                return
+            self._controls_signature = signature
+            for controls in (self._header_layout, self._toolbar_layout):
+                while controls.count():
+                    controls.takeAt(0)
+                for column in range(5):
+                    controls.setColumnStretch(column, 0)
+            if signature[0]:
+                self._header_layout.addWidget(self.header_title, 0, 0, 1, 2)
+                self._header_layout.addWidget(self.header_help, 0, 2)
+                self._header_layout.addWidget(self.filter_combo, 1, 0, 1, 2)
+                self._header_layout.addWidget(self.open_folder_button, 1, 2)
+                self._header_layout.setColumnStretch(0, 1)
+            else:
+                for widget, column in zip(header, (0, 1, 3, 4)):
+                    self._header_layout.addWidget(widget, 0, column)
+                self._header_layout.setColumnStretch(2, 1)
+            if signature[1]:
+                self._toolbar_layout.addWidget(self.search, 0, 0, 1, 2)
+                self._toolbar_layout.addWidget(self.match_count, 0, 2)
+                self._toolbar_layout.addWidget(self.follow, 1, 0, 1, 2)
+                self._toolbar_layout.addWidget(self.copy_button, 1, 2)
+            else:
+                for column, widget in enumerate(toolbar):
+                    self._toolbar_layout.addWidget(widget, 0, column)
+            self._toolbar_layout.setColumnStretch(0, 1)
+
+        def resizeEvent(self, event):
+            super().resizeEvent(event)
+            self._reflow_controls()
 
         def _selection_changed(self):
             if not self._mutating and self.view.textCursor().hasSelection():
@@ -215,6 +256,7 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
                 selections.append(selection)
             self.view.setExtraSelections(selections)
             self.match_count.setText(f"{self.search_index + 1} of {len(hits)}" if hits else "0 matches")
+            self._reflow_controls()
 
         def _search_changed(self, _text):
             self.search_index = 0

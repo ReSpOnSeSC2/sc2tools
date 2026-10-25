@@ -23,6 +23,8 @@ import {
 } from "./GameStreamLinks";
 import { useGameVodLinks } from "./useGameVodLinks";
 import { ReplayDownloadButton } from "./ReplayDownloadButton";
+import { StarGhostReplayButton } from "@/components/builds/StarGhostReplayButton";
+import { ReferenceComparison } from "@/components/builds/ReferenceComparison";
 import { PlannedBadge, PlayedBuildBadge } from "@/components/build-checkin/PlannedBadge";
 import {
   gameAnalysisHref,
@@ -368,6 +370,7 @@ function GameRow({
         ) : null}
         <td className="px-2 py-1 text-right">
           <div className="inline-flex items-center justify-end gap-1.5">
+            {game.id ? <StarGhostReplayButton gameId={game.id} /> : null}
             <GameDeepDiveLink
               gameId={game.id}
               opponentContext={opponentContext}
@@ -665,6 +668,7 @@ function GameMobileCard({
             />
           ) : null}
           <div className="space-y-2">
+            {game.id ? <StarGhostReplayButton gameId={game.id} /> : null}
             <GameDeepDiveLink
               gameId={game.id}
               mobile
@@ -858,7 +862,7 @@ function BuildOrderRow({
   const { data } = buildOrder;
   if (!data) return null;
   return (
-    <BuildOrderDualTimeline
+    <><BuildOrderDualTimeline
       events={data.events || []}
       oppEvents={data.opp_events || []}
       gameId={gameId}
@@ -868,7 +872,7 @@ function BuildOrderRow({
       oppBuildName={data.opp_strategy}
       myStatus={data.my_status}
       oppStatus={data.opp_status}
-    />
+    /><div className="mt-3 flex flex-wrap items-center gap-2"><span className="text-caption text-text-muted">Opponent opening</span><StarGhostReplayButton gameId={gameId} side="opponent" /></div><ReferenceComparison gameId={gameId} /></>
   );
 }
 

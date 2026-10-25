@@ -248,7 +248,7 @@ class LiveClientPoller:
         # Replay sessions: explicitly do NOT push to the bridge. The
         # streamer reviewing a vod doesn't want fake "scouting" widgets
         # appearing for the in-replay opponent.
-        if game.is_replay:
+        if game.is_replay or game.is_observer:
             if self._last_phase != LiveLifecyclePhase.MENU:
                 self._emit(
                     LiveLifecyclePhase.MENU,
@@ -545,6 +545,7 @@ class LiveClientPoller:
         return LiveGameState(
             display_time=display_time,
             is_replay=bool(data.get("isReplay")),
+            is_observer=any(data.get(key) is True for key in ("isObserver", "is_observer", "sourceObserver", "sourceIsObserver", "source_is_observer")),
             players=players,
         )
 
@@ -630,6 +631,8 @@ def _player_from_dict(raw: Dict[str, Any]) -> LivePlayer:
         race=str(raw.get("race") or ""),
         result=str(raw.get("result") or "Undecided"),
         player_id=pid,
+        team_id=next((value for value in (raw.get("teamId"), raw.get("team"))
+                      if type(value) is int and 0 <= value <= 16), None),
     )
 
 

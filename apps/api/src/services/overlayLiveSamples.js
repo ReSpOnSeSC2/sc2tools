@@ -1,5 +1,7 @@
 "use strict";
 
+const { computePlayerCard } = require("./scouting/playerCard");
+
 /**
  * Synthetic overlay payloads for the Settings → Overlay Test button.
  *
@@ -120,6 +122,14 @@ function buildSamplePayload(widget) {
       note: "Frequent matchup",
     },
     rematch: { isRematch: true, lastResult: "win" },
+    // Explicitly synthetic, just like every other field in this Test payload.
+    playerCard: computePlayerCard([
+      { earlyFinish: true, expansion: false, economy: false, tech: false, air: false },
+      { earlyFinish: false, expansion: true, economy: true, tech: true, air: true },
+      { earlyFinish: false, expansion: true, economy: true, tech: true, air: true },
+      { earlyFinish: false, expansion: true, economy: true, tech: false, air: true },
+      { earlyFinish: false, expansion: true, economy: false, tech: false, air: false },
+    ], { totalGames: null, sampleLimit: 5, sampled: true }),
     // Realistic phase forecast — modal final phase Mid/Late with a
     // Skytoss composition, matching the calibration anchor from the
     // PvZ 15m Skytoss snapshot in
@@ -204,6 +214,7 @@ const PER_WIDGET_KEYS = {
     "cheeseHistory",
     "recentGames",
     "opponentPhases",
+    "playerCard",
   ],
   "session": ["session"],
   // Randomizer reads its build pool from overlay:config (not the live

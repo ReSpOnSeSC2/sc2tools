@@ -118,6 +118,7 @@ class LiveGame:
     resend_inflight: bool = False
     """A pick the declare never delivered is being sent after the game."""
     released: bool = False
+    randomizer_request_inflight: bool = False
     register_count: int = 0
     registered_with_matchup: bool = False
     ops: Deque[LiveOp] = field(default_factory=deque)

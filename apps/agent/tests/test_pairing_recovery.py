@@ -172,6 +172,7 @@ def test_actual_recovery_holds_jobs_keeps_cursor_and_rebuilds_credentials(tmp_pa
     assert cell.upload.pending_count() == 1 and not cell.upload.is_paused()
     assert not state.paused and state.uploaded == {"kept": "2026-01-01"}
     new_socket.start.assert_called_once()
+    new_socket.set_session_enabled.assert_called_once_with(state.companion_session_enabled)
 
 
 def test_stopped_gui_pairing_does_not_quit_window(tmp_path):

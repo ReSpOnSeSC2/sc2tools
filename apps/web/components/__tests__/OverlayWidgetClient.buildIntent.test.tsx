@@ -145,6 +145,16 @@ describe("dedicated randomizer source — build check-in", () => {
     expect(socket.rolls()).toEqual([ROLL]);
   });
 
+  it("shows the check-in's saved result when the widget opens after the choice", () => {
+    mount();
+    act(() => socket.fire("overlay:buildIntent", { gameKey: GAME, suppressRandomizer: false, holdRemainingMs: 0,
+      randomizer: { key: "custom:saved", name: "Already selected build", source: "custom" } }));
+    fireEnvelope();
+    expect(reveals).toEqual(["custom:saved"]);
+    expect(frameShown()).toBe(true);
+    expect(socket.rolls()).toEqual([]);
+  });
+
   it("ends the hold when the match starts", () => {
     mount();
     fireEnvelope();

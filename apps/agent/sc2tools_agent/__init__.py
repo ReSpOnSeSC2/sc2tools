@@ -9,7 +9,7 @@ The agent runs on the user's gaming PC and:
        * a system-tray icon (``ui.tray``) for power users, and
        * a console fallback (``ui.console``) for headless / CI runs.
   5. Polls ``GET /v1/agent/version`` for new releases and downloads +
-     verifies + launches the signed installer when one appears.
+     verifies + launches the installer when one appears.
   6. Reports unhandled crashes to Sentry with PII-redacted breadcrumbs.
 
 The actual replay parsers (event_extractor, macro_score, ...) live in
@@ -17,5 +17,5 @@ the apps/replay-engine/ package — the agent imports them so we never
 duplicate parsing logic. See ``replay_pipeline.py``.
 """
 
-__version__ = "0.19.0"
+__version__ = "0.24.4"
 

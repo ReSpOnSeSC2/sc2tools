@@ -17,6 +17,8 @@ import { fmtDate, fmtMinutes } from "@/lib/format";
 import type { BuildOrderEvent } from "@/lib/build-events";
 import { PlannedBadge } from "@/components/build-checkin/PlannedBadge";
 import type { BuildRecentGame } from "./types";
+import { StarGhostReplayButton } from "./StarGhostReplayButton";
+import { ReferenceComparison } from "./ReferenceComparison";
 
 interface BuildOrderResp {
   ok: boolean;
@@ -46,11 +48,15 @@ export function BuildGamesTable({
   resumedGames = [],
   resumedCount = 0,
   total,
+  buildKey,
+  ghostSide = "you",
 }: {
   games: BuildRecentGame[];
   resumedGames?: BuildRecentGame[];
   resumedCount?: number;
   total?: number;
+  buildKey?: string;
+  ghostSide?: "you" | "opponent";
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showResumedGames, setShowResumedGames] = useState(false);
@@ -150,6 +156,8 @@ export function BuildGamesTable({
                   <GameRow
                     key={g.gameId}
                     game={g}
+                    buildKey={buildKey}
+                    ghostSide={ghostSide}
                     expanded={expanded === g.gameId}
                     onToggle={() =>
                       setExpanded((cur) =>
@@ -166,6 +174,8 @@ export function BuildGamesTable({
               <GameMobile
                 key={g.gameId}
                 game={g}
+                buildKey={buildKey}
+                ghostSide={ghostSide}
                 expanded={expanded === g.gameId}
                 onToggle={() =>
                   setExpanded((cur) =>
@@ -198,10 +208,14 @@ function sortValue(game: BuildRecentGame, column: string): string | number | nul
 
 function GameRow({
   game,
+  buildKey,
+  ghostSide,
   expanded,
   onToggle,
 }: {
   game: BuildRecentGame;
+  buildKey?: string;
+  ghostSide: "you" | "opponent";
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -253,13 +267,13 @@ function GameRow({
             <GameResultBadge game={game} />
           </span>
         </td>
-        <td className="text-center"><OpenGameLink game={game} /></td>
+        <td className="text-center"><OpenGameLink game={game} /><StarGhostReplayButton gameId={game.gameId} buildKey={buildKey} side={ghostSide} /></td>
       </tr>
       {expanded ? (
         <tr id={`build-game-${game.gameId}-detail`} className="bg-bg-elevated/20">
           <td colSpan={8} className="space-y-2 px-2 pb-3 pt-1">
             <CheckInNotes game={game} />
-            <BuildOrderExpansion gameId={game.gameId} game={game} />
+            <BuildOrderExpansion gameId={game.gameId} game={game} buildKey={buildKey} ghostSide={ghostSide} />
           </td>
         </tr>
       ) : null}
@@ -269,10 +283,14 @@ function GameRow({
 
 function GameMobile({
   game,
+  buildKey,
+  ghostSide,
   expanded,
   onToggle,
 }: {
   game: BuildRecentGame;
+  buildKey?: string;
+  ghostSide: "you" | "opponent";
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -326,11 +344,11 @@ function GameMobile({
           )}
         </span>
       </button>
-      <div className="px-3 pb-1 text-caption text-text-muted"><span>Strategy: <StrategyLabel label={game.opp_strategy || "—"} /></span><div><OpenGameLink game={game} mobile /></div></div>
+      <div className="px-3 pb-1 text-caption text-text-muted"><span>Strategy: <StrategyLabel label={game.opp_strategy || "—"} /></span><div><OpenGameLink game={game} mobile /><StarGhostReplayButton gameId={game.gameId} buildKey={buildKey} side={ghostSide} /></div></div>
       {expanded ? (
         <div id={`build-game-${game.gameId}-mobile-detail`} className="space-y-2 border-t border-border px-3 py-2">
           <CheckInNotes game={game} />
-          <BuildOrderExpansion gameId={game.gameId} game={game} />
+          <BuildOrderExpansion gameId={game.gameId} game={game} buildKey={buildKey} ghostSide={ghostSide} />
         </div>
       ) : null}
     </li>
@@ -409,9 +427,13 @@ function MacroCell({ value }: { value: number | null }) {
 function BuildOrderExpansion({
   gameId,
   game,
+  buildKey,
+  ghostSide,
 }: {
   gameId: string;
   game: BuildRecentGame;
+  buildKey?: string;
+  ghostSide: "you" | "opponent";
 }) {
   const { data, isLoading, error, mutate } = useApi<BuildOrderResp>(
     `/v1/games/${encodeURIComponent(gameId)}/build-order`,
@@ -428,7 +450,7 @@ function BuildOrderExpansion({
   }
   if (!data) return null;
   return (
-    <BuildOrderTimeline
+    <><BuildOrderTimeline
       events={data.events || []}
       oppEvents={data.opp_events || []}
       defaultPerspective="you"
@@ -440,6 +462,6 @@ function BuildOrderExpansion({
         // SaveAsBuildButton handles the API call internally via the
         // BuildEditorModal -> PUT /v1/custom-builds/:slug flow.
       }}
-    />
+    /><ReferenceComparison gameId={gameId} buildKey={buildKey} side={ghostSide} /></>
   );
 }

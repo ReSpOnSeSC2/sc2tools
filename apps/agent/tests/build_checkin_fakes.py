@@ -260,6 +260,19 @@ class FakeCheckinApi:
             raise api_error(404, "not_found")
         return self._live_state(game_key)
 
+    def roll_live_randomizer(self, game_key: str, matchup: str) -> Dict[str, Any]:
+        self._enter("roll_live_randomizer", game_key, matchup)
+        doc = self.live[game_key]
+        if doc.get("declared"):
+            raise api_error(409, "build_declared")
+        if not doc.get("randomizer"):
+            pool = [build for build in self.options.get(matchup, {}).get("builds", []) if build.get("inRandomizer")]
+            if not self.randomizer_enabled or not pool:
+                raise api_error(409, "randomizer_disabled")
+            doc["randomizer"] = {field: pool[0].get(field) for field in ("key", "name", "source", "slug")}
+            doc["released"] = True
+        return self._live_state(game_key)
+
     def get_game_intent(self, game_id: str, *, include_options: bool = False) -> Dict[str, Any]:
         self._enter("get_game_intent", game_id, include_options=include_options)
         if game_id not in self.games:

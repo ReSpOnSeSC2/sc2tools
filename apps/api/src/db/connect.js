@@ -47,6 +47,7 @@ const { ensureGuideIndexes, startBackgroundIndexBuilds } = require("./guideIndex
  *   supportEmailSync: import('mongodb').Collection<any>,
  *   sitePresence: import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>,
  *   siteConfig: import('mongodb').Collection<any>,
+ *   ghostExamples: import('mongodb').Collection<any>,
  *   pulseAccounts: import('mongodb').Collection,
  *   pulseCharacterLinks: import('mongodb').Collection,
  *   playerChannels: import('mongodb').Collection,
@@ -141,6 +142,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     adminAudit: db.collection(COLLECTIONS.ADMIN_AUDIT),
     supportEmailSync: db.collection(COLLECTIONS.SUPPORT_EMAIL_SYNC),
     siteConfig: db.collection(COLLECTIONS.SITE_CONFIG),
+    ghostExamples: db.collection(COLLECTIONS.GHOST_EXAMPLES),
     sitePresence: /** @type {import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>} */ (
       db.collection(COLLECTIONS.SITE_PRESENCE)
     ),
@@ -312,6 +314,9 @@ async function ensureBuildIntentIndexes(ctx) {
  * @returns {Promise<import('./guideIndexes').BackgroundIndexBuilds>}
  */
 async function ensureIndexes(ctx, opts = {}) {
+  await ctx.ghostExamples.createIndex({ ownerUserId: 1, sourceGameId: 1, side: 1 }, { unique: true });
+  await ctx.ghostExamples.createIndex({ publishedAt: -1, _id: 1 });
+  await ctx.ghostExamples.createIndex({ matchup: 1, publishedAt: -1, _id: 1 });
   await Promise.all([
     ctx.siteConfig.createIndex({ kind: 1, revision: -1 }, { name: "preset_policy_history" }),
     ctx.jobRuns.createIndex({ job: 1, startedAt: -1 }),

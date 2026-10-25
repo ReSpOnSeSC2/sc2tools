@@ -40,9 +40,10 @@ window keeps the app running in the tray; use **Quit** to stop it.
 
 During an outage, the Dashboard shows the number of waiting replays and a
 retry countdown. **Retry now** starts another attempt. Temporary connection
-problems do not add error rows to Recent uploads. Permanent replay outcomes
-show a plain-language message, technical details on hover, **Copy details**,
-and a help link. Read [Pairing problems](https://sc2tools.com/help/pairing-troubleshooting)
+problems explain the connection hold. Recent games keeps the latest per-file
+outcome with friendly text: link this PC again for 401/403, wait for the rate
+limit for 429, or wait/retry when the service is busy for 5xx. Right-click a
+failed row for **Retry**, **Copy error**, and Help. Read [Pairing problems](https://sc2tools.com/help/pairing-troubleshooting)
 or [Sync problems](https://sc2tools.com/help/desktop-app-sync-problems).
 
 ## For developers - the source-install path
@@ -103,12 +104,120 @@ multiplexer, so they are always in sync. PySide6 imports are guarded:
 on a source install without `pip install -r requirements.txt`, the
 agent falls back gracefully to tray+console.
 
+## Companion and in-game panels
+
+The **Companion** is part of the existing agent and is the initial page for
+paired installs without a saved page preference. Existing window and page
+preferences are retained. It uses the same account, replay library, updater,
+and tray icon. Choose an opponent, browse your meetings, and inspect each
+player's build and important tech milestones. Replay timings distinguish
+construction **started** from unit, upgrade, and morph **completed** times.
+Missing replay details stay unavailable; the app does not infer enemy tech
+during a live game.
+
+Enable **Opponent**, **Scouting**, **Session**, or **Build Order Ghost** independently
+to keep separate panels above the game. The master assistance switch hides
+native panels while preserving your individual choices. Updates preserve your
+saved choices. Opponent and Scouting follow the active opponent even
+while you browse someone else, stay visible through the match, and hide in
+menus and replays. Closing the main window keeps enabled panels running;
+quitting the agent closes them all. Session can remain visible between games;
+its timer, record, latest-known MMR and rating region use your owned Session feed.
+Rating region is not verified active-server detection.
+
+The race-themed button on the compact opponent strip expands **Standard** when
+scouting is unavailable, including between matches. During an eligible live game,
+it opens or closes the floating **Scouting** report without changing the Companion
+size or your saved pin choice. Opening the Agent from its shortcut or tray also
+opens Standard if you left the main window in Compact; pinned panels keep their size.
+It uses the same paired build cards as Detailed view, including unit icons,
+upgrade timings, Ghost reference buttons and 3/6/10-minute or full-build ranges.
+It follows the live opponent even while you browse another profile. Between
+matches, compact clears the opponent and waits for the next match.
+
+While StarCraft II has focus, only the compact button's **Scouting** action accepts clicks.
+Other compact controls and floating panel areas pass clicks through to the game.
+Use Alt+Tab to another application to restore normal overlay interaction or expand.
+Right-click the strip to expand Companion, minimize, close or open the shared
+Agent menu. These window actions are kept off the compact strip itself.
+Compact uses a transparent background with text and one original control: a
+Protoss crystal, Terran scanner, Zerg organic eye or Default shield. Race
+borders remain on expanded views and the other panels.
+
+Native panel positions are remembered locally without changing their sizes.
+Removed-monitor positions are restored safely onto an available screen. Use
+**Assistance → Reset panel positions** to return to the default placement.
+
+The Companion requires the matching API update for account data. Update the
+installed agent through the existing update flow; a second installation or
+pairing is not needed. OBS browser sources and Build check-in remain available.
+
+The **Agent** dropdown is shared by Companion and every Agent page. It includes
+navigation, **Border & animations…**, **Help & support**, **Check for updates** and
+**Quit SC2 Tools**. Update checks open the Dashboard so progress and results are visible.
+
+The **Build selectors** screen contains the pre-game plan and post-game check-in.
+Choices, opponent corrections, and notes use the same records as the website
+and floating game cards. Their independent switches can be changed at any time.
+The **Randomizer settings** screen silently manages the matchup's eligible pool
+and shows the saved pick. In the loading check-in, **Randomize** selects and saves
+one build even when the separate widget is closed. Every display uses that same
+result; animation, sounds and Randomizer speech stay in the separate widget.
+Selection failures show a message and allow retry. Hidden settings do not poll
+the account; opening them refreshes the saved pool. Failed saves retain the draft
+and allow retry. The settings page displays the saved result without drawing again.
+**Build Order Ghost** arms a recorded replay target for
+each matchup and follows the live game clock in an optional floating panel.
+Each feature has its own on/off control. Turn **In-game assistance** off
+to hide every game panel and pause native assistance without clearing settings.
+
+Save local **Ladder**, **Customs**, **Teams**, **Practice**, and **Review** presets
+under **Customize mode**. Preset gates never rewrite shared account settings;
+Hybrid team scouting supports a selected enemy and an expanded roster, with
+explicit identity/team confirmation when authoritative IDs are unavailable.
+Team ratings are labeled as historical 1v1 data, not invented current team MMR.
+Team Ghost must be armed explicitly for the confirmed game; automatic check-ins
+and Randomizer draws remain limited to supported human 1v1 matches. The optional
+**Ctrl+Shift+F10** shortcut toggles assistance without leaving the game.
+Ghost accepts local replay files, account replays, and explicitly published
+admin examples. Star per-build references, filter the replay library, restore
+earlier reference versions, and compare completed replay timings against them.
+Choose **Compact**, **Standard**, **Detailed**, or **Full workspace** from
+the size picker. Compact shows opponent name, race, MMR, your W–L record against
+them, and your win percentage, with one race-themed control. No league field is
+added. Standard keeps a compact opponent summary and switchable profile, scouting
+and tool pages. Detailed adds more tech steps and upgrades, with a portrait rail
+when the screen has enough room; Full workspace exposes full replay
+timelines and notes. Home, Back, opponent arrows, game arrows, and Previous
+encounters let you browse without losing selected replays or unsaved notes.
+Manual size and information layout are retained. The **Agent** menu opens the
+existing Dashboard, Settings, Streams, Recent games, and Logs.
+
+Cloud replay targets, references and late replies are fenced to the current
+account. Unpairing or switching accounts clears private cloud-derived Ghost data;
+explicit local replay targets remain local. Pending replay archives also retain
+their owner, and older unowned tasks require an owned-game check before resuming.
+
+**Voice on/off** in the Companion header controls spoken scouting independently
+of pinned panels. **Assistance → Read scouting report aloud in Companion** is
+the same saved switch; **Read report now** repeats the current live report and
+**Stop reading** cancels it. This uses the Windows system voice without OBS.
+Automatic reports require a fresh human 1v1 game and read at most once per game
+in this agent session. They wait briefly for opponent history before falling back
+to the known profile if enrichment is unavailable. Browsing history never triggers speech. Only notes marked
+for readout are included. Master-off, a disallowing preset, stale telemetry, or
+quitting stops speech; enable the per-mode speech gate under Customize mode if
+needed. OBS voice preferences remain separate—keep only one scouting voice
+enabled to avoid hearing both. Missing native speech engines show an error
+instead of silently claiming playback.
+
 ## Main window - what is where
 
 | Tab | Contents |
 | --- | -------- |
-| Dashboard | Shared status card (Starting / Connecting / Link this PC / Unlinked / Watching / Syncing / Paused / Needs attention / Error), its cause and next action, pairing code and recovery; green pairing confirmation for four seconds, upload totals when linked, separate update card and release notes. Status matches the sidebar and tray dot. Pause, Re-sync, Add folder, Check for updates, and Open dashboard actions. |
-| Recent uploads | Last ~100 replays the agent has handled, with timestamps and per-row status. Double-click reveals the replay in Explorer. |
+| Companion | Searchable opponent directory, meetings, build comparisons, recorded tech timings, notes, and independent game panel switches. |
+| Dashboard | Shared status and recovery; Last game and locally tracked Today W–L/MMR; Synced with today's uploads, Waiting, persistent relative Last upload, Failed (24 h), and history-import progress. Pause and Open dashboard remain here; Re-sync is in Settings → Maintenance and Updates is beside the sidebar version. |
+| Recent games | Latest 200 local outcomes, kept across restarts. When, result, matchup, opponent, map, length, own MMR and status; status/date filters and collapsed history imports. Double-click opens game analysis. Right-click selects the exact replay in Explorer, copies its path/error, retries or re-analyzes; select failed rows for Retry failed. |
 | Activity log | Incremental tail of `%LOCALAPPDATA%\sc2tools\logs\agent.log`, with complete tracebacks, readable level filters, Ctrl+F search, follow/pause, copy selection or last 200 lines, and Open log folder. |
 | Settings | Replay folders and sync date range, start-up, updates, capture, build check-in and OBS. Save confirms what applied; API address, log level and import speed name their restart requirement. The API field supports Reset to default and Test. |
 | Streams | Shared stream title and YouTube description, connected channels, and verified or accepted per-platform save results. |
@@ -117,6 +226,35 @@ Closing the window hides it in the tray while syncing continues. A one-time remi
 explains where it went. Launching the shortcut again brings that same window forward.
 Without a tray, Close offers Quit or Minimize and remembers the choice.
 Use **Quit** in the tray or **Quit SC2 Tools** below sidebar Help to fully exit.
+
+### Recent games and replay history
+
+The first launch seeds up to 100 dated upload entries. Those entries do not
+invent results from filenames; **Today** counts locally tracked game details,
+using the played date in your local timezone. Net MMR compares consecutive
+ladder games only when region, ladder race and both ratings are known. Synced
+**+N today** uses upload time, so an old history import can increase that number
+without changing today's W–L. The private `recent_games.jsonl` holds at most 200
+rows in the agent state directory and only displays the currently linked account.
+
+**Waiting** includes eligible replays still on disk, counted in the background;
+queued files are already part of that inventory and are not counted twice.
+The import card shows counts and measured throughput; ETA appears only after
+enough samples and is hidden while paused or waiting for a connection. **Only
+import this season** applies just that saved filter. **View on website** opens
+your dashboard. Manual **Settings → Maintenance → Re-sync replay library…**
+  uses the same progress card, including when cloud progress reporting is offline.
+
+In **Recent games → Skipped**, older markers have an unknown date and appear
+only under All dates. **Retry these** for an unresolved player, unreadable replay,
+unfinished file or date-filtered replay clears only that reason. Fix the cause
+first; the saved date filter still applies. AI games, incomplete matches and
+resumed/synthetic results do not become ordinary ladder records by retrying.
+
+To see a local result message such as **Victory vs Opponent (Z) on Alcyone LE**,
+enable **Settings → Notify me after every new game syncs** and Save. This is off
+by default and history imports stay quiet. See [Your recent games](https://sc2tools.com/help/desktop-app-recent-games)
+and [Importing your replay history](https://sc2tools.com/help/desktop-app-import).
 
 ### Streams
 

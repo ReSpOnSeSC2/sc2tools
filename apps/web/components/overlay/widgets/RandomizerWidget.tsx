@@ -30,6 +30,7 @@ import type {
 import type {
   MatchupKey,
   RandomizerConfig,
+  RandomizerBuild,
   SpinOutcome,
 } from "@/lib/randomizer/types";
 import { isMatchupKey } from "@/lib/randomizer/types";
@@ -80,6 +81,8 @@ export function RandomizerWidget({
   const isTest = Boolean(live?.isTest);
   const gameKey = gameKeyFromTriggerKey(triggerKey);
   const gate = intent && intent.gameKey === gameKey ? intent : null;
+  const savedPick = isTest ? null : gate?.randomizer;
+  const displayedPick = spin?.triggerKey === triggerKey ? spin.outcome.winner.id : null;
   const intentSeen = gate?.seen ?? false;
   const suppressed = gate?.suppressRandomizer ?? false;
   const holdDeadlineMs = gate?.holdDeadlineMs ?? 0;
@@ -100,7 +103,7 @@ export function RandomizerWidget({
 
   useEffect(() => {
     if (!visible || !matchup || !config || !spinKey || !triggerKey) return;
-    if (consumedStarts.current.has(triggerKey)) return;
+    if (consumedStarts.current.has(triggerKey) && (!savedPick || displayedPick === savedPick.key)) return;
     const mc = config.matchups[matchup];
     if (!mc || !mc.enabled || mc.builds.length === 0) return;
     if (!isTest) {
@@ -128,7 +131,13 @@ export function RandomizerWidget({
     // overlay is refreshed or rendered by both the composite and dedicated
     // Browser Sources. Test fires carry a unique nonce so every click still
     // produces a fresh outcome.
-    const outcome = spinResult(matchup, mc, mulberry32(seedFromString(spinKey)));
+    const configuredWinner = savedPick ? mc.builds.find((build) => build.id === savedPick.key) : null;
+    const winner: RandomizerBuild | undefined = savedPick ? {
+      ...configuredWinner, id: savedPick.key, name: savedPick.name, source: savedPick.source,
+      race: matchup[0] === "P" ? "Protoss" : matchup[0] === "T" ? "Terran" : "Zerg",
+      weight: configuredWinner?.weight ?? 1,
+    } : undefined;
+    const outcome = spinResult(matchup, mc, mulberry32(seedFromString(spinKey)), undefined, winner);
     if (!outcome) return;
     consumedStarts.current.add(triggerKey);
     spinIdRef.current += 1;
@@ -136,11 +145,11 @@ export function RandomizerWidget({
     onSpinRef.current?.({
       triggerKey,
       startedAtMs: Date.now(),
-      roll: rollGameKey ? { gameKey: rollGameKey, buildId: outcome.winner.id } : null,
+      roll: rollGameKey && !savedPick ? { gameKey: rollGameKey, buildId: outcome.winner.id } : null,
     });
   }, [
     visible, matchup, spinKey, triggerKey, config, isTest, rollGameKey,
-    intentSeen, suppressed, holdDeadlineMs, phase, gateClock,
+    intentSeen, suppressed, holdDeadlineMs, phase, gateClock, savedPick, displayedPick,
   ]);
 
   // A declaration that lands after the reveal began takes it off stream
@@ -149,14 +158,15 @@ export function RandomizerWidget({
   const spinSuppressed = spinGameKey !== null
     && intent?.gameKey === spinGameKey
     && intent.suppressRandomizer;
+  const spinDisabled = !!spin && !!config && config.matchups[spin.outcome.matchup]?.enabled !== true;
   useEffect(() => {
-    if (spin && spinSuppressed) setDismissedSpinId(spin.spinId);
-  }, [spin, spinSuppressed]);
+    if (spin && (spinSuppressed || spinDisabled)) setDismissedSpinId(spin.spinId);
+  }, [spin, spinSuppressed, spinDisabled]);
 
   // Keep the reveal mounted through transient phase gaps; the clients hide
   // its frame. A genuinely different match must wait for its own outcome.
   if (!spin || (triggerKey !== null && spin.triggerKey !== triggerKey)) return null;
-  if (spinSuppressed || dismissedSpinId === spin.spinId) return null;
+  if (spinSuppressed || spinDisabled || dismissedSpinId === spin.spinId) return null;
 
   return (
     <div

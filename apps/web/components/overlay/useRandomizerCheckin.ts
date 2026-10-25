@@ -26,15 +26,17 @@ const REPORTED_ROLLS_KEPT = 16;
  * Per-gameKey build check-in state from ``overlay:buildIntent``. Returns
  * the ledger and a stable handler for the overlay socket.
  */
-export function useOverlayBuildIntents(): [BuildIntentLedger, (msg: unknown) => void] {
-  const [ledger, setLedger] = useState<BuildIntentLedger>(EMPTY_BUILD_INTENT_LEDGER);
+export function useOverlayBuildIntents(owner = ""): [BuildIntentLedger, (msg: unknown) => void] {
+  const [state, setState] = useState({ owner, ledger: EMPTY_BUILD_INTENT_LEDGER });
+  if (state.owner !== owner) setState({ owner, ledger: EMPTY_BUILD_INTENT_LEDGER });
   const onBuildIntent = useCallback((msg: unknown) => {
     const event = parseOverlayBuildIntent(msg);
     if (!event) return;
     const receivedAtMs = Date.now();
-    setLedger((prev) => recordBuildIntent(prev, event, receivedAtMs));
-  }, []);
-  return [ledger, onBuildIntent];
+    setState((previous) => previous.owner === owner
+      ? { owner, ledger: recordBuildIntent(previous.ledger, event, receivedAtMs) } : previous);
+  }, [owner]);
+  return [state.owner === owner ? state.ledger : EMPTY_BUILD_INTENT_LEDGER, onBuildIntent];
 }
 
 export interface RandomizerCheckin {

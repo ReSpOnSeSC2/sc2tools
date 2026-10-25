@@ -154,6 +154,17 @@ class ApiClient:
             raise PermissionError("agent_not_paired")
         return self._get("/v1/me/profile", auth=True)
 
+    def get_game_summary(self, game_id: str) -> Dict[str, Any]:
+        if (not isinstance(game_id, str) or not 0 < len(game_id) <= 200
+                or game_id != game_id.strip() or game_id in {".", ".."}
+                or any(ord(character) < 32 or ord(character) == 127 for character in game_id)):
+            raise ValueError("Select a valid replay.")
+        try:
+            encoded = quote(game_id, safe="")
+        except UnicodeEncodeError:
+            raise ValueError("Select a valid replay.") from None
+        return self._interactive("GET", "/v1/games/" + encoded)
+
     # ---------------- Game ingest ----------------
     def get_preset_policy(self) -> Dict[str, Any]:
         """Public shared policy: one bounded-deadline attempt, no device token."""
@@ -559,7 +570,7 @@ class ApiClient:
             body={"token": token, "payload": payload},
         )
 
-    def get_overlay_token(self) -> Optional[str]:
+    def get_overlay_token(self, *, interactive: bool = False) -> Optional[str]:
         """Return the user's active overlay token, or ``None``.
 
         Used by the OBS scene builder: the backdrop, chat and session
@@ -575,7 +586,8 @@ class ApiClient:
         """
         if not self.device_token:
             raise PermissionError("agent_not_paired")
-        body = self._get("/v1/overlay-tokens", auth=True)
+        body = (self._interactive("GET", "/v1/overlay-tokens") if interactive
+                else self._get("/v1/overlay-tokens", auth=True))
         for item in body.get("items") or []:
             if not isinstance(item, dict):
                 continue
@@ -687,6 +699,10 @@ class ApiClient:
     def get_live_intent(self, game_key: str) -> Dict[str, Any]:
         """Read the live record of a game (``LiveState``); 404 when absent."""
         return self._interactive("GET", _live_intent_path(game_key))
+
+    def roll_live_randomizer(self, game_key: str, matchup: str) -> Dict[str, Any]:
+        return self._interactive("POST", _live_intent_path(game_key) + "/randomizer",
+            body={"matchup": matchup, "releaseHold": True, "revealInWidget": True})
 
     def get_game_intent(
         self,
