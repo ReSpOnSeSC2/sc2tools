@@ -42,6 +42,11 @@ corresponding GitHub Release.
 - Filter analyzer views by up to twenty SC2 accounts, including saved views, shared filter links and replay navigation.
 - Export the current replay filters and sort order as a formula-safe UTF-8 CSV, with a shared column dictionary and a visible 50,000-row cap.
 
+### Opponents list and rivals
+
+- Find regular opponents with Wilson-based rivalry cards, private stars and a saved-rivals view showing measured streaks, usual openers and cached public ladder movement. Fresh public cache observations can mark an approved channel Live now.
+- Use phone dossier cards, race and region labels, remembered column choices, quick views and a shared 100-row window. Export every matching sorted opponent or up to 5,000 scoped dossier replays with the existing safe CSV download and account limit.
+
 ### My reviews dashboard
 
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.

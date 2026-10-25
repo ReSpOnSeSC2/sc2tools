@@ -6,6 +6,7 @@ import {
 } from "../OpponentReplayHistory";
 
 const useApiMock = vi.fn();
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: false, userId: null }) }));
 
 vi.mock("@/lib/clientApi", () => ({
   useApi: (...args: unknown[]) => useApiMock(...args),
