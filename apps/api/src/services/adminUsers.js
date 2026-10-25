@@ -2,6 +2,7 @@
 
 const { COLLECTIONS } = require("../config/constants");
 const { csvCell } = require("./replayCsv");
+const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 
 const FILTERS = new Set(["all", "with_games", "no_games", "with_agent", "signed_up_7d", "agent_inactive_14d", "admins"]);
 const SORTS = Object.freeze({ lastActivity: "sortKey", createdAt: "createdAt", games: "gameStats.gameCount", opponents: "opponentCount", agentLastSeen: "agentStats.lastSeenAt" });
@@ -34,7 +35,7 @@ function scope(options, adminIds, now) {
 function gameLookup() {
   return [
     { $lookup: { from: COLLECTIONS.GAMES, let: { uid: "$userId" }, pipeline: [
-      { $match: { $expr: { $eq: ["$userId", "$$uid"] } } },
+      { $match: { ...LIVE_GAME_MATCH, $expr: { $eq: ["$userId", "$$uid"] } } },
       { $group: { _id: null, gameCount: { $sum: 1 }, firstActivity: { $min: "$date" }, lastActivity: { $max: "$date" } } },
     ], as: "gameStats" } },
     { $set: { gameStats: { $ifNull: [{ $arrayElemAt: ["$gameStats", 0] }, { gameCount: 0, firstActivity: null, lastActivity: null }] } } },
@@ -78,6 +79,7 @@ function derivedMatch(selected) {
  * @param {Record<string,any>} match @returns {import('mongodb').Document[]} */
 function groupedGames(match) {
   return [
+    { $match: LIVE_GAME_MATCH },
     { $sort: { userId: 1 } },
     { $group: { _id: "$userId", gameCount: { $sum: 1 }, firstActivity: { $min: "$date" }, lastActivity: { $max: "$date" } } },
     { $lookup: { from: COLLECTIONS.USERS, localField: "_id", foreignField: "userId", pipeline: [{ $match: match }], as: "owner" } },
