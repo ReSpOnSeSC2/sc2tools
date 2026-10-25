@@ -29,7 +29,7 @@ const article: HelpArticle = {
     "schedule",
     "time zone",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-25",
   order: 20,
   body: [
     {
@@ -37,7 +37,7 @@ const article: HelpArticle = {
       text: "[Coaching](/coaching) is a private workspace for a coach and their students, with three tabs: **Locker** (the coach's notes, builds and materials for each student), **Practice** (practice plans) and **Sessions** (booking lessons). Practice progress is counted from synced replays with fixed rules, and the workspace never grades or scores your play: every judgement is your coach's.",
     },
     { type: "heading", anchor: "roles-and-linking", text: "Who can use it" },
-    { type: "paragraph", text: "The header shows your role and your coach or students. A badge on **Practice** marks sharing requests waiting for a student's answer. **Sessions** shows unread booking alerts, and a warning dot marks unpublished availability changes. Use the arrow keys, Home or End to move through the workspace tabs." },
+    { type: "paragraph", text: "The header shows your role and your coach or students. For students, a badge on **Practice** marks sharing requests waiting for an answer. For coaches, it counts players behind their active plan's schedule pace. **Sessions** shows unread booking alerts, and a warning dot marks unpublished availability changes. Use the arrow keys, Home or End to move through the workspace tabs." },
     {
       type: "list",
       items: [
@@ -76,6 +76,7 @@ const article: HelpArticle = {
       text: "To stop, the student presses **Revoke access** on the Practice tab, and the coach loses access right away. Allowing again later starts a new sharing period; games from the earlier plans stay private.",
     },
     { type: "heading", anchor: "practice-plans", text: "Practice plans" },
+    { type: "heading", anchor: "assigning-practice-plans", text: "Assigning practice plans" },
     {
       type: "paragraph",
       text: "The coach sets a plan with **Assign games**. Each plan counts games from the student's synced replays with fixed rules, so nobody types in a number and nothing is self-reported.",
@@ -99,8 +100,14 @@ const article: HelpArticle = {
         "**The player's time zone.** The coach picks it when assigning. Days, weeks and months start and end on the player's local calendar, so a late-night game counts on the day the player played it.",
         "**Progress** updates as the desktop app syncs each replay and shows *Starts soon*, *In progress*, *Complete* or *Window ended*. A plan asks for 1 to 1,000 games and can span up to 366 days.",
         "**Cancelling.** The coach presses **Cancel plan**. Its progress and game list stay visible, marked *Cancelled*, and new games stop counting.",
+        "**Assign again** opens a new draft from any plan, including cancelled plans. It copies the student, target, build, time zone, title and note. A missing build needs a new selection. Dates start after the old window, or today in the player's zone when that window is past; repeating plans align forward to a period boundary. The inclusive number of calendar days is kept, so a copied monthly window can cross another month. Review the live summary before assigning.",
+        "Use **Active**, **Upcoming**, **Ended**, **Cancelled** or **All** above a player's plans. The numbers count plans in that player's permitted history, not games or completed targets. Changing a filter returns to the newest page. Ended plans retain their recorded progress.",
+        "Coaches start at **All players**. The roster covers approved practice sharing and sorts players behind schedule first. Select a player to read their full history or request approval from the Player menu. The overview uses at most the newest 100 active plans; a notice and lower-bound counts appear if more exist.",
       ],
     },
+    { type: "heading", anchor: "how-progress-is-counted", text: "How progress is counted" },
+    { type: "paragraph", text: "Only eligible synced 1v1 replays count, after the plan was assigned. Periods follow the player's time zone, including daylight-saving changes. The period strip marks reached targets in green, past unmet targets in red, the current period with an accent ring, and upcoming periods in a dim style. Select a period to read its recorded count. The streak counts consecutive reached periods ending with the last finished period; the current unfinished period does not add to it." },
+    { type: "paragraph", text: "**Behind schedule** compares the current period's recorded games with the whole-number part of its target multiplied by the elapsed share of that period. It is schedule pace, not a grade or a prediction. The roster's last qualifying game is taken from active plans, and its dates are labeled UTC. **Games and replay evidence** shows the full qualifying count and W–L across all pages; its percentage uses wins plus losses, excluding ties. Use **Retry** inside the list after a failed read." },
     { type: "heading", anchor: "sessions", text: "Booking sessions" },
     {
       type: "steps",

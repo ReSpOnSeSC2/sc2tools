@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
@@ -13,6 +13,10 @@ const harness = vi.hoisted(() => ({
   mutateObservedGames: vi.fn(async () => undefined),
   apiCall: vi.fn(async () => ({})),
   getToken: vi.fn(async () => "test-token"),
+  owner: "fixture-owner",
+  authLoaded: true,
+  signedIn: true,
+  evidenceError: undefined as unknown,
   toast: {
     success: vi.fn(),
     error: vi.fn(),
@@ -22,7 +26,7 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: harness.getToken }),
+  useAuth: () => ({ getToken: harness.getToken, isLoaded: harness.authLoaded, isSignedIn: harness.signedIn, userId: harness.owner }),
 }));
 
 vi.mock("@/lib/clientApi", () => ({
@@ -56,7 +60,7 @@ vi.mock("@/lib/clientApi", () => ({
     if (path && path in harness.observedGamesByPath) {
       return {
         data: harness.observedGamesByPath[path],
-        error: undefined,
+        error: path.includes("/assignments/") ? harness.evidenceError : undefined,
         isLoading: false,
         mutate: harness.mutateObservedGames,
       };
@@ -118,6 +122,7 @@ beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
   harness.apiCall.mockResolvedValue({});
+  harness.owner = "fixture-owner"; harness.authLoaded = true; harness.signedIn = true; harness.evidenceError = undefined;
 });
 
 afterEach(() => {
@@ -127,6 +132,85 @@ afterEach(() => {
 });
 
 describe("CoachingPractice", () => {
+  it("defaults coaches to a bounded all-player roster, sorts behind students first and selects a player", () => {
+    harness.rosterData = { state: { students: [{ id: "student-1", name: "Aster", userId: "user-1" }, { id: "student-2", name: "Blair", userId: "user-2" }] } };
+    harness.sharingData = { rev: 1, relationships: [sharingRelationship("accepted"), sharingRelationship("accepted", { student: { id: "student-2", name: "Blair" } })] };
+    harness.assignmentsData = assignmentPayload([makeAssignment({ progress: makeProgress({ currentBucket: makeBucket({ playedGames: 0 }), lastGameAt: "2026-09-03T12:00:00Z" }) })]);
+    render(<CoachingPractice role="coach" />);
+    expect(screen.getByRole("combobox", { name: "Practice plan player" })).toHaveProperty("value", "");
+    expect(harness.requestedPaths).toContain("/v1/coaching/assignments?state=active&limit=100");
+    const table = screen.getByRole("table"); expect(within(table).getAllByRole("row")[1].textContent).toContain("Aster");
+    expect(within(table).getByText(/Behind schedule · 0 of 5 games/)).toBeTruthy();
+    fireEvent.click(within(table).getByRole("button", { name: "Aster" }));
+    expect(harness.requestedPaths).toContain("/v1/coaching/assignments?studentId=student-1&page=1&limit=20&state=active");
+    expect(screen.getByRole("button", { name: "Assign again" })).toBeTruthy();
+  });
+
+  it("defaults to All without active plans and resets paging when a state chip changes", () => {
+    harness.assignmentsData = { ...assignmentPayload([makeAssignment()]), counts: { active: 0, upcoming: 1, ended: 3, cancelled: 2, all: 6 }, hasMore: true };
+    render(<CoachingPractice role="student" />);
+    expect(screen.getByRole("button", { name: "All (6)" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Older plans" }));
+    expect(harness.requestedPaths).toContain("/v1/coaching/assignments?page=2&limit=20");
+    fireEvent.click(screen.getByRole("button", { name: "Ended (3)" }));
+    expect(harness.requestedPaths).toContain("/v1/coaching/assignments?page=1&limit=20&state=ended");
+  });
+
+  it("repeats even a cancelled plan with copied fields, a new identity and a visible unavailable-build error", async () => {
+    harness.rosterData = { state: { students: [{ id: "student-1", name: "Aster", userId: "user-1" }] } };
+    harness.assignmentsData = assignmentPayload([makeAssignment({ status: "cancelled", progress: makeProgress({ state: "cancelled" }) })]);
+    harness.observedGamesByPath = { "/v1/coaching/students/user-1/games": { games: [] } };
+    render(<CoachingPractice role="coach" />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Practice plan player" }), { target: { value: "student-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Assign again" }));
+    expect(screen.getByRole("combobox", { name: "Student" })).toHaveProperty("value", "student-1");
+    expect(screen.getByLabelText(/^Starts/)).toHaveProperty("value", "2026-09-08");
+    expect(screen.getByLabelText(/^Ends/)).toHaveProperty("value", "2026-09-14");
+    expect(screen.getByRole("combobox", { name: "Build" })).toHaveProperty("value", "");
+    expect(await screen.findByText("Choose a build available for this student.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Assign plan" })).toHaveProperty("disabled", true);
+  });
+
+  it("shows full evidence W-L and retries without closing the disclosure", async () => {
+    harness.assignmentsData = assignmentPayload([makeAssignment()]);
+    harness.observedGamesByPath = { "/v1/coaching/assignments/assignment-1/games?page=1&limit=25": { assignmentId: "assignment-1", page: 1, limit: 25, total: 7, wins: 4, losses: 3, games: [makeReplayGame()], hasMore: false } };
+    const view = render(<CoachingPractice role="student" />);
+    const details = screen.getByText("Games and replay evidence").closest("details")!; details.open = true; fireEvent(details, new Event("toggle"));
+    expect(screen.getByText("7 games · 4–3 (57%)")).toBeTruthy();
+    harness.evidenceError = { message: "Synthetic error" }; view.rerender(<CoachingPractice role="student" />);
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(harness.mutateObservedGames).toHaveBeenCalled(); expect(details.open).toBe(true);
+  });
+
+  it("shows historical/current/upcoming period labels, colour states and the completed streak", () => {
+    const buckets = [1, 8, 15, 22, 29].map((day, index) => makeBucket({ key: `period-${index}`, startsAt: `2026-09-${String(day).padStart(2, "0")}T00:00:00Z`, endsAt: index === 4 ? "2026-10-06T00:00:00Z" : `2026-09-${String(day + 7).padStart(2, "0")}T00:00:00Z`, playedGames: index < 3 ? 5 : 2, complete: index < 3 }));
+    const assignment = makeAssignment(); assignment.requirement.recurrence = "weekly";
+    harness.assignmentsData = { ...assignmentPayload([{ ...assignment, progress: makeProgress({ buckets, currentBucket: buckets[3], completedBuckets: 3, totalBuckets: 5 }) }]), serverTime: "2026-09-24T12:00:00Z" };
+    render(<CoachingPractice role="student" />);
+    expect(screen.getByText("Streak: 3 weeks")).toBeTruthy();
+    const current = screen.getByRole("button", { name: /Week of Sep 22: 2 of 5 games · current/ }); expect(current.className).toContain("ring-accent");
+    expect(screen.getByRole("button", { name: /Week of Sep 1: 5 of 5 games · met/ }).className).toContain("text-success");
+    expect(screen.getByRole("button", { name: /Week of Sep 29: 2 of 5 games · upcoming/ }).className).toContain("text-text-dim");
+    fireEvent.click(screen.getByRole("button", { name: /Week of Sep 8:/ }));
+    expect(screen.getByText("Selected week")).toBeTruthy();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("5");
+  });
+
+  it("drops a draft on owner/auth changes and rejects an old held token before a write", async () => {
+    harness.rosterData = { state: { students: [{ id: "student-1", name: "Aster", userId: "user-1" }] } };
+    let release: (value: string) => void = () => undefined; const writes: string[] = [];
+    harness.getToken.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    harness.apiCall.mockImplementationOnce(async (...args: unknown[]) => { await (args[0] as () => Promise<string>)(); writes.push("sent"); return {}; });
+    const view = render(<CoachingPractice role="coach" />);
+    fireEvent.click(screen.getByRole("button", { name: "Assign games" }));
+    fireEvent.change(screen.getByPlaceholderText("e.g. PvP - Phoenix Style"), { target: { value: "Exact style" } });
+    fireEvent.click(screen.getByRole("button", { name: "Assign plan" }));
+    harness.owner = "new-owner"; view.rerender(<CoachingPractice role="coach" />);
+    await act(async () => release("old-token"));
+    expect(writes).toEqual([]); expect(screen.queryByRole("dialog")).toBeNull(); expect(harness.toast.success).not.toHaveBeenCalled();
+    harness.authLoaded = false; view.rerender(<CoachingPractice role="coach" />);
+    expect(screen.queryByRole("combobox", { name: "Practice plan player" })).toBeNull();
+  });
   it("renders a student's nested assignment and never requests the coach roster", () => {
     harness.observedGamesByPath = {
       "/v1/coaching/assignments/assignment-1/games?page=1&limit=25": {
@@ -168,7 +252,7 @@ describe("CoachingPractice", () => {
     replayList.open = true;
     fireEvent(replayList, new Event("toggle"));
 
-    expect(harness.requestedPaths).toContain("/v1/coaching/assignments?page=1&limit=20");
+    expect(harness.requestedPaths).toContain("/v1/coaching/assignments?page=1&limit=20&state=active");
     expect(harness.requestedPaths).not.toContain("/v1/coaching/state");
     expect(screen.getByText("Oracle mechanics")).toBeTruthy();
     expect(screen.getByText("Keep the first Oracle active.")).toBeTruthy();
@@ -364,6 +448,7 @@ describe("CoachingPractice", () => {
     };
 
     render(<CoachingPractice role="coach" />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Practice plan player" }), { target: { value: "student-unlinked" } });
 
     const assignButtons = screen.getAllByRole("button", { name: "Assign games" });
     expect(assignButtons.length).toBeGreaterThan(0);
@@ -444,6 +529,7 @@ describe("CoachingPractice", () => {
     });
 
     render(<CoachingPractice role="coach" />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Practice plan player" }), { target: { value: "student-linked" } });
 
     for (const button of screen.getAllByRole("button", { name: "Assign games" })) {
       expect((button as HTMLButtonElement).disabled).toBe(true);
@@ -469,7 +555,7 @@ describe("CoachingPractice", () => {
     render(<CoachingPractice role="student" />);
     fireEvent.click(screen.getByRole("button", { name: "Older plans" }));
 
-    expect(harness.requestedPaths).toContain("/v1/coaching/assignments?page=2&limit=20");
+    expect(harness.requestedPaths).toContain("/v1/coaching/assignments?page=2&limit=20&state=active");
   });
 
   it("shows the final empty bucket for an ended recurring plan", () => {
@@ -520,7 +606,7 @@ describe("CoachingPractice", () => {
     });
     expect(progress.getAttribute("aria-valuenow")).toBe("0");
     expect(progress.getAttribute("aria-valuemax")).toBe("4");
-    expect(screen.getByText("4 to go")).toBeTruthy();
+    expect(screen.getByText("4 short of target")).toBeTruthy();
   });
 
   it("does not label an empty cancelled plan as target reached", () => {

@@ -40,7 +40,7 @@ export function AssignmentModal({
     invalid: Boolean((attempted || touched[name]) && errors[name]),
     onBlur: () => setTouched((current) => ({ ...current, [name]: true })),
   });
-  const error = (name: keyof AssignmentDraft) => (attempted || touched[name]) ? errors[name] : undefined;
+  const error = (name: keyof AssignmentDraft) => (attempted || touched[name] || (name === "buildSelection" && draft.unavailableBuild)) ? errors[name] : undefined;
   const focusErrors = () => {
     setAttempted(true);
     const first = Array.from(formRef.current?.elements ?? []).find((element) =>
@@ -119,8 +119,9 @@ export function AssignmentModal({
               <Select {...field("buildSelection")} value={draft.buildSelection} onChange={(event) => {
                 const buildSelection = event.target.value;
                 const selected = buildSuggestions.find((item) => buildSuggestionKey(item) === buildSelection);
-                patch({ buildSelection, buildName: selected?.name || "" });
+                patch({ buildSelection, buildName: selected?.name || "", unavailableBuild: false });
               }}>
+                <option value="" disabled>Choose an available build…</option>
                 <option value="manual">Enter an exact detected style name…</option>
                 {buildSuggestions.map((item) => (
                   <option key={buildSuggestionKey(item)} value={buildSuggestionKey(item)}>

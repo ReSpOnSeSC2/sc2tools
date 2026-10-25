@@ -56,6 +56,10 @@ corresponding GitHub Release.
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
 - Your reviewer profile shows verified leagues, badges, karma and synced-game eligibility. Leaderboard and weekly digest preferences live together there and restore their previous value if saving fails.
 
+### Coaching practice plans
+
+- Assign a plan again from any state, filter plan history with counts, and scan an all-player roster for schedule pace and the latest qualifying game. Period history shows recorded targets and streaks; evidence lists include full W–L totals and an inline retry.
+
 ### Game benchmarks
 
 - Compare each game's macro score, APM, spending quotient and length with your earlier ranked matchup games and cached league percentiles, with visible sample sizes and update dates. League distributions stay hidden below 50 samples per measurement; personal build timings now reach the late-expansion loss analysis when five earlier natural timings are available.
