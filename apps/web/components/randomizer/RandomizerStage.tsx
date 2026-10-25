@@ -5,6 +5,7 @@
  * and renders it. Every style shares `RevealProps`, so swapping between
  * them is just a switch.
  */
+import { useMemo } from "react";
 import type { SpinOutcome } from "@/lib/randomizer/types";
 import { BattleRoyaleReveal } from "./reveals/BattleRoyaleReveal";
 import { CaseUnboxingReveal } from "./reveals/CaseUnboxingReveal";
@@ -18,6 +19,11 @@ import { SumoShoveReveal } from "./reveals/SumoShoveReveal";
 import { AsteroidLockReveal } from "./reveals/AsteroidLockReveal";
 import { HungrySwarmReveal } from "./reveals/HungrySwarmReveal";
 import { ClawMachineReveal } from "./reveals/ClawMachineReveal";
+import { buildMotionVisualField } from "./reveals/visualField";
+
+const MOTION_STYLES: ReadonlySet<SpinOutcome["style"]> = new Set([
+  "fighter", "race", "sumo", "asteroid", "swarm", "claw",
+]);
 
 export interface RandomizerStageProps {
   outcome: SpinOutcome;
@@ -36,8 +42,15 @@ export function RandomizerStage({
     outcome.pool.findIndex((b) => b.id === outcome.winner.id),
   );
   const winnerProbability = outcome.probabilities[winnerIndex] ?? 0;
+  const visualPool = useMemo(
+    () => MOTION_STYLES.has(outcome.style)
+      ? buildMotionVisualField(outcome.pool, outcome.winner, spinId)
+      : undefined,
+    [outcome.style, outcome.pool, outcome.winner, spinId],
+  );
   const common = {
     pool: outcome.pool,
+    visualPool,
     probabilities: outcome.probabilities,
     winner: outcome.winner,
     winnerProbability,
@@ -49,6 +62,11 @@ export function RandomizerStage({
   return (
     <>
       <RevealKeyframes />
+      {visualPool && visualPool.length < outcome.pool.length ? (
+        <div role="note" style={{ fontSize: 11, color: "#aab2c3", textAlign: "center", marginBottom: 6 }}>
+          {visualPool.length} of {outcome.pool.length} contenders shown · Winner drawn from the full eligible pool
+        </div>
+      ) : null}
       {renderReveal(outcome.style, common)}
     </>
   );
