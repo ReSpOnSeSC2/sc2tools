@@ -1,5 +1,9 @@
 # Owner setup notes (accumulated)
 
+## Recorded playback guidance and segment streaming
+
+No new infrastructure, secret, environment variable or manual migration is required. Deploy the API and web normally. Authenticated content-addressed segment responses use private immutable browser caching for seven days; manifests remain no-store and every server read still checks ownership. A website-requested artifact upload sends one private `playback_ready` bell notification after verified completion, using the existing notification service and delivery identity. Automatic uploads and viewer polling do not send it. Browser decoded segments have a 24 MB LRU budget; a miss retains the last frame, and Retry remains available. Recording itself stays explicitly requested or controlled by the desktop app's existing default-off automatic-capture setting. No production recording or account operation was performed during implementation.
+
 ## Wave 4: desktop stream titles
 
 Deploy the API with the private `GET /v1/agent/streaming/session` route before distributing the desktop code. No new variable, secret, collection, migration, service or release tag is required. Existing SC2 Tools pairing and streaming-account grants are reused. Automatic titles start off and advanced local connections cannot enable them. An individual user chooses platforms and saves the explicit opt-in in Streams; YouTube is unselected initially because title updates consume its quota. No production integration was enabled and no account title was published during development. Stored title consent is bound to the paired API/token fingerprint, so changing accounts requires a new opt-in. Reverting the app/API code stops future automation; private local settings can remain. See `/help/desktop-stream-titles` for the template tokens, 70-character rendered limit, ten-minute throttle, bounded history scope and ambiguous receipts.

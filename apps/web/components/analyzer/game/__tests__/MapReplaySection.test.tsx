@@ -38,10 +38,10 @@ describe("MapReplaySection", () => {
   // times…") rather than MapReplayer's own "▶ Play" / "8×" chrome,
   // which ReplayStage hides via ``hideControls``. The canvas, the map
   // name and the scrubber are unchanged.
-  it("renders the replayer with controls and HUD for real playback data", () => {
+  it("renders the replayer with controls and HUD for real playback data", async () => {
     mockApi = { data: PLAYBACK, isLoading: false, error: null };
     render(<MapReplaySection gameId="g1" />);
-    expect(screen.getByTestId("map-replayer")).toBeTruthy();
+    expect(await screen.findByTestId("map-replayer")).toBeTruthy();
     expect(screen.getByTestId("replay-transport")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /playback speed/i })).toBeTruthy();

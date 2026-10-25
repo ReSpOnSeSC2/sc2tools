@@ -60,6 +60,7 @@ import type { MapPlayback } from "@/lib/mapReplay";
 import type { PatchEra } from "@/lib/meta";
 import {
   deriveReplayHud,
+  mergeMarkers,
   hudAt,
   type BankedSeries,
   type ReplaySide,
@@ -92,6 +93,8 @@ export function ReplayStage({
   initialTimeSec,
   onPlaybackTimeChange,
   onPlaybackStateChange,
+  onPlaybackSpeedChange,
+  castMarkers,
   onStageSeek,
   clockLink,
   upgrades,
@@ -138,6 +141,8 @@ export function ReplayStage({
   initialTimeSec?: number | null;
   onPlaybackTimeChange?: (time: number) => void;
   onPlaybackStateChange?: (playing: boolean, time: number) => void;
+  onPlaybackSpeedChange?: (speed: number) => void;
+  castMarkers?: readonly import("@/lib/replayHud").TimelineMarker[];
   onStageSeek?: (time: number) => void;
   clockLink?: import("react").ReactNode;
   upgrades?: Record<ReplaySide, readonly { time: number; name: string }[]>;
@@ -162,7 +167,10 @@ export function ReplayStage({
    *  carries no game version; omitted, the live 12-worker game. */
   patchEra?: PatchEra | null;
 }) {
-  const model = useMemo(() => deriveReplayHud(playback, patchEra), [playback, patchEra]);
+  const baseModel = useMemo(() => deriveReplayHud(playback, patchEra), [playback, patchEra]);
+  const model = useMemo(() => castMarkers ? { ...baseModel,
+    markers: mergeMarkers([...baseModel.markers.filter(marker => marker.kind !== "cast"), ...castMarkers].sort((a, b) => a.t - b.t)),
+  } : baseModel, [baseModel, castMarkers]);
 
   const [time, setTime] = useState(() => clampReplayTime(initialTimeSec, playback.gameLength) ?? 0);
   const [playing, setPlaying] = useState(false);
@@ -170,6 +178,7 @@ export function ReplayStage({
   useEffect(() => { onPlaybackStateChange?.(playing, currentTime.current); }, [playing, onPlaybackStateChange]);
   const { preferences, update } = useReplayPreferences(defaultShowProduction);
   const { speed, productionSide, buildFilter, showWorkers, autoScroll, panelTab } = preferences;
+  useEffect(() => { onPlaybackSpeedChange?.(speed); }, [speed, onPlaybackSpeedChange]);
   const showProduction = preferences.rails.production;
   const showBuildOrder = preferences.rails.build;
   const setShowProduction = useCallback((production: boolean) => update({ rails: { production, build: showBuildOrder } }), [update, showBuildOrder]);
@@ -298,6 +307,7 @@ export function ReplayStage({
         oppRace={oppRace}
       />
 
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col gap-2 p-2 xl:flex-row xl:items-stretch xl:gap-2.5 xl:p-2.5">
         {wide && showProduction ? (
           <ProductionRail
@@ -416,6 +426,7 @@ export function ReplayStage({
         </> : null}
       </section> : null}
 
+      </div>
     </section>
   );
 }

@@ -17,7 +17,7 @@ describe("manifest-first authenticated replay loading", () => {
     await waitFor(() => expect(hook.result.current.manifest?.artifactId).toBe(raw.artifactId));
     expect(hook.result.current.playback).toBeNull();
     expect(fetcher.mock.calls.map(([url]) => url.replace(/^https?:\/\/[^/]+/, ""))).toEqual([
-      "/v1/games/g1/map-playback/manifest", "/v1/games/g1/map-playback/status",
+      "/v1/games/g1/map-playback/manifest", "/v1/me", "/v1/games/g1/map-playback/status",
     ]);
   });
   it("falls back to the legacy endpoint once on a missing artifact", async () => {

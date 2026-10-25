@@ -3,17 +3,19 @@
 const { createHash } = require("crypto");
 const { PutObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } = require("@aws-sdk/client-s3");
 const { validateManifest, validateSegment, MAX_SEGMENT_BYTES, MAX_MANIFEST_BYTES, SHA } = require("../validation/playbackArtifact");
+const { getPlaybackJob } = require("./replayPlaybackJobs");
 /** @param {Buffer} body */
 const digest = (body) => createHash("sha256").update(body).digest("hex");
 /** @param {number} status @param {string} code */
 const error = (status, code) => Object.assign(new Error(code), { status, code });
 
 class PlaybackArtifactsService {
-  /** @param {{client: import('@aws-sdk/client-s3').S3Client, bucket: string, games: import('mongodb').Collection}} options */
-  constructor({ client, bucket, games }) {
+  /** @param {{client: import('@aws-sdk/client-s3').S3Client, bucket: string, games: import('mongodb').Collection, notifications?:Pick<import('./notifications').NotificationsService,'notify'>}} options */
+  constructor({ client, bucket, games, notifications }) {
     this.client = client;
     this.bucket = bucket;
     this.games = games;
+    this.notifications = notifications;
     this.activeReads = 0;
     this.activeWrites = 0;
   }
@@ -31,7 +33,7 @@ class PlaybackArtifactsService {
 
   /** @param {string} userId @param {string} gameId */
   async owned(userId, gameId) {
-    const game = await this.games.findOne({ userId, gameId }, { projection: { replayFile: 1, playbackArtifact: 1 } });
+    const game = await this.games.findOne({ userId, gameId }, { projection: { replayFile: 1, playbackArtifact: 1, playbackUpload: 1, myRace: 1, "opponent.race": 1, map: 1 } });
     if (!game) throw error(404, "game_not_found");
     return game;
   }
@@ -100,8 +102,10 @@ class PlaybackArtifactsService {
       this.assertSource(game, manifest);
       const body = Buffer.from(JSON.stringify(manifest));
       const artifactId = digest(body);
+      const job = getPlaybackJob(userId, gameId);
+      const requestId = job && ["queued", "processing", "uploading"].includes(job.status) ? job.requestId : undefined;
       const reserved = await this.games.updateOne({ userId, gameId }, {
-        $set: { playbackUpload: { artifactId, preparedAt: new Date() } },
+        $set: { playbackUpload: { artifactId, preparedAt: new Date(), ...(requestId ? { requestId } : {}) } },
       });
       if (reserved.matchedCount !== 1) throw error(404, "game_not_found");
       await this.put(this.key(userId, gameId, artifactId, "manifest.json"), body);
@@ -140,13 +144,23 @@ class PlaybackArtifactsService {
         catch (e) { if (isMissing(e)) throw error(409, "playback_segments_incomplete"); throw e; }
         if (Number(head.ContentLength) !== s.sizeBytes || head.Metadata?.sha256 !== s.sha256) throw error(409, "playback_segments_incomplete");
       }
-      const marker = { artifactId, replaySha256: m.replaySha256, segmentCount: m.segments.length, storedAt: new Date() };
+      const source = game.playbackUpload?.artifactId === artifactId ? game.playbackUpload : game.playbackArtifact?.artifactId === artifactId ? game.playbackArtifact : null;
+      const requestId = typeof source?.requestId === "string" ? source.requestId : null;
+      const marker = { artifactId, replaySha256: m.replaySha256, segmentCount: m.segments.length, storedAt: new Date(), ...(requestId ? { requestId } : {}) };
       const result = await this.games.updateOne({ userId, gameId, $or: [
         { "playbackUpload.artifactId": artifactId }, { "playbackArtifact.artifactId": artifactId },
       ] }, { $set: { playbackArtifact: marker }, $unset: { playbackUpload: "" } });
       if (result.matchedCount !== 1) {
         await this.stillOwned(userId, gameId, artifactId);
         throw error(409, "playback_artifact_superseded");
+      }
+      if (requestId && this.notifications) {
+        const letter = (/** @type {unknown} */ value) => typeof value === "string" && /^[PTZR]/i.test(value) ? value.charAt(0).toUpperCase() : "?";
+        const href = `/app/game/${encodeURIComponent(gameId)}#replay`;
+        await this.notifications.notify(userId, { kind: "playback_ready", groupKey: gameId,
+          eventKey: `playback_ready:${gameId}:${requestId}`,
+          title: `Accurate playback ready: ${letter(game.myRace)}v${letter(game.opponent?.race)} on ${String(game.map || m.mapName).slice(0, 100)}`,
+          body: "The recorded playback has finished uploading. Open the game to watch it.", href: href.length <= 300 ? href : "/app/replays" });
       }
       return { ok: true, artifactId, segmentCount: m.segments.length };
     });
