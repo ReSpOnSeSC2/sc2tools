@@ -25,6 +25,7 @@ describe("public social card projection", () => {
     expect(card.steps.map(row => row.name)).toEqual(["Pylon", "Gateway", "Assimilator", "Cybernetics Core", "Nexus"]);
     expect(card.steps.map(row => row.time)).toEqual(["by 0:18", "by 0:58", "by 1:15", "by 1:40", "by 2:00"]);
     expect(card.stepsLabel).toBe("Opening rule deadlines");
+    expect(card.steps.every(row => row.icon?.startsWith("/icons/sc2/"))).toBe(true);
     expect(card.stats).toEqual([{ label: "Net votes", value: "-3" }]);
   });
 

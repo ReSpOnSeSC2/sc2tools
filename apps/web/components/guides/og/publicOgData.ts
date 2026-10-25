@@ -21,7 +21,7 @@ export function communityBuildOg(data: CommunityBuildDetail): PublicOgCardData {
   const steps = rows.filter(row => typeof row.token === "string" && /^[A-Za-z][A-Za-z0-9]{0,79}$/.test(row.token)).sort((a, b) => a.time - b.time).slice(0, 5).map(row => {
     const token = String(row.token);
     const name = token.replace(/^(Build|Train|Research|Morph)(?=[A-Z])/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
-    return { name: plain(`${row.count > 1 ? `${row.count}× ` : ""}${name}`, 36), time: `by ${clock(Math.ceil(row.time))}`, icon: getIconPath(token) };
+    return { name: plain(`${row.count > 1 ? `${row.count}× ` : ""}${name}`, 36), time: `by ${clock(Math.ceil(row.time))}`, icon: getIconPath(name) };
   });
   const author = plain(data.authorName, 80);
   return { kind: "Community build", title: plain(data.title, 90) || "Community build",

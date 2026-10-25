@@ -27,21 +27,24 @@ test("every sitemap route has its own canonical and coherent social title", asyn
     await Promise.all(locations.slice(offset, offset + 4).map(async location => {
       const expectedUrl = new URL(location);
       const route = expectedUrl.pathname + expectedUrl.search;
-      const response = await request.get(route);
-      expect(response.status(), route).toBe(200);
+      // The ordinary Community request intentionally simulates an outage in
+      // this suite. Its opt-in public fixture exercises indexable metadata
+      // while preserving that existing outage coverage.
+      const response = await request.get(route === "/community" ? "/community?q=fixture" : route);
+      expect.soft(response.status(), route).toBe(200);
       const html = await response.text();
       const parsed = new JSDOM(html.match(/<(?:meta|link)\b[^>]*>/gi)?.join("") || "");
       try {
         const doc = parsed.window.document;
         const canonical = doc.querySelector('link[rel="canonical"]')?.getAttribute("href");
-        expect(canonical, route).toBeTruthy();
-        expect(new URL(canonical!).href, route).toBe(expectedUrl.href);
+        expect.soft(canonical, route).toBeTruthy();
+        if (canonical) expect.soft(new URL(canonical).href, route).toBe(expectedUrl.href);
         const title = doc.querySelector('meta[property="og:title"]')?.getAttribute("content");
-        expect(title, route).toBeTruthy();
-        if (expectedUrl.pathname !== "/") expect(title, route).not.toBe(rootTitle);
-        expect(doc.querySelector('meta[name="twitter:title"]')?.getAttribute("content"), route).toBe(title);
-        expect(doc.querySelector('meta[property="og:image"]')?.getAttribute("content"), route).toBeTruthy();
-        expect(doc.querySelector('meta[name="robots"]')?.getAttribute("content") || "", route).not.toContain("noindex");
+        expect.soft(title, route).toBeTruthy();
+        if (expectedUrl.pathname !== "/") expect.soft(title, route).not.toBe(rootTitle);
+        expect.soft(doc.querySelector('meta[name="twitter:title"]')?.getAttribute("content"), route).toBe(title);
+        expect.soft(doc.querySelector('meta[property="og:image"]')?.getAttribute("content"), route).toBeTruthy();
+        expect.soft(doc.querySelector('meta[name="robots"]')?.getAttribute("content") || "", route).not.toContain("noindex");
       } finally { parsed.window.close(); }
     }));
   }

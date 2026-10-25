@@ -21,8 +21,11 @@ async function iconsFor(card: PublicOgCardData) {
 }
 
 export function PublicOgCard({ card, icons = [] }: { card: PublicOgCardData; icons?: (string | null)[] }) {
-  return <div style={{ display: "flex", width: "100%", height: "100%", flexDirection: "column", justifyContent: "space-between", padding: "48px 64px", backgroundColor: COLORS.bg, backgroundImage: `radial-gradient(1000px 500px at 100% 0%, ${COLORS.teal}44 0%, ${COLORS.bg} 55%)`, color: COLORS.text, fontFamily: "sans-serif" }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 16, color: COLORS.cyan, fontSize: 25, fontWeight: 700 }}><div style={{ display: "flex", width: 12, height: 34, borderRadius: 6, backgroundColor: COLORS.cyan }} />SC2 Tools · {card.kind}{card.badge ? <div style={{ display: "flex", marginLeft: "auto", padding: "6px 16px", border: `2px solid ${COLORS.teal}`, borderRadius: 999, color: COLORS.text }}>{card.badge}</div> : null}</div>
+  return <div style={{ display: "flex", position: "relative", width: "100%", height: "100%", flexDirection: "column", justifyContent: "space-between", padding: "48px 64px", backgroundColor: COLORS.bg, backgroundImage: `radial-gradient(1000px 500px at 100% 0%, ${COLORS.teal}44 0%, ${COLORS.bg} 55%)`, color: COLORS.text, fontFamily: "sans-serif" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, color: COLORS.cyan, fontSize: 25, fontWeight: 700 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}><div style={{ display: "flex", width: 12, height: 34, borderRadius: 6, backgroundColor: COLORS.cyan }} />SC2 Tools · {card.kind}</div>
+    </div>
+    {card.badge ? <div style={{ display: "flex", position: "absolute", right: 64, top: 48, padding: "6px 16px", border: `2px solid ${COLORS.teal}`, borderRadius: 999, color: COLORS.text, fontSize: 25 }}>{card.badge}</div> : null}
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}><div style={{ display: "flex", fontSize: card.title.length > 50 ? 52 : 66, lineHeight: 1.06, fontWeight: 800 }}>{card.title}</div><div style={{ display: "flex", color: COLORS.muted, fontSize: 27 }}>{card.subtitle}</div></div>
     {card.steps.length ? <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", color: COLORS.muted, fontSize: 19 }}>{card.stepsLabel || "Opening rules"}</div>

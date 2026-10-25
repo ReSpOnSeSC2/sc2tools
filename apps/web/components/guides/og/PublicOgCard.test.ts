@@ -14,8 +14,9 @@ describe("actual public social image renderer", () => {
   });
   it("renders all five local-icon deadline cards with a long public title", async () => {
     const card = { ...marketingOg("try"), kind: "Community build", title: "A two-Stargate opening that preserves its early air commitment through later transitions",
-      stepsLabel: "Opening rule deadlines", steps: ["BuildPylon", "BuildGateway", "BuildCyberneticsCore", "BuildStargate", "TrainVoidRay"].map(token => ({ name: token, time: "by 7:00", icon: getIconPath(token) })),
+      stepsLabel: "Opening rule deadlines", steps: ["Pylon", "Gateway", "CyberneticsCore", "Stargate", "VoidRay"].map(token => ({ name: token, time: "by 7:00", icon: getIconPath(token) })),
       stats: [{ label: "Net votes", value: "1,234" }] };
+    expect(card.steps.every(row => row.icon)).toBe(true);
     const response = await renderPublicOgImage(card);
     const png = Buffer.from(await response.arrayBuffer());
     expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1200, 630]);
