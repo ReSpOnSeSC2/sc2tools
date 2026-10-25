@@ -59,6 +59,10 @@ for (const surface of ["all-in-one", "widget"] as const) describe(`${surface} sa
     view.rerender(component("two")); const current = sockets.at(-1)!; config(current, 5, 1, "#123456");
     config(old, 60, 50, "#000000"); live(current);
     expect(accent(view.container)).toBe("#123456");
+    view.rerender(component("one")); const returned = sockets.at(-1)!;
+    config(old, 60, 100, "#000000"); live(returned);
+    expect(accent(view.container)).toBe("");
+    config(returned, 5, 2, "#654321"); expect(accent(view.container)).toBe("#654321");
   });
 });
 
