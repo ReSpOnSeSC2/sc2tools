@@ -56,7 +56,10 @@ const server = http.createServer((req, res) => {
       await expect(card.getByRole('button', { name: 'Generate accurate playback' })).toBeDisabled();
       await expect(card.getByRole('status')).toHaveCount(0); checks += 3;
       if (width === 390 || width === 1440) {
+        await expect(page.getByTestId('replay-stage')).toBeVisible();
+        await expect(page.getByText('Loading replay controls…')).toHaveCount(0); checks += 2;
         await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+        await page.evaluate(() => document.fonts.ready);
         await card.scrollIntoViewIfNeeded();
         await page.screenshot({ path: `../../docs/handoff/screenshots/playback-quality-${width}-dark.png`, fullPage: false }); checks++;
       }
