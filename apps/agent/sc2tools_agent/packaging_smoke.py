@@ -35,6 +35,9 @@ def _exercise_gui(report):
         "metadata": {"title": "Packaged GUI smoke check", "description": ""},
         "youtube": {"connected": False}, "platforms": {}, "catalog": {},
         "message": "Offline packaging check",
+        "title_automation": {"enabled": False, "template": "SC2 | {mmr}",
+            "platforms": {"twitch": True, "kick": True, "youtube": False}, "values": {"mmr": "5000"},
+            "message": "Offline packaging fixture; no account requests."},
     }
 
     def inert(*_args):
@@ -68,6 +71,10 @@ def _exercise_gui(report):
             )
             if streams_index is None:
                 raise RuntimeError("The bundled Streams page did not construct.")
+            titles = stack.widget(streams_index).title_controls
+            if titles.preview.text() != "Preview: SC2 | 5000" or titles.enabled.isChecked() or titles.platforms["youtube"].isChecked():
+                raise RuntimeError("The bundled stream-title preview or default-off controls are incorrect.")
+            report["stream_title_preview_painted"] = True
             window.resize(1120, 850)
             report["stage"] = "dashboard_recent_paint"
             from datetime import datetime, timezone

@@ -33,6 +33,13 @@ Leave the setting off to sync standard analysis only. The website's
 **Generate accurate playback** button can record one game on demand with
 either setting, using agent 0.16.11 or newer.
 
+**Streams** accepts statistic tokens such as `SC2 | {mmr} MMR | {record}` and
+shows a live preview. Automatic updates start off: choose the connected
+platforms, enable **Refresh titles after each synced game**, and save its
+settings. Twitch/Kick are selected initially; YouTube is not. Updates wait for
+the live replay to sync, skip unchanged titles and run at most every ten minutes
+on their own worker. See [Stream titles](https://sc2tools.com/help/desktop-stream-titles).
+
 If you unpair this PC on the website, the desktop window says **This PC was
 unlinked from your account**. Click **Link again** and confirm the new code.
 Your settings, queued replays, and sync history stay on the PC. Closing the

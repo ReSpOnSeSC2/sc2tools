@@ -337,6 +337,7 @@ export interface GamesService {
     games: number;
     mmrStart?: number;
     mmrCurrent?: number;
+    league?: string;
     region?: string;
     sessionStartedAt?: string;
     streak?: { kind: "win" | "loss"; count: number };
