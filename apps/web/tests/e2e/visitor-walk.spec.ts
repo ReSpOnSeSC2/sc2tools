@@ -39,7 +39,9 @@ test.describe("signed-out visitor walk", () => {
     expectNotSignIn(page);
     await expectNoEndlessSkeleton(page);
     await expect(page.getByRole("heading", { name: "Your own build library" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Create account", exact: true })).toHaveAttribute("href", "/sign-up?redirect_url=%2Fbuilds");
+    // Auth return context is restricted to public pages; private library URLs
+    // deliberately use the normal safe post-sign-in destination.
+    await expect(page.getByRole("link", { name: "Create account", exact: true })).toHaveAttribute("href", "/sign-up");
     await expect(page.getByRole("link", { name: "Browse community builds" })).toHaveAttribute("href", "/community");
   });
 
@@ -50,7 +52,7 @@ test.describe("signed-out visitor walk", () => {
     await expectNoEndlessSkeleton(page);
     const main = page.locator("main").first();
     await expect(main.getByRole("heading", { name: "Sign in to open this build" })).toBeVisible();
-    await expect(main.getByRole("link", { name: "Sign in", exact: true })).toHaveAttribute("href", "/sign-in?redirect_url=%2Fbuilds%2Fsome-private-build");
+    await expect(main.getByRole("link", { name: "Sign in", exact: true })).toHaveAttribute("href", "/sign-in");
   });
 
   test("/community says the API is down instead of 'no builds yet'", async ({ page }) => {
