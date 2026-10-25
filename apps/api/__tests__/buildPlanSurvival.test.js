@@ -60,7 +60,14 @@ test("the declared cohort includes different detector labels and excludes ordina
 
 test("ranked differences have deterministic ties and retain only the top five", async () => {
   await games.insertMany(["F", "A", "E", "B", "D", "C"].map(name => row(name, { name, slug: name })));
-  expect((await aggregate()).knockedInto).toEqual(["A", "B", "C", "D", "E"].map(name => ({ name, count: 1 })));
+  expect((await aggregate()).knockedInto.map(({ name, count }) => ({ name, count }))).toEqual(["A", "B", "C", "D", "E"].map(name => ({ name, count: 1 })));
+});
+
+test("linked examples retain only the latest20 while full label counts stay complete", async () => {
+  await games.insertMany(Array.from({ length: 30 }, (_, index) => row(`g${index}`, { name: "Other" }, { date: new Date(1_000_000 + index * 1000) })));
+  const [label] = (await aggregate()).knockedInto;
+  expect(label).toMatchObject({ count: 30, sampleLimit: 20, sampleTruncated: true });
+  expect(label.sampleGameIds).toHaveLength(20); expect(label.sampleGameIds[0]).toBe("g29"); expect(label.sampleGameIds.at(-1)).toBe("g10");
 });
 
 test("unmeasured/invalid lengths do not become zero-minute observations and draws do not become losses", async () => {

@@ -14,6 +14,7 @@ const { computeTransitions } = require("./buildTransitions");
 const { publicBuildMongoExpression } = require("./communityBuildSnapshot");
 const { ruleNameFromUnit } = require("./knownBuildings");
 const { hydrateDossierTimings } = require("./buildDossierTimingSample");
+const { readCommunityTimings } = require("./buildCommunityTimings");
 const { planFacets, finishPlan } = require("./buildPlanSurvival");
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 const {
@@ -1339,6 +1340,7 @@ class CustomBuildsService {
    *   timingSampleLimit: number,
    *   timingsTruncated: boolean,
    *   plan: Record<string,any>|null,
+   *   communityTimings: Record<string,any>,
    * }>}
    */
   async evaluateBuild(userId, slug, opts = {}) {
@@ -1486,6 +1488,7 @@ class CustomBuildsService {
       slug: build.slug,
       name: build.name || build.slug,
       plan: ownBuild ? finishPlan(doc) : null,
+      communityTimings: ownBuild ? await readCommunityTimings(/** @type {any} */ (this.db).guideStats, build.name || build.slug, timingGames, opts.signal) : {},
       totals: {
         ...totals,
         checkins,
@@ -3381,6 +3384,7 @@ function classifiedDossierProjection(opts = {}) {
     map: 1,
     myRace: 1,
     myBuild: 1,
+    _customBuildSlug: 1,
     durationSec: 1,
     macroScore: 1,
     apm: 1,

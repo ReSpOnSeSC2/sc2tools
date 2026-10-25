@@ -24,10 +24,10 @@ afterEach(async () => {
 });
 afterAll(async () => { await client?.close(); await mongo?.stop(); });
 
-async function fixture() {
+async function fixture(buildName = ref.name) {
   const games = database.collection("games"), customBuilds = database.collection("custom_builds");
   const details = new GameDetailsService(new MongoDetailsStore({ gameDetails: database.collection("game_details") }));
-  const base = { userId: owner, myBuild: ref.name, _customBuildSlug: "dt", myRace: "Protoss",
+  const base = { userId: owner, myBuild: buildName, _customBuildSlug: "dt", myRace: "Protoss",
     opponent: { race: "Zerg", strategy: "Zerg - Rush", displayName: "Synthetic opponent" },
     result: "Victory", map: "Synthetic map", durationSec: 900, gameVersion: "5.0.16.97425" };
   const rows = Array.from({ length: 30 }, (_, index) => ({ ...base, gameId: `game-${index}`,
@@ -44,7 +44,7 @@ async function fixture() {
     buildLog: ["[3:30] Gateway", "[4:00] Gateway"], oppBuildLog: ["[1:20] SpawningPool"],
     macroBreakdown: { stats_events: [{ privateHeavy: "not requested" }] },
   });
-  await customBuilds.insertOne({ userId: owner, slug: ref.slug, name: ref.name, race: "Protoss", vsRace: "Zerg", rules: [] });
+  await customBuilds.insertOne({ userId: owner, slug: ref.slug, name: buildName, race: "Protoss", vsRace: "Zerg", rules: [] });
   return { games, customBuilds, customBuildJobs: database.collection("custom_build_jobs"), details };
 }
 
@@ -64,6 +64,16 @@ test.each(["catalog", "custom"])("%s timings use at most25 split-store logs whil
   }
   const stored = await deps.games.findOne({ gameId: "game-29" });
   expect(stored).not.toHaveProperty("buildLog");
+});
+
+test.each(["catalog", "custom"])("%s detail cannot map a same-name private classifier to a public guide", async source => {
+  const buildName = "PvZ - 2 Stargate Phoenix", deps = await fixture(buildName);
+  await deps.games.updateMany({}, { $set: { gameVersion: "5.0.17.98000" } });
+  const find = jest.fn(), db = { ...deps, guideStats: /** @type {any} */ ({ find }) };
+  const result = source === "catalog"
+    ? await new BuildsService(db, { gameDetails: deps.details }).detail(owner, buildName, {})
+    : await new CustomBuildsService(db, { perGame: /** @type {any} */ ({ gameDetails: deps.details }) }).evaluateBuild(owner, ref.slug);
+  expect(result).toMatchObject({ communityTimings: {} }); expect(find).not.toHaveBeenCalled();
 });
 
 test("an aborted held detail read cannot hydrate a second game or return a partial summary", async () => {

@@ -104,6 +104,13 @@ function timingOutcomeMedians(samples) {
     winnerSampleCount: winners.length, loserSampleCount: losers.length };
 }
 
+/** Mongo Dates stringify with weekday names; they must sort by timestamp.
+ * @param {TimingSample} sample */
+function timingSampleDate(sample) {
+  const value = sample.date instanceof Date ? sample.date.getTime() : Date.parse(sample.date);
+  return Number.isFinite(value) ? value : null;
+}
+
 /** @param {number[]} sortedAsc @param {number} p @returns {number|null} */
 function percentileInclusive(sortedAsc, p) {
   const n = sortedAsc.length;
@@ -465,7 +472,8 @@ function finaliseSamples(samples, ordering, ownInternalSet) {
       out[tk.internalName] = emptyTokenRow(tk, source);
       continue;
     }
-    list2.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const dated = list2.every(sample => timingSampleDate(sample) !== null);
+    list2.sort((a, b) => (timingSampleDate(a) ?? -Infinity) - (timingSampleDate(b) ?? -Infinity));
     const secondsList = list2.map((s) => s.seconds);
     const sortedAsc = [...secondsList].sort((a, b) => a - b);
     const n = secondsList.length;
@@ -480,7 +488,7 @@ function finaliseSamples(samples, ordering, ownInternalSet) {
     );
     const mn = sortedAsc[0];
     const mx = sortedAsc[n - 1];
-    const lastSeen = list2[list2.length - 1].seconds;
+    const lastSeen = dated ? list2[list2.length - 1].seconds : null;
     const winsCount = list2.reduce((a, s) => a + (s.won ? 1 : 0), 0);
 
     out[tk.internalName] = {
@@ -496,9 +504,9 @@ function finaliseSamples(samples, ordering, ownInternalSet) {
       maxSeconds: mx,
       maxDisplay: formatSeconds(mx),
       lastSeenSeconds: lastSeen,
-      lastSeenDisplay: formatSeconds(lastSeen),
+      lastSeenDisplay: lastSeen === null ? "-" : formatSeconds(lastSeen),
       winRateWhenBuilt: winsCount / n,
-      trend: computeTrend(secondsList),
+      trend: dated ? computeTrend(secondsList) : "unknown",
       source,
       samples: list2.slice().reverse(),
       ...timingOutcomeMedians(list2),

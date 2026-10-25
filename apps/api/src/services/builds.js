@@ -3,6 +3,7 @@
 const { gamesMatchStage } = require("../util/parseQuery");
 const { computeDossierExtras } = require("./buildDossier");
 const { hydrateDossierTimings } = require("./buildDossierTimingSample");
+const { readCommunityTimings } = require("./buildCommunityTimings");
 const { planFacets, finishPlan, planGroupFields, planHeldRate } = require("./buildPlanSurvival");
 const { strengthPipeline, finishStrength } = require("./strengthAdjusted");
 const { OPPONENT_RACE_GROUP, OPPONENT_RACE_PROJECT } = require("../util/opponentRaceCounts");
@@ -63,7 +64,7 @@ const BUCKET_BRANCHES = [
  * for corrected opponent builds on ``opponent.strategy``.
  */
 class BuildsService {
-  /** @param {{games: import('mongodb').Collection}} db
+  /** @param {{games: import('mongodb').Collection,guideStats?:import('mongodb').Collection}} db
    * @param {{mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'>,
    * gameDetails?:Pick<import('./gameDetails').GameDetailsService,'findMany'>}} [opts] */
   constructor(db, opts = {}) {
@@ -281,6 +282,7 @@ class BuildsService {
     return {
       name,
       plan: finishPlan(doc),
+      communityTimings: await readCommunityTimings(this.db.guideStats, name, timingGames),
       timingSampleGames: timingGames.filter(game => game.buildLog.length > 0 || game.oppBuildLog.length > 0).length,
       timingSampleLimit: 25,
       timingsTruncated: totals.total > 25,

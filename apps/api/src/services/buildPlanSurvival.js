@@ -48,9 +48,11 @@ function rankedLabels(field) {
     { $match: { _planHeld: false } },
     { $set: { _planLabel: stringValue(field) } },
     { $match: { _planLabel: { $ne: "" } } },
-    { $group: { _id: "$_planLabel", count: { $sum: 1 } } },
+    { $group: { _id: "$_planLabel", count: { $sum: 1 },
+      sampleGameIds: { $topN: { n: 20, sortBy: { date: -1, gameId: -1 }, output: "$gameId" } },
+    } },
     { $sort: { count: -1, _id: 1 } }, { $limit: 5 },
-    { $project: { _id: 0, name: "$_id", count: 1 } },
+    { $project: { _id: 0, name: "$_id", count: 1, sampleGameIds: 1 } },
   ];
 }
 
@@ -85,9 +87,27 @@ function planFacets(bucket) {
 const number = value => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
 /** @param {unknown} wins @param {unknown} losses */
 const winRate = (wins, losses) => number(wins) + number(losses) ? number(wins) / (number(wins) + number(losses)) : null;
+/** Keep an owner-only example link within the existing bounded games query.
+ * @param {unknown} raw */
+function sampleIds(raw) {
+  if (!Array.isArray(raw)) return [];
+  /** @type {string[]} */ const ids = [];
+  let encoded = 0;
+  for (const value of raw.slice(0, 20)) {
+    const id = typeof value === "string" ? value : typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? String(value) : "";
+    if (!id || id.length > 200 || /[\u0000-\u001f\u007f]/u.test(id) || ids.includes(id)) continue;
+    const size = encodeURIComponent(id).length + 7;
+    if (size > 207 || encoded + size > 3000) continue;
+    ids.push(id); encoded += size;
+  }
+  return ids;
+}
 /** @param {Array<Record<string,any>>|undefined} rows */
 const labels = rows => (rows || []).filter(row => typeof row.name === "string" && row.name.length > 0 && row.name.length <= 200)
-  .slice(0, 5).map(row => ({ name: row.name, count: number(row.count) }));
+  .slice(0, 5).map(row => {
+    const gameIds = sampleIds(row.sampleGameIds);
+    return { name: row.name, count: number(row.count), sampleGameIds: gameIds, sampleLimit: 20, sampleTruncated: number(row.count) > gameIds.length };
+  });
 
 /** @param {Record<string,any>|null|undefined} doc */
 function finishPlan(doc) {

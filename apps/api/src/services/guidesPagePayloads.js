@@ -418,6 +418,7 @@ function shapeSitemapPayload(input) {
 }
 
 module.exports = {
+  pickTimings,
   servesPublishedCell,
   ARMY_CHECKPOINT_KEYS,
   shapeBuildPayload,

@@ -33,3 +33,16 @@ test("unobserved tokens and invalid timing numbers never invent an outcome compa
   expect(Dna.timingOutcomeMedians(/** @type {any} */ (samples))).toMatchObject({ winnerSampleCount: 5,
     loserSampleCount: 4, winnerMedianSeconds: null, loserMedianSeconds: null });
 });
+
+test("Mongo Date samples sort chronologically rather than by weekday text", () => {
+  const games = Array.from({ length: 6 }, (_, index) => ({ ...game(index < 3 ? 100 : 200, "Victory"), date: new Date(Date.UTC(2026, 9, 5 + index)) }));
+  const timing = Dna.computeMedianTimingsForMatchup(games, "P", "Z").Gateway;
+  expect(timing).toMatchObject({ trend: "later", lastSeenSeconds: 200 });
+  expect(timing.samples[0].date).toEqual(new Date(Date.UTC(2026, 9, 10)));
+});
+
+test("invalid dates retain measured quantiles but suppress recency claims", () => {
+  const games = Array.from({ length: 6 }, (_, index) => ({ ...game(100 + index, "Victory"), date: new Date(NaN) }));
+  expect(Dna.computeMedianTimingsForMatchup(games, "P", "Z").Gateway).toMatchObject({ sampleCount: 6,
+    medianSeconds: 102.5, trend: "unknown", lastSeenSeconds: null });
+});
