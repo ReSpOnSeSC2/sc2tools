@@ -273,7 +273,9 @@ export function ReplayDemo() {
                 ref={inputRef}
                 type="file"
                 aria-label="Replay for the build editor demo"
-                accept={accept}
+                // Keep the shared iOS picker workaround, but this demo takes
+                // one replay rather than /try's optional archive collection.
+                accept={accept ? ".SC2Replay" : undefined}
                 className="sr-only"
                 onChange={(e) => { const file = e.currentTarget.files?.[0] ?? null; e.currentTarget.value = ""; setIntakeMessage(""); void onPick(file); }}
               />

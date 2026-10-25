@@ -19,6 +19,10 @@ Preliminary real Chromium matrix passes **212 checks and 36 captures** at 320/39
 
 These captures currently use the preceding production CSS and remain preliminary/unstaged. Representative corrected 320px light editor, 1440px dark opponent editor and 320px dark unsupported captures were opened and inspected; the obscured header is fixed. Final source integration, production build/budgets, required real Next landing Playwright proof, final CSS recapture and remote exact-head gates remain outstanding.
 
+Approved frozen generic-editor dependency `a8fc536f` is integrated at `94e8099a`, preserving its exact lazy import. The combined affected run passes **42 assertions across 7 files**, including the generic lazy/editor-owner request cases. The interim local production build with a synthetic auth/API setup and `all` only in that test process passes every unchanged budget: landing **190.7/215**, Today **238.3/240**, opponent **447.7/500**, Dock **215.3/225**, widget **322.4/325** kB gzip.
+
+The new real **production Next/Webpack** landing Playwright case passes on desktop-1280 and mobile-360: **2 tests, 11.8 seconds**. It parses the actual repository replay, confirms no engine assets on page view, opens/reopens both real build orders and sees no API-origin or upload-sized/write traffic. Unlike the separate capture harness, this proof uses Webpack's actual Worker URL with no adapter. Both app and API fixture servers exited afterward. Final shared `useApi` fence/main coordination, a final production build/recapture and remote gates are still required before merge.
+
 No engine source changed. The expected engine remains `25b300818c31d41b`; coordinate any required prebuild with the other worktrees. No old `f96` prebuild is allowed. No rollout/environment, provider, migration, installer, version or release action was performed.
 
 ## Reproduction

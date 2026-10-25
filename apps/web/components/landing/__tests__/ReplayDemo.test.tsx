@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { ReplayDemo } from "../ReplayDemo";
 const mock = vi.hoisted(() => ({ mode: "off", fetch: vi.fn(), editor: vi.fn() }));
 vi.mock("@/lib/instant/flag", () => ({ getInstantImportMode: () => mock.mode }));
-vi.mock("@/components/builds/editor", () => ({ BuildEditorModal: (props: unknown) => { mock.editor(props); return null; } }));
+vi.mock("@/components/builds/editor/LazyBuildEditorModal", () => ({ LazyBuildEditorModal: (props: unknown) => { mock.editor(props); return null; } }));
 beforeEach(() => { mock.fetch.mockReset(); mock.editor.mockClear(); mock.mode = "off"; vi.stubGlobal("fetch", mock.fetch); mock.fetch.mockResolvedValue({ ok: false, status: 504, headers: new Headers(), json: async () => ({ error: { code: "preview_timeout" } }) }); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 function replay() { const file = new File(["replay"], "game.SC2Replay"); Object.defineProperty(file, "arrayBuffer", { value: async () => new ArrayBuffer(6) }); return file; }
@@ -24,6 +24,7 @@ it("rejects non-replays without a request and ignores text drags", () => {
 });
 it("resets the picker so the same replay can be selected again", async () => {
   mock.mode = "off"; const { container } = render(<ReplayDemo />); const input = container.querySelector<HTMLInputElement>('input[type="file"]')!; const file = replay();
+  expect(input.accept).toBe(".SC2Replay");
   fireEvent.change(input, { target: { files: [file] } }); await screen.findByRole("button", { name: "Choose another replay" }); expect(input.value).toBe("");
   fireEvent.change(input, { target: { files: [file] } }); await waitFor(() => expect(mock.fetch).toHaveBeenCalledTimes(2));
   expect(screen.queryByRole("link", { name: "Analyze it in your browser" })).toBeNull();
