@@ -8,7 +8,8 @@ import { GlowHalo } from "@/components/ui/GlowHalo";
 import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/Stat";
-import { fmtAgo, pct, wrColor } from "@/lib/format";
+import { pct, wrColor } from "@/lib/format";
+import { publicDate } from "@/lib/seo/publicDate";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { verifiedRegionsLabel } from "@/lib/reviews";
 import { GetYourOwnCTA } from "./GetYourOwnCTA";
@@ -88,7 +89,7 @@ export function PublicProfile({ profile }: PublicProfileProps) {
                 ) : null}
                 {profile.joinedAt ? (
                   <span className="text-micro uppercase tracking-wider text-text-dim">
-                    Member {fmtAgo(profile.joinedAt)}
+                    Member since {publicDate(profile.joinedAt)}
                   </span>
                 ) : null}
               </span>

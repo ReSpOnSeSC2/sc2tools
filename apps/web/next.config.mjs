@@ -103,6 +103,11 @@ function retiredToolRedirects(guidesOn) {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // The server-rendered Community social card embeds only registry-resolved
+  // local icons. Trace the assets so serverless builds retain those files.
+  outputFileTracingIncludes: {
+    "/community/builds/*/opengraph-image": ["./public/icons/sc2/{buildings,units,upgrades}/*.png"],
+  },
   reactStrictMode: true,
   poweredByHeader: false,
   // transformers.js (on-device chat translation) is browser-only for

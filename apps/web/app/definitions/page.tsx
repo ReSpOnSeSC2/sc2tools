@@ -7,17 +7,18 @@ import { DefinitionsBackLink } from "@/components/definitions/DefinitionsBackLin
 import { fetchPublishedGuidePaths } from "@/lib/guides/api";
 import { definitionGuideLinks } from "@/lib/guides/definitionLinks";
 import { guidesEnabled } from "@/lib/guides/flags";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
 // Keep the successful sitemap in the data cache, but never cache a whole
 // page with missing links after one failed API request.
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  alternates: { canonical: "/definitions" },
+export const metadata = pageMetadata({
+  canonical: "/definitions",
   title: "Build & Strategy Definitions",
   description:
     "The detection rules used by the SC2 Tools analyzer to label opponent strategies and your own builds.",
-};
+});
 
 export default async function DefinitionsPage() {
   // The guide sitemap is a cached read (6 h, purged when guides publish);

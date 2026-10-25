@@ -62,6 +62,11 @@ corresponding GitHub Release.
 
 - Browse exact totals with sortable pages and signup, admin and inactive-agent filters. Export matching accounts as a bounded private CSV, inspect recent games/activity, and copy account IDs with a manual fallback.
 
+### Public link previews
+
+- Public pages use their own canonical and social titles. Shared community builds and authors, Try and Download gain branded preview cards; build rules show their deadlines clearly. Public member dates use a consistent time zone, and unavailable share data falls back promptly.
+- Public Community lists can refresh through bounded signed cache invalidation after edits and removals. Opponent profiles always recheck current privacy admission; interrupted writes and partial game wipes retire cached contributions safely.
+
 ### Stream Dock
 
 - Run an opt-in best-of series with an exact opponent, scheduled maps and manual score corrections. Accepted replays with a recorded start update the score once; the Series widget and shared `!series` command show the same score without posting automatically.
