@@ -23,6 +23,18 @@ function editor(onSaved = vi.fn(), draft = initialDraft) {
 const noCompletion = (onSaved: ReturnType<typeof vi.fn>) => { expect(onSaved).not.toHaveBeenCalled(); expect(h.toast.success).not.toHaveBeenCalled(); expect(h.toast.warning).not.toHaveBeenCalled(); };
 
 describe("real editor transport ownership and deadlines", () => {
+  it.each(["signature", "create-only"])("cancels a held JWT when the %s source contract changes", async boundary => {
+    const token = deferred<string>(); h.token.mockImplementation(() => token.promise);
+    const first = [{ unit: "Stargate", count: 2, beforeSec: 240 }];
+    const onSaved = vi.fn();
+    const view = renderHook(({ signature, createOnly }) => useBuildEditorState({ open: true, context,
+      initialDraft, sourceSignature: signature, createOnly, onSaved }), { initialProps: { signature: first, createOnly: true } });
+    let save!: Promise<void>; act(() => { save = view.result.current.save(false); });
+    await flush(); expect(h.token).toHaveBeenCalledOnce(); expect(fetcher).not.toHaveBeenCalled();
+    view.rerender({ signature: boundary === "signature" ? [{ ...first[0], count: 3 }] : first, createOnly: boundary !== "create-only" });
+    await act(async () => { token.resolve("token-A"); await save; });
+    expect(fetcher).not.toHaveBeenCalled(); noCompletion(onSaved);
+  });
   it.each(["owner", "loading", "source", "close", "unmount"])("does not dispatch a held JWT after %s invalidates its operation", async boundary => {
     const token = deferred<string | null>(); h.token.mockReturnValue(token.promise); const view = editor();
     let save!: Promise<void>; act(() => { save = view.result.current.save(false); }); await flush();

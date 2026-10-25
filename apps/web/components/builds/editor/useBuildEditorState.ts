@@ -122,7 +122,7 @@ export function useBuildEditorState(
   const { getToken, isLoaded, isSignedIn, userId } = useAuth();
   const owner = isLoaded && isSignedIn && userId ? userId : null;
   const requests = useBuildEditorRequests({ owner, open, getToken,
-    identity: JSON.stringify([lockedSlug, context.gameId, context.perspective, saveIntent, initialDraft]),
+    identity: JSON.stringify([lockedSlug, context.gameId, context.perspective, saveIntent, createOnly, sourceSignature, initialDraft]),
   });
   const globalToast = useToastOptional()?.toast;
 
