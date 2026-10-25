@@ -67,3 +67,40 @@ light/dark pass, including the pending-record explanation and real wipe dialog
 39 count, cancelled without mutation. Four loopback synthetic exports only;
 all nonlocal traffic blocked. Updated four detail captures individually viewed.
 This narrow follow-up has no engine or infrastructure changes.
+
+## Current-main reconciliation for PR730
+
+Integrated actual main through Cache749 (`5dee4be9`) without conflict. Preserved
+the public-cache unknown-commit notifications and centralized private game-cache
+invalidation, current live-opponent section order/local tab-strip scrolling,
+owner native queue changes and the seven-minute engine cutoff.
+
+The wider API run exposed an erasure-admission race: a shared writer can release
+between a failed exclusive CAS and the following owner read. The isolated fix
+`c6dc788f` retries the identical guarded CAS only while the original deadline
+remains and the existing owner has no active writer or exclusive lease. It does
+not extend a deadline or override a lease. Actual-method disposable Mongo tests
+were two failing/two passing before the correction and all four pass after it;
+they also cover a newly appearing exclusive lease, a reappearing writer and a
+deleted owner. Root and independent peer reviews cleared the complete method.
+
+Final integrated local proof uses source `b41f66e4`:
+
+- Full API run: 428 suites passed, 6,039 tests passed, six skipped; one snapshot
+  passed. Uses disposable Mongo databases and mocked integrations.
+- API/web types and scoped lint pass (API lint retains existing length warnings).
+  All 207 admin web cases across 27 suites passed before the clean Cache749
+  integration; the final five affected suites passed all 28 cases afterward.
+- Next-only production build and every existing bundle budget pass. Relevant
+  gzip values: landing190.1/215, Today238.8/240, game311.1/440,
+  opponent448.2/500, Dock215.7/225, overlay239.6/240 and widget323.8/325 kB.
+  Verified existing engine1.6.12/bundle25b300818c31d41b, zip digest and all 40
+  shipped source entries; no shared prebuild or engine-source change.
+- Actual Chromium shell/list/detail fixture passes 80 checks at375/1440 in
+  light/dark, with four synthetic loopback CSV exports, zero mutations and all
+  nonlocal traffic blocked. The pending-record wipe dialog previews39 while
+  stored Games is38, then cancels. All eight current list/detail captures were
+  individually inspected and fit their viewports.
+
+No production data, account, migration, integration, deployment configuration or
+version operation was performed.
