@@ -73,10 +73,13 @@ function CardPair({ show, children }: { show: boolean; children: ReactNode }) {
 export function InstantReport({ report, actions, focusKey = 0, className = "", guideLinks, guideFocus, title = "Your instant report" }: InstantReportProps) {
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
+  const completedFocus = useRef(0);
   const explicitOpener = !!guideFocus && report.openers?.some((row) => row.name === guideFocus.name)
     && report.games.some((game) => game.matchup === guideFocus.matchup && game.payload.myBuild === guideFocus.name);
   useEffect(() => {
-    if (focusKey > 0 && !explicitOpener) heading.current?.focus();
+    if (focusKey <= 0 || completedFocus.current === focusKey) return;
+    completedFocus.current = focusKey;
+    if (!explicitOpener) heading.current?.focus();
   }, [focusKey, explicitOpener]);
   if (report.totals.games === 0) return null;
   return (

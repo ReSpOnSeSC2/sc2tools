@@ -83,6 +83,14 @@ async function main() {
       const { ctx, page } = await context(390, 'dark'); await page.goto(`${origin}/fixture?theme=dark&focus=${focus}`); await expect(page.getByRole('heading', { name: 'Your instant report' })).toBeAttached();
       await page.waitForTimeout(100);
       await check(page.evaluate(valid => valid ? document.activeElement?.getAttribute('data-guide-focus') === 'true' && scrollY > 0 : document.querySelector('[data-guide-focus="true"]') === null && scrollY === 0, focus === 'pvz/adept-glaives-robo'));
+      if (focus === 'pvz/adept-glaives-robo') {
+        await page.getByRole('button', { name: 'Share report', exact: true }).evaluate(node => node.focus({ preventScroll: true }));
+        const y = await page.evaluate(() => scrollY); await page.evaluate(() => window.fixtureNavigate('?theme=dark'));
+        await expect.poll(() => page.locator('[data-guide-focus="true"]').count()).toBe(0); checks++;
+        await check(page.evaluate(before => scrollY === before && document.activeElement?.textContent === 'Share report', y));
+        await page.evaluate(() => window.fixtureNavigate('?theme=dark&focus=pvz/adept-glaives-robo'));
+        await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('data-guide-focus'))).toBe('true'); checks++;
+      }
       await ctx.close();
     }
     for (const mode of ['all', 'admins', 'off']) {

@@ -97,5 +97,12 @@ describe("report conversion actions", () => {
     view.rerender(<><button>Intake control</button><InstantReport report={report} focusKey={2} guideFocus={focus} /></>);
     expect(document.activeElement?.getAttribute("data-guide-focus")).toBe("true");
     expect(scroll).toHaveBeenCalledTimes(2);
+    const intake = screen.getByRole("button", { name: "Intake control" }); intake.focus();
+    view.rerender(<><button>Intake control</button><InstantReport report={report} focusKey={2} /></>);
+    expect(document.activeElement).toBe(intake);
+    expect(scroll).toHaveBeenCalledTimes(2);
+    view.rerender(<><button>Intake control</button><InstantReport report={report} focusKey={2} guideFocus={focus} /></>);
+    expect(document.activeElement?.getAttribute("data-guide-focus")).toBe("true");
+    expect(scroll).toHaveBeenCalledTimes(3);
   });
 });

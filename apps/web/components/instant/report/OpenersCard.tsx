@@ -50,7 +50,8 @@ function OpenerListCard({ rows, title, subtitle, testId, kind, games = [], guide
   const focusName = kind === "build" && guideFocus && games.some((game) => game.matchup === guideFocus.matchup && game.payload.myBuild === guideFocus.name) ? guideFocus.name : null;
   useEffect(() => {
     const intent = guideFocus ? `${guideFocus.key}:${focusEpoch}` : null;
-    if (!focusName || !guideFocus || focused.current === intent) return;
+    if (!focusName || !guideFocus) { focused.current = null; return; }
+    if (focused.current === intent) return;
     const target = list.current?.querySelector<HTMLElement>('[data-guide-focus="true"]');
     if (!target) return;
     focused.current = intent;
