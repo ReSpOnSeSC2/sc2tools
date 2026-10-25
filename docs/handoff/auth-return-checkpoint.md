@@ -79,3 +79,21 @@ engine build is used. The final actual Chromium auth matrix again passes
 145 checks / eight contexts / 16 unchanged captures, with 24 synthetic writes,
 no unexpected requests and no external traffic. Every final production budget
 passes after this integration. Final-head remote checks remain the merge gate.
+
+## Final shared request integration
+
+Current main's Twitch changes and the exact shared query/editor ownership fix
+are integrated through `de9f98e9` and `1b56cbf6`. The actual root-StrictMode
+Community Save/vote consumers exposed a deduped initial-read cancellation;
+the shared correction retains only a synchronously reactivated same-owner
+scope while real account/unmount capabilities remain immediately invalid.
+All 169 final auth/private-query consumers pass across 12 suites, including
+the three reproduced return-action cases. Full types and final production
+build pass. Every unchanged budget passes: landing 190/215, Today 238.7/240,
+Dossier 448.1/500 and Welcome 173.9/245 kB.
+
+The actual browser matrix passes 145 checks/eight contexts/24 synthetic writes,
+with no unexpected or external traffic. `AUTH_SHOTS_DIR` directs rerun captures
+into local cache so the 16 reviewed committed images remain intact. Independent
+integration/source review is clear. Final exact-head CI, Vercel and current-main
+merge-tree checks remain required; no provider or production write occurred.

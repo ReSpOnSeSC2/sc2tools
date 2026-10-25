@@ -4,6 +4,7 @@ const fs = require('node:fs'), path = require('node:path'), http = require('node
 process.chdir(path.resolve(__dirname, '../..'));
 const { chromium, expect } = require('@playwright/test');
 const origin = 'http://127.0.0.1:3261', writes = [], unexpected = [];
+const shots = process.env.AUTH_SHOTS_DIR || '../../docs/handoff/screenshots';
 let saved = [], vote = 0, config = { v: 2, revision: 0, slots: {} };
 const css = fs.readdirSync('.next/static/css', { recursive: true }).filter(n => n.endsWith('.css')).map(n => fs.readFileSync(path.join('.next/static/css', n), 'utf8')).join('\n');
 const fonts = `@font-face{font-family:FixtureSans;src:url('/fonts/hanken-grotesk-latin.woff2');font-weight:100 900}@font-face{font-family:FixtureDisplay;src:url('/fonts/bricolage-grotesque-latin.woff2');font-weight:100 900}:root{--font-sans:FixtureSans;--font-display:FixtureDisplay;--font-serif:serif}`;
@@ -45,7 +46,7 @@ const server = http.createServer(async (req, res) => {
   await require('./auth-return-fixture.cjs')(origin);
   await new Promise(resolve => server.listen(3261, '127.0.0.1', resolve));
   const browser = await chromium.launch({ headless: true }); let checks = 0;
-  fs.mkdirSync('../../docs/handoff/screenshots', { recursive: true });
+  fs.mkdirSync(shots, { recursive: true });
   try {
     for (const width of [320, 390, 768, 1440]) for (const theme of ['light', 'dark']) {
       const context = await browser.newContext({ viewport: { width, height: 1000 }, reducedMotion: 'reduce' });
@@ -68,7 +69,7 @@ const server = http.createServer(async (req, res) => {
       await page.getByRole('link', { name: /Create.*account.*save|Sign up.*save/i }).click();
       await expect(page.getByTestId('forced-destination')).toHaveText('/welcome?next=%2Fcommunity%2Fbuilds%2Fblink');
       await complete(); await expect(page.getByText(/Continue where you left off:/)).toBeVisible(); checks += 2;
-      await page.screenshot({ path: `../../docs/handoff/screenshots/auth-return-welcome-${theme}-${width}.png` });
+      await page.screenshot({ path: `${shots}/auth-return-welcome-${theme}-${width}.png` });
       await page.getByRole('button', { name: /Skip/ }).click();
       await expect(page.getByRole('link', { name: /In your library.*Open/ })).toBeVisible();
       expect(writes.slice(beforeSave).filter(w => w.path.startsWith('/v1/custom-builds/'))).toHaveLength(1); checks += 2;
@@ -77,7 +78,7 @@ const server = http.createServer(async (req, res) => {
       await expect(page.getByRole('button', { name: 'Downvote', exact: true }).first()).toHaveAttribute('aria-pressed', 'true');
       await expect(page.getByRole('button', { name: 'Downvote', exact: true }).last()).toHaveAttribute('aria-pressed', 'true');
       expect(writes.slice(beforeVote).filter(w => w.path.endsWith('/vote'))).toHaveLength(1); checks += 3;
-      await page.screenshot({ path: `../../docs/handoff/screenshots/auth-return-vote-${theme}-${width}.png` });
+      await page.screenshot({ path: `${shots}/auth-return-vote-${theme}-${width}.png` });
       await go(detail); const beforePractice = writes.length;
       await page.getByRole('button', { name: 'Practice in PvT', exact: true }).first().click(); await complete();
       await expect(page.getByRole('heading', { name: 'Ghost settings', exact: true })).toBeVisible();
