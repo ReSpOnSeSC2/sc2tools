@@ -28,6 +28,8 @@ catalog drift, web consumer and required browser bundle checks passed:
 - Desktop Instant Analysis fixture parity: 60 passed.
 - API preset policy consumers: 42 passed; generated catalog drift check passed.
 - Web definition parity: 12 passed.
+- The generated API guide catalog is also refreshed; guide/catalog identity
+  and description checks passed (24 combined guide/definition assertions).
 - Required browser bundle: `25b300818c31d41b`, 223 files / 79 compiled
   modules, 1.19 MiB; smoke parsed a 142,939-byte payload.
 - Real Pyodide worker glue: six checks passed, including every installed-view

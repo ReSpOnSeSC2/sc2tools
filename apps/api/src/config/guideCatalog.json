@@ -416,21 +416,21 @@
     "name": "PvZ - 2 Stargate Phoenix",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Stargate-first opening with exactly 2 Stargates, 2+ Nexuses and 4+ real Phoenix by 10:00 or the first capital ship, whichever comes first. Later Carrier/Tempest transitions preserve the Phoenix label. Glaives-first Twilight or Robotics Facility by 10:00 reroutes to the matching transition.",
+    "description": "Stargate-first opening with exactly 2 Stargates, 2+ Nexuses and 4+ real Phoenix by 7:00 or the first capital ship, whichever comes first. Later Carrier/Tempest transitions preserve the Phoenix label. Glaives-first Twilight or Robotics Facility by 10:00 reroutes to the matching transition.",
     "opener": true
   },
   {
     "name": "PvZ - 2 Stargate Void Ray",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Stargate-first opening with 2+ Stargates, 2+ Nexuses and 4+ real Void Rays by 10:00 or the first capital ship, whichever comes first. Later Carrier/Tempest transitions preserve the Void Ray label. Glaives-first Twilight or Robotics Facility by 6:00 reroutes to the matching transition; a later Robo is support.",
+    "description": "Stargate-first opening with 2+ Stargates, 2+ Nexuses and 4+ real Void Rays by 7:00 or the first capital ship, whichever comes first. Later Carrier/Tempest transitions preserve the Void Ray label. Glaives-first Twilight or Robotics Facility by 6:00 reroutes to the matching transition; a later Robo is support.",
     "opener": true
   },
   {
     "name": "PvZ - 3 Stargate Phoenix",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Stargate-first opening with 3+ Stargates, 2+ Nexuses and 4+ real Phoenix by 10:00 or the first capital ship, whichever comes first. Later Carrier/Tempest transitions preserve the Phoenix label. Glaives-first Twilight or Robotics Facility by 10:00 reroutes to the matching transition.",
+    "description": "Stargate-first opening with 3+ Stargates, 2+ Nexuses and 4+ real Phoenix by 7:00 or the first capital ship, whichever comes first. Later Carrier/Tempest transitions preserve the Phoenix label. Glaives-first Twilight or Robotics Facility by 10:00 reroutes to the matching transition.",
     "opener": true
   },
   {
@@ -486,7 +486,7 @@
     "name": "PvZ - Carrier Rush",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Stargate-first opening with Fleet Beacon before Twilight/Robo/Dark Shrine and the first real capital ship a Carrier by 10:00. An established 2+ Stargate / 2+ Nexus force of 4+ Void Rays or Phoenix before the first capital ship keeps its opening label. Hallucinated units do not count.",
+    "description": "Stargate-first opening with Fleet Beacon before Twilight/Robo/Dark Shrine and the first real capital ship a Carrier by 10:00. An established 2+ Stargate / 2+ Nexus force of 4+ Void Rays or Phoenix by 7:00 or the first capital ship, whichever comes first, keeps its opening label. Hallucinated units do not count.",
     "opener": true
   },
   {
@@ -584,7 +584,7 @@
     "name": "PvZ - Tempest Rush",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Stargate-first opening with Fleet Beacon before Twilight/Robo/Dark Shrine and the first real capital ship a Tempest by 10:00. Later Carriers do not overwrite it, and an established 2+ Stargate / 2+ Nexus force of 4+ Void Rays or Phoenix keeps its opening label. Hallucinated units do not count.",
+    "description": "Stargate-first opening with Fleet Beacon before Twilight/Robo/Dark Shrine and the first real capital ship a Tempest by 10:00. Later Carriers do not overwrite it, and an established 2+ Stargate / 2+ Nexus force of 4+ Void Rays or Phoenix by 7:00 or the first capital ship, whichever comes first, keeps its opening label. Hallucinated units do not count.",
     "opener": true
   },
   {
