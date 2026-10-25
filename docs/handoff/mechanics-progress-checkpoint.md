@@ -1,6 +1,6 @@
 # Mechanics progress over time
 
-Implements `mechanics-progress` and its macro-score-trend-and-dedupe augment on `codex/wave3-mechanics-progress`, reusing the clean preserved `wave3-my-reviews` worktree. Main through PR707 and the reviewed game-benchmarks foundation `e13a2098` are integrated. Merge after PR708. The prior reviews branch is preserved. Remote checks and merge remain required before calling this shipped.
+Implements `mechanics-progress` and its macro-score-trend-and-dedupe augment on `codex/wave3-mechanics-progress`, reusing the clean preserved `wave3-my-reviews` worktree. Actual main through merged benchmarks PR708 and Battle reports PR710 (`2a4ae2da`) is integrated. Additive squash-ancestry conflicts retained main's complete Story, benchmarks and Battle game page, consumer test and generated Help index; those three files are byte-identical to main. The prior reviews branch is preserved. Remote checks and merge remain required before calling this shipped.
 
 ## Behavior and data
 
@@ -22,5 +22,7 @@ Builds now mounts the existing Build mix matrix, with the same bucket preference
 - Final required-engine production build and every unchanged budget pass after all review fixes: landing 214.1/215 kB, Today 224.4/240, game 314.6/440 and opponent 490.5/500.
 - 96 localhost browser checks pass at 320/390/768/1440 in light and dark, using actual Macro/Builds components, fetch hooks, production CSS and committed fonts. They verify real calendar geometry, gap breaks, sample markers, metric-switch request reuse, opponent-bracket reference, shared grouping, online/offline empty actions, late plot measurement, readable controls and no page overflow. Build mix count text meets at least 4.5:1 computed contrast over its translucent fills in both themes. Inspected screenshots are in `screenshots/mechanics-*.png`.
 - Independent API/calendar/reference and UI reviews confirmed the scalar-only aggregation extension, metric counts, calendar geometry and proxy wording. Cached-table-on-404 and conditional plot measurement findings are fixed and covered by regressions; the reviewers rechecked the fixes with no remaining blocker.
+- Prior exact head `475d621d` passed all API, web, responsive and Vercel checks (5,253 API tests). The fresh-main integration also passes 57 focused GameDetail/Mechanics/Builds/Mix consumers and the full web typecheck. Integration source changes are upstream Battle additions only; Mechanics behavior is unchanged.
+- The main-integrated required-engine production build, every unchanged bundle budget and all 96 light/dark localhost browser checks pass again. Current-head remote CI remains required after this integration commit.
 
 Reproduce browser evidence from `apps/web` with `node tests/manual/mechanics-progress.cjs` after building. Auth/API/Next and unrelated MMR panels are explicit synthetic boundaries; non-local requests are blocked and mocked backfill never contacts an Agent. No new endpoint, infrastructure, environment variable, migration, AI feature or budget increase.

@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, FileQuestion } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
+import { useMapReplay } from "@/lib/useMapReplay";
 import { Card } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
 import { SectionBoundary } from "@/components/ui/SectionBoundary";
@@ -31,6 +32,7 @@ import { useGameContext } from "@/lib/useBenchmarks";
 const BuildOrderColumns = dynamic(() => import("./BuildOrderColumns").then((value) => value.BuildOrderColumns), { loading: () => <div role="status" aria-label="Loading build orders" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
 const BuildWorkspaceActions = dynamic(() => import("./BuildWorkspaceActions").then(value => value.BuildWorkspaceActions));
 const GameMacroSection = dynamic(() => import("./GameMacroSection").then((value) => value.GameMacroSection), { loading: () => <div role="status" aria-label="Loading macro breakdown" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
+const GameBattleReport = dynamic(() => import("@/components/battleReport/GameBattleReport").then((value) => value.GameBattleReport), { loading: () => <div role="status" aria-label="Loading battle report" className="h-52 animate-pulse rounded-lg bg-bg-elevated" /> });
 import { LossAutopsyCard } from "./LossAutopsyCard";
 import { GameStoryPanel } from "./GameStoryPanel";
 import type { GameStoryInput } from "@/lib/gameStory";
@@ -131,6 +133,7 @@ function GameDetailContent({
   const setScrubTime = clock.seek;
 
   const game = gameReq.data ?? null;
+  const playbackController = useMapReplay(game?.gameId ?? null);
   // The macro endpoint 404s with `macro_not_computed` when the agent
   // never uploaded a breakdown — that's a degrade, not an error page.
   const breakdown = macroReq.data ?? null;
@@ -261,6 +264,13 @@ function GameDetailContent({
         onNewBuildOpened={initialNewBuild ? dropNewBuildParam : undefined}
       />
 
+      <SectionBoundary key={`battle report:${game.gameId}`} label="the battle report" title="The battle report hit a problem"><GameBattleReport
+        game={game} breakdown={breakdown} buildOrders={buildReq.data} intent={intentReq.data} myName={myName}
+        playback={playbackController.playback} segmented={!!playbackController.manifest}
+        pending={macroStatus === "loading" || buildStatus === "loading" || intentReq.isPreviousData || playbackController.isLoading}
+        onSeek={setScrubTime}
+      /></SectionBoundary>
+
       <SectionBoundary key={`mechanics:${game.gameId}`} label="mechanics" title="Mechanics hit a problem"><GameStoryPanel input={storyInput} onSeek={setScrubTime} mechanics={<div className="space-y-4"><MechanicsPanel
           breakdown={breakdown}
           game={game}
@@ -280,6 +290,7 @@ function GameDetailContent({
           computed playback data. */}
       <SectionBoundary key={`the replay player:${game.gameId}`} label="the replay player" title="The replay player hit a problem"><MapReplaySection
         gameId={game.gameId}
+        controller={playbackController}
         initialTimeSec={initialTimeSec}
         seekRequest={clock.seekRequest} onPlaybackTimeChange={clock.onPlaybackTimeChange} onPlaybackStateChange={clock.onPlaybackStateChange} onStageSeek={clock.onStageSeek} banked={banked} upgrades={upgrades} clockLink={<GameClockLink time={clock.t} getHref={clock.linkAtCurrentTime} />}
         buildName={checkinBuild?.label ?? game.myBuild}
