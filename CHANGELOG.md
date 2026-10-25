@@ -56,6 +56,10 @@ corresponding GitHub Release.
 - Compare builds, strategies, maps and matchups with replay-rated expected wins, sortable wins above expected, visible rating coverage and Wilson win-rate ranges. Sparse history stays unknown; fewer than ten games are marked as thin samples.
 - Trends shows matchup performance-rating windows over each pair's latest 50 decided ranked 1v1 games. Missing ratings and unbounded all-win/all-loss windows remain gaps. A bounded daily calibration uses only aggregate replay-time rating evidence, with a documented Elo fallback.
 
+### Guide video library
+
+- Filter current build-order videos by matchup, search their titles and reveal 24 cards at a time. Matchup links open with the same filter, and unique matches can link directly to a published build guide.
+
 ### Agent 0.24.5 - Opt-in game-screen assistance
 - Default build selectors and loading-screen scouting to off, matching the
   existing off defaults for native pins, spoken scouting, Session and Ghost.

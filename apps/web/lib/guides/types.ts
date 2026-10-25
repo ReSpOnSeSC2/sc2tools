@@ -89,6 +89,10 @@ export interface GuideVideo {
    * build order. Absent from API builds that predate the field.
    */
   eightWorkerPatch?: boolean;
+  /** Detected viewer-side matchup; optional for older API deployments. */
+  matchup?: GuideMatchup | null;
+  /** Exactly one catalog build with a currently published guide, otherwise null. */
+  buildSlug?: string | null;
 }
 
 export interface GuideChannel {

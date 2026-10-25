@@ -5,7 +5,7 @@ import { GUIDE_TREND_FLAT_THRESHOLD } from "@/lib/guides/format";
 const article: HelpArticle = {
   slug: "reading-guide-stats", title: "Build guides: reading the stats",
   summary: "Read win rates, likely ranges, verdict symbols and trends, and understand why some guide numbers stay hidden.",
-  category: "builds", audience: "all", keywords: ["confidence", "likely range", "sample", "publishing floor", "win rate", "trend", "glyph", "guides"], updated: "2026-10-23",
+  category: "builds", audience: "all", keywords: ["confidence", "likely range", "sample", "publishing floor", "win rate", "trend", "glyph", "guides", "videos"], updated: "2026-10-25",
   body: [
     { type: "paragraph", text: "[Build guides](/guides) count ranked 1v1 games uploaded to SC2 Tools. Every number and explanation uses fixed rules and recorded results, with no AI. The guide describes these players' games, rather than promising your next result." },
     { type: "heading", text: "Why some numbers are hidden", anchor: "publishing-floors" },
@@ -20,6 +20,7 @@ const article: HelpArticle = {
     { type: "paragraph", text: "Choose an opponent league or MMR band before comparing openers. The table summary states which opponents it counts. See [Build guides: filtering](/help/build-guides#opponent-filters) for the controls and ways to clear them." },
     { type: "paragraph", text: "The **8-worker patch** is an archive with different opening timings. Its videos stay collapsed below current 12-worker guides. Keep the era in mind when comparing numbers or practicing a build." },
     { type: "heading", text: "Practice what you found", anchor: "practice" },
+    { type: "paragraph", text: "[All build order videos](/guides/videos) has matchup filters and a title search. Show more adds 24 cards at a time. Share a matchup with the page URL; the 8-worker archive stays separate. **Read the guide** appears only when a video matches one build with a published guide." },
     { type: "paragraph", text: "Use **Practice it on stream** on a build guide to load its targets in Ghost Build. [Practice Ghost Build](/help/practice-ghost-build) explains the stream setup. Use the guide's section links to save or share the timings, army or matchups you want to revisit." },
   ], related: ["build-guides", "practice-ghost-build", "rules-explained"],
 };
