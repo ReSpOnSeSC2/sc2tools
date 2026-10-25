@@ -1,4 +1,20 @@
 "use strict";
+const { OwnerRevisions } = require("../util/gameVisibility");
+
+/** @type {WeakMap<Map<string,any>, OwnerRevisions>} */
+const cacheRevisions = new WeakMap();
+/** @param {Map<string,any>} cache */
+function revisionsFor(cache) {
+  let revisions = cacheRevisions.get(cache);
+  if (!revisions) { revisions = new OwnerRevisions(); cacheRevisions.set(cache, revisions); }
+  return revisions;
+}
+
+/** @param {Map<string,any>} cache @param {string} userId */
+function invalidateEnrichmentForUser(cache, userId) {
+  revisionsFor(cache).invalidate(userId);
+  for (const key of cache.keys()) if (key.startsWith(`${userId}|`)) cache.delete(key);
+}
 
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 
@@ -245,6 +261,7 @@ async function enrichEnvelope(
   coordinator = null,
 ) {
   if (!userId || !envelope || typeof envelope !== "object") return envelope;
+  const revisions = revisionsFor(cache), revision = revisions.get(userId);
   const opp = envelope.opponent;
   if (!opp || typeof opp !== "object") return envelope;
   const name = typeof opp.name === "string" ? opp.name.trim() : "";
@@ -314,11 +331,12 @@ async function enrichEnvelope(
     }
   };
   const coordinated = coordinator
-    ? await coordinator.run(key, compute)
+    ? await coordinator.run(`${key}|visibility:${revision.id}`, compute)
     : { admitted: true, value: await compute() };
   // Capacity shedding is deliberately not cached. A later 1 Hz tick can
   // retry after one of the bounded lanes becomes available.
   if (!coordinated.admitted) return envelope;
+  if (!revisions.current(userId, revision)) return envelope;
   const history = coordinated.value;
   // Cache even null results so a Pulse-miss / unknown-opponent case
   // doesn't repeatedly hit the aggregation.
@@ -430,6 +448,7 @@ class LiveEnrichmentCoordinator {
  */
 function invalidateEnrichmentForOpponent(cache, userId, opponentName, pulseCharacterId) {
   if (!userId || !opponentName) return;
+  revisionsFor(cache).invalidate(userId);
   const namePrefix = `${userId}|name:${opponentName.toLowerCase()}|`;
   const pcid =
     pulseCharacterId !== undefined
@@ -456,4 +475,5 @@ module.exports = {
   enrichEnvelope,
   LiveEnrichmentCoordinator,
   invalidateEnrichmentForOpponent,
+  invalidateEnrichmentForUser,
 };

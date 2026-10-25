@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const {
@@ -172,7 +174,7 @@ class ArcadeService {
         {
           userId,
           date: { $gte: start },
-          isResumedFromReplay: { $ne: true },
+          ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
         },
         { projection: RESOLVE_GAME_PROJECTION },
       )
@@ -299,7 +301,7 @@ class ArcadeService {
     if (!userId) return empty;
     const games = await this.db.games
       .find(
-        { userId, isResumedFromReplay: { $ne: true } },
+        { userId, ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true } },
         { projection: { _id: 0, gameId: 1, date: 1 } },
       )
       .sort({ date: -1 })

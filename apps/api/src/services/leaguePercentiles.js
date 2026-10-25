@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+
 const { VERSION_KEY } = require("../db/schemaVersioning");
 
 /**
@@ -259,7 +261,7 @@ function buildRecomputePipeline() {
   return [
     {
       $match: {
-        isResumedFromReplay: { $ne: true },
+        ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
         "opponent.leagueId": { $type: "number" },
         myRace: { $type: "string" },
         "opponent.race": { $type: "string" },

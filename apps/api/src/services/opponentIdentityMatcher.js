@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+
 const { controlGroupComponent, actionComponent, validControlGroups, validActions, validCamera, hasIncompatibleLegacySteals } = require("./opponentBehavior");
 const { OPP_INTENT_LABEL_PROJECTION, opponentDetectorView } = require("./buildIntentShape");
 
@@ -304,7 +306,7 @@ class OpponentIdentityMatcherService {
       .find(
         {
           userId,
-          isResumedFromReplay: { $ne: true },
+          ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
           $or: identity,
         },
         { projection: MATCH_GAME_PROJECTION },
@@ -401,7 +403,7 @@ class OpponentIdentityMatcherService {
       .find(
         {
           userId,
-          isResumedFromReplay: { $ne: true },
+          ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
           "opponent.race": { $in: raceVariants(race) },
           $or: identityClauses,
         },
