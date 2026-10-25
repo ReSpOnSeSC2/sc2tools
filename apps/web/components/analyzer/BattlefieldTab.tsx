@@ -23,7 +23,7 @@ import type { MapGamesDrill } from "./maps/MapVetoTable";
 import { Toggle } from "@/components/ui/Toggle";
 import { opponentRace, poolMapRows } from "@/lib/mapVeto";
 import { sumStrength, type StrengthFields } from "@/lib/strengthAdjusted";
-import { StrengthCell, StrengthGuide, WinRateRange } from "./StrengthAdjusted";
+import { StrengthCell, StrengthGuide, StrengthHeader, WinRateRange } from "./StrengthAdjusted";
 
 type Row = StrengthFields & {
   /** Matchup label ("vs P"). */
@@ -253,7 +253,7 @@ export function BattlefieldTab() {
                       <SortableTh col="losses" label="L" {...muSort} align="right" />
                       <SortableTh col="total" label="Games" {...muSort} align="right" />
                       <SortableTh col="winRate" label="WR" {...muSort} align="right" />
-                      <SortableTh col="winsAboveExpected" label="Vs expected" {...muSort} align="right" />
+                      <StrengthHeader sort={muSort} />
                       <th className="px-3 py-2 text-right text-micro uppercase text-text-dim">
                         Recent
                       </th>

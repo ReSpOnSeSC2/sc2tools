@@ -3,6 +3,7 @@
 const { ladderExpression, ratingsExpression } = require("./mmrExpectation");
 const { RULES, validatedAnchors, performanceRating } = require("./mmrExpectationMath");
 const { wilsonInterval } = require("../util/wilson");
+const { raceLetterExpr } = require("./trendsRegionExpr");
 
 /** @typedef {import('./mmrExpectationMath').Calibration|null} Curve */
 /** @param {number} probability */
@@ -84,9 +85,10 @@ function finishStrength(row, curve) {
 /** At most 16 race pairs x 50 scalar samples; no replay names, ids, details,
  * or unbounded $push. Includes missing-MMR games so coverage stays visible. */
 function matchupRatingStages() {
+  const race = (/** @type {string} */ field) => raceLetterExpr({ $trim: { input: { $ifNull: [field, ""] } } });
   return [
     { $match: { _strengthCohort: true, date: { $type: "date" } } },
-    { $group: { _id: { myRace: "$_myRace", race: "$_oppRace" }, totalGames: { $sum: 1 }, samples: { $topN: { n: 50, sortBy: { date: -1, gameId: -1 }, output: { date: "$date", win: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] }, opponent: "$opponent.mmr", rated: "$_strengthRated", expected: "$_strengthExpected" } } } } },
+    { $group: { _id: { myRace: race("$myRace"), race: race("$opponent.race") }, totalGames: { $sum: 1 }, samples: { $topN: { n: 50, sortBy: { date: -1, gameId: -1 }, output: { date: "$date", win: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] }, opponent: "$opponent.mmr", rated: "$_strengthRated", expected: "$_strengthExpected" } } } } },
     { $sort: { "_id.myRace": 1, "_id.race": 1 } },
   ];
 }

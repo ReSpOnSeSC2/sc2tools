@@ -1,7 +1,7 @@
 import type { HelpArticle } from "@/lib/help/types";
 
 const article: HelpArticle = {
-  slug: "vs-expected", title: "Vs expected: results given who you played",
+  slug: "vs-expected", title: "Strength-adjusted win rate and performance rating",
   summary: "Read opponent-strength-adjusted wins, replay-time rating coverage, performance ratings and win-rate uncertainty.",
   category: "analyzer", audience: "player", signedInOnly: true, order: 11,
   keywords: ["vs expected", "expected wins", "strength adjusted", "performance rating", "MMR", "Wilson", "thin sample"],

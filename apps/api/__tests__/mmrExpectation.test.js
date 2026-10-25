@@ -43,6 +43,12 @@ describe("bounded replay-only corpus calibration", () => {
 });
 
 describe("calibration publication and read fallback", () => {
+  test.each(["excluded", "_deleted", "_deletionPending"])("%s owner contributions never fill the sample floor, while another owner's copies remain", async flag => {
+    await db.collection("games").insertMany(Array.from({ length: 200 }, (_, i) => [game({ gameId: String(i), userId: "hidden", [flag]: true }), game({ gameId: String(i), userId: "retained" })]).flat());
+    expect(await service.recompute()).toMatchObject({ sampleGames: 200, supportedBins: 1 });
+    expect(await db.collection("games").countDocuments({ userId: "retained" })).toBe(200);
+  });
+
   test("recognized race initials and case variants are eligible while unknown/Computer are excluded", async () => {
     const aliases = ["p", "PROTOSS", "P", " protoss ", "t", "Terran", "ZERG", "r", "Random"];
     await db.collection("games").insertMany(aliases.map(myRace => game({ myRace, opponent: { race: "z", mmr: 4200, mmrSource: "replay" } })));

@@ -29,6 +29,8 @@ function ladderExpression() {
   return { $and: [
     { $eq: ["$isLadderGame", true] },
     { $ne: ["$excluded", true] },
+    { $ne: ["$_deleted", true] },
+    { $ne: ["$_deletionPending", true] },
     { $ne: ["$isResumedFromReplay", true] },
     { $or: [{ $eq: ["$matchFormat", "1v1"] }, { $and: [{ $in: [{ $type: "$matchFormat" }, ["missing", "null"]] }, { $eq: ["$playerCount", 2] }] }] },
     { $or: [{ $in: [{ $type: "$playerCount" }, ["missing", "null"]] }, { $eq: ["$playerCount", 2] }] },

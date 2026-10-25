@@ -4,17 +4,21 @@ import { ratingSparkline, signedWins, strengthDescription, sumStrength, type Mat
 describe("strength result presentation", () => {
   it("formats positive, negative and rounded neutral wins without negative zero", () => {
     expect(signedWins(1.56)).toBe("+1.6"); expect(signedWins(-1.56)).toBe("−1.6"); expect(signedWins(-.01)).toBe("±0.0");
+    expect(signedWins(.75)).toBe("+0.8"); expect(signedWins(-.75)).toBe("−0.8");
   });
   it("spells out rated-subset arithmetic, exclusions and actual calibration evidence", () => {
     const text = strengthDescription({ ratedGames: 4, ratedWins: 2, expectedWins: 1.5, winsAboveExpected: .5, excludedNoMmr: 3, excludedIneligible: 2, perfRating: 4200, expectation: { method: "calibrated", sampleGames: 600, supportedBins: 2, eloScale: 400 } });
     expect(text).toContain("2 rated wins − 1.50 expected wins = +0.5"); expect(text).toContain("3 missing paired ratings; 2 other ineligible");
     expect(text).toContain("600 original games in 2 supported bins"); expect(text).toContain("Performance rating 4,200");
     expect(strengthDescription({ ratedGames: 0 })).toMatch(/unavailable/);
+    expect(strengthDescription({ ratedGames: 0, excludedNoMmr: 7 })).toContain("7 missing paired ratings");
+    expect(strengthDescription({})).toContain("coverage has not been supplied");
   });
   it("sums disjoint subsets without averaging their performance ratings", () => {
     const result = sumStrength([{ ratedGames: 4, ratedWins: 3, expectedWins: 2, perfRating: 4400, excludedNoMmr: 1 }, { ratedGames: 2, ratedWins: 0, expectedWins: .5, perfRating: null }]);
     expect(result).toMatchObject({ ratedGames: 6, ratedWins: 3, expectedWins: 2.5, winsAboveExpected: .5, excludedNoMmr: 1 }); expect(result.perfRating).toBeUndefined();
-    expect(sumStrength([{}]).expectedWins).toBeNull();
+    expect(sumStrength([{}]).ratedGames).toBeUndefined();
+    expect(sumStrength([{ ratedGames: 2, ratedWins: 1, expectedWins: 1 }, {}]).expectedWins).toBeUndefined();
   });
 });
 

@@ -1,6 +1,6 @@
 # Strength-adjusted win rates checkpoint
 
-Worktree: `.worktrees/wave3-my-reviews`; branch: `codex/wave3-strength-adjusted`, based on merged benchmark main `1309693b`. The prior Mechanics branch is preserved at `475d621d` while PR709 completes its final gates.
+Worktree: `.worktrees/wave3-my-reviews`; branch: `codex/wave3-strength-adjusted`, originally based on merged benchmark main `1309693b`. Actual main through Mechanics PR709 and Saved Views PR711 is integrated. The prior Mechanics branch is preserved at `fc25757d`; PR709 merged as `6cced788` after all current-head checks passed.
 
 ## API and deterministic calibration
 
@@ -13,7 +13,7 @@ Worktree: `.worktrees/wave3-my-reviews`; branch: `codex/wave3-strength-adjusted`
 - Existing maps, matchups, map-by-matchup, builds, opponent strategies and build-by-strategy groups add paired-rating counts, expected wins, rated wins above expected, performance rating and Wilson ranges in their existing aggregation passes. Raw totals remain unchanged; `excludedNoMmr` counts eligible decided 1v1 games without paired historical ratings, while `excludedIneligible` distinguishes other rows.
 - Existing matchup-timeseries response adds each pair's latest 50 decided ladder games through bounded `$topN` in the same scan, with ten-game rolling performance windows and explicit missing-rating coverage. Original timeseries points retain their existing shape and values. Global deduplicated history uses the same calibration and already retains the required historical provenance fields.
 
-Validation so far: 171 local API tests across 10 suites and one snapshot pass, full API typecheck and strict new-module lint pass. These include actual stored Victory/Defeat results, Mongo expression/pure-math parity, strict provenance, coverage exclusions, recognized race aliases/case, hidden owner contributions without hiding another uploader's copy, interpolation/tails, atomic publication, freshness/lock/singleflight and last-50 bounds. Existing long-file lint warnings are unchanged.
+The integrated full API suite passed 5,319 tests with six environment skips across 374 suites and one snapshot before the final visibility/trimmed-race regressions. All 24 final Mongo coverage/visibility tests, full API types and strict new-module lint pass afterward. They cover actual stored Victory/Defeat results, Mongo expression/pure-math parity, strict provenance, recognized race aliases/case/spacing, hidden or deleted owner contributions without hiding another uploader's copy, interpolation/tails, atomic publication, freshness/lock/singleflight and last-50 bounds. `excluded`, `_deleted` and `_deletionPending` are fenced independently in the strength cohort so the replay-library integration cannot race a corpus read. Existing long-file lint warnings are unchanged.
 
 ## UI implementation
 
@@ -21,6 +21,13 @@ Builds, build-by-strategy, opponent strategy cards, matchup rows and map groups 
 
 Trends' Matchup rating card shares the exact grouped-matchup URL/resource with the existing matchup win-rate chart. It presents latest-50 estimates plus rolling ten-game sparklines in game order, explicit rated/missing counts, null gaps and native window inspection. Previous-cohort data is withheld. Help `/help/vs-expected` documents a worked arithmetic example, replay-only coverage, Elo400, PAV/prior/symmetry assumptions, original counts and unbounded performance windows.
 
-120 web/Help tests across 18 suites, full web types and strict changed-source/new-test lint pass. They cover signed/unknown chips, coverage arithmetic, disjoint map sums, null geometry, single visible points, native inspection, previous-cohort suppression, actual table sorting and all Help links/registry checks.
+127 web/Help tests across 19 suites, full web types and strict changed-source/new-test lint pass. A final 22-consumer pass additionally verifies legacy/mixed missing coverage remains unknown in grouped maps. Tests cover signed/unknown chips, symmetric half-tie rounding, coverage arithmetic, disjoint map sums, null geometry, single visible points, native inspection, previous-cohort suppression, actual table sorting and all Help links/registry checks. The column's question-mark link opens the worked example.
 
-Responsive browser evidence, final production build and PR gates remain in progress. No release version, signed installer, tag or AI feature was changed. Source through merged Battle reports main is integrated; actual Mechanics/Saved Views main integration follows after preserving this UI checkpoint.
+## Final local evidence
+
+- Required browser-engine production build and every unchanged budget pass: landing 214.2/215 kB, Today 226.9/240, game 315.6/440 and opponent 491.6/500. Engine/cache writes were coordinated with the root task.
+- 148 local browser checks pass at 320/390/768/1440 in light and dark. Actual Builds, Strategies, Battlefield, rating-card components and fetch hooks render with production CSS/fonts. Auth/Next, unrelated MMR panels and the veto planner are explicit synthetic boundaries; all non-local requests are blocked. No account, Agent or provider operation occurs.
+- Browser checks verify table/mobile sorting, partial and unknown rating coverage, header Help links, Wilson/thin-sample presentation, aliased map sums, null sparkline gaps, native window inspection, same-resource request reuse and no page overflow. New chip text has at least 4.5:1 computed contrast over its actual tinted background in both themes. Inspected screenshots are `screenshots/strength-{builds,bvs,strategies,maps,rating}-*.png`.
+- Root and independent reviews approved the math direction, PAV weighting, symmetry/raw evidence counts, inverse/tails, API eligibility and UI/Help honesty. Race-alias and visibility findings are fixed with regressions. A final fresh-main integration and exact-head remote checks remain required before merge.
+
+No release version, signed installer, tag or AI feature was changed. No production job, migration, new infrastructure or budget increase was performed.

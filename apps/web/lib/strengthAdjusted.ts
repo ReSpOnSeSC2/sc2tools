@@ -11,14 +11,15 @@ export type StrengthFields = {
 };
 
 export function signedWins(value: number): string {
-  const rounded = Math.round(value * 10) / 10;
-  return `${rounded > 0 ? "+" : rounded < 0 ? "−" : "±"}${Math.abs(rounded).toFixed(1)}`;
+  const rounded = Math.round(Math.abs(value) * 10) / 10;
+  return `${rounded === 0 ? "±" : value > 0 ? "+" : "−"}${rounded.toFixed(1)}`;
 }
 
 /** Both terms come from the SAME paired replay-MMR subset. */
 export function strengthDescription(row: StrengthFields): string {
+  if (row.ratedGames == null) return "Vs expected unavailable: replay-time rating coverage has not been supplied.";
   const rated = row.ratedGames ?? 0;
-  if (!rated || row.expectedWins == null || row.winsAboveExpected == null) return "Vs expected unavailable: no decided ranked 1v1 games with both replay-time ratings.";
+  if (!rated || row.expectedWins == null || row.winsAboveExpected == null) return `Vs expected unavailable: no decided ranked 1v1 games with both replay-time ratings. ${row.excludedNoMmr ?? 0} missing paired ratings; ${row.excludedIneligible ?? 0} other ineligible records.`;
   const model = row.expectation?.method === "calibrated"
     ? `Calibrated from ${row.expectation.sampleGames.toLocaleString()} original games in ${row.expectation.supportedBins} supported bins.`
     : `Elo fallback, scale ${row.expectation?.eloScale ?? 400}.`;
@@ -37,6 +38,7 @@ export type MatchupRatingSeries = StrengthFields & {
 /** Add disjoint map/matchup subsets without averaging performance ratings.
  * The calibrated inverse is nonlinear and stays on the server. */
 export function sumStrength(rows: readonly StrengthFields[]): StrengthFields {
+  if (rows.some(row => row.ratedGames == null)) return {};
   const ratedGames = rows.reduce((n, row) => n + (row.ratedGames ?? 0), 0);
   const ratedWins = rows.reduce((n, row) => n + (row.ratedWins ?? 0), 0);
   const expectedWins = ratedGames ? rows.reduce((n, row) => n + (row.expectedWins ?? 0), 0) : null;

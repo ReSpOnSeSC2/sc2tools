@@ -6,7 +6,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
-import { StrengthCell, StrengthGuide, WinRateRange } from "./StrengthAdjusted";
+import { StrengthCell, StrengthGuide, StrengthHeader, WinRateRange } from "./StrengthAdjusted";
 import type { StrengthFields } from "@/lib/strengthAdjusted";
 import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { usePersistentSort, SortableTh, type SortState } from "@/components/ui/SortableTh";
@@ -775,7 +775,7 @@ function BvsTable({
               <SortableTh col="losses" label="L" {...sort} align="right" />
               <SortableTh col="total" label="Games" {...sort} align="right" />
               <SortableTh col="winRate" label="WR" {...sort} align="right" />
-              <SortableTh col="winsAboveExpected" label="Vs expected" {...sort} align="right" />
+              <StrengthHeader sort={sort} />
             </tr>
           </thead>
           <tbody>

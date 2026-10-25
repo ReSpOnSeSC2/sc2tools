@@ -57,8 +57,8 @@ describe("same curve in Mongo sums and pure inverse lookup", () => {
 });
 
 describe("bounded last-50 matchup performance", () => {
-  test("hidden contributions cannot enter rated metrics/series and do not hide another uploader's copy", async () => {
-    await db.games.insertMany([game(1, { excluded: true }), game(2), game(1, { userId: "other-owner" })]);
+  test.each(["excluded", "_deleted", "_deletionPending"])("%s contributions cannot enter rated metrics/series and do not hide another uploader's copy", async flag => {
+    await db.games.insertMany([game(1, { [flag]: true }), game(2), game(1, { userId: "other-owner" })]);
     const builds = new BuildsService(db), aggregations = new AggregationsService(db);
     expect((await builds.list("owner", {}))[0]).toMatchObject({ ratedGames: 1, ratedWins: 0 });
     expect((await builds.list("other-owner", {}))[0]).toMatchObject({ ratedGames: 1, ratedWins: 1 });
@@ -68,10 +68,10 @@ describe("bounded last-50 matchup performance", () => {
   });
 
   test("initials and case variants retain paired MMR eligibility in rows and rating series", async () => {
-    await db.games.insertMany([game(1, { myRace: "p", opponent: { race: "z", mmr: 4000, mmrSource: "replay", strategy: "Pool" } }), game(2, { myRace: "PROTOSS", opponent: { race: "ZERG", mmr: 4000, mmrSource: "replay", strategy: "Pool" } })]);
-    expect((await new BuildsService(db).list("owner", {}))[0]).toMatchObject({ ratedGames: 2, excludedIneligible: 0, expectedWins: 1 });
+    await db.games.insertMany([game(1, { myRace: "p", opponent: { race: "z", mmr: 4000, mmrSource: "replay", strategy: "Pool" } }), game(2, { myRace: "PROTOSS", opponent: { race: "ZERG", mmr: 4000, mmrSource: "replay", strategy: "Pool" } }), game(3, { myRace: " protoss " }), game(4, { opponent: { race: " zerg ", mmr: 4000, mmrSource: "replay", strategy: "Pool" } })]);
+    expect((await new BuildsService(db).list("owner", {}))[0]).toMatchObject({ ratedGames: 4, excludedIneligible: 0, expectedWins: 2 });
     const response = await new AggregationsService(db).matchupTimeseries("owner", { groupByOwnRace: true }, {});
-    expect(response.ratingSeries).toHaveLength(1); expect(response.ratingSeries[0]).toMatchObject({ matchup: "PvZ", ratedGames: 2, sampleGames: 2, perfRating: 4000 });
+    expect(response.ratingSeries).toHaveLength(1); expect(response.ratingSeries[0]).toMatchObject({ matchup: "PvZ", ratedGames: 4, sampleGames: 4, perfRating: 4000 });
   });
 
   test("same scoped timeseries scan returns each pair's latest50 and explicit missing-MMR coverage", async () => {

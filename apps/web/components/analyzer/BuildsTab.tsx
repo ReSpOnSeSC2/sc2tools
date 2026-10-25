@@ -17,7 +17,7 @@ import { usePersistentSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
 import { BuildEditorModal } from "./BuildEditorModal";
-import { StrengthCell, StrengthGuide, WinRateRange } from "./StrengthAdjusted";
+import { StrengthCell, StrengthGuide, StrengthHeader, WinRateRange } from "./StrengthAdjusted";
 import type { StrengthFields } from "@/lib/strengthAdjusted";
 import { NoFilterMatches } from "./EmptyStates";
 import { BuildMmrPanel } from "./mmr/BuildMmrPanel";
@@ -185,7 +185,7 @@ export function BuildsTab() {
                     <SortableTh col="losses" label="L" {...sort} align="right" />
                     <SortableTh col="total" label="Games" {...sort} align="right" />
                     <SortableTh col="winRate" label="WR" {...sort} align="right" />
-                    <SortableTh col="winsAboveExpected" label="Vs expected" {...sort} align="right" />
+                    <StrengthHeader sort={sort} />
                     <th className="px-3 py-2 text-left text-micro uppercase text-text-dim">
                       Trend
                     </th>
