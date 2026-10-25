@@ -5,6 +5,7 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
+const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
 
 const REPLAY_SHARE_ID_RE = /^[A-Za-z0-9_-]{32}$/;
 const REPLAY_SHARE_SLUG_SUFFIX_BYTES = 5;
@@ -809,7 +810,21 @@ class UsersService {
       { userId },
       { projection: { _id: 0, [`preferences.${type}`]: 1 } },
     );
-    return (doc && doc.preferences && doc.preferences[type]) || {};
+    const prefs = (doc && doc.preferences && doc.preferences[type]) || {};
+    return type === "analyzerViews" ? sanitizeAnalyzerViews(prefs) : prefs;
+  }
+
+  /** One indexed preferences read replaces AppHome's existing misc lookup.
+   * Only the selected safe view and the legacy scalar leave the service.
+   * @param {string} userId */
+  async getAnalyzerDefaultView(userId) {
+    const doc = await this.db.users.findOne({ userId }, {
+      projection: { _id: 0, "preferences.misc": 1, "preferences.analyzerViews": 1 },
+    });
+    const prefs = sanitizeAnalyzerViews(doc?.preferences?.analyzerViews);
+    const legacy = doc?.preferences?.misc?.defaultTab;
+    const defaultTab = typeof legacy === "string" && legacy.length <= 64 && !/[\u0000-\u001f\u007f]/.test(legacy) ? legacy : null;
+    return { defaultView: prefs.views.find((view) => view.id === prefs.defaultViewId) || null, defaultTab };
   }
 
   /**
@@ -823,6 +838,7 @@ class UsersService {
    * @returns {Promise<Record<string, unknown>>}
    */
   async updatePreferences(userId, type, prefs) {
+    if (type === "analyzerViews") prefs = sanitizeAnalyzerViews(prefs, true);
     if (type === "onboarding") {
       // Independent checklist, goals and What's New writes must not replace
       // each other's fields. A literal merge is atomic and treats payload

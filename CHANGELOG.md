@@ -23,6 +23,7 @@ corresponding GitHub Release.
 
 ### Added
 
+- Share analyzer filter links without replacing device preferences. Save up to twelve named views with their section, manage them from Views, and choose a default for the first Today visit of a session.
 - Admin Build Studio lists and versions all preset, private custom and community definitions. Preset replacements use one validated policy across compatible server, desktop and browser engines, with explicit completion clocks, custom-rule precedence, reviewed restores and offline fallback.
 
 ### My reviews dashboard
