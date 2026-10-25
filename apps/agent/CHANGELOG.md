@@ -2,7 +2,20 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
-## Unreleased
+## 0.24.6
+
+### Fixed - Reduce game-start and match-time load
+- Avoid repeated native overlay style and ownership checks while focus and
+  visible windows are unchanged; revalidate periodically and after window changes
+  so click-through recovers if Windows or Qt changes the native handle or style.
+- Keep queued historical uploads paused during matches when Pause history imports
+  in game is enabled, preserving fresh replay priority and resuming queued work
+  afterwards.
+- Coordinate the web Randomizer performance update: bound animated motion fields
+  to 12 contenders and 30 frames per second, retaining the full weighted draw,
+  selected winner, reveal timing, sound and voice. Correct frame-dependent motion.
+
+### Included from main
 
 - Repair recognized generated OBS source URLs after overlay-token rotation when
   OBS scene switching is already enabled. Follow exact owned replacements,

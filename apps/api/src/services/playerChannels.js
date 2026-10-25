@@ -116,6 +116,38 @@ class PlayerChannelsService {
     /** @type {Promise<any>|null} */
     this.importPromise = null;
     this.activeLinkReads = 0;
+    this.liveRevision = 0;
+  }
+
+  /** Fence cached and in-flight live lookups around every directory mutation.
+   * @param {'updateOne'|'insertOne'|'bulkWrite'} method @param {any[]} args
+   * @returns {Promise<any>}
+   */
+  async _writeChannels(method, ...args) {
+    this.liveRevision += 1;
+    try { return await /** @type {any} */ (this.col)[method](...args); }
+    finally { this.liveRevision += 1; }
+  }
+
+  /** Direct reviewed identities only; deliberately bypass resolve/ensureSeeds.
+   * @param {any} identity @returns {Promise<Record<string,string>>}
+   */
+  async resolveApprovedExact(identity) {
+    let keys;
+    try { keys = identityKeys(normalizeIdentity(identity)); } catch { return {}; }
+    const rows = await this.col.find({ identityKeys: { $in: keys }, removed: { $ne: true } }, {
+      maxTimeMS: 1000,
+      projection: { source: 1, identityKeys: 1, approvedIdentityKeys: 1, approvedAt: 1, channels: 1 },
+    }).limit(3).toArray();
+    const approved = rows.filter(row => ["admin", "curated", "sc2pulse"].includes(row.source)
+      || (row.source === "self" && row.approvedAt && row.approvedIdentityKeys?.some((/** @type {string} */ key) => keys.includes(key))));
+    if (approved.length !== 1 || rows.length !== 1) return {};
+    /** @type {Record<string,string>} */
+    const out = {};
+    for (const platform of PLATFORMS) {
+      try { const url = normalizeChannelUrl(platform, approved[0].channels?.[platform]); if (url) out[platform] = url; } catch { /* Invalid stored URLs fail closed. */ }
+    }
+    return out;
   }
 
   async ensureSeeds() {
@@ -137,7 +169,7 @@ class PlayerChannelsService {
       operations.push({ updateOne: { filter: { identityKeys: { $in: entry.identityKeys } }, update: { $setOnInsert: doc }, upsert: true } });
     }
     if (!operations.length) return;
-    try { await this.col.bulkWrite(operations, { ordered: false }); } catch (err) {
+    try { await this._writeChannels("bulkWrite", operations, { ordered: false }); } catch (err) {
       const errors = /** @type {any} */ (err)?.writeErrors;
       if (!Array.isArray(errors) || !errors.length || errors.some((item) => item.code !== 11000)) throw err;
     }
@@ -287,7 +319,7 @@ class PlayerChannelsService {
     const preserveOwner = old?.source === "self" && old.ownerUserId;
     const doc = stampVersion({ ...next, id: entryId, revision: (old?.revision || 0) + 1, source: preserveOwner ? "self" : "admin", ...(preserveOwner ? { ownerUserId: old.ownerUserId, approvedIdentityKeys: next.identityKeys, approvedDisplayName: next.displayName } : {}), pending: false, approvedAt: now, reviewedBy: adminUserId, updatedAt: now, updatedBy: adminUserId, createdAt: old?.createdAt || now }, COLLECTIONS.PLAYER_CHANNELS);
     try {
-      const result = await this.col.updateOne({ id: entryId, ...(old ? revisionMatch(old) : {}) }, { $set: doc, $unset: { pendingChannels: "", ...(!preserveOwner ? { ownerUserId: "" } : {}) } }, { upsert: !old });
+      const result = await this._writeChannels("updateOne", { id: entryId, ...(old ? revisionMatch(old) : {}) }, { $set: doc, $unset: { pendingChannels: "", ...(!preserveOwner ? { ownerUserId: "" } : {}) } }, { upsert: !old });
       if (old && !result.matchedCount) throw channelError(409, "player_channels_changed", "This player entry changed. Refresh it before approving or saving.");
     } catch (err) { throw duplicateConflict(err); }
     return { entry: managementEntry(doc, true) };
@@ -296,7 +328,7 @@ class PlayerChannelsService {
   /** @param {string} id @param {string} adminUserId */
   async removeAdmin(id, adminUserId) {
     // A durable tombstone keeps upstream and curated imports from resurrecting removed links.
-    const result = await this.col.updateOne({ id }, { $set: { removed: true, pending: false, channels: { twitch: null, youtube: null }, source: "admin", updatedAt: new Date(), updatedBy: adminUserId }, $inc: { revision: 1 }, $unset: { ownerUserId: "", pendingChannels: "" } });
+    const result = await this._writeChannels("updateOne", { id }, { $set: { removed: true, pending: false, channels: { twitch: null, youtube: null }, source: "admin", updatedAt: new Date(), updatedBy: adminUserId }, $inc: { revision: 1 }, $unset: { ownerUserId: "", pendingChannels: "" } });
     if (!result.matchedCount) throw channelError(404, "player_not_found", "Player entry was not found.");
     return { ok: true };
   }
@@ -338,7 +370,7 @@ class PlayerChannelsService {
     const saved = await this.savedIdentities(userId);
     const channels = normalizeChannels(raw?.channels);
     if (typeof raw?.id === "string" && !channels.twitch && !channels.youtube) {
-      const result = await this.col.updateOne({ id: raw.id, ownerUserId: userId, source: "self" }, { $set: { channels, pending: false, removed: true, updatedAt: new Date() }, $inc: { revision: 1 }, $unset: { pendingChannels: "" } });
+      const result = await this._writeChannels("updateOne", { id: raw.id, ownerUserId: userId, source: "self" }, { $set: { channels, pending: false, removed: true, updatedAt: new Date() }, $inc: { revision: 1 }, $unset: { pendingChannels: "" } });
       if (!result.matchedCount) throw channelError(404, "player_not_found", "Your connected player entry was not found.");
       return this.getSelf(userId);
     }
@@ -361,9 +393,9 @@ class PlayerChannelsService {
     const doc = stampVersion({ ...entry, revision: (old?.revision || 0) + 1, channels: withdrawn ? channels : old?.channels || {}, approvedIdentityKeys: old?.approvedIdentityKeys || [], pendingChannels: withdrawn ? null : channels, pending: !withdrawn, identityKeys: [...new Set([...(old?.identityKeys || []), ...entry.identityKeys, ...expanded])], id: old?.id || randomUUID(), source: "self", ownerUserId: userId, createdAt: old?.createdAt || now, updatedAt: now }, COLLECTIONS.PLAYER_CHANNELS);
     try {
       if (old) {
-        const result = await this.col.updateOne({ id: old.id, ownerUserId: userId, source: "self", ...revisionMatch(old) }, { $set: doc });
+        const result = await this._writeChannels("updateOne", { id: old.id, ownerUserId: userId, source: "self", ...revisionMatch(old) }, { $set: doc });
         if (!result.matchedCount) throw channelError(409, "player_channels_managed", "This player entry changed. Refresh before saving again.");
-      } else await this.col.insertOne(doc);
+      } else await this._writeChannels("insertOne", doc);
     } catch (err) { throw duplicateConflict(err); }
     return this.getSelf(userId);
   }
@@ -389,9 +421,9 @@ class PlayerChannelsService {
       const doc = stampVersion({ ...entry, revision: (old?.revision || 0) + 1, pulseCharacterIds: [...new Set([...(old?.pulseCharacterIds || []), ...entry.pulseCharacterIds])], toonHandles: [...new Set([...(old?.toonHandles || []), ...entry.toonHandles])], identityKeys: [...new Set([...(old?.identityKeys || []), ...entry.identityKeys])], channels, curatedPlatforms: source === "curated" ? ["youtube"] : curatedPlatforms, id: old?.id || randomUUID(), source: mergedSource, createdAt: old?.createdAt || now, updatedAt: now, importedAt: now, sources: Array.isArray(raw.sources) ? raw.sources.filter((/** @type {any} */ url) => typeof url === "string").slice(0, 10) : [] }, COLLECTIONS.PLAYER_CHANNELS);
       try {
         if (old) {
-          const result = await this.col.updateOne({ id: old.id, source: old.source, removed: { $ne: true }, ...revisionMatch(old) }, { $set: doc });
+          const result = await this._writeChannels("updateOne", { id: old.id, source: old.source, removed: { $ne: true }, ...revisionMatch(old) }, { $set: doc });
           if (result.matchedCount) updated++; else skipped++;
-        } else { await this.col.insertOne(doc); imported++; }
+        } else { await this._writeChannels("insertOne", doc); imported++; }
       } catch (err) { if (/** @type {any} */ (err)?.code === 11000) skipped++; else throw err; }
     }
     return { imported, updated, skipped, total: rows.length };

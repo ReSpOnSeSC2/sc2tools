@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import time
 
 from . import win32_window
 
@@ -14,6 +15,7 @@ WS_EX_TRANSPARENT = 0x00000020
 WS_EX_LAYERED = 0x00080000
 INPUT_STYLES = WS_EX_TRANSPARENT | WS_EX_LAYERED
 REFRESH_FLAGS = 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020
+NATIVE_RECHECK_SECONDS = 1.0
 
 
 class _StyleApi:
@@ -205,21 +207,90 @@ def build_scouting_control(source, *, QtCore, QtWidgets):
 
 
 def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, native=None, foreground_provider=None,
-                          scouting_buttons_provider=None, QtWidgets=None):
+                          scouting_buttons_provider=None, QtWidgets=None, clock=None):
     class OverlayInput(QtCore.QObject):
         def __init__(self):
             super().__init__(window)
             self._native = native if native is not None else NativeClickThrough()
             self._foreground = foreground_provider or sc2_has_foreground
+            self._clock = clock or time.monotonic
             self._handles = {}
+            self._native_states = {}
+            self._watched = set()
+            self._pending_invalidations = set()
+            self._refresh_pending = False
+            self._application = QtCore.QCoreApplication.instance()
+            self._application_state_signal = getattr(self._application, "applicationStateChanged", None)
             self._scouting_controls = {}
             self._closed = False
             self._updating = False
+            if self._application_state_signal is not None:
+                self._application_state_signal.connect(self._foreground_changed)
             self.timer = QtCore.QTimer(self)
             self.timer.setInterval(150)
             self.timer.timeout.connect(self.refresh)
             self.timer.start()
             self.refresh()
+
+        def _invalidate(self, widget):
+            for hwnd, state in tuple(self._native_states.items()):
+                if state[0] is widget:
+                    self._native_states.pop(hwnd, None)
+
+        def _after_window_event(self):
+            self._refresh_pending = False
+            if self._closed:
+                return
+            for widget in self._pending_invalidations:
+                self._invalidate(widget)
+            self._pending_invalidations.clear()
+            self.refresh()
+
+        def _defer_refresh(self):
+            if not self._refresh_pending:
+                self._refresh_pending = True
+                QtCore.QTimer.singleShot(0, self._after_window_event)
+
+        def _foreground_changed(self, *_args):
+            if not self._closed:
+                self.refresh()
+                self._defer_refresh()
+
+        def eventFilter(self, watched, event):
+            if self._closed:
+                return False
+            kind = event.type()
+            immediate = watched in self._watched and kind in (
+                QtCore.QEvent.Show, QtCore.QEvent.Hide, QtCore.QEvent.WindowStateChange,
+                QtCore.QEvent.WindowActivate, QtCore.QEvent.WindowDeactivate,
+            )
+            surface_event = watched in self._watched and kind in (
+                QtCore.QEvent.Show, QtCore.QEvent.Hide, QtCore.QEvent.WinIdChange,
+                QtCore.QEvent.StyleChange, QtCore.QEvent.ParentChange, QtCore.QEvent.PlatformSurface,
+                QtCore.QEvent.WindowStateChange,
+            )
+            if surface_event:
+                self._invalidate(watched)
+                self._pending_invalidations.add(watched)
+            if immediate:
+                self.refresh()
+            if immediate or surface_event:
+                # Qt may recreate a native surface or finish its style update
+                # after delivering this event. Recheck once after it settles.
+                self._defer_refresh()
+            return False
+
+        def _apply_native_state(self, hwnd, widget, locked, now):
+            state = self._native_states.get(hwnd)
+            if (state is not None and state[0] is widget and state[1] == locked
+                    and now - state[2] < NATIVE_RECHECK_SECONDS):
+                return True
+            applied = self._native.set_click_through(hwnd, locked)
+            if applied:
+                self._native_states[hwnd] = (widget, locked, now)
+            else:
+                self._native_states.pop(hwnd, None)
+            return applied
 
         def refresh(self):
             if self._closed or self._updating:
@@ -231,25 +302,39 @@ def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, 
                 except Exception:
                     locked = False
                 targets = list(panels_provider())
+                for widget in [*targets, window]:
+                    if widget not in self._watched:
+                        self._watched.add(widget)
+                        widget.installEventFilter(self)
                 if compact_provider():
                     targets.append(window)
                 current = {}
+                applied_widgets = set()
+                now = self._clock()
                 for widget in targets:
                     if widget.isVisible():
                         hwnd = int(widget.winId())
                         current[hwnd] = widget
-                        applied = self._native.set_click_through(hwnd, locked)
+                        applied = self._apply_native_state(hwnd, widget, locked, now)
                         if applied:
-                            widget.setProperty("gameClickThrough", locked)
+                            applied_widgets.add(widget)
+                            if widget.property("gameClickThrough") is not locked:
+                                widget.setProperty("gameClickThrough", locked)
                 for hwnd, widget in self._handles.items():
                     if hwnd not in current:
+                        self._native_states.pop(hwnd, None)
                         if self._native.set_click_through(hwnd, False):
-                            widget.setProperty("gameClickThrough", False)
+                            # Qt can replace the HWND without replacing its
+                            # widget. Releasing the old HWND must not clear the
+                            # successfully applied state of its new surface.
+                            if widget not in applied_widgets and widget.property("gameClickThrough") is not False:
+                                widget.setProperty("gameClickThrough", False)
                         else:
                             current[hwnd] = widget
                 self._handles = current
                 self._sync_scouting_controls(locked)
             except RuntimeError:
+                self._native_states.clear()
                 self._native.restore_all()
                 for control in self._scouting_controls.values():
                     try:
@@ -286,7 +371,20 @@ def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, 
             if not self._closed:
                 self._closed = True
                 self.timer.stop()
+                if self._application_state_signal is not None:
+                    try:
+                        self._application_state_signal.disconnect(self._foreground_changed)
+                    except (RuntimeError, TypeError):
+                        pass
+                for widget in self._watched:
+                    try:
+                        widget.removeEventFilter(self)
+                    except RuntimeError:
+                        pass
                 self._native.restore_all()
+                self._native_states.clear()
+                self._pending_invalidations.clear()
+                self._watched.clear()
                 for control in self._scouting_controls.values():
                     try:
                         control.close()

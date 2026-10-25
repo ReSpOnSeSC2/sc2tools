@@ -11,6 +11,15 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.24.6 and Randomizer game-start performance
+- Bound the OBS Randomizer's motion simulations to 12 visual contenders and
+  30 FPS, retaining the complete weighted selection pool, chosen result, reveal
+  timing, sound and voice. Keep movement speed independent of refresh rate.
+- Avoid repeated native overlay checks for unchanged windows and focus, with
+  periodic and window-event recovery of click-through styles.
+- Pause queued historical uploads during matches when game-time import pausing
+  is enabled, while keeping fresh replay priority and queued history intact.
+
 ### Added
 - Chat commands now share saved aliases, availability and cooldowns across the Twitch bot, Nightbot and on-stream answers. New commands show recorded daily and season stats, recent opponent meetings, prediction leaders and stream-session uptime; owners can add bounded plain-text custom replies with supported variables.
 - Analyzer tables now support keyboard build opening, global matchup chips, a matchup-scoped heatmap and a Strategy games sheet that stays open as filters change. CSV exports save the displayed Builds, Strategy pairs, Matchups, Maps and pool cells with their scope and local date.
@@ -22,6 +31,7 @@ corresponding GitHub Release.
 
 ### Stream Dock
 
+- The new Game section and sticky status header show match and session context, Crystal Ball votes and safe round controls, a confirmed session reset, reversible game-widget hiding, and approved opponent shout-outs. Manual results earn no oracle points or accuracy; verified scoring recovers safely after interrupted writes.
 - Collapse panels into live summaries, pin frequently used sections, and keep the layout in this browser. Dock controls now show connection text and keyboard focus, give touch users larger targets, and offer selected text when clipboard access is unavailable.
 
 ### Overlay health

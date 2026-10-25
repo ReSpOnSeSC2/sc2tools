@@ -47,6 +47,7 @@ interface Fighter {
 
 export function FighterBrawlReveal({
   pool,
+  visualPool = pool,
   winner,
   winnerProbability,
   spinId,
@@ -66,6 +67,7 @@ export function FighterBrawlReveal({
     loserOrder.forEach((id, i) => map.set(id, step * (i + 1)));
     return map;
   }, [loserOrder]);
+  const trackedIds = useMemo(() => new Set(visualPool.map((build) => build.id)), [visualPool]);
 
   const { eliminated, settled } = useEliminationSchedule(
     spinId,
@@ -73,6 +75,7 @@ export function FighterBrawlReveal({
     DURATION_MS,
     reducedMotion,
     onComplete,
+    trackedIds,
   );
   useRevealSound({
     style: "fighter",
@@ -82,14 +85,14 @@ export function FighterBrawlReveal({
     eliminationTimesMs: loserOrder.map((id) => deathAt.get(id) ?? DURATION_MS),
   });
 
-  const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
+  const sprites = useMemo(() => assignPoolSprites(visualPool), [visualPool]);
   const fightersRef = useRef<Fighter[]>([]);
   const [, force] = useState(0);
   const elapsedRef = useRef(0);
 
   useMemo(() => {
-    fightersRef.current = pool.map((b, i) => {
-      const angle = (i / pool.length) * Math.PI * 2;
+    fightersRef.current = visualPool.map((b, i) => {
+      const angle = (i / visualPool.length) * Math.PI * 2;
       return {
         id: b.id,
         build: b,
@@ -102,16 +105,15 @@ export function FighterBrawlReveal({
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spinId, pool]);
+  }, [spinId, visualPool]);
 
   useRaf(!reducedMotion && !settled, spinId, (dt, elapsed) => {
     elapsedRef.current = elapsed;
     const fighters = fightersRef.current;
     const alive = fighters.filter((f) => !eliminated.has(f.id) || f.id === winner.id);
-    const speed = dt / 16;
     for (const f of alive) {
-      f.x += f.vx * dt * speed;
-      f.y += f.vy * dt * speed;
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
       if (f.x < R) { f.x = R; f.vx = Math.abs(f.vx); }
       if (f.x > W - R) { f.x = W - R; f.vx = -Math.abs(f.vx); }
       if (f.y < R) { f.y = R; f.vy = Math.abs(f.vy); }
@@ -176,7 +178,7 @@ export function FighterBrawlReveal({
         })}
       </div>
       <SpriteLegend
-        pool={pool}
+        pool={visualPool}
         sprites={sprites}
         eliminated={eliminated}
       />
