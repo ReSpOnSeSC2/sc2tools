@@ -22,5 +22,15 @@ criteria. No stored replays are reanalyzed and no live policy is changed.
 Validation covers all required-event boundaries at 419, 420, 420.01, 421
 and 600 seconds, both Phoenix Stargate counts, late third Stargates,
 capital transitions and existing early/late Robo behavior. Full engine,
-catalog drift, web consumer and required browser bundle results are
-recorded with the final PR evidence.
+catalog drift, web consumer and required browser bundle checks passed:
+
+- Full replay engine: 1,151 passed, four expected skips.
+- Desktop Instant Analysis fixture parity: 60 passed.
+- API preset policy consumers: 42 passed; generated catalog drift check passed.
+- Web definition parity: 12 passed.
+- Required browser bundle: `25b300818c31d41b`, 223 files / 79 compiled
+  modules, 1.19 MiB; smoke parsed a 142,939-byte payload.
+- Real Pyodide worker glue: six checks passed, including every installed-view
+  CPython fixture/perspective golden and the shared runtime contract.
+
+No version pin, budget or infrastructure setting changes accompany this fix.
