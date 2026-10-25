@@ -374,6 +374,7 @@ function makeServices(deps, clerk) {
   );
   const playbackArtifacts = replayFiles ? new PlaybackArtifactsService({
     client: replayFiles.client, bucket: replayFiles.bucket, games: deps.db.games,
+    notifications,
   }) : null;
   // One read-only Atlas client (and OAuth token) shared by capacity
   // monitoring and backup health; null when the service account is unset.
@@ -1220,6 +1221,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     auth,
     integrations: services.platformIntegrations,
     streamingTitles: new StreamingTitlesService({ integrations: services.platformIntegrations }),
+    titleSession: (userId) => require("./services/streamTitleSession").streamTitleSession(deps.db, services.games, userId),
   }));
   const youtubeLedgerCollection = deps.db.youtubeCreateOperations;
   app.use(SERVICE.ROUTE_PREFIX, buildYoutubeStreamingRouter({

@@ -195,6 +195,10 @@ corresponding GitHub Release.
 
 - The desktop Dashboard shows game summaries, local Today W–L/MMR and replay-history progress. Recent games survives restarts with 200 private local outcomes, status/date filters, skipped reasons and selective retries. Re-sync moves to Settings Maintenance; optional game-result notifications exclude history imports.
 
+### Desktop stream titles
+
+- Streams previews MMR, league, session record, streak and matchup tokens. Optional automatic updates start off, target only selected connected platforms, skip unchanged titles and run at most once every ten minutes after a live replay syncs.
+
 ### Build supply and exports
 
 - Game build orders show prior-sample supply with an approximation marker, worker/supply filters and aligned times. Either side can copy text, supply-first text, Markdown or SALT, print a compact cheat sheet, arm a confirmed Ghost target or open the custom-build editor.
@@ -230,10 +234,21 @@ corresponding GitHub Release.
 - Step through older and newer games with remembered all, opponent, matchup or build scope, optional recorded head-to-head totals and Alt+arrow shortcuts. Back links retain the originating list, filters and named build context; opponent names open their dossiers where an identity is available.
 - Focus the replay for keyboard seeking, slow motion, event jumps, fullscreen and a shortcut sheet. Replay display choices, speed, volume and mobile panels are remembered on this device, and seeks are announced to screen readers.
 
+### Game story and fight ledger
+
+- Game pages summarize measured lead changes, replay highlights and recorded fight trades, with exact or explicitly estimated losses. Timestamp controls seek the shared replay, and narrow screens use readable fight cards.
+- Wins and draws use the same story view, wins retain their top macro leak, and loss pages keep Why you lost selected alongside Game story. Games without meaningful observations give Mechanics the full row.
+
 ### Shared game analysis
 
 - Back keeps archive filters and page context; older/newer games and arrow-key navigation follow the same filtered list.
 - Shared analysis has section links, one Watch entry point, seekable macro-leak timestamps and an expandable penalty-ordered leak list. Macro scores share clear colour bands and an out-of-100 label.
+
+### Recorded playback and smooth replay sections
+
+- Playback quality shows the desktop connection, recording steps and a readable explanation of standard versus recorded positions. The canvas accuracy badge opens the same CPU and setup guidance.
+- Recorded sections prefetch ahead and share a 24 MB decoded cache. Cached transitions stay clear; slow downloads retain the last frame with a corner status. Decoded cast markers remain available for timeline jumps.
+- Website-requested artifact uploads send one private ready notification when the verified upload completes.
 
 ### Game header and completed check-ins
 

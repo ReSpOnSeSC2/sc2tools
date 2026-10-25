@@ -1,0 +1,8 @@
+.ledger { container-type: inline-size; }
+.table { display: none; }
+.cards { display: grid; gap: 0.75rem; }
+
+@container (min-width: 520px) {
+  .table { display: block; }
+  .cards { display: none; }
+}

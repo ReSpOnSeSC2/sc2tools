@@ -32,6 +32,8 @@ const BuildOrderColumns = dynamic(() => import("./BuildOrderColumns").then((valu
 const BuildWorkspaceActions = dynamic(() => import("./BuildWorkspaceActions").then(value => value.BuildWorkspaceActions));
 const GameMacroSection = dynamic(() => import("./GameMacroSection").then((value) => value.GameMacroSection), { loading: () => <div role="status" aria-label="Loading macro breakdown" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
 import { LossAutopsyCard } from "./LossAutopsyCard";
+import { GameStoryPanel } from "./GameStoryPanel";
+import type { GameStoryInput } from "@/lib/gameStory";
 import { ArmGhostFromLogButton, GhostGradeCard } from "./GhostGradeCard";
 import {
   isLossResult,
@@ -166,6 +168,21 @@ function GameDetailContent({
     };
   }, [game, breakdown, buildLogLines]);
 
+  const storyInput = useMemo<GameStoryInput>(() => {
+    const windows = breakdown?.raw?.supply_block_windows?.filter(window => Number.isFinite(window.start) && window.start >= 0 && Number.isFinite(window.end) && window.end >= window.start);
+    const counted = windows?.reduce((sum, window) => sum + (typeof window.blocked_sec === "number" && Number.isFinite(window.blocked_sec) && window.blocked_sec >= 0 ? window.blocked_sec : window.end - window.start), 0);
+    const rawBlocked = breakdown?.raw?.supply_blocked_seconds;
+    return {
+      gameId, result: game?.result,
+      statsEvents: breakdown?.stats_events, oppStatsEvents: breakdown?.opp_stats_events,
+      casualtyEvents: breakdown?.casualty_events, buildEvents: buildReq.data?.events,
+      patchEra: game ? patchEraForGame(game) : null,
+      supplyBlockedSeconds: counted && counted > 0 ? Math.round(counted) : typeof rawBlocked === "number" && Number.isFinite(rawBlocked) && rawBlocked >= 0 ? Math.round(rawBlocked) : null,
+      supplyBlockWindows: windows,
+      leaks: breakdown?.all_leaks?.length ? breakdown.all_leaks : breakdown?.top_3_leaks,
+    };
+  }, [gameId, game, breakdown, buildReq.data?.events]);
+
   if (!gameId || (gameReq.error && gameReq.error.status === 404)) {
     return (
       <GameNotFound
@@ -244,27 +261,16 @@ function GameDetailContent({
         onNewBuildOpened={initialNewBuild ? dropNewBuildParam : undefined}
       />
 
-      <SectionBoundary key={`mechanics:${game.gameId}`} label="mechanics" title="Mechanics hit a problem"><div className="grid items-start gap-6 md:grid-cols-2">
-        <div className="space-y-4"><MechanicsPanel
+      <SectionBoundary key={`mechanics:${game.gameId}`} label="mechanics" title="Mechanics hit a problem"><GameStoryPanel input={storyInput} onSeek={setScrubTime} mechanics={<div className="space-y-4"><MechanicsPanel
           breakdown={breakdown}
           game={game}
           loading={macroStatus === "loading"}
           error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()}
           onSeek={setScrubTime}
           recomputeAction={recomputeAction} seekTarget="replay" currentTime={clock.t}
-        /><GameContextCard game={game} context={contextReq.data} error={contextReq.error} loading={contextReq.isLoading} onRetry={() => void contextReq.mutate()} /></div>
-        {loss && autopsyGame ? (
+        /><GameContextCard game={game} context={contextReq.data} error={contextReq.error} loading={contextReq.isLoading} onRetry={() => void contextReq.mutate()} /></div>} lossAutopsy={loss && autopsyGame ? (
           <LossAutopsyCard game={autopsyGame} personalMedians={contextReq.data?.personal} seekTarget="replay" recomputeAction={recomputeAction} onSeek={setScrubTime} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} />
-        ) : (
-          <Card title="Result">
-            <p className="text-caption text-text-muted">
-              {game.result === "Victory" || game.result === "Win"
-                ? "You won this one — the loss autopsy only runs on defeats. Scrub the timeline to see where the game swung your way."
-                : "The loss autopsy only runs on defeats."}
-            </p>
-          </Card>
-        )}
-      </div></SectionBoundary>
+        ) : undefined} /></SectionBoundary>
 
       <section ref={clock.stageRef} tabIndex={-1} id="replay" className="space-y-3 scroll-mt-[var(--game-section-offset,8rem)]" aria-labelledby="game-replay-heading">
         <h2 id="game-replay-heading" className="font-display text-h3 font-bold">Map replay <LazyHelpLink slug="game-page" anchor="replay-controls">Help</LazyHelpLink></h2>
