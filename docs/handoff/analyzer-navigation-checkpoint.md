@@ -80,3 +80,21 @@ The final kept-layout production build and every unchanged budget pass:
 landing 214.7/215, Today 232.4/240, Opponents 132.6/180, Dossier 471.5/500,
 Dock 215.9/225, Overlay 239/240 and Widget 323.2/325 kB. Final-head remote
 GitHub and Vercel checks remain required before merge.
+
+## Final shared query and Twitch integration
+
+Integrated released Twitch main and the final shared request fix `1b56cbf6`.
+Preference reconciliation explicitly retains scouting, Twitch, Ghost, rivals
+and Chat sanitizers, private no-store responses, Clerk-only Twitch writes and
+the default-off automation gate. Independent source review is clear; all four
+concrete preference suites pass 49 assertions and both full typechecks pass.
+The shared core helpers match the reviewed source; 73 affected navigation and
+ownership assertions passed before its separately tested StrictMode follow-up.
+
+The final production build passes every unchanged budget: landing 190/215,
+Today 232.2/240, Dossier 449.1/500, Dock 216.4/225, Overlay 239.5/240 and
+Widget 323.6/325 kB. Actual final-CSS verification passes all 232 navigation
+checks and 122 real dossier checks. The exact retained live section order and
+Brief/History navigation pass at all four widths in both themes; no API write
+or nonlocal traffic is allowed. Cached rerun captures preserve all eleven
+previously unstaged screenshots. Final exact-head remote gates still apply.
