@@ -21,7 +21,7 @@ describe("widget learning explorer", () => {
     expect(preview.getAttribute("src")).toContain("opponent.webp");
     expect(preview.getAttribute("width")).toBe("1400");
     expect(preview.getAttribute("height")).toBe("900");
-    expect(within(guide).getByRole("link", { name: "Open the right settings" }).getAttribute("href")).toBe("/settings?tab=overlay");
+    expect(within(guide).getByRole("link", { name: "Open the right settings" }).getAttribute("href")).toBe("/settings?tab=overlay&section=widgets&widget=opponent");
   });
 
   it("opens a widget deep link and exposes its dedicated-source instructions", () => {

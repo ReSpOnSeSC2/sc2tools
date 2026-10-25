@@ -1,5 +1,9 @@
 # Owner setup notes (accumulated)
 
+## Widget manager
+
+Deploy the API before the web so the authenticated bulk widget-selection PUT is available. No new environment variable, secret, collection, migration or infrastructure is required. Existing tokens and enable/config events are reused. Starter packs require the user's review and confirmation and preserve other enabled widgets. The shared recommended-size JSON is included by the existing desktop packaging specification; no installer, version bump, tag or release was performed. Existing OBS scene dimensions remain unchanged. Verify a local or off-air Browser Source by copying/dragging it, checking its recommended size and using Preview before sending any live sample. The steps are in `/help/obs-overlay-setup`.
+
 ## Dossier timings and phases
 
 Deploy the API before the web update. No new environment variable, secret, collection, migration or scheduled task is required. The ordinary web profile is metadata-only and the detailed section uses the private lazy analysis route. Already installed desktop Companions retain the rich old-route response through trusted device authentication; future desktop source uses the explicit analysis route. No desktop version bump or release is required for compatibility. Check `/help/opponent-dossier#reading-key-timings` after deployment.

@@ -20,8 +20,8 @@ describe("UrlRow", () => {
 
     const code = container.querySelector("code");
     expect(code).not.toBeNull();
-    expect(code!.textContent).toBe(url);
-    expect(code!.getAttribute("title")).toBe(url);
+    expect(code!.textContent).toBe("https://sc2tools.com/overlay/••••••/widget/ghost-build");
+    expect(code!.getAttribute("title")).not.toContain("token");
     expect(code!.getAttribute("aria-label")).toBe("Widget Browser Source URL");
     expect(code!.getAttribute("tabindex")).toBe("0");
 
@@ -62,5 +62,17 @@ describe("UrlRow", () => {
 
     fireEvent.click(copyButton);
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(url));
+    fireEvent.click(getByRole("button", { name: "Reveal" })); expect(code!.textContent).toBe(url);
+    fireEvent.click(getByRole("button", { name: "Hide URL" })); expect(code!.textContent).not.toContain("token");
+  });
+
+  it("selects the full URL when clipboard copy fails, and never reveals a newly changed token", async () => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error("unavailable")) } });
+    const first = "https://sc2tools.com/dock/first-private", second = "https://sc2tools.com/dock/second-private";
+    const view = render(<UrlRow url={first} compact />); fireEvent.click(view.getByRole("button", { name: "Copy" }));
+    const field = await view.findByRole("textbox", { name: "Copy this private URL" }) as HTMLInputElement;
+    expect(field.value).toBe(first); expect(document.activeElement).toBe(field); expect(field.selectionEnd).toBe(first.length);
+    view.rerender(<UrlRow url={second} compact />); expect(view.queryByRole("textbox")).toBeNull(); expect(view.container.querySelector("code")!.textContent).not.toContain("second-private");
+    fireEvent.click(view.getByRole("button", { name: "Reveal" })); view.rerender(<UrlRow url={first} compact />); expect(view.container.querySelector("code")!.textContent).not.toContain("first-private");
   });
 });

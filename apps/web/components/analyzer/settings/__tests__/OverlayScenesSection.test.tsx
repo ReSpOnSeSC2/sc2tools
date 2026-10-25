@@ -19,6 +19,8 @@ describe("OverlayScenesSection virtual sets", () => {
       />,
     );
 
+    expect(screen.getAllByLabelText("Widget Browser Source URL").every(node => !node.textContent?.includes("overlay-token"))).toBe(true);
+    screen.getAllByRole("button", { name: "Reveal" }).forEach(button => fireEvent.click(button));
     const urls = screen
       .getAllByLabelText("Widget Browser Source URL")
       .map((node) => node.textContent);
@@ -51,10 +53,12 @@ describe("OverlayScenesSection virtual sets", () => {
 describe("OverlayScenesSection credit flag", () => {
   it("bakes credit=0 into the animated scenes once the credit is switched off", () => {
     render(<OverlayScenesSection token="overlay-token" origin="https://studio.example" theme={{}} />);
+    screen.getAllByRole("button", { name: "Reveal" }).forEach(button => fireEvent.click(button));
     const urls = () => screen.getAllByLabelText("Widget Browser Source URL").map((node) => node.textContent);
     expect(urls()).toContain("https://studio.example/overlay/overlay-token/scene/starting-soon");
 
     act(() => setOverlayCreditPreference(false));
+    screen.getAllByRole("button", { name: "Reveal" }).forEach(button => fireEvent.click(button));
     expect(urls()).toContain("https://studio.example/overlay/overlay-token/scene/starting-soon?credit=0");
     // Virtual sets never show the credit, so their URLs never change.
     expect(urls()).toContain(`https://studio.example/overlay/overlay-token/scene/${STREAM_BACKGROUNDS[0].id}`);
