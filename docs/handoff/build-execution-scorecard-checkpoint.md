@@ -4,13 +4,46 @@ Branch `codex/wave4-build-execution` starts at preserved Dossier `62b4939c` in
 the released SEO tree. SEO `eb18ed52` and caches remain preserved. ADR0060
 records the owner-only/shared-request/cache contract.
 
-API detailed/legacy/parity and bounded dossier suites pass286 tests/one snapshot;
-16 latest service/timing cases also prove actual invalidation callbacks, exact
-source/visibility hydration, era parity and the private2-hidden/3-shown floor.
-Full API/web types pass. Initial card/timeline/game consumers pass55 tests;
-additional real rail/clock/request assertions are under final verification.
+Actual main `d5da6340` is integrated at `29b68dba`; its Reference schema,
+completion clocks, Practice priority, exports and editor guards are retained.
+The response advertises a supplied private reference only by a bounded flag;
+the existing explicit Practice flow fetches it rather than caching its steps.
 
-Remaining: source freeze/review, final combined types/lint/tests/Help, production
-build and unchanged budgets, mocked responsive browser evidence, dependency/main
-reconciliation and coordinated PR/gates. No push or production/provider action.
-Required-engine builds must coordinate current25b; never run an oldf96 prebuild.
+Peer review caught nonempty malformed/noise-only logs parsing to no events.
+They now remain unavailable, including negative and exact-zero rules. Valid
+worker-only evidence stays usable. Definition race edits and missing/invalid
+custom identities cannot become wrong-faction grades or same-name catalog
+lookups. Percentages and timeline baselines remain withheld in those states.
+
+The narrow GDPR/restore seam `d3830616` is integrated at `b750d5c8`, retaining
+gameExecution in the centralized private invalidator. A real ranged-wipe
+regression proves surviving games lose their old baseline. Known/unknown
+game deletion outcomes, full erasure and restore finally retire owner epochs;
+advisory callbacks preserve mutation results. Independent API/lifecycle review
+is clear, including 400 extra valid-rule combinations checked against legacy
+verdict/count parity and strict event deadlines.
+
+Final frozen verification passes 498 API tests across 16 suites/one snapshot,
+91 web consumers across nine suites, full API/web types, strict new-source lint
+and deterministic Help generation (88 articles). The required 25b engine build
+and smoke pass: 223 files/79 pyc, 142,939-byte parse. No engine/native source
+changed. The final isolated production build passes every unchanged budget:
+landing 190.2/215, Today 238.8/240, game 311.9/440, opponent 448.2/500,
+Builds 200.1/270, Dock 215.7/225, AIO 239.7/240 and widget 323.9/325 kB.
+
+The actual GameDetailPage/card/player/Practice loopback browser matrix passes
+132 checks with 15 captures at 320/390/768/1440 in both themes. It covers one
+shared execution resource, no dossier GET, the same mounted clock/canvas,
+rail percentage, event/deadline/timing seeking, two/three samples, unknown and
+unavailable states, catalog/zero-rule builds, explicit Practice options,
+Retry, held-response owner loading/B/A, overflow, targets and scoped axe.
+All nonlocal requests are blocked and all writes rejected (zero attempted).
+Capture inspection fixed the ring's RGB-token syntax; a computed-gradient
+browser assertion now guards it. Seven reviewed representatives are committed
+under `docs/handoff/screenshots/build-execution-*`; full evidence remains in
+`.cache/build-execution-evidence`. Root UI/visual signoff is complete.
+
+Remaining: current-main/dependency reconciliation (including the user-priority
+shared tab-strip fix), a coordinated push/PR, exact-head CI/Vercel and merge.
+No production/provider operations or environment/version/release changes.
+Required-engine builds must coordinate current 25b; never run old f96 prebuilds.
