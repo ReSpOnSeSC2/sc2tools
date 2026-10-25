@@ -27,6 +27,8 @@ The final production-CSS Chromium matrix passes **212 checks and 36 captures** a
 
 Final captures use production CSS `085eec6ea1a84fdf`, `54f1d62a562fcc18`, `9e93c7f0ce562f59`, and `c8183fd076b4bf97`. The 320px light card/editor, 320px dark chooser/unsupported, 1440px dark opponent editor and 1440px light card were opened and visually inspected. No remaining overlap, clipping or blank-capture issue was found. All 36 owned images are included as evidence. Remote exact-head gates remain required before merge.
 
+PR745's initial web check passed. Responsive CI passed 205 cases but exposed one existing `build-editor.spec.ts` smoke that still provided synthetic replay bytes and intercepted the legacy server route while all-mode now parses locally. The test now uses the actual repository replay/player chooser in browser mode and retains the intercepted compatibility response otherwise. All original private-notes, rule, overflow and close assertions remain, with zero browser fallback/upload checks. The expanded local production-app run passes **3 tests / 1 expected project skip (19.4 seconds)** and strict test/config lint. Runtime and reviewed images are unchanged. The current Vercel gate reports a daily deployment quota; merge remains held until every final-head gate is green.
+
 No engine source changed. The expected engine remains `25b300818c31d41b`; coordinate any required prebuild with the other worktrees. No old `f96` prebuild is allowed. No rollout/environment, provider, migration, installer, version or release action was performed.
 
 ## Reproduction

@@ -8,7 +8,7 @@ export default defineConfig({
   ...base,
   testDir: path.resolve(__dirname, "../e2e"),
   outputDir: path.resolve(__dirname, "../../.cache/landing-playwright-results"),
-  grep: /home-page replay demo/,
+  grep: /home-page replay demo|phone build editor/,
   retries: 0,
   workers: 1,
   webServer: (Array.isArray(base.webServer) ? base.webServer : [base.webServer!]).map(server => ({
