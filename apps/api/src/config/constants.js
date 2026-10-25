@@ -70,6 +70,7 @@ const COLLECTIONS = Object.freeze({
   YOUTUBE_CREATE_OPERATIONS: "youtube_create_operations",
   PLATFORM_WEBHOOK_RECEIPTS: "platform_webhook_receipts",
   PLATFORM_EVENTS: "platform_events",
+  TWITCH_AUTOMATION_RECEIPTS: "twitch_automation_receipts",
   IMPORT_JOBS: "import_jobs",
   MACRO_JOBS: "macro_jobs",
   AGENT_RELEASES: "agent_releases",
