@@ -29,7 +29,7 @@ export function MechanicsTrendCard() {
   const benchmark = useBenchmarks(league === "" || !comparable ? null : Number(league), comparable ? matchup : null);
   const table = benchmark.data?.table, sample = table?.metrics[BENCHMARK_KEY[metric]];
   const median = sample?.deciles?.[4];
-  const reference = comparable && league !== "" && !q.isPreviousData && !benchmark.isPreviousData && table?.leagueId === Number(league) && table.matchup === matchup && sample && sample.n >= BENCHMARK_MIN_SAMPLE && typeof median === "number" && median >= 0 && (metric !== "macro" || median <= 100) && percentileOf(sample, median)
+  const reference = comparable && league !== "" && !q.isPreviousData && !benchmark.error && !benchmark.isPreviousData && table?.leagueId === Number(league) && table.matchup === matchup && sample && sample.n >= BENCHMARK_MIN_SAMPLE && typeof median === "number" && median >= 0 && (metric !== "macro" || median <= 100) && percentileOf(sample, median)
     ? { value: median, label: `${table.league} ${table.matchup} median · n=${sample.n}` } : null;
   return <Card title="Mechanics progress" headingLevel={2} data-testid="mechanics-trend-card" right={<LazyHelpLink slug="macro" anchor="progress">Help</LazyHelpLink>}>
     <div className="space-y-4">

@@ -8,7 +8,7 @@ import { MacroTab } from "../MacroTab";
 
 const harness = vi.hoisted(() => ({
   paths: [] as Array<string | null>, apiCall: vi.fn(), mutate: vi.fn(), online: false, empty: false, stale: false,
-  leagueMatchup: "PvZ", seriesStale: false, benchmarkN: 50,
+  leagueMatchup: "PvZ", seriesStale: false, benchmarkN: 50, benchmarkError: null as null | { status: number; message: string },
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "synthetic" }) }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: () => <Link href="/help/macro#progress">Help</Link> }));
@@ -28,14 +28,14 @@ vi.mock("@/lib/clientApi", () => ({
     else if (path?.startsWith("/v1/macro/summary")) data = { gamesTotal: harness.empty ? 0 : 20, gamesWithMacro: 10, gamesMissingMacro: 10, avgScore: 65, leaks: [{ name: "Duplicate leak fixture", count: 2, totalMinerals: 100 }] };
     else if (path?.startsWith("/v1/macro/report")) data = { gamesTotal: 0, gamesScored: 0 };
     else if (path?.startsWith("/v1/macro/backfill/status")) data = { status: "running", done: 1, total: 4 };
-    return { data, mutate: harness.mutate, isLoading: false, isPreviousData: path?.startsWith("/v1/benchmarks") ? harness.stale : path?.startsWith("/v1/timeseries") ? harness.seriesStale : false };
+    return { data, mutate: harness.mutate, isLoading: false, error: path?.startsWith("/v1/benchmarks") ? harness.benchmarkError : null, isPreviousData: path?.startsWith("/v1/benchmarks") ? harness.stale : path?.startsWith("/v1/timeseries") ? harness.seriesStale : false };
   },
 }));
 
 const backfill = { starting: false, running: false, error: null, start: async () => {} };
 function scoped(filters: AnalyzerFilters) { return <FiltersContext.Provider value={{ filters: { game_size: "1v1", map_pool: "ladder", ...filters }, dbRev: 1, setFilters: vi.fn(), bumpRev: vi.fn(), seasons: [] }}><MechanicsTrendCard /></FiltersContext.Provider>; }
 beforeEach(() => {
-  localStorage.clear(); harness.paths = []; harness.online = false; harness.empty = false; harness.stale = false; harness.seriesStale = false; harness.leagueMatchup = "PvZ"; harness.benchmarkN = 50;
+  localStorage.clear(); harness.paths = []; harness.online = false; harness.empty = false; harness.stale = false; harness.seriesStale = false; harness.leagueMatchup = "PvZ"; harness.benchmarkN = 50; harness.benchmarkError = null;
   harness.apiCall.mockReset(); harness.apiCall.mockResolvedValue({ jobId: "synthetic-job" }); harness.mutate.mockReset();
 });
 afterEach(cleanup);
@@ -77,6 +77,9 @@ describe("mechanics progress consumers", () => {
     harness.benchmarkN = 49; fireEvent.click(screen.getByRole("button", { name: "Macro score" }));
     expect(screen.queryByTestId("mechanics-reference")).toBeNull();
     harness.benchmarkN = 50;
+    harness.benchmarkError = { status: 404, message: "Band unavailable" }; view.rerender(scoped({ race: "P", opp_race: "Z" }));
+    expect(screen.queryByTestId("mechanics-reference")).toBeNull();
+    harness.benchmarkError = null;
     harness.leagueMatchup = "PvT"; view.rerender(scoped({ race: "P", opp_race: "Z" }));
     expect(screen.queryByTestId("mechanics-reference")).toBeNull();
     harness.leagueMatchup = "PvZ"; harness.stale = true; view.rerender(scoped({ race: "P", opp_race: "Z" }));

@@ -57,8 +57,19 @@ const server = http.createServer((req, res) => {
       await page.goto(origin + '/app/macro?empty=1'); await page.getByRole('button', { name: 'Score my older games' }).click(); await expect(page.getByRole('status').filter({ hasText: 'Scoring older games: 1/4' })).toBeVisible(); checks++;
       await page.goto(origin + '/app/macro?empty=1&offline=1'); await expect(page.getByRole('link', { name: 'Get the desktop app' })).toBeVisible(); checks++;
       await page.goto(origin + '/app/builds'); await expect(page.getByLabel('Build mix period')).toHaveValue('day'); await expect(page.getByRole('heading', { name: 'Build mix over time' })).toBeVisible(); checks++;
-      if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Builds overflow ' + width); checks++;
-      if (width === 390 || width === 1440) { await page.getByRole('heading', { name: 'Build mix over time' }).evaluate(element => scrollTo(0, scrollY + element.getBoundingClientRect().top - 30)); await page.screenshot({ path: `../../docs/handoff/screenshots/mechanics-build-mix-${width}.png` }); }
+      for (const theme of ['light','dark']) {
+        await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+        await page.locator('div[title][style*="background-color"]').first().waitFor({ state: 'attached' });
+        if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Builds overflow ' + width); checks++;
+        const contrast = await page.locator('div[title][style*="background-color"]').evaluateAll(cells => {
+          const numbers = value => value.match(/[\d.]+/g).map(Number);
+          const background = numbers(getComputedStyle(document.documentElement).getPropertyValue('--bg-surface'));
+          const luminance = rgb => rgb.map(value => { const c = value/255; return c <= .04045 ? c/12.92 : ((c+.055)/1.055)**2.4; }).reduce((sum, value, i) => sum + value*[.2126,.7152,.0722][i], 0);
+          return cells.map(cell => { const style = getComputedStyle(cell), fill = numbers(style.backgroundColor), alpha = fill[3] ?? 1, rgb = fill.slice(0,3).map((value,i) => value*alpha + background[i]*(1-alpha)); const a = luminance(numbers(style.color)), b = luminance(rgb); return alpha > 0 ? (Math.max(a,b)+.05)/(Math.min(a,b)+.05) : 0; });
+        });
+        if (!contrast.length || Math.min(...contrast) < 4.5) throw new Error('Build mix count contrast ' + JSON.stringify({ theme, contrast })); checks++;
+        if (width === 390 || width === 1440) { await page.getByRole('heading', { name: 'Build mix over time' }).evaluate(element => scrollTo(0, scrollY + element.getBoundingClientRect().top - 30)); await page.screenshot({ path: `../../docs/handoff/screenshots/mechanics-build-mix-${theme==='light'?'':theme+'-'}${width}.png` }); }
+      }
       if (errors.length) throw new Error(JSON.stringify(errors)); console.log(JSON.stringify({ width, checks, errors })); await context.close();
     }
     console.log(`${checks} mechanics browser checks passed`);
