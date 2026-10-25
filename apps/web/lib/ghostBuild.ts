@@ -1,14 +1,16 @@
 /**
  * Ghost Build — the data layer for the closed practice loop.
  *
- * A streamer picks a TIMED target build ("tonight's homework"). The
- * target travels in the overlay widget URL as versioned base64url data.
+ * A streamer picks a TIMED target build ("tonight's homework"). Account
+ * assignments arrive over the authenticated overlay socket; legacy targets
+ * also travel in the widget URL as versioned base64url data.
  * New v2 loadouts use ``#ghost=<base64url json>`` so the potentially large
  * nine-matchup payload never leaves the browser; legacy v1 links retain
  * their original ``?ghost=`` shape. The encoded value is treated as HOSTILE
  * input end to end. The same encoded target is also
  * mirrored into localStorage when the user arms it, so the game page
- * can grade the next games against it without any server state (see
+ * supplied the old browser-only grading path. Synced consumers use an
+ * account-keyed offline cache (see ghostSyncModel.ts and
  * lib/ghostGrade.ts).
  *
  * SECURITY: the ``ghost`` string arrives on an UNAUTHENTICATED
@@ -34,6 +36,14 @@ import {
   isMatchupKey,
   type MatchupKey,
 } from "@/lib/randomizer/types";
+
+/** Lazy account transport keeps Clerk/SWR out of the overlay's pure codec. */
+export async function readSynced(getToken: () => Promise<string | null>, signal?: AbortSignal) {
+  return (await import("./ghostSyncIO")).readSynced(getToken, signal);
+}
+export async function writeSynced(getToken: () => Promise<string | null>, patch: import("./ghostSyncIO").GhostPatch, signal?: AbortSignal) {
+  return (await import("./ghostSyncIO")).writeSynced(getToken, patch, signal);
+}
 
 export const GHOST_BUILD_VERSION = 1;
 export const GHOST_BUILD_CONFIG_VERSION = 2;
@@ -113,6 +123,8 @@ export const GHOST_MATCHUPS: ReadonlyArray<GhostMatchupKey> = MATCHUPS;
 export interface GhostBuildConfig {
   v: typeof GHOST_BUILD_CONFIG_VERSION;
   slots: Partial<Record<GhostMatchupKey, GhostTarget>>;
+  /** Account transport sequence; the pure/legacy codec ignores metadata. */
+  revision?: number;
 }
 
 /** A locally saved target that can be assigned to any exact slot by Settings.

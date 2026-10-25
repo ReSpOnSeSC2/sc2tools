@@ -22,6 +22,7 @@ import type {
   DefinitionGuideLinks,
 } from "@/lib/guides/definitionLinks";
 import { raceIconName, raceTint, type Race } from "@/lib/race";
+import { PracticeButton } from "@/components/practice/PracticeButton";
 
 const COPIED_RESET_MS = 1800;
 
@@ -301,19 +302,19 @@ function DefinitionCard({
             </p>
           ) : null}
           {guides.length > 0 ? (
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-caption">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-caption">
               <BookOpen className="h-4 w-4 text-accent-cyan" aria-hidden />
               {guides.map((guide) => (
-                <Link
+                <span key={guide.href} className="inline-flex flex-wrap items-center gap-2"><Link
                   key={guide.href}
                   href={guide.href}
                   aria-label={`${guide.matchup} guide for ${def.name}`}
                   className="inline-flex min-h-[36px] items-center font-semibold text-accent-cyan underline-offset-2 hover:text-accent-cyan hover:underline"
                 >
                   {guides.length > 1 ? `${guide.matchup} guide` : "Guide"}
-                </Link>
+                </Link><PracticeButton build={{ name: def.name, race: def.race }} guideHref={guide.href} matchup={guide.matchup} /></span>
               ))}
-            </p>
+            </div>
           ) : null}
         </div>
       </article>

@@ -5,6 +5,9 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 ## 0.24.6
 
 ### Fixed - Reduce game-start and match-time load
+- Defer hidden scouting timelines and their icons until the relevant view opens.
+  Compact and hidden Companion windows no longer build full replay-history views
+  when opponent data arrives; visible views still refresh when selections change.
 - Avoid repeated native overlay style and ownership checks while focus and
   visible windows are unchanged; revalidate periodically and after window changes
   so click-through recovers if Windows or Qt changes the native handle or style.
