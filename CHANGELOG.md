@@ -19,6 +19,7 @@ corresponding GitHub Release.
   periodic and window-event recovery of click-through styles.
 - Pause queued historical uploads during matches when game-time import pausing
   is enabled, while keeping fresh replay priority and queued history intact.
+  Bound fresh-replay overflow to eight pending jobs during large backlogs.
 
 ### Added
 - Analyzer tables now support keyboard build opening, global matchup chips, a matchup-scoped heatmap and a Strategy games sheet that stays open as filters change. CSV exports save the displayed Builds, Strategy pairs, Matchups, Maps and pool cells with their scope and local date.
