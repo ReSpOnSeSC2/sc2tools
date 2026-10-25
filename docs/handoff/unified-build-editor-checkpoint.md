@@ -95,6 +95,7 @@ passed again after retaining the incoming variant. The initial full web CI had
 7,543 passing cases and one passive-effect focus timing assertion in the shared
 URL-row test; that assertion now waits for focus and full selection, retains
 all token masking checks, and its two cases pass. No URL-row runtime code changed.
-The actual PR743 squash must be reconciled before the final push; unchanged
-merged trees do not need another build. No migration, new infrastructure, AI, provider activation, account operation,
+Actual PR743 squash `bef4054c` was reconciled at `9af55f13`; its resulting
+tree `aa154e5f1dcda7685241ee4cbe67290fe4b1cf53` exactly matches the tested
+dependency tree, so no additional build was needed. No migration, new infrastructure, AI, provider activation, account operation,
 version bump or release is part of this pack.
