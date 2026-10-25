@@ -28,13 +28,17 @@
 import { useMapReplay, type MapReplayController } from "@/lib/useMapReplay";
 import type { PatchEra } from "@/lib/meta";
 import { CompactReplayHost } from "./replay/CompactReplayHost";
-import { ReplayStage } from "./replay/ReplayStage";
 import type { ComponentProps } from "react";
 import dynamic from "next/dynamic";
 import { PlaybackFidelityCard } from "./PlaybackFidelityCard";
 import { MISSING_PLAYBACK_HINT } from "@/lib/playbackFidelity";
 
 const SegmentedReplayHost = dynamic(() => import("./replay/SegmentedReplayHost").then(value => value.SegmentedReplayHost), { ssr: false });
+// Dossiers also import this host for a compact modal. Keep the full HUD's
+// rails, shortcut sheet and preferences out of their initial page bundle.
+const ReplayStage = dynamic(() => import("./replay/ReplayStage").then(value => value.ReplayStage), {
+  loading: () => <div role="status" className="flex min-h-64 items-center justify-center rounded-lg border border-border bg-bg-elevated/40 text-caption text-text-muted">Loading replay controls…</div>,
+});
 
 /** Stage height cap for the compact (drilldown) host, in CSS px. The
  * full-page host passes none and the replayer sizes itself to the
