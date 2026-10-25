@@ -39,10 +39,10 @@ test("unknown and omitted-tail probability is retained rather than inflating thr
   expect(partialPrior.otherProbability).toBe(.8);
 });
 
-test("matchup, visibility, too-short and resumed guards precede the50-row cap", () => {
+test("matchup/visibility/resume precede the50-row window; short observations lower n without refill", () => {
   const excluded = [row("Wrong matchup", { myRace: "Terran" }), row("Hidden", { excluded: true }), row("Deleted", { _deleted: true }), row("Pending", { _deletionPending: true }), row("Resumed", { isResumedFromReplay: true }), row("Too short", { durationSec: 20 })];
   const result = openingForecast([...excluded, ...Array.from({ length: 70 }, () => row("Hatch First"))], ctx);
-  expect(result.sampleSize).toBe(50);
+  expect(result.sampleSize).toBe(49);
   expect(result.top.map(r => r.name)).toEqual(["Hatch First"]);
   expect(openingForecast([row("Hatch First")], { myRace: "Random", oppRace: "Zerg", prior }).top).toEqual([]);
 });

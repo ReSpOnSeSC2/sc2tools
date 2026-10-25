@@ -24,16 +24,20 @@ function strategy(row) {
 /** @param {number} n */
 function confidence(n) { return n < 3 ? "Low" : n < 8 ? "Medium" : "High"; }
 
-/** Shared eligible metadata window for the posterior and replay-observed rating. @param {any[]} rows @param {{myRace?:unknown,oppRace?:unknown}} context */
-function matchingForecastRows(rows, context) {
+/** Match identity scope/races first; short/invalid observations lower n within the latest50 without refill. @param {any[]} rows @param {{myRace?:unknown,oppRace?:unknown}} context */
+function forecastSourceRows(rows, context) {
   const myRace = race(context.myRace), oppRace = race(context.oppRace);
   if (!myRace || !oppRace || myRace === "R" || oppRace === "R") return [];
-  return (Array.isArray(rows) ? rows : []).slice(0, 1000).filter(row => {
-    const label = strategy(row), duration = Number(row?.durationSec);
-    return row && row.excluded !== true && row._deleted !== true && row._deletionPending !== true
+  return (Array.isArray(rows) ? rows : []).slice(0, 1000).filter(row => row
+      && row.excluded !== true && row._deleted !== true && row._deletionPending !== true
       && row.isResumedFromReplay !== true && race(row.myRace) === myRace && race(row.opponent?.race) === oppRace
-      && !(Number.isFinite(duration) && duration > 0 && duration < TOO_SHORT_SECONDS) && !TOO_SHORT_LABEL_RE.test(label);
-  }).slice(0, FORECAST_LIMIT);
+  ).slice(0, FORECAST_LIMIT);
+}
+
+/** @param {any[]} rows @param {{myRace?:unknown,oppRace?:unknown}} context */
+function matchingForecastRows(rows, context) {
+  return forecastSourceRows(rows, context).filter(row => typeof row.durationSec === "number" && Number.isFinite(row.durationSec)
+    && row.durationSec >= TOO_SHORT_SECONDS && !TOO_SHORT_LABEL_RE.test(strategy(row)));
 }
 
 /** @param {any} prior @param {string|null} matchup */
@@ -54,8 +58,8 @@ function priorDistribution(prior, matchup) {
 }
 
 /**
- * Pure deterministic posterior over newest-first personal replay metadata.
- * Age is measured in matching eligible games, including unlabelled games.
+ * Pure deterministic posterior over the latest50 matching replay metadata rows.
+ * Age is measured in eligible observations within that fixed window, including unlabelled games.
  * The top three retain their probability across ALL openings; omitted/unknown
  * mass is explicit rather than renormalising a small displayed subset to 100%.
  * The cached prior is viewed from the opponent's side of the matchup, at the
@@ -94,10 +98,11 @@ function openingForecast(rows, context = {}) {
     });
   return {
     top, effectiveN: round(effectiveN), confidence: label, sampleSize: personal.length,
+    sourceWindowSize: forecastSourceRows(rows, context).length, partial: false,
     matchup, map: map || null, limit: FORECAST_LIMIT,
     otherProbability: total > 0 ? round(Math.max(0, 1 - top.reduce((sum, row) => sum + row.probability, 0))) : 0,
     prior: prior ? { pseudoGames: PRIOR_GAMES, n: prior.n, bandLabel: prior.bandLabel, matchup: `${oppRace}v${myRace}` } : null,
   };
 }
 
-module.exports = { openingForecast, matchingForecastRows, FORECAST_LIMIT, HALF_LIFE_GAMES, MAP_WEIGHT, PRIOR_GAMES };
+module.exports = { openingForecast, forecastSourceRows, matchingForecastRows, FORECAST_LIMIT, HALF_LIFE_GAMES, MAP_WEIGHT, PRIOR_GAMES };

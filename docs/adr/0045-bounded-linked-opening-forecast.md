@@ -7,13 +7,22 @@ widgets use a two-tier recency heuristic, while the private desktop brief copies
 the plain favourite-opening frequency. These are different questions presented
 as one prediction.
 
-Use one pure `openingForecast` over the newest 50 eligible personal matchup
-games. At age i the replay contributes 2^(-i/8), multiplied by 1.5 on the current
+Use one pure `openingForecast` over the newest 50 matching personal metadata
+rows, ordered by date descending and BSON id descending for ties. Owner,
+resolved identity, both races, visibility and non-resume eligibility precede
+the source-window cap. Short or invalid-duration rows then lower the sample
+without refilling from older games. At eligible age i a replay contributes
+2^(-i/8), multiplied by 1.5 on the current
 map. Effective n is the sum of those personal weights. Confidence is Low below
 3, Medium below 8, and High otherwise; a ladder prior never increases personal
 confidence. Missing labels retain probability mass. The three displayed rows
 are probabilities across all openings, with an explicit other-probability
 field, rather than renormalising the displayed subset to 100%.
+
+The dossier retains its existing 1,000-row metadata ceiling. If that ceiling
+is exhausted before 50 matching source rows are available, its forecast is
+explicitly incomplete and withheld. It never substitutes the old heuristic or
+issues a second/refill query. A smaller complete history remains usable.
 
 An existing k-floor Ladder Meta document contributes three pseudo-games. Its
 stored openers describe the uploader's build, and its rating band describes the

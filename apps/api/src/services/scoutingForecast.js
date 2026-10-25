@@ -1,5 +1,5 @@
 "use strict";
-const { openingForecast, matchingForecastRows } = require("./openingForecast");
+const { openingForecast, matchingForecastRows, forecastSourceRows, FORECAST_LIMIT } = require("./openingForecast");
 const { canonicalLiveRace } = require("./overlayLiveEnrichment");
 const { ladderMetaBucketFor } = require("../util/mmrBracketing");
 const { eraForGame } = require("../util/patchEra");
@@ -12,8 +12,12 @@ class ScoutingForecastService {
     /** @type {Map<string,{at:number,value:any}>} */ this.cache = new Map();
     /** @type {Map<string,Promise<any>>} */ this.inflight = new Map();
   }
-  /** @param {any[]} rows @param {{myRace?:unknown,oppRace?:unknown,map?:unknown,myMmr?:unknown}} context */
-  async forecast(rows, context) {
+  /** @param {any[]} rows @param {{myRace?:unknown,oppRace?:unknown,map?:unknown,myMmr?:unknown}} context @param {{sourceTruncated?:boolean}} [opts] */
+  async forecast(rows, context, opts = {}) {
+    if (opts.sourceTruncated && forecastSourceRows(rows, context).length < FORECAST_LIMIT) {
+      return { ...openingForecast(rows, context), top: [], otherProbability: 0, partial: true,
+        reason: "source_window_truncated", ratingBasis: null };
+    }
     const my = canonicalLiveRace(context.myRace), opp = canonicalLiveRace(context.oppRace);
     const matched = matchingForecastRows(rows, context);
     const explicitRating = typeof context.myMmr === "number" && ladderMetaBucketFor(context.myMmr) !== null ? context.myMmr : null;
@@ -22,7 +26,7 @@ class ScoutingForecastService {
     const matchup = my && opp && my !== "Random" && opp !== "Random" ? `${opp[0]}v${my[0]}` : null;
     const era = eraForGame(matched[0]) || eraForGame({ date: new Date(this.now()) }) || "after";
     const prior = band !== null && matchup ? await this.prior(matchup, band, era) : null;
-    return { ...openingForecast(rows, { ...context, prior }), ratingBasis: prior ? explicitRating !== null ? "current_replay" : "last_matchup_replay" : null };
+    return { ...openingForecast(rows, { ...context, prior }), reason: null, ratingBasis: prior ? explicitRating !== null ? "current_replay" : "last_matchup_replay" : null };
   }
   /** @param {string} matchup @param {number} band @param {string} era */
   async prior(matchup, band, era) {

@@ -1581,7 +1581,7 @@ class OpponentsService {
     /** @type {Array<any>} */
     const fetchedGames = await this.db.games
       .find(gamesFilter, { projection: PROFILE_GAME_PROJECTION })
-      .sort({ date: -1 })
+      .sort({ date: -1, _id: -1 })
       // Hard cap: an opponent faced hundreds/thousands of times would
       // otherwise load every shared game — plus a detail-blob fetch
       // per game below — into memory on every profile view. date:-1
@@ -1665,7 +1665,7 @@ class OpponentsService {
       myRace: filters.race || scopedRawGames[0]?.myRace,
       oppRace: filters.oppRace || scopedRawGames[0]?.opponent?.race,
       map: filters.map,
-    }) : null;
+    }, { sourceTruncated: gamesTruncated }) : null;
     const predictedStrategies = forecast ? forecast.top.map(row => ({ strategy: row.name, probability: row.probability })) : Dna.recencyWeightedStrategies(allGames);
     const last5Games = allGames.slice(0, 5);
     // "Last MMR" overlay — same race-aware contract as the list path.

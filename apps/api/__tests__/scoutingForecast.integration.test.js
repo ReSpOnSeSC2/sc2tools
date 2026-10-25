@@ -54,6 +54,35 @@ test("hidden, deleted, pending and other-owner samples do not affect the posteri
   expect((await dossier.get("owner", main.pulseId, { mergeLinked: true })).openingForecast).toEqual(payload.openingForecast);
 });
 
+test("tied dates, short/invalid durations and mixed races select the same fixed50 source window", async () => {
+  const tiedAt = new Date("2026-10-25T13:00:00Z");
+  const rows = Array.from({ length: 60 }, (_,i) => row(100 + i, { gameId: `tied-${i}`, date: tiedAt,
+    durationSec: i % 7 === 0 ? 20 : i === 20 ? null : i === 21 ? "invalid" : i === 22 ? 0 : 600,
+    opponent: { ...row(i).opponent, pulseId: i % 2 ? main.pulseId : alt.pulseId, pulseCharacterId: i % 2 ? "101" : "202" } }));
+  await db.games.insertMany(rows);
+  await db.games.insertMany(Array.from({ length: 80 }, (_,i) => row(300 + i, { gameId: `wrong-race-${i}`, date: new Date(+tiedAt + 1000), myRace: "Terran" })));
+  await db.games.insertMany([row(900, { date: new Date(+tiedAt + 2000), excluded: true }), row(901, { date: new Date(+tiedAt + 2000), _deleted: true }), row(902, { date: new Date(+tiedAt + 2000), _deletionPending: true }), row(903, { date: new Date(+tiedAt + 2000), isResumedFromReplay: true })]);
+  const query = jest.spyOn(db.games, "find");
+  const payload = await live.buildFromOpponentName("owner", "Main", "Zerg", "101", "Protoss", main.pulseId);
+  const profile = await dossier.get("owner", main.pulseId, { mergeLinked: true, filters: { race: "P", oppRace: "Z" } });
+  expect(payload.openingForecast.sampleSize).toBe(41);
+  expect(profile.openingForecast).toEqual(payload.openingForecast);
+  const timingReads = query.mock.calls.filter(([,opts]) => opts?.projection?.gameVersion && opts?.projection?._id === 0);
+  expect(timingReads).toHaveLength(1); // The live tendency source was reused, no refill query.
+  query.mockRestore();
+});
+
+test("an exhausted dossier metadata source withholds an incomplete forecast without legacy substitution or refill", async () => {
+  await db.games.insertMany(Array.from({ length: 1001 }, (_,i) => row(2000 + i, { gameId: `other-race-${i}`, date: new Date("2026-10-25T14:00:00Z"), myRace: "Terran" })));
+  const find = jest.spyOn(db.games, "find");
+  const profile = await dossier.get("owner", main.pulseId, { mergeLinked: true, filters: { race: "P", oppRace: "Z" } });
+  expect(profile.openingForecast).toMatchObject({ partial: true, reason: "source_window_truncated", top: [], sourceWindowSize: 0 });
+  expect(profile.predictedStrategies).toEqual([]); expect(lookup).not.toHaveBeenCalled();
+  expect(find).toHaveBeenCalledTimes(1); find.mockRestore();
+  const payload = await live.buildFromOpponentName("owner", "Main", "Zerg", "101", "Protoss", main.pulseId);
+  expect(payload.openingForecast).toMatchObject({ partial: false, sampleSize: 6 });
+});
+
 test("server grouping off uses only the current account and keeps notes exact-toon", async () => {
   await db.users.insertOne({ userId: "owner", preferences: { opponentScouting: { groupByPlayer: false } } });
   await db.opponentNotes.insertMany([{ userId: "owner", pulseId: main.pulseId, notes: "Current account note" }, { userId: "owner", pulseId: alt.pulseId, notes: "Never inherit this note" }]);

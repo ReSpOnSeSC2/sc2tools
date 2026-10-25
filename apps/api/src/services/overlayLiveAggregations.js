@@ -729,7 +729,7 @@ async function opponentTendencies(games, userId, identity, matchup = {}, forecas
   if (matchup.oppRace) filter["opponent.race"] = { $regex: `^${escapeRegex(matchup.oppRace.charAt(0))}`, $options: "i" };
   const rows = await games
     .find(filter, { projection: TENDENCY_PROJECTION })
-    .sort({ date: -1 })
+    .sort({ date: -1, _id: -1 })
     .limit(TENDENCY_SCAN_CAP)
     .toArray()
     .catch(() => []);
