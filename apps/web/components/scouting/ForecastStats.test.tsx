@@ -28,7 +28,7 @@ describe("shared forecast presentation", () => {
     render(<div style={{ overflow: "hidden" }}><PredictedStrategiesList forecast={forecast} /></div>);
     const button = screen.getByRole("button", { name: "How is this calculated?" }); button.focus(); fireEvent.click(button);
     const dialog = screen.getByRole("dialog", { name: "How the opening forecast works" });
-    expect(dialog.parentElement).toBe(document.body); expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(dialog.parentElement).toBe(document.body); expect(document.activeElement).toBe(dialog);
     expect(screen.getByText(/After eight eligible games/)).toBeTruthy();
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() => expect(document.activeElement).toBe(button));
