@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { csvCell, downloadCsv, toCsv } from "../csvExport";
+import { csvCell, csvFilename, downloadCsv, toCsv } from "../csvExport";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 describe("table CSV serialization", () => {
@@ -23,6 +23,17 @@ describe("table CSV serialization", () => {
   it("allows a column to format a value using its complete row", () => {
     const csv = toCsv({ columns: [{ key: "ids", label: "Merged accounts", format: (_value, row: { ids: string[] }) => row.ids.join("; ") }], rows: [{ ids: ["a", "b"] }], scope: "All time" });
     expect(csv).toContain("\r\na; b\r\n");
+  });
+  it("names files with local calendar fields without converting through UTC", () => {
+    const localMidnight = new Date(2026, 0, 2, 0, 5);
+    const iso = vi.spyOn(localMidnight, "toISOString").mockReturnValue("2026-01-01T23:05:00.000Z");
+    expect(csvFilename("builds", localMidnight)).toBe("sc2tools-builds-2026-01-02.csv");
+    expect(iso).not.toHaveBeenCalled();
+  });
+  it("keeps the section safe for a download filename and rejects invalid dates", () => {
+    expect(csvFilename("../Build vs strategy", new Date(2026, 9, 25))).toBe("sc2tools-build-vs-strategy-2026-10-25.csv");
+    expect(csvFilename("", new Date(2026, 9, 25))).toBe("sc2tools-table-2026-10-25.csv");
+    expect(() => csvFilename("builds", new Date(NaN))).toThrow(RangeError);
   });
 });
 

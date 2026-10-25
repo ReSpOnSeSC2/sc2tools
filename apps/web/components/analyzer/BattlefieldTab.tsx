@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "@/lib/clientApi";
-import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import { useFilters, filtersToQuery, describeActiveFilters } from "@/lib/filterContext";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { pct1, wrColor } from "@/lib/format";
 import { Card, WrBar } from "@/components/ui/Card";
@@ -20,6 +20,8 @@ import { useMapFocus } from "@/lib/useMapFocus";
 import { MapVetoPlanner } from "./maps/MapVetoPlanner";
 import { MapGamesModal } from "./maps/MapGamesModal";
 import type { MapGamesDrill } from "./maps/MapVetoTable";
+import { TableCsvButton } from "./TableCsvButton";
+import type { CsvColumn } from "@/lib/csvExport";
 import { Toggle } from "@/components/ui/Toggle";
 import { opponentRace, poolMapRows } from "@/lib/mapVeto";
 import { sumStrength, type StrengthFields } from "@/lib/strengthAdjusted";
@@ -58,6 +60,17 @@ type MapMatchupGroup = StrengthFields & {
   cells: MapMatchupRow[];
 };
 
+const RECORD_COLUMNS: readonly (CsvColumn<StrengthFields> & { strength?: boolean })[] = [
+  { key: "wins", label: "W" }, { key: "losses", label: "L" },
+  { key: "total", label: "Games" }, { key: "winRate", label: "WR" },
+  { key: "winsAboveExpected", label: "Vs expected", strength: true, format: (value, row) => (row.ratedGames ?? 0) > 0 && typeof value === "number" ? value : null },
+];
+const MATCHUP_COLUMNS: readonly (CsvColumn<Row> & { strength?: boolean; recent?: boolean })[] = [
+  { key: "name", label: "Matchup" }, ...RECORD_COLUMNS,
+  { key: "recent", label: "Recent", recent: true, format: (_value, row) => [...(row.recent ?? [])].reverse().join(" ") },
+];
+const MAP_COLUMNS: readonly CsvColumn<MapMatchupRow>[] = [{ key: "map", label: "Map" }, { key: "matchup", label: "Matchup" }, ...RECORD_COLUMNS];
+
 const LS_MIN_MAPS = "analyzer.battlefield.maps.minGames";
 
 function FormSparkline({
@@ -93,7 +106,7 @@ function FormSparkline({
 }
 
 export function BattlefieldTab() {
-  const { filters, dbRev } = useFilters();
+  const { filters, dbRev, seasons } = useFilters();
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_MAPS, 3);
   const [previewMap, setPreviewMap] = useState<string | null>(null);
   const [drill, setDrill] = useState<MapGamesDrill | null>(null);
@@ -155,6 +168,11 @@ export function BattlefieldTab() {
     [muRows, muSort],
   );
 
+  const scope = describeActiveFilters(filters, { seasons }).map(item => `${item.label}: ${item.value}`).join(" · ") || "Default filters";
+  const mapExportRows = sortedMapMatchupGroups.flatMap(group => [
+    { ...group, matchup: "Overall (all cells, including below Min games)" }, ...group.cells,
+  ]);
+
   // Rows the Min games picker is hiding, for the empty states' "Lower
   // Min games to 1" offer.
   const hiddenMatchups = (muApi.data?.length ?? 0) - muRows.length;
@@ -184,7 +202,7 @@ export function BattlefieldTab() {
         <MinGamesPicker value={minGames} onChange={setMinGames} />
       </div>
 
-      <Card title="Matchups">
+      <Card title="Matchups" right={<TableCsvButton section="matchups" rows={sortedMu} columns={MATCHUP_COLUMNS} scope={`Matchups · ${scope} · min games ${minGames} · sort ${muSort.sortBy} ${muSort.sortDir}`} disabled={!!muApi.error || !muApi.data || muApi.isPreviousData} />}>
         <div className="mb-3 space-y-2"><StrengthGuide /><button type="button" aria-label="Sort matchups by vs expected" aria-pressed={muSort.sortBy === "winsAboveExpected"} className="min-h-11 rounded-lg border border-border px-3 text-caption" onClick={() => muSort.setSortExplicit("winsAboveExpected", muSort.sortBy === "winsAboveExpected" && muSort.sortDir === "desc" ? "asc" : "desc")}>Vs expected {muSort.sortBy === "winsAboveExpected" ? muSort.sortDir === "desc" ? "↓" : "↑" : ""}</button></div>
         <QueryState
           q={muApi}
@@ -248,15 +266,7 @@ export function BattlefieldTab() {
                   </colgroup>
                   <thead className="bg-bg-elevated">
                     <tr>
-                      <SortableTh col="name" label="Matchup" {...muSort} />
-                      <SortableTh col="wins" label="W" {...muSort} align="right" />
-                      <SortableTh col="losses" label="L" {...muSort} align="right" />
-                      <SortableTh col="total" label="Games" {...muSort} align="right" />
-                      <SortableTh col="winRate" label="WR" {...muSort} align="right" />
-                      <StrengthHeader sort={muSort} />
-                      <th className="px-3 py-2 text-right text-micro uppercase text-text-dim">
-                        Recent
-                      </th>
+                      {MATCHUP_COLUMNS.map((column, index) => column.strength ? <StrengthHeader key={String(column.key)} sort={muSort} /> : column.recent ? <th key={String(column.key)} className="px-3 py-2 text-right text-micro uppercase text-text-dim">{column.label}</th> : <SortableTh key={String(column.key)} col={String(column.key)} label={column.label} {...muSort} align={index === 0 ? "left" : "right"} />)}
                     </tr>
                   </thead>
                   <tbody>
@@ -289,7 +299,7 @@ export function BattlefieldTab() {
         </QueryState>
       </Card>
 
-      <Card title="Win rate by map by matchup">
+      <Card title="Win rate by map by matchup" right={<TableCsvButton section="maps" rows={mapExportRows} columns={MAP_COLUMNS} scope={`Maps · ${scope} · min games ${minGames} (matchup cells only; overall rows include all cells) · pool only ${poolOnly} · sort ${mapSort.sortBy} ${mapSort.sortDir}`} disabled={!!mapMuApi.error || !mapMuApi.data || mapMuApi.isPreviousData} />}>
         <div className="mb-3"><StrengthGuide /></div>
         <QueryState
           q={mapMuApi}

@@ -22,7 +22,7 @@ import { GroupingPreference } from "./opponents/GroupingPreference";
 import { useRivalSummary } from "@/lib/useRivalSummary";
 import { rivalSummaryGroups } from "@/lib/rivalSummaryGroups";
 import { StarredRivalCards } from "./opponents/StarredRivalCards";
-import { downloadCsv, toCsv } from "@/lib/csvExport";
+import { csvFilename, downloadCsv, toCsv } from "@/lib/csvExport";
 import { opponentColumns, opponentRace, OPPONENT_CSV_COLUMNS, type OpponentColumns } from "@/lib/opponentPresentation";
 import { RivalStar } from "./opponents/RivalStar";
 import { RivalriesStrip } from "./opponents/RivalriesStrip";
@@ -319,10 +319,10 @@ export function OpponentsTab({
   useEffect(() => { currentExport.current = exportScope; return () => { currentExport.current = null; }; }, [exportScope]);
   const exportRows = useCallback(() => {
     if (currentExport.current !== exportScope) return;
-    const period = filters.since || filters.until ? `${filters.since?.slice(0, 10) || "beginning"}_${filters.until?.slice(0, 10) || "now"}` : "all-time";
+    const exportedAt = new Date();
     const scope = `Opponents · ${showPlayerGroups ? "grouped players" : "accounts"} · ${path} · search ${search || "(none)"} · min games ${minGames} · ${quick} · MMR ${mmrImpactFilter} · notes ${hasNotes} · ${sort.sortBy} ${sort.sortDir}`;
-    downloadCsv(`sc2tools-opponents-${period}.csv`, toCsv({ columns: OPPONENT_CSV_COLUMNS, rows: items, scope }));
-  }, [exportScope, filters.since, filters.until, showPlayerGroups, path, search, minGames, quick, mmrImpactFilter, hasNotes, sort.sortBy, sort.sortDir, items]);
+    downloadCsv(csvFilename("opponents", exportedAt), toCsv({ columns: OPPONENT_CSV_COLUMNS, rows: items, scope, exportedAt }));
+  }, [exportScope, showPlayerGroups, path, search, minGames, quick, mmrImpactFilter, hasNotes, sort.sortBy, sort.sortDir, items]);
   const exportDisabled = !rivals.owner || !items.length || isLoading || isLoadingMore || hitMaxPages || !!error || search !== deferredSearch;
   useEffect(() => {
     onExportAction?.({ count: items.length, disabled: exportDisabled, download: exportRows });
