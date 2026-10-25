@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 import { getTheme, setTheme, THEME_STORAGE_KEY, type Theme } from "@/lib/theme";
@@ -20,7 +19,7 @@ export function MoreSheet({ entries, activeKey, onClose, onReport }: { entries: 
     <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-border-strong" aria-hidden />
     {([['section', 'Analysis'], ['utility', 'Your setup']] as const).map(([group, label]) => <section key={group} aria-label={label}><h3 className={CAPTION}>{label}</h3>{entries.filter((entry) => entry.group === group).map((entry) => { const Icon = entry.icon; return <Link key={entry.key} href={entry.href} onNavigate={() => beginNavigation(entry.href)} onClick={onClose} aria-current={activeKey === entry.key ? "page" : undefined} className={`${ROW} ${activeKey === entry.key ? "bg-accent-cyan/10 text-accent" : ""}`}><Icon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />{entry.label}</Link>; })}</section>)}
     <section aria-label="Help & support"><h3 className={CAPTION}>Help &amp; support</h3>{helpMenuItems(true).map((item) => <HelpRow key={item.key} item={item} onClose={onClose} onReport={onReport} />)}
-      <a href="https://status.sc2tools.com" target="_blank" rel="noopener noreferrer" className={ROW}>System status <ExternalLink className="h-4 w-4" aria-hidden /></a>
+      <Link href="/status" prefetch={false} onClick={onClose} className={ROW}>System status</Link>
       <Link href="/legal/privacy" onClick={onClose} className={ROW}>Privacy</Link><Link href="/legal/terms" onClick={onClose} className={ROW}>Terms</Link>
       <InstallAppButton className="w-full text-body" />
     </section><ThemeRow />

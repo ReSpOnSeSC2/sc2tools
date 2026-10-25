@@ -19,6 +19,8 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Recognize early PvT ground Dark Templar openings as DT Rush before later Charge or Blink follow-ups. An early Dark Shrine excludes Charge-first labels, while a proven Robo and Warp Prism drop retains DT Drop priority.
+- Replace the broken status link with a public website and API reachability page, with separate results, timestamps and manual refresh. The status page works without signing in.
 - The desktop scouting report's X and minimize buttons now work while StarCraft II has focus, alongside the scouting icon. Other report content continues to pass game clicks through.
 
 ### Opponent page position
@@ -46,6 +48,7 @@ corresponding GitHub Release.
   Bound fresh-replay overflow to eight pending jobs during large backlogs.
 
 ### Added
+- Change or clear your planned build directly from Macro Breakdown, in both the score popup and the full game page. The game header and other check-in views stay in sync.
 - Create builds from a replay, a detected label or a blank draft in one rich editor. The first-run library also links Community copies; searchable race-aware action pickers show friendly names, proxy eligibility and unknown-action errors.
 - Configure optional Twitch Predictions and live-game stream markers with separate permissions, explicit opt-ins and confirmed Dock controls. A separate server gate defaults off; current desktop telemetry cannot prove ranked queue status, so automatic Predictions remain unavailable.
 - Opt in to nine recorded ladder achievements in Event alerts, with per-moment visuals and sounds, local tests, clip timestamps and optional posts through an already connected bot. Supporter alerts keep priority; replay starting MMR and confirmed league evidence remain explicit.

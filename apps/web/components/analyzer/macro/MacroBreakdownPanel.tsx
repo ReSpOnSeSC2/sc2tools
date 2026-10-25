@@ -20,6 +20,7 @@ import { matchupFromRaces } from "@/lib/reviews";
 import { lockBodyScroll } from "@/lib/bodyScrollLock";
 import Link from "next/link";
 import { MacroBreakdownBody } from "./MacroBreakdownBody";
+import { MacroBuildSelector } from "./MacroBuildSelector";
 import { useMacroRecompute } from "./useMacroRecompute";
 import type {
   MacroBreakdownPanelProps,
@@ -166,7 +167,8 @@ export function MacroBreakdownPanel({
           ) : null}
           onClose={onClose}
         />
-        <div className="min-w-0 flex-1 px-4 pb-6 pt-3 sm:px-6 sm:py-5 lg:px-8">
+        <div className="min-w-0 flex-1 space-y-4 px-4 pb-6 pt-3 sm:px-6 sm:py-5 lg:px-8">
+          <MacroBuildSelector gameId={gameId} />
           {isLoading ? (
             <LoadingState />
           ) : error ? (
