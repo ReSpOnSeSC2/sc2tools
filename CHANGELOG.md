@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Opponent list columns
+
+- Choose latest replay download, map/result, your and the opponent's build, recorded build-order links/dates, game lengths, your macro breakdown/averages and scouting notes. Matching game filters and measured sample counts apply; incomplete build-order dates stay unknown or marked Latest known.
+- Save opponent column and sort choices immediately in this browser so returning to the page or starting a later session keeps them. Selected details also appear in phone cards, and optional summary fields are available in CSV exports.
+- Cancel replay downloads when the account or replay source changes, and allow retry after a bounded wait.
+
 ### Fixed
 
 - Replace the broken status link with a public website and API reachability page, with separate results, timestamps and manual refresh. The status page works without signing in.

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { usePersistentSort } from "@/components/ui/SortableTh";
 import { OPPONENT_COMPARATORS } from "./opponentListSort";
+import { OPPONENT_DETAIL_SORT_KEYS } from "@/lib/opponentPresentation";
 
 export type MmrImpactFilter = "all" | "tracked" | "net-gain" | "net-loss";
 export type OpponentListLocation = {
@@ -13,7 +14,7 @@ export type OpponentListLocation = {
   prefetch: (href: string) => void;
   navigate: (href: string) => void;
 };
-const SORTS = new Set(["name", "race", "pulseId", "wins", "losses", "winRate", "games", "mmr", "netMmr", "mmrWon", "mmrLost", "lastPlayed"]);
+const SORTS = new Set(["name", "race", "pulseId", "wins", "losses", "winRate", "games", "mmr", "netMmr", "mmrWon", "mmrLost", "lastPlayed", ...OPPONENT_DETAIL_SORT_KEYS]);
 export function readOpponentListQuery(query: string) {
   const params = new URLSearchParams(query);
   const impact = params.get("impact");
@@ -63,7 +64,7 @@ export function useOpponentListNavigation(location?: OpponentListLocation) {
     if (location.query === written.current) { written.current = null; return; }
     const next = readOpponentListQuery(location.query);
     applying.current = JSON.stringify(next);
-    setSearch(next.q); setImpact(next.impact); setHasNotes(next.notes); setSortExplicit(next.sort, next.dir);
+    setSearch(next.q); setImpact(next.impact); setHasNotes(next.notes); setSortExplicit(next.sort, next.dir, { persist: false });
   }, [location, setSortExplicit]);
   useEffect(() => {
     if (!location) return;

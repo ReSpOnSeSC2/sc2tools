@@ -19,7 +19,7 @@ const editorHarness = vi.hoisted(() => ({ props: null as BuildEditorModalProps |
 beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns"), import("../BuildWorkspaceActions"), import("../replay/ReplayStage"), import("../GameStoryCard"), import("../GhostGradeContent"), import("@/components/battleReport/GameBattleReport")]); });
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: getTokenMock, isLoaded: true, isSignedIn: true }),
+  useAuth: () => ({ getToken: getTokenMock, isLoaded: true, isSignedIn: true, userId: "synthetic-owner" }),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -33,7 +33,8 @@ vi.mock("@/components/builds/editor", () => ({
   },
 }));
 
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@/lib/clientApi", async original => ({
+  ...await original<typeof import("@/lib/clientApi")>(),
   useApi: (...args: unknown[]) => useApiMock(...args),
   apiCall: (...args: unknown[]) => apiCallMock(...args),
 }));

@@ -10,6 +10,7 @@ const { gamesMatchStage } = require("../util/parseQuery");
 const { parseExactMapNames } = require("../util/exactMapFilter");
 const { accountMatchHandles } = require("../util/accountFilter");
 const { opponentSeries } = require("./opponentSeries");
+const { overlayListDetails, LIST_DETAIL_QUERY_OPTIONS } = require("./opponentListDetails");
 const { parseAnalysisGameIds } = require("../util/opponentAnalysisMembership");
 const { prepareReplayCsv } = require("./replayCsv");
 const { eraForGame } = require("../util/patchEra");
@@ -349,6 +350,7 @@ class OpponentsService {
    * @param {{
    *   limit?: number,
    *   before?: Date,
+   *   includeListDetails?: boolean,
    *   filters?: ReturnType<typeof gamesMatchStage>['__filters'] & object,
    * }} [opts]
    * @returns {Promise<{items: object[], nextBefore: Date|null}>}
@@ -411,8 +413,9 @@ class OpponentsService {
     // state. Two batched aggregations per page (each uses the
     // ``{opponent.pulseId, userId, date}`` index).
     await Promise.all([
-      this._overlayLatestNameFromGames(userId, page),
-      this._overlayLatestSeenFromGames(userId, page),
+      opts.includeListDetails === true
+        ? overlayListDetails(this.db.games, userId, gamesMatchStage(userId, filters), page, this.gameDetails?.store?.kind === "mongo")
+        : Promise.all([this._overlayLatestNameFromGames(userId, page), this._overlayLatestSeenFromGames(userId, page)]),
       this._overlayLatestMmrFromGames(userId, page),
       this._overlayGlobalIdentities(page),
       this._overlayNotes(userId, page, true),
@@ -429,7 +432,7 @@ class OpponentsService {
    * @private
    * @param {string} userId
    * @param {object} filters
-   * @param {{limit?: number, before?: Date}} opts
+   * @param {{limit?: number, before?: Date, includeListDetails?: boolean}} opts
    */
   async _listFiltered(userId, filters, opts) {
     const limit = clampLimit(opts.limit, LIMITS.OPPONENTS_PAGE_SIZE);
@@ -510,8 +513,11 @@ class OpponentsService {
     pipeline.push({ $sort: { lastPlayed: -1 } });
     pipeline.push({ $limit: limit + 1 });
 
+    const cursor = opts.includeListDetails === true
+      ? this.db.games.aggregate(pipeline, LIST_DETAIL_QUERY_OPTIONS)
+      : this.db.games.aggregate(pipeline);
     /** @type {Array<any>} */
-    const items = await this.db.games.aggregate(pipeline).toArray();
+    const items = await cursor.toArray();
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;
     const nextBefore = hasMore ? page[page.length - 1].lastPlayed : null;
@@ -542,7 +548,11 @@ class OpponentsService {
     //     across all history.
     await this._overlayFromOpponents(userId, page);
     await this._overlayRevealedNamesFromOpponents(userId, page);
-    await this._overlayLatestNameFromGames(userId, page);
+    if (opts.includeListDetails === true) {
+      await overlayListDetails(this.db.games, userId, match, page, this.gameDetails?.store?.kind === "mongo");
+    } else {
+      await this._overlayLatestNameFromGames(userId, page);
+    }
     // (3) ``mmr`` / ``region`` — safety net for rows whose ``$last``
     //     accumulator landed on a game without ``opponent.mmr`` (the
     //     accumulator is non-deterministic without a prior $sort, so
