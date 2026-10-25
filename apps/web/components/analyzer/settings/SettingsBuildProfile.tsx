@@ -58,7 +58,7 @@ export function SettingsBuildProfile({ token }: { token: string }) {
       // A live mutation also invalidates any GET that started before it.
       void mutate(selected, { revalidate: false });
     }
-  });
+  }, true, true);
 
   const postStudio = async (patch: Record<string, unknown>): Promise<StudioState | null> => {
     if (postingRef.current) return null;

@@ -58,6 +58,7 @@ import { BuildProfileEditor } from "./BuildProfileEditor";
 import { useEngagementState } from "@/lib/multichat/useEngagementState";
 import { newestStudioSnapshot, useStudioUpdates } from "@/lib/multichat/useStudioUpdates";
 import type { DockPost } from "./dockActions";
+import { DockPresenceStrip } from "./DockPresenceStrip";
 
 /** Platform config re-read cadence — same as the OBS widget. */
 const CONFIG_REFRESH_MS = 60_000;
@@ -481,6 +482,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-6xl p-2 font-sans text-text sm:p-3">
+      <DockPresenceStrip token={token} />
       {/* Narrow-mode sticky jump tabs — the OBS dock has no room for
           a permanent two-column layout. */}
       <div className="sticky top-0 z-10 -mx-2 mb-2 flex items-center gap-1 overflow-x-auto border-b border-border bg-[#0b0e14] px-2 py-1.5 lg:hidden">
