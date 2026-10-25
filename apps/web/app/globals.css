@@ -58,8 +58,10 @@
   --text-muted: 159 173 185;  /* #9fadb9 — ~9.7:1 on ground */
   --text-dim: 134 146 159;    /* #86929f — lifted to ~7.2:1 for comfortable reads */
 
-  --accent: 21 125 140;       /* #157d8c — deep teal, white text ~4:1 */
-  --accent-hover: 31 158 175; /* #1f9eaf */
+  --accent: 21 125 140;       /* #157d8c — filled controls with white text */
+  --accent-hover: 9 104 117;  /* #096875 — white text remains readable on hover */
+  --accent-ink: 31 158 175;   /* #1f9eaf — link and label text on dark surfaces */
+  --accent-ink-hover: 60 224 214; /* #3ce0d6 */
   --accent-cyan: 60 224 214;  /* #3ce0d6 — electric cyan, glows + eyebrows */
 
   --signal: 245 184 74;       /* #f5b84a — amber, rare emphasis only */
@@ -76,6 +78,7 @@
   --success: 62 200 132;      /* #3ec884 */
   --warning: 232 156 56;      /* #e89c38 — nudged orange so it stays distinct from amber signal */
   --danger: 255 107 107;      /* #ff6b6b */
+  --danger-fill: 201 54 60;   /* #c9363c — separate destructive button fill */
 
   /* Player-vs-player series (macro timeline + roster): you blue,
      opponent red, the same pairing as the in-game team colours and the
@@ -83,8 +86,8 @@
   --player-you: 96 146 255;   /* #6092ff */
   --player-opp: 255 99 99;    /* #ff6363 */
 
-  --border: 28 36 49;         /* #1c2431 */
-  --border-strong: 44 56 72;  /* #2c3848 */
+  --border: 92 105 124;       /* #5c697c — control boundaries on all surfaces */
+  --border-strong: 117 132 155; /* #75849b */
 
   --halo-cyan: rgba(60, 224, 214, 0.16);
   --halo-accent: rgba(31, 158, 175, 0.18);
@@ -126,24 +129,27 @@
 
   --accent: 14 125 140;       /* #0e7d8c — deep teal, white text ~4.3:1 */
   --accent-hover: 9 104 117;  /* #096875 */
-  --accent-cyan: 17 150 158;  /* #11969e */
+  --accent-ink: 10 115 122;   /* #0a737a */
+  --accent-ink-hover: 9 104 117; /* #096875 */
+  --accent-cyan: 10 115 122;  /* #0a737a */
 
-  --signal: 191 124 18;       /* #bf7c12 — amber darkened for AA on white */
-  --signal-hover: 166 106 12; /* #a66a0c */
+  --signal: 143 92 12;        /* #8f5c0c */
+  --signal-hover: 122 78 10;  /* #7a4e0a */
 
   /* Editorial clay-rose, darkened for AA on the light paper ground. */
   --editorial: 178 79 58;         /* #b24f3a — clay rose on light */
-  --editorial-soft: 196 110 90;   /* #c46e5a */
+  --editorial-soft: 157 79 59;    /* #9d4f3b */
 
-  --success: 28 156 86;       /* #1c9c56 */
-  --warning: 176 118 24;      /* #b07618 */
-  --danger: 210 68 73;        /* #d24449 */
+  --success: 21 122 67;       /* #157a43 */
+  --warning: 143 95 15;       /* #8f5f0f */
+  --danger: 184 51 58;        /* #b8333a */
+  --danger-fill: 184 51 58;   /* #b8333a */
 
   --player-you: 37 99 235;    /* #2563eb */
   --player-opp: 214 40 57;    /* #d62839 */
 
-  --border: 221 226 236;      /* #dde2ec */
-  --border-strong: 197 205 221;/* #c5cddd */
+  --border: 124 135 155;      /* #7c879b */
+  --border-strong: 101 115 138; /* #65738a */
 
   --halo-cyan: rgba(17, 150, 158, 0.12);
   --halo-accent: rgba(14, 125, 140, 0.12);
@@ -154,9 +160,9 @@
   --shadow-hard: 3px 3px 0 rgba(13, 18, 26, 0.9);
   --dot: rgba(15, 30, 45, 0.06);
 
-  --race-protoss: 91 109 255;    /* #5b6dff */
-  --race-terran:  214 73 78;     /* #d6494e */
-  --race-zerg:    124 95 230;    /* #7c5fe6 */
+  --race-protoss: 74 90 230;    /* #4a5ae6 */
+  --race-terran:  184 51 58;    /* #b8333a */
+  --race-zerg:    113 84 215;   /* #7154d7 */
   --race-random:  84 96 114;     /* matches text-muted */
 
   --shadow-card: var(--shadow-hard);
@@ -256,10 +262,10 @@ h4 {
   }
 
   a {
-    color: rgb(var(--accent));
+    color: rgb(var(--accent-ink));
   }
   :where(a):hover {
-    color: rgb(var(--accent-hover));
+    color: rgb(var(--accent-ink-hover));
   }
 
   :where(*):focus-visible {
@@ -596,17 +602,30 @@ h4 {
   --text-muted: 174 187 199;  /* #aebbc7 — 10.6:1 */
   --text-dim: 141 155 170;    /* #8d9baa —  7.4:1 */
 
-  --accent: 32 150 166;       /* #2096a6 — lifted so a 15% wash reads */
-  --accent-hover: 60 200 214; /* #3cc8d6 */
+  --accent: 21 125 140;       /* #157d8c — filled controls with white text */
+  --accent-hover: 9 104 117;  /* #096875 */
+  --accent-ink: 31 158 175;   /* #1f9eaf — independent of the outer page theme */
+  --accent-ink-hover: 60 224 214;
   --accent-cyan: 62 224 214;  /* #3ee0d6 */
 
-  --border: 38 48 63;         /* #26303f — visible hairline */
-  --border-strong: 66 83 105; /* #425369 */
+  --border: 92 105 124;
+  --border-strong: 117 132 155;
   --line: 92 105 124;
 
   --success: 62 200 132;
   --warning: 232 156 56;
   --danger: 255 107 107;
+  --danger-fill: 201 54 60;
+  --signal: 245 184 74;
+  --signal-hover: 250 200 110;
+  --editorial: 214 132 110;
+  --editorial-soft: 232 178 162;
+  --player-you: 96 146 255;
+  --player-opp: 255 99 99;
+  --race-protoss: 124 140 255;
+  --race-terran: 255 107 107;
+  --race-zerg: 167 139 250;
+  --race-random: 150 164 176;
 
   color: rgb(var(--text));
 }

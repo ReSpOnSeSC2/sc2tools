@@ -66,6 +66,7 @@ const RESOURCES_LINKS: readonly FooterLink[] = [
 const LEGAL_LINKS: readonly FooterLink[] = [
   { href: "/legal/privacy", label: "Privacy" },
   { href: "/legal/terms", label: "Terms" },
+  { href: "/legal/accessibility", label: "Accessibility" },
 ];
 
 /** Resources column; "Build guides" only while the guides flag is on. */

@@ -1,7 +1,7 @@
 {
   "name": "@sc2tools/web",
   "version": "0.1.0",
-  "description": "SC2 Tools cloud frontend \u2014 Next.js + Clerk + Tailwind, hosted on Vercel.",
+  "description": "SC2 Tools cloud frontend — Next.js + Clerk + Tailwind, hosted on Vercel.",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
@@ -39,6 +39,7 @@
     "swr": "2.3.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.11.2",
     "@playwright/test": "^1.61.1",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.1.0",
@@ -50,6 +51,7 @@
     "axe-core": "4.11.4",
     "eslint": "9.18.0",
     "eslint-config-next": "^15.5.15",
+    "eslint-plugin-jsx-a11y": "6.10.2",
     "fake-indexeddb": "6.2.5",
     "jsdom": "^25.0.1",
     "postcss": "8.5.1",

@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { X } from "lucide-react";
 import { lockBodyScroll } from "@/lib/bodyScrollLock";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { ThemeChoice } from "@/components/ui/ThemeChoice";
 import { LogoMark } from "./LogoMark";
 import { NavAuthGate } from "./NavAuthGate";
 
@@ -62,6 +62,7 @@ function isActive(href: string, pathname: string): boolean {
 export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<Element | null>(null);
+  const closeRef = useRef(onClose); closeRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -72,7 +73,7 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        closeRef.current();
       } else if (e.key === "Tab") {
         trapTab(e, drawerRef.current);
       }
@@ -93,7 +94,7 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
         prev.focus();
       }
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   if (typeof window === "undefined") return null;
@@ -193,9 +194,8 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
             </div>
           </SignedOut>
         </nav>
-        <footer className="flex items-center justify-between gap-3 border-t-2 border-line px-4 py-3">
-          <span className="text-caption text-text-muted">Theme</span>
-          <ThemeToggle />
+        <footer className="border-t-2 border-line px-4 py-3">
+          <ThemeChoice />
         </footer>
       </div>
     </div>,
@@ -222,7 +222,7 @@ function DrawerLink({ href, label, active, onSelect }: DrawerLinkProps) {
           "motion-safe:transition-colors motion-safe:duration-150",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface",
           active
-            ? "bg-accent/15 text-accent"
+            ? "bg-accent/10 text-accent-cyan"
             : "text-text-muted hover:bg-bg-elevated hover:text-text",
         ].join(" ")}
       >
@@ -239,7 +239,14 @@ function DrawerLink({ href, label, active, onSelect }: DrawerLinkProps) {
 
 function focusableInside(root: HTMLElement | null): HTMLElement[] {
   if (!root) return [];
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(el => {
+    if (el.tabIndex < 0 || el.matches(":disabled") || el.closest("[hidden],[inert],[aria-hidden='true']")) return false;
+    for (let node: HTMLElement | null = el; node && node !== root.parentElement; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.display === "none" || style.visibility === "hidden") return false;
+    }
+    return true;
+  });
 }
 
 function trapTab(e: KeyboardEvent, root: HTMLElement | null): void {
@@ -259,7 +266,7 @@ function trapTab(e: KeyboardEvent, root: HTMLElement | null): void {
       last.focus();
     }
   } else {
-    if (active === last) {
+    if (active === last || !root.contains(active)) {
       e.preventDefault();
       first.focus();
     }

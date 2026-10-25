@@ -4,6 +4,7 @@
 // lib/help/articles/<category>/<slug>.ts file. Do not edit by hand.
 
 import type { HelpArticle } from "../types";
+import accountData_appearance from "./account-data/appearance";
 import accountData_backupsAndExport from "./account-data/backups-and-export";
 import accountData_deleteAccount from "./account-data/delete-account";
 import accountData_deletingGameHistory from "./account-data/deleting-game-history";
@@ -93,6 +94,7 @@ import troubleshooting_somethingWentWrong from "./troubleshooting/something-went
 import troubleshooting_troubleshootingAndSupport from "./troubleshooting/troubleshooting-and-support";
 
 export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
+  accountData_appearance,
   accountData_backupsAndExport,
   accountData_deleteAccount,
   accountData_deletingGameHistory,
