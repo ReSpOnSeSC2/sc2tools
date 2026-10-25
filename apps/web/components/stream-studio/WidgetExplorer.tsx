@@ -7,7 +7,7 @@ import { ArrowRight, CheckCircle2, Copy, Expand, Layers3, Search, SlidersHorizon
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { buttonClassName } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { WIDGET_GROUPS, WIDGET_GUIDES, type WidgetGuide } from "@/lib/streamStudioLearn";
+import { WIDGET_GROUPS, WIDGET_GUIDES, STUDIO_AUTOMATION_GUIDES, type WidgetGuide } from "@/lib/streamStudioLearn";
 import { LazyWidgetPlayground } from "./LazyWidgetPlayground";
 
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
@@ -180,6 +180,13 @@ export function WidgetExplorer() {
           <button type="button" onClick={() => { setQuery(""); setGroup("all"); }} className={`mt-4 min-h-11 rounded-full border-2 border-line px-5 font-semibold text-text ${FOCUS}`}>Clear search and filters</button>
         </div>
       )}
+      {STUDIO_AUTOMATION_GUIDES.filter(guide => (group === "all" || group === "community") && (!query.trim() || [guide.name, guide.summary, guide.capability, ...guide.needs].join(" ").toLowerCase().includes(query.trim().toLowerCase()))).map(guide => <article key={guide.id} id={guide.id} aria-label={`${guide.name} guide`} className="mt-8 min-w-0 scroll-mt-28 space-y-4 rounded-md border-2 border-line bg-bg-surface p-5 sm:p-7">
+        <h3 className="text-h3 font-semibold">{guide.name}</h3><p className="text-body text-text-muted">{guide.summary}</p>
+        <p className="rounded border border-border bg-bg-elevated p-3 text-body">{guide.capability}</p>
+        <h4 className="text-body font-semibold">Before you start</h4><ul className="list-disc space-y-2 pl-5 text-body text-text-muted">{guide.needs.map(item => <li key={item}>{item}</li>)}</ul>
+        <h4 className="text-body font-semibold">Setup</h4><ol className="list-decimal space-y-2 pl-5 text-body text-text-muted">{guide.setup.map(item => <li key={item}>{item}</li>)}</ol>
+        <p className="text-body text-text-muted">{guide.recovery}</p><div className="flex flex-wrap gap-3"><Link href={guide.settingsHref} className={buttonClassName({ variant: "secondary", size: "md" })}>Open Twitch automation settings</Link><LazyHelpLink slug={guide.helpSlug} anchor={guide.helpAnchor} className="inline-flex min-h-11 items-center underline">Twitch prediction details</LazyHelpLink></div>
+      </article>)}
     </section>
   );
 }

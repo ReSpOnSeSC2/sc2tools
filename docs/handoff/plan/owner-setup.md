@@ -1,5 +1,15 @@
 # Owner setup notes (accumulated)
 
+## Twitch Predictions and game markers (Wave 4)
+
+Deploy API before web. The new `TWITCH_AUTOMATION_ENABLED` server gate defaults off and accepts only the exact value `true`; this work has not set it or activated any integration. Keeping the gate off makes lifecycle hooks, recovery and Dock provider controls inert even if a saved user opt-in is true. Owner enablement is a separate operational decision. No new service, paid plan or production data migration was executed. The bounded `twitch_automation_receipts` metadata collection uses normal startup index definitions (owner/game unique, TTL and bounded recovery/owner lookups), and account erasure removes its owner rows. It is excluded from snapshot restore.
+
+Current desktop telemetry does not prove live ranked queue status. Automatic Predictions therefore remain unavailable even after owner enablement and user consent; do not infer ranked status from Pulse/MMR or advertise that the current desktop can open them. A future supported queue adapter needs explicit end-to-end verification before changing that capability. Fresh known live two-human 1v1 starts can create saved, consented stream markers; Twitch requires a live channel with VODs enabled.
+
+Each eligible affiliate/partner streamer must approve the incremental Predictions permission (`channel:manage:predictions`) or marker permission (`channel:manage:broadcast`), then explicitly Save Twitch automation. Connecting alone enables neither switch. Same-broadcaster reconnects preserve separately consented scopes. In Dock → Game, inspect the confirmed prediction state before using Resolve or Cancel/refund; missing provider IDs require a manual Twitch dashboard check. No real account, provider prediction, stream marker, OBS session or installer was used in validation.
+
+For rollback, turn both user switches off and Save. Before disabling the server gate or disconnecting Twitch, inspect any open native prediction and settle or cancel it in Twitch; the disabled gate also pauses automatic timeout recovery. Retain receipts rather than deleting them to replay old games.
+
 ## Synced Ghost practice
 
 Deploy the API before the web so `/v1/me/preferences/ghost` GET/PUT/PATCH and
@@ -127,12 +137,55 @@ required URL setup. See `/help/obs-auto-scene-switching` and
 used disposable fixtures and fake/offscreen OBS boundaries; no production OBS or
 account integration was run.
 
+# Chat commands v2
+
+No new environment variable, secret, collection, index, migration or paid
+service is required. Deploy the API and web together. In Settings → Overlay →
+Multi-platform chat → Chat commands, explicitly open the editor, choose
+availability/alias/cooldown and Save. Custom replies allow only `{user}`,
+`{mmr}`, `{record}`, `{opponent}` and `{streak}`. Try shows the saved command's
+exact reply with the selected existing overlay token and never sends it.
+Copy Nightbot snippet copies that token's private credential URL; paste it
+only into the intended bot configuration. Existing integration switches remain
+off until the owner enables them separately. No account was enabled or used to
+publish a message during implementation.
+
+The record is a UTC calendar day, and uptime is time since Start new session,
+not a claim that Twitch has been live. Season replies need an already-cached
+current regional season boundary; a cold/unavailable catalog gives an honest
+unavailable line without starting provider traffic. History replies can be
+up to30seconds old and disclose safety-limited cohorts. Chat and on-stream
+cooldowns run independently so each surface can answer the same viewer once.
+
 
 # Stream Dock Game desk
 
 Deploy API and web together, then refresh existing Dock and overlay Browser Sources once so their game-widget hiding and manual-result labels update. No environment variable, service, collection, index or migration is added. Game is the first Dock section; its sticky header keeps scene, active opponent, session and connection visible. Current desktop agents omit the live map, so that field correctly says unavailable.
 
 At stream start, confirm Start new session to reset the account's session boundary and this token's clip timestamp mark. Hide game widgets is reversible and keeps chat/scenes running; verify your refreshed sources hide and resume before relying on it live. Crystal Ball manual/cancel controls never award points or accuracy. Shout-outs use only reviewed exact opponent channels; a configured matching Twitch bot queues them, otherwise Copy shout-out is available. Validation used synthetic loopback data and no actual bot or provider posts.
+
+## Series mode (Wave 4)
+
+Deploy API and web together, then refresh existing Dock and overlay Browser
+Sources. No environment variable, collection, index, job or provider connection
+is added. In the Dock's Series section, choose an opponent, best-of format and
+optional ordered maps, then explicitly Start. In Settings → Overlay → Widgets,
+enable Series for All-in-one or copy its dedicated 640×420 Browser Source.
+It starts off and stays transparent until a series exists.
+
+Automatic scoring requires a matching replay with a recorded exact start after
+Start. Old uploads without that field remain manual-only; known account
+mismatches never fall back to a shared name. Use ±1 to correct a score and End
+to stop scoring. Eighty retained replay receipts pause automatic scoring until
+the next Start. Lifetime H2H is unavailable without an exact recorded account.
+The shared Chat commands editor controls `!series` aliases, platforms and
+cooldown; no bot is enabled and no message is posted automatically.
+
+Use the silent local preview or Test in OBS to inspect the scorecard; tests do
+not start or score a series. Roll back by ending the series and disabling its
+widget, then reverting the feature commit if needed. Stored Studio state can
+remain safely bounded. Implementation verification uses synthetic local owners,
+replays and socket traffic only.
 
 ## Game moment alerts (Wave 4)
 

@@ -90,7 +90,9 @@ function captureGuideSample(guideSamples, userId, game, customTag, created) {
  *   overlayTokens?: import('../services/types').OverlayTokensService,
  *   liveGameBroker?: import('../services/liveGameBroker').LiveGameBroker,
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
+ *   series?: import('../services/streamSeries').StreamSeriesService,
  *   gameMoments?: import('../services/gameMoments').GameMomentsService,
+ *   twitchAutomation?: import('../services/twitchAutomation').TwitchAutomationService,
  *   gameVods?: {
  *     resolveForGames: (userId: string, games: Array<Record<string, any>>, opts?: {includeOpponent?: boolean}) => Promise<{
  *       configuredPlatforms: string[],
@@ -944,16 +946,27 @@ function buildGamesRouter(deps) {
           }
         }
       }
+      const freshGame = accepted.length > 0 ? pickFreshOverlayGame(competitiveIncoming, competitiveAccepted) : null;
+      if (freshGame && deps.twitchAutomation?.deps.enabled === true && deps.liveGameBroker) {
+        const key = pickGameKey(deps.liveGameBroker, userId, freshGame, { oppName: freshGame.opponent?.displayName });
+        // Dormant under the default-off server gate. Independent from overlay
+        // token/socket fanout; service also checks replay start/matchup identity.
+        void deps.twitchAutomation.settleVerifiedReplay(userId, key, freshGame).catch(() => {});
+      }
+      // Series scoring uses every successfully accepted real row, including
+      // custom games and delayed uploads. It has its own exact start/identity
+      // and durable receipt checks; the freshest-live gate below is unrelated.
+      if (deps.series && accepted.length) {
+        const eligible = new Set(accepted.filter(row => !row.quarantined && !row.excluded).map(row => row.gameId));
+        try { await deps.series.ingest(userId, competitiveIncoming.filter(game => eligible.has(game.gameId))); }
+        catch (err) { req.log?.warn({ err }, "series_ingest_failed"); }
+      }
       // Realtime nudge so an open SPA tab refreshes without polling.
       if (deps.io && accepted.length > 0) {
         // Reuse the same freshness gate for the session MMR refresh and
         // the post-game overlay fan-out. Historical resync batches must
         // not bypass the Pulse cache, while a genuinely new match must
         // not inherit the pre-game rating for another five minutes.
-        const freshGame = pickFreshOverlayGame(
-          competitiveIncoming,
-          competitiveAccepted,
-        );
         deps.io.to(`user:${userId}`).emit("games:changed", {
           count: accepted.length,
           // Quarantined replay-resume markers are excluded from /me stats.
@@ -1270,6 +1283,7 @@ function compactGameForRealtime(game) {
   return {
     gameId: game.gameId,
     date: game.date,
+    startedAt: game.startedAt,
     result: game.result,
     myRace: game.myRace,
     myLadderRace: game.myLadderRace,
@@ -1280,6 +1294,7 @@ function compactGameForRealtime(game) {
     opponent: opponent && typeof opponent === "object"
       ? {
           pulseId: opponent.pulseId,
+          toonHandle: opponent.toonHandle,
           pulseCharacterId: opponent.pulseCharacterId,
           displayName: opponent.displayName,
           race: opponent.race,

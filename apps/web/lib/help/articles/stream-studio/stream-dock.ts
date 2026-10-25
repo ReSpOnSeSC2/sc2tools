@@ -25,6 +25,7 @@ const article: HelpArticle = {
   ],
   updated: "2026-10-25",
   body: [
+    { type: "paragraph", text: "The Game section also shows **Twitch Channel Points** state when configured. This is separate from Crystal Ball. **Resolve verified result** uses the stored replay result; **Cancel / refund** asks Twitch to refund and reports success only after confirmation. Missing provider IDs require a manual Twitch dashboard check. Both automation switches and the server feature gate start off. Current desktop telemetry cannot prove ranked queue status, so automatic Twitch Predictions remain unavailable; opted-in live 1v1 start markers can still work. [Twitch setup and recovery](/help/viewer-engagement#twitch-predictions)." },
     {
       type: "paragraph",
       text: "Open **Game**, the first section, for your current opponent, race, available MMR and head-to-head record, matchup, game phase and session W–L, MMR change and streak. The sticky header keeps the scene and countdown, active opponent, session record, connection label and counts of connected overlay sources visible as you scroll. Opponent details clear after the match or a connection reset. Current desktop agents do not supply a live map name; **Map unavailable live** is an honest source limitation.",

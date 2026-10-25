@@ -2,7 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import useSWR, { type SWRConfiguration } from "swr";
-import { API_BASE, type ClientApiError } from "./clientApi";
+import { API_BASE, useOwnerRequestScope, type ClientApiError } from "./clientApi";
 
 type PublicApiOptions = {
   /**
@@ -30,15 +30,19 @@ export function usePublicApi<T>(
 ) {
   const { getToken, isLoaded, isSignedIn, userId } = useAuth();
   const viewer = options.personalized && isLoaded && isSignedIn && userId ? userId : "anonymous";
+  const runOwned = useOwnerRequestScope(viewer, getToken);
   const key = path ? (["public-api", viewer, path] as const) : null;
   return useSWR<T, ClientApiError>(
     key,
-    async ([, who, requestPath]: readonly [string, string, string]) => {
-      const token = who === "anonymous" ? null : await getToken();
+    async ([, who, requestPath]: readonly [string, string, string]) => runOwned(who, async (scopedToken, signal, assertCurrent) => {
+      // An anonymous key remains anonymous even if sign-in completes later.
+      const token = who === "anonymous" ? null : await scopedToken();
       const res = await fetch(`${API_BASE}${requestPath}`, {
         headers: token ? { authorization: `Bearer ${token}` } : undefined,
         cache: "no-store",
+        signal,
       });
+      assertCurrent();
       if (!res.ok) {
         let code: string | undefined;
         let message = `Request failed (HTTP ${res.status}).`;
@@ -49,10 +53,13 @@ export function usePublicApi<T>(
         } catch {
           /* non-JSON error page */
         }
+        assertCurrent();
         throw { status: res.status, code, message } satisfies ClientApiError;
       }
-      return (await res.json()) as T;
-    },
+      const data = (await res.json()) as T;
+      assertCurrent();
+      return data;
+    }),
     // The app shell keeps previous data while a key changes. Public pages
     // hand each record its own server-rendered fallbackData, so showing
     // the last record instead would put review A on review B's page.

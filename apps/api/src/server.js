@@ -163,6 +163,7 @@ async function main() {
     // the manual Starting Soon / BRB cover.
     resolveStudioState: (token) =>
       /** @type {any} */ (services).multichatStudio.get(token),
+    resolveSeries: (token, owner) => /** @type {any} */ (services).streamSeries.get(token, owner),
     resolvePlatformEvents: (userId) =>
       /** @type {any} */ (services).platformIntegrations.recentEvents(userId),
     // Synchronous broker-snapshot accessor used by the overlay
@@ -208,6 +209,8 @@ async function main() {
     logger.info({ port: config.port }, "listening");
     runtimeCapacity.start();
     /** @type {any} */ (services).platformIntegrations.start();
+    // start() is inert unless the independent server owner gate is true.
+    /** @type {import('./services/twitchAutomation').TwitchAutomationService|null} */ (services.twitchAutomation)?.start();
     // Browser replay backups PUT straight to the private R2 bucket: add and
     // verify its CORS rule in the background (never blocks or fails boot).
     void startBrowserUploadCorsCheck(
@@ -407,6 +410,7 @@ async function main() {
     stopJobMonitor();
     await trendsExplorerBackfill.stop();
     await /** @type {any} */ (services).platformIntegrations.stop();
+    await /** @type {import('./services/twitchAutomation').TwitchAutomationService|null} */ (services.twitchAutomation)?.stop();
     // True drain, in order: stop accepting connections, let in-flight
     // requests finish, THEN close Mongo — the old fire-and-forget
     // close() left handlers mid-query when the client shut down. Long-

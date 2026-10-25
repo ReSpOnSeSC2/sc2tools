@@ -4,8 +4,8 @@ import { createElement, useCallback, useEffect, useMemo, useRef, useState } from
 import Link from "next/link";
 import { useToastOptional } from "@/components/ui/Toast";
 import { useAuth } from "@clerk/nextjs";
-import { apiCall } from "@/lib/clientApi";
 import { firstBuildTokenError } from "@/lib/buildTokenSelection";
+import { useBuildEditorRequests, type EditorOperation } from "./useBuildEditorRequests";
 import {
   PREVIEW_DEBOUNCE_MS,
   RULES_MAX_PER_BUILD,
@@ -120,7 +120,11 @@ export function useBuildEditorState(
 ): BuildEditorState {
   const { open, context, initialDraft, lockedSlug, onSaved, demoMode, createOnly, sourceSignature, saveIntent } = opts;
   const { sourceRows, countRepeats = true } = context;
-  const { getToken } = useAuth();
+  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
+  const owner = isLoaded && isSignedIn && userId ? userId : null;
+  const requests = useBuildEditorRequests({ owner, open, getToken,
+    identity: JSON.stringify([lockedSlug, context.gameId, context.perspective, saveIntent, createOnly, sourceSignature, initialDraft]),
+  });
   const globalToast = useToastOptional()?.toast;
 
   const [draft, setDraft] = useState<BuildEditorDraft>(initialDraft);
@@ -151,7 +155,7 @@ export function useBuildEditorState(
 
   const [pristine, setPristine] = useState(() => JSON.stringify(initialDraft));
   const previewGenerationRef = useRef(0);
-  const previewAbortRef = useRef<AbortController | null>(null);
+  const previewAbortRef = useRef<EditorOperation | null>(null);
 
   // Reset state every time the modal opens with a new context.
   useEffect(() => {
@@ -173,7 +177,7 @@ export function useBuildEditorState(
     setSavedOk(false);
     setPristine(JSON.stringify(initialDraft));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, requests.scope]);
 
   // Debounced preview fetch.
   useEffect(() => {
@@ -187,6 +191,7 @@ export function useBuildEditorState(
       setPreview(null); setPreviewRules(NO_RULES); setPreviewError(tokenError); setPreviewLoading(false);
       return;
     }
+    if (!demoMode && !requests.ready) { setPreview(null); setPreviewRules(NO_RULES); setPreviewLoading(false); return; }
     if (demoMode) {
       // Demo (landing page): no signed-in library to match against, so
       // we render an empty preview without firing the auth'd request.
@@ -214,18 +219,18 @@ export function useBuildEditorState(
       return;
     }
     let disposed = false;
-    let activeController: AbortController | null = null;
+    let activeController: EditorOperation | null = null;
     // The almost-match indexes in the response point into this array.
     const requestRules = draft.rules;
     setPreviewError(null);
     setPreviewLoading(true);
     const handle = window.setTimeout(async () => {
-      const controller = new AbortController();
+      const controller = requests.begin("preview");
+      if (!controller) return;
       activeController = controller;
       previewAbortRef.current = controller;
       try {
-        const result = await apiCall<BuildEditorPreviewResult>(
-          getToken,
+        const result = await controller.run<BuildEditorPreviewResult>(
           "/v1/custom-builds/preview-matches",
           {
             method: "POST",
@@ -235,12 +240,11 @@ export function useBuildEditorState(
               vsRace: draft.vsRace,
               perspective: context.perspective === "opponent" ? "opponent" : "you",
             }),
-            signal: controller.signal,
           },
         );
         if (
           disposed ||
-          controller.signal.aborted ||
+          !controller.current() ||
           generation !== previewGenerationRef.current
         ) {
           return;
@@ -250,7 +254,7 @@ export function useBuildEditorState(
       } catch (err: unknown) {
         if (
           disposed ||
-          controller.signal.aborted ||
+          !controller.current() ||
           generation !== previewGenerationRef.current ||
           isAbortError(err)
         ) {
@@ -263,10 +267,12 @@ export function useBuildEditorState(
         }
         if (
           !disposed &&
+          controller.current() &&
           generation === previewGenerationRef.current
         ) {
           setPreviewLoading(false);
         }
+        controller.finish();
       }
     }, PREVIEW_DEBOUNCE_MS);
     return () => {
@@ -274,12 +280,12 @@ export function useBuildEditorState(
       window.clearTimeout(handle);
       // A rule edit, perspective change, modal close, or unmount must stop
       // the prior browser request before another heavyweight preview starts.
-      activeController?.abort();
+      activeController?.cancel();
       if (previewAbortRef.current === activeController) {
         previewAbortRef.current = null;
       }
     };
-  }, [open, demoMode, draft.rules, draft.race, draft.vsRace, context.perspective, getToken]);
+  }, [open, demoMode, draft.rules, draft.race, draft.vsRace, context.perspective, requests]);
 
   // Reset pagination when preview changes.
   useEffect(() => {
@@ -433,15 +439,18 @@ export function useBuildEditorState(
       // no-op. We keep the callback identity stable to avoid effect
       // churn in BuildEditorPreview.
       if (demoMode) return;
+      if (!requests.ready) return;
       setExpandedMatchId((cur) => (cur === gameId ? null : gameId));
       if (inspectCache[gameId] || inspectLoading[gameId]) return;
+      const operation = requests.begin(`inspect:${gameId}`);
+      if (!operation) return;
       setInspectLoading((p) => ({ ...p, [gameId]: true }));
       (async () => {
         try {
-          const resp = await apiCall<BuildOrderApiResp>(
-            getToken,
+          const resp = await operation.run<BuildOrderApiResp>(
             `/v1/games/${encodeURIComponent(gameId)}/build-order`,
           );
+          if (!operation.current()) return;
           setInspectCache((p) => ({
             ...p,
             [gameId]: Array.isArray(resp.events) ? resp.events : [],
@@ -449,15 +458,16 @@ export function useBuildEditorState(
         } catch {
           /* leave cache empty; row renders "No events available." */
         } finally {
-          setInspectLoading((p) => {
+          if (operation.current()) setInspectLoading((p) => {
             const n = { ...p };
             delete n[gameId];
             return n;
           });
+          operation.finish();
         }
       })();
     },
-    [demoMode, getToken, inspectCache, inspectLoading],
+    [demoMode, requests, inspectCache, inspectLoading],
   );
 
   const hideMatch = useCallback((gameId: string) => {
@@ -511,11 +521,13 @@ export function useBuildEditorState(
         );
         return;
       }
+      const operation = requests.begin("save");
+      if (!operation) return;
       setSaving(true);
       setSaveError(null);
       // Preview is advisory. Do not keep this heavyweight request alive
       // while the save queues a full replay-history classification pass.
-      previewAbortRef.current?.abort();
+      previewAbortRef.current?.cancel();
       previewAbortRef.current = null;
       setPreviewLoading(false);
       const slug = lockedSlug || slugifyRuleName(sanitised.payload.name);
@@ -542,14 +554,14 @@ export function useBuildEditorState(
         ...(!lockedSlug && sourceSignature?.length && sanitised.payload.rules.length === 0 ? { signature: sourceSignature } : {}),
       };
       try {
-        const resp = await apiCall<SaveBuildResponse | null>(
-          getToken,
+        const resp = await operation.run<SaveBuildResponse | null>(
           `/v1/custom-builds/${encodeURIComponent(slug)}`,
           {
             method: "PUT",
             body: JSON.stringify(body),
           },
         );
+        if (!operation.current()) return;
         const community = resp?.community;
         let communityMirrorPending = !!community?.mirrorPending;
         let communityPublished: boolean | undefined;
@@ -558,13 +570,13 @@ export function useBuildEditorState(
             // This owner-only read performs server-side repair from the
             // authoritative Community row before the parent refreshes its
             // private-library data.
-            const settings = await apiCall<{
+            const settings = await operation.run<{
               published: boolean;
               mirrorPending: boolean;
             }>(
-              getToken,
               `/v1/community/my-build-publication/${encodeURIComponent(slug)}`,
             );
+            if (!operation.current()) return;
             communityPublished = settings.published;
             communityMirrorPending = settings.mirrorPending;
           } catch {
@@ -572,6 +584,7 @@ export function useBuildEditorState(
             // the user knows only the private-library badge may be stale.
           }
         }
+        if (!operation.current()) return;
         setPristine(JSON.stringify(draft));
         setSaving(false);
         setSavedOk(true);
@@ -628,7 +641,7 @@ export function useBuildEditorState(
         } else if (community?.action === "unpublished") {
           pushToast("success", "Removed from the community.");
         }
-        onSaved?.(slug, draft, {
+        if (operation.current()) onSaved?.(slug, draft, {
           reclassifyRequested: andReclassify,
           reclassifyStatus: resp?.reclassify?.status,
           reclassifyGeneration: resp?.reclassify?.generation,
@@ -640,6 +653,7 @@ export function useBuildEditorState(
           communityPublished,
         });
       } catch (err: unknown) {
+        if (!operation.current()) return;
         setSaving(false);
         if (errorCode(err) === "slug_taken") {
           // Create-only save: another build (live or deleted) owns this
@@ -648,15 +662,18 @@ export function useBuildEditorState(
           pushToast("error", "Fix the highlighted fields before saving.");
           return;
         }
-        const message = extractMessage(err) || "Save failed.";
+        const message = errorCode(err) === "request_timeout" ? "Save confirmation timed out. Check your library before retrying." : extractMessage(err) || "Save failed.";
         setSaveError(message);
         pushToast("error", `Save failed: ${message}`);
+      } finally {
+        operation.finish();
       }
     },
-    [draft, context.gameId, context.perspective, createOnly, demoMode, getToken, globalToast, lockedSlug, onSaved, pushToast, sourceSignature, saveIntent],
+    [draft, context.gameId, context.perspective, createOnly, demoMode, requests, globalToast, lockedSlug, onSaved, pushToast, sourceSignature, saveIntent],
   );
 
   return {
+    requestReady: requests.ready,
     draft,
     setDraft,
     errors,

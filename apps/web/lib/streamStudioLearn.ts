@@ -395,6 +395,19 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
     source: "dedicated", settingsHref: OVERLAY_SETTINGS, related: ["randomizer", "ghost-build", "chat-highlight"],
   },
   {
+    id: "series", name: "Series scoreboard", group: "production",
+    summary: "Run a best-of scoreboard for cups and showmatches.",
+    explanation: "Start a best-of-1, 3, 5 or 7 series in the Dock. A matching replay counts only when its exact start is after Start. Known account handles take priority over names; otherwise names match ignoring case. Ladder and custom games both count. Ties do not add wins. Correct the score with ±1 and End explicitly when finished.",
+    example: { headline: "Bo5 vs ExampleOpponent · illustrative", lines: ["You 2–1 Opponent", "Current map: Oceanborn · Next: Ghost River", "Recorded lifetime H2H: 7W–5L"] },
+    appears: "After an explicit Dock Start, until End. A completed series shows Series won or Series lost. It is off for new tokens until enabled.",
+    needs: ["A series started for this overlay token and matching accepted replays.", "Exact replay start times for automatic scoring; older uploads need manual correction. Lifetime H2H requires an exact known account."],
+    setup: dockSetup("Series scoreboard", "Open Series in the Dock. Check the opponent, choose Bo1/3/5/7 and optional map order, then Start. Use ±1 to correct and End to stop."),
+    check: "Preview and Test show a silent sample score. They never start, score, end or otherwise change your real series.",
+    troubleshooting: "A same-name replay with a different known account does not count. Games already underway at Start do not count. Hidden, deleted, resumed and test replays are excluded. At 80 retained replay receipts, automatic scoring pauses; correct manually and End or start a new series. Refresh after an uncertain save before trying again.",
+    placement: "The All-in-one layout reserves the upper-left scoreboard slot. For independent placement, use its dedicated 640 × 420 Browser Source.",
+    source: "all-in-one", settingsHref: OVERLAY_SETTINGS, related: ["session", "match-result", "clip-flag"], helpSlug: "series-mode",
+  },
+  {
     id: "session-recap", name: "Session recap card", group: "results",
     summary: "Fire a deliberate closing card for the session's story.",
     explanation: "The recap summarizes wins, losses, games, net MMR when available, and a qualifying streak. Net MMR is the current session MMR minus its starting MMR. You choose the moment from Stream Dock, making it useful before a break or the end of a stream.",
@@ -518,3 +531,15 @@ export const WIDGET_GUIDES: readonly WidgetGuide[] = WIDGET_GUIDE_CONTENT.map(gu
   placement: `${guide.placement} Recommended standalone Browser Source: ${widgetSizes[guide.id].width} × ${widgetSizes[guide.id].height}.`,
   settingsHref: `/settings?tab=overlay&section=widgets&widget=${encodeURIComponent(guide.id)}`,
 }));
+
+/** Automation has no Browser Source or fake widget preview. Its stable Learn
+ * anchor lives beside the widget library and never opens a provider session. */
+export const STUDIO_AUTOMATION_GUIDES = [{
+  id: "twitch-predictions", name: "Twitch Predictions & game markers",
+  summary: "Optional Channel Points Predictions and stream bookmarks, with separate Twitch consent and explicit Save.",
+  capability: "Current desktop telemetry cannot prove ranked queue status. Automatic Twitch Predictions are skipped; known live two-human 1v1 starts can still add opted-in markers.",
+  needs: ["An affiliate or partner Twitch broadcaster and a live channel.", "Server-owner enablement, then your separate Predictions or markers permission and saved opt-in.", "A paired desktop agent reporting a fresh real player game; markers also require VODs enabled."],
+  setup: ["Open Settings → Overlay → Chat & alerts → Twitch automation. Both switches start off.", "Connect Predictions for Channel Points permission, or Connect markers for stream marker permission. Complete Twitch's window, then Refresh status.", "Choose a 30–300 second window (default 120) and a plain title using {me}, {opp}, {oppRace} and {oppMmr}. Win and Loss are fixed; rendered titles stop at 45 characters.", "Enable the choices you want and press Save Twitch automation. Connecting alone changes neither switch.", "In Stream Dock → Game, check the native Twitch prediction state. Confirmed Cancel requests a refund; Resolve uses only an already verified replay result."],
+  recovery: "Predictions skip rematches within 10 minutes. Games under 60 seconds or no result within 20 minutes request refunds. Unconfirmed creates are never blindly repeated. If Twitch did not return a prediction ID, check the Twitch dashboard manually.",
+  settingsHref: "/settings?tab=overlay&section=chat#twitch-automation", helpSlug: "viewer-engagement", helpAnchor: "twitch-predictions",
+}] as const;

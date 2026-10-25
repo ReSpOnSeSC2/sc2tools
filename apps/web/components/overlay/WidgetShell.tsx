@@ -5,6 +5,7 @@ import { coerceRace } from "@/lib/race";
 import { resolveRaceIcon } from "@/lib/sc2-icons";
 
 type Slot =
+  | "top-left-series"
   | "top-center"
   | "top-center-1"
   | "top-center-2"
@@ -30,6 +31,7 @@ type WidgetShellProps = {
 };
 
 const SLOT_STYLE: Record<Slot, CSSProperties> = {
+  "top-left-series": { top: 40, left: 40 },
   "top-center": { top: 40, left: "50%", transform: "translateX(-50%)" },
   "top-center-1": { top: 130, left: "50%", transform: "translateX(-50%)" },
   "top-center-2": { top: 220, left: "50%", transform: "translateX(-50%)" },
