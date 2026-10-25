@@ -8,6 +8,9 @@ vi.mock("next/navigation", () => ({
   },
 }));
 vi.mock("@/components/reviews/MyReviews", () => ({ MyReviews: () => null }));
+// This route unit runs outside the app layout; keep its actual Ask button signed out.
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: false, userId: null }) }));
+vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: undefined, error: undefined }) }));
 
 import MyReviewsPage from "@/app/reviews/mine/page";
 
