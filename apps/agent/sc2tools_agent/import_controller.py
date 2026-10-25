@@ -38,10 +38,12 @@ from __future__ import annotations
 import logging
 import threading
 import time
+import copy
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from .uploader.queue import TerminalUploadError
+from .import_progress import ImportRate
 
 log = logging.getLogger(__name__)
 
@@ -89,11 +91,17 @@ class ImportController:
         watcher: Any,
         full_resync: Optional[Callable[[], None]] = None,
         list_folders: Optional[Callable[[], List[str]]] = None,
+        on_change: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
         self._api = api
         self._watcher = watcher
         self._full_resync = full_resync
         self._list_folders = list_folders or (lambda: [])
+        self._on_change = on_change or (lambda _snapshot: None)
+        self._rate = ImportRate()
+        self._paused = False
+        self._connection_held = False
+        self._local_snapshot = {"phase": "idle", "total": 0, "completed": 0, "errors": 0, "remaining": 0}
         self._lock = threading.Lock()
         self._job_id: Optional[str] = None
         self._total = 0
@@ -111,6 +119,39 @@ class ImportController:
     # Chained by the runner into the existing UploadQueue / watcher
     # callbacks. No-ops while no job is active so steady-state play
     # (one replay per game) costs one lock acquire per upload.
+
+    def snapshot(self) -> Dict[str, Any]:
+        """Cached counts only: never scans disk or waits for an API request."""
+        with self._lock:
+            return copy.deepcopy(self._local_snapshot)
+
+    def set_hold(self, *, paused=None, connection=None):
+        """Exclude deliberate/network holds from the local rate clock."""
+        with self._lock:
+            if paused is not None:
+                self._paused = bool(paused)
+            if connection is not None:
+                self._connection_held = connection != "online"
+            snapshot = dict(self._local_snapshot)
+        # Canonical phases in the desktop cache differ from wire phases.
+        snapshot["phase"] = {"scanning": "scan", "importing": "import"}.get(snapshot.get("phase"), snapshot.get("phase"))
+        self._publish_local(snapshot)
+
+    def _publish_local(self, body: Dict[str, Any]) -> None:
+        with self._lock:
+            snapshot = dict(body)
+            snapshot["phase"] = "done" if body.get("done") else "scanning" if body.get("phase") == "scan" else "idle" if body.get("phase") == "idle" else "importing"
+            if body.get("cancelled"):
+                snapshot["phase"] = "idle"
+            processed = int(body.get("completed", 0)) + int(body.get("errors", 0))
+            snapshot.update(self._rate.observe(processed, max(0, int(body.get("remaining", 0))),
+                                               active=snapshot["phase"] == "importing" and not body.get("stalled")
+                                               and not self._paused and not self._connection_held))
+            self._local_snapshot = snapshot
+        try:
+            self._on_change(copy.deepcopy(snapshot))
+        except Exception:
+            log.debug("import_local_progress_callback_failed")
 
     def on_upload_success(self, path: Path) -> None:  # noqa: ARG002
         with self._lock:
@@ -261,6 +302,7 @@ class ImportController:
         log.info("import_cancel jobId=%s", job_id or "unknown")
         with self._lock:
             self._cancelled = True
+        self._publish_local({**self.snapshot(), "cancelled": True})
         self._deactivate()
 
     def handle_pick_folder_request(self, payload: Dict[str, Any]) -> None:  # noqa: ARG002
@@ -282,7 +324,7 @@ class ImportController:
 
     # ---------------- auto backfill ----------------
 
-    def maybe_start_auto_backfill(self) -> None:
+    def maybe_start_auto_backfill(self, *, force_display=False) -> None:
         """Register the startup sweep as a visible job when it's big.
 
         Called once by the runner right after ``watcher.start()``. The
@@ -302,23 +344,37 @@ class ImportController:
         if total is None:
             log.info("auto_backfill_not_registered reason=inventory_unavailable")
             return
-        if total < AUTO_BACKFILL_MIN and not self._unfinished_job_exists():
+        if total < AUTO_BACKFILL_MIN and not force_display and not self._unfinished_job_exists():
             log.info(
                 "auto_backfill_not_registered candidates=%d threshold=%d",
                 total,
                 AUTO_BACKFILL_MIN,
             )
+            if total:
+                self._activate("local:startup", total)
+            else:
+                self._publish_local({"phase": "idle", "total": 0, "remaining": 0})
             return
         try:
             out = self._api.import_agent_start({"total": total})
         except Exception as exc:  # noqa: BLE001
-            # Older API without the route (404) or offline — the sweep
-            # still runs, just without the card.
+            # Offline/older API must not strand the desktop card at its
+            # initial inventory while normal background uploads continue.
             log.info("auto_backfill_register_failed: %s", exc)
+            if total:
+                self._activate("local:offline", total)
+            elif force_display:
+                self._post_progress({"jobId": "local:offline", "phase": "import", "total": 0,
+                                     "completed": 0, "errors": 0, "remaining": 0, "done": True})
             return
         job_id = out.get("jobId") if isinstance(out, dict) else None
         if not job_id:
             log.info("auto_backfill_register_no_job_id resp=%r", out)
+            if total:
+                self._activate("local:unregistered", total)
+            elif force_display:
+                self._post_progress({"jobId": "local:unregistered", "phase": "import", "total": 0,
+                                     "remaining": 0, "done": True})
             return
         # Adopting a job that survived an agent restart (auto-update
         # mid-backfill): seed our counters from the job's prior
@@ -406,6 +462,9 @@ class ImportController:
             self._dirty = False
             self._cancelled = False
             self._resume_from_stalled = resume_from_stalled
+            self._rate = ImportRate()
+            local = self._snapshot_body(job_id, False)
+        self._publish_local(local)
         self._stop.clear()
         if self._reporter is None or not self._reporter.is_alive():
             self._reporter = threading.Thread(
@@ -601,6 +660,7 @@ class ImportController:
             # enough for the socket card, while REST polling remains the
             # fallback. This avoids one database write and fan-out every
             # ten seconds for a backlog that may run for days.
+            self._publish_local(body)
             if dirty or done:
                 self._post_progress(body)
             if done:
@@ -635,6 +695,9 @@ class ImportController:
         return body
 
     def _post_progress(self, body: Dict[str, Any]) -> None:
+        self._publish_local(body)
+        if str(body.get("jobId", "")).startswith("local:"):
+            return  # Offline/manual desktop progress is never a cloud job ID.
         try:
             self._api.import_progress(body)
         except Exception as exc:  # noqa: BLE001
@@ -649,8 +712,15 @@ class ImportController:
         successful job. Every caller uses this strict form; on unknown the
         auto-backfill prompt simply declines to mount or re-attach.
         """
+        previous = self.snapshot()
+        self._publish_local({**previous, "phase": "scan", "done": False, "inventoryKnown": False})
         try:
-            return max(0, int(self._watcher.count_pending()))
+            remaining = max(0, int(self._watcher.count_pending()))
+            restored = {**previous, "phase": "import", "inventoryKnown": True, "inventoryCount": remaining}
+            if not restored.get("jobId"):
+                restored.update(total=remaining, remaining=remaining)
+            self._publish_local(restored)
+            return remaining
         except Exception:  # noqa: BLE001
             log.exception("count_pending_failed")
             return None

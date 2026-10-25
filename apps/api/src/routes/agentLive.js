@@ -185,6 +185,18 @@ function buildAgentLiveRouter(deps) {
 function buildMeLiveRouter(deps) {
   const router = express.Router();
 
+  router.get("/me/live/snapshot", deps.auth, (req, res) => {
+    const auth = req.auth;
+    if (!auth) {
+      res.status(401).json({ error: { code: "auth_required" } });
+      return;
+    }
+    res.set("Cache-Control", "private, no-store").json({
+      liveGame: deps.broker.latest(auth.userId),
+      overlayLive: deps.broker.latestOverlayLive(auth.userId),
+    });
+  });
+
   router.get("/me/live", deps.auth, (req, res, _next) => {
     const auth = req.auth;
     if (!auth) {

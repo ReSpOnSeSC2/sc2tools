@@ -60,18 +60,20 @@ win._status_action.click(); assert retries==[True]
 win._connection_help.click(); assert opened[-1].endswith("desktop-app-sync-problems?src=agent#offline")
 error=classify(TerminalUploadError("game_payload_too_large: detail"))
 ui.on_upload_failed("game.SC2Replay",error); app.processEvents()
-item=win._recent_table.item(0,2)
-assert "too much data" in item.text() and item.toolTip()==error.detail
-buttons=win._recent_table.cellWidget(0,3).findChildren(QtWidgets.QPushButton)
-next(button for button in buttons if button.text()=="Copy details").click()
+model=win._recent_table.model()
+assert "too much data" in model.data(model.index(0,7))
+assert model.data(model.index(0,7),QtCore.Qt.ToolTipRole)==error.detail
+menu=win._recent_widget.menu_for(model.visible[0])
+actions={action.text():action for action in menu.actions()}
+actions["Copy error"].trigger()
 assert app.clipboard().text()==error.detail
-next(button for button in buttons if button.text()=="Help").click()
+actions["Help"].trigger()
 assert opened[-1].endswith("#rejected")
 ui.on_connection_state("online",time.time(),0,0); app.processEvents()
 assert not hasattr(win,"_connection_banner") and win._connection_kind=="online"
 ui.on_upload_success("uploaded.SC2Replay"); app.processEvents()
-assert win._recent_table.item(0,2).text()=="✓ Uploaded"
+assert model.data(model.index(0,7))=="Uploaded"
 ui.on_upload_failed("legacy.SC2Replay","Plain error"); app.processEvents()
-assert win._recent_table.item(0,2).text()=="✗ Plain error"
+assert model.data(model.index(0,7))=="Plain error"
 win.hide()
 """)

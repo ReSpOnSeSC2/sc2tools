@@ -55,6 +55,7 @@ interface Props {
   liveGame?: LiveGameEnvelope | null;
   intent?: RandomizerIntentGate | null;
   visible?: boolean;
+  config?: RandomizerConfig;
 }
 const cfg = config();
 let spins: RandomizerSpinEvent[];
@@ -64,7 +65,7 @@ function harness(initial: Props) {
     <RandomizerWidget
       live={p.live ?? null}
       liveGame={p.liveGame === undefined ? envelope() : p.liveGame}
-      config={cfg}
+      config={p.config ?? cfg}
       visible={p.visible ?? true}
       intent={p.intent ?? null}
       onSpin={onSpin}
@@ -122,6 +123,35 @@ describe("RandomizerWidget build check-in gate", () => {
     advance(200);
     view.update({ intent: intent() });
     expect(reveals).toEqual(["pvt-blink-stalkers"]);
+  });
+
+  it("reveals the saved check-in choice without making a second draw or report", () => {
+    const saved = { key: "custom:saved-pick", name: "Saved check-in choice", source: "custom" as const };
+    const view = harness({ intent: intent({ randomizer: saved }) });
+    expect(reveals).toEqual([saved.key]);
+    expect(screen.getByTestId("reveal").textContent).toBe(saved.name);
+    expect(spins[0].roll).toBeNull();
+    view.update({ intent: intent({ randomizer: { ...saved } }) });
+    expect(reveals).toEqual([saved.key]);
+    expect(spins).toHaveLength(1);
+  });
+
+  it("reconciles an unaccepted local reveal with the saved canonical result", () => {
+    const view = harness({ intent: intent() });
+    expect(reveals).toEqual(["pvt-blink-stalkers"]);
+    view.update({ intent: intent({ randomizer: { key: "custom:canonical", name: "Canonical result", source: "custom" } }) });
+    expect(reveals).toEqual(["pvt-blink-stalkers", "custom:canonical"]);
+    expect(spins[1].roll).toBeNull();
+  });
+
+  it("hides immediately when the matchup is disabled and never replays that spin", () => {
+    const view = harness({ intent: intent() });
+    expect(revealShown()).toBe(true);
+    view.update({ intent: intent(), config: { ...cfg, matchups: { ...cfg.matchups, PvT: { ...cfg.matchups.PvT, enabled: false } } } });
+    expect(revealShown()).toBe(false);
+    view.update({ intent: intent(), config: cfg });
+    expect(revealShown()).toBe(false);
+    expect(spins).toHaveLength(1);
   });
 
   it("holds until the local deadline, then spins", () => {

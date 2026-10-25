@@ -30,6 +30,7 @@
  */
 
 const { classifyGame, T3_UNITS } = require("../phaseClassifier");
+const { computeOpponentTendencies } = require("./playerCard");
 const {
   PHASE_ORDER,
   WORKER_SKIP,
@@ -38,6 +39,8 @@ const {
 } = require("../buildCompositions");
 const { tokenByInternalName } = require("../timingCatalog");
 const { parseBuildLogLines } = require("../perGameCompute");
+const { isFinishTimeEvent } = require("../buildDurations");
+const { KNOWN_UPGRADE_NAMES } = require("../knownBuildings");
 const {
   canonicalizeName,
   deriveUnitComposition,
@@ -98,12 +101,34 @@ const BUILD_ORDER_SKIP = new Set([
   "LurkerMPEgg",
 ]);
 
+const TECH_MILESTONE_UNITS = new Set([
+  "Marine", "Marauder", "Reaper", "Ghost", "Hellion", "Hellbat",
+  "WidowMine", "SiegeTank", "Cyclone", "Thor", "Viking", "Medivac",
+  "Liberator", "Raven", "Banshee", "Battlecruiser",
+  "Zealot", "Stalker", "Adept", "Sentry", "HighTemplar", "DarkTemplar",
+  "Archon", "Immortal", "Colossus", "Disruptor", "Observer", "WarpPrism",
+  "Phoenix", "VoidRay", "Oracle", "Tempest", "Carrier", "Mothership",
+  "Zergling", "Queen", "Baneling", "Roach", "Ravager", "Hydralisk",
+  "Lurker", "Infestor", "SwarmHost", "Mutalisk", "Corruptor", "Viper",
+  "BroodLord", "Ultralisk", "Overseer",
+]);
+const GAS_MILESTONE_NAMES = new Set([
+  "Assimilator", "AssimilatorRich", "Extractor", "ExtractorRich", "Refinery", "RefineryRich",
+]);
+const TECH_MILESTONE_SKIP = new Set([
+  ...Array.from(BUILD_ORDER_SKIP).filter((name) => !GAS_MILESTONE_NAMES.has(name)),
+  "Egg", "CreepTumor",
+  "CreepTumorBurrowed", "CreepTumorQueen", "AutoTurret", "StasisTrap",
+]);
+const EXPANSION_NAMES = new Set(["Hatchery", "Nexus", "CommandCenter"]);
+const UPGRADE_MILESTONE_NAMES = new Set(Array.from(KNOWN_UPGRADE_NAMES, (name) => name.toLowerCase()));
+
 /**
  * Compute the per-game scouting envelope from one stored game record.
  *
  * @param {any} game raw game record (NOT the serialized profile
  *   shape — needs ``macroBreakdown``, ``buildLog``, ``oppBuildLog``).
- * @returns {object} PerGameScoutingEnvelope
+ * @returns {Record<string, any> & {opponentTendencies: import('./playerCard').Tendencies}} PerGameScoutingEnvelope
  */
 function computePerGameScouting(game) {
   if (!game || typeof game !== "object") {
@@ -225,6 +250,9 @@ function computePerGameScouting(game) {
     oppStrategy: typeof opp.strategy === "string" && opp.strategy
       ? opp.strategy
       : null,
+    opponentTendencies: computeOpponentTendencies(game),
+    myTechMilestones: buildTechMilestones(myEvents, durationSec),
+    oppTechMilestones: buildTechMilestones(oppEvents, durationSec),
     oppBuildOrder,
     oppTransitions,
     oppCompositionByPhase,
@@ -239,6 +267,46 @@ function computePerGameScouting(game) {
     endReason,
     flags,
   };
+}
+
+/**
+ * @param {Array<{name:string,time:number,category?:string,is_building?:boolean}>} events
+ * @param {number} durationSec
+ * @returns {Array<{name:string,timeSec:number,kind:"building"|"unit"|"upgrade",timing:"started"|"completed"}>}
+ */
+function buildTechMilestones(events, durationSec) {
+  const seen = new Set();
+  /** @type {Array<{name:string,timeSec:number,kind:"building"|"unit"|"upgrade",timing:"started"|"completed"}>} */
+  const milestones = [];
+  const ordered = [...events].sort((first, second) => first.time - second.time);
+  for (const event of ordered) {
+    if (typeof event.name !== "string" || event.name.length > 64) continue;
+    if (TECH_MILESTONE_SKIP.has(event.name) || /Cocoon|Egg$|Flying$|Uprooted$|Burrowed$|Sieged$|PhaseShift$/.test(event.name)) continue;
+    if (!Number.isFinite(event.time) || event.time < 0 || (durationSec > 0 && event.time > durationSec)) continue;
+    const name = event.is_building
+      ? event.name.replace(/^LurkerDenMP$/, "LurkerDen").replace(/^TemplarArchives$/, "TemplarArchive").replace(/^(Assimilator|Extractor|Refinery)Rich$/, "$1")
+      : canonicalizeName(event.name);
+    /** @type {"building"|"unit"|"upgrade"} */
+    const kind = event.is_building
+      ? "building"
+      : event.category === "upgrade" || UPGRADE_MILESTONE_NAMES.has(event.name.toLowerCase())
+        ? "upgrade"
+        : "unit";
+    if (kind === "unit" && !TECH_MILESTONE_UNITS.has(name)) continue;
+    if (event.time === 0) continue;
+    const identity = `${kind}:${name.toLowerCase()}`;
+    if (seen.has(identity) && !EXPANSION_NAMES.has(name)) continue;
+    seen.add(identity);
+    milestones.push({
+      name,
+      timeSec: event.time,
+      kind,
+      timing: isFinishTimeEvent(event.name, { isBuilding: event.is_building, category: kind })
+        ? "completed"
+        : "started",
+    });
+  }
+  return milestones;
 }
 
 /**
@@ -573,6 +641,7 @@ module.exports = {
   computePerGameScouting,
   deriveEndReason,
   buildSideBuildOrder,
+  buildTechMilestones,
   // Back-compat alias — older tests / callers may still import this
   // under the original opponent-only name.
   buildOpponentBuildOrder: buildSideBuildOrder,

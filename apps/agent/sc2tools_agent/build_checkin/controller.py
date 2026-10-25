@@ -51,6 +51,8 @@ from dataclasses import replace
 from typing import Any, Callable, Dict, Optional, Protocol, Set, Tuple
 
 from ..api_client import ApiError
+from ..session_stats import session_account_key
+from ..state import _STATE_SAVE_LOCK
 from .matching import (
     accepted_ineligibility,
     closest_by_key_ms,
@@ -67,6 +69,7 @@ from .models import (
     CHECKING_REPLAY,
     STATUS_DECLARE_OFFLINE,
     STATUS_DECLARE_UNAVAILABLE,
+    STATUS_RANDOMIZER_REQUEST_FAILED,
     STATUS_REPLAY_UNAVAILABLE,
     STATUS_SAVE_FAILED,
     STATUS_SAVE_UNKNOWN_BUILD,
@@ -214,6 +217,8 @@ class BuildCheckinController(ScoutingControllerMixin):
         on_prefs_changed: Optional[Callable[[CheckinPrefs], None]] = None,
         show_scouting_at_loading: bool = True,
         on_scouting_changed: Optional[Callable[[bool], None]] = None,
+        connection_provider: Optional[Callable[[], tuple]] = None,
+        identity_provider: Optional[Callable[[], tuple]] = None,
     ) -> None:
         """``prefs`` is the last preference the server confirmed (kept in
         ``AgentState``): the cards follow it until this session's first
@@ -222,6 +227,11 @@ class BuildCheckinController(ScoutingControllerMixin):
         persists each newly confirmed value (called off the state
         thread)."""
         self._api = api
+        self._connection_provider = connection_provider
+        self._identity_provider = identity_provider
+        self._request_api = None
+        self._request_epoch = 0
+        self._pending_requests = {}
         self._view: Any = view if view is not None else NullView()
         self._owns_executor = executor is None
         self._executor: Executor = executor or ThreadPoolExecutor(
@@ -276,6 +286,8 @@ class BuildCheckinController(ScoutingControllerMixin):
         self._options_failed: Set[str] = set()
 
         self._intro_seen = bool(intro_seen)
+        self._connection_snapshot = self._identity_snapshot()
+        self._connection_api = api
 
     # ================================================================
     # Lifecycle (any thread)
@@ -362,6 +374,9 @@ class BuildCheckinController(ScoutingControllerMixin):
     def on_envelope(self, envelope: Dict[str, Any]) -> None:
         """``bridge.bus`` subscriber. Never blocks the publisher."""
         self._post(self._handle_envelope, envelope)
+
+    def on_connection_changed(self) -> None:
+        self._post(lambda: None)
 
     def on_game_accepted(
         self,
@@ -470,7 +485,23 @@ class BuildCheckinController(ScoutingControllerMixin):
 
     def _post(self, handler: Callable[..., None], *args: Any) -> None:
         if not self._stopped.is_set():
-            self._inbox.put((handler, args))
+            identity = self._identity_snapshot()
+            if identity is None:
+                self._inbox.put((handler, args))
+            else:
+                self._inbox.put((self._handle_linked_input, (identity, handler, args)))
+
+    def _handle_linked_input(self, connection, handler, args):
+        with _STATE_SAVE_LOCK:
+            api, current = self._api, self._identity_snapshot()
+            if current is None or current != connection or not current[1]:
+                return
+        previous = self._request_api
+        self._request_api = api
+        try:
+            handler(*args)
+        finally:
+            self._request_api = previous
 
     def _run(self) -> None:
         while True:
@@ -487,6 +518,7 @@ class BuildCheckinController(ScoutingControllerMixin):
     def _dispatch(self, item: Tuple[Callable[..., None], tuple]) -> None:
         handler, args = item
         try:
+            self._sync_connection()
             handler(*args)
         except Exception:  # noqa: BLE001
             _log.exception(
@@ -505,19 +537,128 @@ class BuildCheckinController(ScoutingControllerMixin):
         """Run ``fn`` on the executor; deliver ``on_done(tag, value, error)``
         back on the state thread."""
 
+        api = self._request_api or self._api
+        epoch = self._request_epoch
+        bound_api = getattr(fn, "__self__", api)
+        if bound_api is not api:
+            return
+        ticket = object()
+        self._pending_requests[ticket] = on_done, tag
+
         def job() -> None:
+            if epoch != self._request_epoch or not self._api_current(api):
+                self.on_connection_changed()
+                return
             try:
                 value = fn(*args, **kwargs)
             except Exception as exc:  # noqa: BLE001
-                self._post(on_done, tag, None, exc)
+                self._post(self._handle_api_result, api, epoch, ticket, on_done, tag, None, exc)
             else:
-                self._post(on_done, tag, value, None)
+                self._post(self._handle_api_result, api, epoch, ticket, on_done, tag, value, None)
 
         try:
             self._executor.submit(job)
         except RuntimeError:
             # Executor already shut down: the controller is stopping.
             pass
+
+    def _handle_api_result(self, api, epoch, ticket, on_done, tag, value, error):
+        if epoch != self._request_epoch or not self._api_current(api):
+            return
+        self._pending_requests.pop(ticket, None)
+        previous = self._request_api
+        self._request_api = api
+        try:
+            on_done(tag, value, error)
+        finally:
+            self._request_api = previous
+
+    def _api_current(self, api):
+        with _STATE_SAVE_LOCK:
+            if api is not self._api:
+                return False
+            identity = self._identity_snapshot()
+            if identity is None:
+                return True
+            base, token = identity[:2]
+            api_base = getattr(api, "base_url", None)
+            return (isinstance(base, str) and isinstance(api_base, str) and bool(token)
+                    and api_base.rstrip("/") == base.rstrip("/")
+                    and getattr(api, "device_token", None) == token)
+
+    def _identity_snapshot(self):
+        with _STATE_SAVE_LOCK:
+            try:
+                if self._identity_provider is not None:
+                    base, token, owner = self._identity_provider()
+                    return base, token, owner
+                if self._connection_provider is not None:
+                    base, token = self._connection_provider()
+                    return base, token, None
+            except Exception:
+                return None, None, None
+        return None
+
+    def _sync_connection(self):
+        with _STATE_SAVE_LOCK:
+            identity, api = self._identity_snapshot(), self._api
+            if identity is None or (identity == self._connection_snapshot and api is self._connection_api):
+                return
+        previous = self._connection_snapshot
+        same_owner = (previous is not None and bool(identity[2])
+                      and (previous[0], previous[2]) == (identity[0], identity[2]))
+        pending_prefs = self._prefs_write_pending
+        if same_owner and pending_prefs is None:
+            pending_prefs = next((tag for callback, tag in self._pending_requests.values()
+                                  if callback == self._on_prefs_written), None)
+        self._connection_snapshot, self._connection_api = identity, api
+        self._request_epoch += 1
+        self._pending_requests.clear()
+        self._prefs_read_inflight = self._prefs_reread = self._prefs_read_during_write = False
+        self._prefs_write_inflight = False
+        self._prefs_write_pending = pending_prefs if same_owner else None
+        self._prefs_read_at = self._prefs_retry_at = None
+        self._options_inflight.clear()
+        self._options_failed.clear()
+        for game in self._games.values():
+            self._hide_loading(game, HIDE_DISABLED)
+            game.live_read_inflight = game.live_refetch = game.resend_inflight = game.scouting_fetching = False
+            if same_owner and game.op_inflight is not None:
+                game.ops.appendleft(game.op_inflight)
+            game.op_inflight = None
+        for card in self._cards.values():
+            done = not card.undecided
+            self._hide_card(card, HIDE_DISABLED, done=done)
+            card.busy = card.state_fetching = card.opponent_note_busy = False
+            if same_owner and not done and card.op_inflight is not None:
+                card.ops.appendleft(card.op_inflight)
+            if done:
+                card.ops.clear()
+            card.op_inflight = None
+        if not same_owner:
+            self._games.clear()
+            self._cards.clear()
+            self._options.clear()
+            self._state_gens.clear()
+            self._seen_game_ids.clear()
+            self._pending_show.clear()
+            self._current_key = self._prefetched_race = self._visible_card_id = None
+            self._prefs_confirmed = None
+            self._supported = None
+        if self._api_current(api):
+            previous_api = self._request_api
+            self._request_api = api
+            try:
+                self._handle_refresh_prefs(True)
+                if same_owner:
+                    self._run_prefs_write()
+                    for game in self._games.values():
+                        self._run_live_ops(game)
+                    for card in self._cards.values():
+                        if card.undecided:
+                            self._run_card_ops(card)
+            finally:
+                self._request_api = previous_api
 
     def _background(self, fn: Callable[..., Any], *args: Any) -> None:
         """Fire-and-forget side effect off the state thread."""
@@ -984,10 +1125,13 @@ class BuildCheckinController(ScoutingControllerMixin):
 
     def _handle_roll_now(self, game_key: Any) -> None:
         game = self._live_game_for_action(game_key)
-        if game is None or game.released:
+        if (game is None or game.randomizer_request_inflight or not game.matchup or self._locked(game)
+                or (game.live is not None and game.live.randomizer is not None)):
             return
-        game.released = True
-        self._enqueue_live_op(game, LiveOp("release"))
+        game.randomizer_request_inflight = True
+        if game.loading is not None:
+            game.loading.status = ""
+        self._enqueue_live_op(game, LiveOp("randomize"))
         self._render_loading(game)
 
     def _handle_not_now(self, game_key: Any) -> None:
@@ -1034,6 +1178,10 @@ class BuildCheckinController(ScoutingControllerMixin):
         self._send_live_op(game, op)
 
     def _send_live_op(self, game: LiveGame, op: LiveOp) -> None:
+        if op.action == "randomize":
+            self._call(self._on_live_write, (game.game_key, game.next_gen(), op),
+                       self._api.roll_live_randomizer, game.game_key, game.matchup)
+            return
         body: Dict[str, Any] = {"action": op.action}
         if op.action == "declare":
             body["buildKey"] = op.build_key
@@ -1071,6 +1219,8 @@ class BuildCheckinController(ScoutingControllerMixin):
             return
         if game.op_inflight is op:
             game.op_inflight = None
+        if op.action == "randomize":
+            game.randomizer_request_inflight = False
         mine = (
             op.action == "declare"
             and game.declared is not None
@@ -1084,6 +1234,14 @@ class BuildCheckinController(ScoutingControllerMixin):
             )
             if failure.code == "already_bound" and failure.game_id:
                 self._bind_game(game, failure.game_id)
+            if op.action in {"release", "randomize"} and game.game_id is None and not self._locked(game):
+                if game.loading is not None and not (game.live and game.live.randomizer):
+                    game.loading.status = {
+                        "randomizer_disabled": "Randomizer is off for this matchup. Enable it in Randomizer settings.",
+                        "unknown_build": "No available builds remain in this pool. Update Randomizer settings and try again.",
+                        "pool_changed": "The pool changed while choosing. Try Randomize again.",
+                        "stale_game": "This match is no longer current. Wait for the next match.",
+                    }.get(failure.code, STATUS_RANDOMIZER_REQUEST_FAILED)
             if mine:
                 if failure.code == "unknown_build":
                     game.declared = None
@@ -1098,11 +1256,18 @@ class BuildCheckinController(ScoutingControllerMixin):
                     self._maybe_open_shell(game)
                     self._maybe_resend_declaration(game)
         else:
+            if op.action in {"release", "randomize"} and game.loading is not None and game.loading.status == STATUS_RANDOMIZER_REQUEST_FAILED:
+                game.loading.status = ""
             if mine:
                 game.declared_synced = True
                 game.declare_failed = False
                 _log.info("build_checkin_declared")
             state = parse_live_state(value, key)
+            if op.action == "randomize":
+                if state is not None and state.randomizer is not None:
+                    game.released = True
+                elif game.loading is not None:
+                    game.loading.status = STATUS_RANDOMIZER_REQUEST_FAILED
             if state is not None:
                 self._apply_live_state(game, state, gen)
         self._run_live_ops(game)
@@ -1148,6 +1313,8 @@ class BuildCheckinController(ScoutingControllerMixin):
             return  # an older request answered after a newer one
         game.live_applied_gen = gen
         game.live = state
+        if state.randomizer is not None and game.loading is not None and game.loading.status == STATUS_RANDOMIZER_REQUEST_FAILED:
+            game.loading.status = ""
         if state.prefs is not None:
             self._apply_state_prefs(state.prefs)
         if state.game_id:
@@ -1263,6 +1430,24 @@ class BuildCheckinController(ScoutingControllerMixin):
     # ================================================================
 
     def _handle_accepted(self, game_obj: Any, game_id: Any, row: Dict[str, Any]) -> None:
+        with _STATE_SAVE_LOCK:
+            api = self._api
+            if not self._api_current(api):
+                return
+            owner_key = row.get("_uploadAccountKey")
+            if owner_key is not None:
+                base, token = getattr(api, "base_url", None), getattr(api, "device_token", None)
+                if (not isinstance(base, str) or not token
+                        or owner_key != session_account_key(base.rstrip("/"), token)):
+                    return
+        previous = self._request_api
+        self._request_api = api
+        try:
+            self._handle_owned_accepted(game_obj, game_id, row)
+        finally:
+            self._request_api = previous
+
+    def _handle_owned_accepted(self, game_obj, game_id, row):
         if not isinstance(game_id, str) or not game_id or game_id in self._seen_game_ids:
             return
         self._seen_game_ids[game_id] = None

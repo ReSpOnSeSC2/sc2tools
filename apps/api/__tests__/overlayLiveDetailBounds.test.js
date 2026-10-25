@@ -5,6 +5,7 @@ const {
   opponentPhaseProfile,
   opponentTendencies,
   TENDENCY_SCAN_CAP,
+  last5GamesScouting,
 } = require("../src/services/overlayLiveAggregations");
 
 const USER_ID = "u_overlay_bounds";
@@ -107,5 +108,54 @@ describe("overlay replay-detail bounds", () => {
     }
     expect(projection).toMatchObject({ "opponent.strategy": 1, "buildIntent.opponent.build": 1 });
     expect(games.findOne).not.toHaveBeenCalled();
+  });
+
+  test("recent scouting reads five replay details serially and keeps real milestone summaries", async () => {
+    const rows = Array.from({ length: 7 }, (_, index) => ({
+      gameId: `tech-${index}`,
+      result: "Victory",
+      durationSec: 600,
+      myRace: "Protoss",
+      opponent: { race: "Zerg", strategy: "Detected opening" },
+      buildIntent: { opponent: {
+        status: "confirmed", applied: true, build: { name: "Corrected opening" },
+      } },
+    }));
+    const details = detailStore({
+      buildLog: ["[0:00] Nexus", "[0:50] Gateway"],
+      oppBuildLog: ["[0:00] Hatchery", "[0:47] SpawningPool", "[3:58] Lair"],
+      macroBreakdown: { unit_timeline: [], legacyUnknown: "x".repeat(256 * 1024) },
+    });
+    const games = fakeGames(rows);
+    const out = await last5GamesScouting(games, details, USER_ID, OPP, "Protoss", "Zerg");
+    expect(out).toHaveLength(5);
+    expect(details.calls).toHaveLength(5);
+    expect(details.maxActive).toBe(1);
+    for (const call of details.calls) {
+      expect(call.ids).toHaveLength(1);
+      expect(call.options).toMatchObject({ fields: ["buildLog", "oppBuildLog", "macroBreakdown"], concurrency: 1 });
+    }
+    expect(out[0].myTechMilestones).toEqual([
+      { name: "Gateway", timeSec: 50, kind: "building", timing: "started" },
+    ]);
+    expect(out[0].oppTechMilestones).toContainEqual({ name: "Lair", timeSec: 238, kind: "building", timing: "completed" });
+    expect(out[0].oppStrategy).toBe("Corrected opening");
+    expect(fakeGames.projections[0]).not.toHaveProperty("buildLog");
+    expect(fakeGames.projections[0]).not.toHaveProperty("oppBuildLog");
+    expect(fakeGames.projections[0]).not.toHaveProperty("macroBreakdown");
+    expect(JSON.stringify(out)).not.toContain("legacyUnknown");
+    expect(games.findOne).not.toHaveBeenCalled();
+  });
+
+  test("recent scouting never reads another barcode account from a display name", async () => {
+    const games = fakeGames([{ gameId: "another-player" }]);
+    const out = await last5GamesScouting(games, null, USER_ID, { displayName: "Shared" }, "Protoss", "Zerg");
+    expect(out).toEqual([]);
+    expect(fakeGames.projections).toHaveLength(0);
+  });
+
+  test("recent scouting omits metadata-only games without replay evidence", async () => {
+    const games = fakeGames([{ gameId: "metadata-only", durationSec: 600 }]);
+    expect(await last5GamesScouting(games, null, USER_ID, OPP, "Protoss", "Zerg")).toEqual([]);
   });
 });

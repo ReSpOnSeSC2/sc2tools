@@ -180,12 +180,23 @@ def test_auth_hold_stops_actual_workers_without_dropping_jobs(tmp_path):
         queue.stop()
 
 
-def test_queue_honors_retry_after_without_blocking_probe(tmp_path):
-    queue = UploadQueue(cfg=_cfg(tmp_path), state=AgentState(), api=_StubApi())
+def test_queue_honors_retry_after_without_blocking_probe(tmp_path, monkeypatch):
+    clock = Mock()
+    clock.monotonic.return_value = 220.234
+    clock.time.return_value = 1700.234
+    clock.sleep.side_effect = AssertionError("Retry scheduling must not block the probe")
+    monkeypatch.setattr("sc2tools_agent.uploader.queue.time", clock)
+    connection_states = []
+    queue = UploadQueue(cfg=_cfg(tmp_path), state=AgentState(), api=_StubApi(),
+                        on_connection_state=lambda *args: connection_states.append(args))
     queue._defer_connection(ApiError(429, "limited", retry_after_seconds=60))
-    assert 59 <= queue._retry_at - time.monotonic() <= 60
+    assert queue._retry_at - clock.monotonic() == pytest.approx(60)
+    assert connection_states[-1][0] == "rate_limited"
+    assert connection_states[-1][2] == pytest.approx(clock.time() + 60)
     queue.retry_now()
     assert queue._retry_at == 0
+    assert queue._retry_wake.is_set()
+    clock.sleep.assert_not_called()
 
 
 def test_console_readable_error_and_plain_string(capsys):

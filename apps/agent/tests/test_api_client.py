@@ -544,6 +544,18 @@ def test_build_options_is_interactive_and_encodes_matchup() -> None:
     assert kwargs["timeout"] == (5.0, 5.0)
 
 
+def test_explicit_randomize_requests_one_saved_pick_and_widget_reveal():
+    api = ApiClient(base_url="http://x", device_token="tok")
+    key = "[TAG] Opp/1|Zoë#123|1717000000000"
+    body = {"gameKey": key, "randomizer": {"key": "pvz-robo-opener"}}
+    with patch("requests.request", return_value=_mock_response(200, body)) as transport:
+        assert api.roll_live_randomizer(key, "PvZ") == body
+    arguments, options = transport.call_args
+    assert arguments == ("POST", "http://x/v1/build-intents/live/%5BTAG%5D%20Opp%2F1%7CZo%C3%AB%23123%7C1717000000000/randomizer")
+    assert options["json"] == {"matchup": "PvZ", "releaseHold": True, "revealInWidget": True}
+    assert options["headers"]["authorization"] == "Bearer tok"
+
+
 def test_live_intent_path_encodes_the_whole_game_key() -> None:
     """Names with clan tags, spaces, slashes or accents stay one segment."""
     api = ApiClient(base_url="http://x", device_token="tok")

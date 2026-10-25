@@ -248,14 +248,23 @@ def test_loading_model_waiting_and_titles() -> None:
 def test_loading_model_strip_states() -> None:
     game = _game()
     assert _loading(game).randomizer.can_roll_now is True
-    game.released = True
-    assert _loading(game).randomizer.label == "🎲 Rolling the randomizer…"
+    game.randomizer_request_inflight = True
+    assert _loading(game).randomizer.label == "🎲 Choosing a build…"
     game.live = LiveState(game_key="k", randomizer=DT, randomizer_enabled=True)
     strip = _loading(game, options=_options()).randomizer
     assert (strip.label, strip.rolled_key, strip.can_roll_now) == (
         "🎲 Randomizer: DT into 3 Gate", DT.key, False,
     )
     assert _loading(_game(), options=_options()).randomizer is None
+
+
+def test_saved_widget_pick_stays_visible_when_randomizer_is_disabled_after_the_draw():
+    game = _game()
+    game.live = LiveState(game_key="k", randomizer=DT, randomizer_enabled=False)
+    strip = _loading(game, options=_options()).randomizer
+    assert strip is not None
+    assert strip.rolled_key == DT.key and strip.rolled_name == DT.name
+    assert not strip.can_roll_now
 
 
 def test_loading_model_locked_labels() -> None:

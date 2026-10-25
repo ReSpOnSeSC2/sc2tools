@@ -145,7 +145,7 @@ function ConnectedOverlayClient({
   const [sessionVisible, setSessionVisible] = useState<boolean>(false);
   const [connectionStatus, setConnectionStatus] =
     useState<OverlayConnectionStatus>("connecting");
-  const [buildIntents, onBuildIntent] = useOverlayBuildIntents();
+  const [buildIntents, onBuildIntent] = useOverlayBuildIntents(token);
 
   const socketRef = useOverlaySocket(
     token,

@@ -43,6 +43,7 @@ export interface BuildIntentEntry {
   suppressRandomizer: boolean;
   /** Local ``Date.now()`` deadline of a pending hold; 0 when none. */
   holdDeadlineMs: number;
+  randomizer?: OverlayBuildIntent["randomizer"];
 }
 
 /** Per-gameKey check-in state, oldest first. */
@@ -53,13 +54,20 @@ export const EMPTY_BUILD_INTENT_LEDGER: BuildIntentLedger = new Map();
 /** Validate an ``overlay:buildIntent`` payload; null for anything unusable. */
 export function parseOverlayBuildIntent(msg: unknown): OverlayBuildIntent | null {
   if (!msg || typeof msg !== "object") return null;
-  const { gameKey, suppressRandomizer, holdRemainingMs } = msg as Record<string, unknown>;
+  const { gameKey, suppressRandomizer, holdRemainingMs, randomizer } = msg as Record<string, unknown>;
   if (typeof gameKey !== "string" || gameKey.length === 0
     || gameKey.length > MAX_GAME_KEY_LENGTH) return null;
   const hold = typeof holdRemainingMs === "number" && Number.isFinite(holdRemainingMs)
     ? Math.min(Math.max(holdRemainingMs, 0), MAX_RANDOMIZER_HOLD_MS)
     : 0;
-  return { gameKey, suppressRandomizer: suppressRandomizer === true, holdRemainingMs: hold };
+  const candidate = randomizer && typeof randomizer === "object" && !Array.isArray(randomizer)
+    ? randomizer as Record<string, unknown> : null;
+  const saved = candidate && typeof candidate.key === "string" && candidate.key.trim()
+    && candidate.key.length <= 200 && typeof candidate.name === "string" && candidate.name.trim()
+    && candidate.name.length <= 500 && (candidate.source === "catalog" || candidate.source === "custom")
+    ? { key: candidate.key, name: candidate.name, source: candidate.source } as NonNullable<OverlayBuildIntent["randomizer"]> : null;
+  return { gameKey, suppressRandomizer: suppressRandomizer === true, holdRemainingMs: hold,
+    ...(saved ? { randomizer: saved } : {}) };
 }
 
 /**
@@ -77,6 +85,7 @@ export function recordBuildIntent(
   next.set(event.gameKey, {
     suppressRandomizer: event.suppressRandomizer,
     holdDeadlineMs: event.holdRemainingMs > 0 ? receivedAtMs + event.holdRemainingMs : 0,
+    ...(event.randomizer ? { randomizer: event.randomizer } : {}),
   });
   while (next.size > LEDGER_SIZE) {
     const oldest = next.keys().next().value;
