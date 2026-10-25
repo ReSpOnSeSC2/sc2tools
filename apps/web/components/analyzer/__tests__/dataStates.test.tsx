@@ -27,6 +27,8 @@ vi.mock("@/lib/useMyDisplayName", () => ({ useMyDisplayName: () => "Me" }));
 vi.mock("../mmr/StrategyMmrPanel", () => ({ StrategyMmrPanel: () => null }));
 vi.mock("../mmr/BuildMatchupHeatmap", () => ({ BuildMatchupHeatmap: () => null }));
 vi.mock("../MacroSummaryCard", () => ({ MacroSummaryCard: () => null }));
+vi.mock("../maps/MapVetoPlanner", () => ({ MapVetoPlanner: () => null }));
+vi.mock("@/lib/useSeasons", () => ({ useSeasons: () => ({ data: undefined }) }));
 
 import { BattlefieldTab } from "../BattlefieldTab";
 import { MacroTab } from "../MacroTab";
