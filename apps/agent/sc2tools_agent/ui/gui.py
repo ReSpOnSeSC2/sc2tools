@@ -854,7 +854,7 @@ def _ObsBuildDialog(
             self._show_credit = QtWidgets.QCheckBox("Show SC2 Tools credit on the all-in-one overlay")
             self._show_credit.setChecked(True)
             during_layout.addWidget(self._show_credit)
-            ghost_note = QtWidgets.QLabel("Ghost Build starts unassigned. Assign a timed build in website Look, then Copy its URL into the source before coaching.")
+            ghost_note = QtWidgets.QLabel("Ghost Build uses your account assignments. Choose Practice on a website build or assign a timed build in Look; this source URL updates automatically.")
             ghost_note.setWordWrap(True)
             during_layout.addWidget(ghost_note)
             v.addWidget(during)

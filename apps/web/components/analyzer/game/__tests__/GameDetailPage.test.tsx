@@ -16,7 +16,7 @@ const routerReplaceMock = vi.fn();
 const editorHarness = vi.hoisted(() => ({ props: null as BuildEditorModalProps | null }));
 
 // Compile the real lazy chunks before assertions; bundler work is not UI latency.
-beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns"), import("../BuildWorkspaceActions"), import("../replay/ReplayStage"), import("../GameStoryCard"), import("@/components/battleReport/GameBattleReport")]); });
+beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns"), import("../BuildWorkspaceActions"), import("../replay/ReplayStage"), import("../GameStoryCard"), import("../GhostGradeContent"), import("@/components/battleReport/GameBattleReport")]); });
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: getTokenMock, isLoaded: true, isSignedIn: true }),
@@ -418,7 +418,7 @@ describe("GameDetailPage", () => {
     // BUILD_ORDER says Zerg vs Terran. Those replay-derived values must win
     // over the conflicting slim summary so the build cannot enter PvZ.
     const myColumn = await screen.findByTestId("build-column-me");
-    expect(within(myColumn).getByRole("button", { name: "Use as Ghost Build target" }).title).toContain("ZvT");
+    expect((await within(myColumn).findByRole("button", { name: "Use as Ghost Build target" })).title).toContain("ZvT");
     expect((await within(screen.getByTestId("build-column-opp")).findByRole("button", { name: "Use as Ghost Build target" })).title).toContain("TvZ");
     expect(screen.queryByRole("button", { name: "Save for PvZ" })).toBeNull();
   });

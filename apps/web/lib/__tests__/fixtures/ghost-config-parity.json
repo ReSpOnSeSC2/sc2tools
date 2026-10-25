@@ -1,0 +1,1627 @@
+[
+  {
+    "name": "absent",
+    "input": null,
+    "expected": null
+  },
+  {
+    "name": "empty account is explicit",
+    "input": {
+      "v": 2,
+      "slots": {}
+    },
+    "expected": {
+      "v": 2,
+      "slots": {}
+    }
+  },
+  {
+    "name": "source replay preserved",
+    "input": {
+      "v": 2,
+      "slots": {
+        "PvT": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        }
+      }
+    },
+    "expected": {
+      "v": 2,
+      "slots": {
+        "PvT": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        }
+      }
+    }
+  },
+  {
+    "name": "unknown matchup rejects",
+    "input": {
+      "v": 2,
+      "slots": {
+        "PvR": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        }
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "bad version rejects",
+    "input": {
+      "v": 1,
+      "slots": {}
+    },
+    "expected": null
+  },
+  {
+    "name": "invalid step rejects whole loadout",
+    "input": {
+      "v": 2,
+      "slots": {
+        "PvT": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "name": "Gateway",
+              "t": -1
+            }
+          ],
+          "sourceGameId": "replay-1"
+        }
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "81 steps rejects",
+    "input": {
+      "v": 2,
+      "slots": {
+        "PvT": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        }
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "sanitizes names sorts clamps drops invalid source",
+    "input": {
+      "v": 2,
+      "slots": {
+        "ZvT": {
+          "v": 1,
+          "name": "  A\u0000 \n build  ",
+          "sourceGameId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "steps": [
+            {
+              "name": "​ Pool ",
+              "t": 31.5,
+              "supply": 201
+            },
+            {
+              "name": "Hatchery",
+              "t": 0,
+              "supply": -3
+            }
+          ]
+        }
+      }
+    },
+    "expected": {
+      "v": 2,
+      "slots": {
+        "ZvT": {
+          "v": 1,
+          "name": "A build",
+          "steps": [
+            {
+              "name": "Hatchery",
+              "t": 0,
+              "supply": 0
+            },
+            {
+              "name": "Pool",
+              "t": 32,
+              "supply": 200
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "80 steps accepted",
+    "input": {
+      "v": 2,
+      "slots": {
+        "PvP": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        }
+      }
+    },
+    "expected": {
+      "v": 2,
+      "slots": {
+        "PvP": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            },
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        }
+      }
+    }
+  },
+  {
+    "name": "all nine matchups accepted",
+    "input": {
+      "v": 2,
+      "slots": {
+        "PvP": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "PvT": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "PvZ": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "TvP": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "TvT": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "TvZ": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "ZvP": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "ZvT": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "ZvZ": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        }
+      }
+    },
+    "expected": {
+      "v": 2,
+      "slots": {
+        "PvP": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "PvT": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "PvZ": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "TvP": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "TvT": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "TvZ": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "ZvP": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "ZvT": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        },
+        "ZvZ": {
+          "v": 1,
+          "name": "Blink",
+          "steps": [
+            {
+              "supply": null,
+              "t": 40,
+              "name": "Gateway"
+            }
+          ],
+          "sourceGameId": "replay-1"
+        }
+      }
+    }
+  }
+]

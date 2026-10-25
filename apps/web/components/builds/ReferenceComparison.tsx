@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { useApi } from "@/lib/clientApi";
 import { humanizeBuildName } from "@/lib/build-events";
-import { GHOST_ARMED_EVENT } from "@/components/analyzer/game/useArmGhostTarget";
+import { GHOST_SYNC_EVENT as GHOST_ARMED_EVENT } from "@/lib/ghostPracticeEvents";
 
 type Side = "you" | "opponent";
 type ComparisonRow = {

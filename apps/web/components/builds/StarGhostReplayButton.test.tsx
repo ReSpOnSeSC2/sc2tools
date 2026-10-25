@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { StarGhostReplayButton } from "./StarGhostReplayButton";
+import { StarGhostReplayButton } from "./StarGhostReplayContent";
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), mutate: vi.fn(), data: { references: {} }, arm: vi.fn() }));
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: () => "token" }) }));
-vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: mocks.data, mutate: mocks.mutate }), apiCall: (...args: unknown[]) => mocks.request(...args) }));
-vi.mock("@/lib/ghostBuild", () => ({ MAX_GHOST_STEPS: 80, armGhostTargetForMatchup: (...args: unknown[]) => mocks.arm(...args), readArmedGhostConfig: () => null }));
+const mocks = vi.hoisted(() => ({ request: vi.fn(), mutate: vi.fn(), data: { references: {} }, arm: vi.fn(async () => true) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "owner", getToken: async () => "token" }) }));
+vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: mocks.data, mutate: mocks.mutate }), apiCall: (...args: unknown[]) => mocks.request(...args), boundedApiRequest: (operation: (signal: AbortSignal) => Promise<unknown>) => operation(new AbortController().signal) }));
+vi.mock("@/lib/useGhostResource", () => ({ useGhostResource: () => ({ data: mocks.data, mutate: mocks.mutate }) }));
+vi.mock("@/lib/useGhostPractice", () => ({ useGhostPractice: () => ({ owner: "owner", config: { v: 2, slots: {} }, assign: mocks.arm, saving: false }) }));
 vi.mock("@/components/analyzer/game/useArmGhostTarget", () => ({ GHOST_ARMED_EVENT: "ghost:test" }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); mocks.data = { references: {} }; });
 
@@ -20,7 +21,7 @@ describe("replay Ghost reference star", () => {
     expect(JSON.parse(mocks.request.mock.calls[0][2].body)).toEqual({ gameId: "replay-1", side: "you", buildKey: "blink", clear: false });
     expect(parent).not.toHaveBeenCalled();
     await screen.findByText(/Reference saved for this build/);
-    expect(mocks.arm).toHaveBeenCalledWith("P", "T", target);
+    expect(mocks.arm).toHaveBeenCalledWith("PvT", target);
   });
 
   it("shows the existing reference and clears only that game", async () => {
