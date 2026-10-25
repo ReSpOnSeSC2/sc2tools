@@ -1,6 +1,7 @@
 "use client";
 
 import { resolveLiveOpponentMmr } from "../liveGameOpponentMmr";
+import { OpponentStreamChip } from "../OpponentStreamChip";
 import type { LiveGameEnvelope, LiveGamePayload } from "../types";
 import {
   Dim,
@@ -99,6 +100,7 @@ export function OpponentWidget({
             {wins}-{losses} <Dim>head-to-head</Dim>
           </span>
         </WidgetFooter>
+        <OpponentStreamChip live={liveGame} />
       </WidgetShell>
     );
   }
@@ -182,6 +184,7 @@ export function OpponentWidget({
           )}
         </span>
       </WidgetFooter>
+      <OpponentStreamChip live={liveGame} />
     </WidgetShell>
   );
 }

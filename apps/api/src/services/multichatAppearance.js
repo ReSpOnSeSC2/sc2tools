@@ -1,4 +1,5 @@
 "use strict";
+const { sanitizeGameMoments } = require("./gameMomentConfig");
 
 /**
  * Server-side sanitizer for the multichat widget's appearance blob —
@@ -571,7 +572,14 @@ function sanitizeChatAlerts(raw) {
     showHistory: typeof source.showHistory === "boolean"
       ? source.showHistory
       : DEFAULT_ALERTS.showHistory,
+    ...(source.gameMoments !== undefined ? { gameMoments: sanitizeGameMomentAlerts(source.gameMoments) } : {}),
   };
+}
+
+/** @param {unknown} raw @param {boolean} [strict] */
+function sanitizeGameMomentAlerts(raw, strict = false) {
+  return sanitizeGameMoments(raw, { strict, preset: value => ALERT_VISUAL_PRESET_ID_SET.has(/** @type {string} */ (value)),
+    sound: value => typeof value === "string" && (SOUND_EFFECT_IDS.includes(value) || PACK_SOUND_IDS.includes(value) || CUSTOM_ID_RE.test(value)) });
 }
 
 module.exports = {
@@ -579,6 +587,7 @@ module.exports = {
   sanitizeChatTts,
   sanitizeChatSound,
   sanitizeChatAlerts,
+  sanitizeGameMomentAlerts,
   DEFAULT_APPEARANCE,
   DEFAULT_TTS,
   DEFAULT_SOUND,

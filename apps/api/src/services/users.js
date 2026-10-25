@@ -1,4 +1,5 @@
 "use strict";
+const { sanitizeGameMomentAlerts } = require("./multichatAppearance");
 
 const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
@@ -643,6 +644,7 @@ class UsersService {
    *   lastKnownMmr?: number,
    *   lastKnownMmrAt?: string,
    *   lastKnownMmrRegion?: string,
+   *   sessionAnchorAt?: string,
    * }>}
    */
   async getProfile(userId) {
@@ -661,6 +663,7 @@ class UsersService {
           lastKnownMmr: 1,
           lastKnownMmrAt: 1,
           lastKnownMmrRegion: 1,
+          sessionAnchorAt: 1,
         },
       },
     );
@@ -674,6 +677,7 @@ class UsersService {
       "displayName",
       "lastKnownMmrAt",
       "lastKnownMmrRegion",
+      "sessionAnchorAt",
     ]) {
       const v = doc[k];
       if (typeof v === "string" && v.length > 0) out[k] = v;
@@ -839,6 +843,10 @@ class UsersService {
    */
   async updatePreferences(userId, type, prefs) {
     if (type === "analyzerViews") prefs = sanitizeAnalyzerViews(prefs, true);
+    if (type === "multichat" && prefs.alerts && typeof prefs.alerts === "object") {
+      const alerts = /** @type {Record<string,unknown>} */ (prefs.alerts);
+      if (alerts.gameMoments !== undefined) prefs = { ...prefs, alerts: { ...alerts, gameMoments: sanitizeGameMomentAlerts(alerts.gameMoments, true) } };
+    }
     if (type === "onboarding") {
       // Independent checklist, goals and What's New writes must not replace
       // each other's fields. A literal merge is atomic and treats payload

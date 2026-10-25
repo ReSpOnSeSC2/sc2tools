@@ -17,6 +17,7 @@
  * Settings Test button (demo Starting Soon with a live countdown).
  */
 
+import { formatCountdown } from "@/lib/multichat/countdown";
 import { useEffect, useState, type CSSProperties } from "react";
 import {
   useStudioState,
@@ -224,16 +225,7 @@ export function StreamSceneCanvas({
   );
 }
 
-/** MM:SS (or H:MM:SS past the hour), tabular and zero-padded. */
-export function formatCountdown(remainMs: number): string {
-  const totalSec = Math.ceil(remainMs / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  const mm = String(m).padStart(2, "0");
-  const ss = String(s).padStart(2, "0");
-  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
-}
+export { formatCountdown } from "@/lib/multichat/countdown";
 
 /* ──────────────── styles ──────────────── */
 

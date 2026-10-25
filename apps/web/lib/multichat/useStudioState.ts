@@ -231,6 +231,10 @@ export interface StudioState {
   goals: StudioGoal[];
   blockedUsers: string[];
   recapSeq: number;
+  /** Stream-safe pause affects game widgets and their voice, never chat. */
+  gameWidgetsPaused?: boolean;
+  /** Ephemeral action receipt; never persisted in Studio. */
+  deskAction?: { shoutoutText: string; queued: boolean };
   scene: StudioScene | null;
   timer: StudioTimer | null;
   broll: StudioBrollConfig;
@@ -248,6 +252,7 @@ export const DEFAULT_STUDIO_STATE: StudioState = {
   goals: [],
   blockedUsers: [],
   recapSeq: 0,
+  gameWidgetsPaused: false,
   scene: null,
   timer: null,
   broll: DEFAULT_BROLL_CONFIG,
@@ -512,6 +517,10 @@ export function sanitizeStudioState(raw: unknown): StudioState {
       (u): u is string => typeof u === "string" && u.length > 0,
     ),
     recapSeq: Math.max(0, Math.round(Number(s.recapSeq) || 0)),
+    gameWidgetsPaused: s.gameWidgetsPaused === true,
+    ...(s.deskAction && typeof s.deskAction === "object" && !Array.isArray(s.deskAction)
+      && typeof (s.deskAction as Record<string, unknown>).shoutoutText === "string"
+      ? { deskAction: { shoutoutText: String((s.deskAction as Record<string, unknown>).shoutoutText).slice(0, 500), queued: (s.deskAction as Record<string, unknown>).queued === true } } : {}),
     updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : null,
   };
 }

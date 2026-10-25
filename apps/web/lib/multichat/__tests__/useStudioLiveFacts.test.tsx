@@ -30,4 +30,23 @@ describe("Dock live facts share the existing socket", () => {
     act(() => { sockets[0].events.get("overlay:session")?.({ wins: -1, losses: 0, games: 0 }); sockets[0].events.get("overlay:liveGame")?.({ phase: "match_loading" }); });
     expect(view.result.current.liveGame).toBeNull(); expect(view.result.current.session).toBeNull();
   });
+  it("retains only a narrow ended control state, tracks verified result, and fences old session epochs", () => {
+    const view = renderHook(() => useStudioUpdates("one", vi.fn())); const events = sockets[0].events;
+    act(() => events.get("overlay:liveGame")?.(live({ phase: "match_ended", opponent: { name: "Private after end", toonHandle: "1-S2-1-123" }, streamerHistory: { opponentNotes: { text: "Private note" } } })));
+    expect(view.result.current.liveGame).toBeNull();
+    expect(view.result.current.gameStatus).toEqual({ gameKey: "one", phase: "match_ended", isReplay: false, verified: false });
+    expect(JSON.stringify(view.result.current.gameStatus)).not.toContain("Private");
+    act(() => events.get("overlay:live")?.({ gameKey: "other", result: "win" })); expect(view.result.current.gameStatus?.verified).toBe(false);
+    act(() => events.get("overlay:live")?.({ gameKey: "one", result: "win" })); expect(view.result.current.gameStatus?.verified).toBe(true);
+    act(() => events.get("overlay:session")?.({ wins: 0, losses: 0, games: 0, sessionAnchorAt: "2026-10-25T12:00:00Z" }));
+    act(() => events.get("overlay:session")?.({ wins: 20, losses: 3, games: 23 })); expect(view.result.current.session?.games).toBe(0);
+    act(() => sockets[0].outgoing?.("overlay:resync")); expect(view.result.current.gameStatus).toBeNull(); expect(view.result.current.session).toBeNull();
+  });
+  it("rehydrates a cloud-stamped ended round from menu without opponent data and tracks its verified result", () => {
+    const view = renderHook(() => useStudioUpdates("one", vi.fn())); const events = sockets[0].events;
+    act(() => events.get("overlay:liveGame")?.(live({ phase: "menu", gameKey: undefined, opponent: undefined, lastEndedGame: { gameKey: "one", endedAt: Date.now() } })));
+    expect(view.result.current.liveGame).toBeNull(); expect(view.result.current.gameStatus).toMatchObject({ phase: "menu", gameKey: null, endedGameKey: "one", verified: false });
+    act(() => events.get("overlay:live")?.({ gameKey: "one", result: "win" })); expect(view.result.current.gameStatus?.verified).toBe(true);
+    act(() => events.get("overlay:liveGame")?.(live({ gameKey: "two", phase: "match_started" }))); expect(view.result.current.gameStatus?.endedGameKey).toBeUndefined();
+  });
 });

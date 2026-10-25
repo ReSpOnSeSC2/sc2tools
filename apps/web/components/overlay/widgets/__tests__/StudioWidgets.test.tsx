@@ -101,6 +101,7 @@ vi.mock("@/lib/multichat/useEngagementState", async (importOriginal) => {
     useEngagementState: () => ({
       summary: mockEngagement,
       lastEvent: mockEngagementEvent,
+      loaded: true,
     }),
   };
 });
@@ -452,7 +453,7 @@ describe("ChatAlertsWidget", () => {
     view.rerender(<ChatAlertsWidget token="tok" />);
 
     expect(screen.getByText(event.user)).toBeTruthy();
-    expect(eventSoundSpy.mock.calls.at(-1)?.[0]).toEqual([event]);
+    expect(eventSoundSpy.mock.calls.filter(([events]) => Array.isArray(events) && events.length > 0).at(-1)?.[0]).toEqual([event]);
   });
 
   it("filters Settings and Stream Dock blocked users before queue and audio", () => {
@@ -486,7 +487,8 @@ describe("ChatAlertsWidget", () => {
     expect(screen.getByText("FriendlyFollower")).toBeTruthy();
     expect(screen.queryByText("SETTINGSBLOCKED")).toBeNull();
     expect(screen.queryByText("dockblocked")).toBeNull();
-    expect(eventSoundSpy.mock.calls.at(-1)?.[0]).toEqual([allowed]);
+    expect(eventSoundSpy.mock.calls.filter(([events]) => Array.isArray(events) && events.length > 0).at(-1)?.[0]).toEqual([allowed]);
+    expect(eventSoundSpy.mock.calls.every(([events]) => (events as { id: string }[]).every(event => event.id === allowed.id))).toBe(true);
   });
 
   it("prunes a newly blocked prominent and queued alert without resurrecting it", () => {

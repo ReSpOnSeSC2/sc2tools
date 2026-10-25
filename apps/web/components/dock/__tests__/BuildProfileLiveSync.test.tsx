@@ -5,6 +5,7 @@ import { useState } from "react";
 import { DEFAULT_BUILD_PROFILE, DEFAULT_STUDIO_STATE, type StudioState } from "@/lib/multichat/useStudioState";
 import { SettingsBuildProfile } from "@/components/analyzer/settings/SettingsBuildProfile";
 import { DockClient } from "../DockClient";
+vi.mock("../dockLazyLoaders", async original => ({ ...await original<typeof import("../dockLazyLoaders")>(), loadGameDesk: async () => () => null }));
 
 const sockets = vi.hoisted(() => [] as Array<{ receive?: (raw: unknown) => void; on: ReturnType<typeof vi.fn>; off: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }>);
 vi.mock("socket.io-client", () => ({ io: () => {
@@ -124,7 +125,7 @@ describe("Build-profile live control synchronization", () => {
     await broadcast(snapshot("My saved test edit", 1));
     await broadcast(snapshot("A newer external test edit", 2, true));
     await act(async () => { finishPost?.({ ok: true, json: async () => snapshot("My saved test edit", 1) }); });
-    expect((await screen.findByRole("status")).textContent).toBe("Ratings saved.");
+    expect((await screen.findByText("Ratings saved.", { selector: '[role="status"]' })).textContent).toBe("Ratings saved.");
     expect((screen.getByRole("textbox", { name: "Build title" }) as HTMLInputElement).value).toBe("A newer external test edit");
     expect((screen.getByRole("button", { name: "Hide widget" }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: "Save ratings" }) as HTMLButtonElement).disabled).toBe(true);
@@ -142,7 +143,7 @@ describe("Build-profile live control synchronization", () => {
     await waitFor(() => expect(finishPost).toBeTypeOf("function"));
     await broadcast(snapshot("A live hidden test profile", 1, false));
     await act(async () => { finishPost?.({ ok: true, json: async () => snapshot("Initial test profile", 1, true) }); });
-    expect((await screen.findByRole("status")).textContent).toBe("Widget hidden.");
+    expect((await screen.findByText("Widget hidden.", { selector: '[role="status"]' })).textContent).toBe("Widget hidden.");
     expect((screen.getByRole("button", { name: "Hide widget" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Show widget" }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("textbox", { name: "Build title" }) as HTMLInputElement).value).toBe("A live hidden test profile");
@@ -160,7 +161,7 @@ describe("Build-profile live control synchronization", () => {
     await waitFor(() => expect(finishPost).toBeTypeOf("function"));
     await broadcast(snapshot("A live hidden test profile", 1, false));
     await act(async () => { finishPost?.({ ok: true, json: async () => snapshot("Initial test profile", 1, true) }); });
-    expect((await screen.findByRole("status")).textContent).toBe("Widget hidden.");
+    expect((await screen.findByText("Widget hidden.", { selector: '[role="status"]' })).textContent).toBe("Widget hidden.");
     expect((screen.getByRole("button", { name: "Hide widget" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("textbox", { name: "Build title" }) as HTMLInputElement).value).toBe("A live hidden test profile");
   });
@@ -181,7 +182,7 @@ describe("Build-profile live control synchronization", () => {
     expect(screen.getByText("Shown")).toBeTruthy();
     expect((screen.getByRole("textbox", { name: "Build title" }) as HTMLInputElement).value).toBe("My pending test edit");
     await act(async () => { finishPost?.({ ok: true, json: async () => snapshot("My pending test edit", 0, false) }); });
-    expect((await screen.findByRole("status")).textContent).toBe("Ratings saved.");
+    expect((await screen.findByText("Ratings saved.", { selector: '[role="status"]' })).textContent).toBe("Ratings saved.");
     expect((screen.getByRole("textbox", { name: "Build title" }) as HTMLInputElement).value).toBe("Same-time external saved edit");
     expect((screen.getByRole("button", { name: "Hide widget" }) as HTMLButtonElement).disabled).toBe(false);
   });

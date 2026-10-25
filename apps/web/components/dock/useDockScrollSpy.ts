@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { DOCK_SECTIONS, type DockSectionId } from "@/lib/dockLayout";
 
 /** Observe section headers in the viewport, including folded sections. */
-export function useDockScrollSpy(expand: (id: DockSectionId, open: boolean) => void) {
-  const [active, setActive] = useState<DockSectionId>("dock-chat");
+export function useDockScrollSpy(expand: (id: DockSectionId, open: boolean) => void, headerHeight = 64) {
+  const [active, setActive] = useState<DockSectionId>(DOCK_SECTIONS[0].id);
   const frame = useRef<number | null>(null);
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined") return;
@@ -18,13 +18,13 @@ export function useDockScrollSpy(expand: (id: DockSectionId, open: boolean) => v
       }
       const first = [...visible].sort((a, b) => a[1] - b[1])[0];
       if (first) setActive(first[0]);
-    }, { rootMargin: "-64px 0px -60% 0px", threshold: 0 });
+    }, { rootMargin: `-${Math.max(0, Math.ceil(headerHeight)) + 8}px 0px -40% 0px`, threshold: 0 });
     for (const section of DOCK_SECTIONS) {
       const element = document.getElementById(section.id);
       if (element) observer.observe(element);
     }
     return () => observer.disconnect();
-  }, []);
+  }, [headerHeight]);
   useEffect(() => () => { if (frame.current !== null) cancelAnimationFrame(frame.current); }, []);
   const jumpTo = useCallback((id: DockSectionId) => {
     expand(id, true); setActive(id);

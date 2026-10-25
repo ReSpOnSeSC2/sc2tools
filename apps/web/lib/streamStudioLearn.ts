@@ -67,7 +67,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
   {
     id: "opponent", name: "Opponent identity", group: "game",
     summary: "A quick introduction to the player on the other side of the match.",
-    explanation: "The dossier shows the opponent's name and race, with MMR and head-to-head context when available. Head-to-head means your recorded wins and losses against that opponent. Live identity can arrive before the completed replay; profile lookups and past games add detail as it becomes available.",
+    explanation: "The dossier shows the opponent's name and race, with MMR and head-to-head context when available. Head-to-head means your recorded wins and losses against that opponent. Live identity can arrive before the completed replay; profile lookups and past games add detail as it becomes available. An approved channel matched to the current exact identity adds a Twitch or YouTube chip. Stream Dock → Game offers Shout out; a connected matching bot queues it, otherwise Copy shout-out supplies the text. The !so command never chooses an arbitrary target.",
     example: { headline: "Opponent identity · illustrative", lines: ["ExampleOpponent · Terran · 4,200 MMR", "Head-to-head: 3 wins, 2 losses"] },
     appears: "During the active match when the agent identifies the opponent; clears after the match instead of staying on the next queue.",
     needs: [liveAgent, "Opponent identification; profile and head-to-head details depend on available data."],
@@ -253,7 +253,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
   {
     id: "session", name: "Session record", group: "results",
     summary: "A persistent scorecard for today's games and current MMR.",
-    explanation: "The session HUD shows wins and losses, available region and MMR, and elapsed time when the session has a start time. It can include a small streak chip from two consecutive wins or losses. It reads the cloud's session summary, so it can appear as soon as the source connects without waiting for a new result.",
+    explanation: "The session HUD shows wins and losses, available region and MMR, and elapsed time when the session has a start time. It can include a small streak chip from two consecutive wins or losses. It reads the cloud's session summary, so it can appear as soon as the source connects without waiting for a new result. Confirm Start new session in Stream Dock → Game to count games from now and set a new clip timestamp mark. The sticky Dock header keeps W–L and available MMR change visible while you scroll.",
     example: { headline: "Session record · illustrative", lines: ["4W · 2L · 47m", "NA 4,200 · W2"] },
     appears: "When the overlay receives its session summary; stays visible as the session updates.",
     needs: ["A working overlay connection. Uploaded games populate the record; rating fields depend on available data."],
@@ -347,7 +347,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
   {
     id: "chat-alerts", name: "Event alerts", group: "community",
     summary: "Recognize supported subscriptions, raids, gifts, and other platform events.",
-    explanation: "This source turns supported incoming platform events into animated alert cards. The newest alert is prominent, with a small recent stack while it is active, and the display clears when the alert finishes. Which events arrive depends on the platform and the connection you configured.",
+    explanation: "This source turns supported incoming platform events into animated alert cards. The newest alert is prominent, with a small recent stack while it is active, and the display clears when the alert finishes. Which events arrive depends on the platform and the connection you configured. Game moments are an optional Ladder category: newly recorded achievements use the same source, play after supporter alerts and are logged in Stream Dock → Clips. Configure them in Multi-platform chat → Game moments; recorded MMR refers to replay game-start ratings.",
     example: { headline: "Event alert · illustrative", lines: ["ExampleViewer subscribed", "Platform event card with your saved alert styling"] },
     appears: "When a supported fresh platform event arrives; transparent between alerts.",
     needs: [configuredChat, "A platform connection that supplies the event type you want to show."],
@@ -356,6 +356,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
       "Choose alert appearance and sound options there, then press Save chat settings.",
       "Enable Event alerts and Copy its URL into a dedicated OBS Browser Source.",
       "Press Test to preview sample alerts; use Stream Dock to inspect incoming platform events and moderation.",
+      "For Game moments, use each Test locally button in Settings before Save. These labelled samples preview this browser only and never post chat or fire OBS.",
     ],
     check: "Test plays scripted sample alerts. A supported real event appearing in Stream Dock and the source checks the live platform path.",
     troubleshooting: "A normal chat message is not an alert. Check platform status, supported event delivery, moderation, and saved alert settings. Audio also depends on the Browser Source's OBS audio configuration.",
@@ -448,7 +449,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
   {
     id: "chat-oracle", name: "Crystal Ball predictions", group: "community",
     summary: "Let chat predict the match and celebrate the correct calls.",
-    explanation: "When a game opens a prediction window, viewers call !win or !loss in connected chat. Voting locks during the early game; the prompt hides once calls are closed. The replay-verified result settles the round and reveals the outcome with oracle points and a leaderboard.",
+    explanation: "When a game opens a prediction window, viewers call !win or !loss in connected chat. Voting locks during the early game; the prompt hides once calls are closed. The replay-verified result settles the round and reveals the outcome with oracle points and a leaderboard. Stream Dock → Game shows the tally and lock countdown. Cancel round awards no points. After a matching game ends without a verified result, a confirmed Resolve Win/Loss creates a labelled manual reveal with no points or oracle accuracy.",
     example: { headline: "CRYSTAL BALL · illustrative", lines: ["Call it vs ExampleOpponent: !win / !loss", "WIN 9 · LOSS 4", "After verification: chat was right"] },
     appears: "During an open game prediction window and again for the settled result; transparent between rounds.",
     needs: [liveAgent, configuredChat, "An active engagement-reporting surface, such as Stream Dock or Multi-platform chat, and a processed result to settle the call."],
@@ -459,7 +460,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
       "Finish the game and let its replay upload and process so the verified result can settle the round.",
     ],
     check: "Test plays a demo call and reveal. A real game, timely chat vote, and processed replay are needed to verify the complete prediction cycle.",
-    troubleshooting: "Late calls after voting locks do not count. A missing verified result delays settlement. If calls never arrive, check platform status and keep an engagement-reporting chat surface running.",
+    troubleshooting: "Late calls after voting locks do not count. A missing verified result delays scored settlement; use the Dock's confirmed cancel or manual controls for that round. Hide game widgets pauses the Crystal Ball display with game cards while chat keeps running. If calls never arrive, check platform status and keep an engagement-reporting chat surface running.",
     placement: "Place the call where viewers can read both commands, leaving space for the result reveal.",
     source: "dedicated", settingsHref: OVERLAY_SETTINGS, related: ["chat-poll", "multichat", "supporter-wall"],
   },

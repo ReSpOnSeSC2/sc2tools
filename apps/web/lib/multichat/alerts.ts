@@ -11,6 +11,7 @@ import {
   CHAT_EVENT_KINDS,
   type ChatEventKind,
 } from "./events";
+import { sanitizeGameMomentConfig, type GameMomentConfig } from "../gameMoments";
 
 export const ALERT_VISUAL_CATEGORIES = [
   "Core",
@@ -1114,6 +1115,7 @@ export interface AlertConfig {
   motion: AlertVisualMotion;
   durationSec: number;
   showHistory: boolean;
+  gameMoments?: GameMomentConfig;
 }
 
 /** Compatibility name for callers that prefer the more explicit type. */
@@ -1402,6 +1404,7 @@ export function sanitizeAlertConfig(raw: unknown): AlertConfig {
       typeof source.showHistory === "boolean"
         ? source.showHistory
         : DEFAULT_ALERTS.showHistory,
+    ...(source.gameMoments !== undefined ? { gameMoments: sanitizeGameMomentConfig(source.gameMoments) } : {}),
   };
 }
 
