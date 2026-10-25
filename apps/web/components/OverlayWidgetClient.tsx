@@ -1,4 +1,7 @@
 "use client";
+import dynamic from "next/dynamic";
+import { useOverlaySeriesState } from "@/components/overlay/useOverlaySeriesState";
+const LazySeriesWidget = dynamic(() => import("@/components/overlay/widgets/SeriesWidget").then(module => module.SeriesWidget), { ssr: false });
 
 import {
   useCallback,
@@ -168,6 +171,7 @@ function ConnectedOverlayWidgetClient({
   const testLayer = useOverlayTestLayer(token, optionsRef);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
+  const { series, receiveSeries } = useOverlaySeriesState(token);
   const receiveSession = useCallback((next: SessionSummary | null) => setSession(current => next ? newerSession(current, next) : null), []);
   const [enabled, setEnabled] = useState<boolean>(true);
   const [widgetConfig, setWidgetConfig] = useState<{ token: string; widget: string; enabled: boolean } | null>(null);
@@ -234,6 +238,7 @@ function ConnectedOverlayWidgetClient({
     receiveProfile,
     resetPause,
     receiveMoment,
+    receiveSeries,
   );
   useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
   const showingTest = testLayer.targets(widget as WidgetId);
@@ -385,6 +390,7 @@ function ConnectedOverlayWidgetClient({
         ghostConfig={ghostConfig}
         studioEvent={studioEvent}
         engagementEvent={engagementEvent}
+        series={series}
         momentEvent={momentEvent}
         voicePrefs={voicePrefs}
       />
@@ -404,6 +410,7 @@ function ConnectedOverlayWidgetClient({
         ghostConfig={ghostConfig}
         studioEvent={studioEvent}
         engagementEvent={engagementEvent}
+        series={series}
         momentEvent={momentEvent}
         voicePrefs={voicePrefs}
       />
@@ -437,6 +444,7 @@ const SELF_DRIVEN_WIDGETS: ReadonlySet<WidgetId> = new Set<WidgetId>([
   "stats-ticker",
   "countdown-timer",
   "build-profile",
+  "series",
 ]);
 
 export function WidgetRenderer({
@@ -455,6 +463,7 @@ export function WidgetRenderer({
   engagementEvent,
   momentEvent,
   voicePrefs,
+  series,
 }: {
   widget: WidgetId;
   token: string;
@@ -474,6 +483,7 @@ export function WidgetRenderer({
    *  chosen voice instead of the engine default (Microsoft David on
    *  Windows). */
   voicePrefs: VoicePrefs | null;
+  series?: unknown;
 }) {
   const intel = liveIntelPayload(live, liveGame);
   switch (widget) {
@@ -602,6 +612,8 @@ export function WidgetRenderer({
       return <LowerThirdWidget live={live} />;
     case "build-profile":
       return <BuildProfileWidget token={token} studioEvent={studioEvent} />;
+    case "series":
+      return <LazySeriesWidget rawSeries={series} preview={live?.isTest === true} visible={visible} />;
     case "countdown-timer":
       // Standalone dock-set countdown — studio-driven, show anytime.
       return (
@@ -654,6 +666,7 @@ function useOverlayWidgetSocket(
   receiveProfile: (msg: OverlayProfileConfig) => void,
   resetPause: () => void,
   receiveMoment: (payload: unknown) => void,
+  receiveSeries: (payload: unknown) => void,
 ): RefObject<Socket | null> {
   const socketRef = useRef<Socket | null>(null);
   // The latest gameKey we've observed in either ``live`` or
@@ -683,6 +696,7 @@ function useOverlayWidgetSocket(
     const connection = createOverlaySocket(token, { surface: "widget", widget, onStatus: setConnectionStatus });
     const socket = connection.socket;
     socketRef.current = socket;
+    socket.on("overlay:series", receiveSeries);
     socket.on("overlay:live", (msg: LiveGamePayload) => {
       // A token's Browser Sources all share this room. Per-widget Test
       // events carry their destination so neighbouring sources do not
@@ -828,6 +842,7 @@ function useOverlayWidgetSocket(
     receiveProfile,
     resetPause,
     receiveMoment,
+    receiveSeries,
   ]);
   return socketRef;
 }

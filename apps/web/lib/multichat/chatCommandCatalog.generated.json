@@ -1,0 +1,300 @@
+{
+  "commands": [
+    {
+      "id": "opponent",
+      "aliases": [
+        "opp"
+      ],
+      "description": "Current or last opponent and your history"
+    },
+    {
+      "id": "mmr",
+      "aliases": [
+        "session"
+      ],
+      "description": "Current MMR and session record"
+    },
+    {
+      "id": "build",
+      "aliases": [],
+      "description": "Your current or last recorded build"
+    },
+    {
+      "id": "record",
+      "aliases": [],
+      "description": "Today's wins and losses by matchup (UTC)"
+    },
+    {
+      "id": "winrate",
+      "aliases": [],
+      "argument": "[matchup|race]",
+      "description": "30-day and current-season win rates, with sample sizes"
+    },
+    {
+      "id": "streak",
+      "aliases": [],
+      "description": "Current recorded win or loss streak"
+    },
+    {
+      "id": "lastgame",
+      "aliases": [],
+      "description": "The latest recorded game"
+    },
+    {
+      "id": "h2h",
+      "aliases": [],
+      "description": "Current or last opponent and the last three meetings"
+    },
+    {
+      "id": "peak",
+      "aliases": [],
+      "description": "Recorded current-season peak on your latest region"
+    },
+    {
+      "id": "oracle",
+      "aliases": [],
+      "description": "The top three prediction scorers"
+    },
+    {
+      "id": "uptime",
+      "aliases": [],
+      "description": "Time since the stream session was started"
+    },
+    {
+      "id": "series",
+      "aliases": [],
+      "description": "This token's best-of score and next scheduled map"
+    }
+  ],
+  "platforms": [
+    "twitch",
+    "kick",
+    "youtube",
+    "tiktok",
+    "nightbot"
+  ],
+  "variables": [
+    "user",
+    "mmr",
+    "record",
+    "opponent",
+    "streak"
+  ],
+  "reserved": [
+    "rank",
+    "level",
+    "xp",
+    "commands",
+    "help",
+    "win",
+    "w",
+    "loss",
+    "lose",
+    "l",
+    "vote",
+    "so",
+    "1",
+    "2",
+    "3"
+  ],
+  "maxCustom": 25,
+  "defaults": [
+    {
+      "id": "opponent",
+      "aliases": [
+        "opp"
+      ],
+      "description": "Current or last opponent and your history",
+      "trigger": "opponent",
+      "enabled": true,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true
+    },
+    {
+      "id": "mmr",
+      "aliases": [
+        "session"
+      ],
+      "description": "Current MMR and session record",
+      "trigger": "mmr",
+      "enabled": true,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true
+    },
+    {
+      "id": "build",
+      "aliases": [],
+      "description": "Your current or last recorded build",
+      "trigger": "build",
+      "enabled": true,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true
+    },
+    {
+      "id": "record",
+      "aliases": [],
+      "description": "Today's wins and losses by matchup (UTC)",
+      "trigger": "record",
+      "enabled": true,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true
+    },
+    {
+      "id": "winrate",
+      "aliases": [],
+      "argument": "[matchup|race]",
+      "description": "30-day and current-season win rates, with sample sizes",
+      "trigger": "winrate",
+      "enabled": true,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true
+    },
+    {
+      "id": "streak",
+      "aliases": [],
+      "description": "Current recorded win or loss streak",
+      "trigger": "streak",
+      "enabled": true,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true
+    },
+    {
+      "id": "lastgame",
+      "aliases": [],
+      "description": "The latest recorded game",
+      "trigger": "lastgame",
+      "enabled": true,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true
+    },
+    {
+      "id": "h2h",
+      "aliases": [],
+      "description": "Current or last opponent and the last three meetings",
+      "trigger": "h2h",
+      "enabled": true,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true
+    },
+    {
+      "id": "peak",
+      "aliases": [],
+      "description": "Recorded current-season peak on your latest region",
+      "trigger": "peak",
+      "enabled": true,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true
+    },
+    {
+      "id": "oracle",
+      "aliases": [],
+      "description": "The top three prediction scorers",
+      "trigger": "oracle",
+      "enabled": true,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true
+    },
+    {
+      "id": "uptime",
+      "aliases": [],
+      "description": "Time since the stream session was started",
+      "trigger": "uptime",
+      "enabled": true,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true
+    },
+    {
+      "id": "series",
+      "aliases": [],
+      "description": "This token's best-of score and next scheduled map",
+      "trigger": "series",
+      "enabled": true,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true
+    }
+  ]
+}

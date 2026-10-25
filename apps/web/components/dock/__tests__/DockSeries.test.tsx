@@ -1,0 +1,42 @@
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { SERIES_SAMPLE } from "@/lib/streamSeries";
+import { DockSeries } from "../DockSeries";
+vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: () => <span>Series help</span> }));
+let fetcher: ReturnType<typeof vi.fn>;
+const response = (value: unknown) => new Response(JSON.stringify(value), { status: 200 });
+const input = { token: "one", live: null, onInvalid: vi.fn() };
+beforeEach(() => { fetcher = vi.fn().mockResolvedValue(response(null)); vi.stubGlobal("fetch", fetcher); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+it("starts only on an explicit action with bounded form values and the current revision", async () => {
+  render(<DockSeries {...input} lastOpponent="Clem" />);
+  await waitFor(() => expect((screen.getByRole("button", { name: "Start series" }) as HTMLButtonElement).disabled).toBe(false));
+  expect(screen.getByLabelText("Opponent")).toHaveProperty("value", "Clem");
+  expect(fetcher).toHaveBeenCalledOnce();
+  fireEvent.change(screen.getByLabelText("Map order · optional"), { target: { value: "Alcyone\nGoldenaura" } });
+  fetcher.mockResolvedValueOnce(response(SERIES_SAMPLE));
+  fireEvent.click(screen.getByRole("button", { name: "Start series" }));
+  await screen.findByText("Series started");
+  expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ action: "start", revision: 0, opponentName: "Clem", format: 3, maps: ["Alcyone", "Goldenaura"] });
+  expect(screen.getByLabelText("Bo5 series score")).toBeTruthy();
+});
+it("keeps opponent/map drafts when an automatic score update arrives", async () => {
+  fetcher.mockResolvedValueOnce(response(SERIES_SAMPLE));
+  const view = render(<DockSeries {...input} />);
+  await screen.findByLabelText("Bo5 series score");
+  fireEvent.change(screen.getByLabelText("Opponent"), { target: { value: "My next opponent" } });
+  fireEvent.change(screen.getByLabelText("Map order · optional"), { target: { value: "My map" } });
+  view.rerender(<DockSeries {...input} rawEvent={{ ...SERIES_SAMPLE, revision: 3, score: { you: 1, opponent: 1 } }} />);
+  expect(screen.getByLabelText("Opponent")).toHaveProperty("value", "My next opponent");
+  expect(screen.getByLabelText("Map order · optional")).toHaveProperty("value", "My map");
+});
+it("does not overwrite a newer map draft with a held pool response", async () => {
+  render(<DockSeries {...input} lastOpponent="Clem" />);
+  await waitFor(() => expect((screen.getByRole("button", { name: "Start series" }) as HTMLButtonElement).disabled).toBe(false));
+  let release!: (value: Response) => void; fetcher.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+  fireEvent.click(screen.getByRole("button", { name: "Use current map pool" }));
+  fireEvent.change(screen.getByLabelText("Map order · optional"), { target: { value: "Newer typed map" } });
+  await act(async () => release(response({ mapPool: ["Alcyone"] })));
+  expect(screen.getByLabelText("Map order · optional")).toHaveProperty("value", "Newer typed map");
+  expect(screen.getByText(/newer map draft was kept/)).toBeTruthy();
+});

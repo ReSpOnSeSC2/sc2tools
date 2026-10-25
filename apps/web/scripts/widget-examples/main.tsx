@@ -8,6 +8,7 @@ import { spinResult, mulberry32 } from "../../lib/randomizer/engine";
 import { WIDGET_GUIDES } from "../../lib/streamStudioLearn";
 import { DEFAULT_APPEARANCE } from "../../lib/multichat/appearance";
 import { DEFAULT_ALERTS } from "../../lib/multichat/alerts";
+import { SeriesWidget } from "../../components/overlay/widgets/SeriesWidget";
 import { GHOST, LIVE, LIVE_GAME, NOW, STUDIO } from "./fixtures";
 import "../../app/globals.css";
 import "./style.css";
@@ -60,6 +61,7 @@ const registry: Record<string, () => React.ReactNode> = {
   "chat-alerts": () => <Widgets.ChatAlertsWidget {...shared} />,
   "stream-goals": () => <Widgets.StreamGoalsWidget {...shared} />,
   "build-profile": () => <Widgets.BuildProfileWidget {...shared} />,
+  series: () => <SeriesWidget rawSeries={null} preview />,
   "session-recap": () => <Widgets.SessionRecapWidget {...shared} session={LIVE.session!} />,
   "countdown-timer": () => <Widgets.CountdownTimerWidget {...shared} />,
   "stats-ticker": () => <Widgets.StatsTickerWidget {...shared} session={LIVE.session!} />,
