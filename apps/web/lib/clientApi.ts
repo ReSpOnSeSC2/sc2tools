@@ -121,8 +121,15 @@ export function useOwnerRequestScope(owner: string | null, getToken: () => Promi
     scope.active = !!owner;
     return () => {
       scope.active = false;
-      for (const controller of scope.controllers) controller.abort();
-      scope.controllers.clear();
+      // Root StrictMode replays setup synchronously. SWR shares its first
+      // pending promise, so keep that promise when the same scope reactivates.
+      // Real unmounts/auth transitions are fenced immediately above and their
+      // held adapters still settle at this microtask even if they ignore abort.
+      queueMicrotask(() => {
+        if (scope.active) return;
+        for (const controller of scope.controllers) controller.abort();
+        scope.controllers.clear();
+      });
     };
   }, [owner, scope]);
   return async <T,>(requestOwner: string, operation: (
