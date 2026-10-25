@@ -110,9 +110,18 @@ game 312.3/440, opponent 448.2/500, Builds 197.5/270, Dock 215.7/225,
 AIO 238.7/240 and widget 322.8/325 kB. The final actual-source browser run passes
 197 checks/32 captures, including the absent-log read gate, with blocked external
 traffic and zero writes. All eight representative images were inspected; three
-are refreshed from this exact combined output. Full independent UI/visual review
-and the actual generic squash integration remain prerequisites for the final
-coordinated push and expected-head checks.
+are refreshed from this exact combined output. Root independently reviewed the
+final timing and survival components plus phone timing/plan and desktop game
+captures; final UI/visual signoff is complete.
+
+The reviewed StrictMode follow-up `1b56cbf6` is integrated at `55c571b9`.
+Capability retirement remains immediate; one microtask lets only the same scope
+object retain a deduplicated read through root StrictMode setup replay. The exact
+follow-up passes 136 focused ownership/review/Dossier/game tests, full web types
+and strict helper lint. A fresh isolated production build, every unchanged budget
+and the complete 197-check/32-capture browser matrix pass again. The actual
+generic squash integration remains the prerequisite for the single coordinated
+push and final expected-head checks.
 
 No production or provider operations were performed. Never run an old f96
 engine prebuild; shared engine writes must remain coordinated on 25b source.
