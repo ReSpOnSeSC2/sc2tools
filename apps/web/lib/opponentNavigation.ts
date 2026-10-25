@@ -1,3 +1,5 @@
+import { safeGameSource, type GameSource } from "./gameNavigation";
+
 export const OPPONENT_QUERY_PARAM = "opponent";
 export const OPPONENT_NAME_QUERY_PARAM = "opponentName";
 
@@ -28,15 +30,17 @@ export function opponentContextFromQuery(
 export function gameAnalysisHref(
   gameId: string,
   opponent?: OpponentNavigationContext | null,
+  source?: GameSource | null,
 ): string {
   const base = `/app/game/${encodeURIComponent(gameId)}`;
   const pulseId = clean(opponent?.pulseId, 256);
-  if (!pulseId) return base;
-
-  const query = new URLSearchParams({ [OPPONENT_QUERY_PARAM]: pulseId });
+  const query = new URLSearchParams();
+  if (pulseId) query.set(OPPONENT_QUERY_PARAM, pulseId);
   const displayName = clean(opponent?.displayName, 120);
-  if (displayName) query.set(OPPONENT_NAME_QUERY_PARAM, displayName);
-  return `${base}?${query.toString()}`;
+  if (displayName && pulseId) query.set(OPPONENT_NAME_QUERY_PARAM, displayName);
+  const from = safeGameSource(source?.href, source?.label, source?.filters);
+  if (from) { query.set("from", from.href); query.set("fromLabel", from.label); if (from.filters !== undefined) query.set("fromFilters", from.filters); }
+  return query.size ? `${base}?${query.toString()}` : base;
 }
 
 /**

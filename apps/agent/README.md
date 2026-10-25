@@ -177,6 +177,11 @@ and allow retry. The settings page displays the saved result without drawing aga
 each matchup and follows the live game clock in an optional floating panel.
 Each feature has its own on/off control. Turn **In-game assistance** off
 to hide every game panel and pause native assistance without clearing settings.
+Game-screen assistance starts **off by default**: opponent and scouting pins,
+pre-game and post-game selectors, loading-screen scouting, spoken scouting,
+Session and Ghost. Enable In-game assistance and the individual features you
+want. Mode presets allow features without turning those choices on. Existing
+saved opt-ins are preserved when updating.
 
 Save local **Ladder**, **Customs**, **Teams**, **Practice**, and **Review** presets
 under **Customize mode**. Preset gates never rewrite shared account settings;
@@ -354,10 +359,12 @@ list first, then means Later. These keys never activate a card over the game.
 ### Private scouting
 
 Settings → Build check-in → **Show scouting at loading** is a local PC choice.
-With check-ins enabled, loading cards show the current opponent's record, recent
-opening samples, best recorded answer and a two-line private note. Turning off
-Ask during the loading screen leaves a slim scouting-only card. Missing or
-ambiguous identity never borrows another account's private note. **Open dossier**
+It starts off. With check-ins and this option enabled, loading cards show the
+current opponent's record, recent opening samples, best recorded answer and a
+two-line private note. Turning off
+Ask during the loading screen leaves a slim scouting-only card only when
+Show scouting at loading is enabled. Missing or ambiguous identity never borrows
+another account's private note. **Open dossier**
 opens the validated account path in your configured dashboard.
 
 After the replay syncs and identifies the opponent, **Note for next time → Save

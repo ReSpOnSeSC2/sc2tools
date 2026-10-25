@@ -2,6 +2,25 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## Unreleased
+
+- Streams supports live statistic-token previews and optional updates to selected
+  Twitch, Kick and YouTube accounts after synced games. Automatic updates start
+  off, preserve platform receipts, skip unchanged titles and run at most every
+  ten minutes without blocking replay uploads.
+
+## 0.24.5
+
+### Changed - Game-screen assistance is opt-in
+- Start pre-game and post-game build selectors, and loading-screen scouting,
+  off for new or unset preferences. Opponent/scouting pins, spoken scouting,
+  Session, Ghost and the assistance master switch also remain off by default.
+- Use the same explicit opt-in defaults in the Agent, API and website. Preserve
+  saved enabled choices; missing or malformed flags do not enable prompts.
+- Keep fresh offline sessions quiet. Apply a saved account opt-in as soon as it
+  loads, without duplicate preference updates or waiting for another game event.
+- Update Settings, help and documentation to explain how to enable features.
+
 ## 0.24.4
 
 ### Fixed - One Compact opponent display
@@ -284,11 +303,6 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   outcomes, with filters, exact-file actions, narrow retries and skipped reasons.
   Optional every-game notifications stay quiet during history imports. Re-sync
   is in Settings Maintenance; Check for updates is beside the sidebar version.
-
-- Streams supports live statistic-token previews and optional updates to selected
-  Twitch, Kick and YouTube accounts after synced games. Automatic updates start
-  off, preserve platform receipts, skip unchanged titles and run at most every
-  ten minutes without blocking replay uploads.
 
 - PvZ Archon Drop detection requires a real Warp Prism completed by 6:00 and
   observed Archons, preventing late Templar transitions from being called drops.

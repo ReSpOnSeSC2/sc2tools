@@ -16,9 +16,12 @@ corresponding GitHub Release.
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
 - Your reviewer profile shows verified leagues, badges, karma and synced-game eligibility. Leaderboard and weekly digest preferences live together there and restore their previous value if saving fails.
 
-### Desktop stream titles
-
-- Streams previews MMR, league, session record, streak and matchup tokens. Optional automatic updates start off, target only selected connected platforms, skip unchanged titles and run at most once every ten minutes after a live replay syncs.
+### Agent 0.24.5 - Opt-in game-screen assistance
+- Default build selectors and loading-screen scouting to off, matching the
+  existing off defaults for native pins, spoken scouting, Session and Ghost.
+- Align Agent, API and website preference handling: require explicit true flags,
+  preserve saved choices, and keep new/offline accounts free of automatic prompts.
+- Apply saved opt-ins promptly when account settings load, and document activation.
 
 ### Agent 0.24.4 - One Compact opponent display
 - Fold Compact into the visible pinned opponent HUD, preserving its position and
@@ -184,6 +187,10 @@ corresponding GitHub Release.
 
 - The desktop Dashboard shows game summaries, local Today W–L/MMR and replay-history progress. Recent games survives restarts with 200 private local outcomes, status/date filters, skipped reasons and selective retries. Re-sync moves to Settings Maintenance; optional game-result notifications exclude history imports.
 
+### Desktop stream titles
+
+- Streams previews MMR, league, session record, streak and matchup tokens. Optional automatic updates start off, target only selected connected platforms, skip unchanged titles and run at most once every ten minutes after a live replay syncs.
+
 ### Build supply and exports
 
 - Game build orders show prior-sample supply with an approximation marker, worker/supply filters and aligned times. Either side can copy text, supply-first text, Markdown or SALT, print a compact cheat sheet, arm a confirmed Ghost target or open the custom-build editor.
@@ -213,6 +220,11 @@ corresponding GitHub Release.
 
 - The game page includes the complete macro report, priced leaks and Recompute analysis, with section links that keep the replay mounted. Bank joins the chart metrics, and this browser remembers your selection.
 - Supply blocks, loss causes, macro moments and build steps seek one replay clock. Playback follows through the chart and current build step; timestamp links, completed upgrades and measured banked resources give each moment context.
+
+### Game navigation and replay controls
+
+- Step through older and newer games with remembered all, opponent, matchup or build scope, optional recorded head-to-head totals and Alt+arrow shortcuts. Back links retain the originating list, filters and named build context; opponent names open their dossiers where an identity is available.
+- Focus the replay for keyboard seeking, slow motion, event jumps, fullscreen and a shortcut sheet. Replay display choices, speed, volume and mobile panels are remembered on this device, and seeks are announced to screen readers.
 
 ### Shared game analysis
 

@@ -33,6 +33,7 @@ HINT_READY = "Check-in choices are saved to your account. Scouting visibility is
 HINT_SAVE_FAILED = "Couldn't save that change. Check your connection and try again."
 
 INTRO = (
+    "Game-screen prompts start off. Enable only the prompts you want. "
     "Tell sc2tools which build you were going for. A game where the plan "
     "went sideways still counts toward that build's record."
 )
@@ -217,10 +218,10 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         ready = state == "ready"
         prefs = self._prefs
         for box, value in (
-            (self.enabled_box, getattr(prefs, "enabled", True)),
-            (self.loading_box, getattr(prefs, "ask_at_loading", True)),
-            (self.after_box, getattr(prefs, "ask_after_game", True)),
-            (self.scouting_box, getattr(self._controller(), "scouting_enabled", True)),
+            (self.enabled_box, getattr(prefs, "enabled", False)),
+            (self.loading_box, getattr(prefs, "ask_at_loading", False)),
+            (self.after_box, getattr(prefs, "ask_after_game", False)),
+            (self.scouting_box, getattr(self._controller(), "scouting_enabled", False)),
         ):
             box.blockSignals(True)
             box.setChecked(bool(value))
@@ -238,7 +239,7 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
             "ready": HINT_READY,
         }[state]
         self.hint.setText(hint)
-        off = prefs is not None and not getattr(prefs, "enabled", True)
+        off = prefs is not None and not getattr(prefs, "enabled", False)
         self.preview_hint.setText("Check-ins are off; this is only a preview" if off else "Previews do not save a build or contact the server. Dragging remembers the card position.")
 
     # ------------------------------------------------------ player out

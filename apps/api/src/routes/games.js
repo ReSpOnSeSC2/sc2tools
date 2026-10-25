@@ -12,6 +12,7 @@ const {
   releaseReplayIngestAdmission,
 } = require("../middleware/replayIngestAdmission");
 const { registerGamesExistsRoute } = require("./gamesExists");
+const { registerGameNeighborsRoute } = require("./gameNeighbors");
 const { normalizePoolBuildNames } = require("../util/poolBuildNames");
 const {
   stampIngestProvenance,
@@ -160,6 +161,7 @@ function buildGamesRouter(deps) {
 
   // Declared before every ``/games/:gameId`` route so the literal path wins.
   registerGamesExistsRoute(router, { games: deps.games });
+  registerGameNeighborsRoute(router, { games: deps.games });
 
   router.get("/games", async (req, res, next) => {
     try {

@@ -264,7 +264,7 @@ def test_prefs_fetch_failure_keeps_defaults() -> None:
     h.api.fail_next("get_checkin_prefs", ConnectionError("offline"))
     h.boot()
     h.send(envelope("match_loading", h.new_key()))
-    assert len(h.view.of("show_loading")) == 1
+    assert not h.view.of("show_loading")
     assert h.ctl.prefs == CheckinPrefs()
 
 
@@ -313,10 +313,10 @@ def test_settings_writes_are_serialised_and_last_one_wins() -> None:
     h.pump()
     writes = [args[0] for args, _ in h.api.calls_to("put_checkin_prefs")]
     assert writes == [
-        {"enabled": False, "askAtLoading": True, "askAfterGame": True},
-        {"enabled": True, "askAtLoading": False, "askAfterGame": True},
+        {"enabled": False, "askAtLoading": False, "askAfterGame": False},
+        {"enabled": True, "askAtLoading": False, "askAfterGame": False},
     ]
-    assert h.ctl.prefs == CheckinPrefs(enabled=True, ask_at_loading=False)
+    assert h.ctl.prefs == CheckinPrefs(enabled=True, ask_at_loading=False, ask_after_game=False)
 
 
 def test_server_read_does_not_override_a_pending_settings_write() -> None:
@@ -359,7 +359,7 @@ def test_declare_collapses_and_locks_in(h: Harness) -> None:
 
 def test_declare_shows_saving_until_the_server_answers() -> None:
     executor = ManualExecutor()
-    h = Harness(executor=executor)
+    h = Harness(executor=executor, prefs=CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))
     key = h.new_key()
     h.send(envelope("match_loading", key))
     executor.run_all()
@@ -468,7 +468,7 @@ def test_change_over_a_web_pick_reopens_without_withdrawing(h: Harness) -> None:
 
 def test_rapid_picks_collapse_to_the_last_one() -> None:
     executor = ManualExecutor()
-    h = Harness(executor=executor)
+    h = Harness(executor=executor, prefs=CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))
     key = h.new_key()
     h.send(envelope("match_loading", key))
     executor.run_all()
@@ -654,7 +654,7 @@ def test_web_pick_replaces_an_older_agent_pick(h: Harness) -> None:
 
 def test_stale_live_read_cannot_undo_a_newer_declare() -> None:
     executor = ManualExecutor()
-    h = Harness(executor=executor)
+    h = Harness(executor=executor, prefs=CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))
     key = h.new_key()
     h.send(envelope("match_loading", key))
     executor.run_all()
@@ -690,7 +690,7 @@ def test_pings_for_unknown_or_old_games_are_ignored(h: Harness) -> None:
 
 def test_rows_never_reorder_after_first_paint() -> None:
     executor = ManualExecutor()
-    h = Harness(executor=executor)
+    h = Harness(executor=executor, prefs=CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))
     key = h.new_key()
     h.send(envelope("match_loading", key))
     executor.run_all()
@@ -719,7 +719,7 @@ def test_rows_never_reorder_after_first_paint() -> None:
 
 def test_options_loading_then_error_state() -> None:
     executor = ManualExecutor()
-    h = Harness(executor=executor)
+    h = Harness(executor=executor, prefs=CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))
     key = h.new_key()
     h.send(envelope("match_loading", key))
     assert h.view.last("show_loading").options_loading is True
@@ -780,7 +780,7 @@ def test_set_view_repaints_the_current_card(h: Harness) -> None:
     h.ctl.set_view(late)
     h.pump()
     assert [m.game_key for m in late.of("show_loading")] == [key]
-    assert late.prefs == [CheckinPrefs()]
+    assert late.prefs == [CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True)]
 
 
 def test_threaded_start_attach_and_stop() -> None:
@@ -828,7 +828,7 @@ def test_inputs_never_block_the_caller() -> None:
 
 
 def test_a_crashing_handler_is_contained() -> None:
-    h = Harness(executor=SyncExecutor())
+    h = Harness(executor=SyncExecutor()).boot()
     h.ctl._post(lambda: 1 / 0)
     h.send(envelope("match_loading", h.new_key()))
     assert len(h.view.of("show_loading")) == 1
@@ -848,7 +848,7 @@ def test_prefetch_waits_until_check_ins_are_on() -> None:
 
 def test_declare_never_waits_behind_the_register_write() -> None:
     executor = ManualExecutor()
-    h = Harness(executor=executor)
+    h = Harness(executor=executor, prefs=CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))
     key = h.new_key()
     h.send(envelope("match_loading", key))
     # Let the option lists (and the first prefs read) load but hold the
@@ -869,12 +869,12 @@ def test_declare_never_waits_behind_the_register_write() -> None:
     assert model.locked_key == "custom:dt-3-gate" and model.saving is False
 
 
-def test_view_learns_loaded_prefs_even_when_they_are_the_defaults() -> None:
+def test_view_learns_explicitly_enabled_server_prefs() -> None:
     h = Harness()
     assert h.ctl.available is None
     h.boot()
     assert h.ctl.available is True
-    assert h.view.prefs == [CheckinPrefs()]
+    assert h.view.prefs == [CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True)]
 
 
 def test_unavailable_api_is_reported() -> None:
@@ -890,23 +890,24 @@ def test_unavailable_api_is_reported() -> None:
 
 def test_confirmed_prefs_are_persisted_when_they_change() -> None:
     h = Harness().boot()
-    assert h.saved_prefs == [CheckinPrefs()]
+    opted_in = CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True)
+    assert h.saved_prefs == [opted_in]
     # Same value again (live register, game reads): nothing to save.
     h.send(envelope("match_loading", h.new_key()))
-    assert h.saved_prefs == [CheckinPrefs()]
+    assert h.saved_prefs == [opted_in]
     h.ctl.set_prefs(ask_at_loading=False)
     h.pump()
-    assert h.saved_prefs == [CheckinPrefs(), CheckinPrefs(ask_at_loading=False)]
+    assert h.saved_prefs == [opted_in, CheckinPrefs(enabled=True, ask_at_loading=False, ask_after_game=True)]
 
 
 def test_cached_prefs_decide_the_cards_while_the_server_is_unreachable() -> None:
     """Offline at login: a player who turned the loading card off must not
     get one just because the first read failed."""
-    h = Harness(prefs=CheckinPrefs(ask_at_loading=False))
+    h = Harness(prefs=CheckinPrefs(enabled=True, ask_at_loading=False, ask_after_game=True))
     h.api.fail_next("get_checkin_prefs", ConnectionError("offline"))
     h.boot()
     assert h.ctl.available is None
-    assert h.ctl.prefs == CheckinPrefs(ask_at_loading=False)
+    assert h.ctl.prefs == CheckinPrefs(enabled=True, ask_at_loading=False, ask_after_game=True)
     h.send(envelope("match_loading", h.new_key()))
     assert h.view.of("show_loading") == []
     assert h.api.calls_to("put_live_intent") == []
@@ -915,20 +916,20 @@ def test_cached_prefs_decide_the_cards_while_the_server_is_unreachable() -> None
 def test_cached_prefs_with_cards_off_still_follow_the_server() -> None:
     h = Harness(prefs=CheckinPrefs(enabled=False))
     h.boot()
-    assert h.ctl.prefs == CheckinPrefs()
+    assert h.ctl.prefs == CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True)
     h.send(envelope("match_loading", h.new_key()))
     assert len(h.view.of("show_loading")) == 1
-    assert h.saved_prefs == [CheckinPrefs()]
+    assert h.saved_prefs == [CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True)]
 
 
 def test_a_failed_save_reverts_to_the_cached_prefs() -> None:
-    h = Harness(prefs=CheckinPrefs(ask_after_game=False))
+    h = Harness(prefs=CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=False))
     h.api.fail_next("get_checkin_prefs", ConnectionError("offline"))
     h.api.fail_next("put_checkin_prefs", ConnectionError("offline"))
     h.boot()
     h.ctl.set_prefs(ask_after_game=True)
     h.pump()
-    assert h.ctl.prefs == CheckinPrefs(ask_after_game=False)
+    assert h.ctl.prefs == CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=False)
 
 
 def test_prefs_read_retries_with_backoff_until_it_answers() -> None:
@@ -967,8 +968,8 @@ def test_a_prefs_ping_during_a_read_reads_again() -> None:
     executor.run_all()
     h.pump()
     executor.run_all()  # remembering it for the next start
-    assert h.ctl.prefs == CheckinPrefs(ask_at_loading=False)
-    assert h.saved_prefs == [CheckinPrefs(ask_at_loading=False)]
+    assert h.ctl.prefs == CheckinPrefs(enabled=True, ask_at_loading=False, ask_after_game=True)
+    assert h.saved_prefs == [CheckinPrefs(enabled=True, ask_at_loading=False, ask_after_game=True)]
     assert len(h.api.calls_to("get_checkin_prefs")) == 1
 
 
@@ -992,7 +993,7 @@ def test_a_read_older_than_a_confirmed_save_is_not_applied() -> None:
     executor.run_all()  # then the older read
     h.pump()
     executor.run_all()
-    both = CheckinPrefs(ask_at_loading=False, ask_after_game=False)
+    both = CheckinPrefs(enabled=False, ask_at_loading=False, ask_after_game=False)
     assert h.ctl.prefs == both
     assert h.saved_prefs[-1] == both
 
@@ -1016,7 +1017,7 @@ def test_a_read_answered_during_a_save_is_read_again_after_it() -> None:
     while executor.jobs:
         executor.run_all()
         h.pump()
-    assert h.ctl.prefs == CheckinPrefs(ask_at_loading=False, ask_after_game=False)
+    assert h.ctl.prefs == CheckinPrefs(enabled=True, ask_at_loading=False, ask_after_game=False)
     assert len(h.api.calls_to("get_checkin_prefs")) == 2
 
 

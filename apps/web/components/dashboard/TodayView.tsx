@@ -1,15 +1,21 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { DailyPulse } from "@/components/analyzer/DailyPulse";
 import { DashboardKpiStrip } from "@/components/analyzer/DashboardKpiStrip";
-import { LadderPulse } from "@/components/analyzer/LadderPulse";
+import { LadderPulseFrame } from "@/components/analyzer/LadderPulseFrame";
 import { hrefForTab, opponentDossierHref } from "@/components/analyzer/tabs";
 import { AgentUpgradeNotice } from "@/components/dashboard/AgentUpgradeNotice";
 import { LiveGamePanel } from "@/components/dashboard/LiveGamePanel";
 import { useDashboardMe } from "@/components/dashboard/AnalyzerFrame";
 import { SectionBoundary } from "@/components/ui/SectionBoundary";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
+
+const LadderPulse = dynamic(
+  () => import("@/components/analyzer/LadderPulse").then((module) => module.LadderPulse),
+  { loading: () => <LadderPulseFrame pending /> },
+);
 
 /**
  * TodayView — the /app landing surface. Everything here is the

@@ -52,12 +52,12 @@ afterEach(() => {
 const switchFor = (name: string) => screen.getByRole("switch", { name });
 
 describe("BuildCheckInSettings", () => {
-  it("defaults every switch to on when nothing is stored", () => {
+  it("defaults every switch to off when nothing is stored", () => {
     harness.data = {};
     render(<BuildCheckInSettings />);
     expect(screen.getByRole("heading", { name: "Build check-in" })).toBeTruthy();
     for (const name of ["Build check-ins", "Ask during the loading screen", "Ask after each game"]) {
-      expect(switchFor(name).getAttribute("aria-checked")).toBe("true");
+      expect(switchFor(name).getAttribute("aria-checked")).toBe("false");
     }
     expect(screen.queryByRole("region", { name: "Unsaved changes" })).toBeNull();
   });
@@ -109,7 +109,7 @@ describe("BuildCheckInSettings", () => {
     expect(harness.toast.error).toHaveBeenCalledWith("Couldn't save build check-in settings", {
       description: expect.stringMatching(/Too many check-in changes/),
     });
-    expect(switchFor("Build check-ins").getAttribute("aria-checked")).toBe("false");
+    expect(switchFor("Build check-ins").getAttribute("aria-checked")).toBe("true");
     expect(harness.bump).not.toHaveBeenCalled();
   });
 

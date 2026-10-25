@@ -235,6 +235,7 @@ const PROFILE_GAME_ROW_PROJECTION = {
   macroScore: 1,
   replayFile: 1,
   "opponent.displayName": 1,
+  "opponent.pulseId": 1,
   "opponent.race": 1,
   "opponent.strategy": 1,
   "opponent.mmr": 1,
@@ -3849,6 +3850,8 @@ function serializeCompactProfileGame(g) {
     result: g?.result || "",
     map: g?.map || "",
     opponent: opp.displayName || "",
+    ...(typeof opp.pulseId === "string" && opp.pulseId.trim() && opp.pulseId.length <= 200 && !/[\u0000-\u001f\u007f]/.test(opp.pulseId)
+      ? { opponent_pulse_id: opp.pulseId.trim() } : {}),
     opp_race: opp.race || "",
     opp_strategy: opp.strategy || null,
     my_build: g?.myBuild || "",

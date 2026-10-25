@@ -148,7 +148,7 @@ def test_private_note_waits_for_uploaded_identity_and_remains_retryable(native):
 
 
 def test_native_settings_toggle_controls_only_local_scouting(app):
-    h = Harness().boot()
+    h = Harness(show_scouting_at_loading=True).boot()
     group = CheckinSettingsGroup(controller=lambda: h.ctl, available=True)
     group.apply_prefs(h.ctl.prefs); group.show(); app.processEvents()
     assert group.scouting_box.isChecked() and group.scouting_box.isEnabled()

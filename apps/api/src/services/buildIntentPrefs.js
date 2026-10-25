@@ -4,7 +4,7 @@
  * Build check-in preferences.
  *
  * ``users.preferences.buildCheckin`` holds three booleans that all default
- * to true: a flag is off only when it is stored as ``false``. The randomizer
+ * to false: each prompt requires an explicit opt-in. The randomizer
  * config (``users.preferences.randomizer``, written by the web Settings)
  * supplies the per-matchup pool the OBS widget rolls from.
  */
@@ -14,10 +14,10 @@ const CHECKIN_PREF_TYPE = "buildCheckin";
 /** @typedef {{ enabled: boolean, askAtLoading: boolean, askAfterGame: boolean }} CheckinPrefs */
 
 /**
- * Exactly the three booleans; anything but an explicit ``false`` is true.
+ * Exactly the three booleans; only an explicit ``true`` opts in.
  *
  * Example: `sanitizeCheckinPrefs({ askAtLoading: false, extra: 1 })` →
- * `{ enabled: true, askAtLoading: false, askAfterGame: true }`.
+ * `{ enabled: false, askAtLoading: false, askAfterGame: false }`.
  *
  * @param {unknown} raw
  * @returns {CheckinPrefs}
@@ -27,9 +27,9 @@ function sanitizeCheckinPrefs(raw) {
     ? /** @type {Record<string, unknown>} */ (raw)
     : {};
   return {
-    enabled: src.enabled !== false,
-    askAtLoading: src.askAtLoading !== false,
-    askAfterGame: src.askAfterGame !== false,
+    enabled: src.enabled === true,
+    askAtLoading: src.askAtLoading === true,
+    askAfterGame: src.askAfterGame === true,
   };
 }
 

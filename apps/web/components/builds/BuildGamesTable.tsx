@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import Link from "next/link";
+import { GameAnalysisLink } from "@/components/analyzer/GameAnalysisLink";
 import { ChevronDown, ChevronRight, ExternalLink, StickyNote } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
@@ -19,6 +19,7 @@ import { PlannedBadge } from "@/components/build-checkin/PlannedBadge";
 import type { BuildRecentGame } from "./types";
 import { StarGhostReplayButton } from "./StarGhostReplayButton";
 import { ReferenceComparison } from "./ReferenceComparison";
+import { GameSourceProvider } from "@/lib/useGameSource";
 
 interface BuildOrderResp {
   ok: boolean;
@@ -106,6 +107,7 @@ export function BuildGamesTable({
   const hasResumedGames = totalResumed > 0;
 
   return (
+    <GameSourceProvider filters={activeFilter === "win" || activeFilter === "loss" ? `result=${activeFilter}` : /^[PTZ]$/.test(activeFilter) ? `opp_race=${activeFilter}` : undefined}>
     <Card
       title={total != null && total > groupedGames.competitive.length ? `Latest ${groupedGames.competitive.length} of ${total} games` : `Recent games · ${groupedGames.competitive.length}`}
     >
@@ -188,6 +190,7 @@ export function BuildGamesTable({
         </>
       )}
     </Card>
+    </GameSourceProvider>
   );
 }
 
@@ -377,7 +380,7 @@ function GameResultBadge({ game }: { game: BuildRecentGame }) {
 }
 
 function OpenGameLink({ game, mobile = false }: { game: BuildRecentGame; mobile?: boolean }) {
-  return <Link href={`/app/game/${encodeURIComponent(game.gameId)}`} aria-label={`Open game vs ${game.opponent || "unknown opponent"} on ${game.map || "unknown map"}`} className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{mobile ? "Open game" : <ExternalLink className="h-4 w-4" aria-hidden />}</Link>;
+  return <GameAnalysisLink gameId={game.gameId} aria-label={`Open game vs ${game.opponent || "unknown opponent"} on ${game.map || "unknown map"}`} className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{mobile ? "Open game" : <ExternalLink className="h-4 w-4" aria-hidden />}</GameAnalysisLink>;
 }
 
 /** "Planned" badge, plus a note icon when the check-in has notes. */

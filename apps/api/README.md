@@ -140,7 +140,7 @@ custom-build save or delete, and `custom:` keys fall back to the database).
 | POST   | /v1/build-intents/pending/dismiss            | clerk/device | "No set build" for the whole queue |
 | GET    | /v1/games/:gameId/build-intent               | clerk/device | A game's check-in state, with an `opponent` block (`?include=options` adds both option lists) |
 | PUT    | /v1/games/:gameId/build-intent               | clerk/device | `confirm`, `skip`, `defer`, `notes`, `opponent`; `opponentBuildKey` (a key, or `null` to clear) on any action, in the same update (400 `unknown_opponent_build`, 409 `not_eligible`) |
-| GET    | /v1/me/preferences/buildCheckin              | clerk/device | `{enabled, askAtLoading, askAfterGame}` (default true) |
+| GET    | /v1/me/preferences/buildCheckin              | clerk/device | `{enabled, askAtLoading, askAfterGame}` (default false; explicit opt-ins preserved) |
 | PUT    | /v1/me/preferences/buildCheckin              | clerk/device | Store the three switches |
 
 `POST /v1/agent/live` registers the live game on `match_loading` /

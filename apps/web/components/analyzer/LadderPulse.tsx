@@ -44,7 +44,8 @@ import {
   type PulseResult,
   type VerifiedMmrDelta,
 } from "@/lib/ladderPulse";
-import { gameAnalysisHref } from "@/lib/opponentNavigation";
+import { GameAnalysisLink } from "./GameAnalysisLink";
+import { OpponentLink } from "./OpponentLink";
 import { useDailySeed } from "./arcade/hooks/useDailySeed";
 import { MapLabel } from "@/components/maps/MapArtwork";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
@@ -256,7 +257,7 @@ function LatestDispatch({
         aria-live="polite"
       >
         {resultHeadline(result)}{" "}
-        <span className="text-accent-cyan">vs {opponent}</span>
+        <span className="text-accent-cyan">vs <OpponentLink pulseId={game.opponent?.pulseId} name={opponent} /></span>
       </h3>
       <p className="mt-1 text-caption text-text-muted">
         {[matchup, formatDuration(game.durationSec)]
@@ -313,8 +314,7 @@ function LatestDispatch({
                 clean(row.opponent?.displayName) || "unknown opponent";
               return (
                 <li key={row.gameId}>
-                  <Link
-                    href={gameAnalysisHref(row.gameId)}
+                  <GameAnalysisLink gameId={row.gameId}
                     aria-label={`${resultLabel(rowResult)} against ${rowOpponent}, ${fmtAgo(row.date)}`}
                     title={`${resultLabel(rowResult)} vs ${rowOpponent}`}
                     className={[
@@ -324,7 +324,7 @@ function LatestDispatch({
                     ].join(" ")}
                   >
                     {resultShortLabel(rowResult)}
-                  </Link>
+                  </GameAnalysisLink>
                 </li>
               );
             })}
@@ -332,13 +332,12 @@ function LatestDispatch({
         </div>
       ) : null}
 
-      <Link
-        href={gameAnalysisHref(game.gameId)}
+      <GameAnalysisLink gameId={game.gameId}
         className={`${primaryActionClass()} mt-4`}
       >
         Open full analysis
         <ArrowUpRight className="h-4 w-4" aria-hidden />
-      </Link>
+      </GameAnalysisLink>
     </article>
   );
 }
@@ -378,7 +377,7 @@ function DailyReplayCard({
         {resultLabel(result)}
       </Badge>
       <h3 className="mt-2 text-h4 font-bold leading-snug text-text">
-        Revisit your {resultLabel(result).toLowerCase()} vs {opponent}
+        Revisit your {resultLabel(result).toLowerCase()} vs <OpponentLink pulseId={game.opponent?.pulseId} name={opponent} />
       </h3>
       <div className="mt-3">
         <MapLabel
@@ -399,13 +398,12 @@ function DailyReplayCard({
           value={formatDuration(game.durationSec)}
         />
       </dl>
-      <Link
-        href={gameAnalysisHref(game.gameId)}
+      <GameAnalysisLink gameId={game.gameId}
         className={`${secondaryActionClass()} mt-4`}
       >
         Reopen replay
         <ArrowUpRight className="h-4 w-4" aria-hidden />
-      </Link>
+      </GameAnalysisLink>
     </aside>
   );
 }

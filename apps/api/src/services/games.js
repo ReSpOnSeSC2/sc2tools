@@ -15,6 +15,7 @@ const {
   OPP_INTENT_LABEL_PROJECTION,
 } = require("./buildIntentShape");
 const { withOwnerBuildFlags } = require("./buildIntentReaders");
+const { ownedGameNeighbors } = require("./gameNeighbors");
 
 /** @param {number} ms */
 function wait(ms) {
@@ -175,7 +176,7 @@ const PUBLIC_GAME_PROJECTION = Object.freeze({
  */
 class GamesService {
   /**
-   * @param {{games: import('mongodb').Collection}} db
+   * @param {{games: import('mongodb').Collection, opponents?:import('mongodb').Collection}} db
    * @param {{
    *   gameDetails?: import('./gameDetails').GameDetailsService,
    *   users?: {
@@ -605,6 +606,12 @@ class GamesService {
     const page = hasMore ? items.slice(0, limit) : items;
     const nextBefore = hasMore ? page[page.length - 1].date : null;
     return { items: page.map(withOwnerBuildFlags), nextBefore };
+  }
+
+  /** @param {string} userId @param {string} gameId
+   * @param {Parameters<typeof ownedGameNeighbors>[3]} [opts] */
+  async neighbors(userId, gameId, opts = {}) {
+    return ownedGameNeighbors(this.db, userId, gameId, opts);
   }
 
   /**

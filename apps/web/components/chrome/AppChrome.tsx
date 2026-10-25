@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { backToGameSource, safeGameSource } from "@/lib/gameNavigation";
 import { usePathname } from "next/navigation";
 import { ClerkLoading, useAuth, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Bug, ChevronLeft, Cpu, LifeBuoy, LogIn, MoreHorizontal, PanelLeftOpen, PanelLeftClose, Settings } from "lucide-react";
@@ -263,6 +264,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             {showBack ? (
               <Link
                 href={backHref}
+                onClick={(event) => backToGameSource(event, safeGameSource(backHref))}
                 onNavigate={() => beginNavigation(backHref)}
                 aria-label={backLabel}
                 className="grid h-11 w-11 shrink-0 place-items-center md:h-8 md:w-8 rounded-full border-2 border-border text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"

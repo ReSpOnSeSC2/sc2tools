@@ -20,7 +20,7 @@ from sc2tools_agent.ui.companion_builds import build_companion_builds
 class Controller:
     def __init__(self):
         self.available = True
-        self.prefs = CheckinPrefs()
+        self.prefs = CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True)
         self.calls = []
 
     def __getattr__(self, method):
