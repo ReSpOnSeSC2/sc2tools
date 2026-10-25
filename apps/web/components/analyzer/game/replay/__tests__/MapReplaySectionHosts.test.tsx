@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { rawPayload } from "./fixtures";
 
@@ -30,6 +30,7 @@ vi.mock("@/lib/clientApi", () => ({
 }));
 
 const { MapReplaySection } = await import("../../MapReplaySection");
+beforeAll(async () => { await import("../ReplayStage"); });
 
 describe("MapReplaySection hosts", () => {
   beforeEach(() => {
@@ -41,11 +42,12 @@ describe("MapReplaySection hosts", () => {
     }));
   });
 
-  it("seeks when delayed playback arrives, stays paused, and preserves user scrubbing on refresh", () => {
+  it("seeks when delayed playback arrives, stays paused, and preserves user scrubbing on refresh", async () => {
     api.result = { data: undefined, isLoading: true };
     const view = render(<MapReplaySection gameId="g1" initialTimeSec={360} />);
     api.result = { data: rawPayload(), isLoading: false };
     view.rerender(<MapReplaySection gameId="g1" initialTimeSec={360} />);
+    await screen.findByRole("slider", { name: /playback position/i });
     const slider = () => screen.getByRole("slider", { name: /playback position/i }) as HTMLInputElement;
     expect(slider().value).toBe("360");
     expect(screen.getByRole("button", { name: /^play$/i })).toBeTruthy();
@@ -55,17 +57,18 @@ describe("MapReplaySection hosts", () => {
     expect(slider().value).toBe("420");
   });
 
-  it("clamps a linked timestamp to playback duration and resets on game or timestamp navigation", () => {
+  it("clamps a linked timestamp to playback duration and resets on game or timestamp navigation", async () => {
     const view = render(<MapReplaySection gameId="g1" initialTimeSec={999999} />);
+    await screen.findByRole("slider", { name: /playback position/i });
     const slider = () => screen.getByRole("slider", { name: /playback position/i }) as HTMLInputElement;
     expect(slider().value).toBe("600");
     view.rerender(<MapReplaySection gameId="g1" initialTimeSec={120} />);
-    expect(slider().value).toBe("120");
+    await waitFor(() => expect(slider().value).toBe("120"));
     fireEvent.change(slider(), { target: { value: "180" } });
     view.rerender(<MapReplaySection gameId="g2" initialTimeSec={120} />);
-    expect(slider().value).toBe("120");
+    await waitFor(() => expect(slider().value).toBe("120"));
     view.rerender(<MapReplaySection gameId="g3" />);
-    expect(slider().value).toBe("0");
+    await waitFor(() => expect(slider().value).toBe("0"));
   });
 
   it("initializes the compact replay at the linked timestamp too", () => {
@@ -75,19 +78,19 @@ describe("MapReplaySection hosts", () => {
     expect(screen.getByRole("button", { name: "▶ Play" })).toBeTruthy();
   });
 
-  it("renders the HUD stage with both rails on the full-page host", () => {
+  it("renders the HUD stage with both rails on the full-page host", async () => {
     render(<MapReplaySection gameId="g1" />);
-    expect(screen.getByTestId("replay-stage")).toBeTruthy();
+    expect(await screen.findByTestId("replay-stage")).toBeTruthy();
     expect(screen.getByTestId("replay-top-bar")).toBeTruthy();
     expect(screen.getByTestId("replay-production-rail")).toBeTruthy();
     expect(screen.getByTestId("replay-build-order-rail")).toBeTruthy();
     expect(screen.getByTestId("replay-transport")).toBeTruthy();
   });
 
-  it("passes player identity through to the top bar", () => {
+  it("passes player identity through to the top bar", async () => {
     render(<MapReplaySection gameId="g1" myName="Serral" oppName="Maru" />);
     // Scoped: the names also label the rails' side switches.
-    const bar = within(screen.getByTestId("replay-top-bar"));
+    const bar = within(await screen.findByTestId("replay-top-bar"));
     expect(bar.getByText("Serral")).toBeTruthy();
     expect(bar.getByText("Maru")).toBeTruthy();
   });
