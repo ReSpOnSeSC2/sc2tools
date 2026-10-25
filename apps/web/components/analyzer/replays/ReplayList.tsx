@@ -137,7 +137,7 @@ interface RowProps {
 }
 
 function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery }: RowProps) {
-  const source = useGameSource();
+  const source = useGameSource(undefined, owner ? listQuery : undefined);
   const analysisHref = owner
     ? gameAnalysisHref(game.gameId, null, source)
     : sharedAnalysisHref(publicRoot || "", game.gameId, listQuery);
@@ -195,7 +195,7 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, p
 }
 
 function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery }: RowProps) {
-  const source = useGameSource();
+  const source = useGameSource(undefined, owner ? listQuery : undefined);
   const analysisHref = owner
     ? gameAnalysisHref(game.gameId, null, source)
     : sharedAnalysisHref(publicRoot || "", game.gameId, listQuery);

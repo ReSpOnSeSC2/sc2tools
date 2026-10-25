@@ -38,6 +38,7 @@ const article: HelpArticle = {
     },
     { type: "heading", text: "Moving between games", anchor: "moving-between-games" },
     { type: "paragraph", text: "Older and Newer step through your games with the active list filters. Choose all games, the same opponent, matchup or effective checked-in build; the scope is remembered on this device. Alt + Left and Alt + Right also step through games while you are not typing. A game opened from an opponent starts with that opponent unless you already chose a scope. Back to Replays, Macro, Builds or the opponent returns to the originating filtered list; when the browser exposes the matching previous entry, it also restores its scroll position. Copied links keep a normal backlink. The H2H chip counts recorded wins and losses against this opponent across all time when that record is available." },
+    { type: "paragraph", text: "Replay search, result, matchup and sort choices are kept in the list URL, so the backlink restores those controls after reopening the list. Nearby games keep a separate snapshot of the active global and supported drilldown filters. Same build follows the game's stored effective check-in or classification label. Custom definition rules and composition sample lists are not reevaluated for navigation: All games applies the supported filters, while the named Back link returns to that custom dossier." },
     { type: "heading", text: "The header", anchor: "header" },
     {
       type: "list",

@@ -603,11 +603,6 @@ function GameMobileCard({
                 {fmtDate(game.date)}
               </span>
             </div>
-            {showPlayers ? (
-              <div className="text-micro">
-                <PlayersCell myName={myName} opponent={game.opponent} pulseId={game.opponent_pulse_id || opponentContext?.pulseId} />
-              </div>
-            ) : null}
             {game.map ? (
               <MapLabel
                 name={game.map}
@@ -660,6 +655,7 @@ function GameMobileCard({
           />
         </div>
       </div>
+      {showPlayers ? <div className="px-3 pb-2 text-micro"><PlayersCell myName={myName} opponent={game.opponent} pulseId={game.opponent_pulse_id || opponentContext?.pulseId} /></div> : null}
       {game.id ? (
         <div className="space-y-2 border-t border-border px-3 py-2">
           {streamLinks && streamLinks.length > 0 ? (

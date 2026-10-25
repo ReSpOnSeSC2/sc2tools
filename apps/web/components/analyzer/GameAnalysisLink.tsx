@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { createContext, useContext, type ComponentProps, type ReactNode } from "react";
+import { type ComponentProps, type ReactNode } from "react";
 import { gameAnalysisHref, type OpponentNavigationContext } from "@/lib/opponentNavigation";
-import { useGameSource } from "@/lib/useGameSource";
+import { GameSourceProvider, useGameSource } from "@/lib/useGameSource";
 
-const SourceLabelContext = createContext<string | undefined>(undefined);
-export function GameSourceLabelProvider({ label, children }: { label: string; children: ReactNode }) {
-  return <SourceLabelContext.Provider value={label}>{children}</SourceLabelContext.Provider>;
+export function GameSourceLabelProvider({ label, filters, replace, children }: { label: string; filters?: string; replace?: boolean; children: ReactNode }) {
+  return <GameSourceProvider label={label} filters={filters} replace={replace}>{children}</GameSourceProvider>;
 }
 
 export function GameAnalysisLink({ gameId, opponentContext, fromLabel, hash = "", ...props }: Omit<ComponentProps<typeof Link>, "href"> & {
@@ -16,7 +15,6 @@ export function GameAnalysisLink({ gameId, opponentContext, fromLabel, hash = ""
   fromLabel?: string;
   hash?: string;
 }) {
-  const contextLabel = useContext(SourceLabelContext);
-  const source = useGameSource(fromLabel ?? contextLabel);
+  const source = useGameSource(fromLabel);
   return <Link {...props} href={`${gameAnalysisHref(gameId, opponentContext, source)}${hash}`} />;
 }

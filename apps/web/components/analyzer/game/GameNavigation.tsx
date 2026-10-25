@@ -7,15 +7,15 @@ import { useApi } from "@/lib/clientApi";
 import { gameAnalysisHref, type OpponentNavigationContext } from "@/lib/opponentNavigation";
 import { isGameNeighborScope, type GameNeighborScope, type GameSource } from "@/lib/gameNavigation";
 import type { GameSummary } from "./types";
+import { gameSourceFilters } from "@/lib/gameSourceFilters";
 
 const SCOPE_KEY = "sc2tools:game-neighbor-scope:v1";
-const FILTER_KEYS = new Set(["since", "until", "patch_era", "race", "opp_race", "map", "mmr_min", "mmr_max", "opp_strategy", "group_by_race_played", "build", "leak", "macro_min", "macro_max", "min_minutes", "max_minutes", "exclude_too_short", "regions", "map_pool", "game_size", "result", "matchup", "q"]);
 type Neighbors = { prev: GameSummary | null; next: GameSummary | null; h2h?: { wins: number; losses: number } | null };
 
 export function ownerNeighborPath(gameId: string, scope: GameNeighborScope, source?: GameSource | null): string {
   const query = new URLSearchParams({ scope });
-  if (source) for (const [key, value] of new URL(source.href, "https://sc2tools.invalid").searchParams) {
-    if (FILTER_KEYS.has(key) && value.length <= 256) query.append(key, value);
+  if (source) for (const [key, value] of new URLSearchParams(gameSourceFilters(source.filters ?? new URL(source.href, "https://sc2tools.invalid").search))) {
+    query.set(key, value);
   }
   return `/v1/games/${encodeURIComponent(gameId)}/neighbors?${query}`;
 }
@@ -50,7 +50,7 @@ export function GameNavigation({ game, source, opponentContext, buildLabel }: {
     <select id={selectId} value={scope} onChange={(event) => {
       if (!isGameNeighborScope(event.target.value)) return;
       setScope(event.target.value); try { localStorage.setItem(SCOPE_KEY, event.target.value); } catch { /* Navigation still works. */ }
-    }} className="min-h-11 max-w-full rounded-md border border-border bg-bg-surface px-3 text-text">
+    }} title="Same build follows the game's stored effective check-in or classified build label. Custom definition rules are not evaluated here." className="min-h-11 max-w-full rounded-md border border-border bg-bg-surface px-3 text-text">
       <option value="all">All games</option><option value="opponent">Same opponent</option><option value="matchup">Same matchup</option><option value="build">Same build</option>
     </select>
     {record && Number.isInteger(record.wins) && Number.isInteger(record.losses) && record.wins >= 0 && record.losses >= 0 ? <span className="rounded-full border border-border bg-bg-surface px-3 py-1 tabular-nums" title="Your recorded wins and losses against this opponent, across all time">H2H {record.wins}–{record.losses} all-time</span> : null}

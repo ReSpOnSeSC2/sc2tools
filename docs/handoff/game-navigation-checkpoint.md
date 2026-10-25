@@ -6,12 +6,15 @@ Implements `game-nav-and-replay-controls` in the final plan. The preserved web w
 
 Owner games provide Older/Newer links, remembered all/opponent/matchup/effective-build scope, Alt+arrow navigation, next-game prefetch and optional cached all-time H2H. Safe local source links retain list filters/hash and named build context. History restoration is used only when the browser exposes the actual matching prior entry; other browsers use the durable link. Required replay, game, build and Ladder Pulse lists share opponent links and source-aware game links. Game tabs receive descriptive titles.
 
+Review fixes capture the actual global and supported modal filters in a separate bounded, allowlisted `fromFilters` snapshot; the actual source URL remains unchanged for history matching. Replay-local search/result/matchup/sort choices now live in the replay list URL and restore after a durable backlink or remount. Classified build dossiers retain their named effective-build cohort; custom-rule dossiers retain their name and supported filters without pretending the definition name is a stored build label. Navigation does not reevaluate custom rules or composition sample membership. The mobile games list keeps its opponent link outside the build-order disclosure button.
+
 Replay focus enables play/pause, 10-second and fine seeks, single-loop paused steps, speed changes from 0.25× through 16×, percentage/start/end seeks, event jumps, fullscreen, music and the shortcut sheet. Text fields, native controls and dialogs retain their keys. Settings Escape still closes settings. The sheet stays inside a fullscreen player through an optional Modal portal container. Seeks have a polite announcement. Validated local preferences include rails, sides, workers, autoscroll, volume and mobile panel state, with blocked/malformed storage tolerated.
 
 Today loads Ladder Pulse in a separate chunk with its existing pending frame, keeping navigation additions inside the unchanged first-load budget. Race chips reuse the existing four SVG assets rather than importing the full game icon catalog.
 
 ## Verification at resume
 
+- After the review fixes above: full web TypeScript and strict changed-source ESLint passed, and 116 assertions in nine affected consumer/Help suites passed. New regressions use the real ReplayLibrary, AllGamesTable, BuildDossier and report modal to cover actual cohorts, durable replay-control restoration, bounded snapshots, custom-definition labels and independent mobile opponent/disclosure activation. The production build and browser fixture still need their final rerun after these fixes.
 - Previous checkpoint: 86 focused consumer assertions and 52 real browser checks passed before the final browser script gained title/fullscreen/Alt-navigation assertions. Those totals are historical, overlap, and are not a claim about the integrated head.
 - Current focused navigation, replay controls and Today consumer run: 18 assertions passed in three suites.
 - Current list/game/replay/build/Modal/Help consumer run: 225 assertions passed in 26 suites. Strict ESLint passes every changed/new TypeScript file.

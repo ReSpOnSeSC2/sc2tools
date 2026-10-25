@@ -5,6 +5,7 @@ import { gameSourceFromQuery, previousEntryMatchesSource, safeGameSource } from 
 import { gameAnalysisHref } from "@/lib/opponentNavigation";
 import { GameAnalysisLink, GameSourceLabelProvider } from "../../GameAnalysisLink";
 import { OpponentLink } from "../../OpponentLink";
+import { gameSourceFilters } from "@/lib/gameSourceFilters";
 
 const state = vi.hoisted(() => ({ push: vi.fn(), prefetch: vi.fn(), mutate: vi.fn(), path: "", loading: false, previous: false, error: false, data: { prev: { gameId: "older/id", map: "Old map" }, next: { gameId: "newer", map: "New map" }, h2h: { wins: 3, losses: 2 } } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: state.push, prefetch: state.prefetch }) }));
@@ -63,6 +64,17 @@ describe("owner game navigation", () => {
 });
 
 describe("durable game sources", () => {
+  it("bounds filter snapshots, omits credentials and pagination, and preserves them across neighbor links", () => {
+    expect(gameSourceFilters("race=P&search=Rival&cursor=private&token=secret&limit=25&scope=opponent", "race=T&result=loss")).toBe("race=T&q=Rival&result=loss");
+    expect(gameSourceFilters(`q=${"x".repeat(257)}&map=ok`)).toBe("map=ok");
+    expect(gameSourceFilters("q=bad%00value&build=ok")).toBe("build=ok");
+    expect(gameSourceFilters("x".repeat(4097))).toBe("");
+    const source = safeGameSource("/app/replays?keep=1#archive", "Replays", "race=P&search=Rival")!;
+    const roundTrip = gameSourceFromQuery(Object.fromEntries(new URL(gameAnalysisHref("one", null, source), "https://example.test").searchParams));
+    expect(roundTrip).toEqual(source);
+    expect(ownerNeighborPath("one", "all", roundTrip)).toBe("/v1/games/one/neighbors?scope=all&race=P&q=Rival");
+  });
+
   it("rejects redirects, game chains and oversized URLs, and names originating lists", () => {
     for (const raw of ["https://evil.test/app", "//evil.test/app", "/app\\evil", "/app/../settings", "/app/game/a", "/application", "/app?" + "x".repeat(2048)]) expect(safeGameSource(raw)).toBeNull();
     expect(gameSourceFromQuery({ from: ["/app?tab=macro&race=P", "/bad"] })?.label).toBe("Macro");

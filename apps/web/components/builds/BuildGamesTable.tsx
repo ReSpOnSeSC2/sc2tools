@@ -19,6 +19,7 @@ import { PlannedBadge } from "@/components/build-checkin/PlannedBadge";
 import type { BuildRecentGame } from "./types";
 import { StarGhostReplayButton } from "./StarGhostReplayButton";
 import { ReferenceComparison } from "./ReferenceComparison";
+import { GameSourceProvider } from "@/lib/useGameSource";
 
 interface BuildOrderResp {
   ok: boolean;
@@ -106,6 +107,7 @@ export function BuildGamesTable({
   const hasResumedGames = totalResumed > 0;
 
   return (
+    <GameSourceProvider filters={activeFilter === "win" || activeFilter === "loss" ? `result=${activeFilter}` : /^[PTZ]$/.test(activeFilter) ? `opp_race=${activeFilter}` : undefined}>
     <Card
       title={total != null && total > groupedGames.competitive.length ? `Latest ${groupedGames.competitive.length} of ${total} games` : `Recent games · ${groupedGames.competitive.length}`}
     >
@@ -188,6 +190,7 @@ export function BuildGamesTable({
         </>
       )}
     </Card>
+    </GameSourceProvider>
   );
 }
 

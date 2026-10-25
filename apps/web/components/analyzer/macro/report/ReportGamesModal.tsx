@@ -10,6 +10,7 @@ import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { AllGamesTable } from "../../AllGamesTable";
 import type { ProfileGame } from "../../Last5GamesTimeline";
 import type { ReportDrill } from "./types";
+import { GameSourceProvider } from "@/lib/useGameSource";
 
 const GAMES_LIMIT = 100;
 
@@ -111,7 +112,7 @@ export function ReportGamesModal({
         />
       ) : (
         <>
-          <AllGamesTable games={games} myName={myName} />
+          <GameSourceProvider filters={query ?? ""} replace><AllGamesTable games={games} myName={myName} /></GameSourceProvider>
           {data && (data.total || 0) > games.length ? (
             <p className="mt-3 text-micro text-text-dim">
               Showing the {games.length.toLocaleString()} most recent of{" "}

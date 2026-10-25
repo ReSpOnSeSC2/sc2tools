@@ -150,6 +150,7 @@ export function BuildDossier({
   } | null>(null);
   const scope = `${apiPath}|${phasePerspective ?? "default"}`;
   const activeGameFilter = gameFilter?.scope === scope ? gameFilter : null;
+  const customRules = apiPath.startsWith("/v1/custom-builds/");
 
   if (isLoading && !data && !error) {
     return (
@@ -208,7 +209,7 @@ export function BuildDossier({
   };
 
   return (
-    <GameSourceLabelProvider label={data.name}><div className="space-y-5">
+    <GameSourceLabelProvider label={data.name} replace={!customRules} filters={`${new URL(apiPath, "https://sc2tools.invalid").search.slice(1)}${customRules ? "" : `&build=${encodeURIComponent(data.name)}`}`}><div className="space-y-5">
       {headerSlot ? headerSlot(data) : null}
       {sectionNavigation ? <BuildDossierNav /> : null}
       {error ? (
