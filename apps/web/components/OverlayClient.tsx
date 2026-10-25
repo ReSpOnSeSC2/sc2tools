@@ -242,7 +242,7 @@ function ConnectedOverlayClient({
   const testTargets = (id: WidgetId) => enabled.has(id) && (!singleWidget || singleWidget === id) && testLayer.targets(id);
   const realSlot = (id: WidgetId, card: ReactNode) => <div data-overlay-real={id} style={{ display: testTargets(id) ? "none" : undefined }}>{card}</div>;
 
-  if (connectionStatus === "invalid") return <><OverlaySetupCard reason="invalid-token" /><OverlayCheckBadge status="invalid" /></>;
+  if ((connectionStatus === "invalid" || connectionStatus === "replaced")) return <><OverlaySetupCard reason={connectionStatus === "replaced" ? "replaced" : "invalid-token"} /><OverlayCheckBadge status={connectionStatus} /></>;
 
   return (
     <div

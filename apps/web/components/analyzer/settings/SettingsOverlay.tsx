@@ -1,25 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import {
-  Plus,
-  Trash2,
   Tv,
   AlertTriangle,
   BookOpen,
   ArrowUpRight,
 } from "lucide-react";
-import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
+import { apiCall, boundedApiRequest, useApi, type ClientApiError } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
 import { WidgetList } from "./OverlayWidgetGrid";
-import { Badge } from "@/components/ui/Badge";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
-import { fmtAgo } from "@/lib/format";
 import { useOverlayTests, OverlayLiveTestDialog } from "./OverlayTestControls";
 import { OverlayProfileEditor } from "./OverlayProfileEditor";
 import {
@@ -51,6 +46,7 @@ import { OverlayManagerNav, useOverlaySection } from "./OverlayManagerNav";
 import { OverlayStarterPacks } from "./OverlayStarterPacks";
 import { OverlayDockSetup, OverlayBotSettings } from "./OverlayDockSetup";
 import { OverlayHealthProvider } from "@/components/overlay/OverlayHealthContext";
+import { OverlayTokenManager } from "./OverlayTokenManager";
 import { OverlayHealthBoard } from "./OverlayHealthBoard";
 
 /**
@@ -59,33 +55,47 @@ import { OverlayHealthBoard } from "./OverlayHealthBoard";
  * The user shouldn't have to click "Create" to start using the overlay
  * — a brand-new account auto-mints a "Default" token the first time
  * this tab loads, then renders every widget URL inline with a Copy
- * button. Multiple tokens are still supported (handy for "main scene"
- * vs "friend test"), but they're surfaced as a compact list at the
- * bottom rather than gating the URLs behind a form.
+ * button. An owner-scoped selector drives every displayed source URL;
+ * Tokens provides rename, resumable rotation and separate danger revocation.
  */
 
 type OverlayResp = { items: OverlayToken[] };
 
 export function SettingsOverlay({ origin }: { origin?: string }) {
-  const { getToken, userId, isLoaded, isSignedIn } = useAuth();
+  const { userId, isLoaded, isSignedIn } = useAuth();
+  if (!isLoaded || !isSignedIn || !userId) return <Skeleton rows={3} />;
+  return <SettingsOverlayOwner key={userId} origin={origin} />;
+}
+
+function SettingsOverlayOwner({ origin }: { origin?: string }) {
+  const { getToken: readToken, userId, isLoaded, isSignedIn } = useAuth();
+  const live = useRef(true);
+  useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
+  const getToken = useCallback(async () => {
+    if (!live.current) throw new Error("Account changed");
+    const token = await readToken();
+    if (!live.current) throw new Error("Account changed");
+    return token;
+  }, [readToken]);
   const section = useOverlaySection();
   const { data, isLoading, error, mutate } = useApi<OverlayResp>(
-    "/v1/overlay-tokens",
+    "/v1/overlay-tokens", { keepPreviousData: false }, { timeoutMs: 15_000 },
   );
   const { toast } = useToast();
 
   const [busyToken, setBusyToken] = useState<string | null>(null);
-  const [pendingRevoke, setPendingRevoke] = useState<OverlayToken | null>(null);
-  const [revoking, setRevoking] = useState(false);
+  const [selection, setSelection] = useState<{ owner: string; token: string } | null>(null);
   const [autoMintError, setAutoMintError] = useState<string | null>(null);
   const { testingWidget, pendingLiveTest, setPendingLiveTest, testWidget } = useOverlayTests(getToken, toast);
   const autoMintingRef = useRef(false);
 
+  const owner = isLoaded && isSignedIn && userId ? userId : null;
   const items = useMemo(
-    () => (data?.items ?? []).filter((i) => !i.revokedAt),
-    [data],
+    () => owner ? (data?.items ?? []).filter((i) => !i.revokedAt || i.rotationPending) : [],
+    [data, owner],
   );
-  const activeToken = items[0] ?? null;
+  const activeToken = items.find(item => selection?.owner === owner && item.token === selection.token) ?? items[0] ?? null;
+  const selectToken = (token: string) => { if (owner) setSelection({ owner, token }); };
 
   // Ghost's nine exact-matchup slots travel in the dedicated widget URL;
   // the larger saved-build library stays local and only powers the picker.
@@ -176,84 +186,46 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
   // Auto-mint a default token on first visit so the user can copy URLs
   // immediately without clicking through a form.
   useEffect(() => {
-    if (isLoading || error) return;
+    if (!owner || isLoading || error || data?.items.some(item => item.rotationPending)) return;
     if (data && items.length === 0 && !autoMintingRef.current) {
       autoMintingRef.current = true;
       void (async () => {
         try {
-          await apiCall(getToken, "/v1/overlay-tokens", {
+          await boundedApiRequest(signal => apiCall(getToken, "/v1/overlay-tokens", {
             method: "POST",
-            body: JSON.stringify({ label: "Default" }),
-          });
-          await mutate();
+            body: JSON.stringify({ label: "Default" }), signal,
+          }), 15_000);
+          if (live.current) await mutate();
         } catch (err) {
           const message =
             (err as ClientApiError | undefined)?.message ?? "Please try again.";
-          setAutoMintError(message);
+          if (live.current) setAutoMintError(message);
         } finally {
           autoMintingRef.current = false;
         }
       })();
     }
-  }, [isLoading, error, data, items.length, getToken, mutate]);
-
-  async function mintAdditional() {
-    try {
-      const label = `Token ${items.length + 1}`;
-      await apiCall(getToken, "/v1/overlay-tokens", {
-        method: "POST",
-        body: JSON.stringify({ label }),
-      });
-      await mutate();
-      toast.success(`Minted "${label}"`);
-    } catch (err) {
-      const message =
-        (err as ClientApiError | undefined)?.message ?? "Please try again.";
-      toast.error("Couldn't mint token", { description: message });
-    }
-  }
-
-  async function confirmRevoke() {
-    const target = pendingRevoke;
-    if (!target || revoking) return;
-    setRevoking(true);
-    try {
-      await apiCall(
-        getToken,
-        `/v1/overlay-tokens/${encodeURIComponent(target.token)}`,
-        { method: "DELETE" },
-      );
-      await mutate();
-      toast.success(`"${target.label}" revoked`);
-      setPendingRevoke(null);
-    } catch (err) {
-      const message =
-        (err as ClientApiError | undefined)?.message ?? "Please try again.";
-      toast.error("Couldn't revoke token", { description: message });
-    } finally {
-      setRevoking(false);
-    }
-  }
+  }, [owner, isLoading, error, data, items.length, getToken, mutate]);
 
   async function toggleWidget(token: string, widget: string, on: boolean) {
-    if (busyToken) return;
+    if (!live.current || busyToken) return;
     setBusyToken(token);
     try {
-      await apiCall(
+      await boundedApiRequest(signal => apiCall(
         getToken,
         `/v1/overlay-tokens/${encodeURIComponent(token)}/widgets`,
         {
           method: "PATCH",
-          body: JSON.stringify({ widget, enabled: on }),
+          body: JSON.stringify({ widget, enabled: on }), signal,
         },
-      );
-      await mutate();
+      ), 15_000);
+      if (live.current) await mutate();
     } catch (err) {
       const message =
         (err as ClientApiError | undefined)?.message ?? "Please try again.";
-      toast.error("Couldn't update widget", { description: message });
+      if (live.current) toast.error("Couldn't update widget", { description: message });
     } finally {
-      setBusyToken(null);
+      if (live.current) setBusyToken(null);
     }
   }
 
@@ -306,8 +278,11 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
     return <Skeleton rows={3} />;
   }
 
+  if (activeToken.rotationPending) return <OverlayTokenManager key={owner} items={items} selected={activeToken} onSelect={selectToken} onRefresh={() => mutate()} />;
+
   return (
     <OverlayProfileEditor key={`${userId}:${activeToken.token}`} token={activeToken} onSaved={saved => { void mutate(previous => previous ? { items: previous.items.map(item => item.token === activeToken.token ? { ...item, ...saved } : item) } : previous, { revalidate: false }); }}>{({ profile, saving: profileSaving, setTheme, setDuration }) => <OverlayHealthProvider token={activeToken.token} enabledWidgets={activeToken.enabledWidgets} enabled={section === "setup" || section === "widgets"}><div className="space-y-6">
+      <OverlayTokenManager key={owner} items={items} selected={activeToken} onSelect={selectToken} onRefresh={() => mutate()} compact={section !== "tokens"} />
       <OverlayManagerNav section={section} />
       <div hidden={section !== "setup" && section !== "widgets"}><OverlayHealthBoard /></div>
       <div hidden={section !== "setup"} className="space-y-6">
@@ -430,81 +405,8 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
       <fieldset className="min-w-0 max-w-full" disabled={profileSaving}><OverlayThemeSection theme={profile.theme} onChange={setTheme} /></fieldset>
       </div>
 
-      <div hidden={section !== "tokens"}>
-      <Section
-        title="Manage tokens"
-        description="Each token is a hidden bearer credential. Revoke a token to invalidate every URL above (handy if a stream key ever leaks)."
-      >
-        <Card padded={false}>
-          <ul className="divide-y divide-border">
-            {items.map((t) => (
-              <li
-                key={t.token}
-                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-body font-medium text-text">
-                      {t.label}
-                    </span>
-                    <Badge variant="cyan" size="sm">
-                      {`${t.token.slice(0, 6)}…${t.token.slice(-4)}`}
-                    </Badge>
-                    {t.token === activeToken.token ? (
-                      <Badge variant="success" size="sm">
-                        active
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <div className="mt-0.5 text-caption text-text-muted">
-                    Created {fmtAgo(t.createdAt)}
-                    {t.lastSeenAt
-                      ? ` · seen ${fmtAgo(t.lastSeenAt)}`
-                      : " · not yet connected"}
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setPendingRevoke(t)}
-                  iconLeft={<Trash2 className="h-4 w-4" aria-hidden />}
-                >
-                  Revoke
-                </Button>
-              </li>
-            ))}
-          </ul>
-          <div className="border-t border-border px-4 py-3">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => void mintAdditional()}
-              iconLeft={<Plus className="h-4 w-4" aria-hidden />}
-            >
-              Mint another token
-            </Button>
-          </div>
-        </Card>
-      </Section>
-      </div>
-
       <OverlayLiveTestDialog pending={pendingLiveTest} busy={testingWidget !== null} origin={origin}
         onClose={() => setPendingLiveTest(null)} onSend={() => { if (pendingLiveTest) void testWidget(pendingLiveTest.token, pendingLiveTest.widget, true); }} />
-      <ConfirmDialog
-        open={pendingRevoke !== null}
-        onClose={() => (revoking ? undefined : setPendingRevoke(null))}
-        onConfirm={confirmRevoke}
-        title="Revoke overlay token?"
-        description={
-          pendingRevoke
-            ? `OBS sources using "${pendingRevoke.label}" will go blank immediately. This can't be undone — you'll need a new token + URL.`
-            : undefined
-        }
-        confirmLabel="Revoke"
-        cancelLabel="Cancel"
-        intent="danger"
-        loading={revoking}
-      />
     </div></OverlayHealthProvider>}</OverlayProfileEditor>
   );
 }

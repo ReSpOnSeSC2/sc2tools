@@ -1396,7 +1396,7 @@ async function emitOverlayLive(
   const activeTokens = [];
   for (const t of items) {
     if (!t || !t.token) continue;
-    if (t.revokedAt) continue;
+    if (t.revokedAt || t.rotationPending) continue;
     activeTokens.push(t.token);
     io.to(`overlay:${t.token}`).emit("overlay:live", payload);
   }
@@ -1424,11 +1424,13 @@ async function emitOverlayLive(
       }
       if (reasons.length > 0) {
         for (const token of activeTokens) {
-          await eng.recordMoment(token, {
+          try { await eng.recordMoment(token, {
             kind: "game-event",
             reason: `${payload.result === "win" ? "Victory" : "Defeat"} vs ${payload.oppName ?? "opponent"} — ${reasons.join(", ")}`,
             gameKey: payload.gameKey,
-          });
+          }); } catch (err) {
+            if (!["overlay_rotation_pending", "overlay_token_resolve_busy", "invalid_overlay_token"].includes(/** @type {any} */ (err)?.code)) throw err;
+          }
         }
       }
     } catch {
@@ -1665,6 +1667,7 @@ function isAbortError(err) {
 
 module.exports = {
   buildGamesRouter,
+  emitOverlayLive,
   createSessionUpdateScheduler,
   createAnalysisCorpusAdmission,
   holdAnalysisCorpusPermit,
