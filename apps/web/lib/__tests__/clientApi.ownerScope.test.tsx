@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { StrictMode, type ReactNode } from "react";
 import { act, cleanup, render, renderHook, waitFor } from "@testing-library/react";
 import { SWRConfig, unstable_serialize } from "swr";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,6 +40,15 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe("useApi actual SWR owner isolation", () => {
+  it("loads under StrictMode effect replay without retaining the retired first operation", async () => {
+    const fetcher = vi.fn(async () => response("A")); vi.stubGlobal("fetch", fetcher);
+    const f = fixture();
+    const view = renderHook(() => useApi<PrivateData>(path, { shouldRetryOnError: false }), {
+      wrapper: ({ children }) => <StrictMode><f.wrapper>{children}</f.wrapper></StrictMode>,
+    });
+    await waitFor(() => expect(view.result.current.data?.privateOwner).toBe("A"));
+  });
+
   it("never caches a held A JWT resolved with B credentials into A's key, including A→B→A", async () => {
     const token = deferred<string>();
     h.auth.getToken.mockReturnValueOnce(token.promise);
