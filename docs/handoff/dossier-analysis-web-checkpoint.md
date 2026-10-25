@@ -1,0 +1,13 @@
+# Dossier analysis: timings, phases and sampled history
+
+This is PR B of `dossier-upgrade`, following merged PR712. API foundation commits431882ae/666dff00 preserve the separately reviewed original commits2d1983dd/a3973844. The source branch is `codex/wave3-dossier-analysis-web` in `.worktrees/admin-build-studio`; the original Build Studio and API branches remain preserved.
+
+The web profile stays metadata-only. One lazy, authenticated analysis resource supplies key timings and the existing unmodified phase trajectory, composition and transition components. Coverage, the100-detail limit, metadata cap and per-perspective missing orders remain explicit. Predictions identify their separate all-date recency cohort and previous-profile probabilities are withheld while the profile changes scope.
+
+A timing row narrows the same clearable history filter as map/strategy selections. The history API intersects up to100 literal sample IDs with owner, opponent and ordinary filters before paging. Durable game URLs carry only `fromSample=1` and bounded ordinary filters. Standard Older/Newer navigation makes no request until the user chooses Use selected scope; that choice is bound synchronously to owner, source URL and source cohort. Neighbor links then identify the selected standard scope.
+
+The analysis admission gate is acquired before metadata/detail reads and held until completion, preserving the2-active/8-waiter bound. Old device-authenticated profile requests retain the rich payload for installed Companions; Clerk web requests use the cheap profile. Future Companion source calls the explicit rich analysis endpoint. No additional infrastructure, migration, integration activation or deployment operation is required.
+
+Local verification before final integration:32 consumer tests across analysis/history/profile/navigation;98 synthetic real-browser checks across320/390/768/1440px in both themes, including lazy admission, shared request, legacy timing fallback, small-sample omission, >10-minute clamping, partial coverage, sample membership/clearing, navigation opt-in, busy backoff and network recovery. Browser traffic is loopback only with synthetic auth and all writes blocked. Screenshots are `docs/handoff/screenshots/dossier-analysis-{light,dark}-{320,390,768,1440}.png`. Production build, final integrated tests, CI and merge evidence will be appended before shipping.
+
+Help is in `/help/opponent-dossier#reading-key-timings`: reach Timings, choose Theirs/Yours and a matchup, read count/quartile/last-seen/trend/win rate, select a row for sampled History, clear its chip to widen history, and explicitly choose standard navigation on an individual sampled game.

@@ -13,6 +13,7 @@ corresponding GitHub Release.
 
 ### Opponent dossier
 
+- Key timings, phase trajectories, recorded compositions and transitions load together when reached. Timing rows show recorded coverage, quartiles and trends, and filter history to their analyzed sample with explicit navigation scope.
 - Read and copy a six-line scouting brief, follow the all-time meeting series, and move through the dossier with sticky section links. Date overrides stay local to this opponent; history remains directly above private notes.
 - Identity and data quality share one disclosure, normal identity forms wait until requested, and ladder ratings share one card. Busy analysis retries with backoff, while missing history and network failures have distinct recovery states.
 ### Battle reports

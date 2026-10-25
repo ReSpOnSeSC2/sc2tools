@@ -313,10 +313,16 @@ function buildOpponentsRouter(deps) {
       // only when it does. Cached in the community service and run in
       // parallel with the profile; a failure just hides the link.
       const [opp, communityAvailable] = await Promise.all([
-        deps.opponents.get(auth.userId, pulseId, {
-          filters,
-          mergeLinked: req.query.mergeLinked === "1",
-        }),
+        // Installed Companions still request this original URL. Their
+        // trusted device-auth identity keeps the rich contract while the
+        // Clerk web dossier opts into bounded analysis through /analysis.
+        auth.source === "device"
+          ? deps.opponents.getAnalysis(auth.userId, pulseId, {
+            filters, mergeLinked: req.query.mergeLinked === "1", includeProfile: true,
+          })
+          : deps.opponents.get(auth.userId, pulseId, {
+            filters, mergeLinked: req.query.mergeLinked === "1",
+          }),
         deps.community
           ? deps.community.opponentProfileAvailable(pulseId).catch(() => false)
           : Promise.resolve(false),
