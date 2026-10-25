@@ -44,3 +44,12 @@ test("community detail projects shareable reference steps but never nested priva
   const list = await request(h.app).get("/v1/community/builds");
   expect(list.status).toBe(200); expect(JSON.stringify(list.body)).not.toContain("buildOrder");
 });
+
+test("publication stores only the public reference leaves from the private saved build", async () => {
+  const response = await request(h.app).post("/v1/community/builds").set("authorization", "Bearer u:ref-owner")
+    .send({ slug: "reference", title: "Reference publication", publishAnonymously: true });
+  expect(response.status).toBe(201);
+  const row = await h.db.communityBuilds.findOne({ ownerUserId: "u_ref-owner", sourceSlug: "reference" });
+  expect(row?.build.buildOrder).toEqual({ v: 1, source: "game", steps: order.steps });
+  expect(JSON.stringify(row?.build)).not.toContain("private-replay-id");
+});

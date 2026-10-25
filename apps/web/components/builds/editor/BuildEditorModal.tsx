@@ -286,7 +286,7 @@ export function BuildEditorModal({
             hasSignature={!!sourceSignature?.length}
             hasReference={!!readReferenceBuildOrder(editor.draft.buildOrder)?.steps.length}
             demoMode={demoMode}
-            ruleError={firstBuildTokenError(editor.draft.rules, editor.draft.race) || (editor.draft.buildOrder && !readReferenceBuildOrder(editor.draft.buildOrder) ? "Check the reference build-order fields before saving." : null)}
+            ruleError={firstBuildTokenError(editor.draft.rules, editor.draft.race) || (editor.draft.buildOrder && !readReferenceBuildOrder(editor.draft.buildOrder) ? "Check the reference build-order fields before saving." : null) || (!demoMode && !editor.requestReady ? "Sign in again before saving this build." : null)}
           />
         }
       >

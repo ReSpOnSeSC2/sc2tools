@@ -41,11 +41,11 @@ export function BuildExportMenu({ steps, meta, rules = [], extraActions, referen
     try {
       const format = await import("@/lib/gameExport"); if (!current()) return; const metadata = absoluteMeta();
       let text: string;
-      if (reference) text = kind === "markdown" ? format.referenceBuildToMarkdown(reference.steps, metadata) : format.referenceBuildToText(reference.steps, metadata);
+      if (reference) text = kind === "markdown" ? format.referenceBuildToMarkdown(reference.steps, metadata) : format.referenceBuildToText(kind === "print" ? reference.steps.slice(0, 60) : reference.steps, metadata);
       else if (kind === "salt") { const result = format.buildToSalt(steps, metadata); text = result.salt; setSkipped(result.skipped); }
       else if (kind === "markdown") text = format.buildToMarkdownTable(steps, metadata, rules);
       else text = format.buildToText(kind === "print" ? steps.slice().sort((a, b) => a.time - b.time).slice(0, 60) : steps, metadata, kind === "supply" ? "supply-clock" : "clock", rules);
-      if (kind === "print") { setPrintText(text + (steps.length > 60 ? `\n\nFirst 60 of ${steps.length} steps. Copy build order includes every step.` : "")); return; }
+      if (kind === "print") { const total = reference ? reference.steps.length : steps.length; setPrintText(text + (total > 60 ? `\n\nFirst 60 of ${total} steps. Copy build order includes every step.` : "")); return; }
       if (kind === "download") { const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = `${format.gameExportFilename(null, meta.matchup, meta.title)}.txt`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); setMessage("Text file prepared"); return; }
       try { await navigator.clipboard.writeText(text); if (current()) { setMessage("Copied"); toast?.toast.success("Build order copied"); } }
       catch { if (current()) setFallback(text); }

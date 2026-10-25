@@ -3,7 +3,7 @@
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{execFileSync}=require('node:child_process');
 const{chromium,expect}=require('@playwright/test'),axe=require('axe-core');
 const root=process.cwd(),shots='../../docs/handoff/screenshots',calls=[],unexpected=[],saved=new Map();
-let origin,checks=0,captures=0;
+let origin,checks=0,captures=0,holdSaveBody=false,releaseSaveBody;
 const css=fs.readdirSync('.next/static/css',{recursive:true}).filter(name=>name.endsWith('.css')).map(name=>fs.readFileSync(path.join('.next/static/css',name),'utf8')).join('\n');
 const fonts=`@font-face{font-family:FixtureSans;src:url('/fonts/hanken-grotesk-latin.woff2');font-weight:100 900}@font-face{font-family:FixtureDisplay;src:url('/fonts/bricolage-grotesque-latin.woff2');font-weight:100 900}:root{--font-sans:FixtureSans;--font-display:FixtureDisplay}`;
 const server=http.createServer(async(req,res)=>{
@@ -14,7 +14,7 @@ const server=http.createServer(async(req,res)=>{
   if(p==='/v1/me/profile')return json({displayName:'Synthetic owner'});
   if(p==='/v1/custom-builds/preview-matches')return json({matches:[],almost_matches:[],scanned_games:12,truncated:false});
   if(p.startsWith('/v1/community/my-build-publication/'))return json({published:false,authorName:'Synthetic owner',publishAnonymously:false,mirrorPending:false});
-  if(p.startsWith('/v1/custom-builds/')){const slug=decodeURIComponent(p.split('/').at(-1));if(req.method==='PUT'){saved.set(owner+':'+slug,{...body,slug});return json({saved:true,reclassify:null})}return json(saved.get(owner+':'+slug)||{},saved.has(owner+':'+slug)?200:404)}
+  if(p.startsWith('/v1/custom-builds/')){const slug=decodeURIComponent(p.split('/').at(-1));if(req.method==='PUT'){saved.set(owner+':'+slug,{...body,slug});if(holdSaveBody){holdSaveBody=false;res.writeHead(200,{'Content-Type':'application/json'});res.write('{"saved":true,');await new Promise(resolve=>{releaseSaveBody=resolve});return res.end('"reclassify":null,"community":{"mirrorPending":true}}')}return json({saved:true,reclassify:null})}return json(saved.get(owner+':'+slug)||{},saved.has(owner+':'+slug)?200:404)}
   if(p==='/v1/replays')return json({items:[{gameId:'source-game',date:'2026-10-25T12:00:00Z',map:'Synthetic Sanctuary',myRace:'Protoss',result:'win',opponent:{displayName:'Synthetic opponent'}}],page:{hasMore:false,nextCursor:null}});
   if(p==='/v1/games/source-game/build-order')return json({game_id:'source-game',my_race:'Protoss',opp_race:'Zerg',events:[{time:5,name:'Probe',category:'unit',race:'Protoss',supply:13},{time:18,name:'Pylon',is_building:true,race:'Protoss',supply:14},{time:60,name:'Gateway',is_building:true,race:'Protoss',supply:16,supplyApprox:true}],opp_events:[]});
   unexpected.push({p,method:req.method});return json({},404);
@@ -54,7 +54,11 @@ async function shot(page,name){if(process.env.REFERENCE_NO_SHOTS==='1')return;aw
    await geometry(page);await shot(page,`source-${theme}-${width}`);
    await page.evaluate(()=>window.fixtureAuth('synthetic-b'));await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.getByRole('region',{name:'Reference build order'})).toHaveCount(0);expect(errors).toEqual([]);checks+=3;await context.close();
   }
-  expect(unexpected).toEqual([]);expect(calls.filter(call=>call.method==='PUT')).toHaveLength(10);checks+=2;
+  const context=await browser.newContext({viewport:{width:320,height:1000}}),page=await context.newPage();await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());await page.goto(`${origin}/fixture`);
+  const openReference=async name=>{await page.getByRole('button',{name:'Open pasted builder'}).click();await page.getByRole('textbox',{name:'Paste a build order'}).fill('14 - Future action');await page.getByRole('button',{name:'Use pasted order'}).click();await page.getByRole('textbox',{name:/^Name/}).fill(name)};
+  await openReference('Held JWT');const beforeToken=calls.filter(call=>call.method==='PUT').length;await page.evaluate(()=>window.fixtureHoldToken());await page.getByRole('button',{name:'Save build',exact:true}).click();await page.evaluate(()=>{window.fixtureAuth('synthetic-b');window.fixtureReleaseToken()});await expect(page.getByRole('dialog')).toHaveCount(0);await page.waitForTimeout(75);expect(calls.filter(call=>call.method==='PUT')).toHaveLength(beforeToken);checks+=2;
+  await page.evaluate(()=>window.fixtureAuth('synthetic-a'));await openReference('Held response body');const beforeRepair=calls.filter(call=>call.path.includes('/my-build-publication/')).length;holdSaveBody=true;await page.getByRole('button',{name:'Save build',exact:true}).click();await expect.poll(()=>Boolean(releaseSaveBody)).toBe(true);await page.evaluate(()=>window.fixtureAuth('synthetic-b'));releaseSaveBody();await page.waitForTimeout(75);await expect(page.getByRole('region',{name:'Reference build order'})).toHaveCount(0);expect(calls.filter(call=>call.path.includes('/my-build-publication/'))).toHaveLength(beforeRepair);await expect(page.getByText(/^Saved "Held response body"/)).toHaveCount(0);checks+=3;await context.close();
+  expect(unexpected).toEqual([]);expect(calls.filter(call=>call.method==='PUT')).toHaveLength(11);checks+=2;
   console.log(JSON.stringify({result:'PASS',checks,captures,requests:calls.length,externalRequests:0}));
- }finally{await browser.close();server.closeAllConnections();server.close()}
-})().catch(error=>{console.error(error);process.exitCode=1;server.closeAllConnections();server.close()});
+ }finally{releaseSaveBody?.();await browser.close();server.closeAllConnections();server.close()}
+})().catch(error=>{console.error(error);process.exitCode=1;releaseSaveBody?.();server.closeAllConnections();server.close()});
