@@ -20,6 +20,17 @@ function state(profile: StudioBuildProfile): StudioState {
 afterEach(cleanup);
 
 describe("BuildProfileEditor", () => {
+  it("loads the optional graph only after its preview is opened", async () => {
+    render(<BuildProfileEditor profile={TEST_PROFILE} busy={false} onPost={async () => null} />);
+    expect(screen.queryByRole("img")).toBeNull();
+    const disclosure = screen.getByText("Preview graph").closest("details")!;
+    disclosure.open = true; fireEvent(disclosure, new Event("toggle"));
+    expect(await screen.findByRole("img")).toBeTruthy();
+    disclosure.open = false; fireEvent(disclosure, new Event("toggle"));
+    await waitFor(() => expect(screen.queryByRole("img", { hidden: true })).toBeNull());
+    expect((screen.getByRole("textbox", { name: "Build title" }) as HTMLInputElement).value).toBe("Test build");
+  });
+
   it("starts unrated and hidden, with no guessed scores or available show action", () => {
     const onPost = vi.fn();
     render(<BuildProfileEditor profile={DEFAULT_BUILD_PROFILE} busy={false} onPost={onPost} />);

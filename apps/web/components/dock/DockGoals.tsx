@@ -1,5 +1,8 @@
 "use client";
 
+import { DockInput, DockButton } from "./DockControls";
+import { X } from "lucide-react";
+
 /**
  * DockGoals — stream-goal editor for the Stream Dock (up to 4 goals:
  * label, current, target). Value/label edits are local until the
@@ -27,7 +30,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { StudioGoal } from "@/lib/multichat/useStudioState";
-import { DockButton } from "./DockClient";
+
 import type { DockPost } from "./dockActions";
 import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
 
@@ -120,57 +123,59 @@ export function DockGoals({
       {draft.map((g, i) => (
         <div key={i} className="min-w-0 space-y-1.5 rounded-md border border-border p-2">
           <div className="flex min-w-0 items-center gap-1.5">
-            <input
+            <DockInput
               type="text"
               value={g.label}
               onChange={(e) => edit(i, { label: e.target.value })}
               placeholder="Goal label"
               maxLength={40}
-              className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+              className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text placeholder:text-text-muted focus:border-accent"
             />
-            <button
+            <DockButton
               type="button"
               aria-label={`Remove goal ${i + 1}`}
               disabled={busy}
               onClick={() => void remove(i)}
               className="rounded border border-border px-1.5 py-1 text-micro text-text-muted hover:border-danger hover:text-danger disabled:opacity-50"
             >
-              ✕
-            </button>
+              <X aria-hidden className="h-4 w-4" />
+            </DockButton>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <button
+            <DockButton
               type="button"
               aria-label={`Decrement ${g.label || `goal ${i + 1}`}`}
               onClick={() => edit(i, { current: Math.max(0, g.current - 1) })}
               className="rounded border border-border px-2 py-1 text-caption text-text hover:border-accent"
             >
               −1
-            </button>
-            <input
+            </DockButton>
+            <DockInput
               type="number"
               min={0}
               value={g.current}
               onChange={(e) => edit(i, { current: Number(e.target.value) })}
               aria-label="Current value"
-              className="w-16 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption tabular-nums text-text focus:border-accent focus:outline-none"
+              style={{ width: "4rem", maxWidth: "100%" }}
+          className="w-16 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption tabular-nums text-text focus:border-accent"
             />
-            <button
+            <DockButton
               type="button"
               aria-label={`Increment ${g.label || `goal ${i + 1}`}`}
               onClick={() => edit(i, { current: g.current + 1 })}
               className="rounded border border-border px-2 py-1 text-caption text-text hover:border-accent"
             >
               +1
-            </button>
+            </DockButton>
             <span className="text-caption text-text-dim">/</span>
-            <input
+            <DockInput
               type="number"
               min={1}
               value={g.target}
               onChange={(e) => edit(i, { target: Number(e.target.value) })}
               aria-label="Target value"
-              className="w-16 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption tabular-nums text-text focus:border-accent focus:outline-none"
+              style={{ width: "4rem", maxWidth: "100%" }}
+          className="w-16 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption tabular-nums text-text focus:border-accent"
             />
           </div>
         </div>

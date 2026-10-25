@@ -1,5 +1,9 @@
 "use client";
 
+import { DockCopyText } from "./DockCopyText";
+import { Circle, Flame, Play } from "lucide-react";
+import { DockInput, DockButton } from "./DockControls";
+
 /**
  * DockClips — the clip-moment log for the Stream Dock: every moment
  * the engagement service flagged (chat spikes, notable game events),
@@ -21,7 +25,7 @@
 import { useMemo, useState } from "react";
 import type { ClipMoment } from "@/lib/multichat/useEngagementState";
 import { formatOffset, vodLinkAt } from "@/lib/vodLinks";
-import { DockButton } from "./DockClient";
+
 import type { DockPost } from "./dockActions";
 import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
 
@@ -43,7 +47,6 @@ export function DockClips({
   onPost: DockPost;
 }) {
   const [vodDraft, setVodDraft] = useState("");
-  const [copied, setCopied] = useState(false);
   const { run, notice, pending } = useDockPanelActions(studioReady, busy, onPost, {
     saveVod: () => vodDraft.trim() ? { patch: { vodUrl: vodDraft.trim() }, message: "VOD link saved", after: () => setVodDraft("") } : null,
     clearVod: () => ({ patch: { vodUrl: null }, message: "VOD link cleared" }),
@@ -52,8 +55,7 @@ export function DockClips({
   });
   if (!studioReady) return <DockSnapshotState />;
 
-  const copyList = () => {
-    const lines = [...moments]
+  const timestamps = [...moments]
       .sort((a, b) => a.atMs - b.atMs)
       .map((m) => {
         const stamp =
@@ -67,11 +69,7 @@ export function DockClips({
         return `${stamp} — ${m.reason}`;
       })
       .join("\n");
-    void navigator.clipboard?.writeText(lines).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    });
-  };
+
 
   return (
     <fieldset disabled={busy || pending} className="min-w-0"><div className="space-y-2.5">
@@ -101,7 +99,7 @@ export function DockClips({
               disabled={busy}
               onClick={() => void run("mark")}
             >
-              ⏺ Mark stream start
+              <Circle aria-hidden className="h-4 w-4" /> Mark stream start
             </DockButton>
             <span className="text-micro text-text-dim">
               …or it auto-marks when you tap Go live on Starting Soon.
@@ -109,9 +107,7 @@ export function DockClips({
           </>
         )}
         {moments.length > 0 ? (
-          <DockButton disabled={busy} onClick={copyList}>
-            {copied ? "✓ Copied" : "Copy timestamps"}
-          </DockButton>
+          <DockCopyText value={timestamps} label="Copy timestamps" disabled={busy} />
         ) : null}
       </div>
 
@@ -130,7 +126,7 @@ export function DockClips({
           </>
         ) : (
           <>
-            <input
+            <DockInput
               type="url"
               value={vodDraft}
               onChange={(e) => setVodDraft(e.target.value)}
@@ -202,7 +198,7 @@ function MomentRow({
               rel="noopener noreferrer"
               className="text-micro font-semibold tabular-nums text-accent-cyan underline decoration-accent-cyan/50 underline-offset-2 hover:text-accent-hover"
             >
-              ▶ {offsetLabel}
+              <Play aria-hidden className="inline h-3 w-3" /> {offsetLabel}
             </a>
           ) : (
             <span className="text-micro font-semibold tabular-nums text-text">
@@ -215,7 +211,7 @@ function MomentRow({
             m.kind === "game-event" ? "text-accent-cyan" : "text-warning"
           }`}
         >
-          {m.kind === "game-event" ? "Game" : "🔥 Chat"}
+          {m.kind === "game-event" ? "Game" : <><Flame aria-hidden className="inline h-3 w-3" /> Chat</>}
         </span>
       </div>
       <div className="mt-0.5 break-words text-caption text-text">

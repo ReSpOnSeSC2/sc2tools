@@ -14,6 +14,10 @@ corresponding GitHub Release.
 ### Added
 - Live scouting on Today and a large second-screen page reuse your recorded opponent history, with bounded opening counts, recent replay links and an exact-account note popover. The Stream Dock Scout view omits private notes and replay/account actions.
 
+### Stream Dock
+
+- Collapse panels into live summaries, pin frequently used sections, and keep the layout in this browser. Dock controls now show connection text and keyboard focus, give touch users larger targets, and offer selected text when clipboard access is unavailable.
+
 ### Live overlay display
 
 - Save an overlay theme and per-widget display times to its token. Connected OBS sources receive changes without re-copying URLs; existing `?theme=` URLs keep working and retain their explicit look. Previous browser themes can be moved into a draft with an explicit Save.
@@ -62,6 +66,10 @@ corresponding GitHub Release.
 
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
 - Your reviewer profile shows verified leagues, badges, karma and synced-game eligibility. Leaderboard and weekly digest preferences live together there and restore their previous value if saving fails.
+
+### Coaching practice plans
+
+- Assign a plan again from any state, filter plan history with counts, and scan an all-player roster for schedule pace and the latest qualifying game. Period history shows recorded targets and streaks; evidence lists include full W–L totals and an inline retry.
 
 ### Game benchmarks
 

@@ -106,7 +106,7 @@ it("mounts every current user and admin consumer on one socket and fans out reco
   await act(async () => { vi.advanceTimersByTime(2000); });
   await act(async () => { vi.advanceTimersByTime(1); });
   expect(corpusCalls()).toHaveLength(2);
-  expect(h.resources.get("/v1/coaching/assignments?page=1&limit=20")!.mutate).toHaveBeenCalledOnce();
+  expect(h.resources.get("/v1/coaching/assignments?page=1&limit=20&state=active")!.mutate).toHaveBeenCalledOnce();
   expect(screen.getByTestId("analyzer").textContent).toBe("1"); expect(screen.getByTestId("checkin").textContent).toBe("1"); expect(h.refresh).toHaveBeenCalledOnce();
   act(() => h.handlers.get("games:changed")?.({ count: 25, inserted: 2, bulk: true, reason: "ingest" }));
   expect(h.resources.get("/v1/me")!.mutate.mock.calls.filter(([update]) => typeof update === "function")).toHaveLength(2);
