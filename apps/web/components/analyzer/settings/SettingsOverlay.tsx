@@ -21,11 +21,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { fmtAgo } from "@/lib/format";
 import { useOverlayTests, OverlayLiveTestDialog } from "./OverlayTestControls";
-import { useLocalStorageState } from "@/lib/useLocalStorageState";
-import {
-  normalizeOverlayTheme,
-  type OverlayTheme,
-} from "@/lib/overlayTheme";
+import { OverlayProfileEditor } from "./OverlayProfileEditor";
 import {
   assignSavedGhostBuild,
   clearGhostTarget,
@@ -54,6 +50,8 @@ import { ActiveTokenHeader, AllInOneRow, type OverlayToken } from "./OverlayToke
 import { OverlayManagerNav, useOverlaySection } from "./OverlayManagerNav";
 import { OverlayStarterPacks } from "./OverlayStarterPacks";
 import { OverlayDockSetup, OverlayBotSettings } from "./OverlayDockSetup";
+import { OverlayHealthProvider } from "@/components/overlay/OverlayHealthContext";
+import { OverlayHealthBoard } from "./OverlayHealthBoard";
 
 /**
  * Settings · Overlay tab.
@@ -69,7 +67,7 @@ import { OverlayDockSetup, OverlayBotSettings } from "./OverlayDockSetup";
 type OverlayResp = { items: OverlayToken[] };
 
 export function SettingsOverlay({ origin }: { origin?: string }) {
-  const { getToken, userId } = useAuth();
+  const { getToken, userId, isLoaded, isSignedIn } = useAuth();
   const section = useOverlaySection();
   const { data, isLoading, error, mutate } = useApi<OverlayResp>(
     "/v1/overlay-tokens",
@@ -88,24 +86,6 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
     [data],
   );
   const activeToken = items[0] ?? null;
-
-  // Overlay theme — persisted client-side per token (the theme itself
-  // travels in the copyable URLs as ?theme=…, so there's no server
-  // state to sync; localStorage just keeps the pickers stable across
-  // visits). Stored values are untrusted like any ?theme= string:
-  // everything funnels through normalizeOverlayTheme.
-  const [storedTheme, setStoredTheme] = useLocalStorageState<OverlayTheme>(
-    `sc2tools:overlay-theme:${activeToken?.token ?? "default"}`,
-    {},
-    (raw): raw is OverlayTheme =>
-      typeof raw === "object" && raw !== null && !Array.isArray(raw),
-  );
-  const theme = useMemo(
-    () => normalizeOverlayTheme(storedTheme),
-    [storedTheme],
-  );
-  const setTheme = (next: OverlayTheme) =>
-    setStoredTheme(normalizeOverlayTheme(next));
 
   // Ghost's nine exact-matchup slots travel in the dedicated widget URL;
   // the larger saved-build library stays local and only powers the picker.
@@ -291,7 +271,7 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
   // button would snap back as soon as the API responded (~100 ms),
   // leaving the user mashing "Test" while the previous widget was
   // still on screen.
-  if (isLoading) return <Skeleton rows={3} />;
+  if (isLoading || !isLoaded || !isSignedIn || !userId) return <Skeleton rows={3} />;
   if (error) {
     return (
       <Card>
@@ -327,8 +307,9 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
   }
 
   return (
-    <div className="space-y-6">
+    <OverlayProfileEditor key={`${userId}:${activeToken.token}`} token={activeToken} onSaved={saved => { void mutate(previous => previous ? { items: previous.items.map(item => item.token === activeToken.token ? { ...item, ...saved } : item) } : previous, { revalidate: false }); }}>{({ profile, saving: profileSaving, setTheme, setDuration }) => <OverlayHealthProvider token={activeToken.token} enabledWidgets={activeToken.enabledWidgets} enabled={section === "setup" || section === "widgets"}><div className="space-y-6">
       <OverlayManagerNav section={section} />
+      <div hidden={section !== "setup" && section !== "widgets"}><OverlayHealthBoard /></div>
       <div hidden={section !== "setup"} className="space-y-6">
       {/* Browser-import users without a paired agent: the overlay's live data needs it. */}
       <OverlayAgentUpsell />
@@ -389,12 +370,15 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
             testing={testingWidget === "all"}
             anyTesting={testingWidget !== null}
           />
-          <AllInOneRow token={activeToken} origin={origin} theme={theme} />
+          <AllInOneRow token={activeToken} origin={origin} theme={profile.theme} />
           <div hidden={section !== "widgets"}><WidgetList
             key={`${userId}:${activeToken.token}`}
             token={activeToken}
             origin={origin}
-            theme={theme}
+            theme={profile.theme}
+            profile={profile}
+            profileSaving={profileSaving}
+            onDurationChange={setDuration}
             ghostConfig={ghostConfig}
             busy={busyToken === activeToken.token}
             onToggleWidget={(w, on) => toggleWidget(activeToken.token, w, on)}
@@ -411,7 +395,7 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
       <OverlayScenesSection
         token={activeToken.token}
         origin={origin}
-        theme={theme}
+        theme={profile.theme}
       />
       </div>
 
@@ -443,7 +427,7 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         </Card>
       </Section>
 
-      <OverlayThemeSection theme={theme} onChange={setTheme} />
+      <fieldset className="min-w-0 max-w-full" disabled={profileSaving}><OverlayThemeSection theme={profile.theme} onChange={setTheme} /></fieldset>
       </div>
 
       <div hidden={section !== "tokens"}>
@@ -521,6 +505,6 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         intent="danger"
         loading={revoking}
       />
-    </div>
+    </div></OverlayHealthProvider>}</OverlayProfileEditor>
   );
 }

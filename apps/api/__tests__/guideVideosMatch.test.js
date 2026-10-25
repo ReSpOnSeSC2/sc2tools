@@ -24,12 +24,23 @@ const {
 const { extractChecklist, extractExcerpt } = require("../src/services/guideVideoText");
 const { parseChannelFeed } = require("../src/services/guideVideoFeed");
 const { buildNamesForMatchup, strategyNamesForMatchup } = require("../src/config/guideSlugs");
+const { guideTarget } = require("../src/services/guideVideoPublic");
 
 const FEED_FIXTURE = path.join(__dirname, "fixtures", "guides", "youtube-channel-feed.xml");
 
 const NONE = { matchup: null, builds: [], counters: [] };
 /** @param {string} matchup @param {string[]} [builds] @param {string[]} [counters] */
 const mu = (matchup, builds = [], counters = []) => ({ matchup, builds, counters });
+
+describe("public video guide targets", () => {
+  test("only exactly one catalog build can identify a canonical guide", () => {
+    expect(guideTarget({ match: mu("PvZ", ["PvZ - Stargate into Glaives"]) })).toEqual({ key: "build:after:PvZ:stargate-into-glaives", slug: "stargate-into-glaives" });
+    expect(guideTarget({ match: mu("PvZ", ["PvZ - Stargate into Glaives", "PvZ - Carrier Rush"]) })).toBeNull();
+    expect(guideTarget({ match: mu("PvZ", [], ["Zerg - 12 Pool"]) })).toBeNull();
+    expect(guideTarget({ match: NONE })).toBeNull();
+    expect(guideTarget({ match: mu("PvZ", ["invented build"]) })).toBeNull();
+  });
+});
 
 /**
  * Automatic match (title/hashtag rule only) for EVERY snapshot video.

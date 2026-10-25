@@ -129,6 +129,10 @@ COPY apps/api/package.json apps/api/package-lock.json* ./
 RUN npm ci --omit=dev
 
 COPY apps/api/ ./
+# The API runtime is flattened to /app; its shared profile rules resolve at /web.
+COPY apps/web/lib/overlayProfileRules.json /web/lib/overlayProfileRules.json
+COPY apps/web/lib/overlayPresenceRules.json /web/lib/overlayPresenceRules.json
+
 # The API and client read the same pure sample data. /app/src/services' relative
 # ../../../web path resolves here in the flattened runtime image.
 COPY apps/web/lib/overlaySamples.json /web/lib/overlaySamples.json

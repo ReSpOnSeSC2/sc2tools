@@ -138,6 +138,21 @@ function buildOverlayTokensRouter(deps) {
     } catch (err) { next(err); }
   });
 
+  authed.put("/overlay-tokens/:token/profile", async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store");
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)
+        || Object.keys(req.body).some(key => !["profile", "expectedRevision"].includes(key))) {
+        res.status(400).json({ error: { code: "invalid_overlay_profile" } }); return;
+      }
+      const token = String(req.params.token);
+      const result = await deps.overlayTokens.setProfile(req.auth.userId, token, req.body.profile, req.body.expectedRevision);
+      deps.io?.to(`overlay:${token}`).emit("overlay:config", result);
+      res.json(result);
+    } catch (err) { next(err); }
+  });
+
   // Per-token rate limit on live overlay events. A leaked token
   // shouldn't be able to fan out hundreds of messages per second to
   // the overlay's socket room; 10/sec is plenty for the legitimate

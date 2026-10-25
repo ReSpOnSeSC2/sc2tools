@@ -184,6 +184,7 @@ const {
 const { buildCustomBuildsRouter } = require("./routes/customBuilds");
 const { buildDevicePairingsRouter } = require("./routes/devicePairings");
 const { buildOverlayTokensRouter } = require("./routes/overlayTokens");
+const { buildOverlayPresenceRouter } = require("./routes/overlayPresence");
 const {
   buildPlatformIntegrationsRouter,
 } = require("./routes/platformIntegrations");
@@ -1606,6 +1607,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       io: deps.io,
     }),
   );
+  app.use(SERVICE.ROUTE_PREFIX, buildOverlayPresenceRouter({ overlayTokens: services.overlayTokens, liveGameBroker: services.liveGameBroker, auth, io: deps.io }));
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildAggregationsRouter({

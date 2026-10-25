@@ -98,3 +98,11 @@ describe("Stream Studio learning catalog", () => {
     }
   });
 });
+
+
+it("describes saved Display time for each timed widget and leaves persistent visibility explicit", () => {
+  const timed = WIDGET_GUIDES.filter(guide => ["opponent", "match-result", "post-game", "mmr-delta", "streak", "cheese", "rematch", "rival", "rank", "meta", "fav-opening", "best-answer", "scouting", "randomizer", "lower-third"].includes(guide.id));
+  expect(timed).toHaveLength(15);
+  for (const guide of timed) { expect(guide.appears).toContain("Default display time:"); expect(guide.appears).toContain("Save overlay display"); expect(guide.appears).toContain("20s"); }
+  expect(WIDGET_GUIDES.find(guide => guide.id === "session")!.appears).not.toContain("Default display time:");
+});
