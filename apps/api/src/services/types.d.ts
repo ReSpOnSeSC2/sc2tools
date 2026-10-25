@@ -805,6 +805,11 @@ export interface DevicePairingInfo {
 }
 
 export interface OverlayTokensService {
+  rotate(userId:string, token:string):Promise<{pending:boolean,token?:string,unavailable?:boolean,revoked?:boolean}>;
+  rename(userId:string, token:string, label:unknown):Promise<{label:string}>;
+  isReplaced(token:string):Promise<boolean>;
+  replacementReceipts(userId:string):Promise<Array<{from:string;to:string}>>;
+  withWrite<T>(token:string,work:()=>Promise<T>):Promise<T>;
   create(userId: string, label: string): Promise<object>;
   list(userId: string): Promise<
     Array<{
@@ -813,6 +818,8 @@ export interface OverlayTokensService {
       createdAt: Date;
       lastSeenAt?: Date | null;
       revokedAt?: Date | null;
+      rotationPending?: boolean;
+      replacedBy?: string;
       enabledWidgets: string[];
       profile?: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }> };
       profileRevision?: number;

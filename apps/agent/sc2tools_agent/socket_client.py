@@ -69,6 +69,7 @@ class SocketClient:
         on_import_pick_folder: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_bot_lab: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
         on_obs_add: Optional[Callable] = None,
+        on_overlay_tokens_changed: Optional[Callable] = None,
         obs_add_enabled_provider: Optional[Callable[[], bool]] = None,
         on_build_intent_changed: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_scouting_brief: Optional[Callable[[Dict[str, Any]], None]] = None,
@@ -93,6 +94,7 @@ class SocketClient:
         self._on_import_pick_folder = on_import_pick_folder
         self._on_bot_lab = on_bot_lab
         self._on_obs_add = on_obs_add
+        self._on_overlay_tokens_changed = on_overlay_tokens_changed
         self._obs_add_enabled_provider = obs_add_enabled_provider or (lambda: False)
         # Build check-in ping: a live record or a game's check-in changed
         # (web pick, randomizer roll, confirmation), or the check-in
@@ -116,7 +118,7 @@ class SocketClient:
     def with_device_token(self, token: str) -> "SocketClient":
         """Rebuild a stopped socket with its existing event handlers."""
         names = ("recompute_games", "recompute_opp_build", "full_resync", "import_scan",
-                 "import_start", "import_cancel", "import_pick_folder", "bot_lab", "obs_add", "build_intent_changed", "scouting_brief")
+                 "import_start", "import_cancel", "import_pick_folder", "bot_lab", "obs_add", "overlay_tokens_changed", "build_intent_changed", "scouting_brief")
         callbacks = {"on_" + name: getattr(self, "_on_" + name) for name in names}
         return SocketClient(base_url=self._account_base_url, device_token=token,
             overlay_token_provider=self._overlay_token_provider,
@@ -246,6 +248,17 @@ class SocketClient:
             if self._on_obs_add is None or self._stop.is_set():
                 return {"code": "disabled"}
             return await asyncio.to_thread(self._on_obs_add, payload, self._device_token)
+
+        @sio.on("overlay:tokens-changed")
+        async def _on_overlay_tokens_changed(payload):
+            if (self._on_overlay_tokens_changed is None or self._stop.is_set()
+                    or not isinstance(payload, dict) or set(payload) != {"replaced"}
+                    or payload["replaced"] is not True):
+                return
+            try:
+                self._on_overlay_tokens_changed(self._device_token)
+            except Exception as exc:
+                log.debug("overlay_token_advisory_failed type=%s", type(exc).__name__)
 
         @sio.on("macro:recompute_request")
         async def _on_macro(payload: Optional[Dict[str, Any]], *, requested: bool = False) -> Optional[Dict[str, Any]]:  # noqa: ARG001

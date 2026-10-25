@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
+import { responseWasReplaced } from "@/components/overlay/overlayLinkStatus";
 import { DEFAULT_APPEARANCE, sanitizeAppearance, type ChatAppearance } from "@/lib/multichat/appearance";
 import type { MultichatConfig } from "@/lib/multichat/types";
 import { sanitizeTtsConfig, type ChatTtsConfig } from "@/lib/multichat/tts";
@@ -18,7 +19,7 @@ const DEFAULT_MODERATION_APPEARANCE = {
  * every engine when the object identity changes, so styling blobs
  * must never ride along and equal payloads must not mint new objects.
  */
-export function useDockPlatformConfig(token: string, onInvalid: () => void): {
+export function useDockPlatformConfig(token: string, onInvalid: (replaced?: boolean) => void): {
   platforms: MultichatConfig | null;
   moderationAppearance: Pick<ChatAppearance, "blockedUsers" | "hideBots">;
   /** Read-aloud voice settings, shared with the OBS multichat widget. */
@@ -44,7 +45,7 @@ export function useDockPlatformConfig(token: string, onInvalid: () => void): {
           `${API_BASE}/v1/multichat/${encodeURIComponent(token)}/config`,
           { cache: "no-store" },
         );
-        if (!cancelled && res.status === 401) { onInvalid(); return; }
+        if (!cancelled && res.status === 401) { const replaced = await responseWasReplaced(res); if (!cancelled) onInvalid(replaced); return; }
         if (!res.ok) return;
         const body: unknown = await res.json();
         if (!body || typeof body !== "object" || Array.isArray(body)) return;

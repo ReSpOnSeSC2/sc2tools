@@ -46,7 +46,7 @@ function buildOverlayTokensRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const items = await deps.overlayTokens.list(auth.userId);
-      res.json({ items });
+      res.set("Cache-Control", "private, no-store").json({ items });
     } catch (err) {
       next(err);
     }
@@ -62,6 +62,36 @@ function buildOverlayTokensRouter(deps) {
     } catch (err) {
       next(err);
     }
+  });
+
+  const rotationLimiter = rateLimit({ windowMs: 60_000, max: 20, standardHeaders: true, legacyHeaders: false,
+    store: new BoundedRateLimitStore({ maxEntries: 1024 }), keyGenerator: (/** @type {import('express').Request} */ req) => `overlay-rotation:${req.auth?.userId || "anonymous"}` });
+
+  authed.post("/overlay-tokens/:token/rotate", rotationLimiter, async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store");
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      if (req.body && Object.keys(req.body).length) { res.status(400).json({ error: { code: "invalid_rotation_request" } }); return; }
+      const token = String(req.params.token);
+      const result = await deps.overlayTokens.rotate(req.auth.userId, token);
+      if (!result.pending && result.token) {
+        // Overlay sockets also join the user room for existing game events,
+        // so neither room may receive a replacement credential. Native agents
+        // fetch the exact mapping with their separate authenticated device token.
+        deps.io?.to(`overlay:${token}`).emit("overlay:config", { replacedBy: true });
+        deps.io?.to(`user:${req.auth.userId}`).emit("overlay:tokens-changed", { replaced: true });
+      }
+      res.status(result.pending ? 202 : 200).json(result);
+    } catch (err) { next(err); }
+  });
+
+  authed.patch("/overlay-tokens/:token", async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store");
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      if (!req.body || Object.keys(req.body).some(key => key !== "label")) { res.status(400).json({ error: { code: "invalid_overlay_label" } }); return; }
+      res.json(await deps.overlayTokens.rename(req.auth.userId, String(req.params.token), req.body.label));
+    } catch (err) { next(err); }
   });
 
   authed.delete("/overlay-tokens/:token", async (req, res, next) => {

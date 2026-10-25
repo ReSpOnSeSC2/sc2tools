@@ -22,6 +22,10 @@ corresponding GitHub Release.
 
 - Check connected game, chat and Dock sources before going live. Widget cards show identified connections, unknown older pages and possible duplicate audio; failed checks keep an honest unavailable state. The Dock has a counts-only source strip.
 
+### Overlay URL rotation
+
+- Replace a leaked overlay URL while keeping its Studio controls, b-roll, viewer XP and oracle history. Select any token's URLs, rename it inline, and continue an interrupted rotation safely. Recognized generated OBS sources follow exact owned replacements through the desktop app; custom sources and Docks show a clear update notice.
+
 ### Live overlay display
 
 - Save an overlay theme and per-widget display times to its token. Connected OBS sources receive changes without re-copying URLs; existing `?theme=` URLs keep working and retain their explicit look. Previous browser themes can be moved into a draft with an explicit Save.

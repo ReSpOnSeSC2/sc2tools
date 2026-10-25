@@ -356,6 +356,7 @@ def _run_headless(
     api = ApiClient(base_url=cfg.api_base, device_token=state.device_token)
 
     recovery_cell = _RuntimeCell()
+    recovery_cell.no_obs = no_obs
     console = ConsoleUI()
     tray: Optional[TrayUI] = None
 
@@ -498,7 +499,8 @@ def _run_headless(
                       on_check=lambda release: _announce_updated_version(cfg,state,recovery_cell,release))
     recovery_cell.updater = updater
     heartbeat = Heartbeat(api, on_success=recovery.connected,
-                          on_failure=recovery.watchdog.failure, state_dir=cfg.state_dir)
+                          on_failure=recovery.watchdog.failure, state_dir=cfg.state_dir,
+                          on_overlay_tokens=_obs_token_rotation_controller(cfg, state, recovery_cell).heartbeat)
     recovery_cell.watcher = watcher
     recovery_cell.heartbeat = heartbeat
     recovery_cell.import_ctl = import_ctl
@@ -534,6 +536,7 @@ def _run_headless(
             on_import_pick_folder=import_ctl.handle_pick_folder_request,
             on_bot_lab=BotLabController(cfg.state_dir, state).handle,
             on_obs_add=_obs_website_controller(cfg, state, recovery_cell).handle,
+            on_overlay_tokens_changed=_obs_token_rotation_controller(cfg, state, recovery_cell).changed,
             obs_add_enabled_provider=lambda: bool(_obs_website_scope(cfg, state, recovery_cell)),
             overlay_token_provider=lambda token: ApiClient(base_url=cfg.api_base, device_token=token).get_overlay_token(interactive=True),
             session_enabled=state.companion_session_enabled,
@@ -1092,7 +1095,8 @@ def _gui_boot_worker(
         updater = Updater(cfg=cfg,state=state,on_update_available=cell.update_scheduler.offer,
                           on_check=lambda release: _announce_updated_version(cfg,state,cell,release))
         heartbeat = Heartbeat(api, on_success=recovery.connected,
-                              on_failure=recovery.watchdog.failure, state_dir=cfg.state_dir)
+                              on_failure=recovery.watchdog.failure, state_dir=cfg.state_dir,
+                              on_overlay_tokens=_obs_token_rotation_controller(cfg, state, cell).heartbeat)
 
         cell.upload = upload
         cell.watcher = watcher
@@ -1128,6 +1132,7 @@ def _gui_boot_worker(
                 on_import_pick_folder=import_ctl.handle_pick_folder_request,
                 on_bot_lab=BotLabController(cfg.state_dir, state).handle,
                 on_obs_add=_obs_website_controller(cfg, state, cell).handle,
+                on_overlay_tokens_changed=_obs_token_rotation_controller(cfg, state, cell).changed,
                 obs_add_enabled_provider=lambda: bool(_obs_website_scope(cfg, state, cell)),
                 overlay_token_provider=lambda token: ApiClient(base_url=cfg.api_base, device_token=token).get_overlay_token(interactive=True),
                 session_enabled=state.companion_session_enabled,
@@ -2878,6 +2883,24 @@ def _obs_website_controller(cfg, state, cell):
     )
 
 
+def _obs_token_rotation_controller(cfg, state, cell):
+    from .live.obs_token_rotation import ObsTokenRotation
+    def scope():
+        if state.obs_scene_switch_enabled is not True or cell.no_obs or not state.device_token:
+            return None
+        return (cfg.api_base, state.device_token, *_effective_obs_connection(state))
+    with cell.obs_lock:
+        if cell.obs_token_rotation is None:
+            cell.obs_token_rotation = ObsTokenRotation(
+                scope=scope,
+                api_factory=lambda base, token: ApiClient(base_url=base, device_token=token),
+                client_factory=lambda captured: ObsClient(
+                    host=captured[2], port=captured[3], password=captured[4], subscribe_events=False),
+                base_url=_dashboard_url_from_api,
+            )
+        return cell.obs_token_rotation
+
+
 def _handle_obs_build(
     *, cfg: AgentConfig, state: AgentState, request: dict, log: logging.Logger,
 ) -> dict:
@@ -3161,7 +3184,7 @@ def _build_obs_switcher(
     )
     client: ObsClient
 
-    def _repair_generated_manual_covers() -> None:
+    def _repair_generated_manual_covers_locked() -> None:
         """Upgrade legacy generated layouts after each OBS connection.
 
         This callback is best-effort by design: scene switching must stay
@@ -3301,6 +3324,18 @@ def _build_obs_switcher(
         finally:
             repair_client.shutdown()
 
+    def _repair_generated_manual_covers() -> None:
+        # The token repair and explicit builder/Add paths share these inputs.
+        # Inventory and writes must stay in one critical section so a stale
+        # startup snapshot cannot restore an old bearer URL after rotation.
+        from .live.obs_game_overlay import OBS_GAME_WRITE_LOCK
+        if not OBS_GAME_WRITE_LOCK.acquire(timeout=2.0):
+            return  # Best effort; the next OBS connection retries startup repair.
+        try:
+            _repair_generated_manual_covers_locked()
+        finally:
+            OBS_GAME_WRITE_LOCK.release()
+
     client = ObsClient(
         host=host,
         port=port,
@@ -3380,6 +3415,7 @@ class _RuntimeCell:
         "obs_client",
         "obs_scene",
         "obs_lock",
+        "obs_token_rotation",
         "no_obs",
     )
 
@@ -3414,6 +3450,7 @@ class _RuntimeCell:
         # the controller. One lock prevents duplicate EventBus subscriptions
         # and makes the persisted gate authoritative at startup.
         self.obs_lock = threading.RLock()
+        self.obs_token_rotation = None
         self.no_obs = False
 
 

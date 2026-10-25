@@ -408,3 +408,10 @@ test("connect includes the token's saved display profile and its revision", asyn
   io.runConnect(socket); await new Promise(resolve => setImmediate(resolve));
   expect(socket.emitted.find(entry => entry.event === "overlay:config")?.payload).toMatchObject({ profile, profileRevision: 4 });
 });
+
+
+test("a replaced overlay bearer gets only a terminal boolean reason, never its replacement", async () => {
+  const io = setupIo();
+  attachSocketAuth(io, { secretKey: "test", resolveOverlayToken: async () => null, isOverlayTokenReplaced: async () => true });
+  await expect(io.runHandshake({ auth: { overlayToken: "old-private" } })).rejects.toThrow("overlay_token_replaced");
+});

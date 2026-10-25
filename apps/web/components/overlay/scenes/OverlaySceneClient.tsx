@@ -223,7 +223,7 @@ function DockDrivenSceneContent({ token, scene, staticMode, demo, showCredit, th
   // Live: hiding just the headline would still leave an opaque backdrop over
   // the broadcast. Demo mode intentionally shows Starting Soon so Settings can
   // preview the otherwise-invisible source.
-  if (!demo && connectionStatus === "invalid") return <><OverlaySetupCard reason="invalid-token" /><OverlayCheckBadge status="invalid" /></>;
+  if (!demo && (connectionStatus === "invalid" || connectionStatus === "replaced")) return <><OverlaySetupCard reason={connectionStatus === "replaced" ? "replaced" : "invalid-token"} /><OverlayCheckBadge status={connectionStatus} /></>;
   const checkBadge = <OverlayCheckBadge status={demo ? "connected" : connectionStatus} live={hasActiveOverlayGame(liveGame)} />;
   if (scene === "manual" && !demo && !dockScene) {
     return (
