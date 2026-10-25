@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useApi } from "@/lib/clientApi";
-import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import { useFilters, filtersToQuery, describeActiveFilters } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
@@ -20,6 +20,13 @@ import {
 } from "./PhaseCompositionTabs";
 import type { CustomBuild } from "@/components/builds/types";
 import type { BuildPhasePayload } from "@/lib/serverApi";
+import { Download } from "lucide-react";
+import { Input } from "@/components/ui/Input";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { useLocalStorageState } from "@/lib/useLocalStorageState";
+import { csvFilename, downloadCsv, toCsv, type CsvColumn } from "@/lib/csvExport";
+import { defaultMatrixRace, matrixAxes as matrixAxesForExport, type MatrixRace } from "@/lib/strategyMatrix";
+import { StrategyMatrixHeatmap } from "./StrategyMatrixHeatmap";
 
 /**
  * Build × Opponent-strategy matrix for ``StrategiesTab``.
@@ -33,6 +40,7 @@ import type { BuildPhasePayload } from "@/lib/serverApi";
 const LS_BVS_SORT = "analyzer.strategies.bvs.sort";
 
 export type BvsCell = StrengthFields & {
+  myMatchups?: Partial<Record<"P" | "T" | "Z", number>>;
   my_build: string;
   opp_strat: string;
   wins: number;
@@ -41,8 +49,14 @@ export type BvsCell = StrengthFields & {
   winRate: number;
 };
 
+const BVS_COLUMNS: readonly (CsvColumn<BvsCell> & { strength?: boolean })[] = [
+  { key: "my_build", label: "My build" }, { key: "opp_strat", label: "vs Opponent strategy" },
+  { key: "wins", label: "W" }, { key: "losses", label: "L" }, { key: "total", label: "Games" }, { key: "winRate", label: "WR" },
+  { key: "winsAboveExpected", label: "Vs expected", strength: true, format: (value, row) => (row.ratedGames ?? 0) > 0 && typeof value === "number" ? value : null },
+];
+
 export interface BuildVsStrategyViewProps {
-  onOpenBvs: (build: string, strategy: string) => void;
+  onOpenBvs: (build: string, strategy: string, race?: string) => void;
   /** Current view mode — fully controlled by the caller. */
   initialView: "heatmap" | "table";
   /** Current min-games threshold — fully controlled by the caller. */
@@ -67,214 +81,50 @@ export function BuildVsStrategyView({
   onMinGamesChange,
   renderMinGamesPicker,
 }: BuildVsStrategyViewProps) {
-  const { filters, dbRev } = useFilters();
+  const { filters, dbRev, seasons } = useFilters();
   const [search, setSearch] = useState("");
-  // Fully controlled: ``view`` / ``minGames`` are owned by the parent
-  // so localStorage hydration in StrategiesTab (via
-  // ``useLocalStorageState``) flows straight through. Re-introducing
-  // local copies under ``useState(initialFoo)`` was the source of a
-  // hydration desync — the inner state captured the pre-hydration
-  // default and never picked up the user's saved value.
-  const view = initialView;
-  const setView = onViewChange;
-  const minGames = initialMinGames;
-  const setMinGames = onMinGamesChange;
+  const [chosenRace, setChosenRace] = useState<{ scope: string; race: MatrixRace } | null>(null);
+  const [axisOrder, setAxisOrder] = useLocalStorageState<"games" | "az">("analyzer.bvs.sort", "games", (raw): raw is "games" | "az" => raw === "games" || raw === "az");
+  const view = initialView, minGames = initialMinGames;
   const sort = usePersistentSort(LS_BVS_SORT, "total", "desc");
-
-  const cellsApi = useApi<BvsCell[]>(
-    `/v1/build-vs-strategy${filtersToQuery(filters)}#${dbRev}`,
-  );
-  const { data } = cellsApi;
-
+  const scopeKey = filtersToQuery(filters);
+  const overall = useApi<BvsCell[]>(`/v1/build-vs-strategy${scopeKey}#${dbRev}`, { keepPreviousData: false });
+  const localRace = chosenRace?.scope === scopeKey ? chosenRace.race : defaultMatrixRace(overall.data);
+  const race = filters.opp_race || (localRace === "all" ? undefined : localRace);
+  // One selected-cohort request, never a request per race. Preserve every global
+  // filter, including strategy, when narrowing the local matrix.
+  const selected = useApi<BvsCell[]>(!filters.opp_race && race ? `/v1/build-vs-strategy${filtersToQuery({ ...filters, opp_race: race })}#${dbRev}` : null, { keepPreviousData: false });
+  const cellsApi = !filters.opp_race && race ? selected : overall;
   const { filtered, hiddenByMinGames } = useMemo(() => {
-    let r = data || [];
-    const s = search.trim().toLowerCase();
-    if (s) {
-      r = r.filter(
-        (x) =>
-          (x.my_build || "").toLowerCase().includes(s) ||
-          (x.opp_strat || "").toLowerCase().includes(s),
-      );
-    }
-    const searched = r.length;
-    if (minGames > 1) r = r.filter((x) => (x.total || 0) >= minGames);
-    return { filtered: r, hiddenByMinGames: searched - r.length };
-  }, [data, search, minGames]);
-
-  const rows = useMemo(
-    () =>
-      sort.sortRows(filtered, (row, col) => (row as Record<string, unknown>)[col]),
-    [filtered, sort],
-  );
-
-  if (!hasQueryData(cellsApi)) {
-    return <QueryState q={cellsApi} skeleton={<Skeleton rows={8} />} filtered />;
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <input
-          className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
-          placeholder="Search builds or strategies"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        {renderMinGamesPicker(minGames, setMinGames)}
-        {view === "table" && <button type="button" className="min-h-11 rounded-lg border border-border px-3 text-caption" aria-pressed={sort.sortBy === "winsAboveExpected"} onClick={() => sort.setSortExplicit("winsAboveExpected", sort.sortBy === "winsAboveExpected" && sort.sortDir === "desc" ? "asc" : "desc")}>Vs expected {sort.sortBy === "winsAboveExpected" ? sort.sortDir === "desc" ? "↓" : "↑" : ""}</button>}
-        {view === "table" ? (
-          <WinRateSortToggle
-            dir={sort.sortBy === "winRate" ? sort.sortDir : "desc"}
-            active={sort.sortBy === "winRate"}
-            onChange={(dir) => sort.setSortExplicit("winRate", dir)}
-          />
-        ) : null}
-        <div className="inline-flex overflow-hidden rounded-lg border-2 border-line">
-          {(["table", "heatmap"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              className={`px-3 py-1 text-xs capitalize transition ${
-                view === v
-                  ? "bg-accent/20 text-accent"
-                  : "text-text-muted hover:bg-bg-elevated"
-              }`}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="text-micro text-text-dim">
-        Click any cell or row to see the games for that build × strategy combo.
-      </div>
-
-      {filtered.length === 0 ? (
-        <Card>
-          <NoFilterMatches
-            title="No build and strategy pairs match these filters"
-            minGames={minGames}
-            hiddenByMinGames={hiddenByMinGames}
-            onLowerMinGames={() => setMinGames(1)}
-            extraAction={
-              search.trim() ? (
-                <Button variant="secondary" size="sm" onClick={() => setSearch("")}>
-                  Clear search
-                </Button>
-              ) : null
-            }
-          />
-        </Card>
-      ) : view === "heatmap" ? (
-        <BvsHeatmap rows={filtered} onOpenBvs={onOpenBvs} />
-      ) : (
-        <BvsTable rows={rows} sort={sort} onOpenBvs={onOpenBvs} />
-      )}
+    const term = search.trim().toLowerCase();
+    const searched = (cellsApi.data || []).filter(row => row.total > 0 && (!term || row.my_build.toLowerCase().includes(term) || row.opp_strat.toLowerCase().includes(term)));
+    const filtered = searched.filter(row => row.total >= minGames);
+    return { filtered, hiddenByMinGames: searched.length - filtered.length };
+  }, [cellsApi.data, search, minGames]);
+  const rows = useMemo(() => sort.sortRows(filtered, (row, col) => (row as Record<string, unknown>)[col]), [filtered, sort]);
+  const open = (build: string, strategy: string) => onOpenBvs(build, strategy, race);
+  const exportRows = () => {
+    const exportedAt = new Date();
+    const scope = `Build vs strategy · ${describeActiveFilters(filters, { seasons }).map(item => `${item.label}: ${item.value}`).join(" · ") || "Default filters"} · matrix matchup ${race ? `vs ${race}` : "All"} · search ${search.trim() || "(none)"} · min games ${minGames} · ${view === "heatmap" ? `axes ${axisOrder}` : `sort ${sort.sortBy} ${sort.sortDir}`}${cellsApi.error ? " · last loaded results (refresh failed)" : ""}`;
+    const axes = matrixAxesForExport(filtered, axisOrder);
+    const exportedRows = view === "heatmap" ? [...filtered].sort((a, b) => {
+      return axes.builds.indexOf(a.my_build) - axes.builds.indexOf(b.my_build) || axes.strategies.indexOf(a.opp_strat) - axes.strategies.indexOf(b.opp_strat);
+    }) : rows;
+    downloadCsv(csvFilename("build-vs-strategy", exportedAt), toCsv({ columns: [...BVS_COLUMNS, { key: "matchup", label: "Matchup", format: () => race ? `vs ${race}` : "All" }], rows: exportedRows, scope, exportedAt }));
+  };
+  return <div className="space-y-4">
+    <div className="flex flex-wrap items-center gap-3">
+      <Input type="search" aria-label="Search builds or strategies" placeholder="Search builds or strategies" value={search} onChange={event => setSearch(event.target.value)} />
+      {renderMinGamesPicker(minGames, onMinGamesChange)}
+      <SegmentedControl label="Build versus strategy view" value={view} options={[{ value: "table", label: "Table" }, { value: "heatmap", label: "Heatmap" }]} onChange={onViewChange} />
+      {!filters.opp_race && <SegmentedControl label="Matrix matchup" value={localRace} options={[{ value: "P", label: "vP", ariaLabel: "versus Protoss" }, { value: "T", label: "vT", ariaLabel: "versus Terran" }, { value: "Z", label: "vZ", ariaLabel: "versus Zerg" }, { value: "all", label: "All" }]} onChange={race => setChosenRace({ scope: scopeKey, race })} />}
+      {view === "heatmap" ? <SegmentedControl label="Matrix axis order" value={axisOrder} options={[{ value: "games", label: "Most games" }, { value: "az", label: "A–Z" }]} onChange={setAxisOrder} /> : <><button type="button" className="min-h-11 rounded-lg border border-border px-3 text-caption" aria-pressed={sort.sortBy === "winsAboveExpected"} onClick={() => sort.setSortExplicit("winsAboveExpected", sort.sortBy === "winsAboveExpected" && sort.sortDir === "desc" ? "asc" : "desc")}>Vs expected</button><WinRateSortToggle dir={sort.sortBy === "winRate" ? sort.sortDir : "desc"} active={sort.sortBy === "winRate"} onChange={dir => sort.setSortExplicit("winRate", dir)} /></>}
+      <Button variant="ghost" size="sm" aria-label="Export these rows as CSV" disabled={!filtered.length || !hasQueryData(cellsApi)} onClick={exportRows}><Download className="mr-1 h-4 w-4" />{filtered.length ? "Export CSV" : "Nothing to export"}</Button>
     </div>
-  );
-}
-
-function BvsHeatmap({
-  rows,
-  onOpenBvs,
-}: {
-  rows: BvsCell[];
-  onOpenBvs: (build: string, strategy: string) => void;
-}) {
-  const builds = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.my_build))).sort(),
-    [rows],
-  );
-  const strategies = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.opp_strat))).sort(),
-    [rows],
-  );
-  const lookup = useMemo(() => {
-    const m = new Map<string, BvsCell>();
-    for (const r of rows) m.set(`${r.my_build}|${r.opp_strat}`, r);
-    return m;
-  }, [rows]);
-  const maxGames = Math.max(...rows.map((r) => r.total || 0), 1);
-
-  if (builds.length === 0 || strategies.length === 0) {
-    return (
-      <Card>
-        <EmptyState title="Not enough samples" />
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <div className="overflow-auto">
-        <table className="border-collapse text-xs">
-          <thead>
-            <tr>
-              <th className="sticky left-0 bg-bg-surface px-2 py-1 text-left text-text-dim">
-                My build ↓ / vs →
-              </th>
-              {strategies.map((s) => (
-                <th
-                  key={s}
-                  className="px-1 py-1 align-bottom text-text-muted"
-                  style={{ minWidth: "5.5rem", maxWidth: "8rem" }}
-                >
-                  <div className="truncate" title={s}>
-                    {s}
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {builds.map((b) => (
-              <tr key={b}>
-                <td
-                  className="sticky left-0 truncate bg-bg-surface px-2 py-1 text-text"
-                  style={{ maxWidth: "12rem" }}
-                  title={b}
-                >
-                  {b}
-                </td>
-                {strategies.map((s) => {
-                  const c = lookup.get(`${b}|${s}`);
-                  if (!c) {
-                    return (
-                      <td key={s} className="px-0.5 py-0.5">
-                        <div className="h-9 rounded bg-bg-elevated/40" />
-                      </td>
-                    );
-                  }
-                  const intensity = 0.35 + 0.65 * (c.total / maxGames);
-                  return (
-                    <td key={s} className="px-0.5 py-0.5">
-                      <button
-                        type="button"
-                        onClick={() => onOpenBvs(b, s)}
-                        className="flex h-9 w-full cursor-pointer items-center justify-center rounded text-micro font-semibold tabular-nums ring-1 ring-inset ring-black/30 transition hover:ring-2 hover:ring-accent/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                        style={{
-                          background: wrColor(c.winRate, c.total),
-                          opacity: intensity,
-                          color: "#0c0c0c",
-                        }}
-                        title={`${b} vs ${s}\n${c.wins}W - ${c.losses}L · ${c.total} games · ${pct1(c.winRate)}\nClick to see the games.`}
-                      >
-                        {pct1(c.winRate).replace(".0", "")}
-                      </button>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="mt-2 text-micro text-text-dim">
-          Cell color = win rate. Cell opacity = sample size. Click a cell to see the games.
-        </div>
-      </div>
-    </Card>
-  );
+    <p className="text-micro text-text-dim">{race ? `Showing vs ${race}. ` : "All matchups. "}Select a cell or row to view its games.</p>
+    {cellsApi.error && cellsApi.data && <p role="alert" className="text-caption text-text-muted">Couldn’t refresh these results. Showing the last loaded rows for this matchup. <button type="button" className="min-h-11 text-accent underline" onClick={() => void cellsApi.mutate()}>Retry</button></p>}
+    {!hasQueryData(cellsApi) ? <QueryState q={cellsApi} skeleton={<Skeleton rows={8} />} filtered /> : !filtered.length ? <Card><NoFilterMatches title="No build and strategy pairs match these filters" minGames={minGames} hiddenByMinGames={hiddenByMinGames} onLowerMinGames={() => onMinGamesChange(1)} extraAction={search.trim() ? <Button variant="secondary" onClick={() => setSearch("")}>Clear search</Button> : null} /></Card> : view === "heatmap" ? <StrategyMatrixHeatmap rows={filtered} order={axisOrder} minGames={minGames} onOpenBvs={open} /> : <BvsTable rows={rows} sort={sort} onOpenBvs={open} />}
+  </div>;
 }
 
 /**
@@ -345,9 +195,11 @@ function normalizeBuildName(s: string): string {
 export function BuildVsStrategyComparison({
   build,
   strategy,
+  oppRace,
 }: {
   build: string;
   strategy: string;
+  oppRace?: string;
 }) {
   // Resolve build name → custom-build slug via the user's library.
   // The drill state only carries the display name (matches ``myBuild``
@@ -400,6 +252,7 @@ export function BuildVsStrategyComparison({
             strategy={strategy}
             slug={slug}
             isResolvingSlug={slugLoading}
+            oppRace={oppRace}
           />
         </ComparisonColumn>
         <ComparisonColumn
@@ -407,7 +260,7 @@ export function BuildVsStrategyComparison({
           subtitle={strategy}
           testId="bvs-column-opponent"
         >
-          <OpponentColumn strategy={strategy} build={build} />
+          <OpponentColumn strategy={strategy} build={build} oppRace={oppRace} />
         </ComparisonColumn>
       </div>
     </Card>
@@ -456,11 +309,13 @@ function YouColumn({
   strategy,
   slug,
   isResolvingSlug,
+  oppRace,
 }: {
   build: string;
   strategy: string;
   slug: string | null;
   isResolvingSlug: boolean;
+  oppRace?: string;
 }) {
   // Left side has two data sources, picked in priority order:
   //
@@ -495,6 +350,7 @@ function YouColumn({
   const phaseQuery = filtersToQuery({
     ...filters,
     perspective: "you",
+    opp_race: filters.opp_race || oppRace,
     strategy: strategy || undefined,
   });
   const customPath = slug
@@ -586,9 +442,11 @@ type BuildLabelPhasesResponse = {
 function OpponentColumn({
   strategy,
   build,
+  oppRace,
 }: {
   strategy: string;
   build: string;
+  oppRace?: string;
 }) {
   // ``build`` scopes the strategy aggregation to one cell of the
   // build × strategy matrix — same game set as the cell the user
@@ -600,6 +458,7 @@ function OpponentColumn({
   const phaseQuery = filtersToQuery({
     ...filters,
     perspective: "opponent",
+    opp_race: filters.opp_race || oppRace,
     // The clicked matrix cell is authoritative. Object assignment replaces
     // an active global build filter instead of serialising a second copy.
     build: build || filters.build,
@@ -769,13 +628,7 @@ function BvsTable({
           </colgroup>
           <thead className="bg-bg-elevated">
             <tr>
-              <SortableTh col="my_build" label="My build" {...sort} />
-              <SortableTh col="opp_strat" label="vs Opponent strategy" {...sort} />
-              <SortableTh col="wins" label="W" {...sort} align="right" />
-              <SortableTh col="losses" label="L" {...sort} align="right" />
-              <SortableTh col="total" label="Games" {...sort} align="right" />
-              <SortableTh col="winRate" label="WR" {...sort} align="right" />
-              <StrengthHeader sort={sort} />
+              {BVS_COLUMNS.map((column, index) => column.strength ? <StrengthHeader key={String(column.key)} sort={sort} /> : <SortableTh key={String(column.key)} col={String(column.key)} label={column.label} {...sort} align={index < 2 ? "left" : "right"} />)}
             </tr>
           </thead>
           <tbody>
@@ -787,7 +640,7 @@ function BvsTable({
                 title="Click to see the games"
               >
                 <td className="truncate px-3 py-1.5" title={c.my_build}>
-                  {c.my_build}
+                  <button type="button" className="min-h-11 text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={event => { event.stopPropagation(); onOpenBvs(c.my_build, c.opp_strat); }}>{c.my_build}</button>
                 </td>
                 <td
                   className="truncate px-3 py-1.5 text-text-muted"

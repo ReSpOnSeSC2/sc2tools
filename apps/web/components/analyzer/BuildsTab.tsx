@@ -2,10 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { RefreshCcw } from "lucide-react";
+import { Download, RefreshCcw } from "lucide-react";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { Button } from "@/components/ui/Button";
-import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import { Input } from "@/components/ui/Input";
+import { useFilters, filtersToQuery, describeActiveFilters, normalizeRaceCode, withOppRace } from "@/lib/filterContext";
+import { csvFilename, downloadCsv, toCsv, type CsvColumn } from "@/lib/csvExport";
 import { useLocalStoragePositiveInt, useLocalStorageState } from "@/lib/useLocalStorageState";
 import { isMechanicsBucket, type MechanicsBucket } from "@/lib/mechanicsTrend";
 import { MixOverTimeChart } from "./charts/MixOverTimeChart";
@@ -37,10 +39,20 @@ type BuildRow = StrengthFields & {
 
 const LS_MIN_BUILDS = "analyzer.builds.minGames";
 const LS_BUILDS_SORT = "analyzer.builds.sort";
+const BUILD_COLUMNS: readonly (CsvColumn<BuildRow> & { sortKey?: string; strength?: boolean })[] = [
+  { key: "name", label: "Build", sortKey: "name" },
+  { key: "wins", label: "W", sortKey: "wins" },
+  { key: "losses", label: "L", sortKey: "losses" },
+  { key: "total", label: "Games", sortKey: "total" },
+  { key: "winRate", label: "WR", sortKey: "winRate" },
+  { key: "winsAboveExpected", label: "Vs expected", strength: true,
+    format: (value, row) => (row.ratedGames ?? 0) > 0 && typeof value === "number" && Number.isFinite(value) ? value : null },
+  { key: "wlSplit", label: "W/L split", format: (_value, row) => `${row.wins}W ${row.losses}L` },
+];
 
 /** Custom and detected builds share the same filtered replay statistics. */
 export function BuildsTab() {
-  const { filters, dbRev } = useFilters();
+  const { filters, setFilters, dbRev, seasons } = useFilters();
   const [search, setSearch] = useState("");
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_BUILDS, 1);
   const [editing, setEditing] = useState<string | null>(null);
@@ -70,6 +82,13 @@ export function BuildsTab() {
     return matchedSearch.filter((b) => (b.total || 0) < minGames).length;
   }, [data, search, minGames]);
 
+  const exportRows = () => {
+    const exportedAt = new Date();
+    const globalScope = describeActiveFilters(filters, { seasons }).map(item => `${item.label}: ${item.value}`).join(" · ") || "Default filters";
+    const scope = `Builds · ${globalScope} · search ${search.trim() || "(none)"} · min games ${minGames} · sort ${sort.sortBy} ${sort.sortDir}${error ? " · last loaded results (refresh failed)" : ""}`;
+    downloadCsv(csvFilename("builds", exportedAt), toCsv({ columns: BUILD_COLUMNS, rows, scope, exportedAt }));
+  };
+
   if (isLoading && !error) return <Skeleton rows={6} />;
 
   return (
@@ -86,8 +105,10 @@ export function BuildsTab() {
       ) : null}
       <ReclassifyBanner rows={data || []} />
       <div className="flex flex-wrap items-center gap-3">
-        <input
-          className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
+        <Input
+          type="search"
+          aria-label="Search builds"
+          className="min-h-11"
           placeholder="Search builds"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -105,7 +126,9 @@ export function BuildsTab() {
       </div>
 
       {data || !error ? <Card>
-        <div className="mb-3"><StrengthGuide /></div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><StrengthGuide />
+          <Button variant="ghost" size="sm" aria-label={rows.length ? "Export these rows as CSV" : "Nothing to export"} disabled={!rows.length} onClick={exportRows} iconLeft={<Download aria-hidden className="h-4 w-4" />}>{rows.length ? "Export CSV" : "Nothing to export"}</Button>
+        </div>
         {rows.length === 0 ? (
           <NoFilterMatches
             title="No builds match these filters"
@@ -131,14 +154,13 @@ export function BuildsTab() {
             <ul className="space-y-2 md:hidden">
               {rows.map((b) => (
                 <li key={b.name}>
-                  <button
-                    type="button"
-                    onClick={() => setEditing(b.name)}
+                  <div
                     className="flex w-full flex-col gap-1.5 rounded-xl border-2 border-line bg-bg-surface px-3 py-2 text-left shadow-hard transition hover:border-accent hover:bg-accent/10"
                   >
-                    <div className="text-sm font-semibold text-text">
+                    <button type="button" onClick={() => setEditing(b.name)} className="min-h-11 rounded text-left text-sm font-semibold text-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
                       {b.name}
-                    </div>
+                    </button>
+                    <MatchupChips counts={b.myMatchups} selected={filters.opp_race} onSelect={race => setFilters(withOppRace(filters, race))} />
                     <CheckinsNote count={b.checkins} />
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
                       <span className="text-success">{b.wins}W</span>
@@ -158,7 +180,7 @@ export function BuildsTab() {
                     </div>
                     <WinRateRange row={b} total={b.total} />
                     <StrengthCell row={b} />
-                  </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -180,15 +202,9 @@ export function BuildsTab() {
                 </colgroup>
                 <thead className="bg-bg-elevated">
                   <tr>
-                    <SortableTh col="name" label="Build" {...sort} />
-                    <SortableTh col="wins" label="W" {...sort} align="right" />
-                    <SortableTh col="losses" label="L" {...sort} align="right" />
-                    <SortableTh col="total" label="Games" {...sort} align="right" />
-                    <SortableTh col="winRate" label="WR" {...sort} align="right" />
-                    <StrengthHeader sort={sort} />
-                    <th className="px-3 py-2 text-left text-micro uppercase text-text-dim">
-                      Trend
-                    </th>
+                    {BUILD_COLUMNS.map(column => column.strength ? <StrengthHeader key={String(column.key)} sort={sort} />
+                      : column.sortKey ? <SortableTh key={String(column.key)} col={column.sortKey} label={column.label} {...sort} align={column.sortKey === "name" ? "left" : "right"} />
+                      : <th key={String(column.key)} className="px-3 py-2 text-left text-micro uppercase text-text-dim">{column.label}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -198,8 +214,9 @@ export function BuildsTab() {
                       className="cursor-pointer border-t border-border hover:bg-accent/10"
                       onClick={() => setEditing(b.name)}
                     >
-                      <td className="truncate px-3 py-1.5 text-text" title={b.name}>
-                        {b.name}
+                      <td className="px-3 py-1.5 text-text">
+                        <button type="button" onClick={event => { event.stopPropagation(); setEditing(b.name); }} title={b.name} className="block min-h-11 max-w-full truncate rounded text-left font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{b.name}</button>
+                        <MatchupChips counts={b.myMatchups} selected={filters.opp_race} onSelect={race => setFilters(withOppRace(filters, race))} />
                         <CheckinsNote count={b.checkins} inline />
                       </td>
                       <td className="px-2 py-1.5 text-right text-success">{b.wins}</td>
@@ -249,6 +266,23 @@ export function BuildsTab() {
       )}
     </div>
   );
+}
+
+function MatchupChips({ counts, selected, onSelect }: {
+  counts?: Record<string, number>; selected?: string; onSelect: (race: string) => void;
+}) {
+  if (!counts) return null;
+  const races = [{ code: "P", name: "Protoss" }, { code: "T", name: "Terran" }, { code: "Z", name: "Zerg" }];
+  const chips = races.flatMap(race => {
+    const games = counts[race.code] ?? counts[race.name] ?? counts[race.name.toLowerCase()];
+    return Number.isSafeInteger(games) && games > 0 ? [{ ...race, games }] : [];
+  }).sort((a, b) => b.games - a.games);
+  if (!chips.length) return null;
+  return <div className="flex flex-wrap gap-1" aria-label="Build matchups">
+    {chips.map(race => <button key={race.code} type="button" aria-label={`Filter builds vs ${race.name}: ${race.games} games`} aria-pressed={normalizeRaceCode(selected) === race.code}
+      onClick={event => { event.stopPropagation(); onSelect(race.code); }}
+      className="min-h-11 rounded border border-border px-2 text-caption text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">v{race.code} {race.games}</button>)}
+  </div>;
 }
 
 /** "incl. N check-ins" — games counted only because of a confirmed check-in. */

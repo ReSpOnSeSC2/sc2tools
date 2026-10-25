@@ -8,6 +8,8 @@ import {
 } from "@testing-library/react";
 import { BattlefieldTab } from "../BattlefieldTab";
 const poolState = vi.hoisted(() => ({ fresh: false, aliases: false }));
+const csvExport = vi.hoisted(() => ({ download: vi.fn() }));
+vi.mock("@/lib/csvExport", async original => ({ ...(await original<typeof import("@/lib/csvExport")>()), downloadCsv: csvExport.download }));
 
 const mapMatchups = [
   {
@@ -81,7 +83,8 @@ vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string) => useApiMock(path),
 }));
 
-vi.mock("@/lib/filterContext", () => ({
+vi.mock("@/lib/filterContext", async (original) => ({
+  ...(await original<typeof import("@/lib/filterContext")>()),
   useFilters: () => ({ filters: {}, dbRev: 7 }),
   filtersToQuery: () => "?scope=all",
 }));
@@ -94,7 +97,7 @@ vi.mock("@/lib/useSeasons", () => ({ useSeasons: () => ({ data: poolState.fresh 
 vi.mock("../maps/MapVetoPlanner", () => ({ MapVetoPlanner: () => null }));
 vi.mock("../maps/MapGamesModal", () => ({ MapGamesModal: ({ drill }: { drill: { map: string; maps?: string[]; opponent?: string } | null }) => drill ? <div role="dialog" aria-label="Map games">{drill.map} {drill.opponent}<output aria-label="Exact map aliases">{JSON.stringify(drill.maps)}</output></div> : null }));
 
-beforeEach(() => { poolState.fresh = false; poolState.aliases = false; localStorage.clear(); window.history.replaceState(null, "", "/app/maps"); });
+beforeEach(() => { poolState.fresh = false; poolState.aliases = false; csvExport.download.mockReset(); localStorage.clear(); window.history.replaceState(null, "", "/app/maps"); });
 
 vi.mock("@/components/maps/MapPreviewDialog", () => ({
   MapPreviewDialog: ({
@@ -117,6 +120,21 @@ afterEach(() => {
   cleanup();
   useApiMock.mockClear();
   vi.unstubAllGlobals();
+});
+
+it("exports visible matchup and map rows with their Min games scope", () => {
+  render(<BattlefieldTab />);
+  const exports = screen.getAllByRole("button", { name: /Export these rows as CSV/ });
+  fireEvent.click(exports[0]);
+  expect(csvExport.download.mock.calls[0][0]).toMatch(/^sc2tools-matchups-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(csvExport.download.mock.calls[0][1]).toContain("min games 3");
+  expect(csvExport.download.mock.calls[0][1]).toContain("vs Z,4,1,5,0.8");
+  fireEvent.click(exports[1]);
+  const maps = csvExport.download.mock.calls[1][1];
+  expect(maps).toContain('Ancient Cistern,"Overall (all cells');
+  expect(maps).toContain("Ancient Cistern,vs Z,4,1,5,0.8");
+  expect(maps).not.toContain("Ancient Cistern,vs T");
+  expect(maps).not.toContain("Hidden Training Map");
 });
 
 function mapOrder(): string[] {

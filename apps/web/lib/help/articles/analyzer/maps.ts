@@ -31,6 +31,7 @@ const article: HelpArticle = {
       text: "[Maps](/app/maps) compares your matchups and maps, with a current-pool veto planner above your detailed records. Your stats come from your own synced games. Community comparisons reuse the published map-guide snapshot.",
     },
     { type: "heading", text: "Matchups", anchor: "matchups" },
+    { type: "paragraph", text: "**Export CSV** saves exactly the rows on screen, with your filters written in the first line. Matchups follows Min games and the current sort. The detailed map export includes each displayed overall record and the matchup rows that clear Min games; overall records still include all their games. The pool export includes every displayed P/T/Z/All cell, its community comparison and recommendation. Its first line records the pool age/source, sample window and ranking matchup. Exports use your local date in the filename." },
     {
       type: "paragraph",
       text: "One row per matchup, such as *vs Z*, with your wins, losses, games and win rate. The squares on the right are your last few results in that matchup, oldest to newest: green for a win, red for a loss.",

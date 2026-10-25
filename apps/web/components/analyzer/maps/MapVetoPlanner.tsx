@@ -2,17 +2,20 @@
 
 import { useMemo, useState } from "react";
 import { useApi } from "@/lib/clientApi";
-import { filtersToQuery, useFilters, type AnalyzerFilters } from "@/lib/filterContext";
+import { filtersToQuery, useFilters, describeActiveFilters, type AnalyzerFilters } from "@/lib/filterContext";
 import { useSeasons } from "@/lib/useSeasons";
 import { useCurrentMapPool } from "@/lib/useCurrentMapPool";
-import { mostPlayedMapMatchup, poolMapRows, vetoMaps, type MapFormStats, type MapMatchupStats } from "@/lib/mapVeto";
+import { mostPlayedMapMatchup, poolMapRows, vetoMaps, mapRecord, communityMapRate, type MapFormStats, type MapMatchupStats } from "@/lib/mapVeto";
 import { useGuideMapPool } from "@/lib/useGuideMapPool";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { QueryState } from "@/components/ui/QueryState";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
-import { MapVetoTable, type MapGamesDrill } from "./MapVetoTable";
+import { MapVetoTable, POOL_MATCHUPS, poolMatchupLabel, type MapGamesDrill } from "./MapVetoTable";
+
+import { TableCsvButton } from "../TableCsvButton";
+import type { CsvColumn } from "@/lib/csvExport";
 
 export function plannerWindowFilters(filters: AnalyzerFilters, window: string, now: number, seasonStart?: string | null): AnalyzerFilters {
   const base = { ...filters, opp_race: undefined };
@@ -42,7 +45,19 @@ export function MapVetoPlanner({ openGames }: { openGames: (drill: MapGamesDrill
   const pool = useCurrentMapPool(catalog.data); const rows = poolMapRows(pool.maps, cells.isPreviousData ? [] : cells.data ?? [], forms.isPreviousData ? [] : forms.data ?? []);
   const suggested = pool.fresh && !cells.error && !cells.isPreviousData ? vetoMaps(rows, matchup, count) : [];
   const mine = filters.race?.[0]?.toUpperCase() ?? "";
-  return <Card title="Current ladder pool" right={<LazyHelpLink slug="maps">How to use</LazyHelpLink>} className="min-w-0">
+  const exportRows = rows.flatMap(row => POOL_MATCHUPS.map(race => {
+    const record = race ? row.cells[race] ?? mapRecord() : row.all;
+    return { map: row.name, matchup: poolMatchupLabel(race), ...record,
+      communityWinRate: communityMapRate(community.data?.maps ?? [], row.name, mine, race),
+      suggestedVeto: suggested.includes(row.name), recent: row.recent?.join(" ") ?? "" };
+  }));
+  const exportColumns: CsvColumn<(typeof exportRows)[number]>[] = [
+    { key: "map", label: "Map" }, { key: "matchup", label: "Matchup" }, { key: "wins", label: "W" }, { key: "losses", label: "L" },
+    { key: "total", label: "Games" }, { key: "decided", label: "Decided games" }, { key: "winRate", label: "WR" },
+    { key: "communityWinRate", label: "Community WR" }, { key: "suggestedVeto", label: "Suggested veto" }, { key: "recent", label: "Recent (ranking matchup)" },
+  ];
+  const exportScope = `Current ladder pool · ${describeActiveFilters(scope, { seasons }).map(item => `${item.label}: ${item.value}`).join(" · ") || "Default filters"} · window ${activeWindow} · ranking ${poolMatchupLabel(matchup)} · veto count ${count} · pool ${pool.source}, fetched ${pool.fetchedAt ? new Date(pool.fetchedAt).toISOString() : "unknown"} · displayed P/T/Z/All columns`;
+  return <Card title="Current ladder pool" right={<div className="flex flex-wrap items-center gap-2"><TableCsvButton section="map-pool" rows={exportRows} columns={exportColumns} scope={exportScope} disabled={!cells.data || !!cells.error || cells.isPreviousData || !pool.maps.length} /><LazyHelpLink slug="maps">How to use</LazyHelpLink></div>} className="min-w-0">
     <div className="mb-4 grid gap-3 sm:grid-cols-3"><label className="text-caption font-semibold text-text">Ranking matchup<Select value={matchup} onChange={(event) => setChoice(event.target.value)}><option value="">All matchups</option>{["P", "T", "Z"].map((race) => <option key={race} value={race}>vs {race}</option>)}</Select></label>
       <label className="text-caption font-semibold text-text">Sample window<Select value={activeWindow} onChange={(event) => setWindow(event.target.value)}><option value="filters">Filter range</option><option value="90d">Last 90 days</option><option value="season" disabled={!seasonStart}>Current season</option></Select></label>
       <label className="text-caption font-semibold text-text">Veto count<Select value={count} onChange={(event) => setCount(Number(event.target.value))}>{[1, 2, 3].map((amount) => <option key={amount} value={amount}>{amount}</option>)}</Select></label></div>
