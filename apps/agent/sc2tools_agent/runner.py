@@ -2844,19 +2844,34 @@ def _handle_obs_probe(
     }
 
 
+def _effective_obs_connection(state, log=None):
+    host = os.environ.get("SC2TOOLS_OBS_HOST", "").strip() or state.obs_host
+    port_env = os.environ.get("SC2TOOLS_OBS_PORT", "").strip()
+    try:
+        port = int(port_env) if port_env else int(state.obs_port)
+    except (TypeError, ValueError):
+        if log is not None:
+            log.warning("obs_port_invalid falling_back=4455")
+        port = 4455
+    password = os.environ.get("SC2TOOLS_OBS_PASSWORD") or state.obs_password or None
+    return host, port, password
+
+
 def _obs_website_scope(cfg, state, cell):
     if (state.obs_website_add_enabled is not True or getattr(cell, "no_obs", False)
             or not state.device_token or not getattr(cell, "gui", None)):
         return None
-    return (cfg.api_base, state.device_token, state.obs_host, state.obs_port, state.obs_password)
+    return (cfg.api_base, state.device_token, *_effective_obs_connection(state))
 
 
 def _obs_website_controller(cfg, state, cell):
     from .live.obs_website_add import ObsWebsiteAdd
+    def client_factory():
+        host, port, password = _effective_obs_connection(state)
+        return ObsClient(host=host, port=port, password=password, subscribe_events=False)
     return ObsWebsiteAdd(
         scope=lambda: _obs_website_scope(cfg, state, cell),
-        client_factory=lambda: ObsClient(host=state.obs_host, port=state.obs_port,
-                                        password=state.obs_password, subscribe_events=False),
+        client_factory=client_factory,
         token_provider=lambda: _overlay_token_for_build(cfg, state, logging.getLogger(__name__)),
         confirm=lambda payload: cell.gui.confirm_obs_add_source(payload) if getattr(cell, "gui", None) else False,
         base_url=lambda: _dashboard_url_from_api(cfg.api_base),
@@ -3130,18 +3145,7 @@ def _build_obs_switcher(
         log.info("obs_scene_switch_skipped reason=live_bridge_disabled")
         return None, None
 
-    host = os.environ.get("SC2TOOLS_OBS_HOST", "").strip() or state.obs_host
-    port_env = os.environ.get("SC2TOOLS_OBS_PORT", "").strip()
-    try:
-        port = int(port_env) if port_env else int(state.obs_port)
-    except ValueError:
-        log.warning("obs_port_invalid value=%r falling_back=4455", port_env)
-        port = 4455
-    password = (
-        os.environ.get("SC2TOOLS_OBS_PASSWORD")
-        or state.obs_password
-        or None
-    )
+    host, port, password = _effective_obs_connection(state, log)
     scene_map = _effective_scene_map(state)
 
     # Built in two steps: the controller needs the client to issue
