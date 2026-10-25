@@ -17,9 +17,9 @@ import type {
   StudioScene,
   StudioTimer,
 } from "@/lib/multichat/useStudioState";
-import dynamic from "next/dynamic";
+import { DockLazyPanel } from "./DockLazyPanel";
+import { loadBrollLibrary } from "./dockLazyLoaders";
 import { Timer, Shuffle, ListOrdered, Volume2, VolumeX, SkipForward, X } from "lucide-react";
-const BrollLibraryEditor = dynamic(() => import("./BrollLibraryEditor").then(module => module.BrollLibraryEditor), { loading: () => <p role="status" className="text-caption text-text-muted">Loading b-roll manager…</p> });
 
 import type { DockPost } from "./dockActions";
 import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
@@ -322,12 +322,7 @@ export function DockScenes({
 
         <div className="mt-3">
           <DockButton aria-expanded={showBroll} aria-controls="dock-broll-manager" onClick={() => (onBrollOpenChange ?? setLocalBrollOpen)(!showBroll)}>Manage b-roll</DockButton>
-          <div id="dock-broll-manager" hidden={!showBroll} className="mt-2">{showBroll || brollLoaded ? <BrollLibraryEditor embedded
-          broll={broll}
-          busy={busy}
-          studioReady={studioReady}
-          onPost={onPost}
-        /> : null}</div>
+          <div id="dock-broll-manager" hidden={!showBroll} className="mt-2">{showBroll || brollLoaded ? <DockLazyPanel loader={loadBrollLibrary} label="b-roll manager" componentProps={{ embedded: true, broll, busy, studioReady, onPost }} /> : null}</div>
         </div>
       </div>
 

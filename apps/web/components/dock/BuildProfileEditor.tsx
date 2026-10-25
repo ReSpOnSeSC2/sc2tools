@@ -3,10 +3,8 @@
 import { DockInput, DockSelect, DockButton } from "./DockControls";
 
 import { useEffect, useRef, useState } from "react";
-import dynamic from "next/dynamic";
-const BuildProfileChart = dynamic(() => import("@/components/overlay/widgets/BuildProfileWidget").then(module => module.BuildProfileChart), {
-  loading: () => <p role="status" className="text-caption text-text-muted">Loading graph…</p>,
-});
+import { DockLazyPanel } from "./DockLazyPanel";
+import { loadBuildProfileChart } from "./dockLazyLoaders";
 import type { DockPost } from "./dockActions";
 import { DockSnapshotState } from "./useDockPanelActions";
 import {
@@ -184,7 +182,7 @@ export function BuildProfileEditor({
         <summary className="flex min-h-8 cursor-pointer items-center [@media(pointer:coarse)]:min-h-10 text-text">Preview graph</summary>
         <div className="mt-2">
           {draftComplete && previewOpen
-            ? <BuildProfileChart profile={draft} preview />
+            ? <DockLazyPanel loader={loadBuildProfileChart} label="build graph" componentProps={{ profile: draft, preview: true }} />
             : !draftComplete ? <p className="py-2">Enter a build title and all five ratings to preview the graph.</p> : null}
         </div>
       </details>

@@ -9,7 +9,7 @@ test("Dock disclosures preserve drafts and pass automated accessibility checks",
       : path.endsWith("/studio") ? { highlight: null, goals: [], poll: null, scene: null, timer: null, blockedUsers: [] }
       : path.endsWith("/viewers") ? { platforms: [] }
       : { clipMoments: [] };
-    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(data) });
+    return route.fulfill({ status: 200, headers: { "Access-Control-Allow-Origin": "*" }, contentType: "application/json", body: JSON.stringify(data) });
   });
   await page.route("**/socket.io/**", route => route.abort());
   await page.goto("/dock/e2e-synthetic-dock");
@@ -21,6 +21,21 @@ test("Dock disclosures preserve drafts and pass automated accessibility checks",
   await expect(page.locator("[data-dock-section]").first()).toHaveAttribute("id", "dock-poll");
   await page.getByRole("button", { name: "Reset layout", exact: true }).click();
   await expect(draft).toHaveValue("Next build?");
+  const timerDraft = page.getByPlaceholder("Optional label — e.g. next game in…");
+  await timerDraft.fill("Keep timer draft");
+  let rejectedChunk = false;
+  await page.route("**/_next/static/chunks/*.js", route => {
+    if (!rejectedChunk) { rejectedChunk = true; return route.abort(); }
+    return route.continue();
+  });
+  await page.getByRole("button", { name: "Build vote", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Retry build vote", exact: true })).toBeVisible();
+  await expect(timerDraft).toHaveValue("Keep timer draft");
+  await page.getByRole("button", { name: "Retry build vote", exact: true }).click();
+  await expect(page.getByText(/No saved builds yet/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Build vote", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(timerDraft).toHaveValue("Keep timer draft");
+  expect(rejectedChunk).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.addScriptTag({ content: axe.source });
   const violations = await page.evaluate(async () => {

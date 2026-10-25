@@ -120,7 +120,7 @@ export function DockBuildVote({
   if (loaded && builds.length === 0) {
     return (
       <p className="text-caption text-text-dim">
-        No saved builds yet — create one in <a href="/builds" target="_blank" rel="noopener noreferrer" className="underline">Builds</a>.
+        No saved builds yet — create one in <a href="/builds" target="_blank" rel="noopener noreferrer" className="text-text underline">Builds</a>.
       </p>
     );
   }

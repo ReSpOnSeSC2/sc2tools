@@ -4,10 +4,8 @@ import { DockButton } from "./DockControls";
 import { useState } from "react";
 import type { StudioPoll } from "@/lib/multichat/useStudioState";
 import type { ChatMessage } from "@/lib/multichat/types";
-import dynamic from "next/dynamic";
-const DockBuildVote = dynamic(() => import("./DockBuildVote").then(module => module.DockBuildVote), {
-  loading: () => <p role="status" className="text-caption text-text-muted">Loading saved builds…</p>,
-});
+import { DockLazyPanel } from "./DockLazyPanel";
+import { loadBuildVote } from "./dockLazyLoaders";
 import { DockPoll } from "./DockPoll";
 import type { DockPost } from "./dockActions";
 
@@ -25,6 +23,6 @@ export function DockPollCard({ token, poll, messages, busy, studioReady, onPost 
         className={`rounded-md border px-2.5 py-1.5 text-caption disabled:opacity-60 ${mode === id ? "border-accent bg-accent/10 text-text" : "border-border text-text-muted"}`}>{label}</DockButton>)}
     </div>
     {poll || mode === "custom" ? <DockPoll poll={poll} messages={messages} busy={busy} studioReady={studioReady} onPost={onPost} /> : null}
-    {mode === "build" ? <DockBuildVote token={token} busy={busy} ready={studioReady} pollActive={Boolean(poll)} poll={poll} messages={messages} onPost={onPost} /> : null}
+    {mode === "build" ? <DockLazyPanel loader={loadBuildVote} label="build vote" componentProps={{ token, busy, ready: studioReady, pollActive: Boolean(poll), poll, messages, onPost }} /> : null}
   </div>;
 }

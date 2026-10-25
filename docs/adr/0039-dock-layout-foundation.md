@@ -13,3 +13,5 @@ Collapsed summaries use the same studio state, local poll tally and engagement s
 The plan's Scout migration remains pending the `live-scouting-brief` predecessor: no token-authenticated Scout panel exists in the current source. The private analyzer dossier brief is not an appropriate replacement. Game desk's Scout work must follow that predecessor; this foundation changes only the existing panels.
 
 The separately owned counts-only `DockPresenceStrip` remains independent and will move into the future status header when Game desk is implemented.
+
+Optional build picking, b-roll management and graph previews each have a local import/render boundary. A load has a 20-second deadline; explicit Retry creates a fresh lazy identity and invokes the import factory again. An unavailable optional chunk cannot unmount the other panels or their drafts.
