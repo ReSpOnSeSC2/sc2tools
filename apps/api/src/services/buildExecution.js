@@ -57,9 +57,10 @@ class BuildExecutionService {
     const rules = definition && own ? extractRules(definition).slice(0, 80) : [];
     const build = name ? { name, source: slug ? "custom" : "catalog", key: slug ? customKeyForSlug(slug) : catalogKeyForName(name),
       ...(slug ? { slug } : {}), race: game.myRace || null, vsRace: game.opponent?.race || null,
-      deleted: !!declared?.deleted || !!slug && (!definition || !own), rules } : null;
+      deleted: !!declared?.deleted || !!slug && (!definition || !own), rules,
+      hasReferenceBuildOrder: !!definition?.hasReferenceBuildOrder || !!definition?.buildOrder?.steps?.length } : null;
     const source = declared ? "confirmed" : name ? "detected" : "none";
-    const rulesHash = hash([rules, definition?.updatedAt, definition?.revision, definition?.name]);
+    const rulesHash = hash([rules, definition?.updatedAt, definition?.revision, definition?.name, build?.hasReferenceBuildOrder]);
     const prefix = `${JSON.stringify(owner)}|${epoch.id}|`;
     const key = `${prefix}${hash([game, build?.key, rulesHash])}`;
     const cached = this.read(this.cache, key);

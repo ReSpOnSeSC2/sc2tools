@@ -73,6 +73,13 @@ test("neighboring game/card/timeline reads reuse one compact baseline and rule e
   expect((await endpoint()).body.matchPct).toBe(0);
   expect(h.services.customBuilds.evaluateBuild).toHaveBeenCalledTimes(2);
 });
+test("Reference practice priority is advertised without retaining reference steps in the shared scorecard response", async () => {
+  await custom(); await seed("current", { _customBuildSlug: "private" });
+  await h.db.customBuilds.updateOne({ slug: "private" }, { $set: { buildOrder: { v: 1, source: "manual", steps: [{ t: 60, supply: 16, action: "Stargate", note: "PRIVATE_REFERENCE_NOTE" }] } } });
+  const body = (await endpoint()).body;
+  expect(body.build.hasReferenceBuildOrder).toBe(true);
+  expect(JSON.stringify(body)).not.toContain("PRIVATE_REFERENCE_NOTE"); expect(body.build.buildOrder).toBeUndefined();
+});
 test("actual detail-log replacement invalidates unchanged game/build/rule keys immediately", async () => {
   await custom(); await seed("current", { _customBuildSlug: "private" });
   expect((await endpoint()).body.matchPct).toBe(100);
