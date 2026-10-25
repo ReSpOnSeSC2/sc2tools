@@ -941,13 +941,17 @@ function makeServices(deps, clerk, adminClerkIds) {
       keyFile: null,
     },
   });
-  const gameControls = new GameControlsService(deps.db, { gdpr, onChanged: async (userId) => {
+  const invalidatePrivateGameCaches = (/** @type {string} */ userId) => {
     games.invalidateForUser(userId);
     // Each owner-aware invalidator fences late in-flight cache completion.
-    for (const service of [overlayLive, rivals, gameContext, gameExecution, tickerFacts, chatStats, community, aggregations.trendsRequests, streamSeries]) {
+    for (const service of [overlayLive, rivals, gameContext, gameExecution, tickerFacts, chatStats, aggregations.trendsRequests, streamSeries]) {
       service.invalidateForUser(userId);
     }
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
+  };
+  gdpr.onGamesChanged = invalidatePrivateGameCaches;
+  const gameControls = new GameControlsService(deps.db, { gdpr, onChanged: async (userId) => {
+    invalidatePrivateGameCaches(userId); community.invalidateForUser(userId);
     deps.io?.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "game-control" });
   } });
   return {
