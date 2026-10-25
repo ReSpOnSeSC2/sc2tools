@@ -86,6 +86,12 @@ test("pre-game intel comes from games when no row carries an `opening`", async (
     vsOpponent("c", 3, { strategy: "Zerg - 12 Pool" }),
   ]);
   const p = await preGame();
+  expect(p.oppPulseId).toBe(TOON);
+  expect(p.openingHistory).toEqual([
+    { name: "Zerg - 12 Pool", samples: 2, of: 3 },
+    { name: "Zerg - Hatch First", samples: 1, of: 3 },
+  ]);
+  expect(p.recentGames[0].gameId).toBe("a");
   expect(p.favOpening).toEqual({ name: "Zerg - 12 Pool", share: 2 / 3, samples: 2, of: 3 });
   expect(p.predictedStrategies[0].name).toBe("Zerg - 12 Pool");
   expect(p.scouting[0].label).toBe("Zerg - 12 Pool");
