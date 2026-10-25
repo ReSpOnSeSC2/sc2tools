@@ -22,6 +22,7 @@
  * an in-memory Mongo.
  */
 
+const { AdminUsersService } = require("./adminUsers");
 const { COLLECTIONS } = require("../config/constants");
 const { disabledBrowserUploadStatus } = require("./replayFilesCors");
 
@@ -34,16 +35,6 @@ const { disabledBrowserUploadStatus } = require("./replayFilesCors");
  * collections (importJobs, macroJobs, etc.) that the dashboard
  * doesn't render.
  */
-// Allowed values for the Users-tab segment filter. Anything outside
-// this set falls back to "all" so a bad query param can't inject a
-// pipeline stage or quietly skew the list.
-const USER_LIST_FILTERS = new Set([
-  "all",
-  "with_games",
-  "no_games",
-  "with_agent",
-]);
-
 // Whitelisted sort columns for the per-user "all opponents" browser.
 // Anything outside this set falls back to ``gameCount`` so a bad query
 // param can never inject a field path into the sort stage. ``winRate``
@@ -80,6 +71,7 @@ class AdminService {
    * @param {{
    *   db: import('../db/connect').DbContext,
    *   gdpr: import('./gdpr').GdprService,
+   *   adminIds?: () => string[],
    *   infrastructureUsage?: import('./infrastructureUsage').InfrastructureUsageService,
    * }} deps
    */
@@ -87,6 +79,7 @@ class AdminService {
     if (!deps || !deps.db) throw new Error("AdminService: db required");
     if (!deps.gdpr) throw new Error("AdminService: gdpr required");
     this.db = deps.db;
+    this.userDirectory = new AdminUsersService(deps.db, { adminIds: deps.adminIds });
     this.gdpr = deps.gdpr;
     this.infrastructureUsage = deps.infrastructureUsage || null;
     this._startedAt = Date.now();
@@ -169,188 +162,13 @@ class AdminService {
     };
   }
 
-  /**
-   * Per-user activity summary for the Users tab. Returns the top-N
-   * users by game count, each annotated with totals + last-activity
-   * timestamp + opponent count. Designed to fit in a single screen
-   * for ops review; the SPA paginates by passing ``before`` (the
-   * lastActivity cursor of the previous page).
-   *
-   * Optional ``filter`` narrows the result set:
-   *   - ``"all"``        — every user (default)
-   *   - ``"with_games"`` — users who have uploaded at least one game
-   *   - ``"no_games"``   — signed-up users with zero games yet
-   *   - ``"with_agent"`` — users who have paired at least one agent
-   *
-   * @param {{ limit?: number, before?: Date, search?: string,
-   *   filter?: string }} [opts]
-   * @returns {Promise<{
-   *   items: Array<{
-   *     userId: string,
-   *     clerkUserId: string | null,
-   *     email: string | null,
-   *     gameCount: number,
-   *     opponentCount: number,
-   *     lastActivity: Date | null,
-   *     firstActivity: Date | null,
-   *     hasAgent: boolean,
-   *     agentLastSeenAt: Date | null,
-   *     storageEstimateBytes: number,
-   *   }>,
-   *   nextBefore: Date | null,
-   * }>}
-   */
-  async listUsers(opts = {}) {
-    const limit = clampLimit(opts.limit, 50);
-    // Whitelist the filter so an unknown value can never inject a stage
-    // or silently return the wrong set — anything unrecognised is "all".
-    const filter = USER_LIST_FILTERS.has(/** @type {string} */ (opts.filter))
-      ? opts.filter
-      : "all";
-    // Users-FIRST pipeline so signed-up users who have not uploaded any
-    // games yet still appear (they show with 0 games). The older
-    // games-first aggregation hid them entirely, which made the list
-    // disagree with the "total users" counter.
-    const pipeline = [];
-    if (typeof opts.search === "string" && opts.search.length > 0) {
-      // Case-insensitive match on userId / clerkUserId / email.
-      const re = new RegExp(escapeRegex(opts.search), "i");
-      pipeline.push({
-        $match: { $or: [{ userId: re }, { clerkUserId: re }, { email: re }] },
-      });
-    }
-    pipeline.push(
-      // Per-user game count + activity bounds. ``date`` on games is
-      // indexed per userId, so the correlated lookup is cheap at the
-      // admin's scale and keeps users with zero games in the result.
-      {
-        $lookup: {
-          from: COLLECTIONS.GAMES,
-          let: { uid: "$userId" },
-          pipeline: [
-            { $match: { $expr: { $eq: ["$userId", "$$uid"] } } },
-            {
-              $group: {
-                _id: null,
-                gameCount: { $sum: 1 },
-                firstActivity: { $min: "$date" },
-                lastActivity: { $max: "$date" },
-              },
-            },
-          ],
-          as: "gameStats",
-        },
-      },
-      {
-        $addFields: {
-          gameStats: {
-            $ifNull: [
-              { $arrayElemAt: ["$gameStats", 0] },
-              { gameCount: 0, firstActivity: null, lastActivity: null },
-            ],
-          },
-        },
-      },
-      // Per-user paired-agent status from deviceTokens (one token per
-      // agent install). ``count`` powers the "Has agent" filter/badge;
-      // ``lastSeenAt`` is the newest heartbeat across the user's agents.
-      {
-        $lookup: {
-          from: COLLECTIONS.DEVICE_TOKENS,
-          let: { uid: "$userId" },
-          pipeline: [
-            { $match: { $expr: { $eq: ["$userId", "$$uid"] } } },
-            {
-              $group: {
-                _id: null,
-                count: { $sum: 1 },
-                lastSeenAt: { $max: "$lastSeenAt" },
-              },
-            },
-          ],
-          as: "agentStats",
-        },
-      },
-      {
-        $addFields: {
-          agentStats: {
-            $ifNull: [
-              { $arrayElemAt: ["$agentStats", 0] },
-              { count: 0, lastSeenAt: null },
-            ],
-          },
-        },
-      },
-      // Coalesced sort key so game-less users (null lastActivity) still
-      // order deterministically — newest by last game, else last sign-in,
-      // else account creation. The cursor (`before`) compares against it.
-      {
-        $addFields: {
-          sortKey: {
-            $ifNull: [
-              "$gameStats.lastActivity",
-              { $ifNull: ["$lastSeenAt", "$createdAt"] },
-            ],
-          },
-        },
-      },
-    );
-    // Segment filter — applied after the stat lookups so it can key on
-    // the derived counts, and before the cursor/limit so pagination
-    // counts only matching rows.
-    if (filter === "with_games") {
-      pipeline.push({ $match: { "gameStats.gameCount": { $gt: 0 } } });
-    } else if (filter === "no_games") {
-      pipeline.push({ $match: { "gameStats.gameCount": { $eq: 0 } } });
-    } else if (filter === "with_agent") {
-      pipeline.push({ $match: { "agentStats.count": { $gt: 0 } } });
-    }
-    pipeline.push({ $sort: { sortKey: -1 } });
-    if (opts.before instanceof Date && !Number.isNaN(opts.before.getTime())) {
-      pipeline.push({ $match: { sortKey: { $lt: opts.before } } });
-    }
-    pipeline.push({ $limit: limit + 1 });
+  /** Users includes exact total and page/limit for every sort. Legacy before
+   * remains accepted for the prior activity cursor UI for one release.
+   * @param {Record<string,any>} [opts] */
+  listUsers(opts = {}) { return this.userDirectory.list(opts); }
 
-    const rows = await this.db.users.aggregate(pipeline).toArray();
-    const hasMore = rows.length > limit;
-    const page = hasMore ? rows.slice(0, limit) : rows;
-    if (page.length === 0) {
-      return { items: [], nextBefore: null };
-    }
-    // Per-user opponent counts via a single grouped query — cheaper
-    // than N round-trips. ``$in`` on the indexed ``userId`` field
-    // makes this O(log N) per user.
-    const userIds = page.map((r) => r.userId);
-    const oppCounts = await this.db.opponents
-      .aggregate([
-        { $match: { userId: { $in: userIds } } },
-        { $group: { _id: "$userId", count: { $sum: 1 } } },
-      ])
-      .toArray();
-    const oppCountByUser = new Map(oppCounts.map((c) => [c._id, c.count]));
-    const items = page.map((r) => {
-      const g = r.gameStats || {};
-      const a = r.agentStats || {};
-      return {
-        userId: String(r.userId || ""),
-        clerkUserId: r.clerkUserId ? String(r.clerkUserId) : null,
-        email: r.email ? String(r.email) : null,
-        gameCount: Number(g.gameCount) || 0,
-        opponentCount: oppCountByUser.get(r.userId) || 0,
-        lastActivity: g.lastActivity instanceof Date ? g.lastActivity : null,
-        firstActivity: g.firstActivity instanceof Date ? g.firstActivity : null,
-        hasAgent: (Number(a.count) || 0) > 0,
-        agentLastSeenAt: a.lastSeenAt instanceof Date ? a.lastSeenAt : null,
-        // Coarse storage estimate placeholder — gameDetails overhead is
-        // tracked separately in ``storageStats``.
-        storageEstimateBytes: 0,
-      };
-    });
-    const nextBefore = hasMore && page.length > 0
-      ? page[page.length - 1].sortKey
-      : null;
-    return { items, nextBefore };
-  }
+  /** @param {Record<string,any>} [opts] */
+  prepareUsersCsv(opts = {}) { return this.userDirectory.prepareCsv(opts); }
 
   /**
    * Detailed snapshot for one user — what the Users-tab "Open" drawer
@@ -366,6 +184,7 @@ class AdminService {
       gameStats,
       opponentCount,
       recentOpponents,
+      recentGames,
     ] = await Promise.all([
       this.db.users.findOne({ userId }, { projection: { _id: 0 } }),
       this.db.games
@@ -406,6 +225,7 @@ class AdminService {
         .sort({ lastSeen: -1, pulseId: 1 })
         .limit(5)
         .toArray(),
+      this.db.games.find({ userId }, { projection: { _id: 0, gameId: 1, date: 1, map: 1, result: 1, "opponent.displayName": 1, "opponent.pulseId": 1 } }).sort({ date: -1, _id: -1 }).limit(5).toArray(),
     ]);
     const stats = gameStats[0] || {
       gameCount: 0,
@@ -421,7 +241,7 @@ class AdminService {
       // ``admin`` when this user carries the DB-granted role (founder
       // bootstrap or an explicit grant). Drives the "Grant admin" /
       // "Already an admin" state on the user-detail page.
-      isAdmin: user ? user.role === "admin" : false,
+      isAdmin: user ? user.role === "admin" || this.userDirectory.adminIds().includes(user.clerkUserId) : false,
       createdAt: user ? user.createdAt || null : null,
       lastSeenAt: user ? user.lastSeenAt || null : null,
       games: {
@@ -431,6 +251,9 @@ class AdminService {
         firstActivity: stats.firstActivity instanceof Date ? stats.firstActivity : null,
         lastActivity: stats.lastActivity instanceof Date ? stats.lastActivity : null,
       },
+      recentGames: recentGames.map(game => ({ gameId: String(game.gameId || ""), date: game.date instanceof Date ? game.date : null,
+        map: typeof game.map === "string" ? game.map : null, result: typeof game.result === "string" ? game.result : null,
+        opponent: { name: typeof game.opponent?.displayName === "string" ? game.opponent.displayName : null, pulseId: typeof game.opponent?.pulseId === "string" ? game.opponent.pulseId : null } })),
       opponents: {
         total: opponentCount,
         top: recentOpponents,

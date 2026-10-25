@@ -33,7 +33,7 @@ export function MetricStat({
   caption,
 }: {
   label: string;
-  value: string;
+  value: import("react").ReactNode;
   caption?: string;
 }) {
   return (

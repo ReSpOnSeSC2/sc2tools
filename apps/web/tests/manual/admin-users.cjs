@@ -1,0 +1,56 @@
+/* Actual admin Users list/detail + shell/clientApi, synthetic loopback only.
+ * Run from apps/web after production build; all nonlocal traffic is blocked. */
+const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),esbuild=require('esbuild');
+const {chromium,expect}=require('@playwright/test');
+const origin='http://127.0.0.1:3250',root=process.cwd(),downloads=[],unexpected=[];
+const date='2026-10-20T12:00:00.000Z';
+const rows=Array.from({length:12},(_,i)=>({userId:'synthetic-user-'+i,clerkUserId:'synthetic-clerk-'+i,email:i===0?'long.synthetic.administrator@example.test':`player${i}@example.test`,createdAt:date,isAdmin:i===0,gameCount:38-i,opponentCount:12-i,firstActivity:date,lastActivity:date,hasAgent:i%3!==2,agentLastSeenAt:i%3!==2?date:null}));
+const detail={...rows[0],lastSeenAt:date,games:{total:38,wins:20,losses:12,firstActivity:'2026-09-10T12:00:00Z',lastActivity:date},opponents:{total:12,top:[{pulseId:'1-S2-1-123',displayNameSample:'Synthetic rival',race:'Protoss',gameCount:8,wins:5,losses:3}]},recentGames:[{gameId:'synthetic-game|1',date,map:'Synthetic test map',result:'Victory',opponent:{name:'Synthetic rival',pulseId:'1-S2-1-123'}},{gameId:'synthetic-game|2',date,map:'Another test map',result:'Tie',opponent:{name:'Unresolved rival',pulseId:null}}]};
+const events=[{eventId:'local-install',type:'agent_connected',createdAt:date,readAt:null,payload:{userId:rows[0].userId,platform:'windows',version:'0.fixture',source:'heartbeat',email:rows[0].email}},{eventId:'local-signup',type:'user_signup',createdAt:'2026-09-01T00:00:00Z',readAt:date,payload:{userId:rows[0].userId,email:rows[0].email,source:'first_touch'}}];
+const boundaries={
+ '@clerk/nextjs':"import{useSyncExternalStore}from'react';const auth={isLoaded:true,isSignedIn:true,userId:'synthetic-admin',getToken:async()=>window.fixtureHeldToken?window.fixtureHeldToken:'local-jwt'};let version=0;const listeners=new Set();window.fixtureAuth=(ready)=>{auth.isLoaded=ready;auth.isSignedIn=ready;version++;listeners.forEach(fn=>fn())};export function useAuth(){useSyncExternalStore(fn=>{listeners.add(fn);return()=>listeners.delete(fn)},()=>version);return auth}",
+ '@/lib/useUserSocket':"export const useUserSocket=()=>{};",
+ 'next/link':"import React from'react';export default function Link({href,children,prefetch,scroll,...props}){return <a href={href} {...props}>{children}</a>}",
+ 'next/navigation':"import{useSyncExternalStore}from'react';const listeners=new Set();const update=url=>{history.pushState({},'',url);listeners.forEach(fn=>fn())};window.addEventListener('popstate',()=>listeners.forEach(fn=>fn()));const subscribe=fn=>{listeners.add(fn);return()=>listeners.delete(fn)};const snap=()=>location.pathname+location.search;export const usePathname=()=>useSyncExternalStore(subscribe,snap).split('?')[0];export const useSearchParams=()=>new URLSearchParams(useSyncExternalStore(subscribe,snap).split('?')[1]||'');export const useRouter=()=>({replace:update,push:update});",
+};
+(async()=>{
+ fs.mkdirSync('.tmp',{recursive:true});
+ await esbuild.build({stdin:{contents:"import React,{Suspense}from'react';import{createRoot}from'react-dom/client';import{SWRConfig}from'swr';import{ToastProvider}from'@/components/ui/Toast';import{AdminShell}from'@/app/admin/components/AdminShell';import Users from'@/app/admin/users/page';import Detail from'@/app/admin/users/[userId]/page';const params=Promise.resolve({userId:'synthetic-user-0'});createRoot(document.getElementById('root')).render(<SWRConfig value={{provider:()=>new Map(),shouldRetryOnError:false,revalidateOnFocus:false,keepPreviousData:true}}><ToastProvider><main className='mx-auto min-w-0 max-w-screen-2xl p-4 pb-12'><AdminShell><Suspense fallback={<p>Loading fixture…</p>}>{location.pathname.endsWith('/synthetic-user-0')?<Detail params={params}/>:<Users/>}</Suspense></AdminShell></main></ToastProvider></SWRConfig>);",loader:'tsx',resolveDir:root},bundle:true,outfile:'.tmp/admin-users-fixture.js',alias:{'@':root},jsx:'automatic',plugins:[{name:'local-boundaries',setup(build){build.onResolve({filter:/.*/},args=>boundaries[args.path]?{path:args.path,namespace:'fixture'}:undefined);build.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:boundaries[args.path],loader:'tsx',resolveDir:root}))}}],define:{'process.env.NODE_ENV':'"production"','process.env.NEXT_PUBLIC_API_BASE':JSON.stringify(origin)},logLevel:'warning'});
+ const css=fs.readdirSync('.next/static/css',{recursive:true}).filter(name=>name.endsWith('.css')).map(name=>fs.readFileSync(path.join('.next/static/css',name),'utf8')).join('\n');
+ const fonts="@font-face{font-family:FixtureSans;src:url('/fonts/hanken-grotesk-latin.woff2');font-weight:100 900}@font-face{font-family:FixtureDisplay;src:url('/fonts/bricolage-grotesque-latin.woff2');font-weight:100 900}:root{--font-sans:FixtureSans;--font-display:FixtureDisplay;--font-serif:serif}";
+ const json=(res,data,status=200)=>{res.statusCode=status;res.setHeader('content-type','application/json');res.end(JSON.stringify(data))};
+ const server=http.createServer((req,res)=>{const url=new URL(req.url,origin),p=url.pathname;
+  if(req.method!=='GET'){unexpected.push({method:req.method,path:p});return json(res,{error:{code:'no_synthetic_mutations'}},405)}
+  if(p==='/v1/admin/users/export.csv'){downloads.push(url.search);res.setHeader('content-type','text/csv');res.setHeader('X-Export-Truncated','true');return res.end('userId,email\r\nsynthetic-user-0,fixture@example.test\r\n')}
+  if(p==='/v1/admin/users'){const page=Number(url.searchParams.get('page')||1),search=url.searchParams.get('search')||'';const items=rows.filter(row=>row.email.includes(search)&&(!(url.searchParams.get('filter')==='admins')||row.isAdmin));return json(res,{items:page===2?items.slice(0,2):items,total:search?items.length:62,page,limit:50,hasMore:page===1})}
+  if(p==='/v1/admin/users/synthetic-user-0')return json(res,detail);
+  if(p==='/v1/admin/users/synthetic-user-0/support')return json(res,{devices:[{deviceId:'synthetic-device',hostname:'Local fixture PC',os:'Windows 11',version:'0.fixture',lastSeenAt:date,online:true}],doctor:{ok:true,warnings:[]},replayArchive:{totalGames:38,archivedGames:36,missingGames:2},imports:[{jobId:'local-import',status:'completed',completed:5,failed:0}],audit:[{auditId:'local-audit',action:'user.rebuild',createdAt:date,result:{games:38}}]});
+  if(p==='/v1/admin/events/counts')return json(res,{unreadCount:2});
+  if(p==='/v1/admin/events')return json(res,{items:events,nextBefore:null});
+  if(p==='/v1/admin/infrastructure')return json(res,{overallStatus:'healthy'});
+  if(p.startsWith('/v1/')){unexpected.push({path:p});return json(res,{error:{code:'unexpected_synthetic_read'}},404)}
+  if(p==='/fixture.js'){res.setHeader('content-type','text/javascript;charset=utf-8');return res.end(fs.readFileSync('.tmp/admin-users-fixture.js'))}
+  if(p.startsWith('/fonts/')){res.setHeader('content-type','font/woff2');return res.end(fs.readFileSync(path.join('app',p)))}
+  res.setHeader('content-type','text/html;charset=utf-8');res.end(`<!doctype html><html data-theme="${url.searchParams.get('theme')==='dark'?'dark':'light'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}\n${fonts}</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>`);
+ });
+ await new Promise(resolve=>server.listen(3250,'127.0.0.1',resolve));const browser=await chromium.launch({headless:true});let checks=0;
+ try{for(const width of [375,1440])for(const theme of ['light','dark']){
+  const context=await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce',acceptDownloads:true});await context.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.goto(`${origin}/admin/users?theme=${theme}`);await expect(page.getByRole('heading',{name:'Users',exact:true})).toBeVisible();await expect(page.getByText('1–12 of 62 users',{exact:true})).toBeVisible();checks+=2;
+  await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:`../../docs/handoff/screenshots/admin-users-list-${theme}-${width}.png`});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);checks++;
+  if(width<768)await page.getByRole('combobox',{name:'Sort by'}).selectOption('games');else await page.getByRole('button',{name:/^Games/}).click();await expect(page).toHaveURL(/sort=games/);checks++;
+  await page.getByRole('button',{name:'Next',exact:true}).click();await expect(page.getByText('51–52 of 62 users',{exact:true})).toBeVisible();checks++;
+  await page.getByRole('button',{name:'Admins',exact:true}).click();await expect(page).not.toHaveURL(/page=2/);checks++;
+  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Export CSV',exact:true}).click();expect((await download).suggestedFilename()).toMatch(/^sc2tools-users-.*\.csv$/);await expect(page.getByText(/Limited to the first 10,000/)).toBeVisible();checks+=2;
+  await page.goto(`${origin}/admin/users/synthetic-user-0?theme=${theme}`);await expect(page.getByText('63%',{exact:true})).toBeVisible();await expect(page.getByText('Signed up',{exact:true})).toBeVisible();checks+=2;
+  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw Error('local denied')}}}));await page.getByRole('button',{name:'Copy userId',exact:true}).click();const input=page.getByRole('textbox',{name:'userId to copy',exact:true});await expect(input).toHaveValue('synthetic-user-0');expect(await input.evaluate(node=>node.selectionEnd===node.value.length)).toBe(true);checks+=2;
+  await page.getByRole('heading',{name:'User',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:`../../docs/handoff/screenshots/admin-users-detail-${theme}-${width}.png`,fullPage:true});
+  const game=page.getByRole('link',{name:'Synthetic test map',exact:true});await expect(game).toHaveAttribute('href','/admin/users/synthetic-user-0/opponents/1-S2-1-123?game=synthetic-game%7C1');checks++;
+  await expect(page.getByText(/Windows 11.*Online.*Last seen/)).toBeVisible();await expect(page.getByRole('heading',{name:'Recent activity',exact:true})).toBeVisible();await expect(page.getByRole('link',{name:/View all activity/})).toHaveAttribute('href','/admin/notifications?userId=synthetic-user-0&unread=0');checks+=3;
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);checks+=2;
+  await context.close();console.log(JSON.stringify({width,theme,checks}));
+ }
+ expect(unexpected).toEqual([]);console.log(JSON.stringify({checks,syntheticExports:downloads.length,nonlocalTraffic:'blocked'}));
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve))}
+})().catch(error=>{console.error(error);process.exitCode=1});

@@ -205,7 +205,7 @@ class AdminEventsService {
    * Cursor pagination on ``createdAt`` + ``eventId`` keeps timestamp ties
    * traversable. The unread filter shares counts()'s readAt predicate.
    *
-   * @param {{ limit?: number, before?: Date|string, type?: string, unread?: boolean }} [opts]
+   * @param {{ limit?: number, before?: Date|string, type?: string, unread?: boolean, userId?: string }} [opts]
    * @returns {Promise<{ items: AdminEventDoc[], nextBefore: string | null }>}
    */
   async list(opts = {}) {
@@ -216,6 +216,12 @@ class AdminEventsService {
       query.type = opts.type;
     }
     if (opts.unread === true) query.readAt = null;
+    if (typeof opts.userId === "string" && opts.userId) {
+      query["payload.userId"] = opts.userId;
+      // Never associate GDPR-anonymized events with a user again, including
+      // legacy records that retain an identity-shaped payload field.
+      query.anonymizedAt = { $exists: false };
+    }
     const rows = /** @type {AdminEventDoc[]} */ (
       /** @type {unknown} */ (
         await this.db.adminEvents

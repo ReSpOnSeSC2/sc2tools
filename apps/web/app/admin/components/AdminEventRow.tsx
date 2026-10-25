@@ -19,6 +19,7 @@ import {
   type ReportType,
 } from "@/lib/feedback/reportContext";
 import { timeSince } from "./format";
+import { AdminDate } from "./AdminDate";
 import type {
   AdminEvent,
   AdminEventAgentConnectedPayload,
@@ -39,9 +40,11 @@ export function AdminEventRow({
   event,
   unread,
   onReportUpdated,
+  compact = false,
 }: {
   event: AdminEvent;
   unread: boolean;
+  compact?: boolean;
   onReportUpdated?: () => unknown;
 }) {
   const meta = describe(event);
@@ -85,18 +88,18 @@ export function AdminEventRow({
             {meta.subtitle}
           </p>
         ) : null}
-        {meta.body ? (
+        {meta.body && !compact ? (
           <p className="mt-1.5 whitespace-pre-wrap break-words rounded-lg border border-border bg-bg-elevated/40 px-3 py-2 text-caption text-text-muted">
             {meta.body}
           </p>
         ) : null}
       </div>
       <span className="flex flex-none flex-col items-end gap-2 whitespace-nowrap text-caption text-text-dim">
-        {timeSince(event.createdAt)}
+        <AdminDate value={event.createdAt} />
         <ChevronRight className="h-4 w-4" aria-hidden />
       </span>
       </button>
-      {meta.href || report ? <div className="space-y-2 px-4 pb-3 pl-16">
+      {!compact && (meta.href || report) ? <div className="space-y-2 px-4 pb-3 pl-16">
         {meta.href ? <a className="inline-flex min-h-11 items-center text-caption text-accent underline" href={meta.href}>Open Infrastructure →</a> : null}
         {report?.context ? <ReportContextLines payload={report} /> : null}
         {report ? <EmailSource payload={report} /> : null}
