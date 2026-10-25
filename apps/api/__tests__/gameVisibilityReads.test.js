@@ -69,17 +69,17 @@ test("public k-floor drops hidden owner contributions, retains another uploader 
 test("opponent matching and dossier account scope reject hidden rows and empty scoped totals do not fall back", async () => {
   await db.opponents.insertOne({ userId: "owner", pulseId, displayNameSample: "Synthetic Foe", gameCount: 99, wins: 80, losses: 19 });
   await db.games.insertMany([
-    row("visible", { result: "Victory" }), row("alt", { myToonHandle: "2-S2-1-alt", result: "Defeat" }),
-    row("hidden", { excluded: true }), row("deleted", { _deleted: true }), row("pending", { _deletionPending: true }),
+    row("visible", { myToonHandle: "1-S2-1-111", result: "Victory" }), row("alt", { myToonHandle: "2-S2-1-222", result: "Defeat" }),
+    row("hidden", { myToonHandle: "1-S2-1-111", excluded: true }), row("deleted", { myToonHandle: "1-S2-1-111", _deleted: true }), row("pending", { myToonHandle: "1-S2-1-111", _deletionPending: true }),
   ]);
   const matcher = new OpponentIdentityMatcherService(db);
   expect((await matcher._targetGames("owner", { pulseId })).map((g) => g.gameId).sort()).toEqual(["alt", "visible"]);
   const service = new OpponentsService(db);
-  const profile = await service.get("owner", pulseId, { filters: { accounts: ["1-S2-1-main"] } });
+  const profile = await service.get("owner", pulseId, { filters: { accounts: ["1-S2-1-111"] } });
   expect(profile.games).toHaveLength(1);
   expect(profile.games[0].result).toBe("Victory");
   expect(profile.totals).toMatchObject({ total: 1, wins: 1, losses: 0 });
-  const empty = await service.get("owner", pulseId, { filters: { accounts: ["absent-account"] } });
+  const empty = await service.get("owner", pulseId, { filters: { accounts: ["1-S2-1-999"] } });
   expect(empty.games).toEqual([]);
   expect(empty.totals).toMatchObject({ total: 0, wins: 0, losses: 0 });
 });

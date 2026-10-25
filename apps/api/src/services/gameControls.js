@@ -49,7 +49,7 @@ class GameControlsService {
     const rowsPromise = this.db.games.aggregate([
       { $match: { userId, ...LIVE_GAME_MATCH, myToonHandle: { $regex: new RegExp(accountRules.handlePattern, "i") } } },
       { $sort: { date: -1, _id: -1 } },
-      { $group: { _id: "$myToonHandle", lastSeen: { $first: "$date" }, mmr: { $first: "$myMmr" }, leagueId: { $first: "$myLeagueId" } } },
+      { $group: { _id: { $toUpper: "$myToonHandle" }, lastSeen: { $first: "$date" }, mmr: { $first: "$myMmr" }, leagueId: { $first: "$myLeagueId" } } },
       { $sort: { lastSeen: -1, _id: 1 } }, { $limit: accountRules.maximumAccounts },
     ], { maxTimeMS: 5000 }).toArray();
     const [rows, profile] = await Promise.all([rowsPromise, this.db.users.findOne({ userId }, { projection: { _id: 0, pulseId: 1, pulseIds: 1 } })]);

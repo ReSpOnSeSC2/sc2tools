@@ -16,7 +16,7 @@ Branch: `codex/wave3-replay-library-control` in the preserved `wave4-agent-dashb
 | --- | --- |
 | Hidden games | One owner/game-indexed metadata page,25 control records plus one sentinel,5s query deadline; completed tombstones never appear as replays. |
 | Account catalog | Owner-only slim metadata aggregate, at most20 handles,5s deadline; one projected profile read, no Pulse/detail calls. |
-| Account cohort | At most20 literal SC2 toon handles, strict shared validation and1,300-character wire bound; invalid cohorts fail closed. |
+| Account cohort | At most20 literal SC2 toon identities, strict shared validation and1,300-character wire bound; invalid cohorts fail closed. Server lookups expand only the accepted S2/s2 separator spellings into at most40 exact index values, and canonical grouping precedes the catalog limit. |
 | Hide/delete | At most25 browser-selected games, processed serially; one affected opponent recount per game, generation-fenced cache invalidation, no live public corpus recompute. |
 | Cleanup recovery check | One projected first-match read through the existing owner/game index,5s deadline, retaining the caller's full owner/game scope. |
 | Replay CSV | Private metadata cursor, batch100, at most50,000 rows plus one bounded truncation sentinel; streamed with backpressure and abort/close cleanup, one export/minute/user. |
