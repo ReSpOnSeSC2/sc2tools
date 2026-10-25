@@ -63,7 +63,7 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "The chooser also shows **From a pasted build order** as unavailable. It will become usable when reference build orders ship. Every available create and edit path uses the same rich editor, with **How rules count** and its worked-example Help link. In an action picker, use Arrow keys, Home/End and Enter to choose; Escape closes the list first, and Tab continues through the form.",
+      text: "**From a pasted build order** previews supported time/supply formats and opens a private reference plan. See [Write or paste a build order](/help/build-order-paste). Every create and edit path uses the same rich editor, with **How rules count** and its worked-example Help link. In an action picker, use Arrow keys, Home/End and Enter to choose; Escape closes the list first, and Tab continues through the form.",
     },
     { type: "paragraph", text: "If making a detected variant asks you to sign in, the public Definitions page keeps the selected catalog label. Choose **Continue private variant** there to open your draft. Returning from sign-in never saves a build automatically." },
     {

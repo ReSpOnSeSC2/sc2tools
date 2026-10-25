@@ -526,6 +526,7 @@ export function useBuildEditorState(
         description: sanitised.payload.description,
         notes: sanitised.payload.notes,
         rules: sanitised.payload.rules,
+        ...(sanitised.payload.buildOrder ? { buildOrder: sanitised.payload.buildOrder } : {}),
         skillLevel: sanitised.payload.skillLevel,
         winConditions: sanitised.payload.winConditions,
         losesTo: sanitised.payload.losesTo,

@@ -225,6 +225,8 @@ const CUSTOM_BUILD_READ_AGGREGATE_PROJECTION = Object.freeze({
   userId: boundedMongoString("$userId", 200),
   slug: boundedMongoString("$slug", 80),
   ...ROOT_PUBLIC_BUILD_EXPRESSION,
+  // Full reference steps load only for detail or explicit Practice.
+  hasReferenceBuildOrder: { $eq: [{ $type: "$buildOrder" }, "object"] },
   notes: boundedMongoString("$notes", 8000),
   isPublic: boundedMongoBoolean("$isPublic"),
   sourceGameId: boundedMongoString("$sourceGameId", 200),

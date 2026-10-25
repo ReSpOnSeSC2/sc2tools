@@ -16,8 +16,10 @@ import { BuildEditorModal } from "./editor";
 import type { BuildEditorSaveResult } from "./editor/BuildEditor.types";
 import { BuildStartCards, type BuildStartChoice } from "./BuildStartCards";
 import type { CustomBuild } from "./types";
+import type { ReferenceBuildOrder } from "@/lib/buildOrderReference";
+import { BuildOrderPaste } from "./editor/BuildOrderPaste";
 
-type Seed = { gameId?: string; events: GameBuildOrderResponse["events"]; race: RaceLite; vsRace: VsRaceLite; name?: string };
+type Seed = { gameId?: string; events: GameBuildOrderResponse["events"]; race: RaceLite; vsRace: VsRaceLite; name?: string; buildOrder?: ReferenceBuildOrder };
 type Props = { onClose: () => void; onSaved: (build: CustomBuild, result: BuildEditorSaveResult) => void; initialChoice?: BuildStartChoice; definitionId?: string };
 const races = ["Protoss", "Terran", "Zerg", "Random"] as const;
 const vsRaces = ["Any", ...races] as const;
@@ -77,10 +79,11 @@ function BuildStartBody({ onClose, onSaved, initialChoice, definitionId }: Props
       setSeed({ gameId, events: detail.events, race: coerceRace(detail.my_race, race), vsRace: coerceRace(detail.opp_race, vsRace === "Any" ? "Random" : vsRace), name: step === "detected" ? selectedDefinition?.name : undefined });
     } catch (failure) { if (!controller.signal.aborted && current.current === epoch) { setError(errorText(failure)); setSelected(null); } }
   }
-  const editorSeed = seed ?? (step === "blank" ? { events: [], race, vsRace } : null);
+  const editorSeed: Seed | null = seed ?? (step === "blank" ? { events: [], race, vsRace } : null);
   if (editorSeed) return <BuildEditorModal open onClose={onClose} events={editorSeed.events} gameId={editorSeed.gameId} race={editorSeed.race} vsRace={editorSeed.vsRace} perspective="you" defaultName={editorSeed.name} createOnly
+    initialDraft={editorSeed.buildOrder ? { buildOrder: editorSeed.buildOrder } : undefined}
     onSaved={(slug, draft, result) => onSaved({ ...draft, slug, sourceGameId: editorSeed.gameId, perspective: "you" }, result)} />;
-  return <Modal open title={step === "choose" ? "Start a new build" : step === "games" ? "Choose one of your games" : "Start from a detected build"} onClose={onClose} size="lg"
+  return <Modal open title={step === "choose" ? "Start a new build" : step === "games" ? "Choose one of your games" : step === "paste" ? "Paste a build order" : "Start from a detected build"} onClose={onClose} size="lg"
     footer={<Button variant="secondary" onClick={onClose}>Cancel</Button>}>
     {step === "choose" ? <BuildStartCards onChoose={setStep} /> : <div className="space-y-4">
       <Button variant="ghost" onClick={() => changeScope(() => setStep("choose"))}>Back to starting points</Button>
@@ -88,6 +91,7 @@ function BuildStartBody({ onClose, onSaved, initialChoice, definitionId }: Props
         onChange={id => changeScope(() => { const item = BUILD_DEFINITIONS.find(candidate => candidate.id === id); setDefinition(id); if (item) { setRace(item.race); setVsRace(item.matchup ? coerceRace(item.matchup[2], "Random") : "Any"); } })} /> : null}
       <div className="grid grid-cols-2 gap-3"><label className="space-y-1 text-caption">Your race<Select className="min-h-11" value={race} disabled={step === "detected"} onChange={event => changeScope(() => setRace(event.target.value as RaceLite))}>{races.map(item => <option key={item}>{item}</option>)}</Select></label>
         <label className="space-y-1 text-caption">Opponent race<Select className="min-h-11" value={vsRace} onChange={event => changeScope(() => setVsRace(event.target.value as VsRaceLite))}>{vsRaces.map(item => <option key={item}>{item}</option>)}</Select></label></div>
+      {step === "paste" ? <BuildOrderPaste race={race} onImport={buildOrder => setSeed({ events: [], race, vsRace, buildOrder })} /> : <>
       {step === "detected" ? <p className="text-caption text-text-muted">Choose a label, then a replay with that stored build label (including confirmed check-ins). Your variant starts as a private draft; the analyzer’s rules stay unchanged.</p> : <p className="text-caption text-text-muted">Your latest visible replays for this matchup. Only the selected replay’s build order is loaded.</p>}
       {loading ? <p role="status">Loading replays…</p> : null}
       {error ? <div role="alert" className="space-y-2 text-danger"><p>{error}</p>{!page ? <Button variant="secondary" onClick={() => setRetry(value => value + 1)}>Retry</Button> : null}</div> : null}
@@ -96,6 +100,7 @@ function BuildStartBody({ onClose, onSaved, initialChoice, definitionId }: Props
         <span className="min-w-0 break-words"><span className="block font-semibold">{game.map || "Unknown map"} · {game.opponent?.displayName || "Unknown opponent"}</span><span className="text-caption text-text-muted">{game.date ? new Date(game.date).toLocaleString() : "Date unavailable"} · {game.result || "Result unavailable"}{game.myBuild ? ` · ${game.myBuild}` : ""}</span></span><span className="shrink-0 text-caption">{selected === game.gameId ? "Loading…" : "Use build order"}</span>
       </button></li>)}</ul> : null}
       {page ? <div className="flex flex-wrap justify-between gap-2"><Button variant="secondary" disabled={!previous.length || !!selected} onClick={() => { setCursor(previous.at(-1) ?? null); setPrevious(items => items.slice(0, -1)); }}>Previous replays</Button><Button variant="secondary" disabled={!page.page.hasMore || !page.page.nextCursor || !!selected} onClick={() => { setPrevious(items => [...items, cursor]); setCursor(page.page.nextCursor); }}>Next replays</Button></div> : null}
+      </>}
     </div>}
   </Modal>;
 }

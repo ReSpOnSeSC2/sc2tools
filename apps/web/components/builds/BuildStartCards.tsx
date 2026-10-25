@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ClipboardList, FilePlus2, Film, ScanText } from "lucide-react";
 
-export type BuildStartChoice = "games" | "detected" | "blank";
+export type BuildStartChoice = "games" | "detected" | "blank" | "paste";
 
 /** Thin enough for the first-run library; editor/catalog code stays lazy. */
 export function BuildStartCards({ onChoose, community = false }: {
@@ -19,7 +19,7 @@ export function BuildStartCards({ onChoose, community = false }: {
   return <div className="space-y-4">
     <div className="grid gap-3 sm:grid-cols-2">
       {cards.slice(0, 2).map(({ choice, title, text, Icon }) => <button key={choice} type="button" className={cardClass} onClick={() => onChoose(choice)}><Icon className="h-5 w-5 text-accent" aria-hidden /><span className="font-semibold">{title}</span><span className="text-caption text-text-muted">{text}</span></button>)}
-      <button type="button" className={`${cardClass} cursor-not-allowed opacity-70`} disabled><ClipboardList className="h-5 w-5" aria-hidden /><span className="font-semibold">From a pasted build order</span><span className="text-caption text-text-muted">Coming with reference build orders. Pasting is not available yet.</span></button>
+      <button type="button" className={cardClass} onClick={() => onChoose("paste")}><ClipboardList className="h-5 w-5" aria-hidden /><span className="font-semibold">From a pasted build order</span><span className="text-caption text-text-muted">Preview timed or supply-only steps, then edit a private reference plan.</span></button>
       {cards.slice(2).map(({ choice, title, text, Icon }) => <button key={choice} type="button" className={cardClass} onClick={() => onChoose(choice)}><Icon className="h-5 w-5 text-accent" aria-hidden /><span className="font-semibold">{title}</span><span className="text-caption text-text-muted">{text}</span></button>)}
       {community ? <Link href="/community" className={cardClass}><span className="font-semibold">Copy a Community build</span><span className="text-caption text-text-muted">Browse shared builds and save a private copy before editing.</span></Link> : null}
     </div>

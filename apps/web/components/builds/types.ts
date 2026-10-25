@@ -21,6 +21,7 @@ export type BuildPerspective = "you" | "opponent";
 
 export interface CustomBuild {
   buildOrder?: ReferenceBuildOrder;
+  hasReferenceBuildOrder?: boolean;
   /** Stable client-generated id used as the URL slug. */
   slug: string;
   /** Display name. */

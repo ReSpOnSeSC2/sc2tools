@@ -4,7 +4,7 @@ import type { BuildEditorModalProps } from "./editor/BuildEditorModal";
 const harness = vi.hoisted(() => ({ apiCall: vi.fn(), getToken: vi.fn(async () => "token"), userId: "owner-a", signedIn: true }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: harness.getToken, userId: harness.userId, isLoaded: true, isSignedIn: harness.signedIn }) }));
 vi.mock("@/lib/clientApi", async importOriginal => ({ ...await importOriginal<object>(), apiCall: (...args: unknown[]) => harness.apiCall(...args) }));
-vi.mock("./editor", () => ({ BuildEditorModal: (props: BuildEditorModalProps) => <section aria-label="Rich editor"><span>{JSON.stringify({ events: props.events, race: props.race, vsRace: props.vsRace, gameId: props.gameId, name: props.defaultName, createOnly: props.createOnly })}</span></section> }));
+vi.mock("./editor", () => ({ BuildEditorModal: (props: BuildEditorModalProps) => <section aria-label="Rich editor"><span>{JSON.stringify({ events: props.events, race: props.race, vsRace: props.vsRace, gameId: props.gameId, name: props.defaultName, createOnly: props.createOnly, initialDraft: props.initialDraft })}</span></section> }));
 import { BuildStartFlow } from "./BuildStartFlow";
 import { BUILD_DEFINITIONS } from "@/lib/build-definitions";
 const game = (id = "game-a") => ({ gameId: id, map: id, date: "2026-10-25T10:00:00Z", result: "win", opponent: { displayName: "Opponent" } });
@@ -14,6 +14,14 @@ function deferred<T>() { let resolve!: (value: T) => void; const promise = new P
 afterEach(cleanup);
 beforeEach(() => { harness.apiCall.mockReset(); harness.userId = "owner-a"; harness.signedIn = true; });
 describe("one build creation flow", () => {
+  it("hands a previewed paste to the same rich create-only editor without replay reads or writes", () => {
+    render(<BuildStartFlow onClose={vi.fn()} onSaved={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /From a pasted/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Paste a build order" }), { target: { value: "14 - Future action\n0:18 Pylon" } });
+    fireEvent.click(screen.getByRole("button", { name: "Use pasted order" }));
+    expect(JSON.parse(screen.getByRole("region", { name: "Rich editor" }).textContent!)).toMatchObject({ createOnly: true, events: [], initialDraft: { buildOrder: { v: 1, source: "paste", steps: [{ t: null, supply: 14, action: "Future action" }, { t: 18, supply: null, action: "BuildPylon" }] } } });
+    expect(harness.apiCall).not.toHaveBeenCalled();
+  });
   it("keeps malformed 200 responses inside the modal and retries without accepting stale malformed rows", async () => {
     const stale = deferred<unknown>(); harness.apiCall.mockReturnValueOnce(stale.promise).mockResolvedValueOnce({ items: [{ gameId: "bad" }], page: { hasMore: "yes" } }).mockResolvedValue(page("recovered"));
     render(<BuildStartFlow initialChoice="games" onClose={vi.fn()} onSaved={vi.fn()} />);
@@ -24,9 +32,9 @@ describe("one build creation flow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry" })); await screen.findByRole("button", { name: /recovered/ });
     expect(screen.queryByRole("alert")).toBeNull();
   });
-  it("offers four starting cards, keeps paste unavailable, and opens blank in the rich create-only editor without a read", () => {
+  it("offers four starting cards including paste, and opens blank in the rich create-only editor without a read", () => {
     render(<BuildStartFlow onClose={vi.fn()} onSaved={vi.fn()} />);
-    expect((screen.getByRole("button", { name: /From a pasted/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /From a pasted/ }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: /Blank build/ }));
     expect(JSON.parse(screen.getByRole("region", { name: "Rich editor" }).textContent!)).toMatchObject({ events: [], createOnly: true });
     expect(harness.apiCall).not.toHaveBeenCalled();

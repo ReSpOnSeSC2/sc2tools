@@ -11,6 +11,14 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Reference build orders
+- Write, paste or capture a bounded reference plan in the rich build editor,
+  separately from the rules that classify replays. Supply-only steps keep an
+  unknown clock; unknown action names stay visible and saveable.
+- Reorder and edit steps, fold repeated army actions, copy text or Markdown,
+  download .txt, and practise usable timed actions. Community copies retain the
+  reference plan while private source replay IDs stay private.
+
 ### Agent 0.24.6 and Randomizer game-start performance
 - Build scouting timelines and load their icons when the relevant view opens,
   avoiding full hidden-history hydration in Compact or hidden Companion windows.

@@ -23,11 +23,13 @@ test("validates the optional reference field, retaining no giant unknown childre
 });
 
 test("full owner detail retains reference provenance; lists and classification omit it", async () => {
-  await h.db.customBuilds.insertOne({ userId: "u_ref-owner", slug: "reference", name: "Reference", race: "Protoss", buildOrder: order, rules: [], updatedAt: new Date() });
+  const saved = await request(h.app).put("/v1/custom-builds/reference").set("authorization", "Bearer u:ref-owner").send({ name: "Reference", race: "Protoss", buildOrder: order, rules: [], reclassify: false, createOnly: true });
+  expect(saved.status).toBe(200);
   const own = await request(h.app).get("/v1/custom-builds/reference").set("authorization", "Bearer u:ref-owner");
   expect(own.status).toBe(200); expect(own.body.buildOrder).toEqual(order);
   const service = new CustomBuildsService(h.db, {});
-  expect((await service.list("u_ref-owner"))[0]).not.toHaveProperty("buildOrder");
+  const list = (await service.list("u_ref-owner"))[0];
+  expect(list).not.toHaveProperty("buildOrder"); expect(list).toHaveProperty("hasReferenceBuildOrder", true);
   expect((await service._classificationPage("u_ref-owner"))[0]).not.toHaveProperty("buildOrder");
   expect((await request(h.app).get("/v1/custom-builds/reference").set("authorization", "Bearer u:foreign")).status).toBe(404);
 });

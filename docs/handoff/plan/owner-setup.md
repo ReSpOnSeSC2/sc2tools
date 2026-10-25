@@ -162,3 +162,15 @@ At stream start, confirm Start new session to reset the account's session bounda
 - Optional editor code loads when opened. A stale chunk gets local Retry and
   Cancel controls; Retry does not repeat replay selection or write anything.
 - Rollback is a web revert. No stored data conversion needs to be undone.
+
+### Reference build orders (ADR 0058)
+
+- No environment variables, new infrastructure, collection, index, migration,
+  provider setup or desktop release. Existing custom-build documents may carry
+  an optional version-1 `buildOrder`; old documents remain valid.
+- Deploy the API field validation/projections with the web editor. Source
+  replay IDs remain private in nested reference data; shareable step notes are
+  distinct from private build notes. Lists and classifier pages omit full
+  reference payloads. A card requests its reference only on explicit Practice.
+- Paste parsing and exports run locally. No external parser or AI service is
+  used. Rollback may leave the optional field stored; older readers ignore it.
