@@ -37,7 +37,7 @@ const server=http.createServer(async(req,res)=>{
   if(!file.startsWith(base+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.statusCode=404;return res.end()}
   res.setHeader('Content-Type',({'.woff2':'font/woff2','.png':'image/png','.svg':'image/svg+xml','.webp':'image/webp'})[path.extname(file)]||'application/octet-stream');res.end(fs.readFileSync(file));
 });
-async function shot(page,name){await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:`${shots}/unified-build-editor-${name}.png`});captures++}
+async function shot(page,name){if(process.env.UNIFIED_NO_SHOTS==='1')return;await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:`${shots}/unified-build-editor-${name}.png`});captures++}
 async function geometry(page){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);checks++;const dialog=page.getByRole('dialog').first();if(await dialog.count()){expect(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1)).toBe(true);checks++}}
 async function chooseToken(page,token){const input=page.getByRole('combobox',{name:'Rule 1 action'});await input.fill(token);await input.press('ArrowDown');await input.press('Enter');expect(await input.getAttribute('aria-invalid')).toBeNull();checks++;return input}
 (async()=>{
