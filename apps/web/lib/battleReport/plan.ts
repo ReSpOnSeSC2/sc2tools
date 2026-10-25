@@ -31,7 +31,7 @@ export function planBattleReport(facts: StoryFacts, tone: ReportTone = "battle")
     usedTemplates.add(selected.id); usedFacts.add(id);
     return renderFact(selected, facts.entries[id]);
   });
-  const setting = pick("setting", ["setting", facts.entries.plan ? "plan" : "opener", "opponent-opener", "mmr"]);
+  const setting = pick("setting", ["setting", facts.entries.plan ? "plan" : "opener", facts.entries["opponent-opener"] ? "opponent-opener" : "opponent-correction", "mmr"]);
   const opening = pick("opening", ["natural", "tech", "first-clash", "gas", "upgrade", "first-attack"].filter(id => facts.entries[id]).slice(0, 3));
   const turning = pick("turning", ["largest-swing", "comeback", "largest-fight", "townhall-exchange"].filter(id => facts.entries[id]).slice(0, 3));
   const aftermath = pick("aftermath", ["result", "workers", "lesson", "early-blocks", "own-structures", "opp-structures"].filter(id => facts.entries[id]).slice(0, 4));

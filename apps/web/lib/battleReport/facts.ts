@@ -31,6 +31,11 @@ const TECH = new Set(["CyberneticsCore", "TwilightCouncil", "Stargate", "Robotic
 export function battleReportFacts(input: BattleReportInput): StoryFacts {
   const { game, breakdown, playback } = input;
   const length = nonnegative(game.durationSec) ? game.durationSec : nonnegative(breakdown?.game_length_sec) ? breakdown.game_length_sec : null;
+  const within = (n: unknown): n is number => nonnegative(n) && (length === null || n <= length);
+  const samples = breakdown?.stats_events?.filter(row => within(row.time)), opposingSamples = breakdown?.opp_stats_events?.filter(row => within(row.time));
+  const casualties = breakdown?.casualty_events?.filter(row => within(row.time));
+  const windows = breakdown?.raw?.supply_block_windows?.filter(row => within(row.start) && within(row.end) && row.end >= row.start);
+  const leaks = (breakdown?.all_leaks ?? breakdown?.top_3_leaks)?.filter(row => row.time == null || within(row.time));
   const entries: StoryFacts["entries"] = {}, beats: StoryFacts["beats"] = { setting: [], opening: [], turning: [], aftermath: [] };
   const add = (beat: ReportBeat, id: string, content: string, time: number, source: string, timestamps = [time]) => {
     if (!nonnegative(time) || length !== null && time > length) return;
@@ -42,15 +47,17 @@ export function battleReportFacts(input: BattleReportInput): StoryFacts {
   const map = text(game.map), matchup = [text(game.myRace), text(game.opponent?.race)].filter(Boolean).join(" versus ");
   add("setting", "setting", `${me} faced ${opponent}${matchup ? ` in ${matchup}` : ""}${map ? ` on ${map}` : ""}`, 0, "game metadata");
   if (nonnegative(game.myMmr) && nonnegative(game.opponent?.mmr)) add("setting", "mmr", `The replay listed ${game.myMmr} MMR for you and ${game.opponent.mmr} for your opponent`, 0, "game metadata");
-  const planned = text(input.plannedBuild), classified = text(game.detectedBuild) ?? text(game.myBuild);
+  const planned = text(input.plannedBuild) ?? (game.buildPlanned ? text(game.myBuild) : null);
+  const classified = text(game.detectedBuild) ?? (!game.buildPlanned && !planned ? text(game.myBuild) : null);
   if (planned) add("setting", "plan", `Your checked-in plan was ${planned}${classified ? `; the replay classifier named ${classified}` : ""}`, 0, "build check-in and classifier");
   else if (classified) add("setting", "opener", `Your replay-classified opening was ${classified}`, 0, "replay classifier");
-  const theirOpening = text(game.detectedOppStrategy) ?? text(game.opponent?.strategy);
+  const theirOpening = text(game.detectedOppStrategy) ?? (!game.oppStrategyPlanned ? text(game.opponent?.strategy) : null);
   if (theirOpening) add("setting", "opponent-opener", `The opponent's replay-classified opening was ${theirOpening}`, 0, "replay classifier");
+  if (game.oppStrategyPlanned && text(game.opponent?.strategy)) add("setting", "opponent-correction", `Your corrected opponent label was ${text(game.opponent?.strategy)}`, 0, "opponent build check-in");
 
   const ordered = (input.buildEvents ?? []).filter(row => nonnegative(row.time) && row.time > 0 && (length === null || row.time <= length) && text(row.name)).slice().sort((a, b) => a.time - b.time || a.name.localeCompare(b.name));
   const natural = ordered.find(row => row.time > 10 && TOWNHALLS.has(row.name));
-  if (natural) add("opening", "natural", `Your first expansion, ${natural.display || humanizeBuildName(natural.name)}, started at ${clock(natural.time)}`, natural.time, "build events");
+  if (natural) add("opening", "natural", `Your next recorded town hall, ${natural.display || humanizeBuildName(natural.name)}, started at ${clock(natural.time)}`, natural.time, "build events after the starting-base exclusion");
   const gas = ordered.find(row => /^(Extractor|Assimilator|Refinery)(Rich)?$/.test(row.name));
   if (gas) add("opening", "gas", `Your first recorded gas structure, ${gas.display || humanizeBuildName(gas.name)}, started at ${clock(gas.time)}`, gas.time, "build events");
   const tech = ordered.find(row => TECH.has(row.name));
@@ -59,11 +66,15 @@ export function battleReportFacts(input: BattleReportInput): StoryFacts {
   if (upgrade) add("opening", "upgrade", `${upgrade.display || upgrade.name} completed at ${clock(upgrade.complete_time!)}`, upgrade.complete_time!, "build completion event");
   if (playback?.fidelity?.attacks === "observed") {
     let first = Infinity;
-    for (const rows of [playback.units, playback.buildings]) for (const row of rows) for (const shot of row.attacks ?? []) if (nonnegative(shot)) first = Math.min(first, shot);
+    for (const rows of [playback.units, playback.buildings]) for (const row of rows) for (const shot of row.attacks ?? []) if (within(shot)) first = Math.min(first, shot);
     if (finite(first)) add("opening", "first-attack", `The first observed weapon cycle was at ${clock(first)}`, first, "observed playback attacks");
   }
 
-  const story = input.story ?? gameStory({ gameId: game.gameId, result: game.result, statsEvents: breakdown?.stats_events, oppStatsEvents: breakdown?.opp_stats_events, casualtyEvents: breakdown?.casualty_events, buildEvents: input.buildEvents, patchEra: patchEraForGame(game), supplyBlockedSeconds: breakdown?.raw?.supply_blocked_seconds, supplyBlockWindows: breakdown?.raw?.supply_block_windows, leaks: breakdown?.all_leaks ?? breakdown?.top_3_leaks });
+  const derived = input.story ?? gameStory({ gameId: game.gameId, result: game.result, statsEvents: samples, oppStatsEvents: opposingSamples, casualtyEvents: casualties, buildEvents: ordered, patchEra: patchEraForGame(game), supplyBlockedSeconds: breakdown?.raw?.supply_blocked_seconds, supplyBlockWindows: windows, leaks });
+  // Callers may reuse an existing story, but its complete observations still
+  // have to belong to this replay. Never clip a cluster and report its full
+  // losses or an out-of-range end as if they happened before the final frame.
+  const story: GameStory = { ...derived, recap: [], chips: derived.chips.filter(row => within(row.time)), fights: derived.fights.filter(row => within(row.start) && within(row.end) && row.end >= row.start), leadSeries: derived.leadSeries.filter(row => within(row.time)), turningPoints: derived.turningPoints.filter(row => within(row.start) && within(row.time)), topLeak: derived.topLeak?.time != null && !within(derived.topLeak.time) ? null : derived.topLeak };
   const fights = story.fights;
   const describeFight = (fight: StoryFight) => {
     const loss = (side: StoryFight["me"]) => fight.estimated ? side.estimatedValue === undefined ? "an unmeasured resource loss" : `an estimated ${Math.round(side.estimatedValue)} resources` : `${Math.round(side.minerals)} minerals and ${Math.round(side.gas)} gas${side.unpriced ? `, plus ${side.unpriced} unpriced deaths` : ""}`;
@@ -81,34 +92,34 @@ export function battleReportFacts(input: BattleReportInput): StoryFacts {
   const priced = fights.filter(row => !row.me.unpriced && !row.opp.unpriced && (!row.estimated || row.me.estimatedValue !== undefined && row.opp.estimatedValue !== undefined));
   const biggestFight = priced.slice().sort((a, b) => ((b.me.estimatedValue ?? b.me.minerals + b.me.gas) + (b.opp.estimatedValue ?? b.opp.minerals + b.opp.gas)) - ((a.me.estimatedValue ?? a.me.minerals + a.me.gas) + (a.opp.estimatedValue ?? a.opp.minerals + a.opp.gas)) || a.start - b.start)[0];
   if (biggestFight && biggestFight !== fights[0]) add("turning", "largest-fight", describeFight(biggestFight), biggestFight.start, "fight ledger", [biggestFight.start, biggestFight.end]);
-  const townhallLosses = (breakdown?.casualty_events ?? []).filter(row => row.category === "buildings" && TOWNHALLS.has(row.name) && nonnegative(row.time)).slice().sort((a, b) => a.time - b.time);
+  const townhallLosses = (casualties ?? []).filter(row => row.category === "buildings" && TOWNHALLS.has(row.name)).slice().sort((a, b) => a.time - b.time);
   const exchange = townhallLosses.find((row, index) => townhallLosses.slice(index + 1).some(other => other.owner !== row.owner && other.time - row.time <= 45));
   if (exchange) add("turning", "townhall-exchange", `Both players lost a recorded town hall within a ${45}-second window beginning at ${clock(exchange.time)}`, exchange.time, "building casualties");
 
   const result = text(game.result);
   if (result) add("aftermath", "result", `The replay result was ${result}${length !== null ? ` after ${clock(length)}` : ""}`, length ?? 0, "game metadata");
-  const workerPeak = (breakdown?.stats_events ?? []).filter(row => nonnegative(row.food_workers) && nonnegative(row.time)).slice().sort((a, b) => b.food_workers! - a.food_workers! || a.time - b.time)[0];
+  const workerPeak = (samples ?? []).filter(row => nonnegative(row.food_workers)).slice().sort((a, b) => b.food_workers! - a.food_workers! || a.time - b.time)[0];
   if (workerPeak) add("aftermath", "workers", `Your sampled worker count peaked at ${workerPeak.food_workers} at ${clock(workerPeak.time)}`, workerPeak.time, "worker samples");
-  if (story.topLeak) add("aftermath", "lesson", `The highest-ranked priced macro leak was ${story.topLeak.name}. ${story.topLeak.detail}`, story.topLeak.time ?? length ?? 0, "macro leak rules");
-  const blocks = (breakdown?.raw?.supply_block_windows ?? []).filter(row => nonnegative(row.start) && nonnegative(row.end) && row.end >= row.start && row.end <= 360);
+  if (story.topLeak) add("aftermath", "lesson", `The highest-ranked macro leak was ${story.topLeak.name}. ${story.topLeak.detail}`, story.topLeak.time ?? length ?? 0, "macro leak rules");
+  const blocks = (windows ?? []).filter(row => row.end <= 360);
   if (blocks.length) {
     const seconds = blocks.reduce((sum, row) => sum + (nonnegative(row.blocked_sec) ? Math.min(row.end - row.start, row.blocked_sec) : row.end - row.start), 0);
     add("aftermath", "early-blocks", `${blocks.length} complete supply-block ${blocks.length === 1 ? "window" : "windows"} before 6:00 contained ${Math.round(seconds)} counted blocked seconds`, blocks[0].start, "supply block windows");
   }
-  const destroyed = (rows: MacroBreakdownData["production_buildings"]) => rows?.length && rows.every(row => row.destroyed === true && nonnegative(row.died_time));
+  const destroyed = (rows: MacroBreakdownData["production_buildings"]) => rows?.length && rows.every(row => within(row.born_time) && row.destroyed === true && within(row.died_time));
   if (destroyed(breakdown?.production_buildings)) add("aftermath", "own-structures", "All your recorded production structures were destroyed", Math.max(...breakdown!.production_buildings!.map(row => row.died_time)), "production building lifetimes");
   if (destroyed(breakdown?.opp_production_buildings)) add("aftermath", "opp-structures", "All your opponent's recorded production structures were destroyed", Math.max(...breakdown!.opp_production_buildings!.map(row => row.died_time)), "production building lifetimes");
   // A result alone says nothing about GG or surrender. Those end conditions
   // are omitted because the game page does not currently carry chat events.
   const moments: SnapshotMoment[] = [];
   const moment = (id: string, time: number, caption: string, minimum = false) => {
-    if (!nonnegative(time) || moments.some(row => Math.abs(row.time - time) < (minimum ? .001 : 5))) return;
+    if (!within(time) || moments.some(row => Math.abs(row.time - time) < (minimum ? .001 : 5))) return;
     const marker = playback?.battles?.filter(row => Math.abs(row.t - time) <= 10).sort((a, b) => Math.abs(a.t - time) - Math.abs(b.t - time))[0];
     moments.push({ id, time, caption, ...(marker && finite(marker.x) && finite(marker.y) ? { point: { x: marker.x, y: marker.y } } : {}) });
   };
   if (fights[0]) moment("first-clash", fights[0].start, fights[0].estimated ? "First estimated fight window" : "First recorded casualty cluster");
   if (largest) moment("largest-swing", largest.time, "Largest sampled lead swing");
-  if (biggestFight) moment("largest-fight", biggestFight.start, "Largest priced casualty cluster");
+  if (biggestFight) moment("largest-fight", biggestFight.start, biggestFight.estimated ? "Largest estimated army-drop window" : "Largest priced casualty cluster");
   if (length !== null) { if (!moments.length) moment("middle", length / 2, "Mid-game context"); moment("end", length, "End of the replay"); }
   if (length !== null && length > 0 && moments.length < 2) moment("opening", 0, "Opening context", true);
   const date = typeof game.date === "string" && Number.isFinite(Date.parse(game.date)) ? new Date(game.date).toISOString().slice(0, 10) : null;
