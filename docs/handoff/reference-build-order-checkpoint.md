@@ -85,10 +85,16 @@ inspected; no layout blocker found.
 
 ## Remaining gates
 
-Parent is publishing the generic request fence and shared-query ownership
-fixes in PR743 so PR738 can consume them safely. Preserve both branches and
-integrate the actual hotfix squash
-and actual squash ancestry without rebasing. Reference PR creation/final CI,
-independent final visual review and coordinated green merge remain outstanding.
+Generic request ownership PR743 merged at `bef4054c`. Reference reconciled its
+actual squash at `3d5e0a05`; tree `e87aa051c2a147bc8f92ebf4924064a636ef2113`
+exactly matches the tested dependency tree. Final PR738 parent `fe5726ea` was
+then integrated at `bf799d13`; only its evidence/harness bookkeeping changed.
+No Reference product source or upgrade evidence changed after final checks.
+
+The Reference draft PR is stacked on `codex/wave4-unified-build-editor` for an
+additive review. It requires PR738 to merge, then retargeting to main before
+its own coordinated green merge. Final CI, independent final visual review
+and coordinated merge remain outstanding. Preserve both branches without
+rebasing. Deployment quota failures remain held without redeploy retries.
 No infrastructure, migration, integration activation, provider call, account
 operation, version bump, release or production write is part of this pack.
