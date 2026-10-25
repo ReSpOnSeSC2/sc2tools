@@ -5,6 +5,7 @@ import { FiltersContext, type AnalyzerFilters } from "@/lib/filterContext";
 import { MechanicsTrendCard } from "../MechanicsTrendCard";
 import { MacroSummaryCard } from "../MacroSummaryCard";
 import { MacroTab } from "../MacroTab";
+import { MacroTrendChart } from "../charts/MacroTrendChart";
 
 const harness = vi.hoisted(() => ({
   paths: [] as Array<string | null>, apiCall: vi.fn(), mutate: vi.fn(), online: false, empty: false, stale: false,
@@ -38,9 +39,18 @@ beforeEach(() => {
   localStorage.clear(); harness.paths = []; harness.online = false; harness.empty = false; harness.stale = false; harness.seriesStale = false; harness.leagueMatchup = "PvZ"; harness.benchmarkN = 50; harness.benchmarkError = null;
   harness.apiCall.mockReset(); harness.apiCall.mockResolvedValue({ jobId: "synthetic-job" }); harness.mutate.mockReset();
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("mechanics progress consumers", () => {
+  it("measures a narrow plot when switching from initially unmeasured Macro to measured APM", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 280, height: 220, x: 0, y: 0, left: 0, top: 0, right: 280, bottom: 220, toJSON: () => ({}) });
+    const series = [{ date: "2026-10-01", games: 6, wins: 3, losses: 3, winRate: .5, avgMacroScore: null, macroN: 0, avgApm: 120, apmN: 6 }];
+    const view = render(<MacroTrendChart series={series} metric="macro" />);
+    expect(screen.queryByTestId("mechanics-trend-chart")).toBeNull();
+    view.rerender(<MacroTrendChart series={series} metric="apm" />);
+    await waitFor(() => expect(screen.getByTestId("mechanics-trend-chart").getAttribute("viewBox")).toBe("0 0 280 220"));
+  });
+
   it("switches metrics using one timeseries resource with distinct scored counts and hollow points", () => {
     const view = render(<MechanicsTrendCard />);
     expect(view.container.querySelectorAll('circle[data-hollow="true"]')).toHaveLength(1);
@@ -69,9 +79,9 @@ describe("mechanics progress consumers", () => {
   it("shows a measured matching league median only after explicit selection", () => {
     const view = render(scoped({ race: "P", opp_race: "Z" }));
     expect(screen.queryByTestId("mechanics-reference")).toBeNull();
-    fireEvent.change(screen.getByLabelText("League reference"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("Opponent league reference"), { target: { value: "4" } });
     expect(screen.getByTestId("mechanics-reference")).toBeTruthy();
-    expect(screen.getByText(/Diamond PvZ median · n=50/)).toBeTruthy();
+    expect(screen.getByText(/Diamond opponent bracket · PvZ median · n=50/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "APM" }));
     expect(screen.queryByTestId("mechanics-reference")).toBeNull();
     harness.benchmarkN = 49; fireEvent.click(screen.getByRole("button", { name: "Macro score" }));
@@ -90,7 +100,7 @@ describe("mechanics progress consumers", () => {
     harness.seriesStale = false;
     harness.stale = false; view.rerender(scoped({ race: "P", opp_race: "Z", game_size: "team" }));
     expect(screen.queryByTestId("mechanics-reference")).toBeNull();
-    expect((screen.getByLabelText("League reference") as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Opponent league reference") as HTMLSelectElement).disabled).toBe(true);
   });
 
   it("keeps score and coverage without duplicating the leak ledger", () => {

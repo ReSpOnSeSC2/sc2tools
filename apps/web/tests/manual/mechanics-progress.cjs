@@ -48,13 +48,15 @@ const server = http.createServer((req, res) => {
         await card.getByRole('button', { name: 'APM', exact: true }).click(); await expect(card.getByRole('img', { name: /APM by calendar day/ })).toBeVisible();
         await card.getByRole('button', { name: 'SQ', exact: true }).click(); await expect(card.getByText('72 · 2 measured games', { exact: true })).toBeVisible();
         expect(calls.filter(call => call.path === '/v1/timeseries').length).toBe(before); checks++;
-        await card.getByRole('button', { name: 'Macro score', exact: true }).click(); await page.getByLabel('League reference').selectOption('4'); await expect(card.getByTestId('mechanics-reference')).toHaveCount(1); await expect(card.getByText(/Dashed line: Diamond PvZ median/)).toBeVisible(); checks++;
+        await card.getByRole('button', { name: 'Macro score', exact: true }).click(); await page.getByLabel('Opponent league reference').selectOption('4'); await expect(card.getByTestId('mechanics-reference')).toHaveCount(1); await expect(card.getByText(/Dashed line: Diamond opponent bracket · PvZ median/)).toBeVisible(); checks++;
         await card.evaluate(element => scrollTo(0, scrollY + element.getBoundingClientRect().top - 20));
         if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Macro overflow ' + width); checks++;
         if ((await card.locator('button,select').evaluateAll(nodes => nodes.some(node => node.getBoundingClientRect().height < 43)))) throw new Error('Small mechanics controls'); checks++;
         await page.evaluate(() => document.fonts.ready); await page.screenshot({ path: `../../docs/handoff/screenshots/mechanics-progress-${theme}-${width}.png` });
       }
-      await page.goto(origin + '/app/macro?empty=1'); await page.getByRole('button', { name: 'Score my older games' }).click(); await expect(page.getByRole('status').filter({ hasText: 'Scoring older games: 1/4' })).toBeVisible(); checks++;
+      await page.goto(origin + '/app/macro?empty=1'); await page.getByRole('button', { name: 'APM', exact: true }).click(); await expect(page.getByRole('img', { name: /APM by calendar/ })).toBeVisible();
+      const latePlot = page.getByTestId('mechanics-trend-chart'); await expect.poll(() => latePlot.evaluate(element => Math.abs(element.viewBox.baseVal.width - element.getBoundingClientRect().width))).toBeLessThan(2); checks++;
+      await page.getByRole('button', { name: 'Score my older games' }).click(); await expect(page.getByRole('status').filter({ hasText: 'Scoring older games: 1/4' })).toBeVisible(); checks++;
       await page.goto(origin + '/app/macro?empty=1&offline=1'); await expect(page.getByRole('link', { name: 'Get the desktop app' })).toBeVisible(); checks++;
       await page.goto(origin + '/app/builds'); await expect(page.getByLabel('Build mix period')).toHaveValue('day'); await expect(page.getByRole('heading', { name: 'Build mix over time' })).toBeVisible(); checks++;
       for (const theme of ['light','dark']) {

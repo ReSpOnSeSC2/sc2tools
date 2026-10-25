@@ -246,7 +246,7 @@ corresponding GitHub Release.
 
 ### Mechanics progress
 
-- Macro tracks macro score, APM and SQ over calendar periods with measured-game counts, small-sample markers, honest gaps and an optional matchup-specific league median.
+- Macro tracks macro score, APM and SQ over calendar periods with measured-game counts, small-sample markers, honest gaps and an optional matchup-specific opponent-bracket median.
 - Build stats includes Build mix over time with the shared grouping preference. Macro keeps one leak ledger and offers a working score-older-games action or desktop setup when no scores exist.
 
 ### Shared game analysis

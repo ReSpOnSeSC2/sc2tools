@@ -67,7 +67,7 @@ const article: HelpArticle = {
         "**Group by** uses calendar days, weeks or months and shares your grouping preference with Trends and Build mix. The server can return a coarser interval for a long history; the chart names the interval actually returned.",
         "The horizontal spacing follows real calendar dates. Missing periods and missing measurements break the line instead of becoming zero. Each average includes only games measured for that metric; APM and macro score can have different counts.",
         "Hollow points have fewer than five measured games, or a count unavailable in an older response. Use **Inspect period** to read the value and measured-game count without hovering. Five games is a reading cue, not a guarantee of improvement.",
-        "For an optional **League reference**, choose ranked 1v1, one own race and one opponent race in the shared filters, then select a league. The dashed line is that matchup's measured league median, shown only with at least 50 measurements. It compares a population median with your period averages and is not a personal target. Missing or mismatched tables leave the line out.",
+        "For an optional **Opponent league reference**, choose ranked 1v1, one own race and one opponent race in the shared filters, then select an opponent league bracket. The bracket groups replays by the opponent's recorded league, a proxy for opposition level. Its dashed matchup median requires at least 50 measurements. It compares a population median with your period averages. Missing or mismatched tables leave the line out.",
       ],
     },
     { type: "heading", text: "Score your older games", anchor: "backfill" },
