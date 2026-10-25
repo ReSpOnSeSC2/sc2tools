@@ -12,3 +12,11 @@ it("keeps the complete save error in a wrapping callout above the actions", () =
   expect(alert.className).not.toContain("truncate");
   expect(alert.compareDocumentPosition(screen.getByRole("button", { name: "Save build" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
+it("blocks both write actions while a rule needs a known action", () => {
+  const save = vi.fn();
+  render(<BuildEditorSaveBar ruleCount={2} saving={false} saveError={null} ruleError="Rule 2: Unknown action." onCancel={vi.fn()} onSave={save} />);
+  expect((screen.getByRole("button", { name: "Save build" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Save & re-match" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByRole("status").textContent).toContain("Rule 2");
+  expect(save).not.toHaveBeenCalled();
+});

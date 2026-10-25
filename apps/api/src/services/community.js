@@ -1,4 +1,5 @@
 "use strict";
+const { referenceBuildOrderMongoExpression } = require("./referenceBuildOrderSnapshot");
 
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 
@@ -140,6 +141,7 @@ const PUBLIC_AGGREGATE_PROJECTION = Object.freeze({
 const PRIVATE_BUILD_PUBLICATION_PROJECTION = Object.freeze({
   _id: 0,
   ...publicBuildMongoExpression("$$ROOT"),
+  buildOrder: referenceBuildOrderMongoExpression("$buildOrder"),
   isPublic: 1,
 });
 
@@ -1289,7 +1291,10 @@ class CommunityService {
       // Keep detail responses on the same explicit public allowlist as the
       // collection view. In particular, sourceSlug links the publication to
       // a user's private library and must never cross this boundary.
-      { $project: PUBLIC_AGGREGATE_PROJECTION },
+      { $project: { ...PUBLIC_AGGREGATE_PROJECTION, build: {
+        ...publicBuildMongoExpression("$build"),
+        buildOrder: referenceBuildOrderMongoExpression("$build.buildOrder"),
+      } } },
     ]).next();
     return row ? publicCommunityBuildSnapshot(row) : null;
   }
