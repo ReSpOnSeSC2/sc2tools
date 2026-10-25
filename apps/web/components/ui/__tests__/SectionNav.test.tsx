@@ -20,15 +20,22 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); observe.mockClear(); disconnect.mockClear(); scroll.mockClear(); });
 function view() { return render(<><SectionNav items={items} aria-label="Guide contents" />{items.map((item) => <section key={item.id} id={item.id}>{item.label} content</section>)}</>); }
 describe("SectionNav", () => {
-  it("follows observed sections and scrolls the active chip into view", () => {
+  it("reveals observed chips only inside their horizontal strip without scrolling the page", () => {
     view();
+    expect(scroll).not.toHaveBeenCalled();
     expect(observe).toHaveBeenCalledTimes(3);
+    const link = screen.getByRole("link", { name: "Army" });
+    const strip = link.parentElement!;
+    Object.defineProperties(strip, { clientWidth: { configurable: true, value: 180 }, scrollWidth: { configurable: true, value: 400 } });
+    vi.spyOn(strip, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 180, 44));
+    vi.spyOn(link, "getBoundingClientRect").mockReturnValue(new DOMRect(160, 0, 80, 44));
     const army = document.getElementById("army")!;
     const rect = new DOMRect(0, 125, 100, 100);
     act(() => notify([{ target: army, isIntersecting: true, boundingClientRect: rect, intersectionRect: rect, intersectionRatio: 1, rootBounds: null, time: 0 }], {} as IntersectionObserver));
     expect(screen.getByRole("link", { name: "Army" }).getAttribute("aria-current")).toBe("location");
     expect(screen.getByRole("link", { name: "Timings" }).hasAttribute("aria-current")).toBe(false);
-    expect(scroll).toHaveBeenLastCalledWith({ block: "nearest", inline: "nearest" });
+    expect(scroll).not.toHaveBeenCalled();
+    expect(strip.scrollLeft).toBe(60);
   });
   it.each([false, true])("replaces the hash and respects reduced motion %s", (reduced) => {
     vi.mocked(window.matchMedia).mockReturnValue({ matches: reduced } as MediaQueryList);
