@@ -1,4 +1,6 @@
 "use client";
+import { withOverlayDemo } from "../OverlayDemoBoundary";
+import fixtures from "@/lib/overlaySamples.json";
 
 /**
  * StatsTickerWidget — an always-on, continuously scrolling bottom
@@ -63,7 +65,7 @@ const ACTIVE_PHASES = new Set([
   "match_in_progress",
 ]);
 
-export function StatsTickerWidget({
+function ConnectedStatsTickerWidget({
   token,
   studioEvent,
   engagementEvent,
@@ -363,20 +365,7 @@ function normalizeRegion(value: unknown): string | null {
   return region;
 }
 
-const TEST_SEGMENTS = [
-  "TEST · this is your stats ticker",
-  "SESSION 4–2 · +34 MMR",
-  "NOW PLAYING: vs TestOpponent (PvZ) · 4,612 MMR",
-  "HEAD-TO-HEAD vs TestOpponent: 5–3",
-  "⚠️ CHEESE WATCH: 48% of this opponent's games open cheesy",
-  "FOLLOWER GOAL 1168 / 1200",
-  "🔮 CALL IT: !win / !loss — chat is 68% WIN",
-  "🔮 CHAT ORACLE RECORD: majority right in 12 of 19 calls",
-  "TOP SUPPORTER: TestGrinder (Immortal)",
-  "CAREER: 1,482 W – 1,301 L (53%) over 2,891 tracked games",
-  "PEAK MMR: 4,712 on NA (Aug 12, 2025) — 138 away right now",
-  "TIME SUPPLY BLOCKED (career): 6.3 hrs — build more pylons",
-];
+const TEST_SEGMENTS = fixtures.demo.tickerSegments;
 
 /* ──────────────── styles ──────────────── */
 
@@ -438,3 +427,5 @@ const diamondStyle: CSSProperties = {
   color: "var(--ov-accent, #3ec0c7)",
   fontSize: 8,
 };
+
+export const StatsTickerWidget = withOverlayDemo(ConnectedStatsTickerWidget);
