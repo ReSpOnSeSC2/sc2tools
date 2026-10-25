@@ -2846,8 +2846,7 @@ def _handle_obs_probe(
 
 def _obs_website_scope(cfg, state, cell):
     if (state.obs_website_add_enabled is not True or getattr(cell, "no_obs", False)
-            or not state.device_token or not getattr(cell, "gui", None)
-            or not getattr(cell.gui, "_ui_ready", False)):
+            or not state.device_token or not getattr(cell, "gui", None)):
         return None
     return (cfg.api_base, state.device_token, state.obs_host, state.obs_port, state.obs_password)
 
@@ -2859,7 +2858,7 @@ def _obs_website_controller(cfg, state, cell):
         client_factory=lambda: ObsClient(host=state.obs_host, port=state.obs_port,
                                         password=state.obs_password, subscribe_events=False),
         token_provider=lambda: _overlay_token_for_build(cfg, state, logging.getLogger(__name__)),
-        confirm=lambda payload: bool(getattr(cell, "gui", None) and cell.gui.confirm_obs_add_source(payload)),
+        confirm=lambda payload: cell.gui.confirm_obs_add_source(payload) if getattr(cell, "gui", None) else False,
         base_url=lambda: _dashboard_url_from_api(cfg.api_base),
     )
 

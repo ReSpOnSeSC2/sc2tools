@@ -25,6 +25,10 @@ The website shares one availability lookup across cards. Account/auth transition
 cancel pending UI work and late token/body completions cannot act under a new
 owner. A true deadline covers token lookup, network and response parsing. Copy
 and Drag remain available for a particular token/theme/Ghost configuration.
+Ghost website Add is disabled and its API command rejected because the private
+assigned build fragment cannot travel in the widget-only request. The optional
+builder Ghost source warns visibly that it starts unassigned. Website additions
+preserve the priority of existing authenticated cover/alert anchors.
 
 The native reference ticker is a 1920×56 scene strip; website standalone Add uses
 the shared recommended size JSON (1920×180). Tests exercise fake clients and

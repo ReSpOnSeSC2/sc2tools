@@ -38,9 +38,9 @@ test("one request reaches one verified selected device and validates the bound A
   expect(payload.requestId).toMatch(/^[a-f0-9]{32}$/); expect(payload.deviceId).toBe(DEVICE);
   expect(payload.expiresAt - Date.now()).toBeLessThanOrEqual(44000);
 });
-test("URL-armed Ghost Build is a supported standalone source without extending widget enable toggles", async () => {
-  const f = fixture(); expect((await request(f.app).post("/v1/devices/obs/add-source").send({ widget: "ghost-build" })).status).toBe(200);
-  expect(f.emit.mock.calls[0][1].widget).toBe("ghost-build");
+test("Ghost without an assigned URL fragment is rejected before dispatch; website uses Copy/Drag", async () => {
+  const f = fixture(); expect((await request(f.app).post("/v1/devices/obs/add-source").send({ widget: "ghost-build" })).status).toBe(400);
+  expect(f.emit).not.toHaveBeenCalled();
 });
 test.each([[], [{ data: { kind: "device", userId: "another", deviceId: DEVICE } }], [{ data: { kind: "web", userId: "owner", deviceId: DEVICE } }]].map(devices => ({ devices })))("foreign, web and offline sockets cannot receive commands", async ({ devices }) => {
   const f = fixture({ devices }); expect((await request(f.app).post("/v1/devices/obs/add-source").send({ widget: "opponent" })).status).toBe(409);

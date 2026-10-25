@@ -6,7 +6,7 @@ const { rateLimit } = require("express-rate-limit");
 const { KNOWN_WIDGETS } = require("../services/overlayTokens");
 const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
 const DEVICE_ID = /^[a-f0-9]{24}$/;
-const WIDGETS = new Set([...KNOWN_WIDGETS, "ghost-build"]);
+const WIDGETS = new Set(KNOWN_WIDGETS); // Ghost requires a private assigned URL fragment; use Copy/Drag.
 const CODES = new Set(["added", "already_present", "declined", "disabled", "obs_unavailable", "scene_changed", "expired", "busy", "owner_changed", "local_error", "token_unavailable", "invalid_request"]);
 /** @param {number} status @param {string} code */
 function fail(status, code) { return Object.assign(new Error(code), { status, code }); }

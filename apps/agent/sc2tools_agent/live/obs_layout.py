@@ -315,6 +315,8 @@ def plan_scenes(
 
     existing = set(client.refresh_scenes())
     warnings: List[str] = []
+    if during_game_widgets is not None and "ghost-build" in during_game_widgets:
+        warnings.append("Ghost Build starts unassigned. In website Look, assign a timed build and use Copy to replace this source URL before coaching.")
     if not webcam_source:
         warnings.append(
             "No webcam source selected — the Between Games scene will "

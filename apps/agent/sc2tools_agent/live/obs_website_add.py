@@ -6,7 +6,7 @@ import threading
 import time
 from typing import Callable
 
-from .obs_game_overlay import OBS_GAME_WRITE_LOCK, matching_game_input
+from .obs_game_overlay import OBS_GAME_WRITE_LOCK, cover_anchor_index, matching_game_input
 from .obs_layout import PlannedItem, Rect, _browser_settings, _overlay_url, _overlay_url_key, _transform_for, _unique_input_name
 from .widget_sizes import widget_sizes
 
@@ -26,7 +26,7 @@ class ObsWebsiteAdd:
         if (not isinstance(raw, dict) or set(raw) != {"requestId", "deviceId", "widget", "expiresAt"}
                 or not isinstance(request_id, str) or not re.fullmatch(r"[a-f0-9]{32}", request_id)
                 or not isinstance(device_id, str) or not re.fullmatch(r"[a-f0-9]{24}", device_id)
-                or not isinstance(raw.get("widget"), str) or raw["widget"] not in widget_sizes()
+                or not isinstance(raw.get("widget"), str) or raw["widget"] not in widget_sizes() or raw["widget"] == "ghost-build"
                 or type(raw.get("expiresAt")) not in (int, float)):
             return reply("invalid_request")
         if not self._pending.acquire(blocking=False):
@@ -44,8 +44,9 @@ class ObsWebsiteAdd:
             if not isinstance(scene, str) or not scene or len(scene) > 512:
                 return reply("obs_unavailable")
             # Never auto-accept: the callback is a native default-Cancel dialog.
-            if not self.confirm({"widget": raw["widget"], "scene": scene, "expiresAt": raw["expiresAt"]}):
-                return reply("declined")
+            decision = self.confirm({"widget": raw["widget"], "scene": scene, "expiresAt": raw["expiresAt"]})
+            if decision is not True:
+                return reply("expired" if decision == "expired" or self.clock() * 1000 >= raw["expiresAt"] else "declined")
             if self.scope() != initial_scope:
                 return reply("owner_changed")
             if self.clock() * 1000 >= raw["expiresAt"]:
@@ -75,12 +76,15 @@ class ObsWebsiteAdd:
                 ) == _overlay_url_key(item.browser_path) for row in rows):
                     return reply("already_present")
                 existing = matching_game_input(client, item)
+                anchor = cover_anchor_index(client, rows, item.browser_path, widget)
                 if existing:
                     new_id = client.create_scene_item(scene_name=scene, source_name=existing)
                 else:
                     new_id = client.create_input(scene_name=scene, input_name=_unique_input_name(client, item.input_name),
                                                  input_kind="browser_source", settings=_browser_settings(item))
                 client.set_scene_item_transform(scene_name=scene, item_id=new_id, transform=_transform_for(item.rect))
+                if anchor is not None:
+                    client.set_scene_item_index(scene_name=scene, item_id=new_id, index=anchor)
             return reply("added")
         except Exception:
             # No retry after an uncertain write; the user can inspect OBS first.

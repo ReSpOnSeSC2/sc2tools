@@ -453,13 +453,14 @@ class GuiUI:
         from ..live.widget_sizes import widget_sizes
         if payload.get("widget") not in widget_sizes():
             return False
-        request = dict(payload, done=threading.Event(), accepted=False,
+        deadline = min(payload["expiresAt"] / 1000, time.time() + 40)
+        request = dict(payload, expiresAt=deadline * 1000, done=threading.Event(), accepted=False,
                        label={"opponent": "Opponent identity", "ghost-build": "Ghost Build coach"}.get(payload["widget"], payload["widget"].replace("-", " ").title()))
         self._signals.obsAddConfirmation.emit(request)
-        request["done"].wait(max(0, min(40, payload["expiresAt"] / 1000 - time.time())))
+        request["done"].wait(max(0, deadline - time.time()))
         accepted = request["done"].is_set() and request["accepted"]
         request["done"].set()
-        return accepted
+        return True if accepted else "expired" if time.time() >= deadline else False
 
     def choose_folder(self):
         self._dispatch("chooseFolderRequested")
@@ -844,6 +845,8 @@ def _ObsBuildDialog(
             self._during_game = {}
             for key in GAME_WIDGETS:
                 label = GAME_WIDGET_LABELS[key] + (" (1920 × 56)" if key == "stats-ticker" else "")
+                if key == "ghost-build":
+                    label += " (URL setup needed)"
                 checkbox = QtWidgets.QCheckBox(label)
                 checkbox.setChecked(key == "overlay")
                 self._during_game[key] = checkbox
@@ -851,6 +854,9 @@ def _ObsBuildDialog(
             self._show_credit = QtWidgets.QCheckBox("Show SC2 Tools credit on the all-in-one overlay")
             self._show_credit.setChecked(True)
             during_layout.addWidget(self._show_credit)
+            ghost_note = QtWidgets.QLabel("Ghost Build starts unassigned. Assign a timed build in website Look, then Copy its URL into the source before coaching.")
+            ghost_note.setWordWrap(True)
+            during_layout.addWidget(ghost_note)
             v.addWidget(during)
 
             if not webcams or not games:
@@ -889,12 +895,19 @@ def _ObsBuildDialog(
                 "Update" if update_existing else "Build",
             )
             buttons.button(QtWidgets.QDialogButtonBox.Cancel).setDefault(True)
+            buttons.button(QtWidgets.QDialogButtonBox.Cancel).setFocus()
+            self._cancel = buttons.button(QtWidgets.QDialogButtonBox.Cancel)
             buttons.accepted.connect(self.accept)
             buttons.rejected.connect(self.reject)
             outer.addWidget(buttons)
             screen = self.screen()
             height = min(720, screen.availableGeometry().height() - 60) if screen else 640
             self.resize(560, max(300, height))
+
+        def showEvent(self, event):
+            super().showEvent(event)
+            self._cancel.setDefault(True)
+            self._cancel.setFocus()
 
         def webcam(self) -> str:
             return self._webcam.currentData() or ""

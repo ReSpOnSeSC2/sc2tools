@@ -61,6 +61,22 @@ def matching_game_input(client: Any, item) -> Optional[str]:
     return None
 
 
+def cover_anchor_index(client: Any, rows, url: str, widget_id: str) -> Optional[int]:
+    """Keep the existing authenticated cover/alerts above a newly added source."""
+    from .obs_layout import _chat_alerts_url_from_manual_url, _manual_override_url_from_overlay_url, _overlay_url_key
+    manual = _manual_override_url_from_overlay_url(
+        url, expected_route=("overlay", "") if widget_id == "overlay" else ("widget", widget_id),
+    )
+    if not manual:
+        return None
+    keys = {_overlay_url_key(manual), _overlay_url_key(_chat_alerts_url_from_manual_url(manual))}
+    indices = [int(row.get("index", index)) for index, row in enumerate(rows)
+               if row.get("input_kind") == "browser_source" and _overlay_url_key(
+                   client.get_input_settings(str(row.get("source_name") or "")).get("url", ""),
+               ) in keys]
+    return min(indices) if indices else None
+
+
 def add_missing_game_sources(client: Any, plan, scene_names: Sequence[str]) -> list[str]:
     """Add only selected missing inputs/references, preserving existing order.
 
@@ -70,7 +86,7 @@ def add_missing_game_sources(client: Any, plan, scene_names: Sequence[str]) -> l
     """
     from .obs_layout import (
         SCENE_IN_GAME, _assert_ours, _create_item, _transform_for,
-        _overlay_url_key, _manual_override_url_from_overlay_url,
+        _overlay_url_key,
     )
     added = []
     for scene in plan.scenes:
@@ -93,21 +109,12 @@ def add_missing_game_sources(client: Any, plan, scene_names: Sequence[str]) -> l
             if existing:
                 shared[item.share_key] = existing
             widget_id = item.share_key.split(":", 1)[1]
-            manual = _manual_override_url_from_overlay_url(
-                item.browser_path, expected_route=("overlay", "") if widget_id == "overlay" else ("widget", widget_id),
-            )
-            anchor_keys = {_overlay_url_key(manual)}
-            if manual:
-                anchor_keys.add(_overlay_url_key(manual.replace("/scene/manual", "/widget/chat-alerts")))
-            anchors = [int(row.get("index", index)) for index, row in enumerate(rows)
-                       if row.get("input_kind") == "browser_source" and _overlay_url_key(
-                           client.get_input_settings(str(row.get("source_name") or "")).get("url", ""),
-                       ) in anchor_keys]
+            anchor = cover_anchor_index(client, rows, item.browser_path, widget_id)
             new_id = _create_item(client, scene.name, item, shared_browser_inputs=shared)
             if new_id is None:
                 continue
             client.set_scene_item_transform(scene_name=scene.name, item_id=new_id, transform=_transform_for(item.rect))
-            if anchors:
-                client.set_scene_item_index(scene_name=scene.name, item_id=new_id, index=min(anchors))
+            if anchor is not None:
+                client.set_scene_item_index(scene_name=scene.name, item_id=new_id, index=anchor)
             added.append(item.label)
     return added

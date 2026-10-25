@@ -22,6 +22,9 @@ it("sends one allowlisted widget/device request and renders the local acknowledg
   expect(state.sent).toEqual([{ path: "/v1/devices/obs/add-source", body: { widget: "opponent", deviceId: device.id } }]);
   expect(result.current.message).toContain("Source added"); expect(result.current.busy).toBeNull();
 });
+it("keeps Ghost assignments on Copy/Drag rather than sending an unarmed coach request", async () => {
+  const { result } = renderHook(useObsAddSource); await act(() => result.current.add("ghost-build")); expect(state.sent).toEqual([]);
+});
 it("requires explicit device choice when two consenting devices are online", async () => {
   state.devices = [device, { ...device, id: "b".repeat(24) }]; const { result } = renderHook(useObsAddSource);
   expect(result.current.reason).toContain("Choose a desktop"); await act(() => result.current.add("opponent")); expect(state.sent).toEqual([]);

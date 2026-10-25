@@ -28,7 +28,7 @@ export function useObsAddSource() {
   }, [owner]);
   const reason = !owner ? "Sign in to add a source." : availability.error ? "Couldn’t check the desktop agent. Retry the connection check." : !availability.data ? "Checking your desktop agent…" : !devices.length ? "Open your paired desktop agent to add a source." : !eligible.length ? "Enable website OBS requests in an updated desktop agent." : !selected ? "Choose a desktop agent first." : busy ? "Finish the pending desktop confirmation first." : "";
   const add = async (widget: string) => {
-    if (!owner || !selected || reason || active.current) return;
+    if (!owner || !selected || reason || active.current || widget === "ghost-build") return;
     const captured = owner, request = new AbortController(); active.current = request;
     setBusy(widget); setMessage("Confirm Add source in your desktop agent. Cancel is selected by default.");
     try {

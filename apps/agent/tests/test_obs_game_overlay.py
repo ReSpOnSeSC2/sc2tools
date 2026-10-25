@@ -55,6 +55,7 @@ def test_explicit_choices_and_fixed_scaled_ticker():
     assert [item.share_key for item in chosen] == ["during_game:ghost-build", "during_game:randomizer", "during_game:stats-ticker"]
     assert (chosen[-1].rect.y, chosen[-1].rect.w, chosen[-1].rect.h) == (512, 960, 28)
     assert not any((item.share_key or "") == "during_game:overlay" for item in items)
+    assert any("Ghost Build starts unassigned" in warning for warning in plan(Obs(), during_game_widgets=["ghost-build"]).warnings)
     with pytest.raises(ValueError):
         plan(Obs(), during_game_widgets=["../untrusted"])
 
@@ -103,7 +104,7 @@ def test_remote_requires_opt_in_and_current_authenticated_pairing_before_even_co
     assert obs.connections == 0
 
 
-@pytest.mark.parametrize("extra", [{"url": "https://elsewhere"}, {"widget": "unknown"}, {"expiresAt": 99000}, {"expiresAt": 200000}])
+@pytest.mark.parametrize("extra", [{"url": "https://elsewhere"}, {"widget": "unknown"}, {"widget": "ghost-build"}, {"expiresAt": 99000}, {"expiresAt": 200000}])
 def test_remote_rejects_untrusted_or_expired_requests_without_writes(extra):
     controller, obs, raw, _, _ = fixture()
     assert controller.handle({**raw, **extra}, "paired-A")["code"] in {"invalid_request", "expired"}
@@ -113,6 +114,12 @@ def test_remote_rejects_untrusted_or_expired_requests_without_writes(extra):
 def test_decline_has_no_token_lookup_or_obs_mutation():
     controller, obs, raw, _, tokens = fixture(confirm=lambda payload: False)
     assert controller.handle(raw, "paired-A")["code"] == "declined"
+    assert tokens == obs.created_inputs == []
+
+
+def test_local_confirmation_deadline_is_not_reported_as_user_acceptance_or_cancel():
+    controller, obs, raw, _, tokens = fixture(confirm=lambda _payload: "expired")
+    assert controller.handle(raw, "paired-A")["code"] == "expired"
     assert tokens == obs.created_inputs == []
 
 
@@ -145,6 +152,19 @@ def test_confirmed_remote_add_uses_shared_standalone_size_and_idempotent_url_mem
     assert settings["shutdown"] is settings["restart_when_active"] is False
     assert controller.handle(raw, "paired-A")["code"] == "already_present"
     assert len(obs.created_inputs) == 1
+
+
+def test_remote_new_full_canvas_widget_stays_below_existing_same_token_cover_and_alerts():
+    controller, obs, raw, _, _ = fixture()
+    raw["widget"] = "stream-scene"
+    obs._inputs.extend([{"name": "Renamed cover", "kind": "browser_source"}, {"name": "Renamed alerts", "kind": "browser_source"}])
+    obs.input_settings.update({"Renamed cover": {"url": "https://sc2tools.com/overlay/synthetic/scene/manual"}, "Renamed alerts": {"url": "https://sc2tools.com/overlay/synthetic/widget/chat-alerts"}})
+    obs.rows[obs.current] = [{"source_name": "Renamed cover", "input_kind": "browser_source", "index": 5}, {"source_name": "Renamed alerts", "input_kind": "browser_source", "index": 6}]
+    before = deepcopy(obs.input_settings)
+    assert controller.handle(raw, "paired-A")["code"] == "added"
+    assert obs.indexes[-1]["index"] == 5
+    assert all(obs.input_settings[name] == value for name, value in before.items())
+    assert obs.removed_items == obs.input_setting_updates == []
 
 
 def test_opt_in_state_is_strict_and_default_off(tmp_path):
