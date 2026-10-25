@@ -60,6 +60,13 @@ describe("game story fixed rules", () => {
     const input = { gameId: "legacy", statsEvents: [sample(0, 1200), sample(30, 200)], oppStatsEvents: [sample(0, 1000), sample(30, 900)] };
     expect(storyFights(input)[0]).toMatchObject({ estimated: true, outcome: "lost" });
     expect(storyFights({ ...input, oppStatsEvents: [] })[0]).toMatchObject({ estimated: true, outcome: "unknown", label: "Estimated fight · one side unmeasured" });
+    expect(storyFights(input)[0].me).toMatchObject({ minerals: 0, gas: 0, estimatedValue: 1000, supply: null });
+  });
+
+  it("requires measurements bracketing this estimated fight, not just samples somewhere in the game", () => {
+    const input = { gameId: "disjoint", statsEvents: [sample(0, 1200), sample(30, 200)], oppStatsEvents: [sample(100, 1000), sample(130, 900)] };
+    expect(storyFights(input)[0]).toMatchObject({ estimated: true, outcome: "unknown" });
+    expect(storyFights({ ...input, oppStatsEvents: [sample(0, 1000), sample(90, 900)] })[0].outcome).toBe("unknown");
   });
 
   it("pairs staggered samples without leaking a future sample and stops at the common range", () => {
@@ -72,6 +79,12 @@ describe("game story fixed rules", () => {
     const me = [sample(0, 100), { time: 30, food_workers: 40 }, sample(60, 1000, 40)];
     const story = gameStory({ gameId: "missing", statsEvents: me, oppStatsEvents: [sample(0, 100), sample(30, 100), sample(60, 100)] });
     expect(story.leadSeries[1]).toMatchObject({ armyLead: null, incomeLead: null, combinedLead: null });
+    expect(story.turningPoints).toEqual([]);
+  });
+
+  it("frequent opposing samples cannot hide a long gap in the player's observations", () => {
+    const story = gameStory({ gameId: "gap", statsEvents: [sample(0, 100), sample(90, 1000)], oppStatsEvents: Array.from({ length: 10 }, (_, i) => sample(i * 10, 100)) });
+    expect(story.leadSeries.find(row => row.time === 60)).toMatchObject({ armyLead: null, workerLead: null, incomeLead: null, combinedLead: null });
     expect(story.turningPoints).toEqual([]);
   });
 

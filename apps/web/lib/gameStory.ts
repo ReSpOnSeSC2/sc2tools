@@ -7,7 +7,7 @@ import type { PatchEra } from "./meta";
 
 export type StoryLead = { time: number; armyLead: number | null; workerLead: number | null; incomeLead: number | null; combinedLead: number | null };
 export type StoryTurningPoint = { start: number; time: number; delta: number; label: string };
-export type StoryLoss = { minerals: number; gas: number; supply: number | null; unpriced: number; units: { name: string; count: number }[] };
+export type StoryLoss = { minerals: number; gas: number; supply: number | null; unpriced: number; units: { name: string; count: number }[]; estimatedValue?: number };
 export type StoryFight = { id: string; start: number; end: number; duration: number; me: StoryLoss; opp: StoryLoss; estimated: boolean; tradeRatio: number | null; outcome: "won" | "even" | "lost" | "unknown"; label: string };
 export type StoryChip = { id: string; time: number; label: string };
 export type GameStory = { leadSeries: StoryLead[]; turningPoints: StoryTurningPoint[]; fights: StoryFight[]; recap: string[]; chips: StoryChip[]; topLeak: { name: string; detail: string; time: number | null } | null; meaningful: boolean };
@@ -44,6 +44,7 @@ export function storyLeadSeries(me: readonly StatsEvent[] = [], opp: readonly St
     while (ri + 1 < right.length && right[ri + 1].time <= time) ri++;
     if (li < 0 || ri < 0) return [];
     const a = left[li], b = right[ri];
+    if (time - a.time > 30 || time - b.time > 30) return [{ time, armyLead: null, workerLead: null, incomeLead: null, combinedLead: null }];
     const av = value(a, "army_value"), bv = value(b, "army_value"), aw = value(a, "food_workers"), bw = value(b, "food_workers"), ai = income(a), bi = income(b);
     // Require the same three channels for every composite sample. Otherwise a
     // newly available channel could create a spurious turning point.
@@ -78,7 +79,7 @@ function turningPoints(series: readonly StoryLead[]): StoryTurningPoint[] {
 const emptyLoss = (): StoryLoss => ({ minerals: 0, gas: 0, supply: 0, unpriced: 0, units: [] });
 function outcome(me: StoryLoss, opp: StoryLoss, estimated: boolean): Pick<StoryFight, "tradeRatio" | "outcome" | "label"> {
   if (me.unpriced || opp.unpriced) return { tradeRatio: null, outcome: "unknown", label: "Trade unknown · missing prices" };
-  const own = me.minerals + me.gas, theirs = opp.minerals + opp.gas;
+  const own = me.estimatedValue ?? me.minerals + me.gas, theirs = opp.estimatedValue ?? opp.minerals + opp.gas;
   const prefix = estimated ? "Estimated " : "";
   if (!own && !theirs) return { tradeRatio: null, outcome: "unknown", label: `${prefix}trade unknown` };
   if (!own) return { tradeRatio: null, outcome: "won", label: `${prefix}won trade · no priced losses` };
@@ -90,8 +91,12 @@ function outcome(me: StoryLoss, opp: StoryLoss, estimated: boolean): Pick<StoryF
  * An explicit empty ledger is authoritative; only an absent ledger estimates. */
 export function storyFights(input: GameStoryInput): StoryFight[] {
   if (!Array.isArray(input.casualtyEvents)) return detectBattles(input.statsEvents, input.oppStatsEvents).map((battle, i) => {
-    const me = { ...emptyLoss(), minerals: battle.myLoss, supply: null }, opp = { ...emptyLoss(), minerals: battle.oppLoss, supply: null };
-    const bothMeasured = [input.statsEvents, input.oppStatsEvents].every(rows => (rows ?? []).filter(row => nonnegative(row.army_value)).length >= 2);
+    const me = { ...emptyLoss(), estimatedValue: battle.myLoss, supply: null }, opp = { ...emptyLoss(), estimatedValue: battle.oppLoss, supply: null };
+    const bothMeasured = [input.statsEvents, input.oppStatsEvents].every(rows => {
+      const measured = (rows ?? []).filter(row => nonnegative(row.time) && nonnegative(row.army_value)).slice().sort((a, b) => a.time - b.time);
+      const first = measured.findLastIndex(row => row.time <= battle.start), last = measured.findIndex(row => row.time >= battle.end);
+      return first >= 0 && last > first && measured.slice(first + 1, last + 1).every((row, index) => row.time - measured[first + index].time <= 30);
+    });
     return { id: `estimated:${i}:${battle.start}`, start: battle.start, end: battle.end, duration: battle.end - battle.start, me, opp, estimated: true, ...(bothMeasured ? outcome(me, opp, true) : { tradeRatio: null, outcome: "unknown" as const, label: "Estimated fight · one side unmeasured" }) };
   });
   const events = (input.casualtyEvents as readonly CasualtyEvent[]).filter(event => nonnegative(event.time) && (event.owner === "me" || event.owner === "opp") && ["workers", "units", "buildings"].includes(event.category) && typeof event.name === "string" && event.name.length > 0).slice().sort((a, b) => a.time - b.time || a.owner.localeCompare(b.owner) || a.name.localeCompare(b.name));
