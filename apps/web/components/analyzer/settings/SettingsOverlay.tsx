@@ -17,26 +17,10 @@ import { WidgetList } from "./OverlayWidgetGrid";
 import { useToast } from "@/components/ui/Toast";
 import { useOverlayTests, OverlayLiveTestDialog } from "./OverlayTestControls";
 import { OverlayProfileEditor } from "./OverlayProfileEditor";
-import {
-  assignSavedGhostBuild,
-  clearGhostTarget,
-  emptyGhostBuildConfig,
-  GHOST_BUILD_LIBRARY_STORAGE_KEY,
-  GHOST_BUILD_STORAGE_KEY,
-  migrateLegacyGhostTargetInStorage,
-  readArmedGhostConfig,
-  readArmedGhostTarget,
-  readSavedGhostBuilds,
-  writeArmedGhostConfig,
-  type GhostBuildConfig,
-  type GhostMatchupKey,
-  type SavedGhostBuild,
-  type GhostTarget,
-} from "@/lib/ghostBuild";
+import { useGhostPractice } from "@/lib/useGhostPractice";
+import { GhostPracticeSettings } from "./GhostPracticeSettings";
 import { SettingsMultiChat } from "./SettingsMultiChat";
 import { SettingsBuildProfile } from "./SettingsBuildProfile";
-import { GhostLegacyMigration } from "./GhostLegacyMigration";
-import { GhostMatchupManager } from "./GhostMatchupManager";
 import { OverlayThemeSection } from "./OverlayThemeSection";
 import { OverlayScenesSection } from "./OverlayScenesSection";
 import { OverlayAgentUpsell } from "@/components/instant/AgentLiveUpsell";
@@ -97,91 +81,7 @@ function SettingsOverlayOwner({ origin }: { origin?: string }) {
   const activeToken = items.find(item => selection?.owner === owner && item.token === selection.token) ?? items[0] ?? null;
   const selectToken = (token: string) => { if (owner) setSelection({ owner, token }); };
 
-  // Ghost's nine exact-matchup slots travel in the dedicated widget URL;
-  // the larger saved-build library stays local and only powers the picker.
-  const [ghostConfig, setGhostConfig] = useState<GhostBuildConfig>(() =>
-    emptyGhostBuildConfig(),
-  );
-  const [ghostLibrary, setGhostLibrary] = useState<SavedGhostBuild[]>([]);
-  const [legacyGhostTarget, setLegacyGhostTarget] =
-    useState<GhostTarget | null>(null);
-  useEffect(() => {
-    const refreshGhost = () => {
-      setGhostConfig(readArmedGhostConfig() ?? emptyGhostBuildConfig());
-      setGhostLibrary(readSavedGhostBuilds());
-      setLegacyGhostTarget(readArmedGhostTarget());
-    };
-    const onStorage = (event: StorageEvent) => {
-      if (
-        event.key === GHOST_BUILD_STORAGE_KEY
-        || event.key === GHOST_BUILD_LIBRARY_STORAGE_KEY
-        || event.key === null
-      ) {
-        refreshGhost();
-      }
-    };
-    refreshGhost();
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  function migrateLegacyGhostBuild(matchup: GhostMatchupKey) {
-    if (!legacyGhostTarget) return;
-    if (!migrateLegacyGhostTargetInStorage(legacyGhostTarget, matchup)) {
-      toast.error("Couldn't upgrade the previous Ghost build", {
-        description:
-          "Browser storage is unavailable or changed in another tab. Your previous build was left untouched.",
-      });
-      return;
-    }
-
-    const nextConfig = readArmedGhostConfig();
-    if (!nextConfig) {
-      toast.error("Couldn't verify the Ghost upgrade", {
-        description:
-          "Your browser did not return the saved matchup. Reload Settings before trying again.",
-      });
-      return;
-    }
-    setGhostConfig(nextConfig);
-    setGhostLibrary(readSavedGhostBuilds());
-    setLegacyGhostTarget(null);
-    toast.success(`Previous build upgraded to ${matchup}`, {
-      description:
-        "It is now saved in your library and assigned only to that matchup. Copy the updated Ghost Build widget URL before going live.",
-    });
-  }
-
-  function assignGhostBuild(
-    matchup: GhostMatchupKey,
-    build: SavedGhostBuild,
-  ) {
-    const next = assignSavedGhostBuild(ghostConfig, matchup, build);
-    if (!writeArmedGhostConfig(next)) {
-      toast.error("Couldn't save Ghost matchup", {
-        description: "Browser storage is unavailable or full. Your existing assignments were left unchanged.",
-      });
-      return;
-    }
-    setGhostConfig(next);
-    toast.success(`${matchup} coach updated`, {
-      description: `Ghost will use “${build.target.name}” when you play ${matchup}. Copy the widget URL again before going live.`,
-    });
-  }
-
-  function clearGhostBuild(matchup: GhostMatchupKey) {
-    const next = clearGhostTarget(ghostConfig, matchup);
-    if (!writeArmedGhostConfig(next)) {
-      toast.error("Couldn't clear Ghost matchup", {
-        description: "Browser storage is unavailable. Please try again.",
-      });
-      return;
-    }
-    setGhostConfig(next);
-    toast.success(`${matchup} coach cleared`, {
-      description: "The saved build remains in your library and can be selected again later.",
-    });
-  }
+  const { config: ghostConfig } = useGhostPractice();
 
   // Auto-mint a default token on first visit so the user can copy URLs
   // immediately without clicking through a form.
@@ -381,24 +281,10 @@ function SettingsOverlayOwner({ origin }: { origin?: string }) {
       <SettingsBuildProfile key={activeToken.token} token={activeToken.token} />
       <Section
         title="Ghost Build coach"
-        description="Choose the timed build Ghost should coach for each of the nine concrete race matchups. Assignments stay on this device and are embedded into the dedicated OBS URL."
+        description="Choose an account-synced timed build for each exact matchup. Your Ghost source URL stays the same."
       >
         <Card>
-          <div className="min-w-0 max-w-full space-y-5">
-            {legacyGhostTarget ? (
-              <GhostLegacyMigration
-                target={legacyGhostTarget}
-                onMigrate={migrateLegacyGhostBuild}
-              />
-            ) : null}
-            <GhostMatchupManager
-              loadout={ghostConfig}
-              library={ghostLibrary}
-              onAssign={assignGhostBuild}
-              onClear={clearGhostBuild}
-              disabled={legacyGhostTarget !== null}
-            />
-          </div>
+          <GhostPracticeSettings />
         </Card>
       </Section>
 

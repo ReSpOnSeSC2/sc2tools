@@ -32,6 +32,14 @@ it("retains theme and Ghost data when adding the documented OBS URL-drop paramet
   const parsed = new URL(obsWidgetDropUrl("https://example.invalid/overlay/synthetic/widget/ghost-build?theme=abc#ghost=private", "Ghost", 640, 900));
   expect(parsed.searchParams.get("theme")).toBe("abc"); expect(parsed.searchParams.get("layer-height")).toBe("900"); expect(parsed.hash).toBe("#ghost=private");
 });
+it("new Ghost source URLs remain permanent when account assignments change", () => {
+  const target = { v: 1 as const, name: "First", steps: [{ supply: null, t: 30, name: "Gateway" }] };
+  const view = render(<WidgetList {...props} ghostConfig={{ v: 2, slots: { PvT: target } }} />);
+  const href = () => within(view.container.querySelector('[data-widget-id="ghost-build"]') as HTMLElement).getByRole("link", { name: "Drag into OBS" }).getAttribute("href");
+  const original = href(); expect(new URL(original!).hash).toBe("");
+  view.rerender(<WidgetList {...props} ghostConfig={{ v: 2, slots: { PvT: { ...target, name: "Other browser" } } }} />);
+  expect(href()).toBe(original);
+});
 it("deep links focus Copy for the requested widget", async () => {
   state.query += "&widget=scouting"; const view = render(<WidgetList {...props} />);
   await waitFor(() => expect(document.activeElement).toBe(view.container.querySelector('[data-widget-id="scouting"] [data-widget-copy]')));

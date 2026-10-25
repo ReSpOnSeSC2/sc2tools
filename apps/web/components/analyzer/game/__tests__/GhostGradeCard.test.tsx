@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ArmGhostFromLogButton, GhostGradeCard } from "../GhostGradeCard";
 import {
@@ -7,12 +7,28 @@ import {
   emptyGhostBuildConfig,
   GHOST_BUILD_STORAGE_KEY,
   GHOST_BUILD_VERSION,
-  readArmedGhostConfig,
   readSavedGhostBuilds,
   selectGhostTarget,
-  writeArmedGhostConfig,
   type GhostTarget,
+  type GhostBuildConfig,
 } from "@/lib/ghostBuild";
+
+const store = vi.hoisted(() => ({ config: null as GhostBuildConfig | null, listeners: new Set<() => void>() }));
+vi.mock("@/lib/useGhostPractice", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const empty: GhostBuildConfig = { v: 2, slots: {} };
+  return { useGhostPractice: () => {
+    const config = useSyncExternalStore(listener => { store.listeners.add(listener); return () => { store.listeners.delete(listener); }; }, () => store.config ?? empty);
+    return { owner: "test-owner", config, saving: false, loading: false, offline: false, error: null,
+      assign: async (matchup: string, target: GhostTarget | null) => {
+        const slots = { ...store.config?.slots };
+        if (target) slots[matchup as keyof typeof slots] = target; else delete slots[matchup as keyof typeof slots];
+        store.config = { v: 2, slots }; store.listeners.forEach(listener => listener()); return true;
+      },
+    };
+  } };
+});
+function readFixtureConfig() { return Object.keys(store.config?.slots ?? {}).length ? store.config : null; }
 
 const TARGET: GhostTarget = {
   v: GHOST_BUILD_VERSION,
@@ -33,9 +49,7 @@ const FIXTURE_LOG = [
 ];
 
 function armFixture(target: GhostTarget = TARGET) {
-  writeArmedGhostConfig(
-    assignGhostTarget(emptyGhostBuildConfig(), "PvT", target),
-  );
+  store.config = assignGhostTarget(emptyGhostBuildConfig(), "PvT", target);
 }
 
 const GRADE_PROPS = {
@@ -45,7 +59,7 @@ const GRADE_PROPS = {
 
 afterEach(() => {
   cleanup();
-  window.localStorage.clear();
+  window.localStorage.clear(); store.config = null; store.listeners.clear();
 });
 
 describe("GhostGradeCard", () => {
@@ -119,7 +133,7 @@ describe("GhostGradeCard", () => {
     expect(screen.getByText("missed")).toBeTruthy();
   });
 
-  it("disarm clears storage and unmounts the card", () => {
+  it("disarm clears the account slot and unmounts the card", () => {
     armFixture();
     render(<GhostGradeCard buildLog={FIXTURE_LOG} {...GRADE_PROPS} />);
     fireEvent.click(screen.getByRole("button", { name: "Clear PvT" }));
@@ -129,7 +143,7 @@ describe("GhostGradeCard", () => {
 });
 
 describe("ArmGhostFromLogButton", () => {
-  it("arms the build log as the ghost target", () => {
+  it("arms the build log as the account target", async () => {
     render(
       <ArmGhostFromLogButton
         name="Blink opener"
@@ -139,13 +153,13 @@ describe("ArmGhostFromLogButton", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /Use as Ghost Build target/i }));
     const armed = selectGhostTarget(
-      readArmedGhostConfig(),
+      readFixtureConfig(),
       GRADE_PROPS.myRace,
       GRADE_PROPS.opponentRace,
     );
     expect(armed).not.toBeNull();
     expect(armed!.name).toBe("Blink opener");
-    expect(readSavedGhostBuilds()).toHaveLength(1);
+    await waitFor(() => expect(readSavedGhostBuilds()).toHaveLength(1));
     // Probe excluded; Pylon/Gateway/Assimilator armed with their times.
     expect(armed!.steps).toEqual([
       { supply: null, t: 17, name: "Pylon" },
@@ -181,7 +195,7 @@ describe("ArmGhostFromLogButton", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Use as Ghost Build target/i }));
-    expect(readArmedGhostConfig()).toBeNull();
+    expect(readFixtureConfig()).toBeNull();
   });
 
   it("disables saving against Random opponents", () => {
@@ -199,7 +213,7 @@ describe("ArmGhostFromLogButton", () => {
         name: /no build vs random/i,
       }) as HTMLButtonElement).disabled,
     ).toBe(true);
-    expect(readArmedGhostConfig()).toBeNull();
+    expect(readFixtureConfig()).toBeNull();
   });
 });
 
@@ -209,19 +223,19 @@ it("does not grade the source replay against itself", () => {
   expect(screen.queryByTestId("ghost-grade-card")).toBeNull();
   expect(screen.getByText(/This game is your armed PvT target/)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Disarm" }));
-  expect(readArmedGhostConfig()).toBeNull();
+  expect(readFixtureConfig()).toBeNull();
 });
 
-it("confirms a replacement and Undo restores the previous matchup loadout", () => {
+it("confirms a replacement and Undo restores the previous matchup loadout", async () => {
   armFixture(TARGET);
   render(<ToastProvider><ArmGhostFromLogButton name="New target" lines={FIXTURE_LOG} gameId="new-source" {...GRADE_PROPS} /></ToastProvider>);
   fireEvent.click(screen.getByRole("button", { name: "Use as Ghost Build target" }));
   expect(screen.getByRole("dialog")).toBeTruthy();
-  expect(selectGhostTarget(readArmedGhostConfig(), "P", "T")?.name).toBe(TARGET.name);
+  expect(selectGhostTarget(readFixtureConfig(), "P", "T")?.name).toBe(TARGET.name);
   fireEvent.click(screen.getByRole("button", { name: "Replace target" }));
-  expect(selectGhostTarget(readArmedGhostConfig(), "P", "T")?.sourceGameId).toBe("new-source");
-  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
-  expect(selectGhostTarget(readArmedGhostConfig(), "P", "T")).toEqual(TARGET);
+  expect(selectGhostTarget(readFixtureConfig(), "P", "T")?.sourceGameId).toBe("new-source");
+  fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
+  expect(selectGhostTarget(readFixtureConfig(), "P", "T")).toEqual(TARGET);
 });
 
 it("confirms before replacing a legacy target without source ids", () => {
@@ -229,5 +243,5 @@ it("confirms before replacing a legacy target without source ids", () => {
   render(<ArmGhostFromLogButton name="Other target" lines={FIXTURE_LOG} {...GRADE_PROPS} />);
   fireEvent.click(screen.getByRole("button", { name: "Use as Ghost Build target" }));
   expect(screen.getByRole("dialog")).toBeTruthy();
-  expect(selectGhostTarget(readArmedGhostConfig(), "P", "T")).toEqual(TARGET);
+  expect(selectGhostTarget(readFixtureConfig(), "P", "T")).toEqual(TARGET);
 });

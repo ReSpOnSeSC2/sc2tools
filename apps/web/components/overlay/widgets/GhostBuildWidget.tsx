@@ -9,6 +9,7 @@ import {
   decodeGhostTarget,
   ghostMatchupKey,
   selectGhostTarget,
+  type GhostBuildConfig,
   type GhostStep,
   type GhostTarget,
 } from "@/lib/ghostBuild";
@@ -61,6 +62,7 @@ export function GhostBuildWidget({
   liveGame,
   ghostParam = null,
   voicePrefs = null,
+  socketConfig,
 }: {
   live: LiveGamePayload | null;
   liveGame: LiveGameEnvelope | null;
@@ -71,14 +73,17 @@ export function GhostBuildWidget({
    *  chosen voice instead of the engine default; null keeps the legacy
    *  behaviour of letting the engine decide. */
   voicePrefs?: VoicePrefs | null;
+  /** Undefined means no account config was delivered. A valid empty config
+   * is an explicit disarm and takes precedence over any old fragment. */
+  socketConfig?: GhostBuildConfig;
 }) {
   const preview = useOverlayPreview();
-  const config = useMemo(() => decodeGhostBuildConfig(ghostParam), [ghostParam]);
+  const config = useMemo(() => socketConfig ?? decodeGhostBuildConfig(ghostParam), [socketConfig, ghostParam]);
   // Keep old v1 URLs recognizable, but never fan their one build across all
   // matchups. The user gets a migration prompt instead of incorrect coaching.
   const legacyTarget = useMemo(
-    () => (config ? null : decodeGhostTarget(ghostParam)),
-    [config, ghostParam],
+    () => (socketConfig !== undefined || config ? null : decodeGhostTarget(ghostParam)),
+    [socketConfig, config, ghostParam],
   );
   const races = useMemo(() => resolveGhostLiveRaces(liveGame), [liveGame]);
   const clockSec = useLiveGameClock(liveGame);
@@ -136,12 +141,12 @@ export function GhostBuildWidget({
   }, [preview, voiceEnabled, config, matchActive, randomBlocked, races]);
   useGhostVoice(voiceSteps, clockSec, voicePrefs ?? null);
 
-  if (!config) {
+  if (!config || Object.keys(config.slots).length === 0) {
     if (legacyTarget) {
       return (
         <GhostStatusCard status="update URL" title="Matchup setup required">
           This source still has one legacy build. Choose builds for the nine
-          matchups in Settings → Overlay, then copy the Ghost URL again.
+          matchups in Settings → Overlay and move them to your account.
         </GhostStatusCard>
       );
     }
@@ -155,8 +160,8 @@ export function GhostBuildWidget({
             <Dim>not armed</Dim>
           </WidgetHeader>
           <p style={{ margin: "6px 0 0", fontSize: 13, opacity: 0.8 }}>
-            Arm a build from a game page&apos;s build log, then
-            re-copy this widget URL from Settings → Overlay.
+            Choose Practice on a build or game page. Account assignments
+            reach this source automatically.
           </p>
         </WidgetShell>
       );

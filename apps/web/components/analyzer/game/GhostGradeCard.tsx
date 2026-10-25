@@ -16,21 +16,15 @@
  * touched Ghost Build.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Crosshair } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { GHOST_ARMED_EVENT, useArmGhostTarget } from "./useArmGhostTarget";
+import { useArmGhostTarget } from "./useArmGhostTarget";
 export { GHOST_ARMED_EVENT } from "./useArmGhostTarget";
-import {
-  clearGhostTarget,
-  ghostMatchupKey,
-  readArmedGhostConfig,
-  selectGhostTarget,
-  writeArmedGhostConfig,
-  type GhostTarget,
-} from "@/lib/ghostBuild";
+import { ghostMatchupKey, selectGhostTarget } from "@/lib/ghostBuild";
+import { useGhostPractice } from "@/lib/useGhostPractice";
 import {
   gradeExecution,
   type GhostGradeLetter,
@@ -72,49 +66,31 @@ export function GhostGradeCard({
   myRace?: string | null;
   opponentRace?: string | null;
 }) {
-  // localStorage is read after mount (SSR-safe) and re-read when an
-  // arm affordance fires the local event.
-  const [target, setTarget] = useState<GhostTarget | null>(null);
+  const practice = useGhostPractice();
+  const target = selectGhostTarget(practice.config, myRace, opponentRace);
   const [showSteps, setShowSteps] = useState(false);
-  useEffect(() => {
-    const read = () => {
-      setTarget(
-        selectGhostTarget(
-          readArmedGhostConfig(),
-          myRace,
-          opponentRace,
-        ),
-      );
-    };
-    read();
-    window.addEventListener(GHOST_ARMED_EVENT, read);
-    return () => window.removeEventListener(GHOST_ARMED_EVENT, read);
-  }, [myRace, opponentRace]);
-
   const grade = useMemo<GhostGradeResult | null>(() => {
     if (!target || (gameId && target.sourceGameId === gameId) || !buildLog || buildLog.length === 0) return null;
     return gradeExecution(target, buildLog);
   }, [target, buildLog, gameId]);
 
-  const onDisarm = useCallback(() => {
+  const onDisarm = () => {
     const matchup = ghostMatchupKey(myRace, opponentRace);
-    const config = readArmedGhostConfig();
-    if (!matchup || !config) return;
-    if (writeArmedGhostConfig(clearGhostTarget(config, matchup))) {
-      setTarget(null);
-      window.dispatchEvent(new Event(GHOST_ARMED_EVENT));
-    }
-  }, [myRace, opponentRace]);
+    if (matchup) void practice.assign(matchup, null, target);
+  };
 
   if (target && gameId && target.sourceGameId === gameId) return <Card title="Ghost Build target">
     <p>This game is your armed {ghostMatchupKey(myRace, opponentRace)} target. Your next {ghostMatchupKey(myRace, opponentRace)} games will be graded against it.</p>
-    <Button variant="ghost" onClick={onDisarm}>Disarm</Button>
+    <Button variant="ghost" disabled={practice.saving || !!practice.readError} onClick={onDisarm}>Disarm</Button>
+    {practice.error ? <p role="alert" className="text-caption text-danger">{practice.error}</p> : null}
   </Card>;
   if (!target || !grade) return null;
 
   return (
     <Card title="Ghost Build grade" data-testid="ghost-grade-card">
       <div className="space-y-3">
+        {practice.offline ? <p className="text-caption text-warning">Graded against this account’s cached target; account refresh is unavailable.</p> : null}
+        {practice.error ? <p role="alert" className="text-caption text-danger">{practice.error}</p> : null}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span
             className={`font-display text-5xl font-bold leading-none ${GRADE_CLASS[grade.grade]}`}
@@ -229,10 +205,10 @@ export function GhostGradeCard({
         </div>
 
         <p className="text-caption text-text-dim">
-          Grading against the armed target on this device.{" "}
+          Grading against your account&apos;s assigned target.{" "}
           <button
             type="button"
-            onClick={onDisarm}
+            onClick={onDisarm} disabled={practice.saving || !!practice.readError}
             className="rounded text-text-muted underline underline-offset-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             Clear {ghostMatchupKey(myRace, opponentRace) ?? "matchup"}
@@ -257,7 +233,7 @@ export function ArmGhostFromLogButton(props: {
   return <>
     <Button variant="ghost" size="sm" className={props.className} onClick={ghost.armed ? ghost.disarm : ghost.arm}
       aria-label={ghost.armed ? `Armed for ${ghost.matchup} · Disarm` : ghost.matchup ? "Use as Ghost Build target" : undefined}
-      disabled={!ghost.matchup} iconLeft={<Crosshair className="h-4 w-4" aria-hidden />}
+      disabled={!ghost.matchup || !ghost.signedIn || ghost.saving || ghost.loading} iconLeft={<Crosshair className="h-4 w-4" aria-hidden />}
       title={random ? "Ghost Build is disabled against Random opponents" : ghost.matchup
         ? `Your next ${ghost.matchup} games are graded against this build, and the Ghost Build overlay shows its steps while you play.`
         : "Ghost Build requires two concrete races"}>
@@ -265,6 +241,7 @@ export function ArmGhostFromLogButton(props: {
         ? random ? "No build vs Random" : "Matchup unavailable"
         : <><span className="hidden sm:inline">Use as Ghost Build target</span><span className="sm:hidden">Ghost target</span></>}
     </Button>
+    {ghost.error ? <span role="alert" className="text-caption text-danger">{ghost.error} <button className="min-h-11 px-2 underline" onClick={ghost.retry}>Try again</button></span> : null}
     <ConfirmDialog open={!!ghost.replacement} onClose={ghost.cancel} onConfirm={ghost.confirm}
       title={`Replace “${ghost.replacement?.name || ""}” with this game's build?`}
       description="Later games in this matchup will use the new target. You can undo this from the confirmation toast."

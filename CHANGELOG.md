@@ -12,6 +12,7 @@ corresponding GitHub Release.
 ## [Unreleased]
 
 ### Added
+- Ghost practice assignments now sync to your account, with Practice actions on build and guide pages, a quick-disarm chip, explicit browser migration and a permanent OBS coach URL. Legacy Ghost links remain compatible; native Companion controls stay separate.
 - Analyzer tables now support keyboard build opening, global matchup chips, a matchup-scoped heatmap and a Strategy games sheet that stays open as filters change. CSV exports save the displayed Builds, Strategy pairs, Matchups, Maps and pool cells with their scope and local date.
 - Live scouting on Today and a large second-screen page reuse your recorded opponent history, with bounded opening counts, recent replay links and an exact-account note popover. The Stream Dock Scout view omits private notes and replay/account actions.
 

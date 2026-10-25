@@ -415,3 +415,24 @@ test("a replaced overlay bearer gets only a terminal boolean reason, never its r
   attachSocketAuth(io, { secretKey: "test", resolveOverlayToken: async () => null, isOverlayTokenReplaced: async () => true });
   await expect(io.runHandshake({ auth: { overlayToken: "old-private" } })).rejects.toThrow("overlay_token_replaced");
 });
+
+test.each([null, { v: 2, slots: {} }])("connect preserves absent versus explicit empty Ghost config: %j", async ghost => {
+  const io = setupIo(), resolveGhostPrefs = jest.fn(async () => ghost);
+  attachSocketAuth(io, { secretKey: "test", resolveOverlayToken: async () => ({ userId: "owner", label: "test", enabledWidgets: [] }), resolveGhostPrefs });
+  const socket = await io.runHandshake({ auth: { overlayToken: "synthetic" } });
+  io.runConnect(socket); await new Promise(resolve => setImmediate(resolve));
+  const payload = socket.emitted.find(row => row.event === "overlay:config")?.payload;
+  expect(resolveGhostPrefs).toHaveBeenCalledWith("owner");
+  expect(Object.prototype.hasOwnProperty.call(payload, "ghost")).toBe(ghost !== null);
+  if (ghost) expect(payload.ghost).toEqual(ghost);
+});
+
+test("a held Ghost lookup cannot emit config after token socket retirement", async () => {
+  let release;
+  const io = setupIo();
+  attachSocketAuth(io, { secretKey: "test", resolveOverlayToken: async () => ({ userId: "owner", label: "test" }), resolveGhostPrefs: () => new Promise(resolve => { release = resolve; }) });
+  const socket = await io.runHandshake({ auth: { overlayToken: "synthetic" } });
+  io.runConnect(socket); await new Promise(resolve => setImmediate(resolve));
+  socket.connected = false; release({ v: 2, slots: {} }); await new Promise(resolve => setImmediate(resolve));
+  expect(socket.emitted.some(row => row.event === "overlay:config")).toBe(false);
+});

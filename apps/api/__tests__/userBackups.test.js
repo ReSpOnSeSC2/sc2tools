@@ -23,6 +23,14 @@ describe("streamed snapshots and safe restore (real Mongo)", () => {
     await db.users.insertMany([{ userId: "u1", clerkUserId: "clerk-one" }, { userId: "u2", clerkUserId: "clerk-two" }]);
   });
   const api = (method, path, token = "one") => request(app)[method](`/v1${path}`).set("Authorization", `Bearer ${token}`);
+  test("restoring an older snapshot preserves current Ghost assignment and its transport revision", async () => {
+    const first = { v: 2, slots: { PvT: { v: 1, name: "Old", steps: [{ name: "Gateway", t: 40, supply: null }] } } };
+    await services.ghostConfig.replace("u1", first);
+    const snapshot = await services.gdpr.snapshot("u1");
+    await services.ghostConfig.replace("u1", { v: 2, slots: {} });
+    await services.gdpr.restoreSnapshot("u1", snapshot.id);
+    expect(await services.ghostConfig.get("u1")).toEqual({ v: 2, slots: {}, revision: 2 });
+  });
   test("an older snapshot cannot revive a rotated URL or remove its live replacement", async () => {
     const old = await services.overlayTokens.create("u1", "Live");
     const saved = await services.gdpr.snapshot("u1");

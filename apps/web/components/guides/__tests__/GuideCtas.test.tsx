@@ -1,23 +1,19 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   gaEvent: vi.fn(),
   auth: { isLoaded: true, isSignedIn: false },
-  arm: vi.fn(() => true),
+  practice: null as null | Record<string, unknown>,
 }));
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => mocks.auth }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: mocks.gaEvent }));
-vi.mock("@/lib/ghostBuild", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/ghostBuild")>();
-  return { ...actual, armGhostTargetForMatchup: mocks.arm };
-});
+vi.mock("@/components/practice/PracticeButton", () => ({ PracticeButton: (props: { matchup: string; onPractice: () => void }) => { mocks.practice = props; return <button onClick={props.onPractice}>Practice in {props.matchup}</button>; } }));
 
 import { GuideCtas } from "@/components/guides/GuideCtas";
 import { buildGhostTargetFromGuide } from "@/lib/guides/ghost";
 import { FIXTURE_BUILD_PUBLISHED } from "@/lib/guides/__fixtures__";
-import { isSettingsTabId } from "@/components/analyzer/settings/SettingsShell";
 
 /** jsdom cannot navigate; stop anchor default actions (onClick handlers still run). */
 function preventNavigation(event: Event) {
@@ -31,8 +27,7 @@ afterEach(() => {
   cleanup();
   mocks.auth = { isLoaded: true, isSignedIn: false };
   mocks.gaEvent.mockReset();
-  mocks.arm.mockReset();
-  mocks.arm.mockReturnValue(true);
+  mocks.practice = null;
 });
 
 const TARGET = buildGhostTargetFromGuide(FIXTURE_BUILD_PUBLISHED);
@@ -77,33 +72,14 @@ describe("GuideCtas", () => {
     });
   });
 
-  it("arms the community Ghost Build and points to overlay settings", async () => {
-    expect(TARGET).not.toBeNull();
-    renderCtas();
-    fireEvent.click(screen.getByRole("button", { name: /Practice it on stream/ }));
-    await waitFor(() => expect(mocks.arm).toHaveBeenCalledTimes(1));
-    expect(mocks.arm).toHaveBeenCalledWith("P", "Z", TARGET);
-    expect(mocks.gaEvent).toHaveBeenCalledWith("guide_cta_click", {
-      cta: "practice",
-      matchup: "PvZ",
-      build: "stargate-into-glaives",
-    });
-    const settings = await screen.findByRole("link", { name: /Open Settings → Overlay/ });
-    expect(settings.getAttribute("href")).toBe("/settings?tab=overlay");
-    // /settings opens a tab only from ?tab= (never the hash), so it must name a real tab.
-    const tab = new URL(settings.getAttribute("href") ?? "", "https://sc2tools.com").searchParams.get("tab");
-    expect(isSettingsTabId(tab)).toBe(true);
-  });
-
-  it("reports a storage failure instead of claiming success", async () => {
-    mocks.arm.mockReturnValue(false);
-    renderCtas();
-    fireEvent.click(screen.getByRole("button", { name: /Practice it on stream/ }));
-    expect(await screen.findByText(/Couldn't save the Ghost Build here/)).toBeTruthy();
+  it("delegates the guide target to the shared synced Practice action and retains analytics", () => {
+    renderCtas(); fireEvent.click(screen.getByRole("button", { name: "Practice in PvZ" }));
+    expect(mocks.practice).toMatchObject({ matchup: "PvZ", target: TARGET });
+    expect(mocks.gaEvent).toHaveBeenCalledWith("guide_cta_click", { cta: "practice", matchup: "PvZ", build: "stargate-into-glaives" });
   });
 
   it("hides the practice CTA without a target", () => {
     renderCtas(null);
-    expect(screen.queryByRole("button", { name: /Practice it on stream/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Practice in PvZ/ })).toBeNull();
   });
 });
