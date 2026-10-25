@@ -80,7 +80,7 @@ export function BuildStudioEditor({ detail, onSaved, onReload, onDirtyChange }: 
     </fieldset></form>
     <Modal open={Boolean(review)} onClose={() => { if (!busy) setReview(null); }} title={review?.title} size="xl" disableScrimClose={busy} footer={<><Button variant="secondary" disabled={busy} onClick={() => setReview(null)}>Keep editing</Button><Button loading={busy} onClick={() => void save()}>Confirm save</Button></>}>
       <p className="mb-4 text-caption">{preset ? "This updates the global active policy. Private custom matches retain priority. A tightened or disabled released label cannot bypass these replacement criteria; it becomes Unclassified when no replacement matches." : "This saves a new version for the owner shown above. Current owner edits and account erasure exclude this save through version checks and an owner write lease."}</p>
-      <p className="mb-3 text-caption">{reclassify && !preset && original.scope === "custom" ? "This also queues reclassification for this owner." : "Existing game labels are unchanged by this save."}</p>
+      <p className="mb-3 text-caption">{reclassify && !preset && original.scope === "custom" ? "This also queues reclassification for this owner." : original.scope === "custom" ? "Existing games are not reclassified; renamed check-ins keep the updated name." : "Existing game labels are unchanged by this save."}</p>
       <div className="grid min-w-0 gap-3 md:grid-cols-2"><JsonPanel label="Before" value={review?.before} /><JsonPanel label="After" value={review?.after} /></div>
     </Modal>
   </section>;

@@ -211,17 +211,16 @@ MongoDB transaction before cache notifications. All versioned admin saves and
 preset restores require transaction support and return a recoverable 503 when it
 is unavailable. Standalone development MongoDB permits only legacy owner saves;
 it never falls back to partial writes for a versioned admin operation.
-Invalid legacy
-definitions exceeding validated bounds are marked incomplete and cannot be
+Invalid legacy definitions exceeding validated bounds are marked incomplete and cannot be
 silently overwritten by their bounded projection; they require a reviewed repair.
 
 The shared runtime contract is **schema 1 / evaluator 1** (`preset-policy-v1`),
 not a promise that an old installed executable supports it. Compatible desktop
-engines refresh the anonymous global manifest after healthy heartbeats. Browser
-signed-in import engines refresh before analysis, at most once per minute. The
+engines refresh the anonymous global manifest after healthy heartbeats. Signed-in
+browser imports refresh before analysis, at most once per minute. The
 visitor-only `/try` flow retains its no-API-before-save promise and uses bundled
-classification rules. A validated last-good
-manifest survives outages; fresh installs fall back to their bundled released
+classification rules. A validated last-good manifest survives outages; fresh
+installs fall back to their bundled released
 trees. Hash/schema/label incompatibility never installs an unverified policy.
 Older clients and incomplete raw evidence keep their uploaded classification;
 update and reanalyse those files to adopt current policy. Existing history does
