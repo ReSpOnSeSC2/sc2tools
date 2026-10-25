@@ -39,6 +39,7 @@
 
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
+const { withPublicGuideLinks } = require("./guideVideoPublic");
 const {
   MATCHUPS,
   isGuideBuildName,
@@ -229,7 +230,7 @@ function isDuplicateOnly(err) {
 
 class GuideVideosService {
   /**
-   * @param {{ guideVideos?: import('mongodb').Collection<any> }} db
+   * @param {{ guideVideos?: import('mongodb').Collection<any>, guideStats?: import('mongodb').Collection<any> }} db
    * @param {{
    *   channelId?: string|null,
    *   channelUrl?: string|null,
@@ -270,6 +271,8 @@ class GuideVideosService {
     this.loading = null;
     /** Bumped by invalidate() so a read that started earlier is not cached. */
     this.generation = 0;
+    /** @type {{rows:VideoRow[],promise:Promise<VideoRow[]>}|null} */
+    this.publicationRead = null;
   }
 
   /** @returns {boolean} true when a valid channel id is configured */
@@ -324,7 +327,7 @@ class GuideVideosService {
       match,
       buildOrder: match.matchup !== null,
       eightWorkerPatch,
-      video: { ...toPublicVideo(doc), eightWorkerPatch },
+      video: { ...toPublicVideo(doc), eightWorkerPatch, matchup: match.matchup, buildSlug: null },
     };
   }
 
@@ -377,6 +380,19 @@ class GuideVideosService {
     return this.loading;
   }
 
+  /** Concurrent hub/current/archive selections share one publication read.
+   * Only the metadata is cached: a guide unpublished after that cache warmed
+   * must not keep its link until the video cache's five-minute TTL expires.
+   * @returns {Promise<VideoRow[]>} */
+  async publicRows() {
+    const rows = await this.cachedRows();
+    if (this.publicationRead?.rows === rows) return this.publicationRead.promise;
+    const flight = { rows, promise: /** @type {Promise<VideoRow[]>} */ (Promise.resolve([])) };
+    flight.promise = withPublicGuideLinks(rows, this.db?.guideStats).finally(() => { if (this.publicationRead === flight) this.publicationRead = null; });
+    this.publicationRead = flight;
+    return flight.promise;
+  }
+
   /**
    * @param {number} now
    * @returns {Promise<VideoRow[]>}
@@ -406,7 +422,7 @@ class GuideVideosService {
    */
   async videosForBuild(matchup, buildKey, overrides = null) {
     if (!isGuideBuildName(matchup, buildKey)) return [];
-    const rows = await this.cachedRows();
+    const rows = await this.publicRows();
     return selectForGuide(rows, (m) => m.matchup === matchup && m.builds.includes(buildKey), overrides);
   }
 
@@ -422,7 +438,7 @@ class GuideVideosService {
    */
   async eightWorkerVideosForBuild(matchup, buildKey, overrides = null) {
     if (!isGuideBuildName(matchup, buildKey)) return [];
-    const rows = await this.cachedRows();
+    const rows = await this.publicRows();
     return selectEightWorkerForGuide(
       rows, (m) => m.matchup === matchup && m.builds.includes(buildKey), overrides,
     );
@@ -439,7 +455,7 @@ class GuideVideosService {
    */
   async videosForCounter(matchup, strategyKey, overrides = null) {
     if (!isGuideStrategyName(matchup, strategyKey)) return [];
-    const rows = await this.cachedRows();
+    const rows = await this.publicRows();
     return selectForGuide(rows, (m) => m.matchup === matchup && m.counters.includes(strategyKey), overrides);
   }
 
@@ -454,7 +470,7 @@ class GuideVideosService {
    */
   async eightWorkerVideosForCounter(matchup, strategyKey, overrides = null) {
     if (!isGuideStrategyName(matchup, strategyKey)) return [];
-    const rows = await this.cachedRows();
+    const rows = await this.publicRows();
     return selectEightWorkerForGuide(
       rows, (m) => m.matchup === matchup && m.counters.includes(strategyKey), overrides,
     );
@@ -473,7 +489,7 @@ class GuideVideosService {
   async videosForMatchup(matchup, n = VIDEO_LIST_DEFAULT, era = PATCH_ERA_AFTER) {
     if (!MATCHUPS.includes(matchup)) return [];
     const workers = era === PATCH_ERA_BEFORE ? EIGHT_WORKERS : TWELVE_WORKERS;
-    return selectLatest(await this.cachedRows(), n, matchup, workers);
+    return selectLatest(await this.publicRows(), n, matchup, workers);
   }
 
   /**
@@ -486,7 +502,7 @@ class GuideVideosService {
    * @returns {Promise<PublicVideo[]>}
    */
   async latest(n = VIDEO_LIST_DEFAULT, workers = null) {
-    return selectLatest(await this.cachedRows(), n, null, workers);
+    return selectLatest(await this.publicRows(), n, null, workers);
   }
 
   /**
@@ -497,7 +513,7 @@ class GuideVideosService {
    * @returns {Promise<PublicVideo[]>}
    */
   async all(workers = null) {
-    return selectAll(await this.cachedRows(), workers);
+    return selectAll(await this.publicRows(), workers);
   }
 
   /**
