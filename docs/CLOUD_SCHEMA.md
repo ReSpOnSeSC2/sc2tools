@@ -430,6 +430,30 @@ Hot queries:
 - `findOne({token})` — overlay page mount.
 - `find({userId}).sort({createdAt: -1})` — streaming page.
 
+Rotation uses only existing rows: `_rotation: {to, startedAt, state:'pending'|'complete'}`
+on the owned source; `_rotationSource` and `_rotationPending` on its reserved
+replacement. These fields are internal and excluded from token-list DTOs.
+Pending destinations cannot resolve or receive writes. The owner list exposes
+`rotationPending` for continuation and a completed `replacedBy` mapping only
+when the destination is ready. Public socket notices contain boolean values;
+owner-authenticated configuration and device heartbeat receipts carry mappings.
+
+`POST /v1/overlay-tokens/:token/rotate` closes and drains admitted Studio/
+engagement writes on the single API instance, copies the canonical-or-legacy
+Studio row and rekeys engagement events, viewers, predictions and clip moments
+in 500-ID batches, at most 8 batches/request. 202 means retry the same owned
+operation. It preserves the same reserved destination after partial or ambiguous
+failures, revokes the source before activation and never deletes copied data.
+Repeated old-source requests resolve only a ready owned terminal chain (maximum
+16 hops); revoked/missing/cyclic targets are never reactivated. See ADR0043.
+
+Uploaded sound rows remain `userId`-owned; their stable upload IDs and strict
+legacy sound paths are rendered through the replacement token's serve route.
+Alert catalog object keys and presigned media grants do not contain overlay
+tokens. Custom external URLs are not rewritten. Snapshot restore retains current
+overlay credential/lifecycle rows while still reading historical token sections,
+so a pre-rotation snapshot cannot revive a leaked credential.
+
 ---
 
 ## Replay Review Exchange collections

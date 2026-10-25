@@ -23,7 +23,7 @@ const article: HelpArticle = {
     "delete account",
     "recovery",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-25",
   body: [
     { type: "heading", text: "Deleting game history" },
     { type: "paragraph", text: "A Before action snapshot is saved automatically before deletion. In Settings → Backups & data, From and Through use your local time and include both chosen days. The confirmation dialog shows how many games will be deleted; an empty range cannot be confirmed. Re-sync from the desktop app afterwards to upload your replays again. [Step-by-step deletion guide](/help/deleting-game-history)." },
@@ -45,14 +45,14 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "A snapshot holds your games list, opponents, notes, custom builds, profile, ordinary settings and overlay tokens. Heavy game details and replay binaries are separate. Paired PCs, onboarding goals/checklist progress, notification choices, import history, coaching and community records stay outside restore. Old work queues are never revived.",
+      text: "A snapshot holds your games list, opponents, notes, custom builds, profile, ordinary settings and a historical overlay-token section. Current overlay credentials and their rotation/revocation state stay unchanged during restore, so an old snapshot cannot revive a leaked URL. Heavy game details and replay binaries are separate. Paired PCs, onboarding goals/checklist progress, notification choices, import history, coaching and community records stay outside restore. Old work queues are never revived.",
     },
     { type: "heading", text: "Restore a snapshot" },
     {
       type: "steps",
       items: [
         "In [Settings → Backups & data](/settings?tab=backups), find the snapshot and press **Restore**.",
-        "Wait for the verified preview. Check games kept, removed and added, plus custom builds, notes and tokens. If preview fails, **Try again**; Restore stays disabled. Confirm **Restore** only after checking these numbers. A fresh Before action snapshot is saved first.",
+        "Wait for the verified preview. Check games kept, removed and added, plus custom builds and notes. Overlay-token credentials stay unchanged. If preview fails, **Try again**; Restore stays disabled. Confirm **Restore** only after checking these numbers. A fresh Before action snapshot is saved first.",
         "Build orders, charts, replay-map data and original replay files for game IDs in both your current list and the snapshot are kept. Games absent from the snapshot and their files are removed. Restored games absent from your current data may need a desktop **Re-sync** to recover their files.",
       ],
     },

@@ -156,6 +156,9 @@ class TwitchChatBotService {
       viewerCooldown: new Map(),
       lastAnnounce: new Map(),
       overlayToken: null,
+      pendingOverlayToken: null,
+      resolvingOverlayToken: true,
+      rotationReceipts: new Map(),
       rankRace: "protoss",
       reconnectTimer: null,
     };
@@ -165,11 +168,16 @@ class TwitchChatBotService {
     // decorative — failures leave the bot chatting with fallbacks.
     try {
       const items = await this.overlayTokens.list(userId);
-      const active = (items || []).find((t) => t && t.token && !t.revokedAt);
-      conn.overlayToken = active ? String(active.token) : null;
+      const active = (items || []).find((t) => t && t.token && !t.revokedAt && !t.rotationPending);
+      const pending = active ? undefined : (items || []).find(t => t?.token && t.rotationPending);
+      const selected = active?.token || pending?.token;
+      let target = selected;
+      for (let hop = 0; hop < 16 && conn.rotationReceipts.has(target); hop++) target = conn.rotationReceipts.get(target);
+      conn.overlayToken = active || target !== selected ? target || null : null;
+      conn.pendingOverlayToken = !conn.overlayToken && pending ? String(pending.token) : null;
     } catch {
       conn.overlayToken = null;
-    }
+    } finally { conn.resolvingOverlayToken = false; conn.rotationReceipts.clear(); }
     try {
       const prefs = await this.users.getPreferences(userId, "multichat");
       const race = prefs && prefs.engagement && prefs.engagement.rankRace;
@@ -179,7 +187,19 @@ class TwitchChatBotService {
     } catch {
       /* default stands */
     }
-    this._connect(conn);
+    if (!conn.stopped && this._conns.get(userId) === conn) this._connect(conn);
+  }
+
+  /** Swap only the exact rotated credential of an existing owner connection.
+   * Never reconnect the provider or enable a disabled bot.
+   * @param {string} userId @param {string} from @param {string} to */
+  replaceOverlayToken(userId, from, to) {
+    const conn = this._conns.get(userId);
+    if (!conn || conn.stopped) return;
+    if (conn.resolvingOverlayToken && conn.rotationReceipts.size < 16) conn.rotationReceipts.set(from, to);
+    if (conn.overlayToken === from || !conn.overlayToken && conn.pendingOverlayToken === from) {
+      conn.overlayToken = to; conn.pendingOverlayToken = null;
+    }
   }
 
   /** @param {string} userId */

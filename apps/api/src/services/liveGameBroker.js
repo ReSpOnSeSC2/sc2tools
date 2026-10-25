@@ -486,7 +486,7 @@ class LiveGameBroker {
       // Mirror the post-game ``emitOverlayLive`` filter in
       // routes/games.js — a leaked-then-revoked token must not still
       // receive live data after revocation.
-      if (t.revokedAt) continue;
+      if (t.revokedAt || t.rotationPending) continue;
       try {
         this._io
           .to(`overlay:${t.token}`)

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { createOverlaySocket, hasActiveOverlayGame } from "../overlayResilience";
+import { attachOverlayResilience, createOverlaySocket, hasActiveOverlayGame } from "../overlayResilience";
 
 const factory = vi.hoisted(() => vi.fn());
 vi.mock("socket.io-client", () => ({ io: factory }));
@@ -7,6 +7,7 @@ type Handler = (...args: unknown[]) => void;
 class TestSocket {
   connected = false;
   handlers = new Map<string, Set<Handler>>();
+  emit = vi.fn();
   connect = vi.fn();
   disconnect = vi.fn(() => { this.connected = false; });
   on(event: string, handler: Handler) { if (!this.handlers.has(event)) this.handlers.set(event, new Set()); this.handlers.get(event)!.add(handler); return this; }
@@ -93,4 +94,22 @@ it("disposes a StrictMode probe before its first connection opens", () => {
   vi.advanceTimersByTime(0);
   expect(socket.connect).not.toHaveBeenCalled();
   expect(secondSocket.connect).toHaveBeenCalledTimes(1);
+});
+
+
+it.each(["handshake", "config"])("a replacement %s stops retries and heartbeat without exposing a new credential", cause => {
+  const status = vi.fn();
+  ({ dispose } = createOverlaySocket("old-private", { surface: "widget", onStatus: status }));
+  const detach = attachOverlayResilience(socket as never, { latestGameKey: () => null, onStatus: status });
+  vi.advanceTimersByTime(0); socket.fire("connect");
+  if (cause === "handshake") socket.fire("connect_error", new Error("overlay_token_replaced"));
+  else socket.fire("overlay:config", { replacedBy: true });
+  socket.fire("disconnect"); socket.fire("connect");
+  const emitted = socket.emit.mock.calls.length;
+  socket.fire("overlay:heartbeat", { gameKey: "late" });
+  window.dispatchEvent(new Event("online")); vi.advanceTimersByTime(120000);
+  expect(status).toHaveBeenLastCalledWith("replaced");
+  expect(socket.connect).toHaveBeenCalledTimes(1);
+  expect(socket.emit.mock.calls.length).toBe(emitted);
+  detach();
 });

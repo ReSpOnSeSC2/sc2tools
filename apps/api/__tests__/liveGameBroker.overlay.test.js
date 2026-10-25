@@ -103,6 +103,7 @@ describe("LiveGameBroker — overlay Socket.io fan-out", () => {
       "user-a": [
         { token: "tok_alive", revokedAt: null },
         { token: "tok_revoked", revokedAt: new Date("2026-01-01") },
+        { token: "tok_rotating", revokedAt: null, rotationPending: true },
         { token: "tok_alive2", revokedAt: null },
       ],
     });
@@ -119,6 +120,7 @@ describe("LiveGameBroker — overlay Socket.io fan-out", () => {
       ["overlay:tok_alive", "overlay:tok_alive2"],
     );
     expect(calls.find((c) => c.room === "overlay:tok_revoked")).toBeUndefined();
+    expect(calls.find((c) => c.room === "overlay:tok_rotating")).toBeUndefined();
   });
 
   test("a throwing Socket.io emit for one token does not block the others or the SSE fan-out", async () => {

@@ -23,6 +23,18 @@ describe("streamed snapshots and safe restore (real Mongo)", () => {
     await db.users.insertMany([{ userId: "u1", clerkUserId: "clerk-one" }, { userId: "u2", clerkUserId: "clerk-two" }]);
   });
   const api = (method, path, token = "one") => request(app)[method](`/v1${path}`).set("Authorization", `Bearer ${token}`);
+  test("an older snapshot cannot revive a rotated URL or remove its live replacement", async () => {
+    const old = await services.overlayTokens.create("u1", "Live");
+    const saved = await services.gdpr.snapshot("u1");
+    const replacement = await services.overlayTokens.rotate("u1", old.token);
+    const preview = await services.gdpr.backups.preview("u1", saved.id);
+    expect(preview.overlayTokens).toBe(0);
+    await services.gdpr.restoreSnapshot("u1", saved.id);
+    expect(await services.overlayTokens.resolve(old.token)).toBeNull();
+    expect(await services.overlayTokens.isReplaced(old.token)).toBe(true);
+    expect(await services.overlayTokens.resolve(replacement.token)).toMatchObject({ userId: "u1" });
+    expect(await db.overlayTokens.countDocuments({ userId: "u1" })).toBe(2);
+  });
   test("metadata stays small for an archive beyond Mongo's16MB limit and Dates survive the round trip", async () => {
     const played = new Date("2026-10-20T12:00:00Z"); const chunk = "x".repeat(200_000);
     await db.games.insertMany(Array.from({ length: 90 }, (_, n) => ({ userId: "u1", gameId: `large-${n}`, date: played, annotation: chunk })));

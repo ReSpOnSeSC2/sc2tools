@@ -55,11 +55,12 @@ const DEFAULT_BROLL = Object.freeze({
 class MultichatStudioService {
   /**
    * @param {{ multichatStudio: import('mongodb').Collection }} db
-   * @param {{ io?: import('socket.io').Server }} [deps]
+   * @param {{ io?: import('socket.io').Server, overlayTokens?: Pick<import('./overlayTokens').OverlayTokensService, "withWrite"> }} [deps]
    */
   constructor(db, deps = {}) {
     this.col = db.multichatStudio;
     this.io = deps.io || null;
+    this.overlayTokens = deps.overlayTokens;
     /** Serialize same-token b-roll writes inside this API process. */
     this.brollUpdateQueues = new Map();
   }
@@ -119,6 +120,11 @@ class MultichatStudioService {
    * @param {Record<string, unknown>} patch
    */
   async update(token, patch) {
+    return this.overlayTokens ? this.overlayTokens.withWrite(token, () => this._updateAdmitted(token, patch)) : this._updateAdmitted(token, patch);
+  }
+
+  /** @param {string} token @param {Record<string, unknown>} patch */
+  async _updateAdmitted(token, patch) {
     if (!("broll" in patch)) return this._updateUnlocked(token, patch);
 
     // Dock controls send small b-roll patches. Serializing them prevents a

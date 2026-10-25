@@ -27,3 +27,12 @@ it("shows an opt-in check badge for ten seconds with current live status", () =>
   act(() => { vi.advanceTimersByTime(10000); });
   expect(screen.queryByRole("status")).toBeNull();
 });
+
+it("explains replaced URLs distinctly and keeps the credential out of the card", () => {
+  vi.useFakeTimers(); window.history.replaceState(null, "", "/overlay/old-private");
+  render(<OverlaySetupCard reason="replaced" />);
+  expect(screen.getByText("This overlay URL was replaced — update it in OBS")).toBeTruthy();
+  expect(document.body.textContent).not.toContain("old-private");
+  act(() => { vi.advanceTimersByTime(60000); });
+  expect(screen.getByText("Overlay URL replaced")).toBeTruthy();
+});

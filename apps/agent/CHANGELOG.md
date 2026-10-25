@@ -4,6 +4,11 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+- Repair recognized generated OBS source URLs after overlay-token rotation when
+  OBS scene switching is already enabled. Follow exact owned replacements,
+  preserve layout and URL options, and revalidate cached targets before writes.
+  Custom sources and Docks require a manual URL update.
+
 - Streams supports live statistic-token previews and optional updates to selected
   Twitch, Kick and YouTube accounts after synced games. Automatic updates start
   off, preserve platform receipts, skip unchanged titles and run at most every

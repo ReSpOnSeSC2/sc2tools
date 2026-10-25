@@ -28,6 +28,8 @@ export type OverlayToken = {
   enabledWidgets?: string[];
   profile?: OverlayProfile;
   profileRevision?: number;
+  rotationPending?: boolean;
+  replacedBy?: string;
 };
 
 export function ActiveTokenHeader({
