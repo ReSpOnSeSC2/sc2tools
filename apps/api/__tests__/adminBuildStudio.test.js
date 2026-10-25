@@ -87,12 +87,17 @@ test("community snapshot editing preserves private source, removal state and con
   const beforePrivate = await db.customBuilds.findOne({ userId: owner, slug: "private-opening" });
   await db.communityBuilds.updateOne({ slug: "public-opening" }, { $set: { removed: true }, $inc: { votes: 1 } });
   const build = { ...original, description: "Corrected public rules", rules: [{ type: "count_min", name: "BuildGateway", time_lt: 180, count: 2 }] };
-  const saved = await admin(request(app).put(`${root}/community/${publicId}`).send({ expectedRevision: 1, build }));
+  const saved = await admin(request(app).put(`${root}/community/${publicId}`).send({ expectedRevision: 1, build, title: "Corrected listing", description: "Corrected listing description" }));
   expect(saved.status).toBe(200); expect(saved.body.revision).toBe(2); expect(saved.body.removed).toBe(true);
   const row = await db.communityBuilds.findOne({ slug: "public-opening" });
   expect(row.votes).toBe(8); expect(row.upvotes).toEqual(["voter"]); expect(row.ownerUserId).toBe(owner); expect(row.sourceSlug).toBe("private-opening");
   expect(await db.customBuilds.findOne({ userId: owner, slug: "private-opening" })).toEqual(beforePrivate);
   expect((await admin(request(app).put(`${root}/community/${publicId}`).send({ expectedRevision: 1, build }))).status).toBe(409);
+  const restored = await admin(request(app).post(`${root}/community/${publicId}/revert`).send({ expectedRevision: 2, revision: 1 }));
+  expect(restored.status).toBe(200); expect(restored.body.revision).toBe(3);
+  expect(restored.body).toMatchObject({ title: "Public opening", description: "Public listing", removed: true, build: original });
+  expect(restored.body.history[1]).toMatchObject({ title: "Corrected listing", description: "Corrected listing description", build });
+  expect((await db.communityBuilds.findOne({ slug: "public-opening" })).votes).toBe(8);
 });
 
 test("expired erasure locks remain authoritative; held owner edit excludes exclusive erasure until completion", async () => {
@@ -280,6 +285,12 @@ test("standalone development owner saves work but versioned admin saves fail bef
     const saved = await local.customBuilds.findOne({ userId: "local-owner", slug: "local-build" });
     expect(saved?.name).toBe("Local initial"); expect(saved?.definitionRevision).toBe(1); expect(saved?._definitionHistory).toBeUndefined();
     expect(onDefinitionsChanged).toHaveBeenCalledTimes(1);
+    const { PresetPoliciesService } = require("../src/services/presetPolicies");
+    const policies = new PresetPoliciesService(local), baseline = await policies.current();
+    await expect(policies.save(baseline.hash, [replacement])).rejects.toMatchObject({ status: 503, code: "preset_policy_transactions_required" });
+    await expect(policies.revert(baseline.hash, 0)).rejects.toMatchObject({ status: 503, code: "preset_policy_transactions_required" });
+    expect(await local.siteConfig.countDocuments({})).toBe(0);
+    expect(await policies.current()).toEqual(baseline);
   } finally { await local.close(); await standalone.stop(); }
 });
 

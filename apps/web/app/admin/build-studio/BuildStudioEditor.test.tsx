@@ -69,3 +69,14 @@ it("reviews community listing text as well as the full independent snapshot befo
   await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce());
   expect(JSON.parse(mocks.call.mock.calls[0][2].body)).toMatchObject({ title: "Corrected listing title", description: "Corrected public description", expectedRevision: 2 });
 });
+
+it("restores community listing text together with its previous definition in one reviewed save", async () => {
+  const build = { name: "Rule only", race: "Protoss", rules: [], steps: [] };
+  const value: BuildDetail = { id: "public-id", name: "Public snapshot", scope: "community", owner: "owner-2", mode: "rule-only", revision: 3, title: "Current listing", description: "Current description", build,
+    history: [{ revision: 2, savedAt: "2026-10-23", build, title: "Previous listing", description: "Previous description" }] };
+  editor(value); fireEvent.click(screen.getByRole("button", { name: "Review revision 2" }));
+  const dialog = screen.getByRole("dialog"); expect(dialog.textContent).toContain("Previous listing"); expect(dialog.textContent).toContain("Current description");
+  mocks.call.mockResolvedValueOnce({ ...value, revision: 4 }); fireEvent.click(within(dialog).getByRole("button", { name: "Confirm save" }));
+  await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce());
+  expect(JSON.parse(mocks.call.mock.calls[0][2].body)).toEqual({ expectedRevision: 3, build, title: "Previous listing", description: "Previous description" });
+});

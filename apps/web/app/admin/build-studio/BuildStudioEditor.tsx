@@ -50,6 +50,11 @@ export function BuildStudioEditor({ detail, onSaved, onReload, onDirtyChange }: 
       setReview(null); onSaved(saved);
     } catch (caught) { setReview(null); setError(errorText(caught)); } finally { setBusy(false); }
   };
+  const reviewVersion = (row: NonNullable<BuildDetail["history"]>[number]) => {
+    const listing = original.scope === "community" ? { title: row.title ?? original.title, description: row.description ?? original.description } : {};
+    setReview({ title: `Restore definition revision ${row.revision}`, before: original.scope === "community" ? { title: original.title, description: original.description, build: original.build } : original.build,
+      after: original.scope === "community" ? { ...listing, build: row.build } : row.build, payload: { expectedRevision: original.revision, build: row.build, ...listing } });
+  };
   return <section className="min-w-0 space-y-4" aria-label="Definition editor">
     <header><h2 className="break-words text-xl font-semibold">{original.name || original.id}</h2><p className="break-all text-caption text-text-muted">{preset ? "Released preset · global policy" : `${original.scope === "custom" ? "Private custom" : "Community snapshot"} · owner ${original.owner || "unavailable"}`}{original.sourceSlug ? ` · private source ${original.sourceSlug}` : ""}</p></header>
     {error ? <div role="alert" className="space-y-2 rounded border border-danger p-3"><p>{error}</p><Button variant="secondary" disabled={busy} onClick={() => void onReload()}>Reload latest (discard draft)</Button></div> : null}
@@ -71,7 +76,7 @@ export function BuildStudioEditor({ detail, onSaved, onReload, onDirtyChange }: 
         {original.scope === "custom" ? <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={reclassify} onChange={event => setReclassify(event.target.checked)} /> Reclassify this owner&apos;s games after saving</label> : null}
       </>}
       <div className="flex flex-wrap gap-2"><Button type="submit">Review changes</Button>{preset && original.replacement ? <Button variant="secondary" onClick={() => setReview({ title: "Restore released preset", before: original.replacement, after: null, payload: { expectedHash: original.expectedHash, replacement: null } })}>Review restore to released</Button> : null}</div>
-      {!preset && original.history?.length ? <div className="space-y-2"><h3 className="font-semibold">Previous definitions</h3>{original.history.map(row => <Button key={row.revision} variant="secondary" onClick={() => setReview({ title: `Restore definition revision ${row.revision}`, before: original.build, after: row.build, payload: { expectedRevision: original.revision, build: row.build } })}>Review revision {row.revision}</Button>)}</div> : null}
+      {!preset && original.history?.length ? <div className="space-y-2"><h3 className="font-semibold">Previous definitions</h3>{original.history.map(row => <Button key={row.revision} variant="secondary" onClick={() => reviewVersion(row)}>Review revision {row.revision}</Button>)}</div> : null}
     </fieldset></form>
     <Modal open={Boolean(review)} onClose={() => { if (!busy) setReview(null); }} title={review?.title} size="xl" disableScrimClose={busy} footer={<><Button variant="secondary" disabled={busy} onClick={() => setReview(null)}>Keep editing</Button><Button loading={busy} onClick={() => void save()}>Confirm save</Button></>}>
       <p className="mb-4 text-caption">{preset ? "This updates the global active policy. Private custom matches retain priority. A tightened or disabled released label cannot bypass these replacement criteria; it becomes Unclassified when no replacement matches." : "This saves a new version for the owner shown above. Current owner edits and account erasure exclude this save through version checks and an owner write lease."}</p>

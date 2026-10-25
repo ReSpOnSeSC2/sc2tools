@@ -53,7 +53,9 @@ class PresetPoliciesService {
       this.cache = { value: nextPolicy, expires: Date.now() + 30000 };
       return structuredClone(nextPolicy);
     } catch (error) {
-      if (/** @type {any} */ (error)?.code === 11000) throw problem(409, "preset_policy_changed");
+      const failure = /** @type {any} */ (error);
+      if (failure?.code === 11000) throw problem(409, "preset_policy_changed");
+      if (failure?.code === 20 && /Transaction numbers are only allowed/.test(String(failure.message))) throw problem(503, "preset_policy_transactions_required");
       throw error;
     } finally { await session.endSession(); }
   }

@@ -203,7 +203,15 @@ changes its published snapshot independently of the private source and keeps a
 removed listing removed. Private saves can explicitly queue owner-scoped
 reclassification. All saves check the current definition version and hold the
 owner's shared data-write lease, so account erasure/restore excludes the edit.
-Previous definitions are reviewed and restored as a new version. Invalid legacy
+Previous definitions are reviewed and restored as a new version. Community
+versions include their listing title and description alongside the build rules;
+restoring older records without those fields keeps the current listing text.
+Private definition/version writes and linked game check-in renames commit in one
+MongoDB transaction before cache notifications. All versioned admin saves and
+preset restores require transaction support and return a recoverable 503 when it
+is unavailable. Standalone development MongoDB permits only legacy owner saves;
+it never falls back to partial writes for a versioned admin operation.
+Invalid legacy
 definitions exceeding validated bounds are marked incomplete and cannot be
 silently overwritten by their bounded projection; they require a reviewed repair.
 

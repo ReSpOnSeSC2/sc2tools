@@ -17,7 +17,7 @@ export interface PresetEntry {
 export interface Policy { schemaVersion: number; evaluatorVersion: number; revision: number; hash: string; entries: PresetEntry[] }
 export interface BuildDetail extends BuildRow {
   truncated?: boolean; definitionCounts?: Record<string, number>; build?: JsonObject; title?: string; description?: string; revision?: number;
-  history?: Array<{ revision: number; savedAt: string; build: JsonObject }>;
+  history?: Array<{ revision: number; savedAt: string; build: JsonObject; title?: string | null; description?: string | null }>;
   released?: { description: string; implementation: string; surfaces?: Array<"you" | "opponent">; releasedCriteria?: PolicyCondition[][] };
   replacement?: PresetEntry | null; expectedHash?: string; policyRevision?: number; releaseHash?: string;
   evaluatorVersion?: number; schemaVersion?: number; source?: string;

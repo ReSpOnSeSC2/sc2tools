@@ -44,7 +44,7 @@ class AdminBuildStudioService {
       _id: 0, slug: bounded("$slug", 80), owner: bounded(scope === "custom" ? "$userId" : "$ownerUserId", 200), sourceSlug: bounded("$sourceSlug", 80), title: bounded("$title", 120), description: bounded("$description", 4000),
       removed: { $eq: ["$removed", true] }, build: publicBuildMongoExpression(content), definitionCounts: definitionCounts(content),
       revision: { $ifNull: [scope === "custom" ? "$definitionRevision" : "$publicationSequence", 0] }, updatedAt: 1,
-      history: { $map: { input: { $slice: [{ $cond: [{ $isArray: "$_definitionHistory" }, "$_definitionHistory", []] }, -10] }, as: "revision", in: { revision: "$$revision.revision", savedAt: "$$revision.savedAt", build: publicBuildMongoExpression("$$revision.build") } } },
+      history: { $map: { input: { $slice: [{ $cond: [{ $isArray: "$_definitionHistory" }, "$_definitionHistory", []] }, -10] }, as: "revision", in: { revision: "$$revision.revision", savedAt: "$$revision.savedAt", build: publicBuildMongoExpression("$$revision.build"), title: bounded("$$revision.title", 120), description: bounded("$$revision.description", 4000) } } },
     } }]).next();
     if (!row) throw problem(404, "build_definition_not_found");
     const clean = publicBuildSnapshot(row.build);
@@ -86,7 +86,7 @@ class AdminBuildStudioService {
         if (typeof title !== "string" || !title.trim() || title.length > 120 || typeof description !== "string" || description.length > 4000) throw problem(400, "invalid_build_definition");
         const saved = await this.db.communityBuilds.updateOne({ _id: objectId(id), ownerUserId: current.owner, ...(input.expectedRevision === 0 ? { $or: [{ publicationSequence: 0 }, { publicationSequence: { $exists: false } }] } : { publicationSequence: input.expectedRevision }) }, /** @type {import('mongodb').Document} */ ({
           $set: { build: publicBuildSnapshot(build), title, description, updatedAt: new Date(), publicationRevision: randomUUID() }, $inc: { publicationSequence: 1 },
-          $push: { _definitionHistory: { $each: [{ revision: current.revision, savedAt: new Date(), build: current.build }], $slice: -10 } },
+          $push: { _definitionHistory: { $each: [{ revision: current.revision, savedAt: new Date(), build: current.build, title: current.title, description: current.description }], $slice: -10 } },
         }));
         if (!saved.matchedCount) throw problem(409, "build_definition_changed");
       }
@@ -101,7 +101,7 @@ class AdminBuildStudioService {
     const current = await this.detail(scope, id);
     const previous = current.history.find((/** @type {any} */ row) => row.revision === revision);
     if (!previous) throw problem(404, "build_definition_revision_not_found");
-    return this.save(scope, id, { expectedRevision, build: previous.build });
+    return this.save(scope, id, { expectedRevision, build: previous.build, ...(scope === "community" ? { ...(typeof previous.title === "string" ? { title: previous.title } : {}), ...(typeof previous.description === "string" ? { description: previous.description } : {}) } : {}) });
   }
 
   /** Validate/evaluate an unsaved replacement against a bounded synthetic/raw
