@@ -1,6 +1,6 @@
 # Game navigation and replay controls
 
-Implements `game-nav-and-replay-controls` in the final plan. The preserved web work lives on `codex/wave3-game-navigation`; the neighbor API is a separate commit `3a7e064dbb2dbe82d94df661e8dfe00fd50aa241` pending integration. This checkpoint does not establish a shipped status until the integrated PR passes CI and merges.
+Implements `game-nav-and-replay-controls` in the final plan on `codex/wave3-game-navigation`. Preserved web work was committed before main integration; the neighbor API source commit `3a7e064dbb2dbe82d94df661e8dfe00fd50aa241` is integrated as `b73c24ea`. Current source includes main through PR700 (`7464cecd`). Remote CI and merge remain required before calling this shipped.
 
 ## Behavior
 
@@ -12,13 +12,11 @@ Replay focus enables play/pause, 10-second and fine seeks, single-loop paused st
 
 Today loads Ladder Pulse in a separate chunk with its existing pending frame, keeping navigation additions inside the unchanged first-load budget. Race chips reuse the existing four SVG assets rather than importing the full game icon catalog.
 
-## Verification at resume
+## Integrated verification
 
-- After the review fixes above: full web TypeScript and strict changed-source ESLint passed, and 116 assertions in nine affected consumer/Help suites passed. New regressions use the real ReplayLibrary, AllGamesTable, BuildDossier and report modal to cover actual cohorts, durable replay-control restoration, bounded snapshots, custom-definition labels and independent mobile opponent/disclosure activation. The production build and browser fixture still need their final rerun after these fixes.
-- Previous checkpoint: 86 focused consumer assertions and 52 real browser checks passed before the final browser script gained title/fullscreen/Alt-navigation assertions. Those totals are historical, overlap, and are not a claim about the integrated head.
-- Current focused navigation, replay controls and Today consumer run: 18 assertions passed in three suites.
-- Current list/game/replay/build/Modal/Help consumer run: 225 assertions passed in 26 suites. Strict ESLint passes every changed/new TypeScript file.
-- Production build and all unchanged budgets pass: landing 213.5/215kB, Today 223.5/240, game 317.5/440, opponent 492.3/500. The first sandbox attempt hit Windows EPERM creating Next output; the escalated retry completed successfully.
+- After the review fixes: full web TypeScript and strict changed-source ESLint passed. The latest integrated run passes 229 assertions in 24 affected consumer/Help suites. A separate overlapping 116-assertion run uses real ReplayLibrary, AllGamesTable, BuildDossier and report modal consumers to cover actual cohorts, durable replay-control restoration, bounded snapshots, custom-definition labels and independent mobile opponent/disclosure activation.
+- Owner-neighbor API regression runs pass 104 tests across nine real Mongo/API/public DTO/profile suites. Full API TypeScript and strict new-source lint pass. Existing service/router lint baselines are unchanged.
+- Final production build and all unchanged budgets pass: landing 213.6/215kB, Today 223.6/240, game 318/440, opponent 498.3/500. The first sandbox attempt hit Windows EPERM creating Next output; escalated builds completed successfully. No budget was raised.
 - Extended browser fixture: 54 checks pass at 320/390/768/1440, including title, filtered history restoration, scope persistence, fullscreen sheet containment, Alt-navigation, native button/slider guards, settings Escape and replay preference restoration. It serves actual committed UI fonts and production CSS with explicit synthetic API/auth/Next boundaries and blocks non-local requests. Header and replay screenshots are saved in `screenshots/game-navigation*.png`; inspected phone/desktop views show readable wrapped controls and no body overflow.
 
 No new infrastructure, AI features/API calls, environment variables or production migrations. No bundle budget is raised. See `owner-game-neighbors-checkpoint.md` for API ownership, bounded reads, query plans and public DTO omission safeguards.
