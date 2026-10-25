@@ -16,8 +16,15 @@ Seventy-one Mongo/API tests in builds/aggregations/new matchup metadata passed;
 API types passed and affected legacy services retain six existing lint warnings,
 with no errors. Full web types and strict changed-source lint are being rerun;
 focused CSV, contrast, Builds, Strategy and Maps tests pass as recorded in logs.
-Final integrated production build, browser captures, independent review and
-remote gates remain required; no completion claim is made for these yet.
+The integrated main725 build passed every unchanged budget (Today238.7/240,
+Dock224.3/225, landing214.6/215), including the reviewed shared Build editor
+Modal. Browser104 checks pass at320/390/768/1440 in both themes, including
+native Tab/Enter, Escape/focus return, held filter refetch, zero export and
+actual downloaded CSV content. Thirty-two captures were generated and
+representative phone/desktop heatmap, sheet and map views reviewed.
+Independent review corrected stale games/phase data and made both comparison
+columns share the clicked axes. Sixty final affected consumer tests pass.
+The full web run and remote gates are still pending.
 
 ADR 0046 explains cohort and export boundaries. The following URL-drill pack
 `analyzer-home-polish-5` is still outstanding. No production actions, new

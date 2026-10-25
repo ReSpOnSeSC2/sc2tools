@@ -51,12 +51,12 @@ export function StrategyGamesSheet({
     [filters, drill, dbRev],
   );
 
-  const gamesApi = useApi<GamesListResp>(apiPath);
+  const gamesApi = useApi<GamesListResp>(apiPath, { keepPreviousData: false });
   const { data } = gamesApi;
-  const loaded = hasQueryData(gamesApi);
+  const loaded = hasQueryData(gamesApi) && !gamesApi.isPreviousData;
 
   const games = useMemo<ProfileGame[]>(() => {
-    const raw = data?.games || [];
+    const raw = gamesApi.isPreviousData ? [] : data?.games || [];
     // Defensive client-side filter so a server that ignored an unknown
     // query param can't leak unrelated games into the drill-down.
     const filteredRaw = raw.filter((g) => {
@@ -87,7 +87,7 @@ export function StrategyGamesSheet({
       game_length: g.game_length ?? null,
       macro_score: g.macro_score ?? null,
     }));
-  }, [data, drill, filters.opp_race]);
+  }, [data, drill, filters.opp_race, gamesApi.isPreviousData]);
 
   const titleText = useMemo(() => {
     if (drill.build) return `${drill.build}  vs  ${drill.opp_strategy}`;
@@ -112,6 +112,7 @@ export function StrategyGamesSheet({
     <Modal open onClose={onBack} size="xl" mobileLayout="sheet" title={`${titleText} · ${loaded ? `${summary.total} games` : "Loading games…"}`} footer={<Button variant="secondary" onClick={onBack}>Back to strategies</Button>}>
     <div className="space-y-4">
       <p className="break-words text-caption text-text-muted" aria-label="Active drill filters">{active.length ? active.map(item => `${item.label}: ${item.value}`).join(" · ") : "Default filters"}</p>
+      {gamesApi.error && loaded && <p role="alert" className="text-caption text-text-muted">Couldn’t refresh these games. Showing the last loaded results for these filters. <button type="button" className="min-h-11 text-accent underline" onClick={() => void gamesApi.mutate()}>Retry games</button></p>}
       {loaded && summary.total > 0 && <p className="text-caption text-text-muted">{summary.wins}W · {summary.losses}L · {summary.wr === null ? "No decided games" : `${pct1(summary.wr)} win rate`}{data && data.total > games.length ? ` · showing ${games.length} of ${data.total} matching games (5,000 limit)` : ""}</p>}
       {/* When the drill carries both a build AND a strategy, the
           2-column comparison renders above the games list — left side
@@ -125,7 +126,7 @@ export function StrategyGamesSheet({
         />
       ) : null}
       {!loaded ? (
-        <QueryState q={gamesApi} skeleton={<Skeleton rows={6} />} errorTitle="Games" filtered />
+        <QueryState q={{ ...gamesApi, data: undefined }} skeleton={<Skeleton rows={6} />} errorTitle="Games" filtered />
       ) : games.length === 0 ? (
         <Card>
           <NoFilterMatches title="No games match this strategy and the active filters" />

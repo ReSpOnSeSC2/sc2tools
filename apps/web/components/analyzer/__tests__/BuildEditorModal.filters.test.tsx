@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import {
   FiltersContext,
   type AnalyzerFilters,
@@ -73,6 +73,15 @@ describe("BuildEditorModal community guide link", () => {
 });
 
 describe("BuildEditorModal global filter scope", () => {
+  it("names the real dialog, contains keyboard focus and closes on Escape", () => {
+    const closed = vi.fn();
+    const opener = document.createElement("button"); opener.textContent = "Open build"; document.body.append(opener); opener.focus();
+    const view = render(<FiltersContext.Provider value={{ filters: FILTERS, setFilters: vi.fn(), dbRev: 1, bumpRev: vi.fn(), seasons: [] }}><BuildEditorModal buildName="Keyboard build" onClose={closed} /></FiltersContext.Provider>);
+    const dialog = screen.getByRole("dialog", { name: /^Keyboard build$/ });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" }); expect(closed).toHaveBeenCalledOnce();
+    view.unmount(); expect(document.activeElement).toBe(opener); opener.remove();
+  });
   it("passes the complete Builds-page game scope and db revision to the dossier query", () => {
     const filters: AnalyzerFilters = {
       preset: "custom",

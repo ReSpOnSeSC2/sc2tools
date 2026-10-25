@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { AnalyzerFilters } from "@/lib/filterContext";
-const state = vi.hoisted(() => ({ filters: {} as AnalyzerFilters, paths: [] as (string | null)[], noGames: false }));
+const state = vi.hoisted(() => ({ filters: {} as AnalyzerFilters, paths: [] as (string | null)[], noGames: false, previous: false, options: [] as unknown[] }));
 const csv = vi.hoisted(() => ({ download: vi.fn() }));
 vi.mock("@/lib/csvExport", async original => ({ ...(await original<typeof import("@/lib/csvExport")>()), downloadCsv: csv.download }));
 const rows = [
   { my_build: "Z Build", opp_strat: "Z Strategy", wins: 8, losses: 2, total: 10, winRate: .8, myMatchups: { P: 8, T: 2 } },
   { my_build: "A Build", opp_strat: "A Strategy", wins: 2, losses: 2, total: 4, winRate: .5, myMatchups: { P: 4 } },
 ];
-vi.mock("@/lib/clientApi", () => ({ useApi: (path: string | null) => {
+vi.mock("@/lib/clientApi", () => ({ useApi: (path: string | null, options?: unknown) => {
   state.paths.push(path);
   if (!path) return { data: undefined, isLoading: false };
   if (path.startsWith("/v1/build-vs-strategy")) return { data: path.includes("opp_race=T") ? [rows[1]] : rows, isLoading: false };
-  if (path.startsWith("/v1/games-list")) return { data: { total: state.noGames ? 0 : 1, games: state.noGames ? [] : [{ id: "g1", result: "Win", build: "Z Build", opp_strategy: "Z Strategy", opp_race: "Protoss" }] }, isLoading: false };
+  if (path.startsWith("/v1/games-list")) { state.options.push(options); return { data: { total: state.noGames ? 0 : 1, games: state.noGames ? [] : [{ id: "g1", result: "Win", build: "Z Build", opp_strategy: "Z Strategy", opp_race: "Protoss" }] }, isPreviousData: state.previous, isLoading: state.previous }; }
   if (path.includes("/phases")) return { data: undefined, error: { status: 404 }, isLoading: false };
   return { data: [], isLoading: false };
 } }));
@@ -23,7 +23,7 @@ vi.mock("../mmr/BuildMatchupHeatmap", () => ({ BuildMatchupHeatmap: () => null }
 vi.mock("../AllGamesTable", () => ({ AllGamesTable: () => <p>Fixture games table</p> }));
 import { StrategiesTab } from "../StrategiesTab";
 import { BuildVsStrategyView } from "../StrategiesTabBuildVs";
-beforeEach(() => { localStorage.clear(); state.filters = {}; state.paths = []; state.noGames = false; csv.download.mockClear(); });
+beforeEach(() => { localStorage.clear(); state.filters = {}; state.paths = []; state.options = []; state.noGames = false; state.previous = false; csv.download.mockClear(); });
 afterEach(cleanup);
 describe("strategy table and sheet", () => {
   it("uses radio keyboard controls, preserves the background and restores focus after Escape", () => {
@@ -38,7 +38,12 @@ describe("strategy table and sheet", () => {
     expect(opener.isConnected).toBe(true);
     expect(screen.getByText(/Fixture games table/)).toBeTruthy();
     expect(state.paths.some(path => path?.startsWith("/v1/games-list") && path.includes("opp_race=P"))).toBe(true);
-    state.filters = { map: "New map" }; state.noGames = true;
+    state.filters = { map: "New map" }; state.previous = true;
+    rerender(<StrategiesTab />);
+    expect(screen.getByRole("dialog", { name: /Loading games/ })).toBeTruthy();
+    expect(screen.queryByText(/Fixture games table/)).toBeNull();
+    expect(state.options.at(-1)).toEqual({ keepPreviousData: false });
+    state.previous = false; state.noGames = true;
     rerender(<StrategiesTab />);
     const modal = screen.getByRole("dialog", { name: /0 games/ });
     expect(within(modal).getByLabelText(/Active drill filters/).textContent).toContain("New map");

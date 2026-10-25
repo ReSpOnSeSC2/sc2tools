@@ -18,7 +18,7 @@ const useFiltersMock = vi.fn(() => ({
 }));
 
 vi.mock("@/lib/clientApi", () => ({
-  useApi: (path: string | null) => useApiMock(path),
+  useApi: (path: string | null, options?: unknown) => useApiMock(path, options),
 }));
 
 vi.mock("@/lib/filterContext", async () => {
@@ -149,7 +149,7 @@ describe("BuildVsStrategyComparison", () => {
     expect(callPaths).toEqual(
       expect.arrayContaining([
         expect.stringContaining(
-          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you&strategy=Terran+-+Mech",
+          "/v1/custom-builds/stargate-phoenix/compositions?opp_strategy=Terran+-+Mech&build=Stargate+Phoenix&perspective=you&strategy=Terran+-+Mech",
         ),
       ]),
     );
@@ -157,7 +157,7 @@ describe("BuildVsStrategyComparison", () => {
     expect(callPaths).toEqual(
       expect.arrayContaining([
         expect.stringContaining(
-          "/v1/strategies/Terran%20-%20Mech/phases?perspective=opponent&build=Stargate+Phoenix",
+          "/v1/strategies/Terran%20-%20Mech/phases?opp_strategy=Terran+-+Mech&build=Stargate+Phoenix&perspective=opponent",
         ),
       ]),
     );
@@ -231,7 +231,7 @@ describe("BuildVsStrategyComparison", () => {
         // The fallback also carries the strategy filter so the cell-
         // scoped intersection holds in the auto-classified-label path.
         expect.stringContaining(
-          "/v1/builds/Some%20Agent%20Auto-Label/phases?perspective=you&strategy=Terran+-+Mech",
+          "/v1/builds/Some%20Agent%20Auto-Label/phases?opp_strategy=Terran+-+Mech&build=Some+Agent+Auto-Label&perspective=you&strategy=Terran+-+Mech",
         ),
       ]),
     );
@@ -319,7 +319,7 @@ describe("BuildVsStrategyComparison", () => {
     expect(callPaths).toEqual(
       expect.arrayContaining([
         expect.stringContaining(
-          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you&strategy=Zerg+-+3+Base+Macro",
+          "/v1/custom-builds/stargate-phoenix/compositions?opp_strategy=Zerg+-+3+Base+Macro&build=PvZ+-+3+Stargate+Phoenix&perspective=you&strategy=Zerg+-+3+Base+Macro",
         ),
       ]),
     );
@@ -349,7 +349,7 @@ describe("BuildVsStrategyComparison", () => {
     expect(callPaths).toEqual(
       expect.arrayContaining([
         expect.stringContaining(
-          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you&strategy=Zerg+-+3+Base+Macro",
+          "/v1/custom-builds/stargate-phoenix/compositions?opp_strategy=Zerg+-+3+Base+Macro&build=PvZ+-+3+Stargate+Phoenix&perspective=you&strategy=Zerg+-+3+Base+Macro",
         ),
       ]),
     );
@@ -530,4 +530,19 @@ describe("BuildVsStrategyComparison", () => {
       screen.getByText(/Opponent signal too sparse/i),
     ).toBeTruthy();
   });
+});
+
+it("keeps both comparison columns on clicked axes after conflicting global edits, without previous-cohort data", () => {
+  useFiltersMock.mockImplementation(() => ({ filters: { preset: "all", build: "Changed global build", opp_strategy: "Changed global strategy", map: "New map" }, setFilters: () => {}, dbRev: 2, bumpRev: () => {}, seasons: [] }));
+  useApiMock.mockImplementation((path: string | null) => path?.startsWith("/v1/custom-builds?") ? { data: [{ name: "Stargate Phoenix", slug: "stargate-phoenix" }], isLoading: false } : { data: undefined, isLoading: true });
+  render(<BuildVsStrategyComparison build="Stargate Phoenix" strategy="Terran - Mech" oppRace="T" />);
+  const calls = useApiMock.mock.calls.filter(([path]) => typeof path === "string" && /\/(compositions|phases)\?/.test(path));
+  expect(calls).toHaveLength(2);
+  for (const [path, options] of calls) {
+    const params = new URL(path, "https://fixture.test").searchParams;
+    expect(params.getAll("build")).toEqual(["Stargate Phoenix"]);
+    expect(params.getAll("opp_strategy")).toEqual(["Terran - Mech"]);
+    expect(params.get("opp_race")).toBe("T"); expect(params.get("map")).toBe("New map");
+    expect(options).toEqual({ keepPreviousData: false });
+  }
 });

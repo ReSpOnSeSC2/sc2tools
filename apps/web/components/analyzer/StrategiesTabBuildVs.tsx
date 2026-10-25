@@ -27,6 +27,7 @@ import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { csvFilename, downloadCsv, toCsv, type CsvColumn } from "@/lib/csvExport";
 import { defaultMatrixRace, matrixAxes as matrixAxesForExport, type MatrixRace } from "@/lib/strategyMatrix";
 import { StrategyMatrixHeatmap } from "./StrategyMatrixHeatmap";
+import { strategyDrillFilters } from "@/lib/strategyDrill";
 
 /**
  * Build × Opponent-strategy matrix for ``StrategiesTab``.
@@ -348,15 +349,14 @@ function YouColumn({
   // Express parses as arrays and ``parseFilters`` correctly refuses as an
   // ambiguous string filter.
   const phaseQuery = filtersToQuery({
-    ...filters,
+    ...strategyDrillFilters(filters, { build, opp_strategy: strategy, opp_race: oppRace }),
     perspective: "you",
-    opp_race: filters.opp_race || oppRace,
     strategy: strategy || undefined,
   });
   const customPath = slug
     ? `/v1/custom-builds/${encodeURIComponent(slug)}/compositions${phaseQuery}`
     : null;
-  const customResult = useApi<BuildPhasePayload>(customPath);
+  const customResult = useApi<BuildPhasePayload>(customPath, { keepPreviousData: false });
 
   // Only fire the fallback once the slug bridge has settled and
   // resolved to "no saved build" — firing both in parallel would
@@ -365,7 +365,7 @@ function YouColumn({
     !slug && !isResolvingSlug && build
       ? `/v1/builds/${encodeURIComponent(build)}/phases${phaseQuery}`
       : null;
-  const labelResult = useApi<BuildLabelPhasesResponse>(labelPath);
+  const labelResult = useApi<BuildLabelPhasesResponse>(labelPath, { keepPreviousData: false });
 
   if (isResolvingSlug) return <Skeleton rows={3} />;
 
@@ -456,9 +456,8 @@ function OpponentColumn({
   // "All games" list below.
   const { filters } = useFilters();
   const phaseQuery = filtersToQuery({
-    ...filters,
+    ...strategyDrillFilters(filters, { build, opp_strategy: strategy, opp_race: oppRace }),
     perspective: "opponent",
-    opp_race: filters.opp_race || oppRace,
     // The clicked matrix cell is authoritative. Object assignment replaces
     // an active global build filter instead of serialising a second copy.
     build: build || filters.build,
@@ -466,7 +465,7 @@ function OpponentColumn({
   const path = strategy
     ? `/v1/strategies/${encodeURIComponent(strategy)}/phases${phaseQuery}`
     : null;
-  const { data, isLoading, error } = useApi<StrategyPhasesResponse>(path);
+  const { data, isLoading, error } = useApi<StrategyPhasesResponse>(path, { keepPreviousData: false });
 
   if (!strategy) {
     return (
