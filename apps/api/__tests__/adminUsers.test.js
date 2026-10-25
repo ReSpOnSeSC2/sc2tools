@@ -4,6 +4,7 @@ const { MongoMemoryServer } = require("mongodb-memory-server");
 const { connect } = require("../src/db/connect");
 const { AdminUsersService, CSV_COLUMNS } = require("../src/services/adminUsers");
 const { AdminService } = require("../src/services/admin");
+const { AdminAuditService } = require("../src/services/adminAudit");
 const { AdminEventsService } = require("../src/services/adminEvents");
 const { parseUsersQuery, buildAdminUsersRouter } = require("../src/routes/adminUsers");
 const express = require("express");
@@ -19,7 +20,7 @@ describe("Admin Users matched pages and private exports", () => {
   });
   afterAll(async () => { await db?.close(); await mongo?.stop(); });
   beforeEach(async () => {
-    await Promise.all([db.users, db.games, db.opponents, db.deviceTokens, db.adminEvents].map(c => c.deleteMany({})));
+    await Promise.all([db.users, db.games, db.opponents, db.deviceTokens, db.adminEvents, db.adminAudit].map(c => c.deleteMany({})));
     await db.users.insertMany([
       { userId: "alpha", clerkUserId: "env-admin", email: "a+one@example.test", createdAt: new Date(+now - 7 * day), lastSeenAt: new Date(+now - day) },
       { userId: "beta", clerkUserId: "b", email: "b@example.test", role: "admin", createdAt: new Date(+now - 20 * day), lastSeenAt: new Date(+now - 2 * day) },
@@ -99,13 +100,16 @@ describe("Admin Users matched pages and private exports", () => {
     expect((await db.adminEvents.findOne({ eventId: "mine" })).payload.email).toBeUndefined();
   });
   test("export route streams attachment, audits counts only, and admits once per admin/minute", async () => {
-    const audit = jest.fn(), app = express();
-    app.use((req, _res, next) => { req.auth = { userId: "admin" }; next(); });
+    await db.users.insertOne({ userId: "export-admin", clerkUserId: "export-admin-clerk", createdAt: now });
+    const auditService = new AdminAuditService({ db });
+    const audit = jest.fn((...args) => auditService.audit(...args)), app = express();
+    app.use((req, _res, next) => { req.auth = { userId: "export-admin" }; next(); });
     app.use(buildAdminUsersRouter({ admin: { listUsers: opts => service.list(opts), prepareUsersCsv: opts => service.prepareCsv(opts) }, adminAudit: { audit } }));
     const response = await request(app).get("/admin/users/export.csv?q=a%2Bone&filter=admins");
     expect(response.status).toBe(200); expect(response.headers["cache-control"]).toContain("no-store");
     expect(response.headers["content-disposition"]).toMatch(/attachment; filename="sc2tools-users-\d{4}-\d{2}-\d{2}\.csv"/);
     expect(response.text).toContain("a+one@example.test"); expect(response.headers["x-export-truncated"]).toBe("false");
+    expect(await db.adminAudit.findOne({ action: "users.export" })).toMatchObject({ actorUserId: "export-admin", target: null, result: { rows: 1, truncated: false } });
     expect(audit.mock.calls[0].slice(1)).toEqual(["users.export", null, { rows: 1, truncated: false }]);
     expect((await request(app).get("/admin/users/export.csv")).status).toBe(429);
   });
