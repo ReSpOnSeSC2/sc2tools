@@ -12,6 +12,8 @@ corresponding GitHub Release.
 ## [Unreleased]
 
 ### Agent 0.24.6 and Randomizer game-start performance
+- Build scouting timelines and load their icons when the relevant view opens,
+  avoiding full hidden-history hydration in Compact or hidden Companion windows.
 - Bound the OBS Randomizer's motion simulations to 12 visual contenders and
   30 FPS, retaining the complete weighted selection pool, chosen result, reveal
   timing, sound and voice. Keep movement speed independent of refresh rate.

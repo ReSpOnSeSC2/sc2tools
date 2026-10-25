@@ -407,6 +407,11 @@ normal priority), each limited by CPU count. Save and restart to apply the worke
 count. Existing custom worker limits remain until a speed is saved. On POSIX,
 background workers request nice(10).
 
+Companion defers hidden scouting timelines and their icons until that view opens.
+Keeping the app hidden or Compact does not build the full replay-history views
+when opponent data arrives. Opening a scouting page uses the selected replay,
+time range and worker/supply filter.
+
 Pause history import while I'm in a game is on by default. The shared live-game
 gate holds new history parses, queued historical uploads and archive jobs through
 loading/play and for 20 seconds after the match ends. An upload already in flight

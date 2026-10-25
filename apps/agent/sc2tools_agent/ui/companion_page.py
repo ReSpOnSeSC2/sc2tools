@@ -137,6 +137,22 @@ def _filter_build_events(events, *, include_workers_supply, horizon=None):
             and (horizon is None or (_time(event.get("timeSec")) != "—" and event["timeSec"] <= horizon))]
 
 
+def _history_exposed(widget):
+    return widget.isVisible() and not widget.window().isMinimized()
+
+
+def _history_source_signature(game, stored):
+    if stored is not None:
+        return ("stored", id(stored))
+    def rows_for(name):
+        rows = game.get(name)
+        return rows if isinstance(rows, (list, tuple)) else ()
+    return ("preview", tuple(tuple(tuple(row.get(field) for field in
+            ("name", "timeSec", "time", "kind", "category", "timing"))
+            for row in rows_for(name) if isinstance(row, dict))
+            for name in ("myTechMilestones", "oppTechMilestones", "myBuildOrder", "oppBuildOrder")))
+
+
 def _live_context(snapshot):
     envelope = snapshot.get("liveGame") or {}
     active = envelope.get("phase") in {"match_loading", "match_started", "match_in_progress"} and not envelope.get("isReplay")
@@ -253,6 +269,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._source_id = None
             self._key = None
             self._games = []
+            self._render_signature = None
+            self._render_source = None
             self.setObjectName("companionPanel")
             self.setWindowTitle("SC2TOOLS · " + kind.title())
             self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
@@ -390,6 +408,26 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self.owner.set_preference(self.kind + "Overlay", False)
             event.accept()
 
+        def showEvent(self, event):
+            super().showEvent(event)
+            if self.kind == "scouting":
+                QtCore.QTimer.singleShot(0, self._hydrate_history)
+
+        def changeEvent(self, event):
+            super().changeEvent(event)
+            if self.kind == "scouting" and event.type() == QtCore.QEvent.WindowStateChange:
+                QtCore.QTimer.singleShot(0, self._hydrate_history)
+
+        def _hydrate_history(self):
+            if not self.owner._closed and _history_exposed(self):
+                self.render_build_data()
+                self.owner._ensure_build_order()
+
+        def clear_history(self):
+            self._render_signature = self._render_source = None
+            for side in ("my", "opp"):
+                self.comparison.set_side(side, None, [], self.build_time_range.currentData())
+
         def update_context(self, context, *, scope=None):
             self.title.setText(_name(context) if context else "Preview · choose an opponent")
             record = context.get("headToHead") or context.get("totals") or context
@@ -458,11 +496,17 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             game = self._games[index] if 0 <= index < len(self._games) else {}
             stored = self.owner._build_order_cache.get(self._key)
             self.comparison_title.setText("BUILD VS BUILD · " + str(game.get("map") or "Previous encounter") if game else "No previous replay scouting available")
-            for side, field in (("my", "myBuild"), ("opp", "oppStrategy")):
-                source = stored[side] if stored is not None else _events(game, side)
-                source = _filter_build_events(source, include_workers_supply=self.include_workers_supply.isChecked())
-                name = game.get(field) or (game.get("oppBuild") if side == "opp" else None)
-                self.comparison.set_side(side, name, source, self.build_time_range.currentData())
+            if _history_exposed(self):
+                signature = (self.owner._account_key, self._key, _history_source_signature(game, stored),
+                             self.build_time_range.currentData(), self.include_workers_supply.isChecked(),
+                             game.get("myBuild"), game.get("oppStrategy"), game.get("oppBuild"))
+                if signature != self._render_signature:
+                    for side, field in (("my", "myBuild"), ("opp", "oppStrategy")):
+                        source = stored[side] if stored is not None else _events(game, side)
+                        source = _filter_build_events(source, include_workers_supply=self.include_workers_supply.isChecked())
+                        name = game.get(field) or (game.get("oppBuild") if side == "opp" else None)
+                        self.comparison.set_side(side, name, source, self.build_time_range.currentData())
+                    self._render_signature, self._render_source = signature, stored
             failed = self._key in self.owner._build_order_failures
             self.retry.setVisible(bool(self._key and failed))
             self.retry.setEnabled(self.owner._build_order_inflight is None)
@@ -531,6 +575,10 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._build_order_cache = OrderedDict()
             self._build_order_failures = OrderedDict()
             self._build_order_inflight = None
+            self._history_signatures = {}
+            self._history_sources = {}
+            self._history_refresh_pending = False
+            self._history_window = None
             self._panel_restore_requests = set()
             self._manual_scouting_open = False
             self._manual_scouting_dismissed = False
@@ -557,6 +605,10 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.scouting_speech = (speech_factory or build_scouting_speech)(self, QtCore=QtCore)
             self.scouting_speech.statusChanged.connect(self.voice_status.setText)
             self.overlays = {kind: CompanionPanel(self, kind) for kind in ("opponent", "scouting")}
+            self._history_views = [self.scouting_comparison,
+                                   *(tree for trees in self.trees.values() for tree in trees.values())]
+            for view in self._history_views:
+                view.installEventFilter(self)
             from .companion_session import build_companion_session
             self.session_panel = build_companion_session(QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
             self.session_panel.userClosed.connect(lambda: self.session_check.setChecked(False))
@@ -1324,8 +1376,6 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
 
         def _build_range_changed(self, *_args):
             horizon = self.build_time_range.currentData()
-            for chain in [*getattr(self, "build_chains", {}).values(), *getattr(self, "upgrade_chains", {}).values()]:
-                chain.set_time_range(horizon)
             if hasattr(self, "overlays"):
                 self.overlays["scouting"].sync_options(horizon, self.include_workers_supply.isChecked())
             self._render_information_layout()
@@ -1392,27 +1442,47 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             stored = self._build_order_cache.get(key)
             horizon = self.build_time_range.currentData()
             include_supply = self.include_workers_supply.isChecked()
-            for side, build_key in (("my", "myBuild"), ("opp", "oppStrategy")):
-                source = stored[side] if stored is not None else _events(game, side)
-                source = _filter_build_events(source, include_workers_supply=include_supply)
-                build_name = game.get(build_key) or (game.get("oppBuild") if side == "opp" else None)
-                self.scouting_comparison.set_side(side, build_name, source, horizon)
-                for kind, trees in self.trees.items():
+            visible_trees = [(kind, side, tree) for kind, trees in self.trees.items()
+                             for side, tree in trees.items() if _history_exposed(tree)]
+            comparison = _history_exposed(self.scouting_comparison)
+            if comparison or visible_trees:
+                base = (self._account_key, key, _history_source_signature(game, stored), include_supply)
+                comparison_signature = (*base, horizon, self._density,
+                                        game.get("myBuild"), game.get("oppStrategy"), game.get("oppBuild"))
+                comparison_dirty = comparison and self._history_signatures.get("comparison") != comparison_signature
+                sources = {}
+                def source_for(side):
+                    if side not in sources:
+                        source = stored[side] if stored is not None else _events(game, side)
+                        sources[side] = _filter_build_events(source, include_workers_supply=include_supply)
+                    return sources[side]
+                if comparison_dirty:
+                    for side, build_key in (("my", "myBuild"), ("opp", "oppStrategy")):
+                        build_name = game.get(build_key) or (game.get("oppBuild") if side == "opp" else None)
+                        self.scouting_comparison.set_side(side, build_name, source_for(side), horizon)
+                    self._history_signatures["comparison"] = comparison_signature
+                    self._history_sources["comparison"] = stored
+                for kind, side, tree in visible_trees:
+                    view = (kind, side)
+                    if self._history_signatures.get(view) == base:
+                        continue
                     if stored is None:
                         timeline_events = _events(game, side, full=kind == "build", upgrades=kind == "upgrades")
                     elif kind == "upgrades":
-                        timeline_events = [event for event in source if event["kind"] == "upgrade"]
+                        timeline_events = [event for event in source_for(side) if event["kind"] == "upgrade"]
                     elif kind == "tech":
                         seen = set()
                         timeline_events = []
-                        for event in source:
+                        for event in source_for(side):
                             identity = (event["kind"], event["name"].casefold())
                             if identity not in seen or event["name"] in {"Nexus", "Hatchery", "CommandCenter"}:
                                 timeline_events.append(event)
                                 seen.add(identity)
                     else:
-                        timeline_events = source
-                    fill_timeline(trees[side], timeline_events)
+                        timeline_events = source_for(side)
+                    fill_timeline(tree, timeline_events)
+                    self._history_signatures[view] = base
+                    self._history_sources[view] = stored
             failed = key in self._build_order_failures
             self.build_retry.setVisible(bool(key and failed))
             self.build_retry.setEnabled(self._build_order_inflight is None and self._paired)
@@ -1428,6 +1498,47 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                     text = "not extracted" if status == "not_extracted" else "no recorded events" if not stored[side] else str(len(stored[side])) + " recorded events"
                     descriptions.append(title + ": " + text)
                 self.build_source_status.setText("Stored replay events · " + " · ".join(descriptions) + ". Older uploads may be incomplete.")
+
+        def _queue_history_render(self):
+            if not self._closed and not self._history_refresh_pending:
+                self._history_refresh_pending = True
+                QtCore.QTimer.singleShot(0, self._flush_history_render)
+
+        def _flush_history_render(self):
+            self._history_refresh_pending = False
+            if not self._closed:
+                self._render_information_layout()
+
+        def showEvent(self, event):
+            super().showEvent(event)
+            window = self.window()
+            if window is not self._history_window:
+                if self._history_window is not None:
+                    self._history_window.removeEventFilter(self)
+                self._history_window = window
+                window.installEventFilter(self)
+            self._queue_history_render()
+
+        def eventFilter(self, watched, event):
+            if ((watched in getattr(self, "_history_views", ()) and event.type() == QtCore.QEvent.Show)
+                    or (watched is self._history_window and event.type() == QtCore.QEvent.WindowStateChange)):
+                self._queue_history_render()
+            return super().eventFilter(watched, event)
+
+        def _clear_history_render_cache(self, *, clear_widgets=False):
+            self._history_signatures.clear()
+            self._history_sources.clear()
+            if not hasattr(self, "overlays"):
+                return
+            panel = self.overlays["scouting"]
+            panel._render_signature = panel._render_source = None
+            if clear_widgets:
+                for trees in self.trees.values():
+                    for tree in trees.values():
+                        fill_timeline(tree, [])
+                for side in ("my", "opp"):
+                    self.scouting_comparison.set_side(side, None, [], self.build_time_range.currentData())
+                panel.clear_history()
 
         def _render_selected_summary(self):
             if not hasattr(self, "console") or not hasattr(self.console, "set_opponent_summary"):
@@ -1736,6 +1847,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._build_order_inflight = None
             self._build_order_cache.clear()
             self._build_order_failures.clear()
+            self._clear_history_render_cache()
             self._render_information_layout()
             self.build_selectors.refresh()
             self.randomizer_page.refresh()
@@ -1989,6 +2101,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._build_order_inflight = None
             self._build_order_cache.clear()
             self._build_order_failures.clear()
+            self._clear_history_render_cache(clear_widgets=True)
             self._directory_loaded = False
             self._library_last_refresh = 0.0
             self._opponents = []
@@ -2400,6 +2513,10 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._build_order_inflight = None
             self._build_order_cache.clear()
             self._build_order_failures.clear()
+            self._history_signatures.clear()
+            self._history_sources.clear()
+            if self._history_window is not None:
+                self._history_window.removeEventFilter(self)
             self.build_selectors.set_assistance_enabled(False)
             self.randomizer_page.shutdown()
             self.ghost_page.shutdown()

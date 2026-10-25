@@ -250,9 +250,13 @@ def test_foreign_owner_cleanup_reclaims_priority_overflow_without_retargeting(tm
 def test_match_start_during_history_batch_assembly_retains_batch(tmp_path, monkeypatch):
     import sc2tools_agent.uploader.queue as queue_module
 
-    monkeypatch.setattr(queue_module, "_BATCH_COALESCE_SEC", 0.2)
+    # Hold the worker at the coalescing read rather than infer that boundary
+    # from an exact float timeout. Coarse Windows clock ticks can make
+    # (deadline - now) slightly greater than the configured 0.2 seconds.
+    monkeypatch.setattr(queue_module, "_BATCH_COALESCE_SEC", 30.0)
     gate = GameActivityGate()
     entered_coalescing = threading.Event()
+    release_coalescing = threading.Event()
     state = AgentState(device_token="t")
     api = _StubApi()
     q = UploadQueue(cfg=_cfg(tmp_path, upload_batch_size=5), state=state, api=api)
@@ -260,10 +264,12 @@ def test_match_start_during_history_batch_assembly_retains_batch(tmp_path, monke
     original_get = q._q.get
 
     def get(*args, **kwargs):
-        timeout = kwargs.get("timeout")
-        if kwargs.get("block", True) and timeout is not None and 0 < timeout <= 0.2:
-            gate.on_event("match_loading")
+        # The job is queued before start(), so its initial read is nonblocking.
+        # The first timed read therefore waits for another batch member.
+        if kwargs.get("timeout") is not None and not entered_coalescing.is_set():
             entered_coalescing.set()
+            assert release_coalescing.wait(5)
+            raise queue.Empty
         return original_get(*args, **kwargs)
 
     monkeypatch.setattr(q._q, "get", get)
@@ -271,7 +277,10 @@ def test_match_start_during_history_batch_assembly_retains_batch(tmp_path, monke
     assert q.submit(job)
     q.start()
     try:
-        assert entered_coalescing.wait(2)
+        assert entered_coalescing.wait(5)
+        assert q.is_pending(job.file_path) and not api.calls
+        gate.on_event("match_loading")
+        release_coalescing.set()
         assert _wait_for(lambda: q._retry_q.qsize() == 1)
         assert not api.calls and not state.uploaded
         assert q.pending_count() == 1
@@ -279,6 +288,7 @@ def test_match_start_during_history_batch_assembly_retains_batch(tmp_path, monke
         assert _wait_for(lambda: q.pending_count() == 0)
         assert len(api.calls) == 1
     finally:
+        release_coalescing.set()
         q.stop()
 
 
