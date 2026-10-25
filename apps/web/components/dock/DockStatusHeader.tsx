@@ -38,8 +38,8 @@ export function DockStatusHeader({ token, studio, ready, live, lastLiveAt, sessi
     <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-caption">
       <span className="rounded border border-border px-1.5 py-0.5 font-semibold">{scene}</span>
       <span>{sessionRecord(session)}</span>
-      <span role="status" className={status === "connected" ? "text-success" : "text-text-muted"}>{status === "connected" ? "Connected" : "Reconnecting…"}</span>
-      {studio.gameWidgetsPaused ? <span className="text-warning">Game widgets hidden</span> : null}
+      <span role="status" className="text-text">{status === "connected" ? "Connected" : "Reconnecting…"}</span>
+      {studio.gameWidgetsPaused ? <span className="text-text">Game widgets hidden</span> : null}
     </div>
     {opponent ? <p aria-label="Current opponent" className="min-w-0 break-words text-caption">
       {/* Existing four static race assets; avoid loading the unit icon registry in the header. */}

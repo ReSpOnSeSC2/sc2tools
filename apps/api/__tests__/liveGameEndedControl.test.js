@@ -24,7 +24,17 @@ test("menu heartbeats and repeated ended ticks cannot extend the window", () => 
   const first = withEndedGameControl(ended, undefined, NOW);
   const repeat = withEndedGameControl(ended, first, NOW + 60_000); expect(repeat.lastEndedGame.endedAt).toBe(NOW);
   const menu = withEndedGameControl({ phase: "menu" }, repeat, NOW + 120_000); expect(menu.lastEndedGame.endedAt).toBe(NOW);
-  expect(withEndedGameControl({ phase: "menu" }, menu, NOW + ENDED_CONTROL_MS + 1).lastEndedGame).toBeUndefined();
-  const expired = withEndedGameControl(ended, repeat, NOW + ENDED_CONTROL_MS + 1); expect(expired.lastEndedGame.gameKey).toBeUndefined();
-  const later = withEndedGameControl(ended, expired, NOW + ENDED_CONTROL_MS + 60_000); expect(later.lastEndedGame).toEqual({ endedAt: NOW });
+  const expired = withEndedGameControl({ phase: "menu" }, menu, NOW + ENDED_CONTROL_MS + 1);
+  expect(expired.lastEndedGame).toEqual({ gameKey: "one", endedAt: NOW });
+  const later = withEndedGameControl(ended, expired, NOW + ENDED_CONTROL_MS + 60_000); expect(later.lastEndedGame).toEqual({ gameKey: "one", endedAt: NOW });
+});
+test.each([120_000, ENDED_CONTROL_MS + 1])("ended → menu → late same-key ended keeps first observation at %ims", elapsed => {
+  const first = withEndedGameControl(ended, undefined, NOW);
+  const menu = withEndedGameControl({ phase: "menu" }, first, NOW + elapsed);
+  const delayed = withEndedGameControl(ended, menu, NOW + elapsed + 1000);
+  expect(delayed.lastEndedGame).toEqual({ gameKey: "one", endedAt: NOW });
+  const idle = withEndedGameControl({ phase: "idle" }, delayed, NOW + elapsed + 2000);
+  expect(idle.lastEndedGame).toEqual(first.lastEndedGame);
+  expect(withEndedGameControl({ phase: "match_loading", gameKey: "two" }, idle, NOW + elapsed + 3000).lastEndedGame).toBeUndefined();
+  expect(withEndedGameControl({ ...ended, isReplay: true }, idle, NOW + elapsed + 3000).lastEndedGame).toBeUndefined();
 });

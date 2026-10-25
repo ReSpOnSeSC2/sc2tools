@@ -533,8 +533,8 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
             type="button"
             onClick={() => jumpTo(s.id)}
             aria-current={active === s.id ? "location" : undefined}
-            className="shrink-0 whitespace-nowrap px-2 text-caption"
-            variant={active === s.id ? "primary" : "ghost"}
+            className={`shrink-0 whitespace-nowrap px-2 text-caption ${active === s.id ? "underline underline-offset-4" : ""}`}
+            variant={active === s.id ? "secondary" : "ghost"}
           >
             {s.label}
           </DockButton>

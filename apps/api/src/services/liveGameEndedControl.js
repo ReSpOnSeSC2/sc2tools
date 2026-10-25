@@ -10,13 +10,13 @@ function withEndedGameControl(envelope, previous, now) {
   const key = typeof envelope.gameKey === "string" && envelope.gameKey.trim().length > 0 && envelope.gameKey.length <= 120 ? envelope.gameKey : null;
   const before = previous?.lastEndedGame;
   if (envelope.phase === "match_ended" && key) {
-    const same = previous?.phase === "match_ended" && previous.gameKey === key;
+    const same = before?.gameKey === key;
     const endedAt = same && typeof before?.endedAt === "number" && Number.isFinite(before.endedAt) ? before.endedAt : now;
-    // Retain only the timestamp after expiry during repeated ended ticks, so
-    // those ticks cannot manufacture a fresh window for the same game.
-    next.lastEndedGame = now - endedAt <= ENDED_CONTROL_MS ? { gameKey: key, endedAt } : { endedAt };
+    // Keep one receipt, including its expired timestamp, through menu/idle.
+    // A delayed same-key end cannot restart eligibility after expiry.
+    next.lastEndedGame = { gameKey: key, endedAt };
   } else if (["menu", "idle"].includes(envelope.phase) && typeof before?.gameKey === "string"
-    && typeof before.endedAt === "number" && now - before.endedAt <= ENDED_CONTROL_MS) {
+    && typeof before.endedAt === "number" && Number.isFinite(before.endedAt)) {
     next.lastEndedGame = { gameKey: before.gameKey, endedAt: before.endedAt };
   }
   return next;

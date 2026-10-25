@@ -256,7 +256,7 @@ export function DockScenes({
                 ? "border-accent-cyan/50 bg-accent-cyan/10 text-accent-cyan"
                 : clipCount > 0
                   ? "border-border text-text-muted"
-                  : "border-danger/40 text-danger"
+                  : "border-danger/40 text-text"
             }`}
             aria-live="polite"
           >
