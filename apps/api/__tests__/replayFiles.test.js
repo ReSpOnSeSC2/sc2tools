@@ -23,9 +23,7 @@ class FakeGames {
   }
 
   async findOne(filter) {
-    return this.rows.find(
-      (row) => row.userId === filter.userId && row.gameId === filter.gameId,
-    ) || null;
+    return this.rows.find((row) => matches(row, filter)) || null;
   }
 
   async updateOne(filter, update) {
@@ -41,7 +39,10 @@ class FakeGames {
 
 function matches(row, filter) {
   return Object.entries(filter).every(([path, expected]) => {
+    if (path === "$or") return expected.some(clause => matches(row, clause));
+    if (path === "$and") return expected.every(clause => matches(row, clause));
     const actual = getPath(row, path);
+    if (expected && typeof expected === "object" && "$ne" in expected) return actual !== expected.$ne;
     if (expected && typeof expected === "object" && "$exists" in expected) {
       return expected.$exists ? actual !== undefined : actual === undefined;
     }
@@ -152,6 +153,21 @@ function makeStore(gameRows) {
 }
 
 describe("ReplayFilesService", () => {
+  test("single-game cleanup removes only its pending objects and preserves other uploads", async () => {
+    const { store, client } = makeStore([]);
+    const target = store.keyFor("u1", "target"), pending = store.pendingKeyFor("u1", "target", "A".repeat(24));
+    const unrelated = store.pendingKeyFor("u1", "other-game", "B".repeat(24)), foreign = store.pendingKeyFor("u2", "target", "C".repeat(24));
+    for (const key of [target, pending, unrelated, foreign]) client.put(key);
+    await store.delete("u1", "target");
+    expect(client.objects.has(target)).toBe(false); expect(client.objects.has(pending)).toBe(false);
+    expect(client.objects.has(unrelated)).toBe(true); expect(client.objects.has(foreign)).toBe(true);
+    client.put(pending); client.deleteErrors = [{ Key: pending, Code: "AccessDenied" }];
+    await expect(store.delete("u1", "target")).rejects.toMatchObject({ code: "replay_object_delete_failed" });
+  });
+  test.each(["_deleted", "_deletionPending"])("%s markers do not authorize owner uploads or downloads", async (flag) => {
+    const { store } = makeStore([{ userId: "u1", gameId: "g1", [flag]: true }]);
+    await expect(store.prepareDownload("u1", "g1")).rejects.toMatchObject({ status: 404 });
+  });
   test("builds from the shared R2 config and stays disabled without R2", () => {
     const db = { games: new FakeGames() };
     expect(buildReplayFilesFromConfig(db, {

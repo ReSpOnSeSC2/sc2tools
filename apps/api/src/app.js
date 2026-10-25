@@ -37,6 +37,9 @@ const { PublicYoutubeVodsService } = require("./services/publicYoutubeVods");
 const { PulseMatchVodsService } = require("./services/pulseMatchVods");
 const { GameVodLinksService } = require("./services/gameVodLinks");
 const { GameDetailsService } = require("./services/gameDetails");
+const { deletedGameIds } = require("./util/deletedGames");
+const { GameControlsService } = require("./services/gameControls");
+const { buildGameControlsRouter } = require("./routes/gameControls");
 const { GameContextService } = require("./services/gameContext");
 const { buildStoreFromConfig } = require("./services/gameDetailsStore");
 const { buildReplayFilesFromConfig } = require("./services/replayFiles");
@@ -359,7 +362,7 @@ function makeServices(deps, clerk) {
       r2: deps.config.r2,
     },
   });
-  const gameDetails = new GameDetailsService(gameDetailsStore);
+  const gameDetails = new GameDetailsService(gameDetailsStore, { deletedGameIds: (userId, ids) => deletedGameIds(deps.db.games, userId, ids) });
   const replayFiles = buildReplayFilesFromConfig(deps.db, deps.config);
   // Verified R2 CORS status for browser replay backups; the first check is
   // started by server.js after listen (see services/replayFilesCors.js).
@@ -865,8 +868,17 @@ function makeServices(deps, clerk) {
       keyFile: null,
     },
   });
+  const gameControls = new GameControlsService(deps.db, { gdpr, onChanged: async (userId) => {
+    games.invalidateForUser(userId);
+    // Each owner-aware invalidator fences late in-flight cache completion.
+    for (const service of [overlayLive, gameContext, tickerFacts, community, aggregations.trendsRequests]) {
+      service.invalidateForUser(userId);
+    }
+    adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
+    deps.io?.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "game-control" });
+  } });
   return {
-    jobLedger, adminAudit,
+    jobLedger, adminAudit, gameControls,
     users,
     opponents,
     opponentIdentityMatcher,
@@ -967,7 +979,7 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
       // Cross-origin JS can only read CORS-safelisted response headers
       // unless they are exposed. The browser importer honours Retry-After
       // on 503 replay_ingest_busy / 408 / 429 instead of guessing a backoff.
-      exposedHeaders: ["Retry-After"],
+      exposedHeaders: ["Retry-After", "X-Export-Truncated", "Content-Disposition"],
     }),
   );
   app.use(
@@ -1515,6 +1527,10 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       replayFiles: services.replayFiles,
       auth,
     }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildGameControlsRouter({ auth, controls: services.gameControls }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,

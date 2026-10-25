@@ -298,6 +298,7 @@ export interface GamesService {
     created: boolean;
     customBuildRevision: string;
     spatial?: Record<string, unknown>;
+    excluded?: boolean;
   }>;
   quarantineResumedReplay(
     userId: string,
@@ -1210,6 +1211,7 @@ export interface CatalogService {
   catalogLookup(): { lookup: (rawName: string) => object | null };
   definitions(): Promise<object>;
   exportCsv(userId: string, filters: object): AsyncGenerator<string, void, void>;
+  prepareCsv(userId: string, filters: object, opts?: {search?: unknown; result?: unknown; matchup?: unknown; sort?: unknown; signal?: AbortSignal}): Promise<{truncated: boolean; stream: AsyncGenerator<string, void, void>}>;
   mapImagePath(
     name: string,
     opts?: { variant?: "layout" },

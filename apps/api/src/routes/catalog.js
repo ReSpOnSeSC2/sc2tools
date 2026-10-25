@@ -2,6 +2,8 @@
 
 const express = require("express");
 const { parseFilters } = require("../util/parseQuery");
+const rateLimitModule = require("express-rate-limit");
+const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
 
 /**
  * /v1/catalog, /v1/definitions, /v1/export.csv, /v1/playback —
@@ -17,6 +19,11 @@ const { parseFilters } = require("../util/parseQuery");
 function buildCatalogRouter(deps) {
   const router = express.Router();
   router.use(deps.auth);
+  const exportLimiter = (rateLimitModule.default || rateLimitModule)({ windowMs: 60_000, max: 1, standardHeaders: true, legacyHeaders: false,
+    store: new BoundedRateLimitStore({ maxEntries: 4096 }),
+    keyGenerator: req => `replay-csv:${req.auth?.userId || req.ip}`,
+    message: { error: { code: "export_rate_limited", message: "You can export once per minute. Please wait and try again." } },
+  });
 
   router.get("/catalog", async (_req, res, next) => {
     try {
@@ -34,9 +41,15 @@ function buildCatalogRouter(deps) {
     }
   });
 
-  router.get("/export.csv", async (req, res, next) => {
+  router.get("/export.csv", exportLimiter, async (req, res, next) => {
+    const controller = new AbortController();
+    const disconnected = () => controller.abort();
+    res.once("close", disconnected);
     try {
       const userId = requireAuth(req).userId;
+      const prepared = await deps.catalog.prepareCsv(userId, parseFilters(req.query), { search: req.query.search, result: req.query.result, matchup: req.query.matchup, sort: req.query.sort, signal: controller.signal });
+      res.set("Cache-Control", "private, no-store");
+      res.set("X-Export-Truncated", String(prepared.truncated));
       res.setHeader("content-type", "text/csv; charset=utf-8");
       res.setHeader(
         "content-disposition",
@@ -44,16 +57,19 @@ function buildCatalogRouter(deps) {
           .toISOString()
           .slice(0, 10)}.csv"`,
       );
-      const filters = parseFilters(req.query);
-      for await (const chunk of deps.catalog.exportCsv(userId, filters)) {
+      for await (const chunk of prepared.stream) {
+        if (res.destroyed) break;
         if (!res.write(chunk)) {
-          await new Promise((resolve) => res.once("drain", resolve));
+          await new Promise((resolve) => {
+            const ready = () => { res.off("drain", ready); res.off("close", ready); resolve(undefined); };
+            res.once("drain", ready); res.once("close", ready);
+          });
         }
       }
-      res.end();
+      if (!res.destroyed) res.end();
     } catch (err) {
-      next(err);
-    }
+      if (!res.destroyed) next(err);
+    } finally { res.off("close", disconnected); controller.abort(); }
   });
 
   router.get("/playback", (req, res, next) => {

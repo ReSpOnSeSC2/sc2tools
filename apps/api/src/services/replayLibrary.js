@@ -1,4 +1,6 @@
 "use strict";
+const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
+const { parseAccounts } = require("../util/accountFilter");
 const { parseExactMapNames } = require("../util/exactMapFilter");
 
 const { gamesMatchStage } = require("../util/parseQuery");
@@ -34,6 +36,8 @@ const REGION_CODES = new Set(REGION_LABELS);
 // children, object-store hashes/keys, or internal identity fields that must
 // never be materialised merely because a user opened a replay library.
 const REPLAY_LIBRARY_PROJECTION = Object.freeze({
+  excluded: 1,
+  exclusionReason: 1,
   _id: 1,
   gameId: 1,
   date: 1,
@@ -185,6 +189,7 @@ class ReplayLibraryService {
       {
         userId: ownerId,
         gameId: replayId,
+        ...LIVE_GAME_MATCH,
         isResumedFromReplay: { $ne: true },
       },
       { projection: REPLAY_LIBRARY_PROJECTION },
@@ -278,6 +283,9 @@ function sanitizeGlobalFilters(raw) {
   copyFiniteFilter(out, source, "minMinutes", 0, 600);
   copyFiniteFilter(out, source, "maxMinutes", 0, 600);
 
+  if (source.accounts !== undefined) out.accounts = parseAccounts(source.accounts);
+  if (source.includeExcluded === true) out.includeExcluded = true;
+  if (source.excludedOnly === true) out.excludedOnly = true;
   if (source.excludeTooShort === true) out.excludeTooShort = true;
   if (source.mapPool === "ladder" || source.mapPool === "nonladder") {
     out.mapPool = source.mapPool;
@@ -431,6 +439,8 @@ function replayBuildLabel(row, view) {
   const flags = ownerBuildFlags(row);
   return {
     myBuild: boundedOutputString(row?.myBuild, 200),
+    excluded: row?.excluded === true,
+    exclusionReason: row?.excluded === true ? boundedOutputString(row?.exclusionReason, 40) : null,
     buildPlanned: flags.buildPlanned,
     detectedBuild: boundedOutputString(flags.detectedBuild, 200),
     oppStrategyPlanned: flags.oppStrategyPlanned,

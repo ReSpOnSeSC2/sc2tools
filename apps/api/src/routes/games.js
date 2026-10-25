@@ -463,6 +463,7 @@ function buildGamesRouter(deps) {
        *   gameId: string,
        *   created: boolean,
        *   quarantined?: boolean,
+       *   excluded?: boolean,
        *   replayArchive?: {
        *     available: boolean,
        *     sizeBytes?: number,
@@ -477,6 +478,7 @@ function buildGamesRouter(deps) {
        *   gameId: string,
        *   created: boolean,
        *   quarantined?: boolean,
+       *   excluded?: boolean,
        *   replayArchive?: {
        *     available: boolean,
        *     sizeBytes?: number,
@@ -569,7 +571,7 @@ function buildGamesRouter(deps) {
             accepted.push(outcome);
             quarantinedAccepted.push(outcome);
           } catch (err) {
-            const e = /** @type {{ message?: unknown }} */ (err);
+            const e = /** @type {{ message?: unknown, code?: unknown }} */ (err);
             if (req.log) {
               req.log.warn(
                 { err, gameId: game.gameId, userId },
@@ -578,9 +580,9 @@ function buildGamesRouter(deps) {
             }
             rejected.push({
               gameId: game.gameId || null,
-              retryable: true,
+              retryable: e?.code !== "game_deleted",
               errors: [
-                `quarantine_failed: ${
+                e?.code === "game_deleted" ? "game_deleted" : `quarantine_failed: ${
                   e && e.message ? e.message : String(err)
                 }`,
               ],
@@ -622,6 +624,7 @@ function buildGamesRouter(deps) {
         try {
           if (typeof deps.games.upsertWithRevision === "function") {
             const stored = await deps.games.upsertWithRevision(userId, game);
+            if (stored.excluded) { accepted.push({ gameId: game.gameId, created: false, excluded: true }); continue; }
             created = stored.created;
             customBuildRevision = stored.customBuildRevision;
             storedSpatial = stored.spatial;
@@ -629,7 +632,11 @@ function buildGamesRouter(deps) {
             created = await deps.games.upsert(userId, game);
           }
         } catch (err) {
-          const e = /** @type {{ message?: unknown }} */ (err);
+          const e = /** @type {{ message?: unknown, code?: string }} */ (err);
+          if (e.code === "game_deleted") {
+            rejected.push({ gameId: game.gameId, retryable: false, errors: ["game_deleted"] });
+            continue;
+          }
           if (req.log) {
             req.log.warn(
               { err, gameId: game.gameId, userId },
