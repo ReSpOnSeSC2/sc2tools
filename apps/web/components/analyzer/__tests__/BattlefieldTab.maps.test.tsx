@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
@@ -7,6 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { BattlefieldTab } from "../BattlefieldTab";
+const poolState = vi.hoisted(() => ({ fresh: false }));
 
 const mapMatchups = [
   {
@@ -81,9 +82,15 @@ vi.mock("@/lib/filterContext", () => ({
   filtersToQuery: () => "?scope=all",
 }));
 
-vi.mock("@/lib/useLocalStorageState", () => ({
+vi.mock("@/lib/useLocalStorageState", async (original) => ({
+  ...(await original<typeof import("@/lib/useLocalStorageState")>()),
   useLocalStoragePositiveInt: () => [3, vi.fn()],
 }));
+vi.mock("@/lib/useSeasons", () => ({ useSeasons: () => ({ data: poolState.fresh ? { mapPool: ["Ancient Cistern LE"], mapPoolSource: "persisted", mapPoolFetchedAt: Date.now() } : undefined }) }));
+vi.mock("../maps/MapVetoPlanner", () => ({ MapVetoPlanner: () => null }));
+vi.mock("../maps/MapGamesModal", () => ({ MapGamesModal: ({ drill }: { drill: { map: string; opponent?: string } | null }) => drill ? <div role="dialog" aria-label="Map games">{drill.map} {drill.opponent}</div> : null }));
+
+beforeEach(() => { poolState.fresh = false; localStorage.clear(); window.history.replaceState(null, "", "/app/maps"); });
 
 vi.mock("@/components/maps/MapPreviewDialog", () => ({
   MapPreviewDialog: ({
@@ -105,6 +112,7 @@ vi.mock("@/components/maps/MapPreviewDialog", () => ({
 afterEach(() => {
   cleanup();
   useApiMock.mockClear();
+  vi.unstubAllGlobals();
 });
 
 function mapOrder(): string[] {
@@ -117,6 +125,32 @@ function mapOrder(): string[] {
 }
 
 describe("BattlefieldTab map performance", () => {
+  it("defaults to a fresh current pool using edition matching and can show every map", () => {
+    poolState.fresh = true; render(<BattlefieldTab />);
+    expect(screen.getByRole("switch", { name: "Current ladder pool only" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.queryByRole("button", { name: "View games on Ruby Rock" })).toBeNull();
+    expect(screen.getByRole("button", { name: "View games on Ancient Cistern" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("switch", { name: "Current ladder pool only" }));
+    expect(screen.getByRole("button", { name: "View games on Ruby Rock" })).toBeTruthy();
+  });
+
+  it("keeps map sorting across a remount and opens map/matchup samples", () => {
+    const view = render(<BattlefieldTab />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Sort maps by" }), { target: { value: "total" } });
+    view.unmount(); render(<BattlefieldTab />);
+    expect((screen.getByRole("combobox", { name: "Sort maps by" }) as HTMLSelectElement).value).toBe("total");
+    fireEvent.click(screen.getByRole("button", { name: "View vs Z games on Ancient Cistern" }));
+    expect(screen.getByRole("dialog", { name: "Map games" }).textContent).toContain("Ancient Cistern Z");
+  });
+
+  it("honors a focus deep link through LE aliases, highlights its row and opens its games", () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; }); vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    window.history.replaceState(null, "", "/app/maps?focus=Ancient%20Cistern%20LE");
+    render(<BattlefieldTab />);
+    expect(document.getElementById("map-ancientcistern")?.className).toContain("ring-2 ring-accent");
+    expect(screen.getByRole("dialog", { name: "Map games" }).textContent).toContain("Ancient Cistern");
+  });
+
   it("uses one combined map panel and keeps the matchup min-games semantics", () => {
     render(<BattlefieldTab />);
 

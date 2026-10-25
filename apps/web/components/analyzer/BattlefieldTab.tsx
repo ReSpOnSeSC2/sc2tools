@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
@@ -8,11 +8,18 @@ import { pct1, wrColor } from "@/lib/format";
 import { Card, WrBar } from "@/components/ui/Card";
 import { QueryState } from "@/components/ui/QueryState";
 import { SkeletonRows } from "@/components/ui/Skeleton";
-import { useSort, SortableTh } from "@/components/ui/SortableTh";
+import { useSort, usePersistentSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { MapLabel } from "@/components/maps/MapArtwork";
 import { MapPreviewDialog } from "@/components/maps/MapPreviewDialog";
 import { NoFilterMatches } from "./EmptyStates";
+import { useSeasons } from "@/lib/useSeasons";
+import { currentMapPoolKey, currentPool } from "@/lib/currentMapPool";
+import { useMapFocus } from "@/lib/useMapFocus";
+import { MapVetoPlanner } from "./maps/MapVetoPlanner";
+import { MapGamesModal } from "./maps/MapGamesModal";
+import type { MapGamesDrill } from "./maps/MapVetoTable";
+import { Toggle } from "@/components/ui/Toggle";
 
 type Row = {
   /** Matchup label ("vs P"). */
@@ -70,7 +77,7 @@ function FormSparkline({
             width: 8,
             height: 8,
             borderRadius: 2,
-            background: r === "win" ? "#3ec07a" : "#ff6b6b",
+            background: r === "win" ? "rgb(var(--success))" : "rgb(var(--danger))",
             display: "inline-block",
           }}
         />
@@ -83,6 +90,11 @@ export function BattlefieldTab() {
   const { filters, dbRev } = useFilters();
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_MAPS, 3);
   const [previewMap, setPreviewMap] = useState<string | null>(null);
+  const [drill, setDrill] = useState<MapGamesDrill | null>(null);
+  const [poolPreference, setPoolPreference] = useState<boolean | null>(null);
+  const catalog = useSeasons(); const pool = currentPool(catalog.data);
+  const poolOnly = poolPreference ?? pool.fresh;
+  const focus = useMapFocus(), handledFocus = useRef<string | null>(null), scrolledFocus = useRef<string | null>(null);
 
   const muApi = useApi<MatchupRow[]>(
     `/v1/matchups${filtersToQuery(filters)}#${dbRev}`,
@@ -116,7 +128,7 @@ export function BattlefieldTab() {
     const groups: MapMatchupGroup[] = [];
     for (const g of byMap.values()) {
       if (g.cells.length === 0) continue;
-      g.winRate = g.total ? g.wins / g.total : 0;
+      g.winRate = g.wins + g.losses ? g.wins / (g.wins + g.losses) : 0;
       g.cells.sort((a, b) => b.total - a.total);
       groups.push(g);
     }
@@ -126,17 +138,17 @@ export function BattlefieldTab() {
     return groups;
   }, [mapMuApi.data, minGames]);
 
-  const mapSort = useSort("winRate", "desc");
+  const mapSort = usePersistentSort("analyzer.maps.sort", "winRate", "desc");
   const muSort = useSort("total", "desc");
 
   const sortedMapMatchupGroups = useMemo(
     () =>
-      mapSort.sortRows(mapMatchupGroups, (group, col) =>
+      mapSort.sortRows(mapMatchupGroups.filter((group) => !poolOnly || pool.maps.some((map) => currentMapPoolKey(map) === currentMapPoolKey(group.map))), (group, col) =>
         col === "map"
           ? group.map.toLocaleLowerCase()
           : (group as unknown as Record<string, unknown>)[col],
       ),
-    [mapMatchupGroups, mapSort],
+    [mapMatchupGroups, mapSort, poolOnly, pool.maps],
   );
   const sortedMu = useMemo(
     () =>
@@ -153,8 +165,24 @@ export function BattlefieldTab() {
     (mapMuApi.data?.length ?? 0) -
     mapMatchupGroups.reduce((n, g) => n + g.cells.length, 0);
 
+  useEffect(() => {
+    if (!focus) { handledFocus.current = null; scrolledFocus.current = null; return; }
+    if (handledFocus.current === focus || !mapMuApi.data) return;
+    const row = mapMuApi.data.find((entry) => currentMapPoolKey(entry.map) === currentMapPoolKey(focus));
+    if (!row) return;
+    handledFocus.current = focus; setMinGames(1);
+    if (!pool.maps.some((map) => currentMapPoolKey(map) === currentMapPoolKey(row.map))) setPoolPreference(false);
+    setDrill({ map: row.map });
+  }, [focus, mapMuApi.data, setMinGames, pool.maps]);
+  useEffect(() => {
+    if (!focus || scrolledFocus.current === focus) return;
+    const row = document.getElementById(`map-${currentMapPoolKey(focus)}`);
+    if (row) { row.scrollIntoView?.({ block: "center" }); scrolledFocus.current = focus; }
+  }, [focus, sortedMapMatchupGroups]);
+
   return (
     <div className="space-y-5">
+      <MapVetoPlanner openGames={setDrill} />
       <div className="flex items-center justify-end">
         <MinGamesPicker value={minGames} onChange={setMinGames} />
       </div>
@@ -262,13 +290,14 @@ export function BattlefieldTab() {
           q={mapMuApi}
           skeleton={<SkeletonRows rows={4} label="Loading map matchups" />}
           filtered
-          isEmpty={() => mapMatchupGroups.length === 0}
+          isEmpty={() => sortedMapMatchupGroups.length === 0}
           empty={
             <NoFilterMatches
               title="No map matchups match these filters"
               minGames={minGames}
               hiddenByMinGames={hiddenMapCells}
               onLowerMinGames={() => setMinGames(1)}
+              extraAction={poolOnly ? <button type="button" onClick={() => setPoolPreference(false)} className="min-h-11 px-3 text-accent underline">Show all maps</button> : undefined}
             />
           }
         >
@@ -324,20 +353,21 @@ export function BattlefieldTab() {
                   </button>
                 </div>
               </div>
+              <div className="mb-4 space-y-2"><label className="flex min-h-11 items-center gap-3 text-caption font-medium text-text"><Toggle checked={poolOnly} onChange={setPoolPreference} label="Current ladder pool only" /><span>Current ladder pool only</span></label>{!pool.fresh ? <p className="text-micro text-warning">Pool data may be out of date; showing all maps by default.</p> : null}</div>
 
               <ul
                 className="space-y-4"
                 aria-label="Map performance by matchup"
               >
                 {sortedMapMatchupGroups.map((g) => (
-                  <li key={g.map} className="space-y-2">
-                    <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
+                  <li key={g.map} id={`map-${currentMapPoolKey(g.map)}`} className={`space-y-2 scroll-mt-32 ${focus && currentMapPoolKey(focus) === currentMapPoolKey(g.map) ? "rounded-lg ring-2 ring-accent" : ""}`}>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-2">
                       <button
                         type="button"
-                        aria-label={`Open larger preview of ${g.map}`}
+                        aria-label={`View games on ${g.map}`}
                         aria-haspopup="dialog"
-                        onClick={() => setPreviewMap(g.map)}
-                        className="group/map -m-1 inline-flex min-h-11 min-w-0 max-w-full cursor-zoom-in items-center rounded-lg p-1 text-left transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        onClick={() => setDrill({ map: g.map })}
+                        className="group/map -m-1 inline-flex min-h-11 w-full min-w-0 max-w-full items-center rounded-lg p-1 text-left transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:w-auto sm:flex-1"
                       >
                         <MapLabel
                           name={g.map}
@@ -346,7 +376,8 @@ export function BattlefieldTab() {
                           textClassName="text-sm font-semibold text-text group-hover/map:text-accent"
                         />
                       </button>
-                      <span className="shrink-0 text-micro text-text-dim">
+                      <button type="button" aria-label={`Open larger preview of ${g.map}`} aria-haspopup="dialog" onClick={() => setPreviewMap(g.map)} className="min-h-11 shrink-0 rounded px-2 text-micro text-accent hover:underline">Preview map</button>
+                      <span className="ml-auto shrink-0 text-micro text-text-dim">
                         <span className="text-success">{g.wins}W</span> ·{" "}
                         <span className="text-danger">{g.losses}L</span> ·{" "}
                         <span
@@ -361,9 +392,9 @@ export function BattlefieldTab() {
                       {g.cells.map((c) => (
                         <li key={c.matchup} className="flex flex-col gap-1">
                           <div className="flex items-baseline justify-between gap-2 text-micro">
-                            <span className="font-medium text-text-dim">
+                            <button type="button" onClick={() => setDrill({ map: g.map, opponent: c.matchup.replace(/^vs\s*/i, "") })} className="min-h-11 rounded px-1 font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={`View ${c.matchup} games on ${g.map}`}>
                               {c.matchup}
-                            </span>
+                            </button>
                             <span className="flex items-baseline gap-2">
                               <span className="text-text-dim">
                                 <span className="text-success">{c.wins}W</span> ·{" "}
@@ -394,6 +425,7 @@ export function BattlefieldTab() {
         mapName={previewMap}
         onClose={() => setPreviewMap(null)}
       />
+      {drill ? <MapGamesModal drill={drill} onClose={() => setDrill(null)} /> : null}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import { MapGuide } from "@/components/guides/map/MapGuide";
+import { GuideMapPersonalComparison } from "@/components/guides/map/GuideMapPersonalComparison";
 import { guidePaths, mapMetadata } from "@/components/guides/guideMetadata";
 import { guideUnavailableMetadata } from "@/components/guides/guideSeo";
 import { fetchGuideIndex, fetchGuideMap, fetchPublishedGuidePaths } from "@/lib/guides/api";
@@ -54,5 +55,5 @@ export default async function MapGuidePage({ params }: MapPageProps) {
   const [publishedPaths, index] = result.data.published ? await Promise.all([
     fetchPublishedGuidePaths(), fetchGuideIndex().catch(() => null),
   ]) : [null, null];
-  return <MapGuide payload={result.data} publishedPaths={publishedPaths} mapIndex={index?.kind === "ok" ? index.data.maps : null} />;
+  return <MapGuide payload={result.data} publishedPaths={publishedPaths} mapIndex={index?.kind === "ok" ? index.data.maps : null} personalSlot={<GuideMapPersonalComparison payload={result.data} />} />;
 }

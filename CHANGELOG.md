@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Maps and veto planning
+
+- Compare the current ladder pool by matchup with sample sizes, Wilson ranges and community context. Choose one to three suggested vetoes from maps with at least five decided games; stale pool data and failed refreshes pause recommendations.
+- Open the games behind a map or matchup, apply a map to every analyzer section, and return to a highlighted map from a deep link. Map sorting is remembered, and map guides can privately compare your own record after signing in.
+
 ### My reviews dashboard
 
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.

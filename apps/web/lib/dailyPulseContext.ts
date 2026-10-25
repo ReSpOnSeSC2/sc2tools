@@ -1,3 +1,4 @@
+import { currentMapPoolKey } from "./currentMapPool";
 // Daily Pulse — context layer. Computes the per-day PulseContext (the
 // derived personal stats every pulse card reads) from the user's slim
 // game rows. The card pool + daily selection live in lib/dailyPulse.ts;
@@ -265,35 +266,6 @@ export function shortAccountLabel(handle: string): string {
 export function decidedWinrate(wins: number, losses: number): number {
   const decided = wins + losses;
   return decided > 0 ? wins / decided : 0;
-}
-
-/**
- * Comparison key for live-pool names and replay-authored map names.
- * Liquipedia serves names such as "Fear and Faith", while replays commonly
- * append edition tags such as "LE". Roman numerals and the rest of the map
- * name remain significant, so Sanctuary II never aliases Sanctuary III.
- */
-function currentMapPoolKey(value: unknown): string {
-  const tokens = String(value ?? "")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/['\u2019]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (tokens.length >= 3 && tokens.slice(-2).join(" ") === "ladder edition") {
-    tokens.splice(-2);
-  } else if (
-    tokens.length >= 2 &&
-    ["le", "te", "ce", "re"].includes(tokens.at(-1)!)
-  ) {
-    tokens.pop();
-  }
-  return tokens.join("");
 }
 
 /** Shift a "YYYY-MM-DD" key by whole days (keys are tz-local already). */

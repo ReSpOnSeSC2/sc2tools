@@ -1,0 +1,19 @@
+# Maps and veto planner
+
+Implements `map-veto-planner` and its `maps-pool-veto-heatmap` augment from the final plan. Work started on new `codex/wave3-map-veto` from freshly fetched main `7464cecd`, reusing the clean merged guides checkout. This file does not establish a shipped status until final integration, CI and merge.
+
+## Behavior and bounded data
+
+- Current ladder pool, source, fetched date and age reuse the public `/v1/seasons` client cache. Edition-name matching shares the existing Daily Pulse key behavior through a small pure module, preserving Roman numerals. Persisted/Liquipedia data needs a measured fetch within eight days. Stale/fallback/unknown pool data shows historical stats but suppresses suggestions/copying.
+- Ranking matchup defaults to most played, or All for a Random race filter. The planner compares all opponent races while retaining other active filters. Filter-range, 90-day and measured current-season windows plus veto count 1–3 are supported.
+- Existing `/v1/maps/matchups` and `/v1/maps` supply personal cells and recent form; SWR reuses identical existing queries. There is no per-map request fanout or new server aggregation. One cacheable public guide-index response supplies every published community map cell, with its snapshot date and worker era shown. Community comparisons require an explicit own race and exact published matchup side; unavailable/mixed-race cells are not invented.
+- Win rates and Wilson 95% intervals use decided games. The lowest lower bounds receive Suggested veto, with a hard five-decided-game floor independent of the historical Min games picker. Ties/other results remain visible in sample notes. Copy has a selectable-text fallback. A failed or stale personal sample pauses recommendations.
+- Pool-map and matchup cells open one on-demand, latest-100 games page using the selected cohort. The footer applies that map to global filters. The historical list supports current-pool-only (fresh pool defaults on, stale defaults off), persistent sorting, map/matchup drilldowns and separate Preview map controls. `?focus=` matches edition aliases, lowers the display floor, highlights/scrolls to the map and opens its games.
+- Map guides render a lazy private “You on this map” panel only after signed-in auth resolves. Own-race selection aligns personal and community sides; failures offer Retry and signed-out views request no private map data.
+
+## Verification so far
+
+- Full web TypeScript and strict new/changed-source ESLint pass. Focused statistic/planner/drilldown/privacy/recovery tests passed 34 assertions in six files. The broader guides, maps, Daily Pulse and Help run passed 273 assertions in 41 files.
+- The first production build on baseline main passed every unchanged budget: landing 213.5/215, app 234.9/240, game 314/440 and opponent 493/500 kB. Required engine prebuild/smoke parsing passed. Final current-main integration needs its own build result.
+- Reproducible browser fixtures are `apps/web/tests/manual/map-veto*.cjs`, with real product components, SWR/authenticated fetch hooks, production CSS/fonts and explicit synthetic auth/Next/local API boundaries. Non-local requests are blocked. Four viewport widths (320/390/768/1440), signed-in/out guide states, and stale-pool light/dark views passed. The fixture caught a real phone overflow from positioned screen-reader spans in the wide table; a positioned scroll container fixed it. Phone map labels now get their own row rather than collapsing beside preview/record controls.
+- Screenshots are under `screenshots/map-veto-*.png` and `map-guide-personal-*.png`. Final screenshots/build/CI evidence will be recorded after integration. No infrastructure, environment variables, production data changes, integrations, AI features/API calls or budget increases are added.
