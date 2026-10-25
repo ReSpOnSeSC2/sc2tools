@@ -73,17 +73,20 @@ DT = BuildRef("custom:dt-3-gate", "DT into 3 Gate", "dt-3-gate", "custom")
 # ----------------------------------------------------------------- models
 
 
-def test_prefs_default_on_and_only_false_turns_off() -> None:
+def test_prefs_default_off_and_only_explicit_true_opts_in() -> None:
     assert parse_prefs({}) == CheckinPrefs()
     assert parse_prefs({"enabled": None, "askAtLoading": 0}) == CheckinPrefs()
     prefs = parse_prefs({"enabled": True, "askAtLoading": False, "askAfterGame": True})
-    assert prefs == CheckinPrefs(ask_at_loading=False)
+    assert prefs == CheckinPrefs(enabled=True, ask_at_loading=False, ask_after_game=True)
     assert prefs.loading_cards is False and prefs.postgame_cards is True
     assert CheckinPrefs(enabled=False).postgame_cards is False
     assert parse_prefs([]) is None
-    assert CheckinPrefs(ask_after_game=False).to_json() == {
-        "enabled": True, "askAtLoading": True, "askAfterGame": False,
+    assert CheckinPrefs().to_json() == {
+        "enabled": False, "askAtLoading": False, "askAfterGame": False,
     }
+    assert parse_prefs({"enabled": 1, "askAtLoading": "true", "askAfterGame": []}) == CheckinPrefs()
+    opted_in = {"enabled": True, "askAtLoading": True, "askAfterGame": True}
+    assert parse_prefs(opted_in).to_json() == opted_in
 
 
 def test_options_parse_drops_bad_rows_and_duplicates() -> None:

@@ -209,11 +209,14 @@ describe("shared helpers", () => {
     expect(overlayPayload({ gameKey: "K|1", hold: { untilMs: 10_000, released: true } }, 0).holdRemainingMs).toBe(0);
   });
 
-  test("check-in prefs default to true and only false turns a flag off", () => {
-    expect(sanitizeCheckinPrefs(undefined)).toEqual({ enabled: true, askAtLoading: true, askAfterGame: true });
+  test("check-in prefs default off and require an explicit true", () => {
+    expect(sanitizeCheckinPrefs(undefined)).toEqual({ enabled: false, askAtLoading: false, askAfterGame: false });
     expect(sanitizeCheckinPrefs({ enabled: false, askAfterGame: 0, extra: true }))
-      .toEqual({ enabled: false, askAtLoading: true, askAfterGame: true });
-    expect(sanitizeCheckinPrefs([false])).toEqual({ enabled: true, askAtLoading: true, askAfterGame: true });
+      .toEqual({ enabled: false, askAtLoading: false, askAfterGame: false });
+    expect(sanitizeCheckinPrefs([false])).toEqual({ enabled: false, askAtLoading: false, askAfterGame: false });
+    const optedIn = { enabled: true, askAtLoading: true, askAfterGame: true };
+    expect(sanitizeCheckinPrefs(optedIn)).toEqual(optedIn);
+    expect(sanitizeCheckinPrefs({ enabled: 1, askAtLoading: "true" })).toEqual({ enabled: false, askAtLoading: false, askAfterGame: false });
   });
 
   test("randomizer pools mirror the widget's gate", () => {

@@ -125,9 +125,9 @@ def test_start_helper_passes_the_dashboard_and_the_cached_prefs(tmp_path: Path, 
     )
     assert captured["dashboard_url"] == "http://localhost:3000"
     assert captured["web_queue_url"] == "http://localhost:3000/app"
-    assert captured["prefs"] == CheckinPrefs(ask_at_loading=False)
+    assert captured["prefs"] == CheckinPrefs(enabled=True, ask_at_loading=False, ask_after_game=True)
 
-    captured["on_prefs_changed"](CheckinPrefs(enabled=False))
+    captured["on_prefs_changed"](CheckinPrefs(enabled=False, ask_at_loading=True, ask_after_game=True))
     assert state.build_checkin_prefs == {
         "enabled": False, "askAtLoading": True, "askAfterGame": True,
     }

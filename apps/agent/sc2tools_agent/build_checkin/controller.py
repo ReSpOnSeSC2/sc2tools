@@ -215,7 +215,7 @@ class BuildCheckinController(ScoutingControllerMixin):
         open_url: Callable[[str], Any] = webbrowser.open,
         prefs: Optional[CheckinPrefs] = None,
         on_prefs_changed: Optional[Callable[[CheckinPrefs], None]] = None,
-        show_scouting_at_loading: bool = True,
+        show_scouting_at_loading: bool = False,
         on_scouting_changed: Optional[Callable[[bool], None]] = None,
         connection_provider: Optional[Callable[[], tuple]] = None,
         identity_provider: Optional[Callable[[], tuple]] = None,
@@ -2283,8 +2283,9 @@ class BuildCheckinController(ScoutingControllerMixin):
             return
         self._prefs_failures = 0
         self._prefs_retry_at = None
+        previous_prefs = self._prefs
         self._apply_server_prefs(prefs)
-        self._set_supported(True)
+        self._set_supported(True, notify_prefs=self._prefs == previous_prefs)
 
     def _schedule_prefs_retry(self) -> None:
         """No answer yet this session (offline at login): try again soon,
@@ -2299,13 +2300,13 @@ class BuildCheckinController(ScoutingControllerMixin):
             "build_checkin_prefs_read_retry in_sec=%d", int(delay),
         )
 
-    def _set_supported(self, supported: bool) -> None:
+    def _set_supported(self, supported: bool, *, notify_prefs: bool = True) -> None:
         self._prefs_retry_at = None  # the server answered
         if self._supported == supported:
             return
         self._supported = supported
         _log.info("build_checkin_available=%s", supported)
-        if supported:
+        if supported and notify_prefs:
             # The view learns the loaded value even when it equals the
             # defaults it started with.
             self._view_call("update_prefs", self._prefs)
@@ -2352,7 +2353,10 @@ class BuildCheckinController(ScoutingControllerMixin):
         if game is not None and not self._loading_allowed():
             self._hide_loading(game, HIDE_DISABLED)
         elif game is not None:
-            self._render_loading(game)
+            if game.loading is None and self._loading_may_show(game):
+                self._handle_active(game)
+            else:
+                self._render_loading(game)
         if not self._postgame_allowed():
             card = self._visible_card()
             if card is not None:

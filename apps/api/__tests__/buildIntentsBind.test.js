@@ -407,6 +407,18 @@ describe("build check-in ingest bind", () => {
   });
 
   describe("games without a live record", () => {
+    test("a new account without saved preferences does not queue game check-ins", async () => {
+      const user = await signIn(h.app, h.db, "quiet-first-game", { enableCheckins: false });
+      const game = ingestGame(19);
+      await upload(user, game);
+      expect((await gameRow(user, game.gameId)).buildIntent).toBeUndefined();
+      const pending = await request(h.app)
+        .get("/v1/build-intents/pending")
+        .set("authorization", user.web)
+        .expect(200);
+      expect(pending.body.items).toEqual([]);
+    });
+
     test("a fresh eligible game becomes pending with a suggestion", async () => {
       const user = await newUser();
       const game = ingestGame(20, { myBuild: PHOENIX });

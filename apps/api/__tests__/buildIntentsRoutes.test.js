@@ -604,25 +604,25 @@ describe("build check-in routes", () => {
 
   describe("buildCheckin preference", () => {
     test("GET returns the defaults and PUT stores exactly three booleans", async () => {
-      const user = await newUser();
+      const user = await signIn(h.app, h.db, "quiet-defaults", { enableCheckins: false });
       const empty = await request(h.app)
         .get("/v1/me/preferences/buildCheckin")
         .set("authorization", user.web)
         .expect(200);
-      expect(empty.body).toEqual({ enabled: true, askAtLoading: true, askAfterGame: true });
+      expect(empty.body).toEqual({ enabled: false, askAtLoading: false, askAfterGame: false });
       const saved = await request(h.app)
         .put("/v1/me/preferences/buildCheckin")
         .set("authorization", user.device)
         .send({ enabled: false, askAtLoading: "no", junk: { nested: true } })
         .expect(200);
-      expect(saved.body).toEqual({ enabled: false, askAtLoading: true, askAfterGame: true });
+      expect(saved.body).toEqual({ enabled: false, askAtLoading: false, askAfterGame: false });
       const row = await h.db.users.findOne({ userId: user.userId });
-      expect(row.preferences.buildCheckin).toEqual({ enabled: false, askAtLoading: true, askAfterGame: true });
+      expect(row.preferences.buildCheckin).toEqual({ enabled: false, askAtLoading: false, askAfterGame: false });
       const read = await request(h.app)
         .get("/v1/me/preferences/buildCheckin")
         .set("authorization", user.web)
         .expect(200);
-      expect(read.body).toEqual({ enabled: false, askAtLoading: true, askAfterGame: true });
+      expect(read.body).toEqual({ enabled: false, askAtLoading: false, askAfterGame: false });
     });
   });
 });

@@ -220,7 +220,7 @@ class FakeCheckinApi:
 
     def put_checkin_prefs(self, prefs: Dict[str, Any]) -> Dict[str, Any]:
         self._enter("put_checkin_prefs", prefs)
-        self.prefs = {key: prefs.get(key) is not False
+        self.prefs = {key: prefs.get(key) is True
                       for key in ("enabled", "askAtLoading", "askAfterGame")}
         return dict(self.prefs)
 
@@ -463,6 +463,7 @@ class Harness:
         intro_seen: bool = True,
         view: Any = "fake",
         prefs: Optional[CheckinPrefs] = None,
+        show_scouting_at_loading: bool = False,
     ) -> None:
         self.clock = Clock()
         self.wall = Clock(WALL_START)
@@ -484,6 +485,7 @@ class Harness:
             dashboard_url="https://sc2tools.test",
             open_url=self.opened.append,
             prefs=prefs,
+            show_scouting_at_loading=show_scouting_at_loading,
             on_prefs_changed=self.saved_prefs.append,
         )
         self._key_seq = 0

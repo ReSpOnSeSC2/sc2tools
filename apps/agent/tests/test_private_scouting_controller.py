@@ -27,7 +27,7 @@ def upload(h, key, pulse_id=None):
 
 
 def test_socket_brief_updates_only_the_current_game_and_opponent():
-    h = Harness().boot(); key = h.new_key()
+    h = Harness(show_scouting_at_loading=True).boot(); key = h.new_key()
     h.send(envelope("match_loading", key))
     h.ctl.on_scouting_brief(brief("old")); h.pump()
     h.ctl.on_scouting_brief(brief(key, opponent="Someone else")); h.pump()
@@ -39,7 +39,7 @@ def test_socket_brief_updates_only_the_current_game_and_opponent():
 
 
 def test_dont_ask_uses_slim_card_only_after_real_brief_and_closes_locally():
-    h = Harness(); h.api.prefs["askAtLoading"] = False; h.boot()
+    h = Harness(show_scouting_at_loading=True); h.api.prefs["askAtLoading"] = False; h.boot()
     key = h.new_key(); h.send(envelope("match_loading", key))
     assert not h.view.of("show_loading")
     h.ctl.on_scouting_brief(brief(key)); h.pump()
@@ -54,7 +54,7 @@ def test_dont_ask_uses_slim_card_only_after_real_brief_and_closes_locally():
 
 def test_global_off_and_local_scouting_off_do_not_show_slim_card():
     for disabled in ("enabled", "local"):
-        h = Harness(); h.api.prefs["askAtLoading"] = False
+        h = Harness(show_scouting_at_loading=True); h.api.prefs["askAtLoading"] = False
         if disabled == "enabled": h.api.prefs["enabled"] = False
         h.boot()
         if disabled == "local": h.ctl.set_scouting_enabled(False); h.pump()
@@ -64,7 +64,7 @@ def test_global_off_and_local_scouting_off_do_not_show_slim_card():
 
 
 def test_fallback_is_single_flight_with_bounded_retry_and_no_blocking_actor():
-    h = Harness(); calls = []
+    h = Harness(show_scouting_at_loading=True); calls = []
     def read(key):
         calls.append(key)
         raise ConnectionError("offline")
@@ -79,7 +79,7 @@ def test_fallback_is_single_flight_with_bounded_retry_and_no_blocking_actor():
 
 
 def test_late_fallback_from_previous_game_cannot_overwrite_new_brief():
-    h = Harness(executor=ManualExecutor()).boot(); drain(h)
+    h = Harness(show_scouting_at_loading=True, executor=ManualExecutor()).boot(); drain(h)
     h.api.get_scouting_brief = lambda key: brief(key, note=key)
     old = h.new_key(); h.send(envelope("match_loading", old))
     new = h.new_key(); h.send(envelope("match_loading", new))
@@ -91,7 +91,7 @@ def test_late_fallback_from_previous_game_cannot_overwrite_new_brief():
 
 
 def test_dossier_uses_safe_local_origin_and_visibility_setting_has_own_persistence():
-    h = Harness().boot(); saved = []
+    h = Harness(show_scouting_at_loading=True).boot(); saved = []
     h.ctl._on_scouting_changed = saved.append
     key = h.new_key(); h.send(envelope("match_loading", key))
     h.ctl.on_scouting_brief({**brief(key), "dossierUrl": "https://bad.invalid"}); h.pump()
@@ -104,7 +104,7 @@ def test_dossier_uses_safe_local_origin_and_visibility_setting_has_own_persisten
 
 
 def test_postgame_private_note_uses_opponent_endpoint_and_preserves_game_notes():
-    h = Harness().boot(); writes = []
+    h = Harness(show_scouting_at_loading=True).boot(); writes = []
     h.api.put_opponent_note = lambda identity, note: writes.append((identity, note)) or {"notes": note}
     key = h.new_key(); h.send(envelope("match_loading", key))
     h.ctl.on_scouting_brief(brief(key)); h.pump()
@@ -121,7 +121,7 @@ def test_postgame_private_note_uses_opponent_endpoint_and_preserves_game_notes()
 
 
 def test_private_note_failure_stays_retryable_and_does_not_hide_the_card():
-    h = Harness().boot(); key = h.new_key(); h.send(envelope("match_loading", key))
+    h = Harness(show_scouting_at_loading=True).boot(); key = h.new_key(); h.send(envelope("match_loading", key))
     h.ctl.on_scouting_brief(brief(key)); h.pump(); h.play(key)
     upload(h, key)
     card = h.view.last("show_postgame", "update_postgame")
@@ -135,7 +135,7 @@ def test_private_note_failure_stays_retryable_and_does_not_hide_the_card():
 
 
 def test_private_note_waits_for_replay_upload_before_writing_a_new_opponent():
-    h = Harness().boot(); key = h.new_key(); h.send(envelope("match_loading", key))
+    h = Harness(show_scouting_at_loading=True).boot(); key = h.new_key(); h.send(envelope("match_loading", key))
     h.ctl.on_scouting_brief(brief(key)); h.pump(); h.play(key)
     card = h.view.last("show_postgame", "update_postgame"); writes = []
     h.api.put_opponent_note = lambda *args: writes.append(args)
@@ -144,14 +144,14 @@ def test_private_note_waits_for_replay_upload_before_writing_a_new_opponent():
 
 
 def test_replay_identity_enables_first_meeting_note_without_a_live_pulse_lookup():
-    h = Harness().boot(); key = h.new_key(); h.play(key)
+    h = Harness(show_scouting_at_loading=True).boot(); key = h.new_key(); h.play(key)
     assert h.view.last("show_postgame", "update_postgame").opponent_pulse_id is None
     upload(h, key, "1-S2-1-99")
     assert h.view.last("show_postgame", "update_postgame").opponent_pulse_id == "1-S2-1-99"
 
 
 def test_replay_identity_drops_an_untouched_note_from_a_different_toon():
-    h = Harness().boot(); key = h.new_key(); h.send(envelope("match_loading", key))
+    h = Harness(show_scouting_at_loading=True).boot(); key = h.new_key(); h.send(envelope("match_loading", key))
     h.ctl.on_scouting_brief(brief(key)); h.pump(); h.play(key)
     upload(h, key, "1-S2-1-99")
     value = h.view.last("show_postgame", "update_postgame")
@@ -159,7 +159,7 @@ def test_replay_identity_drops_an_untouched_note_from_a_different_toon():
 
 
 def test_explicit_reenable_restores_cached_scouting_but_not_a_dismissed_card():
-    h = Harness(); h.api.prefs["askAtLoading"] = False; h.boot()
+    h = Harness(show_scouting_at_loading=True); h.api.prefs["askAtLoading"] = False; h.boot()
     key = h.new_key(); h.send(envelope("match_loading", key))
     h.ctl.on_scouting_brief(brief(key)); h.pump()
     h.ctl.set_scouting_enabled(False); h.pump()
@@ -171,7 +171,7 @@ def test_explicit_reenable_restores_cached_scouting_but_not_a_dismissed_card():
 
 
 def test_new_postgame_card_does_not_copy_another_resolved_accounts_note():
-    h = Harness().boot(); key = h.new_key(); h.send(envelope("match_loading", key))
+    h = Harness(show_scouting_at_loading=True).boot(); key = h.new_key(); h.send(envelope("match_loading", key))
     h.ctl.on_scouting_brief(brief(key)); h.pump()
     game = h.ctl._games[key]
     # A replay may bind the authoritative account before the first end card.

@@ -89,13 +89,16 @@ async function startFullApp(dbName) {
 }
 
 /**
- * Create the Clerk user ``clerk_<name>`` and pair a device token to it.
+ * Create a paired account explicitly opted into the build check-in scenarios.
  * @returns {Promise<{ userId: string, web: string, device: string }>} auth headers
  */
-async function signIn(app, db, name) {
+async function signIn(app, db, name, { enableCheckins = true } = {}) {
   const web = `Bearer u:${name}`;
   await request(app).get("/v1/me").set("authorization", web).expect(200);
   const row = await db.users.findOne({ clerkUserId: `clerk_${name}` });
+  if (enableCheckins) {
+    await setPrefs(db, row.userId, { buildCheckin: { enabled: true, askAtLoading: true, askAfterGame: true } });
+  }
   const raw = randomToken(32);
   const now = new Date();
   await db.deviceTokens.insertOne({

@@ -689,9 +689,10 @@ def test_build_checkin_prefs_round_trip(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("raw,expected", [
-    ({"enabled": False}, {"enabled": False, "askAtLoading": True, "askAfterGame": True}),
+    ({"enabled": False}, {"enabled": False, "askAtLoading": False, "askAfterGame": False}),
+    ({"enabled": True}, {"enabled": True, "askAtLoading": False, "askAfterGame": False}),
     ({"askAtLoading": 0, "askAfterGame": "no", "extra": False},
-     {"enabled": True, "askAtLoading": True, "askAfterGame": True}),
+     {"enabled": False, "askAtLoading": False, "askAfterGame": False}),
     ([False, False], None),
     ("off", None),
     (None, None),
