@@ -9,7 +9,8 @@ from sc2tools_agent.live.widget_sizes import recommended_widget_size, widget_siz
 def test_shared_sizes_and_packaged_resource_contract():
     root = Path(__file__).resolve().parents[3]
     canonical = json.loads((root / "apps/web/lib/widgetRecommendedSizes.json").read_text())
-    assert len(canonical) == 31
+    assert len(canonical) == 32
+    assert canonical["series"] == {"width": 640, "height": 420}
     assert widget_sizes() == {key: (value["width"], value["height"]) for key, value in canonical.items()}
     packaging = (root / "apps/agent/packaging/sc2tools_agent.spec").read_text()
     assert '"widgetRecommendedSizes.json"), "sc2tools_agent/live"' in packaging

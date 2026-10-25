@@ -24,7 +24,9 @@ function fixtureBundle() {
       builder.onLoad({ filter: /.*/, namespace: "fixture" }, (args) => ({ resolveDir: process.cwd(), contents:
         args.path === "@clerk/nextjs" ? 'const auth={isLoaded:true,isSignedIn:true,userId:"coach",getToken:async()=>"fixture-token"};export const useAuth=()=>auth;'
           : args.path === "@/lib/useUserSocket" ? 'export const useUserSocket=()=>{};'
-            : `const students=[{id:"alex",name:"Alex",userId:"alex-user"},{id:"blair",name:"Blair",userId:"blair-user"}];
+            : `export {boundedApiRequest} from "./lib/clientApi.ts";
+              export const API_BASE="https://coaching-fixture.local";
+              const students=[{id:"alex",name:"Alex",userId:"alex-user"},{id:"blair",name:"Blair",userId:"blair-user"}];
               const roster={state:{students}};const sharing={rev:1,relationships:students.map(student=>({student,coach:{id:"coach",name:"Coach"},status:"accepted"}))};
               const assignments={assignments:[],page:1,hasMore:false};const observed={games:[]};const mutate=async()=>{};
               export const useApi=(path)=>({data:!path?undefined:path==="/v1/coaching/state"?roster:path==="/v1/coaching/practice-sharing"?sharing:path.includes("/assignments?")?assignments:observed,mutate,isLoading:false});

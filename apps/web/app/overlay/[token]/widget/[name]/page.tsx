@@ -57,6 +57,7 @@ const VALID_WIDGETS = new Set([
   "stats-ticker",
   "countdown-timer",
   "build-profile",
+  "series",
 ]);
 
 export default async function OverlayWidgetPage({

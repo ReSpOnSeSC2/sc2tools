@@ -18,7 +18,9 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 it("groups and searches real widget cards, filters enabled items, and keeps unknown IDs harmless", () => {
   state.query += "&widget=unknown"; const view = render(<WidgetList {...props} />);
-  expect(view.container.querySelectorAll("[data-widget-id]")).toHaveLength(31);
+  expect(view.container.querySelectorAll("[data-widget-id]")).toHaveLength(32);
+  const series = view.container.querySelector('[data-widget-id="series"]') as HTMLElement;
+  expect(within(series).getByRole("switch", { name: "Enable Series scoreboard" }).getAttribute("aria-checked")).toBe("false");
   fireEvent.click(screen.getByRole("checkbox", { name: "Enabled only" })); expect(view.container.querySelectorAll("[data-widget-id]")).toHaveLength(3);
   fireEvent.change(screen.getByRole("searchbox", { name: "Find a widget" }), { target: { value: "session" } }); expect(view.container.querySelectorAll("[data-widget-id]")).toHaveLength(1);
   const card = screen.getByRole("heading", { name: /^Session record$/ }).closest("article")!;
