@@ -76,7 +76,7 @@ it("settles a never-resolving authentication lookup with a retryable deadline", 
 it("preserves unfinished Overlay drafts by blocking token changes until Save or Reset", () => {
   dirty.value = true; render(manager());
   expect((screen.getByRole("combobox", { name: "URLs shown for" }) as HTMLSelectElement).disabled).toBe(true);
-  for (const name of ["Mint another token", "Rotate", "Revoke"]) expect((screen.getByRole("button", { name, exact: true }) as HTMLButtonElement).disabled).toBe(true);
+  for (const name of ["Mint another token", "Rotate", "Revoke"]) expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.getByText(/Save or reset your unsaved Overlay edits/)).toBeTruthy();
   expect(fetch).not.toHaveBeenCalled();
 });
