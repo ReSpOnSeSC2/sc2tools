@@ -189,10 +189,12 @@ class GamesService {
    *     getCurrentMmr(pulseId: string): Promise<{
    *       mmr: number,
    *       region: string | null,
+   *       league?: string | null,
    *     } | null>,
    *     getCurrentMmrByToon?(toonHandle: string): Promise<{
    *       mmr: number,
    *       region: string | null,
+   *       league?: string | null,
    *     } | null>,
    *     getCurrentMmrForAny?(
    *       ids: string[],
@@ -200,6 +202,7 @@ class GamesService {
    *     ): Promise<{
    *       mmr: number,
    *       region: string | null,
+   *       league?: string | null,
    *     } | null>,
    *   },
    *   logger?: { info: (obj: Record<string, unknown>, msg: string) => void },
@@ -953,6 +956,7 @@ class GamesService {
    *   games: number,
    *   mmrStart?: number,
    *   mmrCurrent?: number,
+   *   league?: string,
    *   region?: string,
    *   sessionStartedAt?: string,
    *   streak?: { kind: 'win'|'loss', count: number },
@@ -1022,6 +1026,8 @@ class GamesService {
     let mmrStart;
     /** @type {number|undefined} */
     let mmrCurrent;
+    /** @type {string|undefined} */
+    let currentLeague;
     /** @type {number|undefined} */
     let lastKnownMmr;
     /** @type {string|undefined} */
@@ -1353,6 +1359,7 @@ class GamesService {
         );
         if (pulse && Number.isFinite(pulse.mmr)) {
           mmrCurrent = pulse.mmr;
+          currentLeague = typeof pulse.league === "string" ? pulse.league : undefined;
           mmrSource = "pulse_multi";
           if (typeof pulse.region === "string" && pulse.region) {
             pulseRegion = pulse.region;
@@ -1381,6 +1388,7 @@ class GamesService {
         const pulse = await this.pulseMmr.getCurrentMmr(profile.pulseId);
         if (pulse && Number.isFinite(pulse.mmr)) {
           mmrCurrent = pulse.mmr;
+          currentLeague = typeof pulse.league === "string" ? pulse.league : undefined;
           mmrSource = "pulse_pulseid";
           if (typeof pulse.region === "string" && pulse.region) {
             pulseRegion = pulse.region;
@@ -1403,6 +1411,7 @@ class GamesService {
         );
         if (pulse && Number.isFinite(pulse.mmr)) {
           mmrCurrent = pulse.mmr;
+          currentLeague = typeof pulse.league === "string" ? pulse.league : undefined;
           mmrSource = "pulse_toon";
           if (typeof pulse.region === "string" && pulse.region) {
             pulseRegion = pulse.region;
@@ -1459,7 +1468,7 @@ class GamesService {
     /**
      * @type {{
      *   wins: number, losses: number, games: number,
-     *   mmrStart?: number, mmrCurrent?: number,
+     *   mmrStart?: number, mmrCurrent?: number, league?: string,
      *   region?: string, sessionStartedAt?: string,
      *   streak?: { kind: 'win'|'loss', count: number },
      * }}
@@ -1467,6 +1476,7 @@ class GamesService {
     const out = { wins, losses, games };
     if (mmrStart !== undefined) out.mmrStart = mmrStart;
     if (mmrCurrent !== undefined) out.mmrCurrent = mmrCurrent;
+    if (currentLeague !== undefined) out.league = currentLeague;
     if (sessionStartedAt !== undefined) out.sessionStartedAt = sessionStartedAt;
     // Current run = consecutive same-result trail at the end of the session's
     // game list. Surfaces the SPA's "W4" / "L2" streak chip on the

@@ -43,11 +43,25 @@ def validated_obs_connection(value, stream_id):
 
 
 class CloudStreamingClient:
-    def __init__(self, connection_provider, *, transport=None, identity_provider=None):
+    def __init__(self, connection_provider, *, transport=None, identity_provider=None, guard=None):
         self.connection_provider = connection_provider
         self.identity_provider = identity_provider
         self.transport = transport or requests.request
+        self.guard = guard
         self._operation_context = threading.local()
+
+    def bound(self, connection, *, guard=None):
+        expected = self.context()
+        if expected["connection"] != connection:
+            raise CloudStreamError("SC2Tools pairing changed. Refresh connections before continuing.", pairing_changed=True)
+        return CloudStreamingClient(lambda: connection, transport=self.transport,
+            guard=lambda: self.context() == expected and (guard is None or guard()))
+
+    def title_session(self):
+        result = self._request("GET", "/v1/agent/streaming/session")
+        if not isinstance(result, dict) or type(result.get("schema")) is not int or result.get("schema") != 1:
+            raise CloudStreamError("Stream-title statistics are unavailable on this server.")
+        return result
 
     def context(self):
         if self.identity_provider is not None:
@@ -60,7 +74,7 @@ class CloudStreamingClient:
         return {"connection": (base, token), "accountKey": account_key, "connectionKey": connection_key}
 
     def assert_context(self, expected):
-        if self.context() != expected:
+        if self.context() != expected or self.guard is not None and not self.guard():
             raise CloudStreamError("SC2Tools pairing changed. Refresh connections before continuing; existing broadcasts are preserved.",
                 connection_invalid=True, pairing_changed=True)
 

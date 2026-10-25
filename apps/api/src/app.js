@@ -1218,6 +1218,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     auth,
     integrations: services.platformIntegrations,
     streamingTitles: new StreamingTitlesService({ integrations: services.platformIntegrations }),
+    titleSession: (userId) => require("./services/streamTitleSession").streamTitleSession(deps.db, services.games, userId),
   }));
   const youtubeLedgerCollection = deps.db.youtubeCreateOperations;
   app.use(SERVICE.ROUTE_PREFIX, buildYoutubeStreamingRouter({
