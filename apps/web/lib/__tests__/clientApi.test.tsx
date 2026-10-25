@@ -131,6 +131,14 @@ describe("opt-in API deadlines", () => {
 });
 
 describe("useApi authenticated cache identity", () => {
+  it("uses the owner from the SWR argument and rejects a retired key before JWT lookup", async () => {
+    const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
+    const view = renderHook(() => useApi("/v1/private"));
+    const swr = view.result.current as unknown as MockSWRResult;
+    await expect(swr.fetcher(["authenticated-api", "user-b", "/v1/private"])).rejects.toMatchObject({ name: "AbortError" });
+    expect(harness.auth.getToken).not.toHaveBeenCalled(); expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("rejects refresh mutations after sign-out without sending an anonymous request", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -170,6 +178,7 @@ describe("useApi authenticated cache identity", () => {
     expect(fetchMock).toHaveBeenCalledWith(`${API_BASE}/v1/private`, {
       headers: { authorization: "Bearer token-user-b" },
       cache: "no-store",
+      signal: expect.any(AbortSignal),
     });
 
     harness.auth.isSignedIn = false;
