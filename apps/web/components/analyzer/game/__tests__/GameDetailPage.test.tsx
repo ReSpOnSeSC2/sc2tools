@@ -15,7 +15,7 @@ const routerReplaceMock = vi.fn();
 const editorHarness = vi.hoisted(() => ({ props: null as BuildEditorModalProps | null }));
 
 // Compile the real lazy chunks before assertions; bundler work is not UI latency.
-beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns"), import("../GameStoryCard")]); });
+beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns"), import("../BuildWorkspaceActions"), import("../replay/ReplayStage"), import("../GameStoryCard")]); });
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: getTokenMock, isLoaded: true, isSignedIn: true }),
@@ -205,14 +205,14 @@ function mockEndpoints({
 }
 
 describe("GameDetailPage", () => {
-  it("uses the recorded upgrade completion rather than research start and omits unknown completion times", () => {
+  it("uses the recorded upgrade completion rather than research start and omits unknown completion times", async () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     mockEndpoints({ playback: true, buildOrder: { ...BUILD_ORDER, events: [
       { time: 100, complete_time: 300, name: "MetabolicBoost", display: "Metabolic Boost", category: "upgrade" },
       { time: 50, name: "UnknownTiming", display: "Unknown timing", category: "upgrade" },
     ] } });
     const view = render(<GameDetailPage gameId="g1" initialTimeSec={150} />);
-    const bar = screen.getByTestId("replay-top-bar");
+    const bar = await screen.findByTestId("replay-top-bar");
     expect(within(bar).queryByText("Metabolic Boost")).toBeNull();
     view.rerender(<GameDetailPage gameId="g1" initialTimeSec={300} />);
     expect(within(bar).getByText("Metabolic Boost")).toBeTruthy();
@@ -390,7 +390,7 @@ describe("GameDetailPage", () => {
     // over the conflicting slim summary so the build cannot enter PvZ.
     const myColumn = await screen.findByTestId("build-column-me");
     expect(within(myColumn).getByRole("button", { name: "Use as Ghost Build target" }).title).toContain("ZvT");
-    expect(within(screen.getByTestId("build-column-opp")).getByRole("button", { name: "Use as Ghost Build target" }).title).toContain("TvZ");
+    expect((await within(screen.getByTestId("build-column-opp")).findByRole("button", { name: "Use as Ghost Build target" })).title).toContain("TvZ");
     expect(screen.queryByRole("button", { name: "Save for PvZ" })).toBeNull();
   });
 

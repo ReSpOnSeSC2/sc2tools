@@ -1,6 +1,7 @@
 import { sanitizeMapPlayback, type MapPlayback } from "./mapReplay";
 
 export const MAX_SEGMENT_BYTES = 2 * 1024 * 1024;
+export const PLAYBACK_CACHE_BYTES = 24 * 1024 * 1024;
 export type PlaybackSegmentEntry = { index: number; start: number; end: number; sizeBytes: number; sha256: string; points: number };
 export type PlaybackManifest = {
   artifactId: string;
@@ -58,20 +59,38 @@ export function segmentAt(manifest: PlaybackManifest, time: number): PlaybackSeg
 
 /** Independent bounded cache; SWR never retains one heavy entry per segment. */
 export class PlaybackSegmentCache {
-  private entries = new Map<string, MapPlayback>();
-  constructor(private readonly limit = 3) {}
+  private entries = new Map<string, { value: MapPlayback; bytes: number }>();
+  private used = 0;
+  constructor(private readonly limit = PLAYBACK_CACHE_BYTES) {}
   get size() { return this.entries.size; }
+  get bytes() { return this.used; }
   get(key: string) {
-    const value = this.entries.get(key);
-    if (value) { this.entries.delete(key); this.entries.set(key, value); }
-    return value;
+    const entry = this.entries.get(key);
+    if (entry) { this.entries.delete(key); this.entries.set(key, entry); }
+    return entry?.value;
   }
-  set(key: string, value: MapPlayback) {
+  set(key: string, value: MapPlayback, bytes = decodedPlaybackBytes(value)) {
+    const previous = this.entries.get(key);
+    if (previous) this.used -= previous.bytes;
     this.entries.delete(key);
-    this.entries.set(key, value);
-    while (this.entries.size > this.limit) this.entries.delete(this.entries.keys().next().value!);
+    if (!Number.isFinite(bytes) || bytes < 0 || bytes > this.limit) return;
+    this.entries.set(key, { value, bytes }); this.used += bytes;
+    while (this.used > this.limit) {
+      const oldest = this.entries.keys().next().value!;
+      this.used -= this.entries.get(oldest)!.bytes; this.entries.delete(oldest);
+    }
   }
-  clear() { this.entries.clear(); }
+  clear() { this.entries.clear(); this.used = 0; }
+}
+
+/** Conservative decoded-size accounting, including array slots/object keys.
+ * Wire size alone undercounts dense numeric channels after JSON decoding. */
+export function decodedPlaybackBytes(value: unknown): number {
+  if (typeof value === "string") return 24 + value.length * 2;
+  if (typeof value === "number" || typeof value === "boolean") return 8;
+  if (!value || typeof value !== "object") return 0;
+  if (Array.isArray(value)) return 32 + value.reduce((total, item) => total + 8 + decodedPlaybackBytes(item), 0);
+  return 48 + Object.entries(value).reduce((total, [key, item]) => total + 16 + key.length * 2 + decodedPlaybackBytes(item), 0);
 }
 
 export async function decodePlaybackSegment(bytes: Uint8Array, manifest: PlaybackManifest, entry: PlaybackSegmentEntry): Promise<MapPlayback> {

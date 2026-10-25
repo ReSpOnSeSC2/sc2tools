@@ -22,7 +22,10 @@ function buildPlaybackArtifactsRouter({ playbackArtifacts, auth }) {
       }
       res.set("Cache-Control", "private, no-store");
       const result = await action(req, playbackArtifacts);
-      if (Buffer.isBuffer(result)) res.type("application/json").send(result);
+      if (Buffer.isBuffer(result)) {
+        if (!write) { res.set("Cache-Control", "private, max-age=604800, immutable"); res.vary("Authorization"); }
+        res.type("application/json").send(result);
+      }
       else res.json(result);
     } catch (err) {
       if (/** @type {{status?: number}} */ (err).status === 503) res.set("Retry-After", "5");

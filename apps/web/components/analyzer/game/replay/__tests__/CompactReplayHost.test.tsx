@@ -137,9 +137,9 @@ describe("the compact drilldown host", () => {
     expect(music.setPlaying.mock.calls.map((c) => c[0])).toEqual([true, false]);
   });
 
-  it("leaves the full-page host untouched", () => {
+  it("leaves the full-page host untouched", async () => {
     render(<MapReplaySection gameId="g1" />);
-    expect(screen.getByTestId("replay-stage")).toBeTruthy();
+    expect(await screen.findByTestId("replay-stage")).toBeTruthy();
     expect(screen.queryByTestId("replay-compact-controls")).toBeFalsy();
     // The dock's own copy of the control is still the one there.
     expect(

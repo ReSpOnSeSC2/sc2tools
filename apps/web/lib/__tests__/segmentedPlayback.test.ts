@@ -51,12 +51,15 @@ describe("segmented playback", () => {
     await expect(readBoundedSegment(new Response(bytes[0].slice(1)), bytes[0].length)).rejects.toThrow("incomplete");
     await expect(readBoundedSegment(new Response(bytes[0]), bytes[0].length - 1)).rejects.toThrow("exceeded");
   });
-  it("keeps only three least recently used segment payloads", () => {
+  it("evicts least recently used segments by decoded bytes, including replacements and oversize entries", () => {
     const cache = new PlaybackSegmentCache(3), playback = sanitizeMapPlayback(makePlayback())!;
-    for (const key of ["0", "1", "2"]) cache.set(key, playback);
-    cache.get("0"); cache.set("3", playback);
+    for (const key of ["0", "1", "2"]) cache.set(key, playback, 1);
+    cache.get("0"); cache.set("3", playback, 1);
     expect(cache.size).toBe(3); expect(cache.get("1")).toBeUndefined(); expect(cache.get("0")).toBe(playback);
-    cache.clear(); expect(cache.size).toBe(0);
+    expect(cache.bytes).toBe(3);
+    cache.set("0", playback, 2); expect(cache.bytes).toBe(3); expect(cache.get("2")).toBeUndefined();
+    cache.set("huge", playback, 4); expect(cache.size).toBe(2); expect(cache.bytes).toBe(3);
+    cache.clear(); expect(cache.size).toBe(0); expect(cache.bytes).toBe(0);
   });
   it("keeps legacy terminal-shot behavior unless the explicit v7 flag is present", () => {
     const raw = makePlayback();
