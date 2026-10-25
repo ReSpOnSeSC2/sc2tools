@@ -17,7 +17,7 @@ Builds now mounts the existing Build mix matrix, with the same bucket preference
 ## Verification
 
 - 143 assertions across 19 affected web/Help/state suites pass. Real consumers cover metric-specific counts, the hollow threshold, calendar geometry/gaps, stored grouping, median suppression, online/offline backfill and the measured plot mounting after an initially unmeasured metric.
-- 93 API assertions pass, including real Mongo aggregation of null/string/missing/zero metrics, independent counts, account/race/date bounds and existing global timeseries behavior.
+- 98 API assertions pass, including real Mongo aggregation of null/string/missing/zero metrics, independent counts, account/race/date bounds, query coalescing/date-probe reuse and existing global timeseries behavior.
 - Full web/API TypeScript and strict changed web/new API source lint pass. The aggregation file retains its five existing warnings; the extended timeseries method adds none.
 - Final required-engine production build and every unchanged budget pass after all review fixes: landing 214.1/215 kB, Today 224.4/240, game 314.6/440 and opponent 490.5/500.
 - 96 localhost browser checks pass at 320/390/768/1440 in light and dark, using actual Macro/Builds components, fetch hooks, production CSS and committed fonts. They verify real calendar geometry, gap breaks, sample markers, metric-switch request reuse, opponent-bracket reference, shared grouping, online/offline empty actions, late plot measurement, readable controls and no page overflow. Build mix count text meets at least 4.5:1 computed contrast over its translucent fills in both themes. Inspected screenshots are in `screenshots/mechanics-*.png`.
