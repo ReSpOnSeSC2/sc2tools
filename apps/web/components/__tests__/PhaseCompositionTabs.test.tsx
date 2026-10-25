@@ -77,6 +77,22 @@ function baseProps(
 }
 
 describe("PhaseCompositionTabs", () => {
+  it("does not scroll the page when delayed compositions mount or their selected phase changes", () => {
+    const original = HTMLElement.prototype.scrollIntoView;
+    const scroll = vi.fn(); HTMLElement.prototype.scrollIntoView = scroll;
+    try {
+      const view = render(<p>Loading analysis</p>);
+      view.rerender(<PhaseCompositionTabs {...baseProps()} />);
+      expect(scroll).not.toHaveBeenCalled();
+      const tabs = view.getAllByRole("tab");
+      const focus = vi.spyOn(tabs[1], "focus");
+      fireEvent.keyDown(tabs[0], { key: "ArrowRight" });
+      expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+      expect(scroll).not.toHaveBeenCalled();
+      expect(tabs[1].getAttribute("aria-selected")).toBe("true");
+    } finally { HTMLElement.prototype.scrollIntoView = original; }
+  });
+
   it("renders five tab buttons with the right counts", () => {
     const { container } = render(<PhaseCompositionTabs {...baseProps()} />);
     const tabs = Array.from(
