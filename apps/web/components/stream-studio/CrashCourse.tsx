@@ -78,11 +78,11 @@ const LESSONS: ReadonlyArray<Lesson> = [
     steps: [
       {
         title: "Choose one starting point",
-        body: <>In <strong>Settings → Overlay → OBS Browser Source URLs</strong>, use the <strong>All-in-one URL</strong> for a ready-arranged set of core game widgets: opponent scouting, results, session stats and the build randomizer. Use individual widget URLs when you want to position each one yourself. Chat, broadcast extras, Ghost Build coach and Build profile use their own sources.</>,
+        body: <>In <strong>Settings → Overlay → Widgets</strong>, choose a starter pack and review which widgets it enables before confirming. Use Setup&apos;s <strong>All-in-one URL</strong> for a ready-arranged core layout, or choose individual widget cards to position each source yourself. Chat, Ghost Build coach and Build profile use dedicated sources.</>,
       },
       {
         title: "Add a Browser Source in OBS",
-        body: <>In the scene’s <strong>Sources</strong> list, choose <strong>+ → Browser</strong>, give it a clear name and paste the copied URL. For a standard horizontal scene, start with <strong>Width 1920</strong> and <strong>Height 1080</strong>, matching a 1920 × 1080 canvas. Follow a widget’s size instructions when provided; <strong>Build profile</strong> uses <strong>720 × 900</strong>.</>,
+        body: <>Use <strong>Drag into OBS</strong> on a widget card to create a named source at its recommended size. Alternatively, choose <strong>Sources → + → Browser</strong>, paste its private URL with Copy and enter the card&apos;s width and height. All-in-one uses your canvas size, usually <strong>1920 × 1080</strong>; Build profile uses <strong>720 × 900</strong>. Press Test and review Preview before sending any live sample.</>,
       },
       {
         title: "Place it above your gameplay",

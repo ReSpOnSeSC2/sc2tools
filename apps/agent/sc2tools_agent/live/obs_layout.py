@@ -60,6 +60,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from .metrics import METRICS
 from .obs_scene import SCENE_BETWEEN_GAMES, SCENE_IN_GAME
+from .widget_sizes import recommended_widget_size
 
 _log = logging.getLogger("sc2tools_agent.live.obs_layout")
 
@@ -3489,10 +3490,13 @@ def _browser_settings(item: PlannedItem) -> Dict[str, Any]:
     air every single time the switcher fires, which is many times a
     session.
     """
+    path_parts = urlsplit(item.browser_path or "").path.strip("/").split("/")
+    widget_id = path_parts[-1] if len(path_parts) >= 2 and path_parts[-2] == "widget" else ""
+    recommended_width, recommended_height = recommended_widget_size(widget_id)
     return {
         "url": item.browser_path,
-        "width": max(1, item.rect.w),
-        "height": max(1, item.rect.h),
+        "width": item.rect.w if item.rect.w > 0 else recommended_width,
+        "height": item.rect.h if item.rect.h > 0 else recommended_height,
         "shutdown": False,
         "restart_when_active": False,
         "reroute_audio": False,

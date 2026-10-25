@@ -27,7 +27,7 @@ describe("Stream Studio learning catalog", () => {
   });
 
   it("uses the current Settings labels so instructions can be found", () => {
-    const settings = source("components/analyzer/settings/SettingsOverlay.tsx");
+    const settings = source("components/analyzer/settings/overlayWidgetMeta.ts");
     const catalog = settings.match(/const WIDGETS:[\s\S]*?= \[([\s\S]*?)\n\];/)?.[1];
     expect(catalog).toBeTruthy();
     const labels = new Map(
@@ -57,7 +57,10 @@ describe("Stream Studio learning catalog", () => {
       expect(guide.needs.length).toBeGreaterThan(0);
       expect(guide.example.headline).toMatch(/illustrative/i);
       expect(guide.example.lines.length).toBeGreaterThan(0);
-      expect(guide.settingsHref).toMatch(/^\/settings\?tab=(overlay|randomizer)$/);
+      const settings = new URL(guide.settingsHref, "https://example.invalid");
+      expect(settings.pathname).toBe("/settings"); expect(settings.searchParams.get("section")).toBe("widgets");
+      expect(settings.searchParams.get("widget")).toBe(guide.id);
+      expect(guide.recommendedSize.width).toBeGreaterThanOrEqual(100); expect(guide.recommendedSize.height).toBeGreaterThanOrEqual(100);
       expect(guide.check.length).toBeGreaterThan(30);
       expect(guide.troubleshooting.length).toBeGreaterThan(30);
       expect(guide.related.length).toBeGreaterThan(0);
