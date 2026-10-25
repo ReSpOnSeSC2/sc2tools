@@ -55,6 +55,8 @@ def test_new_worker_rejects_oversized_and_bad_hash_cache_without_installing(tmp_
     invalid = policy(); invalid["entries"][0]["enabled"] = False
     (tmp_path / CACHE_NAME).write_text(json.dumps(invalid), encoding="utf-8")
     assert load_cached_policy(tmp_path) == baseline
+    (tmp_path / CACHE_NAME).write_text("[" * 10000 + "]" * 10000, encoding="utf-8")
+    assert load_cached_policy(tmp_path) == baseline
 
 
 def test_scoped_parse_uses_one_cached_policy_and_does_not_leak_across_threads(tmp_path):

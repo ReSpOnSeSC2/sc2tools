@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { BuildStudioBody } from "./page";
+import { BuildStudioBody } from "./BuildStudioPage";
 import { PolicyHistory } from "./PolicyHistory";
 import { navigation } from "../components/__tests__/navigationFixture";
 

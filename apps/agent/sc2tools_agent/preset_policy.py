@@ -42,7 +42,7 @@ def load_cached_policy(state_dir: Path):
             while len(_cache) > 4:
                 _cache.popitem(last=False)
             return copy.deepcopy(value)
-        except (OSError, ValueError, TypeError):
+        except (OSError, ValueError, TypeError, RecursionError):
             return copy.deepcopy(prior[1]) if prior else policy_snapshot()
 
 

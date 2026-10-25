@@ -1,6 +1,6 @@
 "use strict";
 const request = require("supertest");
-const { MongoMemoryReplSet } = require("mongodb-memory-server");
+const { MongoMemoryReplSet, MongoMemoryServer } = require("mongodb-memory-server");
 const { pino } = require("pino");
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
@@ -223,4 +223,80 @@ test("owner-filtered catalog pages use bounded compound keyset indexes instead o
   expect(explained.executionStats.totalKeysExamined).toBeLessThanOrEqual(51);
   expect(explained.executionStats.totalDocsExamined).toBeLessThanOrEqual(51);
   expect((await db.communityBuilds.indexes()).some((/** @type {any} */ index) => index.name === "admin_community_build_catalog")).toBe(true);
+});
+
+
+test("a losing cross-process admin rename cannot partially change confirmed game labels", async () => {
+  const { CustomBuildsService } = require("../src/services/customBuilds");
+  const raceOwner = "studio-rename-race-owner", slug = "rename-race";
+  await db.users.insertOne({ userId: raceOwner, clerkUserId: "rename-race-clerk" });
+  const id = String((await db.customBuilds.insertOne({ ...original, name: "Initial name", userId: raceOwner, slug, definitionRevision: 0 })).insertedId);
+  await db.games.insertOne({ userId: raceOwner, gameId: "rename-race-game", myBuild: "Initial name", _customBuildSlug: slug,
+    buildIntent: { status: "confirmed", applied: true, build: { source: "custom", slug, name: "Initial name", key: slug }, detected: { slug, name: "Initial name" } } });
+  /** @type {()=>void} */ let entered = () => {}; /** @type {()=>void} */ let release = () => {};
+  const started = new Promise(resolve => { entered = () => resolve(undefined); });
+  const hold = new Promise(resolve => { release = () => resolve(undefined); });
+  const actualUpdate = db.games.updateMany.bind(db.games);
+  let held = false;
+  const spy = jest.spyOn(db.games, "updateMany").mockImplementation(async (...args) => {
+    if (!held && /** @type {any} */ (args[1])?.[0]?.$set?.myBuild?.$literal === "Admin stale rename") {
+      held = true; entered(); await hold;
+    }
+    return actualUpdate(...args);
+  });
+  const ownerGamesChanged = jest.fn(), ownerDefinitionsChanged = jest.fn();
+  const otherProcess = new CustomBuildsService(db, { onGamesChanged: ownerGamesChanged, onDefinitionsChanged: ownerDefinitionsChanged });
+  const losing = services.buildStudio.save("custom", id, { expectedRevision: 0, build: { ...original, name: "Admin stale rename" } });
+  // Observe rejection immediately, even if a later assertion fails.
+  const result = losing.then((/** @type {any} */ value) => ({ value }), (/** @type {any} */ error) => ({ error }));
+  try {
+    await started;
+    await otherProcess.upsert(raceOwner, { ...original, slug, name: "Owner winner" });
+    release();
+    expect(await result).toMatchObject({ error: { status: 409, code: "build_definition_changed" } });
+    const definition = await db.customBuilds.findOne({ userId: raceOwner, slug });
+    expect(definition.name).toBe("Owner winner"); expect(definition.definitionRevision).toBe(1);
+    expect(definition._definitionHistory).toBeUndefined();
+    const game = await db.games.findOne({ userId: raceOwner, gameId: "rename-race-game" });
+    expect(game.myBuild).toBe("Owner winner");
+    expect(game.buildIntent.build.name).toBe("Owner winner");
+    expect(game.buildIntent.detected).toEqual({ slug, name: "Owner winner" });
+    expect(ownerGamesChanged).toHaveBeenCalledTimes(1); expect(ownerGamesChanged).toHaveBeenCalledWith(raceOwner, 1);
+    expect(ownerDefinitionsChanged).toHaveBeenCalledTimes(1);
+  } finally { release(); await result; spy.mockRestore(); }
+});
+
+
+test("standalone development owner saves work but versioned admin saves fail before any partial write", async () => {
+  const { CustomBuildsService } = require("../src/services/customBuilds");
+  const standalone = await MongoMemoryServer.create();
+  const local = await connect({ uri: standalone.getUri(), dbName: "studio_standalone_only" });
+  try {
+    const onDefinitionsChanged = jest.fn();
+    const service = new CustomBuildsService(local, { onDefinitionsChanged });
+    await service.upsert("local-owner", { ...original, slug: "local-build", name: "Local initial" });
+    expect(onDefinitionsChanged).toHaveBeenCalledTimes(1);
+    await expect(service.upsert("local-owner", { ...original, slug: "local-build", name: "Rejected admin rename" }, { expectedRevision: 1, recordHistory: true })).rejects.toMatchObject({ status: 503, code: "build_definition_transactions_required" });
+    const saved = await local.customBuilds.findOne({ userId: "local-owner", slug: "local-build" });
+    expect(saved?.name).toBe("Local initial"); expect(saved?.definitionRevision).toBe(1); expect(saved?._definitionHistory).toBeUndefined();
+    expect(onDefinitionsChanged).toHaveBeenCalledTimes(1);
+  } finally { await local.close(); await standalone.stop(); }
+});
+
+test("an unsupported-transaction error after the initial read never retries without a transaction", async () => {
+  const { CustomBuildsService } = require("../src/services/customBuilds");
+  const userId = "late-transaction-error-owner", slug = "late-transaction-error";
+  await db.customBuilds.insertOne({ ...original, userId, slug, name: "Original name", definitionRevision: 1 });
+  await db.games.insertOne({ userId, gameId: slug, myBuild: "Original name", _customBuildSlug: slug });
+  const onGamesChanged = jest.fn(), onDefinitionsChanged = jest.fn();
+  const service = new CustomBuildsService(db, { onGamesChanged, onDefinitionsChanged });
+  const failure = Object.assign(new Error("Transaction numbers are only allowed on a replica set member or mongos"), { code: 20 });
+  const write = jest.spyOn(db.customBuilds, "updateOne").mockRejectedValueOnce(failure);
+  try {
+    await expect(service.upsert(userId, { ...original, slug, name: "Rejected name" })).rejects.toBe(failure);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect((await db.customBuilds.findOne({ userId, slug })).name).toBe("Original name");
+    expect((await db.games.findOne({ userId, gameId: slug })).myBuild).toBe("Original name");
+    expect(onGamesChanged).not.toHaveBeenCalled(); expect(onDefinitionsChanged).not.toHaveBeenCalled();
+  } finally { write.mockRestore(); }
 });

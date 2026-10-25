@@ -52,3 +52,20 @@ it("restores a preset to released behavior through an explicit new-version revie
   expect(screen.getByRole("dialog").textContent).toContain("Restore released preset"); mocks.call.mockResolvedValueOnce(detail()); fireEvent.click(screen.getByRole("button", { name: "Confirm save" }));
   await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce()); expect(JSON.parse(mocks.call.mock.calls[0][2].body)).toEqual({ expectedHash: "a".repeat(64), replacement: null });
 });
+
+it("reviews community listing text as well as the full independent snapshot before writing", async () => {
+  const value: BuildDetail = { id: "public-id", name: "Public snapshot", scope: "community", owner: "owner-2", sourceSlug: "private-source", removed: true, mode: "rule-only", revision: 2, title: "Original listing", description: "Original listing description", build: { name: "Rule only", race: "Protoss", rules: [], steps: [] } };
+  editor(value);
+  fireEvent.change(screen.getByLabelText("Listing title"), { target: { value: "Corrected listing title" } });
+  fireEvent.change(screen.getByLabelText("Listing description"), { target: { value: "Corrected public description" } });
+  fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
+  const dialog = screen.getByRole("dialog");
+  expect(dialog.textContent).toContain("Original listing description");
+  expect(dialog.textContent).toContain("Corrected listing title");
+  expect(dialog.textContent).toContain("Corrected public description");
+  expect(mocks.call).not.toHaveBeenCalled();
+  mocks.call.mockResolvedValueOnce({ ...value, revision: 3 });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Confirm save" }));
+  await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce());
+  expect(JSON.parse(mocks.call.mock.calls[0][2].body)).toMatchObject({ title: "Corrected listing title", description: "Corrected public description", expectedRevision: 2 });
+});

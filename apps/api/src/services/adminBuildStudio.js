@@ -78,6 +78,7 @@ class AdminBuildStudioService {
       await lease.assert();
       if (scope === "custom") {
         await this.customBuilds.upsert(current.owner, { slug: current.slug, ...build }, { expectedRevision: input.expectedRevision, expectedId: id, recordHistory: true });
+        await lease.assert();
         if (input.reclassify) await this.customBuilds.enqueueReclassifyAll(current.owner, { clearUnmatched: true });
       } else {
         const title = input.title === undefined ? current.title : input.title;
@@ -89,6 +90,7 @@ class AdminBuildStudioService {
         }));
         if (!saved.matchedCount) throw problem(409, "build_definition_changed");
       }
+      await lease.assert();
       return this.detail(scope, id);
     } finally { await lease.release(); }
   }

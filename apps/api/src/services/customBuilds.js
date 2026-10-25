@@ -74,6 +74,12 @@ const RECLASSIFY_LEASE_MS = 60 * 1000;
 const RECLASSIFY_LEASE_RENEW_MS = 20 * 1000;
 const RECLASSIFY_RECOVERY_INTERVAL_MS = 15 * 1000;
 
+function definitionTransactionsRequired() {
+  return Object.assign(new Error("build_definition_transactions_required"), {
+    status: 503, code: "build_definition_transactions_required",
+  });
+}
+
 /** @param {any} build @returns {"you"|"opponent"} */
 function buildPerspective(build) {
   return build && build.perspective === "opponent" ? "opponent" : "you";
@@ -357,6 +363,7 @@ class CustomBuildsService {
    * @param {{
    *   customBuilds: import('mongodb').Collection,
    *   customBuildJobs?: import('mongodb').Collection,
+   *   client?: import('mongodb').MongoClient,
    * }} db
    * @param {{
    *   perGame?: import('./types').PerGameComputeService,
@@ -602,49 +609,86 @@ class CustomBuildsService {
    * @param {{expectedRevision?:number, expectedId?:string, recordHistory?:boolean}} [options]
    */
   async upsert(userId, build, options = {}) {
-    return this._withUserBuildMutation(
-      userId,
-      () => this._upsertUnlocked(userId, build, options),
-    );
+    return this._withUserBuildMutation(userId, async () => {
+      const client = this.db.client;
+      if (!client) {
+        if (options.expectedRevision !== undefined) throw definitionTransactionsRequired();
+        await this._upsertUnlocked(userId, build, options);
+        return;
+      }
+      const session = client.startSession();
+      let renamedCheckins = 0;
+      let initialReadCompleted = false;
+      try {
+        // Definition CAS and linked check-in names commit together, including
+        // ordinary owner saves on another API process. Publish only once,
+        // after commit; the Mongo driver may retry this callback.
+        await session.withTransaction(async () => {
+          renamedCheckins = await this._upsertUnlocked(userId, build, {
+            ...options, session, deferNotifications: true,
+            onInitialRead: () => { initialReadCompleted = true; },
+          });
+        });
+      } catch (error) {
+        const failure = /** @type {any} */ (error);
+        // Standalone development Mongo rejects the first transactional read
+        // before any write. Keep legacy owner saves available there; a
+        // version-fenced admin save must never fall back to partial writes.
+        if (!initialReadCompleted && failure?.code === 20 && /Transaction numbers are only allowed/.test(String(failure.message))) {
+          if (options.expectedRevision !== undefined) throw definitionTransactionsRequired();
+          await this._upsertUnlocked(userId, build, options);
+          return;
+        }
+        throw error;
+      } finally {
+        await session.endSession();
+      }
+      if (renamedCheckins > 0) this._notifyGamesChanged(userId, renamedCheckins);
+      this._notifyDefinitionsChanged(userId);
+    });
   }
 
   /**
    * @private
    * @param {string} userId
    * @param {{slug: string} & Record<string, unknown>} build
-   * @param {{expectedRevision?:number, expectedId?:string, recordHistory?:boolean}} [options]
+   * @param {{expectedRevision?:number, expectedId?:string, recordHistory?:boolean, session?:import('mongodb').ClientSession, deferNotifications?:boolean, onInitialRead?:()=>void}} [options]
    */
   async _upsertUnlocked(userId, build, options = {}) {
     if (!build || !build.slug) throw new Error("slug required");
     // Build check-ins (and opponent corrections) store the declared custom
-    // build's display name on the replay row. Rename them before saving,
-    // whatever the reclassify flag, so name-keyed stats never split the build
-    // (a retried save renames again).
+    // build's display name on the replay row. Rename them in the same
+    // transaction as the definition, independent of the reclassify flag.
     const previous = options.recordHistory
       ? await this.db.customBuilds.aggregate([
         { $match: { userId, slug: build.slug, deletedAt: { $exists: false }, ...(options.expectedId ? { _id: new (require('mongodb').ObjectId)(options.expectedId) } : {}) } },
         { $limit: 1 },
         { $project: { _id: 0, ...ROOT_PUBLIC_BUILD_EXPRESSION, definitionRevision: { $ifNull: ["$definitionRevision", 0] }, updatedAt: 1 } },
-      ]).next()
+      ], options.session ? { session: options.session } : {}).next()
       : typeof this.db.customBuilds.findOne === "function"
       ? await this.db.customBuilds.findOne(
         { userId, slug: build.slug },
-        { projection: { _id: 0, name: 1, perspective: 1, definitionRevision: 1 } },
+        { projection: { _id: 0, name: 1, perspective: 1, definitionRevision: 1 }, ...(options.session ? { session: options.session } : {}) },
       )
       : null;
+    options.onInitialRead?.();
     if (options.expectedRevision !== undefined && (!previous || (previous.definitionRevision || 0) !== options.expectedRevision)) {
       throw Object.assign(new Error("build_definition_changed"), { status: 409, code: "build_definition_changed" });
     }
     const overrideName = checkinRenameTarget(previous, build, "you");
     const opponentOverrideName = checkinRenameTarget(previous, build, "opponent");
     const games = this._gamesCollection();
+    const renameGames = options.session && games
+      ? /** @type {import('mongodb').Collection} */ (/** @type {unknown} */ ({
+        updateMany: (/** @type {any} */ filter, /** @type {any} */ update) => games.updateMany(filter, update, { session: options.session }),
+      })) : games;
     let renamedCheckins = 0;
-    if (games && overrideName !== null) {
-      renamedCheckins += await renameCustomOverrides(games, userId, build.slug, overrideName);
+    if (renameGames && overrideName !== null) {
+      renamedCheckins += await renameCustomOverrides(renameGames, userId, build.slug, overrideName);
     }
-    if (games && opponentOverrideName !== null) {
+    if (renameGames && opponentOverrideName !== null) {
       renamedCheckins += await renameCustomOpponentOverrides(
-        games, userId, build.slug, opponentOverrideName,
+        renameGames, userId, build.slug, opponentOverrideName,
       );
     }
     const now = new Date();
@@ -660,14 +704,17 @@ class CustomBuildsService {
     delete doc._definitionHistory;
     stampVersion(doc, COLLECTIONS.CUSTOM_BUILDS);
     const saved = await /** @type {import('mongodb').Collection<any>} */ (this.db.customBuilds).updateOne(
-      { userId, slug: build.slug, ...(options.expectedId ? { _id: new (require('mongodb').ObjectId)(options.expectedId) } : {}), ...(options.expectedRevision === undefined ? {} : options.expectedRevision === 0 ? { $or: [{ definitionRevision: 0 }, { definitionRevision: { $exists: false } }] } : { definitionRevision: options.expectedRevision }) },
+      { userId, slug: build.slug, ...(options.expectedRevision === undefined ? {} : { deletedAt: { $exists: false } }), ...(options.expectedId ? { _id: new (require('mongodb').ObjectId)(options.expectedId) } : {}), ...(options.expectedRevision === undefined ? {} : options.expectedRevision === 0 ? { $or: [{ definitionRevision: 0 }, { definitionRevision: { $exists: false } }] } : { definitionRevision: options.expectedRevision }) },
       /** @type {import('mongodb').Document} */ ({ $setOnInsert: { createdAt: now }, $set: doc, $unset: { deletedAt: "" }, $inc: { definitionRevision: 1 },
         ...(options.recordHistory && previous ? { $push: { _definitionHistory: { $each: [{ revision: previous.definitionRevision || 0, savedAt: now, build: Object.fromEntries(Object.entries(previous).filter(([key]) => key !== "definitionRevision" && key !== "updatedAt")) }], $slice: -10 } } } : {}) }),
-      { upsert: options.expectedRevision === undefined },
+      { upsert: options.expectedRevision === undefined, ...(options.session ? { session: options.session } : {}) },
     );
     if (options.expectedRevision !== undefined && !saved.matchedCount) throw Object.assign(new Error("build_definition_changed"), { status: 409, code: "build_definition_changed" });
-    if (renamedCheckins > 0) this._notifyGamesChanged(userId, renamedCheckins);
-    this._notifyDefinitionsChanged(userId);
+    if (!options.deferNotifications) {
+      if (renamedCheckins > 0) this._notifyGamesChanged(userId, renamedCheckins);
+      this._notifyDefinitionsChanged(userId);
+    }
+    return renamedCheckins;
   }
 
   /**

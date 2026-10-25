@@ -38,7 +38,9 @@ export function BuildStudioEditor({ detail, onSaved, onReload, onDirtyChange }: 
     try {
       const edited: unknown = JSON.parse(build);
       const payload = preset ? { expectedHash: original.expectedHash, replacement: entry } : { expectedRevision: original.revision, build: edited, ...(original.scope === "community" ? { title, description } : { reclassify }) };
-      setReview({ title: "Review definition changes", before: preset ? original.replacement || null : original.build, after: preset ? entry : edited, payload });
+      const before = preset ? original.replacement || null : original.scope === "community" ? { title: original.title, description: original.description, build: original.build } : original.build;
+      const after = preset ? entry : original.scope === "community" ? { title, description, build: edited } : edited;
+      setReview({ title: "Review definition changes", before, after, payload });
     } catch { setError("The definition must contain valid JSON. Your draft is preserved."); }
   };
   const save = async () => {
@@ -91,7 +93,8 @@ export function BuildStudioDetail({ scope, id, onChanged, onDirtyChange }: { sco
   const { getToken } = useAuth();
   const swr = useApi<BuildDetail>(resource(scope, id), { revalidateOnFocus: false });
   const [generation, setGeneration] = useState(0); const [notice, setNotice] = useState("");
+  const [committed, setCommitted] = useState<BuildDetail | null>(null);
   if (swr.error) return <RequestError error={swr.error} onRetry={() => void swr.mutate()} />;
   if (!swr.data) return <p role="status">Loading definition…</p>;
-  return <>{notice ? <p role="status">{notice}</p> : null}<BuildStudioEditor key={`${scope}:${id}:${generation}`} detail={swr.data} onDirtyChange={onDirtyChange} onSaved={value => { void swr.mutate(value, { revalidate: false }); setGeneration(value => value + 1); setNotice("Definition saved as a new version."); onChanged(); }} onReload={async () => { try { const latest = await apiCall<BuildDetail>(getToken, resource(scope, id)); await swr.mutate(latest, { revalidate: false }); setGeneration(value => value + 1); setNotice("Loaded the latest definition."); } catch (caught) { setNotice(errorText(caught)); } }} /></>;
+  return <>{notice ? <p role="status">{notice}</p> : null}<BuildStudioEditor key={`${scope}:${id}:${generation}`} detail={committed || swr.data} onDirtyChange={onDirtyChange} onSaved={value => { onDirtyChange?.(false); setCommitted(value); void swr.mutate(value, { revalidate: false }); setGeneration(value => value + 1); setNotice("Definition saved as a new version."); onChanged(); }} onReload={async () => { try { const latest = await apiCall<BuildDetail>(getToken, resource(scope, id)); await swr.mutate(latest, { revalidate: false }); onDirtyChange?.(false); setCommitted(latest); setGeneration(value => value + 1); setNotice("Loaded the latest definition."); } catch (caught) { setNotice(errorText(caught)); } }} /></>;
 }
