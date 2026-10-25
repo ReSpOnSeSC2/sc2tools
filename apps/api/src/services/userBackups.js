@@ -213,6 +213,7 @@ class UserBackupsService {
   /** @param {string} userId @param {string} id @param {{assert:()=>Promise<void>}} fence @param {string|undefined} [expectedRevision] */
   async restore(userId, id, fence, expectedRevision) {
     const staged = await this.stage(userId, id);
+    let contributionChanged = false;
     try {
       if (expectedRevision && expectedRevision !== await this.membershipRevision(userId)) throw failure("backup_preview_changed", 409);
       // Validate every current replay marker before the first destructive write.
@@ -257,7 +258,9 @@ class UserBackupsService {
           await restoreUserSettings(this.db.users, userId, key, await this.staging.findOne({ operationId: staged.operationId, key }));
           continue;
         }
+        if (dbKey === "games") contributionChanged = true;
         await collection.deleteMany(dbKey === "games" ? liveBackupGamesMatch(userId) : { userId });
+        if (dbKey === "games") this.gdpr.notifyGamesChanged?.(userId);
         /** @type {any[]} */ let rows = []; let bytes = 0;
         for await (const row of this.staging.find({ operationId: staged.operationId, key }).sort({ ordinal: 1 }).batchSize(BATCH)) {
           const data = { ...row.data, userId }; delete data._id; rows.push(data); bytes += BSON.calculateObjectSize(data);
@@ -271,7 +274,10 @@ class UserBackupsService {
       }
       await this.gdpr._scrubUserGuideExamples(userId);
       return { restoredAt: new Date(), counts: { ...staged.counts, overlayTokens: 0 } };
-    } finally { await this.staging.deleteMany({ operationId: staged.operationId }); }
+    } finally {
+      if (contributionChanged) this.gdpr.notifyGamesChanged?.(userId);
+      await this.staging.deleteMany({ operationId: staged.operationId });
+    }
   }
   /** Lazy, once-per-ISO-week CAS; a failed attempt leaves the next ingest able to retry. @param {string} userId @param {Date} [now] */
   weekly(userId, now = new Date()) {
