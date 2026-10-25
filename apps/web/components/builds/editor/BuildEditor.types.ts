@@ -67,6 +67,7 @@ export interface BuildEditorContext {
 }
 
 export interface BuildEditorState {
+  requestReady: boolean;
   draft: BuildEditorDraft;
   setDraft: Dispatch<SetStateAction<BuildEditorDraft>>;
 
