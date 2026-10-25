@@ -139,6 +139,7 @@ function applyOpponentTendencies(payload, tendencies, legacyOpenings) {
     ? tendencies
     : tendenciesFromLegacyOpenings(legacyOpenings) || tendencies;
   if (t.favOpening) payload.favOpening = t.favOpening;
+  if (t.openingHistory?.length) payload.openingHistory = t.openingHistory;
   if (t.predictedStrategies && t.predictedStrategies.length > 0) {
     payload.predictedStrategies = t.predictedStrategies;
     payload.scouting = t.predictedStrategies.map((p) => ({
@@ -669,6 +670,12 @@ class OverlayLiveService {
     if (opponentNotes) payload.opponentNotes = opponentNotes;
     payload.opponentIdentityMatched = oppRow?.matchedBy !== "display_name";
     if (oppRow && payload.opponentIdentityMatched) payload.opponentPulseId = oppRow.pulseId;
+    // Exact current toon takes precedence over an older handle on a matched row.
+    if (typeof notePulseId === "string" && /^\d+-S2-\d+-\d+$/.test(notePulseId)
+      && (opponentToonHandle === notePulseId || (oppRow && payload.opponentIdentityMatched))) {
+      payload.oppPulseId = notePulseId;
+    }
+    payload.opponentNotesWritable = Boolean(oppRow && payload.opponentIdentityMatched && oppRow.pulseId === notePulseId);
 
     if (oppRow) {
       const wins = Number(oppRow.wins) || 0;

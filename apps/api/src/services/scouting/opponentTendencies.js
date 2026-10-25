@@ -145,6 +145,7 @@ function topLabel(labels) {
  *   window: number,
  *   favOpening?: {name: string, share: number, samples: number, of: number},
  *   predictedStrategies?: Array<{name: string, weight: number}>,
+ *   openingHistory?: Array<{name: string, samples: number, of: number}>,
  *   cheeseProbability?: number,
  *   cheeseHistory?: {samples: number, of: number},
  * }} OpponentTendencies
@@ -177,6 +178,11 @@ function summarizeOpponentTendencies(rows) {
   /** @type {OpponentTendencies} */
   const out = { window };
   if (window < MIN_TENDENCY_GAMES) return out;
+
+  const counts = new Map();
+  for (const label of labels) if (label) counts.set(label, (counts.get(label) || 0) + 1);
+  out.openingHistory = [...counts].sort((a, b) => b[1] - a[1]).slice(0, MAX_PREDICTIONS)
+    .map(([name, samples]) => ({ name, samples, of: window }));
 
   const top = topLabel(labels);
   if (top && top.count >= MIN_TENDENCY_GAMES) {

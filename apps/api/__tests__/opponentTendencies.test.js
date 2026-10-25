@@ -71,6 +71,15 @@ test("derives every field from stored strategies alone (rows without `opening`)"
   expect(t.cheeseHistory).toEqual({ samples: 2, of: 3 });
 });
 
+test("opening frequencies keep unlabelled games in the denominator and stop at three", () => {
+  const t = summarizeOpponentTendencies(rows("Hatch", "Pool", "Hatch", "", "Gas", "Fourth"));
+  expect(t.openingHistory).toEqual([
+    { name: "Hatch", samples: 2, of: 6 },
+    { name: "Pool", samples: 1, of: 6 },
+    { name: "Gas", samples: 1, of: 6 },
+  ]);
+});
+
 test("predictions are the dossier's recency-weighted numbers for the same games", () => {
   const strategies = Array.from({ length: 14 }, (_, i) =>
     (i < 4 ? "Zerg - Roach Rush" : "Zerg - Hatch First"));

@@ -354,8 +354,10 @@ function validateNotesBody(raw) {
       `notes must contain at most ${LIMITS.OPPONENT_NOTES_MAX_LENGTH} characters`,
     );
   }
-  if (typeof body.notesReadAloud !== "boolean") {
-    errors.push("notesReadAloud must be a boolean");
+  if (body.preserveReadAloud === true) {
+    if (Object.keys(body).some(key => key !== "notes" && key !== "preserveReadAloud")) errors.push("preserveReadAloud accepts only notes");
+  } else if (body.preserveReadAloud !== undefined || typeof body.notesReadAloud !== "boolean") {
+    errors.push("notesReadAloud must be a boolean, or use preserveReadAloud: true");
   }
   return errors;
 }

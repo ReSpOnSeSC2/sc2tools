@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useDockLayout } from "../useDockLayout";
 import { SectionCard } from "../SectionCard";
-import { orderedDockSections, DOCK_LAYOUT_KEY } from "@/lib/dockLayout";
+import { orderedDockSections, DOCK_LAYOUT_KEY, DOCK_SECTIONS } from "@/lib/dockLayout";
 
 function Fixture() {
   const { layout, setOpen, togglePin, reset } = useDockLayout();
@@ -29,7 +29,7 @@ describe("Dock section disclosure and browser layout", () => {
     expect(screen.getByRole("button", { name: "Poll" }).getAttribute("aria-expanded")).toBe("true");
     expect(JSON.parse(localStorage.getItem(DOCK_LAYOUT_KEY)!)).toMatchObject({ pinned: ["dock-poll"] });
     fireEvent.click(screen.getByRole("button", { name: "Reset layout" }));
-    expect(screen.getByTestId("sections").firstElementChild?.id).toBe("dock-chat");
+    expect(screen.getByTestId("sections").firstElementChild?.id).toBe(DOCK_SECTIONS[0].id);
     expect((screen.getByLabelText("Draft dock-poll") as HTMLInputElement).value).toBe("Keep this draft");
     expect(screen.getByRole("button", { name: "Pin Poll to top" }).closest("button")?.querySelector("button")).toBeNull();
   });

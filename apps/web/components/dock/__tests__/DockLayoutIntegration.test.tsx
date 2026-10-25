@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DockClient } from "../DockClient";
-import { DOCK_LAYOUT_KEY } from "@/lib/dockLayout";
+import { DOCK_LAYOUT_KEY, DOCK_SECTIONS } from "@/lib/dockLayout";
 import { DEFAULT_STUDIO_STATE } from "@/lib/multichat/useStudioState";
 
 vi.mock("@/lib/multichat/useMultiChat", () => ({ useMultiChat: () => ({ messages: [], events: [], statuses: {}, active: false }) }));
@@ -39,7 +39,7 @@ describe("Real Dock layout consumers", () => {
     expect(saved).not.toContain("Next build?");
     fireEvent.click(screen.getByRole("button", { name: "Reset layout" }));
     expect((screen.getByPlaceholderText(/Poll question/) as HTMLInputElement).value).toBe("Next build?");
-    expect(document.querySelector("[data-dock-section]")?.id).toBe("dock-chat");
+    expect(document.querySelector("[data-dock-section]")?.id).toBe(DOCK_SECTIONS[0].id);
     expect(studioPosts()).toEqual([]);
   });
 
@@ -68,7 +68,7 @@ describe("Real Dock layout consumers", () => {
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: scroll, configurable: true });
     try {
       const view = render(<DockClient token="token" />); await drain();
-      expect(watched.mock.calls.filter(([element]) => (element as HTMLElement).hasAttribute("data-dock-section"))).toHaveLength(9);
+      expect(watched.mock.calls.filter(([element]) => (element as HTMLElement).hasAttribute("data-dock-section"))).toHaveLength(DOCK_SECTIONS.length);
       const nav = within(screen.getByRole("navigation", { name: "Dock sections" }));
       act(() => observe?.([{ target: document.getElementById("dock-goals")!, isIntersecting: true, boundingClientRect: { top: 90 } } as unknown as IntersectionObserverEntry], {} as IntersectionObserver));
       expect(nav.getByRole("button", { name: "Goals" }).getAttribute("aria-current")).toBe("location");

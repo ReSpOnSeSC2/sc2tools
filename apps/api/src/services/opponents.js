@@ -1170,7 +1170,7 @@ class OpponentsService {
    *
    * @param {string} userId
    * @param {string} pulseId
-   * @param {{notes: string, notesReadAloud: boolean}} input
+   * @param {{notes: string, notesReadAloud?: boolean, preserveReadAloud?: boolean}} input
    * @returns {Promise<{
    *   notes: string,
    *   notesReadAloud: boolean,
@@ -1182,7 +1182,8 @@ class OpponentsService {
     if (
       !input
       || typeof input.notes !== "string"
-      || typeof input.notesReadAloud !== "boolean"
+      || (input.preserveReadAloud === true ? Object.hasOwn(input, "notesReadAloud")
+        : typeof input.notesReadAloud !== "boolean" || input.preserveReadAloud !== undefined)
       || input.notes.length > LIMITS.OPPONENT_NOTES_MAX_LENGTH
     ) {
       throw invalidOpponentNotes();
@@ -1211,23 +1212,24 @@ class OpponentsService {
     // name-keyed cache entries when an older opponents row is stale.
     await this._overlayLatestNameFromGames(userId, [opponent]);
     const notes = input.notes.trim();
-    const notesReadAloud = notes.length > 0 && input.notesReadAloud;
+    let notesReadAloud = false;
     if (notes.length === 0) {
       await this.db.opponentNotes.deleteOne({ userId, pulseId });
     } else {
-      await this.db.opponentNotes.updateOne(
+      const saved = await this.db.opponentNotes.findOneAndUpdate(
         { userId, pulseId },
         {
-          $setOnInsert: { userId, pulseId },
+          $setOnInsert: { userId, pulseId, ...(input.preserveReadAloud === true ? { notesReadAloud: false } : {}) },
           $set: {
             notes,
-            notesReadAloud,
+            ...(input.preserveReadAloud === true ? {} : { notesReadAloud: input.notesReadAloud === true }),
             updatedAt: new Date(),
             _schemaVersion: OPPONENT_NOTES_VERSION,
           },
         },
-        { upsert: true },
+        { upsert: true, returnDocument: "after", includeResultMetadata: false },
       );
+      notesReadAloud = saved?.notesReadAloud === true;
     }
 
     return {
