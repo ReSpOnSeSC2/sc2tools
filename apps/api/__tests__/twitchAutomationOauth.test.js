@@ -22,7 +22,7 @@ beforeEach(async () => {
 async function connect(metadata = { predictionsConsent: true }, granted = scopes) {
   await service.vault.saveConnection(OWNER, "twitch", { accessToken: "mock-access", refreshToken: "mock-refresh", expiresAt: new Date(now + 3600000), platformUserId: "42", platformUserName: "Synthetic broadcaster", scopes: granted, metadata });
 }
-const complete = async () => { const flow = await service.begin(OWNER, "twitch", { purpose: "predictions" }); const state = new URL(flow.authorizeUrl).searchParams.get("state"); await service.complete("twitch", { state, code: "disposable-code" }); };
+const complete = async (purpose = "predictions") => { const flow = await service.begin(OWNER, "twitch", { purpose }); const state = new URL(flow.authorizeUrl).searchParams.get("state"); await service.complete("twitch", { state, code: "disposable-code" }); };
 
 test("predictions permission is incremental, explicit and Twitch-only", () => {
   expect(oauth.scopesForPurpose("twitch")).not.toContain("channel:manage:predictions");
@@ -48,6 +48,19 @@ test("reconnecting predictions preserves a same-account explicitly granted broad
 test("first prediction consent does not silently enable title/marker streaming controls", async () => {
   await complete(); const row = await service.vault.getConnection(OWNER, "twitch"); expect(row.metadata).toMatchObject({ streamingConsent: false, predictionsConsent: true });
   expect(row.scopes).not.toContain("channel:manage:broadcast");
+});
+test.each([true, false])("reverse reconnect order preserves prediction consent only on the same broadcaster: %j", async sameAccount => {
+  await connect({ predictionsConsent: true });
+  scopes = [...oauth.STREAMING_SCOPES.twitch, "channel:manage:predictions"]; if (!sameAccount) identity = "99";
+  const flow = await service.begin(OWNER, "twitch", { purpose: "streaming" });
+  expect(new URL(flow.authorizeUrl).searchParams.get("scope").split(" ")).toEqual(scopes);
+  await service.complete("twitch", { state: new URL(flow.authorizeUrl).searchParams.get("state"), code: "disposable-code" });
+  const row = await service.vault.getConnection(OWNER, "twitch"); expect(row.metadata).toMatchObject({ streamingConsent: true, predictionsConsent: sameAccount });
+});
+test("unconsented prediction scope is not silently re-requested for stream controls", async () => {
+  await connect({}, [...oauth.STREAMING_SCOPES.twitch, "channel:manage:predictions"]);
+  const flow = await service.begin(OWNER, "twitch", { purpose: "streaming" });
+  expect(new URL(flow.authorizeUrl).searchParams.get("scope").split(" ")).toEqual(oauth.STREAMING_SCOPES.twitch);
 });
 test("account switches do not carry another broadcaster's streaming consent", async () => {
   await connect({ streamingConsent: true }, oauth.STREAMING_SCOPES.twitch); scopes = oauth.scopesForPurpose("twitch", "predictions", oauth.STREAMING_SCOPES.twitch); identity = "99";

@@ -52,6 +52,7 @@ function scopesForPurpose(platform, purpose = "alerts", existingScopes = []) {
   }
   if (purpose === "predictions") return [...TWITCH_SCOPES, "channel:manage:predictions",
     ...(existingScopes.includes("channel:manage:broadcast") ? ["channel:manage:broadcast"] : [])];
+  if (platform === "twitch" && purpose === "streaming" && existingScopes.includes("channel:manage:predictions")) return [...STREAMING_SCOPES.twitch, "channel:manage:predictions"];
   return [...(purpose === "streaming" ? STREAMING_SCOPES[platform] : defaults[platform])];
 }
 const YOUTUBE_UPLOAD_PAGE_LIMIT = 3;

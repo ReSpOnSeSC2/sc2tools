@@ -547,7 +547,9 @@ class PlatformIntegrationsService {
     const vault = this._vault();
     if (!userId) throw integrationError(401, "auth_required", "Sign in first");
     const purpose = options.purpose || "alerts";
-    const existingScopes = purpose === "predictions" ? (await vault.statuses(userId)).find(row => row.platform === platform)?.scopes || [] : [];
+    const existing = platform === "twitch" && (purpose === "predictions" || purpose === "streaming")
+      ? (await vault.statuses(userId)).find(row => row.platform === platform) : null;
+    const existingScopes = (existing?.scopes || []).filter(scope => scope !== "channel:manage:predictions" || existing?.predictionsConsent === true);
     const requiredScopes = oauthDefault.scopesForPurpose(platform, purpose, existingScopes);
     if ((purpose === "streaming" || purpose === "predictions") && !vault.supportsStreamingLeases()) {
       throw integrationError(503, "streaming_coordination_unavailable", "Stream control is unavailable until server coordination is ready.");
@@ -570,7 +572,8 @@ class PlatformIntegrationsService {
     });
     let authorizeUrl;
     if (platform === "twitch") {
-      authorizeUrl = purpose === "predictions" ? this.oauth.buildTwitchAuthorizeUrl(provider, state, purpose, existingScopes) : this.oauth.buildTwitchAuthorizeUrl(provider, state, purpose);
+      authorizeUrl = purpose === "predictions" || purpose === "streaming" && existingScopes.includes("channel:manage:predictions")
+        ? this.oauth.buildTwitchAuthorizeUrl(provider, state, purpose, existingScopes) : this.oauth.buildTwitchAuthorizeUrl(provider, state, purpose);
     } else if (platform === "kick") {
       authorizeUrl = this.oauth.buildKickAuthorizeUrl(provider, state, challenge || "", purpose);
     } else {
