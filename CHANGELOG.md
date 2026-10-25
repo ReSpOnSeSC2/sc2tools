@@ -28,6 +28,10 @@ corresponding GitHub Release.
 
 - Browse exact totals with sortable pages and signup, admin and inactive-agent filters. Export matching accounts as a bounded private CSV, inspect recent games/activity, and copy account IDs with a manual fallback.
 
+### Public link previews
+
+- Public pages use their own canonical and social titles. Shared community builds and authors, Try and Download gain branded preview cards; build rules show their deadlines clearly. Public member dates use a consistent time zone, and unavailable share data falls back promptly.
+
 ### Stream Dock
 
 - The new Game section and sticky status header show match and session context, Crystal Ball votes and safe round controls, a confirmed session reset, reversible game-widget hiding, and approved opponent shout-outs. Manual results earn no oracle points or accuracy; verified scoring recovers safely after interrupted writes.

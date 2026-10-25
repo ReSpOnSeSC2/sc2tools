@@ -7,6 +7,7 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { AuthorProfile } from "@/components/community/AuthorProfile";
 import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
 import type { CommunityAuthorProfile } from "@/components/community/types";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
 /**
  * Public author profile route.
@@ -54,15 +55,12 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
     profile.totalBuilds === 1
       ? `1 published build by ${profile.displayName}.`
       : `${profile.totalBuilds} published builds by ${profile.displayName}.`;
-  return {
+  return pageMetadata({
     title: `${profile.displayName} · Community`,
     description,
-    openGraph: {
-      title: `${profile.displayName} — SC2 Tools community`,
-      description,
-      images: [{ url: "/og.jpg", width: 1200, height: 630 }],
-    },
-  };
+    canonical: `/community/authors/${encodeURIComponent(userId)}`,
+    shareTitle: `${profile.displayName} — SC2 Tools community`, routeOgImage: true,
+  });
 }
 
 export default async function CommunityAuthorPage({ params }: PageParams) {

@@ -11,9 +11,10 @@
 import type { Metadata } from "next";
 import { safeVideoUrls } from "@/components/guides/youtubeUrls";
 import type { GuideBuildPublished, GuideVideo } from "@/lib/guides/types";
+import { absoluteUrl, siteOrigin } from "@/lib/seo/absoluteUrl";
+import { trimDescription } from "@/lib/seo/trimDescription";
 
 export const GUIDE_SITE_NAME = "SC2 Tools";
-const DEFAULT_SITE_URL = "https://sc2tools.com";
 const SCHEMA_CONTEXT = "https://schema.org";
 /** Search snippets are truncated around here; keep descriptions below it. */
 const DESCRIPTION_MAX_CHARS = 300;
@@ -27,8 +28,7 @@ export interface GuideCrumb {
 
 /** The deployment's public origin, without a trailing slash. */
 export function guideSiteUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_SITE_URL ?? DEFAULT_SITE_URL;
-  return raw.replace(/\/+$/, "");
+  return siteOrigin();
 }
 
 /**
@@ -37,14 +37,11 @@ export function guideSiteUrl(): string {
  * Example: `guideAbsoluteUrl("/guides/pvz")` → "https://sc2tools.com/guides/pvz".
  */
 export function guideAbsoluteUrl(path: string): string {
-  return `${guideSiteUrl()}${path}`;
+  return absoluteUrl(path);
 }
 
 function clampDescription(text: string): string {
-  if (text.length <= DESCRIPTION_MAX_CHARS) return text;
-  const cut = text.slice(0, DESCRIPTION_MAX_CHARS - 1);
-  const lastSpace = cut.lastIndexOf(" ");
-  return `${cut.slice(0, lastSpace > 0 ? lastSpace : cut.length)}…`;
+  return trimDescription(text, DESCRIPTION_MAX_CHARS);
 }
 
 export interface GuideMetadataInput {

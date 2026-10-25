@@ -134,7 +134,7 @@ export async function getJson<T>(
  */
 export async function getJsonWithStatus<T>(
   path: string,
-  opts: { revalidateSec?: number } = {},
+  opts: { revalidateSec?: number; signal?: AbortSignal } = {},
 ): Promise<{ data: T | null; status: number | null }> {
   const revalidate =
     typeof opts.revalidateSec === "number" && opts.revalidateSec > 0
@@ -144,6 +144,7 @@ export async function getJsonWithStatus<T>(
     const res = await fetch(`${API_BASE}${path}`, {
       headers: { accept: "application/json" },
       next: { revalidate },
+      ...(opts.signal ? { signal: opts.signal } : {}),
     });
     if (!res.ok) return { data: null, status: res.status };
     return { data: (await res.json()) as T, status: res.status };

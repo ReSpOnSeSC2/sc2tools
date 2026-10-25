@@ -30,6 +30,9 @@ import { SKILL_LEVELS, coerceSavedRules } from "@/lib/build-rules";
 import { SavedBuildExportMenu } from "@/components/builds/SavedBuildExportMenu";
 import { serializeJsonLd } from "@/lib/reviewJsonLd";
 import { communityDescription } from "@/lib/communityDescription";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
+import { trimDescription } from "@/lib/seo/trimDescription";
+import { absoluteUrl } from "@/lib/seo/absoluteUrl";
 
 /**
  * The published build. A 404 from the API is the only "doesn't exist";
@@ -61,17 +64,14 @@ export async function generateMetadata({
     };
   }
   const description =
-    data.description?.slice(0, 200) ||
+    trimDescription(data.description || "", 200) ||
     `Player-published StarCraft II build for ${data.matchup || "any matchup"}.`;
-  return {
+  return pageMetadata({
     title: `${data.title} · Community build`,
     description,
-    openGraph: {
-      title: `${data.title} — SC2 Tools community build`,
-      description,
-      images: [{ url: "/og.jpg", width: 1200, height: 630 }],
-    },
-  };
+    canonical: `/community/builds/${encodeURIComponent(data.slug)}`,
+    shareTitle: `${data.title} — SC2 Tools community build`, routeOgImage: true,
+  });
 }
 
 /**
@@ -129,13 +129,13 @@ export default async function CommunityBuildPage({
         "@type": "ListItem",
         position: 1,
         name: "Community",
-        item: "/community",
+        item: absoluteUrl("/community"),
       },
       {
         "@type": "ListItem",
         position: 2,
         name: data.title,
-        item: `/community/builds/${data.slug}`,
+        item: absoluteUrl(`/community/builds/${encodeURIComponent(data.slug)}`),
       },
     ],
   };
