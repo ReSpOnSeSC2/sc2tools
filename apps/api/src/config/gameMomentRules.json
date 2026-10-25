@@ -1,0 +1,14 @@
+{
+  "mmrSteps": [100, 250],
+  "kinds": [
+    { "id": "crossedMmrMark", "label": "Recorded MMR milestone", "preset": "victory-lap" },
+    { "id": "newSeasonPeak", "label": "Recorded season peak", "preset": "tiny-crown" },
+    { "id": "leagueChange", "label": "Confirmed league change", "preset": "level-up" },
+    { "id": "winStreak", "label": "Five or ten wins", "preset": "gg-fireworks" },
+    { "id": "lossStreakBroken", "label": "Loss streak broken", "preset": "gold-star" },
+    { "id": "revengeWin", "label": "Revenge win", "preset": "victory-lap" },
+    { "id": "giantKiller", "label": "Giant-killer win", "preset": "comic-burst" },
+    { "id": "marathonWin", "label": "Marathon win", "preset": "gold-star" },
+    { "id": "streamerOpponentWin", "label": "Win against an approved streamer", "preset": "victory-lap" }
+  ]
+}

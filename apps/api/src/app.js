@@ -83,6 +83,7 @@ const { buildAlertMediaStore } = require("./services/alertMediaStore");
 const { OverlayLiveService } = require("./services/overlayLive");
 const { LiveGameBroker } = require("./services/liveGameBroker");
 const { OpponentChannelsCache } = require("./services/opponentChannels");
+const { GameMomentsService } = require("./services/gameMoments");
 const { GameDeskService } = require("./services/gameDesk");
 const { AggregationsService } = require("./services/aggregations");
 const { MacroReportService } = require("./services/macroReport");
@@ -819,6 +820,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     builds,
   });
   const seasons = new SeasonsService();
+  const gameMoments = new GameMomentsService(deps.db, { users, tokens: overlayTokens, channels: opponentChannels,
+    seasons, engagement: multichatEngagement, bot: twitchChatBot, io: deps.io, logger: deps.logger });
   const arcade = new ArcadeService(deps.db, { games, gameDetails });
   // Replay Review Exchange (docs/reviews.md). Built unconditionally —
   // REVIEWS_ENABLED only gates the routes — so GDPR export/deletion and
@@ -905,7 +908,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     deps.io?.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "game-control" });
   } });
   return {
-    jobLedger, adminAudit, gameControls,
+    jobLedger, adminAudit, gameControls, gameMoments,
     users,
     opponents,
     opponentIdentityMatcher,
@@ -1584,6 +1587,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       liveGameBroker: services.liveGameBroker,
       engagement: services.multichatEngagement,
       ladderMapPool: services.seasons ? services.seasons.ladderMapPool : undefined,
+      gameMoments: services.gameMoments,
       replayFiles: services.replayFiles || undefined,
       io: deps.io,
       guideSamples: services.guideSamples,
