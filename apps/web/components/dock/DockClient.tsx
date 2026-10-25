@@ -72,6 +72,7 @@ import { DockStatusHeader } from "./DockStatusHeader";
 import { loadGameDesk } from "./dockLazyLoaders";
 import { DockLazyPanel } from "./DockLazyPanel";
 const loadScout = () => import("./DockScout").then(module => module.DockScout);
+const loadTwitchAutomation = () => import("./DockTwitchAutomation").then(module => module.DockTwitchAutomation);
 
 /** Platform config re-read cadence — same as the OBS widget. */
 const CONFIG_REFRESH_MS = DOCK_CONFIG_REFRESH_MS;
@@ -375,7 +376,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
   const summaries = useDockSummaries(studio, studioSnapshotReady, platforms, loaded,
     tally?.total ?? 0, engagement.clipMoments.length, engagementReady);
   const panels: Record<DockSectionId, ReactNode> = {
-    "dock-game": <DockLazyPanel label="game desk" loader={loadGameDesk} componentProps={{ token, live: updates?.liveGame ?? null, lastLiveAt: updates?.lastLiveAt ?? null, gameStatus: updates?.gameStatus ?? null, session: updates?.session ?? null, studio, engagement, ready: studioSnapshotReady && engagementReady, busy, onPost: postStudioAction }} />,
+    "dock-game": <><DockLazyPanel label="game desk" loader={loadGameDesk} componentProps={{ token, live: updates?.liveGame ?? null, lastLiveAt: updates?.lastLiveAt ?? null, gameStatus: updates?.gameStatus ?? null, session: updates?.session ?? null, studio, engagement, ready: studioSnapshotReady && engagementReady, busy, onPost: postStudioAction }} /><DockLazyPanel label="Twitch prediction controls" loader={loadTwitchAutomation} componentProps={{ token, onInvalid }} /></>,
     "dock-scout": <DockLazyPanel label="live scouting" loader={loadScout} componentProps={{ live: updates?.liveGame ?? null, lastUpdatedAt: updates?.lastLiveAt ?? null }} />,
     "dock-chat": <>
 <DockChat embedded
