@@ -1,0 +1,10 @@
+{
+  "maxViews": 12,
+  "maxName": 60,
+  "sections": ["today", "replays", "opponents", "strategies", "trends", "macro", "maps", "builds", "arcade"],
+  "presets": ["all", "after_5_0_17", "patch_5_0_16", "before_5_0_16", "today", "yesterday", "last_week", "last_7d", "this_month", "last_30d", "last_90d", "this_year", "last_year", "current_season", "custom"],
+  "strings": {"map": 200, "build": 200, "opp_strategy": 200, "leak": 120},
+  "numbers": {"mmr_min": [0, 10000], "mmr_max": [0, 10000], "macro_min": [0, 100], "macro_max": [0, 100], "min_minutes": [1, 600], "max_minutes": [1, 600]},
+  "choices": {"race": ["P", "T", "Z", "R"], "opp_race": ["P", "T", "Z", "R"], "map_pool": ["ladder", "nonladder", "all"], "game_size": ["1v1", "team", "all"]},
+  "regions": ["NA", "EU", "KR", "CN", "SEA", "PTR"]
+}

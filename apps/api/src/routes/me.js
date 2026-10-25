@@ -10,6 +10,7 @@ const {
   releaseReplayIngestAdmission,
 } = require("../middleware/replayIngestAdmission");
 const { browserUploadStatusOf } = require("../services/replayFilesCors");
+const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
 const {
   CHECKIN_PREF_TYPE,
   sanitizeCheckinPrefs,
@@ -34,6 +35,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   GET    /me/preferences/:type    — read stored preferences ("misc" | "voice")
  *   PUT    /me/preferences/:type    — replace preferences for that type ("buildCheckin"
  *                                     also pings ``build-intent:changed {prefs: true}``)
+ *   GET    /me/analyzer-default-view — one private selected-view/legacy-tab lookup
  *   GET    /me/doctor               — diagnostic warnings (no agent, no profile, etc.)
  *   GET    /me/replay-archive-status — one-time original replay backfill progress
  *   POST   /me/replay-archive-resync — agent acknowledges a full local re-sync
@@ -44,7 +46,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   POST   /me/backups/:id/restore  — restore from a snapshot
  *
  * @param {{
- *   users: import('../services/types').UsersService,
+ *   users: import('../services/types').UsersService & Pick<import('../services/users').UsersService, 'getAnalyzerDefaultView'>,
  *   announcements?: import('../services/announcements').AnnouncementsService,
  *   games: import('../services/types').GamesService,
  *   gdpr: import('../services/gdpr').GdprService,
@@ -391,21 +393,32 @@ function buildMeRouter(deps) {
     "randomizer",
     "onboarding",
     "multichat",
+    "analyzerViews",
     CHECKIN_PREF_TYPE,
   ]);
+
+  router.get("/me/analyzer-default-view", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      res.set("Cache-Control", "private, no-store");
+      res.json(await deps.users.getAnalyzerDefaultView(req.auth.userId));
+    } catch (error) { next(error); }
+  });
 
   router.get("/me/preferences/:type", deps.auth, async (req, res, next) => {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
+      if (type === "analyzerViews") res.set("Cache-Control", "private, no-store");
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
         return;
       }
       const prefs = await deps.users.getPreferences(auth.userId, type);
       res.json(type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(prefs)
-        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(prefs) : prefs);
+        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(prefs)
+          : type === "analyzerViews" ? sanitizeAnalyzerViews(prefs) : prefs);
     } catch (err) {
       next(err);
     }
@@ -416,6 +429,7 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
+      if (type === "analyzerViews") res.set("Cache-Control", "private, no-store");
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
         return;
@@ -431,7 +445,8 @@ function buildMeRouter(deps) {
         return;
       }
       const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body)
-        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(req.body) : req.body;
+        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(req.body)
+          : type === "analyzerViews" ? sanitizeAnalyzerViews(req.body, true) : req.body;
       const saved = await deps.users.updatePreferences(auth.userId, type, body);
       if (deps.buildIntents) {
         try {

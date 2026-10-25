@@ -8,9 +8,9 @@ import {
   hrefForTab,
   isTabId,
   opponentDossierHref,
-  type TabId,
 } from "@/components/analyzer/tabs";
 import { TodayView } from "@/components/dashboard/TodayView";
+import { analyzerViewHref, sanitizeAnalyzerViews, viewFiltersFromQuery } from "@/lib/analyzerViews";
 
 export const metadata = {
   title: "Today",
@@ -19,11 +19,11 @@ export const metadata = {
 };
 
 /**
- * Longest the "Default tab" lookup may hold the first /app page of a
+ * Longest the saved-view/default-tab lookup may hold the first /app page of a
  * session. Past this (a restart, an unavailable or slow API) the visit just
  * shows Today.
  */
-const DEFAULT_TAB_LOOKUP_TIMEOUT_MS = 1500;
+const DEFAULT_VIEW_LOOKUP_TIMEOUT_MS = 1500;
 
 /**
  * /app — the Today screen: the between-games glance (live game, session
@@ -34,8 +34,8 @@ const DEFAULT_TAB_LOOKUP_TIMEOUT_MS = 1500;
  *   /app?opponent=<pulseId>  → /app/opponents/<pulseId>   (dossier backlinks)
  *   /app?tab=<tabId>         → /app/<section>             (old deep links)
  *
- * Then Settings → "Default tab": when /app is the first analyzer page
- * of the browser session, a saved section opens instead of Today. The
+ * On the first plain /app visit of a browser session, a default saved view
+ * (or the legacy Settings default tab) opens instead of Today. The
  * redirect runs here, before render, so Today never flashes first.
  */
 export default async function AppHome({
@@ -49,17 +49,19 @@ export default async function AppHome({
   if (opponent) redirect(opponentDossierHref(opponent.pulseId));
 
   const rawTab = Array.isArray(query.tab) ? query.tab[0] : query.tab;
-  if (isTabId(rawTab)) redirect(hrefForTab(rawTab));
+  const urlQuery = new URLSearchParams();
+  for (const [key, raw] of Object.entries(query)) { const value = Array.isArray(raw) ? raw[0] : raw; if (value !== undefined && key !== "tab") urlQuery.set(key, value); }
+  if (isTabId(rawTab)) redirect(`${hrefForTab(rawTab)}${urlQuery.size ? `?${urlQuery}` : ""}`);
 
   const rawView = Array.isArray(query.view) ? query.view[0] : query.view;
-  const defaultTab = rawView === "today" ? null : await defaultTabForThisVisit();
-  if (defaultTab) redirect(hrefForTab(defaultTab));
+  const target = rawView === "today" || viewFiltersFromQuery(urlQuery).present ? null : await defaultViewForThisVisit();
+  if (target) redirect(target);
 
   return <TodayView />;
 }
 
 /**
- * The section the saved "Default tab" opens, or null to show Today.
+ * The default saved-view URL, legacy section URL, or null to show Today.
  *
  * Only the first /app page of a browser session reads it: AnalyzerFrame
  * sets the session cookie (lib/appSession.ts) once any /app page has
@@ -68,15 +70,19 @@ export default async function AppHome({
  * preference, "today", an unknown tab, a failed or slow request: all
  * show Today.
  */
-async function defaultTabForThisVisit(): Promise<TabId | null> {
+async function defaultViewForThisVisit(): Promise<string | null> {
   try {
     const jar = await cookies();
     if (jar.has(APP_SESSION_COOKIE)) return null;
-    const res = await apiFetch<{ defaultTab?: string } | null>(
-      "/v1/me/preferences/misc",
-      { signal: AbortSignal.timeout(DEFAULT_TAB_LOOKUP_TIMEOUT_MS) },
+    const res = await apiFetch<{ defaultTab?: string; defaultView?: unknown } | null>(
+      "/v1/me/analyzer-default-view",
+      { signal: AbortSignal.timeout(DEFAULT_VIEW_LOOKUP_TIMEOUT_MS) },
     );
-    return res.ok ? defaultTabRedirect(res.data?.defaultTab) : null;
+    if (!res.ok) return null;
+    const view = sanitizeAnalyzerViews({ views: [res.data?.defaultView] }).views[0];
+    if (view) return analyzerViewHref(view);
+    const tab = defaultTabRedirect(res.data?.defaultTab);
+    return tab ? hrefForTab(tab) : null;
   } catch {
     return null;
   }
