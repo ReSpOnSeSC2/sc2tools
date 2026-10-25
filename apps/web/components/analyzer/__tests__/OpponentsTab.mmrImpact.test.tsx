@@ -114,7 +114,7 @@ const impacts = [
 
 beforeEach(() => {
   downloadCsvMock.mockReset();
-  useRivalsMock.mockReturnValue({ keys: [], toggle: vi.fn(), loading: false, saving: false });
+  useRivalsMock.mockReturnValue({ owner: "owner-a", keys: [], toggle: vi.fn(), loading: false, saving: false });
   useRivalSummaryMock.mockReturnValue({ data: undefined, error: false, loading: false, retry: vi.fn() });
   useFiltersMock.mockReturnValue({ filters: {}, dbRev: 7 });
   usePlayerChannelsMock.mockReturnValue(() => undefined);

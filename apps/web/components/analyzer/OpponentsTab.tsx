@@ -325,7 +325,7 @@ export function OpponentsTab({
     const scope = `Opponents · ${showPlayerGroups ? "grouped players" : "accounts"} · ${path} · search ${search || "(none)"} · min games ${minGames} · ${quick} · MMR ${mmrImpactFilter} · notes ${hasNotes} · ${sort.sortBy} ${sort.sortDir}`;
     downloadCsv(`sc2tools-opponents-${period}.csv`, toCsv({ columns: OPPONENT_CSV_COLUMNS, rows: items, scope }));
   }, [exportScope, filters.since, filters.until, showPlayerGroups, path, search, minGames, quick, mmrImpactFilter, hasNotes, sort.sortBy, sort.sortDir, items]);
-  const exportDisabled = !items.length || isLoading || isLoadingMore || hitMaxPages || !!error || search !== deferredSearch;
+  const exportDisabled = !rivals.owner || !items.length || isLoading || isLoadingMore || hitMaxPages || !!error || search !== deferredSearch;
   useEffect(() => {
     onExportAction?.({ count: items.length, disabled: exportDisabled, download: exportRows });
     return () => onExportAction?.(null);
@@ -359,7 +359,7 @@ export function OpponentsTab({
         <OpponentColumnPicker columns={columns} onChange={(key, checked) => setColumnOverrides({ ...columnOverrides, [key]: checked })} onReset={() => setColumnOverrides({})} />
         {!onExportAction ? <Button variant="secondary" disabled={exportDisabled} title={`Export all ${items.length.toLocaleString()} matching ${groupByPlayer ? "players" : "accounts"}, including rows outside the render window`} onClick={exportRows}>Export CSV</Button> : null}
       </div>
-      {rivals.error || rivals.unavailable ? <p role="alert" className="text-caption text-warning">{rivals.error || "Rival preferences are temporarily unavailable."}</p> : null}
+      {rivals.error || rivals.unavailable ? <div role="alert" className="flex flex-wrap items-center gap-2 text-caption text-warning"><p>{rivals.error || "Rival preferences are temporarily unavailable."}</p>{rivals.unavailable ? <Button variant="ghost" size="sm" onClick={rivals.retry}>Retry rival preferences</Button> : null}</div> : null}
       {summary.error ? <p role="status" className="flex flex-wrap items-center gap-2 text-caption text-text-muted">Recent rival details are unavailable.<Button variant="ghost" size="sm" onClick={summary.retry}>Retry rival details</Button></p> : null}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative w-full sm:max-w-sm">

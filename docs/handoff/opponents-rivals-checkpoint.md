@@ -43,13 +43,14 @@ for Strength, Mechanics, Story and stream titles are preserved.
 
 ## Local evidence so far
 
-- 182 focused web/Help tests, including 1,500 rows (100 then 200), previous Back
+- 191 focused web/Help tests, including 1,500 rows (100 then 200), previous Back
   restoration, owner/token/response fences, Wilson bounds and CSV cells.
-- 112 distinct focused API tests with temporary MongoDB and mocked providers, covering
+- 163 focused API tests with temporary MongoDB and mocked providers, covering
   visibility/owner/filter scope, top-20 lower-bound streaks, recent cap,
   generation invalidation, raw rating history, cache TTL/admission and cache-only
   live status, existing dossier/overlay consumers, scoped CSV parity, empty and
-  malformed analysis samples, 5,001→5,000 truncation and shared route admission.
+  malformed analysis samples, 5,001→5,000 truncation, canonical/lowercase account
+  parity and shared route admission.
 - API/web typechecks and strict scoped lint pass for the foundation.
 - Required-engine integrated production build and every unchanged bundle budget
   passed: Today 227.3/240 kB, game 316.7/440, list 120/180, dossier 475.2/500,
@@ -69,4 +70,11 @@ with a fence on admitted reads. Root's review accepted the shared CSV scope
 extraction. Integrate #716's final account-case follow-up (`cd44666a`) and fresh
 main before remote gates; preserve both packs and refresh any required evidence.
 Final CI/PR/merge evidence will be appended after the expected head is green.
+Independent review found and corrected two client boundaries before first CI:
+all auth fields now define owner scope, including loading/signout with a stale
+same user ID; a real deadline/cancellation race settles held token/body promises
+and allows retry. Fifteen deterministic tests cover these paths and late
+settlement, including a held cache mutation; active controller identity also
+fences return-to-same-owner races. The initial preference read uses the existing
+API deadline too, with explicit retry recovery.
 No production job, migration, real account write or provider operation was run.

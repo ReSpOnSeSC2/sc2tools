@@ -39,6 +39,12 @@ test("empty analysis samples stay empty, malformed samples fail closed, unowned 
   await expect(csv({ analysisGameIds: "oops" })).rejects.toMatchObject({ status: 400, code: "invalid_analysis_game_ids" });
   expect(await csv({},"other")).toBeNull();
 });
+test("dossier paging and CSV both retain legacy lowercase account handles under a canonical account filter", async () => {
+  await db.games.insertMany([game(1,{myToonHandle:"1-s2-1-99"}),game(2,{myToonHandle:"1-S2-1-99"}),game(3,{myToonHandle:"1-S2-1-77"}),game(4,{myToonHandle:"1-s2-1-99",userId:"other"})]);
+  const opts={filters:{accounts:["1-S2-1-99"]}};
+  expect((await csv(opts)).ids).toEqual(["2","1"]);
+  expect((await opponents.listGames("owner","a",opts)).items.map(row=>row.id)).toEqual(["2","1"]);
+});
 test("5,001 matching rows use the shared serializer and report exactly a 5,000-row cap without materializing replay details", async () => {
   await db.games.insertMany(Array.from({ length: 5001 },(_,i) => game(i + 1)));
   const find = jest.spyOn(db.games,"find"), output = await csv();
