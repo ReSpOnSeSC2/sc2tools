@@ -80,6 +80,7 @@ const ROLL_REPORT_WINDOW_MS = 60_000;
  *   issuer?: string,
  *   audience?: string,
  *   resolveOverlayToken?: (token: string) => Promise<{userId: string, label: string, enabledWidgets?: string[],profile?:unknown,profileRevision?:number}|null>,
+ *   isOverlayTokenReplaced?: (token:string) => Promise<boolean>,
  *   validateOverlayToken?: (userId: string, token: string) => Promise<boolean>,
  *   resolveDeviceToken?: (tokenHash: string) => Promise<{userId: string, deviceId?: string}|null>,
  *   resolveSession?: (userId: string, timezone?: string) => Promise<{
@@ -126,7 +127,7 @@ function attachSocketAuth(io, opts) {
         }
         const hit = await opts.resolveOverlayToken(overlayToken);
         if (!hit) {
-          next(new Error("invalid_overlay_token"));
+          next(new Error(await opts.isOverlayTokenReplaced?.(overlayToken) ? "overlay_token_replaced" : "invalid_overlay_token"));
           return;
         }
         socket.data.overlayToken = overlayToken;
@@ -162,6 +163,10 @@ function attachSocketAuth(io, opts) {
         socket.data.kind = "device";
         // Stable pairing identity survives reconnects; never expose bearer hashes.
         socket.data.deviceId = hit.deviceId;
+        socket.data.obsAddSource = {
+          supported: socket.handshake.auth.obsAddSource?.supported === true,
+          enabled: socket.handshake.auth.obsAddSource?.enabled === true,
+        };
         next();
         return;
       }
@@ -435,6 +440,9 @@ function attachSocketAuth(io, opts) {
         socket.join(`user:${u}`);
         socket.join(scoutingDeviceRoom(u));
       }
+      socket.on("obs:capabilities", (payload) => {
+        socket.data.obsAddSource = { supported: payload?.supported === true, enabled: payload?.enabled === true };
+      });
       socket.on("map-playback:status", (payload) => {
         if (!u || !payload || typeof payload.gameId !== "string" || typeof payload.requestId !== "string") return;
         // A device can only update an existing request in its authenticated

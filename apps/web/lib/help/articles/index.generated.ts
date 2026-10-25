@@ -79,6 +79,7 @@ import streamStudio_obsAutoSceneSwitching from "./stream-studio/obs-auto-scene-s
 import streamStudio_obsOverlaySetup from "./stream-studio/obs-overlay-setup";
 import streamStudio_opponentScouting from "./stream-studio/opponent-scouting";
 import streamStudio_overlayHealth from "./stream-studio/overlay-health";
+import streamStudio_overlayUrlLeaked from "./stream-studio/overlay-url-leaked";
 import streamStudio_streamDock from "./stream-studio/stream-dock";
 import streamStudio_viewerEngagement from "./stream-studio/viewer-engagement";
 import streamStudio_voice from "./stream-studio/voice";
@@ -164,6 +165,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   streamStudio_obsOverlaySetup,
   streamStudio_opponentScouting,
   streamStudio_overlayHealth,
+  streamStudio_overlayUrlLeaked,
   streamStudio_streamDock,
   streamStudio_viewerEngagement,
   streamStudio_voice,

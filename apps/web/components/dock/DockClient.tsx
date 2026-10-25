@@ -26,6 +26,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import { API_BASE } from "@/lib/clientApi";
+import { responseWasReplaced } from "@/components/overlay/overlayLinkStatus";
 import {
   blockedUserSet,
   normalizeBlockedUser,
@@ -78,17 +79,19 @@ const CONFIG_REFRESH_MS = DOCK_CONFIG_REFRESH_MS;
 const STUDIO_RETRY_MS = [2_000, 5_000, 10_000, 30_000] as const;
 
 
+
 export function DockClient({ token }: { token: string }) {
   const [invalidToken, setInvalidToken] = useState<string | null>(null);
+  const [replaced, setReplaced] = useState(false);
   const activeTokenRef = useRef(token);
   activeTokenRef.current = token;
-  const onInvalid = useCallback(() => {
-    if (activeTokenRef.current === token) setInvalidToken(token);
+  const onInvalid = useCallback((wasReplaced = false) => {
+    if (activeTokenRef.current === token) { setInvalidToken(token); setReplaced(wasReplaced); }
   }, [token]);
   if (invalidToken === token) return <div className="flex min-h-screen items-center justify-center p-4 text-text">
     <div role="alert" className="max-w-md space-y-3 rounded-lg border border-warning/40 bg-bg-surface p-5">
-      <h1 className="text-h3 font-semibold">This Dock link no longer works</h1>
-      <p>It was revoked or mistyped. Copy a fresh Dock URL from Settings → Overlay.</p>
+      <h1 className="text-h3 font-semibold">{replaced ? "This Dock URL was replaced" : "This Dock link no longer works"}</h1>
+      <p>{replaced ? "Update this Dock in OBS using its replacement URL from Settings → Overlay." : "It was revoked or mistyped. Copy a fresh Dock URL from Settings → Overlay."}</p>
       <a href="/settings?tab=overlay" target="_blank" rel="noreferrer" className="text-accent-cyan underline">Open Overlay settings<span className="sr-only"> (opens in new tab)</span></a>
     </div>
   </div>;
@@ -97,7 +100,7 @@ export function DockClient({ token }: { token: string }) {
   return <ActiveDockClient key={token} token={token} onInvalid={onInvalid} />;
 }
 
-function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () => void }) {
+function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (replaced?: boolean) => void }) {
   const { platforms, moderationAppearance, tts, loaded } =
     useDockPlatformConfig(token, onInvalid);
   const { messages, events, statuses } = useMultiChat({
@@ -149,7 +152,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
   });
   const connectionStatus = updates?.status ?? "connected";
   const { summary: engagement, loaded: engagementReady } = useEngagementState(token, updates?.engagementEvent ?? null);
-  useEffect(() => { if (connectionStatus === "invalid") onInvalid(); }, [connectionStatus, onInvalid]);
+  useEffect(() => { if (connectionStatus === "invalid" || connectionStatus === "replaced") onInvalid(connectionStatus === "replaced"); }, [connectionStatus, onInvalid]);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,7 +163,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
       const fetchSequence = ++studioFetchRef.current;
       try {
         const res = await fetch(studioUrl, { cache: "no-store" });
-        if (!cancelled && res.status === 401) { onInvalid(); return; }
+        if (!cancelled && res.status === 401) { const replaced = await responseWasReplaced(res); if (!cancelled) onInvalid(replaced); return; }
         if (!res.ok) return;
         const body: unknown = await res.json();
         if (
@@ -235,7 +238,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
           body: JSON.stringify(patch),
           cache: "no-store",
         });
-        if (res.status === 401) { onInvalid(); return null; }
+        if (res.status === 401) { const replaced = await responseWasReplaced(res); onInvalid(replaced); return null; }
         if (!res.ok) {
           if (currentTokenRef.current === token) setError(`Save failed (${res.status}) — try again.`);
           return null;

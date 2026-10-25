@@ -708,6 +708,21 @@ describe("admin notification events", () => {
       .set("content-type", "application/json")
       .send(payload);
   }
+  test("user activity is owner-filtered before limiting and rejects ambiguous identity queries", async () => {
+    const date = new Date("2026-10-25T00:00:00Z");
+    await db.adminEvents.insertMany([
+      { eventId: "scoped", type: "agent_connected", createdAt: date, payload: { userId: "fixture-owner" } },
+      { eventId: "other", type: "agent_connected", createdAt: date, payload: { userId: "other-owner" } },
+      { eventId: "anonymous", type: "agent_connected", createdAt: date, anonymizedAt: date, payload: { userId: "fixture-owner" } },
+    ]);
+    const response = await asAdmin(request(app).get("/v1/admin/events?userId=fixture-owner&limit=1"));
+    expect(response.status).toBe(200); expect(response.headers["cache-control"]).toContain("no-store");
+    expect(response.body.items.map(row => row.eventId)).toEqual(["scoped"]);
+    for (const query of ["userId=", "userId=%20", "userId=a&userId=b", "userId[x]=a", "userId=%20fixture-owner"]) {
+      expect((await asAdmin(request(app).get(`/v1/admin/events?${query}`))).status).toBe(400);
+    }
+  });
+
 });
 
 function flushMicroTasks() {

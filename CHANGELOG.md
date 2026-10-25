@@ -12,7 +12,12 @@ corresponding GitHub Release.
 ## [Unreleased]
 
 ### Added
+- Analyzer tables now support keyboard build opening, global matchup chips, a matchup-scoped heatmap and a Strategy games sheet that stays open as filters change. CSV exports save the displayed Builds, Strategy pairs, Matchups, Maps and pool cells with their scope and local date.
 - Live scouting on Today and a large second-screen page reuse your recorded opponent history, with bounded opening counts, recent replay links and an exact-account note popover. The Stream Dock Scout view omits private notes and replay/account actions.
+
+### Admin Users
+
+- Browse exact totals with sortable pages and signup, admin and inactive-agent filters. Export matching accounts as a bounded private CSV, inspect recent games/activity, and copy account IDs with a manual fallback.
 
 ### Stream Dock
 
@@ -22,6 +27,10 @@ corresponding GitHub Release.
 ### Overlay health
 
 - Check connected game, chat and Dock sources before going live. Widget cards show identified connections, unknown older pages and possible duplicate audio; failed checks keep an honest unavailable state. The Dock has a counts-only source strip.
+
+### Overlay URL rotation
+
+- Replace a leaked overlay URL while keeping its Studio controls, b-roll, viewer XP and oracle history. Select any token's URLs, rename it inline, and continue an interrupted rotation safely. Recognized generated OBS sources follow exact owned replacements through the desktop app; custom sources and Docks show a clear update notice.
 
 ### Live overlay display
 
@@ -61,6 +70,11 @@ corresponding GitHub Release.
 - Hide a replay from your own statistics and scouting, then Unhide it from Settings. Single-game and page-limited bulk deletion require an exact typed confirmation, retain local files, and keep incomplete cloud cleanup available for retry.
 - Filter analyzer views by up to twenty SC2 accounts, including saved views, shared filter links and replay navigation.
 - Export the current replay filters and sort order as a formula-safe UTF-8 CSV, with a shared column dictionary and a visible 50,000-row cap.
+
+### OBS game sources
+
+- Build scenes with the all-in-one game overlay and optional coach, randomizer and ticker sources. Additive updates reuse existing renderers and preserve custom sources and cover priority.
+- Request a widget from the website through an opted-in paired agent, with a default-Cancel confirmation naming the current OBS program scene. Offline agents explain why Add is disabled; Ghost assignments use Copy or Drag.
 
 ### Opponents list and rivals
 

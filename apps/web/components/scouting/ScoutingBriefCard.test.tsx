@@ -41,12 +41,16 @@ describe("live scouting card states", () => {
     render(<ScoutingBriefCard live={value} />); expect(screen.queryByRole("button", { name: "Add note" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Open dossier" })).toBeNull(); expect(screen.getByText(/after this account’s first replay syncs/)).toBeTruthy();
   });
-  it("preserves an open draft as the loading brief becomes an in-game bar", () => {
+  it("preserves an open draft and focus as the loading brief becomes an in-game bar", async () => {
     const value = live(), view = render(<ScoutingBriefCard live={value} />);
-    fireEvent.click(screen.getByRole("button", { name: "Add note" })); fireEvent.change(screen.getByRole("textbox"), { target: { value: "Keep this draft" } });
+    const add = screen.getByRole("button", { name: "Add note" }); add.focus(); fireEvent.click(add); fireEvent.change(screen.getByRole("textbox"), { target: { value: "Keep this draft" } });
     view.rerender(<ScoutingBriefCard live={{ ...value, phase: "match_in_progress" }} />);
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("Keep this draft");
-    fireEvent.click(screen.getByRole("button", { name: "Done" })); fireEvent.click(screen.getByRole("button", { name: /^Brief$/ })); fireEvent.click(screen.getByRole("button", { name: "Add note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Add note" })));
+    const collapse = screen.getByRole("button", { name: "Collapse brief" }); collapse.focus(); fireEvent.click(collapse);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /^Brief$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Brief$/ })); fireEvent.click(screen.getByRole("button", { name: "Add note" }));
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("Keep this draft");
   });
   it("keeps a newer note draft when an earlier save settles and reports failure", async () => {

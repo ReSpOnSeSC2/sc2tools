@@ -12,6 +12,7 @@ const express = require("express");
  *   - /devices            Clerk JWT    (list/revoke)
  *
  * @param {{
+ *   overlayTokens?: Pick<import('../services/overlayTokens').OverlayTokensService, "replacementReceipts">,
  *   pairings: import('../services/types').DevicePairingsService,
  *   auth: import('express').RequestHandler,
  * }} deps
@@ -123,7 +124,11 @@ function buildDevicePairingsRouter(deps) {
         auth.tokenHash,
         req.body || {},
       );
-      res.json(result);
+      // Advisory owned configuration never turns a successful heartbeat into
+      // a failed/revoked-device signal. The agent retries on its next heartbeat.
+      let overlayTokenReplacements = /** @type {Array<{from:string,to:string}>|undefined} */ (undefined);
+      try { overlayTokenReplacements = await deps.overlayTokens?.replacementReceipts(auth.userId); } catch { /* advisory */ }
+      res.set("Cache-Control", "private, no-store").json({ ...result, ...(overlayTokenReplacements?.length ? { overlayTokenReplacements } : {}) });
     } catch (err) {
       next(err);
     }

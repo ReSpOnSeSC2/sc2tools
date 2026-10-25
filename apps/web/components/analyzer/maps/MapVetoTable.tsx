@@ -7,7 +7,8 @@ import { communityMapRate, mapRecord, type MapRecord, type VetoMap } from "@/lib
 import type { GuideIndexMap } from "@/lib/guides/types";
 
 export type MapGamesDrill = { map: string; maps?: string[]; opponent?: string; filters?: Record<string, unknown> };
-const COLUMNS = ["P", "T", "Z", ""];
+export const POOL_MATCHUPS = ["P", "T", "Z", ""] as const;
+export const poolMatchupLabel = (race: string) => race ? `vs ${race}` : "All";
 
 function Form({ values, matchup }: { values?: ("win" | "loss")[]; matchup: string }) {
   if (!values?.length) return <span className="text-micro text-text-dim">Recent form unavailable</span>;
@@ -33,14 +34,14 @@ export function MapVetoTable({ rows, suggested, matchup, mine, community, openGa
 }) {
   return <div className="min-w-0 space-y-2"><p className="text-micro text-text-dim sm:hidden">Swipe across the table to compare matchups.</p><div className="relative max-w-full overflow-x-auto rounded-xl border border-border"><table className="w-full min-w-[760px] text-caption">
     <caption className="sr-only">Current ladder map pool, personal record and community comparison</caption>
-    <thead className="bg-bg-elevated text-text-muted"><tr><th scope="col" className="sticky left-0 z-10 w-44 bg-bg-elevated p-3 text-left">Map</th>{COLUMNS.map((race) => <th scope="col" key={race} className={`p-2 text-right ${race === matchup ? "text-accent" : ""}`}>{race ? `vs ${race}` : "All"}{race === matchup ? " · ranking" : ""}</th>)}</tr></thead>
+    <thead className="bg-bg-elevated text-text-muted"><tr><th scope="col" className="sticky left-0 z-10 w-44 bg-bg-elevated p-3 text-left">Map</th>{POOL_MATCHUPS.map((race) => <th scope="col" key={race} className={`p-2 text-right ${race === matchup ? "text-accent" : ""}`}>{poolMatchupLabel(race)}{race === matchup ? " · ranking" : ""}</th>)}</tr></thead>
     <tbody className="divide-y divide-border">{rows.map((row) => {
       const ranked = matchup ? row.cells[matchup] : row.all;
       return <tr key={row.name}><th scope="row" className="sticky left-0 z-10 space-y-2 bg-bg-surface p-3 text-left align-top font-normal">
         <button type="button" className="min-h-11 rounded text-left font-semibold text-text hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => openGames({ map: row.gameMap, maps: row.gameMaps.length ? row.gameMaps : [row.name] })} aria-label={`View games on ${row.name}`}><MapLabel name={row.name} size="sm" /></button>
         {suggested.includes(row.name) ? <span className="block text-micro font-semibold text-warning">Suggested veto</span> : (ranked?.decided ?? 0) < 5 ? <span className="block text-micro text-text-dim">Not enough games</span> : null}
         <Form values={row.recent} matchup={matchup} />
-      </th>{COLUMNS.map((race) => <td key={race} className={`p-1 align-top ${race === matchup ? "bg-accent/5" : ""}`}><MapRecordCell record={race ? row.cells[race] ?? mapRecord() : row.all}
+      </th>{POOL_MATCHUPS.map((race) => <td key={race} className={`p-1 align-top ${race === matchup ? "bg-accent/5" : ""}`}><MapRecordCell record={race ? row.cells[race] ?? mapRecord() : row.all}
         community={communityMapRate(community, row.name, mine, race)} label={`View ${race ? `vs ${race}` : "all"} games on ${row.name}`} onClick={() => openGames({ map: row.gameMap, maps: row.gameMaps.length ? row.gameMaps : [row.name], opponent: race || undefined })} /></td>)}</tr>;
     })}</tbody>
   </table></div></div>;

@@ -147,6 +147,19 @@ class MultichatEngagementService {
     this._lastTallyAt = new Map();
   }
 
+  /** @template T @param {string} token @param {()=>Promise<T>} work */
+  _withWrite(token, work) { return this.overlayTokens?.withWrite ? this.overlayTokens.withWrite(token, work) : work(); }
+
+  /** Internal game fanout must not let one credential rotating between list
+   * and admission suppress a different healthy token's prediction.
+   * @template T @param {string} token @param {()=>Promise<T>} work */
+  async _withAvailableWrite(token, work) {
+    try { return await this._withWrite(token, work); }
+    catch (err) {
+      if (!["overlay_rotation_pending", "invalid_overlay_token", "overlay_token_resolve_busy"].includes(/** @type {any} */ (err)?.code)) throw err;
+    }
+  }
+
   /** @param {string} token @param {Record<string, unknown>} msg */
   _emit(token, msg) {
     if (this.io) this.io.to(`overlay:${token}`).emit("overlay:engagement", msg);
@@ -169,6 +182,11 @@ class MultichatEngagementService {
    * @param {unknown} rawEvents
    */
   async ingest(token, rawEvents) {
+    return this._withWrite(token, () => this._ingestAdmitted(token, rawEvents));
+  }
+
+  /** @param {string} token @param {unknown} rawEvents */
+  async _ingestAdmitted(token, rawEvents) {
     const now = this.now();
     const batch = (Array.isArray(rawEvents) ? rawEvents : [])
       .slice(0, BATCH_MAX)
@@ -334,7 +352,7 @@ class MultichatEngagementService {
     if (current < median * CLIP_SPIKE_FACTOR) return;
     if (now - (this._lastClipAt.get(token) ?? 0) < CLIP_COOLDOWN_MS) return;
     this._lastClipAt.set(token, now);
-    await this.recordMoment(token, {
+    await this._recordMomentAdmitted(token, {
       kind: "chat-spike",
       reason: `Chat spiked — ${current} messages in 10s (usual ~${median})`,
       sampleLines: messages
@@ -350,6 +368,11 @@ class MultichatEngagementService {
    * @param {{kind: string, reason: string, sampleLines?: string[], gameKey?: string}} m
    */
   async recordMoment(token, m) {
+    return this._withWrite(token, () => this._recordMomentAdmitted(token, m));
+  }
+
+  /** @param {string} token @param {{kind:string,reason:string,sampleLines?:string[],gameKey?:string}} m */
+  async _recordMomentAdmitted(token, m) {
     const doc = {
       token,
       atMs: this.now(),
@@ -372,7 +395,7 @@ class MultichatEngagementService {
    */
   async openPrediction(tokens, game) {
     if (!game?.gameKey) return;
-    for (const token of tokens) {
+    for (const token of tokens) await this._withAvailableWrite(token, async () => {
       const locksAtMs = this.now() + PREDICTION_LOCK_MS;
       const res = await this.predictions.updateOne(
         { token, gameKey: game.gameKey },
@@ -397,7 +420,7 @@ class MultichatEngagementService {
           locksAtMs,
         });
       }
-    }
+    });
   }
 
   /**
@@ -409,7 +432,7 @@ class MultichatEngagementService {
    */
   async settlePrediction(tokens, game) {
     if (game.result !== "win" && game.result !== "loss") return;
-    for (const token of tokens) await this.verifiedSettlement.settle(token, game);
+    for (const token of tokens) await this._withAvailableWrite(token, () => this.verifiedSettlement.settle(token, game));
   }
 
   /** Cancel only the named open round. No viewer score or accuracy changes.
@@ -552,7 +575,10 @@ class MultichatEngagementService {
    *
    * @param {string} token
    */
-  async summary(token) {
+  async summary(token) { return this._withWrite(token, () => this._summaryAdmitted(token)); }
+
+  /** @param {string} token */
+  async _summaryAdmitted(token) {
     const settlementSequence = await this.verifiedSettlement.resume(token);
     // The streamer never ranks on their own boards (wall + oracles).
     const selfKeys = await this._selfKeys(token);

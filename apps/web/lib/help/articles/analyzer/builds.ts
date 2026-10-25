@@ -37,8 +37,10 @@ const article: HelpArticle = {
         "One row per build with wins, losses, games and win rate. Search by name, and sort by win rate with the arrow button or by any column header.",
         "**incl. N check-ins** means N of the games count only because you checked in to this build. See [Build check-in](/help/build-check-in).",
         "Click a row to open the build: its record by matchup and map, recent games, your **Personal notes**, and **Publish to community** for a build saved in your library.",
+        "Use Tab to reach a build name, then Enter to open it. The **W/L split** bar shows wins against losses. Matchup chips such as **vZ 20** use the global opponent-race filter; they do not create another independent filter.",
       ],
     },
+    { type: "paragraph", text: "**Export CSV** saves exactly the table rows on screen after search, Min games and sorting, with your filters written in the first line. The filename uses your local date. Win rates stay raw numbers for spreadsheet calculations; unavailable strength comparisons stay blank." },
     { type: "heading", text: "The charts", anchor: "charts" },
     {
       type: "table",

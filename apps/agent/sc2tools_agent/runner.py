@@ -55,7 +55,7 @@ from .live.client_api import LiveClientPoller
 from .live.metrics import PeriodicMetricsLogger
 from .live.types import _unique_player_name_match
 from .live.obs_client import ObsAuthFailed, ObsClient
-from .live.obs_scene import DEFAULT_SCENE_MAP, ObsSceneController
+from .live.obs_scene import DEFAULT_SCENE_MAP, ObsSceneController, SCENE_BETWEEN_GAMES, SCENE_IN_GAME
 from .live.transport import (
     CloudTransport,
     FanOutTransport,
@@ -356,6 +356,7 @@ def _run_headless(
     api = ApiClient(base_url=cfg.api_base, device_token=state.device_token)
 
     recovery_cell = _RuntimeCell()
+    recovery_cell.no_obs = no_obs
     console = ConsoleUI()
     tray: Optional[TrayUI] = None
 
@@ -498,7 +499,8 @@ def _run_headless(
                       on_check=lambda release: _announce_updated_version(cfg,state,recovery_cell,release))
     recovery_cell.updater = updater
     heartbeat = Heartbeat(api, on_success=recovery.connected,
-                          on_failure=recovery.watchdog.failure, state_dir=cfg.state_dir)
+                          on_failure=recovery.watchdog.failure, state_dir=cfg.state_dir,
+                          on_overlay_tokens=_obs_token_rotation_controller(cfg, state, recovery_cell).heartbeat)
     recovery_cell.watcher = watcher
     recovery_cell.heartbeat = heartbeat
     recovery_cell.import_ctl = import_ctl
@@ -533,6 +535,9 @@ def _run_headless(
             on_import_cancel=import_ctl.handle_cancel_request,
             on_import_pick_folder=import_ctl.handle_pick_folder_request,
             on_bot_lab=BotLabController(cfg.state_dir, state).handle,
+            on_obs_add=_obs_website_controller(cfg, state, recovery_cell).handle,
+            on_overlay_tokens_changed=_obs_token_rotation_controller(cfg, state, recovery_cell).changed,
+            obs_add_enabled_provider=lambda: bool(_obs_website_scope(cfg, state, recovery_cell)),
             overlay_token_provider=lambda token: ApiClient(base_url=cfg.api_base, device_token=token).get_overlay_token(interactive=True),
             session_enabled=state.companion_session_enabled,
         )
@@ -722,6 +727,7 @@ def _run_with_gui(
         obs_scene_map=dict(state.obs_scene_map),
         obs_switch_debounce_sec=state.obs_switch_debounce_sec,
         obs_switch_on_replays=state.obs_switch_on_replays,
+        obs_website_add_enabled=state.obs_website_add_enabled,
     )
 
     from .companion import CompanionClient
@@ -1089,7 +1095,8 @@ def _gui_boot_worker(
         updater = Updater(cfg=cfg,state=state,on_update_available=cell.update_scheduler.offer,
                           on_check=lambda release: _announce_updated_version(cfg,state,cell,release))
         heartbeat = Heartbeat(api, on_success=recovery.connected,
-                              on_failure=recovery.watchdog.failure, state_dir=cfg.state_dir)
+                              on_failure=recovery.watchdog.failure, state_dir=cfg.state_dir,
+                              on_overlay_tokens=_obs_token_rotation_controller(cfg, state, cell).heartbeat)
 
         cell.upload = upload
         cell.watcher = watcher
@@ -1124,6 +1131,9 @@ def _gui_boot_worker(
                 on_import_cancel=import_ctl.handle_cancel_request,
                 on_import_pick_folder=import_ctl.handle_pick_folder_request,
                 on_bot_lab=BotLabController(cfg.state_dir, state).handle,
+                on_obs_add=_obs_website_controller(cfg, state, cell).handle,
+                on_overlay_tokens_changed=_obs_token_rotation_controller(cfg, state, cell).changed,
+                obs_add_enabled_provider=lambda: bool(_obs_website_scope(cfg, state, cell)),
                 overlay_token_provider=lambda token: ApiClient(base_url=cfg.api_base, device_token=token).get_overlay_token(interactive=True),
                 session_enabled=state.companion_session_enabled,
                 on_build_intent_changed=lambda ping: (
@@ -2576,6 +2586,7 @@ def _apply_obs_settings_unlocked(
         "obs_scene_map": dict(state.obs_scene_map),
         "obs_switch_debounce_sec": state.obs_switch_debounce_sec,
         "obs_switch_on_replays": state.obs_switch_on_replays,
+        "obs_website_add_enabled": state.obs_website_add_enabled,
     }
     previous_enabled = bool(state.obs_scene_switch_enabled)
     desired_enabled = (
@@ -2598,6 +2609,9 @@ def _apply_obs_settings_unlocked(
                 field_name,
                 dict(value) if field_name == "obs_scene_map" else value,
             )
+        socket = getattr(cell, "socket_client", None)
+        if socket is not None:
+            socket.publish_obs_capabilities()
 
     conn_changed = False
     if payload.obs_host is not None and payload.obs_host != state.obs_host:
@@ -2622,6 +2636,11 @@ def _apply_obs_settings_unlocked(
         state.obs_switch_debounce_sec = max(
             0.0, float(payload.obs_switch_debounce_sec),
         )
+    if payload.obs_website_add_enabled is not None:
+        state.obs_website_add_enabled = payload.obs_website_add_enabled is True
+        socket = getattr(cell, "socket_client", None)
+        if socket is not None:
+            socket.publish_obs_capabilities()
     if payload.obs_switch_on_replays is not None:
         state.obs_switch_on_replays = bool(payload.obs_switch_on_replays)
 
@@ -2826,10 +2845,71 @@ def _handle_obs_probe(
         "webcams": sources.get("webcam", []),
         "games": sources.get("game", []),
         "manual_override_update_scenes": manual_update_scenes,
+        "generated_update_scenes": [name for name in scenes if name in {SCENE_BETWEEN_GAMES, SCENE_IN_GAME}],
     }
 
 
+def _effective_obs_connection(state, log=None):
+    host = os.environ.get("SC2TOOLS_OBS_HOST", "").strip() or state.obs_host
+    port_env = os.environ.get("SC2TOOLS_OBS_PORT", "").strip()
+    try:
+        port = int(port_env) if port_env else int(state.obs_port)
+    except (TypeError, ValueError):
+        if log is not None:
+            log.warning("obs_port_invalid falling_back=4455")
+        port = 4455
+    password = os.environ.get("SC2TOOLS_OBS_PASSWORD") or state.obs_password or None
+    return host, port, password
+
+
+def _obs_website_scope(cfg, state, cell):
+    if (state.obs_website_add_enabled is not True or getattr(cell, "no_obs", False)
+            or not state.device_token or not getattr(cell, "gui", None)):
+        return None
+    return (cfg.api_base, state.device_token, *_effective_obs_connection(state))
+
+
+def _obs_website_controller(cfg, state, cell):
+    from .live.obs_website_add import ObsWebsiteAdd
+    def client_factory():
+        host, port, password = _effective_obs_connection(state)
+        return ObsClient(host=host, port=port, password=password, subscribe_events=False)
+    return ObsWebsiteAdd(
+        scope=lambda: _obs_website_scope(cfg, state, cell),
+        client_factory=client_factory,
+        token_provider=lambda: _overlay_token_for_build(cfg, state, logging.getLogger(__name__)),
+        confirm=lambda payload: cell.gui.confirm_obs_add_source(payload) if getattr(cell, "gui", None) else False,
+        base_url=lambda: _dashboard_url_from_api(cfg.api_base),
+    )
+
+
+def _obs_token_rotation_controller(cfg, state, cell):
+    from .live.obs_token_rotation import ObsTokenRotation
+    def scope():
+        if state.obs_scene_switch_enabled is not True or cell.no_obs or not state.device_token:
+            return None
+        return (cfg.api_base, state.device_token, *_effective_obs_connection(state))
+    with cell.obs_lock:
+        if cell.obs_token_rotation is None:
+            cell.obs_token_rotation = ObsTokenRotation(
+                scope=scope,
+                api_factory=lambda base, token: ApiClient(base_url=base, device_token=token),
+                client_factory=lambda captured: ObsClient(
+                    host=captured[2], port=captured[3], password=captured[4], subscribe_events=False),
+                base_url=_dashboard_url_from_api,
+            )
+        return cell.obs_token_rotation
+
+
 def _handle_obs_build(
+    *, cfg: AgentConfig, state: AgentState, request: dict, log: logging.Logger,
+) -> dict:
+    from .live.obs_game_overlay import OBS_GAME_WRITE_LOCK
+    with OBS_GAME_WRITE_LOCK:
+        return _handle_obs_build_locked(cfg=cfg, state=state, request=request, log=log)
+
+
+def _handle_obs_build_locked(
     *,
     cfg: AgentConfig,
     state: AgentState,
@@ -2881,6 +2961,8 @@ def _handle_obs_build(
             overlay_token=token,
             webcam_source=request.get("webcam_source") or None,
             game_source=request.get("game_source") or None,
+            during_game_widgets=request.get("during_game_widgets"),
+            show_overlay_credit=request.get("show_overlay_credit", True) is True,
         )
         manual_url = next(
             item.browser_path
@@ -2892,6 +2974,8 @@ def _handle_obs_build(
         rebuild = bool(request.get("rebuild"))
         repaired: list[str] = []
         missing_generated: list[str] = []
+        added_game_sources: list[str] = []
+        additive_update = "during_game_widgets" in request and not rebuild
         raw_authorized_updates = request.get("update_existing_scenes") or []
         if isinstance(raw_authorized_updates, str):
             raw_authorized_updates = [raw_authorized_updates]
@@ -2924,11 +3008,13 @@ def _handle_obs_build(
                 scene.name for scene in plan.scenes if not scene.exists
             ]
             if authorized_existing:
-                repaired = repair_manual_scene_overrides(
-                    client,
-                    browser_url=manual_url,
-                    scene_names=authorized_existing,
-                )
+                if additive_update:
+                    from .live.obs_game_overlay import add_missing_game_sources
+                    added_game_sources = add_missing_game_sources(client, plan, authorized_existing)
+                else:
+                    repaired = repair_manual_scene_overrides(
+                        client, browser_url=manual_url, scene_names=authorized_existing,
+                    )
         elif plan.conflicts:
             # A normal Build may create a missing counterpart, but it has no
             # authority to alter an existing generated scene. Keeping this
@@ -2960,18 +3046,12 @@ def _handle_obs_build(
                 )
         else:
             created = build_scenes(client, plan)
-        (
-            chat_alert_audio_owners,
-            chat_alert_role_updates,
-            chat_alert_geometry_updates,
-        ) = repair_chat_alert_audio_roles(
-            client,
-            browser_url=manual_url,
-        )
-        audio_owner, audio_role_updates = repair_broll_audio_roles(
-            client,
-            browser_url=manual_url,
-        )
+        chat_alert_audio_owners, chat_alert_role_updates, chat_alert_geometry_updates = [], [], []
+        audio_owner, audio_role_updates = None, []
+        if not (additive_update and authorized_updates):
+            (chat_alert_audio_owners, chat_alert_role_updates,
+             chat_alert_geometry_updates) = repair_chat_alert_audio_roles(client, browser_url=manual_url)
+            audio_owner, audio_role_updates = repair_broll_audio_roles(client, browser_url=manual_url)
     except SceneBuildError as exc:
         return {"ok": False, "message": str(exc)}
     except Exception as exc:  # noqa: BLE001
@@ -2996,6 +3076,8 @@ def _handle_obs_build(
     note = " ".join(plan.warnings) if plan.warnings else ""
     updated_existing = [name for name in repaired if name not in created]
     outcomes: list[str] = []
+    if added_game_sources:
+        outcomes.append("Added during-game sources: " + ", ".join(added_game_sources) + ".")
     if updated_existing:
         outcomes.append(
             "Updated the BRB / Starting Soon priority in "
@@ -3086,18 +3168,7 @@ def _build_obs_switcher(
         log.info("obs_scene_switch_skipped reason=live_bridge_disabled")
         return None, None
 
-    host = os.environ.get("SC2TOOLS_OBS_HOST", "").strip() or state.obs_host
-    port_env = os.environ.get("SC2TOOLS_OBS_PORT", "").strip()
-    try:
-        port = int(port_env) if port_env else int(state.obs_port)
-    except ValueError:
-        log.warning("obs_port_invalid value=%r falling_back=4455", port_env)
-        port = 4455
-    password = (
-        os.environ.get("SC2TOOLS_OBS_PASSWORD")
-        or state.obs_password
-        or None
-    )
+    host, port, password = _effective_obs_connection(state, log)
     scene_map = _effective_scene_map(state)
 
     # Built in two steps: the controller needs the client to issue
@@ -3113,7 +3184,7 @@ def _build_obs_switcher(
     )
     client: ObsClient
 
-    def _repair_generated_manual_covers() -> None:
+    def _repair_generated_manual_covers_locked() -> None:
         """Upgrade legacy generated layouts after each OBS connection.
 
         This callback is best-effort by design: scene switching must stay
@@ -3253,6 +3324,18 @@ def _build_obs_switcher(
         finally:
             repair_client.shutdown()
 
+    def _repair_generated_manual_covers() -> None:
+        # The token repair and explicit builder/Add paths share these inputs.
+        # Inventory and writes must stay in one critical section so a stale
+        # startup snapshot cannot restore an old bearer URL after rotation.
+        from .live.obs_game_overlay import OBS_GAME_WRITE_LOCK
+        if not OBS_GAME_WRITE_LOCK.acquire(timeout=2.0):
+            return  # Best effort; the next OBS connection retries startup repair.
+        try:
+            _repair_generated_manual_covers_locked()
+        finally:
+            OBS_GAME_WRITE_LOCK.release()
+
     client = ObsClient(
         host=host,
         port=port,
@@ -3332,6 +3415,7 @@ class _RuntimeCell:
         "obs_client",
         "obs_scene",
         "obs_lock",
+        "obs_token_rotation",
         "no_obs",
     )
 
@@ -3366,6 +3450,7 @@ class _RuntimeCell:
         # the controller. One lock prevents duplicate EventBus subscriptions
         # and makes the persisted gate authoritative at startup.
         self.obs_lock = threading.RLock()
+        self.obs_token_rotation = None
         self.no_obs = False
 
 

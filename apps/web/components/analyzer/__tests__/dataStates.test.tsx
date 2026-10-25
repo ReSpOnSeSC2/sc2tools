@@ -85,7 +85,7 @@ describe("failed requests show Retry, not an empty state", () => {
 
   it("Strategies: by opponent strategy", async () => {
     render(<StrategiesTab />);
-    fireEvent.click(screen.getByRole("button", { name: "By opponent strategy" }));
+    fireEvent.click(screen.getByRole("radio", { name: "By opponent strategy" }));
     expect(screen.getByText("Win rate vs opponent strategies")).toBeTruthy();
     expect(screen.getByTestId("request-error")).toBeTruthy();
     expect(screen.queryByText(/No strategies match/)).toBeNull();

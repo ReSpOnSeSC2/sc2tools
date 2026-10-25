@@ -1414,6 +1414,26 @@ def test_build_updates_existing_generated_scenes_without_clobbering(
     assert ProbeClient.scene_items[SCENE_BETWEEN_GAMES] == between_after_update
 
 
+def test_new_update_only_adds_selected_missing_game_source_and_never_repairs_other_sources(tmp_path, monkeypatch):
+    from copy import deepcopy
+    monkeypatch.setattr(runner, "_overlay_token_for_build", lambda *_: "tok")
+    ProbeClient.scenes = [SCENE_IN_GAME]
+    ProbeClient.inputs.append({"name": "Custom overlay", "kind": "browser_source"})
+    ProbeClient.input_settings["Custom overlay"] = {"url": "https://example.invalid/custom", "width": 800}
+    ProbeClient.scene_items[SCENE_IN_GAME] = [{"source_name": "Custom overlay", "input_kind": "browser_source", "item_id": 7, "index": 0, "transform": {"custom": True}}]
+    previous = deepcopy(ProbeClient.scene_items[SCENE_IN_GAME])
+    for name in ("repair_manual_scene_overrides", "repair_chat_alert_audio_roles", "repair_broll_audio_roles"):
+        monkeypatch.setattr("sc2tools_agent.live.obs_layout." + name, lambda *_, **__: pytest.fail("additive Update must not repair existing sources"))
+    request = {"during_game_widgets": ["overlay"], "show_overlay_credit": False, "update_existing_scenes": [SCENE_IN_GAME]}
+    result = _handle_obs_build(cfg=_cfg(tmp_path), state=AgentState(device_token="dev"), request=request, log=_LOG)
+    assert result["ok"] is True, result["message"]
+    assert ProbeClient.scene_items[SCENE_IN_GAME][0] == previous[0]
+    assert ProbeClient.input_settings["Custom overlay"] == {"url": "https://example.invalid/custom", "width": 800}
+    assert len(ProbeClient.scene_items[SCENE_IN_GAME]) == 2
+    result = _handle_obs_build(cfg=_cfg(tmp_path), state=AgentState(device_token="dev"), request=request, log=_LOG)
+    assert result["ok"] is True and len(ProbeClient.scene_items[SCENE_IN_GAME]) == 2
+
+
 def test_partial_build_reuses_legacy_native_shared_inputs_before_creating_scene(
     tmp_path: Path, monkeypatch,
 ) -> None:

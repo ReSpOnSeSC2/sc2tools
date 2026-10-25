@@ -7,7 +7,7 @@ vi.mock("next/navigation", () => import("../components/__tests__/navigationFixtu
 const auth = vi.hoisted(() => ({ getToken: vi.fn(async () => "fixture-token"), isLoaded: true, isSignedIn: true, userId: "admin-fixture" }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => auth }));
 afterEach(() => { cleanup(); navigation.defer = false; navigation.queued = []; vi.clearAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals(); });
-const row = { userId: "player", clerkUserId: "clerk-player", email: "player@example.test", gameCount: 12, opponentCount: 4, hasAgent: false, agentLastSeenAt: null, lastActivity: null, firstActivity: null, storageEstimateBytes: 0 };
+const row = { userId: "player", clerkUserId: "clerk-player", email: "player@example.test", gameCount: 12, opponentCount: 4, hasAgent: false, agentLastSeenAt: null, lastActivity: null, firstActivity: null };
 
 it("makes one HTTP search request after five keystrokes and retains rows while that request is pending", async () => {
   navigation.url = "/admin/users?debug=1&before=old-cursor";

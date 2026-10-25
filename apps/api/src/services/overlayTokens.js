@@ -1,6 +1,8 @@
 "use strict";
 
 const { createHash } = require("crypto");
+const { OverlayTokenWrites } = require("./overlayTokenWrites");
+const { OverlayTokenRotation, replacementTargets } = require("./overlayTokenRotation");
 const { COLLECTIONS } = require("../config/constants");
 const { randomToken } = require("../util/hash");
 const { stampVersion } = require("../db/schemaVersioning");
@@ -73,9 +75,12 @@ const OVERLAY_TOKEN_INPUT_MAX = 512;
  *     enabledWidgets: string[] }
  */
 class OverlayTokensService {
-  /** @param {{overlayTokens: import('mongodb').Collection}} db */
-  constructor(db) {
+  /** @param {Pick<import('../db/connect').DbContext, "overlayTokens"> & Partial<import('../db/connect').DbContext>} db
+   * @param {{onRotationStarted?:(token:string)=>void}} [opts] */
+  constructor(db, opts = {}) {
     this.db = db;
+    this.writes = new OverlayTokenWrites(token => this.resolve(token));
+    this.rotation = new OverlayTokenRotation(/** @type {import('../db/connect').DbContext} */ (db), this, opts);
     /** @type {Map<string, {expiresAt: number, value: {userId: string, label: string, enabledWidgets: string[],profile:ReturnType<typeof overlayProfileForRead>,profileRevision:number}}>} */
     this.resolveCache = new Map();
     /** @type {Map<string, number>} */
@@ -153,13 +158,14 @@ class OverlayTokensService {
     );
     // Backfill default widgets for tokens minted before the toggle
     // shipped — keeps the UI stable without a one-shot migration.
-    return items.map((it) => ({
-      ...it,
-      enabledWidgets: Array.isArray(it.enabledWidgets)
-        ? it.enabledWidgets
-        : [...DEFAULT_WIDGETS],
-      profile: overlayProfileForRead(it.profile),
-      profileRevision: profileRevision(it.profileRevision),
+    const ready = new Set(items.filter(it => !it._rotationPending).map(it => it.token));
+    return items.filter(it => !it._rotationPending).map(it => ({
+      token: it.token, label: it.label, createdAt: it.createdAt,
+      lastSeenAt: it.lastSeenAt ?? null, revokedAt: it.revokedAt ?? null,
+      enabledWidgets: Array.isArray(it.enabledWidgets) ? it.enabledWidgets : [...DEFAULT_WIDGETS],
+      profile: overlayProfileForRead(it.profile), profileRevision: profileRevision(it.profileRevision),
+      ...(it._rotation ? it._rotation.state === "complete" && ready.has(it._rotation.to)
+        ? { replacedBy: it._rotation.to } : { rotationPending: true } : {}),
     }));
   }
 
@@ -189,7 +195,7 @@ class OverlayTokensService {
     const pending = this.db.overlayTokens
       .findOne({ token, revokedAt: null })
       .then((row) => {
-        if (!row) return null;
+        if (!row || row._rotationPending || row._rotation) return null;
         // Revocation/widget mutation removes the owning in-flight entry. A
         // lookup that was already awaiting Mongo must not return its stale
         // pre-mutation value to socket or HTTP waiters afterward.
@@ -237,7 +243,7 @@ class OverlayTokensService {
    */
   async revoke(userId, token) {
     const result = await this.db.overlayTokens.updateOne(
-      { userId, token },
+      { userId, token, "_rotation.state": { $ne: "pending" } },
       { $set: { revokedAt: new Date() } },
     );
     const cacheKey = tokenCacheKey(token);
@@ -267,7 +273,8 @@ class OverlayTokensService {
         ? { $addToSet: { enabledWidgets: widget } }
         : { $pull: { enabledWidgets: widget } }
     );
-    await this.db.overlayTokens.updateOne({ userId, token }, op);
+    const changed = await this.db.overlayTokens.updateOne({ userId, token, revokedAt: null, _rotation: { $exists: false }, _rotationPending: { $ne: true } }, op);
+    if (!changed.matchedCount) throw Object.assign(new Error("overlay_token_unavailable"), { status: 409, code: "overlay_token_unavailable" });
     const cacheKey = tokenCacheKey(token);
     this.resolveCache.delete(cacheKey);
     const pending = this.resolveInflight.get(cacheKey);
@@ -289,7 +296,7 @@ class OverlayTokensService {
    */
   async setEnabledWidgets(userId, token, enabled, expectedEnabled) {
     const widgets = widgetSelection(enabled);
-    const match = /** @type {any} */ ({ userId, token, revokedAt: null });
+    const match = /** @type {any} */ ({ userId, token, revokedAt: null, _rotation: { $exists: false }, _rotationPending: { $ne: true } });
     if (expectedEnabled !== undefined) {
       const expected = widgetSelection(expectedEnabled);
       const sameDefaults = expected.length === DEFAULT_WIDGETS.length && DEFAULT_WIDGETS.every(id => expected.includes(id));
@@ -317,7 +324,7 @@ class OverlayTokensService {
       throw Object.assign(new Error("Use the current overlay profile revision."), { status: 400, code: "invalid_overlay_profile_revision" });
     }
     const revision = Number(expectedRevision);
-    const row = await this.db.overlayTokens.findOneAndUpdate({ userId, token, revokedAt: null,
+    const row = await this.db.overlayTokens.findOneAndUpdate({ userId, token, revokedAt: null, _rotation: { $exists: false }, _rotationPending: { $ne: true },
       $or: [{ profileRevision: revision }, ...(revision === 0 ? [{ profileRevision: { $exists: false } }] : [])],
     }, { $set: { profile, profileRevision: revision + 1 } }, { returnDocument: "after", projection: { _id: 0, profile: 1, profileRevision: 1 } });
     if (!row) {
@@ -342,9 +349,48 @@ class OverlayTokensService {
     const row = await this.db.overlayTokens.findOne({
       userId,
       token,
-      revokedAt: null,
+      revokedAt: null, _rotation: { $exists: false }, _rotationPending: { $ne: true },
     });
     return Boolean(row);
+  }
+
+  /** Bounded device-heartbeat catch-up; private device auth is required by
+   * the caller. Only ready terminal targets are included; agents fetch the full
+   * owner config before resolving chains or changing a generated source.
+   * @param {string} userId */
+  async replacementReceipts(userId) {
+    const rows = await this.db.overlayTokens.find({ userId, "_rotation.state": "complete" }, { projection: { token: 1, revokedAt: 1, _rotationPending: 1, _rotation: 1 }, maxTimeMS: 1000 }).sort({ "_rotation.startedAt": -1 }).limit(32).toArray();
+    if (!rows.length) return [];
+    const targets = await replacementTargets(this.db.overlayTokens, userId, new Map(rows.map(row => [String(row.token), String(row._rotation.to)])), rows);
+    return [...targets].flatMap(([from, target]) => target.token ? [{ from, to: target.token }] : []);
+  }
+
+  /** Never exposes a replacement credential to its former bearer.
+   * @param {string} token */
+  async isReplaced(token) {
+    if (typeof token !== "string" || token.length > OVERLAY_TOKEN_INPUT_MAX) return false;
+    return Boolean(await this.db.overlayTokens.findOne({ token, _rotation: { $exists: true } }, { projection: { _id: 1 } }));
+  }
+
+  /** @param {string} token @param {boolean} [retry] */
+  invalidate(token, retry = false) {
+    const key = tokenCacheKey(token); this.resolveCache.delete(key); this.lastSeenWrites.delete(key);
+    const pending = this.resolveInflight.get(key);
+    if (pending) { this.invalidatedInflight.add(pending); if (retry) this.profileChangedInflight.add(pending); }
+  }
+
+  /** @template T @param {string} token @param {()=>Promise<T>} work */
+  withWrite(token, work) { return this.writes.run(token, work); }
+  /** @param {string} userId @param {string} token */
+  rotate(userId, token) { return this.rotation.rotate(userId, token); }
+
+  /** @param {string} userId @param {string} token @param {unknown} label */
+  async rename(userId, token, label) {
+    if (typeof label !== "string" || !label.trim() || label.length > 60) throw Object.assign(new Error("invalid_overlay_label"), { status: 400, code: "invalid_overlay_label" });
+    const changed = await this.db.overlayTokens.updateOne({ userId, token, revokedAt: null, _rotation: { $exists: false }, _rotationPending: { $ne: true } }, { $set: { label: label.trim() } });
+    if (!changed.matchedCount) throw Object.assign(new Error("overlay_token_unavailable"), { status: 409, code: "overlay_token_unavailable" });
+    this.invalidate(token, true);
+    return { label: label.trim() };
   }
 
   /** @param {string} token @param {string} cacheKey */

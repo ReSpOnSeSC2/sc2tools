@@ -179,6 +179,7 @@ const { buildReplaysRouter } = require("./routes/replays");
 const { buildReplayFilesRouter } = require("./routes/replayFiles");
 const { buildPlaybackArtifactsRouter } = require("./routes/playbackArtifacts");
 const { buildBotLabRouter } = require("./routes/botLab");
+const { buildObsSourcesRouter } = require("./routes/obsSources");
 const {
   buildInfrastructureCostsRouter,
 } = require("./routes/infrastructureCosts");
@@ -311,7 +312,8 @@ function buildApp(deps) {
         logger: deps.logger,
       })
     : noopClerkClient());
-  const services = makeServices(deps, clerk);
+  const adminClerkIds = new Set(deps.config.adminUserIds || []);
+  const services = makeServices(deps, clerk, adminClerkIds);
   registerRuntimeCapacityProviders(deps.runtimeCapacityRegistry, services);
   const app = express();
   app.set("trust proxy", 1);
@@ -328,7 +330,6 @@ function buildApp(deps) {
   // mutated in place by the email-allowlist + admin-grant paths. The
   // REST ``isAdmin`` gate and the socket layer both read this live set;
   // the boot sequence also merges persisted DB admins into it.
-  const adminClerkIds = new Set(deps.config.adminUserIds || []);
   mountRoutes(app, deps, services, clerk, adminClerkIds, auth);
   app.use(buildErrorHandler(deps.logger));
   return { app, services, adminClerkIds };
@@ -337,8 +338,9 @@ function buildApp(deps) {
 /**
  * @param {AppDeps} deps
  * @param {import('./services/clerkClient').ClerkClient} clerk
+ * @param {Set<string>} adminClerkIds
  */
-function makeServices(deps, clerk) {
+function makeServices(deps, clerk, adminClerkIds) {
   // Admin notification stream — wired BEFORE UsersService so the
   // user-creation paths (ensureFromClerk first-touch, webhook upsert)
   // can fire signup events without a forward reference.
@@ -508,7 +510,10 @@ function makeServices(deps, clerk) {
   });
   const replayLibrary = new ReplayLibraryService(deps.db);
   const pairings = new DevicePairingsService(deps.db, { adminEvents, logger: deps.logger });
-  const overlayTokens = new OverlayTokensService(deps.db);
+  const overlayTokens = new OverlayTokensService(deps.db, { onRotationStarted: token => {
+    deps.io?.to(`overlay:${token}`).emit("overlay:config", { replacedBy: true });
+    deps.io?.in(`overlay:${token}`).disconnectSockets(true);
+  } });
   const platformIntegrations = new PlatformIntegrationsService(deps.db, {
     config: deps.config.platformIntegrations || { enabled: false },
     overlayTokens,
@@ -548,7 +553,7 @@ function makeServices(deps, clerk) {
     log: deps.logger,
   });
   const rivals = new RivalsService(deps.db, { users, pulse: new RivalsPulseService(pulseIntel), channels: playerChannels, viewers: multichatViewers, identities: playerIdentities });
-  const multichatStudio = new MultichatStudioService(deps.db, { io: deps.io });
+  const multichatStudio = new MultichatStudioService(deps.db, { io: deps.io, overlayTokens });
   const multichatSounds = new MultichatSoundsService(deps.db);
   // users + overlayTokens let the service resolve the streamer's own
   // channel identities, so the broadcaster never headlines their own
@@ -622,6 +627,7 @@ function makeServices(deps, clerk) {
     chatbot,
     logger: deps.logger,
   });
+  overlayTokens.rotation.onCompleted = (userId, from, to) => twitchChatBot.replaceOverlayToken(userId, from, to);
   multichatEngagement.onEvent = (token, msg) => {
     void twitchChatBot.handleEngagementEvent(token, msg).catch(() => {});
   };
@@ -856,6 +862,7 @@ function makeServices(deps, clerk) {
   // its dependencies are already constructed.
   const admin = new AdminService({
     db: deps.db,
+    adminIds: () => [...adminClerkIds],
     gdpr,
     infrastructureUsage,
   });
@@ -1239,7 +1246,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   // routers so the unauth'd endpoints aren't intercepted upstream.
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildDevicePairingsRouter({ pairings: services.pairings, auth }),
+    buildDevicePairingsRouter({ pairings: services.pairings, overlayTokens: services.overlayTokens, auth }),
   );
   // Official OAuth callbacks + signed platform webhooks must remain in the
   // public bundle. Account management paths apply Clerk auth per route.
@@ -1280,6 +1287,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     Boolean(req.auth && req.auth.clerkUserId && adminIds.has(req.auth.clerkUserId));
   app.use("/v1/bot-lab", buildBotLabRouter({ auth, io: deps.io, isAdmin,
     enabled: process.env.BOT_LAB_ENABLED === "true" }));
+  app.use("/v1/devices/obs", buildObsSourcesRouter({ auth, io: deps.io }));
   app.use(SERVICE.ROUTE_PREFIX, buildPlaybackArtifactsRouter({
     playbackArtifacts: services.playbackArtifacts, auth,
   }));

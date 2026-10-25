@@ -12,12 +12,13 @@ const { MultichatEngagementService } = require("../src/services/multichatEngagem
 const { PlayerChannelsService } = require("../src/services/playerChannels");
 const { OpponentChannelsCache } = require("../src/services/opponentChannels");
 const { buildMultichatRouter } = require("../src/routes/multichat");
+const { OverlayTokensService } = require("../src/services/overlayTokens");
 let mongo, db, svc, engagement, studio, games, live, verified, app, directory, channels, events, bot;
 const TOKEN = "desk-token", OWNER = "desk-owner";
 beforeAll(async () => { mongo = await MongoMemoryServer.create(); db = await connect({ uri: mongo.getUri(), dbName: "game_desk" }); });
 afterAll(async () => { await db?.close(); await mongo?.stop(); });
 beforeEach(async () => {
-  for (const collection of [db.users, db.games, db.multichatPredictions, db.multichatViewers, db.multichatStudio, db.playerChannels]) await collection.deleteMany({});
+  for (const collection of [db.users, db.games, db.multichatPredictions, db.multichatViewers, db.multichatStudio, db.playerChannels, db.overlayTokens]) await collection.deleteMany({});
   await db.users.insertOne({ userId: OWNER }); events = [];
   const io = { to: room => ({ emit: (event, payload) => events.push({ room, event, payload }) }) };
   engagement = new MultichatEngagementService(db, { io }); studio = new MultichatStudioService(db, { io });
@@ -172,6 +173,24 @@ test("a held full drain cannot publish an older reveal after the next round comp
   expect(reveals.map(event => event.gameKey)).toEqual(["game-one", "game-two"]);
   expect(reveals.map(event => event.settlementSequence)).toEqual([1, 2]);
   expect((await resumed.summary(TOKEN))).toMatchObject({ settlementSequence: 2, latestRoundKey: "game-two", prediction: null });
+});
+
+test("pending verified scores and scalar receipts resume through real token rotation", async () => {
+  const tokens = new OverlayTokensService(db), original = await tokens.create(OWNER, "Synthetic");
+  const scoring = new MultichatEngagementService(db, { overlayTokens: tokens });
+  await scoring.openPrediction([original.token], { gameKey: "rotate-pending", opponent: "Synthetic" });
+  await db.multichatPredictions.updateOne({ token: original.token, gameKey: "rotate-pending" }, { $set: { picks: {
+    alice: { user: "Alice", platform: "twitch", pick: "win" }, bob: { user: "Bob", platform: "twitch", pick: "win" },
+  } } });
+  const write = db.multichatViewers.updateOne.bind(db.multichatViewers); let failed = false;
+  const spy = jest.spyOn(db.multichatViewers, "updateOne").mockImplementation(async (...args) => { const result = await write(...args); if (!failed) { failed = true; throw new Error("lost score ack"); } return result; });
+  await expect(scoring.settlePrediction([original.token], { gameKey: "rotate-pending", result: "win" })).rejects.toThrow("lost score ack"); spy.mockRestore();
+  const replacement = await tokens.rotate(OWNER, original.token); expect(replacement.pending).toBe(false);
+  expect((await db.multichatStudio.findOne({ studioKey: replacement.token })).oraclePending.gameKey).toBe("rotate-pending");
+  await scoring.summary(replacement.token);
+  for (const userKey of ["twitch:alice", "twitch:bob"]) expect((await db.multichatViewers.findOne({ token: replacement.token, userKey })).oracle).toMatchObject({ total: 1, score: 10, awardSequence: 1 });
+  expect(await db.multichatViewers.countDocuments({ token: original.token })).toBe(0);
+  await expect(scoring.summary(original.token)).rejects.toMatchObject({ code: "invalid_overlay_token" });
 });
 
 test.each(["owner-write", "stream-mark"])("reversed reset completion at %s retains the newer anchor and stream mark", async boundary => {

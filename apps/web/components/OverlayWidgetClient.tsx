@@ -307,7 +307,7 @@ function ConnectedOverlayWidgetClient({
   // Hiding the randomizer must retain its consumed match identities and
   // running sequence through a brief loading/menu/reconnect transition.
   const retainRandomizer = widget === "randomizer";
-  if (connectionStatus === "invalid") return <><OverlaySetupCard reason="invalid-token" /><OverlayCheckBadge status="invalid" /></>;
+  if ((connectionStatus === "invalid" || connectionStatus === "replaced")) return <><OverlaySetupCard reason={connectionStatus === "replaced" ? "replaced" : "invalid-token"} /><OverlayCheckBadge status={connectionStatus} /></>;
   if (pausedHere && !retainRandomizer || !effectiveEnabled || (!showingTest && !visible && !ghostArmed && !alwaysVisible && !retainRandomizer)) {
     return (
       <>

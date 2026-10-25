@@ -54,10 +54,12 @@ class Heartbeat:
         interval_sec: float = DEFAULT_INTERVAL_SEC,
         on_success: Optional[Callable[[], None]] = None,
         on_failure: Optional[Callable[[Exception], None]] = None,
+        on_overlay_tokens: Optional[Callable] = None,
         state_dir: Optional[Path] = None,
     ) -> None:
         self._on_success = on_success or (lambda: None)
         self._on_failure = on_failure or (lambda _exc: None)
+        self._on_overlay_tokens = on_overlay_tokens
         self._api = api
         if state_dir is not None:
             from .preset_policy import PresetPolicyRefresh
@@ -111,11 +113,18 @@ class Heartbeat:
         # Reuse the api_client request infrastructure (auth, retries,
         # backoff). Failures are logged-only — we'll try again next tick.
         try:
-            self._api._post("/v1/devices/heartbeat", auth=True, body=body)
+            api = self._api  # Recovery may replace self._api while this request is in flight.
+            response = api._post("/v1/devices/heartbeat", auth=True, body=body)
             self._on_success()
         except Exception as exc:  # noqa: BLE001
             self._on_failure(exc)
             self._log.debug("heartbeat_attempt_failed: %s", exc)
             return
+        if self._on_overlay_tokens is not None:
+            try:
+                receipts = response.get("overlayTokenReplacements", []) if isinstance(response, dict) else []
+                self._on_overlay_tokens(receipts, api)
+            except Exception as exc:  # Advisory repair must not fail the heartbeat/watchdog.
+                self._log.debug("overlay_token_advisory_failed type=%s", type(exc).__name__)
         if self._preset_policy is not None:
             self._preset_policy.refresh()

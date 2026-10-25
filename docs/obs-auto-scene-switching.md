@@ -157,16 +157,32 @@ or BRB is selected in the Stream Dock.
 
 ### SC2 Tools — In Game
 
-Game capture full canvas, webcam at 304×171 bottom-right, and the shared
-Stream Dock manual override full canvas at the very top.
+Game capture full canvas, webcam at 304×171 bottom-right, and a canvas-sized
+**SC2 game overlay** Browser Source (`/overlay/<token>`, with the chosen credit
+preference). The game overlay sits above the webcam and below the Stream Dock
+cover and chat alerts. Browser Sources keep shutdown/restart-on-activation off.
+
+The Build/Update **During games** checklist offers All-in-one overlay (on by
+default), Ghost Build coach, Build randomizer, and Stats ticker (the other three
+start off). Reference rectangles at 1920×1080 are respectively `(0,0,1920,1080)`,
+`(1480,20,420,780)`, `(700,20,520,360)` and `(0,1024,1920,56)`, scaled to the
+canvas. The generated ticker strip is intentionally smaller than the shared
+recommended standalone ticker size, 1920×180.
+
+Update adds selected missing sources to an existing generated In Game scene.
+It never removes sources or changes existing input settings, transforms or
+relative order. New references are inserted below existing same-token manual
+covers/alerts. Unchecking a choice does not remove it. A same-origin/token/route
+Browser Source anywhere in OBS is reused; a matching scene reference is skipped,
+so rerunning does not start duplicate voice/audio renderers.
 
 A streamer who already has a gameplay scene they like can skip this
 half entirely and point the phase map at their own scene.
 
 ## 6. Builder safety contract
 
-`obs_layout.py` is the only code in the agent that writes to a user's
-OBS, and it runs against a live stream setup. So:
+The scene builder and confirmed website source handler write to a user's OBS,
+which can be a live stream setup. So:
 
 * Creating or replacing a layout runs **only** on an explicit
   **Build my scenes** or **Replace scenes** confirmation.
@@ -198,8 +214,9 @@ same OBS input to both generated scenes. This keeps one connection and one
 piece of state behind both scene items. When the enabled scene switcher
 connects to OBS, older generated scenes with a missing or misplaced cover are
 upgraded automatically using the authenticated overlay URL already present in
-the layout. The same non-destructive repair remains available through **Test
-connection → Update my scenes**; **Replace the scenes instead** is the separate
+the layout. This narrow compatibility repair belongs to the enabled switcher's
+connection path. **Test connection → Update my scenes** is an additive
+during-game-source update; **Replace the scenes instead** is the separate
 destructive reset.
 
 For custom phase-mapped scenes, add
@@ -219,6 +236,35 @@ the very top of each scene's source list.
 3. Click **Build my scenes** (or **Update my scenes** when detected), pick
    your webcam and game capture, and confirm.
 4. Select the new scenes in the phase dropdowns and **Save settings**.
+
+### Add a website widget to the current program scene
+
+1. Save OBS connection details in the updated paired desktop app. Enable
+   **Allow website requests to add an OBS source** (default off). This does not
+   require automatic switching.
+2. Website → **Settings → Overlay → Widgets** → enable the widget → **Add to
+   OBS**. Choose a device if more than one opted-in agent is online.
+3. The agent shows a local **Add [widget] to scene [name]?** confirmation,
+   default **Cancel**. **Add source** can put the source on your live stream.
+4. The agent checks the paired account, expiry and current program scene again,
+   then adds one recommended-size source (or reuses/skips an exact same-token
+   route). It sends a request/device-bound acknowledgement to the website.
+5. If there is no acknowledgement, inspect OBS before retrying; neither side
+   automatically repeats an uncertain write.
+
+The website sends only widget/device identifiers, never a URL, overlay token or
+OBS credentials. The agent resolves its paired account's default overlay URL.
+Use Copy/Drag for a particular token, theme or Ghost configuration. Ghost Add
+stays disabled: its assigned build fragment must come from Copy/Drag. The
+builder's optional Ghost source visibly warns that it starts unassigned. New
+website references sit below existing same-token covers and alerts.
+New references remain disabled until placement and a final scope check finish;
+an interrupted setup may leave a disabled source for inspection. Availability
+is one shared 30-second private request for the entire widget list. Requests have
+one pending slot per owner, 64 total, a 45-second cloud acknowledgement deadline
+and a 40-second native confirmation wait. The `--no-obs` boundary also blocks
+website requests. All automated verification uses fake OBS clients; no installer
+or real OBS execution is part of this change.
 
 ### Two PCs (SC2 on the gaming rig, OBS on the stream rig)
 
@@ -247,6 +293,7 @@ file, matching the rest of the agent.
 | `obs_scene_map` | — | see §4 |
 | `obs_switch_debounce_sec` | — | `3.0` |
 | `obs_switch_on_replays` | — | `false` |
+| `obs_website_add_enabled` | — | `false` |
 | `obs_transition_name` | — | none (leave OBS alone) |
 | `obs_transition_duration_ms` | — | none |
 

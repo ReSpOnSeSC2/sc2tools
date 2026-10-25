@@ -56,6 +56,58 @@ Review the evidence before approving identity or channel claims. Follow
 
 ## Users and repairing data
 
+### Filters and export
+
+Users shows 50 accounts per page with an exact matching total. Sort by Last
+activity, Signed up, Games, Opponents or Agent last seen; click a heading again
+to reverse it, or use the phone sort controls. Search matches email, internal
+user ID or Clerk ID as literal text. Filters reset the page and remain in the URL.
+
+- **All** includes accounts without replay data. **Has games** and **No games
+  yet** use stored game counts; **Has agent** means paired at least once.
+- **Signed up in 7 days** includes accounts created at or after the current time
+  minus seven days. **Admins** includes the stored admin role and server allowlist.
+- **Agent inactive 14 days** requires at least one historical device-token row
+  and its newest recorded device activity to be strictly older than 14 days.
+  Retained revoked installations count as pairing history. Missing activity is
+  unknown and excluded; a newer device prevents an old installation from
+  classifying the account as inactive. Device activity can be any authenticated
+  Companion request, not only a heartbeat.
+
+**Export CSV** downloads the current search and filter, latest replay activity
+first (falling back to sign-in or signup for accounts without games). It streams
+at most 10,000 users and reports truncation; narrow the filters for the rest.
+Counts and the truncation flag are read when the export starts; the streamed
+rows are not a database snapshot and can change during concurrent activity.
+There is one export per administrator per minute and one active export on the
+server. Columns are `userId`, `clerkUserId`, `email`, `signedUpAt`, `lastActivity`,
+`games`, `opponents`, `agentPaired`, `agentLastSeen` and `isAdmin`. Text cells are
+escaped for spreadsheets. The export contains emails: keep it internal and
+delete it after use. Export audit rows record counts and truncation, not emails
+or search text. No credentials are exported.
+
+User detail measures:
+
+- **Games:** stored games and recorded wins/losses, including undecided games in
+  the total.
+- **Win rate:** wins divided by wins plus losses; no decided games displays an
+  em dash.
+- **Opponents:** stored opponent records for this account.
+- **Last activity:** latest replay date on detail. The list and CSV fall back to
+  last sign-in, then signup when an account has no replays, matching their sort.
+- **Last sign-in:** the account's recorded `lastSeenAt`.
+- **First replay:** earliest stored replay date.
+- **Signed up:** account creation time, with absolute date and relative age.
+
+Relative dates expose the absolute date on hover and as semantic time elements.
+Copy either ID with Copy; if clipboard access is blocked, select the read-only
+field and copy it manually. Recent opponents and the five most recent games
+open the opponent drill-down; a game link selects that replay. Recent activity
+shows this user's last ten retained notification events; View all opens a
+user-filtered feed. Anonymized events are never relinked to a deleted identity.
+The feed's unread total remains global, and Mark all read is disabled while a
+user filter is active.
+
 ### Repairing a user's data
 
 Use the 300 ms debounced email/ID lookup in Tools, or open the user's detail page.
@@ -76,7 +128,8 @@ the card and Open user checks the outcome. Unknown IDs produce No user with that
 ID. Games-only legacy IDs still must pass the normal owner mutation fence; these
 records are not automatically turned into accounts.
 
-Support snapshot shows active devices and version/online state, the same doctor
+Support snapshot shows active devices with platform, version, online state and
+last recorded device activity, the same doctor
 warnings shown to the owner, replay archive counts, the last five imports and
 recent audit rows. It excludes tokens, replay paths and message bodies. Refresh
 it before retrying an uncertain action. See the [operations runbook](runbooks/admin-operations.md)

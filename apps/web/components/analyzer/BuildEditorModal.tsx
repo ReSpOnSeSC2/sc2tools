@@ -6,6 +6,7 @@ import { useAuth } from "@clerk/nextjs";
 import { apiCall } from "@/lib/clientApi";
 import { filtersToQuery, useFilters } from "@/lib/filterContext";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { BuildDossier } from "@/components/builds/BuildDossier";
 import { BuildPublishModal } from "@/components/builds/BuildPublishModal";
 import type { CustomBuild } from "@/components/builds/types";
@@ -137,38 +138,8 @@ export function BuildEditorModal({
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-6"
-        onClick={onClose}
-      >
-        <div
-          className="w-full max-w-4xl space-y-4"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="rounded-xl border border-border bg-bg-surface flex items-center justify-between px-4 py-3">
-            <div className="min-w-0">
-              <h2 className="truncate text-base font-semibold">{buildName}</h2>
-              <p className="text-micro text-text-dim">
-                Build dossier
-                {guideHref ? (
-                  <>
-                    {" · "}
-                    <Link href={guideHref} className="font-semibold text-accent-cyan hover:underline">
-                      Community guide
-                    </Link>
-                  </>
-                ) : null}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-xs"
-            >
-              ✕ close
-            </button>
-          </div>
-
+      <Modal open onClose={onClose} size="xl" mobileLayout="sheet" title={buildName}
+        description={<>Build dossier{guideHref ? <> · <Link href={guideHref} className="font-semibold text-accent-cyan hover:underline">Community guide</Link></> : null}</>}>
           <BuildDossier
             apiPath={apiPath}
             footerSlot={() => (
@@ -185,8 +156,7 @@ export function BuildEditorModal({
               />
             )}
           />
-        </div>
-      </div>
+      </Modal>
 
       {/* Rendered as a sibling (not inside the click-to-close scrim) so
           interacting with it never dismisses the dossier behind it. */}

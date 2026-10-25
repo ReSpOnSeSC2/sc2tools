@@ -277,6 +277,9 @@ class AgentState:
     localhost:6119 poll or an alt-tab yanking the layout mid-game.
     Entering a match is never debounced."""
 
+    obs_website_add_enabled: bool = False
+    """Website OBS requests require opt-in AND a separate local confirmation."""
+
     obs_switch_on_replays: bool = False
     """When False (the default) watching a replay does not trigger the
     in-game scene, even though replay playback reports the same
@@ -478,6 +481,7 @@ def load_state(state_dir: Path) -> AgentState:
         obs_switch_debounce_sec=_coerce_non_negative_float(
             raw.get("obs_switch_debounce_sec"), default=3.0,
         ),
+        obs_website_add_enabled=raw.get("obs_website_add_enabled") is True,
         obs_switch_on_replays=bool(raw.get("obs_switch_on_replays") or False),
         obs_transition_name=_coerce_str(raw.get("obs_transition_name")),
         obs_transition_duration_ms=_coerce_int(
@@ -569,6 +573,7 @@ def _snapshot(state: AgentState) -> dict:
         release_seen=dict(state.release_seen),
         replay_folders_override=list(state.replay_folders_override),
         replay_folders_excluded=list(state.replay_folders_excluded),
+        obs_website_add_enabled=state.obs_website_add_enabled is True,
         obs_scene_map=dict(state.obs_scene_map),
         build_checkin_card_positions={
             kind: list(point)

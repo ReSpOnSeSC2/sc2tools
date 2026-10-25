@@ -54,7 +54,7 @@ const {
  *     read straight from the platforms (no CORS from the browser).
  *
  * @param {{
- *   overlayTokens: { resolve: (token: string) => Promise<{userId: string} | null> },
+ *   overlayTokens: { resolve: (token: string) => Promise<{userId: string} | null>, isReplaced?: (token:string)=>Promise<boolean> },
  *   dataUsers?: import('mongodb').Collection<any>,
  *   users: {
  *     getPreferences: (userId: string, type: string) => Promise<Record<string, any>>,
@@ -138,7 +138,7 @@ function buildMultichatRouter(deps) {
       const token = String(req.params.token || "");
       const resolved = token ? await deps.overlayTokens.resolve(token) : null;
       if (!resolved) {
-        res.status(401).json({ error: { code: "invalid_overlay_token" } });
+        res.status(401).json({ error: { code: await deps.overlayTokens.isReplaced?.(token) ? "overlay_token_replaced" : "invalid_overlay_token" } });
         return;
       }
       // @ts-ignore request-scoped context, same pattern as socket auth
@@ -179,16 +179,15 @@ function buildMultichatRouter(deps) {
         );
         if (sound && Array.isArray(sound.customSounds)) {
           const token = encodeURIComponent(String(req.params.token));
-          sound.customSounds = sound.customSounds.map((c) =>
-            c.kind === "upload" && typeof c.uploadId === "string"
-              ? {
-                  id: c.id,
-                  label: c.label,
-                  kind: "upload",
-                  url: `/v1/multichat/${token}/sound/${c.uploadId}`,
-                }
-              : c,
-          );
+          sound.customSounds = sound.customSounds.flatMap(c => {
+            if (c.kind !== "upload") return [c];
+            // Old preferences sometimes stored the rendered serve URL instead
+            // of uploadId. Extract only its strict sound ID, then build this
+            // credential's owner-scoped URL; never forward the former bearer.
+            const legacy = typeof c.url === "string" ? /^\/v1\/multichat\/[^/?#]+\/sound\/([a-f0-9-]{8,40})$/.exec(c.url) : null;
+            const id = typeof c.uploadId === "string" ? c.uploadId : legacy?.[1];
+            return id ? [{ id: c.id, label: c.label, kind: "upload", url: `/v1/multichat/${token}/sound/${id}` }] : [];
+          });
         }
         res.json({ config });
       } catch (err) {

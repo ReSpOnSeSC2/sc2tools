@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ query: "section=widgets", userId: "owner-a", replace: vi.fn(), api: vi.fn(), sent: [] as unknown[], getToken: vi.fn(), updated: vi.fn() }));
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(state.query), useRouter: () => ({ replace: state.replace }) }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: state.userId, getToken: state.getToken }) }));
-vi.mock("@/lib/clientApi", () => ({ apiCall: (...args: unknown[]) => state.api(...args) }));
+vi.mock("@/lib/clientApi", () => ({ apiCall: (...args: unknown[]) => state.api(...args), useApi: () => ({ data: { devices: [] }, mutate: vi.fn() }) }));
 vi.mock("next/image", () => ({ default: ({ alt }: { alt: string }) => <span role="img" aria-label={alt} /> }));
 import { WidgetList, obsWidgetDropUrl } from "../OverlayWidgetGrid";
 import { OverlayStarterPacks } from "../OverlayStarterPacks";
