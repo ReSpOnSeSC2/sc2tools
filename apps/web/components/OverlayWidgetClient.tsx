@@ -188,8 +188,10 @@ function ConnectedOverlayWidgetClient({
   // Latest raw ``overlay:engagement`` payload — re-sanitized by the
   // engagement widgets themselves (useEngagementState).
   const [engagementEvent, setEngagementEvent] = useState<unknown>(null);
-  const momentSource = JSON.stringify([token, widget]), momentSourceRef = useRef(momentSource); momentSourceRef.current = momentSource;
-  const [momentSnapshot, setMomentSnapshot] = useState<{ source: string; payloads: unknown[] } | null>(null);
+  const momentSourceRef = useRef({ token, widget });
+  if (momentSourceRef.current.token !== token || momentSourceRef.current.widget !== widget) momentSourceRef.current = { token, widget };
+  const momentSource = momentSourceRef.current;
+  const [momentSnapshot, setMomentSnapshot] = useState<{ source: typeof momentSource; payloads: unknown[] } | null>(null);
   const momentEvent = momentSnapshot?.source === momentSource ? momentSnapshot.payloads : null;
   const receiveMoment = useCallback((payload: unknown) => {
     if (momentSourceRef.current !== momentSource) return;
@@ -752,7 +754,10 @@ function useOverlayWidgetSocket(
     // Stream Studio state (highlight / poll / goals / recap trigger) —
     // stored raw; the studio widgets defensively re-sanitize it via
     // useStudioState before rendering anything.
-    const clearScope = () => { resetPause(); receiveMoment(null); };
+    // Retired socket callbacks fail closed even if their former source returns.
+    const momentEpoch = { active: true };
+    const onMoment = (payload: unknown) => { if (momentEpoch.active) receiveMoment(payload); };
+    const clearScope = () => { if (momentEpoch.active) { resetPause(); receiveMoment(null); } };
     receiveMoment(null);
     socket.on("connect", clearScope); socket.on("disconnect", clearScope);
     const resetOnResync = (event: string) => { if (event === "overlay:resync") clearScope(); };
@@ -763,7 +768,7 @@ function useOverlayWidgetSocket(
     socket.on("overlay:engagement", (msg: unknown) => {
       if (msg && typeof msg === "object") setEngagementEvent(msg);
     });
-    if (widget === "chat-alerts") socket.on("overlay:moment", receiveMoment);
+    if (widget === "chat-alerts") socket.on("overlay:moment", onMoment);
     // Build check-in state (hold / suppress) for the randomizer's spin
     // gate; replayed by the cloud on connect and resync.
     if (onBuildIntent) socket.on("overlay:buildIntent", onBuildIntent);
@@ -778,6 +783,7 @@ function useOverlayWidgetSocket(
       latestGameKey: () => gameKeyRef.current,
     });
     return () => {
+      momentEpoch.active = false;
       socket.offAnyOutgoing?.(resetOnResync);
       socket.off("connect", clearScope); socket.off("disconnect", clearScope);
       detachResilience();

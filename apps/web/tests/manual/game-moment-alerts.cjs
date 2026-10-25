@@ -35,9 +35,13 @@ const server=http.createServer(async(req,res)=>{
     if(p==='/v1/me/integrations')return json({platforms:[]});
     if(tokens.includes(token)){
       if(p.endsWith('/config'))return json({config:prefs.get(token)});
+      if(p.endsWith('/alert-media'))return json({error:{code:'forbidden'}},403);
       if(p.endsWith('/studio'))return json(studio);
       if(p.endsWith('/engagement'))return json({wall:[],oracles:[],prediction:null,clipMoments:clips.get(token),oracleRecap:{calls:0,majorityRight:0,last:null}});
       if(p.endsWith('/ingest')&&req.method==='POST')return json({ok:true});
+      if(p.endsWith('/engage')&&req.method==='POST'){
+        const parts=[];for await(const chunk of req)parts.push(chunk);calls.at(-1).body=JSON.parse(Buffer.concat(parts).toString());return json({ok:true});
+      }
     }
     unexpected.push({path:p,method:req.method});return json({},404);
   }
@@ -50,7 +54,11 @@ const server=http.createServer(async(req,res)=>{
 io=new Server(server,{transports:['websocket','polling']});io.use((socket,next)=>next(tokens.includes(socket.handshake.auth.overlayToken)?undefined:new Error('invalid_overlay_token')));
 function snapshot(socket){socket.emit('overlay:config',{enabledWidgets:['chat-alerts']});socket.emit('overlay:multichat',studio)}
 io.on('connection',socket=>{const token=socket.handshake.auth.overlayToken;connections.push({token,surface:socket.handshake.auth.surface,widget:socket.handshake.auth.widget});socket.join(`overlay:${token}`);snapshot(socket);socket.on('overlay:resync',()=>snapshot(socket));socket.on('overlay:heartbeat',()=>socket.emit('overlay:heartbeat',{gameKey:null}))});
-async function shot(page,name){await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:`${shots}/game-moment-alerts-${name}.png`});captures++}
+async function shot(page,name){
+  if(name.startsWith('settings-'))await page.locator('summary').filter({hasText:/^Game moments/}).evaluate(node=>node.scrollIntoView({block:'start'}));
+  if(name.startsWith('preview-'))await page.locator('section[aria-label="Game moment preview"]').evaluate(node=>node.scrollIntoView({block:'start'}));
+  await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:`${shots}/game-moment-alerts-${name}.png`});captures++;
+}
 async function noOverflow(page){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);checks++}
 async function visible(page,label){await expect(page.getByText(label,{exact:true}).first()).toBeVisible();checks++}
 async function send(page,kind,id){return moment(tokens[0],kind,id,await page.evaluate(()=>Date.now()))}
@@ -114,6 +122,7 @@ async function send(page,kind,id){return moment(tokens[0],kind,id,await page.eva
       await page.addScriptTag({content:axe.source});const violations=await panel.evaluate(async node=>(await window.axe.run(node,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(item=>({id:item.id,nodes:item.nodes.map(row=>({target:row.target,failure:row.failureSummary}))})));expect(violations).toEqual([]);checks++;
       console.log(JSON.stringify({width,theme,checks,captures}));await context.close();
     }
-    expect(unexpected).toEqual([]);console.log(JSON.stringify({result:'PASS',checks,captures,connections:connections.length,requests:calls.length}));
+    expect(unexpected).toEqual([]);expect(calls.filter(call=>call.path.endsWith('/engage')).every(call=>!JSON.stringify(call.body).includes('ladder:'))).toBe(true);checks++;
+    console.log(JSON.stringify({result:'PASS',checks,captures,connections:connections.length,requests:calls.length}));
   }finally{await browser.close();await new Promise(resolve=>io.close(resolve));server.close()}
 })().catch(error=>{console.error(error);process.exitCode=1;io.close();server.close()});

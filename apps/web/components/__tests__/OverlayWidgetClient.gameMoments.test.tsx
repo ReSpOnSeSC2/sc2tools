@@ -67,4 +67,17 @@ describe("actual Browser Source moment subscription", () => {
     const retired = current(); view.rerender(<OverlayWidgetClient token="b" widget="chat-highlight" />);
     expect(retired.disconnected).toBe(true); expect(current().handlers.has("overlay:moment")).toBe(false);
   });
+  it("rejects held A callbacks and snapshots after an A to B to A transition", () => {
+    const view = render(<OverlayWidgetClient token="a" widget="chat-alerts" />), firstA = current();
+    const held = [...firstA.handlers.get("overlay:moment")!][0];
+    act(() => { firstA.fire("overlay:multichat", {}); firstA.fire("overlay:moment", moment("old-a")); });
+    expect(screen.getByText("Moment old-a")).toBeTruthy();
+    view.rerender(<OverlayWidgetClient token="b" widget="chat-alerts" />);
+    view.rerender(<OverlayWidgetClient token="a" widget="chat-alerts" />);
+    expect(screen.queryByText("Moment old-a")).toBeNull();
+    act(() => { held(moment("held-a")); current().fire("overlay:multichat", {}); });
+    expect(screen.queryByText("Moment held-a")).toBeNull();
+    act(() => current().fire("overlay:moment", moment("current-a")));
+    expect(screen.getByText("Moment current-a")).toBeTruthy(); expect(fixture.sockets).toHaveLength(3);
+  });
 });
