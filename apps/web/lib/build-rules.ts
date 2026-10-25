@@ -21,6 +21,7 @@
  * and unit-tested directly.
  */
 import type { BuildOrderEvent } from "@/lib/build-events";
+import { readReferenceBuildOrder, type ReferenceBuildOrder } from "@/lib/buildOrderReference";
 
 export const BUILD_RULES_SCHEMA_VERSION = 3 as const;
 
@@ -178,9 +179,11 @@ export interface BuildEditorDraft {
   transitionsInto: string[];
   rules: BuildRule[];
   sourceReplayId?: string;
+  buildOrder?: ReferenceBuildOrder;
 }
 
 export interface BuildEditorErrors {
+  buildOrder?: string;
   name?: string;
   rules?: string;
   communityAuthorName?: string;
@@ -204,6 +207,7 @@ export interface SanitisedDraft {
     transitionsInto: string[];
     rules: BuildRule[];
     sourceReplayId: string | null;
+    buildOrder?: ReferenceBuildOrder;
   };
 }
 
@@ -449,6 +453,8 @@ export function slugifyRuleName(name: string): string {
 
 export function sanitiseDraft(draft: BuildEditorDraft, { allowEmptyRules = false } = {}): SanitisedDraft {
   const errors: BuildEditorErrors = {};
+  const buildOrder = readReferenceBuildOrder(draft.buildOrder);
+  if (draft.buildOrder !== undefined && !buildOrder) errors.buildOrder = "Check the build-order times, supply, actions and notes (120 steps maximum).";
   const name = String(draft.name || "").trim();
   if (name.length < NAME_MIN_CHARS) {
     errors.name = `Need at least ${NAME_MIN_CHARS} chars.`;
@@ -465,7 +471,7 @@ export function sanitiseDraft(draft: BuildEditorDraft, { allowEmptyRules = false
     .filter((r): r is BuildRule => r !== null);
   if (invalidProxyRule) {
     errors.rules = "“Only count proxied” needs a building token, for example BuildPylon or BuildBarracks.";
-  } else if (rules.length === 0 && (!allowEmptyRules || draftRules.length > 0)) {
+  } else if (rules.length === 0 && ((!allowEmptyRules && !buildOrder?.steps.length) || draftRules.length > 0)) {
     errors.rules = "Need at least one rule.";
   } else if (rules.length > RULES_MAX_PER_BUILD) {
     errors.rules = `At most ${RULES_MAX_PER_BUILD} rules.`;
@@ -504,6 +510,7 @@ export function sanitiseDraft(draft: BuildEditorDraft, { allowEmptyRules = false
       transitionsInto: clipStrings(draft.transitionsInto),
       rules,
       sourceReplayId: draft.sourceReplayId || null,
+      ...(buildOrder ? { buildOrder } : {}),
     },
   };
 }

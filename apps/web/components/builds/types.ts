@@ -8,6 +8,7 @@
  * without bumping the schema validator.
  */
 import type { BuildSignatureItem } from "@/lib/build-events";
+import type { ReferenceBuildOrder } from "@/lib/buildOrderReference";
 import type { BuildRule, SkillLevelId } from "@/lib/build-rules";
 import type { Race, VsRace } from "@/lib/race";
 
@@ -19,6 +20,7 @@ export type {
 export type BuildPerspective = "you" | "opponent";
 
 export interface CustomBuild {
+  buildOrder?: ReferenceBuildOrder;
   /** Stable client-generated id used as the URL slug. */
   slug: string;
   /** Display name. */
