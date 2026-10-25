@@ -29,7 +29,8 @@ import { MapReplaySection } from "./MapReplaySection";
 import { MechanicsPanel } from "./MechanicsPanel";
 import { GameContextCard } from "./GameContextCard";
 import { useGameContext } from "@/lib/useBenchmarks";
-const BuildOrderColumns = dynamic(() => import("./BuildOrderColumns").then((value) => value.BuildOrderColumns), { loading: () => <div role="status" aria-label="Loading build orders" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
+import { ownTimingContext } from "@/lib/buildTimingComparison";
+const BuildOrderColumns = dynamic(() => import("./GameBuildOrderColumns").then((value) => value.GameBuildOrderColumns), { loading: () => <div role="status" aria-label="Loading build orders" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
 const BuildWorkspaceActions = dynamic(() => import("./BuildWorkspaceActions").then(value => value.BuildWorkspaceActions));
 const GameDataMenu = dynamic(() => import("./GameDataMenu").then(value => value.GameDataMenu));
 const GameMacroSection = dynamic(() => import("./GameMacroSection").then((value) => value.GameMacroSection), { loading: () => <div role="status" aria-label="Loading macro breakdown" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
@@ -319,6 +320,7 @@ function GameDetailContent({
       /></SectionBoundary>
 
       <SectionBoundary key={`build orders:${game.gameId}`} label="build orders" title="Build orders hit a problem"><BuildOrderColumns
+        timingContext={!intentReq.isPreviousData && !intentReq.error && !buildReq.isPreviousData ? ownTimingContext(intentReq.data, game.gameId, ghostMyRace, ghostOpponentRace, checkinRevision) : undefined}
         workspace={{
           myMeta: { title: checkinBuild?.label ?? buildReq.data?.my_build ?? game.myBuild ?? "My build", matchup: `${ghostMyRace || "Unknown"} vs ${ghostOpponentRace || "Unknown"}`, author: myName, sourceUrl: `/app/game/${encodeURIComponent(game.gameId)}#builds` },
           oppMeta: { title: checkinOpponent?.label ?? buildReq.data?.opp_strategy ?? game.opponent?.strategy ?? "Opponent build", matchup: `${ghostOpponentRace || "Unknown"} vs ${ghostMyRace || "Unknown"}`, author: oppName, sourceUrl: `/app/game/${encodeURIComponent(game.gameId)}#builds` },

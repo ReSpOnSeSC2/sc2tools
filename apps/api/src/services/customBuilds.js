@@ -15,7 +15,7 @@ const { publicBuildMongoExpression } = require("./communityBuildSnapshot");
 const { ruleNameFromUnit } = require("./knownBuildings");
 const { hydrateDossierTimings } = require("./buildDossierTimingSample");
 const { readCommunityTimings } = require("./buildCommunityTimings");
-const { planFacets, finishPlan } = require("./buildPlanSurvival");
+const { planFacets, finishPlan, planGroupFields, planHeldRate } = require("./buildPlanSurvival");
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 const {
   CUSTOM_BUILD_PAGE_SIZE,
@@ -1768,7 +1768,7 @@ class CustomBuildsService {
    * ``checkins`` counts the games included only through a build check-in
    * (an opponent correction for opponent-perspective definitions).
    *
-   * @returns {Promise<Array<{name: string, slug: string, total: number, wins: number, losses: number, checkins: number, winRate: number, lastPlayed: Date|null, ruleCount: number}>>}
+   * @returns {Promise<Array<{name: string, slug: string, total: number, wins: number, losses: number, checkins: number, planHeldRate: number|null, winRate: number, lastPlayed: Date|null, ruleCount: number}>>}
    */
   async evaluateAllStats(userId, opts = {}) {
     if (opts.slugs && (opts.slugs.length > CUSTOM_BUILD_MAX_PAGE_SIZE || opts.slugs.some((slug) => typeof slug !== "string" || !slug || slug.length > 80))) {
@@ -1799,6 +1799,7 @@ class CustomBuildsService {
               {
                 $match: {
                   userId,
+                  ...STATS_GAME_MATCH,
                   [provenanceField]: { $in: slugs },
                   isResumedFromReplay: { $ne: true },
                 },
@@ -1810,6 +1811,7 @@ class CustomBuildsService {
                   wins: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "win"] }, 1, 0] } },
                   losses: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "loss"] }, 1, 0] } },
                   total: { $sum: 1 },
+                  ...(perspective === "you" ? planGroupFields() : {}),
                   checkins: {
                     $sum: perspective === "you"
                       ? COUNTED_BY_CHECKIN_EXPR
@@ -1842,6 +1844,7 @@ class CustomBuildsService {
           wins: row.wins,
           losses: row.losses,
           checkins: Math.max(0, Number(row.checkins) || 0),
+          planHeldRate: buildPerspective(b) === "you" ? planHeldRate(row) : null,
           winRate: decided > 0 ? row.wins / decided : 0,
           lastPlayed: row.lastPlayed,
           ruleCount: extractRules(b).length,

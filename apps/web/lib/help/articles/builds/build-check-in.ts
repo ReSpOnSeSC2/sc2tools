@@ -25,7 +25,7 @@ const article: HelpArticle = {
     "win rate",
     "planned badge",
   ],
-  updated: "2026-10-24",
+  updated: "2026-10-25",
   body: [
     {
       type: "paragraph",
@@ -122,6 +122,10 @@ const article: HelpArticle = {
         "Games under 45 seconds never count toward a build. **No set build** undoes a check-in.",
       ],
     },
+    { type: "heading", text: "Plan survival", anchor: "plan-survival" },
+    { type: "paragraph", text: "After at least **five confirmed declarations** for a build, its dossier shows **Plan survival** and build lists can show **Held**. Held means the replay detector named the declared build or recorded no different label. **Knocked off** means it recorded another build. This comparison describes labels; missing detection does not prove execution, and a different label does not prove that your opponent caused a change. Stable custom-build identity is used before a renamed display label." },
+    { type: "paragraph", text: "The ring counts all confirmed declared games in the visible cohort. **Held win rate** and **Knocked-off win rate** each use their own decided-game count; missing results stay unknown rather than becoming losses. Ordinary detected games remain in Performance but do not inflate the declared denominator." },
+    { type: "paragraph", text: "**Knocked into** ranks the five most common different detector labels. **Knocked by opponent strategy** ranks the opponent labels recorded in those same games, without claiming causality. A row opens at most 20 latest recorded examples, while its count still covers all matching declarations. The estimated median full game length describes games with a different label; it is not the time the plan changed. Hidden, deleted, pending-deletion and replay-resume tests do not contribute." },
     { type: "heading", text: "On stream" },
     {
       type: "paragraph",

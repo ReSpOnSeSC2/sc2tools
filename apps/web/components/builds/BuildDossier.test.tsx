@@ -7,6 +7,8 @@ import { gameSourceFromQuery } from "@/lib/gameNavigation";
 import { ownerNeighborPath } from "@/components/analyzer/game/GameNavigation";
 
 const harness = vi.hoisted(() => ({
+  owner: "owner-a" as string | null,
+  authLoaded: true,
   paths: [] as Array<string | null>,
   data: null as BuildDossierData | null,
   compositions: undefined as BuildPhasePayload | undefined,
@@ -65,7 +67,7 @@ vi.mock("@/lib/clientApi", () => ({
     };
   },
 }));
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: vi.fn() }) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: vi.fn(), userId: harness.owner, isLoaded: harness.authLoaded, isSignedIn: !!harness.owner }) }));
 
 vi.mock("@/components/analyzer/Last5GamesTimeline", () => ({ Last5GamesTimeline: () => null }));
 vi.mock("@/components/analyzer/PredictedStrategiesList", () => ({ PredictedStrategiesList: () => null }));
@@ -131,6 +133,7 @@ function compositionPayload(): BuildPhasePayload {
 }
 
 beforeEach(() => {
+  harness.owner = "owner-a"; harness.authLoaded = true;
   harness.paths = [];
   harness.compositionError = null;
   harness.transitionError = null;
@@ -152,6 +155,22 @@ afterEach(() => {
 });
 
 describe("BuildDossier composition integration", () => {
+  it("uses timing and declared-plan example selections in the same owner-scoped games panel", async () => {
+    harness.data!.matchupTimingsLegacy = { PvZ: { timings: { Stargate: { source: "build_log", medianSeconds: 300, sampleCount: 6, samples: [{ gameId: "timing-game" }] } } } };
+    harness.data!.plan = { declared: 5, held: 3, knockedOff: 2, heldRate: .6, heldWR: 2 / 3, knockedOffWR: .5, heldDecided: 3, knockedOffDecided: 2,
+      knockedInto: [{ name: "Ground follow-up", count: 2, sampleGameIds: ["plan-game"], sampleLimit: 20, sampleTruncated: true }], knockedBy: [], medianKnockedOffDurationSec: null, durationSamples: 0, durationEstimated: true };
+    const view = render(<BuildDossier apiPath="/v1/builds/Test" sectionNavigation showMacro={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Stargate.*recorded sample games/ }));
+    expect(screen.getByRole("region", { name: "Selected sample games" }).textContent).toContain("Stargate timings · PvZ");
+    expect(screen.getByRole("link", { name: "Key timings" }).getAttribute("href")).toBe("#timings");
+    fireEvent.click(await screen.findByRole("button", { name: /Ground follow-up/ }));
+    expect(screen.getByRole("region", { name: "Selected sample games" }).textContent).toContain("Knocked into: Ground follow-up");
+    expect(harness.paths).toContain("/v1/games/plan-game");
+    harness.authLoaded = false; view.rerender(<BuildDossier apiPath="/v1/builds/Test" sectionNavigation showMacro={false} />);
+    expect(screen.queryByRole("region", { name: "Selected sample games" })).toBeNull();
+    harness.authLoaded = true; view.rerender(<BuildDossier apiPath="/v1/builds/Test" sectionNavigation showMacro={false} />);
+    expect(screen.queryByRole("region", { name: "Selected sample games" })).toBeNull();
+  });
   it("keeps a named build and its actual cohort separate from the durable list URL", () => {
     window.history.replaceState(null, "", "/app/builds#games");
     render(<BuildDossier apiPath="/v1/builds/Test?opp_race=T&regions=EU#17" showMacro={false} />);
@@ -253,7 +272,7 @@ describe("BuildDossier composition integration", () => {
     const { rerender } = render(<BuildDossier apiPath="/v1/builds/Bio" showMacro={false} />);
     fireEvent.click(screen.getByRole("button", { name: "Inspect mid-game composition" }));
     expect(screen.getByText("Mid · Siege Tank")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Composition sample games" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Selected sample games" })).toBeTruthy();
 
     rerender(<BuildDossier apiPath="/v1/builds/Bio?opp_race=P" showMacro={false} />);
     expect(screen.getByTestId("filtered-games").textContent).toBe("All games");

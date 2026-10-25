@@ -22,9 +22,26 @@ loser medians use the same personal samples and require five of each outcome.
 Timing recency sorts actual timestamps; unknown dates retain quantiles while
 withholding trends and last-seen claims.
 
-API verification: 149 tests across ten suites and one snapshot, full API type
-checking and strict lint for the new helpers/tests pass. Web cards, consumer
-tests, Help, browser evidence and final integration/build remain in progress.
+API verification: the initial 149 tests across ten suites and one snapshot,
+then 68 compactor/outcome and 62 library/cohort regressions, full API type
+checking and strict helper/test lint pass. The bounded compactor now preserves
+earliest construction-start parity on unordered logs, including morphs. Timing
+win rate uses decided games with an explicit denominator. Library Held summaries
+reuse the same existing grouped query and visibility guards, with no hydration.
+
+Key timings and Plan survival cards, optional native section links and selected
+sample-game integration are implemented. An owner/auth epoch prevents selections
+from resurfacing across loading/signout/ABA transitions. The owned game page uses
+one exact loaded-intent dossier SWR key for all first-occurrence owner building
+deltas; old cohorts, failed cached lookups and unidentified/deleted references
+supply no baseline. Existing supply, actions and shared-clock seeking stay intact.
+The cards remain inside the existing lazy dossier route/modal boundaries; the
+game comparison remains in the existing lazy build-order chunk.
+
+New card/helper/wrapper consumers, the existing 39 game consumers and 23 dossier
+integration/nav tests pass, along with web types/scoped lint. Help sections are
+written. Build-card/Builds-tab summaries await actual Unified editor integration;
+browser evidence and final integration/build remain in progress.
 No production or provider operations were performed. Do not run an old f96
 engine prebuild; integrate the owner's seven-minute cutoff source and coordinate
 the new engine hash before any required production build.

@@ -13,6 +13,8 @@ import type { GameBuildOrderEvent } from "./types";
 import { BuildExportMenu } from "@/components/builds/BuildExportMenu";
 import { withBuildSupply, type BuildExportMeta } from "@/lib/gameExport";
 import { Input } from "@/components/ui/Input";
+import type { DossierAnalysis } from "@/lib/dossierTypes";
+import { ownTimingDeltas, type OwnTimingDelta } from "@/lib/buildTimingComparison";
 
 type Workspace = {
   myMeta: BuildExportMeta; oppMeta: BuildExportMeta;
@@ -22,6 +24,7 @@ type Workspace = {
 };
 
 export interface BuildOrderColumnsProps {
+  myTimingBaseline?: { data: DossierAnalysis; matchup: string };
   workspace?: Workspace;
   onSeek?: (time: number) => void;
   currentTime?: number;
@@ -68,6 +71,7 @@ function visibleRows(rows: BuildEventRow[], workers: boolean, supplyBuildings: b
  * page.
  */
 export function BuildOrderColumns({
+  myTimingBaseline,
   error, onRetry, workspace,
   myEvents,
   oppEvents,
@@ -88,6 +92,7 @@ export function BuildOrderColumns({
   const enhanced = !!workspace, myStats = workspace?.myStats, oppStats = workspace?.oppStats;
   const myRows = useMemo(() => { const rows = normalizeBuildEvents(enhanced ? withBuildSupply(myEvents || [], myStats) : myEvents); return enhanced ? rows.sort((a, b) => a.time - b.time) : rows; }, [myEvents, myStats, enhanced]);
   const oppRows = useMemo(() => { const rows = normalizeBuildEvents(enhanced ? withBuildSupply(oppEvents || [], oppStats) : oppEvents); return enhanced ? rows.sort((a, b) => a.time - b.time) : rows; }, [oppEvents, oppStats, enhanced]);
+  const timingDeltas = useMemo(() => ownTimingDeltas(myRows, myTimingBaseline?.data, myTimingBaseline?.matchup ?? ""), [myRows, myTimingBaseline]);
   const mine = useMemo(() => enhanced ? visibleRows(myRows, workers, supplyBuildings, filter) : myRows, [myRows, enhanced, workers, supplyBuildings, filter]);
   const theirs = useMemo(() => enhanced ? visibleRows(oppRows, workers, supplyBuildings, filter) : oppRows, [oppRows, enhanced, workers, supplyBuildings, filter]);
   const slots = useMemo(() => {
@@ -130,8 +135,10 @@ export function BuildOrderColumns({
         <Input aria-label="Filter steps" placeholder="Filter steps…" value={filter} onChange={event => setFilter(event.target.value)} className="w-full sm:w-56" />
         <p className="w-full text-micro text-text-muted">Supply ≈ uses the last recorded sample before the step. Missing supply stays —.</p>
       </div> : null}
+      {timingDeltas.size ? <p className="mb-3 text-micro text-text-muted">Your median compares the first construction start with the recorded {myTimingBaseline?.matchup} dossier sample. It is an observation, not an execution grade.</p> : null}
       <div className="grid gap-4 md:grid-cols-2">
         <BuildColumn
+          timingDeltas={timingDeltas}
           heading={`${myHeadingLabel} — ${(myLabel || "").trim() || "Unclassified"}`}
           rows={mine}
           totalRows={myRows.length} slots={slots} showSupply={!!workspace} listRef={list => { lists.current.me = list; }} onListScroll={() => syncScroll("me")}
@@ -156,6 +163,7 @@ export function BuildOrderColumns({
 }
 
 function BuildColumn({
+  timingDeltas,
   heading,
   rows, menu, showSupply, slots, totalRows, listRef, onListScroll,
   status,
@@ -165,6 +173,7 @@ function BuildColumn({
   currentTime,
   autoScroll,
 }: {
+  timingDeltas?: Map<string, OwnTimingDelta>;
   heading: string;
   menu?: ReactNode; showSupply?: boolean; totalRows?: number;
   slots?: { time: number; count: number }[];
@@ -242,7 +251,7 @@ function BuildColumn({
                 <div className={slots ? "md:min-h-[var(--build-slot-height)]" : undefined} style={slots ? { "--build-slot-height": `${slot.count * 44}px` } as CSSProperties : undefined}>
             {group.map(row => (
               <div key={row.key}>
-                {onSeek ? <button type="button" aria-label={`Jump to ${row.timeDisplay} ${row.displayName}`} aria-current={active === row.key ? "step" : undefined} onClick={() => onSeek(row.time)} className={`flex min-h-11 w-full items-center gap-2 rounded px-1 py-0.5 text-left text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${active === row.key ? "bg-accent/10" : "hover:bg-bg-elevated"}`}><BuildEventContent row={row} showSupply={showSupply} /></button> : <span className="flex items-center gap-2 rounded px-1 py-0.5 text-caption"><BuildEventContent row={row} showSupply={showSupply} /></span>}
+                {onSeek ? <button type="button" aria-label={`Jump to ${row.timeDisplay} ${row.displayName}`} aria-current={active === row.key ? "step" : undefined} onClick={() => onSeek(row.time)} className={`flex min-h-11 w-full items-center gap-2 rounded px-1 py-0.5 text-left text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${active === row.key ? "bg-accent/10" : "hover:bg-bg-elevated"}`}><BuildEventContent row={row} showSupply={showSupply} delta={timingDeltas?.get(row.key)} /></button> : <span className="flex min-h-11 items-center gap-2 rounded px-1 py-0.5 text-caption"><BuildEventContent row={row} showSupply={showSupply} delta={timingDeltas?.get(row.key)} /></span>}
               </div>
             ))}</div></li>; })}
           </ol>
@@ -252,7 +261,7 @@ function BuildColumn({
   );
 }
 
-function BuildEventContent({ row, showSupply }: { row: BuildEventRow; showSupply?: boolean }) {
+function BuildEventContent({ row, showSupply, delta }: { row: BuildEventRow; showSupply?: boolean; delta?: OwnTimingDelta }) {
   return <>
                 <span className="w-11 flex-shrink-0 text-right font-mono text-micro tabular-nums text-text-dim">
                   {row.timeDisplay}
@@ -274,8 +283,6 @@ function BuildEventContent({ row, showSupply }: { row: BuildEventRow; showSupply
                     aria-hidden
                   />
                 )}
-                <span className="truncate text-text" title={row.rawName}>
-                  {row.displayName}
-                </span>
+                <span className="min-w-0 flex-1"><span className="block truncate text-text" title={row.rawName}>{row.displayName}</span>{delta ? <span className="block truncate text-micro text-text-muted" title={delta.title}>{delta.label}</span> : null}</span>
   </>;
 }

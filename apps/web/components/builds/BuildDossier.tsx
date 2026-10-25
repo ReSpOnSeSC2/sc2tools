@@ -2,8 +2,10 @@
 
 import { GameAnalysisLink, GameSourceLabelProvider } from "@/components/analyzer/GameAnalysisLink";
 
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
+import { hasPlanSurvival, type BuildDossierInsightsData } from "@/lib/buildDossierInsights";
 import { Card, EmptyState, Skeleton, Stat } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
 import { fmtAgo, fmtDate, fmtMinutes, pct1, wrColor } from "@/lib/format";
@@ -36,6 +38,8 @@ import { BuildCompositionExplorer } from "./BuildCompositionExplorer";
 import { BuildWinRateTrend } from "./BuildWinRateTrend";
 import { BuildDossierEmpty } from "./BuildDossierEmpty";
 import { BuildDossierNav } from "./BuildDossierNav";
+import { KeyTimingsCard } from "./KeyTimingsCard";
+import { PlanSurvivalCard } from "./PlanSurvivalCard";
 import type {
   BuildDetailRow,
   BuildPhasePayload,
@@ -60,7 +64,7 @@ const PHASE_LABELS: Record<Phase, string> = {
  * dossier extras (opponent-strategy predictions, macro aggregate). See
  * `apps/api/src/services/buildDossier.js`.
  */
-export interface BuildDossierData {
+export interface BuildDossierData extends BuildDossierInsightsData {
   name: string;
   slug?: string;
   totals: {
@@ -133,6 +137,10 @@ export function BuildDossier({
   onEditRules,
   sectionNavigation = false,
 }: BuildDossierProps) {
+  const { userId, isLoaded, isSignedIn } = useAuth();
+  const owner = isLoaded && isSignedIn ? userId : null;
+  const ownerEpoch = useRef({ owner, epoch: 0 });
+  if (ownerEpoch.current.owner !== owner) ownerEpoch.current = { owner, epoch: ownerEpoch.current.epoch + 1 };
   const { data, error, isLoading, mutate } = useApi<BuildDossierData>(apiPath);
 
   const phasePaths = phaseApiPaths(apiPath, phasePerspective);
@@ -148,7 +156,7 @@ export function BuildDossier({
     gameIds: string[];
     label: string;
   } | null>(null);
-  const scope = `${apiPath}|${phasePerspective ?? "default"}`;
+  const scope = `${ownerEpoch.current.epoch}|${apiPath}|${phasePerspective ?? "default"}`;
   const activeGameFilter = gameFilter?.scope === scope ? gameFilter : null;
   const customRules = apiPath.startsWith("/v1/custom-builds/");
 
@@ -211,7 +219,7 @@ export function BuildDossier({
   return (
     <GameSourceLabelProvider label={data.name} replace={!customRules} filters={`${new URL(apiPath, "https://sc2tools.invalid").search.slice(1)}${customRules ? "" : `&build=${encodeURIComponent(data.name)}`}`}><div className="space-y-5">
       {headerSlot ? headerSlot(data) : null}
-      {sectionNavigation ? <BuildDossierNav /> : null}
+      {sectionNavigation ? <BuildDossierNav insights plan={hasPlanSurvival(data.plan)} /> : null}
       {error ? (
         // SWR keeps the last good response when a refresh fails.
         <PhaseLoadError
@@ -225,6 +233,8 @@ export function BuildDossier({
       {data.totals.total > 0 && data.totals.total < 5 ? <p className="text-caption text-warning">Only {data.totals.total} games so far: treat percentages as early signals.</p> : null}
       {showMacro ? <MacroAggregate macro={data.macro} /> : null}
       </section>
+      <section id={sectionNavigation ? "timings" : undefined} className="scroll-mt-24" aria-label="Build key timings"><KeyTimingsCard key={scope} data={data} initialSource={phasePerspective === "opponent" ? "opp_build_log" : "build_log"} onSelect={openFilteredGames} /></section>
+      {hasPlanSurvival(data.plan) ? <section id={sectionNavigation ? "plan" : undefined} className="scroll-mt-24" aria-label="Declared build plan survival"><PlanSurvivalCard plan={data.plan} onSelect={openFilteredGames} /></section> : null}
       <section id={sectionNavigation ? "army" : undefined} className="scroll-mt-24 space-y-4" aria-label="Build army">
       {phasePaths.compositions ? (
         <PhaseAndTransitions
@@ -550,8 +560,8 @@ function CompositionSampleGames({
   const visibleIds = ids.slice(page * pageSize, (page + 1) * pageSize);
   const recentById = new Map(recent.map((game) => [game.gameId, game]));
   return (
-    <Card title="Composition sample games">
-      <div tabIndex={-1} role="region" aria-label="Selected composition sample games" className="mb-3 flex flex-wrap items-start justify-between gap-3 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" data-testid="build-games-filter-chip">
+    <Card title="Selected sample games">
+      <div tabIndex={-1} role="region" aria-label="Selected sample games" className="mb-3 flex flex-wrap items-start justify-between gap-3 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" data-testid="build-games-filter-chip">
         <div>
           <p className="text-caption font-medium text-text">{label}</p>
           <p className="mt-1 text-micro text-text-muted">

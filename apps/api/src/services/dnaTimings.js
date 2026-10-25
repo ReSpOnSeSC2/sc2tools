@@ -66,6 +66,7 @@ const TREND_REL_FRACTION = 0.05;
  *   lastSeenSeconds: number|null,
  *   lastSeenDisplay: string,
  *   winRateWhenBuilt: number|null,
+ *   winRateSampleCount: number,
  *   winnerMedianSeconds: number|null,
  *   loserMedianSeconds: number|null,
  *   winnerSampleCount: number,
@@ -159,6 +160,7 @@ function emptyTokenRow(token, source) {
     lastSeenSeconds: null,
     lastSeenDisplay: "-",
     winRateWhenBuilt: null,
+    winRateSampleCount: 0,
     ...timingOutcomeMedians([]),
     trend: "unknown",
     source,
@@ -489,7 +491,8 @@ function finaliseSamples(samples, ordering, ownInternalSet) {
     const mn = sortedAsc[0];
     const mx = sortedAsc[n - 1];
     const lastSeen = dated ? list2[list2.length - 1].seconds : null;
-    const winsCount = list2.reduce((a, s) => a + (s.won ? 1 : 0), 0);
+    const winsCount = list2.filter(s => resultBucket(s.result) === "win").length;
+    const decidedCount = list2.filter(s => { const bucket = resultBucket(s.result); return bucket === "win" || bucket === "loss"; }).length;
 
     out[tk.internalName] = {
       sampleCount: n,
@@ -505,7 +508,8 @@ function finaliseSamples(samples, ordering, ownInternalSet) {
       maxDisplay: formatSeconds(mx),
       lastSeenSeconds: lastSeen,
       lastSeenDisplay: lastSeen === null ? "-" : formatSeconds(lastSeen),
-      winRateWhenBuilt: winsCount / n,
+      winRateWhenBuilt: decidedCount ? winsCount / decidedCount : null,
+      winRateSampleCount: decidedCount,
       trend: dated ? computeTrend(secondsList) : "unknown",
       source,
       samples: list2.slice().reverse(),

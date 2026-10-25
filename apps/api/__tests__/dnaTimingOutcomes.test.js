@@ -14,7 +14,8 @@ test("actual stored and legacy outcome spellings share the same measured sample 
   expect(timing).toMatchObject({ sampleCount: 12, winnerSampleCount: 5, loserSampleCount: 5,
     winnerMedianSeconds: 120, loserMedianSeconds: 220 });
   expect(timing.samples).toHaveLength(12);
-  expect(timing.winRateWhenBuilt).toBeCloseTo(5 / 12);
+  expect(timing.winRateWhenBuilt).toBe(0.5);
+  expect(timing.winRateSampleCount).toBe(10);
 });
 
 test("both outcome medians stay absent if either measured side has fewer than five", () => {

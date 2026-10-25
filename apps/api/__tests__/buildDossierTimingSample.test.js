@@ -76,6 +76,20 @@ test.each(["catalog", "custom"])("%s detail cannot map a same-name private class
   expect(result).toMatchObject({ communityTimings: {} }); expect(find).not.toHaveBeenCalled();
 });
 
+test("library stats reuse the same live declared denominator without hydration or list fanout", async () => {
+  const deps = await fixture(), details = jest.spyOn(deps.details, "findMany");
+  await deps.games.updateMany({ userId: owner, gameId: { $in: ["game-2", "game-3", "game-4"] } }, { $set: { buildIntent: {
+    status: "confirmed", applied: true, build: ref, detected: { name: ref.name, slug: ref.slug },
+  } } });
+  await deps.games.updateMany({ gameId: /^ineligible-/ }, { $set: { buildIntent: { status: "confirmed", applied: true, build: ref, detected: null } } });
+  const service = new CustomBuildsService(deps, { perGame: /** @type {any} */ ({ gameDetails: deps.details }) });
+  const [stats] = await service.evaluateAllStats(owner, { slugs: [ref.slug] });
+  expect(stats).toMatchObject({ total: 30, wins: 15, losses: 15, planHeldRate: 4 / 5 });
+  expect(details).not.toHaveBeenCalled();
+  await deps.games.updateOne({ userId: owner, gameId: "game-4" }, { $unset: { buildIntent: "" } });
+  expect((await service.evaluateAllStats(owner, { slugs: [ref.slug] }))[0].planHeldRate).toBeNull();
+});
+
 test("an aborted held detail read cannot hydrate a second game or return a partial summary", async () => {
   /** @type {(value:unknown)=>void} */ let release = () => {};
   const held = new Promise(resolve => { release = resolve; });
@@ -84,4 +98,15 @@ test("an aborted held detail read cannot hydrate a second game or return a parti
     owner, [{ gameId: "first" }, { gameId: "second" }], controller.signal);
   controller.abort(); release(new Map([["first", { buildLog: [], oppBuildLog: [] }]]));
   await expect(result).rejects.toMatchObject({ name: "AbortError" }); expect(findMany).toHaveBeenCalledTimes(1);
+});
+
+test("the bounded compactor preserves earliest-start DNA parity for unordered logs", () => {
+  const { compactDossierTimingLog } = require("../src/services/buildDossierTimingSample");
+  const { firstOccurrenceSeconds } = require("../src/services/dnaTimings");
+  const raw = ["[9:00] Gateway", "[4:00] Gateway", "[8:00] GreaterSpire", "[7:45] Spire", "[3:30] Gateway"];
+  const game = { gameVersion: "5.0.17.98000" };
+  const compact = compactDossierTimingLog(raw, game);
+  for (const token of ["Gateway", "Spire"]) expect(firstOccurrenceSeconds(compact, token, game)).toBe(firstOccurrenceSeconds(raw, token, game));
+  expect(compact).toContain("[3:30] Gateway"); expect(compact).not.toContain("[9:00] Gateway");
+  expect(compact.length).toBeLessThan(raw.length);
 });
