@@ -64,7 +64,7 @@ const server = http.createServer(async (req, res) => {
       expect(requests.length).toBe(start); expect(await page.getByRole('table', { name: 'Chat command settings' }).count()).toBe(0); checks += 2;
       await capture('guide', page.getByRole('heading', { name: 'Viewer engagement', exact: true }));
       await page.goto(origin + '/settings'); const table = page.getByRole('table', { name: 'Chat command settings' }); await expect(table).toBeVisible(); await expect(page.getByRole('button', { name: 'Copy for your bio' })).toBeEnabled();
-      expect(requests.slice(start).filter(row => row.method !== 'GET').length).toBe(0); await expect(table.getByRole('row')).toHaveCount(width >= 1024 ? 12 : 11); checks += 2;
+      expect(requests.slice(start).filter(row => row.method !== 'GET').length).toBe(0); await expect(table.getByRole('row')).toHaveCount(registry.CHAT_COMMANDS.length + (width >= 1024 ? 1 : 0)); checks += 2;
       const mmr = table.getByRole('row').filter({ has: page.getByRole('heading', { name: '!mmr', exact: true }) });
       await mmr.getByRole('textbox', { name: 'Alias for !mmr', exact: true }).fill('rating'); await mmr.getByRole('spinbutton', { name: 'Cooldown for !mmr', exact: true }).fill('35');
       await mmr.locator('summary').click(); for (const platform of ['twitch', 'youtube', 'tiktok', 'nightbot']) await mmr.getByRole('checkbox', { name: platform + ' for !mmr', exact: true }).uncheck();

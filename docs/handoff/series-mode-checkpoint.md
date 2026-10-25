@@ -32,10 +32,12 @@ another control island is present. Root reviewed that delta; the unchanged
 real Dock profile host and all existing recovery assertions pass.
 
 Preserved source includes actual Moments main b2212bbd and reviewed shared Chat
-3e932f72. Both moment fresh-only scoring and Series all-accepted-row scoring are
-retained. Pure/service/route/socket and shared command tests pass92 API cases;
-full API/web typechecks pass. Local Dock consumer sweep passes164 tests,
-overlay sweep706, actual dedicated/AIO Series transport4, and shared Chat15.
+5e0cfa36. Its squash-order reconciliation retains the exact combined source
+tree. Both moment fresh-only scoring and Series all-accepted-row scoring remain.
+The final combined pure/service/route/socket/Chat/Moments run passes148 API
+cases across11 suites; full API/web typechecks pass. Local Dock consumer sweep
+passes164 tests, overlay sweep706 and final focused web32, including actual
+dedicated/AIO Series transport4 and shared Chat15.
 The actual sample widget image and87-article generated Help index are current.
 
 The standalone local browser harness passes145 checks with eight production-font
