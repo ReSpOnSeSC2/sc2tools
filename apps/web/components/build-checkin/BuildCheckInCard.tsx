@@ -57,6 +57,9 @@ export function BuildCheckInCard({
   onChanged,
   initialNewBuild = null,
   onNewBuildOpened,
+  defaultExpanded = false,
+  showRequestState = false,
+  headingLevel = 2,
 }: {
   gameId: string;
   /** After a successful write, e.g. to refresh the page's game summary. */
@@ -65,10 +68,16 @@ export function BuildCheckInCard({
   initialNewBuild?: CheckInSide | null;
   /** The deep link was acted on (or can't be); e.g. drop it from the URL. */
   onNewBuildOpened?: () => void;
+  /** Explicit edit intent from another game surface; keep the default compact. */
+  defaultExpanded?: boolean;
+  /** An explicit editor must explain loading/missing data instead of disappearing. */
+  showRequestState?: boolean;
+  /** Match the nesting when embedded inside another game section. */
+  headingLevel?: 2 | 4;
 }) {
   const { revision } = useBuildCheckInRevision();
   const request = useGameBuildIntent(gameId, revision);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [creating, setCreating] = useState<NewBuildRequest | null>(null);
   const [signal, setSignal] = useState<SideSignal | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -170,6 +179,12 @@ export function BuildCheckInCard({
   const confirmed = state?.eligible && (state.status === "confirmed" || state.opponent?.status === "confirmed");
   let content: ReactNode;
   if (!state) {
+    if (showRequestState) {
+      content = <div role={request.error ? "alert" : "status"} className="space-y-2 rounded-xl border border-border px-4 py-3 text-caption text-text-muted">
+        <p>{request.error ? request.error.status === 404 ? "Build selection isn't available for this game yet." : "Build selection couldn't load." : "Loading build selection…"}</p>
+        {request.error ? <Button variant="secondary" className="min-h-11" onClick={() => { rootRef.current?.focus(); void request.mutate(); }}>Try again</Button> : null}
+      </div>;
+    } else {
     content =
       !request.error || request.error.status === 404 ? null : (
         <div
@@ -187,6 +202,7 @@ export function BuildCheckInCard({
           </Button>
         </div>
       );
+    }
   } else if (!state.eligible) {
     content = <IneligibleLine state={state} />;
   } else if (confirmed && !expanded && creating === null && !initialNewBuild) {
@@ -236,6 +252,8 @@ export function BuildCheckInCard({
         onDone={confirmed && expanded ? () => { returnToSummary.current = true; setExpanded(false); } : undefined}
         onAddNew={openNewBuild}
         editorOpen={creating !== null}
+        headingLevel={headingLevel}
+        focusPickerOnMount={!defaultExpanded}
       />
     );
   }
@@ -243,7 +261,7 @@ export function BuildCheckInCard({
   return (
     <>
       {content ? (
-        <div ref={rootRef} className="scroll-mt-20">
+        <div ref={rootRef} tabIndex={showRequestState ? -1 : undefined} className="scroll-mt-20">
           {content}
         </div>
       ) : null}
@@ -295,6 +313,8 @@ function CheckInPanel({
   onDone,
   onAddNew,
   editorOpen,
+  headingLevel,
+  focusPickerOnMount,
 }: {
   id: string;
   state: GameIntentState;
@@ -309,8 +329,11 @@ function CheckInPanel({
   onAddNew: (side: CheckInSide, query: string) => void;
   /** The build editor dialog is open over the page. */
   editorOpen: boolean;
+  headingLevel: 2 | 4;
+  focusPickerOnMount: boolean;
 }) {
   const titleId = useId();
+  const Heading = headingLevel === 4 ? "h4" : "h2";
   const notesForWrite = () => (notes.dirty ? notes.draft : undefined);
 
   const afterWrite = (errorCode: string | null) => {
@@ -353,12 +376,12 @@ function CheckInPanel({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <ClipboardCheck className="h-4 w-4 text-accent" aria-hidden />
-            <h2
+            <Heading
               id={titleId}
               className="text-caption font-semibold uppercase tracking-wider text-text"
             >
               Build check-in
-            </h2>
+            </Heading>
             <CheckInStatusBadge status={state.status} />
           </div>
           <p className="mt-1 text-caption text-text-muted">
@@ -382,6 +405,7 @@ function CheckInPanel({
           onAddNew={(query) => onAddNew("you", query)}
           afterWrite={afterWrite}
           editorOpen={editorOpen}
+          focusPickerOnMount={focusPickerOnMount}
         />
 
         {state.opponent ? (
@@ -444,6 +468,7 @@ function YourBuildRow({
   onAddNew,
   afterWrite,
   editorOpen,
+  focusPickerOnMount,
 }: {
   state: GameIntentState;
   actions: CheckInActions;
@@ -455,6 +480,7 @@ function YourBuildRow({
   onAddNew: (query: string) => void;
   afterWrite: (errorCode: string | null) => void;
   editorOpen: boolean;
+  focusPickerOnMount: boolean;
 }) {
   const suggestion = state.suggestion;
   const [picking, setPicking] = useState(
@@ -462,7 +488,7 @@ function YourBuildRow({
   );
   // Focus the search box only when the player opened the picker, never
   // on page load.
-  const [focusPicker, setFocusPicker] = useState(Boolean(onCollapse));
+  const [focusPicker, setFocusPicker] = useState(Boolean(onCollapse) && focusPickerOnMount);
   const [selectedKey, setSelectedKey] = useState<string | null>(
     state.status === "confirmed" ? state.build?.key ?? null : suggestion?.key ?? null,
   );

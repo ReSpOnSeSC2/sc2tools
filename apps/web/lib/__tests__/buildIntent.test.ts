@@ -171,6 +171,20 @@ describe("mutations", () => {
     });
   });
 
+  it("passes local cancellation to every game write without persisting it", async () => {
+    apiCallMock.mockResolvedValue({ gameId: "g1" });
+    const signal = new AbortController().signal;
+    await confirmGameIntent(getToken, "g1", "catalog:a", undefined, { signal });
+    await skipGameIntent(getToken, "g1", undefined, { signal });
+    await setOpponentBuild(getToken, "g1", null, undefined, { signal });
+    await saveGameIntentNotes(getToken, "g1", "note", { signal });
+    expect(apiCallMock).toHaveBeenCalledTimes(4);
+    for (const [, , init] of apiCallMock.mock.calls) {
+      expect(init.signal).toBe(signal);
+      expect(JSON.parse(init.body)).not.toHaveProperty("signal");
+    }
+  });
+
   it("dismisses the pending window with a POST", async () => {
     apiCallMock.mockResolvedValue({ dismissed: 3 });
     await expect(dismissPendingIntents(getToken)).resolves.toEqual({ dismissed: 3 });
