@@ -2,9 +2,11 @@
 
 2026-10-25. Branch `codex/wave4-reference-build-order`, preserved in
 `.worktrees/wave3-coaching-forms`. ADR 0058. Depends on unified editor PR 738;
-do not merge ahead of that foundation. Source freeze includes `62ed1918`, with
+do not merge ahead of that foundation. Source freeze is `601d99dc`, with
 the independently reviewed generic request fence in `c3faa6f9` and its complete
-saved-editor test auth fixture in `a10b7d2a`.
+saved-editor test auth fixture in `a10b7d2a`. It integrates reviewed generic
+hotfix/current-main dependency `a8fc536f`, retaining the richer token gates and
+the additional create-only/signature identity fields and tests.
 
 ## Implemented
 
@@ -20,6 +22,11 @@ saved-editor test auth fixture in `a10b7d2a`.
   row moves, five-minute trim, adjacent repeated-army compaction and explicit
   source-game fill. Game-created drafts auto-fill, folding worker rows into
   recorded supply without inventing samples.
+- Upgrade practice keeps recorded completion clocks. If completion is absent,
+  the reference clock stays unknown. Recorded start clocks and start supply
+  stay in a shareable step note, rather than presenting start supply as exact
+  completion supply. Manual/pasted upgrade clocks are explicitly completion
+  checkpoints. Malformed/oversized legacy event rows cannot crash source fill.
 - Deterministic paste accepts bracketed/plain clocks, Spawning Tool columns and
   Liquipedia supply-only lines. Per-line errors forbid partial import; unknown
   action/timing warnings remain saveable. The first-run pasted card is enabled.
@@ -37,9 +44,10 @@ saved-editor test auth fixture in `a10b7d2a`.
 
 ## Verification
 
-- 423 affected web consumers/helpers/Help checks pass. Thirteen real-transport
+- 427 affected web consumers/helpers/Help checks pass. Fifteen real-transport
   scope regressions cover held JWT, headers, response body, publication repair,
-  preview/inspect, owner/loading/source/close/unmount and ABA boundaries.
+  preview/inspect, owner/loading/source/signature/create-only/close/unmount and
+  ABA boundaries.
 - 26 focused API schema, private/public boundary and prior payload-bound checks
   pass with disposable MongoDB. Real owner save and publication retain steps
   while private replay IDs never enter the public document.
@@ -53,18 +61,20 @@ saved-editor test auth fixture in `a10b7d2a`.
   that ancestry-only reconciliation.
 - Final production Next build and every unchanged performance budget pass:
   landing 189.7/215, Today 238.4/240, Builds 199.5/270, game 310.7/440,
-  opponent 447.8/500, Dock 215.2/225, widget 323.4/325 kB gzip.
-- Actual-source Chromium: 371 checks, 42 captures, five widths
+  opponent 447.8/500, Dock 215.3/225, widget 323.4/325 kB gzip.
+- Actual-source Chromium: 395 checks, 44 captures, five widths
   (300/320/390/768/1440), light/dark, production CSS/fonts, full-modal axe,
   overflow, keyboard editing, unknown/malformed paste, source worker folding,
-  clipboard fallback, .txt download, and held JWT/body owner switches.
+  clipboard fallback, .txt download, recorded upgrade completion versus start
+  supply, and held JWT/body owner switches.
   All 42 API requests and 11 writes are synthetic loopback fixture data;
   external browser traffic is blocked and unexpected API requests are zero.
 
 Manual entry points are `apps/web/tests/manual/reference-build-order*.cjs`.
 Captures are `docs/handoff/screenshots/reference-build-order-*.png`.
-Representative 300px paste/export, 320px editor, focused tab/control views and
-1440px dark source fill were visually inspected; no layout blocker found.
+Representative 300px paste/export, 320px editor, focused tab/control views,
+1440px dark source fill and 320/1440px upgrade completion views were visually
+inspected; no layout blocker found.
 
 ## Remaining gates
 
