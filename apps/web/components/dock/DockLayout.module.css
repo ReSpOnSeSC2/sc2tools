@@ -9,7 +9,7 @@
 :global([data-theme="light"]) .name { color: rgb(var(--text)); }
 
 @media (min-width: 1024px) {
-  .grid { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
+  .grid { grid-template-columns: minmax(0, 1fr) 340px; grid-auto-flow: row dense; align-items: start; }
   .grid > :global([data-pinned="true"]) { grid-column: 1 / -1; }
   .grid:not([data-chat-pinned="true"]) > :global(#dock-chat) { grid-column: 1; grid-row: span var(--dock-controls); }
   .grid:not([data-chat-pinned="true"]) > :global([data-pinned="false"]:not(#dock-chat)) { grid-column: 2; }

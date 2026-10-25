@@ -12,7 +12,7 @@ class FakeSocket {
   off() {}
   handlers = new Map<string, Handler>();
   emitted: Array<[string, unknown]> = [];
-  on(event: string, handler: Handler) { this.handlers.set(event, handler); }
+  on(event: string, handler: Handler) { this.handlers.set(event, handler); if (event === "overlay:multichat") handler({ gameWidgetsPaused: false }); }
   emit(event: string, payload?: unknown) { this.emitted.push([event, payload]); }
   disconnect() {}
   fire(event: string, value?: unknown) { this.handlers.get(event)?.(value); }

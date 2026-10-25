@@ -25,7 +25,10 @@ import { OverlayWidgetClient } from "../OverlayWidgetClient";
 import { OverlaySceneClient } from "../overlay/scenes/OverlaySceneClient";
 
 const profile = (durationSec = 45, accent = "#abcdef") => ({ v: 1, theme: { accent }, widgetOptions: { "mmr-delta": { durationSec } } });
-const config = (socket: Socket, duration = 45, revision = 1, accent = "#abcdef") => act(() => socket.fire("overlay:config", { enabledWidgets: ["mmr-delta"], profile: profile(duration, accent), profileRevision: revision }));
+const config = (socket: Socket, duration = 45, revision = 1, accent = "#abcdef") => act(() => {
+  socket.fire("overlay:multichat", { gameWidgetsPaused: false });
+  socket.fire("overlay:config", { enabledWidgets: ["mmr-delta"], profile: profile(duration, accent), profileRevision: revision });
+});
 const live = (socket: Socket, extra = {}) => act(() => socket.fire("overlay:live", { gameKey: "new-game", mmrDelta: 18, oppName: "Synthetic", ...extra }));
 const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
 const accent = (container: HTMLElement) => container.querySelector<HTMLElement>('[style*="--ov-accent"]')?.style.getPropertyValue("--ov-accent") || "";

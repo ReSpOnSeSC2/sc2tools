@@ -23,6 +23,7 @@ const DEFAULT_MAX_COMPUTE_WAITERS = 32;
 /**
  * @typedef {{
  *   generation: number,
+ *   discardBefore: number,
  *   tail: Promise<any>,
  *   tasks: Map<string, ResolutionEntry>,
  *   cache: Map<string, {generation: number, value: any, expiresAt: number}>,
@@ -179,6 +180,9 @@ class SessionResolutionGate {
     } finally {
       releaseCompute();
     }
+    if (generation < lane.discardBefore) {
+      throw Object.assign(new Error("session changed during resolution"), { code: "SESSION_RESOLUTION_STALE" });
+    }
     if (entry.cacheResult && lane.generation === generation) {
       this._cache(lane, timezoneKey, generation, value);
     }
@@ -188,14 +192,17 @@ class SessionResolutionGate {
   /**
    * Invalidate all completed results for a user and put later requests in a
    * new generation. Work that started before the write may finish for its
-   * original callers, but it cannot repopulate the post-write cache.
+   * original callers, but it cannot repopulate the post-write cache. A manual
+   * reset additionally discards pending delivery to the original subscribers.
    *
    * @param {string} userId
+   * @param {{discardPending:boolean}} [opts]
    */
-  invalidate(userId) {
+  invalidate(userId, opts = { discardPending: false }) {
     const lane = this.lanes.get(userId);
     if (!lane) return;
     lane.generation += 1;
+    if (opts.discardPending) lane.discardBefore = lane.generation;
     lane.cache.clear();
     lane.touchedAt = this.now();
   }
@@ -384,6 +391,7 @@ class SessionComputeAdmission {
 function makeLane(now) {
   return {
     generation: 0,
+    discardBefore: 0,
     tail: Promise.resolve(),
     tasks: new Map(),
     cache: new Map(),

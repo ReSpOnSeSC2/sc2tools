@@ -24,7 +24,7 @@ class FakeSocket {
   disconnected = false;
 
   on(event: string, handler: SocketHandler) {
-    this.handlers.set(event, handler);
+    this.handlers.set(event, handler); if (event === "overlay:multichat") handler({ gameWidgetsPaused: false });
   }
 
   emit(event: string, payload?: unknown) {

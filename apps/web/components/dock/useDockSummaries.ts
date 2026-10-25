@@ -5,7 +5,7 @@ import type { StudioState } from "@/lib/multichat/useStudioState";
 import type { MultichatConfig } from "@/lib/multichat/types";
 import type { DockSectionId } from "@/lib/dockLayout";
 import { STUDIO_SCENE_LABELS } from "@/lib/multichat/sceneModes";
-import { formatCountdown } from "@/components/overlay/widgets/StreamSceneWidget";
+import { formatCountdown } from "@/lib/multichat/countdown";
 
 export type DockSummary = { summary: string; active?: boolean; loading?: boolean };
 export function useDockSummaries(studio: StudioState, ready: boolean, platforms: MultichatConfig | null,
@@ -24,6 +24,7 @@ export function useDockSummaries(studio: StudioState, ready: boolean, platforms:
   const remaining = scene?.countdownEndsAt ? Math.max(0, scene.countdownEndsAt - now) : null;
   const timerLeft = studio.timer ? Math.max(0, studio.timer.endsAt - now) : 0;
   return {
+    "dock-game": { summary: studio.gameWidgetsPaused ? "Game widgets hidden" : "Match & session controls", active: studio.gameWidgetsPaused, loading: !ready },
     "dock-scout": { summary: "Live opponent brief" },
     "dock-chat": { summary: `${count} ${count === 1 ? "platform" : "platforms"}`, loading: !platformsReady || !ready },
     "dock-highlight": { summary: studio.highlight ? "Pinned" : "Nothing pinned", active: !!studio.highlight, loading: !ready },

@@ -643,6 +643,7 @@ class UsersService {
    *   lastKnownMmr?: number,
    *   lastKnownMmrAt?: string,
    *   lastKnownMmrRegion?: string,
+   *   sessionAnchorAt?: string,
    * }>}
    */
   async getProfile(userId) {
@@ -661,6 +662,7 @@ class UsersService {
           lastKnownMmr: 1,
           lastKnownMmrAt: 1,
           lastKnownMmrRegion: 1,
+          sessionAnchorAt: 1,
         },
       },
     );
@@ -674,6 +676,7 @@ class UsersService {
       "displayName",
       "lastKnownMmrAt",
       "lastKnownMmrRegion",
+      "sessionAnchorAt",
     ]) {
       const v = doc[k];
       if (typeof v === "string" && v.length > 0) out[k] = v;

@@ -101,6 +101,7 @@ vi.mock("@/lib/multichat/useEngagementState", async (importOriginal) => {
     useEngagementState: () => ({
       summary: mockEngagement,
       lastEvent: mockEngagementEvent,
+      loaded: true,
     }),
   };
 });
