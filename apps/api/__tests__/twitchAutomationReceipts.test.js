@@ -72,3 +72,33 @@ test("recovery batches stay bounded and fields cannot carry secrets or expressio
   await expect(journal.finish(ticket, "active", { ...ids, accessToken: "must-not-store" })).rejects.toThrow();
   const result = await journal.finish(ticket, "active", { ...ids, reason: "$literal-provider-reason" }); expect(result.prediction.reason).toBe("$literal-provider-reason");
 });
+
+test("cancel before dispatch prevents CREATE and never affects another owner", async () => {
+  await reserve(); expect(await journal.requestSettlement("owner-B", "game-1", { action: "cancel", reason: "dock_cancel" })).toBeNull();
+  const row = await journal.requestSettlement("owner-A", "game-1", { action: "cancel", reason: "dock_cancel" });
+  expect(row).toMatchObject({ prediction: { status: "canceled" }, settlement: { action: "cancel", reason: "dock_cancel" } });
+  expect(await journal.claim("owner-A", "game-1", "prediction", "pending", "creating")).toBeNull(); expect(await journal.due()).toHaveLength(0);
+});
+
+test.each(["verified_result", "short_game", "result_timeout", "dock_cancel"])("%s during CREATE survives completion and becomes immediately recoverable", async reason => {
+  await reserve(); const ticket = await journal.claim("owner-A", "game-1", "prediction", "pending", "creating");
+  const action = reason === "verified_result" ? "resolve" : "cancel";
+  await journal.requestSettlement("owner-A", "game-1", { action, reason, ...(action === "resolve" ? { outcome: "win" } : {}) });
+  expect(await journal.due()).toHaveLength(0); await journal.finish(ticket, "active", ids);
+  const recovered = new TwitchAutomationReceipts({ collection: rows, now: () => now });
+  expect((await recovered.due())[0]).toMatchObject({ settlement: { action, reason }, prediction: { status: "active", ...ids } });
+});
+
+test("duplicate/conflicting results cannot replace a durable result; cancellation cannot resurrect a terminal prediction", async () => {
+  await activate(); await journal.requestSettlement("owner-A", "game-1", { action: "resolve", outcome: "win", reason: "verified_result" });
+  expect(await journal.requestSettlement("owner-A", "game-1", { action: "resolve", outcome: "loss", reason: "verified_result" })).toBeNull();
+  await journal.requestSettlement("owner-A", "game-1", { action: "cancel", reason: "dock_cancel" });
+  const ticket = await journal.claim("owner-A", "game-1", "prediction", "active", "canceling"); await journal.finish(ticket, "canceled");
+  expect(await journal.requestSettlement("owner-A", "game-1", { action: "resolve", outcome: "loss", reason: "verified_result" })).toBeNull();
+  expect((await journal.read("owner-A", "game-1")).settlement.action).toBe("cancel");
+});
+
+test("an unknown CREATE without exact provider ID never becomes an automatic write candidate", async () => {
+  await reserve(); const ticket = await journal.claim("owner-A", "game-1", "prediction", "pending", "creating"); await journal.finish(ticket, "unknown", { reason: "unconfirmed_create" });
+  await journal.requestSettlement("owner-A", "game-1", { action: "cancel", reason: "dock_cancel" }); expect(await journal.due()).toHaveLength(0);
+});
