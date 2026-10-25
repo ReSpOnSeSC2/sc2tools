@@ -6,6 +6,7 @@ import { viewFiltersFromQuery } from "@/lib/analyzerViews";
 import { AnalyzerFilterUrlSync } from "../analyzer/AnalyzerFilterUrlSync";
 
 const navigation = vi.hoisted(() => ({ path: "/app/maps", query: "", replace: vi.fn() }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "owner" }) }));
 vi.mock("next/navigation", () => ({ usePathname: () => navigation.path, useSearchParams: () => new URLSearchParams(navigation.query), useRouter: () => ({ replace: navigation.replace }) }));
 vi.mock("@/lib/useUserSocket", () => ({ useUserSocket: () => undefined }));
 vi.mock("@/lib/useSeasons", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/useSeasons")>(), useSeasons: () => ({ data: undefined }) }));
