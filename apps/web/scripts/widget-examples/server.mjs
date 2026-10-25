@@ -43,7 +43,7 @@ const server = await createServer({
   ] },
   css: { postcss: webRoot },
   define: { "process.env": JSON.stringify({ NODE_ENV: "development", NEXT_PUBLIC_API_BASE: "/fixture-api" }) },
-  server: { host: "127.0.0.1", port: 4317, strictPort: true, hmr: false, fs: { allow: [webRoot] } },
+  server: { host: "127.0.0.1", port: Number(process.env.WIDGET_EXAMPLES_PORT || 4317), strictPort: true, hmr: false, fs: { allow: [webRoot] } },
   optimizeDeps: { include: ["react", "react-dom/client", "lucide-react"] },
 });
 await server.listen();

@@ -350,7 +350,8 @@
     ],
     "stats-ticker": [],
     "countdown-timer": [],
-    "build-profile": []
+    "build-profile": [],
+    "series": []
   },
   "demo": {
     "chat": [
