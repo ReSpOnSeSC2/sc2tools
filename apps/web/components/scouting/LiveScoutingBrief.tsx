@@ -1,6 +1,8 @@
 "use client";
-import { ScoutingBriefCard } from "./ScoutingBriefCard";
+import dynamic from "next/dynamic";
 import { useLiveScouting } from "./useLiveScouting";
+
+const ScoutingBriefCard = dynamic(() => import("./ScoutingBriefCard").then(module => module.ScoutingBriefCard));
 
 export function LiveScoutingBrief() {
   const { live, unavailable, retry } = useLiveScouting();

@@ -14,6 +14,10 @@ corresponding GitHub Release.
 ### Added
 - Live scouting on Today and a large second-screen page reuse your recorded opponent history, with bounded opening counts, recent replay links and an exact-account note popover. The Stream Dock Scout view omits private notes and replay/account actions.
 
+### Linked scouting and opening forecasts
+
+- Save same-player grouping across devices and recognise approved or already-cached alternate accounts in live scouting. Dossier, live and desktop briefs share a deterministic opening forecast with confidence, sample size and count-based explanations; missing or incomplete history stays explicit.
+
 ### Stream Dock
 
 - Collapse panels into live summaries, pin frequently used sections, and keep the layout in this browser. Dock controls now show connection text and keyboard focus, give touch users larger targets, and offer selected text when clipboard access is unavailable.
