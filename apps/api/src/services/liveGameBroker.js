@@ -228,6 +228,8 @@ class LiveGameBroker {
    */
   publish(userId, envelope) {
     if (!userId || !envelope || typeof envelope !== "object") return false;
+    // This field is cloud-reviewed enrichment, never an agent assertion.
+    if ("opponentChannels" in envelope) { envelope = { ...envelope }; delete envelope.opponentChannels; }
     this.counters.published += 1;
     const receivedAt = Date.now();
     const capturedAt = envelope.synthetic !== true

@@ -96,6 +96,7 @@ class MultichatStudioService {
       goals: Array.isArray(doc?.goals) ? doc.goals : [],
       blockedUsers: Array.isArray(doc?.blockedUsers) ? doc.blockedUsers : [],
       recapSeq: Number(doc?.recapSeq) || 0,
+      gameWidgetsPaused: doc?.gameWidgetsPaused === true,
       scene: doc?.scene ?? null,
       timer: doc?.timer ?? null,
       buildProfile: sanitizeBuildProfile(doc?.buildProfile),
@@ -158,6 +159,10 @@ class MultichatStudioService {
     const set = { updatedAt: new Date(), studioKey: token };
     /** @type {Record<string, any>} */
     const inc = {};
+    if ("gameWidgetsPaused" in patch) {
+      if (typeof patch.gameWidgetsPaused !== "boolean") throw Object.assign(new Error("invalid game pause"), { status: 400, code: "invalid_game_pause" });
+      set.gameWidgetsPaused = patch.gameWidgetsPaused;
+    }
     if ("highlight" in patch) {
       set.highlight = sanitizeHighlight(patch.highlight);
     }

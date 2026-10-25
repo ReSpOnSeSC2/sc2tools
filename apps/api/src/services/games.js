@@ -244,6 +244,13 @@ class GamesService {
   /** @param {string} userId */
   invalidateForUser(userId) { this._sessionResolutionGate.invalidate(userId); }
 
+  /** A manual reset must fence the result delivered to existing subscribers too.
+   * @param {string} userId
+   */
+  invalidateSessionForReset(userId) {
+    this._sessionResolutionGate.invalidate(userId, { discardPending: true });
+  }
+
   /**
    * Insert or update a game record. Returns true if it was new.
    *
@@ -1005,10 +1012,37 @@ class GamesService {
    * @param {{refreshCurrentMmr?: boolean, reuseRecent?: boolean}} [opts]
    */
   async _computeTodaySession(userId, _timezone, opts = {}) {
+    // Read the user profile up front so we can use ``region``,
+    // ``pulseId``, AND the agent-pinged ``lastKnownMmr`` in the same
+    // flow — the SC2Pulse fallbacks below depend on ``pulseId`` being
+    // present, and the sticky-MMR tier just below depends on
+    // ``lastKnownMmr``.
+    /**
+     * @type {{
+     *   region?: string,
+     *   pulseId?: string,
+     *   pulseIds?: string[],
+     *   lastKnownMmr?: number,
+     *   lastKnownMmrRegion?: string,
+     *   sessionAnchorAt?: string,
+     * }}
+     */
+    let profile = {};
+    if (this.users) {
+      try {
+        profile = (await this.users.getProfile(userId)) || {};
+      } catch (error) {
+        // The persisted session reset anchor is authoritative. A failed read
+        // cannot safely fall back to a pre-reset record.
+        throw error;
+      }
+    }
     // Use one clock snapshot for both the query and inactivity walk.
     // A future-dated replay must not keep a session alive or replace
     // the current play burst with games that have not happened yet.
     const nowMs = Date.now();
+    const anchorMs = typeof profile.sessionAnchorAt === "string" ? Date.parse(profile.sessionAnchorAt) : NaN;
+    const sessionAnchor = Number.isFinite(anchorMs) && anchorMs <= nowMs ? anchorMs : null;
     const now = new Date(nowMs);
     const cutoff = new Date(nowMs - 14 * 24 * 60 * 60 * 1000);
     const rows = await this.db.games
@@ -1107,6 +1141,7 @@ class GamesService {
       if (typeof myToon === "string" && myToon.length > 0) {
         lastKnownMyToonHandle = myToon;
       }
+      if (sessionAnchor !== null && date.getTime() < sessionAnchor) continue;
       sessionCandidates.push({
         ts: date,
         result: String(row.result || ""),
@@ -1252,30 +1287,6 @@ class GamesService {
       } catch {
         // findOne failure is non-fatal — leave mmrCurrent undefined
         // and let the renderer fall back to its placeholder.
-      }
-    }
-    // Read the user profile up front so we can use ``region``,
-    // ``pulseId``, AND the agent-pinged ``lastKnownMmr`` in the same
-    // flow — the SC2Pulse fallbacks below depend on ``pulseId`` being
-    // present, and the sticky-MMR tier just below depends on
-    // ``lastKnownMmr``.
-    /**
-     * @type {{
-     *   region?: string,
-     *   pulseId?: string,
-     *   pulseIds?: string[],
-     *   lastKnownMmr?: number,
-     *   lastKnownMmrRegion?: string,
-     * }}
-     */
-    let profile = {};
-    if (this.users) {
-      try {
-        profile = (await this.users.getProfile(userId)) || {};
-      } catch {
-        // Profile is decorative; a lookup failure must never block the
-        // session payload from emitting.
-        profile = {};
       }
     }
     // Sticky-MMR tier: the agent pings a focused

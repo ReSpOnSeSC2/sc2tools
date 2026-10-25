@@ -285,7 +285,8 @@ class MultichatEngagementService {
         platform: e.platform,
       };
     }
-    await this.predictions.updateOne({ _id: open._id }, { $set: set });
+    const saved = await this.predictions.updateOne({ _id: open._id, settled: false }, { $set: set });
+    if (!saved.matchedCount) return;
     const now = this.now();
     if (now - (this._lastTallyAt.get(token) ?? 0) >= TALLY_THROTTLE_MS) {
       this._lastTallyAt.set(token, now);
@@ -403,16 +404,26 @@ class MultichatEngagementService {
     for (const token of tokens) {
       // Settle the matching window when the gameKey lines up, else the
       // newest open one (envelope/result key drift must not strand it).
-      const open =
-        (game.gameKey
-          ? await this.predictions.findOne({ token, gameKey: game.gameKey, settled: false })
-          : null) ??
-        (await this.predictions.findOne(
+      const exact = game.gameKey
+        ? await this.predictions.findOne({ token, gameKey: game.gameKey })
+        : null;
+      // A known closed round is terminal, including manual/cancelled rounds.
+      // Retain legacy key-drift recovery only when no matching round exists.
+      if (exact?.settled) continue;
+      const open = exact ?? (await this.predictions.findOne(
           { token, settled: false },
           { sort: { openedAt: -1 } },
         ));
       if (!open) continue;
-      const picks = open.picks ?? {};
+      // Cancel/manual/verified resolution compete for the same durable claim.
+      // In particular a late replay must not award a manually resolved round.
+      const claimed = await this.predictions.findOneAndUpdate(
+        { _id: open._id, settled: false },
+        { $set: { settled: true, resolution: "verified", result: game.result, settledAt: new Date(this.now()) } },
+        { returnDocument: "before" },
+      );
+      if (!claimed) continue;
+      const picks = claimed.picks ?? {};
       const tally = tallyPicks(picks);
       /** @type {Array<{user: string, platform: string}>} */
       const winners = [];
@@ -436,7 +447,7 @@ class MultichatEngagementService {
       }
       await this.predictions.updateOne(
         { _id: open._id },
-        { $set: { settled: true, result: game.result, tally, settledAt: new Date() } },
+        { $set: { tally } },
       );
       const topOracles = await this.topOracles(token, 3);
       this._emit(token, {
@@ -449,6 +460,37 @@ class MultichatEngagementService {
         topOracles,
       });
     }
+  }
+
+  /** Cancel only the named open round. No viewer score or accuracy changes.
+   * @param {string} token @param {string} gameKey
+   */
+  async cancel(token, gameKey) {
+    const doc = await this.predictions.findOneAndUpdate(
+      { token, gameKey, settled: false },
+      { $set: { settled: true, resolution: "cancelled", settledAt: new Date(this.now()) } },
+      { returnDocument: "before" },
+    );
+    if (doc) this._emit(token, { type: "prediction-cancelled", gameKey });
+    return !!doc;
+  }
+
+  /** Caller verifies the matching game has ended without a replay result.
+   * A manual reveal is display-only: never increment oracle scores/accuracy.
+   * @param {string} token @param {string} gameKey @param {'win'|'loss'} result
+   */
+  async manualSettle(token, gameKey, result) {
+    if (!["win", "loss"].includes(result)) return false;
+    const doc = await this.predictions.findOneAndUpdate(
+      { token, gameKey, settled: false },
+      { $set: { settled: true, resolution: "manual", result, settledAt: new Date(this.now()) } },
+      { returnDocument: "before" },
+    );
+    if (!doc) return false;
+    const tally = tallyPicks(doc.picks ?? {});
+    await this.predictions.updateOne({ _id: doc._id }, { $set: { tally } });
+    this._emit(token, { type: "prediction-settled", gameKey, result, tally, manual: true, pointsEach: 0, correctCount: 0, topOracles: [] });
+    return true;
   }
 
   /**
@@ -578,7 +620,7 @@ class MultichatEngagementService {
         .toArray(),
       this.predictions
         .find(
-          { token, settled: true },
+          { token, settled: true, resolution: { $nin: ["manual", "cancelled"] } },
           { projection: { _id: 0, opponent: 1, result: 1, tally: 1, settledAt: 1 } },
         )
         .sort({ settledAt: -1 })

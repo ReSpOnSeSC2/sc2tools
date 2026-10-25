@@ -101,6 +101,18 @@ class TwitchChatBotService {
     /** @type {Map<string, {userId: string, atMs: number}>} token→user cache */
     this._tokenCache = new Map();
     this._ircIdSeq = 0;
+    /** @type {((userId:string)=>Promise<string|null>)|null} */
+    this.shoutoutLine = null;
+  }
+
+  /** Queue only on the matching configured bot. Copy is the caller's fallback.
+   * @param {string} userId @param {string} token @param {string} text
+   */
+  queueShoutout(userId, token, text) {
+    const conn = this._conns.get(userId);
+    if (!conn || conn.state !== "connected" || conn.overlayToken !== token) return false;
+    this._say(conn, text);
+    return true;
   }
 
   /**
@@ -246,7 +258,9 @@ class TwitchChatBotService {
       const t = msg.tally || {};
       const total = Number(t.total) || 0;
       const result = msg.result === "win" ? "WIN" : "LOSS";
-      if (total > 0) {
+      if (msg.manual === true) {
+        line = `🔮 Result: ${result} — resolved manually. No oracle points or accuracy recorded.`;
+      } else if (total > 0) {
         const majority = Number(t.win) >= Number(t.loss) ? "WIN" : "LOSS";
         const pct = Math.round(
           (Math.max(Number(t.win) || 0, Number(t.loss) || 0) / total) * 100,
@@ -257,6 +271,9 @@ class TwitchChatBotService {
       } else {
         line = `🔮 Result: ${result} — nobody called it. Type !win / !loss when the next game loads!`;
       }
+    } else if (msg.type === "prediction-cancelled" && conn.cfg.announceOracle) {
+      dedupeKey = `cancelled:${msg.gameKey ?? ""}`;
+      line = "🔮 Crystal Ball round cancelled — no points or accuracy recorded.";
     } else if (msg.type === "level-up" && conn.cfg.announceLevelUps) {
       dedupeKey = `level:${msg.user ?? ""}:${msg.level ?? ""}`;
       const rank = themedRank(conn.rankRace, Number(msg.level));
@@ -421,6 +438,7 @@ class TwitchChatBotService {
   async _answerCommand(conn, command, display) {
     const token = conn.overlayToken;
     try {
+      if (command === "so") return this.shoutoutLine ? this.shoutoutLine(conn.userId) : null;
       if (command === "rank" || command === "level" || command === "xp") {
         if (!this.engagement || !token) return null;
         const s = await this.engagement.viewerStats(token, "twitch", display);

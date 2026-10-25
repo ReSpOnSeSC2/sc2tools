@@ -65,6 +65,7 @@ const {
  *   alertMedia?: import('../services/alertMediaStore').AlertMediaStore | null,
  *   tiktokRelay: import('../services/tiktokChatRelay').TikTokChatRelay,
  *   studio: import('../services/multichatStudio').MultichatStudioService,
+ *   gameDesk?: import('../services/gameDesk').GameDeskService,
  *   sounds?: import('../services/multichatSounds').MultichatSoundsService,
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
  *   viewers?: import('../services/multichatViewers').MultichatViewersService,
@@ -653,7 +654,12 @@ function buildMultichatRouter(deps) {
       try {
         const body =
           req.body && typeof req.body === "object" ? req.body : {};
-        res.json(await deps.studio.update(String(req.params.token), body));
+        const token = String(req.params.token);
+        if ("action" in body) {
+          if (!deps.gameDesk) { res.status(503).json({ error: { code: "game_desk_unavailable" } }); return; }
+          // @ts-ignore stamped by tokenAuth
+          res.json(await deps.gameDesk.act(String(req.overlayUserId), token, body));
+        } else res.json(await deps.studio.update(token, body));
       } catch (err) {
         next(err);
       }
