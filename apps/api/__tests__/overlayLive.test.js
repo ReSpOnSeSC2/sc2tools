@@ -230,7 +230,7 @@ describe("services/overlayLive.buildFromGame", () => {
 
   test("derives league + tier from myMmr without an external rank service", async () => {
     const p = await svc.buildFromGame("u1", game({ myMmr: 4310 }));
-    expect(p.rank).toEqual({ league: "Diamond", tier: 1, mmr: 4310 });
+    expect(p.rank).toEqual({ source: "estimate", league: "Diamond", tier: 1, mmr: 4310 });
   });
 
   test("prefers the REAL SC2Pulse league + tier over the MMR-threshold guess", async () => {
@@ -252,7 +252,7 @@ describe("services/overlayLive.buildFromGame", () => {
       "u1",
       game({ myMmr: 5124, myToonHandle: "2-S2-1-267727" }),
     );
-    expect(p.rank).toEqual({ league: "Master", tier: 1, mmr: 5124 });
+    expect(p.rank).toEqual({ source: "pulse", league: "Master", tier: 1, mmr: 5124 });
     // The lookup is pinned to the region of the account that just
     // played so a multi-region profile can't leak another ladder's
     // league onto the widget.
@@ -276,14 +276,14 @@ describe("services/overlayLive.buildFromGame", () => {
       ["98-S2-1-30230"],
       undefined,
     );
-    expect(p.rank).toEqual({ league: "Diamond", tier: 1, mmr: 4310 });
+    expect(p.rank).toEqual({ source: "estimate", league: "Diamond", tier: 1, mmr: 4310 });
   });
 
   test("falls back to the MMR-threshold guess when SC2Pulse resolves nothing", async () => {
     const pulseMmr = { getCurrentMmrForAny: jest.fn(async () => null) };
     const rankedSvc = new OverlayLiveService(db, { pulseMmr });
     const p = await rankedSvc.buildFromGame("u1", game({ myMmr: 5124 }));
-    expect(p.rank).toEqual({ league: "Master", tier: 2, mmr: 5124 });
+    expect(p.rank).toEqual({ source: "estimate", league: "Master", tier: 2, mmr: 5124 });
   });
 
   test("falls back to the MMR-threshold guess when the Pulse lookup throws", async () => {
@@ -294,7 +294,7 @@ describe("services/overlayLive.buildFromGame", () => {
     };
     const rankedSvc = new OverlayLiveService(db, { pulseMmr });
     const p = await rankedSvc.buildFromGame("u1", game({ myMmr: 4310 }));
-    expect(p.rank).toEqual({ league: "Diamond", tier: 1, mmr: 4310 });
+    expect(p.rank).toEqual({ source: "estimate", league: "Diamond", tier: 1, mmr: 4310 });
   });
 
   test("Grandmaster rank renders without a tier", async () => {
@@ -312,7 +312,7 @@ describe("services/overlayLive.buildFromGame", () => {
       "u1",
       game({ myMmr: 6400, myToonHandle: "2-S2-1-267727" }),
     );
-    expect(p.rank).toEqual({ league: "Grandmaster", mmr: 6400 });
+    expect(p.rank).toEqual({ source: "pulse", league: "Grandmaster", mmr: 6400 });
   });
 
   test("Pulse rank still lands when the replay carried no myMmr", async () => {
@@ -330,7 +330,7 @@ describe("services/overlayLive.buildFromGame", () => {
       "u1",
       game({ myMmr: undefined, myToonHandle: "2-S2-1-267727" }),
     );
-    expect(p.rank).toEqual({ league: "Master", tier: 1, mmr: 5130 });
+    expect(p.rank).toEqual({ source: "pulse", league: "Master", tier: 1, mmr: 5130 });
   });
 
   test("triggers cheese alert when the opponent strategy is cheese-y", async () => {

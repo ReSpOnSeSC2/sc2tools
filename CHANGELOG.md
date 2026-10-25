@@ -19,10 +19,12 @@ corresponding GitHub Release.
   periodic and window-event recovery of click-through styles.
 - Pause queued historical uploads during matches when game-time import pausing
   is enabled, while keeping fresh replay priority and queued history intact.
+  Bound fresh-replay overflow to eight pending jobs during large backlogs.
 
 ### Added
 - Signing in returns you to the public page you were viewing. Setup keeps that destination, and a recent Save, vote or Practice choice can finish when you return to the original page.
 - Ghost practice assignments now sync to your account, with Practice actions on build and guide pages, a quick-disarm chip, explicit browser migration and a permanent OBS coach URL. Legacy Ghost links remain compatible; native Companion controls stay separate.
+- Opt in to nine recorded ladder achievements in Event alerts, with per-moment visuals and sounds, local tests, clip timestamps and optional posts through an already connected bot. Supporter alerts keep priority; replay starting MMR and confirmed league evidence remain explicit.
 - Analyzer tables now support keyboard build opening, global matchup chips, a matchup-scoped heatmap and a Strategy games sheet that stays open as filters change. CSV exports save the displayed Builds, Strategy pairs, Matchups, Maps and pool cells with their scope and local date.
 - Live scouting on Today and a large second-screen page reuse your recorded opponent history, with bounded opening counts, recent replay links and an exact-account note popover. The Stream Dock Scout view omits private notes and replay/account actions.
 

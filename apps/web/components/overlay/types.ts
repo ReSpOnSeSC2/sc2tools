@@ -181,7 +181,7 @@ export type LiveGamePayload = {
     streak?: { kind: "win" | "loss"; count: number };
   };
   /** Player rank info. */
-  rank?: { league?: string; tier?: number; mmr?: number };
+  rank?: { league?: string; tier?: number; mmr?: number; source?: "pulse" | "estimate" };
   /** Meta — current ladder snapshot. */
   meta?: { matchup?: string; topBuilds?: { name: string; share: number }[] };
   /** Rivalry context. */

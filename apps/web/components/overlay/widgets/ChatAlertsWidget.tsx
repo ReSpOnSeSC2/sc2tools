@@ -57,6 +57,10 @@ import type { LiveGamePayload } from "../types";
 import { PLATFORM_META } from "./MultiChatMessageList";
 import { useMultichatConfig } from "./MultiChatWidget";
 import { ChatAlertCard } from "./ChatAlertCard";
+import { GameMomentCard } from "./GameMomentCard";
+import { useGameMomentQueue } from "../useGameMomentQueue";
+import { gameMomentIdentity, momentCardEvent, sanitizeGameMomentConfig } from "@/lib/gameMoments";
+import { sanitizeSoundConfig } from "@/lib/multichat/sound";
 import {
   useSpeechSynthesisIdle,
   useWidgetAudioOwner,
@@ -72,17 +76,20 @@ const ALERT_SEEN_CAP = 500;
 
 import { useOverlayAlertMediaGrant } from "@/lib/multichat/useAlertMediaGrant";
 
-export function ChatAlertsWidget({
+type Props = {
+  token: string;
+  studioEvent?: unknown;
+  live?: LiveGamePayload | null;
+  momentEvent?: unknown;
+};
+/** Warm token changes retire queues/audio before new-owner effects begin. */
+export function ChatAlertsWidget(props: Props) { return <ActiveChatAlertsWidget key={props.token} {...props} />; }
+function ActiveChatAlertsWidget({
   token,
   studioEvent,
   live,
-}: {
-  token: string;
-  /** Accepted for renderer uniformity — alerts are feed-driven. */
-  studioEvent?: unknown;
-  /** Shared overlay payload — read ONLY for the Test-fire flag. */
-  live?: LiveGamePayload | null;
-}) {
+  momentEvent,
+}: Props) {
   // Admin-gated SC2 3D media: presigned per overlay token, and only when the
   // token's owning user holds admin. A non-admin overlay simply never gets a
   // grant and the cards render their code-native art.
@@ -310,12 +317,22 @@ export function ChatAlertsWidget({
     [audioOwner, sound],
   );
   useEventSounds(visibleProminent ? [visibleProminent] : [], audioSound);
+  const momentConfig = useMemo(() => sanitizeGameMomentConfig(alerts.gameMoments), [alerts.gameMoments]);
+  const { moment, pending: momentPending } = useGameMomentQueue({ event: momentEvent, config: momentConfig, ready: moderationReady,
+    paused: studio.gameWidgetsPaused === true, blocked: visibleProminent !== null || queue.length > 0 || testActive, durationMs: alerts.durationSec * 1000 });
+  const momentBaseSound = useMemo(() => sanitizeSoundConfig(sound), [sound]);
+  const momentSound = useMemo(() => ({ ...momentBaseSound,
+    eventSoundsEnabled: audioOwner && momentBaseSound.eventSoundsEnabled && moment !== null,
+    eventSounds: { ...momentBaseSound.eventSounds, reward: moment ? momentConfig.moments[moment.kind].sound : "none" },
+  }), [audioOwner, momentBaseSound, moment, momentConfig]);
+  useEventSounds(moment ? [momentCardEvent(moment)] : [], momentSound);
   const speechIdle = useSpeechSynthesisIdle(audioOwner);
   useOverlayBuildRefresh({
     enabled: !testActive,
     safeToReload:
       visibleProminent === null
       && queue.length === 0
+      && !momentPending
       && feedTailQuiet
       && (!audioOwner || speechIdle),
   });
@@ -324,7 +341,10 @@ export function ChatAlertsWidget({
     ? visibleHistory.slice(0, -1).slice(-STACK_SIZE).reverse()
     : [];
 
-  if (!visibleProminent) return <div style={{ background: "transparent" }} />;
+  if (!visibleProminent) return moment ? <div style={frameStyle}>
+    {moment.isTest ? <div style={testTagStyle}>TEST</div> : null}
+    <GameMomentCard key={gameMomentIdentity(moment)} moment={moment} preset={resolveAlertVisualPreset(momentConfig.moments[moment.kind].preset, "reward", gameMomentIdentity(moment))} motion={alerts.motion} />
+  </div> : <div style={{ background: "transparent" }} />;
   const preset = resolveAlertVisualPreset(
     alerts.eventVisuals[visibleProminent.kind],
     visibleProminent.kind,

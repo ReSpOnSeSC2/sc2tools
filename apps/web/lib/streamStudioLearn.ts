@@ -347,7 +347,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
   {
     id: "chat-alerts", name: "Event alerts", group: "community",
     summary: "Recognize supported subscriptions, raids, gifts, and other platform events.",
-    explanation: "This source turns supported incoming platform events into animated alert cards. The newest alert is prominent, with a small recent stack while it is active, and the display clears when the alert finishes. Which events arrive depends on the platform and the connection you configured.",
+    explanation: "This source turns supported incoming platform events into animated alert cards. The newest alert is prominent, with a small recent stack while it is active, and the display clears when the alert finishes. Which events arrive depends on the platform and the connection you configured. Game moments are an optional Ladder category: newly recorded achievements use the same source, play after supporter alerts and are logged in Stream Dock → Clips. Configure them in Multi-platform chat → Game moments; recorded MMR refers to replay game-start ratings.",
     example: { headline: "Event alert · illustrative", lines: ["ExampleViewer subscribed", "Platform event card with your saved alert styling"] },
     appears: "When a supported fresh platform event arrives; transparent between alerts.",
     needs: [configuredChat, "A platform connection that supplies the event type you want to show."],
@@ -356,6 +356,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
       "Choose alert appearance and sound options there, then press Save chat settings.",
       "Enable Event alerts and Copy its URL into a dedicated OBS Browser Source.",
       "Press Test to preview sample alerts; use Stream Dock to inspect incoming platform events and moderation.",
+      "For Game moments, use each Test locally button in Settings before Save. These labelled samples preview this browser only and never post chat or fire OBS.",
     ],
     check: "Test plays scripted sample alerts. A supported real event appearing in Stream Dock and the source checks the live platform path.",
     troubleshooting: "A normal chat message is not an alert. Check platform status, supported event delivery, moderation, and saved alert settings. Audio also depends on the Browser Source's OBS audio configuration.",

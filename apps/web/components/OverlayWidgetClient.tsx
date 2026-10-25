@@ -196,6 +196,16 @@ function ConnectedOverlayWidgetClient({
   // Latest raw ``overlay:engagement`` payload — re-sanitized by the
   // engagement widgets themselves (useEngagementState).
   const [engagementEvent, setEngagementEvent] = useState<unknown>(null);
+  const momentSourceRef = useRef({ token, widget });
+  if (momentSourceRef.current.token !== token || momentSourceRef.current.widget !== widget) momentSourceRef.current = { token, widget };
+  const momentSource = momentSourceRef.current;
+  const [momentSnapshot, setMomentSnapshot] = useState<{ source: typeof momentSource; payloads: unknown[] } | null>(null);
+  const momentEvent = momentSnapshot?.source === momentSource ? momentSnapshot.payloads : null;
+  const receiveMoment = useCallback((payload: unknown) => {
+    if (momentSourceRef.current !== momentSource) return;
+    // Functional updates preserve a same-turn burst from one ingested replay.
+    setMomentSnapshot(current => payload === null ? null : { source: momentSource, payloads: [...(current?.source === momentSource ? current.payloads : []), payload].slice(-18) });
+  }, [momentSource]);
   const [fragmentGhostParam, setFragmentGhostParam] = useState<string | null>(
     null,
   );
@@ -223,6 +233,7 @@ function ConnectedOverlayWidgetClient({
     widget === "randomizer" ? onBuildIntent : null,
     receiveProfile,
     resetPause,
+    receiveMoment,
   );
   useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
   const showingTest = testLayer.targets(widget as WidgetId);
@@ -374,6 +385,7 @@ function ConnectedOverlayWidgetClient({
         ghostConfig={ghostConfig}
         studioEvent={studioEvent}
         engagementEvent={engagementEvent}
+        momentEvent={momentEvent}
         voicePrefs={voicePrefs}
       />
       </div>
@@ -392,6 +404,7 @@ function ConnectedOverlayWidgetClient({
         ghostConfig={ghostConfig}
         studioEvent={studioEvent}
         engagementEvent={engagementEvent}
+        momentEvent={momentEvent}
         voicePrefs={voicePrefs}
       />
       </div></OverlayPreviewContext.Provider> : null}
@@ -440,6 +453,7 @@ export function WidgetRenderer({
   ghostConfig,
   studioEvent,
   engagementEvent,
+  momentEvent,
   voicePrefs,
 }: {
   widget: WidgetId;
@@ -455,6 +469,7 @@ export function WidgetRenderer({
   ghostConfig?: GhostBuildConfig;
   studioEvent: unknown;
   engagementEvent: unknown;
+  momentEvent?: unknown;
   /** Socket-delivered voice prefs, so spoken widgets use the streamer's
    *  chosen voice instead of the engine default (Microsoft David on
    *  Windows). */
@@ -546,7 +561,7 @@ export function WidgetRenderer({
       return <ChatPollWidget token={token} studioEvent={studioEvent} live={live} />;
     case "chat-alerts":
       return (
-        <ChatAlertsWidget token={token} studioEvent={studioEvent} live={live} />
+        <ChatAlertsWidget token={token} studioEvent={studioEvent} live={live} momentEvent={momentEvent} />
       );
     case "stream-goals":
       return (
@@ -638,6 +653,7 @@ function useOverlayWidgetSocket(
   onBuildIntent: ((msg: unknown) => void) | null,
   receiveProfile: (msg: OverlayProfileConfig) => void,
   resetPause: () => void,
+  receiveMoment: (payload: unknown) => void,
 ): RefObject<Socket | null> {
   const socketRef = useRef<Socket | null>(null);
   // The latest gameKey we've observed in either ``live`` or
@@ -756,8 +772,13 @@ function useOverlayWidgetSocket(
     // Stream Studio state (highlight / poll / goals / recap trigger) —
     // stored raw; the studio widgets defensively re-sanitize it via
     // useStudioState before rendering anything.
-    socket.on("connect", resetPause); socket.on("disconnect", resetPause);
-    const resetOnResync = (event: string) => { if (event === "overlay:resync") resetPause(); };
+    // Retired socket callbacks fail closed even if their former source returns.
+    const momentEpoch = { active: true };
+    const onMoment = (payload: unknown) => { if (momentEpoch.active) receiveMoment(payload); };
+    const clearScope = () => { if (momentEpoch.active) { resetPause(); receiveMoment(null); } };
+    receiveMoment(null);
+    socket.on("connect", clearScope); socket.on("disconnect", clearScope);
+    const resetOnResync = (event: string) => { if (event === "overlay:resync") clearScope(); };
     socket.onAnyOutgoing?.(resetOnResync);
     socket.on("overlay:multichat", (msg: unknown) => {
       if (msg && typeof msg === "object") setStudioEvent(msg);
@@ -765,6 +786,7 @@ function useOverlayWidgetSocket(
     socket.on("overlay:engagement", (msg: unknown) => {
       if (msg && typeof msg === "object") setEngagementEvent(msg);
     });
+    if (widget === "chat-alerts") socket.on("overlay:moment", onMoment);
     // Build check-in state (hold / suppress) for the randomizer's spin
     // gate; replayed by the cloud on connect and resync.
     if (onBuildIntent) socket.on("overlay:buildIntent", onBuildIntent);
@@ -779,8 +801,9 @@ function useOverlayWidgetSocket(
       latestGameKey: () => gameKeyRef.current,
     });
     return () => {
+      momentEpoch.active = false;
       socket.offAnyOutgoing?.(resetOnResync);
-      socket.off("connect", resetPause); socket.off("disconnect", resetPause);
+      socket.off("connect", clearScope); socket.off("disconnect", clearScope);
       detachResilience();
       connection.dispose();
       if (socketRef.current === socket) socketRef.current = null;
@@ -804,6 +827,7 @@ function useOverlayWidgetSocket(
     onBuildIntent,
     receiveProfile,
     resetPause,
+    receiveMoment,
   ]);
   return socketRef;
 }
