@@ -226,7 +226,7 @@ async function trackedFetch(path: string, url: string, init: RequestInit): Promi
 }
 
 /** A scoped deadline also settles a stalled token lookup or response body. */
-async function boundedApiRequest<T>(
+export async function boundedApiRequest<T>(
   operation: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number,
   callerSignal?: AbortSignal | null,

@@ -1,0 +1,155 @@
+from copy import deepcopy
+import json
+import pytest
+
+from sc2tools_agent.live.obs_game_overlay import add_missing_game_sources
+from sc2tools_agent.live.obs_layout import plan_scenes, build_scenes, _manual_override_url_from_overlay_url, _strict_browser_url_key
+from sc2tools_agent.live.obs_scene import SCENE_IN_GAME
+from sc2tools_agent.live.obs_website_add import ObsWebsiteAdd
+from sc2tools_agent.state import AgentState, load_state, save_state
+from tests.test_live_obs_layout import FakeObs
+
+
+class Obs(FakeObs):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.rows = {}
+        self.current = "Live custom scene"
+        self.connections = 0
+    def connect_now(self):
+        self.connections += 1
+    def shutdown(self):
+        pass
+    def current_program_scene(self):
+        return self.current
+    def get_scene_item_list(self, scene_name):
+        return deepcopy(self.rows.get(scene_name, []))
+    def create_input(self, **kwargs):
+        result = super().create_input(**kwargs)
+        self.rows.setdefault(kwargs["scene_name"], []).append({"source_name": kwargs["input_name"], "input_kind": "browser_source", "index": 0})
+        return result
+    def create_scene_item(self, **kwargs):
+        result = super().create_scene_item(**kwargs)
+        self.rows.setdefault(kwargs["scene_name"], []).append({"source_name": kwargs["source_name"], "input_kind": "browser_source", "index": 0})
+        return result
+
+
+def plan(obs, **kwargs):
+    return plan_scenes(obs, overlay_base_url="https://sc2tools.com/prefix", overlay_token="synthetic", **kwargs)
+
+
+def test_default_full_canvas_layer_and_credit():
+    items = plan(Obs(canvas=(1280, 720)), webcam_source="Logitech Brio", show_overlay_credit=False).scenes[1].items
+    overlay = next(item for item in items if item.share_key == "during_game:overlay")
+    assert (overlay.rect.w, overlay.rect.h, overlay.z) == (1280, 720, 2)
+    assert overlay.browser_path == "https://sc2tools.com/prefix/overlay/synthetic?credit=0"
+    assert next(item.z for item in items if item.label == "Webcam") < overlay.z
+    assert next(item.z for item in items if item.label == "Chat alerts") > overlay.z
+    assert _manual_override_url_from_overlay_url(overlay.browser_path, expected_route=("overlay", "")) == "https://sc2tools.com/prefix/overlay/synthetic/scene/manual"
+    assert _strict_browser_url_key(overlay.browser_path) != _strict_browser_url_key(overlay.browser_path.replace("credit=0", "credit=1"))
+
+
+def test_explicit_choices_and_fixed_scaled_ticker():
+    items = plan(Obs(canvas=(960, 540)), during_game_widgets=["ghost-build", "randomizer", "stats-ticker"]).scenes[1].items
+    chosen = [item for item in items if (item.share_key or "").startswith("during_game:")]
+    assert [item.share_key for item in chosen] == ["during_game:ghost-build", "during_game:randomizer", "during_game:stats-ticker"]
+    assert (chosen[-1].rect.y, chosen[-1].rect.w, chosen[-1].rect.h) == (512, 960, 28)
+    assert not any((item.share_key or "") == "during_game:overlay" for item in items)
+    with pytest.raises(ValueError):
+        plan(Obs(), during_game_widgets=["../untrusted"])
+
+
+def test_additive_update_reuses_renderer_and_preserves_cover_and_all_existing_settings():
+    url = "https://sc2tools.com/prefix/overlay/synthetic"
+    obs = Obs(scenes=[SCENE_IN_GAME], inputs=[{"name": "Renamed overlay", "kind": "browser_source", "settings": {"url": url, "width": 1920, "height": 1080}}, {"name": "Renamed cover", "kind": "browser_source", "settings": {"url": url + "/scene/manual"}}])
+    obs.rows[SCENE_IN_GAME] = [{"source_name": "Renamed cover", "input_kind": "browser_source", "index": 7}]
+    before = deepcopy(obs.input_settings)
+    assert add_missing_game_sources(obs, plan(obs), [SCENE_IN_GAME]) == ["All-in-one overlay"]
+    assert obs.created_items[0]["source"] == "Renamed overlay"
+    assert obs.indexes[0]["index"] == 7
+    assert obs.input_settings == before
+    assert obs.created_inputs == obs.removed_items == obs.input_setting_updates == []
+    assert add_missing_game_sources(obs, plan(obs), [SCENE_IN_GAME]) == []
+    assert len(obs.created_items) == 1
+    assert add_missing_game_sources(obs, plan(obs), ["My private scene"]) == []
+
+
+def test_builder_reuses_existing_same_token_route_instead_of_another_audio_renderer():
+    obs = Obs(inputs=[{"name": "Existing game overlay", "kind": "browser_source", "settings": {"url": "https://sc2tools.com/prefix/overlay/synthetic?credit=0"}}])
+    build_scenes(obs, plan(obs))
+    assert any(item["source"] == "Existing game overlay" for item in obs.created_items)
+    assert not any(item["settings"]["url"].split("?")[0].endswith("/overlay/synthetic") for item in obs.created_inputs)
+
+
+def fixture(confirm=lambda _payload: True, scope=None, token_provider=None):
+    obs = Obs()
+    active = [scope or ("api", "paired-A")]
+    tokens = []
+    def token():
+        tokens.append(True)
+        return token_provider() if token_provider else "synthetic"
+    controller = ObsWebsiteAdd(scope=lambda: active[0], client_factory=lambda: obs, token_provider=token,
+                               confirm=confirm, base_url=lambda: "https://sc2tools.com", clock=lambda: 100)
+    raw = {"requestId": "a" * 32, "deviceId": "b" * 24, "widget": "stats-ticker", "expiresAt": 140000}
+    return controller, obs, raw, active, tokens
+
+
+def test_remote_requires_opt_in_and_current_authenticated_pairing_before_even_connecting():
+    controller, obs, raw, active, _ = fixture()
+    active[0] = None
+    assert controller.handle(raw, "paired-A")["code"] == "disabled"
+    active[0] = ("api", "paired-B")
+    assert controller.handle(raw, "paired-A")["code"] == "disabled"
+    assert obs.connections == 0
+
+
+@pytest.mark.parametrize("extra", [{"url": "https://elsewhere"}, {"widget": "unknown"}, {"expiresAt": 99000}, {"expiresAt": 200000}])
+def test_remote_rejects_untrusted_or_expired_requests_without_writes(extra):
+    controller, obs, raw, _, _ = fixture()
+    assert controller.handle({**raw, **extra}, "paired-A")["code"] in {"invalid_request", "expired"}
+    assert not obs.created_inputs
+
+
+def test_decline_has_no_token_lookup_or_obs_mutation():
+    controller, obs, raw, _, tokens = fixture(confirm=lambda payload: False)
+    assert controller.handle(raw, "paired-A")["code"] == "declined"
+    assert tokens == obs.created_inputs == []
+
+
+def test_owner_change_while_confirmation_or_token_lookup_is_pending_never_writes():
+    controller, obs, raw, active, _ = fixture()
+    controller.confirm = lambda payload: active.__setitem__(0, ("api", "paired-B")) or True
+    assert controller.handle(raw, "paired-A")["code"] == "owner_changed"
+    active[0] = ("api", "paired-A")
+    controller.confirm = lambda payload: True
+    controller.token_provider = lambda: active.__setitem__(0, None) or "synthetic"
+    assert controller.handle(raw, "paired-A")["code"] == "owner_changed"
+    assert not obs.created_inputs
+
+
+def test_changed_program_scene_after_confirmation_does_not_write_somewhere_else():
+    controller, obs, raw, _, _ = fixture()
+    controller.confirm = lambda payload: setattr(obs, "current", "Different scene") or True
+    assert controller.handle(raw, "paired-A")["code"] == "scene_changed"
+    assert not obs.created_inputs
+
+
+def test_confirmed_remote_add_uses_shared_standalone_size_and_idempotent_url_membership():
+    prompts = []
+    controller, obs, raw, _, _ = fixture(confirm=lambda payload: prompts.append(payload) or True)
+    reply = controller.handle(raw, "paired-A")
+    assert reply == {"requestId": raw["requestId"], "deviceId": raw["deviceId"], "code": "added"}
+    assert prompts[0]["scene"] == "Live custom scene"
+    settings = obs.created_inputs[0]["settings"]
+    assert (settings["width"], settings["height"]) == (1920, 180)
+    assert settings["shutdown"] is settings["restart_when_active"] is False
+    assert controller.handle(raw, "paired-A")["code"] == "already_present"
+    assert len(obs.created_inputs) == 1
+
+
+def test_opt_in_state_is_strict_and_default_off(tmp_path):
+    assert AgentState().obs_website_add_enabled is False
+    (tmp_path / "agent.json").write_text(json.dumps({"obs_website_add_enabled": "true"}))
+    assert load_state(tmp_path).obs_website_add_enabled is False
+    save_state(tmp_path, AgentState(obs_website_add_enabled=True))
+    assert load_state(tmp_path).obs_website_add_enabled is True

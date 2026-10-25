@@ -55,7 +55,7 @@ from .live.client_api import LiveClientPoller
 from .live.metrics import PeriodicMetricsLogger
 from .live.types import _unique_player_name_match
 from .live.obs_client import ObsAuthFailed, ObsClient
-from .live.obs_scene import DEFAULT_SCENE_MAP, ObsSceneController
+from .live.obs_scene import DEFAULT_SCENE_MAP, ObsSceneController, SCENE_BETWEEN_GAMES, SCENE_IN_GAME
 from .live.transport import (
     CloudTransport,
     FanOutTransport,
@@ -533,6 +533,8 @@ def _run_headless(
             on_import_cancel=import_ctl.handle_cancel_request,
             on_import_pick_folder=import_ctl.handle_pick_folder_request,
             on_bot_lab=BotLabController(cfg.state_dir, state).handle,
+            on_obs_add=_obs_website_controller(cfg, state, recovery_cell).handle,
+            obs_add_enabled_provider=lambda: bool(_obs_website_scope(cfg, state, recovery_cell)),
             overlay_token_provider=lambda token: ApiClient(base_url=cfg.api_base, device_token=token).get_overlay_token(interactive=True),
             session_enabled=state.companion_session_enabled,
         )
@@ -722,6 +724,7 @@ def _run_with_gui(
         obs_scene_map=dict(state.obs_scene_map),
         obs_switch_debounce_sec=state.obs_switch_debounce_sec,
         obs_switch_on_replays=state.obs_switch_on_replays,
+        obs_website_add_enabled=state.obs_website_add_enabled,
     )
 
     from .companion import CompanionClient
@@ -1124,6 +1127,8 @@ def _gui_boot_worker(
                 on_import_cancel=import_ctl.handle_cancel_request,
                 on_import_pick_folder=import_ctl.handle_pick_folder_request,
                 on_bot_lab=BotLabController(cfg.state_dir, state).handle,
+                on_obs_add=_obs_website_controller(cfg, state, cell).handle,
+                obs_add_enabled_provider=lambda: bool(_obs_website_scope(cfg, state, cell)),
                 overlay_token_provider=lambda token: ApiClient(base_url=cfg.api_base, device_token=token).get_overlay_token(interactive=True),
                 session_enabled=state.companion_session_enabled,
                 on_build_intent_changed=lambda ping: (
@@ -2576,6 +2581,7 @@ def _apply_obs_settings_unlocked(
         "obs_scene_map": dict(state.obs_scene_map),
         "obs_switch_debounce_sec": state.obs_switch_debounce_sec,
         "obs_switch_on_replays": state.obs_switch_on_replays,
+        "obs_website_add_enabled": state.obs_website_add_enabled,
     }
     previous_enabled = bool(state.obs_scene_switch_enabled)
     desired_enabled = (
@@ -2598,6 +2604,9 @@ def _apply_obs_settings_unlocked(
                 field_name,
                 dict(value) if field_name == "obs_scene_map" else value,
             )
+        socket = getattr(cell, "socket_client", None)
+        if socket is not None:
+            socket.publish_obs_capabilities()
 
     conn_changed = False
     if payload.obs_host is not None and payload.obs_host != state.obs_host:
@@ -2622,6 +2631,11 @@ def _apply_obs_settings_unlocked(
         state.obs_switch_debounce_sec = max(
             0.0, float(payload.obs_switch_debounce_sec),
         )
+    if payload.obs_website_add_enabled is not None:
+        state.obs_website_add_enabled = payload.obs_website_add_enabled is True
+        socket = getattr(cell, "socket_client", None)
+        if socket is not None:
+            socket.publish_obs_capabilities()
     if payload.obs_switch_on_replays is not None:
         state.obs_switch_on_replays = bool(payload.obs_switch_on_replays)
 
@@ -2826,10 +2840,39 @@ def _handle_obs_probe(
         "webcams": sources.get("webcam", []),
         "games": sources.get("game", []),
         "manual_override_update_scenes": manual_update_scenes,
+        "generated_update_scenes": [name for name in scenes if name in {SCENE_BETWEEN_GAMES, SCENE_IN_GAME}],
     }
 
 
+def _obs_website_scope(cfg, state, cell):
+    if (state.obs_website_add_enabled is not True or getattr(cell, "no_obs", False)
+            or not state.device_token or not getattr(cell, "gui", None)
+            or not getattr(cell.gui, "_ui_ready", False)):
+        return None
+    return (cfg.api_base, state.device_token, state.obs_host, state.obs_port, state.obs_password)
+
+
+def _obs_website_controller(cfg, state, cell):
+    from .live.obs_website_add import ObsWebsiteAdd
+    return ObsWebsiteAdd(
+        scope=lambda: _obs_website_scope(cfg, state, cell),
+        client_factory=lambda: ObsClient(host=state.obs_host, port=state.obs_port,
+                                        password=state.obs_password, subscribe_events=False),
+        token_provider=lambda: _overlay_token_for_build(cfg, state, logging.getLogger(__name__)),
+        confirm=lambda payload: bool(getattr(cell, "gui", None) and cell.gui.confirm_obs_add_source(payload)),
+        base_url=lambda: _dashboard_url_from_api(cfg.api_base),
+    )
+
+
 def _handle_obs_build(
+    *, cfg: AgentConfig, state: AgentState, request: dict, log: logging.Logger,
+) -> dict:
+    from .live.obs_game_overlay import OBS_GAME_WRITE_LOCK
+    with OBS_GAME_WRITE_LOCK:
+        return _handle_obs_build_locked(cfg=cfg, state=state, request=request, log=log)
+
+
+def _handle_obs_build_locked(
     *,
     cfg: AgentConfig,
     state: AgentState,
@@ -2881,6 +2924,8 @@ def _handle_obs_build(
             overlay_token=token,
             webcam_source=request.get("webcam_source") or None,
             game_source=request.get("game_source") or None,
+            during_game_widgets=request.get("during_game_widgets"),
+            show_overlay_credit=request.get("show_overlay_credit", True) is True,
         )
         manual_url = next(
             item.browser_path
@@ -2892,6 +2937,8 @@ def _handle_obs_build(
         rebuild = bool(request.get("rebuild"))
         repaired: list[str] = []
         missing_generated: list[str] = []
+        added_game_sources: list[str] = []
+        additive_update = "during_game_widgets" in request and not rebuild
         raw_authorized_updates = request.get("update_existing_scenes") or []
         if isinstance(raw_authorized_updates, str):
             raw_authorized_updates = [raw_authorized_updates]
@@ -2924,11 +2971,13 @@ def _handle_obs_build(
                 scene.name for scene in plan.scenes if not scene.exists
             ]
             if authorized_existing:
-                repaired = repair_manual_scene_overrides(
-                    client,
-                    browser_url=manual_url,
-                    scene_names=authorized_existing,
-                )
+                if additive_update:
+                    from .live.obs_game_overlay import add_missing_game_sources
+                    added_game_sources = add_missing_game_sources(client, plan, authorized_existing)
+                else:
+                    repaired = repair_manual_scene_overrides(
+                        client, browser_url=manual_url, scene_names=authorized_existing,
+                    )
         elif plan.conflicts:
             # A normal Build may create a missing counterpart, but it has no
             # authority to alter an existing generated scene. Keeping this
@@ -2960,18 +3009,12 @@ def _handle_obs_build(
                 )
         else:
             created = build_scenes(client, plan)
-        (
-            chat_alert_audio_owners,
-            chat_alert_role_updates,
-            chat_alert_geometry_updates,
-        ) = repair_chat_alert_audio_roles(
-            client,
-            browser_url=manual_url,
-        )
-        audio_owner, audio_role_updates = repair_broll_audio_roles(
-            client,
-            browser_url=manual_url,
-        )
+        chat_alert_audio_owners, chat_alert_role_updates, chat_alert_geometry_updates = [], [], []
+        audio_owner, audio_role_updates = None, []
+        if not (additive_update and authorized_updates):
+            (chat_alert_audio_owners, chat_alert_role_updates,
+             chat_alert_geometry_updates) = repair_chat_alert_audio_roles(client, browser_url=manual_url)
+            audio_owner, audio_role_updates = repair_broll_audio_roles(client, browser_url=manual_url)
     except SceneBuildError as exc:
         return {"ok": False, "message": str(exc)}
     except Exception as exc:  # noqa: BLE001
@@ -2996,6 +3039,8 @@ def _handle_obs_build(
     note = " ".join(plan.warnings) if plan.warnings else ""
     updated_existing = [name for name in repaired if name not in created]
     outcomes: list[str] = []
+    if added_game_sources:
+        outcomes.append("Added during-game sources: " + ", ".join(added_game_sources) + ".")
     if updated_existing:
         outcomes.append(
             "Updated the BRB / Starting Soon priority in "

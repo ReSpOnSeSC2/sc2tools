@@ -26,7 +26,7 @@ const article: HelpArticle = {
     "dual pc",
     "replays",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-25",
   body: [
     {
       type: "paragraph",
@@ -67,6 +67,24 @@ const article: HelpArticle = {
     {
       type: "paragraph",
       text: "**Build my scenes…** creates two scenes from the sources you already have: *SC2 Tools — Between Games*, with a big camera, your chat, session stats and a small game view, and *SC2 Tools — In Game*, with the game full screen and a small camera. Pick your webcam and game capture and confirm. They're ordinary OBS scenes, so edit them as you like afterwards; **Update my scenes** later keeps your changes. Starting Soon and BRB from the [Stream Dock](/help/stream-dock) still show on top of both.",
+    },
+    {
+      type: "paragraph",
+      text: "The **During games** checklist starts with **All-in-one overlay** on. Ghost Build coach, Build randomizer and the 1920 × 56 scene ticker are optional. The all-in-one source fills your canvas above the webcam and below the Stream Dock cover and alerts. Choose whether it shows SC2 Tools credit. **Update** only adds missing selected sources; it keeps existing sources, settings and relative order. A matching source is reused rather than starting another audio connection. Unchecking an item does not remove a source already in OBS.",
+    },
+    { type: "heading", text: "Add a widget from the website", anchor: "website-add" },
+    {
+      type: "steps",
+      items: [
+        "In an updated, paired desktop app, save your OBS connection details and turn on **Allow website requests to add an OBS source**. This is off by default; automatic scene switching can remain off.",
+        "In **Settings → Overlay → Widgets**, enable the widget and choose **Add to OBS**. If several opted-in agents are online, choose one first. An offline or older agent leaves the button disabled with a reason.",
+        "On that desktop, read **Add [widget] to scene [name]?**. Cancel is selected by default. Choose **Add source** only when the current program scene is the scene you want; the new source can appear on your live stream.",
+        "Read the website result and inspect OBS. A matching source already in that scene is left alone. If the scene changed, the request expired or no acknowledgement arrived, inspect OBS before trying again. Requests are never retried automatically.",
+      ],
+    },
+    {
+      type: "paragraph",
+      text: "Website Add uses the paired account's default overlay URL and recommended standalone size (the standalone Stats ticker is 1920 × 180). For a particular token, theme or Ghost Build URL configuration, use **Copy** or **Drag into OBS** instead. OBS passwords and overlay URLs are never sent in the website request.",
     },
     { type: "heading", text: "Two PCs", anchor: "two-pcs" },
     {

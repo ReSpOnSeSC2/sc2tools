@@ -404,6 +404,27 @@ def _client_with_build_intent_callback(callback):
     return client._sio.handlers["build-intent:changed"]
 
 
+def test_obs_add_handler_carries_authenticated_socket_provenance_and_rebinds_it():
+    import asyncio
+    from sc2tools_agent.socket_client import SocketClient
+    calls = []
+    client = SocketClient(base_url="https://example.test", device_token="paired-A",
+        on_recompute_games=lambda _: None, on_recompute_opp_build=lambda _: None,
+        on_obs_add=lambda payload, token: calls.append((payload, token)) or {"code": "declined"},
+        obs_add_enabled_provider=lambda: True)
+    assert client.obs_capabilities() == {"supported": True, "enabled": True}
+    client._sio = _RecordingSio()
+    client._wire_handlers()
+    assert asyncio.run(client._sio.handlers["obs:add-source"]({"widget": "opponent"})) == {"code": "declined"}
+    assert calls[-1][1] == "paired-A"
+    rebound = client.with_device_token("paired-B")
+    assert rebound.obs_capabilities() == {"supported": True, "enabled": True}
+    rebound._sio = _RecordingSio()
+    rebound._wire_handlers()
+    asyncio.run(rebound._sio.handlers["obs:add-source"]({"widget": "session"}))
+    assert calls[-1] == ({"widget": "session"}, "paired-B")
+
+
 def test_build_intent_ping_forwards_only_the_ids() -> None:
     import asyncio
 
