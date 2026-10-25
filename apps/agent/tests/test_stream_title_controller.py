@@ -176,6 +176,20 @@ def test_cached_status_masks_statistics_before_account_refresh_and_disables_cons
     assert instance.titles.settings["enabled"] is False
 
 
+def test_account_change_discards_old_queued_game_before_new_explicit_opt_in(service):
+    instance, calls, _, connection = service
+    configure(instance)
+    instance.titles.worker.pending = 1200
+    instance.titles.worker.ready = True
+    connection[1] = "new-fixture-owner-token"
+    instance._publish()
+    assert instance.titles.worker.pending is None
+    assert instance.titles.worker.ready is False
+    configure(instance)
+    instance.titles.worker.run_once()
+    assert not any(call[0] == "POST" for call in calls)
+
+
 def test_real_runner_accepted_upload_hands_off_without_network(tmp_path):
     from sc2tools_agent.runner import _handle_checkin_game_accepted
     from sc2tools_agent.state import AgentState

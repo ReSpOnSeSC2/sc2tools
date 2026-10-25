@@ -42,7 +42,13 @@ class StreamTitleController:
             self.settings = load_title_settings({}, owner)
             self.stats = {}
             self.message = "Account changed. Automatic titles are off; review the template and platforms."
-            self.worker.last_attempt = 0
+            with self.worker.lock:
+                self.worker.last_attempt = 0
+                self.worker.pending = None
+                self.worker.ready = False
+                self.worker.seen = []
+                self.worker.preview_pending = True
+            self.worker.wake.set()
         return owner
 
     def snapshot(self):

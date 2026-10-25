@@ -34,17 +34,38 @@ verification use mocked provider calls; no actual account publication occurs.
 - Help article `desktop-stream-titles`, inline token reference, README,
   agent/root changelogs and owner setup notes document the complete behavior.
 
-## Verification before main integration
+## Final integration and verification
 
-- Initial native focused run: **142 passed**. Final controller/UI run after
-  adding preview controls: **49 passed**.
-- API unit/service/real-Mongo owner integration suites: **52 passed**. All
+- Integrated current main through PR700 (`7464cecd`), preserving current
+  Companion/upload/Streams account fences and all changelog/Help entries.
+- Initial native focused run: **142 passed**; integrated account/service/UI
+  cases: **115 passed**; final controller/account/worker cases: **31 passed**;
+  controller/packaging-diagnostic source cases: **24 passed**.
+- API/session/real-Mongo ownership integration suites: **137 passed**. All
   provider calls are mocked or forbidden; no production credential is loaded.
 - Full API types and strict lint of changed route/new session sources pass.
   Existing games.js function-size warnings predate this change.
-- Help import boundary: **2 passed**; regenerated Help index has 72 articles.
+- Full web types and strict Help lint pass. All **77 Help tests** pass;
+  regenerated index has 75 articles and regenerates without changes.
+- Final integrated production build and every unchanged bundle budget pass:
+  landing 213.6/215 kB; /app 235.2/240; game 313.4/440; opponent 493.2/500;
+  Help 151.4/185 and article 179.6/200. Logs: apps/web/.tmp-title-web-*-integrated.log.
+- Actual unsigned package built with the current packaging script's sanitized
+  Windows/runtime PATH. The complete Qt6.12 offscreen diagnostic passes,
+  including title preview/default-off/YouTube-unselected controls and existing
+  six pages/Companion/pinned panels. Twelve compiled modules matched source.
+  Proofs: apps/agent/.tmp/title-frozen-clean.json and title-modules-proof-clean.json.
+- Styled sample screenshots inspected at 1120x900 and 820x600; no horizontal
+  overflow. Reproduce with apps/agent/tests/manual/stream_titles_preview.py.
+- Root review fixes actual stored Victory/Defeat/Tie matchup normalization and
+  per-platform durable attempt marking. Failed YouTube setup does not suppress
+  untouched Twitch/Kick attempts. Account changes also clear queued old games
+  before a new account may explicitly opt in.
 
-Main integration, broader native/package verification, final Help/build checks,
-independent review and PR/CI evidence remain required at this checkpoint.
+PR703 is created/attached and initially pushed at `e6c9be4f`. Final CI is running;
+the local full native suite is progressing through current main's expanded GUI
+coverage. Final results belong in the PR body before merge. Coordinate merge
+after Studio702; root changelog entries use separate insertion points. This is
+one completed implementation pack, not completion of the wider roadmap.
 No release version, signing, tag, production migration or actual streaming
 account change has been performed.
