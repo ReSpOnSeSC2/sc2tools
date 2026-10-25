@@ -2,11 +2,13 @@
 
 2026-10-25. Branch `codex/wave4-reference-build-order`, preserved in
 `.worktrees/wave3-coaching-forms`. ADR 0058. Depends on unified editor PR 738;
-do not merge ahead of that foundation. Source freeze is `601d99dc`, with
+do not merge ahead of that foundation. Current integrated source is `2cf48109`,
+preserving Reference source `601d99dc`, with
 the independently reviewed generic request fence in `c3faa6f9` and its complete
 saved-editor test auth fixture in `a10b7d2a`. It integrates reviewed generic
-hotfix/current-main dependency `a8fc536f`, retaining the richer token gates and
-the additional create-only/signature identity fields and tests.
+hotfix/current-main dependency `a8fc536f` and frozen PR743 `de9f98e9` plus
+StrictMode follow-up `1b56cbf6`, retaining the richer token gates and the
+additional create-only/signature identity fields and tests.
 
 ## Implemented
 
@@ -44,7 +46,8 @@ the additional create-only/signature identity fields and tests.
 
 ## Verification
 
-- 427 affected web consumers/helpers/Help checks pass. Fifteen real-transport
+- 706 affected web consumers/helpers/Help and shared-query/review checks pass
+  after the final PR743 integration. Fifteen editor real-transport
   scope regressions cover held JWT, headers, response body, publication repair,
   preview/inspect, owner/loading/source/signature/create-only/close/unmount and
   ABA boundaries.
@@ -60,8 +63,9 @@ the additional create-only/signature identity fields and tests.
   `e2fa5d08` produces an identical merged tree; no source rebuild is needed for
   that ancestry-only reconciliation.
 - Final production Next build and every unchanged performance budget pass:
-  landing 189.7/215, Today 238.4/240, Builds 199.5/270, game 310.7/440,
-  opponent 447.8/500, Dock 215.3/225, widget 323.4/325 kB gzip.
+  landing 190.1/215, Today 238.8/240, Builds 199.9/270, game 311.1/440,
+  opponent 448.2/500, Dock 215.7/225, widget 323.8/325, overlay 239.7/240 kB gzip.
+  This was a Next-only rebuild; the unchanged 25b engine was not rebuilt.
 - Actual-source Chromium: 395 checks, 44 captures, five widths
   (300/320/390/768/1440), light/dark, production CSS/fonts, full-modal axe,
   overflow, keyboard editing, unknown/malformed paste, source worker folding,
@@ -69,6 +73,9 @@ the additional create-only/signature identity fields and tests.
   supply, and held JWT/body owner switches.
   All 42 API requests and 11 writes are synthetic loopback fixture data;
   external browser traffic is blocked and unexpected API requests are zero.
+  The final PR743 integration rerun passed all 395 checks against current
+  production CSS, preserving the 44 existing captures because no UI classes
+  changed.
 
 Manual entry points are `apps/web/tests/manual/reference-build-order*.cjs`.
 Captures are `docs/handoff/screenshots/reference-build-order-*.png`.
@@ -78,8 +85,9 @@ inspected; no layout blocker found.
 
 ## Remaining gates
 
-Parent is publishing the generic request fence as a small main hotfix so PR
-738 can consume it safely. Preserve both branches and integrate that hotfix
+Parent is publishing the generic request fence and shared-query ownership
+fixes in PR743 so PR738 can consume them safely. Preserve both branches and
+integrate the actual hotfix squash
 and actual squash ancestry without rebasing. Reference PR creation/final CI,
 independent final visual review and coordinated green merge remain outstanding.
 No infrastructure, migration, integration activation, provider call, account
