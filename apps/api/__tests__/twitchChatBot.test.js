@@ -59,6 +59,29 @@ describe("services/twitchChatBot", () => {
   let deps;
   let bot;
 
+  test.each(["rotation", "stop", "reconfigure"])("held registry replies cannot cross %s", async action => {
+    const ws = await connectBot();
+    let release;
+    bot.chatCommands = { answer: jest.fn(() => new Promise(resolve => { release = resolve; })) };
+    ws.serverSays("@id=held;display-name=Alice :alice!alice@a.tmi.twitch.tv PRIVMSG #response :!record");
+    await flush(); expect(bot.chatCommands.answer).toHaveBeenCalled();
+    if (action === "rotation") bot.replaceOverlayToken("u1", "tokA", "new-token");
+    else if (action === "stop") bot.stop("u1");
+    else await bot.configure("u1", CFG);
+    release({ text: "Old credential reply", status: "reply", command: "record" });
+    await flush(); await drainSends();
+    expect(ws.sent.filter(line => line.startsWith("PRIVMSG"))).toHaveLength(0);
+    expect(sockets.flatMap(socket => socket.sent).join(" ")).not.toContain("Old credential reply");
+  });
+
+  test("queued replies are discarded when the exact token rotates", async () => {
+    const ws = await connectBot(); const conn = bot._conns.get("u1");
+    bot._say(conn, "Old queued reply"); expect(conn.sendQueue).toHaveLength(1);
+    bot.replaceOverlayToken("u1", "tokA", "new-token"); await drainSends();
+    expect(ws.sent.filter(line => line.startsWith("PRIVMSG"))).toHaveLength(0);
+    expect(conn.sendQueue).toHaveLength(0);
+  });
+
   test("rotation swaps only the existing exact owner credential without provider reconnect", async () => {
     await bot.configure("u1", CFG);
     const conn = bot._conns.get("u1"), socket = sockets[0];
@@ -289,6 +312,28 @@ describe("services/twitchChatBot", () => {
     expect(ws.sent.find((l) => l.includes("leveled up"))).toContain(
       "Alice leveled up — Hellion (Lv 4)!",
     );
+  });
+
+  test("drops an older verified reveal after the next round and labels manual outcomes without points", async () => {
+    const ws = await connectBot();
+    await bot.handleEngagementEvent("tokA", { type: "prediction-settled", gameKey: "second", settlementSequence: 2, result: "loss", tally: { win: 0, loss: 3, total: 3 }, correctCount: 3, pointsEach: 10 });
+    await bot.handleEngagementEvent("tokA", { type: "prediction-settled", gameKey: "first", settlementSequence: 1, result: "win", tally: { win: 3, loss: 0, total: 3 }, correctCount: 3, pointsEach: 10 });
+    await bot.handleEngagementEvent("tokA", { type: "prediction-settled", gameKey: "manual", manual: true, result: "win", tally: { win: 3, loss: 0, total: 3 }, correctCount: 0, pointsEach: 0 });
+    await drainSends();
+    const lines = ws.sent.filter(line => line.includes("Result:"));
+    expect(lines).toHaveLength(2); expect(lines[0]).toContain("Result: LOSS");
+    expect(lines[1]).toContain("resolved manually"); expect(lines[1]).not.toContain("+10");
+  });
+
+  test("queues only the configured matching bot and !so has no arbitrary target", async () => {
+    const ws = await connectBot(); bot.shoutoutLine = jest.fn(async () => "Approved opponent: https://www.twitch.tv/approved");
+    expect(bot.queueShoutout("u1", "different-token", "wrong")).toBe(false);
+    expect(bot.queueShoutout("u1", "tokA", "Approved channel")).toBe(true);
+    ws.serverSays("@id=so1;display-name=Viewer :viewer!viewer@host PRIVMSG #response :!so arbitrary-target");
+    await flush(); await drainSends();
+    expect(bot.shoutoutLine).toHaveBeenCalledWith("u1");
+    expect(ws.sent.some(line => line.includes("arbitrary-target"))).toBe(false);
+    expect(ws.sent.some(line => line.includes("https://www.twitch.tv/approved"))).toBe(true);
   });
 
   test("disabled toggles silence announcements", async () => {

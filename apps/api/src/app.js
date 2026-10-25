@@ -62,10 +62,16 @@ const { buildPresetPolicyRouter } = require("./routes/presetPolicy");
 const { BuildIntentsService } = require("./services/buildIntents");
 const { GhostExamplesService } = require("./services/ghostExamples");
 const { GhostReferencesService } = require("./services/ghostReferences");
+const { GhostConfigService } = require("./services/ghostConfig");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { PlatformIntegrationsService } = require("./services/platformIntegrations");
 const { StreamingTitlesService } = require("./services/streamingTitles");
+const { TwitchAutomationService } = require("./services/twitchAutomation");
+const { TwitchAutomationProvider } = require("./services/twitchAutomationProvider");
+const { TwitchAutomationReceipts } = require("./services/twitchAutomationReceipts");
+const { TwitchAutomationStatus } = require("./services/twitchAutomationStatus");
+const { buildTwitchAutomationRouter } = require("./routes/twitchAutomation");
 const { buildAgentStreamingRouter } = require("./routes/agentStreaming");
 const { YoutubeStreamingService } = require("./services/youtubeStreaming");
 const { buildYoutubeCreateLedger } = require("./services/youtubeCreateOperationLedger");
@@ -76,12 +82,19 @@ const { MultichatSoundsService } = require("./services/multichatSounds");
 const { MultichatEngagementService } = require("./services/multichatEngagement");
 const { MultichatViewersService } = require("./services/multichatViewers");
 const { TickerFactsService } = require("./services/tickerFacts");
+const { ChatStatsService } = require("./services/chatStats");
+const { ChatCommandService } = require("./services/chatCommandService");
+const { buildChatCommandsOwnerRouter } = require("./routes/chatCommandsOwner");
 const { TwitchChatBotService } = require("./services/twitchChatBot");
 const { buildChatBotSettingsRouter } = require("./routes/chatBotSettings");
 const { buildMultichatRouter } = require("./routes/multichat");
 const { buildAlertMediaStore } = require("./services/alertMediaStore");
 const { OverlayLiveService } = require("./services/overlayLive");
 const { LiveGameBroker } = require("./services/liveGameBroker");
+const { OpponentChannelsCache } = require("./services/opponentChannels");
+const { GameMomentsService } = require("./services/gameMoments");
+const { GameDeskService } = require("./services/gameDesk");
+const { StreamSeriesService } = require("./services/streamSeries");
 const { AggregationsService } = require("./services/aggregations");
 const { MacroReportService } = require("./services/macroReport");
 const { StreakService } = require("./services/streak");
@@ -590,22 +603,46 @@ function makeServices(deps, clerk, adminClerkIds) {
   // Without enrichment the scouting widget pre-game can only show
   // the opponent's identity + Pulse MMR; with it, the pre-game card
   // matches the post-game one.
+  const opponentChannels = new OpponentChannelsCache(playerChannels);
   const liveGameBroker = new LiveGameBroker({
     io: deps.io,
     overlayTokens,
     logger: deps.logger,
-    enrich: (userId, envelope) =>
-      overlayLive.enrichEnvelope(userId, envelope),
+    enrich: async (userId, envelope) => {
+      const [enriched, channels] = await Promise.all([
+        overlayLive.enrichEnvelope(userId, envelope),
+        opponentChannels.forMatch(userId, envelope),
+      ]);
+      return { ...enriched, opponentChannels: channels };
+    },
   });
+  // A separate server gate defaults false. Merely configuring Twitch or saving
+  // a user preference cannot activate these hooks. No environment is changed.
+  const twitchAutomation = deps.db.twitchAutomationReceipts ? new TwitchAutomationService({
+    enabled: deps.config.twitchAutomationEnabled === true,
+    users, usersCollection: deps.db.users, integrations: platformIntegrations,
+    receipts: new TwitchAutomationReceipts({ collection: deps.db.twitchAutomationReceipts }),
+    provider: new TwitchAutomationProvider({ clientId: deps.config.platformIntegrations?.twitch?.clientId || "" }),
+    isCurrent: (userId, envelope) => {
+      const latest = liveGameBroker.latest(userId);
+      return liveGameBroker.currentGameKey(userId) === envelope.gameKey && Boolean(latest && ["match_loading", "match_started", "match_in_progress"].includes(String(latest.phase)));
+    },
+  }) : null;
   // Nightbot/StreamElements custom-API lines (!opponent/!mmr/!build) —
   // the overlay token in the URL path is the credential, same trust
   // model as the OBS Browser Source.
+  const seasons = new SeasonsService();
+  const chatStats = new ChatStatsService(deps.db, { seasons });
   const chatbot = new ChatbotService(deps.db, {
     overlayTokens,
     liveGameBroker,
     games,
+    chatStats,
+    engagement: multichatEngagement,
+    studio: multichatStudio,
     logger: deps.logger,
   });
+  const chatCommands = new ChatCommandService({ chatbot, users, overlayTokens });
   // The bot that talks back IN chat (Twitch IRC). Reuses the
   // ChatbotService line composers for !mmr/!opponent/!build and the
   // engagement service for !rank + vote/XP ingest. Engagement
@@ -617,12 +654,23 @@ function makeServices(deps, clerk, adminClerkIds) {
     overlayTokens,
     engagement: multichatEngagement,
     chatbot,
+    chatCommands,
     logger: deps.logger,
   });
   overlayTokens.rotation.onCompleted = (userId, from, to) => twitchChatBot.replaceOverlayToken(userId, from, to);
   multichatEngagement.onEvent = (token, msg) => {
     void twitchChatBot.handleEngagementEvent(token, msg).catch(() => {});
   };
+  const gameDesk = new GameDeskService({ users: deps.db.users, studio: multichatStudio,
+    engagement: multichatEngagement, games, broker: liveGameBroker, channels: opponentChannels,
+    tokens: overlayTokens, bot: twitchChatBot, io: deps.io });
+  twitchChatBot.shoutoutLine = userId => gameDesk.shoutoutLine(userId);
+  const streamSeries = new StreamSeriesService({ studio: multichatStudio, games: deps.db.games,
+    tokens: overlayTokens, io: deps.io, onCompleted: async (token, series) => {
+      await multichatEngagement._recordMomentAdmitted(token, { kind: "game-event",
+        reason: `Series ${series.score.you > series.score.opponent ? "won" : "lost"} — Bo${series.format} vs ${series.opponentName}: ${series.score.you}–${series.score.opponent}` });
+    } });
+  chatbot.series = streamSeries;
   // Reconnect every enabled bot on boot — best-effort, non-blocking.
   void twitchChatBot.restoreAll();
   const aggregations = new AggregationsService(deps.db, { mmrExpectation });
@@ -687,6 +735,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
   const ghostExamples = new GhostExamplesService({ db: deps.db, gameDetails });
   const ghostReferences = new GhostReferencesService({ db: deps.db, gameDetails });
+  const ghostConfig = new GhostConfigService({ db: deps.db, overlayTokens, io: deps.io });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const imports = new ImportService(deps.db, { io: deps.io, notifications, logger: deps.logger });
   const spatial = new SpatialService(deps.db);
@@ -806,7 +855,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     aggregations,
     builds,
   });
-  const seasons = new SeasonsService();
+  const gameMoments = new GameMomentsService(deps.db, { users, tokens: overlayTokens, channels: opponentChannels,
+    seasons, engagement: multichatEngagement, bot: twitchChatBot, io: deps.io, logger: deps.logger });
   const arcade = new ArcadeService(deps.db, { games, gameDetails });
   // Replay Review Exchange (docs/reviews.md). Built unconditionally —
   // REVIEWS_ENABLED only gates the routes — so GDPR export/deletion and
@@ -886,14 +936,14 @@ function makeServices(deps, clerk, adminClerkIds) {
   const gameControls = new GameControlsService(deps.db, { gdpr, onChanged: async (userId) => {
     games.invalidateForUser(userId);
     // Each owner-aware invalidator fences late in-flight cache completion.
-    for (const service of [overlayLive, rivals, gameContext, tickerFacts, community, aggregations.trendsRequests]) {
+    for (const service of [overlayLive, rivals, gameContext, tickerFacts, chatStats, community, aggregations.trendsRequests, streamSeries]) {
       service.invalidateForUser(userId);
     }
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
     deps.io?.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "game-control" });
   } });
   return {
-    jobLedger, adminAudit, gameControls,
+    jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
     users,
     opponents,
     opponentIdentityMatcher,
@@ -913,6 +963,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     buildStudio,
     ghostExamples,
     ghostReferences,
+    ghostConfig,
     pairings,
     overlayTokens,
     platformIntegrations,
@@ -920,6 +971,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     liveGameBroker,
     tiktokChatRelay,
     multichatStudio,
+    gameDesk,
+    streamSeries,
     multichatSounds,
     multichatEngagement,
     multichatViewers,
@@ -1200,8 +1253,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   // headers; the overlay token in the path is the credential).
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildChatbotRouter({ chatbot: services.chatbot, logger: deps.logger }),
+    buildChatbotRouter({ chatbot: services.chatbot, commands: services.chatCommands, logger: deps.logger }),
   );
+  app.use(SERVICE.ROUTE_PREFIX, buildChatCommandsOwnerRouter({ auth, commands: services.chatCommands }));
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildChatBotSettingsRouter({
@@ -1251,6 +1305,10 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     integrations: services.platformIntegrations,
     streamingTitles: new StreamingTitlesService({ integrations: services.platformIntegrations }),
     titleSession: (userId) => require("./services/streamTitleSession").streamTitleSession(deps.db, services.games, userId),
+  }));
+  if (services.twitchAutomation) app.use(SERVICE.ROUTE_PREFIX, buildTwitchAutomationRouter({
+    auth, automation: services.twitchAutomation, tokens: services.overlayTokens,
+    status: new TwitchAutomationStatus({ automation: services.twitchAutomation, broker: services.liveGameBroker }),
   }));
   const youtubeLedgerCollection = deps.db.youtubeCreateOperations;
   app.use(SERVICE.ROUTE_PREFIX, buildYoutubeStreamingRouter({
@@ -1335,6 +1393,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       isAdminEmail,
       onAdminGranted,
       buildIntents: services.buildIntents,
+      ghostConfig: services.ghostConfig,
       onRivalsChanged: (userId) => { services.overlayLive.invalidateForUser(userId); services.rivals.invalidateForUser(userId); },
       logger: deps.logger,
     }),
@@ -1420,6 +1479,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       alertMedia: buildAlertMediaStore(deps.config.r2),
       tiktokRelay: services.tiktokChatRelay,
       studio: services.multichatStudio,
+      commands: services.chatCommands,
+      gameDesk: services.gameDesk,
+      series: services.streamSeries,
       sounds: services.multichatSounds,
       engagement: services.multichatEngagement,
       viewers: services.multichatViewers,
@@ -1570,6 +1632,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       liveGameBroker: services.liveGameBroker,
       engagement: services.multichatEngagement,
       ladderMapPool: services.seasons ? services.seasons.ladderMapPool : undefined,
+      series: services.streamSeries,
+      gameMoments: services.gameMoments,
+      twitchAutomation: services.twitchAutomation || undefined,
       replayFiles: services.replayFiles || undefined,
       io: deps.io,
       guideSamples: services.guideSamples,
@@ -1691,6 +1756,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       engagement: services.multichatEngagement,
       overlayTokens: services.overlayTokens,
       buildIntents: services.buildIntents,
+      twitchAutomation: services.twitchAutomation || undefined,
       logger: deps.logger,
     }),
   );

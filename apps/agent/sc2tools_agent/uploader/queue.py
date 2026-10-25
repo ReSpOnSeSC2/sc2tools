@@ -59,6 +59,11 @@ log = logging.getLogger(__name__)
 # submitting new parses while the queue is congested.
 _BACKPRESSURE_TIMEOUT_SEC = 15.0
 
+# One match normally creates one priority replay. Copied/restored folders can
+# generate many such events, so only a small number of NEW priority payloads
+# may bypass a full primary queue. Previously admitted retries remain lossless.
+_PRIORITY_OVERFLOW_LIMIT = 8
+
 # A process parse pool completes jobs in small, slightly staggered waves.  An
 # immediate non-blocking drain therefore produced a median batch of only two
 # games even when the user selected 50.  Historical work may wait briefly for
@@ -187,7 +192,7 @@ class _RetryablePerGameError(Exception):
 
 
 class _PausedBeforeNetwork(Exception):
-    """Pause won the race while an ingest worker waited for a shared slot."""
+    """A pause or match hold won the race before ingest reached the network."""
 
 
 class _UploadSessionChanged(_PausedBeforeNetwork):
@@ -368,6 +373,10 @@ class UploadQueue:
         # queued replay as "not uploaded" and parses/enqueues it again
         # for as long as a congested backlog takes to drain.
         self._pending_paths: set[str] = set()
+        # Admission slots follow pending reservations through dequeue/retry.
+        # Prune lazily on overflow so every existing terminal path can release
+        # them through its normal pending-path/owner cleanup.
+        self._priority_overflow_paths: set[str] = set()
         # Lifecycle lock for ``start`` / ``stop`` / ``set_concurrency``.
         # Prevents two GUI button clicks racing into overlapping
         # restart sequences (which would leak threads).
@@ -545,16 +554,18 @@ class UploadQueue:
         loop that could repeat indefinitely on a backfill of N>>1k
         replays.
 
-        The fix: ``put`` with a generous timeout. Blocks the caller
+        Historical work uses ``put`` with a bounded timeout. It blocks the caller
         (the parse-pool done-callback thread) until the upload worker
         drains a slot. ``ProcessPoolExecutor`` gracefully accumulates
         completed-but-not-yet-callback'd futures during the block, so
         nothing is lost — parses just queue up in memory until the
-        upload thread catches up. The 5-minute timeout is a safety
+        upload thread catches up. The short timeout is a safety
         net for a wedged upload thread (e.g. a hung HTTPS connection
         the connection pool hasn't reaped yet); we'd rather log the
         symptom and drop one job than block the entire pipeline
-        forever.
+        forever. Fresh priority games may use a small reserved overflow
+        allowance when history fills the primary lane. That allowance lasts
+        until the job's pending reservation ends, including through retries.
         """
         path_key = str(job.file_path)
         with self._lock:
@@ -572,10 +583,24 @@ class UploadQueue:
         self._archive_wake.set()
         self._notify_pending()
         try:
-            self._q.put(
-                self._queue_item(job),
-                timeout=_BACKPRESSURE_TIMEOUT_SEC,
-            )
+            item = self._queue_item(job)
+            if job.priority:
+                # History may fill the bounded lane while a match holds it.
+                # Keep a bounded number of fresh games in the existing
+                # non-dropping retry lane instead of behind paused history.
+                try:
+                    self._q.put_nowait(item)
+                except queue.Full:
+                    with self._lock:
+                        self._priority_overflow_paths.intersection_update(self._pending_paths)
+                        self._priority_overflow_paths.intersection_update(self._pending_owners)
+                        if len(self._priority_overflow_paths) >= _PRIORITY_OVERFLOW_LIMIT:
+                            raise queue.Full
+                        self._priority_overflow_paths.add(path_key)
+                        self._retry_q.put_nowait(item)
+                self._retry_wake.set()
+            else:
+                self._q.put(item, timeout=_BACKPRESSURE_TIMEOUT_SEC)
             return True
         except queue.Full:
             # Queue saturated (slow / unreachable API). NOT a loss:
@@ -1070,6 +1095,14 @@ class UploadQueue:
     def set_activity_gate(self, gate):
         self._activity_gate = gate
 
+    def _history_held_for_match(self) -> bool:
+        gate = self._activity_gate
+        return bool(
+            getattr(self._state, "pause_history_in_game", True)
+            and gate is not None
+            and gate.busy
+        )
+
     def hold_auth(self, held: bool) -> None:
         with self._lock:
             self._auth_held = held
@@ -1394,10 +1427,13 @@ class UploadQueue:
             with self._connection_lock:
                 delayed = self._retry_at > time.monotonic()
             battery_hold = getattr(self._state,"pause_on_battery",False) and not first_job.priority and on_battery()
-            if battery_hold or delayed and (source_q is self._retry_q or not first_job.priority):
+            match_hold = not first_job.priority and self._history_held_for_match()
+            retry_hold = delayed and (source_q is self._retry_q or not first_job.priority)
+            if battery_hold or match_hold or retry_hold:
                 self._retry_q.put_nowait(self._queue_item(first_job))
                 source_q.task_done()
                 # Short event waits let a fresh rank-0 job keep its lane;
+                # history stays reserved until the match hold clears, and
                 # retry work never makes another network call before due.
                 self._retry_wake.wait(0.1)
                 self._retry_wake.clear()
@@ -1446,11 +1482,13 @@ class UploadQueue:
                         batch.append(job)
                     except queue.Empty:
                         break
-            # Pause can be clicked while a history worker is inside the
-            # coalescing wait. Re-check immediately before the network call;
+            # Pause or match loading can arrive while a history worker is
+            # inside the coalescing wait. Re-check before building payloads;
             # every assembled item remains reserved and returns to its source
             # lane without being reported as failed or uploaded.
-            if self.is_paused():
+            paused = self.is_paused()
+            match_hold = not first_job.priority and self._history_held_for_match()
+            if paused or match_hold:
                 for job in batch:
                     try:
                         source_q.put_nowait(self._queue_item(job))
@@ -1462,7 +1500,11 @@ class UploadQueue:
                         self._retry_q.put_nowait(self._queue_item(job))
                 for _ in batch:
                     source_q.task_done()
-                self._ingest_stop.wait(1.0)
+                if paused:
+                    self._ingest_stop.wait(1.0)
+                else:
+                    self._retry_wake.wait(0.1)
+                    self._retry_wake.clear()
                 continue
             context = self._upload_context()
             try:
@@ -1476,9 +1518,9 @@ class UploadQueue:
                 if not self._upload_context_current(context):
                     self._retain_after_session_change(batch, context)
                     continue
-                # Pause was clicked after batch assembly while this worker
-                # waited for the global request gate. Retain every still-live
-                # reservation without a failure callback or adaptive shrink.
+                # Pause or a match hold arrived after batch assembly while
+                # this worker waited for the global request gate. Retain every
+                # still-live reservation without a failure callback or shrink.
                 for job in batch:
                     if self.is_pending(job.file_path):
                         self._retry_q.put_nowait(self._queue_item(job))
@@ -1593,6 +1635,8 @@ class UploadQueue:
         batch = self._owned_upload_jobs(batch, context)
         if not batch:
             raise _PausedBeforeNetwork()
+        if not any(job.priority for job in batch) and self._history_held_for_match():
+            raise _PausedBeforeNetwork()
         # Defense-in-depth filter check at the moment of upload. The
         # watcher applies the filter post-parse, but if the user
         # changed the filter between parse and upload (typical queue
@@ -1650,6 +1694,9 @@ class UploadQueue:
                 # network round-trip entirely.
                 return
             batch = kept
+        ingest_priority = 0 if any(job.priority for job in batch) else 1
+        if ingest_priority > 0 and self._history_held_for_match():
+            raise _PausedBeforeNetwork()
         # Build payloads + a gameId→job lookup so we can map server
         # responses back to the originating ``UploadJob``. Keyed off
         # the server's authoritative gameId rather than file path
@@ -1705,9 +1752,8 @@ class UploadQueue:
         # path uniform. Tests that pin to ``upload_concurrency=1``
         # and ``upload_batch_size=1`` to assert single-game behaviour
         # see one ``upload_games_batch`` call with a 1-element list.
-        ingest_priority = 0 if any(job.priority for job in batch) else 1
         with self._network_gate.hold(ingest_priority):
-            if self.is_paused():
+            if self.is_paused() or (ingest_priority > 0 and self._history_held_for_match()):
                 raise _PausedBeforeNetwork()
             try:
                 self._require_upload_context(context)

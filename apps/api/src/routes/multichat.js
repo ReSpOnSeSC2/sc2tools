@@ -8,6 +8,7 @@ const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
 const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
+const { registerStreamSeriesRoutes } = require("./streamSeries");
 
 const {
   YoutubeChatError,
@@ -65,6 +66,9 @@ const {
  *   alertMedia?: import('../services/alertMediaStore').AlertMediaStore | null,
  *   tiktokRelay: import('../services/tiktokChatRelay').TikTokChatRelay,
  *   studio: import('../services/multichatStudio').MultichatStudioService,
+ *   commands?: import('../services/chatCommandService').ChatCommandService,
+ *   gameDesk?: import('../services/gameDesk').GameDeskService,
+ *   series?: import('../services/streamSeries').StreamSeriesService,
  *   sounds?: import('../services/multichatSounds').MultichatSoundsService,
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
  *   viewers?: import('../services/multichatViewers').MultichatViewersService,
@@ -158,6 +162,24 @@ function buildMultichatRouter(deps) {
   };
 
   router.use("/multichat/:token", globalLimiter);
+  registerStreamSeriesRoutes(router, { series: deps.series, limiter, tokenAuth });
+
+  router.post("/multichat/:token/command", limiter, tokenAuth, async (req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      if (!deps.commands) { res.status(503).json({ error: { code: "chat_commands_unavailable" } }); return; }
+      const body = req.body;
+      if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.command !== "string" || body.command.length > 25 ||
+        (body.argument !== undefined && (typeof body.argument !== "string" || body.argument.length > 80)) ||
+        typeof body.user !== "string" || body.user.length > 80 || !["twitch", "kick", "youtube", "tiktok"].includes(body.platform)) {
+        res.status(400).json({ error: { code: "invalid_chat_command" } }); return;
+      }
+      const reply = await deps.commands.answer(req.params.token, { command: body.command, argument: body.argument,
+        user: body.user, platform: body.platform, onStream: true });
+      if (!reply) { res.status(401).json({ error: { code: "invalid_overlay_token" } }); return; }
+      res.json(reply);
+    } catch (error) { next(error); }
+  });
 
   router.get(
     "/multichat/:token/config",
@@ -652,7 +674,12 @@ function buildMultichatRouter(deps) {
       try {
         const body =
           req.body && typeof req.body === "object" ? req.body : {};
-        res.json(await deps.studio.update(String(req.params.token), body));
+        const token = String(req.params.token);
+        if ("action" in body) {
+          if (!deps.gameDesk) { res.status(503).json({ error: { code: "game_desk_unavailable" } }); return; }
+          // @ts-ignore stamped by tokenAuth
+          res.json(await deps.gameDesk.act(String(req.overlayUserId), token, body));
+        } else res.json(await deps.studio.update(token, body));
       } catch (err) {
         next(err);
       }

@@ -67,7 +67,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
   {
     id: "opponent", name: "Opponent identity", group: "game",
     summary: "A quick introduction to the player on the other side of the match.",
-    explanation: "The dossier shows the opponent's name and race, with MMR and head-to-head context when available. Head-to-head means your recorded wins and losses against that opponent. Live identity can arrive before the completed replay; profile lookups and past games add detail as it becomes available.",
+    explanation: "The dossier shows the opponent's name and race, with MMR and head-to-head context when available. Head-to-head means your recorded wins and losses against that opponent. Live identity can arrive before the completed replay; profile lookups and past games add detail as it becomes available. An approved channel matched to the current exact identity adds a Twitch or YouTube chip. Stream Dock → Game offers Shout out; a connected matching bot queues it, otherwise Copy shout-out supplies the text. The !so command never chooses an arbitrary target.",
     example: { headline: "Opponent identity · illustrative", lines: ["ExampleOpponent · Terran · 4,200 MMR", "Head-to-head: 3 wins, 2 losses"] },
     appears: "During the active match when the agent identifies the opponent; clears after the match instead of staying on the next queue.",
     needs: [liveAgent, "Opponent identification; profile and head-to-head details depend on available data."],
@@ -253,7 +253,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
   {
     id: "session", name: "Session record", group: "results",
     summary: "A persistent scorecard for today's games and current MMR.",
-    explanation: "The session HUD shows wins and losses, available region and MMR, and elapsed time when the session has a start time. It can include a small streak chip from two consecutive wins or losses. It reads the cloud's session summary, so it can appear as soon as the source connects without waiting for a new result.",
+    explanation: "The session HUD shows wins and losses, available region and MMR, and elapsed time when the session has a start time. It can include a small streak chip from two consecutive wins or losses. It reads the cloud's session summary, so it can appear as soon as the source connects without waiting for a new result. Confirm Start new session in Stream Dock → Game to count games from now and set a new clip timestamp mark. The sticky Dock header keeps W–L and available MMR change visible while you scroll.",
     example: { headline: "Session record · illustrative", lines: ["4W · 2L · 47m", "NA 4,200 · W2"] },
     appears: "When the overlay receives its session summary; stays visible as the session updates.",
     needs: ["A working overlay connection. Uploaded games populate the record; rating fields depend on available data."],
@@ -287,16 +287,16 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
     explanation: "Ghost turns a saved timed build into a practice HUD showing the previous, current, and next steps. A drift chip compares the current step's target time with the game clock; it is a timing cue, not confirmation that you completed the action. Assign a build separately for each concrete race matchup; games against Random are deliberately paused.",
     example: { headline: "Ghost coach · illustrative", lines: ["Current: 2:15 — Example build step", "Next: 2:40 — Example follow-up", "Drift shows timing relative to the current target"] },
     appears: "An armed status between games, then timed coaching in the matching live game. Unassigned matchups cannot supply build steps.",
-    needs: [liveAgent, "A saved timed build assigned to the current matchup on this browser.", "The dedicated Ghost URL copied after assignments or Voice coach changes."],
+    needs: [liveAgent, "An account practice target assigned to the current matchup.", "The dedicated permanent Ghost URL; Voice coach is a separate URL opt-in."],
     setup: [
-      "Open a completed game's build order and use Save for its matchup, such as Save for PvT.",
+      "Choose Practice on a build or guide, or Use as Ghost Build target above a completed game’s build order.",
       "In Settings → Overlay → Ghost Build coach, choose a saved build for the matchup slot.",
       "Beside Ghost Build coach in OBS Browser Source URLs, optionally enable Voice coach, then Copy the updated URL.",
-      "Paste it into its own OBS Browser Source. Copy and replace that URL after future assignment changes.",
+      "Paste the permanent URL into its own OBS Browser Source. Account assignment changes reach it automatically; only changing the URL-specific Voice coach switch needs a new copy.",
       "Start a game in the assigned matchup and follow the timed steps; check the game's Ghost grade afterward.",
     ],
     check: "Test can show a placement or configuration preview, but a real matched game with the agent running verifies the game clock. Look for the armed status before you queue.",
-    troubleshooting: "Ghost is separate from All-in-one. Assignments are stored on the device where you made them and embedded in the copied URL. An old URL keeps old assignments; Random opponents pause coaching for the entire game.",
+    troubleshooting: "Ghost is separate from All-in-one. Assignments are saved to your account. Move old browser assignments once in Look. Legacy fragment URLs work until an account configuration is present; an explicit empty account setup disarms old fragments too. Random opponents pause coaching for the entire game.",
     placement: "Use a readable practice corner with room for multiple step rows and the drift chip.",
     source: "dedicated", settingsHref: OVERLAY_SETTINGS, related: ["randomizer", "post-game", "build-profile"],
   },
@@ -347,7 +347,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
   {
     id: "chat-alerts", name: "Event alerts", group: "community",
     summary: "Recognize supported subscriptions, raids, gifts, and other platform events.",
-    explanation: "This source turns supported incoming platform events into animated alert cards. The newest alert is prominent, with a small recent stack while it is active, and the display clears when the alert finishes. Which events arrive depends on the platform and the connection you configured.",
+    explanation: "This source turns supported incoming platform events into animated alert cards. The newest alert is prominent, with a small recent stack while it is active, and the display clears when the alert finishes. Which events arrive depends on the platform and the connection you configured. Game moments are an optional Ladder category: newly recorded achievements use the same source, play after supporter alerts and are logged in Stream Dock → Clips. Configure them in Multi-platform chat → Game moments; recorded MMR refers to replay game-start ratings.",
     example: { headline: "Event alert · illustrative", lines: ["ExampleViewer subscribed", "Platform event card with your saved alert styling"] },
     appears: "When a supported fresh platform event arrives; transparent between alerts.",
     needs: [configuredChat, "A platform connection that supplies the event type you want to show."],
@@ -356,6 +356,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
       "Choose alert appearance and sound options there, then press Save chat settings.",
       "Enable Event alerts and Copy its URL into a dedicated OBS Browser Source.",
       "Press Test to preview sample alerts; use Stream Dock to inspect incoming platform events and moderation.",
+      "For Game moments, use each Test locally button in Settings before Save. These labelled samples preview this browser only and never post chat or fire OBS.",
     ],
     check: "Test plays scripted sample alerts. A supported real event appearing in Stream Dock and the source checks the live platform path.",
     troubleshooting: "A normal chat message is not an alert. Check platform status, supported event delivery, moderation, and saved alert settings. Audio also depends on the Browser Source's OBS audio configuration.",
@@ -392,6 +393,19 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
     troubleshooting: "Show widget is unavailable while edits are unsaved or the title and five ratings are incomplete. Hide the widget before saving an empty title or an unset rating.",
     placement: "Use the recommended portrait source size and position the graph clear of gameplay and your camera.",
     source: "dedicated", settingsHref: OVERLAY_SETTINGS, related: ["randomizer", "ghost-build", "chat-highlight"],
+  },
+  {
+    id: "series", name: "Series scoreboard", group: "production",
+    summary: "Run a best-of scoreboard for cups and showmatches.",
+    explanation: "Start a best-of-1, 3, 5 or 7 series in the Dock. A matching replay counts only when its exact start is after Start. Known account handles take priority over names; otherwise names match ignoring case. Ladder and custom games both count. Ties do not add wins. Correct the score with ±1 and End explicitly when finished.",
+    example: { headline: "Bo5 vs ExampleOpponent · illustrative", lines: ["You 2–1 Opponent", "Current map: Oceanborn · Next: Ghost River", "Recorded lifetime H2H: 7W–5L"] },
+    appears: "After an explicit Dock Start, until End. A completed series shows Series won or Series lost. It is off for new tokens until enabled.",
+    needs: ["A series started for this overlay token and matching accepted replays.", "Exact replay start times for automatic scoring; older uploads need manual correction. Lifetime H2H requires an exact known account."],
+    setup: dockSetup("Series scoreboard", "Open Series in the Dock. Check the opponent, choose Bo1/3/5/7 and optional map order, then Start. Use ±1 to correct and End to stop."),
+    check: "Preview and Test show a silent sample score. They never start, score, end or otherwise change your real series.",
+    troubleshooting: "A same-name replay with a different known account does not count. Games already underway at Start do not count. Hidden, deleted, resumed and test replays are excluded. At 80 retained replay receipts, automatic scoring pauses; correct manually and End or start a new series. Refresh after an uncertain save before trying again.",
+    placement: "The All-in-one layout reserves the upper-left scoreboard slot. For independent placement, use its dedicated 640 × 420 Browser Source.",
+    source: "all-in-one", settingsHref: OVERLAY_SETTINGS, related: ["session", "match-result", "clip-flag"], helpSlug: "series-mode",
   },
   {
     id: "session-recap", name: "Session recap card", group: "results",
@@ -448,7 +462,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
   {
     id: "chat-oracle", name: "Crystal Ball predictions", group: "community",
     summary: "Let chat predict the match and celebrate the correct calls.",
-    explanation: "When a game opens a prediction window, viewers call !win or !loss in connected chat. Voting locks during the early game; the prompt hides once calls are closed. The replay-verified result settles the round and reveals the outcome with oracle points and a leaderboard.",
+    explanation: "When a game opens a prediction window, viewers call !win or !loss in connected chat. Voting locks during the early game; the prompt hides once calls are closed. The replay-verified result settles the round and reveals the outcome with oracle points and a leaderboard. Stream Dock → Game shows the tally and lock countdown. Cancel round awards no points. After a matching game ends without a verified result, a confirmed Resolve Win/Loss creates a labelled manual reveal with no points or oracle accuracy.",
     example: { headline: "CRYSTAL BALL · illustrative", lines: ["Call it vs ExampleOpponent: !win / !loss", "WIN 9 · LOSS 4", "After verification: chat was right"] },
     appears: "During an open game prediction window and again for the settled result; transparent between rounds.",
     needs: [liveAgent, configuredChat, "An active engagement-reporting surface, such as Stream Dock or Multi-platform chat, and a processed result to settle the call."],
@@ -459,7 +473,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
       "Finish the game and let its replay upload and process so the verified result can settle the round.",
     ],
     check: "Test plays a demo call and reveal. A real game, timely chat vote, and processed replay are needed to verify the complete prediction cycle.",
-    troubleshooting: "Late calls after voting locks do not count. A missing verified result delays settlement. If calls never arrive, check platform status and keep an engagement-reporting chat surface running.",
+    troubleshooting: "Late calls after voting locks do not count. A missing verified result delays scored settlement; use the Dock's confirmed cancel or manual controls for that round. Hide game widgets pauses the Crystal Ball display with game cards while chat keeps running. If calls never arrive, check platform status and keep an engagement-reporting chat surface running.",
     placement: "Place the call where viewers can read both commands, leaving space for the result reveal.",
     source: "dedicated", settingsHref: OVERLAY_SETTINGS, related: ["chat-poll", "multichat", "supporter-wall"],
   },
@@ -517,3 +531,15 @@ export const WIDGET_GUIDES: readonly WidgetGuide[] = WIDGET_GUIDE_CONTENT.map(gu
   placement: `${guide.placement} Recommended standalone Browser Source: ${widgetSizes[guide.id].width} × ${widgetSizes[guide.id].height}.`,
   settingsHref: `/settings?tab=overlay&section=widgets&widget=${encodeURIComponent(guide.id)}`,
 }));
+
+/** Automation has no Browser Source or fake widget preview. Its stable Learn
+ * anchor lives beside the widget library and never opens a provider session. */
+export const STUDIO_AUTOMATION_GUIDES = [{
+  id: "twitch-predictions", name: "Twitch Predictions & game markers",
+  summary: "Optional Channel Points Predictions and stream bookmarks, with separate Twitch consent and explicit Save.",
+  capability: "Current desktop telemetry cannot prove ranked queue status. Automatic Twitch Predictions are skipped; known live two-human 1v1 starts can still add opted-in markers.",
+  needs: ["An affiliate or partner Twitch broadcaster and a live channel.", "Server-owner enablement, then your separate Predictions or markers permission and saved opt-in.", "A paired desktop agent reporting a fresh real player game; markers also require VODs enabled."],
+  setup: ["Open Settings → Overlay → Chat & alerts → Twitch automation. Both switches start off.", "Connect Predictions for Channel Points permission, or Connect markers for stream marker permission. Complete Twitch's window, then Refresh status.", "Choose a 30–300 second window (default 120) and a plain title using {me}, {opp}, {oppRace} and {oppMmr}. Win and Loss are fixed; rendered titles stop at 45 characters.", "Enable the choices you want and press Save Twitch automation. Connecting alone changes neither switch.", "In Stream Dock → Game, check the native Twitch prediction state. Confirmed Cancel requests a refund; Resolve uses only an already verified replay result."],
+  recovery: "Predictions skip rematches within 10 minutes. Games under 60 seconds or no result within 20 minutes request refunds. Unconfirmed creates are never blindly repeated. If Twitch did not return a prediction ID, check the Twitch dashboard manually.",
+  settingsHref: "/settings?tab=overlay&section=chat#twitch-automation", helpSlug: "viewer-engagement", helpAnchor: "twitch-predictions",
+}] as const;

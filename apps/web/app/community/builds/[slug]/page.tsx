@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { BuildOrderSteps } from "@/components/builds/BuildOrderSteps";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Calendar } from "lucide-react";
@@ -28,6 +29,7 @@ import type { CommunityBuildDetail } from "@/components/community/types";
 import { RulesSummary } from "@/components/builds/RulesSummary";
 import { SKILL_LEVELS, coerceSavedRules } from "@/lib/build-rules";
 import { SavedBuildExportMenu } from "@/components/builds/SavedBuildExportMenu";
+import { PracticeButton } from "@/components/practice/PracticeButton";
 import { serializeJsonLd } from "@/lib/reviewJsonLd";
 import { communityDescription } from "@/lib/communityDescription";
 
@@ -216,6 +218,7 @@ export default async function CommunityBuildPage({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
+          <BuildOrderSteps value={snapshot.buildOrder} />
           {description.showAbout ? <Card><h2 className="mb-3 text-h4 font-semibold text-text">About this build</h2><ExpandableText text={data.description.trim()} /></Card> : null}
           {rules.length > 0 ? (
             <RulesSummary rules={rules} />
@@ -240,6 +243,7 @@ export default async function CommunityBuildPage({
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+          <div className="hidden lg:block"><PracticeButton build={{ ...data.build, name: data.title }} /></div>
           <Card className="hidden lg:block">
             <CommunityVotePanel
               slug={data.slug}

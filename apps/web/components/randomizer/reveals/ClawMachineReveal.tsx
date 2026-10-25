@@ -43,6 +43,7 @@ interface Toy {
 
 export function ClawMachineReveal({
   pool,
+  visualPool = pool,
   winner,
   winnerProbability,
   spinId,
@@ -59,9 +60,9 @@ export function ClawMachineReveal({
   );
   useRevealSound({ style: "claw", spinId, durationMs: DURATION_MS, reducedMotion });
 
-  const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
+  const sprites = useMemo(() => assignPoolSprites(visualPool), [visualPool]);
   const toys = useMemo<Toy[]>(() => {
-    const order = seededShuffle(pool, spinId);
+    const order = seededShuffle(visualPool, spinId);
     const slotW = (W - 60) / Math.max(1, order.length);
     return order.map((b, i) => ({
       build: b,
@@ -69,7 +70,7 @@ export function ClawMachineReveal({
       x: 30 + slotW * (i + 0.5),
       rot: ((i * 47) % 30) - 15,
     }));
-  }, [pool, spinId, sprites]);
+  }, [visualPool, spinId, sprites]);
 
   const winnerToy = toys.find((t) => t.build.id === winner.id) ?? toys[0];
   const p = Math.min(1, elapsed / DURATION_MS);
@@ -141,7 +142,7 @@ export function ClawMachineReveal({
         />
       </div>
       <SpriteLegend
-        pool={pool}
+        pool={visualPool}
         sprites={sprites}
         highlightId={settled ? winner.id : null}
       />

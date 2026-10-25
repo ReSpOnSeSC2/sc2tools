@@ -61,6 +61,15 @@ afterEach(() => {
 });
 
 describe("GhostBuildWidget", () => {
+  it("uses a present account config over an old fragment, including explicit empty disarm", () => {
+    const synced = assignGhostTarget(emptyGhostBuildConfig(), "PvZ", { ...TARGET, name: "Account target" });
+    const view = render(<GhostBuildWidget live={null} liveGame={envelope("match_in_progress", 30)} ghostParam={GHOST_PARAM} socketConfig={synced} />);
+    expect(view.container.textContent).toContain("Account target"); expect(view.container.textContent).not.toContain(TARGET.name);
+    view.rerender(<GhostBuildWidget live={null} liveGame={null} ghostParam={GHOST_PARAM} socketConfig={emptyGhostBuildConfig()} />);
+    expect(view.container.textContent).toBe("");
+    view.rerender(<GhostBuildWidget live={null} liveGame={null} ghostParam={GHOST_PARAM} />);
+    expect(view.container.textContent).toContain("1 of 9 matchups ready");
+  });
   it("renders nothing when no target is armed", () => {
     const { container } = render(
       <GhostBuildWidget live={null} liveGame={null} ghostParam={null} />,

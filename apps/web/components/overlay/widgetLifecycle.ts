@@ -55,7 +55,8 @@ export type WidgetId =
   | "lower-third"
   | "stats-ticker"
   | "countdown-timer"
-  | "build-profile";
+  | "build-profile"
+  | "series";
 
 export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "opponent",
@@ -89,6 +90,7 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "stats-ticker",
   "countdown-timer",
   "build-profile",
+  "series",
 ];
 
 /**

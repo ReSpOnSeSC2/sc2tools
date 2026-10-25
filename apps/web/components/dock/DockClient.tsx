@@ -68,9 +68,12 @@ import { useDockScrollSpy } from "./useDockScrollSpy";
 import { useDockSummaries } from "./useDockSummaries";
 import { usePollTally } from "./usePollTally";
 export { DockButton } from "./DockControls";
-import { DockPresenceStrip } from "./DockPresenceStrip";
+import { DockStatusHeader } from "./DockStatusHeader";
+import { loadGameDesk } from "./dockLazyLoaders";
 import { DockLazyPanel } from "./DockLazyPanel";
 const loadScout = () => import("./DockScout").then(module => module.DockScout);
+const loadTwitchAutomation = () => import("./DockTwitchAutomation").then(module => module.DockTwitchAutomation);
+const loadSeries = () => import("./DockSeries").then(module => module.DockSeries);
 
 /** Platform config re-read cadence — same as the OBS widget. */
 const CONFIG_REFRESH_MS = DOCK_CONFIG_REFRESH_MS;
@@ -112,7 +115,6 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
   const viewers = useViewerCounts(token, events);
   // Clip-moment log keeps its own boot fetch + 60s fallback. The lightweight
   // studio subscription below listens only for control-state updates.
-  const { summary: engagement, loaded: engagementReady } = useEngagementState(token, null);
 
   // Keep readiness tied to the token as part of the snapshot itself. That
   // makes a token change fail closed on its very first render instead of
@@ -151,6 +153,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
     adoptStudioSnapshot(next);
   });
   const connectionStatus = updates?.status ?? "connected";
+  const { summary: engagement, loaded: engagementReady } = useEngagementState(token, updates?.engagementEvent ?? null);
   useEffect(() => { if (connectionStatus === "invalid" || connectionStatus === "replaced") onInvalid(connectionStatus === "replaced"); }, [connectionStatus, onInvalid]);
 
   useEffect(() => {
@@ -367,12 +370,18 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
   const [dockUrl, setDockUrl] = useState("");
   useEffect(() => { setDockUrl(window.location.href); }, []);
   const { layout, setOpen, togglePin, setBrollOpen, reset } = useDockLayout();
+  const [seriesSummary, setSeriesSummary] = useState({ summary: "No active series", active: false });
+  const receiveSeriesSummary = useCallback((summary: string, active: boolean) => setSeriesSummary(old => old.summary === summary && old.active === active ? old : { summary, active }), []);
   const ordered = orderedDockSections(layout);
-  const { active, jumpTo } = useDockScrollSpy(setOpen);
+  const [headerHeight, setHeaderHeight] = useState(64);
+  const { active, jumpTo } = useDockScrollSpy(setOpen, headerHeight);
   const tally = usePollTally(moderatedMessages, studio.poll);
   const summaries = useDockSummaries(studio, studioSnapshotReady, platforms, loaded,
     tally?.total ?? 0, engagement.clipMoments.length, engagementReady);
+  summaries["dock-series"] = seriesSummary;
   const panels: Record<DockSectionId, ReactNode> = {
+    "dock-game": <><DockLazyPanel label="game desk" loader={loadGameDesk} componentProps={{ token, live: updates?.liveGame ?? null, lastLiveAt: updates?.lastLiveAt ?? null, gameStatus: updates?.gameStatus ?? null, session: updates?.session ?? null, studio, engagement, ready: studioSnapshotReady && engagementReady, busy, onPost: postStudioAction }} /><DockLazyPanel label="Twitch prediction controls" loader={loadTwitchAutomation} componentProps={{ token, onInvalid }} /></>,
+    "dock-series": <DockLazyPanel label="Series controls" loader={loadSeries} componentProps={{ token, rawEvent: updates?.seriesEvent, live: updates?.liveGame ?? null, lastOpponent: updates?.lastOpponent ?? null, onInvalid, onSummary: receiveSeriesSummary }} />,
     "dock-scout": <DockLazyPanel label="live scouting" loader={loadScout} componentProps={{ live: updates?.liveGame ?? null, lastUpdatedAt: updates?.lastLiveAt ?? null }} />,
     "dock-chat": <>
 <DockChat embedded
@@ -519,24 +528,25 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
   };
 
   return (
-    <div className={`${styles.root} mx-auto min-h-screen w-full max-w-6xl p-2 font-sans text-text sm:p-3`}>
-      <DockPresenceStrip token={token} />
+    <div className={`${styles.root} mx-auto min-h-screen w-full max-w-6xl p-2 font-sans text-text sm:p-3`} style={{ "--dock-sticky-height": `${headerHeight}px` } as CSSProperties}>
+      <DockStatusHeader token={token} studio={studio} ready={studioSnapshotReady} live={updates?.liveGame ?? null} lastLiveAt={updates?.lastLiveAt ?? null} session={updates?.session ?? null} status={connectionStatus} onHeight={setHeaderHeight}>
       {/* Narrow-mode sticky jump tabs — the OBS dock has no room for
           a permanent two-column layout. */}
-      <nav aria-label="Dock sections" className="sticky top-0 z-10 -mx-2 mb-2 flex items-center gap-1 overflow-x-auto border-b border-border bg-bg px-2 py-1.5 lg:hidden">
+      <nav aria-label="Dock sections" className="flex items-center gap-1 overflow-x-auto py-1.5 lg:hidden">
         {DOCK_SECTIONS.map((s) => (
           <DockButton
             key={s.id}
             type="button"
             onClick={() => jumpTo(s.id)}
             aria-current={active === s.id ? "location" : undefined}
-            className="shrink-0 whitespace-nowrap px-2 text-caption"
-            variant={active === s.id ? "primary" : "ghost"}
+            className={`shrink-0 whitespace-nowrap px-2 text-caption ${active === s.id ? "underline underline-offset-4" : ""}`}
+            variant={active === s.id ? "secondary" : "ghost"}
           >
             {s.label}
           </DockButton>
         ))}
       </nav>
+      </DockStatusHeader>
       <div className="mb-2 flex justify-end"><DockButton onClick={reset}>Reset layout</DockButton></div>
 
       {connectionStatus === "reconnecting" ? <p role="status" className="mb-2 text-caption text-text-muted">Reconnecting to SC2 Tools…</p> : null}

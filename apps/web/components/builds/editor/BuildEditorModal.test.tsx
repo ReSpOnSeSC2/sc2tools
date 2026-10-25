@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState, type ComponentProps } from "react";
 
@@ -9,9 +9,10 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: harness.getToken }),
+  useAuth: () => ({ getToken: harness.getToken, userId: "test-owner", isLoaded: true, isSignedIn: true }),
 }));
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@/lib/clientApi", async original => ({
+  ...await original<typeof import("@/lib/clientApi")>(),
   apiCall: (...args: unknown[]) => harness.apiCall(...args),
   useApi: () => ({ data: undefined, error: undefined, isLoading: false }),
 }));
@@ -29,6 +30,26 @@ afterEach(() => {
 });
 
 describe("BuildEditorModal safeguards", () => {
+  it("disables portalled choices while Save is held even when activation keeps focus in the action input", async () => {
+    let finish!: (value: unknown) => void; const held = new Promise(resolve => { finish = resolve; });
+    harness.apiCall.mockImplementation((_token, _path, options) => options?.method === "PUT" ? held : Promise.resolve({ matches: [], almost_matches: [], scanned_games: 0, truncated: false }));
+    renderEditor({ initialDraft: { rules: [{ type: "before", name: "BuildSpawningPool", time_lt: 120 }] } });
+    const picker = screen.getByRole("combobox", { name: "Rule 1 action" }); fireEvent.focus(picker); expect(screen.getByRole("listbox")).toBeTruthy();
+    // AX/button activation need not move DOM focus as a mouse press does.
+    fireEvent.click(screen.getByRole("button", { name: "Save build" }));
+    expect(picker.matches(":disabled")).toBe(true); expect(screen.queryByRole("listbox")).toBeNull();
+    await act(async () => finish({ saved: true, reclassify: null }));
+  });
+  it("keeps the real token picker in the dialog, consumes its Escape and blocks an unknown action", () => {
+    const onClose = vi.fn(); renderEditor({ onClose, initialDraft: { rules: [{ type: "before", name: "BuildSpawningPool", time_lt: 120 }] } });
+    const picker = screen.getByRole("combobox", { name: /Rule 1 action/ }); fireEvent.focus(picker);
+    expect(screen.getByRole("dialog").contains(screen.getByRole("listbox"))).toBe(true);
+    fireEvent.keyDown(picker, { key: "Escape" }); expect(onClose).not.toHaveBeenCalled();
+    fireEvent.change(picker, { target: { value: "BuildTypoPool" } });
+    expect((picker as HTMLInputElement).value).toBe("BuildTypoPool"); expect(picker.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getAllByRole("button").filter(button => /^Save/.test(button.textContent || "")).every(button => (button as HTMLButtonElement).disabled)).toBe(true);
+    expect(harness.apiCall.mock.calls.some(call => call[2]?.method === "PUT")).toBe(false);
+  });
   it("cannot close a newly opened draft through a previous save's delayed callback", async () => {
     harness.apiCall.mockResolvedValue({ saved: true, reclassify: null });
     function Parent() {
@@ -130,7 +151,7 @@ function renderEditor(props: Partial<ComponentProps<typeof BuildEditorModal>> = 
     <BuildEditorModal
       open
       onClose={vi.fn()}
-      events={[{ time: 20, name: "Gateway", is_building: true }]}
+      events={[{ time: 20, name: "SpawningPool", is_building: true }]}
       race="Zerg"
       vsRace="Protoss"
       perspective="opponent"

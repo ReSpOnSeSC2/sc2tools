@@ -80,6 +80,7 @@ class TwitchChatBotService {
    *   overlayTokens: {resolve: (token: string) => Promise<{userId: string}|null>, list: (userId: string) => Promise<Array<Record<string, any>>>},
    *   engagement?: import('./multichatEngagement').MultichatEngagementService,
    *   chatbot?: import('./chatbot').ChatbotService,
+ *   chatCommands?: import('./chatCommandService').ChatCommandService,
    *   logger?: import('pino').Logger | null,
    *   wsFactory?: (url: string) => any,
    *   now?: () => number,
@@ -91,6 +92,7 @@ class TwitchChatBotService {
     this.overlayTokens = deps.overlayTokens;
     this.engagement = deps.engagement || null;
     this.chatbot = deps.chatbot || null;
+    this.chatCommands = deps.chatCommands;
     this.logger = deps.logger || null;
     this.wsFactory =
       deps.wsFactory ||
@@ -101,7 +103,25 @@ class TwitchChatBotService {
     /** @type {Map<string, {userId: string, atMs: number}>} token→user cache */
     this._tokenCache = new Map();
     this._ircIdSeq = 0;
+    /** @type {Map<string, number>} bounded verified-reveal delivery cursor */
+    this._oracleSequences = new Map();
+    /** @type {((userId:string)=>Promise<string|null>)|null} */
+    this.shoutoutLine = null;
   }
+
+  /** Queue only on the matching configured bot. Copy is the caller's fallback.
+   * @param {string} userId @param {string} token @param {string} text
+   */
+  queueShoutout(userId, token, text) {
+    const conn = this._conns.get(userId);
+    if (!conn || conn.state !== "connected" || conn.overlayToken !== token) return false;
+    this._say(conn, text);
+    return true;
+  }
+
+  /** Existing configured connection/queue only; no provider is enabled here.
+   * @param {string} userId @param {string} token @param {string} text */
+  queueGameMoments(userId, token, text) { return this.queueShoutout(userId, token, text); }
 
   /**
    * Boot-time restore: reconnect every streamer whose saved config is
@@ -198,6 +218,9 @@ class TwitchChatBotService {
     if (!conn || conn.stopped) return;
     if (conn.resolvingOverlayToken && conn.rotationReceipts.size < 16) conn.rotationReceipts.set(from, to);
     if (conn.overlayToken === from || !conn.overlayToken && conn.pendingOverlayToken === from) {
+      conn.sendQueue.length = 0;
+      if (conn.sendTimer) clearTimeout(conn.sendTimer);
+      conn.sendTimer = null;
       conn.overlayToken = to; conn.pendingOverlayToken = null;
     }
   }
@@ -254,6 +277,13 @@ class TwitchChatBotService {
     if (!userId) return;
     const conn = this._conns.get(userId);
     if (!conn || conn.state !== "connected") return;
+    if (msg.type === "prediction-settled" && Number.isSafeInteger(msg.settlementSequence) && msg.settlementSequence > 0) {
+      if (msg.settlementSequence < (this._oracleSequences.get(token) || 0)) return;
+      while (this._oracleSequences.size >= 256 && !this._oracleSequences.has(token)) {
+        const oldest = this._oracleSequences.keys().next().value; if (!oldest) break; this._oracleSequences.delete(oldest);
+      }
+      this._oracleSequences.set(token, msg.settlementSequence);
+    }
     /** @type {string|null} */
     let line = null;
     /** @type {string} */
@@ -266,7 +296,9 @@ class TwitchChatBotService {
       const t = msg.tally || {};
       const total = Number(t.total) || 0;
       const result = msg.result === "win" ? "WIN" : "LOSS";
-      if (total > 0) {
+      if (msg.manual === true) {
+        line = `🔮 Result: ${result} — resolved manually. No oracle points or accuracy recorded.`;
+      } else if (total > 0) {
         const majority = Number(t.win) >= Number(t.loss) ? "WIN" : "LOSS";
         const pct = Math.round(
           (Math.max(Number(t.win) || 0, Number(t.loss) || 0) / total) * 100,
@@ -277,6 +309,9 @@ class TwitchChatBotService {
       } else {
         line = `🔮 Result: ${result} — nobody called it. Type !win / !loss when the next game loads!`;
       }
+    } else if (msg.type === "prediction-cancelled" && conn.cfg.announceOracle) {
+      dedupeKey = `cancelled:${msg.gameKey ?? ""}`;
+      line = "🔮 Crystal Ball round cancelled — no points or accuracy recorded.";
     } else if (msg.type === "level-up" && conn.cfg.announceLevelUps) {
       dedupeKey = `level:${msg.user ?? ""}:${msg.level ?? ""}`;
       const rank = themedRank(conn.rankRace, Number(msg.level));
@@ -399,6 +434,9 @@ class TwitchChatBotService {
    */
   async _handleChatMessage(conn, msg) {
     if (!msg) return;
+    const token = conn.overlayToken;
+    const current = () => !conn.stopped && this._conns.get(conn.userId) === conn && conn.overlayToken === token;
+    if (!current()) return;
     const nick = msg.nick || "";
     if (!nick || nick.toLowerCase() === conn.cfg.username.toLowerCase()) return;
     const text = String(msg.trailing ?? "").trim();
@@ -407,22 +445,23 @@ class TwitchChatBotService {
     // Engagement ingest — XP, !win/!loss picks, spike detection. The
     // IRC tag id matches what the browser Twitch engine reports, so
     // the shared unique index dedupes when both surfaces are open.
-    if (this.engagement && conn.overlayToken) {
+    if (this.engagement && token) {
       this._ircIdSeq += 1;
       const id = msg.tags.id || `irc-${this.now()}-${this._ircIdSeq}`;
       try {
-        await this.engagement.ingest(conn.overlayToken, [
+        await this.engagement.ingest(token, [
           { platform: "twitch", id, user: display, text, atMs: this.now() },
         ]);
       } catch {
         /* engagement is additive — never break the reply path */
       }
     }
-    if (!conn.cfg.replyCommands) return;
+    if (!current() || !conn.cfg.replyCommands) return;
     if (!text.startsWith("!")) return;
     const command = text.slice(1).split(/\s+/, 1)[0].toLowerCase();
-    const reply = await this._answerCommand(conn, command, display);
-    if (!reply) return;
+    const reply = await this._answerCommand(conn, command, display, text.slice(1 + command.length).trim());
+    if (!reply || !current()) return;
+    if (this.chatCommands && !["rank", "level", "xp", "commands", "help", "so"].includes(command)) { this._say(conn, reply); return; }
     const nowMs = this.now();
     if (nowMs - (conn.cmdCooldown.get(command) ?? 0) < COMMAND_COOLDOWN_MS) return;
     if (nowMs - (conn.viewerCooldown.get(nick) ?? 0) < VIEWER_COOLDOWN_MS) return;
@@ -436,11 +475,17 @@ class TwitchChatBotService {
    * @param {Record<string, any>} conn
    * @param {string} command
    * @param {string} display viewer display name
+   * @param {string} [argument]
    * @returns {Promise<string|null>}
    */
-  async _answerCommand(conn, command, display) {
+  async _answerCommand(conn, command, display, argument = "") {
     const token = conn.overlayToken;
     try {
+      if (this.chatCommands && token && !["rank", "level", "xp", "commands", "help", "so"].includes(command)) {
+        const reply = await this.chatCommands.answer(token, { command, argument, platform: "twitch", user: display });
+        return reply?.text || null;
+      }
+      if (command === "so") return this.shoutoutLine ? this.shoutoutLine(conn.userId) : null;
       if (command === "rank" || command === "level" || command === "xp") {
         if (!this.engagement || !token) return null;
         const s = await this.engagement.viewerStats(token, "twitch", display);
@@ -487,7 +532,7 @@ class TwitchChatBotService {
    * @param {string} text
    */
   _say(conn, text) {
-    if (conn.state !== "connected") return;
+    if (conn.state !== "connected" || conn.stopped || this._conns.get(conn.userId) !== conn) return;
     const line = `PRIVMSG #${conn.cfg.channel.toLowerCase()} :${text.slice(0, MAX_CHAT_CHARS)}`;
     conn.sendQueue.push(line);
     while (conn.sendQueue.length > SEND_QUEUE_MAX) conn.sendQueue.shift();
@@ -497,12 +542,13 @@ class TwitchChatBotService {
   /** @param {Record<string, any>} conn */
   _drainSendQueue(conn) {
     if (conn.sendTimer || conn.sendQueue.length === 0) return;
+    const token = conn.overlayToken;
     const nowMs = this.now();
     const wait = Math.max(0, conn.lastSentAt + SEND_GAP_MS - nowMs);
     conn.sendTimer = setTimeout(() => {
       conn.sendTimer = null;
       const line = conn.sendQueue.shift();
-      if (line && conn.state === "connected") {
+      if (line && conn.state === "connected" && !conn.stopped && this._conns.get(conn.userId) === conn && conn.overlayToken === token) {
         conn.lastSentAt = this.now();
         this._raw(conn, line);
       }

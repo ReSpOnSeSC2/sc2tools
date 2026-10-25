@@ -1,6 +1,8 @@
 /** Browser-only layout preferences. No token, message or stream data is stored. */
 export const DOCK_LAYOUT_KEY = "sc2t:dock-layout:v1";
 export const DOCK_SECTIONS = [
+  { id: "dock-game", label: "Game" },
+  { id: "dock-series", label: "Series" },
   { id: "dock-scout", label: "Scout" },
   { id: "dock-chat", label: "Chat" },
   { id: "dock-highlight", label: "Highlight" },

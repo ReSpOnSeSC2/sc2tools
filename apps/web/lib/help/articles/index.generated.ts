@@ -34,6 +34,7 @@ import analyzer_trends from "./analyzer/trends";
 import analyzer_vsExpected from "./analyzer/vs-expected";
 import builds_buildCheckIn from "./builds/build-check-in";
 import builds_buildGuides from "./builds/build-guides";
+import builds_buildOrderPaste from "./builds/build-order-paste";
 import builds_buildOrdersExport from "./builds/build-orders-export";
 import builds_communityBuilds from "./builds/community-builds";
 import builds_customBuilds from "./builds/custom-builds";
@@ -74,12 +75,15 @@ import gettingStarted_settingsOverview from "./getting-started/settings-overview
 import opponents_opponentDossier from "./opponents/opponent-dossier";
 import reviewsCoaching_coaching from "./reviews-coaching/coaching";
 import reviewsCoaching_replayReviews from "./reviews-coaching/replay-reviews";
+import streamStudio_customChatCommands from "./stream-studio/custom-chat-commands";
+import streamStudio_gameMomentAlerts from "./stream-studio/game-moment-alerts";
 import streamStudio_multiPlatformChat from "./stream-studio/multi-platform-chat";
 import streamStudio_obsAutoSceneSwitching from "./stream-studio/obs-auto-scene-switching";
 import streamStudio_obsOverlaySetup from "./stream-studio/obs-overlay-setup";
 import streamStudio_opponentScouting from "./stream-studio/opponent-scouting";
 import streamStudio_overlayHealth from "./stream-studio/overlay-health";
 import streamStudio_overlayUrlLeaked from "./stream-studio/overlay-url-leaked";
+import streamStudio_seriesMode from "./stream-studio/series-mode";
 import streamStudio_streamDock from "./stream-studio/stream-dock";
 import streamStudio_viewerEngagement from "./stream-studio/viewer-engagement";
 import streamStudio_voice from "./stream-studio/voice";
@@ -120,6 +124,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_vsExpected,
   builds_buildCheckIn,
   builds_buildGuides,
+  builds_buildOrderPaste,
   builds_buildOrdersExport,
   builds_communityBuilds,
   builds_customBuilds,
@@ -160,12 +165,15 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   opponents_opponentDossier,
   reviewsCoaching_coaching,
   reviewsCoaching_replayReviews,
+  streamStudio_customChatCommands,
+  streamStudio_gameMomentAlerts,
   streamStudio_multiPlatformChat,
   streamStudio_obsAutoSceneSwitching,
   streamStudio_obsOverlaySetup,
   streamStudio_opponentScouting,
   streamStudio_overlayHealth,
   streamStudio_overlayUrlLeaked,
+  streamStudio_seriesMode,
   streamStudio_streamDock,
   streamStudio_viewerEngagement,
   streamStudio_voice,

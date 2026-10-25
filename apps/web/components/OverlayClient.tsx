@@ -1,4 +1,7 @@
 "use client";
+import dynamic from "next/dynamic";
+import { useOverlaySeriesState } from "@/components/overlay/useOverlaySeriesState";
+const LazySeriesWidget = dynamic(() => import("@/components/overlay/widgets/SeriesWidget").then(module => module.SeriesWidget), { ssr: false });
 
 import {
   useCallback,
@@ -12,6 +15,8 @@ import {
 } from "react";
 import { OverlayLocalPreviewFrame, localPreviewRandomizer } from "@/components/overlay/OverlayLocalPreviewFrame";
 import { CompositeTestWidgets } from "@/components/overlay/CompositeTestWidgets";
+import { useGameWidgetsPaused } from "@/components/overlay/useGameWidgetsPaused";
+import { newerSession } from "@/lib/multichat/sessionSnapshot";
 import { useOverlayTestLayer, type TestClear } from "@/components/overlay/useOverlayTestLayer";
 import type { Socket } from "socket.io-client";
 import type {
@@ -135,10 +140,13 @@ function ConnectedOverlayClient({
   showCredit?: boolean;
 }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
+  const { gameWidgetsPaused, receivePause, resetPause } = useGameWidgetsPaused(token);
   const { themeVars, optionsRef, receiveProfile } = useOverlayProfile(token, themeParam);
   const testLayer = useOverlayTestLayer(token, optionsRef);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
+  const { series, receiveSeries } = useOverlaySeriesState(token);
+  const receiveSession = useCallback((next: SessionSummary | null) => setSession(current => next ? newerSession(current, next) : null), []);
   const [enabled, setEnabled] = useState<Set<WidgetId>>(
     () => new Set(ALL_WIDGETS),
   );
@@ -156,7 +164,7 @@ function ConnectedOverlayClient({
     token,
     setLive,
     setLiveGame,
-    setSession,
+    receiveSession,
     setEnabled,
     setVoicePrefs,
     setRandomizer,
@@ -166,6 +174,9 @@ function ConnectedOverlayClient({
     setConnectionStatus,
     onBuildIntent,
     receiveProfile,
+    receivePause,
+    resetPause,
+    receiveSeries,
   );
 
   // Mirror the per-widget client's stale-clear behaviour so the
@@ -209,7 +220,7 @@ function ConnectedOverlayClient({
   // mode that's the unfiltered overlay; in single-widget mode it's the
   // ``?w=scouting`` source. Any other ``?w=`` filter explicitly opts out
   // — those are sibling Browser Sources that share the room.
-  const enableVoiceHere = singleWidget === null || singleWidget === "scouting";
+  const enableVoiceHere = !gameWidgetsPaused && (singleWidget === null || singleWidget === "scouting");
   const voice = useVoiceReadout(
     enableVoiceHere ? testLayer.targets("scouting") ? testLayer.live : live : null,
     enableVoiceHere ? voicePrefs : null,
@@ -227,6 +238,7 @@ function ConnectedOverlayClient({
   useRevealAudioUnlock(singleWidget === null || singleWidget === "randomizer");
 
   function shouldShow(id: WidgetId): boolean {
+    if (gameWidgetsPaused) return false;
     if (singleWidget && singleWidget !== id) return false;
     // The all-in-one source shares the same token room as every
     // dedicated source. A per-widget Test must render only its target;
@@ -234,6 +246,7 @@ function ConnectedOverlayClient({
     // source transparent instead of firing generic neighbouring cards.
     if (!payloadTargetsWidget(live, id)) return false;
     if (!enabled.has(id)) return false;
+    if (id === "series") return !!series && series.status !== "ended";
     if (id === "session") return sessionVisible;
     return visibleLive.has(id);
   }
@@ -265,6 +278,7 @@ function ConnectedOverlayClient({
       {shouldShow("best-answer") && realSlot("best-answer", <BestAnswerWidget live={intel} />)}
       {shouldShow("scouting") && realSlot("scouting", <ScoutingWidget live={live} liveGame={liveGame} />)}
       {shouldShow("session") && realSlot("session", <SessionWidget live={live} session={session} />)}
+      {shouldShow("series") && realSlot("series", <LazySeriesWidget rawSeries={series} composite />)}
       {/* Preserve the spin ledger through timed hides and brief bridge
           interruptions, so recovering the same match cannot replay it. */}
       {enabled.has("randomizer") && (!singleWidget || singleWidget === "randomizer") && (
@@ -279,7 +293,7 @@ function ConnectedOverlayClient({
           />
         </div>
       )}
-      <CompositeTestWidgets live={testLayer.live} session={testLayer.session} randomizer={randomizer} targets={testTargets} />
+      {!gameWidgetsPaused && <CompositeTestWidgets live={testLayer.live} session={testLayer.session} randomizer={randomizer} targets={testTargets} />}
       {/* A refused first handshake has no widget payload to make visible. */}
       {connectionStatus === "reconnecting" ? (
         <ReconnectDot />
@@ -287,7 +301,7 @@ function ConnectedOverlayClient({
       {voice.needsGesture ? (
         <VoiceGestureBanner onClick={voice.onUserGesture} />
       ) : null}
-      <OverlayCredit placement="top-left" visible={compositeCreditVisible(showCredit, singleWidget, (id) => shouldShow(id) || testTargets(id))} />
+      <OverlayCredit placement="top-left" visible={compositeCreditVisible(showCredit, singleWidget, (id) => shouldShow(id) || (!gameWidgetsPaused && testTargets(id)))} />
     </div>
   );
 }
@@ -343,6 +357,9 @@ function useOverlaySocket(
   setConnectionStatus: (status: OverlayConnectionStatus) => void,
   onBuildIntent: (msg: unknown) => void,
   receiveProfile: (msg: OverlayProfileConfig) => void,
+  receivePause: (raw: unknown) => void,
+  resetPause: () => void,
+  receiveSeries: (raw: unknown) => void,
 ): RefObject<Socket | null> {
   const socketRef = useRef<Socket | null>(null);
   // Sticky cache of the latest enriched ``streamerHistory`` keyed by
@@ -362,6 +379,7 @@ function useOverlaySocket(
     const connection = createOverlaySocket(token, { ...legacyCompositePresence(new URLSearchParams(window.location.search).get("w")), onStatus: setConnectionStatus });
     const socket = connection.socket;
     socketRef.current = socket;
+    socket.on("overlay:series", receiveSeries);
     socket.on("overlay:live", (msg: LiveGamePayload) => {
       if (msg?.isTest) { onTestLive(msg); return; }
       setLive(msg);
@@ -413,6 +431,10 @@ function useOverlaySocket(
         }
       },
     );
+    socket.on("overlay:multichat", receivePause);
+    socket.on("connect", resetPause); socket.on("disconnect", resetPause);
+    const resetOnResync = (event: string) => { if (event === "overlay:resync") resetPause(); };
+    socket.onAnyOutgoing?.(resetOnResync);
     // Replayed by the cloud on connect and resync, like the envelope.
     socket.on("overlay:buildIntent", onBuildIntent);
     socket.on("overlay:clear", onClear);
@@ -426,6 +448,8 @@ function useOverlaySocket(
       latestGameKey: () => gameKeyRef.current,
     });
     return () => {
+      socket.offAnyOutgoing?.(resetOnResync);
+      socket.off("connect", resetPause); socket.off("disconnect", resetPause);
       detachResilience();
       connection.dispose();
       if (socketRef.current === socket) socketRef.current = null;
@@ -444,6 +468,9 @@ function useOverlaySocket(
     setConnectionStatus,
     onBuildIntent,
     receiveProfile,
+    receivePause,
+    resetPause,
+    receiveSeries,
   ]);
   return socketRef;
 }

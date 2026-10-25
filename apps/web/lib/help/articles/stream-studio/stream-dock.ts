@@ -4,7 +4,7 @@ const article: HelpArticle = {
   slug: "stream-dock",
   title: "Stream Dock (your control panel)",
   summary:
-    "A second-screen control panel for your stream: chat highlights, polls and build votes, goals, BRB scenes, the recap card and the clip-moment log.",
+    "Your game and session at a glance, with Crystal Ball controls, stream-safe hiding, approved opponent shout-outs, chat, polls and scenes.",
   category: "stream-studio",
   audience: "streamer",
   signedInOnly: true,
@@ -25,6 +25,25 @@ const article: HelpArticle = {
   ],
   updated: "2026-10-25",
   body: [
+    { type: "paragraph", text: "The Game section also shows **Twitch Channel Points** state when configured. This is separate from Crystal Ball. **Resolve verified result** uses the stored replay result; **Cancel / refund** asks Twitch to refund and reports success only after confirmation. Missing provider IDs require a manual Twitch dashboard check. Both automation switches and the server feature gate start off. Current desktop telemetry cannot prove ranked queue status, so automatic Twitch Predictions remain unavailable; opted-in live 1v1 start markers can still work. [Twitch setup and recovery](/help/viewer-engagement#twitch-predictions)." },
+    {
+      type: "paragraph",
+      text: "Open **Game**, the first section, for your current opponent, race, available MMR and head-to-head record, matchup, game phase and session W–L, MMR change and streak. The sticky header keeps the scene and countdown, active opponent, session record, connection label and counts of connected overlay sources visible as you scroll. Opponent details clear after the match or a connection reset. Current desktop agents do not supply a live map name; **Map unavailable live** is an honest source limitation.",
+    },
+    {
+      type: "callout",
+      tone: "info",
+      title: "Crystal Ball fair play",
+      text: "The Game card shows votes and the voting-lock countdown. **Cancel round** closes the selected round with no points. **Resolve Win/Loss** requires confirmation and is available for 30 minutes after that matching game ends without a replay-verified result, until a new match starts. Its reveal says **resolved manually**, awards no oracle points, and is excluded from oracle accuracy. Verified results remain the scoring source.",
+    },
+    {
+      type: "paragraph",
+      text: "Choose **Start new session**, then confirm, to count games from now and set the clip log's stream-start mark to now. The reset boundary belongs to your account, so your connected session widgets update together. **Hide game widgets** saves a reversible pause for this Dock's overlay token: game cards, scouting voice, session, Crystal Ball and stats ticker hide. Chat, polls, scenes, timers and manual Build profile controls keep running. Choose **Show game widgets** to resume. Refresh existing Browser Sources once after updating so they honor hiding and manual-result labels.",
+    },
+    {
+      type: "paragraph",
+      text: "**Shout out** is enabled only when the active opponent has an approved Twitch or YouTube channel linked to their exact Pulse identity or Battle.net toon. A connected matching Twitch bot queues the message; otherwise **Copy shout-out** provides text and a manual-copy fallback. The bot's **!so** command answers only for that approved current opponent and does not accept another target. Uncertain identities or missing approved links leave the action unavailable.",
+    },
     {
       type: "paragraph",
       text: "Tap a section title to collapse it; pin the sections you use every game to the top.",

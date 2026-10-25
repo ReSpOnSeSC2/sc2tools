@@ -31,11 +31,13 @@ import {
 } from "@/lib/race";
 import { BuildDossier } from "./BuildDossier";
 import { BuildDefinitionCard } from "./BuildDefinitionCard";
+import { BuildOrderSteps } from "./BuildOrderSteps";
 import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildPublishModal } from "./BuildPublishModal";
 import { BuildSignInPrompt } from "./BuildSignInPrompt";
 import { BuildKebab } from "./BuildCard";
 import { SavedBuildExportMenu } from "./SavedBuildExportMenu";
+import { PracticeButton } from "@/components/practice/PracticeButton";
 import type { CustomBuild } from "./types";
 
 const BACK_LINK_CLASS =
@@ -182,6 +184,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
         description={build.description}
         actions={
           <div className="flex flex-wrap gap-2">
+            <PracticeButton build={build} privateBuild />
             <SavedBuildExportMenu build={build} meta={{ title: build.name || "Untitled build", matchup: mu, author: build.communityAuthorName, sourceUrl: `/builds/${encodeURIComponent(slug)}` }} />
             <Button
               variant="secondary"
@@ -218,7 +221,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
           phasePerspective={
             build.perspective === "opponent" ? "opponent" : undefined
           }
-          headerSlot={() => <div className="grid min-w-0 gap-4 lg:grid-cols-2"><BuildDefinitionCard build={build} onEdit={() => openEditor()} /><NotesPanel notes={build.notes} accent={tint.text} onEdit={() => openEditor("notes")} /></div>}
+          headerSlot={() => <div className="space-y-4"><BuildOrderSteps value={build.buildOrder} /><div className="grid min-w-0 gap-4 lg:grid-cols-2"><BuildDefinitionCard build={build} onEdit={() => openEditor()} /><NotesPanel notes={build.notes} accent={tint.text} onEdit={() => openEditor("notes")} /></div></div>}
         />
       ) : null}
 

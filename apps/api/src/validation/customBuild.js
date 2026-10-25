@@ -2,6 +2,7 @@
 
 const AjvModule = require("ajv");
 const addFormatsModule = require("ajv-formats");
+const { REFERENCE_BUILD_ORDER_SCHEMA, boundedReferenceBuildOrder } = require("./referenceBuildOrder");
 const {
   PROXY_ELIGIBLE_BUILDING_NAMES,
   isProxyEligibleBuilding,
@@ -49,6 +50,7 @@ const BUILD_FIELDS = Object.freeze([
   "schemaVersion",
   "source",
   "forkedFrom",
+  "buildOrder",
 ]);
 
 // Community slugs share the private slug alphabet and length cap.
@@ -60,6 +62,7 @@ const BUILD_SCHEMA = {
   required: ["slug", "name", "race"],
   additionalProperties: false,
   properties: {
+    buildOrder: REFERENCE_BUILD_ORDER_SCHEMA,
     slug: { type: "string", minLength: 1, maxLength: 80, pattern: "^[a-zA-Z0-9._-]+$" },
     name: { type: "string", minLength: 1, maxLength: 120 },
     race: { type: "string", enum: ["Protoss", "Terran", "Zerg", "Random"] },
@@ -348,6 +351,9 @@ function boundedBuildClone(raw) {
     raw.forkedFrom,
     ["communitySlug", "version", "savedAt"],
   );
+  if (Object.prototype.hasOwnProperty.call(raw, "buildOrder")) {
+    out.buildOrder = boundedReferenceBuildOrder(raw.buildOrder);
+  }
   // Do not manufacture optional fields that were absent from the request.
   for (const field of [
     "signature",

@@ -5,7 +5,7 @@ import { ChevronDown, Save } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { normalizeBuildEvents } from "@/lib/build-events";
 import { BuildOrderRow } from "./BuildOrderRow";
-import { BuildEditorModal } from "@/components/builds/editor";
+import { LazyBuildEditorModal as BuildEditorModal } from "@/components/builds/editor/LazyBuildEditorModal";
 import type { BuildEventRow } from "@/lib/build-events";
 import type {
   BuildOrderEvent,
