@@ -153,6 +153,17 @@ describe("Merged player profile via SC2Pulse linkage", () => {
     expect(fromBarcode.name).toBe("MainName");
   });
 
+  test("series keeps all-time document dates and linked slim games when the scoped view is empty", async () => {
+    await seedLinkedPair();
+    await db.opponents.updateOne({ userId: "u1", pulseId: TOON_B }, { $set: { firstSeen: new Date("2020-01-01"), lastSeen: new Date("2026-02-01") } });
+    const profile = await service().get("u1", TOON_A, { mergeLinked: true, filters: { since: new Date("2030-01-01") } });
+    expect(profile.games).toEqual([]);
+    expect(profile.series).toMatchObject({ firstSeen: "2020-01-01T00:00:00.000Z", lastSeen: "2026-02-01T00:00:00.000Z", sourceLimit: 1000, truncated: false });
+    expect(profile.series.games.map(row => row.id)).toEqual(["b1", "a3", "a2", "a1"]);
+    expect(Object.keys(profile.series.games[0]).sort()).toEqual(["date", "id", "map", "result"]);
+    expect(await service().get("other-owner", TOON_A, { mergeLinked: true })).toBeNull();
+  });
+
   test("a revealed name on any identity leads the merged heading", async () => {
     await seedLinkedPair({ revealedOnB: "Star" });
     const profile = await service().get("u1", TOON_A, { mergeLinked: true });
