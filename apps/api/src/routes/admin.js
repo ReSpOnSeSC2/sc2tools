@@ -33,6 +33,7 @@
  */
 
 const express = require("express");
+const { buildAdminUsersRouter } = require("./adminUsers");
 const { buildAdminOpsRouter, requireKnownUser } = require("./adminOps");
 const { analyticsRange } = require("../services/analytics");
 const { buildAdminGlobalTrendsRouter } = require("./adminGlobalTrends");
@@ -220,17 +221,7 @@ function buildAdminRouter(deps) {
     }
   });
 
-  router.get("/admin/users", async (req, res, next) => {
-    try {
-      const limit = parseLimit(req.query.limit);
-      const before = parseDate(req.query.before);
-      const search = typeof req.query.search === "string" ? req.query.search : undefined;
-      const filter = typeof req.query.filter === "string" ? req.query.filter : undefined;
-      res.json(await deps.admin.listUsers({ limit, before, search, filter }));
-    } catch (err) {
-      next(err);
-    }
-  });
+  router.use(buildAdminUsersRouter(deps));
 
   router.get("/admin/users/:userId", async (req, res, next) => {
     try {
@@ -549,7 +540,9 @@ function buildAdminRouter(deps) {
       const type = typeof typeRaw === "string" && typeRaw.length > 0
         ? typeRaw
         : undefined;
-      res.json(await deps.adminEvents.list({ limit, before, type, unread: req.query.unread === "true" }));
+      const userId = req.query.userId;
+      if (userId !== undefined && (typeof userId !== "string" || !userId.trim() || userId.trim() !== userId || userId.length > 64 || /[\u0000-\u001f\u007f]/.test(userId))) throw Object.assign(new Error("invalid_user_filter"), { status: 400, code: "invalid_user_filter" });
+      res.set("Cache-Control", "private, no-store").json(await deps.adminEvents.list({ limit, before, type, userId, unread: req.query.unread === "true" }));
     } catch (err) {
       next(err);
     }

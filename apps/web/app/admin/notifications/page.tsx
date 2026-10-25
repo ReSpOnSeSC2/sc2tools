@@ -45,7 +45,7 @@ const FILTER_LABEL: Record<Filter, string> = {
 function NotificationsBody() {
   const { getToken } = useAuth();
   const realtime = useRealtimeStatus();
-  const [view, setView] = useAdminQueryState({ type: "all", unread: true, before: "" }, { allowed: { type: Object.keys(FILTER_LABEL) } });
+  const [view, setView] = useAdminQueryState({ type: "all", unread: true, before: "", userId: "" }, { allowed: { type: Object.keys(FILTER_LABEL) } });
   const filter = view.type as Filter, unreadOnly = view.unread, before = view.before;
   const setFilter = (type: Filter) => setView({ type });
   const setUnreadOnly = (unread: boolean) => setView({ unread });
@@ -57,6 +57,7 @@ function NotificationsBody() {
   if (unreadOnly) params.set("unread", "true");
   if (filter !== "all") params.set("type", filter);
   if (before) params.set("before", before);
+  if (view.userId) params.set("userId", view.userId);
   const path = `/v1/admin/events?${params.toString()}`;
 
   const { data, error, isLoading, isValidating, mutate } = useApi<AdminEventsListResp>(path, {
@@ -105,11 +106,12 @@ function NotificationsBody() {
 
   return (
     <div className="space-y-6">
+      {view.userId ? <div className="flex flex-wrap items-center gap-2 text-caption"><span className="break-all">Activity for user {view.userId}</span><Button size="sm" variant="ghost" onClick={() => setView({ userId: "" })}>Clear user filter</Button></div> : null}
       <AdminPageHeader anchor="notifications-and-support-inbox" title="Notifications" description="Triage activity and support messages." actions={<><AdminLiveStatus onRefresh={() => { void mutate(); void counts.mutate(); }} data={data} /><Button variant="secondary" size="sm"
           type="button"
 
           onClick={markAllRead}
-          disabled={markingRead || unread === 0}
+          disabled={markingRead || unread === 0 || !!view.userId}
         >
           {markingRead
             ? "Working…"
