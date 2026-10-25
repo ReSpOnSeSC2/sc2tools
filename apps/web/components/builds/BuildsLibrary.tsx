@@ -91,7 +91,15 @@ const EMPTY_BUILDS: CustomBuild[] = [];
  */
 export function BuildsLibrary() {
   const { isLoaded, isSignedIn, userId } = useAuth();
-  if (!isLoaded || !isSignedIn) return <BuildsPublicIntro />;
+  const searchParams = useSearchParams();
+  if (!isLoaded || !isSignedIn) {
+    const params = new URLSearchParams(buildFiltersQuery(readBuildFilters(searchParams)));
+    const definition = searchParams.get("definition");
+    if (searchParams.get("create") === "detected" && definition && /^[a-z0-9-]{1,160}$/.test(definition)) {
+      params.set("create", "detected"); params.set("definition", definition);
+    }
+    return <BuildsPublicIntro returnTo={`/builds${params.size ? `?${params}` : ""}`} />;
+  }
   return <BuildsLibraryInner key={userId} />;
 }
 

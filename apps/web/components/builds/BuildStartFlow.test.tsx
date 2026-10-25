@@ -14,6 +14,16 @@ function deferred<T>() { let resolve!: (value: T) => void; const promise = new P
 afterEach(cleanup);
 beforeEach(() => { harness.apiCall.mockReset(); harness.userId = "owner-a"; harness.signedIn = true; });
 describe("one build creation flow", () => {
+  it("keeps malformed 200 responses inside the modal and retries without accepting stale malformed rows", async () => {
+    const stale = deferred<unknown>(); harness.apiCall.mockReturnValueOnce(stale.promise).mockResolvedValueOnce({ items: [{ gameId: "bad" }], page: { hasMore: "yes" } }).mockResolvedValue(page("recovered"));
+    render(<BuildStartFlow initialChoice="games" onClose={vi.fn()} onSaved={vi.fn()} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Your race" }), { target: { value: "Zerg" } });
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("unexpected response"));
+    await act(async () => stale.resolve({ items: "not a list" }));
+    expect(screen.getByRole("dialog", { name: "Choose one of your games" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" })); await screen.findByRole("button", { name: /recovered/ });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
   it("offers four starting cards, keeps paste unavailable, and opens blank in the rich create-only editor without a read", () => {
     render(<BuildStartFlow onClose={vi.fn()} onSaved={vi.fn()} />);
     expect((screen.getByRole("button", { name: /From a pasted/ }) as HTMLButtonElement).disabled).toBe(true);

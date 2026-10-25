@@ -11,7 +11,7 @@ import { BUILD_DEFINITIONS } from "@/lib/build-definitions";
 import { coerceRace } from "@/lib/race";
 import type { RaceLite, VsRaceLite } from "@/lib/build-rules";
 import type { GameBuildOrderResponse } from "@/components/analyzer/game/types";
-import type { ReplayLibraryResponse } from "@/components/analyzer/replays/types";
+import { readBuildStartReplayPage, type BuildStartReplayPage } from "./buildStartReplayPage";
 import { BuildEditorModal } from "./editor";
 import type { BuildEditorSaveResult } from "./editor/BuildEditor.types";
 import { BuildStartCards, type BuildStartChoice } from "./BuildStartCards";
@@ -38,7 +38,7 @@ function BuildStartBody({ onClose, onSaved, initialChoice, definitionId }: Props
   const [vsRace, setVsRace] = useState<VsRaceLite>(initialDefinition?.matchup ? coerceRace(initialDefinition.matchup[2], "Random") : "Any");
   const [definition, setDefinition] = useState(initialDefinition?.id ?? "");
   const [cursor, setCursor] = useState<string | null>(null), [previous, setPrevious] = useState<Array<string | null>>([]);
-  const [pageState, setPage] = useState<{ source: object; data: ReplayLibraryResponse } | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState<string | null>(null);
+  const [pageState, setPage] = useState<{ source: object; data: BuildStartReplayPage } | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0), [selected, setSelected] = useState<string | null>(null), [seed, setSeed] = useState<Seed | null>(null);
   const selectedDefinition = BUILD_DEFINITIONS.find(item => item.id === definition);
   const query = new URLSearchParams({ limit: "20", sort: "date_desc", race: race[0] });
@@ -58,8 +58,8 @@ function BuildStartBody({ onClose, onSaved, initialChoice, definitionId }: Props
     if (!listEnabled) return;
     const controller = new AbortController(), epoch = current.current;
     setPage(null); setLoading(true); setError(null); setSelected(null);
-    void boundedApiRequest(signal => apiCall<ReplayLibraryResponse>(getToken, path, { signal }), 8000, controller.signal).then(next => {
-      if (!controller.signal.aborted && current.current === epoch) setPage({ source: epoch, data: next });
+    void boundedApiRequest(signal => apiCall<unknown>(getToken, path, { signal }), 8000, controller.signal).then(next => {
+      if (!controller.signal.aborted && current.current === epoch) setPage({ source: epoch, data: readBuildStartReplayPage(next) });
     }).catch(failure => { if (!controller.signal.aborted && current.current === epoch) setError(errorText(failure)); })
       .finally(() => { if (!controller.signal.aborted && current.current === epoch) setLoading(false); });
     return () => controller.abort();
