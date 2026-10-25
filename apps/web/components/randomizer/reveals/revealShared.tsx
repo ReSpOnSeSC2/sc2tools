@@ -129,6 +129,8 @@ export function useRevealStart(
 /** Props every reveal animation receives. */
 export interface RevealProps {
   pool: RandomizerBuild[];
+  /** Optional bounded sprites; selection, odds and sound use the full pool. */
+  visualPool?: RandomizerBuild[];
   probabilities: number[];
   winner: RandomizerBuild;
   winnerProbability: number;
