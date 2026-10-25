@@ -193,7 +193,7 @@ function SideBlock({
         </span>
       </span>
       <span
-        className={`flex w-full min-w-0 items-start justify-center gap-2 overflow-hidden xl:w-auto xl:gap-4 ${
+        className={`flex w-full min-w-0 flex-wrap items-start justify-center gap-x-2 gap-y-1 overflow-hidden sm:flex-nowrap xl:w-auto xl:gap-4 ${
           mirrored ? "flex-row-reverse" : ""
         }`}
       >

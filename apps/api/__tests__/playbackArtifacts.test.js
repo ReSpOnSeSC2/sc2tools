@@ -139,6 +139,7 @@ test("only exact authenticated segment PUTs enter the existing large-body lane",
 test("routes require device writes, allow owner reads and preserve raw bytes", async () => {
   const { service } = setup();
   const app = express();
+  app.use((_req, res, next) => { res.vary("Origin"); next(); });
   app.use(express.json({ limit: "5mb", verify: (req, _res, body) => { /** @type {any} */ (req).playbackRawBody = body; } }));
   const auth = (/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ _res, /** @type {import('express').NextFunction} */ next) => {
     req.auth = /** @type {any} */ ({ userId: req.headers["x-user"] || "owner", source: req.headers["x-source"] || "clerk" }); next();
@@ -155,5 +156,43 @@ test("routes require device writes, allow owner reads and preserve raw bytes", a
   expect((await request(app).post(`${base}/artifacts/${id}/complete`).set("x-source", "device").send({})).status).toBe(200);
   const response = await request(app).get(`${base}/artifacts/${id}/segments/0`);
   expect(Buffer.from(response.text)).toEqual(body);
+  expect(response.headers["cache-control"]).toBe("private, max-age=604800, immutable");
+  expect(response.headers.vary).toContain("Authorization");
+  expect(response.headers.vary).toContain("Origin");
+  expect((await request(app).get(`${base}/manifest`)).headers["cache-control"]).toBe("private, no-store");
   expect((await request(app).get(`${base}/manifest`).set("x-user", "other")).status).toBe(404);
+});
+
+test("requested artifact completion creates one durable private notification; reads and automatic uploads do not", async () => {
+  const { MongoMemoryServer } = require("mongodb-memory-server");
+  const { connect } = require("../src/db/connect");
+  const { NotificationsService } = require("../src/services/notifications");
+  const { startPlaybackJob } = require("../src/services/replayPlaybackJobs");
+  const mongo = await MongoMemoryServer.create();
+  const db = await connect({ uri: mongo.getUri(), dbName: "playback_ready_test" });
+  try {
+    const { service } = setup();
+    service.games = db.games;
+    service.notifications = new NotificationsService(db);
+    await db.users.insertOne({ userId: "owner" });
+    await db.games.insertOne({ userId: "owner", gameId: "game", myRace: "Protoss", opponent: { race: "Zerg" }, map: "Alcyone LE" });
+    const { manifest, body } = fixture();
+    startPlaybackJob("owner", "game");
+    const { artifactId } = await service.prepare("owner", "game", manifest);
+    await service.upload("owner", "game", artifactId, 0, body);
+    expect(await db.notifications.countDocuments({})).toBe(0);
+    await service.complete("owner", "game", artifactId);
+    await service.complete("owner", "game", artifactId);
+    await service.getManifest("owner", "game");
+    await service.getSegment("owner", "game", artifactId, 0);
+    const rows = await db.notifications.find({ userId: "owner" }).toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ kind: "playback_ready", count: 1, groupKey: "game",
+      title: "Accurate playback ready: PvZ on Alcyone LE", href: "/app/game/game#replay" });
+    await db.games.insertOne({ userId: "owner", gameId: "automatic" });
+    const automatic = await service.prepare("owner", "automatic", manifest);
+    await service.upload("owner", "automatic", automatic.artifactId, 0, body);
+    await service.complete("owner", "automatic", automatic.artifactId);
+    expect(await db.notifications.countDocuments({})).toBe(1);
+  } finally { await db.close(); await mongo.stop(); }
 });

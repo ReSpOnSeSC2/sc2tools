@@ -15,7 +15,7 @@ const routerReplaceMock = vi.fn();
 const editorHarness = vi.hoisted(() => ({ props: null as BuildEditorModalProps | null }));
 
 // Compile the real lazy chunks before assertions; bundler work is not UI latency.
-beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns")]); });
+beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns"), import("../BuildWorkspaceActions"), import("../replay/ReplayStage"), import("../GameStoryCard")]); });
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: getTokenMock, isLoaded: true, isSignedIn: true }),
@@ -205,14 +205,14 @@ function mockEndpoints({
 }
 
 describe("GameDetailPage", () => {
-  it("uses the recorded upgrade completion rather than research start and omits unknown completion times", () => {
+  it("uses the recorded upgrade completion rather than research start and omits unknown completion times", async () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     mockEndpoints({ playback: true, buildOrder: { ...BUILD_ORDER, events: [
       { time: 100, complete_time: 300, name: "MetabolicBoost", display: "Metabolic Boost", category: "upgrade" },
       { time: 50, name: "UnknownTiming", display: "Unknown timing", category: "upgrade" },
     ] } });
     const view = render(<GameDetailPage gameId="g1" initialTimeSec={150} />);
-    const bar = screen.getByTestId("replay-top-bar");
+    const bar = await screen.findByTestId("replay-top-bar");
     expect(within(bar).queryByText("Metabolic Boost")).toBeNull();
     view.rerender(<GameDetailPage gameId="g1" initialTimeSec={300} />);
     expect(within(bar).getByText("Metabolic Boost")).toBeTruthy();
@@ -223,7 +223,7 @@ describe("GameDetailPage", () => {
     window.history.replaceState(null, "", "/app/game/g1?from=replays");
     mockEndpoints({ playback: true, macro: { ...MACRO, stats_events: MACRO.stats_events?.map((sample) => ({ ...sample, vespene_current: 75 })) } });
     const view = render(<GameDetailPage gameId="g1" />);
-    const stage = screen.getByTestId("replay-stage");
+    const stage = await screen.findByTestId("replay-stage");
     const scroll = vi.fn(); stage.scrollIntoView = scroll;
     vi.spyOn(stage, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 1400, 600, 400));
     fireEvent.click(within(screen.getByTestId("mechanics-panel")).getByRole("button", { name: "Watch the replay at 3:42" }));
@@ -343,7 +343,7 @@ describe("GameDetailPage", () => {
 
     // Loss → autopsy visible with at least one clickable timestamp.
     expect(screen.getByTestId("loss-autopsy-card")).toBeTruthy();
-    expect(screen.getByText("Why you lost")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Why you lost" })).toBeTruthy();
     expect(screen.getByText("Missed injects")).toBeTruthy();
     expect(
       within(screen.getByTestId("loss-autopsy-card")).getByRole("button", { name: "Watch the replay at 3:42" }),
@@ -354,14 +354,26 @@ describe("GameDetailPage", () => {
     expect(screen.getByText("Barracks")).toBeTruthy();
   });
 
-  it("hides the autopsy on a win", () => {
+  it("replaces the win placeholder with a replay-derived story", async () => {
     mockEndpoints({ slim: { ...SLIM, result: "Victory" } });
     render(<GameDetailPage gameId="g1" />);
     expect(screen.getByText("Victory")).toBeTruthy();
     expect(screen.queryByTestId("loss-autopsy-card")).toBeNull();
     expect(screen.queryByText("Why you lost")).toBeNull();
-    // The slot degrades to a friendly note, never a blank cell.
-    expect(screen.getByText(/You won this one/)).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Game story" })).toBeTruthy();
+    expect(screen.queryByText(/You won this one/)).toBeNull();
+  });
+
+  it("uses the same mounted replay clock for a game-story highlight", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    mockEndpoints({ slim: { ...SLIM, result: "Victory" }, playback: true });
+    render(<GameDetailPage gameId="g1" />);
+    const stage = await screen.findByTestId("replay-stage");
+    const peak = await screen.findByRole("button", { name: /Peak army lead.*5:00/ });
+    fireEvent.click(peak);
+    await waitFor(() => expect(within(stage).getByLabelText("Game clock 5:00 of 10:00")).toBeTruthy());
+    expect(screen.getByTestId("replay-stage")).toBe(stage);
+    expect(document.activeElement).toBe(stage);
   });
 
   it("uses replay build-order races for the exact Ghost matchup", async () => {
@@ -378,7 +390,7 @@ describe("GameDetailPage", () => {
     // over the conflicting slim summary so the build cannot enter PvZ.
     const myColumn = await screen.findByTestId("build-column-me");
     expect(within(myColumn).getByRole("button", { name: "Use as Ghost Build target" }).title).toContain("ZvT");
-    expect(within(screen.getByTestId("build-column-opp")).getByRole("button", { name: "Use as Ghost Build target" }).title).toContain("TvZ");
+    expect((await within(screen.getByTestId("build-column-opp")).findByRole("button", { name: "Use as Ghost Build target" })).title).toContain("TvZ");
     expect(screen.queryByRole("button", { name: "Save for PvZ" })).toBeNull();
   });
 

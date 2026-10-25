@@ -44,6 +44,7 @@ import { Maximize2, Minimize2, Minus, Plus, RotateCcw } from "lucide-react";
 import { getMapLayoutUrl } from "@/lib/map-images";
 import { getIconPath } from "@/lib/sc2-icons";
 import { REPLAY_SCOPE_CLASS } from "./replay/replayTheme";
+import { PlaybackAccuracyBadge } from "./PlaybackAccuracyBadge";
 import { markerAt, type ReplayMapMarker } from "@/lib/replayMarkers";
 
 import { renderFrame } from "./replay/mapCanvasRenderer";
@@ -356,6 +357,7 @@ export function MapReplayer({
     let lastTs: number | null = null;
     const draw = (ts: number) => {
       raf = requestAnimationFrame(draw);
+      if (bufferingRef.current) { lastTs = ts; return; }
       if (lastTs !== null && playingRef.current && !bufferingRef.current) {
         const dt = ((ts - lastTs) / 1000) * speedRef.current;
         const segmentEnd = windowRef.current?.end ?? gameLength;
@@ -792,18 +794,7 @@ export function MapReplayer({
             className="block h-full w-full rounded-lg bg-[#0a0d13] shadow-[0_10px_40px_-16px_rgba(0,0,0,0.9)] ring-1 ring-inset ring-white/[0.14]"
             aria-label={`Map playback of ${playback.mapName || "this game"}`}
           />
-          <div
-            className="pointer-events-none absolute bottom-2 left-2 max-w-[calc(100%-1rem)] rounded-md border border-white/10 bg-black/70 px-2 py-1 text-[10px] leading-snug text-white/80"
-            role="note"
-            aria-label="Replay accuracy"
-          >
-            {playback.fidelity?.positions === "engine"
-              ? "Recorded game playback"
-              : playback.v >= 6 ? "Limited position data · gaps hold last position" : "Older replay data · re-sync for accurate positions"}
-            {playback.fidelity?.complete === false ? " · partial recording" : ""}
-            {playback.fidelity?.positions === "engine" && playback.fidelity.attacks !== "observed" ? " · regenerate for attacks" : ""}
-            {!playback.creep && derivedOf(playback).creepSources.length > 0 ? " · estimated creep" : ""}
-          </div>
+          <PlaybackAccuracyBadge playback={playback} estimatedCreep={!playback.creep && derivedOf(playback).creepSources.length > 0} />
           <div
             className="absolute right-2 top-2 flex flex-col gap-1 rounded-lg border border-white/10 bg-black/55 p-1 backdrop-blur-sm"
             role="group"
