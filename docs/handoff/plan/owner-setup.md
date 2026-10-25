@@ -1,5 +1,9 @@
 # Owner setup notes (accumulated)
 
+## Recorded playback guidance and segment streaming
+
+No new infrastructure, secret, environment variable or manual migration is required. Deploy the API and web normally. Authenticated content-addressed segment responses use private immutable browser caching for seven days; manifests remain no-store and every server read still checks ownership. A website-requested artifact upload sends one private `playback_ready` bell notification after verified completion, using the existing notification service and delivery identity. Automatic uploads and viewer polling do not send it. Browser decoded segments have a 24 MB LRU budget; a miss retains the last frame, and Retry remains available. Recording itself stays explicitly requested or controlled by the desktop app's existing default-off automatic-capture setting. No production recording or account operation was performed during implementation.
+
 ## Wave 2: opponents-polish-2 / opponents-polish-4
 
 No new secrets, infrastructure or migration. Deploy the API before the web for batched private `notesMeta.preview` reads. Existing full-note list responses stay compatible. List URLs use `q`, `sort`, `dir`, `impact` and `notes`; future global URL writers must preserve these and unknown parameters. Sort preferences are local, and list return state plus unsaved note drafts stay in the current browser tab. Draft restoration checks the signed-in owner. No production notes or account data were modified during validation.

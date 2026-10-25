@@ -13,6 +13,7 @@ const harness = vi.hoisted(() => ({
     request: vi.fn(), mutate: vi.fn() },
 }));
 vi.mock("../clientApi", () => ({ useApi: (path: string | null, config: { refreshInterval: number }) => {
+  if (path === "/v1/me") return { data: { agentLastSeenAt: new Date().toISOString() } };
   harness.path = path;
   harness.interval = config.refreshInterval;
   if (path?.endsWith("/status")) return { ...harness.api,
@@ -55,6 +56,7 @@ describe("shared map replay recording controller", () => {
       expect(harness.interval).toBe(3000);
       expect(harness.fullInterval).toBe(0);
       expect(harness.api.mutate).not.toHaveBeenCalled();
+      expect(hook.result.current.phase).toBe(status === "queued" ? "requested" : status === "processing" ? "recording" : "uploading");
     }
     let finish!: (data: unknown) => void;
     harness.getRequest.mockImplementation(() => new Promise(resolve => { finish = resolve; }));

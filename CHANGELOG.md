@@ -210,6 +210,12 @@ corresponding GitHub Release.
 - Back keeps archive filters and page context; older/newer games and arrow-key navigation follow the same filtered list.
 - Shared analysis has section links, one Watch entry point, seekable macro-leak timestamps and an expandable penalty-ordered leak list. Macro scores share clear colour bands and an out-of-100 label.
 
+### Recorded playback and smooth replay sections
+
+- Playback quality shows the desktop connection, recording steps and a readable explanation of standard versus recorded positions. The canvas accuracy badge opens the same CPU and setup guidance.
+- Recorded sections prefetch ahead and share a 24 MB decoded cache. Cached transitions stay clear; slow downloads retain the last frame with a corner status. Decoded cast markers remain available for timeline jumps.
+- Website-requested artifact uploads send one private ready notification when the verified upload completes.
+
 ### Game header and completed check-ins
 
 - Replay pages use one compact Share, Download, Review and VOD action bar, a descriptive opponent heading and readable recent-game dates. Missing duration and MMR fields stay out of the way.

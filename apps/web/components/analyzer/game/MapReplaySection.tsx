@@ -31,6 +31,8 @@ import { CompactReplayHost } from "./replay/CompactReplayHost";
 import { ReplayStage } from "./replay/ReplayStage";
 import type { ComponentProps } from "react";
 import dynamic from "next/dynamic";
+import { PlaybackFidelityCard } from "./PlaybackFidelityCard";
+import { MISSING_PLAYBACK_HINT } from "@/lib/playbackFidelity";
 
 const SegmentedReplayHost = dynamic(() => import("./replay/SegmentedReplayHost").then(value => value.SegmentedReplayHost), { ssr: false });
 
@@ -87,25 +89,15 @@ export function MapReplaySection({
   patchEra?: PatchEra | null;
 } & Pick<ComponentProps<typeof ReplayStage>, "seekRequest" | "onPlaybackTimeChange" | "onPlaybackStateChange" | "onStageSeek" | "banked" | "upgrades" | "clockLink">) {
   const fallback = useMapReplay(controller ? null : gameId);
-  const { playback, manifest, isLoading, error, canRefresh, refreshing, refreshMessage, refresh } = controller ?? fallback;
+  const recording = controller ?? fallback;
+  const { playback, manifest, isLoading, error, canRefresh } = recording;
   const fidelity = manifest?.fidelity ?? playback?.fidelity;
-  const refreshControl = canRefresh && (fidelity?.positions !== "engine" ||
-    fidelity?.complete === false || fidelity?.attacks !== "observed" ||
-    refreshing || refreshMessage) ? (
-    <div className="flex flex-wrap items-center gap-2 text-caption">
-      <button type="button" disabled={refreshing} onClick={refresh}
-        className="rounded-md border border-border bg-bg-elevated px-3 py-1.5 font-medium text-text hover:border-accent disabled:cursor-wait disabled:opacity-60">
-        {refreshing ? "Recording replay…" : "Generate accurate playback"}
-      </button>
-      <span role="status" className="text-text-dim">
-        {refreshMessage || "With automatic Map replay enabled, the desktop agent records new and re-synced games. Generate accurate playback records this game on demand, even when automatic capture is off. Keep the agent open; recording runs StarCraft II in the background and can use significantly more CPU for several minutes. Saved recordings are reused."}
-      </span>
-    </div>
-  ) : null;
+  const refreshControl = <PlaybackFidelityCard controller={recording} recorded={fidelity?.positions === "engine"}
+    upgrade={fidelity?.positions !== "engine" || fidelity?.complete === false || fidelity?.attacks !== "observed"} />;
 
   const stageMaxH = maxHeightPx ?? (compact ? COMPACT_STAGE_MAX_H_PX : undefined);
 
-  if (manifest) return <section aria-label="Map replay" className="space-y-2">
+  if (manifest) return <section data-playback-section aria-label="Map replay" className="space-y-2">
     {refreshControl}
     <SegmentedReplayHost key={JSON.stringify([gameId, manifest.artifactId, onPlaybackTimeChange ? null : initialTimeSec ?? null])}
       seekRequest={seekRequest} onPlaybackTimeChange={onPlaybackTimeChange} onPlaybackStateChange={onPlaybackStateChange} onStageSeek={onStageSeek} banked={banked} upgrades={upgrades} clockLink={clockLink}
@@ -133,12 +125,12 @@ export function MapReplaySection({
     // Keep the compact empty state actionable instead of hiding the entry point.
     if (compact && !canRefresh) return null;
     return (
-      <div className="rounded-lg border border-border bg-bg-elevated/40 p-4">
+      <div data-playback-section className="rounded-lg border border-border bg-bg-elevated/40 p-4">
         <div className="text-body font-medium text-text">Map replay</div>
         <p className="mt-1 text-caption text-text-dim">
           {error && error.status !== 404
             ? error.message || "Could not load map playback. Check your connection and try again."
-            : "No playback data for this game. Sync the replay with automatic Map replay enabled in the agent, or select Generate accurate playback to record this game."}
+            : MISSING_PLAYBACK_HINT}
         </p>
         {refreshControl}
       </div>
@@ -148,6 +140,7 @@ export function MapReplaySection({
   if (compact) {
     return (
       <section
+        data-playback-section
         aria-label="Map replay"
         className="space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-4"
       >
@@ -172,7 +165,7 @@ export function MapReplaySection({
   }
 
   return (
-    <div className="space-y-2">
+    <div data-playback-section className="space-y-2">
     {refreshControl}
     <ReplayStage
       key={JSON.stringify([gameId, onPlaybackTimeChange ? null : initialTimeSec ?? null])}

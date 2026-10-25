@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "./clientApi";
 import { sanitizeMapPlayback } from "./mapReplay";
 import { sanitizePlaybackManifest } from "./segmentedPlayback";
+import { agentPresence } from "./agentPresence";
+
+export type PlaybackPhase = "idle" | "requested" | "recording" | "uploading" | "ready" | "failed";
 
 const RECORDING_TIMEOUT_MS = 18 * 60 * 1000;
 const ACTIVE_STATUSES = new Set(["queued", "processing", "uploading"]);
@@ -60,6 +63,8 @@ export function useMapReplay(gameId: string | null) {
   // Bind authenticated POST/explicit reads without an eager legacy download.
   const actions = useApi<Record<string, unknown>>(playbackPath,
     { isPaused: () => true, revalidateOnFocus: false, refreshInterval: 0 });
+  const agentReq = useApi<{ agentLastSeenAt?: string | null }>(gameId ? "/v1/me" : null,
+    { revalidateOnFocus: true, refreshInterval: gameId ? 60_000 : 0 });
   const statusReq = useApi<Record<string, unknown>>(
     gameId ? `/v1/games/${encodeURIComponent(gameId)}/map-playback/status` : null,
     { revalidateOnFocus: false, refreshInterval: gameId && state.refreshing ? 3000 : 0 },
@@ -251,6 +256,10 @@ export function useMapReplay(gameId: string | null) {
     }
   };
 
+  const phase: PlaybackPhase = state.refreshing ? jobStatus === "uploading" ? "uploading"
+    : jobStatus === "processing" ? "recording" : "requested"
+    : state.completedRequestId || recordedFidelity?.positions === "engine" && recordedFidelity.complete !== false && recordedFidelity.attacks === "observed" ? "ready"
+    : state.startedAt > 0 && state.refreshMessage ? "failed" : "idle";
   return {
     playback,
     manifest,
@@ -261,10 +270,14 @@ export function useMapReplay(gameId: string | null) {
     refreshMessage: gameId ? state.refreshMessage : "",
     refresh,
     completedRequestId: gameId ? state.completedRequestId : null,
+    phase,
+    recordingStartedAt: state.startedAt,
+    agentPresence: agentReq.data && Object.hasOwn(agentReq.data, "agentLastSeenAt")
+      ? agentPresence(agentReq.data.agentLastSeenAt, Date.now()) : "unknown" as const,
   };
 }
 
-export type MapReplayController = Omit<ReturnType<typeof useMapReplay>, "manifest"> & {
+export type MapReplayController = Omit<ReturnType<typeof useMapReplay>, "manifest" | "phase" | "recordingStartedAt" | "agentPresence"> & Partial<Pick<ReturnType<typeof useMapReplay>, "phase" | "recordingStartedAt" | "agentPresence">> & {
   /** Optional for callers providing a legacy recording controller. */
   manifest?: ReturnType<typeof useMapReplay>["manifest"];
 };
