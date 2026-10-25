@@ -2,7 +2,7 @@
 
 Date: 2026-10-25
 
-Status: implementation in progress
+Status: accepted
 
 ## Context
 
@@ -35,7 +35,10 @@ Inspect at most 25 recent candidates per returned opponent and 5,000 per page.
 Older/legacy candidates, incomplete windows and R2 metadata cannot prove a
 complete absence or the current state of every blob. Qualify positive dates
 as **Latest known** and offer inspection; show unknown dates without inventing
-one. Complete atomic metadata coverage may establish a known result. No
+one. Complete coverage may establish a known result only when the active
+details backend is confirmed Mongo and every candidate has an atomic source
+fact. A Mongo-looking row alone is insufficient during an R2 cutover whose
+first metadata acknowledgement fails. No
 production backfill is required or executed for this change.
 
 Replay downloads use the existing authorized route only after a click. Bind

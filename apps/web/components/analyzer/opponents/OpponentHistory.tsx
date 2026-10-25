@@ -50,7 +50,7 @@ export function OpponentHistory({ items, expanded, visibleCount, onMore, sort, c
           <OpponentDetailCells row={entry.row} columns={columns} mobile />
         </li>)}
       </ul>
-    </> : <div className="overflow-x-auto"><table aria-label="Opponent history" className="w-full text-sm [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-20 [&_thead_th:first-child]:bg-bg-elevated" style={{ minWidth: 640 + extra * 88 }}>
+    </> : <div className="relative overflow-x-auto"><table aria-label="Opponent history" className="w-full text-sm [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-20 [&_thead_th:first-child]:bg-bg-elevated" style={{ minWidth: 640 + extra * 88 }}>
       <thead className="bg-bg-elevated"><tr>
         <SortableTh col="name" label="Opponent" {...sort} compact width="12rem" />
         <SortableTh col="race" label="Race" {...sort} compact width="4rem" />

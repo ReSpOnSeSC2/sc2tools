@@ -15,7 +15,9 @@ const root = process.cwd(), origin = 'http://127.0.0.1:3269';
 const output = path.resolve(root, '../../.cache/opponent-columns');
 const columnStorageKey = 'analyzer.opponents.columns';
 const reads = [], unexpected = [], blocked = [], errors = [], cases = [];
-let javascript = '', holdList = false, heldResponses = [], checks = 0;
+let javascript = '', holdList = false, heldResponses = [], checks = 0, currentCase = 'initialization';
+const layoutStages = [];
+const runStamp = new Date().toISOString().replace(/[:.]/g, '-');
 fs.mkdirSync(output, { recursive: true });
 const cssFiles = fs.readdirSync('.next/static/css', { recursive: true }).filter(name => name.endsWith('.css'));
 if (!cssFiles.length) throw new Error('Build this branch first; production CSS is required.');
@@ -80,7 +82,12 @@ const server = http.createServer(async (req, res) => {
 const labels = ['Pulse ID', 'Last MMR', 'Net MMR', 'MMR won', 'MMR lost', 'Region', 'Download latest replay', 'Last result', 'Last game length', 'Last map', 'My build', 'Opponent build', 'Opponent build order', 'Last recorded build order date', 'My latest macro breakdown', 'My latest macro leaks', 'Average game length', 'My average macro score', 'Scouting notes'];
 const selected = labels.filter(label => !['Last MMR', 'Net MMR', 'MMR won', 'MMR lost'].includes(label));
 const exact = value => new RegExp('^' + value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$');
-const rowFor = (page, width, name) => page.getByRole(width < 768 ? 'listitem' : 'row').filter({ has: page.getByRole('link', { name, exact: true }) });
+const rowFor = (page, width, name) => {
+  const identity = rows.find(item => item.name === name);
+  if (!identity) throw new Error(`Unknown synthetic opponent ${name}`);
+  const history = page.getByRole(width < 768 ? 'list' : 'table', { name: 'Opponent history' });
+  return history.getByRole(width < 768 ? 'listitem' : 'row').filter({ has: page.locator(`a[href="/app/opponents/${identity.pulseId}"],a[href^="/app/opponents/${identity.pulseId}?"]`) });
+};
 const picker = page => page.locator('details').filter({ has: page.locator('summary').filter({ hasText: /^Columns$/ }) });
 async function openPicker(page) { const node = picker(page); if (!await node.evaluate(element => element.open)) await node.locator('summary').click(); return node; }
 async function closePicker(page) { const node = picker(page); if (await node.evaluate(element => element.open)) await node.locator('summary').press('Escape'); }
@@ -106,7 +113,8 @@ async function cell(page, width, name, label) {
 }
 async function order(page, width) {
   const holder = page.getByRole(width < 768 ? 'list' : 'table', { name: 'Opponent history' });
-  return holder.locator(width < 768 ? ':scope > li' : 'tbody > tr').evaluateAll(nodes => nodes.map(node => node.querySelector('a[href^="/app/opponents/"]')?.textContent.trim()).filter(Boolean));
+  const pulseIds = await holder.locator(width < 768 ? ':scope > li' : 'tbody > tr').evaluateAll(nodes => nodes.map(node => node.querySelector('a[href^="/app/opponents/"]')?.getAttribute('href').split('?')[0].split('/').pop()).filter(Boolean));
+  return pulseIds.map(id => rows.find(item => item.pulseId === id)?.name || id);
 }
 async function selectSort(page, width, key, label) {
   if (width < 768) await page.getByRole('combobox', { name: 'Sort opponents' }).selectOption(key);
@@ -117,6 +125,9 @@ async function settled(page) {
   await expect(page.getByRole('button', { name: 'Export CSV', exact: true })).toBeEnabled();
   await page.waitForFunction(() => typeof window.fixtureRefresh === 'function');
   await page.waitForTimeout(400);
+}
+async function recordLayout(page, stage) {
+  layoutStages.push({ case: currentCase, stage, ...await page.evaluate(() => ({ width: innerWidth, htmlWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth, scrollX, scrollY })) });
 }
 
 (async () => {
@@ -134,6 +145,8 @@ async function settled(page) {
   };
   try {
     for (const width of [320, 390, 768, 1440]) for (const theme of ['light', 'dark']) {
+      currentCase = `${width}-${theme}`;
+      if (process.env.OPPONENT_COLUMNS_CASE && process.env.OPPONENT_COLUMNS_CASE !== currentCase) continue;
       let { context, page } = await fresh(width, theme);
       const start = reads.length;
       await page.goto(`${origin}/app/opponents?theme=${theme}`); await settled(page);
@@ -187,7 +200,10 @@ async function settled(page) {
       await closePicker(page); await page.waitForTimeout(450);
       expect(await page.evaluate(() => window.fixtureTokenCalls)).toBe(tokenBefore);
       expect(reads.filter(read => read.path.endsWith('/replay-download')).length).toBe(replayBefore); checks += 2;
-      const replay = rowFor(page, width, 'Atlas').getByRole('button', { name: 'Download replay — latest game vs Atlas', exact: true });
+      const replay = (await cell(page, width, 'Atlas', 'Download latest replay')).getByRole('button');
+      // Grouping deliberately displays the most-played name, AtlasEU, while
+      // its newest game's carrier and dossier target remain identity101.
+      await expect(replay).toHaveAccessibleName('Download replay — latest game vs AtlasEU');
       const routeBefore = page.url(); await replay.click();
       await expect.poll(() => page.evaluate(() => window.fixtureDeliveries.length)).toBe(1);
       expect(page.url()).toBe(routeBefore);
@@ -237,11 +253,14 @@ async function settled(page) {
       expect(await page.evaluate(() => scrollY)).toBe(0); expect(await page.evaluate(() => document.activeElement.id)).toBe('reader'); checks += 2;
 
       await page.evaluate(() => document.fonts.ready);
+      await recordLayout(page, 'before-capture');
       await page.screenshot({ path: path.join(output, `opponent-columns-${theme}-${width}.png`), fullPage: true });
+      await recordLayout(page, 'after-capture');
       if (width >= 768) {
         const scroller = page.getByRole('table', { name: 'Opponent history' }).locator('..');
         expect(await scroller.evaluate(node => node.scrollWidth > node.clientWidth)).toBe(true);
         await scroller.evaluate(node => { node.scrollLeft = node.scrollWidth; });
+        await recordLayout(page, 'after-table-scroll');
         expect(await page.evaluate(() => scrollY)).toBe(0);
         await page.screenshot({ path: path.join(output, `opponent-columns-right-${theme}-${width}.png`), fullPage: true }); checks += 2;
       }
@@ -259,10 +278,27 @@ async function settled(page) {
       await context.close(); console.log(JSON.stringify(cases.at(-1)));
     }
     expect(errors).toEqual([]); expect(unexpected).toEqual([]); expect(blocked).toEqual([]); checks += 3;
-    const summary = { checks, cases, apiReads: reads.length, explicitReplayRequests: reads.filter(read => read.path.endsWith('/replay-download')).length, unexpected, blocked, errors, productionCssFiles: cssFiles, visualApproval: 'pending root inspection', mutationRequests: 0 };
+    const summary = { checks, cases, apiReads: reads.length, explicitReplayRequests: reads.filter(read => read.path.endsWith('/replay-download')).length, unexpected, blocked, errors, layoutStages, productionCssFiles: cssFiles, visualApproval: 'pending root inspection', mutationRequests: 0 };
     fs.writeFileSync(path.join(output, 'summary.json'), JSON.stringify(summary, null, 2));
     fs.writeFileSync(path.join(output, 'requests.json'), JSON.stringify(reads, null, 2));
     console.log(JSON.stringify(summary));
+  } catch (error) {
+    const activePage = browser.contexts().flatMap(context => context.pages()).find(page => !page.isClosed());
+    if (activePage) {
+      const overflow = await activePage.evaluate(() => [...document.querySelectorAll('body *')].map(node => {
+        const rect = node.getBoundingClientRect(), style = getComputedStyle(node);
+        return { tag: node.tagName, id: node.id, className: String(node.className?.baseVal ?? node.className), text: node.textContent.trim().slice(0, 60), left: rect.left, right: rect.right, width: rect.width, scrollWidth: node.scrollWidth, clientWidth: node.clientWidth, overflowX: style.overflowX, position: style.position };
+      }).filter(node => node.right > innerWidth + 1 || node.left < -1).slice(0, 150)).catch(() => []);
+      const ancestors = await activePage.evaluate(() => {
+        const describe = node => { const rect = node.getBoundingClientRect(), style = getComputedStyle(node); return { tag: node.tagName, id: node.id, className: String(node.className), rect: { left: rect.left, right: rect.right, width: rect.width }, scrollWidth: node.scrollWidth, clientWidth: node.clientWidth, width: style.width, minWidth: style.minWidth, maxWidth: style.maxWidth, display: style.display, overflowX: style.overflowX, overflowY: style.overflowY, position: style.position }; };
+        const chain = []; for (let node = document.querySelector('table'); node; node = node.parentElement) chain.push(describe(node));
+        return { chain, outsideRight: [...document.querySelectorAll('body *')].filter(node => node.getBoundingClientRect().right > innerWidth + 1).map(describe).slice(0, 35), scrollingElement: document.scrollingElement?.tagName };
+      }).catch(() => ({}));
+      fs.writeFileSync(path.join(output, `failure-layout-${currentCase}-${runStamp}.json`), JSON.stringify({ layoutStages, ancestors, overflow }, null, 2));
+      await activePage.screenshot({ path: path.join(output, `failure-${currentCase}-${runStamp}.png`), fullPage: true }).catch(() => {});
+      await activePage.content().then(html => fs.writeFileSync(path.join(output, `failure-${currentCase}-${runStamp}.html`), html)).catch(() => {});
+    }
+    throw error;
   } finally {
     holdList = false; for (const send of heldResponses) send(); heldResponses = [];
     await browser.close(); await new Promise(resolve => server.close(resolve));
