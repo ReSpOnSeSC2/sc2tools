@@ -21,7 +21,8 @@ export function ForecastExplanation() {
     update(); window.addEventListener("resize", update); window.addEventListener("scroll", update, true);
     return () => { window.removeEventListener("resize", update); window.removeEventListener("scroll", update, true); };
   }, [open]);
-  useFocusTrap({ open, containerRef: panel, onClose: () => setOpen(false) });
+  // The lazy Help link replaces its fallback anchor; keep initial focus stable.
+  useFocusTrap({ open, containerRef: panel, initialFocusRef: panel, onClose: () => setOpen(false) });
   return <>
     <Button ref={trigger} size="sm" variant="ghost" className="min-h-11" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>How is this calculated?</Button>
     {open && typeof document !== "undefined" ? createPortal(<>
