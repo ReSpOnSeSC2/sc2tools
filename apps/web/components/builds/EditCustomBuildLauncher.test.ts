@@ -4,6 +4,19 @@ import { normalizeBuildEvent } from "@/lib/build-events";
 import { docToEvents } from "./EditCustomBuildLauncher";
 
 describe("EditCustomBuildLauncher proxy round-trip", () => {
+  it("reconstructs signature-only source rows in deadline order without losing quantities or proxy evidence", () => {
+    const signature = [{ unit: "marine", count: 3, beforeSec: 140.9 }, { unit: "Barracks", count: 2, beforeSec: 80, proxy: true }];
+    const events = docToEvents({ slug: "legacy", signature });
+    expect(events).toEqual([
+      expect.objectContaining({ time: 80, name: "Barracks", display: "Barracks ×2", category: "building", is_proxy: true }),
+      expect.objectContaining({ time: 140, name: "Marine", display: "Marine ×3", category: "unit", is_proxy: false }),
+    ]);
+    expect(signature[0]).toEqual({ unit: "marine", count: 3, beforeSec: 140.9 });
+  });
+  it("prefers exact rich-rule tokens over a stale legacy signature", () => {
+    const events = docToEvents({ slug: "modern", signature: [{ unit: "Gateway", count: 3, beforeSec: 200 }], rules: [{ type: "before", name: "ResearchBlinkTech", time_lt: 300 }] });
+    expect(events).toHaveLength(1); expect(events[0]).toMatchObject({ name: "ResearchBlinkTech", time: 300 });
+  });
   it("reconstructs proxy evidence for a saved v3 rule", () => {
     expect(docToEvents({
       slug: "proxy-gateway",

@@ -18,6 +18,7 @@ export interface BuildEditorSaveBarProps {
    */
   demoMode?: boolean;
   hasSignature?: boolean;
+  ruleError?: string | null;
 }
 
 /**
@@ -36,6 +37,7 @@ export function BuildEditorSaveBar({
   mode = "create",
   demoMode = false,
   hasSignature = false,
+  ruleError = null,
 }: BuildEditorSaveBarProps) {
   if (demoMode) {
     return (
@@ -63,9 +65,10 @@ export function BuildEditorSaveBar({
   // gate save on having at least one rule. Create mode still requires
   // a rule, otherwise the saved build is non-functional from the start.
   const requiresRule = mode !== "edit" && !hasSignature;
-  const saveDisabled = saving || (requiresRule && ruleCount === 0);
+  const saveDisabled = saving || !!ruleError || (requiresRule && ruleCount === 0);
   return (
     <div className="space-y-3">
+      {ruleError ? <p role="status" className="text-caption text-danger">{ruleError}</p> : null}
       {saveError ? (
         <div
           role="alert"

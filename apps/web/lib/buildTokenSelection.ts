@@ -11,3 +11,10 @@ export function buildTokenError(value: string, race?: string): string | null {
 }
 export const buildTokenFitsRace = (value: string, race?: string): boolean => buildTokenError(value, race) === null;
 export const pickerRace = (race?: string): BuildTokenRace | null => ["Protoss", "Terran", "Zerg"].includes(race || "") ? race as BuildTokenRace : null;
+export function firstBuildTokenError(rules: readonly { name: string }[], race?: string): string | null {
+  for (let index = 0; index < rules.length; index++) {
+    const error = buildTokenError(rules[index]?.name, race);
+    if (error) return `Rule ${index + 1}: ${error}`;
+  }
+  return null;
+}

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Combobox, type ComboboxOption } from "../Combobox";
+import { Modal } from "../Modal";
 const options: ComboboxOption[] = [
   { value: "BuildGateway", label: "Gateway", description: "Protoss building", searchTerms: ["production"] },
   { value: "BuildPylon", label: "Pylon", disabled: true },
@@ -13,6 +14,20 @@ function Harness({ spy = vi.fn() }: { spy?: (value: string) => void }) {
 }
 afterEach(cleanup);
 describe("Combobox keyboard and selection contract", () => {
+  it("replaces a pending query when its controlled selection is reset", () => {
+    const view = render(<Combobox label="Reset" value="BuildGateway" options={options} onChange={vi.fn()} />);
+    const input = screen.getByRole("combobox"); fireEvent.change(input, { target: { value: "no match" } });
+    view.rerender(<Combobox label="Reset" value="BuildStargate" options={options} onChange={vi.fn()} />);
+    expect((input as HTMLInputElement).value).toBe("Stargate");
+    expect(screen.getAllByRole("option")).toHaveLength(3);
+  });
+  it("keeps a portalled list inside the real dialog and consumes only the first Escape", () => {
+    const close = vi.fn(); render(<Modal open title="Edit build" onClose={close}><Harness /></Modal>);
+    const input = screen.getByRole("combobox"); fireEvent.focus(input);
+    expect(screen.getByRole("dialog").contains(screen.getByRole("listbox"))).toBe(true);
+    fireEvent.keyDown(input, { key: "Escape" }); expect(close).not.toHaveBeenCalled(); expect(screen.queryByRole("listbox")).toBeNull();
+    fireEvent.keyDown(input, { key: "Escape" }); expect(close).toHaveBeenCalledTimes(1);
+  });
   it("keeps focus in the input, skips disabled choices and commits with Enter", () => {
     const spy = vi.fn(); render(<Harness spy={spy} />); const input = screen.getByRole("combobox"); input.focus();
     fireEvent.keyDown(input, { key: "ArrowDown" }); fireEvent.keyDown(input, { key: "ArrowDown" });

@@ -160,7 +160,7 @@ export function BuildEditorRules({
           ({rules.length}/{RULES_MAX_PER_BUILD} · every rule must pass)
         </span>
       </h3>
-      <RulesLegend />
+      <RulesLegend withHelpLink />
       {errors.rules ? (
         <p
           role="alert"
@@ -196,6 +196,7 @@ export function BuildEditorRules({
           panelRef={rulesPanelRef}
           rules={rules}
           focusIndex={focusIndex}
+          race={draft.race}
           onUpdate={updateRule}
           onQuantity={changeQuantity}
           onCount={setRuleCount}
@@ -496,6 +497,7 @@ interface RulesListPanelProps {
   panelRef: RefObject<HTMLDivElement | null>;
   rules: ReadonlyArray<BuildRule>;
   focusIndex: number | null;
+  race?: string;
   onUpdate: BuildEditorRulesProps["updateRule"];
   onQuantity: (idx: number, q: RuleQuantifier, carry: number) => void;
   onCount: BuildEditorRulesProps["setRuleCount"];
@@ -506,6 +508,7 @@ function RulesListPanel({
   panelRef,
   rules,
   focusIndex,
+  race,
   onUpdate,
   onQuantity,
   onCount,
@@ -543,6 +546,7 @@ function RulesListPanel({
                 index={idx}
                 ctx={contexts[idx]}
                 autoFocusName={idx === focusIndex}
+                race={race}
                 onUpdate={(patch) => onUpdate(idx, patch)}
                 onQuantity={(q, carry) => onQuantity(idx, q, carry)}
                 onCount={(n) => onCount(idx, n)}

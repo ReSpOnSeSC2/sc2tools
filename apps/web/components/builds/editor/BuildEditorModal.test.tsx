@@ -29,6 +29,16 @@ afterEach(() => {
 });
 
 describe("BuildEditorModal safeguards", () => {
+  it("keeps the real token picker in the dialog, consumes its Escape and blocks an unknown action", () => {
+    const onClose = vi.fn(); renderEditor({ onClose, initialDraft: { rules: [{ type: "before", name: "BuildSpawningPool", time_lt: 120 }] } });
+    const picker = screen.getByRole("combobox", { name: /Rule 1 action/ }); fireEvent.focus(picker);
+    expect(screen.getByRole("dialog").contains(screen.getByRole("listbox"))).toBe(true);
+    fireEvent.keyDown(picker, { key: "Escape" }); expect(onClose).not.toHaveBeenCalled();
+    fireEvent.change(picker, { target: { value: "BuildTypoPool" } });
+    expect((picker as HTMLInputElement).value).toBe("BuildTypoPool"); expect(picker.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getAllByRole("button").filter(button => /^Save/.test(button.textContent || "")).every(button => (button as HTMLButtonElement).disabled)).toBe(true);
+    expect(harness.apiCall.mock.calls.some(call => call[2]?.method === "PUT")).toBe(false);
+  });
   it("cannot close a newly opened draft through a previous save's delayed callback", async () => {
     harness.apiCall.mockResolvedValue({ saved: true, reclassify: null });
     function Parent() {
@@ -130,7 +140,7 @@ function renderEditor(props: Partial<ComponentProps<typeof BuildEditorModal>> = 
     <BuildEditorModal
       open
       onClose={vi.fn()}
-      events={[{ time: 20, name: "Gateway", is_building: true }]}
+      events={[{ time: 20, name: "SpawningPool", is_building: true }]}
       race="Zerg"
       vsRace="Protoss"
       perspective="opponent"

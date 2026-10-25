@@ -63,9 +63,15 @@ describe("DefinitionsCatalog", () => {
     });
     expect(single.textContent).toBe("Guide");
     expect(single.getAttribute("href")).toBe("/guides/pvz/stargate-into-glaives");
-    const pool = within(card("zerg-12-pool")).getAllByRole("link");
+    const pool = within(card("zerg-12-pool")).getAllByRole("link", { name: /guide for/ });
     expect(pool.map((link) => link.textContent)).toEqual(["ZvP guide", "ZvT guide"]);
-    expect(within(card("pvz-robo-opener")).queryByRole("link")).toBeNull();
+    expect(within(card("pvz-robo-opener")).queryByRole("link", { name: /guide for/ })).toBeNull();
+  });
+
+  it("opens a private variant by exact catalog id without carrying the public catalog filters", () => {
+    render(<DefinitionsCatalog />);
+    const variant = within(card("pvz-stargate-into-glaives")).getByRole("link", { name: "Make my own variant of PvZ - Stargate into Glaives" });
+    expect(variant.getAttribute("href")).toBe("/builds?create=detected&definition=pvz-stargate-into-glaives");
   });
 
   it("shows the 8-worker patch name and finds the label by it", () => {

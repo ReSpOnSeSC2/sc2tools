@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useToastOptional } from "@/components/ui/Toast";
 import { useAuth } from "@clerk/nextjs";
 import { apiCall } from "@/lib/clientApi";
+import { firstBuildTokenError } from "@/lib/buildTokenSelection";
 import {
   PREVIEW_DEBOUNCE_MS,
   RULES_MAX_PER_BUILD,
@@ -179,6 +180,11 @@ export function useBuildEditorState(
     const generation = ++previewGenerationRef.current;
     if (!open) {
       setPreviewLoading(false);
+      return;
+    }
+    const tokenError = firstBuildTokenError(draft.rules, draft.race);
+    if (tokenError) {
+      setPreview(null); setPreviewRules(NO_RULES); setPreviewError(tokenError); setPreviewLoading(false);
       return;
     }
     if (demoMode) {
@@ -484,6 +490,8 @@ export function useBuildEditorState(
 
   const save = useCallback(
     async (andReclassify: boolean) => {
+      const tokenError = firstBuildTokenError(draft.rules, draft.race);
+      if (tokenError) { setErrors({ rules: tokenError }); return; }
       const sanitised = sanitiseDraft(draft, { allowEmptyRules: !!lockedSlug || !!sourceSignature?.length });
       if (!sanitised.ok) {
         setErrors(sanitised.errors);

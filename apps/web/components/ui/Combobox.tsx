@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 import { Input } from "./Input";
 
@@ -34,9 +35,13 @@ const key = (value: string) => value.toLocaleLowerCase().trim();
  * list uses active-descendant; Tab always follows the surrounding form. */
 export function Combobox({ label, value, options, onChange, onInputChange, placeholder = "Search…", disabled = false,
   invalid = false, describedBy, autoFocus = false, emptyMessage = "No matching options", className = "" }: ComboboxProps) {
-  const id = useId(), listId = `${id}-options`, root = useRef<HTMLDivElement>(null), input = useRef<HTMLInputElement>(null);
-  const [open, setOpen] = useState(false), [query, setQuery] = useState<string | null>(null), [active, setActive] = useState(-1), [above, setAbove] = useState(false);
-  const selected = options.find(option => option.value === value), needle = key(query ?? "");
+  const id = useId(), listId = `${id}-options`, root = useRef<HTMLDivElement>(null), input = useRef<HTMLInputElement>(null), popup = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false), [query, setQuery] = useState<{ value: string; text: string } | null>(null), [active, setActive] = useState(-1);
+  const [position, setPosition] = useState<CSSProperties | null>(null), [portalHost, setPortalHost] = useState<Element | null>(null);
+  // A controlled reset must replace a pending search in the same render.
+  // Draft-text callers echo the typed value; selection-only callers keep it.
+  const currentQuery = query?.value === value ? query.text : null;
+  const selected = options.find(option => option.value === value), needle = key(currentQuery ?? "");
   const matches = useMemo(() => options.filter(option => !needle || [option.label, option.value, ...(option.searchTerms ?? [])].some(text => key(text).includes(needle))), [needle, options]);
   const visible = matches.slice(0, RESULT_LIMIT), shown = open && !disabled;
   const activeOption = visible[active];
@@ -56,25 +61,33 @@ export function Combobox({ label, value, options, onChange, onInputChange, place
     else if (event.key === "Tab") close();
   }
   useEffect(() => { if (autoFocus) input.current?.focus(); }, [autoFocus]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!shown) return;
-    const place = () => { const box = input.current?.getBoundingClientRect(); if (box) setAbove(window.innerHeight - box.bottom < 260 && box.top > window.innerHeight - box.bottom); };
-    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) { setOpen(false); setActive(-1); setQuery(null); } };
-    place(); document.addEventListener("pointerdown", outside); window.addEventListener("resize", place);
-    return () => { document.removeEventListener("pointerdown", outside); window.removeEventListener("resize", place); };
+    const place = () => {
+      const box = input.current?.getBoundingClientRect(); if (!box) return;
+      const above = window.innerHeight - box.bottom < 260 && box.top > window.innerHeight - box.bottom;
+      setPosition({ left: Math.max(4, Math.min(box.left, window.innerWidth - box.width - 4)), width: Math.min(box.width, window.innerWidth - 8),
+        ...(above ? { bottom: window.innerHeight - box.top + 4 } : { top: box.bottom + 4 }), maxHeight: Math.max(44, Math.min(304, (above ? box.top : window.innerHeight - box.bottom) - 8)) });
+      // A portal inside the active dialog escapes its nested rules scroller
+      // while remaining inside the dialog's focus/inert boundary.
+      setPortalHost(root.current?.closest('[role="dialog"]') ?? document.body);
+    };
+    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node) && !popup.current?.contains(event.target as Node)) { setOpen(false); setActive(-1); setQuery(null); } };
+    place(); document.addEventListener("pointerdown", outside); window.addEventListener("resize", place); window.addEventListener("scroll", place, true);
+    return () => { document.removeEventListener("pointerdown", outside); window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
   }, [shown]);
   useEffect(() => { if (shown && active >= 0) document.getElementById(`${id}-option-${active}`)?.scrollIntoView?.({ block: "nearest" }); }, [active, id, shown]);
-  return <div ref={root} className={`relative min-w-0 ${className}`} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) close(); }}>
+  return <div ref={root} className={`relative min-w-0 ${className}`} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null) && !popup.current?.contains(event.relatedTarget as Node | null)) close(); }}>
     <div className="relative">
       <Input ref={input} role="combobox" aria-label={label} aria-autocomplete="list" aria-expanded={shown} aria-controls={shown ? listId : undefined}
         aria-activedescendant={shown && activeOption ? `${id}-option-${active}` : undefined} aria-describedby={describedBy}
-        value={query ?? selected?.label ?? value} placeholder={placeholder} disabled={disabled} invalid={invalid} autoComplete="off" maxLength={80}
+        value={currentQuery ?? selected?.label ?? value} placeholder={placeholder} disabled={disabled} invalid={invalid} autoComplete="off" maxLength={80}
         className="min-h-11 pr-9" onFocus={() => { setOpen(true); setActive(-1); }} onKeyDown={onKeyDown}
-        onChange={event => { setQuery(event.target.value); setActive(-1); setOpen(true); onInputChange?.(event.target.value); }} />
+        onChange={event => { setQuery({ value: onInputChange ? event.target.value : value, text: event.target.value }); setActive(-1); setOpen(true); onInputChange?.(event.target.value); }} />
       <ChevronDown aria-hidden className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
     </div>
-    {shown ? <div className={`absolute inset-x-0 z-sheet overflow-hidden rounded-lg border-2 border-line bg-bg-surface shadow-xl ${above ? "bottom-full mb-1" : "top-full mt-1"}`}>
-      <ul id={listId} role="listbox" aria-label={`${label} options`} className="max-h-64 overflow-y-auto overscroll-contain p-1">
+    {shown && position && portalHost ? createPortal(<div ref={popup} style={position} className="fixed z-sheet flex flex-col overflow-hidden rounded-lg border-2 border-line bg-bg-surface shadow-xl">
+      <ul id={listId} role="listbox" aria-label={`${label} options`} className="min-h-0 max-h-64 overflow-y-auto overscroll-contain p-1">
         {visible.map((option, index) => <li key={option.value} id={`${id}-option-${index}`} role="option" aria-selected={option.value === value} aria-disabled={option.disabled || undefined}
           className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-body text-text ${index === active ? "bg-bg-elevated outline outline-2 -outline-offset-2 outline-accent" : "hover:bg-bg-elevated"} ${option.disabled ? "cursor-not-allowed opacity-50" : ""}`}
           onPointerMove={() => { if (!option.disabled) setActive(index); }} onMouseDown={event => event.preventDefault()} onClick={() => choose(option)}>
@@ -85,6 +98,6 @@ export function Combobox({ label, value, options, onChange, onInputChange, place
       </ul>
       {visible.length === 0 ? <p role="status" className="p-3 text-caption text-text-muted">{emptyMessage}</p> : null}
       {matches.length > RESULT_LIMIT ? <p role="status" className="border-t border-border px-3 py-2 text-caption text-text-muted">Showing first {RESULT_LIMIT} matches. Type more to narrow the list.</p> : null}
-    </div> : null}
+    </div>, portalHost) : null}
   </div>;
 }

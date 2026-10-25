@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Plus, Library, BookOpen, RefreshCw, Sparkles } from "lucide-react";
+import { Plus, Library, BookOpen, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -11,7 +11,6 @@ import { activeBuildFilters, buildFiltersQuery, readBuildFilters } from "./build
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
-import { GlowHalo } from "@/components/ui/GlowHalo";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useToast } from "@/components/ui/Toast";
 import { apiCall, useApi } from "@/lib/clientApi";
@@ -25,11 +24,12 @@ import { useCustomBuildPage } from "./useCustomBuildPage";
 import { BuildPublishIntent } from "./BuildPublishIntent";
 import type { BuildStats, CustomBuild, DecoratedBuild } from "./types";
 import type { BuildEditorSaveResult } from "./editor/BuildEditor.types";
+import { BuildStartCards, type BuildStartChoice } from "./BuildStartCards";
 
 // Editors and charts are only needed after a library action. Keep them out
 // of the route's first load, including for signed-out visitors.
 const BuildDossierModal = dynamic(() => import("./BuildDossierModal").then((module) => module.BuildDossierModal));
-const BuildEditorSheet = dynamic(() => import("./BuildEditorSheet").then((module) => module.BuildEditorSheet));
+const BuildStartFlow = dynamic(() => import("./BuildStartFlow").then((module) => module.BuildStartFlow));
 const EditCustomBuildLauncher = dynamic(() => import("./EditCustomBuildLauncher").then((module) => module.EditCustomBuildLauncher));
 const BuildPublishModal = dynamic(() => import("./BuildPublishModal").then((module) => module.BuildPublishModal));
 
@@ -145,7 +145,8 @@ function BuildsLibraryInner() {
   );
 
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editorBuild, setEditorBuild] = useState<CustomBuild | null>(null);
+  const [startChoice, setStartChoice] = useState<BuildStartChoice | undefined>();
+  const [startDefinition, setStartDefinition] = useState<string | undefined>();
   const [richEditBuild, setRichEditBuild] = useState<CustomBuild | null>(null);
   const [richEditFocus, setRichEditFocus] = useState<"notes" | "preview" | undefined>();
   const [richEditIntent, setRichEditIntent] = useState<"edit" | "duplicate">("edit");
@@ -224,10 +225,20 @@ function BuildsLibraryInner() {
   // pagination, so they cover every saved build instead of only this page.
   const filtered = decorated;
 
-  const openCreate = useCallback(() => {
-    setEditorBuild(null);
+  const openCreate = useCallback((choice?: BuildStartChoice) => {
+    setStartChoice(choice); setStartDefinition(undefined);
     setEditorOpen(true);
   }, []);
+  const consumedCreation = useRef("");
+  useEffect(() => {
+    const params = new URLSearchParams(queryString), choice = params.get("create");
+    if (choice !== "detected") { consumedCreation.current = ""; return; }
+    if (consumedCreation.current === queryString) return;
+    consumedCreation.current = queryString;
+    setStartChoice("detected"); setStartDefinition((params.get("definition") ?? "").slice(0, 160)); setEditorOpen(true);
+    params.delete("create"); params.delete("definition");
+    router.replace(`/builds${params.size ? `?${params}` : ""}`, { scroll: false });
+  }, [queryString, router]);
 
   const openDossier = useCallback(
     (slug: string) => {
@@ -301,7 +312,7 @@ function BuildsLibraryInner() {
   const handleSaved = useCallback(
     async (saved: CustomBuild, result?: BuildEditorSaveResult) => {
       if (!result) toast.success(
-        editorBuild ? `Saved “${saved.name}”.` : `Created “${saved.name}”.`,
+        `Created “${saved.name}”.`,
       );
       if (!result?.reclassifyError && result?.reclassifyRequested) {
         initiatedReclassifyRef.current = true;
@@ -325,7 +336,7 @@ function BuildsLibraryInner() {
       builds.resetPage();
       void builds.mutate().catch(() => undefined);
     },
-    [editorBuild, builds, reclassifyStatus, toast],
+    [builds, reclassifyStatus, toast],
   );
 
   const handlePublished = useCallback(
@@ -433,7 +444,7 @@ function BuildsLibraryInner() {
               </Button>
             ) : null}
             <Button
-              onClick={openCreate}
+              onClick={() => openCreate()}
               iconLeft={<Plus className="h-4 w-4" aria-hidden />}
             >
               New build
@@ -558,10 +569,10 @@ function BuildsLibraryInner() {
           onChanged={() => builds.mutate()}
         />
       ) : null}
-      {editorOpen ? <BuildEditorSheet
-        open={editorOpen}
+      {editorOpen ? <BuildStartFlow
         onClose={() => setEditorOpen(false)}
-        build={editorBuild}
+        initialChoice={startChoice}
+        definitionId={startDefinition}
         onSaved={handleSaved}
       /> : null}
       {richEditBuild ? <EditCustomBuildLauncher
@@ -574,7 +585,7 @@ function BuildsLibraryInner() {
           setRichEditBuild(null);
         }}
       /> : null}
-      <BuildPublishIntent onChoose={choosePublication} onCreate={openCreate} />
+      <BuildPublishIntent onChoose={choosePublication} onCreate={() => openCreate()} />
       {publishOpen ? <BuildPublishModal
         open={publishOpen}
         onClose={() => setPublishOpen(false)}
@@ -687,27 +698,12 @@ function extractErr(err: unknown): string {
   return "Something went wrong.";
 }
 
-function FirstRunEmptyState({ onCreate }: { onCreate: () => void }) {
+function FirstRunEmptyState({ onCreate }: { onCreate: (choice: BuildStartChoice) => void }) {
   return (
-    <section className="relative overflow-hidden rounded-2xl border-2 border-line bg-bg-surface p-8 shadow-hard sm:p-12">
-      <GlowHalo color="cyan" position="top" opacity={0.85} size={70} />
-      <div className="relative">
-        <EmptyStatePanel
-          size="lg"
-          icon={<Sparkles className="h-6 w-6" aria-hidden />}
-          title="No custom builds yet"
-          description="Save your favourite openers so your replays can be matched to them. From any game’s build order, click ‘Save as new build’ to capture an opener from a real game."
-          action={
-            <Button
-              size="lg"
-              onClick={onCreate}
-              iconLeft={<Plus className="h-5 w-5" aria-hidden />}
-            >
-              Create your first build
-            </Button>
-          }
-        />
-      </div>
+    <section className="space-y-4 rounded-2xl border-2 border-line bg-bg-surface p-4 shadow-hard sm:p-6">
+      <h3 className="text-h3 font-semibold">No custom builds yet</h3>
+      <p className="text-body text-text-muted">Choose a starting point. From a game’s build order, you can also use “Save as new build” to capture that replay’s opener.</p>
+      <BuildStartCards onChoose={onCreate} community />
     </section>
   );
 }

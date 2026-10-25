@@ -85,6 +85,23 @@ afterEach(() => {
 });
 
 describe("useBuildEditorState preview requests", () => {
+  it("keeps unknown rule text for correction and sends no preview or partial save", async () => {
+    const { result } = renderHook(() => useBuildEditorState({ open: true, context, initialDraft: { ...initialDraft,
+      rules: [...initialDraft.rules, { type: "before", name: "BuildImaginary", time_lt: 120 }] } }));
+    await startDebouncedPreview(); await act(async () => result.current.save(false));
+    expect(harness.apiCall).not.toHaveBeenCalled(); expect(result.current.draft.rules).toHaveLength(2);
+    expect(result.current.draft.rules[1].name).toBe("BuildImaginary"); expect(result.current.errors.rules).toMatch(/Rule 2: Unknown/);
+    expect(result.current.previewError).toMatch(/Unknown/);
+  });
+  it("aborts a held valid preview when a typed action becomes unknown", async () => {
+    const held = deferred<BuildEditorPreviewResult>(); harness.apiCall.mockReturnValue(held.promise);
+    const { result } = renderHook(() => useBuildEditorState({ open: true, context, initialDraft }));
+    await startDebouncedPreview(); const init = harness.apiCall.mock.calls[0][2] as RequestInit;
+    act(() => result.current.updateRule(0, { name: "unknown" })); expect(init.signal?.aborted).toBe(true);
+    await act(async () => held.resolve(preview("stale")));
+    expect(result.current.preview).toBeNull(); expect(result.current.previewError).toMatch(/Unknown/);
+    expect(harness.apiCall).toHaveBeenCalledTimes(1);
+  });
   it("creates a blank proxy-only rule without losing the proxy intent", () => {
     const { result } = renderHook(() =>
       useBuildEditorState({ open: true, context, initialDraft }),

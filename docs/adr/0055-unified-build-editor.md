@@ -1,6 +1,6 @@
 # ADR0055: One rich build editor and a bounded action picker
 
-Status: Accepted foundation
+Status: Accepted
 
 Every create path will reach the existing rich BuildEditorModal. Its explicit
 Save, create-only collision checks, locked edit slug, source provenance,
@@ -8,6 +8,14 @@ publication controls and unsaved-close guard remain authoritative. A Start
 from chooser supplies a game, detected label or blank seed. Paste remains
 clearly unavailable until reference-build-order lands; Community remains a
 separate copy-to-library route.
+
+The game picker reuses the existing private `/v1/replays` filtered listing,
+with 20 rows per cursor page and one selected `/games/:id/build-order` read.
+The older `/v1/games` listing does not apply build/matchup filters. No new
+endpoint or analysis fanout is needed. The detected-label cohort follows the
+existing stored effective build label, including confirmed check-ins; the UI
+states that scope explicitly. Owner remounts, request aborts and source epochs
+fence late list/detail responses, including an A→B→A filter change.
 
 The reusable Combobox uses the ARIA 1.2 input/listbox pattern, keeps keyboard
 focus in the input, supports ordinary Tab navigation, and renders at most 60

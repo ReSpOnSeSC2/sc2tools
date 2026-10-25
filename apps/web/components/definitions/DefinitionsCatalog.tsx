@@ -294,6 +294,7 @@ function DefinitionCard({
             <CopyDefinitionLink id={def.id} name={def.name} />
           </div>
           <p className="text-caption text-text-muted">{def.description}</p>
+          <Link href={`/builds?create=detected&definition=${encodeURIComponent(def.id)}`} className="inline-flex min-h-11 items-center text-caption font-semibold text-accent underline underline-offset-2">Make my own variant<span className="sr-only"> of {def.name}</span></Link>
           {def.eightWorkerName ? (
             <p className="text-micro text-text-dim">
               On patch 5.0.16 (8 workers) this is labelled{" "}

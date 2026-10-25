@@ -19,6 +19,7 @@ import { BuildEditorRules } from "./BuildEditorRules";
 import { BuildEditorPreview } from "./BuildEditorPreview";
 import { BuildEditorSaveBar } from "./BuildEditorSaveBar";
 import { BuildEditorToasts } from "./BuildEditorToasts";
+import { firstBuildTokenError } from "@/lib/buildTokenSelection";
 
 export interface BuildEditorModalProps {
   open: boolean;
@@ -279,6 +280,7 @@ export function BuildEditorModal({
             mode={mode}
             hasSignature={!!sourceSignature?.length}
             demoMode={demoMode}
+            ruleError={firstBuildTokenError(editor.draft.rules, editor.draft.race)}
           />
         }
       >
