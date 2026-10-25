@@ -1,11 +1,21 @@
 "use strict";
 const { normalizeIdentity } = require("./playerChannels");
+const { createHash } = require("crypto");
 
 /** Match-local, bounded directory reads. No seed writes, alias expansion,
  * name matching, or external provider requests occur on this path. */
 class OpponentChannelsCache {
   /** @param {import('./playerChannels').PlayerChannelsService} directory */
   constructor(directory) { this.directory = directory; this.cache = new Map(); }
+
+  /** Reuse the bounded exact-identity cache for a replay-confirmed opponent.
+   * The hash is only a cache key; replay ids can exceed the live key bound.
+   * @param {string} userId @param {Record<string,any>} game */
+  forGame(userId, game) {
+    const opponent = game.opponent || {}, toon = opponent.toonHandle || opponent.pulseId;
+    return this.forMatch(userId, { phase: "match_in_progress", gameKey: `game:${createHash("sha256").update(String(game.gameId)).digest("hex")}`,
+      opponent: { profile: { pulse_character_id: opponent.pulseCharacterId, confidence: 1 }, toonHandle: typeof toon === "string" && /^\d+-S2-\d+-\d+$/.test(toon) ? toon : undefined } });
+  }
 
   /** @param {string} userId @param {Record<string,any>} envelope */
   async forMatch(userId, envelope) {

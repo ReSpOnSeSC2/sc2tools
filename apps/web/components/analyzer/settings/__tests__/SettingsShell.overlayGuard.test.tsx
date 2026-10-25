@@ -30,7 +30,7 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: async () => "token", isLoaded: true, isSignedIn: true }),
+  useAuth: () => ({ getToken: async () => "token", isLoaded: true, isSignedIn: true, userId: "synthetic-owner" }),
 }));
 
 vi.mock("@/lib/clientApi", () => ({

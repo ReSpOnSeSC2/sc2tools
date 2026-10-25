@@ -23,7 +23,7 @@
  * its config every minute, so saves land without touching OBS.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@clerk/nextjs";
 import { ExternalLink, Languages, MessageSquare, Wand2 } from "lucide-react";
@@ -224,7 +224,12 @@ function configFromDraft(
 }
 
 export function SettingsMultiChat({ token }: { token: string | null }) {
-  void token;
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  if (!isLoaded) return <p className="text-caption text-text-muted">Loading chat settings…</p>;
+  if (!isSignedIn || !userId) return <p className="text-caption text-text-muted">Sign in to configure chat settings.</p>;
+  return <OwnerSettingsMultiChat key={userId} token={token} />;
+}
+function OwnerSettingsMultiChat({ token }: { token: string | null }) {
   const { getToken } = useAuth();
   const { toast } = useToast();
   const { data, isLoading, error, mutate } = useApi<MultichatConfig>(
@@ -236,6 +241,8 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
   // Switching Settings tabs unmounts this form: ask before dropping edits.
   usePublishDirty("overlay", dirty);
   const [saving, setSaving] = useState(false);
+  const saveRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => saveRequest.current?.abort(), []);
   const [detecting, setDetecting] = useState(false);
   const [kickManualOpen, setKickManualOpen] = useState(false);
   const [kickPaste, setKickPaste] = useState("");
@@ -299,6 +306,7 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
   }, [draft]);
 
   const save = async () => {
+    const request = new AbortController(); saveRequest.current = request;
     setSaving(true);
     try {
       const clean: Draft = {
@@ -312,7 +320,9 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
       await apiCall(getToken, "/v1/me/preferences/multichat", {
         method: "PUT",
         body: JSON.stringify(body),
+        signal: request.signal,
       });
+      if (request.signal.aborted) return;
       setDraft(clean);
       // Refetch BEFORE clearing dirty: the hydrate effect re-fills the
       // draft from SWR `data` the moment dirty flips false, and until
@@ -320,14 +330,15 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
       // clearing first briefly reverted the form and could silently
       // undo the save if the user kept editing in that window.
       await mutate();
+      if (request.signal.aborted) return;
       setDirty(false);
       toast.success("Chat settings saved", {
         description: "The overlay picks changes up within a minute.",
       });
     } catch {
-      toast.error("Could not save chat settings");
+      if (!request.signal.aborted) toast.error("Could not save chat settings");
     } finally {
-      setSaving(false);
+      if (!request.signal.aborted) setSaving(false);
     }
   };
 
@@ -554,6 +565,8 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
               <SettingsMultiChatAlerts
                 value={draft.alerts}
                 onChange={(alerts) => set({ alerts })}
+                sound={draft.sound}
+                overlayToken={token}
               />
             </div>
 

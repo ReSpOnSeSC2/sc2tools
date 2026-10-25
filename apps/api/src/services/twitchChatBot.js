@@ -119,6 +119,10 @@ class TwitchChatBotService {
     return true;
   }
 
+  /** Existing configured connection/queue only; no provider is enabled here.
+   * @param {string} userId @param {string} token @param {string} text */
+  queueGameMoments(userId, token, text) { return this.queueShoutout(userId, token, text); }
+
   /**
    * Boot-time restore: reconnect every streamer whose saved config is
    * enabled. Best-effort — a down Twitch endpoint must not block app
