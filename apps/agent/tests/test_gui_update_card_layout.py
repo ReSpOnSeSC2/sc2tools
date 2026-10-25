@@ -38,6 +38,22 @@ def test_dashboard_recovery_and_settings_fit_minimum_agent_width(tmp_path, monke
     monkeypatch.setenv("QT_SCALE_FACTOR", scale)
     run_gui_check(tmp_path, THEMED_SETUP.replace("FONT_SIZE", "10") + '''
 from types import SimpleNamespace
+def wait_for_page_width(win, scroll, width, skin, route):
+    # Theme changes can queue another height-for-width pass after the resize.
+    # A fixed 15 ms delay did not guarantee both passes on the Windows runner.
+    deadline = QtCore.QDeadlineTimer(1000)
+    stable = 0
+    while not deadline.hasExpired():
+        QtTest.QTest.qWait(5)
+        fitted = (win.width() == width and scroll.horizontalScrollBar().maximum() == 0
+                  and scroll.widget().width() <= scroll.viewport().width())
+        stable = stable + 1 if fitted else 0
+        if stable == 2:
+            return
+    content = scroll.widget()
+    assert stable == 2, (skin, route, width, win.width(), content.width(), scroll.viewport().width(),
+                         content.minimumSizeHint().width(), content.layout().minimumSize().width(),
+                         scroll.horizontalScrollBar().maximum())
 ui, win = make_window(window_animations=False)
 win._set_window_size("Standard")
 win._on_update_state(SimpleNamespace(latest="0.24.0", release_notes="Audit sample"), "failed", "Retry when ready.")
@@ -53,8 +69,10 @@ for skin in ("default", "protoss", "terran", "zerg"):
             win.resize(width, 480)
             QtTest.QTest.qWait(15)
             scroll = win._stack.currentWidget()
+            wait_for_page_width(win, scroll, width, skin, route)
             assert win.width() == width
             assert scroll.horizontalScrollBar().maximum() == 0, (skin, route, width, scroll.widget().width(), scroll.viewport().width())
+            assert scroll.widget().width() <= scroll.viewport().width(), (skin, route, width, scroll.widget().width(), scroll.viewport().width())
             if route == "settings":
                 for checkbox in scroll.widget().findChildren(QtWidgets.QCheckBox):
                     if checkbox.isVisible():
