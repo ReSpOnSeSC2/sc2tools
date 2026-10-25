@@ -27,7 +27,7 @@ export function BuildEditorIsland({ editorProps, loader = loadEditor }: { editor
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const component = await Promise.race([loader(), new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new Error("Build editor load timed out")), 20_000);
+        timer = setTimeout(() => reject(new Error(`Build editor load attempt ${attempt + 1} timed out`)), 20_000);
       })]);
       return { default: component };
     } finally { clearTimeout(timer); }

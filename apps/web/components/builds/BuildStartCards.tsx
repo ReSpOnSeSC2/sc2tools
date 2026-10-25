@@ -23,6 +23,6 @@ export function BuildStartCards({ onChoose, community = false }: {
       {cards.slice(2).map(({ choice, title, text, Icon }) => <button key={choice} type="button" className={cardClass} onClick={() => onChoose(choice)}><Icon className="h-5 w-5 text-accent" aria-hidden /><span className="font-semibold">{title}</span><span className="text-caption text-text-muted">{text}</span></button>)}
       {community ? <Link href="/community" className={cardClass}><span className="font-semibold">Copy a Community build</span><span className="text-caption text-text-muted">Browse shared builds and save a private copy before editing.</span></Link> : null}
     </div>
-    <p className="text-caption text-text-muted"><Link className="inline-flex min-h-11 items-center underline underline-offset-2" href="/definitions">See the built-in labels</Link>.</p>
+    <p className="text-caption text-text-muted"><Link className="inline-flex min-h-11 items-center font-medium text-text underline underline-offset-2" href="/definitions">See the built-in labels</Link>.</p>
   </div>;
 }
