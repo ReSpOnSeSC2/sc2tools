@@ -108,4 +108,19 @@ describe("DockClips", () => {
     expect(lines[0]).toBe("2:05 — Chat spiked — 14 messages in 10s (usual ~3)");
     expect(lines[1]).toBe("2:12:10 — Victory vs GeNieS — 3-game win streak");
   });
+
+  it("selects the complete chronological timestamp list when OBS denies clipboard access", async () => {
+    vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
+    render(<DockClips moments={MOMENTS} streamStartMs={START} vodUrl={null} busy={false} onPost={async () => null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy timestamps" }));
+    const field = await screen.findByRole("textbox", { name: "Copy timestamps manually" }) as HTMLTextAreaElement;
+    expect(field.readOnly).toBe(true);
+    expect(field.value.split("\n")).toEqual([
+      "2:05 — Chat spiked — 14 messages in 10s (usual ~3)",
+      "2:12:10 — Victory vs GeNieS — 3-game win streak",
+    ]);
+    expect(document.activeElement).toBe(field);
+    expect(field.selectionEnd).toBe(field.value.length);
+    expect(screen.getByText(/Press Ctrl\+C/)).toBeTruthy();
+  });
 });

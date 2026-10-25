@@ -24,15 +24,13 @@
  * two-column with chat on the left and controls on the right.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import {
   blockedUserSet,
   normalizeBlockedUser,
   excludeBlockedUsers,
   DEFAULT_APPEARANCE,
-  sanitizeAppearance,
-  type ChatAppearance,
 } from "@/lib/multichat/appearance";
 import { useEngagementReporter } from "@/lib/multichat/useEngagementReporter";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
@@ -43,13 +41,12 @@ import {
   type StudioHighlight,
   type StudioState,
 } from "@/lib/multichat/useStudioState";
-import type { ChatMessage, MultichatConfig } from "@/lib/multichat/types";
-import { sanitizeTtsConfig, type ChatTtsConfig } from "@/lib/multichat/tts";
+import type { ChatMessage } from "@/lib/multichat/types";
 import { useVoiceApplier } from "@/lib/useVoiceApplier";
 import { inferVoiceGender } from "@/lib/voiceCatalog";
 import { DockChat } from "./DockChat";
 import { DockBlockedUsers } from "./DockBlockedUsers";
-import { DOCK_BLOCKLIST_MAX } from "./dockConstants";
+import { DOCK_BLOCKLIST_MAX, DOCK_CONFIG_REFRESH_MS } from "./dockConstants";
 import { DockPollCard } from "./DockPollCard";
 import { DockGoals } from "./DockGoals";
 import { DockScenes, DockTimer } from "./DockScenes";
@@ -58,128 +55,25 @@ import { BuildProfileEditor } from "./BuildProfileEditor";
 import { useEngagementState } from "@/lib/multichat/useEngagementState";
 import { newestStudioSnapshot, useStudioUpdates } from "@/lib/multichat/useStudioUpdates";
 import type { DockPost } from "./dockActions";
+import { useDockPlatformConfig } from "./useDockPlatformConfig";
+import styles from "./DockLayout.module.css";
+import { Volume2 } from "lucide-react";
+import { DOCK_SECTIONS, orderedDockSections, type DockSectionId } from "@/lib/dockLayout";
+import { DockButton, DockToggle } from "./DockControls";
+import { DockCopyText } from "./DockCopyText";
+import { SectionCard } from "./SectionCard";
+import { useDockLayout } from "./useDockLayout";
+import { useDockScrollSpy } from "./useDockScrollSpy";
+import { useDockSummaries } from "./useDockSummaries";
+import { usePollTally } from "./usePollTally";
+export { DockButton } from "./DockControls";
 import { DockPresenceStrip } from "./DockPresenceStrip";
 
 /** Platform config re-read cadence — same as the OBS widget. */
-const CONFIG_REFRESH_MS = 60_000;
+const CONFIG_REFRESH_MS = DOCK_CONFIG_REFRESH_MS;
 /** Recover initial moderation state promptly without hammering an outage. */
 const STUDIO_RETRY_MS = [2_000, 5_000, 10_000, 30_000] as const;
-const DEFAULT_MODERATION_APPEARANCE = {
-  blockedUsers: DEFAULT_APPEARANCE.blockedUsers,
-  hideBots: DEFAULT_APPEARANCE.hideBots,
-};
 
-/**
- * Platform entries only, identity-stable across refetches — same
- * contract as the widget's config loader: useMultiChat reconnects
- * every engine when the object identity changes, so styling blobs
- * must never ride along and equal payloads must not mint new objects.
- */
-function usePlatformConfig(token: string, onInvalid: () => void): {
-  platforms: MultichatConfig | null;
-  moderationAppearance: Pick<ChatAppearance, "blockedUsers" | "hideBots">;
-  /** Read-aloud voice settings, shared with the OBS multichat widget. */
-  tts: ChatTtsConfig;
-  loaded: boolean;
-} {
-  const [platforms, setPlatforms] = useState<MultichatConfig | null>(null);
-  const [moderationAppearance, setModerationAppearance] = useState<
-    Pick<ChatAppearance, "blockedUsers" | "hideBots">
-  >(DEFAULT_MODERATION_APPEARANCE);
-  const [tts, setTts] = useState<ChatTtsConfig>(() => sanitizeTtsConfig(null));
-  const [loadedToken, setLoadedToken] = useState<string | null>(null);
-  const loaded = loadedToken === token;
-
-  useEffect(() => {
-    let cancelled = false;
-    let lastJson = "";
-    let lastModerationJson = "";
-    let lastTtsJson = "";
-    const load = async () => {
-      try {
-        const res = await fetch(
-          `${API_BASE}/v1/multichat/${encodeURIComponent(token)}/config`,
-          { cache: "no-store" },
-        );
-        if (!cancelled && res.status === 401) { onInvalid(); return; }
-        if (!res.ok) return;
-        const body: unknown = await res.json();
-        if (!body || typeof body !== "object" || Array.isArray(body)) return;
-        const rawConfig = (body as Record<string, unknown>).config;
-        if (
-          rawConfig != null
-          && (typeof rawConfig !== "object" || Array.isArray(rawConfig))
-        ) return;
-        if (cancelled) return;
-        const config = (rawConfig ?? {}) as MultichatConfig;
-        const {
-          appearance,
-          tts: rawTts,
-          sound: _sound,
-          alerts: _alerts,
-          ...next
-        } = config;
-        const json = JSON.stringify(next);
-        if (json !== lastJson) {
-          lastJson = json;
-          setPlatforms(next);
-        }
-        // Appearance styling must not enter the platform object above: doing
-        // so reconnects every chat engine.  Keep only the two moderation
-        // fields the Dock needs, strictly sanitized and identity-stable.
-        const sanitized = sanitizeAppearance(appearance);
-        const nextModeration = {
-          blockedUsers: sanitized.blockedUsers,
-          hideBots: sanitized.hideBots,
-        };
-        const moderationJson = JSON.stringify(nextModeration);
-        if (moderationJson !== lastModerationJson) {
-          lastModerationJson = moderationJson;
-          setModerationAppearance(nextModeration);
-        }
-        // Read-aloud voice. Kept OUT of the platform object above for
-        // the same reason appearance is: a new identity there would
-        // reconnect every chat engine.
-        const nextTts = sanitizeTtsConfig(rawTts);
-        const ttsJson = JSON.stringify(nextTts);
-        if (ttsJson !== lastTtsJson) {
-          lastTtsJson = ttsJson;
-          setTts(nextTts);
-        }
-        setLoadedToken(token);
-      } catch {
-        /* transient — next tick retries */
-      }
-    };
-    void load();
-    const timer = setInterval(load, CONFIG_REFRESH_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [token, onInvalid]);
-
-  return {
-    platforms: loaded ? platforms : null,
-    moderationAppearance: loaded
-      ? moderationAppearance
-      : DEFAULT_MODERATION_APPEARANCE,
-    tts,
-    loaded,
-  };
-}
-
-const SECTIONS = [
-  { id: "dock-chat", label: "Chat" },
-  { id: "dock-highlight", label: "Highlight" },
-  { id: "dock-scenes", label: "Scenes" },
-  { id: "dock-build-profile", label: "Build profile" },
-  { id: "dock-timer", label: "Timer" },
-  { id: "dock-poll", label: "Poll" },
-  { id: "dock-goals", label: "Goals" },
-  { id: "dock-clips", label: "Clips" },
-  { id: "dock-actions", label: "Actions" },
-] as const;
 
 export function DockClient({ token }: { token: string }) {
   const [invalidToken, setInvalidToken] = useState<string | null>(null);
@@ -202,7 +96,7 @@ export function DockClient({ token }: { token: string }) {
 
 function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () => void }) {
   const { platforms, moderationAppearance, tts, loaded } =
-    usePlatformConfig(token, onInvalid);
+    useDockPlatformConfig(token, onInvalid);
   const { messages, events, statuses } = useMultiChat({
     apiBase: API_BASE,
     token,
@@ -213,7 +107,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
   const viewers = useViewerCounts(token, events);
   // Clip-moment log keeps its own boot fetch + 60s fallback. The lightweight
   // studio subscription below listens only for control-state updates.
-  const { summary: engagement } = useEngagementState(token, null);
+  const { summary: engagement, loaded: engagementReady } = useEngagementState(token, null);
 
   // Keep readiness tied to the token as part of the snapshot itself. That
   // makes a token change fail closed on its very first render instead of
@@ -466,50 +360,16 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
   };
 
   const [dockUrl, setDockUrl] = useState("");
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    setDockUrl(window.location.href);
-  }, []);
-  const copyDockUrl = async () => {
-    if (!navigator.clipboard || !dockUrl) return;
-    await navigator.clipboard.writeText(dockUrl);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
-  };
-
-  const jumpTo = (id: string) =>
-    document.getElementById(id)?.scrollIntoView({ block: "start" });
-
-  return (
-    <div className="mx-auto min-h-screen w-full max-w-6xl p-2 font-sans text-text sm:p-3">
-      <DockPresenceStrip token={token} />
-      {/* Narrow-mode sticky jump tabs — the OBS dock has no room for
-          a permanent two-column layout. */}
-      <div className="sticky top-0 z-10 -mx-2 mb-2 flex items-center gap-1 overflow-x-auto border-b border-border bg-[#0b0e14] px-2 py-1.5 lg:hidden">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => jumpTo(s.id)}
-            className="whitespace-nowrap rounded-md px-2 py-1 text-caption text-text-muted hover:bg-bg-elevated hover:text-text"
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      {connectionStatus === "reconnecting" ? <p role="status" className="mb-2 text-caption text-text-muted">Reconnecting to SC2 Tools…</p> : null}
-
-      {error ? (
-        <div role="alert" className="mb-2 rounded-md border border-danger/40 bg-danger/10 px-2.5 py-1.5 text-caption text-danger">
-          {error}
-          <div className="mt-1 flex gap-2"><DockButton onClick={() => void lastFailedActionRef.current?.()}>Retry</DockButton><DockButton onClick={() => { setError(null); lastFailedActionRef.current = null; }}>Dismiss</DockButton></div>
-        </div>
-      ) : null}
-
-      <div className="min-w-0 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-4">
-        <section id="dock-chat" className="mb-3 min-w-0 scroll-mt-12 lg:mb-0">
-          <DockChat
+  useEffect(() => { setDockUrl(window.location.href); }, []);
+  const { layout, setOpen, togglePin, setBrollOpen, reset } = useDockLayout();
+  const ordered = orderedDockSections(layout);
+  const { active, jumpTo } = useDockScrollSpy(setOpen);
+  const tally = usePollTally(moderatedMessages, studio.poll);
+  const summaries = useDockSummaries(studio, studioSnapshotReady, platforms, loaded,
+    tally?.total ?? 0, engagement.clipMoments.length, engagementReady);
+  const panels: Record<DockSectionId, ReactNode> = {
+    "dock-chat": <>
+<DockChat embedded
             loaded={loaded}
             studioReady={studioSnapshotReady}
             platforms={platforms}
@@ -523,14 +383,11 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
             onHighlight={(m) => void highlightMessage(m)}
             onBlock={(user) => void blockUser(user)}
           />
-          {blockUndo ? <p role="status" className="mt-2 text-caption text-success">Blocked {blockUndo.user} · <button type="button" disabled={busy || !studioSnapshotReady} onClick={() => void unblockUser(blockUndo.user)} className="underline">Undo</button></p> : null}
+          {blockUndo ? <p role="status" className="mt-2 text-caption text-success">Blocked {blockUndo.user} · <DockButton type="button" disabled={busy || !studioSnapshotReady} onClick={() => void unblockUser(blockUndo.user)} className="underline">Undo</DockButton></p> : null}
           <DockBlockedUsers users={studio.blockedUsers} managedUsers={moderationAppearance.blockedUsers.split(",").map((u) => u.trim()).filter(Boolean)} ready={studioSnapshotReady} busy={busy} onUnblock={(user) => void unblockUser(user)} />
-        </section>
-
-        <div className="min-w-0 space-y-3">
-          <section id="dock-highlight" className="scroll-mt-12">
-            <SectionCard title="Highlight">
-              {studio.highlight ? (
+    </>,
+    "dock-highlight": <>
+{studio.highlight ? (
                 <div className="space-y-2">
                   <div className="rounded-md border border-accent-cyan/40 bg-accent-cyan/10 px-2.5 py-2">
                     <div className="text-micro font-semibold uppercase tracking-wider text-accent-cyan">
@@ -546,7 +403,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
                         studio.highlight && speakHighlight(studio.highlight)
                       }
                     >
-                      🔊 Read aloud
+                      <Volume2 aria-hidden className="h-4 w-4" /> Read aloud
                     </DockButton>
                     <DockButton
                       disabled={busy}
@@ -562,22 +419,16 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
                   pin it on stream.
                 </p>
               )}
-              <label className="mt-2 flex items-center gap-1.5 text-caption text-text-muted">
-                <input
-                  type="checkbox"
-                  checked={autoRead}
-                  onChange={(e) => toggleAutoRead(e.target.checked)}
-                  className="h-3.5 w-3.5 accent-[var(--accent,#3ec0c7)]"
-                />
-                Auto-read new highlights (spoken on this device)
-              </label>
-            </SectionCard>
-          </section>
-
-          <section id="dock-scenes" className="scroll-mt-12">
-            <SectionCard title="Scenes">
-              <DockScenes
+              <div className="mt-2 flex items-center gap-2 text-caption text-text-muted">
+                <DockToggle checked={autoRead} onChange={toggleAutoRead} label="Auto-read new highlights" />
+                <span>Auto-read new highlights (spoken on this device)</span>
+              </div>
+    </>,
+    "dock-scenes": <>
+<DockScenes
                 token={token}
+                brollOpen={layout.brollOpen}
+                onBrollOpenChange={setBrollOpen}
                 studioReady={studioSnapshotReady}
                 scene={studio.scene}
                 broll={studio.broll}
@@ -585,35 +436,26 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
                 streamStartMs={studio.streamStartMs}
                 onPost={postStudioAction}
               />
-            </SectionCard>
-          </section>
-
-          <section id="dock-build-profile" className="scroll-mt-12">
-            <SectionCard title="Build profile">
-              <BuildProfileEditor
+    </>,
+    "dock-build-profile": <>
+<BuildProfileEditor
                 key={token}
                 profile={studio.buildProfile}
                 busy={busy}
                 ready={studioSnapshotReady}
                 onPost={postStudio}
               />
-            </SectionCard>
-          </section>
-
-          <section id="dock-timer" className="scroll-mt-12">
-            <SectionCard title="Countdown timer">
-              <DockTimer
+    </>,
+    "dock-timer": <>
+<DockTimer
                 studioReady={studioSnapshotReady}
                 timer={studio.timer}
                 busy={busy}
                 onPost={postStudioAction}
               />
-            </SectionCard>
-          </section>
-
-          <section id="dock-poll" className="scroll-mt-12">
-            <SectionCard title="Poll">
-              <DockPollCard
+    </>,
+    "dock-poll": <>
+<DockPollCard
                 token={token}
                 studioReady={studioSnapshotReady}
                 poll={studio.poll}
@@ -621,23 +463,17 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
                 busy={busy}
                 onPost={postStudioAction}
               />
-            </SectionCard>
-          </section>
-
-          <section id="dock-goals" className="scroll-mt-12">
-            <SectionCard title="Goals">
-              <DockGoals
+    </>,
+    "dock-goals": <>
+<DockGoals
                 studioReady={studioSnapshotReady}
                 goals={studio.goals}
                 busy={busy}
                 onPost={postStudioAction}
               />
-            </SectionCard>
-          </section>
-
-          <section id="dock-clips" className="scroll-mt-12">
-            <SectionCard title="Clip moments">
-              <DockClips
+    </>,
+    "dock-clips": <>
+<DockClips
                 studioReady={studioSnapshotReady}
                 moments={engagement.clipMoments}
                 streamStartMs={studio.streamStartMs}
@@ -645,12 +481,9 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
                 busy={busy}
                 onPost={postStudioAction}
               />
-            </SectionCard>
-          </section>
-
-          <section id="dock-actions" className="scroll-mt-12">
-            <SectionCard title="Actions">
-              <div className="space-y-3">
+    </>,
+    "dock-actions": <>
+<div className="space-y-3">
                 <DockButton
                   disabled={busy || !studioSnapshotReady}
                   onClick={() => void postStudio({ recap: true })}
@@ -673,67 +506,54 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
                     Add this page as an OBS custom browser dock: Docks →
                     Custom Browser Docks, paste the URL.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => void copyDockUrl()}
-                    className="mt-1.5 rounded-md border border-border bg-bg-elevated px-2.5 py-1 text-micro text-text hover:border-accent"
-                  >
-                    {copied ? "Copied" : "Copy dock URL"}
-                  </button>
+                  <div className="mt-2"><DockCopyText value={dockUrl} label="Copy dock URL" disabled={!dockUrl} /></div>
                 </div>
               </div>
-            </SectionCard>
-          </section>
+    </>
+  };
+
+  return (
+    <div className={`${styles.root} mx-auto min-h-screen w-full max-w-6xl p-2 font-sans text-text sm:p-3`}>
+      <DockPresenceStrip token={token} />
+      {/* Narrow-mode sticky jump tabs — the OBS dock has no room for
+          a permanent two-column layout. */}
+      <nav aria-label="Dock sections" className="sticky top-0 z-10 -mx-2 mb-2 flex items-center gap-1 overflow-x-auto border-b border-border bg-bg px-2 py-1.5 lg:hidden">
+        {DOCK_SECTIONS.map((s) => (
+          <DockButton
+            key={s.id}
+            type="button"
+            onClick={() => jumpTo(s.id)}
+            aria-current={active === s.id ? "location" : undefined}
+            className="shrink-0 whitespace-nowrap px-2 text-caption"
+            variant={active === s.id ? "primary" : "ghost"}
+          >
+            {s.label}
+          </DockButton>
+        ))}
+      </nav>
+      <div className="mb-2 flex justify-end"><DockButton onClick={reset}>Reset layout</DockButton></div>
+
+      {connectionStatus === "reconnecting" ? <p role="status" className="mb-2 text-caption text-text-muted">Reconnecting to SC2 Tools…</p> : null}
+
+      {error ? (
+        <div role="alert" className="mb-2 rounded-md border border-danger/40 bg-danger/10 px-2.5 py-1.5 text-caption text-danger">
+          {error}
+          <div className="mt-1 flex gap-2"><DockButton onClick={() => void lastFailedActionRef.current?.()}>Retry</DockButton><DockButton onClick={() => { setError(null); lastFailedActionRef.current = null; }}>Dismiss</DockButton></div>
         </div>
-      </div>
-    </div>
-  );
-}
+      ) : null}
 
-function SectionCard({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-bg-surface p-3">
-      <div className="mb-2 text-micro font-bold uppercase tracking-widest text-accent-cyan">
-        {title}
+      {/* A single keyed parent preserves each panel's draft when pin order changes. */}
+      <div className={`${styles.grid} grid min-w-0 gap-3`} data-chat-pinned={layout.pinned.includes("dock-chat")} style={{ "--dock-controls": Math.max(1, 8 - layout.pinned.filter(id => id !== "dock-chat").length) } as CSSProperties}>
+        {ordered.map(id => {
+          const section = DOCK_SECTIONS.find(value => value.id === id)!;
+          return <SectionCard key={id} id={id} title={section.label} {...summaries[id]}
+            open={!layout.collapsed.includes(id)} pinned={layout.pinned.includes(id)}
+            onToggle={() => setOpen(id, layout.collapsed.includes(id))} onPin={() => togglePin(id)}>
+            {panels[id]}
+          </SectionCard>;
+        })}
       </div>
-      {children}
-    </div>
-  );
-}
 
-export function DockButton({
-  disabled,
-  onClick,
-  danger,
-  success,
-  children,
-}: {
-  disabled?: boolean;
-  onClick: () => void;
-  danger?: boolean;
-  success?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={[
-        "rounded-md border px-2.5 py-1.5 text-caption font-medium transition-colors disabled:opacity-50",
-        danger
-          ? "border-danger/50 text-danger hover:bg-danger/10"
-          : success ? "border-success/50 bg-success/15 text-success hover:bg-success/25"
-          : "border-border bg-bg-elevated text-text hover:border-accent",
-      ].join(" ")}
-    >
-      {children}
-    </button>
+    </div>
   );
 }

@@ -23,8 +23,12 @@ const article: HelpArticle = {
     "clip",
     "block spammers",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-25",
   body: [
+    {
+      type: "paragraph",
+      text: "Tap a section title to collapse it; pin the sections you use every game to the top.",
+    },
     {
       type: "paragraph",
       text: "The Stream Dock URL (shown in the multichat settings) is a second-screen control panel — add it in OBS via **Docks → Custom Browser Docks**, or open it on a phone. From it you can: pin a chat highlight on stream (and have it read aloud), run chat polls and **build votes** (chat picks your opening from your real saved builds), update stream goals, switch **Starting Soon, BRB, Intermission and Stream ending scenes** with a countdown, fire the session recap card, review the **clip-moment log** (every chat spike and big game moment, timestamped with the chat lines that caused it), and block spammers everywhere at once.",

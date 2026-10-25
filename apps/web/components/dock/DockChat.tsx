@@ -1,5 +1,7 @@
 "use client";
 
+import { DockButton } from "./DockControls";
+
 /**
  * DockChat — the Stream Dock's live merged feed with moderation
  * affordances. Same message stream the OBS source shows, rendered
@@ -22,7 +24,8 @@
  *     commits — mis-taps in a 300px dock are cheap, unblocking isn't.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import styles from "./DockLayout.module.css";
 import { fallbackColor, mergeDisplayFeed } from "@/lib/multichat/feed";
 import {
   excludeBlockedUsers,
@@ -78,6 +81,7 @@ function timeLabel(atMs: number): string {
 }
 
 export function DockChat({
+  embedded = false,
   loaded,
   studioReady = true,
   platforms,
@@ -91,6 +95,7 @@ export function DockChat({
   onHighlight,
   onBlock,
 }: {
+  embedded?: boolean;
   loaded: boolean;
   /** The Dock withholds activity until its moderation snapshot is ready. */
   studioReady?: boolean;
@@ -155,7 +160,7 @@ export function DockChat({
   };
 
   return (
-    <div className="flex min-w-0 flex-col rounded-lg border border-border bg-bg-surface">
+    <div className={`flex min-w-0 flex-col bg-bg-surface ${embedded ? "" : "rounded-lg border border-border"}`}>
       {/* Status + audience share one wrapping row: tighter gaps keep
           all four platforms plus the total inside two lines even at
           OBS-dock width, and a wrapped line costs a hair of height
@@ -185,7 +190,7 @@ export function DockChat({
                 className="inline-block h-1.5 w-1.5 rounded-full"
                 style={{ background: STATE_DOT[st] }}
               />
-              {PLATFORM_META[p].label}
+              {PLATFORM_META[p].label} · {st}
               {/* Unknown counts render nothing at all — a placeholder
                   dash in every row is the clutter this avoids. */}
               {count !== null ? (
@@ -288,8 +293,8 @@ export function DockChat({
                   </div>
                   <div className="mt-0.5 min-w-0 break-words text-text">
                     <span
-                      className="font-semibold"
-                      style={{ color: fallbackColor(event.user) }}
+                      className={`${styles.name} font-semibold`}
+                      style={{ "--dock-name-color": fallbackColor(event.user) } as CSSProperties}
                     >
                       {event.user}
                     </span>
@@ -316,22 +321,24 @@ export function DockChat({
                 <button
                   type="button"
                   onClick={() => setSelected(showActions ? null : key)}
-                  className="block w-full min-w-0 break-words text-left"
+                  aria-expanded={showActions}
+                  aria-label={`Actions for message from ${m.user}: ${m.text}`}
+                  className="block min-h-8 w-full min-w-0 rounded break-words text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent [@media(pointer:coarse)]:min-h-10"
                 >
                   <span className="mr-1.5 tabular-nums text-micro text-text-dim">
                     {timeLabel(m.atMs)}
                   </span>
                   <span
                     className="mr-1.5 inline-flex h-4 shrink-0 items-center justify-center rounded px-1.5 align-middle text-micro font-extrabold leading-none tracking-wide"
-                    style={{ background: meta.color, color: meta.fg }}
+                    style={{ background: m.platform === "youtube" ? "#c92a2a" : meta.color, color: meta.fg }}
                     title={`${meta.label} chat`}
                     aria-label={`${meta.label} chat`}
                   >
                     {meta.short}
                   </span>
                   <span
-                    className="font-semibold"
-                    style={{ color: m.color || fallbackColor(m.user) }}
+                    className={`${styles.name} font-semibold`}
+                    style={{ "--dock-name-color": m.color || fallbackColor(m.user) } as CSSProperties}
                   >
                     {m.user}
                   </span>
@@ -341,17 +348,19 @@ export function DockChat({
                 <div
                   className={`${showActions ? "flex" : "hidden group-hover:flex"} mt-0.5 gap-1.5 pl-5`}
                 >
-                  <button
+                  <DockButton
                     type="button"
                     disabled={busy}
+                    aria-label={`Highlight message from ${m.user}`}
                     onClick={() => onHighlight(m)}
                     className="rounded border border-accent-cyan/50 px-1.5 py-0.5 text-micro text-accent-cyan hover:bg-accent-cyan/10 disabled:opacity-50"
                   >
                     Highlight
-                  </button>
-                  <button
+                  </DockButton>
+                  <DockButton
                       type="button"
                       disabled={busy || blocklistFull}
+                      aria-label={armed === m.user ? `Confirm block ${m.user}` : `Block ${m.user}`}
                       title={blocklistFull ? "Blocklist full — unblock someone first" : undefined}
                       onClick={() => tapBlock(m.user)}
                       className={`rounded border px-1.5 py-0.5 text-micro disabled:opacity-50 ${
@@ -361,7 +370,7 @@ export function DockChat({
                       }`}
                     >
                       {armed === m.user ? "Confirm?" : "Block"}
-                    </button>
+                    </DockButton>
                 </div>
               </div>
             );
