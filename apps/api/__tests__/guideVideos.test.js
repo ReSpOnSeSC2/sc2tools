@@ -19,6 +19,7 @@ const { PATCH_5_0_16_RELEASE, PATCH_5_0_17_RELEASE } = require("../src/util/patc
 const { FEED_URL, OEMBED_URL, FEED_TIMEOUT_MS } = require("../src/services/guideVideoHttp");
 const { loadConfig } = require("../src/config/loader");
 const SNAPSHOT = require("../src/config/guideVideosSnapshot.json");
+const { GUIDE_CURRENT_ERA, GUIDE_PAGE_MIN_GAMES, GUIDE_PAGE_MIN_USERS } = require("../src/config/guides");
 
 const FEED = fs.readFileSync(path.join(__dirname, "fixtures", "guides", "youtube-channel-feed.xml"), "utf8");
 const CHANNEL_ID = "UCZS3YP1mvpqyuU5vPvHVG7g";
@@ -60,6 +61,7 @@ describe("GuideVideosService", () => {
   beforeEach(async () => {
     now = NOW;
     await db.guideVideos.deleteMany({});
+    await db.guideStats.deleteMany({});
   });
 
   afterAll(async () => {
@@ -78,6 +80,50 @@ describe("GuideVideosService", () => {
       ...opts,
     });
   }
+
+  describe("public matchup and published guide metadata", () => {
+    const key = "build:after:PvZ:stargate-into-glaives";
+    const cell = { games: GUIDE_PAGE_MIN_GAMES, users: GUIDE_PAGE_MIN_USERS, wins: Math.floor(GUIDE_PAGE_MIN_GAMES / 2), winRate: .5, ci: { low: .3, high: .7 } };
+    const guide = (overrides = {}) => ({ key, kind: "build", era: GUIDE_CURRENT_ERA, matchup: "PvZ", buildSlug: "stargate-into-glaives", published: true, overall: cell, ...overrides });
+    test("public lists and guide/index selections add only safe metadata with a unique published target", async () => {
+      const svc = service({ eightWorkerWindow: null }); await svc.ensureSnapshot();
+      await db.guideStats.insertOne(guide());
+      const videos = await svc.all();
+      const video = videos.find(row => row.youtubeId === "YcTMc_Ee11w");
+      expect(video).toMatchObject({ matchup: "PvZ", buildSlug: "stargate-into-glaives" });
+      expect(Object.keys(video).sort()).toEqual(["youtubeId", "title", "publishedAt", "url", "thumbnailUrl", "embedUrl", "excerpt", "checklist", "eightWorkerPatch", "matchup", "buildSlug"].sort());
+      expect((await svc.videosForBuild("PvZ", "PvZ - Stargate into Glaives"))[0].buildSlug).toBe("stargate-into-glaives");
+      expect((await svc.latest(12)).every(row => row.matchup !== undefined && Object.hasOwn(row,"buildSlug"))).toBe(true);
+    });
+    test("publishing and unpublishing are rechecked after the five-minute video cache warms", async () => {
+      const svc = service(); await svc.ensureSnapshot();
+      const findVideo = async () => (await svc.all()).find(row => row.youtubeId === "YcTMc_Ee11w");
+      expect((await findVideo()).buildSlug).toBeNull(); const cached = svc.cache.rows;
+      await db.guideStats.insertOne(guide()); expect((await findVideo()).buildSlug).toBe("stargate-into-glaives");
+      await db.guideStats.updateOne({ key }, { $set: { published: false } }); expect((await findVideo()).buildSlug).toBeNull();
+      expect(svc.cache.rows).toBe(cached);
+    });
+    test("wrong era, unpublished and flag-only below-floor records never become guide links", async () => {
+      const svc=service(); await svc.ensureSnapshot();
+      await db.guideStats.insertOne(guide({era:"before"}));
+      const slug=async()=>(await svc.all()).find(row=>row.youtubeId==="YcTMc_Ee11w").buildSlug;
+      expect(await slug()).toBeNull();
+      await db.guideStats.updateOne({key},{$set:{era:GUIDE_CURRENT_ERA,published:false}});expect(await slug()).toBeNull();
+      await db.guideStats.updateOne({key},{$set:{published:true,overall:{...cell,games:GUIDE_PAGE_MIN_GAMES-1}}});expect(await slug()).toBeNull();
+    });
+    test("concurrent selections share one bounded publication batch; read failure keeps videos without links", async () => {
+      const svc=service();await svc.ensureSnapshot();const find=jest.spyOn(db.guideStats,"find");
+      await Promise.all([svc.latest(8,TWELVE_WORKERS),svc.latest(12,EIGHT_WORKERS)]);
+      expect(find).toHaveBeenCalledTimes(1);expect(find.mock.calls[0][0].key.$in.length).toBeLessThanOrEqual(500);
+      find.mockImplementationOnce(()=>{throw new Error("temporary_publication_read_failure");});
+      const videos=await svc.all();expect(videos.length).toBeGreaterThan(0);expect(videos.every(row=>row.buildSlug===null)).toBe(true);find.mockRestore();
+    });
+    test("ambiguous catalog matches stay null even when one matching guide is published", async () => {
+      const svc=service();await db.guideStats.insertOne(guide());
+      await db.guideVideos.insertOne({youtubeId:"ambig-00001",title:"PvZ Carrier Rush and Stargate into Glaives",publishedAt:new Date(NOW),description:"",hidden:false,isShort:false});
+      expect((await svc.all())[0]).toMatchObject({matchup:"PvZ",buildSlug:null});
+    });
+  });
 
   /** @param {string} [body] */
   function feedFetch(body = FEED) {
@@ -302,6 +348,8 @@ describe("GuideVideosService", () => {
         excerpt: "This PvZ build hides an 18-Glaive-Adept timing behind what looks like a normal Stargate opener—and punishes Zerg players who drone too hard.",
         checklist: expect.arrayContaining(["Stargate at 150 gas", "Move before Glaives completes"]),
         eightWorkerPatch: false,
+        matchup: "PvZ",
+        buildSlug: null,
       });
       expect(videos[0].checklist).toHaveLength(10);
     });

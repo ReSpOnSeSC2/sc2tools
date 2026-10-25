@@ -95,4 +95,3 @@ Deploy the API and web together for `overlay-profile-sync`. The API Dockerfile i
 # Widget playground
 
 No additional owner configuration is required. The normal API image includes the shared sample JSON; deploy API and web normally. Use Settings → Overlay → Widgets → Preview, Stream Studio or the public playground to inspect silent local sample data before using Test in OBS. The playground uses no account or overlay token and makes no provider request. No production integration or account setting was changed while validating it.
-
