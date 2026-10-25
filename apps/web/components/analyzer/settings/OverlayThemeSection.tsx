@@ -1,4 +1,5 @@
 "use client";
+import { CHECKERBOARD, PREVIEW_CSS } from "@/lib/overlayPreviewStyles";
 
 import {
   useEffect,
@@ -42,10 +43,9 @@ import {
 /**
  * Settings · Overlay tab · Theme section.
  *
- * Restyles the OBS widgets without any server round-trip: the chosen
- * theme is encoded into the copyable overlay URLs (``?theme=…``) by the
- * parent SettingsOverlay, so an OBS Browser Source needs no re-auth —
- * just a re-copied URL. The live preview renders real widget components
+ * Previews the shared profile draft before an explicit Save applies it
+ * to connected OBS sources. Previously copied ?theme= URLs retain their
+ * explicit override. The live preview renders real widget components
  * with static sample data (no sockets) over a checkerboard so streamers
  * can judge compositing before touching OBS.
  */
@@ -142,7 +142,7 @@ export function OverlayThemeSection({
   return (
     <Section
       title="Overlay theme"
-      description="Restyle every widget — structural frame, texture, accent colour, panel opacity, corners, size and type. The theme travels inside the URLs above, so after changing it re-copy the URLs into your OBS Browser Sources (no re-auth needed)."
+      description="Restyle every widget — structural frame, texture, accent colour, panel opacity, corners, size and type. Save overlay display to update connected sources. Existing URLs with a ?theme= override keep that look; remove the override once to follow saved changes."
     >
       <Card>
         <div className="space-y-5 px-2 py-2">
@@ -366,32 +366,6 @@ const SAMPLE_SESSION: SessionSummary = {
   region: "NA",
   streak: { kind: "win", count: 3 },
   isTest: true,
-};
-
-/**
- * Neutralise WidgetShell's absolute slot positioning inside the preview
- * so the sample widgets flow in a row — the same trick the per-widget
- * OverlayWidgetClient uses for its solo frame. Static CSS only.
- */
-const PREVIEW_CSS = `
-.ov-theme-preview .widget-shell {
-  position: relative !important;
-  top: auto !important;
-  left: auto !important;
-  right: auto !important;
-  bottom: auto !important;
-  transform: none !important;
-  flex-shrink: 0;
-}
-`;
-
-/** OBS-style transparency checkerboard. Deliberately theme-independent —
- * it stands in for "transparent over gameplay", not for site chrome. */
-const CHECKERBOARD: CSSProperties = {
-  backgroundColor: "#3d424d",
-  backgroundImage:
-    "repeating-conic-gradient(#4a505c 0% 25%, #3d424d 0% 50%)",
-  backgroundSize: "18px 18px",
 };
 
 export function OverlayThemePreview({ theme }: { theme: OverlayTheme }) {

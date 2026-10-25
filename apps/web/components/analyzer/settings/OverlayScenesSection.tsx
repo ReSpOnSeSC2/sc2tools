@@ -15,7 +15,7 @@ import { useState } from "react";
 import { Clapperboard, Layers, Monitor } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
-import { appendOverlayThemeToUrl, type OverlayTheme } from "@/lib/overlayTheme";
+import type { OverlayTheme } from "@/lib/overlayTheme";
 import { appendOverlayCreditToUrl } from "@/lib/overlayCredit";
 import {
   STREAM_BACKGROUNDS,
@@ -90,6 +90,8 @@ export function OverlayScenesSection({
   origin?: string;
   theme: OverlayTheme;
 }) {
+  void theme;
+  void theme;
   const [preview, setPreview] = useState<string>("between-games");
   // Same choice as the All-in-one row's credit toggle (lib/overlayCredit).
   const [showCredit] = useOverlayCreditPreference();
@@ -140,7 +142,7 @@ export function OverlayScenesSection({
             const url =
               scene.kind === "virtual-set"
                 ? sceneUrl
-                : appendOverlayCreditToUrl(appendOverlayThemeToUrl(sceneUrl, theme), showCredit);
+                : appendOverlayCreditToUrl(sceneUrl, showCredit);
             const SceneIcon =
               scene.kind === "virtual-set" ? Clapperboard : Layers;
             return (

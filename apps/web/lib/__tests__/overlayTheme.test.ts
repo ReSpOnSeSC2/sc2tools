@@ -8,6 +8,7 @@ import {
   appendOverlayThemeToUrl,
   contrastRatio,
   decodeOverlayTheme,
+  overlayThemeParamFromSearch,
   encodeOverlayTheme,
   expandHex,
   isDefaultOverlayTheme,
@@ -427,4 +428,13 @@ describe("expandHex", () => {
   it("passes invalid values through untouched (caller validates)", () => {
     expect(expandHex("nope")).toBe("nope");
   });
+});
+
+
+it("preserves URL presence even for empty, malformed and repeated theme parameters", () => {
+  expect(overlayThemeParamFromSearch({})).toBeNull();
+  expect(overlayThemeParamFromSearch({ theme: "" })).toBe("");
+  expect(overlayThemeParamFromSearch({ theme: "hostile" })).toBe("hostile");
+  expect(overlayThemeParamFromSearch({ theme: ["first", "second"] })).toBe("");
+  expect(decodeOverlayTheme(overlayThemeParamFromSearch({ theme: [encodeOverlayTheme({ accent: "#abc" }), "bad"] }))).toEqual({});
 });

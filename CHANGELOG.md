@@ -15,6 +15,14 @@ corresponding GitHub Release.
 
 - Collapse panels into live summaries, pin frequently used sections, and keep the layout in this browser. Dock controls now show connection text and keyboard focus, give touch users larger targets, and offer selected text when clipboard access is unavailable.
 
+### Live overlay display
+
+- Save an overlay theme and per-widget display times to its token. Connected OBS sources receive changes without re-copying URLs; existing `?theme=` URLs keep working and retain their explicit look. Previous browser themes can be moved into a draft with an explicit Save.
+
+### Local widget playground
+
+- Preview every widget with sample scenarios and theme presets, alone or together, in Stream Studio, the widget guides and Settings. Silent local previews use no account or overlay token; Test in OBS remains the check for a real source.
+
 ### Widget manager
 
 - Find overlay widgets in grouped cards with search, source sizes, OBS drag links and private URLs hidden until revealed. Starter packs show exactly what they enable, keep existing selections and detect changes from another tab.
@@ -46,6 +54,11 @@ corresponding GitHub Release.
 - Filter analyzer views by up to twenty SC2 accounts, including saved views, shared filter links and replay navigation.
 - Export the current replay filters and sort order as a formula-safe UTF-8 CSV, with a shared column dictionary and a visible 50,000-row cap.
 
+### Opponents list and rivals
+
+- Find regular opponents with Wilson-based rivalry cards, private stars and a saved-rivals view showing measured streaks, usual openers and cached public ladder movement. Fresh public cache observations can mark an approved channel Live now.
+- Use phone dossier cards, race and region labels, remembered column choices, quick views and a shared 100-row window. Export every matching sorted opponent or up to 5,000 scoped dossier replays with the existing safe CSV download and account limit.
+
 ### My reviews dashboard
 
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
@@ -59,6 +72,10 @@ corresponding GitHub Release.
 
 - Compare builds, strategies, maps and matchups with replay-rated expected wins, sortable wins above expected, visible rating coverage and Wilson win-rate ranges. Sparse history stays unknown; fewer than ten games are marked as thin samples.
 - Trends shows matchup performance-rating windows over each pair's latest 50 decided ranked 1v1 games. Missing ratings and unbounded all-win/all-loss windows remain gaps. A bounded daily calibration uses only aggregate replay-time rating evidence, with a documented Elo fallback.
+
+### Guide video library
+
+- Filter current build-order videos by matchup, search their titles and reveal 24 cards at a time. Matchup links open with the same filter, and unique matches can link directly to a published build guide.
 
 ### Agent 0.24.5 - Opt-in game-screen assistance
 - Default build selectors and loading-screen scouting to off, matching the

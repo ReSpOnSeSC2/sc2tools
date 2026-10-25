@@ -19,12 +19,12 @@ const PROBLEMS = [
   },
   {
     title: "The card disappears, or only some cards appear",
-    body: "Many widgets are brief announcements, so they clear after their event. Session record and practice HUDs behave differently. A rematch, streak or cheese alert only appears when its conditions are met; an empty history card can mean there is not enough data. Read 'When it appears' in the widget guide before treating a quiet source as a failure.",
+    body: "Many widgets are brief announcements, so they clear after their event. Session record and practice HUDs behave differently. A rematch, streak or cheese alert only appears when its conditions are met; an empty history card can mean there is not enough data. Read 'When it appears' in the widget guide before treating a quiet source as a failure. Change Display time in Settings → Overlay → Widgets → Display and Save overlay display for the next appearance. Default uses the usual time; Tests respect shorter settings and stay capped at 20s. Persistent and self-driven widgets keep their own visibility rules.",
     href: "#widget-library", action: "Find the widget's trigger",
   },
   {
     title: "The widget is cut off or far too large",
-    body: "Browser Source width and height set the page's drawing area. Change those in source properties before resizing the source on your scene. Start a landscape All-in-one source at your canvas size, for example 1920 × 1080. For individual sources, leave enough room around the card; Build profile uses 720 × 900. Use the overlay appearance controls for text and panel size, then copy the updated URL when the theme is part of it.",
+    body: "Browser Source width and height set the page's drawing area. Change those in source properties before resizing the source on your scene. Start a landscape All-in-one source at your canvas size, for example 1920 × 1080. For individual sources, leave enough room around the card; Build profile uses 720 × 900. Use the overlay appearance controls for text and panel size, then Save overlay display to update connected sources. Older URLs with a ?theme= override keep that look; remove the override once to follow saved changes.",
     href: "/settings?tab=overlay", action: "Adjust appearance",
   },
   {

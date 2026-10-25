@@ -78,7 +78,7 @@ const ROLL_REPORT_WINDOW_MS = 60_000;
  *   secretKey: string,
  *   issuer?: string,
  *   audience?: string,
- *   resolveOverlayToken?: (token: string) => Promise<{userId: string, label: string, enabledWidgets?: string[]}|null>,
+ *   resolveOverlayToken?: (token: string) => Promise<{userId: string, label: string, enabledWidgets?: string[],profile?:unknown,profileRevision?:number}|null>,
  *   validateOverlayToken?: (userId: string, token: string) => Promise<boolean>,
  *   resolveDeviceToken?: (tokenHash: string) => Promise<{userId: string, deviceId?: string}|null>,
  *   resolveSession?: (userId: string, timezone?: string) => Promise<{
@@ -221,11 +221,12 @@ function attachSocketAuth(io, opts) {
           .resolveOverlayToken(t)
           .then(async (info) => {
             if (!info) return;
-            /** @type {{ enabledWidgets?: string[], voicePrefs?: Record<string, unknown>, randomizer?: Record<string, unknown> }} */
+            /** @type {{ enabledWidgets?: string[], voicePrefs?: Record<string, unknown>, randomizer?: Record<string, unknown>,profile?:unknown,profileRevision?:number }} */
             const config = {};
             if (Array.isArray(info.enabledWidgets)) {
               config.enabledWidgets = info.enabledWidgets;
             }
+            if (info.profile) { config.profile = info.profile; config.profileRevision = info.profileRevision ?? 0; }
             if (opts.resolveVoicePrefs) {
               try {
                 const prefs = await opts.resolveVoicePrefs(info.userId);
@@ -254,7 +255,7 @@ function attachSocketAuth(io, opts) {
             if (opts.resolveBuildIntent) {
               await replayOverlayBuildIntent(socket, opts.resolveBuildIntent, info.userId);
             }
-            if (config.enabledWidgets || config.voicePrefs || config.randomizer) {
+            if (config.enabledWidgets || config.voicePrefs || config.randomizer || config.profile) {
               socket.emit("overlay:config", config);
             }
           })

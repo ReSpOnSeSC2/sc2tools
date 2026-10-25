@@ -197,6 +197,7 @@ class OverlayLiveService {
    *   opponents?: any,
    *   gameDetails?: import('./gameDetails').GameDetailsService | null,
    *   pulseMmr?: import('./pulseMmr').PulseMmrService | null,
+   *   rivals?: Pick<import('./rivals').RivalsService,'isStarred'> | null,
    * }} [services]
    */
   constructor(db, services = {}) {
@@ -219,6 +220,7 @@ class OverlayLiveService {
      * @type {import('./pulseMmr').PulseMmrService | null}
      */
     this.pulseMmr = services.pulseMmr || null;
+    this.rivals = services.rivals || null;
     /**
      * Per-(userId, oppName, oppRace) cache for live-envelope
      * enrichment. The agent fires envelopes at 1 Hz during a match;
@@ -301,6 +303,9 @@ class OverlayLiveService {
             {
               projection: {
                 _id: 0,
+                pulseId: 1,
+                pulseCharacterId: 1,
+                toonHandle: 1,
                 gameCount: 1,
                 wins: 1,
                 losses: 1,
@@ -335,10 +340,12 @@ class OverlayLiveService {
       // once the streamer has crossed paths enough to justify the
       // panel real estate.
       const games = Number(oppRow.gameCount) || wins + losses;
-      if (games >= 3) {
+      const starred = this.rivals ? await this.rivals.isStarred(userId, oppRow).catch(() => false) : false;
+      if (games >= 3 || starred) {
         payload.rival = {
           name: opp?.displayName || undefined,
           headToHead: { wins, losses },
+          ...(starred ? { starred: true } : {}),
         };
       }
       // Rematch = same opponent within the last 24h, more than once.
@@ -687,10 +694,12 @@ class OverlayLiveService {
       // Same RIVAL / FAMILIAR threshold as buildFromGame (3+ prior
       // encounters) so the pre-game card flags repeat opponents the
       // same way the post-game card does.
-      if (games >= 3) {
+      const starred = this.rivals && oppRow.matchedBy !== "display_name" ? await this.rivals.isStarred(userId, oppRow).catch(() => false) : false;
+      if (games >= 3 || starred) {
         payload.rival = {
           name: oppRow.displayNameSample || opponentName,
           headToHead: { wins, losses },
+          ...(starred ? { starred: true } : {}),
         };
       }
       const lastSeen = oppRow.lastSeen

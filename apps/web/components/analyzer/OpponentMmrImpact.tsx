@@ -159,38 +159,38 @@ function MmrLeaderCard({
   );
 }
 
-export function MmrImpactCells({ opponent }: { opponent: MmrImpactRow }) {
+export function MmrImpactCells({ opponent, columns = { netMmr: true, mmrWon: true, mmrLost: true } }: { opponent: MmrImpactRow; columns?: { netMmr: boolean; mmrWon: boolean; mmrLost: boolean } }) {
   const pairs = opponent.mmrPairs || 0;
   const tracked = pairs > 0 && typeof opponent.netMmr === "number";
   if (!tracked) {
     return (
       <>
-        <td className="px-2 py-1 text-right text-text-dim">{"—"}</td>
-        <td className="px-2 py-1 text-right text-text-dim">{"—"}</td>
-        <td className="px-2 py-1 text-right text-text-dim">{"—"}</td>
+        {columns.netMmr ? <td className="px-2 py-1 text-right text-text-dim">{"—"}</td> : null}
+        {columns.mmrWon ? <td className="px-2 py-1 text-right text-text-dim">{"—"}</td> : null}
+        {columns.mmrLost ? <td className="px-2 py-1 text-right text-text-dim">{"—"}</td> : null}
       </>
     );
   }
   const net = opponent.netMmr || 0;
   return (
     <>
-      <td
+      {columns.netMmr ? <td
         className={`px-2 py-1 text-right leading-tight tabular-nums ${
           net > 0 ? "text-success" : net < 0 ? "text-danger" : "text-text-muted"
         }`}
-        title={`${pairs} verified ${pairs === 1 ? "pair" : "pairs"}; average ${formatSignedDecimal(opponent.mmrAvgDelta)} MMR per pair`}
+        title={`${pairs} verified ${pairs === 1 ? "pair" : "pairs"}; average ${formatSignedDecimal(opponent.mmrAvgDelta)} MMR per pair; MMR won +${Math.round(opponent.mmrWon || 0)}; MMR lost -${Math.round(opponent.mmrLost || 0)}`}
       >
         <span className="font-semibold">{formatSignedMmr(net)}</span>
         <span className="block text-micro font-normal leading-tight text-text-dim">
           {pairs.toLocaleString()} {pairs === 1 ? "pair" : "pairs"}
         </span>
-      </td>
-      <td className="px-2 py-1 text-right font-medium tabular-nums text-success">
+      </td> : null}
+      {columns.mmrWon ? <td className="px-2 py-1 text-right font-medium tabular-nums text-success">
         +{Math.round(opponent.mmrWon || 0).toLocaleString()}
-      </td>
-      <td className="px-2 py-1 text-right font-medium tabular-nums text-danger">
+      </td> : null}
+      {columns.mmrLost ? <td className="px-2 py-1 text-right font-medium tabular-nums text-danger">
         -{Math.round(opponent.mmrLost || 0).toLocaleString()}
-      </td>
+      </td> : null}
     </>
   );
 }

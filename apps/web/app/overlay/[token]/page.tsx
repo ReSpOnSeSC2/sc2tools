@@ -1,6 +1,6 @@
 import { localOverlaySample } from "@/lib/overlayDemo.server";
 import { OverlayClient } from "@/components/OverlayClient";
-import { OVERLAY_THEME_PARAM } from "@/lib/overlayTheme";
+import { overlayThemeParamFromSearch } from "@/lib/overlayTheme";
 import { isOverlayCreditHidden, OVERLAY_CREDIT_PARAM } from "@/lib/overlayCredit";
 
 export const metadata = {
@@ -30,9 +30,7 @@ export default async function OverlayPage({
   // Passed through raw — the client decodes it with strict validation
   // and silently falls back to the stock look on any malformed value.
   const sp = await searchParams;
-  const themeParam = typeof sp[OVERLAY_THEME_PARAM] === "string"
-    ? (sp[OVERLAY_THEME_PARAM] as string)
-    : null;
+  const themeParam = overlayThemeParamFromSearch(sp);
   // ``?credit=0`` hides the "Overlay by sc2tools.com" credit (lib/overlayCredit).
   const showCredit = !isOverlayCreditHidden(sp[OVERLAY_CREDIT_PARAM]);
   return <OverlayClient demo={sp.demo === "1" ? localOverlaySample() : undefined} token={token} themeParam={themeParam} showCredit={showCredit} />;

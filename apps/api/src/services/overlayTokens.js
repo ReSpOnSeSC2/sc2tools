@@ -4,6 +4,10 @@ const { createHash } = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { randomToken } = require("../util/hash");
 const { stampVersion } = require("../db/schemaVersioning");
+const { validateOverlayProfile, defaultOverlayProfile, overlayProfileForRead } = require("../validation/overlayProfile");
+
+/** @param {unknown} value */
+const profileRevision = value => Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : 0;
 
 const DEFAULT_WIDGETS = Object.freeze([
   "opponent",
@@ -72,14 +76,17 @@ class OverlayTokensService {
   /** @param {{overlayTokens: import('mongodb').Collection}} db */
   constructor(db) {
     this.db = db;
-    /** @type {Map<string, {expiresAt: number, value: {userId: string, label: string, enabledWidgets: string[]}}>} */
+    /** @type {Map<string, {expiresAt: number, value: {userId: string, label: string, enabledWidgets: string[],profile:ReturnType<typeof overlayProfileForRead>,profileRevision:number}}>} */
     this.resolveCache = new Map();
     /** @type {Map<string, number>} */
     this.lastSeenWrites = new Map();
-    /** @type {Map<string, Promise<{userId: string, label: string, enabledWidgets: string[]} | null>>} */
+    /** @type {Map<string, Promise<{userId: string, label: string, enabledWidgets: string[],profile:ReturnType<typeof overlayProfileForRead>,profileRevision:number} | null>>} */
     this.resolveInflight = new Map();
     /** @type {WeakSet<Promise<any>>} */
     this.invalidatedInflight = new WeakSet();
+    /** Profile edits require retry, rather than declaring a valid token revoked.
+     * @type {WeakSet<Promise<any>>} */
+    this.profileChangedInflight = new WeakSet();
   }
 
   /**
@@ -114,11 +121,13 @@ class OverlayTokensService {
           lastSeenAt: null,
           revokedAt: null,
           enabledWidgets: [...DEFAULT_WIDGETS],
+          profile: defaultOverlayProfile(),
+          profileRevision: 0,
         },
         COLLECTIONS.OVERLAY_TOKENS,
       ),
     );
-    return { token, label, createdAt: now, enabledWidgets: [...DEFAULT_WIDGETS] };
+    return { token, label, createdAt: now, enabledWidgets: [...DEFAULT_WIDGETS], profile: defaultOverlayProfile(), profileRevision: 0 };
   }
 
   /**
@@ -149,6 +158,8 @@ class OverlayTokensService {
       enabledWidgets: Array.isArray(it.enabledWidgets)
         ? it.enabledWidgets
         : [...DEFAULT_WIDGETS],
+      profile: overlayProfileForRead(it.profile),
+      profileRevision: profileRevision(it.profileRevision),
     }));
   }
 
@@ -185,13 +196,20 @@ class OverlayTokensService {
         if (
           this.resolveInflight.get(cacheKey) !== pending
           || this.invalidatedInflight.has(pending)
-        ) return null;
+        ) {
+          if (this.profileChangedInflight.has(pending)) {
+            throw Object.assign(new Error("overlay_token_resolve_busy"), { code: "overlay_token_resolve_busy", status: 503, retryAfterSec: 1 });
+          }
+          return null;
+        }
         const value = {
           userId: String(row.userId),
           label: String(row.label || ""),
           enabledWidgets: Array.isArray(row.enabledWidgets)
             ? row.enabledWidgets
             : [...DEFAULT_WIDGETS],
+          profile: overlayProfileForRead(row.profile),
+          profileRevision: profileRevision(row.profileRevision),
         };
         if (this.resolveInflight.get(cacheKey) === pending) {
           this.resolveCache.set(cacheKey, {
@@ -288,6 +306,29 @@ class OverlayTokensService {
     const pending = this.resolveInflight.get(cacheKey);
     if (pending) this.invalidatedInflight.add(pending);
     return { enabledWidgets: row.enabledWidgets };
+  }
+
+  /** Owner-scoped profile CAS never replaces widget selection or credentials.
+   * @param {string} userId @param {string} token @param {unknown} raw
+   * @param {unknown} expectedRevision */
+  async setProfile(userId, token, raw, expectedRevision) {
+    const profile = validateOverlayProfile(raw);
+    if (!Number.isSafeInteger(expectedRevision) || Number(expectedRevision) < 0 || Number(expectedRevision) >= Number.MAX_SAFE_INTEGER) {
+      throw Object.assign(new Error("Use the current overlay profile revision."), { status: 400, code: "invalid_overlay_profile_revision" });
+    }
+    const revision = Number(expectedRevision);
+    const row = await this.db.overlayTokens.findOneAndUpdate({ userId, token, revokedAt: null,
+      $or: [{ profileRevision: revision }, ...(revision === 0 ? [{ profileRevision: { $exists: false } }] : [])],
+    }, { $set: { profile, profileRevision: revision + 1 } }, { returnDocument: "after", projection: { _id: 0, profile: 1, profileRevision: 1 } });
+    if (!row) {
+      const owned = await this.tokenBelongsToUser(userId, token);
+      throw Object.assign(new Error(owned ? "overlay_profile_changed" : "not_found"), { status: owned ? 409 : 404, code: owned ? "overlay_profile_changed" : "not_found" });
+    }
+    const cacheKey = tokenCacheKey(token);
+    this.resolveCache.delete(cacheKey);
+    const pending = this.resolveInflight.get(cacheKey);
+    if (pending) { this.invalidatedInflight.add(pending); this.profileChangedInflight.add(pending); }
+    return { profile: overlayProfileForRead(row.profile), profileRevision: profileRevision(row.profileRevision) };
   }
 
   /**
