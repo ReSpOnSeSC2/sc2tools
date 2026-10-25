@@ -98,7 +98,7 @@ describe("/help/[slug]", () => {
     expect(within(crumbs).getByRole("link", { name: "Help center" }).getAttribute("href")).toBe("/help");
     expect(within(crumbs).getByRole("link", { name: "Getting started" }).getAttribute("href")).toBe("/help#getting-started");
     expect(screen.getByRole("heading", { level: 1, name: "Getting started (5 minutes)" })).toBeTruthy();
-    expect(screen.getByText("October 23, 2026").closest("time")?.getAttribute("dateTime")).toBe("2026-10-23");
+    expect(screen.getByText("October 25, 2026").closest("time")?.getAttribute("dateTime")).toBe("2026-10-25");
     expect(screen.getByRole("link", { name: "Download" }).getAttribute("href")).toBe("/download");
     expect(screen.getByRole("link", { name: "Devices" }).getAttribute("href")).toBe("/devices");
 

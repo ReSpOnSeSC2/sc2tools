@@ -68,7 +68,7 @@ function WelcomeWizard({ owner }: { owner: string }) {
   useEffect(() => {
     const next = new URLSearchParams(query);
     const value = next.get("step");
-    if (isWelcomeStep(value)) { setStep(value); setBrowser(browserImportEnabled && next.get("mode") === "browser"); }
+    if (isWelcomeStep(value)) { resolved.current = true; setStep(value); setBrowser(browserImportEnabled && next.get("mode") === "browser"); }
   }, [query, browserImportEnabled]);
   useEffect(() => {
     if (!me.data) return;

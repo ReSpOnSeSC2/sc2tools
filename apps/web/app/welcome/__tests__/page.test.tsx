@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OnboardingHelpers } from "@/components/onboarding/OnboardingShell";
 import WelcomePage from "../page";
 
-const h = vi.hoisted(() => ({ params: "", replace: vi.fn(), push: vi.fn(), apiCall: vi.fn(), mutate: vi.fn(), auth: { userId: "u1", isLoaded: true, isSignedIn: true, getToken: vi.fn() }, me: { agentPaired: false, games: { total: 0 }, onboarding: {} as Record<string, unknown> } }));
+const h = vi.hoisted(() => ({ params: "", meReady: true, replace: vi.fn(), push: vi.fn(), apiCall: vi.fn(), mutate: vi.fn(), auth: { userId: "u1", isLoaded: true, isSignedIn: true, getToken: vi.fn() }, me: { agentPaired: false, games: { total: 0 }, onboarding: {} as Record<string, unknown> } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: h.push, replace: h.replace }), useSearchParams: () => new URLSearchParams(h.params) }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => h.auth, useUser: () => ({ isLoaded: true, user: { firstName: "Player" } }) }));
-vi.mock("@/lib/clientApi", async original => ({ ...await original<typeof import("@/lib/clientApi")>(), apiCall: (...args: unknown[]) => h.apiCall(...args), useApi: () => ({ data: h.me, mutate: h.mutate }) }));
+vi.mock("@/lib/clientApi", async original => ({ ...await original<typeof import("@/lib/clientApi")>(), apiCall: (...args: unknown[]) => h.apiCall(...args), useApi: () => ({ data: h.meReady ? h.me : undefined, mutate: h.mutate }) }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: vi.fn() }));
 vi.mock("@/lib/instant/useInstantImport", () => ({ useInstantImport: () => ({ enabled: true, mode: "all", loading: false }) }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: ({ slug, children }: { slug: string; children: React.ReactNode }) => <a href={"/help/" + slug}>{children}</a> }));
@@ -20,13 +20,20 @@ vi.mock("@/components/onboarding/OnboardingPair", () => ({ OnboardingPair: ({ on
 vi.mock("@/components/onboarding/OnboardingImport", () => ({ OnboardingImport: ({ mode, onContinue }: { mode: string; onContinue?: () => void }) => <><h1 id="onboarding-step-heading" tabIndex={-1}>Import step: {mode}</h1><button onClick={onContinue}>Finish setup</button></> }));
 vi.mock("@/components/onboarding/OnboardingDone", () => ({ OnboardingDone: () => <h1 id="onboarding-step-heading" tabIndex={-1}>You're set</h1> }));
 
-beforeEach(() => { h.params = ""; h.me = { agentPaired: false, games: { total: 0 }, onboarding: {} }; h.apiCall.mockReset(); h.apiCall.mockResolvedValue({}); h.replace.mockReset(); h.mutate.mockReset(); });
+beforeEach(() => { h.params = ""; h.meReady = true; h.me = { agentPaired: false, games: { total: 0 }, onboarding: {} }; h.apiCall.mockReset(); h.apiCall.mockResolvedValue({}); h.replace.mockReset(); h.mutate.mockReset(); });
 beforeEach(() => { h.auth.userId = "u1"; h.auth.isLoaded = true; h.auth.isSignedIn = true; h.auth.getToken.mockReset().mockResolvedValue("token"); h.push.mockReset(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 async function start() { await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Continue to the download step" })); }); }
 
 describe("resumable WelcomePage", () => {
+  it("keeps an explicit URL continuation selected before the first account read settles", async () => {
+    h.meReady = false; const view = render(<WelcomePage />);
+    h.params = "step=done&next=%2Fguides%2Fpvt%2Fblink"; view.rerender(<WelcomePage />);
+    expect(await screen.findByText("You're set")).toBeTruthy();
+    h.meReady = true; h.me.agentPaired = true; view.rerender(<WelcomePage />);
+    expect(screen.getByText("You're set")).toBeTruthy(); expect(h.replace).not.toHaveBeenCalled();
+  });
   it("keeps browser import Back on Download and preserves the selected path in the URL", async () => {
     render(<WelcomePage />); await start();
     fireEvent.click(screen.getByRole("button", { name: "Import in your browser" }));

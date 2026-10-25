@@ -58,7 +58,7 @@ export function useCommunityVote(slug: string, initialVotes: number) {
   const resume = usePendingIntentResume("vote", returnTo, ready, payload => payload.slug === slug,
     (intent, context) => writeVote(intent.payload.delta, false, context));
   return { ...value, authenticated: !!action.owner, authLoading: action.authLoading,
-    cast: async (next: CommunityVote) => { if (!resume.running) await writeVote(next, true).catch(() => {}); },
+    cast: async (next: CommunityVote) => { if (!resume.running) { resume.clearError(); await writeVote(next, true).catch(() => {}); } },
     completed: resume.completed || !!value.authIntentCompleted,
     pending: action.running || resume.running || Boolean(action.owner && !ready),
     retry: readError ? () => { void query.mutate().catch(() => {}); } : null,

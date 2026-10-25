@@ -199,6 +199,7 @@ function SignedInSave({
   }
 
   async function save(options: { allowDuplicate: boolean }, supplied?: IntentResumeContext): Promise<boolean> {
+    if (!supplied) resume.clearError();
     return action.run(async context => {
       setError(null);
       if (!options.allowDuplicate) {
