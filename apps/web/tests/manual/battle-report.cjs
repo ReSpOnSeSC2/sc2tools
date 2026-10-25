@@ -44,6 +44,7 @@ const server = http.createServer((req, res) => {
     if (suffix === '/build-order') return json(fixture.build);
     if (suffix === '/build-intent') return json(fixture.checkin);
     if (suffix === '/macro-breakdown') return fixture.macro ? json(fixture.macro) : json({ error: { code: 'macro_not_computed' } }, 404);
+    if (suffix === '/context') return json({ matchup: `${fixture.game.myRace[0]}v${fixture.game.opponent.race[0]}`, personal: { n: 0, limit: 50, build: fixture.game.myBuild, expansionTimings: {}, expansionSample: 0, expansionLimit: 25, expansionMinSample: 5, metrics: Object.fromEntries(['macroScore', 'apm', 'spq', 'durationSec'].map(metric => [metric, { n: 0, median: null, p25: null, p75: null }])) }, league: null });
     if (suffix === '/neighbors') return json({ prev: null, next: null });
     if (suffix === '/map-playback/status') return json({ rebuild: null });
     if (suffix === '/map-playback/manifest') return id === 'segmented' ? json(segmented.raw) : json({ error: { code: 'playback_artifact_not_found' } }, 404);
@@ -73,6 +74,7 @@ const server = http.createServer((req, res) => {
       await expect(report.getByRole('button', { name: 'Copy text', exact: true })).toBeEnabled(); await expect(report.getByRole('figure')).toHaveCount(3); checks++;
       await page.evaluate(() => document.fonts.ready); await page.waitForTimeout(2200);
       expect(mapImages.length).toBeGreaterThan(0); expect(mapImages.every(status => status === 200)).toBe(true); checks++;
+      await expect(page.getByRole('heading', { name: /Your usual and your league/ })).toBeVisible(); checks++;
       expect(requests.filter(row => row.path.endsWith('/map-playback/manifest'))).toHaveLength(1); expect(requests.filter(row => row.path.endsWith('/map-playback'))).toHaveLength(1); checks++;
       const before = await report.locator('[data-report-paragraph]').allTextContents();
       await report.getByRole('button', { name: 'Tactical', exact: true }).click(); expect(await report.locator('[data-report-paragraph]').allTextContents()).not.toEqual(before);

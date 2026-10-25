@@ -27,6 +27,8 @@ import { useMacroRecompute } from "@/components/analyzer/macro/useMacroRecompute
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { MapReplaySection } from "./MapReplaySection";
 import { MechanicsPanel } from "./MechanicsPanel";
+import { GameContextCard } from "./GameContextCard";
+import { useGameContext } from "@/lib/useBenchmarks";
 const BuildOrderColumns = dynamic(() => import("./BuildOrderColumns").then((value) => value.BuildOrderColumns), { loading: () => <div role="status" aria-label="Loading build orders" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
 const BuildWorkspaceActions = dynamic(() => import("./BuildWorkspaceActions").then(value => value.BuildWorkspaceActions));
 const GameMacroSection = dynamic(() => import("./GameMacroSection").then((value) => value.GameMacroSection), { loading: () => <div role="status" aria-label="Loading macro breakdown" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
@@ -124,6 +126,7 @@ function GameDetailContent({
   // changes the header's build label without refetching the build order.
   const { revision: checkinRevision } = useBuildCheckInRevision(false);
   const intentReq = useGameBuildIntent(gameId || null, checkinRevision);
+  const contextReq = useGameContext(gameReq.data ? gameId : null, checkinRevision);
 
   // Every timestamp seeks the mounted player; playback also drives the page.
   const clock = useGameClock(gameId, initialTimeSec, gameReq.data?.durationSec ?? macroReq.data?.game_length_sec);
@@ -268,15 +271,15 @@ function GameDetailContent({
         onSeek={setScrubTime}
       /></SectionBoundary>
 
-      <SectionBoundary key={`mechanics:${game.gameId}`} label="mechanics" title="Mechanics hit a problem"><GameStoryPanel input={storyInput} onSeek={setScrubTime} mechanics={<MechanicsPanel
+      <SectionBoundary key={`mechanics:${game.gameId}`} label="mechanics" title="Mechanics hit a problem"><GameStoryPanel input={storyInput} onSeek={setScrubTime} mechanics={<div className="space-y-4"><MechanicsPanel
           breakdown={breakdown}
           game={game}
           loading={macroStatus === "loading"}
           error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()}
           onSeek={setScrubTime}
           recomputeAction={recomputeAction} seekTarget="replay" currentTime={clock.t}
-        />} lossAutopsy={loss && autopsyGame ? (
-          <LossAutopsyCard game={autopsyGame} seekTarget="replay" recomputeAction={recomputeAction} onSeek={setScrubTime} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} />
+        /><GameContextCard game={game} context={contextReq.data} error={contextReq.error} loading={contextReq.isLoading} onRetry={() => void contextReq.mutate()} /></div>} lossAutopsy={loss && autopsyGame ? (
+          <LossAutopsyCard game={autopsyGame} personalMedians={contextReq.data?.personal} seekTarget="replay" recomputeAction={recomputeAction} onSeek={setScrubTime} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} />
         ) : undefined} /></SectionBoundary>
 
       <section ref={clock.stageRef} tabIndex={-1} id="replay" className="space-y-3 scroll-mt-[var(--game-section-offset,8rem)]" aria-labelledby="game-replay-heading">

@@ -37,6 +37,7 @@ const { PublicYoutubeVodsService } = require("./services/publicYoutubeVods");
 const { PulseMatchVodsService } = require("./services/pulseMatchVods");
 const { GameVodLinksService } = require("./services/gameVodLinks");
 const { GameDetailsService } = require("./services/gameDetails");
+const { GameContextService } = require("./services/gameContext");
 const { buildStoreFromConfig } = require("./services/gameDetailsStore");
 const { buildReplayFilesFromConfig } = require("./services/replayFiles");
 const {
@@ -441,6 +442,7 @@ function makeServices(deps, clerk) {
   const leaguePercentiles = new LeaguePercentilesService(deps.db, {
     logger: deps.logger,
   });
+  const gameContext = new GameContextService(deps.db, { leaguePercentiles, gameDetails });
   // Ladder Meta Radar — effectiveness-weighted opener meta by league
   // band + matchup from the corpus (jobs/ladderMetaRecomputeJob),
   // served PUBLICLY by routes/ladderMeta.js for the analyzer's Ladder
@@ -924,6 +926,7 @@ function makeServices(deps, clerk) {
     pulseIntel,
     pulseLinks,
     leaguePercentiles,
+    gameContext,
     fingerprintPopulationCalibration,
     skillFingerprint,
     ladderMeta,
@@ -1517,6 +1520,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildGamesRouter({
       games: services.games,
+      gameContext: services.gameContext,
       gameVods: services.gameVods,
       opponents: services.opponents,
       users: services.users,

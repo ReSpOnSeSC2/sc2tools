@@ -7,6 +7,7 @@ import { GameDetailPage } from "../GameDetailPage";
 import type { GameBuildOrderResponse, GameSummary } from "../types";
 import type { GameIntentState } from "@/lib/buildIntent";
 import { rawPayload } from "../replay/__tests__/fixtures";
+import type { GameContext } from "@/lib/benchmarks";
 
 const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
@@ -162,6 +163,7 @@ function mockEndpoints({
   intent,
   playback = false,
   buildOrder = BUILD_ORDER,
+  context,
 }: {
   slim?: GameSummary;
   macro?: MacroBreakdownData | null;
@@ -170,10 +172,12 @@ function mockEndpoints({
   intent?: GameIntentState;
   playback?: boolean;
   buildOrder?: GameBuildOrderResponse;
+  context?: GameContext;
 } = {}) {
   const encodedId = encodeURIComponent(slim.gameId);
   useApiMock.mockImplementation((path: string | null) => {
     if (!path) return { data: undefined, error: undefined, isLoading: false };
+    if (path.startsWith(`/v1/games/${encodedId}/context?`)) return { data: context, isLoading: false, mutate: vi.fn() };
     if (playback && path === `/v1/games/${encodedId}/map-playback/manifest`) {
       return { data: rawPayload(), error: undefined, isLoading: false, mutate: vi.fn() };
     }
@@ -221,6 +225,15 @@ describe("GameDetailPage", () => {
     expect(within(screen.getByRole("navigation", { name: "Game sections" })).getByRole("link", { name: "Battle report" }).getAttribute("href")).toBe("#battle-report");
   });
 
+  it("wires effective-build expansion medians into the real loss-autopsy rule", () => {
+    mockEndpoints({ macro: { ok: true, race: "Zerg", raw: {}, all_leaks: [] },
+      buildOrder: { ...BUILD_ORDER, events: [{ time: 0, name: "Hatchery" }, { time: 220, name: "Hatchery" }] },
+      context: { matchup: "ZvT", personal: { n: 5, limit: 50, build: "Checked-in opener", expansionTimings: { Hatchery: 100 },
+        expansionSample: 5, expansionLimit: 25, expansionMinSample: 5, metrics: Object.fromEntries(["macroScore","apm","spq","durationSec"].map((key) => [key, { n: 0, median: null, p25: null, p75: null }])) as GameContext["personal"]["metrics"] }, league: null } });
+    render(<GameDetailPage gameId="g1" />);
+    expect(within(screen.getByTestId("loss-autopsy-card")).getByText("Expanded later than usual")).toBeTruthy();
+    expect(within(screen.getByTestId("loss-autopsy-card")).getByRole("button", { name: "Watch the replay at 3:40" })).toBeTruthy();
+  });
   it("uses the recorded upgrade completion rather than research start and omits unknown completion times", async () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     mockEndpoints({ playback: true, buildOrder: { ...BUILD_ORDER, events: [
