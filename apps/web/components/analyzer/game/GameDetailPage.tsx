@@ -31,6 +31,7 @@ import { GameContextCard } from "./GameContextCard";
 import { useGameContext } from "@/lib/useBenchmarks";
 const BuildOrderColumns = dynamic(() => import("./BuildOrderColumns").then((value) => value.BuildOrderColumns), { loading: () => <div role="status" aria-label="Loading build orders" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
 const BuildWorkspaceActions = dynamic(() => import("./BuildWorkspaceActions").then(value => value.BuildWorkspaceActions));
+const GameDataMenu = dynamic(() => import("./GameDataMenu").then(value => value.GameDataMenu));
 const GameMacroSection = dynamic(() => import("./GameMacroSection").then((value) => value.GameMacroSection), { loading: () => <div role="status" aria-label="Loading macro breakdown" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
 const GameBattleReport = dynamic(() => import("@/components/battleReport/GameBattleReport").then((value) => value.GameBattleReport), { loading: () => <div role="status" aria-label="Loading battle report" className="h-52 animate-pulse rounded-lg bg-bg-elevated" /> });
 import { LossAutopsyCard } from "./LossAutopsyCard";
@@ -247,7 +248,7 @@ function GameDetailContent({
     <GameDetailShell
       source={source}
       game={game}
-      exportAction={<GameExportMenu game={game} buildOrders={buildReq.data} macroBreakdown={breakdown} pending={buildStatus === "loading" || macroStatus === "loading"} />}
+      exportAction={<><GameExportMenu game={game} buildOrders={buildReq.data} macroBreakdown={breakdown} pending={buildStatus === "loading" || macroStatus === "loading"} /><GameDataMenu game={game} onComplete={async changes => { if (changes.some(change => change.deleted)) router.replace(source?.href || "/app/replays"); else await gameReq.mutate(); }} /></>}
       opponentContext={opponentContext}
       streamLinks={streamLinks}
       buildLabel={checkinBuild ? checkinBuild.label : undefined}

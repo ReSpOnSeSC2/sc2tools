@@ -42,20 +42,11 @@ function buildFakeAnalyzerDir() {
 }
 
 function buildGames(rows) {
-  let i = 0;
-  return {
-    find() {
-      return {
-        sort: () => ({
-          limit: () => ({
-            [Symbol.asyncIterator]: async function* () {
-              for (const row of rows) yield row;
-            },
-          }),
-        }),
-      };
-    },
-  };
+  return { find() { return {
+    sort() { return this; }, limit() { return this; }, batchSize() { return this; },
+    close: async () => {},
+    [Symbol.asyncIterator]: async function* () { yield* rows; },
+  }; } };
 }
 
 describe("services/catalog", () => {
@@ -293,7 +284,7 @@ describe("services/catalog", () => {
     const chunks = [];
     for await (const chunk of svc.exportCsv("u1", {})) chunks.push(chunk);
     const csv = chunks.join("");
-    expect(csv).toMatch(/^gameId,date,result/);
+    expect(csv).toMatch(/^\uFEFFgameId,date,result/);
     expect(csv).toContain('"Foo,Bar"');
     expect(csv).toContain("g1");
   });

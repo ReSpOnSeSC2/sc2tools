@@ -36,6 +36,7 @@ export interface ReplayListProps {
   listQuery?: string;
   emptyTitle?: string;
   emptyDescription?: string;
+  selection?: { selectedIds: ReadonlySet<string>; onToggle: (gameId: string) => void; disabled?: boolean };
 }
 
 /**
@@ -49,6 +50,7 @@ export function ReplayList({
   playerName,
   publicHandle,
   listQuery,
+  selection,
   emptyTitle = "No replays match these filters",
   emptyDescription = "Try a wider date range or clear the replay search filters. Synced games appear here automatically.",
 }: ReplayListProps) {
@@ -80,6 +82,7 @@ export function ReplayList({
             <caption className="sr-only">Replay history for {playerName}</caption>
             <thead className="border-b-2 border-line bg-bg-elevated/70 text-micro uppercase tracking-wider text-text-muted">
               <tr>
+                {owner && selection ? <th scope="col" className="px-3 py-3"><span className="sr-only">Select replay</span></th> : null}
                 <th scope="col" className="w-24 px-4 py-3 font-semibold">Result</th>
                 <th scope="col" className="w-40 px-3 py-3 font-semibold">Played</th>
                 <th scope="col" className="min-w-52 px-3 py-3 font-semibold">Matchup</th>
@@ -100,6 +103,7 @@ export function ReplayList({
                   publicHandle={publicHandle}
                   publicLocked={publicLocked}
                   listQuery={listQuery}
+                  selection={selection}
                 />
               ))}
             </tbody>
@@ -117,6 +121,7 @@ export function ReplayList({
               publicHandle={publicHandle}
               publicLocked={publicLocked}
               listQuery={listQuery}
+              selection={selection}
             />
           ))}
         </ul>
@@ -134,15 +139,17 @@ interface RowProps {
   publicHandle?: string;
   publicLocked: boolean;
   listQuery?: string;
+  selection?: ReplayListProps["selection"];
 }
 
-function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery }: RowProps) {
+function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery, selection }: RowProps) {
   const source = useGameSource(undefined, owner ? listQuery : undefined);
   const analysisHref = owner
     ? gameAnalysisHref(game.gameId, null, source)
     : sharedAnalysisHref(publicRoot || "", game.gameId, listQuery);
   return (
     <tr className="group bg-bg-surface transition-colors hover:bg-bg-elevated/55">
+      {owner && selection ? <td className="px-2 py-3"><ReplaySelection gameId={game.gameId} selection={selection} /></td> : null}
       <td className={["border-l-4 px-4 py-3", resultRail(game.result)].join(" ")}>
         <ResultBadge result={game.result} />
       </td>
@@ -194,7 +201,7 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, p
   );
 }
 
-function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery }: RowProps) {
+function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery, selection }: RowProps) {
   const source = useGameSource(undefined, owner ? listQuery : undefined);
   const analysisHref = owner
     ? gameAnalysisHref(game.gameId, null, source)
@@ -204,6 +211,7 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, p
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
+            {owner && selection ? <ReplaySelection gameId={game.gameId} selection={selection} /> : null}
             <ResultBadge result={game.result} />
             <ReplayDate value={game.date} />
             <span className="font-mono text-micro tabular-nums text-text-dim">
@@ -263,6 +271,10 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, p
       </div>
     </li>
   );
+}
+
+function ReplaySelection({ gameId, selection }: { gameId: string; selection: NonNullable<ReplayListProps["selection"]> }) {
+  return <label className="inline-flex min-h-11 min-w-11 cursor-pointer items-center gap-2 px-2 text-caption"><input type="checkbox" className="h-4 w-4 accent-accent" aria-label={`Select replay ${gameId}`} checked={selection.selectedIds.has(gameId)} disabled={selection.disabled} onChange={() => selection.onToggle(gameId)} /><span>Select</span></label>;
 }
 
 function Matchup({ game, playerName, owner }: { game: ReplayLibraryItem; playerName: string; owner: boolean }) {

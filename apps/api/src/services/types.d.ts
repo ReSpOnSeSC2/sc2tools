@@ -147,6 +147,17 @@ export interface OpponentsService {
       mergeLinked?: boolean;
     },
   ): Promise<object | null>;
+  getAnalysis(
+    userId: string,
+    pulseId: string,
+    opts?: {
+      filters?: Record<string, unknown>;
+      since?: Date;
+      until?: Date;
+      mergeLinked?: boolean;
+      includeProfile?: boolean;
+    },
+  ): Promise<object | null>;
   updateNotes(
     userId: string,
     pulseId: string,
@@ -166,8 +177,13 @@ export interface OpponentsService {
       limit?: number;
       cursor?: string;
       result?: unknown;
+      analysisGameIds?: string[];
     },
-  ): Promise<{ items: object[]; nextCursor: string | null } | null>;
+  ): Promise<{
+    items: object[];
+    nextCursor: string | null;
+    membership?: { scope: "analysis_sample"; requestedGameCount: number };
+  } | null>;
   recordGame(
     userId: string,
     game: {
@@ -298,6 +314,7 @@ export interface GamesService {
     created: boolean;
     customBuildRevision: string;
     spatial?: Record<string, unknown>;
+    excluded?: boolean;
   }>;
   quarantineResumedReplay(
     userId: string,
@@ -1222,6 +1239,7 @@ export interface CatalogService {
   catalogLookup(): { lookup: (rawName: string) => object | null };
   definitions(): Promise<object>;
   exportCsv(userId: string, filters: object): AsyncGenerator<string, void, void>;
+  prepareCsv(userId: string, filters: object, opts?: {search?: unknown; result?: unknown; matchup?: unknown; sort?: unknown; signal?: AbortSignal}): Promise<{truncated: boolean; stream: AsyncGenerator<string, void, void>}>;
   mapImagePath(
     name: string,
     opts?: { variant?: "layout" },

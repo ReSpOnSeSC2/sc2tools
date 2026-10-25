@@ -13,6 +13,7 @@ export const OPPONENT_REPLAY_PAGE_SIZE = 200;
 type ReplayHistoryPage = {
   items: ProfileGame[];
   nextCursor: string | null;
+  membership?: { scope: "analysis_sample"; requestedGameCount: number };
 };
 
 /**
@@ -48,6 +49,10 @@ export function OpponentReplayHistory({
   const { data, error, isValidating, mutate } =
     useApi<ReplayHistoryPage>(pagePath, { revalidateOnFocus: false, keepPreviousData: false });
 
+  const sourceQuery = new URLSearchParams(pagePath.split("?")[1] ?? "");
+  const sampled = sourceQuery.has("analysisGameIds");
+  sourceQuery.delete("analysisGameIds");
+  const libraryLabel = sampled ? "Analyzed sample replays" : "All replays";
   const firstPageFallback = cursor === null
     ? initialGames.filter((game) => !result || (result === "win" ? /^(win|victory)$/i : /^(loss|defeat)$/i).test(game.result || "")).slice(0, OPPONENT_REPLAY_PAGE_SIZE)
     : [];
@@ -61,14 +66,14 @@ export function OpponentReplayHistory({
   const showingFallback = !data && games.length > 0;
 
   let title: string;
-  if (showingFallback && profileTruncated) {
+  if (showingFallback && profileTruncated && !sampled) {
     title = `Latest ${games.length} replays · loading full history…`;
   } else if (pageIndex === 0 && data && !data.nextCursor) {
-    title = `All replays (${games.length}) · newest first`;
+    title = `${libraryLabel} (${games.length}) · newest first`;
   } else if (games.length > 0) {
-    title = `All replays · showing ${start}–${end} · ${sortBy === "date" ? "newest first" : `sorted by ${sortBy === "map" ? "Map" : sortBy} (this page)`}`;
+    title = `${libraryLabel} · showing ${start}–${end} · ${sortBy === "date" ? "newest first" : `sorted by ${sortBy === "map" ? "Map" : sortBy} (this page)`}`;
   } else {
-    title = "All replays";
+    title = libraryLabel;
   }
 
   const goOlder = () => {
@@ -84,7 +89,8 @@ export function OpponentReplayHistory({
   };
 
   return (
-    <GameSourceLabelProvider label="Opponent history" filters={pagePath.split("?")[1] ?? ""} replace><Card title={title}>
+    <GameSourceLabelProvider label={sampled ? "Analyzed sample history" : "Opponent history"} filters={sourceQuery.toString()} sampled={sampled} replace><Card title={title}>
+      {sampled ? <p className="mb-3 text-caption text-text-muted">Selected analyzed sample{data?.membership ? ` · ${data.membership.requestedGameCount} linked games` : ""}.</p> : null}
       <div className="mb-3 flex flex-wrap gap-3 text-caption">
         <label>Show: <select aria-label="Filter replay results" className="min-h-11 rounded border border-border bg-bg-surface px-2" value={result}
           onChange={(event) => { setResult(event.target.value); setCursor(null); setNewerCursors([]); }}>

@@ -245,15 +245,20 @@ describe("HTTP integration", () => {
       expect(body.oppRaceModal).toBe("Z");
       expect(body.matchupLabel).toBe("PvZ");
       expect(body.matchupCounts.PvZ).toBe(3);
-      expect(body.medianTimingsLegacy.SpawningPool.sampleCount).toBe(3);
-      expect(body.medianTimingsLegacy.Gateway.sampleCount).toBe(2);
-      expect(body.medianTimingsLegacy.Pylon.source).toBe("build_log");
-      expect(body.medianTimingsLegacy.SpawningPool.source).toBe(
+      expect(body).not.toHaveProperty("medianTimingsLegacy");
+      expect(body).not.toHaveProperty("gamesScouting");
+      const analysisRes = await withAuth(request(app).get("/v1/opponents/opp-pulse-1/analysis"));
+      expect(analysisRes.status).toBe(200);
+      const analysis = analysisRes.body;
+      expect(analysis.medianTimingsLegacy.SpawningPool.sampleCount).toBe(3);
+      expect(analysis.medianTimingsLegacy.Gateway.sampleCount).toBe(2);
+      expect(analysis.medianTimingsLegacy.Pylon.source).toBe("build_log");
+      expect(analysis.medianTimingsLegacy.SpawningPool.source).toBe(
         "opp_build_log",
       );
-      expect(body.medianTimings.Pylon.median).toBeGreaterThan(0);
-      expect(body.medianTimings.Pylon.count).toBe(3);
-      expect(body.matchupTimings.PvZ.SpawningPool.count).toBe(3);
+      expect(analysis.medianTimings.Pylon.median).toBeGreaterThan(0);
+      expect(analysis.medianTimings.Pylon.count).toBe(3);
+      expect(analysis.matchupTimings.PvZ.SpawningPool.count).toBe(3);
       // last 5 games + full games array
       expect(body.last5Games.length).toBe(3);
       expect(body.games.length).toBe(3);
@@ -655,7 +660,7 @@ describe("HTTP integration", () => {
       const res = await withAuth(request(app).get("/v1/export.csv"));
       expect(res.status).toBe(200);
       expect(res.headers["content-type"]).toContain("text/csv");
-      expect(res.text.startsWith("gameId,date,result")).toBe(true);
+      expect(res.text.startsWith("\uFEFFgameId,date,result")).toBe(true);
     });
 
     test("/playback returns a 501 with the local-only hint", async () => {

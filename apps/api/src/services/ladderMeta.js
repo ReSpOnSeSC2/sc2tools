@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+
 const { VERSION_KEY } = require("../db/schemaVersioning");
 const {
   LADDER_META_BUCKET_WIDTH,
@@ -496,7 +498,7 @@ function buildGamesMatch(bandType, era) {
     // shared games collection across every account. User-scoped analytics
     // add userId in their service layer; this public aggregate must not.
     ...bandMatch,
-    isResumedFromReplay: { $ne: true },
+    ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
     myRace: { $type: "string" },
     "opponent.race": { $type: "string" },
     myBuild: { $type: "string", $ne: "", $not: /Game Too Short$/ },

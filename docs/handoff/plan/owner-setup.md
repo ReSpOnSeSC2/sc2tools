@@ -1,5 +1,9 @@
 # Owner setup notes (accumulated)
 
+## Dossier timings and phases
+
+Deploy the API before the web update. No new environment variable, secret, collection, migration or scheduled task is required. The ordinary web profile is metadata-only and the detailed section uses the private lazy analysis route. Already installed desktop Companions retain the rich old-route response through trusted device authentication; future desktop source uses the explicit analysis route. No desktop version bump or release is required for compatibility. Check `/help/opponent-dossier#reading-key-timings` after deployment.
+
 ## Recorded playback guidance and segment streaming
 
 No new infrastructure, secret, environment variable or manual migration is required. Deploy the API and web normally. Authenticated content-addressed segment responses use private immutable browser caching for seven days; manifests remain no-store and every server read still checks ownership. A website-requested artifact upload sends one private `playback_ready` bell notification after verified completion, using the existing notification service and delivery identity. Automatic uploads and viewer polling do not send it. Browser decoded segments have a 24 MB LRU budget; a miss retains the last frame, and Retry remains available. Recording itself stays explicitly requested or controlled by the desktop app's existing default-off automatic-capture setting. No production recording or account operation was performed during implementation.

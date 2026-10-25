@@ -771,7 +771,7 @@ class GdprService {
     const since = opts.since instanceof Date && !Number.isNaN(opts.since.getTime()) ? opts.since : null;
     const until = opts.until instanceof Date && !Number.isNaN(opts.until.getTime()) ? opts.until : null;
     if (since && until && since >= until) throw new Error("since must be before until");
-    return { userId, ...(since || until ? { date: { ...(since ? { $gte: since } : {}), ...(until ? { $lt: until } : {}) } } : {}) };
+    return { userId, _deleted: { $ne: true }, ...(since || until ? { date: { ...(since ? { $gte: since } : {}), ...(until ? { $lt: until } : {}) } } : {}) };
   }
 
   /** A read-only preview; deliberately does not take a mutation fence.
@@ -1037,17 +1037,30 @@ class GdprService {
     return dropped.deletedCount || 0;
   }
 
+  /** Recount only one owner's affected opponent, preserving curated metadata.
+   * @param {string} userId @param {string} pulseId */
+  async recountOpponent(userId, pulseId) {
+    const buckets = await this._competitiveOpponentBuckets(userId, pulseId);
+    const bucket = buckets.get(pulseId);
+    if (!bucket) { await this.db.opponents.deleteOne({ userId, pulseId }); return; }
+    await this.db.opponents.updateOne({ userId, pulseId }, { $set: stampVersion({ ...bucket }, COLLECTIONS.OPPONENTS) }, { upsert: true });
+  }
+
   /**
    * @private
    * @param {string} userId
+   * @param {string} [pulseId]
    * @returns {Promise<Map<string, any>>}
    */
-  async _competitiveOpponentBuckets(userId) {
+  async _competitiveOpponentBuckets(userId, pulseId) {
     const cursor = this.db.games.find(
       {
         userId,
         isResumedFromReplay: { $ne: true },
-        "opponent.pulseId": { $exists: true, $ne: "" },
+        excluded: { $ne: true },
+        _deleted: { $ne: true },
+        _deletionPending: { $ne: true },
+        "opponent.pulseId": pulseId || { $exists: true, $ne: "" },
       },
       {
         projection: {
@@ -1055,7 +1068,9 @@ class GdprService {
           gameId: 1,
           date: 1,
           result: 1,
-          opponent: 1,
+          "opponent.pulseId": 1, "opponent.pulseCharacterId": 1,
+          "opponent.displayName": 1, "opponent.race": 1, "opponent.mmr": 1,
+          "opponent.leagueId": 1, "opponent.toonHandle": 1, "opponent.opening": 1,
         },
       },
     );
@@ -1307,8 +1322,8 @@ class GdprService {
     );
   }
 
-  /** @param {string} userId */
-  async _drainOpponentBuildOrderWriters(userId) {
+  /** @param {string} userId @param {string} [gameId] */
+  async _drainOpponentBuildOrderWriters(userId, gameId) {
     const deadline = Date.now() + 15_000;
     for (;;) {
       const now = new Date();
@@ -1317,6 +1332,7 @@ class GdprService {
       await this.db.games.updateMany(
         {
           userId,
+          ...(gameId ? { gameId } : {}),
           "_opponentBuildOrderWriteLease.leaseUntil": { $lte: now },
         },
         { $set: { _customBuildRevision: randomUUID() }, $unset: {
@@ -1328,6 +1344,7 @@ class GdprService {
       const active = await this.db.games.findOne(
         {
           userId,
+          ...(gameId ? { gameId } : {}),
           "_opponentBuildOrderWriteLease.leaseUntil": { $gt: now },
         },
         { projection: { _id: 1 } },
@@ -1352,25 +1369,34 @@ class GdprService {
    * @param {boolean} [additionalMarker]
    */
   async _assertReplayCleanupAvailable(gameFilter, additionalMarker = false) {
-    if (this.replayFiles) return;
+    const missingRequirements = [
+      ...(!this.replayFiles ? [{ "_cleanupRequired.replay": true }] : []),
+      ...(!this.playbackArtifacts ? [{ "_cleanupRequired.playback": true }] : []),
+      ...(!this.gameDetails ? [{ "_cleanupRequired.details": true }] : []),
+    ];
+    if (this.replayFiles && !missingRequirements.length) return;
     const archivedGame = await this.db.games.findOne(
       {
         ...gameFilter,
         $or: [
-          { "replayFile.storedAt": { $exists: true } },
-          { "replayUpload.uploadId": { $exists: true } },
-          { "playbackArtifact.artifactId": { $exists: true } },
-          { "playbackUpload.artifactId": { $exists: true } },
+          ...missingRequirements,
+          ...(!this.replayFiles ? [
+            { "replayFile.storedAt": { $exists: true } },
+            { "replayUpload.uploadId": { $exists: true } },
+            { "playbackArtifact.artifactId": { $exists: true } },
+            { "playbackUpload.artifactId": { $exists: true } },
+          ] : []),
         ],
       },
-      { projection: { _id: 1 } },
+      { projection: { _id: 1 }, hint: { userId: 1, gameId: 1 }, maxTimeMS: 5000 },
     );
-    if (!archivedGame && !additionalMarker) return;
+    if (!archivedGame && !(additionalMarker && !this.replayFiles)) return;
+    const code = this.replayFiles ? "game_cleanup_unavailable" : "replay_storage_unavailable";
     const err = /** @type {Error & {status: number, code: string}} */ (
-      new Error("replay_storage_unavailable")
+      new Error(code)
     );
     err.status = 503;
-    err.code = "replay_storage_unavailable";
+    err.code = code;
     throw err;
   }
 }

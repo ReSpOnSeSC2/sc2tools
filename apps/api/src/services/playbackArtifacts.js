@@ -1,4 +1,5 @@
 "use strict";
+const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 
 const { createHash } = require("crypto");
 const { PutObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } = require("@aws-sdk/client-s3");
@@ -33,7 +34,7 @@ class PlaybackArtifactsService {
 
   /** @param {string} userId @param {string} gameId */
   async owned(userId, gameId) {
-    const game = await this.games.findOne({ userId, gameId }, { projection: { replayFile: 1, playbackArtifact: 1, playbackUpload: 1, myRace: 1, "opponent.race": 1, map: 1 } });
+    const game = await this.games.findOne({ userId, gameId, ...LIVE_GAME_MATCH }, { projection: { replayFile: 1, playbackArtifact: 1, playbackUpload: 1, myRace: 1, "opponent.race": 1, map: 1 } });
     if (!game) throw error(404, "game_not_found");
     return game;
   }
@@ -104,7 +105,7 @@ class PlaybackArtifactsService {
       const artifactId = digest(body);
       const job = getPlaybackJob(userId, gameId);
       const requestId = job && ["queued", "processing", "uploading"].includes(job.status) ? job.requestId : undefined;
-      const reserved = await this.games.updateOne({ userId, gameId }, {
+      const reserved = await this.games.updateOne({ userId, gameId, ...LIVE_GAME_MATCH }, {
         $set: { playbackUpload: { artifactId, preparedAt: new Date(), ...(requestId ? { requestId } : {}) } },
       });
       if (reserved.matchedCount !== 1) throw error(404, "game_not_found");
@@ -147,7 +148,8 @@ class PlaybackArtifactsService {
       const source = game.playbackUpload?.artifactId === artifactId ? game.playbackUpload : game.playbackArtifact?.artifactId === artifactId ? game.playbackArtifact : null;
       const requestId = typeof source?.requestId === "string" ? source.requestId : null;
       const marker = { artifactId, replaySha256: m.replaySha256, segmentCount: m.segments.length, storedAt: new Date(), ...(requestId ? { requestId } : {}) };
-      const result = await this.games.updateOne({ userId, gameId, $or: [
+      const result = await this.games.updateOne({ userId, gameId,
+          ...LIVE_GAME_MATCH, $or: [
         { "playbackUpload.artifactId": artifactId }, { "playbackArtifact.artifactId": artifactId },
       ] }, { $set: { playbackArtifact: marker }, $unset: { playbackUpload: "" } });
       if (result.matchedCount !== 1) {

@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATS_GAME_MATCH, OwnerRevisions } = require("../util/gameVisibility");
+
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 
 /**
@@ -53,7 +55,11 @@ class TickerFactsService {
     this.seasons = deps.seasons || null;
     /** @type {Map<string, {atMs: number, facts: Array<{id: string, text: string}>}>} */
     this._cache = new Map();
+    this._revisions = new OwnerRevisions();
   }
+
+  /** @param {string} userId */
+  invalidateForUser(userId) { this._revisions.invalidate(userId); this._cache.delete(userId); }
 
   /**
    * Cached facts pool for one user. Shape: `[{id, text}]`, ordered
@@ -63,11 +69,13 @@ class TickerFactsService {
    * @returns {Promise<Array<{id: string, text: string}>>}
    */
   async factsFor(userId) {
+    const revision = this._revisions.get(userId);
     const cached = this._cache.get(userId);
     if (cached && this.now() - cached.atMs < CACHE_TTL_MS) {
       return cached.facts;
     }
     const facts = await this._compute(userId);
+    if (!this._revisions.current(userId, revision)) return facts;
     // Refresh insert order so the size cap below evicts the stalest.
     this._cache.delete(userId);
     this._cache.set(userId, { atMs: this.now(), facts });
@@ -88,7 +96,7 @@ class TickerFactsService {
     try {
       rows = await this.db.games
         .find(
-          { userId, isResumedFromReplay: { $ne: true } },
+          { userId, ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true } },
           {
             projection: {
               _id: 0,
@@ -540,7 +548,7 @@ class TickerFactsService {
       const agg = await this.db.games
         .aggregate([
           {
-            $match: { userId, isResumedFromReplay: { $ne: true } },
+            $match: { userId, ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true } },
           },
           {
             $group: {

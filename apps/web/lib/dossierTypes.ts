@@ -22,7 +22,7 @@ export type DossierTimingRow = {
 export type DossierTimingBucket = { timings: Record<string, DossierTimingRow>; order?: string[] };
 export type DossierAnalysis = {
   medianTimings?: Record<string, DossierTimingRow>; medianTimingsLegacy?: Record<string, DossierTimingRow>; medianTimingsOrder?: string[];
-  matchupTimings?: Record<string, DossierTimingBucket>; matchupTimingsLegacy?: Record<string, DossierTimingBucket>; matchupCounts?: Record<string, number>;
+  matchupTimings?: Record<string, DossierTimingBucket | Record<string, DossierTimingRow>>; matchupTimingsLegacy?: Record<string, DossierTimingBucket>; matchupCounts?: Record<string, number>;
   analysisSampleSize?: number; analysisSampleLimit?: number; analysisSampleTruncated?: boolean;
   buildOrdersAvailable?: number; yourBuildOrdersAvailable?: number; buildOrdersTotal?: number;
   analyzedGameIds?: string[]; analysisCohortSize?: number; gamesTruncated?: boolean;

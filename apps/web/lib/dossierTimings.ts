@@ -6,8 +6,9 @@ const valid = (value: unknown): value is number => typeof value === "number" && 
 /** Compatibility numbers never replace rich legacy rows' quartiles/source/sample IDs. */
 export function visibleDossierTimings(data: DossierAnalysis, matchup: string, source: DossierTimingSource): VisibleTiming[] {
   const modern = matchup ? data.matchupTimings?.[matchup] : null, legacy = matchup ? data.matchupTimingsLegacy?.[matchup] : null;
-  const rows = modern?.timings ?? (matchup ? {} : data.medianTimings ?? {}), old = legacy?.timings ?? (matchup ? {} : data.medianTimingsLegacy ?? {});
-  const order = [...new Set([...(modern?.order ?? legacy?.order ?? data.medianTimingsOrder ?? []), ...Object.keys(rows), ...Object.keys(old)])];
+  const modernBucket = modern && "timings" in modern ? modern as import("./dossierTypes").DossierTimingBucket : null;
+  const rows = modernBucket?.timings ?? (modern as Record<string, DossierTimingRow> | undefined) ?? (matchup ? {} : data.medianTimings ?? {}), old = legacy?.timings ?? (matchup ? {} : data.medianTimingsLegacy ?? {});
+  const order = [...new Set([...(modernBucket?.order ?? legacy?.order ?? data.medianTimingsOrder ?? []), ...Object.keys(rows), ...Object.keys(old)])];
   return order.flatMap(token => {
     const row = { ...old[token], ...rows[token] }, n = row.sampleCount ?? row.count, median = row.medianSeconds ?? row.median;
     if (row.source !== source || !valid(n) || n < 2 || !valid(median)) return [];

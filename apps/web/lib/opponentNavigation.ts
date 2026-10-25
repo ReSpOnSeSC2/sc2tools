@@ -38,8 +38,9 @@ export function gameAnalysisHref(
   if (pulseId) query.set(OPPONENT_QUERY_PARAM, pulseId);
   const displayName = clean(opponent?.displayName, 120);
   if (displayName && pulseId) query.set(OPPONENT_NAME_QUERY_PARAM, displayName);
-  const from = safeGameSource(source?.href, source?.label, source?.filters);
+  const from = safeGameSource(source?.href, source?.label, source?.filters, source?.sampled);
   if (from) { query.set("from", from.href); query.set("fromLabel", from.label); if (from.filters !== undefined) query.set("fromFilters", from.filters); }
+  if (from?.sampled) query.set("fromSample", "1");
   return query.size ? `${base}?${query.toString()}` : base;
 }
 

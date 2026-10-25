@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+
 const { parseFilters, parseFiniteInt, parseBool, parseRaceLetter } = require("../util/parseQuery");
 const { raceLetterExpr, myLadderRaceExpr } = require("./trendsRegionExpr");
 const {
@@ -84,7 +86,7 @@ function trustedReplayMmrExpr() {
  * @returns {Array<Record<string, any>>} */
 function globalHistoryStages(playerMatch = {}, projection = GLOBAL_HISTORY_PROJECTION) {
   return [
-    { $match: { isResumedFromReplay: { $ne: true }, date: { $type: "date" } } },
+    { $match: { ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true }, date: { $type: "date" } } },
     { $project: projection },
     { $addFields: { _globalToon: stringExpr("$myToonHandle"), _globalTrustedMmr: trustedReplayMmrExpr() } },
     { $addFields: {

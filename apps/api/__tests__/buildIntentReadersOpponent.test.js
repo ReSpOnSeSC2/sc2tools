@@ -254,7 +254,7 @@ describe("opponent profile", () => {
 
   test("own stats count corrections; per-strategy phase envelopes keep agreeing games only", async () => {
     const opponents = new OpponentsService(db, Buffer.alloc(32, 1));
-    const profile = await opponents.get(USER, PULSE, {});
+    const profile = await opponents.getAnalysis(USER, PULSE, { includeProfile: true });
 
     expect(profile.byStrategy).toEqual({
       [POOL]: { wins: 3, losses: 1 },

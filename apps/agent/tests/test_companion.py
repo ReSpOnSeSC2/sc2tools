@@ -87,7 +87,9 @@ def test_directory_and_notes_use_owned_endpoints_and_bounded_inputs():
     assert page["nextCursor"] == "2026-10-01T00:00:00Z"
     assert calls[-1][1]["params"] == {"limit": 100, "before": "2026-10-20T00:00:00Z"}
     client.action({"action": "opponent", "pulseId": "a/b"})
-    assert calls[-1][0][1].endswith("/opponents/a%2Fb")
+    assert calls[-1][0][1].endswith("/opponents/a%2Fb/analysis")
+    assert calls[-1][1]["params"] == {"includeProfile": "1"}
+    assert len(calls) == 2  # One list request and one complete rich profile request.
     assert client.action({"action": "save_notes", "pulseId": "a/b", "text": "Scout the third",
                           "readAloud": True}) == {"notes": "Scout the third", "notesReadAloud": True}
     assert calls[-1][0][0] == "PUT"

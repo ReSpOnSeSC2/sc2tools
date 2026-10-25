@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from "react";
 import dynamic from "next/dynamic";
+import { useAuth } from "@clerk/nextjs";
+import { accountFilter } from "@/lib/accountFilter";
 import {
   ANALYZER_REGIONS,
   DEFAULT_ANALYZER_FILTERS,
@@ -252,12 +254,27 @@ export function AnalyzerProvider({
   /** AnalyzerFrame enables route synchronization; standalone hosts remain independent. */
   syncUrl?: boolean;
 }) {
+  const { userId, isLoaded, isSignedIn } = useAuth();
+  const owner = isLoaded && isSignedIn ? userId : null;
+  const previousOwner = useRef<string | null | undefined>(undefined);
   const [filters, setFiltersState] = useState<AnalyzerFilters>(initialFilters);
   const [dbRev, setDbRev] = useState(0);
   const bumpRev = useCallback(() => setDbRev((v) => v + 1), []);
   const [filtersReady, setFiltersReady] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
   const urlSession = useRef(false);
+
+  // Account handles belong to one signed-in library. Never persist them in
+  // shared device storage or expose the previous owner's cohort for a frame.
+  const accountReady = !!owner && (previousOwner.current === undefined || previousOwner.current === owner);
+  const visibleFilters = useMemo(() => accountReady ? filters : { ...filters, accounts: undefined }, [accountReady, filters]);
+  useEffect(() => {
+    if (previousOwner.current === undefined && !isLoaded) return;
+    if (!owner || previousOwner.current !== undefined && previousOwner.current !== owner) {
+      setFiltersState(previous => ({ ...previous, accounts: undefined }));
+    }
+    previousOwner.current = owner;
+  }, [owner, isLoaded]);
 
   // Cloud-driven auto-refresh. The games ingest route fans out
   // ``games:changed`` to ``user:<userId>``; bumping ``dbRev`` invalidates
@@ -312,10 +329,11 @@ export function AnalyzerProvider({
   }, [logicalSeasons]);
 
   const setFilters = useCallback((next: AnalyzerFilters) => {
+    next = { ...next, accounts: owner ? accountFilter(next.accounts) : undefined };
     if (next.map_exact_label !== undefined && next.map !== next.map_exact_label) next = { ...next, map_exact: undefined, map_exact_label: undefined };
     setFiltersState(next);
     if (!urlSession.current) writeStored(next);
-  }, []);
+  }, [owner]);
 
   const applyUrl = useCallback((parsed: ReturnType<typeof viewFiltersFromQuery>) => {
     urlSession.current = true;
@@ -325,17 +343,17 @@ export function AnalyzerProvider({
 
   const value = useMemo(
     () => ({
-      filters,
+      filters: visibleFilters,
       setFilters,
       dbRev,
       bumpRev,
       seasons: logicalSeasons,
     }),
-    [filters, setFilters, dbRev, bumpRev, logicalSeasons],
+    [visibleFilters, setFilters, dbRev, bumpRev, logicalSeasons],
   );
   return (
     <FiltersContext.Provider value={value}>
-      {syncUrl ? <AnalyzerFilterUrlSync ready={filtersReady} filters={filters} onNavigate={applyUrl} /> : null}
+      {syncUrl ? <AnalyzerFilterUrlSync ready={filtersReady && isLoaded} filters={visibleFilters} onNavigate={applyUrl} /> : null}
       {/* dbRev has already passed the shared refresh clock; avoid a second 30s wait. */}
       {!urlError ? <AnalysisGamesProvider enabled={analysisGamesEnabled} refreshQuietMs={0}>
         {children}

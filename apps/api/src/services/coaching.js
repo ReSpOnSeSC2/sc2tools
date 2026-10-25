@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+
 /**
  * Coaching Locker persistence + directory service.
  *
@@ -515,7 +517,7 @@ class CoachingService {
       .find(
         {
           userId,
-          isResumedFromReplay: { $ne: true },
+          ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
           ...oneVsOneGameClause(),
         },
         {
@@ -1189,8 +1191,13 @@ class CoachingService {
     if (!safeGameId || safeGameId.length > 200) {
       throw coachingError(404, "replay_not_found", "The assigned replay was not found.");
     }
+    /** @type {Record<string, any>} */
+    const replayMatch = assignmentGameMatch(assignment);
+    // Hide changes statistical contributions; an explicitly shared assigned
+    // replay remains readable. Both deletion markers still block access.
+    delete replayMatch.excluded;
     const game = await this.db.games.findOne(
-      { ...assignmentGameMatch(assignment), gameId: safeGameId },
+      { ...replayMatch, gameId: safeGameId },
       { projection: { _id: 0, gameId: 1 } },
     );
     if (!game) {
@@ -2422,7 +2429,7 @@ function assignmentGameMatch(assignment) {
   }
   return {
     userId: assignment.studentUserId,
-    isResumedFromReplay: { $ne: true },
+    ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
     // Preserve an indexable coarse bound around the exact start-time
     // expression. A replay can last at most 24 hours by schema.
     date: {

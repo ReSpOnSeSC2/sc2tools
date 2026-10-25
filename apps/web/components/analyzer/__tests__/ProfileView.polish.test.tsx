@@ -15,6 +15,7 @@ vi.mock("../OpponentIdentitySubmission", () => ({ OpponentIdentitySubmission: ()
 vi.mock("../LadderContextCard", () => ({ LadderContextCard: () => null }));
 vi.mock("../OpponentDiagnosticsPanel", () => ({ OpponentDiagnosticsPanel: ({ onRetried }: { onRetried: (response: unknown) => void }) => <button onClick={() => onRetried({ resolvedPulseCharacterId: true })}>Finish Pulse retry</button> }));
 vi.mock("../StrategyTendencyChart", () => ({ StrategyTendencyChart: () => null }));
+vi.mock("../DossierAnalysisSection", () => ({ DossierAnalysisSection: ({ onSelect, path }: { onSelect: (value: unknown) => void; path: string }) => <button data-path={path} onClick={() => onSelect({ token: "SpawningPool", label: "Spawning Pool", source: "opp_build_log", gameIds: ["one"] })}>Select timing sample</button> }));
 vi.mock("../PredictedStrategiesList", () => ({ PredictedStrategiesList: () => null }));
 vi.mock("../h2h/H2HTrendsSection", () => ({ H2HTrendsSection: ({ onSelectBuildMatchup }: { onSelectBuildMatchup: (selection: unknown) => void }) => <button onClick={() => onSelectBuildMatchup({ myBuild: "Blink", oppStrategy: "Macro" })}>Select build pairing</button> }));
 vi.mock("@/lib/clientApi", () => ({ useApi: (...args: unknown[]) => harness.api(...args) }));
@@ -43,7 +44,6 @@ it("shows clearable map/strategy/build filters and keeps replay history immediat
   render(<ProfileView pulseId="target" onBack={() => undefined} />);
   fireEvent.click(screen.getByRole("button", { name: /Alcyone/ }));
   expect(screen.getByText("Games (filtered)")).toBeTruthy();
-  expect(screen.getAllByText("All games, not filtered")).toHaveLength(2);
   expect(screen.getByLabelText("Replay history").getAttribute("data-path")).toContain("map=Alcyone");
   fireEvent.click(screen.getByRole("button", { name: "Remove map filter Alcyone" }));
   fireEvent.click(screen.getByRole("button", { name: /Cheese/ }));
@@ -62,6 +62,7 @@ it("refreshes all of this opponent's resources and channels after Pulse retry", 
   await act(async () => fireEvent.click(await screen.findByRole("button", { name: "Finish Pulse retry" })));
   const predicate = harness.refresh.mock.calls[0][0] as (key: unknown) => boolean;
   expect(predicate(["authenticated-api", "user", "/v1/opponents/target/pulse-races"])).toBe(true);
+  expect(predicate(["authenticated-api", "user", "/v1/opponents/target/analysis?race=P#7"])).toBe(true);
   expect(predicate(["authenticated-api", "user", "/v1/opponents/other"])).toBe(false);
   expect(predicate(["player-channels", "identities"])).toBe(true);
   expect(harness.toast).toHaveBeenCalledWith("Pulse data refreshed");
@@ -111,4 +112,18 @@ it("forgets local cohort and open panels when a warm cached opponent switches ac
   harness.ownerId = null; view.rerender(<ProfileView pulseId="target" onBack={() => undefined} />);
   expect(screen.getByText("Sign in to view opponent history.")).toBeTruthy();
   expect(harness.api).toHaveBeenCalledTimes(callCount);
+});
+
+it("filters history through the shared bar using only the selected analyzed IDs", async () => {
+  render(<ProfileView pulseId="target" onBack={() => undefined} />);
+  const select = await screen.findByRole("button", { name: "Select timing sample" });
+  expect(select.getAttribute("data-path")).toBe("/v1/opponents/target/analysis?mergeLinked=1#7");
+  fireEvent.click(select);
+  const path = screen.getByLabelText("Replay history").getAttribute("data-path")!;
+  expect(new URL(path, "https://example.test").searchParams.get("analysisGameIds")).toBe('["one"]');
+  expect(screen.getByRole("region", { name: "Active dossier filters" }).textContent).toContain("Analyzed timing sample");
+  expect(screen.getByText("Games (filtered)").parentElement?.textContent).toContain("1");
+  fireEvent.click(screen.getByRole("button", { name: /Remove timing filter/ }));
+  expect(screen.queryByRole("region", { name: "Active dossier filters" })).toBeNull();
+  expect(screen.getByLabelText("Replay history").getAttribute("data-path")).not.toContain("analysisGameIds");
 });

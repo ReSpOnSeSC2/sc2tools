@@ -1,4 +1,5 @@
 "use strict";
+const { LIVE_GAME_MATCH, STATS_GAME_MATCH, OwnerRevisions } = require("../util/gameVisibility");
 
 const { gamesMatchStage } = require("../util/parseQuery");
 const { navigationIdentity } = require("./gameNeighbors");
@@ -105,6 +106,18 @@ class GameContextService {
     this.timingCache = new Map();
     /** @type {Map<string,Promise<Record<string,any>>>} */
     this.inflight = new Map();
+    this.revisions = new OwnerRevisions();
+  }
+
+  /** @param {string} userId */
+  invalidateForUser(userId) {
+    this.revisions.invalidate(userId);
+    const prefix = `${JSON.stringify([userId]).slice(0, -1)},`;
+    // Pending keys include the old revision, so new reads cannot join them.
+    // Keep them admitted until completion to preserve the four-work bound.
+    for (const cache of [this.cache, this.timingCache]) {
+      for (const key of cache.keys()) if (key.startsWith(prefix)) cache.delete(key);
+    }
   }
 
   /** The owner lookup always precedes cache access, including after erasure.
@@ -112,14 +125,15 @@ class GameContextService {
   async get(userId, gameId) {
     const owner = navigationIdentity(userId), id = navigationIdentity(gameId);
     if (!owner || !id) return null;
-    const current = await this.db.games.findOne({ userId: owner, gameId: id, isResumedFromReplay: { $ne: true } }, { projection: CURRENT_FIELDS });
+    const revision = this.revisions.get(owner);
+    const current = await this.db.games.findOne({ ...LIVE_GAME_MATCH, userId: owner, gameId: id, isResumedFromReplay: { $ne: true } }, { projection: CURRENT_FIELDS });
     if (!current) return null;
     const match = priorMatch(owner, current);
     const mine = raceLetter(current.myRace), theirs = raceLetter(current.opponent?.race);
     const matchup = mine && theirs ? `${mine}v${theirs}` : null;
     // A check-in's effective label owns the cohort, even when detection differs.
     const build = overrideActive(current) ? current.buildIntent.build : { name: current.myBuild, slug: current._customBuildSlug };
-    const key = JSON.stringify([owner, id, current.date, current.myRace, current.opponent?.race,
+    const key = JSON.stringify([owner, revision.id, id, current.date, current.myRace, current.opponent?.race,
       build?.name, build?.slug, current.opponent?.leagueId,
       ...METRICS.map((metric) => current[metric])]);
     const hit = this.cache.get(key);
@@ -128,6 +142,7 @@ class GameContextService {
     if (pending) return pending;
     if (this.inflight.size >= MAX_CONTEXT_WORK) throw Object.assign(new Error("Game comparisons are busy; try again shortly."), { status: 503, code: "game_context_busy" });
     const work = this.compute(owner, current, match, matchup, build).then((value) => {
+      if (!this.revisions.current(owner, revision)) return value;
       if (this.cache.size >= CACHE_LIMIT) this.cache.delete(this.cache.keys().next().value || "");
       this.cache.set(key, { at: this.now(), value });
       return value;
@@ -158,6 +173,7 @@ class GameContextService {
    * @param {string} owner @param {Record<string,any>} current
    * @param {Record<string,any>|null} match @param {{name?:unknown,slug?:unknown}|null} build */
   async expansions(owner, current, match, build) {
+    const revision = this.revisions.get(owner);
     const townhall = /** @type {Record<string,string>} */ (TOWNHALL)[raceLetter(current.myRace) || ""];
     const name = navigationIdentity(build?.name), slug = navigationIdentity(build?.slug);
     if (!match || !townhall || !name) return { timings: {}, n: 0 };
@@ -176,10 +192,10 @@ class GameContextService {
       }
       const detail = this.gameDetails ? await this.gameDetails.findMany(owner, [id], { fields: ["buildLog"], concurrency: 1 }) : new Map();
       let log = detail.get(id)?.buildLog;
-      if (!Array.isArray(log)) log = (await this.db.games.findOne({ userId: owner, gameId: id }, { projection: { _id: 0, buildLog: 1 } }))?.buildLog;
+      if (!Array.isArray(log)) log = (await this.db.games.findOne({ ...STATS_GAME_MATCH, userId: owner, gameId: id }, { projection: { _id: 0, buildLog: 1 } }))?.buildLog;
       const value = naturalSeconds(log, townhall);
       if (this.timingCache.size >= TIMING_CACHE_LIMIT) this.timingCache.delete(this.timingCache.keys().next().value || "");
-      this.timingCache.set(key, { at: this.now(), value });
+      if (this.revisions.current(owner, revision)) this.timingCache.set(key, { at: this.now(), value });
       if (value !== null) values.push(value);
     }
     return { timings: values.length >= TIMING_MIN_SAMPLE ? { [townhall]: median(values) } : {}, n: values.length };

@@ -1,12 +1,13 @@
 import rules from "../../api/src/config/analyzerViews.json";
 import type { AnalyzerFilters } from "./filterContext";
+import { accountFilter } from "./accountFilter";
 
 export type AnalyzerView = { id: string; name: string; filters: AnalyzerFilters; section?: string };
 export type AnalyzerViewPrefs = { views: AnalyzerView[]; defaultViewId: string | null };
 export const ANALYZER_VIEW_LIMIT = rules.maxViews;
 export const VIEW_QUERY_MARKER = "filters";
 const NUMBER_KEYS = new Set(Object.keys(rules.numbers));
-export const VIEW_FILTER_KEYS = ["preset", "since", "until", ...Object.keys(rules.strings), ...Object.keys(rules.numbers), ...Object.keys(rules.choices), "exclude_too_short", "regions", "map_exact"];
+export const VIEW_FILTER_KEYS = ["preset", "since", "until", ...Object.keys(rules.strings), ...Object.keys(rules.numbers), ...Object.keys(rules.choices), ...rules.accountKeys, "exclude_too_short", "regions", "map_exact"];
 const clean = (value: unknown, max: number) => typeof value === "string" && value.length <= max && !/[\u0000-\u001f\u007f]/.test(value) ? value.trim() : "";
 const plain = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 
@@ -27,6 +28,7 @@ export function sanitizeViewFilters(raw: unknown): AnalyzerFilters {
   }
   for (const [key, choices] of Object.entries(rules.choices)) { const value = clean(raw[key], 20); if (choices.includes(value)) out[key] = value; }
   if (typeof raw.exclude_too_short === "boolean") out.exclude_too_short = raw.exclude_too_short;
+  if (raw.accounts !== undefined) { const accounts = accountFilter(raw.accounts); if (accounts) out.accounts = accounts; }
   if (typeof raw.regions === "string") {
     const values = new Set(raw.regions.split(",").map(value => value.trim().toUpperCase()));
     const regions = rules.regions.filter(value => values.has(value));
@@ -53,6 +55,7 @@ export function sanitizeViewFilters(raw: unknown): AnalyzerFilters {
 }
 
 export function viewFiltersFromQuery(query: URLSearchParams): { present: boolean; snapshot: boolean; keys: string[]; filters: AnalyzerFilters; error?: string } {
+  if (query.getAll("accounts").length > 1) return { present: true, snapshot: query.get(VIEW_QUERY_MARKER) === "1", keys: ["accounts"], filters: {}, error: "Use one accounts parameter with up to 20 valid account handles." };
   const raw: Record<string, unknown> = {};
   for (const key of VIEW_FILTER_KEYS) {
     const value = query.get(key); if (value === null) continue;
@@ -61,7 +64,7 @@ export function viewFiltersFromQuery(query: URLSearchParams): { present: boolean
   const keys = VIEW_FILTER_KEYS.filter(key => query.has(key));
   const snapshot = query.get(VIEW_QUERY_MARKER) === "1";
   try { return { present: snapshot || keys.length > 0, snapshot, keys, filters: sanitizeViewFilters(raw) }; }
-  catch { return { present: true, snapshot, keys, filters: {}, error: "This view has an invalid exact map cohort." }; }
+  catch (error) { return { present: true, snapshot, keys, filters: {}, error: error instanceof Error ? error.message : "This view has invalid filters." }; }
 }
 
 /** A preset remains relative when reopened; derived dates are not frozen. */

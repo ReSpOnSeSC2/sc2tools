@@ -1,4 +1,5 @@
 "use strict";
+const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 
 /**
  * Build check-in on a stored game: ``GET/PUT /v1/games/:gameId/build-intent``
@@ -253,7 +254,7 @@ class BuildIntentGameState {
    * @param {{ includeOptions?: boolean }} [opts]
    */
   async get(userId, gameId, opts = {}) {
-    const row = await this.games.findOne({ userId, gameId }, { projection: GAME_PROJECTION });
+    const row = await this.games.findOne({ userId, gameId, ...LIVE_GAME_MATCH }, { projection: GAME_PROJECTION });
     if (!row) throw new BuildIntentError(404, "not_found", "Game not found.");
     const prefs = (await readBuildIntentPrefs(this.users, userId)).checkin;
     const matchup = gameMatchup(row);
@@ -306,12 +307,12 @@ class BuildIntentGameState {
    */
   async put(userId, gameId, body, auth) {
     const notesPatch = notesPatchFor(body);
-    const before = await this.games.findOne({ userId, gameId }, { projection: GAME_PROJECTION });
+    const before = await this.games.findOne({ userId, gameId, ...LIVE_GAME_MATCH }, { projection: GAME_PROJECTION });
     if (!before) throw new BuildIntentError(404, "not_found", "Game not found.");
     const matchup = gameMatchup(before);
     const { options, oppOptions } = await this._optionsFor(userId, matchup);
     await this._applyAction(userId, gameId, body, { before, matchup, options, oppOptions, notesPatch, auth });
-    const after = await this.games.findOne({ userId, gameId }, { projection: GAME_PROJECTION });
+    const after = await this.games.findOne({ userId, gameId, ...LIVE_GAME_MATCH }, { projection: GAME_PROJECTION });
     if (!after) throw new BuildIntentError(404, "not_found", "Game not found.");
     this.options.invalidate(userId);
     const labelChanged = LABEL_FIELDS.some((field) => (field(before) ?? null) !== (field(after) ?? null));
@@ -391,12 +392,13 @@ class BuildIntentGameState {
     });
     if (you.length === 0 && opponent.length === 0) return;
     const res = await this.games.updateOne(
-      { userId, gameId, isResumedFromReplay: { $ne: true } },
+      { userId, gameId,
+          ...LIVE_GAME_MATCH, isResumedFromReplay: { $ne: true } },
       [ensureIntentStage(now), ...you, ...opponent],
     );
     if (res.matchedCount === 0) {
       // Quarantined (or deleted) between the read and the write.
-      const gone = !(await this.games.findOne({ userId, gameId }, { projection: { _id: 1 } }));
+      const gone = !(await this.games.findOne({ userId, gameId, ...LIVE_GAME_MATCH }, { projection: { _id: 1 } }));
       if (gone) throw new BuildIntentError(404, "not_found", "Game not found.");
       throw notEligible("resumed");
     }
@@ -511,6 +513,7 @@ class BuildIntentGameState {
       {
         userId,
         gameId: { $in: ids },
+        ...LIVE_GAME_MATCH,
         "buildIntent.status": "pending",
         isResumedFromReplay: { $ne: true },
       },
@@ -530,6 +533,7 @@ class BuildIntentGameState {
   _pendingFilter(userId) {
     return {
       userId,
+      ...LIVE_GAME_MATCH,
       "buildIntent.status": "pending",
       date: { $gte: new Date(this.now() - BUILD_INTENT.PENDING_WINDOW_MS) },
       isResumedFromReplay: { $ne: true },
