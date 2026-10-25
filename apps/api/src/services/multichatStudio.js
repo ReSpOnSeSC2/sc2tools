@@ -79,6 +79,32 @@ class MultichatStudioService {
     return this.col.findOne({ token }, options);
   }
 
+  /** Lazily reuse/promote the existing token row, without replacing its fields.
+   * @param {string} token @returns {Promise<any>} */
+  async ensureCanonical(token) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const doc = await this._findDocument(token);
+      if (doc?.studioKey === token) return doc;
+      try {
+        if (doc) await this.col.updateOne({ _id: doc._id }, { $set: { studioKey: token } });
+        else await this.col.updateOne({ studioKey: token }, { $setOnInsert: { studioKey: token, token } }, { upsert: true });
+      } catch (error) { if (/** @type {any} */ (error)?.code !== 11000) throw error; }
+    }
+    const doc = await this._findDocument(token);
+    if (!doc || doc.studioKey !== token) throw new Error("studio promotion busy");
+    return doc;
+  }
+
+  /** Manual session resets only move the mark forward; normal explicit clip
+   * edits retain their existing clear/replace behavior. @param {string} token @param {number} at */
+  async advanceStreamStart(token, at) {
+    await this.ensureCanonical(token);
+    await this.col.updateOne({ studioKey: token }, { $max: { streamStartMs: at }, $set: { updatedAt: new Date() } });
+    const state = await this.get(token);
+    this.io?.to(`overlay:${token}`).emit("overlay:multichat", state);
+    return state;
+  }
+
   /**
    * Current studio state for a token. Absent doc → empty defaults so
    * widgets can boot unconditionally.

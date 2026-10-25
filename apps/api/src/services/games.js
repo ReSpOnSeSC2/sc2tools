@@ -1501,11 +1501,12 @@ class GamesService {
      * @type {{
      *   wins: number, losses: number, games: number,
      *   mmrStart?: number, mmrCurrent?: number, league?: string,
-     *   region?: string, sessionStartedAt?: string,
+     *   region?: string, sessionStartedAt?: string, sessionAnchorAt?: string,
      *   streak?: { kind: 'win'|'loss', count: number },
      * }}
      */
     const out = { wins, losses, games };
+    if (sessionAnchor !== null) out.sessionAnchorAt = new Date(sessionAnchor).toISOString();
     if (mmrStart !== undefined) out.mmrStart = mmrStart;
     if (mmrCurrent !== undefined) out.mmrCurrent = mmrCurrent;
     if (currentLeague !== undefined) out.league = currentLeague;

@@ -192,9 +192,11 @@ class SessionResolutionGate {
   /**
    * Invalidate all completed results for a user and put later requests in a
    * new generation. Work that started before the write may finish for its
-   * original callers, but it cannot repopulate the post-write cache.
+   * original callers, but it cannot repopulate the post-write cache. A manual
+   * reset additionally discards pending delivery to the original subscribers.
    *
    * @param {string} userId
+   * @param {{discardPending:boolean}} [opts]
    */
   invalidate(userId, opts = { discardPending: false }) {
     const lane = this.lanes.get(userId);

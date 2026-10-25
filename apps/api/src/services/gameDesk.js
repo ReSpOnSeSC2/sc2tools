@@ -12,6 +12,14 @@ class GameDeskService {
 
   /** @param {string} userId @param {string} token @param {Record<string,any>} body */
   async act(userId, token, body) {
+    const tokens = this.deps.tokens;
+    return "withWrite" in tokens && typeof tokens.withWrite === "function"
+      ? tokens.withWrite(token, () => this._actAdmitted(userId, token, body))
+      : this._actAdmitted(userId, token, body);
+  }
+
+  /** @param {string} userId @param {string} token @param {Record<string,any>} body */
+  async _actAdmitted(userId, token, body) {
     if (!ACTIONS.includes(body.action)) throw deskError(400, "invalid_game_desk_action");
     const allowed = body.action === "predictionResolve" ? ["action", "gameKey", "result"]
       : ["predictionCancel", "shoutout"].includes(body.action) ? ["action", "gameKey"]
@@ -26,14 +34,14 @@ class GameDeskService {
     const gameKey = body.gameKey;
     if (typeof gameKey !== "string" || !gameKey.trim() || gameKey.length > 120) throw deskError(400, "invalid_prediction_game");
     if (body.action === "predictionCancel") {
-      if (!await engagement.cancel(token, gameKey)) throw deskError(409, "prediction_changed");
+      if (!await engagement._cancelAdmitted(token, gameKey)) throw deskError(409, "prediction_changed");
     } else if (body.action === "predictionResolve") {
       const live = broker.latest(userId);
       const verified = /** @type {Record<string,any>|null} */ (broker.latestOverlayLive(userId));
       if (!live || live.isReplay || live.phase !== "match_ended" || live.gameKey !== gameKey
         || (verified?.gameKey === gameKey && ["win", "loss"].includes(verified.result))) throw deskError(409, "prediction_manual_unavailable");
       if (!["win", "loss"].includes(body.result)) throw deskError(400, "invalid_prediction_result");
-      if (!await engagement.manualSettle(token, gameKey, body.result)) throw deskError(409, "prediction_changed");
+      if (!await engagement._manualSettleAdmitted(token, gameKey, body.result)) throw deskError(409, "prediction_changed");
     } else {
       const text = await this.shoutoutLine(userId, gameKey);
       if (!text) throw deskError(409, "opponent_channel_unavailable");
@@ -62,10 +70,13 @@ class GameDeskService {
     const { games, users, studio, tokens, io } = this.deps;
     const at = this.now();
     games.invalidateSessionForReset(userId);
-    const written = await users.updateOne({ userId }, { $set: { sessionAnchorAt: new Date(at).toISOString() } });
+    const written = await users.updateOne({ userId }, { $max: { sessionAnchorAt: new Date(at).toISOString() } });
     if (!written.matchedCount) throw deskError(404, "user_not_found");
+    const committed = await users.findOne({ userId }, { projection: { sessionAnchorAt: 1 } });
+    const anchor = typeof committed?.sessionAnchorAt === "string" ? Date.parse(committed.sessionAnchorAt) : NaN;
+    if (!Number.isFinite(anchor)) throw new Error("session anchor unavailable");
     games.invalidateSessionForReset(userId);
-    const state = await studio.update(token, { streamStartMs: at });
+    const state = await studio.advanceStreamStart(token, anchor);
     const session = await games.todaySession(userId, undefined, { reuseRecent: true });
     if (io) for (const active of await tokens.list(userId)) {
       if (!active.revokedAt && !("rotationPending" in active && active.rotationPending)) io.to(`overlay:${active.token}`).emit("overlay:session", session);

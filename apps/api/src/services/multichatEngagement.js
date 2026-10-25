@@ -22,6 +22,9 @@
  * "prediction-settled" | "level-up" | "clip-moment" | "wall"}).
  */
 
+const { MultichatStudioService } = require("./multichatStudio");
+const { VerifiedPredictionSettlement } = require("./verifiedPredictionSettlement");
+
 const BATCH_MAX = 100;
 const TEXT_MAX = 200;
 const PLATFORMS = ["twitch", "kick", "youtube", "tiktok"];
@@ -109,10 +112,11 @@ class MultichatEngagementService {
    *   multichatViewers: import('mongodb').Collection,
    *   multichatPredictions: import('mongodb').Collection,
    *   multichatClipMoments: import('mongodb').Collection,
+   *   multichatStudio: import('mongodb').Collection,
    * }} db
    * @param {{
    *   io?: import('socket.io').Server,
-   *   overlayTokens?: { listForUser?: (userId: string) => Promise<Array<{token: string, revokedAt?: Date | null}>> , listActiveTokens?: (userId: string) => Promise<string[]>, resolve?: (token: string) => Promise<{userId: string} | null> },
+   *   overlayTokens?: { listForUser?: (userId: string) => Promise<Array<{token: string, revokedAt?: Date | null}>> , listActiveTokens?: (userId: string) => Promise<string[]>, withWrite?: <T>(token:string, work:()=>Promise<T>)=>Promise<T>, resolve?: (token: string) => Promise<{userId: string} | null> },
    *   users?: { getPreferences: (userId: string, type: string) => Promise<Record<string, any>> },
    *   now?: () => number,
    * }} [deps]
@@ -132,6 +136,9 @@ class MultichatEngagementService {
     this.overlayTokens = deps.overlayTokens || null;
     this.users = deps.users || null;
     this.now = deps.now || (() => Date.now());
+    this.verifiedSettlement = new VerifiedPredictionSettlement({ predictions: this.predictions, viewers: this.viewers,
+      studio: new MultichatStudioService(db), now: this.now, points: ORACLE_POINTS, tally: tallyPicks,
+      topOracles: token => this.topOracles(token, 3), emit: (token, event) => this._emit(token, event) });
     /** @type {Map<string, number[]>} token → per-bucket message counts */
     this._buckets = new Map();
     /** @type {Map<string, number>} token → last clip moment ms */
@@ -401,71 +408,18 @@ class MultichatEngagementService {
    */
   async settlePrediction(tokens, game) {
     if (game.result !== "win" && game.result !== "loss") return;
-    for (const token of tokens) {
-      // Settle the matching window when the gameKey lines up, else the
-      // newest open one (envelope/result key drift must not strand it).
-      const exact = game.gameKey
-        ? await this.predictions.findOne({ token, gameKey: game.gameKey })
-        : null;
-      // A known closed round is terminal, including manual/cancelled rounds.
-      // Retain legacy key-drift recovery only when no matching round exists.
-      if (exact?.settled) continue;
-      const open = exact ?? (await this.predictions.findOne(
-          { token, settled: false },
-          { sort: { openedAt: -1 } },
-        ));
-      if (!open) continue;
-      // Cancel/manual/verified resolution compete for the same durable claim.
-      // In particular a late replay must not award a manually resolved round.
-      const claimed = await this.predictions.findOneAndUpdate(
-        { _id: open._id, settled: false },
-        { $set: { settled: true, resolution: "verified", result: game.result, settledAt: new Date(this.now()) } },
-        { returnDocument: "before" },
-      );
-      if (!claimed) continue;
-      const picks = claimed.picks ?? {};
-      const tally = tallyPicks(picks);
-      /** @type {Array<{user: string, platform: string}>} */
-      const winners = [];
-      for (const key of Object.keys(picks)) {
-        const p = picks[key];
-        const correct = p.pick === game.result;
-        await this.viewers.updateOne(
-          { token, userKey: `${p.platform}:${String(p.user).toLowerCase()}` },
-          {
-            $inc: {
-              "oracle.total": 1,
-              "oracle.correct": correct ? 1 : 0,
-              "oracle.score": correct ? ORACLE_POINTS : 0,
-            },
-            $set: { displayName: p.user, platform: p.platform, lastSeenAt: new Date() },
-            $setOnInsert: { xp: 0, messages: 0, events: 0 },
-          },
-          { upsert: true },
-        );
-        if (correct) winners.push({ user: p.user, platform: p.platform });
-      }
-      await this.predictions.updateOne(
-        { _id: open._id },
-        { $set: { tally } },
-      );
-      const topOracles = await this.topOracles(token, 3);
-      this._emit(token, {
-        type: "prediction-settled",
-        gameKey: open.gameKey,
-        result: game.result,
-        tally,
-        correctCount: winners.length,
-        pointsEach: ORACLE_POINTS,
-        topOracles,
-      });
-    }
+    for (const token of tokens) await this.verifiedSettlement.settle(token, game);
   }
 
   /** Cancel only the named open round. No viewer score or accuracy changes.
    * @param {string} token @param {string} gameKey
    */
   async cancel(token, gameKey) {
+    return this.overlayTokens?.withWrite ? this.overlayTokens.withWrite(token, () => this._cancelAdmitted(token, gameKey)) : this._cancelAdmitted(token, gameKey);
+  }
+
+  /** @param {string} token @param {string} gameKey */
+  async _cancelAdmitted(token, gameKey) {
     const doc = await this.predictions.findOneAndUpdate(
       { token, gameKey, settled: false },
       { $set: { settled: true, resolution: "cancelled", settledAt: new Date(this.now()) } },
@@ -480,6 +434,11 @@ class MultichatEngagementService {
    * @param {string} token @param {string} gameKey @param {'win'|'loss'} result
    */
   async manualSettle(token, gameKey, result) {
+    return this.overlayTokens?.withWrite ? this.overlayTokens.withWrite(token, () => this._manualSettleAdmitted(token, gameKey, result)) : this._manualSettleAdmitted(token, gameKey, result);
+  }
+
+  /** @param {string} token @param {string} gameKey @param {'win'|'loss'} result */
+  async _manualSettleAdmitted(token, gameKey, result) {
     if (!["win", "loss"].includes(result)) return false;
     const doc = await this.predictions.findOneAndUpdate(
       { token, gameKey, settled: false },
@@ -594,6 +553,7 @@ class MultichatEngagementService {
    * @param {string} token
    */
   async summary(token) {
+    await this.verifiedSettlement.resume(token);
     // The streamer never ranks on their own boards (wall + oracles).
     const selfKeys = await this._selfKeys(token);
     /** @type {Record<string, any>} */
@@ -620,7 +580,7 @@ class MultichatEngagementService {
         .toArray(),
       this.predictions
         .find(
-          { token, settled: true, resolution: { $nin: ["manual", "cancelled"] } },
+          { token, settled: true, resolution: { $nin: ["manual", "cancelled"] }, settlementState: { $ne: "pending" } },
           { projection: { _id: 0, opponent: 1, result: 1, tally: 1, settledAt: 1 } },
         )
         .sort({ settledAt: -1 })
