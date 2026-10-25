@@ -11,6 +11,18 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Opponent page position
+
+- Keep your reading position when recorded compositions finish loading. Active phase and section chips scroll only within their own horizontal strips; section links still navigate when selected.
+
+### Reference build orders
+- Write, paste or capture a bounded reference plan in the rich build editor,
+  separately from the rules that classify replays. Supply-only steps keep an
+  unknown clock; unknown action names stay visible and saveable.
+- Reorder and edit steps, fold repeated army actions, copy text or Markdown,
+  download .txt, and practise usable timed actions. Community copies retain the
+  reference plan while private source replay IDs stay private.
+
 ### Agent 0.24.6 and Randomizer game-start performance
 - Build scouting timelines and load their icons when the relevant view opens,
   avoiding full hidden-history hydration in Compact or hidden Companion windows.
@@ -24,6 +36,7 @@ corresponding GitHub Release.
   Bound fresh-replay overflow to eight pending jobs during large backlogs.
 
 ### Added
+- Create builds from a replay, a detected label or a blank draft in one rich editor. The first-run library also links Community copies; searchable race-aware action pickers show friendly names, proxy eligibility and unknown-action errors.
 - Configure optional Twitch Predictions and live-game stream markers with separate permissions, explicit opt-ins and confirmed Dock controls. A separate server gate defaults off; current desktop telemetry cannot prove ranked queue status, so automatic Predictions remain unavailable.
 - When browser analysis is available, the home-page demo reads one replay locally, opens either player's real build order and offers recovery without uploading the replay. The analyzer warms up on intent, with the existing server demo retained during the rollout compatibility window.
 - Opt in to nine recorded ladder achievements in Event alerts, with per-moment visuals and sounds, local tests, clip timestamps and optional posts through an already connected bot. Supporter alerts keep priority; replay starting MMR and confirmed league evidence remain explicit.

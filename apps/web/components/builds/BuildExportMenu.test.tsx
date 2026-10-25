@@ -8,6 +8,22 @@ const steps = [{ time: 17, name: "Pylon", supply: 14 }, { time: 42, name: "Gatew
 function open() { const summary = screen.getByLabelText("Build actions for Gate expand"); (summary.closest("details") as HTMLDetailsElement).open = true; return summary; }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe("build actions", () => {
+  it("derives print truncation from the selected reference instead of unrelated legacy steps", async () => {
+    const print = vi.spyOn(window, "print").mockImplementation(() => {
+      const text = document.querySelector("[data-build-print-sheet]")?.textContent;
+      expect(text).toContain("BuildPylon"); expect(text).not.toContain("First 60"); expect(text).not.toContain("Legacy");
+    });
+    render(<BuildExportMenu meta={meta} steps={Array.from({ length: 100 }, (_, time) => ({ time, name: "Legacy" }))} reference={{ v: 1, source: "manual", steps: [{ t: null, supply: 14, action: "BuildPylon" }, { t: 30, supply: null, action: "BuildGateway" }] }} />);
+    open(); fireEvent.click(screen.getByRole("button", { name: "Print cheat sheet" })); await waitFor(() => expect(print).toHaveBeenCalledOnce());
+  });
+  it("prefers reference plans over rule deadlines and retains unknown clocks without private provenance", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    render(<SavedBuildExportMenu meta={meta} build={{ rules: [{ type: "before", name: "BuildStargate", time_lt: 300 }], buildOrder: { v: 1, source: "game", sourceGameId: "private-secret", steps: [{ t: null, supply: 14, action: "Future action", note: "A | B" }] } }} />);
+    open(); expect(screen.queryByRole("button", { name: "Copy SALT" })).toBeNull(); fireEvent.click(screen.getByRole("button", { name: "Copy Markdown" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(writeText.mock.calls[0][0]).toContain("| — | 14 | Future action | A \\| B |");
+    expect(writeText.mock.calls[0][0]).not.toMatch(/private-secret|Stargate|0:00/);
+  });
   it.each(["Escape", "outside"])("keeps focus after %s dismisses a pending clipboard permission request", async dismiss => {
     let reject!: (error: Error) => void;
     const pending = new Promise<void>((_resolve, fail) => { reject = fail; });

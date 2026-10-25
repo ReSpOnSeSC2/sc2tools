@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useToastOptional } from "@/components/ui/Toast";
 import { useAuth } from "@clerk/nextjs";
 import { useBuildEditorRequests, type EditorOperation } from "./useBuildEditorRequests";
+import { firstBuildTokenError } from "@/lib/buildTokenSelection";
 import {
   PREVIEW_DEBOUNCE_MS,
   RULES_MAX_PER_BUILD,
@@ -186,6 +187,11 @@ export function useBuildEditorState(
       return;
     }
     if (!demoMode && !requests.ready) { setPreview(null); setPreviewRules(NO_RULES); setPreviewLoading(false); return; }
+    const tokenError = firstBuildTokenError(draft.rules, draft.race);
+    if (tokenError) {
+      setPreview(null); setPreviewRules(NO_RULES); setPreviewError(tokenError); setPreviewLoading(false);
+      return;
+    }
     if (demoMode) {
       // Demo (landing page): no signed-in library to match against, so
       // we render an empty preview without firing the auth'd request.
@@ -494,6 +500,8 @@ export function useBuildEditorState(
 
   const save = useCallback(
     async (andReclassify: boolean) => {
+      const tokenError = firstBuildTokenError(draft.rules, draft.race);
+      if (tokenError) { setErrors({ rules: tokenError }); return; }
       const sanitised = sanitiseDraft(draft, { allowEmptyRules: !!lockedSlug || !!sourceSignature?.length });
       if (!sanitised.ok) {
         setErrors(sanitised.errors);
@@ -530,6 +538,7 @@ export function useBuildEditorState(
         description: sanitised.payload.description,
         notes: sanitised.payload.notes,
         rules: sanitised.payload.rules,
+        ...(sanitised.payload.buildOrder ? { buildOrder: sanitised.payload.buildOrder } : {}),
         skillLevel: sanitised.payload.skillLevel,
         winConditions: sanitised.payload.winConditions,
         losesTo: sanitised.payload.losesTo,

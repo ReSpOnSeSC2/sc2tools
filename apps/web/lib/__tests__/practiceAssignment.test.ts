@@ -9,6 +9,20 @@ const input = { build: { name: "Blink", slug: "blink", race: "Protoss", vsRace: 
 const signal = () => new AbortController().signal;
 afterEach(() => vi.resetAllMocks());
 describe("honest practice source selection", () => {
+  it("prefers supplied reference clocks without fetching private references or source replay", async () => {
+    const result = await resolvePracticeTarget({ ...input, build: { ...input.build, buildOrder: { v: 1, source: "paste", steps: [{ t: 18, supply: 14, action: "BuildPylon" }] } } }, "PvT", async () => "token", signal());
+    expect(result.target.steps).toEqual([{ t: 18, supply: 14, name: "Pylon" }]); expect(h.call).not.toHaveBeenCalled();
+  });
+  it("hydrates the bounded reference only after a slim card explicitly requests practice", async () => {
+    h.call.mockResolvedValue({ race: "Protoss", buildOrder: { v: 1, source: "paste", steps: [{ t: 18, supply: 14, action: "BuildPylon" }] } });
+    const result = await resolvePracticeTarget({ ...input, build: { ...input.build, hasReferenceBuildOrder: true } }, "PvT", async () => "token", signal());
+    expect(result.target.steps[0].name).toBe("Pylon"); expect(h.call).toHaveBeenCalledTimes(1); expect(h.call.mock.calls[0][1]).toBe("/v1/custom-builds/blink");
+  });
+  it("refuses a changed slim-card race rather than applying its old source under the new identity", async () => {
+    h.call.mockResolvedValue({ race: "Terran", buildOrder: { v: 1, source: "paste", steps: [{ t: 18, supply: 14, action: "BuildBarracks" }] } });
+    await expect(resolvePracticeTarget({ ...input, build: { ...input.build, hasReferenceBuildOrder: true } }, "PvT", async () => "token", signal())).rejects.toThrow(/build changed/);
+    expect(h.call).toHaveBeenCalledTimes(1);
+  });
   it("prefers the exact build reference, limits250 steps to80 and preserves source id", async () => {
     h.call.mockResolvedValue({ references: { other: { buildKey: "different", matchup: "PvT", side: "you", target: { ...target, name: "Wrong" } }, right: { buildKey: "blink", matchup: "PvT", side: "you", target: { ...target, steps: Array(250).fill(target.steps[0]) } } } });
     const result = await resolvePracticeTarget(input, "PvT", async () => "token", signal());

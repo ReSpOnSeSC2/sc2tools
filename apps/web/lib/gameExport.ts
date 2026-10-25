@@ -1,6 +1,7 @@
 import { describeRule } from "./build-rules-copy";
 import type { BuildRule } from "./build-rules";
 import { encodeSaltDetailed, type SaltKind } from "./salt";
+import type { ReferenceBuildStep } from "./buildOrderReference";
 
 export interface ExportStep {
   time: number;
@@ -44,6 +45,16 @@ export function buildToText(steps: readonly ExportStep[], meta: BuildExportMeta,
 }
 
 const markdown = (text: string) => cleanLine(text).replace(/([\\`*_\[\]<>|])/g, "\\$1");
+/** Reference rows retain their authored order and unknown clocks. */
+export function referenceBuildToText(steps: readonly ReferenceBuildStep[], meta: BuildExportMeta): string {
+  return [header(meta), "", "Reference plan; — means not supplied. ≈ marks approximate supply.", "",
+    ...steps.slice(0, 120).map(step => `[${step.t === null ? "—" : clock(step.t)}] ${step.supply === null ? "—" : `${step.supplyApprox ? "≈" : ""}${step.supply}`} ${cleanLine(step.action)}${step.note ? ` — ${cleanLine(step.note)}` : ""}`), "", meta.sourceUrl].join("\n");
+}
+export function referenceBuildToMarkdown(steps: readonly ReferenceBuildStep[], meta: BuildExportMeta): string {
+  return [`# ${markdown(meta.title)}`, `${markdown(meta.matchup || "Any matchup")} · by ${markdown(meta.author || "Anonymous")}`, "", "Reference plan; — means not supplied. ≈ marks approximate supply.", "",
+    "| Time | Supply | Action | Note |", "| --- | --- | --- | --- |",
+    ...steps.slice(0, 120).map(step => `| ${step.t === null ? "—" : clock(step.t)} | ${step.supply === null ? "—" : `${step.supplyApprox ? "≈" : ""}${step.supply}`} | ${markdown(step.action)} | ${markdown(step.note || "")} |`), "", meta.sourceUrl].join("\n");
+}
 export function buildToMarkdownTable(steps: readonly ExportStep[], meta: BuildExportMeta, rules: readonly BuildRule[] = []): string {
   const rows = ordered(steps);
   const body = rows.length ? ["| Time | Supply | Step |", "| --- | --- | --- |", ...rows.map(step => `| ${clock(step.time)} | ${supplyOf(step)} | ${markdown(nameOf(step))} |`)] : rules.map(rule => `- ${markdown(describeRule(rule))}`);

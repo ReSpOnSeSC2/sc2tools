@@ -21,6 +21,8 @@ import {
 /** Raw event shape returned by the API. */
 export interface BuildOrderEvent {
   time: number;
+  /** Original finish clock retained when the API exposes an adjusted start. */
+  complete_time?: number;
   supply?: number;
   supplyApprox?: boolean;
   time_display?: string;

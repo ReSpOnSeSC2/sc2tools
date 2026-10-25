@@ -1,6 +1,6 @@
 import { apiCall, boundedApiRequest } from "./clientApi";
 import { writeSynced } from "./ghostSyncIO";
-import { referencePracticeTarget, replayOrderTarget, ruleCheckpointTarget } from "./practiceTarget";
+import { referenceOrderPracticeTarget, referencePracticeTarget, replayOrderTarget, ruleCheckpointTarget } from "./practiceTarget";
 import { buildGhostTargetFromGuide } from "./guides/ghost";
 import { normalizeConcreteGhostRace } from "./ghostBuild";
 import type { GuideBuildPayload } from "./guides/types";
@@ -14,6 +14,8 @@ export interface PracticeSource {
   sourceGameId?: string;
   perspective?: "you" | "opponent";
   rules?: unknown;
+  buildOrder?: unknown;
+  hasReferenceBuildOrder?: boolean;
 }
 export interface PracticeInput {
   build: PracticeSource;
@@ -28,6 +30,14 @@ type Reference = { buildKey: string; matchup: string; side: string; target: unkn
  * priority source during an outage. No public snapshot can name a private
  * source replay; that path is restricted to the owner's saved-build UI. */
 export async function resolvePracticeTarget(input: PracticeInput, matchup: GhostMatchupKey, getToken: () => Promise<string | null>, signal: AbortSignal) {
+  let reference = input.build.buildOrder;
+  if (!reference && input.privateBuild && input.build.slug && input.build.hasReferenceBuildOrder) {
+    const current = await apiCall<PracticeSource>(getToken, `/v1/custom-builds/${encodeURIComponent(input.build.slug)}`, { signal });
+    if (!current || current.race !== "Random" && normalizeConcreteGhostRace(current.race) !== matchup[0] || (current.perspective ?? "you") !== (input.build.perspective ?? "you")) throw new Error("This build changed. Refresh the library before choosing a practice target.");
+    reference = current.buildOrder;
+  }
+  const supplied = referenceOrderPracticeTarget(input.build.name, reference, matchup[0]);
+  if (supplied) return { target: supplied, source: "Supplied reference build order — timed known actions only" };
   if (input.privateBuild) {
     const references = await apiCall<{ references?: Record<string, Reference> }>(getToken, "/v1/me/ghost-builds", { signal });
     const buildKey = input.build.slug || input.build.name;
