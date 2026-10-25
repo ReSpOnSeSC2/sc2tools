@@ -2,7 +2,7 @@
 
 Branch: `codex/wave4-twitch-predictions-markers` in `.worktrees/wave3-private-scouting`.
 
-Local implementation and focused verification are complete. Fresh-main/cutoff integration, final combined gates and remote PR checks remain outstanding at this checkpoint.
+Local implementation and current-main integration are preserved at `b5885640`. Cutoff integration, final combined gates and remote PR checks remain outstanding at this checkpoint.
 
 ## Behavior and capability
 
@@ -26,6 +26,8 @@ Local implementation and focused verification are complete. Fresh-main/cutoff in
 ## Verification
 
 Focused API policy, OAuth, provider transport, real disposable Mongo journal/controller/routes and actual ingest wiring tests pass. API types and strict new-module lint pass. Controller/journal recovery race cases and held status→token rotation/revocation are covered.
+
+Actual main `c7b9446f` was merged with explicit additive resolutions retaining owner native upload barriers, synced Ghost, Chat commands and Series. There is no native source difference against that main. API and web types pass. Twelve integrated API suites pass **219 assertions**, including all seven Twitch suites plus Series routes, Chat preferences, Ghost, device live ingest and Moments. Main's reviewed effect-loaded Dock helper resolves the previously diagnosed initial-suspension loop: all nine affected Dock/lazy/Twitch suites pass **86 assertions**, including the five previously uncompleted consumers. A fresh full-web run is underway; its result is not inferred from the focused pass.
 
 Focused web, old Learn consumers and Help/article/link/index checks: **72 assertions across 8 files passed** before the final busy-focus/browser follow-up; the named-popup replacement regression passes in the expanded 11-case Settings consumer. Full API: **5840 passed, 6 skipped, 412 suites, 1 snapshot**. The unsharded local web run passed 823 files/7476 assertions but five real Dock consumer workers exhausted the default heap; a bounded diagnostic confirms the second initial Suspense island exposes the already-corrected shared loader issue. Actual main's reviewed effect-loaded DockLazyPanel will be integrated before rerunning those consumers. This run is not claimed as a full-web pass.
 
