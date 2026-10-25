@@ -3,6 +3,8 @@
 Branch: `codex/wave4-dock-polish` in `.worktrees/wave3-game-workspace`.
 Product source: `40e5ea990ac7574a355501795db2af0ad34680bc`, based on current main `b2abc9c034ab3dd7564d0befe50897d288f61649`.
 
+Fresh coaching main `5a402f23487b844fab15e9a8302eaebcb4be05d8` integrated cleanly as `5748e1e9d97ac0184c467bd45838f32209942dc9` after the product proof. Both changelog sections and Help changes remain; no Dock source or CSS changed. Full web types and the affected Dock/Settings/Help consumers pass after that integration.
+
 This is the exact `streamer-polish-4` foundation before Game desk: the existing nine panels now collapse into live/readiness summaries, pin to a shared order and retain drafts through collapse, Pin and Reset. A bounded browser-only layout preference stores known IDs and the b-roll disclosure state. Storage denial keeps controls usable.
 
 Dock controls use the shared UI primitives, visible focus, labelled icons and at least 40px coarse-pointer targets. Platform connections are text-labelled. Failed/missing/stalled clipboard access exposes selected read-only text, including multiline chronological clip timestamps. The b-roll manager, build picker and graph load on demand. Local error boundaries contain failed imports/rendering; explicit Retry reruns each factory with a fresh lazy identity, and a stalled load reaches its local fallback after 20 seconds.
