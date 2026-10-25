@@ -82,6 +82,10 @@ No environment variable, collection, migration or paid service is required. The 
 
 `shareable-views` needs no new environment variables, services, indexes, jobs or migration. The existing private preferences API stores up to twelve named filter/section views. A single indexed user read supplies first-visit saved-view/default-tab behavior. Deploy the API and web changes normally; no production account settings were changed during validation.
 
+# Overlay health
+
+No new environment variable, secret, collection, index, job or infrastructure is required. The API image copies the shared surface/scene allowlist. Deploy API before web, then refresh old OBS Browser Sources once to identify them in Ready to go live? Counts include source pages opened in normal browsers; verify actual scene visibility and audio in OBS. A missing recent game-update timestamp after restart is expected until a replay arrives. No integration or account was enabled during verification.
+
 
 
 ### Live overlay profiles
@@ -91,3 +95,21 @@ Deploy the API and web together for `overlay-profile-sync`. The API Dockerfile i
 # Widget playground
 
 No additional owner configuration is required. The normal API image includes the shared sample JSON; deploy API and web normally. Use Settings → Overlay → Widgets → Preview, Stream Studio or the public playground to inspect silent local sample data before using Test in OBS. The playground uses no account or overlay token and makes no provider request. No production integration or account setting was changed while validating it.
+
+# OBS game sources and website requests
+
+No new environment variables, secrets, indexes or services are required. Deploy
+the normal API/web changes; native source support requires a future ordinary
+agent update. Older agents keep Copy/Drag and show Add as unavailable. No native
+installer, version bump, signing or release is part of this work.
+
+Website requests are off by default in the agent. The user saves OBS connection
+details and explicitly enables **Allow website requests to add an OBS source**.
+Every Add still needs a default-Cancel desktop confirmation for the current
+program scene. Never retry an uncertain acknowledgement without inspecting OBS.
+Ghost assignments remain Copy/Drag; the optional builder source explains its
+required URL setup. See `/help/obs-auto-scene-switching` and
+`docs/obs-auto-scene-switching.md` §§5/7 for the complete procedure. Validation
+used disposable fixtures and fake/offscreen OBS boundaries; no production OBS or
+account integration was run.
+

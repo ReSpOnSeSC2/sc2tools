@@ -4,6 +4,7 @@ const { verifyToken } = require("@clerk/backend");
 const { sha256 } = require("../util/hash");
 const { updatePlaybackJob } = require("../services/replayPlaybackJobs");
 const { scoutingDeviceRoom } = require("../services/agentScouting");
+const { overlayHandshakeDescriptor } = require("../services/overlayPresence");
 
 /** Min interval (ms) between accepted ``overlay:resync`` requests on
  * one socket. Tighter than 2 s would let a misbehaving client trigger
@@ -131,6 +132,8 @@ function attachSocketAuth(io, opts) {
         socket.data.overlayToken = overlayToken;
         socket.data.overlayUserId = hit.userId;
         socket.data.kind = "overlay";
+        socket.data.overlayPresence = overlayHandshakeDescriptor(socket.handshake?.auth);
+        socket.data.overlayControlOnly = socket.handshake?.auth?.controlOnly === true;
         // Stash the OBS Browser Source's IANA timezone so the
         // session-widget aggregation can anchor "today" to the
         // streamer's wall clock. Defaults to UTC at the
@@ -159,6 +162,10 @@ function attachSocketAuth(io, opts) {
         socket.data.kind = "device";
         // Stable pairing identity survives reconnects; never expose bearer hashes.
         socket.data.deviceId = hit.deviceId;
+        socket.data.obsAddSource = {
+          supported: socket.handshake.auth.obsAddSource?.supported === true,
+          enabled: socket.handshake.auth.obsAddSource?.enabled === true,
+        };
         next();
         return;
       }
@@ -207,6 +214,7 @@ function attachSocketAuth(io, opts) {
 
   io.on("connection", (socket) => {
     if (socket.data.kind === "overlay") {
+      socket.data.overlayConnectedAt = Date.now();
       const t = socket.data.overlayToken;
       const u = socket.data.overlayUserId;
       if (t) socket.join(`overlay:${t}`);
@@ -431,6 +439,9 @@ function attachSocketAuth(io, opts) {
         socket.join(`user:${u}`);
         socket.join(scoutingDeviceRoom(u));
       }
+      socket.on("obs:capabilities", (payload) => {
+        socket.data.obsAddSource = { supported: payload?.supported === true, enabled: payload?.enabled === true };
+      });
       socket.on("map-playback:status", (payload) => {
         if (!u || !payload || typeof payload.gameId !== "string" || typeof payload.requestId !== "string") return;
         // A device can only update an existing request in its authenticated

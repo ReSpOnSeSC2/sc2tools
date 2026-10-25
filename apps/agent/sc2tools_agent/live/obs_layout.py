@@ -236,6 +236,10 @@ MANUAL_OVERRIDE_SCENES: Sequence[str] = (
     SCENE_IN_GAME,
 )
 _GENERATED_BROWSER_ROUTES = {
+    "SC2 Tools Game Overlay": ("overlay", ""),
+    "SC2 Tools Ghost Build": ("widget", "ghost-build"),
+    "SC2 Tools Build Randomizer": ("widget", "randomizer"),
+    "SC2 Tools Stats Ticker": ("widget", "stats-ticker"),
     "SC2 Tools Backdrop": ("scene", "between-games"),
     "SC2 Tools Session Stats": ("widget", "session"),
     "SC2 Tools Chat": ("widget", "multichat"),
@@ -245,7 +249,8 @@ _GENERATED_BROWSER_ROUTES = {
 
 
 def _overlay_url(base_url: str, token: str, path: str) -> str:
-    return f"{base_url.rstrip('/')}/overlay/{token}/{path}"
+    root = f"{base_url.rstrip('/')}/overlay/{token}"
+    return root + (path if path.startswith("?") else f"/{path}" if path else "")
 
 
 # ---------------------------------------------------------------------
@@ -293,6 +298,8 @@ def plan_scenes(
     webcam_source: Optional[str] = None,
     game_source: Optional[str] = None,
     include_in_game: bool = True,
+    during_game_widgets: Optional[Sequence[str]] = None,
+    show_overlay_credit: bool = True,
 ) -> BuildPlan:
     """Work out what would be created. Touches nothing.
 
@@ -308,6 +315,8 @@ def plan_scenes(
 
     existing = set(client.refresh_scenes())
     warnings: List[str] = []
+    if during_game_widgets is not None and "ghost-build" in during_game_widgets:
+        warnings.append("Ghost Build starts unassigned. In website Look, assign a timed build and use Copy to replace this source URL before coaching.")
     if not webcam_source:
         warnings.append(
             "No webcam source selected — the Between Games scene will "
@@ -416,6 +425,8 @@ def plan_scenes(
                     source_name=webcam_source,
                 ),
             )
+        from .obs_game_overlay import planned_game_widgets
+        in_game.items.extend(planned_game_widgets(sx, sy, during_game_widgets, show_overlay_credit))
         in_game.items.append(
             PlannedItem(
                 label="Chat alerts",
@@ -469,7 +480,7 @@ def plan_scenes(
     # literally what gets sent.
     for scene in scenes:
         for i, item in enumerate(scene.items):
-            if item.browser_path:
+            if item.browser_path is not None:
                 browser_url = _overlay_url(
                     overlay_base_url, overlay_token, item.browser_path,
                 )
@@ -3289,6 +3300,12 @@ def _manual_override_url_from_overlay_url(
     # Expected route: [/optional-prefix]/overlay/<token>/(scene|widget)/<name>.
     # Keep the token opaque and never log or return it separately.
     parts = parsed.path.rstrip("/").split("/")
+    if expected_route == ("overlay", ""):
+        if len(parts) >= 3 and parts[-2] == "overlay" and parts[-1]:
+            return parsed._replace(
+                path="/".join(parts + ["scene", "manual"]), query="", fragment="",
+            ).geturl()
+        return None
     for index in range(len(parts) - 3, -1, -1):
         if (
             parts[index] == "overlay"
@@ -3426,14 +3443,20 @@ def _create_item(
     item: PlannedItem,
     *,
     shared_browser_inputs: Dict[str, str],
+    enabled: bool = True,
 ) -> Optional[int]:
     if item.source_name:
         # Reference the user's existing input. Not a copy — OBS shares
         # the capture between scenes at no extra cost.
         return client.create_scene_item(
-            scene_name=scene_name, source_name=item.source_name,
+            scene_name=scene_name, source_name=item.source_name, enabled=enabled,
         )
     if item.browser_path and item.input_name:
+        if item.share_key and item.share_key.startswith("during_game:"):
+            from .obs_game_overlay import matching_game_input
+            matched = matching_game_input(client, item)
+            if matched:
+                return client.create_scene_item(scene_name=scene_name, source_name=matched, enabled=enabled)
         existing_name = (
             shared_browser_inputs.get(item.share_key)
             if item.share_key
@@ -3443,6 +3466,7 @@ def _create_item(
             return client.create_scene_item(
                 scene_name=scene_name,
                 source_name=existing_name,
+                enabled=enabled,
             )
         actual_name = _unique_input_name(client, item.input_name)
         item_id = client.create_input(
@@ -3450,6 +3474,7 @@ def _create_item(
             input_name=actual_name,
             input_kind=BROWSER_INPUT_KIND,
             settings=_browser_settings(item),
+            enabled=enabled,
         )
         if item.share_key:
             shared_browser_inputs[item.share_key] = actual_name

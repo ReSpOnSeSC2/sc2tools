@@ -26,7 +26,7 @@ export function createOverlaySocket(token: string, opts: {
 }) {
   const socket = io(API_BASE, {
     autoConnect: false,
-    auth: { ...opts.auth, overlayToken: token, timezone: clientTimezone(), surface: opts.surface, ...(opts.widget ? { widget: opts.widget } : {}) },
+    auth: { ...opts.auth, overlayToken: token, timezone: clientTimezone(), surface: opts.surface, presenceVersion: 1, ...(opts.widget ? { widget: opts.widget } : {}) },
     transports: ["websocket", "polling"],
     reconnection: true, reconnectionAttempts: Infinity,
     reconnectionDelay: 500, reconnectionDelayMax: 5000,

@@ -19,14 +19,14 @@ export function newestStudioSnapshot(current: StudioState | null, next: StudioSt
  * their existing GET fallback; this connection supplies immediate saved-state
  * updates without reconnecting when drafts or callback identities change.
  */
-export function useStudioUpdates(token: string, onUpdate: (state: StudioState) => void, enabled = true): { status: OverlayConnectionStatus } {
+export function useStudioUpdates(token: string, onUpdate: (state: StudioState) => void, enabled = true, controlOnly = false): { status: OverlayConnectionStatus } {
   const [connection, setConnection] = useState<{ token: string; status: OverlayConnectionStatus }>({ token, status: "connecting" });
   const callbackRef = useRef({ token, onUpdate });
   callbackRef.current = { token, onUpdate };
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    const connection = createOverlaySocket(token, { surface: "dock", onStatus: (status) => setConnection({ token, status }) });
+    const connection = createOverlaySocket(token, { surface: "dock", auth: controlOnly ? { controlOnly: true } : undefined, onStatus: (status) => setConnection({ token, status }) });
     const socket = connection.socket;
     const receive = (raw: unknown) => {
       // A late callback from the previous token can occur before effect
@@ -40,6 +40,6 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
       socket.off("overlay:multichat", receive);
       connection.dispose();
     };
-  }, [token, enabled]);
+  }, [token, enabled, controlOnly]);
   return { status: connection.token === token ? connection.status : "connecting" };
 }

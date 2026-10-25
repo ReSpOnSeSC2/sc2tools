@@ -177,12 +177,14 @@ const { buildReplaysRouter } = require("./routes/replays");
 const { buildReplayFilesRouter } = require("./routes/replayFiles");
 const { buildPlaybackArtifactsRouter } = require("./routes/playbackArtifacts");
 const { buildBotLabRouter } = require("./routes/botLab");
+const { buildObsSourcesRouter } = require("./routes/obsSources");
 const {
   buildInfrastructureCostsRouter,
 } = require("./routes/infrastructureCosts");
 const { buildCustomBuildsRouter } = require("./routes/customBuilds");
 const { buildDevicePairingsRouter } = require("./routes/devicePairings");
 const { buildOverlayTokensRouter } = require("./routes/overlayTokens");
+const { buildOverlayPresenceRouter } = require("./routes/overlayPresence");
 const {
   buildPlatformIntegrationsRouter,
 } = require("./routes/platformIntegrations");
@@ -1266,6 +1268,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     Boolean(req.auth && req.auth.clerkUserId && adminIds.has(req.auth.clerkUserId));
   app.use("/v1/bot-lab", buildBotLabRouter({ auth, io: deps.io, isAdmin,
     enabled: process.env.BOT_LAB_ENABLED === "true" }));
+  app.use("/v1/devices/obs", buildObsSourcesRouter({ auth, io: deps.io }));
   app.use(SERVICE.ROUTE_PREFIX, buildPlaybackArtifactsRouter({
     playbackArtifacts: services.playbackArtifacts, auth,
   }));
@@ -1604,6 +1607,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       io: deps.io,
     }),
   );
+  app.use(SERVICE.ROUTE_PREFIX, buildOverlayPresenceRouter({ overlayTokens: services.overlayTokens, liveGameBroker: services.liveGameBroker, auth, io: deps.io }));
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildAggregationsRouter({

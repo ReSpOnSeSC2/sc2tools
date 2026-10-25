@@ -81,6 +81,10 @@ const LESSONS: ReadonlyArray<Lesson> = [
         body: <>In <strong>Settings → Overlay → Widgets</strong>, choose a starter pack and review which widgets it enables before confirming. Use Setup&apos;s <strong>All-in-one URL</strong> for a ready-arranged core layout, or choose individual widget cards to position each source yourself. Chat, Ghost Build coach and Build profile use dedicated sources.</>,
       },
       {
+        title: "Let the app build it",
+        body: <>In the desktop app, open <strong>Settings → OBS scene switching</strong>, enter your OBS WebSocket details and press <strong>Test connection → Build my scenes</strong>. Pick your captures and review <strong>During games</strong>: All-in-one starts on; Ghost Build, Build randomizer and the slim scene ticker are optional. Choose your credit preference, then confirm. <strong>Update</strong> later adds missing selected sources while keeping your existing layout. For one source, enable website OBS requests in the desktop app and use a widget card&apos;s <strong>Add to OBS</strong>, then confirm the named program scene locally. Cancel is the default.</>,
+      },
+      {
         title: "Add a Browser Source in OBS",
         body: <>Use <strong>Drag into OBS</strong> on a widget card to create a named source at its recommended size. Alternatively, choose <strong>Sources → + → Browser</strong>, paste its private URL with Copy and enter the card&apos;s width and height. All-in-one uses your canvas size, usually <strong>1920 × 1080</strong>; Build profile uses <strong>720 × 900</strong>. Press Test and review Preview before sending any live sample.</>,
       },
@@ -100,8 +104,8 @@ const LESSONS: ReadonlyArray<Lesson> = [
     promise: "Separate a layout check from proof that real game information is arriving.",
     steps: [
       {
-        title: "Preview in the playground, then Test in OBS",
-        body: <>Choose <strong>Preview</strong> on a Settings widget card, or open the <Link href="/stream-studio/playground" className="text-accent underline">local widget playground</Link>. Try the sample scenarios, theme presets and Show all together; these silent samples use no account or overlay token. Then enable a widget in <strong>Settings → Overlay</strong> and choose <strong>Test</strong> while watching OBS. Most tests display a sample for about 20 seconds; choose <strong>Stop</strong> to dismiss it sooner. <strong>Test all</strong> helps check a complete scene. Build profile is controlled directly from its settings or the Stream Dock.</>,
+        title: "Check readiness, preview, then Test in OBS",
+        body: <>First check <Link href="/help/overlay-health" className="text-accent underline">Ready to go live?</Link> in Overlay setup for connected sources and possible duplicate audio. Choose <strong>Preview</strong> on a Settings widget card, or open the <Link href="/stream-studio/playground" className="text-accent underline">local widget playground</Link>. Try the sample scenarios, theme presets and Show all together; these silent samples use no account or overlay token. Then enable a widget in <strong>Settings → Overlay</strong> and choose <strong>Test</strong> while watching OBS. Most tests display a sample for about 20 seconds; choose <strong>Stop</strong> to dismiss it sooner. <strong>Test all</strong> helps check a complete scene. Build profile is controlled directly from its settings or the Stream Dock.</>,
       },
       {
         title: "Expect different cards at different times",
