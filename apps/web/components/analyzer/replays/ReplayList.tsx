@@ -1,4 +1,5 @@
 "use client";
+import type { MouseEvent, ReactNode } from "react";
 
 import { OpponentLink } from "../OpponentLink";
 import { useGameSource } from "@/lib/useGameSource";
@@ -36,6 +37,8 @@ export interface ReplayListProps {
   listQuery?: string;
   emptyTitle?: string;
   emptyDescription?: string;
+  emptyAction?: ReactNode;
+  onOpenReplay?: (gameId: string) => void;
   selection?: { selectedIds: ReadonlySet<string>; onToggle: (gameId: string) => void; disabled?: boolean };
 }
 
@@ -51,6 +54,8 @@ export function ReplayList({
   publicHandle,
   listQuery,
   selection,
+  emptyAction,
+  onOpenReplay,
   emptyTitle = "No replays match these filters",
   emptyDescription = "Try a wider date range or clear the replay search filters. Synced games appear here automatically.",
 }: ReplayListProps) {
@@ -65,6 +70,7 @@ export function ReplayList({
           icon={<Swords className="h-6 w-6" aria-hidden />}
           title={emptyTitle}
           description={emptyDescription}
+          action={emptyAction}
         />
       </div>
     );
@@ -104,6 +110,7 @@ export function ReplayList({
                   publicLocked={publicLocked}
                   listQuery={listQuery}
                   selection={selection}
+                  onOpenReplay={onOpenReplay}
                 />
               ))}
             </tbody>
@@ -122,6 +129,7 @@ export function ReplayList({
               publicLocked={publicLocked}
               listQuery={listQuery}
               selection={selection}
+              onOpenReplay={onOpenReplay}
             />
           ))}
         </ul>
@@ -140,15 +148,16 @@ interface RowProps {
   publicLocked: boolean;
   listQuery?: string;
   selection?: ReplayListProps["selection"];
+  onOpenReplay?: (gameId: string) => void;
 }
 
-function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery, selection }: RowProps) {
+function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery, selection, onOpenReplay }: RowProps) {
   const source = useGameSource(undefined, owner ? listQuery : undefined);
   const analysisHref = owner
     ? gameAnalysisHref(game.gameId, null, source)
     : sharedAnalysisHref(publicRoot || "", game.gameId, listQuery);
   return (
-    <tr className="group bg-bg-surface transition-colors hover:bg-bg-elevated/55">
+    <tr data-replay-game-id={game.gameId} onClickCapture={event => rememberOpen(event, game.gameId, onOpenReplay)} className="group bg-bg-surface transition-colors hover:bg-bg-elevated/55">
       {owner && selection ? <td className="px-2 py-3"><ReplaySelection gameId={game.gameId} selection={selection} /></td> : null}
       <td className={["border-l-4 px-4 py-3", resultRail(game.result)].join(" ")}>
         <ResultBadge result={game.result} />
@@ -201,13 +210,13 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, p
   );
 }
 
-function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery, selection }: RowProps) {
+function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery, selection, onOpenReplay }: RowProps) {
   const source = useGameSource(undefined, owner ? listQuery : undefined);
   const analysisHref = owner
     ? gameAnalysisHref(game.gameId, null, source)
     : sharedAnalysisHref(publicRoot || "", game.gameId, listQuery);
   return (
-    <li className={["relative border-l-4 px-4 py-4", resultRail(game.result)].join(" ")}>
+    <li data-replay-game-id={game.gameId} onClickCapture={event => rememberOpen(event, game.gameId, onOpenReplay)} className={["relative border-l-4 px-4 py-4", resultRail(game.result)].join(" ")}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -422,3 +431,9 @@ function PublicReplayActions({ game, href, handle, locked, mobile = false }: { g
 
 const actionClass = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-border bg-bg-elevated/60 px-2.5 text-micro font-semibold text-text-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 const mobileActionClass = "inline-flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-line bg-bg-surface px-3 text-caption font-semibold text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+
+function rememberOpen(event: MouseEvent, gameId: string, onOpen?: (gameId: string) => void) {
+  if (!onOpen || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  const anchor = event.target instanceof Element ? event.target.closest("a") : null;
+  if (anchor?.getAttribute("href")?.startsWith("/app/game/")) onOpen(gameId);
+}

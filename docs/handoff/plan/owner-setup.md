@@ -1,5 +1,16 @@
 # Owner setup notes (accumulated)
 
+## Analyzer section links
+
+The section-navigation pack is web-only and needs no environment variable,
+secret, endpoint, migration, scheduler or infrastructure change. Existing
+authenticated replay and analyzer endpoints are reused. Copied links contain
+validated global filters plus known section controls; they open the recipient's
+own data and never enable public replay sharing. Replay cursor/row restoration
+uses bounded owner-scoped session storage; clearing it leaves Back to newest.
+Search writes use a short debounce and Strategy sheets own one browser history
+entry. Help covers the behavior under Filters, Replays and Today.
+
 ## Widget manager
 
 Deploy the API before the web so the authenticated bulk widget-selection PUT is available. No new environment variable, secret, collection, migration or infrastructure is required. Existing tokens and enable/config events are reused. Starter packs require the user's review and confirmation and preserve other enabled widgets. The shared recommended-size JSON is included by the existing desktop packaging specification; no installer, version bump, tag or release was performed. Existing OBS scene dimensions remain unchanged. Verify a local or off-air Browser Source by copying/dragging it, checking its recommended size and using Preview before sending any live sample. The steps are in `/help/obs-overlay-setup`.

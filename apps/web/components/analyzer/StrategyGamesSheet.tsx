@@ -60,7 +60,7 @@ export function StrategyGamesSheet({
     // Defensive client-side filter so a server that ignored an unknown
     // query param can't leak unrelated games into the drill-down.
     const filteredRaw = raw.filter((g) => {
-      if ((g.opp_strategy || "Unknown") !== drill.opp_strategy) return false;
+      if (drill.opp_strategy && (g.opp_strategy || "Unknown") !== drill.opp_strategy) return false;
       if (drill.build && g.build !== drill.build) return false;
       const race = filters.opp_race || drill.opp_race;
       if (race && g.opp_race?.[0]?.toUpperCase() !== race[0].toUpperCase()) return false;
@@ -90,7 +90,7 @@ export function StrategyGamesSheet({
   }, [data, drill, filters.opp_race, gamesApi.isPreviousData]);
 
   const titleText = useMemo(() => {
-    if (drill.build) return `${drill.build}  vs  ${drill.opp_strategy}`;
+    if (drill.build) return drill.opp_strategy ? `${drill.build}  vs  ${drill.opp_strategy}` : drill.build;
     return `vs ${drill.opp_strategy}`;
   }, [drill]);
 
@@ -109,7 +109,7 @@ export function StrategyGamesSheet({
 
   const active = describeActiveFilters(strategyDrillFilters(filters, drill), { seasons });
   return (
-    <Modal open onClose={onBack} size="xl" mobileLayout="sheet" title={`${titleText} · ${loaded ? `${summary.total} games` : "Loading games…"}`} footer={<Button variant="secondary" onClick={onBack}>Back to strategies</Button>}>
+    <Modal open onClose={onBack} size="xl" mobileLayout="sheet" title={`${titleText} · ${loaded ? `${summary.total} ${summary.total === 1 ? "game" : "games"}` : "Loading games…"}`} footer={<Button variant="secondary" onClick={onBack}>Back to strategies</Button>}>
     <div className="space-y-4">
       <p className="break-words text-caption text-text-muted" aria-label="Active drill filters">{active.length ? active.map(item => `${item.label}: ${item.value}`).join(" · ") : "Default filters"}</p>
       {gamesApi.error && loaded && <p role="alert" className="text-caption text-text-muted">Couldn’t refresh these games. Showing the last loaded results for these filters. <button type="button" className="min-h-11 text-accent underline" onClick={() => void gamesApi.mutate()}>Retry games</button></p>}
@@ -118,7 +118,7 @@ export function StrategyGamesSheet({
           2-column comparison renders above the games list — left side
           is the user's perspective on their build, right side is the
           opponent's perspective on the strategy. */}
-      {drill.build ? (
+      {drill.build && drill.opp_strategy ? (
         <BuildVsStrategyComparison
           build={drill.build}
           strategy={drill.opp_strategy}

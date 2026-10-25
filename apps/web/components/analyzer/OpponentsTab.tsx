@@ -33,7 +33,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { opponentDossierHref } from "./tabs";
 import { visibleOpponentId } from "./opponentListSort";
-import { useOpponentListNavigation, type MmrImpactFilter, type OpponentListLocation, type OpponentListSnapshot } from "./useOpponentListNavigation";
+import { useOpponentListNavigation, type MmrImpactFilter, type OpponentListLocation, type OpponentListSnapshot, type OpponentListControls } from "./useOpponentListNavigation";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { useAllNetMmrOpponents } from "@/lib/netMmrOpponents";
 import { NoGamesYet, NoOpponentsMatch } from "./EmptyStates";
@@ -69,14 +69,16 @@ export function OpponentsTab({
   location,
   onResultCount,
   onExportAction,
+  controls,
 }: {
   onOpen?: (pulseId: string) => void;
   location?: OpponentListLocation;
   onResultCount?: (count: number) => void;
   onExportAction?: (action: OpponentExportAction | null) => void;
+  controls?: OpponentListControls;
 }) {
   const { filters, dbRev } = useFilters();
-  const { search, setSearch, impact: mmrImpactFilter, setImpact: setMmrImpactFilter, hasNotes, setHasNotes, sort, remember } = useOpponentListNavigation(location);
+  const { search, setSearch, impact: mmrImpactFilter, setImpact: setMmrImpactFilter, hasNotes, setHasNotes, sort, remember } = useOpponentListNavigation(location, controls);
   const rivals = useRivals();
   const [quick, setQuick] = useState<"all" | "regulars" | "week" | "rivals">("all");
   const [columnOverrides, setColumnOverrides] = useLocalStorageState<Partial<OpponentColumns>>("analyzer.opponents.columns", {}, (value): value is Partial<OpponentColumns> => !!value && typeof value === "object" && !Array.isArray(value) && Object.entries(value).every(([key, visible]) => ["pulseId", "mmr", "netMmr", "mmrWon", "mmrLost"].includes(key) && typeof visible === "boolean"));

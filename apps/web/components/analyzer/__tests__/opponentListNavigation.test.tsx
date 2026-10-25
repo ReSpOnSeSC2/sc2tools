@@ -16,9 +16,9 @@ it("reads explicit URL state over storage and debounces only the query while pre
   act(() => result.current.setSearch("Beta"));
   act(() => vi.advanceTimersByTime(299)); expect(location.replace).not.toHaveBeenCalled();
   act(() => vi.advanceTimersByTime(1));
-  expect(location.replace).toHaveBeenLastCalledWith("/app/opponents?q=Beta&sort=name&dir=asc&impact=tracked&notes=1&future=keep");
+  expect(location.replace).toHaveBeenLastCalledWith("/app/opponents?q=Beta&sort=name%3Aasc&impact=tracked&notes=1&future=keep");
   act(() => result.current.sort.setSortExplicit("wins", "desc"));
-  expect(location.replace).toHaveBeenLastCalledWith("/app/opponents?q=Beta&sort=wins&impact=tracked&notes=1&future=keep");
+  expect(location.replace).toHaveBeenLastCalledWith("/app/opponents?q=Beta&sort=wins%3Adesc&impact=tracked&notes=1&future=keep");
   expect(JSON.parse(localStorage.getItem("analyzer.opponents.sort")!)).toEqual({ sortBy: "wins", sortDir: "desc" });
 });
 it("applies browser Back URL state without briefly rewriting it with the previous controls", () => {

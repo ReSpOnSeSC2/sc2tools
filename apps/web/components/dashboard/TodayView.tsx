@@ -1,11 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { DailyPulse } from "@/components/analyzer/DailyPulse";
 import { DashboardKpiStrip } from "@/components/analyzer/DashboardKpiStrip";
 import { LadderPulseFrame } from "@/components/analyzer/LadderPulseFrame";
-import { hrefForTab, opponentDossierHref } from "@/components/analyzer/tabs";
+import { dailyPulseHref } from "@/lib/dailyPulseNavigation";
+import { useFilters } from "@/lib/filterContext";
+import { viewFiltersQuery } from "@/lib/analyzerViews";
 import { AgentUpgradeNotice } from "@/components/dashboard/AgentUpgradeNotice";
 import { LiveScoutingBrief } from "@/components/scouting/LiveScoutingBrief";
 import { useDashboardMe } from "@/components/dashboard/AnalyzerFrame";
@@ -29,7 +30,7 @@ const LadderPulse = dynamic(
  * Today always shows Today.
  */
 export function TodayView() {
-  const router = useRouter();
+  const { filters } = useFilters();
   const me = useDashboardMe();
   const { enabled: browserImportEnabled } = useInstantImport();
 
@@ -56,10 +57,7 @@ export function TodayView() {
 
       <SectionBoundary label="the Daily Pulse strip">
         <DailyPulse
-          onNavigate={(tab) => router.push(hrefForTab(tab))}
-          onOpenOpponent={(pulseId) =>
-            router.push(opponentDossierHref(pulseId))
-          }
+          hrefForCard={(card) => dailyPulseHref(card, viewFiltersQuery(filters).toString())}
         />
       </SectionBoundary>
 

@@ -53,7 +53,7 @@ const LS_MIN = "analyzer.strategies.minGames";
 const LS_BVS_VW = "analyzer.strategies.bvs.view";
 const LS_OPP_SORT = "analyzer.strategies.opp.sort";
 
-type StratView = "opp" | "bvs";
+export type StratView = "opp" | "bvs";
 type BvsView = "heatmap" | "table";
 
 function isStratView(raw: unknown): raw is StratView {
@@ -395,15 +395,17 @@ function truncateLabel(s: string, n = 28): string {
   return `${s.slice(0, n - 1)}…`;
 }
 
-export function StrategiesTab({ drill: controlledDrill, onDrillChange }: { drill?: StrategyDrillFilter | null; onDrillChange?: (drill: StrategyDrillFilter | null) => void } = {}) {
+export function StrategiesTab({ drill: controlledDrill, onDrillChange, view: controlledView, onViewChange }: { drill?: StrategyDrillFilter | null; onDrillChange?: (drill: StrategyDrillFilter | null) => void; view?: StratView; onViewChange?: (view: StratView) => void } = {}) {
   // Default to "bvs" — Build vs strategy carries more actionable
   // information (your build paired with what they did) than the flat
   // by-opponent-strategy summary. Existing saved preferences win.
-  const [view, setView] = useLocalStorageState<StratView>(
+  const [localView, setLocalView] = useLocalStorageState<StratView>(
     LS_VIEW,
     "bvs",
     isStratView,
   );
+  const view = controlledView ?? localView;
+  const setView = (next: StratView) => { setLocalView(next); onViewChange?.(next); };
   const [bvsView, setBvsView] = useLocalStorageState<BvsView>(
     LS_BVS_VW,
     "table",
