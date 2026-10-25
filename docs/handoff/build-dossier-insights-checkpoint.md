@@ -38,10 +38,34 @@ supply no baseline. Existing supply, actions and shared-clock seeking stay intac
 The cards remain inside the existing lazy dossier route/modal boundaries; the
 game comparison remains in the existing lazy build-order chunk.
 
-New card/helper/wrapper consumers, the existing 39 game consumers and 23 dossier
-integration/nav tests pass, along with web types/scoped lint. Help sections are
-written. Build-card/Builds-tab summaries await actual Unified editor integration;
-browser evidence and final integration/build remain in progress.
-No production or provider operations were performed. Do not run an old f96
-engine prebuild; integrate the owner's seven-minute cutoff source and coordinate
-the new engine hash before any required production build.
+New card/helper/wrapper consumers, the existing game consumers and owner-scoped
+dossier integration/nav tests pass. The current focused web set is 43 tests,
+with 30 game-page and four recovery consumers previously green. Full types/scoped
+lint pass. Combined API 151 tests/ten suites + one snapshot and all 145 custom-build
+service regressions pass. Independent review cleared the final API additions.
+
+The approved seven-minute cutoff dependency `3dceab1c` was integrated at `2a4c5689`.
+Actual main `e2fa5d08` has a clean merge tree identical to that HEAD tree; no extra
+bookkeeping merge is needed. Required engine `25b300818c31d41b` builds/smokes
+successfully. The production Next baseline passes every unchanged budget:
+landing 214.9/215, Today 239/240, game 312.7/440, Builds 196.7/270,
+opponent 471.6/500, Dock 215.2/225, AIO 238.3/240, widget 322.4/325,
+guide 168.7/175 kB. It uses the public nonfunctional example Clerk key from CI.
+
+The actual-source loopback browser matrix passes 149 checks with 24 captures at
+320/390/768/1440 in both themes using production CSS/fonts. It covers keyboard
+selection/focus, exact example links, matchup/source changes, small samples,
+owner loading/B/A, clock seeking, overflow/targets and axe. No external traffic
+or writes are allowed. Captures live under `.cache/build-dossier-insights-evidence`;
+fixed mobile navigation is hidden only for element screenshots so it does not
+obscure a stitched card. Heading order and fully visible mobile delta text were
+corrected from the browser evidence; both timeline columns retain equal slots.
+
+Selected examples now carry sampled navigation, requiring the existing explicit
+broader-scope opt-in before Older/Newer. Optional nav removal resets its active
+anchor. These final small deltas and library/card Held wiring still need the
+final combined production/browser pass. The Held badge is tested in isolation;
+Build-card/Builds-tab integration awaits actual Unified editor #738 merge. Help,
+ADR, changelog and owner notes are written. No Dossier PR has been created yet.
+No production or provider operations were performed. Never run an old f96
+engine prebuild; shared engine writes must remain coordinated on 25b source.

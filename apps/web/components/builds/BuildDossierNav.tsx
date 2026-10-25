@@ -11,6 +11,7 @@ export function BuildDossierNav({ insights = false, plan = false }: { insights?:
   useEffect(() => {
     const hash = window.location.hash.slice(1);
     if (sections.some(({ id }) => id === hash)) setActive(hash);
+    else setActive(current => sections.some(({ id }) => id === current) ? current : "overview");
     if (typeof IntersectionObserver === "undefined") return;
     const visible = new Map<string, number>();
     const observer = new IntersectionObserver((entries) => {

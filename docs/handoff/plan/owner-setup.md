@@ -1,5 +1,21 @@
 # Owner setup notes (accumulated)
 
+## Build dossier timings and plan survival
+
+Deploy the API before the web. No environment variable, secret, collection,
+index, migration, background job or provider connection is added. Existing
+replay details supply at most 25 sequential timing-log reads per dossier, and
+existing published guide snapshots supply one bounded indexed comparison batch.
+Do not run a production backfill for this feature.
+
+Open a populated build dossier, choose a timing matchup and inspect a recorded
+sample. Confirm Plan survival and Held summaries stay absent below five confirmed
+declarations. Check a first building on an owned game against its exact build's
+cached median; failed or missing baselines stay absent. Community deltas require
+the guide's era and equivalent first-start milestones, so absence can be correct.
+Both Help sections explain those limits. Rollback is an API/web revert; no stored
+data conversion or cleanup is required.
+
 ## Synced Ghost practice
 
 Deploy the API before the web so `/v1/me/preferences/ghost` GET/PUT/PATCH and

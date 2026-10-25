@@ -139,6 +139,7 @@ export function BuildOrderColumns({
       <div className="grid gap-4 md:grid-cols-2">
         <BuildColumn
           timingDeltas={timingDeltas}
+          timingComparison={timingDeltas.size > 0}
           heading={`${myHeadingLabel} — ${(myLabel || "").trim() || "Unclassified"}`}
           rows={mine}
           totalRows={myRows.length} slots={slots} showSupply={!!workspace} listRef={list => { lists.current.me = list; }} onListScroll={() => syncScroll("me")}
@@ -149,6 +150,7 @@ export function BuildOrderColumns({
           onSeek={onSeek} currentTime={currentTime} autoScroll={autoScroll}
         />
         <BuildColumn
+          timingComparison={timingDeltas.size > 0}
           heading={`${opponentHeadingLabel} — ${(oppLabel || "").trim() || "Unknown"}`}
           rows={theirs}
           totalRows={oppRows.length} slots={slots} showSupply={!!workspace} listRef={list => { lists.current.opp = list; }} onListScroll={() => syncScroll("opp")}
@@ -163,7 +165,7 @@ export function BuildOrderColumns({
 }
 
 function BuildColumn({
-  timingDeltas,
+  timingDeltas, timingComparison,
   heading,
   rows, menu, showSupply, slots, totalRows, listRef, onListScroll,
   status,
@@ -173,7 +175,7 @@ function BuildColumn({
   currentTime,
   autoScroll,
 }: {
-  timingDeltas?: Map<string, OwnTimingDelta>;
+  timingDeltas?: Map<string, OwnTimingDelta>; timingComparison?: boolean;
   heading: string;
   menu?: ReactNode; showSupply?: boolean; totalRows?: number;
   slots?: { time: number; count: number }[];
@@ -248,10 +250,10 @@ function BuildColumn({
             {(slots || rows.map(row => ({ time: row.time, count: 1, key: row.key }))).map((slot, slotIndex) => {
               const group = slots ? rowsByTime.get(slot.time) || [] : [rows[slotIndex]];
               return <li key={slots ? slot.time : group[0].key} className={group.length ? "" : "hidden md:block"}>
-                <div className={slots ? "md:min-h-[var(--build-slot-height)]" : undefined} style={slots ? { "--build-slot-height": `${slot.count * 44}px` } as CSSProperties : undefined}>
+                <div className={slots ? "md:min-h-[var(--build-slot-height)]" : undefined} style={slots ? { "--build-slot-height": `${slot.count * (timingComparison ? 64 : 44)}px` } as CSSProperties : undefined}>
             {group.map(row => (
               <div key={row.key}>
-                {onSeek ? <button type="button" aria-label={`Jump to ${row.timeDisplay} ${row.displayName}`} aria-current={active === row.key ? "step" : undefined} onClick={() => onSeek(row.time)} className={`flex min-h-11 w-full items-center gap-2 rounded px-1 py-0.5 text-left text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${active === row.key ? "bg-accent/10" : "hover:bg-bg-elevated"}`}><BuildEventContent row={row} showSupply={showSupply} delta={timingDeltas?.get(row.key)} /></button> : <span className="flex min-h-11 items-center gap-2 rounded px-1 py-0.5 text-caption"><BuildEventContent row={row} showSupply={showSupply} delta={timingDeltas?.get(row.key)} /></span>}
+                {onSeek ? <button type="button" aria-label={`Jump to ${row.timeDisplay} ${row.displayName}`} aria-current={active === row.key ? "step" : undefined} onClick={() => onSeek(row.time)} className={`flex ${timingComparison ? "min-h-16" : "min-h-11"} w-full items-center gap-2 rounded px-1 py-0.5 text-left text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${active === row.key ? "bg-accent/10" : "hover:bg-bg-elevated"}`}><BuildEventContent row={row} showSupply={showSupply} delta={timingDeltas?.get(row.key)} /></button> : <span className={`flex ${timingComparison ? "min-h-16" : "min-h-11"} items-center gap-2 rounded px-1 py-0.5 text-caption`}><BuildEventContent row={row} showSupply={showSupply} delta={timingDeltas?.get(row.key)} /></span>}
               </div>
             ))}</div></li>; })}
           </ol>
@@ -283,6 +285,6 @@ function BuildEventContent({ row, showSupply, delta }: { row: BuildEventRow; sho
                     aria-hidden
                   />
                 )}
-                <span className="min-w-0 flex-1"><span className="block truncate text-text" title={row.rawName}>{row.displayName}</span>{delta ? <span className="block truncate text-micro text-text-muted" title={delta.title}>{delta.label}</span> : null}</span>
+                <span className="min-w-0 flex-1"><span className="block truncate text-text" title={row.rawName}>{row.displayName}</span>{delta ? <span className="block text-micro leading-snug text-text-muted" title={delta.title}>{delta.label}</span> : null}</span>
   </>;
 }

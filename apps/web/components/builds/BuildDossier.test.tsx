@@ -152,10 +152,12 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  window.history.replaceState(null, "", "/");
 });
 
 describe("BuildDossier composition integration", () => {
   it("uses timing and declared-plan example selections in the same owner-scoped games panel", async () => {
+    window.history.replaceState(null, "", "/builds/test");
     harness.data!.matchupTimingsLegacy = { PvZ: { timings: { Stargate: { source: "build_log", medianSeconds: 300, sampleCount: 6, samples: [{ gameId: "timing-game" }] } } } };
     harness.data!.plan = { declared: 5, held: 3, knockedOff: 2, heldRate: .6, heldWR: 2 / 3, knockedOffWR: .5, heldDecided: 3, knockedOffDecided: 2,
       knockedInto: [{ name: "Ground follow-up", count: 2, sampleGameIds: ["plan-game"], sampleLimit: 20, sampleTruncated: true }], knockedBy: [], medianKnockedOffDurationSec: null, durationSamples: 0, durationEstimated: true };
@@ -166,6 +168,8 @@ describe("BuildDossier composition integration", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Ground follow-up/ }));
     expect(screen.getByRole("region", { name: "Selected sample games" }).textContent).toContain("Knocked into: Ground follow-up");
     expect(harness.paths).toContain("/v1/games/plan-game");
+    const sampleHref = screen.getByRole("link", { name: "Open game" }).getAttribute("href")!;
+    expect(gameSourceFromQuery(Object.fromEntries(new URL(sampleHref, "https://sc2tools.test").searchParams))?.sampled).toBe(true);
     harness.authLoaded = false; view.rerender(<BuildDossier apiPath="/v1/builds/Test" sectionNavigation showMacro={false} />);
     expect(screen.queryByRole("region", { name: "Selected sample games" })).toBeNull();
     harness.authLoaded = true; view.rerender(<BuildDossier apiPath="/v1/builds/Test" sectionNavigation showMacro={false} />);

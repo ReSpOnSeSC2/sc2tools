@@ -217,7 +217,7 @@ export function BuildDossier({
   };
 
   return (
-    <GameSourceLabelProvider label={data.name} replace={!customRules} filters={`${new URL(apiPath, "https://sc2tools.invalid").search.slice(1)}${customRules ? "" : `&build=${encodeURIComponent(data.name)}`}`}><div className="space-y-5">
+    <GameSourceLabelProvider label={data.name} replace={!customRules} sampled={!!activeGameFilter} filters={`${new URL(apiPath, "https://sc2tools.invalid").search.slice(1)}${customRules ? "" : `&build=${encodeURIComponent(data.name)}`}`}><div className="space-y-5">
       {headerSlot ? headerSlot(data) : null}
       {sectionNavigation ? <BuildDossierNav insights plan={hasPlanSurvival(data.plan)} /> : null}
       {error ? (
@@ -313,7 +313,7 @@ function PerformanceTiles({
   const last = totals.lastPlayed ?? null;
   const checkins = checkinsText(totals.checkins);
   return (
-    <Card title="Performance">
+    <Card title="Performance" headingLevel={2}>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Games" value={total} />
         <Stat label="Wins" value={wins} color="rgb(var(--success))" />

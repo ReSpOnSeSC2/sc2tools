@@ -34,6 +34,11 @@ corresponding GitHub Release.
 
 - Require the 2-Stargate Void Ray and 2/3-Stargate Phoenix openings to establish their Stargates, two bases and four real air units by 7:00, with matching build definitions.
 
+### Build dossier insights
+
+- Read matchup timing quartiles, trends, decided-game win rates and winner/loser medians from a bounded replay sample. Exact published guide milestones can show a Community comparison; a game's first building occurrence can compare with your own cached median.
+- Inspect declared-plan Held and Knocked-off counts, their separate win rates and bounded recorded examples. Small declaration samples stay hidden, and labels and full-game duration estimates make no claim about execution or causality.
+
 ### Admin Users
 
 - Browse exact totals with sortable pages and signup, admin and inactive-agent filters. Export matching accounts as a bounded private CSV, inspect recent games/activity, and copy account IDs with a manual fallback.

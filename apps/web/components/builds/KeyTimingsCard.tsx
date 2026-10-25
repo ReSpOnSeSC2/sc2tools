@@ -38,8 +38,8 @@ function TimingRow({ item, axis, community, onSelect }: { item: VisibleTiming; a
       <TimingWhisker item={item} axis={axis} />
       <span className="flex flex-wrap gap-x-4 gap-y-1 text-micro text-text-muted"><span>{trend}</span><span>Your WR when {row.source === "opp_build_log" ? "opponent " : ""}built: {rate(row.winRateWhenBuilt)}{measured(row.winRateSampleCount) ? ` · ${row.winRateSampleCount} decided` : ""}</span></span>
       {outcome ? <span className="block text-micro text-text-muted">Your wins: {timingDisplay(row.winnerMedianSeconds)} median (n={row.winnerSampleCount}) · Your losses: {timingDisplay(row.loserMedianSeconds)} median (n={row.loserSampleCount})</span> : null}
-      {community && delta ? <span className="flex flex-wrap items-center gap-2 text-micro"><span className="text-text-muted">Community: {timingDisplay(community.medianSeconds)} · n={community.sampleCount}</span><span className={`rounded border px-2 py-0.5 ${delta.tone === "late" ? "border-warning/40 text-warning" : "border-border text-text-muted"}`} title={delta.text}>{delta.deltaSec === 0 ? "Same as community median" : `${Math.abs(delta.deltaSec)} s ${delta.deltaSec > 0 ? "slower" : "faster"} than community`}</span></span> : null}
-      <span className="block text-micro text-text-dim">{selection ? `${selection.gameIds.length} recorded sample games · inspect games` : "Recorded game links unavailable"}</span>
+      {community && delta ? <span className="flex flex-wrap items-center gap-2 text-micro"><span className="text-text-muted">Community: {timingDisplay(community.medianSeconds)} · n={community.sampleCount}</span><span className={`rounded border px-2 py-0.5 ${delta.tone === "late" ? "border-warning/40 text-text" : "border-border text-text-muted"}`} title={delta.text}>{delta.deltaSec === 0 ? "Same as community median" : `${Math.abs(delta.deltaSec)} s ${delta.deltaSec > 0 ? "slower" : "faster"} than community`}</span></span> : null}
+      <span className="block text-micro text-text-dim">{selection ? `${selection.gameIds.length} recorded sample game${selection.gameIds.length === 1 ? "" : "s"} · inspect games` : "Recorded game links unavailable"}</span>
     </button>
   </li>;
 }
@@ -52,7 +52,7 @@ export function KeyTimingsCard({ data, initialSource = "build_log", onSelect }: 
   const axis = timingAxis(rows.flatMap(({ row, median }) => [row.p75Seconds, median]));
   const community = source === "build_log" ? data.communityTimings?.[matchup] : undefined;
   const guideHref = community && /^\/guides\/[ptz]v[ptz]\/[a-z0-9-]+$/.test(community.href) ? community.href : null;
-  return <Card title="Key timings" right={<LazyHelpLink slug="custom-builds" anchor="key-timings" variant="icon" />}>
+  return <Card title="Key timings" headingLevel={2} right={<LazyHelpLink slug="custom-builds" anchor="key-timings" variant="icon" />}>
     <div className="mb-4 space-y-3">
       {matchups.length ? <div role="group" aria-label="Key timing matchup" className="flex flex-wrap gap-1">{matchups.map(value => <button type="button" key={value} aria-pressed={matchup === value} onClick={() => setChosen(value)} className={`min-h-11 rounded-md border px-3 text-caption ${matchup === value ? "border-accent text-accent" : "border-border text-text-muted"}`}>{value}</button>)}</div> : null}
       <div role="group" aria-label="Key timing perspective" className="flex flex-wrap gap-1">{(["build_log", "opp_build_log"] as const).map(value => <button type="button" key={value} aria-pressed={source === value} onClick={() => setSource(value)} className={`min-h-11 rounded-md border px-3 text-caption ${source === value ? "border-accent text-accent" : "border-border text-text-muted"}`}>{value === "build_log" ? "Your timings" : "Opponent timings"}</button>)}</div>
