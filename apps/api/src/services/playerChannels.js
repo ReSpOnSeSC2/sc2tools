@@ -144,16 +144,16 @@ class PlayerChannelsService {
   }
 
   /** Resolve stable aliases using the existing public Pulse caches. No tenant opponent/name query.
-   * @param {any[]} players @returns {Promise<string[][]>}
+   * @param {any[]} players @param {{cachedOnly?:boolean}} [opts] @returns {Promise<string[][]>}
    */
-  async expandIdentities(players) {
+  async expandIdentities(players, opts = {}) {
     const toons = players.map((p) => p.toonHandle).filter(Boolean);
     const accounts = toons.length ? await this.db.pulseAccounts.find({ toonHandle: { $in: toons } }, { projection: { toonHandle: 1, pulseCharacterId: 1 } }).toArray() : [];
     const cachedToons = toons.length ? await this.db.pulseCharacterLinks.find({ toonHandle: { $in: toons } }, { projection: { toonHandle: 1, pulseCharacterId: 1 } }).toArray() : [];
     const byToon = new Map([...cachedToons, ...accounts].map((row) => [row.toonHandle, row.pulseCharacterId]));
     const ids = [...new Set(players.flatMap((p) => [p.pulseCharacterId, byToon.get(p.toonHandle)]).filter((id) => typeof id === "string" && NUMERIC_ID.test(id)))];
     // getLinks is already bounded, persistent and stale-while-error; one batch for a UI page.
-    const links = await this.readLinks(ids);
+    const links = await this.readLinks(ids, opts);
     const linkedAccounts = [...new Set([...links.values()].map((link) => link.accountId).filter(Boolean))];
     // Account aliases find entries saved for a sibling character, without exposing BattleTags.
     const siblings = ids.length ? await this.db.pulseCharacterLinks.find({ $or: [{ accountId: { $in: linkedAccounts } }, { pulseCharacterId: { $in: ids } }] }, { projection: { pulseCharacterId: 1, accountId: 1, proId: 1, toonHandle: 1 } }).limit(10000).toArray() : [];
@@ -182,11 +182,11 @@ class PlayerChannelsService {
   }
 
   /** Bound upstream work without rejecting cheap cached/public-directory reads.
-   * @param {string[]} ids @returns {Promise<Map<string,any>>}
+   * @param {string[]} ids @param {{cachedOnly?:boolean}} [opts] @returns {Promise<Map<string,any>>}
    */
-  async readLinks(ids) {
+  async readLinks(ids, opts = {}) {
     if (!ids.length) return new Map();
-    if (this.pulseLinks && this.activeLinkReads < 2) {
+    if (!opts.cachedOnly && this.pulseLinks && this.activeLinkReads < 2) {
       this.activeLinkReads++;
       try { return (await this.pulseLinks.getLinks(ids, { includeIdentity: true })).links; } finally { this.activeLinkReads--; }
     }
@@ -194,8 +194,8 @@ class PlayerChannelsService {
     return new Map(cached.map((row) => [row.pulseCharacterId, row]));
   }
 
-  /** @param {any[]} raw @returns {Promise<{players:any[]}>} */
-  async resolve(raw) {
+  /** @param {any[]} raw @param {{cachedOnly?:boolean}} [opts] @returns {Promise<{players:any[]}>} */
+  async resolve(raw, opts = {}) {
     if (!Array.isArray(raw) || raw.length > MAX_PLAYERS) throw channelError(400, "invalid_players", `Resolve at most ${MAX_PLAYERS} players at a time.`);
     const requestedPlayers = raw.map(normalizeIdentity);
     const confirmed = this.playerIdentities ? await this.playerIdentities.resolveMany(requestedPlayers) : [];
@@ -207,7 +207,7 @@ class PlayerChannelsService {
     // Known direct aliases (including reviewed curated toons) need no upstream call.
     const unresolved = players.map((player, index) => ({ player, index })).filter(({ player }) => !directEntries.some((entry) => identityKeys(player).some((key) => entry.identityKeys.includes(key))) || (player.toonHandle && player.pulseCharacterId));
     const keySets = players.map(identityKeys);
-    const expanded = await this.expandIdentities(unresolved.map(({ player }) => player));
+    const expanded = await this.expandIdentities(unresolved.map(({ player }) => player), opts);
     unresolved.forEach(({ index }, i) => { keySets[index] = expanded[i]; });
     const entries = unresolved.length ? await this.col.find({ identityKeys: { $in: [...new Set(keySets.flat())] } }).toArray() : directEntries;
     return { players: players.map((player, index) => {

@@ -7,6 +7,11 @@ const useApiPaginatedMock = vi.fn();
 const useAllNetMmrOpponentsMock = vi.fn();
 const usePlayerChannelsMock = vi.fn();
 const useFiltersMock = vi.fn();
+const useRivalsMock = vi.fn();
+const useRivalSummaryMock = vi.fn();
+
+vi.mock("@/lib/useRivals", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/useRivals")>(), useRivals: () => useRivalsMock() }));
+vi.mock("@/lib/useRivalSummary", () => ({ useRivalSummary: (...args: unknown[]) => useRivalSummaryMock(...args) }));
 
 vi.mock("../usePlayerChannels", () => ({
   usePlayerChannels: (...args: unknown[]) => usePlayerChannelsMock(...args),
@@ -106,6 +111,8 @@ const impacts = [
 ];
 
 beforeEach(() => {
+  useRivalsMock.mockReturnValue({ keys: [], toggle: vi.fn(), loading: false, saving: false });
+  useRivalSummaryMock.mockReturnValue({ data: undefined, error: false, loading: false, retry: vi.fn() });
   useFiltersMock.mockReturnValue({ filters: {}, dbRev: 7 });
   usePlayerChannelsMock.mockReturnValue(() => undefined);
   useApiMock.mockReturnValue({ data: { links: {}, partial: false } });
@@ -272,21 +279,19 @@ describe("OpponentsTab MMR impact", () => {
     expect(within(mostLost).queryByText("-40")).toBeNull();
 
     const table = screen.getByRole("table");
-    expect(table.className).toContain("min-w-[1020px]");
+    expect(table.style.minWidth).toBe("816px");
     const headerLabels = within(table)
       .getAllByRole("columnheader")
       .map((header) => (header.textContent || "").replace(/[↑↓]/g, "").trim());
     expect(headerLabels).toEqual([
       "Opponent",
-      "Pulse ID",
+      "Race",
       "W",
       "L",
       "Win rate",
       "Games",
       "Last MMR",
       "Net MMR",
-      "MMR won",
-      "MMR lost",
       "Last",
       "Open dossier→",
     ]);
@@ -301,6 +306,8 @@ describe("OpponentsTab MMR impact", () => {
     expect(alphaCells[6].textContent).toBe("4100");
     expect(within(table).getByText("+20")).toBeTruthy();
     expect(within(table).getByText("-30")).toBeTruthy();
+    expect(within(table).queryByText("+40")).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: "MMR won" }));
     expect(within(table).getByText("+40")).toBeTruthy();
 
     fireEvent.change(
@@ -475,7 +482,7 @@ describe("OpponentsTab MMR impact", () => {
     );
     expect(alphaIdentity).toBeTruthy();
     const cells = within(alphaIdentity as HTMLTableRowElement).getAllByRole("cell");
-    expect(cells).toHaveLength(12);
+    expect(cells).toHaveLength(10);
     expect(cells[2].textContent).toBe("2");
     expect(cells[3].textContent).toBe("1");
     expect(cells[4].textContent).toBe("66.7%");
@@ -556,21 +563,21 @@ describe("OpponentsTab MMR impact", () => {
 
 describe("opponents progressive list", () => {
   it("windows large lists, preserves the expanded window on refresh, and resets it for search", () => {
-    const rows = Array.from({ length: 450 }, (_, i) => ({ ...opponents[0], pulseId: `p-${i}`, name: `Player ${i}` }));
+    const rows = Array.from({ length: 1500 }, (_, i) => ({ ...opponents[0], pulseId: `p-${i}`, name: `Player ${i}` }));
     useApiPaginatedMock.mockReturnValue({ items: rows, isLoading: false, isRefreshing: false, isLoadingMore: true,
       isStale: false, error: null, pagesFetched: 1, hitMaxPages: false, mutate: vi.fn() });
     const view = render(<OpponentsTab onOpen={vi.fn()} />);
     const table = screen.getByRole("table", { name: "Opponent history" });
-    expect(within(table).getAllByRole("row")).toHaveLength(201);
-    const more = screen.getByRole("button", { name: "Show 200 more (of 450)" });
+    expect(within(table).getAllByRole("row")).toHaveLength(101);
+    const more = screen.getByRole("button", { name: "Show 100 more" });
     more.focus(); fireEvent.click(more);
     expect(document.activeElement).toBe(more);
-    expect(within(table).getAllByRole("row")).toHaveLength(401);
+    expect(within(table).getAllByRole("row")).toHaveLength(201);
     useApiPaginatedMock.mockReturnValue({ ...useApiPaginatedMock.mock.results.at(-1)!.value, items: [...rows], isRefreshing: true });
     view.rerender(<OpponentsTab onOpen={vi.fn()} />);
-    expect(within(table).getAllByRole("row")).toHaveLength(401);
+    expect(within(table).getAllByRole("row")).toHaveLength(201);
     expect(screen.getByText(/Updating…/)).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: "Search opponents" }), { target: { value: "Player" } });
-    expect(within(table).getAllByRole("row")).toHaveLength(201);
+    expect(within(table).getAllByRole("row")).toHaveLength(101);
   });
 });

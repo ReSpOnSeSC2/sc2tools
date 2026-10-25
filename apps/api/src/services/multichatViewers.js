@@ -461,6 +461,17 @@ class MultichatViewersService {
     return this.lookupObserved(platform, channel).then(({ value }) => value);
   }
 
+  /** Public, cache-only decoration for approved player channels. Never starts
+   * a provider lookup or exposes a broadcaster's private integration config.
+   * @param {"twitch"|"youtube"} platform @param {string} channel */
+  peekPublicLive(platform, channel) {
+    const input = String(channel || "").trim();
+    const key = `${platform}:${platform === "youtube" ? input : input.toLowerCase()}`;
+    const hit = this.cache.get(key);
+    if (!hit || this.now() - hit.atMs >= this.ttlMs || hit.observedAtMs === null || hit.value.viewers === null) return null;
+    return { live: hit.value.live === true, observedAt: new Date(hit.observedAtMs).toISOString() };
+  }
+
   /**
    * Viewer response shape used only by `forConfig`. Public single-platform
    * lookup callers retain the legacy object exactly, while the Dock receives

@@ -26,6 +26,9 @@ const { sanitiseRequestForLog, sanitiseResponseForLog } = require("./middleware/
 const { UsersService } = require("./services/users");
 const { buildClerkClient, noopClerkClient } = require("./services/clerkClient");
 const { OpponentsService } = require("./services/opponents");
+const { RivalsService } = require("./services/rivals");
+const { RivalsPulseService } = require("./services/rivalsPulse");
+const { buildRivalsRouter } = require("./routes/rivals");
 const {
   OpponentIdentityMatcherService,
 } = require("./services/opponentIdentityMatcher");
@@ -538,6 +541,7 @@ function makeServices(deps, clerk) {
     tiktokRelay: tiktokChatRelay,
     log: deps.logger,
   });
+  const rivals = new RivalsService(deps.db, { users, pulse: new RivalsPulseService(pulseIntel), channels: playerChannels, viewers: multichatViewers, identities: playerIdentities });
   const multichatStudio = new MultichatStudioService(deps.db, { io: deps.io });
   const multichatSounds = new MultichatSoundsService(deps.db);
   // users + overlayTokens let the service resolve the streamer's own
@@ -872,6 +876,7 @@ function makeServices(deps, clerk) {
     users,
     opponents,
     opponentIdentityMatcher,
+    rivals,
     games,
     browserIngestQuota,
     replayLibrary,
@@ -1483,6 +1488,10 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       gameVods: services.gameVods,
       auth,
     }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildRivalsRouter({ rivals: services.rivals, auth }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
