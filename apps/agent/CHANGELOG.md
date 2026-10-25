@@ -2,6 +2,13 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## Unreleased
+
+- Streams supports live statistic-token previews and optional updates to selected
+  Twitch, Kick and YouTube accounts after synced games. Automatic updates start
+  off, preserve platform receipts, skip unchanged titles and run at most every
+  ten minutes without blocking replay uploads.
+
 ## 0.24.5
 
 ### Changed - Game-screen assistance is opt-in

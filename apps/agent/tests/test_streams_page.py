@@ -55,6 +55,28 @@ def test_failed_save_retains_dirty_edits_and_disables_prepare(page):
     assert widget.notice.text() == "Save failed"
 
 
+def test_live_title_template_preview_and_explicit_default_off_platform_selection(page, monkeypatch):
+    widget, state, app = page
+    state["account_mode"] = "sc2tools"
+    state["title_automation"] = {"enabled": False, "template": "SC2 | {mmr} MMR | {record}",
+        "platforms": {"twitch": True, "kick": True, "youtube": False}, "values": {"mmr": "5000", "record": "1W–0L"}}
+    widget.render(state)
+    assert widget.title_input.maxLength() == 500
+    controls = widget.title_controls
+    assert controls.preview.text() == "Preview: SC2 | 5000 MMR | 1W–0L"
+    assert not controls.enabled.isChecked()
+    assert not controls.platforms["youtube"].isChecked()
+    payloads = []
+    monkeypatch.setattr(widget, "job", payloads.append)
+    controls.enabled.setChecked(True)
+    controls.configure()
+    assert payloads == [{"action": "configure_title_automation", "template": "SC2 | {mmr} MMR | {record}",
+        "enabled": True, "platforms": {"twitch": True, "kick": True, "youtube": False}}]
+    widget._completed({"action": "configure_title_automation", "error": "Storage unavailable"})
+    assert controls.dirty is True
+    assert controls.enabled.isChecked()
+
+
 def test_youtube_metadata_failure_is_visible_with_connected_account(page):
     widget, state, app = page
     state["youtube"]["connected"] = True
@@ -132,7 +154,8 @@ def test_setup_disclosure_keeps_session_description_visible_and_preserves_edits(
     assert not widget.description_input.isHidden()
     assert widget.description_input.parentWidget() == widget.title_input.parentWidget()
     layout = widget.title_input.parentWidget().layout()
-    assert layout.indexOf(widget.description_input) == layout.indexOf(widget.title_input) + 2
+    assert layout.indexOf(widget.description_input) > layout.indexOf(widget.title_input)
+    assert layout.indexOf(widget.title_controls.preview) > layout.indexOf(widget.title_input)
     assert widget.description_scope.text() == "Applies to both YouTube formats"
     assert "link is added automatically" in widget.description_link_note.text()
     widget.setup_toggle.setChecked(True)
