@@ -40,10 +40,6 @@ corresponding GitHub Release.
 
 - Require the 2-Stargate Void Ray and 2/3-Stargate Phoenix openings to establish their Stargates, two bases and four real air units by 7:00, with matching build definitions.
 
-### PvZ air opening timing
-
-- Require the 2-Stargate Void Ray and 2/3-Stargate Phoenix openings to establish their Stargates, two bases and four real air units by 7:00, with matching build definitions.
-
 ### Build editor request ownership
 
 - Cancel pending editor saves, previews and replay inspection when the account, source or open draft changes. Bound stalled requests and suppress stale publication repairs, notifications and completion callbacks. Load the optional editor on demand with Retry and Cancel.
