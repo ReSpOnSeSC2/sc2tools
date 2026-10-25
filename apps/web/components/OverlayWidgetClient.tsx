@@ -99,7 +99,9 @@ import {
   decodeGhostBuildConfig,
   decodeGhostTarget,
   readGhostBuildParamFromHash,
+  type GhostBuildConfig,
 } from "@/lib/ghostBuild";
+import { normalizeGhostSnapshot } from "@/lib/ghostSyncModel";
 
 /**
  * Per-widget Browser Source.
@@ -180,6 +182,12 @@ function ConnectedOverlayWidgetClient({
   const [visible, setVisible] = useState<boolean>(false);
   const [voicePrefs, setVoicePrefs] = useState<VoicePrefs | null>(null);
   const [randomizer, setRandomizer] = useState<RandomizerConfig | null>(null);
+  const [ghostSnapshot, setGhostSnapshot] = useState<{ token: string; config: GhostBuildConfig } | null>(null);
+  const ghostConfig = ghostSnapshot?.token === token ? ghostSnapshot.config : undefined;
+  const receiveGhost = useCallback((input: unknown) => {
+    const config = normalizeGhostSnapshot(input);
+    if (config) setGhostSnapshot(previous => previous?.token === token && (previous.config.revision ?? 0) > (config.revision ?? 0) ? previous : { token, config });
+  }, [token]);
   // Latest raw ``overlay:multichat`` studio payload — validated by the
   // studio widgets themselves (useStudioState re-sanitizes it).
   const { gameWidgetsPaused, receivePause, resetPause } = useGameWidgetsPaused(token);
@@ -219,6 +227,7 @@ function ConnectedOverlayWidgetClient({
     applyWidgetEnabled,
     setVoicePrefs,
     setRandomizer,
+    receiveGhost,
     setStudioEvent,
     setEngagementEvent,
     setConnectionStatus,
@@ -283,10 +292,11 @@ function ConnectedOverlayWidgetClient({
     () =>
       widget === "ghost-build"
       && (
-        decodeGhostBuildConfig(effectiveGhostParam) !== null
+        (ghostConfig !== undefined ? Object.keys(ghostConfig.slots).length > 0 : decodeGhostBuildConfig(effectiveGhostParam) !== null
         || decodeGhostTarget(effectiveGhostParam) !== null
+        )
       ),
-    [widget, effectiveGhostParam],
+    [widget, effectiveGhostParam, ghostConfig],
   );
   const effectiveEnabled = widget === "ghost-build" ? true
     : widget === "build-profile"
@@ -377,6 +387,7 @@ function ConnectedOverlayWidgetClient({
         onRandomizerSpin={randomizerCheckin.onSpin}
         visible={visible && !pausedHere}
         ghostParam={effectiveGhostParam}
+        ghostConfig={ghostConfig}
         studioEvent={studioEvent}
         engagementEvent={engagementEvent}
         series={series}
@@ -396,6 +407,7 @@ function ConnectedOverlayWidgetClient({
         onRandomizerSpin={() => {}}
         visible={true}
         ghostParam={effectiveGhostParam}
+        ghostConfig={ghostConfig}
         studioEvent={studioEvent}
         engagementEvent={engagementEvent}
         series={series}
@@ -446,6 +458,7 @@ export function WidgetRenderer({
   onRandomizerSpin,
   visible,
   ghostParam,
+  ghostConfig,
   studioEvent,
   engagementEvent,
   momentEvent,
@@ -462,6 +475,7 @@ export function WidgetRenderer({
   onRandomizerSpin: (spin: RandomizerSpinEvent) => void;
   visible: boolean;
   ghostParam: string | null;
+  ghostConfig?: GhostBuildConfig;
   studioEvent: unknown;
   engagementEvent: unknown;
   momentEvent?: unknown;
@@ -529,6 +543,7 @@ export function WidgetRenderer({
           live={live}
           liveGame={liveGame}
           ghostParam={ghostParam}
+          socketConfig={ghostConfig}
           voicePrefs={voicePrefs}
         />
       );
@@ -640,6 +655,7 @@ function useOverlayWidgetSocket(
   setEnabled: (on: boolean) => void,
   setVoicePrefs: (prefs: VoicePrefs | null) => void,
   setRandomizer: (cfg: RandomizerConfig | null) => void,
+  receiveGhost: (input: unknown) => void,
   setStudioEvent: (msg: unknown) => void,
   setEngagementEvent: (msg: unknown) => void,
   setConnectionStatus: (status: OverlayConnectionStatus) => void,
@@ -745,6 +761,7 @@ function useOverlayWidgetSocket(
         enabledWidgets?: string[];
         voicePrefs?: VoicePrefs;
         randomizer?: unknown;
+        ghost?: unknown;
       } & OverlayProfileConfig) => {
         receiveProfile(msg);
         if (msg && Array.isArray(msg.enabledWidgets)) {
@@ -756,6 +773,7 @@ function useOverlayWidgetSocket(
         if (msg && msg.randomizer && typeof msg.randomizer === "object") {
           setRandomizer(sanitizeRandomizerConfig(msg.randomizer));
         }
+        if (socketRef.current === socket && msg && Object.prototype.hasOwnProperty.call(msg, "ghost")) receiveGhost(msg.ghost);
       },
     );
     socket.on("overlay:session", (msg: SessionSummary) => {
@@ -813,6 +831,7 @@ function useOverlayWidgetSocket(
     setEnabled,
     setVoicePrefs,
     setRandomizer,
+    receiveGhost,
     setStudioEvent,
     setEngagementEvent,
     setConnectionStatus,

@@ -12,6 +12,8 @@ corresponding GitHub Release.
 ## [Unreleased]
 
 ### Agent 0.24.6 and Randomizer game-start performance
+- Build scouting timelines and load their icons when the relevant view opens,
+  avoiding full hidden-history hydration in Compact or hidden Companion windows.
 - Bound the OBS Randomizer's motion simulations to 12 visual contenders and
   30 FPS, retaining the complete weighted selection pool, chosen result, reveal
   timing, sound and voice. Keep movement speed independent of refresh rate.
@@ -26,6 +28,7 @@ corresponding GitHub Release.
 - Chat commands now share saved aliases, availability and cooldowns across the Twitch bot, Nightbot and on-stream answers. New commands show recorded daily and season stats, recent opponent meetings, prediction leaders and stream-session uptime; owners can add bounded plain-text custom replies with supported variables.
 - Analyzer tables now support keyboard build opening, global matchup chips, a matchup-scoped heatmap and a Strategy games sheet that stays open as filters change. CSV exports save the displayed Builds, Strategy pairs, Matchups, Maps and pool cells with their scope and local date.
 - Live scouting on Today and a large second-screen page reuse your recorded opponent history, with bounded opening counts, recent replay links and an exact-account note popover. The Stream Dock Scout view omits private notes and replay/account actions.
+- Ghost practice assignments now sync to your account, with Practice actions on build and guide pages, a quick-disarm chip, explicit browser migration and a permanent OBS coach URL. Legacy Ghost links remain compatible; native Companion controls stay separate.
 
 ### Admin Users
 

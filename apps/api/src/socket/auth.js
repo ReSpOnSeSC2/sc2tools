@@ -89,6 +89,7 @@ const ROLL_REPORT_WINDOW_MS = 60_000;
  *   }>,
  *   resolveVoicePrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveRandomizerPrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
+ *   resolveGhostPrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveStudioState?: (token: string) => Promise<Record<string, unknown> | null>,
  *   resolveSeries?: (token: string, owner: string) => Promise<Record<string, unknown> | null>,
  *   resolvePlatformEvents?: (userId: string) => Promise<Array<Record<string, unknown>>>,
@@ -231,7 +232,7 @@ function attachSocketAuth(io, opts) {
           .resolveOverlayToken(t)
           .then(async (info) => {
             if (!info) return;
-            /** @type {{ enabledWidgets?: string[], voicePrefs?: Record<string, unknown>, randomizer?: Record<string, unknown>,profile?:unknown,profileRevision?:number }} */
+            /** @type {{ enabledWidgets?: string[], voicePrefs?: Record<string, unknown>, randomizer?: Record<string, unknown>,ghost?:Record<string, unknown>,profile?:unknown,profileRevision?:number }} */
             const config = {};
             if (Array.isArray(info.enabledWidgets)) {
               config.enabledWidgets = info.enabledWidgets;
@@ -265,7 +266,14 @@ function attachSocketAuth(io, opts) {
             if (opts.resolveBuildIntent) {
               await replayOverlayBuildIntent(socket, opts.resolveBuildIntent, info.userId);
             }
-            if (config.enabledWidgets || config.voicePrefs || config.randomizer || config.profile) {
+            if (opts.resolveGhostPrefs) {
+              try {
+                const ghost = await opts.resolveGhostPrefs(info.userId);
+                if (ghost) config.ghost = ghost;
+              } catch { /* Optional; legacy fragment URLs still work. */ }
+            }
+            if (socket.connected === false) return;
+            if (config.enabledWidgets || config.voicePrefs || config.randomizer || config.profile || config.ghost) {
               socket.emit("overlay:config", config);
             }
           })
@@ -374,6 +382,12 @@ function attachSocketAuth(io, opts) {
           return;
         }
         if (socket.connected === false) return;
+        if (opts.resolveGhostPrefs) {
+          try {
+            const ghost = await opts.resolveGhostPrefs(userId);
+            if (ghost && !socket.disconnected) socket.emit("overlay:config", { ghost });
+          } catch { /* A later reconnect/resync can recover. */ }
+        }
         if (opts.resolveSession) {
           opts
             .resolveSession(userId, socket.data.timezone)

@@ -90,6 +90,9 @@ def desk_factory():
 
         page = build_companion_page(None, handler=handler, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
         page.timer.stop()
+        page.set_density("standard")
+        page.show()
+        page.console.navigate("scouting")
         desks.append((page, state))
         wait_until(app, lambda: page._selected_id == "one" and page.game_select.currentData() == "replay-0")
         return page, state, app
@@ -153,6 +156,11 @@ def test_unknown_replay_unit_categories_paint_icons_in_both_chains_and_full_time
         for index, step in enumerate(chain.steps):
             assert step.icon_label.text() == ""
             assert not step.icon_label.pixmap().isNull()
+    page.set_density("full")
+    page.tabs.setCurrentIndex(1)
+    app.processEvents()
+    for side in ("my", "opp"):
+        for index in range(len(_stored_build_events(source, side))):
             assert not page.trees["build"][side].topLevelItem(index).icon(0).pixmap(30, 30).isNull()
     assert source == original
 
@@ -169,10 +177,16 @@ def test_shared_time_range_loads_full_stored_source_once_and_has_no_density_caps
     assert not page.include_workers_supply.isChecked()
     assert "Probe" not in [event["name"] for event in page.build_chains["my"].events]
     for horizon in (360, 600, None):
+        page.set_density("compact")
         page.build_time_range.setCurrentIndex(page.build_time_range.findData(horizon))
         for density in ("standard", "detailed", "full", "compact"):
             page.set_density(density)
-            assert all(chain.time_range() == horizon for chain in [*page.build_chains.values(), *page.upgrade_chains.values()])
+            assert page.build_time_range.currentData() == horizon
+            if density in {"standard", "detailed"}:
+                app.processEvents()
+                assert all(chain.time_range() == horizon for chain in [*page.build_chains.values(), *page.upgrade_chains.values()])
+    page.set_density("detailed")
+    app.processEvents()
     assert len([event for event in page.build_chains["my"].events if event["name"] == "Stalker"]) == 2
     assert page.build_chains["my"].steps[-1].time_label.text() == "Time unknown"
     page.include_workers_supply.setChecked(True)
@@ -196,6 +210,9 @@ def test_valid_empty_source_does_not_fall_back_to_preview(desk_factory):
     assert "You: no recorded events" in page.build_source_status.toolTip()
     assert "Opponent: not extracted" in page.build_source_status.toolTip()
     assert "Scouting preview" not in page.build_source_status.toolTip()
+    page.set_density("full")
+    page.tabs.setCurrentIndex(1)
+    app.processEvents()
     assert page.trees["build"]["my"].topLevelItem(0).text(0) == "No replay timing data available"
 
 
