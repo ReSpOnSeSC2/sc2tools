@@ -1676,8 +1676,13 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
         def scouting_buttons(self):
             opponent = self.overlays["opponent"]
             if opponent.isVisible() and not opponent.isMinimized():
-                return [opponent.identity_card.scouting_button]
-            return [self.compact_card.scouting_button]
+                buttons = [opponent.identity_card.scouting_button]
+            else:
+                buttons = [self.compact_card.scouting_button]
+            # The report stays click-through in game. Only these explicit
+            # window actions receive non-activating native input surfaces.
+            controls = self.overlays["scouting"].window_controls
+            return [*buttons, controls.minimize_button, controls.close_button]
 
         def _step_opponent(self, step):
             if self.team_roster_state.ready:

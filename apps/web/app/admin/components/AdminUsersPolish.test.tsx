@@ -6,13 +6,13 @@ import UserDetail from "../users/[userId]/page";
 import { AdminUsersExport } from "./AdminUsersExport";
 import { AdminIdCopy } from "./AdminIdCopy";
 import { navigation } from "./__tests__/navigationFixture";
-const mocks = vi.hoisted(() => ({ useApi: vi.fn(), save: vi.fn(), toast: vi.fn(), auth: { userId: "admin", isLoaded: true, isSignedIn: true, getToken: vi.fn(async (): Promise<string | null> => "test-token") } }));
+const mocks = vi.hoisted(() => ({ useApi: vi.fn(), action: vi.fn(), save: vi.fn(), toast: vi.fn(), auth: { userId: "admin", isLoaded: true, isSignedIn: true, getToken: vi.fn(async (): Promise<string | null> => "test-token") } }));
 vi.mock("next/navigation", () => import("./__tests__/navigationFixture"));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => mocks.auth }));
 vi.mock("@/lib/clientApi", async original => ({ ...await original<object>(), useApi: (...args: unknown[]) => mocks.useApi(...args) }));
 vi.mock("@/lib/replayCsvDownload", () => ({ saveReplayCsv: (...args: unknown[]) => mocks.save(...args) }));
 vi.mock("@/components/ui/Toast", () => ({ useToastOptional: () => ({ toast: { success: mocks.toast } }) }));
-vi.mock("./AdminActionCard", () => ({ AdminActionCard: () => null }));
+vi.mock("./AdminActionCard", () => ({ AdminActionCard: (props: unknown) => { mocks.action(props); return null; } }));
 vi.mock("./AdminRoleCard", () => ({ AdminRoleCard: () => null }));
 
 const date = "2026-10-20T12:00:00.000Z";
@@ -105,4 +105,13 @@ it("withholds a late CSV body after the matching filters change", async () => {
   view.rerender(<AdminUsersExport query="filter=admins" />);
   await act(async () => { resolve(new Blob(["old cohort"])); });
   expect(mocks.save).not.toHaveBeenCalled(); expect(screen.queryByRole("status")).toBeNull();
+});
+
+it("confirms wipe against its authoritative pending-record preview while Games stays live-only", async () => {
+  mocks.useApi.mockImplementation((path: string) => ({ data: path.startsWith("/v1/admin/users/") && !path.endsWith("/support") ? { ...detail, games: { total: 0, wins: 0, losses: 0, firstActivity: null, lastActivity: null }, recentGames: [], wipeGameCount: 1 } : undefined }));
+  await act(async () => { render(<Suspense><UserDetail params={Promise.resolve({ userId: "pending" })} /></Suspense>); });
+  expect(screen.getByText("The wipe also includes 1 record already pending deletion.")).toBeTruthy();
+  const wipe = mocks.action.mock.calls.find(([props]) => props.action === "wipe-games")?.[0];
+  const rebuild = mocks.action.mock.calls.find(([props]) => props.action === "rebuild-opponents")?.[0];
+  expect(wipe.user.gameCount).toBe(1); expect(rebuild.user.gameCount).toBe(0);
 });

@@ -594,6 +594,57 @@ describe("opponents progressive list", () => {
 });
 
 describe("rivals and responsive opponent consumers", () => {
+  it("opts into detail summaries only for a selected data column and preserves global scope", () => {
+    useFiltersMock.mockReturnValue({ filters: { matchup: "PvT", season: "68" }, dbRev: 7 });
+    render(<OpponentsTab />);
+    const request = () => new URL(useApiPaginatedMock.mock.calls.at(-1)![0], "https://example.test");
+    expect(request().searchParams.get("listDetails")).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Region" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Scouting notes" }));
+    expect(request().searchParams.get("listDetails")).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Average game length" }));
+    expect(request().searchParams.getAll("listDetails")).toEqual(["1"]);
+    expect(request().searchParams.get("matchup")).toBe("PvT");
+    expect(request().searchParams.get("season")).toBe("68");
+    expect(within(screen.getByRole("table")).getByRole("columnheader", { name: /Average game length/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Average game length" }));
+    expect(request().searchParams.get("listDetails")).toBeNull();
+  });
+  it("requests a hidden URL sort's values and leaves missing durations last in both directions", () => {
+    useApiPaginatedMock.mockReturnValue({ items: [
+      { ...opponents[0], duration: { sumSec: 0, samples: 1, averageSec: 0 } },
+      { ...opponents[1], duration: { sumSec: 900, samples: 3, averageSec: 300 } },
+      { ...opponents[0], pulseId: "missing", pulseCharacterId: "303", name: "Unknown duration" },
+    ], isLoading: false });
+    const location = { pathname: "/app/opponents", query: "sort=avgGameLength", replace: vi.fn(), prefetch: vi.fn(), navigate: vi.fn() };
+    const view = render(<OpponentsTab location={location} />);
+    const names = () => [...screen.getByRole("table").querySelectorAll("tbody tr")].map(row => row.querySelector("a")?.textContent);
+    expect(names()).toEqual(["Beta", "Alpha", "Unknown duration"]);
+    expect(useApiPaginatedMock.mock.calls.at(-1)![0]).toContain("listDetails=1");
+    expect(screen.queryByRole("columnheader", { name: /Average game length/ })).toBeNull();
+    view.rerender(<OpponentsTab location={{ ...location, query: "sort=avgGameLength&dir=asc" }} />);
+    expect(names()).toEqual(["Alpha", "Beta", "Unknown duration"]);
+  });
+  it("exports scoped scalar details after opt-in without full logs or signed replay URLs", () => {
+    useFiltersMock.mockReturnValue({ filters: { matchup: "PvT" }, dbRev: 7 });
+    useApiPaginatedMock.mockReturnValue({ items: [{ ...opponents[0],
+      latestGame: { gameId: "latest", date: "2026-10-24T12:00:00.000Z", map: "=HYPERLINK(secret)", result: "win", durationSec: 0,
+        myBuild: "Blink", oppStrategy: "Bio", macroScore: 0, top3Leaks: ["Supply"], replayAvailable: true, replaySizeBytes: 10,
+        signedUrl: "https://secret.example/replay", fullMacro: "private-raw-log" },
+      duration: { sumSec: 300, samples: 2, averageSec: 150 },
+    }], isLoading: false });
+    render(<OpponentsTab />);
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+    expect(downloadCsvMock.mock.calls.at(-1)![1]).not.toContain("Average game length (seconds)");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Average game length" }));
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+    const csv = downloadCsvMock.mock.calls.at(-1)![1] as string;
+    expect(csv).toContain("Average game length (seconds)");
+    expect(csv).toContain("matchup=PvT&listDetails=1");
+    expect(csv).toContain("'=HYPERLINK(secret)");
+    expect(csv).not.toContain("secret.example");
+    expect(csv).not.toContain("private-raw-log");
+  });
   it("hides unmeasured/default impact and Pulse columns, and Reset restores column defaults", () => {
     useAllNetMmrOpponentsMock.mockReturnValue({ items: [], isLoading: false });
     render(<OpponentsTab />); const table = screen.getByRole("table");

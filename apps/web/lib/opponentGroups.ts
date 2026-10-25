@@ -16,6 +16,7 @@
 // the merge rules.
 
 import { isBarcodeName } from "@/lib/sc2pulse";
+import { mergeOpponentListDetails, type OpponentListDetails } from "./opponentListDetails";
 
 /**
  * localStorage key for the "Group same player" toggle. Shared between
@@ -71,7 +72,7 @@ export type GlobalPlayerIdentity = {
 
 /** The row fields grouping reads and merges. Structural subset of the
  * Opponents tab's `Opp` row so the module stays decoupled from it. */
-export interface GroupableOpponent {
+export interface GroupableOpponent extends OpponentListDetails {
   pulseId: string;
   pulseCharacterId?: string | null;
   name?: string;
@@ -228,6 +229,7 @@ function mergeGroup<T extends GroupableOpponent>(
     .find((n) => n.length > 0) || null;
   return {
     ...primary,
+    ...mergeOpponentListDetails(identities),
     name: displayName,
     revealedName,
     globalIdentity: approvedIdentity || primary.globalIdentity,

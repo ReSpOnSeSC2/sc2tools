@@ -105,3 +105,19 @@ it("keeps Opponents URL sort above storage, debounces search without losing an i
   act(() => navigate("/app/opponents?q=Alpha&sort=wins%3Aasc&notes=1", "popstate"));
   expect(result.current.search).toBe("Alpha"); expect(result.current.sort.sortBy).toBe("wins"); expect(result.current.sort.sortDir).toBe("asc"); expect(result.current.hasNotes).toBe(true);
 });
+it.each(["region", "lastResult", "lastGameLength", "avgGameLength", "map", "myBuild", "opponentBuild", "macroBreakdown", "avgMacroScore", "buildOrderDate"])("keeps controlled %s sorts compatible with saved preferences and passive Back", column => {
+  const saved = { sortBy: "games", sortDir: "desc" }, storageKey = "analyzer.opponents.sort";
+  localStorage.setItem(storageKey, JSON.stringify(saved));
+  navigate(`/app/opponents?filters=1&map=Test+Map&sort=${column}%3Aasc`, "popstate");
+  const { result } = renderHook(() => useOpponentUrlControls());
+  expect(result.current.sort.sortBy).toBe(column); expect(result.current.sort.sortDir).toBe("asc");
+  expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual(saved);
+  expect(route.replace).not.toHaveBeenCalled();
+  act(() => result.current.sort.setSortExplicit(column, "desc"));
+  expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual({ sortBy: column, sortDir: "desc" });
+  expect(new URLSearchParams(window.location.search).get("sort")).toBe(`${column}:desc`);
+  expect(new URLSearchParams(window.location.search).get("map")).toBe("Test Map");
+  act(() => navigate(`/app/opponents?filters=1&map=Other+Map&sort=${column}&dir=asc`, "popstate"));
+  expect(result.current.sort.sortBy).toBe(column); expect(result.current.sort.sortDir).toBe("asc");
+  expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual({ sortBy: column, sortDir: "desc" });
+});

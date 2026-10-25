@@ -11,6 +11,16 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Opponent list columns
+
+- Choose latest replay download, map/result, your and the opponent's build, recorded build-order links/dates, game lengths, your macro breakdown/averages and scouting notes. Matching game filters and measured sample counts apply; incomplete build-order dates stay unknown or marked Latest known.
+- Save opponent column and sort choices immediately in this browser so returning to the page or starting a later session keeps them. Selected details also appear in phone cards, and optional summary fields are available in CSV exports.
+- Cancel replay downloads when the account or replay source changes, and allow retry after a bounded wait.
+
+### Fixed
+
+- The desktop scouting report's X and minimize buttons now work while StarCraft II has focus, alongside the scouting icon. Other report content continues to pass game clicks through.
+
 ### Opponent page position
 
 - Keep your reading position when recorded compositions finish loading. Active phase and section chips scroll only within their own horizontal strips; section links still navigate when selected.
@@ -59,6 +69,8 @@ corresponding GitHub Release.
 - Keep private queries, personalized public responses and paginated review results with the account that requested them, including account changes while authentication or a response body is pending.
 
 ### Admin Users
+
+- Keep deleted replay markers out of account game counts and recent history, while showing the authoritative pending-record count before a wipe.
 
 - Browse exact totals with sortable pages and signup, admin and inactive-agent filters. Export matching accounts as a bounded private CSV, inspect recent games/activity, and copy account IDs with a manual fallback.
 
