@@ -25,7 +25,7 @@ const article: HelpArticle = {
     "live preview",
     "roll now",
   ],
-  updated: "2026-10-24",
+  updated: "2026-10-25",
   body: [
     { type: "callout", tone: "info", title: "Agent 0.24.1 and later", text: "Update the [Windows agent](/download) for the check-in Randomize control. The separate widget handles animated reveals and audio. See [Desktop Companion](/help/desktop-companion)." },
     {
@@ -69,6 +69,7 @@ const article: HelpArticle = {
         "The widget respects the loading check-in's decision hold when configured. **Randomize** selects and saves a build directly and releases that hold. The native app does not open a Randomizer animation window or play Randomizer audio.",
         "A build you declared yourself takes priority. A retry, refresh or second connected display reuses the first saved pick for the game. The widget reveals the saved selection instead of choosing a second build.",
         "The drawn build is marked **Rolled** and is suggested as your plan after the game. It only counts toward a build's record once you confirm the check-in.",
+        "Every eligible build keeps its configured chance in the draw. Sprite-based reveals animate up to 12 contenders so large pools stay manageable while you play; the saved result and its opening-unit draw remain unchanged.",
       ],
     },
     { type: "heading", text: "If it doesn't spin", anchor: "troubleshooting" },

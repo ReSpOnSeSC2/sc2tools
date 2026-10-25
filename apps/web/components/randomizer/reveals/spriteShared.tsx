@@ -238,10 +238,12 @@ export function SpriteLegend({
 }
 
 /**
- * requestAnimationFrame loop. Calls `cb(dtMs, elapsedMs)` each frame
+ * requestAnimationFrame loop. Calls `cb(dtMs, elapsedMs)` at most 30 times/second
  * while `active`. Auto-stops + cleans up on unmount or when active
  * flips false. `spinId` restarts the clock.
  */
+export const MOTION_FRAME_INTERVAL_MS = 1000 / 30;
+
 export function useRaf(
   active: boolean,
   spinId: number,
@@ -255,6 +257,10 @@ export function useRaf(
     let last = performance.now();
     const start = last;
     const tick = (now: number) => {
+      if (now - last < MOTION_FRAME_INTERVAL_MS - 0.01) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
       const dt = Math.min(64, now - last);
       last = now;
       cbRef.current(dt, now - start);
@@ -330,20 +336,24 @@ export function useEliminationSchedule(
   durationMs: number,
   reducedMotion: boolean,
   onComplete?: () => void,
+  trackedIds?: ReadonlySet<string>,
 ): { eliminated: Set<string>; settled: boolean; nextOutId: string | null } {
   const [eliminated, setEliminated] = useState<Set<string>>(() => new Set());
   const [settled, setSettled] = useState(false);
   const [nextOutId, setNextOutId] = useState<string | null>(
-    loserIdsInOrder[0] ?? null,
+    loserIdsInOrder.find((id) => !trackedIds || trackedIds.has(id)) ?? null,
   );
 
   useEffect(() => {
+    const shown = loserIdsInOrder
+      .map((id, index) => ({ id, index }))
+      .filter(({ id }) => !trackedIds || trackedIds.has(id));
     setEliminated(new Set());
     setSettled(false);
-    setNextOutId(loserIdsInOrder[0] ?? null);
+    setNextOutId(shown[0]?.id ?? null);
 
     if (reducedMotion || loserIdsInOrder.length === 0) {
-      setEliminated(new Set(loserIdsInOrder));
+      setEliminated(new Set(shown.map(({ id }) => id)));
       setSettled(true);
       setNextOutId(null);
       onComplete?.();
@@ -354,7 +364,9 @@ export function useEliminationSchedule(
     // Leave a short victory beat after the last elimination.
     const step = durationMs / (n + 1);
     const handles: number[] = [];
-    loserIdsInOrder.forEach((id, i) => {
+    // Hidden contenders keep their original audio timing but do not wake
+    // React. Visible contenders keep their full-pool elimination deadlines.
+    shown.forEach(({ id, index }, visualIndex) => {
       handles.push(
         window.setTimeout(() => {
           setEliminated((prev) => {
@@ -362,8 +374,8 @@ export function useEliminationSchedule(
             next.add(id);
             return next;
           });
-          setNextOutId(loserIdsInOrder[i + 1] ?? null);
-        }, step * (i + 1)),
+          setNextOutId(shown[visualIndex + 1]?.id ?? null);
+        }, step * (index + 1)),
       );
     });
     handles.push(
@@ -376,7 +388,7 @@ export function useEliminationSchedule(
       for (const h of handles) window.clearTimeout(h);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spinId, reducedMotion, durationMs, loserIdsInOrder.length]);
+  }, [spinId, reducedMotion, durationMs, loserIdsInOrder.length, trackedIds]);
 
   return { eliminated, settled, nextOutId };
 }

@@ -408,8 +408,10 @@ count. Existing custom worker limits remain until a speed is saved. On POSIX,
 background workers request nice(10).
 
 Pause history import while I'm in a game is on by default. The shared live-game
-gate holds new history parses and archive jobs through loading/play and for 20
-seconds after the match ends. Fresh rank-zero replays retain their priority lane.
+gate holds new history parses, queued historical uploads and archive jobs through
+loading/play and for 20 seconds after the match ends. An upload already in flight
+finishes durably; the next historical batch waits. Fresh rank-zero replays retain
+their priority lane.
 Automatic accurate replay capture does not start mid-match. Pause on battery also
 holds background work. A 120-second event silence or 45-minute match safety limit
 releases the gate; --no-live disables it. Manual Pause holds all queued syncing.

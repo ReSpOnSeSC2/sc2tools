@@ -345,12 +345,8 @@ def test_all_native_pins_and_only_main_compact_follow_foreground_without_focus_o
             def __init__(self):
                 self.locked = set()
                 self.calls = []
-                self.fail_release = None
             def set_click_through(self, hwnd, enabled):
                 self.calls.append((hwnd, enabled))
-                if not enabled and self.fail_release == hwnd:
-                    self.fail_release = None
-                    return False
                 self.locked.add(hwnd) if enabled else self.locked.discard(hwnd)
                 return True
             def restore_all(self):
@@ -402,10 +398,6 @@ def test_all_native_pins_and_only_main_compact_follow_foreground_without_focus_o
         assert int(window.winId()) in native.locked
         window._set_window_size("Standard")
         app.processEvents()
-        native.fail_release = int(window.winId())
-        controller.refresh()
-        assert int(window.winId()) in native.locked
-        assert window.property("gameClickThrough")
         controller.refresh()
         assert int(window.winId()) not in native.locked
         assert window.size().toTuple() == (520, 480)
@@ -427,6 +419,173 @@ def test_all_native_pins_and_only_main_compact_follow_foreground_without_focus_o
         page.shutdown()
         window._race_effects.shutdown()
         window.hide()
+    ''')
+
+
+def test_stable_input_polling_skips_native_calls_but_revalidates_unannounced_style_changes(tmp_path):
+    run_gui_check(tmp_path, '''
+        from sc2tools_agent.ui.overlay_input import install_overlay_input, NATIVE_RECHECK_SECONDS
+        class Native:
+            def __init__(self): self.calls, self.locked = [], set()
+            def set_click_through(self, hwnd, enabled):
+                self.calls.append((hwnd, enabled))
+                self.locked.add(hwnd) if enabled else self.locked.discard(hwnd)
+                return True
+            def restore_all(self): self.locked.clear()
+        class Changes(QtCore.QObject):
+            def __init__(self): super().__init__(); self.count = 0
+            def eventFilter(self, watched, event):
+                if (event.type() == QtCore.QEvent.DynamicPropertyChange
+                        and bytes(event.propertyName()) == b"gameClickThrough"):
+                    self.count += 1
+                return False
+        window = QtWidgets.QWidget()
+        window.show()
+        app.processEvents()
+        native, now, foreground = Native(), [0.0], [True]
+        controller = install_overlay_input(window, panels_provider=lambda: [], compact_provider=lambda: True,
+            QtCore=QtCore, native=native, foreground_provider=lambda: foreground[0], clock=lambda: now[0])
+        controller.timer.stop()
+        changes = Changes()
+        window.installEventFilter(changes)
+        try:
+            app.processEvents()
+            controller.refresh()
+            handle = int(window.winId())
+            assert native.locked == {handle} and window.property("gameClickThrough") is True
+            native.calls.clear()
+            for _ in range(60):
+                now[0] += NATIVE_RECHECK_SECONDS / 100
+                controller.refresh()
+            assert native.calls == [] and changes.count == 0
+            # A native style can change without a Qt event. The bounded
+            # periodic validation repairs it instead of trusting the cache forever.
+            native.locked.clear()
+            now[0] = NATIVE_RECHECK_SECONDS + 0.01
+            controller.refresh()
+            assert native.calls == [(handle, True)] and native.locked == {handle}
+            assert changes.count == 0
+            foreground[0] = False
+            controller.refresh()
+            assert native.calls[-1] == (handle, False) and not native.locked
+            assert window.property("gameClickThrough") is False and changes.count == 1
+            native.calls.clear()
+            for _ in range(60): controller.refresh()
+            assert native.calls == [] and changes.count == 1
+        finally:
+            controller.shutdown()
+            window.close()
+    ''')
+
+
+def test_input_sync_reacts_to_show_hide_focus_style_and_recreated_handle_events(tmp_path):
+    run_gui_check(tmp_path, '''
+        from sc2tools_agent.ui.overlay_input import install_overlay_input
+        class Native:
+            def __init__(self): self.calls, self.locked = [], set()
+            def set_click_through(self, hwnd, enabled):
+                self.calls.append((hwnd, enabled))
+                self.locked.add(hwnd) if enabled else self.locked.discard(hwnd)
+                return True
+            def restore_all(self): self.locked.clear()
+        class Panel(QtWidgets.QWidget):
+            def __init__(self): super().__init__(); self.handle = 101
+            def winId(self): return self.handle
+        window, panel = QtWidgets.QWidget(), Panel()
+        source = QtWidgets.QToolButton(panel)
+        source.setObjectName("opponentCardScout")
+        source.setAccessibleName("Toggle scouting panel")
+        source.setGeometry(10, 10, 22, 22)
+        native, foreground = Native(), [True]
+        controller = install_overlay_input(window, panels_provider=lambda: [panel], compact_provider=lambda: False,
+            QtCore=QtCore, QtWidgets=QtWidgets, scouting_buttons_provider=lambda: [source],
+            native=native, foreground_provider=lambda: foreground[0], clock=lambda: 0.0)
+        controller.timer.stop()
+        try:
+            panel.show()
+            assert native.locked == {101} and panel.property("gameClickThrough") is True
+            app.processEvents()
+            control = controller._scouting_controls[source]
+            assert control.isVisible()
+            native.calls.clear()
+            panel.handle = 202
+            # Check the return from this single refresh, before another poll or
+            # queued event could repair a stale property on the same widget.
+            controller.refresh()
+            assert native.locked == {202}
+            assert panel.property("gameClickThrough") is True and control.isVisible()
+            assert (202, True) in native.calls and (101, False) in native.calls
+            QtCore.QCoreApplication.sendEvent(panel, QtCore.QEvent(QtCore.QEvent.WinIdChange))
+            app.processEvents()
+            assert native.locked == {202}
+            assert panel.property("gameClickThrough") is True and control.isVisible()
+            # Qt style changes invalidate immediately, then re-apply after Qt
+            # has finished changing its surface, even inside the recheck interval.
+            native.locked.clear()
+            native.calls.clear()
+            QtCore.QCoreApplication.sendEvent(panel, QtCore.QEvent(QtCore.QEvent.StyleChange))
+            app.processEvents()
+            assert native.locked == {202} and (202, True) in native.calls
+            native.locked.clear()
+            native.calls.clear()
+            QtCore.QCoreApplication.sendEvent(panel, QtGui.QWindowStateChangeEvent(QtCore.Qt.WindowNoState))
+            assert native.locked == {202} and (202, True) in native.calls
+            assert panel.property("gameClickThrough") is True and control.isVisible()
+            foreground[0] = False
+            app.applicationStateChanged.emit(QtCore.Qt.ApplicationActive)
+            assert not native.locked and panel.property("gameClickThrough") is False
+            foreground[0] = True
+            app.applicationStateChanged.emit(QtCore.Qt.ApplicationInactive)
+            assert native.locked == {202} and panel.property("gameClickThrough") is True
+            panel.hide()
+            assert not native.locked and panel.property("gameClickThrough") is False
+            panel.show()
+            assert native.locked == {202} and panel.property("gameClickThrough") is True
+        finally:
+            controller.shutdown()
+            panel.close()
+            window.close()
+        app.processEvents()
+        assert not native.locked
+    ''')
+
+
+def test_failed_native_lock_and_release_are_retried_without_caching_success(tmp_path):
+    run_gui_check(tmp_path, '''
+        from sc2tools_agent.ui.overlay_input import install_overlay_input
+        class Native:
+            def __init__(self): self.locked, self.fail_lock, self.fail_release = set(), True, False
+            def set_click_through(self, hwnd, enabled):
+                if enabled and self.fail_lock: return False
+                if not enabled and self.fail_release:
+                    self.fail_release = False
+                    return False
+                self.locked.add(hwnd) if enabled else self.locked.discard(hwnd)
+                return True
+            def restore_all(self): self.locked.clear()
+        window, panel = QtWidgets.QWidget(), QtWidgets.QWidget()
+        panel.show()
+        app.processEvents()
+        native, targets = Native(), [panel]
+        controller = install_overlay_input(window, panels_provider=lambda: targets, compact_provider=lambda: False,
+            QtCore=QtCore, native=native, foreground_provider=lambda: True, clock=lambda: 0.0)
+        controller.timer.stop()
+        try:
+            handle = int(panel.winId())
+            assert not native.locked and panel.property("gameClickThrough") is not True
+            native.fail_lock = False
+            controller.refresh()
+            assert native.locked == {handle} and panel.property("gameClickThrough") is True
+            native.fail_release = True
+            targets.clear()
+            controller.refresh()
+            assert native.locked == {handle} and panel.property("gameClickThrough") is True
+            controller.refresh()
+            assert not native.locked and panel.property("gameClickThrough") is False
+        finally:
+            controller.shutdown()
+            panel.close()
+            window.close()
     ''')
 
 

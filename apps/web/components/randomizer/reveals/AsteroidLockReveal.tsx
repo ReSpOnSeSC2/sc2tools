@@ -44,6 +44,7 @@ interface Rock {
 
 export function AsteroidLockReveal({
   pool,
+  visualPool = pool,
   winner,
   winnerProbability,
   spinId,
@@ -57,12 +58,14 @@ export function AsteroidLockReveal({
     () => seededShuffle(pool.filter((b) => b.id !== winner.id), spinId).map((b) => b.id),
     [pool, winner.id, spinId],
   );
+  const trackedIds = useMemo(() => new Set(visualPool.map((build) => build.id)), [visualPool]);
   const { eliminated, settled, nextOutId } = useEliminationSchedule(
     spinId,
     loserOrder,
     DURATION_MS,
     reducedMotion,
     onComplete,
+    trackedIds,
   );
   useRevealSound({
     style: "asteroid",
@@ -74,14 +77,14 @@ export function AsteroidLockReveal({
     ),
   });
 
-  const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
+  const sprites = useMemo(() => assignPoolSprites(visualPool), [visualPool]);
   const rocksRef = useRef<Rock[]>([]);
   const reticleRef = useRef({ x: W / 2, y: H / 2 });
   const [, force] = useState(0);
 
   useMemo(() => {
-    rocksRef.current = pool.map((b, i) => {
-      const angle = (i / pool.length) * Math.PI * 2;
+    rocksRef.current = visualPool.map((b, i) => {
+      const angle = (i / visualPool.length) * Math.PI * 2;
       return {
         id: b.id,
         build: b,
@@ -94,14 +97,14 @@ export function AsteroidLockReveal({
     });
     reticleRef.current = { x: W / 2, y: H / 2 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spinId, pool]);
+  }, [spinId, visualPool]);
 
   useRaf(!reducedMotion && !settled, spinId, (dt) => {
     const speed = dt / 16;
     for (const r of rocksRef.current) {
       if (eliminated.has(r.id) && r.id !== winner.id) continue;
-      r.x += r.vx * dt * speed;
-      r.y += r.vy * dt * speed;
+      r.x += r.vx * dt;
+      r.y += r.vy * dt;
       if (r.x < R) { r.x = R; r.vx = Math.abs(r.vx); }
       if (r.x > W - R) { r.x = W - R; r.vx = -Math.abs(r.vx); }
       if (r.y < R) { r.y = R; r.vy = Math.abs(r.vy); }
@@ -156,7 +159,7 @@ export function AsteroidLockReveal({
         />
       </div>
       <SpriteLegend
-        pool={pool}
+        pool={visualPool}
         sprites={sprites}
         eliminated={eliminated}
         highlightId={settled ? winner.id : nextOutId}
