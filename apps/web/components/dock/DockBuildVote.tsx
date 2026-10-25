@@ -1,5 +1,8 @@
 "use client";
 
+import { DockButton } from "./DockControls";
+import { Vote } from "lucide-react";
+
 /**
  * DockBuildVote — "Chat picks the build": tap up to 3 of your saved
  * builds (real win-rates shown from your replay history), start the
@@ -11,7 +14,7 @@
 
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
-import { DockButton } from "./DockClient";
+
 import type { StudioPoll } from "@/lib/multichat/useStudioState";
 import type { ChatMessage } from "@/lib/multichat/types";
 import { usePollTally } from "./usePollTally";
@@ -97,7 +100,7 @@ export function DockBuildVote({
     },
   });
   if (!ready) return <DockSnapshotState />;
-  if (error) return <p role="alert" className="text-caption text-text-muted">Couldn&apos;t load your builds · <button type="button" className="underline" onClick={() => setAttempt((n) => n + 1)}>Retry</button></p>;
+  if (error) return <p role="alert" className="text-caption text-text-muted">Couldn&apos;t load your builds · <DockButton type="button" className="underline" onClick={() => setAttempt((n) => n + 1)}>Retry</DockButton></p>;
   if (!loaded) return <p role="status" className="text-caption text-text-muted">Loading your builds…</p>;
   if (pollActive) {
     if (poll?.status !== "closed" || poll.meta?.kind !== "build") return null;
@@ -125,7 +128,7 @@ export function DockBuildVote({
   return (
     <fieldset disabled={busy || pending} className="min-w-0"><div className="space-y-2">
       <DockActionNotice message={notice} />
-      <div role="group" aria-label="Build matchups" className="flex flex-wrap gap-1">{matchups.map((m) => <button key={m} type="button" aria-pressed={matchup === m} onClick={() => setMatchup(m)} className={`rounded border px-2 py-1 text-caption ${matchup === m ? "border-accent bg-accent/10 text-accent" : "border-border text-text-muted"}`}>{m}</button>)}</div>
+      <div role="group" aria-label="Build matchups" className="flex flex-wrap gap-1">{matchups.map((m) => <DockButton key={m} type="button" aria-pressed={matchup === m} onClick={() => setMatchup(m)} className={`rounded border px-2 py-1 text-caption ${matchup === m ? "border-accent bg-accent/10 text-accent" : "border-border text-text-muted"}`}>{m}</DockButton>)}</div>
       <p className="text-caption text-text-dim">
         Pick 2–3 builds; chat votes with <b>!1</b>/<b>!2</b>/<b>!3</b> on
         the Chat poll widget.
@@ -135,7 +138,7 @@ export function DockBuildVote({
           const on = picked.includes(b.slug);
           return (
             <li key={b.slug}>
-              <button
+              <DockButton
                 type="button"
                 onClick={() => toggle(b.slug)}
                 aria-pressed={on}
@@ -159,7 +162,7 @@ export function DockBuildVote({
                     ? `${Math.round(b.winRate * 100)}% · ${b.total}g`
                     : "no games"}
                 </span>
-              </button>
+              </DockButton>
             </li>
           );
         })}
@@ -169,7 +172,7 @@ export function DockBuildVote({
           disabled={busy || picked.length < 2 || pollActive}
           onClick={() => void run("start")}
         >
-          Start build vote
+          <Vote aria-hidden className="h-4 w-4" /> Start build vote
         </DockButton>
         {pollActive ? (
           <span className="text-micro text-text-dim">

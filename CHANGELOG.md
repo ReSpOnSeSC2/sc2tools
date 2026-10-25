@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Stream Dock
+
+- Collapse panels into live summaries, pin frequently used sections, and keep the layout in this browser. Dock controls now show connection text and keyboard focus, give touch users larger targets, and offer selected text when clipboard access is unavailable.
+
 ### Widget manager
 
 - Find overlay widgets in grouped cards with search, source sizes, OBS drag links and private URLs hidden until revealed. Starter packs show exactly what they enable, keep existing selections and detect changes from another tab.

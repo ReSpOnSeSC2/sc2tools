@@ -1,5 +1,7 @@
 "use client";
 
+import { DockInput, DockButton } from "./DockControls";
+
 /**
  * DockScenes — Stream Dock control for the full-screen BRB / Starting
  * Soon scene widget. The form's message + countdown are inputs for
@@ -15,8 +17,10 @@ import type {
   StudioScene,
   StudioTimer,
 } from "@/lib/multichat/useStudioState";
-import { BrollLibraryEditor } from "./BrollLibraryEditor";
-import { DockButton } from "./DockClient";
+import dynamic from "next/dynamic";
+import { Timer, Shuffle, ListOrdered, Volume2, VolumeX, SkipForward, X } from "lucide-react";
+const BrollLibraryEditor = dynamic(() => import("./BrollLibraryEditor").then(module => module.BrollLibraryEditor), { loading: () => <p role="status" className="text-caption text-text-muted">Loading b-roll manager…</p> });
+
 import type { DockPost } from "./dockActions";
 import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
 
@@ -79,16 +83,16 @@ export function DockTimer({
           Countdown timer widget instantly.
         </p>
       )}
-      <input
+      <DockInput
         type="text"
         value={label}
         onChange={(e) => setLabel(e.target.value)}
         placeholder="Optional label — e.g. next game in…"
         maxLength={40}
-        className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+        className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text placeholder:text-text-muted focus:border-accent"
       />
       <div className="flex flex-wrap items-center gap-1.5">
-        <input
+        <DockInput
           type="number"
           min={1}
           max={720}
@@ -97,11 +101,12 @@ export function DockTimer({
             setMinutes(Math.max(1, Math.min(720, Number(e.target.value) || 1)))
           }
           aria-label="Timer minutes"
-          className="w-16 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption tabular-nums text-text focus:border-accent focus:outline-none"
+          style={{ width: "4rem", maxWidth: "100%" }}
+          className="w-16 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption tabular-nums text-text focus:border-accent"
         />
         <span className="text-caption text-text-dim">min</span>
         {DOCK_QUICK_MINUTES.map((m) => (
-          <button
+          <DockButton
             key={m}
             type="button"
             onClick={() => setMinutes(m)}
@@ -112,7 +117,7 @@ export function DockTimer({
             }`}
           >
             {m}m
-          </button>
+          </DockButton>
         ))}
         <DockButton
           disabled={busy}
@@ -120,7 +125,7 @@ export function DockTimer({
             void run("start")
           }
         >
-          ⏱ Start timer
+          <Timer aria-hidden className="h-4 w-4" /> Start timer
         </DockButton>
       </div>
     </div></fieldset>
@@ -129,6 +134,8 @@ export function DockTimer({
 
 export function DockScenes({
   token,
+  brollOpen,
+  onBrollOpenChange,
   scene,
   broll,
   busy,
@@ -137,6 +144,8 @@ export function DockScenes({
   onPost,
 }: {
   token?: string;
+  brollOpen?: boolean;
+  onBrollOpenChange?: (open: boolean) => void;
   scene: StudioScene | null;
   broll: StudioBrollConfig;
   busy: boolean;
@@ -145,6 +154,10 @@ export function DockScenes({
   studioReady?: boolean;
   onPost: DockPost;
 }) {
+  const [localBrollOpen, setLocalBrollOpen] = useState(false);
+  const [brollLoaded, setBrollLoaded] = useState(false);
+  const showBroll = brollOpen ?? localBrollOpen;
+  useEffect(() => { if (showBroll) setBrollLoaded(true); }, [showBroll]);
   const [message, setMessage] = useState("");
   const presets = useSceneMessages(token);
   const [minutes, setMinutes] = useState<number>(5);
@@ -260,16 +273,16 @@ export function DockScenes({
         </p>
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <button
+          <DockButton
             type="button"
             disabled={busy || clipCount < 2}
             aria-pressed={broll.shuffle}
             onClick={() => void run("shuffle")}
             className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text transition-colors hover:border-accent disabled:opacity-50"
           >
-            {broll.shuffle ? "🔀 Shuffle" : "→ In order"}
-          </button>
-          <button
+            {broll.shuffle ? <Shuffle aria-hidden className="h-4 w-4" /> : <ListOrdered aria-hidden className="h-4 w-4" />}{broll.shuffle ? "Shuffle" : "In order"}
+          </DockButton>
+          <DockButton
             type="button"
             disabled={busy || clipCount === 0}
             aria-label={broll.muted ? "Unmute b-roll" : "Mute b-roll"}
@@ -277,11 +290,11 @@ export function DockScenes({
             onClick={() => void run("mute")}
             className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text transition-colors hover:border-accent disabled:opacity-50"
           >
-            {broll.muted ? "🔇 Muted" : "🔊 Sound"}
-          </button>
+            {broll.muted ? <VolumeX aria-hidden className="h-4 w-4" /> : <Volume2 aria-hidden className="h-4 w-4" />}{broll.muted ? "Muted" : "Sound"}
+          </DockButton>
           <label className="flex min-w-[9rem] flex-1 items-center gap-1.5 text-caption text-text-dim">
             <span className="sr-only">B-roll volume</span>
-            <input
+            <DockInput
               type="range"
               min={0}
               max={100}
@@ -303,37 +316,40 @@ export function DockScenes({
               void run("skip")
             }
           >
-            ⏭ Skip
+            <SkipForward aria-hidden className="h-4 w-4" /> Skip
           </DockButton>
         </div>
 
-        <BrollLibraryEditor
+        <div className="mt-3">
+          <DockButton aria-expanded={showBroll} aria-controls="dock-broll-manager" onClick={() => (onBrollOpenChange ?? setLocalBrollOpen)(!showBroll)}>Manage b-roll</DockButton>
+          <div id="dock-broll-manager" hidden={!showBroll} className="mt-2">{showBroll || brollLoaded ? <BrollLibraryEditor embedded
           broll={broll}
           busy={busy}
           studioReady={studioReady}
           onPost={onPost}
-        />
+        /> : null}</div>
+        </div>
       </div>
 
-      <input
+      <DockInput
         type="text"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         placeholder="Optional message — e.g. grabbing water, back in 5"
         maxLength={80}
-        className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+        className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text placeholder:text-text-muted focus:border-accent"
       />
 
       {presets.messages.length > 0 ? <div aria-label="Saved scene messages" className="flex flex-wrap gap-1.5">
         {presets.messages.map((preset) => <span key={preset} className="inline-flex max-w-full items-center rounded-md border border-border text-caption">
-          <button type="button" onClick={() => setMessage(preset)} className="min-w-0 truncate px-2 py-1 text-text">{preset}</button>
-          <button type="button" onClick={() => presets.remove(preset)} aria-label={`Remove saved message: ${preset}`} className="px-2 py-1 text-text-muted">×</button>
+          <DockButton type="button" onClick={() => setMessage(preset)} className="min-w-0 truncate px-2 py-1 text-text">{preset}</DockButton>
+          <DockButton type="button" onClick={() => presets.remove(preset)} aria-label={`Remove saved message: ${preset}`} className="px-2 py-1 text-text-muted"><X aria-hidden className="h-4 w-4" /></DockButton>
         </span>)}
       </div> : null}
 
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-caption text-text-dim">Countdown</span>
-        <input
+        <DockInput
           type="number"
           min={0}
           max={720}
@@ -342,11 +358,12 @@ export function DockScenes({
             setMinutes(Math.max(0, Math.min(720, Number(e.target.value) || 0)))
           }
           aria-label="Countdown minutes"
-          className="w-16 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption tabular-nums text-text focus:border-accent focus:outline-none"
+          style={{ width: "4rem", maxWidth: "100%" }}
+          className="w-16 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption tabular-nums text-text focus:border-accent"
         />
         <span className="text-caption text-text-dim">min</span>
         {DOCK_QUICK_MINUTES.map((m) => (
-          <button
+          <DockButton
             key={m}
             type="button"
             onClick={() => setMinutes(m)}
@@ -357,7 +374,7 @@ export function DockScenes({
             }`}
           >
             {m}m
-          </button>
+          </DockButton>
         ))}
         <span className="text-micro text-text-dim">(0 = no countdown)</span>
       </div>

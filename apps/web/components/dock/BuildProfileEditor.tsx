@@ -1,5 +1,7 @@
 "use client";
 
+import { DockInput, DockSelect, DockButton } from "./DockControls";
+
 import { useEffect, useRef, useState } from "react";
 import { BuildProfileChart } from "@/components/overlay/widgets/BuildProfileWidget";
 import type { DockPost } from "./dockActions";
@@ -130,44 +132,44 @@ export function BuildProfileEditor({
       {!ready ? <p className="text-caption text-text-muted">Waiting for saved ratings…</p> : null}
       <label className="block space-y-1">
         <span className="text-caption font-medium text-text">Build title</span>
-        <input
+        <DockInput
           type="text"
           value={draft.title}
           onChange={(event) => edit({ ...draft, title: event.target.value })}
           placeholder="Name of this video's build"
           maxLength={80}
           disabled={disabled}
-          className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-caption text-text placeholder:text-text-muted focus:border-accent-cyan focus:outline-none disabled:opacity-50"
+          className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-caption text-text placeholder:text-text-muted focus:border-accent-cyan disabled:opacity-50"
         />
       </label>
       <div className="space-y-2">
         <p className="text-micro text-text-muted">Edit the wording and select each rating.</p>
         {BUILD_PROFILE_AXES.map((axis) => (
           <div key={axis.key} className="flex min-w-0 items-center justify-between gap-2">
-            <input
+            <DockInput
               type="text"
               aria-label={`${axis.label} label`}
               value={draft.labels[axis.key]}
               onChange={(event) => edit({ ...draft, labels: { ...draft.labels, [axis.key]: event.target.value } })}
               maxLength={32}
               disabled={disabled}
-              className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-caption font-medium text-text focus:border-accent-cyan focus:outline-none disabled:opacity-50"
+              className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-caption font-medium text-text focus:border-accent-cyan disabled:opacity-50"
             />
-            <select
+            <span className="w-24 shrink-0"><DockSelect
               aria-label={axis.label}
               value={draft.ratings[axis.key] ?? ""}
               onChange={(event) => editRating(axis.key, event.target.value)}
               disabled={disabled}
-              className="w-24 shrink-0 rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-caption text-text focus:border-accent-cyan focus:outline-none disabled:opacity-50"
+              className="w-24 shrink-0 rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-caption text-text focus:border-accent-cyan disabled:opacity-50"
             >
               <option value="">Not set</option>
               {[1, 2, 3, 4, 5].map((rating) => <option key={rating} value={rating}>{rating}</option>)}
-            </select>
+            </DockSelect></span>
           </div>
         ))}
       </div>
       <details className="rounded-md border border-border px-2.5 py-2 text-caption text-text-muted">
-        <summary className="cursor-pointer text-text">Rating guide</summary>
+        <summary className="flex min-h-8 cursor-pointer items-center [@media(pointer:coarse)]:min-h-10 text-text">Rating guide</summary>
         <div className="mt-2 space-y-2">
           <p>Higher means more of that trait, including greater difficulty and micro demand. Rate each trait independently; a build can be aggressive and defensive.</p>
           {BUILD_PROFILE_AXES.map((axis) => <p key={axis.key}><span className="font-medium text-text">{axis.label}:</span> {axis.description}</p>)}
@@ -175,7 +177,7 @@ export function BuildProfileEditor({
         </div>
       </details>
       <details className="min-w-0 rounded-md border border-border p-2 text-caption text-text-muted">
-        <summary className="cursor-pointer text-text">Preview graph</summary>
+        <summary className="flex min-h-8 cursor-pointer items-center [@media(pointer:coarse)]:min-h-10 text-text">Preview graph</summary>
         <div className="mt-2">
           {draftComplete
             ? <BuildProfileChart profile={draft} preview />
@@ -212,5 +214,5 @@ function EditorButton({ children, disabled, onClick }: {
   disabled: boolean;
   onClick: () => void;
 }) {
-  return <button type="button" disabled={disabled} onClick={onClick} className="rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-caption font-medium text-text hover:border-accent-cyan/50 hover:text-accent-cyan disabled:cursor-not-allowed disabled:opacity-40">{children}</button>;
+  return <DockButton type="button" disabled={disabled} onClick={onClick} className="rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-caption font-medium text-text hover:border-accent-cyan/50 hover:text-accent-cyan disabled:cursor-not-allowed disabled:opacity-40">{children}</DockButton>;
 }

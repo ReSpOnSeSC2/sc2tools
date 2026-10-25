@@ -1,5 +1,8 @@
 "use client";
 
+import { DockInput, DockButton } from "./DockControls";
+import { X } from "lucide-react";
+
 /**
  * DockPoll — chat-poll controls for the Stream Dock.
  *
@@ -17,7 +20,7 @@ import { useState } from "react";
 import { usePollTally } from "./usePollTally";
 import type { StudioPoll } from "@/lib/multichat/useStudioState";
 import type { ChatMessage } from "@/lib/multichat/types";
-import { DockButton } from "./DockClient";
+
 import type { DockPost } from "./dockActions";
 import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
 
@@ -128,24 +131,24 @@ export function DockPoll({
   return (
     <fieldset disabled={busy || pending} className="min-w-0"><div className="space-y-2">
       <DockActionNotice message={notice} />
-      <input
+      <DockInput
         type="text"
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
         placeholder="Poll question"
-        className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-caption text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+        className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-caption text-text placeholder:text-text-muted focus:border-accent"
       />
       {options.map((opt, i) => (
         <div key={i} className="flex min-w-0 items-center gap-1.5">
-          <input
+          <DockInput
             type="text"
             value={opt}
             onChange={(e) => setOption(i, e.target.value)}
             placeholder={`Option ${i + 1}`}
-            className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-caption text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+            className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-caption text-text placeholder:text-text-muted focus:border-accent"
           />
           {options.length > MIN_OPTIONS ? (
-            <button
+            <DockButton
               type="button"
               aria-label={`Remove option ${i + 1}`}
               onClick={() =>
@@ -153,8 +156,8 @@ export function DockPoll({
               }
               className="rounded border border-border px-1.5 py-1 text-micro text-text-muted hover:border-danger hover:text-danger"
             >
-              ✕
-            </button>
+              <X aria-hidden className="h-4 w-4" />
+            </DockButton>
           ) : null}
         </div>
       ))}

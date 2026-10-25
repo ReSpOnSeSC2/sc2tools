@@ -87,7 +87,7 @@ describe("Dock panel snapshot and save recovery", () => {
   it("keeps timer input on failure", async () => {
     const onPost = failingOnce();
     render(<DockTimer timer={null} busy={false} onPost={onPost} />);
-    change("Optional label — e.g. next game in…", "Next match"); await click("⏱ Start timer");
+    change("Optional label — e.g. next game in…", "Next match"); await click("Start timer");
     expect((screen.getByPlaceholderText("Optional label — e.g. next game in…") as HTMLInputElement).value).toBe("Next match");
     await act(async () => { await onPost.mock.calls[0][1]!(); });
     expect(screen.getByRole("status").textContent).toBe("Timer started");
