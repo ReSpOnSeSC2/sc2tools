@@ -434,6 +434,7 @@ class OverlayLiveService {
     const pulseRank = await this._pulseRankForGame(game);
     if (pulseRank) {
       payload.rank = {
+        source: "pulse",
         league: pulseRank.league,
         ...(typeof pulseRank.tier === "number"
           ? { tier: pulseRank.tier }
@@ -442,6 +443,7 @@ class OverlayLiveService {
       };
     } else if (Number.isFinite(gameMmr)) {
       payload.rank = {
+        source: "estimate",
         ...(leagueFromMmr(gameMmr) || {}),
         mmr: gameMmr,
       };

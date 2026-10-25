@@ -134,3 +134,12 @@ account integration was run.
 Deploy API and web together, then refresh existing Dock and overlay Browser Sources once so their game-widget hiding and manual-result labels update. No environment variable, service, collection, index or migration is added. Game is the first Dock section; its sticky header keeps scene, active opponent, session and connection visible. Current desktop agents omit the live map, so that field correctly says unavailable.
 
 At stream start, confirm Start new session to reset the account's session boundary and this token's clip timestamp mark. Hide game widgets is reversible and keeps chat/scenes running; verify your refreshed sources hide and resume before relying on it live. Crystal Ball manual/cancel controls never award points or accuracy. Shout-outs use only reviewed exact opponent channels; a configured matching Twitch bot queues them, otherwise Copy shout-out is available. Validation used synthetic loopback data and no actual bot or provider posts.
+
+## Game moment alerts (Wave 4)
+
+- No new environment variables, collections, indexes, migrations or provider connections.
+- All nine moments and bot posting start off. Settings → Overlay → Multi-platform chat → Game moments uses the existing draft and Save chat settings action. Test locally is silent unless a sound is selected, previews only this browser, and writes no preference.
+- Existing Event alerts Browser Sources need one refresh for the new Ladder queue. Saved event sound enable/volume and OBS audio routing still apply. Supporter cards have priority; paused game widgets consume Ladder events without replaying them later.
+- Comparative facts use one bounded slim replay read and exact account/race context. Recorded MMR is game-start MMR. Current regional season data is cache-only; missing/incomplete evidence suppresses a season peak. Only actual Pulse league snapshots establish league changes.
+- A conditional receipt on the existing game row prevents duplicate posts on reprocessing. Historical imports, resumed, hidden and deleted games do not create moments. Delivery is best effort after the receipt, so a crash can miss an alert rather than repeat it.
+- Rollback: turn moments and bot posting off in Settings, Save, then revert the feature commit if needed. Existing receipts are harmless; do not remove them to replay history.
