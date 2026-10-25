@@ -85,5 +85,15 @@ Eight representative light-phone/dark-desktop captures are committed under
 `docs/handoff/screenshots/build-dossier-*`. Complete captures/call receipts remain
 in the local evidence folder. Independent API review is clear; full UI/visual
 review and expected-head GitHub/Vercel gates are tracked in the attached PR.
+
+Peer UI review confirmed a no-output cost edge: a valid intent could fetch a
+dossier even when own build events were missing, loading, failed or unextracted.
+The wrapper now gates both its resource path and any warm baseline in those
+states. Seven wrapper and six timeline consumers pass; the expanded local
+browser matrix passes 197 checks/32 captures and proves zero extra baseline
+reads for absent own logs. All other UI/sample/first-occurrence/count shaping
+was independently reviewed without another blocker. The inherited shared-useApi
+JWT fence is being repaired separately; integrate its reviewed source before
+the next combined production/head verification.
 No production or provider operations were performed. Never run an old f96
 engine prebuild; shared engine writes must remain coordinated on 25b source.

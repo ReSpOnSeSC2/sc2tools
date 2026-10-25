@@ -8,6 +8,7 @@ import { BuildOrderColumns, type BuildOrderColumnsProps } from "./BuildOrderColu
 /** One owner-scoped dossier SWR resource for every row. The same key can reuse
  * an already visited dossier; failed or previous responses supply no baseline. */
 export function GameBuildOrderColumns({ timingContext, ...props }: BuildOrderColumnsProps & { timingContext?: OwnTimingContext }) {
-  const result = useApi<DossierAnalysis>(timingContext?.path ?? null, { keepPreviousData: false, dedupingInterval: 60_000, revalidateOnFocus: false, shouldRetryOnError: false });
-  return <BuildOrderColumns {...props} myTimingBaseline={timingContext && !result.error && !result.isPreviousData && result.data ? { data: result.data, matchup: timingContext.matchup } : undefined} />;
+  const canCompare = !props.loading && !props.error && props.myStatus !== "not_extracted" && props.myStatus !== "empty" && Array.isArray(props.myEvents) && props.myEvents.length > 0;
+  const result = useApi<DossierAnalysis>(canCompare ? timingContext?.path ?? null : null, { keepPreviousData: false, dedupingInterval: 60_000, revalidateOnFocus: false, shouldRetryOnError: false });
+  return <BuildOrderColumns {...props} myTimingBaseline={canCompare && timingContext && !result.error && !result.isPreviousData && result.data ? { data: result.data, matchup: timingContext.matchup } : undefined} />;
 }

@@ -64,6 +64,9 @@ const server = http.createServer((req, res) => {
       await page.getByTestId('build-column-me').getByRole('button', { name: 'Jump to 5:12 Stargate' }).click(); expect(await page.evaluate(() => window.fixtureLastSeek)).toBe(312); checks++;
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); checks++;
       await page.addStyleTag({ content: captureCSS }); await page.getByTestId('build-order-columns').screenshot({ path: path.join(evidence, `game-${theme}-${width}.png`) });
+      const baselineReads = () => calls.filter(call => call.path.startsWith('/v1/builds/')).length, readsBeforeEmpty = baselineReads();
+      await page.goto(origin + '/app/game/fixture?missing=1'); await expect(page.getByText('No build events were parsed from this replay.', { exact: true })).toBeVisible();
+      await page.waitForLoadState('networkidle'); expect(baselineReads()).toBe(readsBeforeEmpty); checks++;
       await page.goto(origin + '/app/builds/summary'); await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
       await expect(page.getByText('Held 62%', { exact: true })).toBeVisible(); checks++;
       await expect(page.locator('table thead').getByText('Plan held', { exact: true })).toHaveCount(1); checks++;
