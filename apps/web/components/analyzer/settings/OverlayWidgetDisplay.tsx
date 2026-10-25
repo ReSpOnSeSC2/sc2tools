@@ -36,7 +36,7 @@ export function OverlayWidgetDisplay({ id, name, durationSec, disabled, onChange
   const defaultLabel = persistent ? "Default (widget controlled)" : `Default (${duration / 1000}s)`;
   return <>
     <button ref={trigger} type="button" aria-expanded={open} aria-controls={open ? panelId : undefined} aria-haspopup="dialog" onClick={() => setOpen(previous => !previous)} className="flex min-h-11 items-center rounded border border-border px-3 text-caption font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Display<span className="sr-only"> for {name}</span></button>
-    {open ? createPortal(<div ref={panel} id={panelId} role="dialog" aria-label={`Display for ${name}`} tabIndex={-1} className="fixed space-y-2 overflow-y-auto rounded-lg border border-border bg-bg-surface p-3 text-caption text-text shadow-lg" style={{ ...position, zIndex: 55, width: "min(18rem, calc(100vw - 24px))", maxHeight: "calc(100vh - 24px)" }}>
+    {open ? createPortal(<div ref={panel} id={panelId} role="dialog" aria-label={`Display for ${name}`} tabIndex={-1} className="fixed z-sheet space-y-2 overflow-y-auto rounded-lg border border-border bg-bg-surface p-3 text-caption text-text shadow-lg" style={{ ...position, width: "min(18rem, calc(100vw - 24px))", maxHeight: "calc(100vh - 24px)" }}>
       <label className="block font-medium" htmlFor={`display-${id}`}>Display time for {name}</label>
       <select id={`display-${id}`} className="min-h-11 w-full rounded border border-border bg-bg px-2 text-text" value={durationSec ?? ""} disabled={disabled || persistent} onChange={event => onChange(event.target.value === "" ? null : Number(event.target.value))}>
         <option value="">{defaultLabel}</option>
