@@ -11,6 +11,14 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Reference build orders
+- Write, paste or capture a bounded reference plan in the rich build editor,
+  separately from the rules that classify replays. Supply-only steps keep an
+  unknown clock; unknown action names stay visible and saveable.
+- Reorder and edit steps, fold repeated army actions, copy text or Markdown,
+  download .txt, and practise usable timed actions. Community copies retain the
+  reference plan while private source replay IDs stay private.
+
 ### Agent 0.24.6 and Randomizer game-start performance
 - Build scouting timelines and load their icons when the relevant view opens,
   avoiding full hidden-history hydration in Compact or hidden Companion windows.
@@ -25,6 +33,7 @@ corresponding GitHub Release.
 
 ### Added
 - Signing in returns you to the public page you were viewing. Setup keeps that destination, and a recent Save, vote or Practice choice can finish when you return to the original page.
+- Create builds from a replay, a detected label or a blank draft in one rich editor. The first-run library also links Community copies; searchable race-aware action pickers show friendly names, proxy eligibility and unknown-action errors.
 - Configure optional Twitch Predictions and live-game stream markers with separate permissions, explicit opt-ins and confirmed Dock controls. A separate server gate defaults off; current desktop telemetry cannot prove ranked queue status, so automatic Predictions remain unavailable.
 - Opt in to nine recorded ladder achievements in Event alerts, with per-moment visuals and sounds, local tests, clip timestamps and optional posts through an already connected bot. Supporter alerts keep priority; replay starting MMR and confirmed league evidence remain explicit.
 - Chat commands now share saved aliases, availability and cooldowns across the Twitch bot, Nightbot and on-stream answers. New commands show recorded daily and season stats, recent opponent meetings, prediction leaders and stream-session uptime; owners can add bounded plain-text custom replies with supported variables.

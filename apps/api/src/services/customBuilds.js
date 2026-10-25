@@ -12,6 +12,7 @@ const {
 } = require("./buildCompositions");
 const { computeTransitions } = require("./buildTransitions");
 const { publicBuildMongoExpression } = require("./communityBuildSnapshot");
+const { referenceBuildOrderMongoExpression } = require("./referenceBuildOrderSnapshot");
 const { ruleNameFromUnit } = require("./knownBuildings");
 const TimingCatalog = require("./timingCatalog");
 const {
@@ -224,6 +225,8 @@ const CUSTOM_BUILD_READ_AGGREGATE_PROJECTION = Object.freeze({
   userId: boundedMongoString("$userId", 200),
   slug: boundedMongoString("$slug", 80),
   ...ROOT_PUBLIC_BUILD_EXPRESSION,
+  // Full reference steps load only for detail or explicit Practice.
+  hasReferenceBuildOrder: { $eq: [{ $type: "$buildOrder" }, "object"] },
   notes: boundedMongoString("$notes", 8000),
   isPublic: boundedMongoBoolean("$isPublic"),
   sourceGameId: boundedMongoString("$sourceGameId", 200),
@@ -536,12 +539,15 @@ class CustomBuildsService {
       return this.db.customBuilds.aggregate([
         { $match: { userId, slug, deletedAt: { $exists: false } } },
         { $limit: 1 },
-        { $project: CUSTOM_BUILD_READ_AGGREGATE_PROJECTION },
+        { $project: { ...CUSTOM_BUILD_READ_AGGREGATE_PROJECTION,
+          buildOrder: referenceBuildOrderMongoExpression("$buildOrder", true) } },
       ]).next();
     }
     return this.db.customBuilds.findOne(
       { userId, slug, deletedAt: { $exists: false } },
-      { projection: CUSTOM_BUILD_READ_PROJECTION },
+      { projection: { ...CUSTOM_BUILD_READ_PROJECTION, "buildOrder.v": 1, "buildOrder.source": 1,
+        "buildOrder.sourceGameId": 1, "buildOrder.steps.t": 1, "buildOrder.steps.supply": 1,
+        "buildOrder.steps.supplyApprox": 1, "buildOrder.steps.action": 1, "buildOrder.steps.note": 1 } },
     );
   }
 

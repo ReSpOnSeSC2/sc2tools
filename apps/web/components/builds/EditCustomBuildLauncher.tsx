@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { readReferenceBuildOrder } from "@/lib/buildOrderReference";
 import { useAuth } from "@clerk/nextjs";
 import { apiCall, type ClientApiError } from "@/lib/clientApi";
 import { BuildEditorModal } from "@/components/builds/editor";
@@ -114,6 +115,7 @@ function toInitialDraft(
         ? doc.sourceGameId
         : undefined;
   return {
+    ...(readReferenceBuildOrder(doc.buildOrder) ? { buildOrder: readReferenceBuildOrder(doc.buildOrder)! } : {}),
     name: typeof doc.name === "string" ? doc.name : "",
     description: typeof doc.description === "string" ? doc.description : "",
     notes: typeof doc.notes === "string" ? doc.notes : "",

@@ -18,6 +18,8 @@ export interface BuildEditorSaveBarProps {
    */
   demoMode?: boolean;
   hasSignature?: boolean;
+  hasReference?: boolean;
+  ruleError?: string | null;
 }
 
 /**
@@ -36,6 +38,8 @@ export function BuildEditorSaveBar({
   mode = "create",
   demoMode = false,
   hasSignature = false,
+  hasReference = false,
+  ruleError = null,
 }: BuildEditorSaveBarProps) {
   if (demoMode) {
     return (
@@ -62,10 +66,11 @@ export function BuildEditorSaveBar({
   // skill level, strategy notes) without touching the rules — so don't
   // gate save on having at least one rule. Create mode still requires
   // a rule, otherwise the saved build is non-functional from the start.
-  const requiresRule = mode !== "edit" && !hasSignature;
-  const saveDisabled = saving || (requiresRule && ruleCount === 0);
+  const requiresRule = mode !== "edit" && !hasSignature && !hasReference;
+  const saveDisabled = saving || !!ruleError || (requiresRule && ruleCount === 0);
   return (
     <div className="space-y-3">
+      {ruleError ? <p role="status" className="text-caption text-danger">{ruleError}</p> : null}
       {saveError ? (
         <div
           role="alert"
@@ -98,7 +103,7 @@ export function BuildEditorSaveBar({
         <Button
           variant="secondary"
           onClick={() => onSave(true)}
-          disabled={saveDisabled}
+          disabled={saveDisabled || (ruleCount === 0 && !hasSignature && mode !== "edit")}
           title="Save and match your replay history against this rule set in the background."
         >
           Save & re-match

@@ -1,5 +1,17 @@
 import { coerceSavedRules } from "./build-rules";
+import { readReferenceBuildOrder } from "./buildOrderReference";
+import { BUILD_TOKENS } from "./buildTokens";
 import { fromBuildLog, MAX_GHOST_STEPS, normalizeGhostTarget, type GhostTarget } from "./ghostBuild";
+const referenceTokens = new Map(BUILD_TOKENS.map(token => [token.token, token.race[0]]));
+/** Unknown and untimed reference rows stay in the plan, but are never invented
+ * as HUD checkpoints. Approximate supply is omitted from exact Ghost supply. */
+export function referenceOrderPracticeTarget(name: string, input: unknown, race?: string): GhostTarget | null {
+  const order = readReferenceBuildOrder(input);
+  if (!order) return null;
+  const steps = order.steps.filter(step => step.t !== null && step.t <= 14400 && referenceTokens.has(step.action) && (!race || referenceTokens.get(step.action) === race[0]))
+    .slice(0, MAX_GHOST_STEPS).map(step => ({ t: step.t, supply: step.supplyApprox || step.supply !== null && step.supply > 200 ? null : step.supply, name: step.action.replace(/^(Build|Train|Research|Morph)(?=[A-Z])/, "") }));
+  return normalizeGhostTarget({ v: 1, name, steps });
+}
 
 /** Only positive deadlines are useful checkpoints. Absence/max/not-before
  * constraints cannot honestly become a produced unit at a target time. */

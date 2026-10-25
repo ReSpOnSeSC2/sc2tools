@@ -21,6 +21,8 @@
     "help:index": "node scripts/gen-help-index.mjs",
     "perf:budget": "node scripts/check-perf-budget.mjs",
     "definitions:gen": "node scripts/gen-build-definitions.mjs",
+    "postdefinitions:gen": "node scripts/gen-build-variant-ids.mjs",
+    "build-tokens:gen": "node scripts/gen-build-tokens.mjs",
     "engine:build": "node scripts/build-browser-engine.mjs --require",
     "test:engine": "node --test tests/engine/*.test.mjs"
   },

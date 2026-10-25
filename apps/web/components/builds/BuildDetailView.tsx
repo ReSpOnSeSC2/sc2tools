@@ -31,6 +31,7 @@ import {
 } from "@/lib/race";
 import { BuildDossier } from "./BuildDossier";
 import { BuildDefinitionCard } from "./BuildDefinitionCard";
+import { BuildOrderSteps } from "./BuildOrderSteps";
 import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildPublishModal } from "./BuildPublishModal";
 import { BuildSignInPrompt } from "./BuildSignInPrompt";
@@ -220,7 +221,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
           phasePerspective={
             build.perspective === "opponent" ? "opponent" : undefined
           }
-          headerSlot={() => <div className="grid min-w-0 gap-4 lg:grid-cols-2"><BuildDefinitionCard build={build} onEdit={() => openEditor()} /><NotesPanel notes={build.notes} accent={tint.text} onEdit={() => openEditor("notes")} /></div>}
+          headerSlot={() => <div className="space-y-4"><BuildOrderSteps value={build.buildOrder} /><div className="grid min-w-0 gap-4 lg:grid-cols-2"><BuildDefinitionCard build={build} onEdit={() => openEditor()} /><NotesPanel notes={build.notes} accent={tint.text} onEdit={() => openEditor("notes")} /></div></div>}
         />
       ) : null}
 

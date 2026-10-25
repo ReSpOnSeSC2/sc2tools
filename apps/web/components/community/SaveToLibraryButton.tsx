@@ -14,6 +14,7 @@ import { useCommunityAction } from "./useCommunityAction";
 import { slugifyBuildName, type BuildRuleLike } from "@/lib/build-events";
 import { isProxyStructureToken, SKILL_LEVELS } from "@/lib/build-rules";
 import type { CustomBuild } from "@/components/builds/types";
+import { publicReferenceBuildOrder } from "@/lib/buildOrderReference";
 
 const RULE_TYPE_SET = new Set([
   "before",
@@ -235,6 +236,7 @@ function SignedInSave({
         description: build.description ?? "",
         notes: build.notes ?? "",
         signature: Array.isArray(build.signature) ? build.signature : [],
+        ...(publicReferenceBuildOrder(snap.buildOrder) ? { buildOrder: publicReferenceBuildOrder(snap.buildOrder) } : {}),
         perspective: build.perspective ?? "you",
         // v3 editor fields — without `rules` the forked copy loses its
         // match rules and the edit modal opens empty (0/30, no events).
