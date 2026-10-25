@@ -1,14 +1,16 @@
 /* Run from repo root: node apps/web/tests/manual/analyzer-navigation.cjs
  * Production CSS/fonts, real URL consumers, native Back/Forward and disposable
  * loopback-only API. Default matrix:320/390/768/1440, both themes. NAV_WIDTHS
- * optionally limits diagnostic reruns; the reported final matrix uses defaults.
+ * optionally limits diagnostic reruns; NAV_SHOTS_DIR can preserve prior captures.
+ * The reported final matrix uses all default widths.
  * Every nonlocal browser request is blocked. No real accounts or provider calls.
  * Capture families: strategy-sheet, replay-controls, opponents and pulse.
  */
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 process.chdir(path.resolve(__dirname,'../..'));
 const {chromium,expect}=require('@playwright/test'),buildFixture=require('./analyzer-navigation-fixture.cjs');
-const origin='http://127.0.0.1:3267',root=process.cwd(),shots='../../docs/handoff/screenshots',reads=[],unexpected=[];
+const origin='http://127.0.0.1:3267',root=process.cwd(),shots=process.env.NAV_SHOTS_DIR||'../../docs/handoff/screenshots',reads=[],unexpected=[];
+fs.mkdirSync(shots,{recursive:true});
 const css=fs.readdirSync('.next/static/css',{recursive:true}).filter(name=>name.endsWith('.css')).map(name=>fs.readFileSync(path.join('.next/static/css',name),'utf8')).join('\n');
 const fonts=`@font-face{font-family:FixtureSans;src:url('/fonts/hanken-grotesk-latin.woff2');font-weight:100 900}@font-face{font-family:FixtureDisplay;src:url('/fonts/bricolage-grotesque-latin.woff2');font-weight:100 900}:root{--font-sans:FixtureSans;--font-display:FixtureDisplay}`;
 const builds=[{name:'Gateway pressure',wins:8,losses:2,total:10,winRate:.8,myMatchups:{P:10}},{name:'Adept timing',wins:3,losses:2,total:5,winRate:.6,myMatchups:{P:5}}],matrix=builds.map(build=>({...build,my_build:build.name,opp_strat:'Pressure'}));

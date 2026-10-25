@@ -53,3 +53,30 @@ head is merged;729 is superseded only after successful combined integration.
 
 No budget, infrastructure, production, provider, release or version action.
 Continue all remaining roadmap waves and the final owner setup guide.
+
+## Current main, requested timing and retained live layout
+
+Integrated released Ghost/Series/Chat main `c7b9446f` and the reviewed PR740
+seven-minute Void Ray/Phoenix source, including both generated API catalogs.
+The required browser engine is `25b300818c31d41b`; build and smoke pass.
+
+The user's latest clarification supersedes the proposed top reorder: retain
+the exact live order **Brief → Tendencies → Timings → History → Ladder →
+Identity**, with History/Ladder near the bottom. PR739 was never merged and
+is closed. Its temporary integration is reverted by `cf7eac11`; the forecast,
+history cursor/filter behavior and replay card above notes remain intact.
+Future work must preserve this order unless the user explicitly changes it.
+
+The final source passes 21 profile consumers, both API/web types and 41
+integrated Ghost/scouting/rivals/Chat preference assertions. The owner native
+upload barrier is identical to current main. Actual browser verification passes
+232 navigation checks plus 122 real dossier checks, including exact rendered
+section order and Brief/History navigation at all four widths in both themes.
+The two kept-live-layout captures were inspected. No dossier writes or external
+traffic occurred. New matrix captures use `NAV_SHOTS_DIR` in local cache;
+the eleven previously unstaged navigation screenshots remain untouched.
+
+The final kept-layout production build and every unchanged budget pass:
+landing 214.7/215, Today 232.4/240, Opponents 132.6/180, Dossier 471.5/500,
+Dock 215.9/225, Overlay 239/240 and Widget 323.2/325 kB. Final-head remote
+GitHub and Vercel checks remain required before merge.
