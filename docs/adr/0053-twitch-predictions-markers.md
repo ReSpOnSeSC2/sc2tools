@@ -1,6 +1,6 @@
 # ADR 0053: Opt-in Twitch predictions and game markers
 
-Status: implementation in progress
+Status: implemented; remote verification pending
 
 The Wave 4 `twitch-predictions-markers` item adds optional Twitch channel-points predictions and stream markers to the existing game lifecycle. Both preferences default to false. This work adds no infrastructure, model or external analysis service. Development and tests use synthetic owners, mocked Twitch and disposable Mongo only.
 
@@ -46,4 +46,4 @@ The application window is intentionally narrower than Twitch's provider maximum:
 
 ## Verification so far
 
-Pure preference, rendering and eligibility policy plus real local-Mongo receipt tests cover disabled defaults, strict bounds, malformed inputs, rank-unknown behavior, replay/observer/team/test/stale guards, concurrent claims, exact owner/game scope, stale leases, uncertain creates, immutable IDs, recovery batches and marker start waiting. Runtime wiring, OAuth/UI integration and combined final gates remain required before this feature is complete.
+Pure preference, rendering and eligibility policy plus real local-Mongo receipt tests cover disabled defaults, strict bounds, malformed inputs, rank-unknown behavior, replay/observer/team/test/stale guards, concurrent claims, exact owner/game scope, stale leases, uncertain creates, immutable IDs, recovery batches and marker start waiting. Runtime, OAuth, erasure and UI integration are implemented. The combined local production build, unchanged budgets, full web suite, integrated API suites and 396-check local Chromium matrix pass. Exact-head remote gates remain required before merge; the checkpoint records reproduction and evidence.
