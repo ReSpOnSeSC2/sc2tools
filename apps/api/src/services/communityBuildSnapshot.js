@@ -1,4 +1,5 @@
 "use strict";
+const { publicReferenceBuildOrder } = require("./referenceBuildOrderSnapshot");
 
 const {
   SIGNATURE_MAX_ITEMS,
@@ -40,6 +41,7 @@ const PUBLIC_BUILD_FIELDS = Object.freeze([
   "transitionsInto",
   "perspective",
   "steps",
+  "buildOrder",
 ]);
 
 const PUBLIC_BUILD_LEAF_FIELDS = Object.freeze([
@@ -117,6 +119,8 @@ function publicBuildSnapshot(priv) {
   copyStringArray(out, "losesTo", priv.losesTo);
   copyStringArray(out, "transitionsInto", priv.transitionsInto);
   copyLegacySteps(out, priv.steps);
+  const reference = publicReferenceBuildOrder(priv.buildOrder);
+  if (reference) out.buildOrder = reference;
   return out;
 }
 

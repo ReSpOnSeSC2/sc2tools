@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "sources": ["game", "paste", "manual"],
+  "limits": { "steps": 120, "seconds": 86400, "supply": 1000, "actionChars": 80, "noteChars": 140, "gameIdChars": 256 }
+}
