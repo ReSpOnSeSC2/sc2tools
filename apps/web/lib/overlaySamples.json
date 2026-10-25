@@ -1,0 +1,700 @@
+{
+  "version": 1,
+  "sessionAgeSec": 1620,
+  "payload": {
+    "myRace": "Protoss",
+    "oppRace": "Zerg",
+    "oppName": "TestOpponent",
+    "map": "Goldenaura LE",
+    "matchup": "PvZ",
+    "result": "win",
+    "durationSec": 612,
+    "oppMmr": 4250,
+    "myMmr": 4310,
+    "mmrDelta": 22,
+    "opponentNotes": {
+      "text": "Checks the natural early, then hides proxy tech behind the third.",
+      "readAloud": true
+    },
+    "headToHead": {
+      "wins": 4,
+      "losses": 2
+    },
+    "streak": {
+      "kind": "win",
+      "count": 3
+    },
+    "cheeseProbability": 0.65,
+    "cheeseHistory": {
+      "samples": 12,
+      "of": 20
+    },
+    "predictedStrategies": [
+      {
+        "name": "Pool first",
+        "weight": 0.45
+      },
+      {
+        "name": "Hatch first",
+        "weight": 0.35
+      },
+      {
+        "name": "Roach All-in",
+        "weight": 0.2
+      }
+    ],
+    "topBuilds": [
+      {
+        "name": "P - Stargate",
+        "total": 14,
+        "winRate": 0.71
+      },
+      {
+        "name": "P - 4 Gate",
+        "total": 9,
+        "winRate": 0.55
+      }
+    ],
+    "bestAnswer": {
+      "build": "P - Stargate",
+      "winRate": 0.78,
+      "total": 7
+    },
+    "favOpening": {
+      "name": "Pool first",
+      "share": 0.55,
+      "samples": 11,
+      "of": 20
+    },
+    "scouting": [
+      {
+        "label": "Pool first",
+        "tellAt": 90,
+        "confidence": 0.55
+      },
+      {
+        "label": "Hatch first",
+        "tellAt": 75,
+        "confidence": 0.35
+      }
+    ],
+    "recentGames": [
+      {
+        "result": "Loss",
+        "lengthText": "3:47",
+        "map": "10000 Feet LE",
+        "myBuild": "PvZ - Macro Transition (Unclassified)",
+        "oppBuild": "Zerg - 12 Pool",
+        "oppRace": "Zerg"
+      },
+      {
+        "result": "Win",
+        "lengthText": "11:00",
+        "map": "Ruby Rock LE",
+        "myBuild": "PvZ - 3 Stargate Phoenix",
+        "oppBuild": "Zerg - 3 Base Macro (Hatch First)",
+        "oppRace": "Zerg"
+      },
+      {
+        "result": "Win",
+        "lengthText": "13:37",
+        "map": "Winter Madness LE",
+        "myBuild": "PvZ - 3 Stargate Phoenix",
+        "oppBuild": "Zerg - 3 Base Macro (Hatch First)",
+        "oppRace": "Zerg"
+      },
+      {
+        "result": "Loss",
+        "lengthText": "7:28",
+        "map": "Old Republic LE",
+        "myBuild": "PvZ - Macro Transition (Unclassified)",
+        "oppBuild": "Zerg - 3 Base Macro (Hatch First)",
+        "oppRace": "Zerg"
+      },
+      {
+        "result": "Win",
+        "lengthText": "11:04",
+        "map": "Tourmaline LE",
+        "myBuild": "PvZ - 3 Stargate Phoenix",
+        "oppBuild": "Zerg - 3 Base Macro (Hatch First)",
+        "oppRace": "Zerg"
+      }
+    ],
+    "session": {
+      "wins": 4,
+      "losses": 4,
+      "games": 8,
+      "mmrStart": 5320,
+      "mmrCurrent": 5343,
+      "region": "NA",
+      "sessionStartedAt": "2000-01-01T00:00:00.000Z",
+      "streak": {
+        "kind": "win",
+        "count": 2
+      }
+    },
+    "rank": {
+      "league": "Diamond",
+      "tier": 1,
+      "mmr": 4310
+    },
+    "meta": {
+      "matchup": "PvZ",
+      "topBuilds": [
+        {
+          "name": "Pool first",
+          "share": 0.55
+        },
+        {
+          "name": "Hatch first",
+          "share": 0.35
+        }
+      ]
+    },
+    "rival": {
+      "name": "TestOpponent",
+      "headToHead": {
+        "wins": 4,
+        "losses": 2
+      },
+      "note": "Frequent matchup"
+    },
+    "rematch": {
+      "isRematch": true,
+      "lastResult": "win"
+    },
+    "playerCard": {
+      "version": 1,
+      "sampleSize": 5,
+      "totalGames": null,
+      "sampleLimit": 5,
+      "sampled": true,
+      "axes": [
+        {
+          "key": "earlyFinish",
+          "label": "Early finish",
+          "value": 20,
+          "matches": 1,
+          "samples": 5,
+          "detail": "Games ending before 5:00. This describes game length, not aggression or skill."
+        },
+        {
+          "key": "expansion",
+          "label": "Expansion",
+          "value": 80,
+          "matches": 4,
+          "samples": 5,
+          "detail": "Games where at least two opponent bases were alive together."
+        },
+        {
+          "key": "economy",
+          "label": "Economy",
+          "value": 60,
+          "matches": 3,
+          "samples": 5,
+          "detail": "Games where the opponent reached 60 workers."
+        },
+        {
+          "key": "tech",
+          "label": "Tech",
+          "value": 40,
+          "matches": 2,
+          "samples": 5,
+          "detail": "Games with an observed opponent tier-3 technology building or unit."
+        },
+        {
+          "key": "air",
+          "label": "Air",
+          "value": 60,
+          "matches": 3,
+          "samples": 5,
+          "detail": "Games with observed opponent combat or army-support air units; supply and scouting units are excluded."
+        }
+      ]
+    },
+    "opponentPhases": {
+      "typicalFinalPhase": "midLate",
+      "trajectory": {
+        "sampleSize": {
+          "early": 6,
+          "earlyMid": 6,
+          "mid": 6,
+          "midLate": 5,
+          "late": 2
+        },
+        "crossings": {
+          "earlyMidAt": 240,
+          "midAt": 420,
+          "midLateAt": 660,
+          "lateAt": 900
+        },
+        "finalPhaseDistribution": {
+          "early": 0,
+          "earlyMid": 0,
+          "mid": 1,
+          "midLate": 3,
+          "late": 2
+        },
+        "durationP95Sec": 1080
+      },
+      "typicalLateComp": {
+        "units": [
+          "Carrier",
+          "Tempest",
+          "Mothership"
+        ],
+        "sampleCount": 4,
+        "winRate": 0.73
+      }
+    }
+  },
+  "sharedKeys": [
+    "myRace",
+    "oppRace",
+    "matchup"
+  ],
+  "widgetKeys": {
+    "opponent": [
+      "oppName",
+      "oppMmr",
+      "myMmr",
+      "headToHead"
+    ],
+    "match-result": [
+      "result",
+      "durationSec",
+      "map"
+    ],
+    "post-game": [
+      "map",
+      "durationSec",
+      "result"
+    ],
+    "mmr-delta": [
+      "mmrDelta",
+      "myMmr"
+    ],
+    "streak": [
+      "streak"
+    ],
+    "cheese": [
+      "cheeseProbability",
+      "cheeseHistory",
+      "predictedStrategies"
+    ],
+    "rematch": [
+      "rematch"
+    ],
+    "rival": [
+      "rival"
+    ],
+    "rank": [
+      "rank"
+    ],
+    "meta": [
+      "meta"
+    ],
+    "topbuilds": [
+      "topBuilds"
+    ],
+    "fav-opening": [
+      "favOpening"
+    ],
+    "best-answer": [
+      "bestAnswer",
+      "favOpening"
+    ],
+    "scouting": [
+      "scouting",
+      "predictedStrategies",
+      "oppName",
+      "oppRace",
+      "headToHead",
+      "opponentNotes",
+      "rival",
+      "bestAnswer",
+      "favOpening",
+      "cheeseProbability",
+      "cheeseHistory",
+      "recentGames",
+      "opponentPhases",
+      "playerCard"
+    ],
+    "session": [
+      "session"
+    ],
+    "randomizer": [],
+    "ghost-build": [],
+    "multichat": [
+      "session"
+    ],
+    "chat-highlight": [],
+    "chat-poll": [],
+    "chat-alerts": [],
+    "stream-goals": [],
+    "session-recap": [
+      "session"
+    ],
+    "stream-scene": [],
+    "chat-oracle": [],
+    "supporter-wall": [],
+    "clip-flag": [],
+    "lower-third": [
+      "result",
+      "map",
+      "matchup",
+      "mmrDelta",
+      "headToHead",
+      "session",
+      "oppName"
+    ],
+    "stats-ticker": [],
+    "countdown-timer": [],
+    "build-profile": []
+  },
+  "demo": {
+    "chat": [
+      {
+        "platform": "twitch",
+        "user": "TestViewer",
+        "text": "Test fire! This is how your Twitch chat will look.",
+        "color": "#FF69B4",
+        "badges": []
+      },
+      {
+        "platform": "kick",
+        "user": "KickTester",
+        "text": "Kick messages land in the same feed.",
+        "color": "#75FD48",
+        "badges": [
+          "member"
+        ]
+      },
+      {
+        "platform": "youtube",
+        "user": "YT Test Viewer",
+        "text": "YouTube live chat shows up here too :fire:",
+        "badges": [
+          "member"
+        ]
+      },
+      {
+        "platform": "tiktok",
+        "user": "tiktok.tester",
+        "text": "and TikTok LIVE comments complete the set",
+        "badges": []
+      },
+      {
+        "platform": "twitch",
+        "user": "ModOnDuty",
+        "text": "moderator badges render like this",
+        "color": "#1E90FF",
+        "badges": [
+          "moderator"
+        ]
+      },
+      {
+        "platform": "kick",
+        "user": "TheStreamer",
+        "text": "broadcaster messages get the crown",
+        "color": "#F5B942",
+        "badges": [
+          "owner"
+        ]
+      },
+      {
+        "platform": "youtube",
+        "user": "LongMessageTester",
+        "text": "Longer messages wrap cleanly instead of stretching the panel — tune the width in OBS and the text follows.",
+        "badges": []
+      },
+      {
+        "platform": "twitch",
+        "user": "CommandTester",
+        "text": "!discord — command lines vanish if you enable Hide commands",
+        "color": "#9ACD32",
+        "badges": []
+      }
+    ],
+    "highlight": {
+      "platform": "twitch",
+      "user": "TestViewer",
+      "text": "Test fire! Pinned messages from the Stream Dock appear exactly like this.",
+      "atMs": 0
+    },
+    "poll": {
+      "question": "Test poll — which matchup next?",
+      "options": [
+        "PvT",
+        "PvZ",
+        "PvP"
+      ],
+      "startedAtMs": 0,
+      "status": "open"
+    },
+    "pollTallySteps": [
+      {
+        "counts": [
+          0,
+          0,
+          0
+        ],
+        "total": 0
+      },
+      {
+        "counts": [
+          2,
+          3,
+          1
+        ],
+        "total": 6
+      },
+      {
+        "counts": [
+          4,
+          6,
+          2
+        ],
+        "total": 12
+      },
+      {
+        "counts": [
+          6,
+          9,
+          3
+        ],
+        "total": 18
+      },
+      {
+        "counts": [
+          7,
+          11,
+          4
+        ],
+        "total": 22
+      }
+    ],
+    "goals": [
+      {
+        "label": "Test: Follower goal",
+        "current": 1168,
+        "target": 1200
+      },
+      {
+        "label": "Test: Sub goal",
+        "current": 1,
+        "target": 10
+      }
+    ],
+    "events": [
+      {
+        "platform": "twitch",
+        "kind": "sub",
+        "user": "TestSubscriber",
+        "detail": "Test fire — a new Twitch sub alert looks like this"
+      },
+      {
+        "platform": "kick",
+        "kind": "raid",
+        "user": "TestRaider",
+        "detail": "raided with a test party",
+        "amount": "150"
+      },
+      {
+        "platform": "youtube",
+        "kind": "superchat",
+        "user": "TestFan",
+        "detail": "sent a test Super Chat",
+        "amount": "$5.00"
+      },
+      {
+        "platform": "tiktok",
+        "kind": "gift",
+        "user": "test.gifter",
+        "detail": "sent a test gift",
+        "amount": "×10"
+      }
+    ],
+    "scene": {
+      "mode": "starting",
+      "message": "Test: ranked ladder grind — 1v1 vs the world",
+      "countdownEndsAt": 299000,
+      "setAtMs": 0
+    },
+    "fallbackSession": {
+      "wins": 4,
+      "losses": 2,
+      "games": 6,
+      "mmrStart": 4280,
+      "mmrCurrent": 4314,
+      "streak": {
+        "kind": "win",
+        "count": 2
+      },
+      "isTest": true
+    },
+    "buildProfile": {
+      "title": "Sample Blink pressure",
+      "visible": true,
+      "ratings": {
+        "aggressiveness": 4,
+        "defensiveness": 2,
+        "executionDifficulty": 3,
+        "popularity": 4,
+        "micro": 5
+      },
+      "labels": {
+        "aggressiveness": "Aggressiveness",
+        "defensiveness": "Defensiveness",
+        "executionDifficulty": "Execution difficulty",
+        "popularity": "Build popularity",
+        "micro": "Micro required"
+      }
+    },
+    "supporterWall": [
+      {
+        "user": "TestGrinder",
+        "platform": "twitch",
+        "xp": 1240,
+        "level": 4,
+        "rank": ""
+      },
+      {
+        "user": "KickEnjoyer",
+        "platform": "kick",
+        "xp": 660,
+        "level": 3,
+        "rank": ""
+      },
+      {
+        "user": "TubeWatcher",
+        "platform": "youtube",
+        "xp": 300,
+        "level": 2,
+        "rank": ""
+      },
+      {
+        "user": "TokFan",
+        "platform": "tiktok",
+        "xp": 120,
+        "level": 1,
+        "rank": ""
+      }
+    ],
+    "oracle": {
+      "window": {
+        "opponent": "TestOpponent",
+        "tally": {
+          "win": 9,
+          "loss": 4,
+          "total": 13
+        }
+      },
+      "settle": {
+        "result": "win",
+        "tally": {
+          "win": 14,
+          "loss": 7,
+          "total": 21
+        },
+        "correctCount": 14,
+        "pointsEach": 10,
+        "topOracles": [
+          {
+            "user": "TestOracle",
+            "platform": "twitch",
+            "score": 40,
+            "correct": 4,
+            "total": 5
+          },
+          {
+            "user": "GruntyViewer",
+            "platform": "kick",
+            "score": 30,
+            "correct": 3,
+            "total": 4
+          }
+        ]
+      }
+    },
+    "tickerSegments": [
+      "TEST · this is your stats ticker",
+      "SESSION 4–2 · +34 MMR",
+      "NOW PLAYING: vs TestOpponent (PvZ) · 4,612 MMR",
+      "HEAD-TO-HEAD vs TestOpponent: 5–3",
+      "⚠️ CHEESE WATCH: 48% of this opponent's games open cheesy",
+      "FOLLOWER GOAL 1168 / 1200",
+      "🔮 CALL IT: !win / !loss — chat is 68% WIN",
+      "🔮 CHAT ORACLE RECORD: majority right in 12 of 19 calls",
+      "TOP SUPPORTER: TestGrinder (Immortal)",
+      "CAREER: 1,482 W – 1,301 L (53%) over 2,891 tracked games",
+      "PEAK MMR: 4,712 on NA (Aug 12, 2025) — 138 away right now",
+      "TIME SUPPLY BLOCKED (career): 6.3 hrs — build more pylons"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "pre-game",
+      "label": "Pre-game",
+      "patch": {
+        "result": null,
+        "durationSec": 0,
+        "mmrDelta": 0
+      },
+      "phase": "match_loading"
+    },
+    {
+      "id": "victory",
+      "label": "Victory",
+      "patch": {
+        "result": "win",
+        "mmrDelta": 22
+      },
+      "phase": "match_ended"
+    },
+    {
+      "id": "defeat",
+      "label": "Defeat",
+      "patch": {
+        "result": "loss",
+        "mmrDelta": -18
+      },
+      "phase": "match_ended"
+    },
+    {
+      "id": "cheese",
+      "label": "Cheese",
+      "patch": {
+        "cheeseProbability": 0.85,
+        "cheeseHistory": {
+          "samples": 17,
+          "of": 20
+        }
+      },
+      "phase": "match_loading"
+    },
+    {
+      "id": "hot-streak",
+      "label": "Hot streak",
+      "patch": {
+        "streak": {
+          "kind": "win",
+          "count": 7
+        }
+      },
+      "phase": "match_ended"
+    },
+    {
+      "id": "chat-burst",
+      "label": "Chat burst",
+      "patch": {},
+      "phase": "match_in_progress"
+    },
+    {
+      "id": "poll",
+      "label": "Poll",
+      "patch": {},
+      "phase": "match_in_progress"
+    }
+  ]
+}

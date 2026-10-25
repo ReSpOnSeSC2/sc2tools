@@ -1,4 +1,5 @@
 "use client";
+import { withOverlayDemo } from "../OverlayDemoBoundary";
 
 /**
  * MultiChatWidget — every chat, one overlay.
@@ -305,7 +306,7 @@ function useTestFire(live: LiveGamePayload | null | undefined): TestChatState {
   return testState;
 }
 
-export function MultiChatWidget({
+function ConnectedMultiChatWidget({
   token,
   live,
   session,
@@ -732,3 +733,5 @@ const statusChipStyle: CSSProperties = {
   alignItems: "center",
   gap: 5,
 };
+
+export const MultiChatWidget = withOverlayDemo(ConnectedMultiChatWidget);

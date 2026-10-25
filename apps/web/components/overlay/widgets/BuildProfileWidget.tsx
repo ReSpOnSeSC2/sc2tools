@@ -1,4 +1,5 @@
 "use client";
+import { withOverlayDemo } from "../OverlayDemoBoundary";
 
 import { useEffect, useId, useRef, type CSSProperties } from "react";
 import {
@@ -108,7 +109,7 @@ export function BuildProfileChart({ profile, preview = false }: {
   );
 }
 
-export function BuildProfileWidget({ token, studioEvent }: {
+function ConnectedBuildProfileWidget({ token, studioEvent }: {
   token: string;
   studioEvent?: unknown;
 }) {
@@ -130,3 +131,5 @@ const cardStyle: CSSProperties = {
   color: "#eaf1fa",
   fontFamily: "var(--ov-font, Segoe UI, ui-sans-serif, system-ui, sans-serif)",
 };
+
+export const BuildProfileWidget = withOverlayDemo(ConnectedBuildProfileWidget);
