@@ -1,8 +1,8 @@
 # Analyzer navigation — analyzer-home-polish-5
 
 Owned branch `codex/wave3-analyzer-navigation`, reused preserved Health worktree
-`.worktrees/wave3-build-exports`. Actual main through the owner's9bb3f5ca
-Randomizer/native fix (including Tables727 and Admin728) is reconciled, with
+`.worktrees/wave3-build-exports`. Actual main through GameDesk732's34b14d7f
+(including the owner's9bb3f5ca Randomizer/native fix) is reconciled, with
 reviewed Scouting729 source through a5abe9da. PR731 is the combined analyzer
 integration;729 remains preserved until731 passes all final gates and merges.
 
@@ -40,11 +40,14 @@ width, button-end-state and reduced-motion assertions now pass.
 The owner9bb integration adds53 affected web and31 native test passes, with a
 fresh232-check browser matrix using the integrated production CSS. The manual
 runner now resolves its web directory itself and works from the repo root.
+The actual GameDesk squash adds38 passing integration consumers, clean API
+types and another successful production build. Its exact-channel and bounded
+ended-game fields are retained beside scouting's optional map semantics.
 
 Required engine build/smoke passes atf96c086eb83fdc40. Final production rerun
-and every unchanged budget pass: Today232.2/240, Dock224.5/225,
-landing214.6/215, Opponents132.4/180, Dossier475.9/500,
-Overlay235.7/240 and Widget316.3/325kB. All applicable API/native/web final-head
+and every unchanged budget pass: Today232.2/240, Dock215.2/225,
+landing214.6/215, Opponents132.4/180, Dossier476/500,
+Overlay236.7/240 and Widget317.8/325kB. All applicable API/native/web final-head
 CI, Vercel and a fresh main merge tree remain merge gates. No failed-check
 head is merged;729 is superseded only after successful combined integration.
 
