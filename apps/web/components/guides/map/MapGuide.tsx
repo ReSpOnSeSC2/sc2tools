@@ -121,6 +121,7 @@ function PublishedMap({
       </div>
       <GuideSectionNav items={[
         { id: "matchups", label: "Matchups" },
+        ...(personalSlot ? [{ id: "your-map", label: "You on this map" }] : []),
         ...(payload.matchups.some((row) => row.openers.length) ? [{ id: "best-openers", label: "Best openers" }] : []),
         ...(mapIndex?.some((map) => map.slug !== payload.mapSlug) ? [{ id: "other-maps", label: "Other maps" }] : []),
       ]}>
@@ -156,12 +157,12 @@ export function MapGuide({
       {payload.published ? (
         <PublishedMap payload={payload} publishedPaths={publishedPaths} mapIndex={mapIndex} personalSlot={personalSlot} />
       ) : (
-        <GuideNotEnoughGames
+        <><GuideNotEnoughGames
           eyebrow="Map guide"
           title={payload.map}
           backHref={guidePaths.maps()}
           backLabel="All map guides"
-        />
+        />{personalSlot}</>
       )}
     </article>
   );

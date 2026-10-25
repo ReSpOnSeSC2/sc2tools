@@ -23,6 +23,13 @@ function params(query: string): URLSearchParams {
 }
 
 describe("filtersToQuery", () => {
+  it("sends a complete exact map cohort only while its visible map chip still matches", () => {
+    const scope = { map: "Alpha LE", map_exact: '["Alpha LE","Alpha"]', map_exact_label: "Alpha LE" };
+    expect(Object.fromEntries(params(filtersToQuery(scope)))).toEqual({ map: "Alpha LE", map_exact: '["Alpha LE","Alpha"]' });
+    expect(Object.fromEntries(params(filtersToQuery({ ...scope, map: "Beta" })))).toEqual({ map: "Beta" });
+    expect(params(filtersToQuery({ ...scope, map: undefined })).has("map_exact")).toBe(false);
+  });
+
   it("serializes the ranked-ladder 1v1 defaults", () => {
     const query = params(filtersToQuery(DEFAULT_ANALYZER_FILTERS));
     expect(query.get("map_pool")).toBe("ladder");

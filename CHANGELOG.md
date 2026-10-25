@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Maps and veto planning
+
+- Compare the current ladder pool by matchup with sample sizes, Wilson ranges and community context. Choose one to three suggested vetoes from maps with at least five decided games; stale pool data and failed refreshes pause recommendations.
+- Open the games behind a map or matchup, apply a map to every analyzer section, and return to a highlighted map from a deep link. Map sorting is remembered, and map guides can privately compare your own record after signing in.
+
 ### Added
 
 - Admin Build Studio lists and versions all preset, private custom and community definitions. Preset replacements use one validated policy across compatible server, desktop and browser engines, with explicit completion clocks, custom-rule precedence, reviewed restores and offline fallback.

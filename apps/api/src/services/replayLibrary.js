@@ -1,4 +1,5 @@
 "use strict";
+const { parseExactMapNames } = require("../util/exactMapFilter");
 
 const { gamesMatchStage } = require("../util/parseQuery");
 const { REGION_LABELS } = require("../util/regionFromToonHandle");
@@ -265,6 +266,7 @@ function sanitizeGlobalFilters(raw) {
   const build = boundedFilterString(source.build, 200);
   const leak = boundedFilterString(source.leak, 120);
   if (map) out.map = map.toLowerCase();
+  if (source.mapExact !== undefined) out.mapExact = parseExactMapNames(JSON.stringify(source.mapExact));
   if (oppStrategy) out.oppStrategy = oppStrategy;
   if (build) out.build = build;
   if (leak) out.leak = leak;

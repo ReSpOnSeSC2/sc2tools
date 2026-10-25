@@ -284,6 +284,7 @@ export function AnalyzerProvider({
   }, [logicalSeasons]);
 
   const setFilters = useCallback((next: AnalyzerFilters) => {
+    if (next.map_exact_label !== undefined && next.map !== next.map_exact_label) next = { ...next, map_exact: undefined, map_exact_label: undefined };
     setFiltersState(next);
     writeStored(next);
   }, []);
