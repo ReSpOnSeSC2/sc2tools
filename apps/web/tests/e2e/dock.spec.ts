@@ -8,6 +8,7 @@ test("Dock disclosures preserve drafts and pass automated accessibility checks",
     const data = path.endsWith("/config") ? { config: {} }
       : path.endsWith("/studio") ? { highlight: null, goals: [], poll: null, scene: null, timer: null, blockedUsers: [] }
       : path.endsWith("/viewers") ? { platforms: [] }
+      : path.endsWith("/presence") ? { surfaces: { dock: 1 }, totalSources: 1, sampledAt: new Date().toISOString() }
       : { clipMoments: [] };
     return route.fulfill({ status: 200, headers: { "Access-Control-Allow-Origin": "*" }, contentType: "application/json", body: JSON.stringify(data) });
   });

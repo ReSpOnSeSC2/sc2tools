@@ -15,6 +15,10 @@ corresponding GitHub Release.
 
 - Collapse panels into live summaries, pin frequently used sections, and keep the layout in this browser. Dock controls now show connection text and keyboard focus, give touch users larger targets, and offer selected text when clipboard access is unavailable.
 
+### Overlay health
+
+- Check connected game, chat and Dock sources before going live. Widget cards show identified connections, unknown older pages and possible duplicate audio; failed checks keep an honest unavailable state. The Dock has a counts-only source strip.
+
 ### Live overlay display
 
 - Save an overlay theme and per-widget display times to its token. Connected OBS sources receive changes without re-copying URLs; existing `?theme=` URLs keep working and retain their explicit look. Previous browser themes can be moved into a draft with an explicit Save.

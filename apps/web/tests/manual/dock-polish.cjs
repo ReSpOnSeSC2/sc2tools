@@ -24,7 +24,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname.endsWith('/config')) return json({ config: { twitch: { enabled: true, channel: 'synthetic' }, kick: { enabled: true, chatroomId: 'fixture' }, youtube: { enabled: true, channel: 'synthetic' } } });
     if (pathname.endsWith('/engagement')) return json({ clipMoments: [{ atMs: Date.now() - 50000, kind: 'game-event', reason: 'Victory — a held counterattack', sampleLines: [] }, { atMs: Date.now() - 10000, kind: 'chat-spike', reason: 'Chat celebrated the hold', sampleLines: ['Aurora: well played'] }] });
     if (pathname.endsWith('/viewers')) return json({ platforms: [{ platform: 'twitch', viewers: 24, live: true }, { platform: 'kick', viewers: null, live: true }], total: 24, partial: true });
-    if (pathname.endsWith('/presence')) return json({ sources: 1, widgets: 3, docks: 1, duplicates: 0 });
+    if (pathname.endsWith('/presence')) return json({ surfaces: { 'all-in-one': 1, widget: 3, scene: 0, dock: 1, unknown: 0 }, totalSources: 5, sampledAt: new Date().toISOString() });
     if (pathname.endsWith('/builds')) return json({ builds: [] });
     // Synthetic engagement intake only; no actual provider/server actions.
     if (req.method === 'POST' && pathname.includes('/ingest')) return json({ ok: true });

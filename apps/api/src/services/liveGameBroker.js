@@ -613,6 +613,14 @@ class LiveGameBroker {
     return hit.payload;
   }
 
+  /** Recent real overlay publication time from the existing bounded cache.
+   * Restarts/expiry return unknown rather than inventing a historical update.
+   * @param {string} userId @returns {number|null} */
+  latestOverlayLiveAt(userId) {
+    const hit = this._latestOverlayLive.get(userId);
+    return hit && Date.now() - hit.ts <= this._maxAgeMs ? hit.ts : null;
+  }
+
   /** @param {string} userId @returns {number} */
   subscriberCount(userId) {
     return this._subs.get(userId)?.size || 0;

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 
 const PROBLEMS = [
+  { title: "Check your overlay before going live", body: "Open Ready to go live? in Overlay setup to check connected sources, unknown older pages and possible duplicate audio. Counts include source pages opened in a browser; check the actual scene and audio in OBS too.", href: "/help/overlay-health", action: "Is my overlay ready?" },
   {
     title: "The source says the link is no longer valid",
     body: "The overlay token was revoked or rotated, or the URL was mistyped. Copy a fresh URL from Settings → Overlay and replace it in the Browser Source or Stream Dock. A temporary outage reconnects automatically. Add ?check=1 (or &check=1 after an existing query) to see a connection badge for 10 seconds inside OBS.",

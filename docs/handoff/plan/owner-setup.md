@@ -82,6 +82,10 @@ No environment variable, collection, migration or paid service is required. The 
 
 `shareable-views` needs no new environment variables, services, indexes, jobs or migration. The existing private preferences API stores up to twelve named filter/section views. A single indexed user read supplies first-visit saved-view/default-tab behavior. Deploy the API and web changes normally; no production account settings were changed during validation.
 
+# Overlay health
+
+No new environment variable, secret, collection, index, job or infrastructure is required. The API image copies the shared surface/scene allowlist. Deploy API before web, then refresh old OBS Browser Sources once to identify them in Ready to go live? Counts include source pages opened in normal browsers; verify actual scene visibility and audio in OBS. A missing recent game-update timestamp after restart is expected until a replay arrives. No integration or account was enabled during verification.
+
 
 
 ### Live overlay profiles

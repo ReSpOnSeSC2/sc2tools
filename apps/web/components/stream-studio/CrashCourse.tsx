@@ -100,8 +100,8 @@ const LESSONS: ReadonlyArray<Lesson> = [
     promise: "Separate a layout check from proof that real game information is arriving.",
     steps: [
       {
-        title: "Preview in the playground, then Test in OBS",
-        body: <>Choose <strong>Preview</strong> on a Settings widget card, or open the <Link href="/stream-studio/playground" className="text-accent underline">local widget playground</Link>. Try the sample scenarios, theme presets and Show all together; these silent samples use no account or overlay token. Then enable a widget in <strong>Settings → Overlay</strong> and choose <strong>Test</strong> while watching OBS. Most tests display a sample for about 20 seconds; choose <strong>Stop</strong> to dismiss it sooner. <strong>Test all</strong> helps check a complete scene. Build profile is controlled directly from its settings or the Stream Dock.</>,
+        title: "Check readiness, preview, then Test in OBS",
+        body: <>First check <Link href="/help/overlay-health" className="text-accent underline">Ready to go live?</Link> in Overlay setup for connected sources and possible duplicate audio. Choose <strong>Preview</strong> on a Settings widget card, or open the <Link href="/stream-studio/playground" className="text-accent underline">local widget playground</Link>. Try the sample scenarios, theme presets and Show all together; these silent samples use no account or overlay token. Then enable a widget in <strong>Settings → Overlay</strong> and choose <strong>Test</strong> while watching OBS. Most tests display a sample for about 20 seconds; choose <strong>Stop</strong> to dismiss it sooner. <strong>Test all</strong> helps check a complete scene. Build profile is controlled directly from its settings or the Stream Dock.</>,
       },
       {
         title: "Expect different cards at different times",

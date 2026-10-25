@@ -50,6 +50,8 @@ import { ActiveTokenHeader, AllInOneRow, type OverlayToken } from "./OverlayToke
 import { OverlayManagerNav, useOverlaySection } from "./OverlayManagerNav";
 import { OverlayStarterPacks } from "./OverlayStarterPacks";
 import { OverlayDockSetup, OverlayBotSettings } from "./OverlayDockSetup";
+import { OverlayHealthProvider } from "@/components/overlay/OverlayHealthContext";
+import { OverlayHealthBoard } from "./OverlayHealthBoard";
 
 /**
  * Settings · Overlay tab.
@@ -305,8 +307,9 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
   }
 
   return (
-    <OverlayProfileEditor key={`${userId}:${activeToken.token}`} token={activeToken} onSaved={saved => { void mutate(previous => previous ? { items: previous.items.map(item => item.token === activeToken.token ? { ...item, ...saved } : item) } : previous, { revalidate: false }); }}>{({ profile, saving: profileSaving, setTheme, setDuration }) => <div className="space-y-6">
+    <OverlayProfileEditor key={`${userId}:${activeToken.token}`} token={activeToken} onSaved={saved => { void mutate(previous => previous ? { items: previous.items.map(item => item.token === activeToken.token ? { ...item, ...saved } : item) } : previous, { revalidate: false }); }}>{({ profile, saving: profileSaving, setTheme, setDuration }) => <OverlayHealthProvider token={activeToken.token} enabledWidgets={activeToken.enabledWidgets} enabled={section === "setup" || section === "widgets"}><div className="space-y-6">
       <OverlayManagerNav section={section} />
+      <div hidden={section !== "setup" && section !== "widgets"}><OverlayHealthBoard /></div>
       <div hidden={section !== "setup"} className="space-y-6">
       {/* Browser-import users without a paired agent: the overlay's live data needs it. */}
       <OverlayAgentUpsell />
@@ -502,6 +505,6 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         intent="danger"
         loading={revoking}
       />
-    </div>}</OverlayProfileEditor>
+    </div></OverlayHealthProvider>}</OverlayProfileEditor>
   );
 }
