@@ -35,7 +35,7 @@ def detector(request):
 @pytest.mark.parametrize("support_robo", [None, 450])
 def test_void_ray_opening_survives_capital_transition(detector, capital, support_robo):
     events = opening() + [building("Stargate", 223)]
-    events += [unit("VoidRay", t) for t in (290, 335, 380, 425)]
+    events += [unit("VoidRay", t) for t in (290, 335, 380, 420)]
     events += [building("FleetBeacon", 500), unit(capital, 580)]
     if support_robo is not None:
         events.append(building("RoboticsFacility", support_robo))
