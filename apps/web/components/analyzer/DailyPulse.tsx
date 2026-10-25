@@ -410,7 +410,7 @@ function PulseCardView({
     </>
   );
 
-  const baseClass = `w-[280px] flex-shrink-0 snap-start rounded-lg border border-border border-l-4 ${tone.border} bg-bg-elevated/60 px-3.5 py-3 sm:w-[300px]`;
+  const baseClass = `w-[280px] max-w-full flex-shrink-0 snap-start rounded-lg border border-border border-l-4 ${tone.border} bg-bg-elevated/60 px-3.5 py-3 sm:w-[300px]`;
 
   const interactiveClass = `${baseClass} block text-left transition-colors hover:border-accent hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface`;
   if (href) return <Link href={href} data-pulse-card className={interactiveClass}>{body}</Link>;
@@ -458,7 +458,7 @@ function PulseCarousel({ cards, ...navigation }: { cards: PulseCard[] } & Pick<P
   const arrowClass = "hidden h-11 w-11 items-center justify-center rounded-full border border-line text-accent disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 md:inline-flex";
   return <div className="space-y-2">
     <div className="flex items-center justify-end gap-2"><span aria-live="polite" aria-atomic="true" className="mr-1 text-caption text-text-muted">{position.index + 1} of {cards.length}</span><button type="button" aria-label="Previous insight" disabled={position.start} onClick={() => scroll(-1)} className={arrowClass}><ArrowLeft aria-hidden className="h-4 w-4" /></button><button type="button" aria-label="Next insight" disabled={position.end} onClick={() => scroll(1)} className={arrowClass}><ArrowRight aria-hidden className="h-4 w-4" /></button></div>
-    <div ref={scroller} role="region" aria-label="Daily Pulse insights" aria-roledescription="carousel" tabIndex={0} className="flex snap-x snap-mandatory gap-3 overflow-x-auto p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onKeyDown={event => { if (event.target === event.currentTarget && ["ArrowLeft", "ArrowRight"].includes(event.key)) { event.preventDefault(); scroll(event.key === "ArrowLeft" ? -1 : 1); } }}>
+    <div ref={scroller} role="region" aria-label="Daily Pulse insights" aria-roledescription="carousel" tabIndex={0} style={{ scrollPaddingInline: "0.25rem" }} className="flex snap-x snap-mandatory gap-3 overflow-x-auto p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onKeyDown={event => { if (event.target === event.currentTarget && ["ArrowLeft", "ArrowRight"].includes(event.key)) { event.preventDefault(); scroll(event.key === "ArrowLeft" ? -1 : 1); } }}>
       {cards.map(card => <PulseCardView key={card.id} card={card} {...navigation} />)}
     </div>
   </div>;

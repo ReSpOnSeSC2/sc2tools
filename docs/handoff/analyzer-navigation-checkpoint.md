@@ -1,8 +1,9 @@
 # Analyzer navigation — analyzer-home-polish-5
 
 Owned branch `codex/wave3-analyzer-navigation`, reused preserved Health worktree
-`.worktrees/wave3-build-exports`. Base is main726 plus reviewed Tables727 source.
-The actual727 and728 squashes will be reconciled after source preservation.
+`.worktrees/wave3-build-exports`. Actual main728 (including Tables727) is
+reconciled, with reviewed Scouting729 source through a5abe9da as a prerequisite.
+Scouting729 must pass its own final gates and merge before this navigation PR.
 
 Implemented: shared global/section URL transport with drafts and committed
 values, controlled Strategy/Builds/Arcade/Maps route views, Strategy push/Back
@@ -19,8 +20,27 @@ map/persistence assertions pass in their recorded runs. Independent review found
 and fixed Next history-metadata replacement/late-ack ownership races; the fixture
 now drops custom state as the real router does. Combined169 assertions across22
 focused suites pass (168 in the broad run plus the final first-ack regression).
-Help index is regenerated. Actual browser navigation, final production
-build/budgets, full types/scoped lint, final review and PR remain required.
+Help index is regenerated. Full web run: 824 suites passed, one expected skipped;
+7,495 tests passed, one expected skipped. Both later carousel fixes also pass
+15 focused assertions. Full web types and strict changed-source lint pass.
+
+The reproducible manual fixture passes 232 grouped browser checks at
+320/390/768/1440 in both themes, with 32 checked-in captures and no page errors
+or unexpected API routes. It uses real route wrappers, SWR consumers, global
+filter URL synchronization, native Back/Forward and a reactive Next boundary
+that drops custom history state. Game/dossier detail bodies, unrelated
+chart/Arcade bodies and the four-card Pulse corpus are explicit fixture
+boundaries. External traffic is blocked. Root inspected the narrow dark Pulse
+and light Replay controls; independent review also inspected sheets and the
+desktop opponent table. Browser evidence found and fixed the carousel padding
+snap boundary and cards wider than the narrow container; strict measured
+width, button-end-state and reduced-motion assertions now pass.
+
+Required engine build/smoke passes at604e9d4618a6414b. Final production rerun
+and every unchanged budget pass: Today232.2/240, Dock224.5/225,
+landing214.6/215, Opponents132.4/180, Dossier475.9/500,
+Overlay235.6/240 and Widget316.2/325kB. PR final-head CI, Vercel and the
+scouting prerequisite remain merge gates.
 
 No budget, infrastructure, production, provider, release or version action.
 Continue all remaining roadmap waves and the final owner setup guide.
