@@ -118,10 +118,18 @@ def test_full_history_queue_cannot_block_a_fresh_priority_game(tmp_path, monkeyp
 
 def test_match_start_during_history_batch_assembly_retains_batch(tmp_path, monkeypatch):
     import sc2tools_agent.uploader.queue as queue_module
+    from types import SimpleNamespace
 
-    monkeypatch.setattr(queue_module, "_BATCH_COALESCE_SEC", 0.2)
+    # Freeze only this module's deadline clock, not Python's shared time module
+    # or the gate/test clocks. A slow runner cannot spend the coalescing budget
+    # between creating the deadline and reaching the actual assembly wait.
+    clock = [1000.0]
+    monkeypatch.setattr(queue_module, "time", SimpleNamespace(
+        monotonic=lambda: clock[0], time=queue_module.time.time,
+    ))
     gate = GameActivityGate()
     entered_coalescing = threading.Event()
+    continue_coalescing = threading.Event()
     state = AgentState(device_token="t")
     api = _StubApi()
     q = UploadQueue(cfg=_cfg(tmp_path, upload_batch_size=5), state=state, api=api)
@@ -130,9 +138,12 @@ def test_match_start_during_history_batch_assembly_retains_batch(tmp_path, monke
 
     def get(*args, **kwargs):
         timeout = kwargs.get("timeout")
-        if kwargs.get("block", True) and timeout is not None and 0 < timeout <= 0.2:
-            gate.on_event("match_loading")
+        # The first job is queued before start(), so the first timed get is
+        # assembly, not the idle worker wait. Do not infer it from elapsed
+        # milliseconds (including floating-point rounding of the deadline).
+        if kwargs.get("block", True) and timeout is not None and not entered_coalescing.is_set():
             entered_coalescing.set()
+            assert continue_coalescing.wait(2)
         return original_get(*args, **kwargs)
 
     monkeypatch.setattr(q._q, "get", get)
@@ -141,13 +152,21 @@ def test_match_start_during_history_batch_assembly_retains_batch(tmp_path, monke
     q.start()
     try:
         assert entered_coalescing.wait(2)
+        assert not api.calls and not state.uploaded
+        assert q.pending_count() == 1
+        gate.on_event("match_loading")
+        clock[0] += queue_module._BATCH_COALESCE_SEC
+        continue_coalescing.set()
         assert _wait_for(lambda: q._retry_q.qsize() == 1)
         assert not api.calls and not state.uploaded
         assert q.pending_count() == 1
         gate.enabled = False
         assert _wait_for(lambda: q.pending_count() == 0)
         assert len(api.calls) == 1
+        assert str(job.file_path) in state.uploaded
+        assert _wait_for(lambda: q._q.unfinished_tasks == q._retry_q.unfinished_tasks == 0)
     finally:
+        continue_coalescing.set()
         q.stop()
 
 
