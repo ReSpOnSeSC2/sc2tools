@@ -702,20 +702,7 @@ export function deriveReplayHud(
         : `${formatClock(bt.t)} · ${label}`,
     });
   });
-  const casts: readonly ReplayCast[] = playback.casts ?? [];
-  casts.forEach((c, i) => {
-    if (!NOTABLE_CASTS.has(c.a)) return;
-    const owner: ReplaySide = c.o === 1 ? "opp" : "me";
-    const label = prettyName(c.a);
-    rawMarkers.push({
-      id: `cast-${i}`,
-      t: c.t,
-      kind: "cast",
-      owner,
-      label,
-      title: `${formatClock(c.t)} · ${label} (${owner === "me" ? "you" : "opponent"})`,
-    });
-  });
+  rawMarkers.push(...replayCastMarkers(playback.casts ?? []));
   rawMarkers.sort((a, b) => a.t - b.t);
   const markers = mergeMarkers(rawMarkers);
 
@@ -766,7 +753,7 @@ function resourceText(minerals: number, gas: number): string {
 
 /** Collapse markers that would land on the same few pixels of track,
  *  keeping the tab order (one focusable dot each) sane. */
-function mergeMarkers(sorted: readonly TimelineMarker[]): TimelineMarker[] {
+export function mergeMarkers(sorted: readonly TimelineMarker[]): TimelineMarker[] {
   const out: TimelineMarker[] = [];
   for (const m of sorted) {
     const prev = out[out.length - 1];
@@ -787,6 +774,16 @@ function mergeMarkers(sorted: readonly TimelineMarker[]): TimelineMarker[] {
   const thinned: TimelineMarker[] = [];
   for (let i = 0; i < MARKER_MAX; i += 1) thinned.push(out[Math.floor(i * stride)]);
   return thinned;
+}
+
+/** Small presentation index survives heavy segment eviction. */
+export function replayCastMarkers(casts: readonly ReplayCast[]): TimelineMarker[] {
+  return mergeMarkers(casts.filter(c => NOTABLE_CASTS.has(c.a)).map(c => {
+    const owner: ReplaySide = c.o === 1 ? "opp" : "me";
+    const label = prettyName(c.a);
+    return { id: `cast-${c.o}-${c.t}-${c.a}`, t: c.t, kind: "cast" as const, owner, label,
+      title: `${formatClock(c.t)} · ${label} (${owner === "me" ? "you" : "opponent"})` };
+  }).sort((a, b) => a.t - b.t));
 }
 
 /* ──────────────── phases ────────────────

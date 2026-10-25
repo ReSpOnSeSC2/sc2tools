@@ -36,7 +36,7 @@
  * dock's click.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { MapPlayback } from "@/lib/mapReplay";
 import type { PatchEra } from "@/lib/meta";
 import { useReplayMusic } from "@/lib/replayMusic";
@@ -52,6 +52,7 @@ export function CompactReplayHost({
   maxHeightPx,
   initialTimeSec,
   onPlaybackTimeChange,
+  onPlaybackSpeedChange,
   playbackWindow,
   buffering = false,
   patchEra,
@@ -64,6 +65,7 @@ export function CompactReplayHost({
   /** Applied on mount; the host keys each game/timestamp navigation. */
   initialTimeSec?: number | null;
   onPlaybackTimeChange?: (time: number) => void;
+  onPlaybackSpeedChange?: (speed: number) => void;
   playbackWindow?: { start: number; end: number };
   buffering?: boolean;
   /** The game's patch era, which prices the units-lost panels. */
@@ -72,6 +74,7 @@ export function CompactReplayHost({
   const [time, setTime] = useState(() => clampReplayTime(initialTimeSec, playback.gameLength) ?? 0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<ReplaySpeed>(8);
+  useEffect(() => { onPlaybackSpeedChange?.(speed); }, [speed, onPlaybackSpeedChange]);
 
   const music = useReplayMusic({ playback, gameId, myRace, time, speed });
   const { setPlaying: setMusicPlaying } = music;

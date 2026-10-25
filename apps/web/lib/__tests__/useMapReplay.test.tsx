@@ -13,6 +13,7 @@ const harness = vi.hoisted(() => ({
     request: vi.fn(), mutate: vi.fn() },
 }));
 vi.mock("../clientApi", () => ({ useApi: (path: string | null, config: { refreshInterval: number }) => {
+  if (path === "/v1/me") return { data: { agentLastSeenAt: new Date().toISOString() } };
   harness.path = path;
   harness.interval = config.refreshInterval;
   if (path?.endsWith("/status")) return { ...harness.api,
@@ -44,6 +45,18 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("shared map replay recording controller", () => {
+  it("shows a failed refresh over an existing recording instead of reporting the old artifact as the new Ready result", async () => {
+    harness.api.data = payload("engine");
+    harness.statusData = { rebuild: null };
+    harness.api.request.mockRejectedValue(new Error("Desktop is busy."));
+    const hook = renderHook(() => useMapReplay("existing"));
+    expect(hook.result.current.phase).toBe("ready");
+    await act(async () => hook.result.current.refresh());
+    expect(hook.result.current.refreshing).toBe(false);
+    expect(hook.result.current.phase).toBe("failed");
+    expect(hook.result.current.refreshMessage).toBe("Desktop is busy.");
+    expect(hook.result.current.playback?.fidelity?.positions).toBe("engine");
+  });
   it("polls only lightweight status and downloads the completed record once", async () => {
     harness.api.data = payload("engine");
     harness.statusData = { rebuild: null };
@@ -55,6 +68,7 @@ describe("shared map replay recording controller", () => {
       expect(harness.interval).toBe(3000);
       expect(harness.fullInterval).toBe(0);
       expect(harness.api.mutate).not.toHaveBeenCalled();
+      expect(hook.result.current.phase).toBe(status === "queued" ? "requested" : status === "processing" ? "recording" : "uploading");
     }
     let finish!: (data: unknown) => void;
     harness.getRequest.mockImplementation(() => new Promise(resolve => { finish = resolve; }));

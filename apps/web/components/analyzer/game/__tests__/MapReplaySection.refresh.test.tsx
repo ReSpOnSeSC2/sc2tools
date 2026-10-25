@@ -59,10 +59,11 @@ describe("map playback rebuild progress", () => {
     harness.api.request.mockResolvedValue({ requestId: "compact" });
     const view = render(<MapReplaySection gameId="g1" compact />);
     expect(button().compareDocumentPosition(screen.getByText("Compact replay")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toContain("even when automatic capture is off");
-    expect(screen.getByRole("status").textContent).toContain("significantly more CPU");
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByText(/even when automatic capture is off/).closest("details")).toBeTruthy();
+    expect(screen.getByText(/significantly more CPU/)).toBeTruthy();
     await act(async () => fireEvent.click(button()));
-    expect(new Set(harness.paths)).toEqual(new Set(["/v1/games/g1/map-playback", "/v1/games/g1/map-playback/manifest", "/v1/games/g1/map-playback/status"]));
+    expect(new Set(harness.paths)).toEqual(new Set(["/v1/me", "/v1/games/g1/map-playback", "/v1/games/g1/map-playback/manifest", "/v1/games/g1/map-playback/status"]));
     expect(harness.api.mutate).not.toHaveBeenCalled();
     expect(harness.api.request).toHaveBeenCalledWith({ method: "POST", body: '{"fidelity":"engine"}' });
     expect(harness.interval).toBe(3000);

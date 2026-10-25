@@ -1,0 +1,2 @@
+export const RECORDED_PLAYBACK_EXPLAINER = "With automatic Map replay enabled, the desktop agent records new and re-synced games. Generate accurate playback records this game on demand, even when automatic capture is off. Keep the agent open; recording runs StarCraft II in the background and can use significantly more CPU for several minutes. Saved recordings are reused.";
+export const MISSING_PLAYBACK_HINT = "No playback data for this game. Open the paired desktop app, then upgrade this game's playback or enable automatic Map replay in desktop Settings.";
