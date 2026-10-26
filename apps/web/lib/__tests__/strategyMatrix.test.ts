@@ -32,4 +32,9 @@ describe("matchup-scoped strategy matrix", () => {
     const style = matrixCellStyle(NaN, Infinity, NaN, [255, 255, 255]);
     expect(style.backgroundColor).not.toMatch(/NaN|Infinity/); expect(style.contrast).toBeGreaterThanOrEqual(4.5);
   });
+  it("accepts the current themed ramp without altering the established contrast/alpha selection", () => {
+    const style = matrixCellStyle(.475, 5, 3, [255, 255, 255], () => [143, 92, 12]);
+    expect(style.backgroundColor).toMatch(/^rgb\(143 92 12 \/ /);
+    expect(style.contrast).toBeGreaterThanOrEqual(4.5); expect(style).not.toHaveProperty("opacity");
+  });
 });
