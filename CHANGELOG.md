@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Hosting resource usage
+
+- Stop scheduled website warmups that consume Vercel's server allowance. Keep the existing Render API keepalive and visitor-triggered status checks.
+
 ### App and landing action links
 
 - Use the shared action styles for the app's visitor sign-in controls and the landing page's download, browser, dashboard and support links, keeping their destinations and browser rollout choices.
