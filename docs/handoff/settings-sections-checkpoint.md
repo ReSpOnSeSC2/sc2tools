@@ -1,6 +1,16 @@
 # Settings sections — combined browser repair checkpoint
 
-2026-10-26 current status: Randomizer's contrast repair passed a new production artifact and actual browser AA check. The first78fa A4 case later stopped at two disabled Build Check-in explanation contrast findings, leaving19 cases unrun. The latest three-path Check-in style/documentation repair is **SOURCE ONLY, UNVALIDATED** and requires a new production artifact. No full PR A browser completion or deployed behavior is claimed.
+2026-10-26 current status: current ErW production artifact includes both contrast repairs; formal Light320/390/768 cases passed. Light1280 stopped at the final Help test selector, leaving16 unrun. The latest three-path visible-tablist test/documentation correction is **SOURCE ONLY, UNVALIDATED**, with shipping product/build unchanged. No full PR A browser completion or deployed behavior is claimed.
+
+## Current visible Help-tab selector boundary
+
+Source5629 passed types/source guards and the honest Check-in lint audit (raw1, only existing label warning166:5, zero errors/new warnings/suppressions). The separate one-case Light320 diagnostic/11 clear shared AA arrays/five captures used historical CSS and is not formal proof. ONE subsequent production build generated145 pages, actual `ErWfIpWo99ntZ9ZQRPGOd`, all81 unchanged budgets/post-types/40 inputs/nine retained/four samples/source checks, receipt SHA `e964e67efbc8275066c35ee5d971d3812eaae2c77bda869fa85f8ab25b50ffdf`. All four CSS assets/current metadata5e07 match prior -4h; original6bcc metadata's terminal-CRLF-only difference stays preserved. Root accepted A3 bridge2ed922 for unchanged actual A3 dependencies and unrendered Foundation/Randomizer/Check-in, retaining original b14/201uu receipt6f475 in place.
+
+The formal20 attempt then passed complete Light320/390/768 cases. Desktop Light1280 reached the final Help action after passing Check-in AA, but `.nth(1)` incorrectly assumed two visible Settings tablists. The real Shell hides mobile with `lg:hidden` and desktop with `hidden lg:block`; ByRole only returns the visible list. The spec now asserts exactly one visible named tablist and clicks its exact Help tab without indexing, retaining every remaining assertion and all cases. No product, fixture, data, AA or timeout change is made.
+
+Immutable receipt SHA `ace43910b09bd62bed23790cefcfac286ae095ea4c74ecb67e27e20bba5a1f61` records three passed/one failed/16 unrun,43 shared AA scans `issues:[]` (incomplete IDs retained),20 normal captures/failed PNG/trace,167 GETs/eight exact maps and zero unknown/write/rejected/external/native/socket-rejection events. All16 sockets matched per-case disconnects; all listeners/drain/owned children closed; source206/68/ErW/CSS/raw40/nine retained/pointer/manifest/sample/Chrome postchecks passed.
+
+This latest spec/two-doc correction is unrun. All203 other inputs, shipping product/fixture/default/A3/74-unit bytes are unchanged, so current artifact/bridge/default596 collection remain retained without rebuild. After root preservation, only changed-spec strict lint/types/guards precede a fresh full20 run. Earlier three passes remain historical and will not be mixed with the next run's counts; no Next/A3/default/broad suite repeat is authorized here.
 
 ## Current Check-in contrast boundary
 

@@ -180,7 +180,9 @@ for (const theme of ["light", "dark"] as const) {
       await checkAccessibility(page, info, `/settings-search-voice-${width}`, theme);
       await choose(page, "Build check-in prompts"); await targets(page, ["build-check-in"]); await expect(nav(page)).toHaveCount(0);
       await checkAccessibility(page, info, `/settings-search-checkin-${width}`, theme);
-      await page.getByRole("tablist", { name: "Settings sections", exact: true }).nth(width < 1024 ? 0 : 1).getByRole("tab", { name: "Help", exact: true }).click();
+      const visibleSettingsTabs = page.getByRole("tablist", { name: "Settings sections", exact: true });
+      await expect(visibleSettingsTabs).toHaveCount(1);
+      await visibleSettingsTabs.getByRole("tab", { name: "Help", exact: true }).click();
       await expect(page.locator('[id="my-reports"]')).toHaveCount(1); await expect(page.locator('[id="getting-started"]')).toHaveCount(1);
       await expect(nav(page)).toHaveCount(0); await expect(search(page)).toHaveCount(1);
       await checkAccessibility(page, info, `/settings-search-help-${width}`, theme); await overflow(page);
