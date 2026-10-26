@@ -54,7 +54,8 @@ export async function closeSettingsChatFixtureServer() {
 async function assets() {
   const cwd = process.cwd();
   const result = await build({ stdin: { contents: SOURCE, loader: "tsx", resolveDir: cwd }, bundle: true, write: false, minify: true, format: "iife", platform: "browser", jsx: "automatic", tsconfig: "tsconfig.json",
-    define: { "process.env.NODE_ENV": '"production"', "process.env.NEXT_PUBLIC_API_BASE": JSON.stringify(origin) },
+    // This local fixture has no analytics consent or external analytics transport.
+    define: { "process.env.NODE_ENV": '"production"', "process.env.NEXT_PUBLIC_API_BASE": JSON.stringify(origin), "process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID": '""' },
     plugins: [{ name: "settings-chat-synthetic-auth", setup(builder) {
       builder.onResolve({ filter: /.*/ }, args => Object.hasOwn(adapters, args.path) ? { path: args.path, namespace: "chat-adapter" } : undefined);
       builder.onLoad({ filter: /.*/, namespace: "chat-adapter" }, args => ({ contents: adapters[args.path], loader: "tsx", resolveDir: cwd }));

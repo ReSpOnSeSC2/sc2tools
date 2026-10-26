@@ -1,6 +1,11 @@
+"use client";
+
+import dynamic from "next/dynamic";
 import { ChatCommandsCard } from "@/components/analyzer/settings/ChatCommandsCard";
 import type { HelpWidgetId } from "@/lib/help/types";
-import { GlossaryBrowser } from "./GlossaryBrowser";
+
+// Keep the searchable catalog with its widget, while retaining public SSR.
+const GlossaryBrowser = dynamic(() => import("./GlossaryBrowser").then(module => module.GlossaryBrowser), { ssr: true });
 
 /**
  * Interactive pieces an article can embed with `{ type: "widget" }`.

@@ -10,7 +10,7 @@ const records: { callback: IntersectionObserverCallback; observe: ReturnType<typ
 function Harness({ onNavigate = vi.fn(), hash = "#setup" }: { onNavigate?: (href: string) => void; hash?: string }) {
   const scope = useRef<HTMLDivElement>(null);
   return <><div id="theme">Outside chrome target</div><div ref={scope} data-testid="scope">
-    <section id="tokens">Shared tokens before Content</section>
+    <section id="tokens">Shared tokens before the private body</section>
     <SettingsSectionNav tab="overlay" sections={sections} scope={scope} hash={hash} onNavigate={onNavigate} />
     <div><section id="setup">Actual setup</section><section id="theme">Actual theme</section></div>
   </div></>;
@@ -30,7 +30,7 @@ function intersect(target: Element, top = 115) {
   act(() => records[0].callback([{ target, isIntersecting: true, boundingClientRect: { top } } as IntersectionObserverEntry], {} as IntersectionObserver));
 }
 
-it("observes only active scoped targets, including shared controls above Content", () => {
+it("observes only active scoped targets, including shared controls before the private body", () => {
   render(<Harness />);
   const scope = screen.getByTestId("scope");
   expect(records[0].observe.mock.calls.map(call => call[0])).toEqual(sections.map(section => scope.querySelector(`[id="${section.id}"]`)));

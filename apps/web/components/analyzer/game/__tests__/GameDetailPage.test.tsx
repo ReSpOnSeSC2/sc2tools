@@ -18,7 +18,7 @@ const routerReplaceMock = vi.fn();
 const editorHarness = vi.hoisted(() => ({ props: null as BuildEditorModalProps | null }));
 
 // Compile the real lazy chunks before assertions; bundler work is not UI latency.
-beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns"), import("../BuildWorkspaceActions"), import("../replay/ReplayStage"), import("../GameStoryCard"), import("../GhostGradeContent"), import("@/components/battleReport/GameBattleReport")]); });
+beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../GameBuildOrderColumns"), import("../BuildWorkspaceActions"), import("../replay/ReplayStage"), import("../GameStoryCard"), import("../GhostGradeContent"), import("@/components/battleReport/GameBattleReport")]); });
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: getTokenMock, isLoaded: true, isSignedIn: true, userId: "synthetic-owner" }),
@@ -285,6 +285,56 @@ describe("GameDetailPage", () => {
     expect(within(bar).getByText("Metabolic Boost")).toBeTruthy();
     expect(within(bar).queryByText("Unknown timing")).toBeNull();
   });
+  it.each(["mouse", "touch"])("inspects macro graph points in place with %s while explicit leak actions still reveal replay", async (pointerType) => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    vi.stubGlobal("PointerEvent", class extends MouseEvent {
+      readonly pointerType: string;
+      readonly pointerId: number;
+      readonly pressure: number;
+      constructor(type: string, init: PointerEventInit = {}) {
+        super(type, init);
+        this.pointerType = init.pointerType ?? "mouse";
+        this.pointerId = init.pointerId ?? 1;
+        this.pressure = init.pressure ?? 0;
+      }
+    });
+    localStorage.removeItem("sc2tools:timeline-metrics:v1");
+    window.history.replaceState(null, "", "/app/game/g1?from=replays#macro");
+    mockEndpoints({ playback: true, macro: { ...MACRO, all_leaks: [{ name: "Recorded macro leak", time: 222, penalty: 4 }] } });
+    const view = render(<GameDetailPage gameId="g1" />);
+    try {
+      const stage = await screen.findByTestId("replay-stage");
+      const macro = document.getElementById("macro")!;
+      const chart = await within(macro).findByRole("img", { name: /Army value/ });
+      const overlay = chart.querySelector<SVGRectElement>('rect[fill="transparent"]')!;
+      vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 700, 220));
+      vi.spyOn(stage, "getBoundingClientRect").mockReturnValue(new DOMRect(0, -800, 600, 400));
+      const scroll = vi.fn(); stage.scrollIntoView = scroll;
+      const focus = vi.spyOn(stage, "focus");
+      const control = within(macro).getByRole("button", { name: "Army" });
+      control.focus();
+      for (const [time, clock, army] of [[300, "5:00", "2,000"], [330, "5:30", "400"]] as const) {
+        const point = { pointerType, pointerId: 1, clientX: time, clientY: 30 };
+        fireEvent.pointerDown(overlay, { ...point, buttons: 1, pressure: .5 });
+        fireEvent.pointerUp(overlay, { ...point, buttons: 0, pressure: 0 });
+        fireEvent.click(overlay, { clientX: time, clientY: 30 });
+        await waitFor(() => expect(within(stage).getByLabelText(`Game clock ${clock} of 10:00`)).toBeTruthy());
+        expect(within(within(macro).getByRole("region", { name: `You composition at ${clock}` })).getByText(army)).toBeTruthy();
+        expect(within(macro).getByRole("region", { name: `Foe composition at ${clock}` })).toBeTruthy();
+        expect(scroll).not.toHaveBeenCalled(); expect(focus).not.toHaveBeenCalled();
+        expect(document.activeElement).toBe(control); expect(stage.hasAttribute("data-clock-seek")).toBe(false);
+        expect(screen.getByTestId("replay-stage")).toBe(stage);
+      }
+      await waitFor(() => expect(routerReplaceMock).toHaveBeenCalledWith("/app/game/g1?from=replays&t=330#macro", { scroll: false }));
+      fireEvent.click(within(macro).getByRole("button", { name: /Recorded macro leak/ }));
+      await waitFor(() => expect(within(stage).getByLabelText("Game clock 3:42 of 10:00")).toBeTruthy());
+      expect(scroll).toHaveBeenCalledOnce(); expect(focus).toHaveBeenCalledOnce();
+      expect(document.activeElement).toBe(stage);
+    } finally {
+      view.unmount(); window.history.replaceState(null, "", "/");
+    }
+  });
+
   it("seeks and reveals the mounted replay from a supply block, with banked resources and stable timestamp navigation", async () => {
     const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     window.history.replaceState(null, "", "/app/game/g1?from=replays");

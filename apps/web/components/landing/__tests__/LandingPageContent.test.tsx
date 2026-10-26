@@ -40,3 +40,21 @@ it("keeps visitor download choices and gates the Getting started browser option"
   mocks.mode = "off"; rerender(<LandingPageContent />);
   expect(within(step).queryByText(/Mac or Chromebook/)).toBeNull();
 });
+
+it("keeps navigation anchors and decorative icon labels in shared landing actions", () => {
+  render(<LandingPageContent />);
+  const actions = [
+    ["Download the free agent", "/download"],
+    ["No download — analyze your replays in your browser", "/try"],
+    ["Download the agent", "/download"],
+    ["Browse community builds", "/community"],
+    ["See costs or chip in", "/donate"],
+  ];
+  for (const [name, href] of actions) {
+    const action = screen.getByRole("link", { name });
+    expect(action.getAttribute("href")).toBe(href);
+    expect(action.querySelector("a,button")).toBeNull();
+    expect(action.hasAttribute("aria-disabled")).toBe(false);
+    for (const icon of action.querySelectorAll("svg")) expect(icon.getAttribute("aria-hidden")).toBe("true");
+  }
+});

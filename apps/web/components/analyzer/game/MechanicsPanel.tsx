@@ -169,8 +169,8 @@ export function MechanicsPanel({
 
   return (
     <Card title="Mechanics" right={recomputeAction} data-testid="mechanics-panel">
-      <dl className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-4">
+        <dl className="grid grid-cols-2 gap-3">
           <MechanicStat
             label="Macro score"
             value={macroScore !== null ? Math.round(macroScore) : "—"}
@@ -181,8 +181,9 @@ export function MechanicsPanel({
             value={sq !== null ? Math.round(sq) : "—"}
             hint={sqTier ? `${sqTier}-tier spending` : undefined}
           />
-        </div>
+        </dl>
 
+        <dl className="space-y-4">
         <ApmStat mine={apm.mine} opponent={apm.opponent} />
 
         <div>
@@ -283,7 +284,8 @@ export function MechanicsPanel({
             )}
           </dd>
         </div>
-      </dl>
+        </dl>
+      </div>
     </Card>
   );
 }

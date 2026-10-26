@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { GlowHalo } from "@/components/ui/GlowHalo";
+import { InfoTip } from "@/components/ui/InfoTip";
 import { tierFromSq } from "@/lib/macro";
 
 export interface SpendingQuotientStatProps {
@@ -10,8 +11,8 @@ export interface SpendingQuotientStatProps {
   value: number | null | undefined;
   /** Hint shown beneath the value — e.g. "Master tier" or "low is better". */
   hint?: ReactNode;
-  /** Long-form explanation surfaced on hover / tap. */
-  explanation: string;
+  /** Canonical definition; its data loads only after explicit activation. */
+  termId: "spending-quotient" | "supply-blocked" | "float-spikes" | "apm";
   /** Stat tone affecting the value colour. */
   tone?: "cyan" | "warning" | "danger" | "neutral";
   /** Surface a soft cyan glow behind the card (used for the headline SQ). */
@@ -32,25 +33,25 @@ const TONE_CLASS: Record<NonNullable<SpendingQuotientStatProps["tone"]>, string>
 /**
  * SpendingQuotientStat — small KPI tile used in the panel's top row.
  * Each tile shows a label, a numeric value, optional hint, and an
- * explanation that surfaces on hover/focus (kept tap-accessible via
- * onClick toggle on touch devices).
+ * adjacent named control for its canonical definition.
  */
 export function SpendingQuotientStat({
   label,
   value,
   hint,
-  explanation,
+  termId,
   tone = "neutral",
   glow = false,
   unit,
   decimals = 0,
 }: SpendingQuotientStatProps) {
-  const [expanded, setExpanded] = useState(false);
   const formatted = formatValue(value, decimals);
-  const tier = tone === "cyan" ? tierFromSq(typeof value === "number" ? value : null) : null;
+  const tier = tone === "cyan" ? tierFromSq(typeof value === "number" && Number.isFinite(value) ? value : null) : null;
 
   const card = (
     <div
+      role="group"
+      aria-label={label}
       className={[
         "relative flex h-full flex-col gap-1 rounded-lg border bg-bg-elevated p-3",
         glow ? "border-accent-cyan/40" : "border-border",
@@ -60,15 +61,7 @@ export function SpendingQuotientStat({
         <span className="text-micro font-medium uppercase tracking-wider text-text-dim">
           {label}
         </span>
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
-          aria-label={expanded ? `Hide ${label} explanation` : `Show ${label} explanation`}
-          className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full border border-border text-micro font-semibold text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          ?
-        </button>
+        <InfoTip termId={termId} label={label} />
       </div>
       <div className={`text-h2 font-semibold tabular-nums leading-none ${TONE_CLASS[tone]}`}>
         {formatted}
@@ -78,14 +71,6 @@ export function SpendingQuotientStat({
         <div className="text-caption font-medium text-accent-cyan">{tier} tier</div>
       ) : null}
       {hint ? <div className="text-caption text-text-muted">{hint}</div> : null}
-      {expanded ? (
-        <p
-          role="note"
-          className="rounded-md border border-border bg-bg-subtle p-2 text-caption text-text-muted"
-        >
-          {explanation}
-        </p>
-      ) : null}
     </div>
   );
 

@@ -7,6 +7,31 @@ after the latest corrections. The whole roadmap remains open; consult
 whether a particular item is complete. The final `docs/SETUP_GUIDE.md` remains
 required at the end.
 
+## Latest delivery update
+
+This update supersedes earlier pending-delivery wording below. Provider PR769,
+Header PR770 and Settings A1 PR771 are merged. Auto-track current season PR773
+is merged as `f6b6f524c9bf64b7c8d6f6e00267bd6ebd174c85`; its exact-head CI passed
+9,020 web tests and463 browser cases. Production deployment
+`2m65KhgJvtnj6ts1inWB31Wo9bJo` was visibly Ready/Production/Current for
+`sc2tools.com` at that source. Existing explicit saved ranges remain retained.
+
+Macro graph inspection PR774 is merged as
+`5b4af7360e8fec6e44dee26535399333f151fc58`. Exact source53cc6688 passed9,024
+web tests and463 browser cases; the eight native full-AA scans had no
+violations. The page clock and roster still update while graph selections keep
+the user's scroll position; explicit replay actions retain reveal behavior.
+See both feature checkpoints for proof chronology and original failures.
+
+Site PR772 is integrating main5b4 with unchanged Site product source and new
+exact-head checks pending. Glossary expansion is locally validated at084b76a
+but not yet delivered. Settings Chat A2 passed its first-static421 tests/47
+suites; its final build/browser proof remains pending. Settings section
+navigation A3 is authored across26 paths and remains source-only/unvalidated.
+Settings search and the remainder of Waves5/6 remain open. Manual deployment
+requests hit the existing daily limit; successful automatic deployments are
+verified separately, without plan changes or repeated manual requests.
+
 ## Owner corrections already delivered
 
 - Preserve the live opponent order: Brief, Tendencies, Timings, History,
@@ -261,8 +286,15 @@ branches, captures and every RED receipt are retained.
    Source-only independent review is clear after stronger vertical label/48px
    and native focus baseline proof. First static passes73 checks/four suites,
    types, strict6 zero, Help91 andUI19/1,699/639. Header ancestry integration
-   changed zero file/tree bytes. Final serialized runtime is active; no final
-   build/browser proof is yet claimed for this slice.
+   changed zero file/tree bytes. Final proof at1c9430b9 passes231 tests/20
+   suites, types pre/post, strict6 zero, Help91 andUI19/1,699/639. Build
+   zhXrv06BEo_dNKVZFJgSx passes144 pages/all81 budgets, Landing193.1/215kB.
+   Full appearance passes22 cases/23 intentional skips,158 full AA scans
+   (92 new/66 related) and53 captures. Ten typed Header/Mobile GETs and22
+   bounded landing static GETs; zero forbidden/nonlocal or real actions.
+   No source repair or extra build was needed. All runtime and ports closed.
+   Root verified9 source/six artifact hashes and reviewed/copied3 captures.
+   Remote CI and production delivery follow; this remains one consumer slice.
 
 Do not switch these active branches, reset their worktrees or stage their
 untracked caches. Source-only agents must not start competing runtime work.

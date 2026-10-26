@@ -301,7 +301,7 @@ export function longLabelFor(
 ): string {
   if (id === "current_season") {
     const cur = seasons?.find((s) => s.isCurrent);
-    return cur ? `Season ${cur.number} (current)` : "Current season";
+    return cur ? `Season ${cur.number} (auto)` : "Auto-track current season";
   }
   if (typeof id === "string" && id.startsWith("season:")) {
     return `Season ${id.slice("season:".length)}`;
@@ -311,11 +311,10 @@ export function longLabelFor(
 }
 
 /**
- * The picker's default selection. Patch 5.0.17 is the live 12-worker
- * game; keeping it as a fixed preset prevents 8-worker (5.0.16) and older
- * replays from distorting current build and matchup analysis.
+ * The picker's default follows the current ladder season as the live
+ * season catalog changes. Explicit numbered seasons stay pinned.
  */
-export const DEFAULT_PRESET: PresetId = "after_5_0_17";
+export const DEFAULT_PRESET: PresetId = "current_season";
 
 /**
  * Preset ids from older builds that are no longer offered, mapped to

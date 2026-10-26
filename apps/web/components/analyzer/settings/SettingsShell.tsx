@@ -80,7 +80,7 @@ export interface SettingsShellProps {
   /** Complete search input: same-tab section links also pass the dirty guard. */
   requestedSearch?: string;
   ownerKey?: string | null;
-  /** One lazy authority around both streaming panels, outside keyed Content. */
+  /** One lazy authority inside the persistent streaming panel, outside its keyed private body. */
   renderStreaming?: (children: ReactNode, section: SettingsOverlayPane) => ReactNode;
 }
 
@@ -294,7 +294,34 @@ function SettingsShellInner({
 
         <div ref={panelRegion} className="min-w-0">
         {(() => {
-          const panels = tabs.map((t) => (
+          if (active === "overlay" || active === "chat") {
+            const sections = settingsSectionsForTab(active);
+            const body = <div key={active}>
+              <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_160px]">
+                {active === "overlay" ? <OverlayManagerNav scope={panelRegion} hash={destination.hash} onNavigate={requestSection} />
+                  : <SettingsSectionNav tab={active} sections={sections} scope={panelRegion} hash={destination.hash} onNavigate={requestSection} />}
+                <div className="min-w-0 lg:col-start-1 lg:row-start-1">{renderTab(active)}</div>
+              </div>
+            </div>;
+            return <>
+              {tabs.filter(tab => tab.id !== active).map(tab => <Tabs.Content
+                key={tab.id}
+                value={tab.id}
+                data-settings-panel={`${panelScopeId}-${tab.id}`}
+                className="space-y-5 pb-24"
+              >{null}</Tabs.Content>)}
+              <Tabs.Content
+              value={active}
+              data-settings-panel={`${panelScopeId}-${active}`}
+              className="space-y-5 pb-24"
+            >
+              {locationReady
+                ? renderStreaming ? renderStreaming(body, destination.overlayPane) : body
+                : <p role="status">Opening streaming settings…</p>}
+              </Tabs.Content>
+            </>;
+          }
+          return tabs.map((t) => (
           <Tabs.Content
             key={t.id}
             value={t.id}
@@ -304,15 +331,6 @@ function SettingsShellInner({
             {renderTab(t.id)}
           </Tabs.Content>
           ));
-          const sections = settingsSectionsForTab(active);
-          const content = sections.length >= 3 ? <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_160px]">
-            {active === "overlay" ? <OverlayManagerNav scope={panelRegion} hash={destination.hash} onNavigate={requestSection} />
-              : <SettingsSectionNav tab={active} sections={sections} scope={panelRegion} hash={destination.hash} onNavigate={requestSection} />}
-            <div className="min-w-0 lg:col-start-1 lg:row-start-1">{panels}</div>
-          </div> : panels;
-          return active === "overlay" || active === "chat"
-            ? locationReady ? renderStreaming ? renderStreaming(content, destination.overlayPane) : content : <p role="status">Opening streaming settings…</p>
-            : panels;
         })()}
         </div>
       </Tabs>

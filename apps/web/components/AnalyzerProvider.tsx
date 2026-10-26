@@ -235,8 +235,8 @@ export function filtersFromViewQuery(base: AnalyzerFilters, parsed: ReturnType<t
  * they re-fetch when the user clicks Refresh.
  *
  * The chosen date preset is persisted to localStorage so it survives
- * page reloads. New users default to the live 12-worker patch (5.0.17
- * on). A non-custom preset is re-resolved against "now" (and
+ * page reloads. New users default to auto-tracking the current season.
+ * A non-custom preset is re-resolved against "now" (and
  * against the latest SC2Pulse season catalog) on every mount, so a
  * saved "Last 7 days" reflects today's window and "Current season"
  * tracks whichever season is current right now. Fresh and legacy

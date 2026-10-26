@@ -22,6 +22,31 @@ corresponding GitHub Release.
 - Give platforms, chat appearance, alerts, TTS, translation, commands, Stream Dock and the bot their own Chat & alerts tab. Keep OBS sources, widgets, scenes and look in Overlay.
 - Share one selected streaming-token manager between the two tabs. Guard token changes while either tab has tracked unsaved edits, and check status before retrying an uncertain token creation.
 - Keep older Chat and Dock links working through the unsaved-changes guard, including their destination section. Bound bot saves and retire delayed account or token requests when their owner changes.
+- Keep the selected streaming tab's accessible panel present while token status is loading, unavailable or uncertain; private forms still wait for an admitted token.
+
+### Read your stats and measured terms
+
+- Expand the glossary from seven to 40 terms, with searchable formulas, sample limits and plain explanations of missing measurements and different win-rate denominators.
+- Add contextual definitions beside the four Macro KPIs and six Opponents table headers, keeping help separate from sorting and saved preferences.
+- Explain Today, opponent, macro and build scopes in Reading your stats, including detected versus planned labels and the difference between local today and an overlay session.
+
+### Hosting resource usage
+
+- Stop scheduled website warmups that consume Vercel's server allowance. Keep the existing Render API keepalive and visitor-triggered status checks.
+
+### App and landing action links
+
+- Use the shared action styles for the app's visitor sign-in controls and the landing page's download, browser, dashboard and support links, keeping their destinations and browser rollout choices.
+- Let long landing action labels wrap on a phone while keeping the shared keyboard focus styles.
+
+### Analyzer date range
+
+- Default fresh analyzer views and Reset to defaults to Auto-track current season, following the current season catalog while retaining explicitly saved dates and views.
+
+### Macro graph inspection
+
+- Keep the Macro graph in place when selecting a time with a mouse or touch. The selected time and unit roster still update; explicit replay actions continue to open the player.
+- Keep game statistics labels and values correctly associated for screen readers.
 
 ### Settings groups and compatible links
 
