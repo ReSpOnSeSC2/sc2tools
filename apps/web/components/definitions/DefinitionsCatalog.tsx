@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { BookOpen, Check, Link2, Search, X } from "lucide-react";
@@ -9,6 +9,10 @@ import { Card, EmptyState } from "@/components/ui/Card";
 import { Field } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
+import { useToastOptional } from "@/components/ui/Toast";
+import { useCopy } from "@/lib/useCopy";
 import { FilterPill } from "@/components/ui/FilterPill";
 import {
   BUILD_DEFINITIONS,
@@ -25,8 +29,6 @@ import { publicBuildVariantIntent } from "@/lib/buildVariantIntent";
 import { BuildVariantContinuation } from "./BuildVariantContinuation";
 import { raceIconName, raceTint, type Race } from "@/lib/race";
 import { PracticeButton } from "@/components/practice/PracticeButton";
-
-const COPIED_RESET_MS = 1800;
 
 const RACE_FILTERS: ReadonlyArray<{ value: Race | "All"; label: string }> = [
   { value: "All", label: "All" },
@@ -294,7 +296,7 @@ function DefinitionCard({
           ) : null}
         </div>
         <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-start justify-between gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
             <h4 tabIndex={-1} data-definition-heading className="min-w-0 break-words pt-1.5 text-body font-semibold text-text focus:outline-none">
               {def.name}
             </h4>
@@ -331,41 +333,39 @@ function DefinitionCard({
 
 /** Copies the link to one definition card (`/definitions#<id>`). */
 function CopyDefinitionLink({ id, name }: { id: string; name: string }) {
-  const [copied, setCopied] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
-
-  async function copy() {
-    const href = `${window.location.origin}/definitions#${id}`;
-    try {
-      await navigator.clipboard.writeText(href);
-      setCopied(true);
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setCopied(false), COPIED_RESET_MS);
-    } catch {
-      // Clipboard blocked: let the reader copy it by hand.
-      window.prompt("Copy this link", href);
-    }
-  }
+  const button = useRef<HTMLButtonElement>(null);
+  const inputId = useId(), helpId = useId();
+  const toast = useToastOptional();
+  const clipboard = useCopy({
+    scopeKey: id,
+    onCopied: () => toast?.toast.success("Definition link copied"),
+    onFallback: () => toast?.toast.info("Copy the selected definition link"),
+  });
+  const setInputRef = useCallback((node: HTMLInputElement | null) => { clipboard.inputRef.current = node; }, [clipboard.inputRef]);
+  const dismiss = () => { clipboard.clear(); button.current?.focus(); };
 
   return (
-    <button
-      type="button"
-      onClick={() => void copy()}
-      aria-label={copied ? `Link to ${name} copied` : `Copy link to ${name}`}
-      title={copied ? "Link copied" : "Copy link"}
-      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-dim hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    <><IconButton
+      ref={button}
+      onClick={() => { void clipboard.copy(`${window.location.origin}/definitions#${id}`); }}
+      disabled={clipboard.pending} aria-busy={clipboard.pending}
+      aria-label={clipboard.copied ? `Link to ${name} copied` : `Copy link to ${name}`}
+      title={clipboard.copied ? "Link copied" : "Copy link"}
+      className="shrink-0 text-text-dim hover:text-text"
     >
-      {copied ? (
+      {clipboard.copied ? (
         <Check className="h-4 w-4 text-success" aria-hidden />
       ) : (
         <Link2 className="h-4 w-4" aria-hidden />
       )}
-      <span className="sr-only" aria-live="polite">
-        {copied ? "Link copied" : ""}
-      </span>
-    </button>
+    </IconButton>
+    <span role="status" className="sr-only">{clipboard.copied ? "Link copied" : clipboard.pending ? "Copying definition link" : clipboard.fallbackText !== null ? "Automatic copy is unavailable. Copy the selected definition link manually." : ""}</span>
+    {clipboard.fallbackText !== null ? <div className="col-span-2 min-w-0 space-y-2 rounded-lg border border-border bg-bg-surface p-3">
+      <label htmlFor={inputId} className="block text-caption font-semibold">Copy definition link manually</label>
+      <Input ref={setInputRef} id={inputId} value={clipboard.fallbackText} readOnly aria-describedby={helpId} className="min-h-11"
+        onFocus={event => event.currentTarget.select()} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); dismiss(); } }} />
+      <p id={helpId} className="text-caption text-text-muted">Press Ctrl+C or ⌘C, or use your browser&apos;s Copy command.</p>
+      <Button variant="ghost" size="sm" onClick={dismiss}>Done</Button>
+    </div> : null}</>
   );
 }

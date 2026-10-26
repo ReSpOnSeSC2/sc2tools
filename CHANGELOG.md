@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Copy public build and definition links
+
+- Keep a selected link available when clipboard permission is denied or takes too long: in a shared dialog for Community links, or below a definition's heading. Done or Escape returns to the copy control, and retry stays available.
+- Retire delayed copy results when the public build address changes or its definition leaves the catalog view.
+
 ### Browser report sharing and examples
 
 - Choose which aggregate report rows to share as a PNG or text, with player identities omitted. See a real anonymized sample before adding replays, and follow detected openers to published matchup guides.
@@ -109,12 +114,15 @@ corresponding GitHub Release.
 
 - Require the 2-Stargate Void Ray and 2/3-Stargate Phoenix openings to establish their Stargates, two bases and four real air units by 7:00, with matching build definitions.
 
+<<<<<<< HEAD
+=======
 ### Build dossier insights
 
 - Read matchup timing quartiles, trends, decided-game win rates and winner/loser medians from a bounded replay sample. Exact published guide milestones can show a Community comparison; a game's first building occurrence can compare with your own cached median.
 - Inspect declared-plan Held and Knocked-off counts, their separate win rates and bounded recorded examples. Small declaration samples stay hidden, and labels and full-game duration estimates make no claim about execution or causality.
 - Owned games show saved rule counts, distinct event/deadline evidence, shared-clock jumps and private timing ranges after three observations. Unknown rules withhold the percentage; catalog builds show timings only. Practice reuses the existing explicit Ghost controls.
 
+>>>>>>> codex/wave4-build-execution
 ### Build editor request ownership
 
 - Cancel pending editor saves, previews and replay inspection when the account, source or open draft changes. Bound stalled requests and suppress stale publication repairs, notifications and completion callbacks. Load the optional editor on demand with Retry and Cancel.

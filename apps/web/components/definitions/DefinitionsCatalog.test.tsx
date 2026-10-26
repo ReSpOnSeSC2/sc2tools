@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DefinitionsCatalog } from "./DefinitionsCatalog";
 import { BUILD_DEFINITIONS, definitionHref, definitionId } from "@/lib/build-definitions";
@@ -16,6 +16,7 @@ beforeEach(() => { router.params = ""; router.replace.mockClear(); window.histor
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers(); vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -35,6 +36,57 @@ describe("DefinitionsCatalog", () => {
     await waitFor(() => expect(window.location.search).toBe("?variant=zerg-12-pool"));
     expect(router.replace).not.toHaveBeenCalled();
   });
+
+  it("keeps a denied definition URL visible and selected in its own card", async () => {
+    const prompt = vi.spyOn(window, "prompt").mockReturnValue(null);
+    vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn().mockRejectedValue(new Error("Denied")) } });
+    render(<DefinitionsCatalog />);
+    const definition = card("pvz-stargate-into-glaives");
+    const trigger = within(definition).getByRole("button", { name: "Copy link to PvZ - Stargate into Glaives" });
+    fireEvent.click(trigger);
+    const input = await within(definition).findByRole("textbox", { name: "Copy definition link manually" }) as HTMLInputElement;
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    expect(input.readOnly).toBe(true);
+    expect(input.value).toBe(`${window.location.origin}/definitions#pvz-stargate-into-glaives`);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, input.value.length]);
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(within(definition).queryByRole("textbox")).toBeNull(); expect(document.activeElement).toBe(trigger);
+    expect(window.location.hash).toBe(""); expect(prompt).not.toHaveBeenCalled();
+  });
+
+  it("settles a held definition copy and re-enables retry", async () => {
+    vi.useFakeTimers(); let finish!: () => void;
+    const writeText = vi.fn().mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; })).mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    render(<DefinitionsCatalog />);
+    const definition = card("pvz-stargate-into-glaives");
+    const trigger = within(definition).getByRole("button", { name: "Copy link to PvZ - Stargate into Glaives" });
+    fireEvent.click(trigger); expect(trigger.matches(":disabled")).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    const input = within(definition).getByRole("textbox", { name: "Copy definition link manually" });
+    expect(document.activeElement).toBe(input); expect(trigger.matches(":disabled")).toBe(false);
+    await act(async () => { fireEvent.click(trigger); });
+    expect(within(definition).getByRole("button", { name: "Link to PvZ - Stargate into Glaives copied" })).toBeTruthy();
+    await act(async () => { finish(); }); expect(within(definition).queryByRole("textbox")).toBeNull();
+  });
+
+  it("discards a late fallback when filtering a definition away and back", async () => {
+    let reject!: (error: Error) => void;
+    const writeText = vi.fn(() => new Promise<void>((_resolve, no) => { reject = no; }));
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    render(<DefinitionsCatalog />);
+    const id = "pvz-stargate-into-glaives";
+    fireEvent.click(within(card(id)).getByRole("button", { name: "Copy link to PvZ - Stargate into Glaives" }));
+    const search = screen.getByRole("textbox", { name: "Search builds and strategies" });
+    fireEvent.change(search, { target: { value: "no definition will match this phrase" } });
+    await waitFor(() => expect(document.getElementById(id)).toBeNull()); search.focus();
+    await act(async () => { reject(new Error("Late permission denial")); });
+    expect(document.activeElement).toBe(search); expect(screen.queryByRole("textbox", { name: "Copy definition link manually" })).toBeNull();
+    fireEvent.change(search, { target: { value: "" } });
+    const restored = await screen.findByRole("button", { name: "Copy link to PvZ - Stargate into Glaives" });
+    expect(restored.matches(":disabled")).toBe(false);
+    expect(within(card(id)).queryByRole("textbox")).toBeNull();
+  });
   it("lists the labels the engine catalog used to lack", () => {
     render(<DefinitionsCatalog />);
     expect(within(card("zerg-hatch-first")).getByText("Zerg - Hatch First")).toBeTruthy();
@@ -43,8 +95,9 @@ describe("DefinitionsCatalog", () => {
 
   it("gives every card an anchor and a copy-link button", async () => {
     const writeText = vi.fn(async () => undefined);
-    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
     render(<DefinitionsCatalog />);
+    expect(writeText).not.toHaveBeenCalled();
     const glaives = card("pvz-stargate-into-glaives");
     expect(glaives.className).toContain("scroll-mt-24");
     fireEvent.click(within(glaives).getByRole("button", { name: "Copy link to PvZ - Stargate into Glaives" }));
