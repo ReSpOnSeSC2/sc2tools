@@ -2,6 +2,15 @@
 
 Roadmap: Wave 5 `auth-return-to-context`; ADR0052.
 
+## Shared chart main integration
+
+Merged chart main `56e725ae` normally at `e5fc04da` without an Auth source
+conflict. Whole web types, all 19 UI-rule tests and the 1,656-source scan pass
+(677 inherited occurrences, no new/stale allowance). Logs are root
+`.cache/auth-return-chart-integration-*`. Auth runtime and its tested action
+lifetimes are unchanged; the local production/browser proof below precedes this
+independent chart integration. Exact-head CI must validate the combined build.
+
 ## Final current-main local proof
 
 Final checked HEAD is `4aa73f14dd4ce1056d3deca789c494fca3a46883`, including
