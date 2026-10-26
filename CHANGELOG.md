@@ -15,6 +15,7 @@ corresponding GitHub Release.
 
 - Keep the bell panel within the viewport using the shared nonmodal Popover. Escape returns to the bell, outside clicks preserve the clicked control's focus, and a newer dialog receives Escape first.
 - Preserve fresh-list entry focus, unread styling, pagination and read acknowledgements while removing duplicate overlay handlers.
+- Keep focus in a newer dialog when notification loading finishes, and focus cached error headings after the panel becomes visible on reopen.
 
 ### Build dialogs
 

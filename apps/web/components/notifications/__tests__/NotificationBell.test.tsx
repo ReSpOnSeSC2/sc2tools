@@ -423,6 +423,54 @@ describe("NotificationBell shared popover contract", () => {
     expect(document.body.style.overflow).not.toBe("hidden");
   });
 
+  it("keeps focus in a newer keyboard-opened Modal when the held fresh notification page becomes ready", async () => {
+    function DeferredLaterModal() {
+      const [later, setLater] = useState(false);
+      return <Bell><button type="button" onKeyDown={event => {
+        if (event.key === "Enter") { event.preventDefault(); setLater(true); }
+      }}>Open later dialog by keyboard</button>
+        <Modal open={later} onClose={() => setLater(false)} title="Deferred later dialog"><button type="button">Keep later focus</button></Modal>
+      </Bell>;
+    }
+    rows.ann = [notification("late-layer")];
+    deferList = true;
+    render(<DeferredLaterModal />);
+    const panel = await open(1);
+    await waitFor(() => expect(pendingLists.length).toBeGreaterThan(0));
+    expect(readCalls()).toHaveLength(0);
+    expect(within(panel).queryByText("Review late-layer")).toBeNull();
+
+    // Nonmodal Tab may reach another action. Opening it with a keyboard
+    // event keeps the notification popover mounted; no pointer dismissal.
+    const laterOpener = screen.getByRole("button", { name: "Open later dialog by keyboard" });
+    laterOpener.focus(); fireEvent.keyDown(laterOpener, { key: "Enter" });
+    const laterDialog = screen.getByRole("dialog", { name: "Deferred later dialog" });
+    const laterAction = within(laterDialog).getByRole("button", { name: "Keep later focus" });
+    laterAction.focus(); expect(document.activeElement).toBe(laterAction);
+    expect(screen.getByRole("dialog", { name: "Notifications" })).toBe(panel);
+
+    await act(async () => {
+      deferList = false;
+      pendingLists.splice(0).forEach(resolve => resolve());
+    });
+    const row = await within(panel).findByRole("link", { name: /Review late-layer/ });
+    await waitFor(() => expect(readCalls()).toHaveLength(1));
+    await screen.findByRole("button", { name: "Notifications" });
+    expect(JSON.parse(readCalls()[0][1]!.body as string)).toEqual({ ids: ["late-layer"] });
+    expect(within(row).getByText("New")).toBeTruthy();
+    expect(document.activeElement).toBe(laterAction);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Deferred later dialog" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Notifications" })).toBe(panel);
+    expect(document.activeElement).toBe(laterOpener);
+    expect(document.body.style.overflow).not.toBe("hidden");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Notifications" }));
+    expect(readCalls()).toHaveLength(1);
+  });
+
   it("does not move focus when a held first page settles after the panel closes", async () => {
     rows.ann = [notification("late-page")];
     deferList = true;

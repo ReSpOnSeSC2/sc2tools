@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { canReturnFocus } from "@/lib/a11y/focusScopes";
 import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
 import { NotificationItem } from "./NotificationItem";
 import { CATEGORY_LABELS, NOTIFICATION_CATEGORIES, notificationCategory, notificationFocus, type NotificationCategory, type NotificationRow } from "./notificationModel";
@@ -25,10 +26,28 @@ export default function NotificationPanel(p: Props) {
   useLayoutEffect(() => {
     if (focused.current || (!p.ready && !p.listError && !p.unreadError)) return;
     // ready means the parent's fresh page has been merged into visible rows.
-    // Focus at that commit; a timer could run on its transient empty render
-    // under scheduler pressure and permanently latch focus on the heading.
-    (panel.current?.querySelector<HTMLElement>("[data-notification-row]") || header.current)?.focus();
-    focused.current = true;
+    // The Popover's first placement commit is hidden. A cached error can
+    // arrive in that commit, before the browser will accept heading focus.
+    const content = panel.current;
+    const dialog = content?.closest<HTMLElement>('[role="dialog"]');
+    let current = true;
+    let observer: MutationObserver | null = null;
+    const focusEntry = () => {
+      if (!current || focused.current || !content?.isConnected || dialog?.style.visibility === "hidden") return;
+      const target = content.querySelector<HTMLElement>("[data-notification-row]") || header.current;
+      if (!target?.isConnected) return;
+      focused.current = true;
+      observer?.disconnect();
+      // A newer modal owns focus even if our fresh page arrives while it is
+      // open. Consume this attempt so a later refresh cannot take focus back.
+      if (canReturnFocus(target)) target.focus();
+    };
+    focusEntry();
+    if (!focused.current && dialog?.style.visibility === "hidden") {
+      observer = new MutationObserver(focusEntry);
+      observer.observe(dialog, { attributes: true, attributeFilter: ["style"] });
+    }
+    return () => { current = false; observer?.disconnect(); };
   }, [p.ready, p.items, p.listError, p.unreadError]);
   return <div ref={panel} className="min-w-0">
     <div className="flex items-center justify-between gap-2 px-2 py-2">

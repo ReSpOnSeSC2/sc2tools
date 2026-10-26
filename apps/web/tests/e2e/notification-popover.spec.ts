@@ -83,7 +83,9 @@ for (const theme of ["light", "dark"] as const) {
     const header = panel.getByRole("heading", { name: "Notifications", exact: true });
     await expect(header).toBeFocused();
     await expect(panel.getByText(/Couldn't load notifications/)).toBeVisible();
-    await expect(panel.getByText("Could not load notifications.", { exact: true })).toBeVisible();
+    const listError = panel.getByRole("alert").filter({ hasText: /^Could not load notifications\.\s*Try again$/ });
+    await expect(listError).toBeVisible();
+    await expect(listError.getByRole("button", { name: "Try again", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
     await page.getByRole("button", { name: "Notifications", exact: true }).click();
