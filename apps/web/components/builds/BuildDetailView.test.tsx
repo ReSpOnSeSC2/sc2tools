@@ -178,10 +178,10 @@ describe("BuildDetailView signed out", () => {
     const { container } = render(<BuildDetailView slug="proxy gate" />);
     expect(screen.getByRole("heading", { level: 1, name: "Sign in to open this build" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe(
-      "/sign-in?redirect_url=%2Fbuilds%2Fproxy%2520gate",
+      "/sign-in",
     );
     expect(screen.getByRole("link", { name: "Create account" }).getAttribute("href")).toBe(
-      "/sign-up?redirect_url=%2Fbuilds%2Fproxy%2520gate",
+      "/sign-up",
     );
     expect(screen.getByRole("link", { name: "Browse community builds" }).getAttribute("href")).toBe("/community");
     expect(container.querySelector(".animate-pulse")).toBeNull();

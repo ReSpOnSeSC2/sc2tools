@@ -16,7 +16,7 @@ function fixtureBundle() {
     plugins: [{ name: "explicit-fixture-auth-and-navigation", setup(builder) {
       builder.onResolve({ filter: /^next\/navigation$|^@clerk\/nextjs$/ }, (args) => ({ path: args.path, namespace: "fixture" }));
       builder.onLoad({ filter: /.*/, namespace: "fixture" }, (args) => ({ resolveDir: process.cwd(), contents: args.path === "next/navigation"
-        ? 'import {useSyncExternalStore} from "react";export const useSearchParams=()=>new URLSearchParams(useSyncExternalStore(fn=>{addEventListener("popstate",fn);return()=>removeEventListener("popstate",fn)},()=>location.search));export const useRouter=()=>({push:path=>location.assign(path),refresh(){}});export const notFound=()=>{throw Error("Unexpected fixture notFound")};'
+        ? 'import {useSyncExternalStore} from "react";const subscribe=fn=>{addEventListener("popstate",fn);return()=>removeEventListener("popstate",fn)};export const usePathname=()=>useSyncExternalStore(subscribe,()=>location.pathname,()=>"/reviews");export const useSearchParams=()=>new URLSearchParams(useSyncExternalStore(subscribe,()=>location.search,()=>""));export const useRouter=()=>({push:path=>location.assign(path),refresh(){}});export const notFound=()=>{throw Error("Unexpected fixture notFound")};'
         : 'const auth={isLoaded:true,isSignedIn:true,userId:"fixture-reviewer",getToken:async()=>"fixture-token"};export const useAuth=()=>auth;export const SignedIn=({children})=>children;export const SignedOut=()=>null;' }));
     } }],
   }).then((result) => result.outputFiles[0].text);

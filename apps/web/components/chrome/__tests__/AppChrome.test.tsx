@@ -386,7 +386,7 @@ describe("AppChrome for signed-out visitors", () => {
     const bar = screen.getByRole("navigation", { name: "Quick sections" });
     expect(
       Array.from(bar.querySelectorAll("a")).map((a) => a.getAttribute("href")),
-    ).toEqual(["/community", "/sign-in"]);
+    ).toEqual(["/community", "/sign-in?redirect_url=%2Fcommunity%2Fbuilds%2Fshared-slug"]);
   });
 
   it("offers the build guides to signed-out visitors while their flag is on", () => {

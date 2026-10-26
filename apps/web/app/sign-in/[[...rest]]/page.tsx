@@ -13,7 +13,9 @@ import { LatestUpdate } from "@/components/auth/LatestUpdate";
 import { TrySavePanel } from "@/components/auth/TrySavePanel";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { appearanceFor } from "@/lib/clerk-appearance";
-import { isTryResumeRedirect, safeAuthRedirect } from "@/lib/instant/authRedirect";
+import { isTryResumeRedirect } from "@/lib/instant/authRedirect";
+import { signUpHref } from "@/lib/authLinks";
+import { authDestinations } from "@/lib/authDestinations";
 import type { Theme } from "@/lib/theme";
 
 export default function SignInPage() {
@@ -37,15 +39,16 @@ function SignInContent() {
 
 function SignInWidget({ theme }: { theme: Theme }) {
   const searchParams = useSearchParams();
-  // Only the allowlisted /try hand-off forces a destination; otherwise
-  // Clerk keeps its default behavior (no open redirects added here).
-  const redirect = safeAuthRedirect(searchParams.get("redirect_url"));
+  // Only an allowlisted same-origin context can override Clerk's destination.
+  const destination = authDestinations(searchParams.get("redirect_url"));
   return (
     <SignIn
       key={theme}
       appearance={appearanceFor(theme)}
-      signUpUrl="/sign-up"
-      {...(redirect ? { forceRedirectUrl: redirect } : {})}
+      signUpUrl={signUpHref(destination.returnTo)}
+      forceRedirectUrl={destination.signIn}
+      signUpForceRedirectUrl={destination.signUp}
+      fallbackRedirectUrl="/app"
     />
   );
 }

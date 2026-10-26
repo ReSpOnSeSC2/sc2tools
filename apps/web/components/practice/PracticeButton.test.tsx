@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PracticeButton } from "./PracticeButton";
 
-const h = vi.hoisted(() => ({ auth: { isLoaded: true, isSignedIn: true, userId: "a", getToken: vi.fn() }, assign: vi.fn(), mutate: vi.fn() }));
+const h = vi.hoisted(() => ({ auth: { isLoaded: true, isSignedIn: true, userId: "a", getToken: vi.fn() }, assign: vi.fn(), mutate: vi.fn(), push: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: h.push }) }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => h.auth }));
 vi.mock("swr", () => ({ useSWRConfig: () => ({ mutate: h.mutate }) }));
 vi.mock("@/lib/practiceAssignment", () => ({ assignPractice: (...args: unknown[]) => h.assign(...args) }));
@@ -10,7 +11,7 @@ vi.mock("@/lib/useGhostPractice", () => ({ useGhostPractice: () => ({ config: { 
 const build = { name: "Blink opening", slug: "blink", race: "Protoss", vsRace: "Terran" };
 const result = { target: { v: 1, name: "Blink opening", steps: [{ supply: null, name: "Gateway", t: 40 }] }, config: { v: 2, slots: {} }, source: "Saved reference build order" };
 beforeEach(() => {
-  localStorage.clear(); h.auth = { isLoaded: true, isSignedIn: true, userId: "a", getToken: vi.fn().mockResolvedValue("a-token") };
+  localStorage.clear(); sessionStorage.clear(); h.push.mockReset(); h.auth = { isLoaded: true, isSignedIn: true, userId: "a", getToken: vi.fn().mockResolvedValue("a-token") };
   h.mutate.mockReset().mockResolvedValue(undefined);
   h.assign.mockReset().mockImplementation(async (_input, _slot, getToken) => { await getToken(); return result; });
 });
@@ -34,10 +35,12 @@ describe("shared Practice split button", () => {
     await waitFor(() => expect(h.assign).toHaveBeenCalledOnce()); expect(h.assign.mock.calls[0][1]).toBe("PvZ");
     expect(screen.getByRole("link", { name: "Open Ghost settings" }).getAttribute("href")).toBe("/settings?tab=overlay&section=look");
   });
-  it("requires sign-in and never creates an anonymous browser-only assignment", async () => {
+  it("queues a public Practice action for sign-in without making an anonymous assignment", async () => {
     h.auth = { ...h.auth, isSignedIn: false }; render(<PracticeButton build={build} />);
     fireEvent.click(screen.getByRole("button", { name: "Practice in PvT" }));
-    expect((await screen.findByRole("link", { name: /Sign in to save/ })).getAttribute("href")).toBe("/sign-in"); expect(h.assign).not.toHaveBeenCalled();
+    await waitFor(() => expect(h.push).toHaveBeenCalledWith("/sign-in?redirect_url=%2Fcommunity%2Fbuilds%2Fblink"));
+    const intent = JSON.parse(sessionStorage.getItem("sc2tools:auth-intent:v1")!);
+    expect(intent.kind).toBe("arm-ghost"); expect(intent.payload.matchup).toBe("PvT"); expect(h.assign).not.toHaveBeenCalled();
   });
   it("cancels a held token at a same-user auth-loading boundary", async () => {
     let release!: (token: string) => void; h.auth.getToken.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));

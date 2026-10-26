@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { AuthContextLink } from "@/components/auth/AuthContextLink";
 import dynamic from "next/dynamic";
 import { backToGameSource, safeGameSource } from "@/lib/gameNavigation";
 import { usePathname } from "next/navigation";
@@ -322,18 +323,18 @@ function AppChromeShell({ children }: { children: ReactNode }) {
               </SignedIn>
               <SignedOut>
                 <HelpMenu signedIn={false} />
-                <Link
-                  href="/sign-in"
+                <AuthContextLink
+                  kind="sign-in"
                   className="hard-press hidden h-8 items-center rounded-full border-2 border-line bg-bg-surface px-3.5 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:inline-flex"
                 >
                   Sign in
-                </Link>
-                <Link
-                  href="/sign-up"
+                </AuthContextLink>
+                <AuthContextLink
+                  kind="sign-up"
                   className="hard-press inline-flex h-8 items-center rounded-full border-2 border-line bg-accent px-3.5 font-display text-caption font-bold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   Get started
-                </Link>
+                </AuthContextLink>
               </SignedOut>
             </div>
           </div>
@@ -397,13 +398,13 @@ function AppChromeShell({ children }: { children: ReactNode }) {
                 active={activeKey === entry.key}
               />
             ))}
-            <Link
-              href="/sign-in"
+            <AuthContextLink
+              kind="sign-in"
               className="flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-micro font-bold text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <LogIn className="h-5 w-5" aria-hidden />
               Sign in
-            </Link>
+            </AuthContextLink>
           </SignedOut>
         </div>
       </nav>
