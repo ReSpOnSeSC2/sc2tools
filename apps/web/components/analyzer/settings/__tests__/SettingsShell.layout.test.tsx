@@ -39,7 +39,7 @@ describe("SettingsShell layout containment", () => {
       .toEqual(["Account", "Gameplay", "Streaming"]);
     const tabs = within(desktop).getAllByRole("tab");
     expect(tabs.map((node) => node.getAttribute("data-value")))
-      .toEqual(["account", "profile", "backups", "checkin", "randomizer", "import", "overlay", "voice", "preferences", "help"]);
+      .toEqual(["account", "profile", "backups", "checkin", "randomizer", "import", "overlay", "chat", "voice", "preferences", "help"]);
     expect(Array.from(desktop.children).every((node) => node.getAttribute("role") === "tab")).toBe(true);
     const devices = within(sidebar).getByRole("link", { name: "Devices" });
     expect(devices.getAttribute("href")).toBe("/devices");
@@ -47,7 +47,7 @@ describe("SettingsShell layout containment", () => {
     expect(within(desktop).queryByRole("tab", { name: /Devices/ })).toBeNull();
     const overlay = within(desktop).getByRole("tab", { name: "Overlay" });
     expect(overlay.getAttribute("aria-describedby")!.split(" ").map((id) => document.getElementById(id)?.textContent).join(" "))
-      .toBe("Streaming OBS URLs, scenes, theme, chat");
+      .toBe("Streaming OBS sources, widgets, scenes and theme");
 
     const backups = within(desktop).getByRole("tab", { name: "Backups & data" });
     fireEvent.keyDown(backups, { key: "ArrowDown" });

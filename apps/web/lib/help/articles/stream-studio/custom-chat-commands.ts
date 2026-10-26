@@ -12,7 +12,7 @@ const article: HelpArticle = {
   updated: "2026-10-25",
   body: [
     { type: "steps", items: [
-      "Open **Settings → Overlay → Multi-platform chat** and choose your overlay token. Find **Chat command settings** below the command guide.",
+      "Open **Settings → Chat & alerts** and choose your overlay token. Find **Chat command settings** below the command guide.",
       "Use **Add custom command**. Give it a name such as `hello`, without spaces. Names start with a letter and use at most 24 letters, numbers or underscores. Built-in names, default aliases and engagement commands are reserved.",
       "Write a one-line reply of up to 1,000 characters. Use plain text and the supported variables below. You can save up to 25 custom commands.",
       "Choose **Enabled**, a cooldown from 5 to 3,600 seconds, the platforms where it answers, and whether it can appear in on-stream answers. An empty platform selection disables replies everywhere.",
@@ -37,7 +37,7 @@ const article: HelpArticle = {
       "In your own Nightbot configuration, create the matching trigger and paste the snippet into its response field. Nightbot's `urlfetch` reads the plain-text reply; `querystring` encodes the viewer and command arguments. See [Nightbot URL Fetch](https://docs.nightbot.tv/variables/urlfetch) and [QueryString](https://docs.nightbot.tv/variables/querystring).",
     ] },
     { type: "callout", tone: "warning", title: "Keep your snippet private", text: "The snippet contains your overlay token. Keep it in your Nightbot command configuration. Copying a snippet or saving command settings does not connect an account, enable a bot or send a message." },
-    { type: "settingsLink", label: "Open Overlay settings", href: "/settings?tab=overlay" },
+    { type: "settingsLink", label: "Open Chat & alerts", href: "/settings?tab=chat#commands" },
   ],
   related: ["viewer-engagement", "multi-platform-chat", "stream-dock"],
 };

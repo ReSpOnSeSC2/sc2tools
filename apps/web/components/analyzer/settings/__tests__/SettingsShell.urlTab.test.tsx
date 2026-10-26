@@ -9,6 +9,12 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { SettingsShell, type SettingsTabId } from "../SettingsShell";
 import { usePublishDirty } from "../SettingsContext";
 
+const callbacks = vi.hoisted(() => ({ confirm: null as (() => void) | null }));
+vi.mock("@/components/ui/ConfirmDialog", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/components/ui/ConfirmDialog")>();
+  return { ...actual, ConfirmDialog: (props: Parameters<typeof actual.ConfirmDialog>[0]) => { callbacks.confirm = props.onConfirm; return <actual.ConfirmDialog {...props} />; } };
+});
+
 vi.mock("next/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/navigation")>()),
   useRouter: () => ({ push: vi.fn() }),
@@ -44,6 +50,24 @@ afterEach(() => {
 });
 
 describe("SettingsShell ?tab= sync", () => {
+  it("a retained discard callback cannot admit an older destination or cross owner A→B→A", () => {
+    window.history.replaceState(null, "", "/settings?tab=preferences&ref=kept#notifications");
+    const renderOwner = (ownerKey: string, requestedSearch: string) => <SettingsShell ownerKey={ownerKey} initialTab="preferences" requestedSearch={requestedSearch} renderTab={id => id === "preferences" ? <DirtyPanel id={id} /> : <p>panel {id}</p>} />;
+    const view = render(renderOwner("a", "tab=preferences&ref=kept"));
+    window.history.replaceState(null, "", "/settings?tab=overlay&section=dock");
+    view.rerender(renderOwner("a", "tab=overlay&section=dock")); const oldDiscard = callbacks.confirm!;
+    window.history.replaceState(null, "", "/settings?tab=help#help-section");
+    view.rerender(renderOwner("a", "tab=help"));
+    act(oldDiscard);
+    expect(activePanel()).toBe("dirty preferences");
+    expect(screen.getByRole("dialog", { name: "Discard unsaved changes?" })).toBeTruthy();
+    const beforeOwner = callbacks.confirm!;
+    view.rerender(renderOwner("b", "tab=help")); view.rerender(renderOwner("a", "tab=help"));
+    act(beforeOwner);
+    expect(activePanel()).toBe("dirty preferences");
+    expect(screen.queryByRole("dialog", { name: "Discard unsaved changes?" })).toBeNull();
+    expect(window.location.search).toBe("?tab=help");
+  });
   it("switches when the URL asks for another tab", () => {
     const view = render(shell("checkin"));
     expect(activePanel()).toBe("panel checkin");
@@ -132,7 +156,8 @@ describe("SettingsShell ?tab= sync", () => {
     expect(screen.getByRole("dialog", { name: "Discard unsaved changes?" })).toBeTruthy();
     expect(activePanel()).toBe("dirty preferences");
     fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
-    expect(window.location.search).toBe("?tab=preferences&ref=old");
+    expect(window.location.search).toBe("?tab=misc");
+    expect(window.location.hash).toBe("");
     expect(activePanel()).toBe("dirty preferences");
 
     window.history.replaceState(null, "", "/settings?tab=foundation&ref=old#setup-health");
@@ -142,5 +167,20 @@ describe("SettingsShell ?tab= sync", () => {
     fireEvent.click(screen.getByRole("button", { name: "Discard & switch" }));
     expect(activePanel()).toBe("panel account");
     expect(window.location.search).toBe("?tab=account&ref=old");
+  });
+
+  it("guards a moved same-tab destination, restores the full old alias/hash on Stay and admits the new anchor on Discard", () => {
+    window.history.replaceState(null, "", "/settings?tab=misc&ref=original#notifications");
+    const view = render(shell("preferences", "preferences"));
+    window.history.replaceState(null, "", "/settings?tab=overlay&section=chat&ref=incoming#twitch-automation");
+    view.rerender(<SettingsShell initialTab="overlay" requestedSearch="tab=overlay&section=chat&ref=incoming" renderTab={id => id === "preferences" ? <DirtyPanel id={id} /> : <p>panel {id}</p>} />);
+    expect(activePanel()).toBe("dirty preferences");
+    fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
+    expect(window.location.pathname + window.location.search + window.location.hash).toBe("/settings?tab=misc&ref=original#notifications");
+    window.history.replaceState(null, "", "/settings?tab=overlay&section=dock&ref=next#stream-dock");
+    view.rerender(<SettingsShell requestedSearch="tab=overlay&section=dock&ref=next" renderTab={id => id === "preferences" ? <DirtyPanel id={id} /> : <p>panel {id}</p>} />);
+    fireEvent.click(screen.getByRole("button", { name: "Discard & switch" }));
+    expect(activePanel()).toBe("panel chat");
+    expect(window.location.pathname + window.location.search + window.location.hash).toBe("/settings?tab=chat&ref=next#stream-dock");
   });
 });

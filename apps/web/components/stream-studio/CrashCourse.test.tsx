@@ -32,6 +32,8 @@ describe("Stream Studio crash course", () => {
     expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Add your next feature");
     expect(screen.getByRole("link", { name: "Choose randomizer builds" }).getAttribute("href")).toBe("/settings?tab=randomizer");
     expect(screen.getByRole("link", { name: "Set up voice" }).getAttribute("href")).toBe("/settings?tab=voice");
+    expect(screen.getByRole("link", { name: "Set up chat and the Stream Dock" }).getAttribute("href")).toBe("/settings?tab=chat");
+    expect(screen.getByText(/Settings → Chat & alerts/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /6\. Add a stats panel/ }));
     expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Add a stats panel to your channel");
     expect(screen.getByRole("link", { name: "Choose public profile and panel" }).getAttribute("href")).toBe("/settings?tab=profile");

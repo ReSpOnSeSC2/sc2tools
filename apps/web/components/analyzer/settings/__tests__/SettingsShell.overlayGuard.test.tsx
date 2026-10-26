@@ -1,6 +1,6 @@
 /**
- * The Overlay tab holds two forms with their own Save buttons —
- * Multi-platform chat and the chat bot (in Dock & bot). Both publish
+ * The Chat & alerts tab holds two forms with their own Save buttons —
+ * Multi-platform chat and the chat bot. Both publish
  * their unsaved state, so switching tabs asks before dropping either
  * one's edits, the tab shows the unsaved dot for either, and saving one
  * never clears the other's. The real forms render; the API and Clerk
@@ -64,7 +64,7 @@ beforeEach(() => {
   api.apiCall.mockImplementation(async (_getToken: unknown, path: string) =>
     path === "/v1/me/chatbot" ? BOT : {},
   );
-  window.history.replaceState(null, "", "/settings?tab=overlay");
+  window.history.replaceState(null, "", "/settings?tab=chat");
 });
 
 afterEach(() => {
@@ -72,25 +72,25 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
 });
 
-function renderOverlay() {
+function renderChat() {
   return render(
     <ToastProvider>
       <SettingsShell
-        initialTab="overlay"
-        renderTab={(id) => (id === "overlay" ? <><SettingsMultiChat token="tok" /><OverlayBotSettings /></> : <p>panel {id}</p>)}
+        initialTab="chat"
+        renderTab={(id) => (id === "chat" ? <><SettingsMultiChat token="tok" /><OverlayBotSettings /></> : <p>panel {id}</p>)}
       />
     </ToastProvider>,
   );
 }
 
-/** The desktop sidebar's Overlay tab. */
-function overlayTab() {
-  const tabs = screen.getAllByRole("tab", { name: /^Overlay/ });
+/** The desktop sidebar's Chat tab. */
+function chatTab() {
+  const tabs = screen.getAllByRole("tab", { name: /^Chat & alerts/ });
   return tabs[tabs.length - 1];
 }
 
-function overlayIsDirty() {
-  return within(overlayTab()).queryByLabelText("Unsaved changes") !== null;
+function chatIsDirty() {
+  return within(chatTab()).queryByLabelText("Unsaved changes") !== null;
 }
 
 function clickVoice() {
@@ -107,36 +107,36 @@ function editChatBot() {
 
 const dialog = () => screen.queryByRole("dialog", { name: "Discard unsaved changes?" });
 
-describe("Overlay tab unsaved-changes guard", () => {
+describe("Chat tab unsaved-changes guard", () => {
   it("asks before a tab switch drops Multi-platform chat edits", () => {
-    renderOverlay();
-    expect(overlayIsDirty()).toBe(false);
+    renderChat();
+    expect(chatIsDirty()).toBe(false);
     editMultiChat();
-    expect(overlayIsDirty()).toBe(true);
+    expect(chatIsDirty()).toBe(true);
 
     clickVoice();
     expect(dialog()).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
     expect(dialog()).toBeNull();
-    // Still on Overlay, edits intact.
+    // Still on Chat, edits intact.
     expect((screen.getByLabelText(/Loyalty rank theme/) as HTMLSelectElement).value).toBe("zerg");
 
     clickVoice();
     fireEvent.click(screen.getByRole("button", { name: "Discard & switch" }));
     expect(screen.getByText("panel voice")).toBeTruthy();
-    expect(overlayIsDirty()).toBe(false);
+    expect(chatIsDirty()).toBe(false);
   });
 
-  it("marks Overlay unsaved for chat bot edits alone, and guards them", () => {
-    renderOverlay();
+  it("marks Chat unsaved for chat bot edits alone, and guards them", () => {
+    renderChat();
     editChatBot();
-    expect(overlayIsDirty()).toBe(true);
+    expect(chatIsDirty()).toBe(true);
     clickVoice();
     expect(dialog()).toBeTruthy();
   });
 
   it("keeps the dot while the other form still has edits after one saves", async () => {
-    renderOverlay();
+    renderChat();
     editMultiChat();
     editChatBot();
 
@@ -147,7 +147,7 @@ describe("Overlay tab unsaved-changes guard", () => {
     await waitFor(() =>
       expect((screen.getByRole("button", { name: "Save bot settings" }) as HTMLButtonElement).disabled).toBe(true),
     );
-    expect(overlayIsDirty()).toBe(true);
+    expect(chatIsDirty()).toBe(true);
     clickVoice();
     expect(dialog()).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
@@ -155,7 +155,7 @@ describe("Overlay tab unsaved-changes guard", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Save chat settings" }));
     });
-    await waitFor(() => expect(overlayIsDirty()).toBe(false));
+    await waitFor(() => expect(chatIsDirty()).toBe(false));
     clickVoice();
     expect(dialog()).toBeNull();
     expect(screen.getByText("panel voice")).toBeTruthy();

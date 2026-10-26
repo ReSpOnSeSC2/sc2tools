@@ -3,6 +3,7 @@
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import { SettingsShell } from "@/components/analyzer/settings/SettingsShell";
 import { defaultTabVisibility, settingsTabFromParam, type SettingsTabId } from "@/lib/settingsRegistry";
 import { SettingsFoundation } from "@/components/analyzer/settings/SettingsFoundation";
@@ -23,6 +24,14 @@ const SettingsProfile = dynamic(
 );
 const SettingsOverlay = dynamic(
   () => import("@/components/analyzer/settings/SettingsOverlay").then((mod) => mod.SettingsOverlay),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const SettingsStreamingTokenOwner = dynamic(
+  () => import("@/components/analyzer/settings/SettingsStreamingTokenOwner").then(mod => mod.SettingsStreamingTokenOwner),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const SettingsChat = dynamic(
+  () => import("@/components/analyzer/settings/SettingsChat").then(mod => mod.SettingsChat),
   { loading: () => <Skeleton rows={6} /> },
 );
 const SettingsRandomizer = dynamic(
@@ -96,6 +105,8 @@ function renderTab(id: SettingsTabId, origin: string) {
       return <SettingsProfile />;
     case "overlay":
       return <SettingsOverlay origin={origin} />;
+    case "chat":
+      return <SettingsChat origin={origin} />;
     case "randomizer":
       return <SettingsRandomizer />;
     case "checkin":
@@ -116,14 +127,19 @@ function renderTab(id: SettingsTabId, origin: string) {
 }
 
 function SettingsTabs() {
+  const { userId, isLoaded, isSignedIn } = useAuth();
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const requested = settingsTabFromParam(useSearchParams()?.get("tab"));
+  const search = useSearchParams();
+  const requested = settingsTabFromParam(search?.get("tab"));
   const isTabVisible = defaultTabVisibility;
   const initialTab = requested && isTabVisible(requested) ? requested : undefined;
   return (
     <SettingsShell
       initialTab={initialTab}
       isTabVisible={isTabVisible}
+      requestedSearch={search?.toString() ?? ""}
+      ownerKey={isLoaded && isSignedIn ? userId : null}
+      renderStreaming={(children, section) => <SettingsStreamingTokenOwner section={section}>{children}</SettingsStreamingTokenOwner>}
       renderTab={(id: SettingsTabId) => renderTab(id, origin)}
     />
   );

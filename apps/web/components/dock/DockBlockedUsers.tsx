@@ -21,7 +21,7 @@ export function DockBlockedUsers({ users, managedUsers, busy, ready, onUnblock }
     </label>
     <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto">{shown.map((user) => <li key={user} className="flex flex-wrap items-center justify-between gap-2 text-caption text-text">
       <span className="break-all">{user}</span>
-      {managed.has(user) ? <a className="text-text-muted underline" href="/settings?tab=overlay" target="_blank" rel="noopener noreferrer">Managed in Settings → Overlay</a>
+      {managed.has(user) ? <a className="text-text-muted underline" href="/settings?tab=chat#appearance" target="_blank" rel="noopener noreferrer">Managed in Settings → Chat & alerts</a>
         : <DockButton type="button" disabled={busy || !ready} onClick={() => onUnblock(user)} className="rounded border border-border px-2 py-1 disabled:opacity-50">Unblock <span className="sr-only">{user}</span></DockButton>}
     </li>)}</ul>
     {!shown.length ? <p className="mt-2 text-caption text-text-muted">{all.length ? "No matching users." : "No blocked users."}</p> : null}

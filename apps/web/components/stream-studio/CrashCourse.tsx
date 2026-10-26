@@ -132,7 +132,7 @@ const BASE_LESSONS: ReadonlyArray<Lesson> = [
     steps: [
       {
         title: "Start chat with one platform",
-        body: <>In <strong>Settings → Overlay → Multi-platform chat</strong>, enable and configure one platform you use, then choose <strong>Save chat settings</strong>. Add the dedicated <strong>Multi-platform chat</strong> URL as a Browser Source. Its Test is a sample stream; verify the connection with a real message from your channel too.</>,
+        body: <>In <strong>Settings → Chat & alerts</strong>, enable and configure one platform you use, then choose <strong>Save chat settings</strong>. Add the dedicated <strong>Multi-platform chat</strong> URL as a Browser Source. Its Test is a sample stream; verify the connection with a real message from your channel too.</>,
       },
       {
         title: "Keep the controls within reach",
@@ -146,7 +146,7 @@ const BASE_LESSONS: ReadonlyArray<Lesson> = [
     tryIt: "Pick one upgrade: send a real chat message, pin a highlight from the Stream Dock, or configure a build pool for one matchup. Verify it before adding another feature.",
     expected: "Your chosen feature has both its configuration and its display source in place. A Stream Dock action appears in its matching widget, real chat reaches the feed, or the randomizer has saved builds for the matchup you selected. You know where to return to change it.",
     links: [
-      { href: "/settings?tab=overlay", label: "Set up chat and the Stream Dock" },
+      { href: "/settings?tab=chat", label: "Set up chat and the Stream Dock" },
       { href: "/settings?tab=randomizer", label: "Choose randomizer builds" },
       { href: "/settings?tab=voice", label: "Set up voice" },
     ],

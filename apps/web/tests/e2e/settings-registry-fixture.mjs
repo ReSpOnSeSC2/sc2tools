@@ -80,7 +80,7 @@ function SyntheticPanel({id}:{id:SettingsTabId}){
   .catch(()=>{if(!controller.signal.aborted)setFailed(true)});return()=>controller.abort()},[id]);
  if(failed)return <p role="alert">Synthetic panel unavailable</p>;
  if(!data)return <p role="status">Loading synthetic panel</p>;
- return <section id={id==='overlay'?'platform-connections':'fixture-section'} className="space-y-4 rounded-xl border border-border bg-bg-surface p-5">
+ return <section id={id==='chat'?'platform-connections':'fixture-section'} className="space-y-4 rounded-xl border border-border bg-bg-surface p-5">
   <h2 className="font-display text-h3 text-text">{data.title} panel</h2>
   <p className="text-body text-text-muted">Synthetic panel data. This fixture cannot change an account.</p>
   <Field label="Local draft"><Input value={draft} onChange={event=>setDraft(event.target.value)}/></Field>
@@ -88,11 +88,12 @@ function SyntheticPanel({id}:{id:SettingsTabId}){
  </section>;
 }
 const subscribe=(listener:()=>void)=>{addEventListener('fixture-location',listener);addEventListener('popstate',listener);return()=>{removeEventListener('fixture-location',listener);removeEventListener('popstate',listener)}};
-function navigate(href:string){history.pushState({},'',href);dispatchEvent(new Event('fixture-location'))}
+for(const method of ['pushState','replaceState'] as const){const native=history[method].bind(history);history[method]=(...args:Parameters<History[typeof method]>)=>{native(...args);dispatchEvent(new Event('fixture-location'))}}
+function navigate(href:string){history.pushState({},'',href)}
 declare global{interface Window{settingsFixtureNavigate:(href:string)=>void;settingsFixtureRouterPush:(href:string)=>void;settingsFixtureRouterPushes:()=>string[]}}
 window.settingsFixtureNavigate=navigate;
 const routerPushes:string[]=[];window.settingsFixtureRouterPushes=()=>routerPushes.slice();window.settingsFixtureRouterPush=href=>{routerPushes.push(href);navigate(href)};
-function App(){const current=useSyncExternalStore(subscribe,()=>location.pathname+location.search);if(current==='/devices')return <main className="p-6"><h1 className="font-display text-h2 text-text">Devices destination</h1><p className="text-body text-text-muted">Synthetic client navigation. No account transport is available.</p></main>;return <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6"><h1 className="font-display text-h2 text-text">Settings</h1><SettingsShell initialTab={settingsTabFromParam(new URLSearchParams(location.search).get('tab'))??undefined} renderTab={id=><SyntheticPanel key={id} id={id}/>}/></main>}
+function App(){const current=useSyncExternalStore(subscribe,()=>location.pathname+location.search+location.hash);if(current==='/devices')return <main className="p-6"><h1 className="font-display text-h2 text-text">Devices destination</h1><p className="text-body text-text-muted">Synthetic client navigation. No account transport is available.</p></main>;return <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6"><h1 className="font-display text-h2 text-text">Settings</h1><SettingsShell initialTab={settingsTabFromParam(new URLSearchParams(location.search).get('tab'))??undefined} requestedSearch={location.search.slice(1)} renderTab={id=><SyntheticPanel key={id} id={id}/>}/></main>}
 createRoot(document.getElementById('root')!).render(<App/>);`;
 
 const adapters = {
@@ -160,7 +161,7 @@ export async function openSettingsRegistryFixture(page, theme) {
     if (url.pathname.startsWith("/fonts/") && !url.search && !url.hash && fonts.has(url.pathname.slice(7))) return { contentType: "font/woff2", body: fonts.get(url.pathname.slice(7)) };
     if (url.pathname.startsWith("/synthetic/panels/") && !url.search && !url.hash) {
       const id = url.pathname.slice("/synthetic/panels/".length);
-      const titles = { account: "Account", profile: "Profile", backups: "Backups & data", checkin: "Build check-in", randomizer: "Randomizer", import: "Import", overlay: "Overlay", voice: "Voice", preferences: "Preferences", help: "Help" };
+      const titles = { account: "Account", profile: "Profile", backups: "Backups & data", checkin: "Build check-in", randomizer: "Randomizer", import: "Import", overlay: "Overlay", chat: "Chat & alerts", voice: "Voice", preferences: "Preferences", help: "Help" };
       if (Object.hasOwn(titles, id)) {
         panelReads.push(id);
         return { contentType: "application/json", body: JSON.stringify({ id, title: titles[id] }) };

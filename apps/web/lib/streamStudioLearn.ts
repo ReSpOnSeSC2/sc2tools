@@ -53,7 +53,7 @@ function dockSetup(name: string, action: string): readonly string[] {
   return [
     `In Settings → Overlay, enable ${name} and use Copy beside its URL.`,
     "Paste it into a dedicated OBS Browser Source and position it in your scene.",
-    "Copy Stream Dock from Overlay → Setup; in OBS add it under Docks → Custom Browser Docks.",
+    "Copy Stream Dock from Settings → Chat & alerts → Stream Dock; in OBS add it under Docks → Custom Browser Docks.",
     action,
   ];
 }
@@ -308,7 +308,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
     appears: "As messages arrive from enabled, connected platforms; no game result is required.",
     needs: [configuredChat, "The channel or live-stream information requested by each enabled platform."],
     setup: [
-      "In Settings → Overlay → Multi-platform chat, enable the platforms you use and fill in their requested channel details.",
+      "In Settings → Chat & alerts, enable the platforms you use and fill in their requested channel details.",
       "Choose your chat appearance and optional audio or translation settings, then press Save chat settings.",
       "Enable Multi-platform chat in OBS Browser Source URLs and Copy its URL into its own OBS Browser Source.",
       "Open Stream Dock to watch platform status and send a real chat message from an enabled platform.",
@@ -352,7 +352,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
     appears: "When a supported fresh platform event arrives; transparent between alerts.",
     needs: [configuredChat, "A platform connection that supplies the event type you want to show."],
     setup: [
-      "Configure your platforms in Settings → Overlay → Multi-platform chat.",
+      "Configure your platforms in Settings → Chat & alerts.",
       "Choose alert appearance and sound options there, then press Save chat settings.",
       "Enable Event alerts and Copy its URL into a dedicated OBS Browser Source.",
       "Press Test to preview sample alerts; use Stream Dock to inspect incoming platform events and moderation.",
@@ -485,7 +485,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
     appears: "When supporter data or a level-up event is available; transparent before there is anyone to show.",
     needs: [configuredChat, "An active engagement-reporting surface such as Stream Dock or Multi-platform chat."],
     setup: [
-      "In Settings → Overlay → Multi-platform chat, configure your channels and choose Loyalty rank theme.",
+      "In Settings → Chat & alerts, configure your channels and choose Loyalty rank theme.",
       "Press Save chat settings, then keep Stream Dock or the chat source running during your stream.",
       "Enable Supporter wall and Copy its URL into its own OBS Browser Source.",
       "Use Test for sample supporters, then watch real chat activity populate the wall.",
@@ -539,9 +539,9 @@ export const STUDIO_AUTOMATION_GUIDES = [{
   summary: "Optional Channel Points Predictions and stream bookmarks, with separate Twitch consent and explicit Save.",
   capability: "Current desktop telemetry cannot prove ranked queue status. Automatic Twitch Predictions are skipped; known live two-human 1v1 starts can still add opted-in markers.",
   needs: ["An affiliate or partner Twitch broadcaster and a live channel.", "Server-owner enablement, then your separate Predictions or markers permission and saved opt-in.", "A paired desktop agent reporting a fresh real player game; markers also require VODs enabled."],
-  setup: ["Open Settings → Overlay → Chat & alerts → Twitch automation. Both switches start off.", "Connect Predictions for Channel Points permission, or Connect markers for stream marker permission. Complete Twitch's window, then Refresh status.", "Choose a 30–300 second window (default 120) and a plain title using {me}, {opp}, {oppRace} and {oppMmr}. Win and Loss are fixed; rendered titles stop at 45 characters.", "Enable the choices you want and press Save Twitch automation. Connecting alone changes neither switch.", "In Stream Dock → Game, check the native Twitch prediction state. Confirmed Cancel requests a refund; Resolve uses only an already verified replay result."],
+  setup: ["Open Settings → Chat & alerts → Twitch automation. Both switches start off.", "Connect Predictions for Channel Points permission, or Connect markers for stream marker permission. Complete Twitch's window, then Refresh status.", "Choose a 30–300 second window (default 120) and a plain title using {me}, {opp}, {oppRace} and {oppMmr}. Win and Loss are fixed; rendered titles stop at 45 characters.", "Enable the choices you want and press Save Twitch automation. Connecting alone changes neither switch.", "In Stream Dock → Game, check the native Twitch prediction state. Confirmed Cancel requests a refund; Resolve uses only an already verified replay result."],
   recovery: "Predictions skip rematches within 10 minutes. Games under 60 seconds or no result within 20 minutes request refunds. Unconfirmed creates are never blindly repeated. If Twitch did not return a prediction ID, check the Twitch dashboard manually.",
-  settingsHref: "/settings?tab=overlay&section=chat#twitch-automation", helpSlug: "viewer-engagement", helpAnchor: "twitch-predictions",
+  settingsHref: "/settings?tab=chat#twitch-automation", helpSlug: "viewer-engagement", helpAnchor: "twitch-predictions",
 }] as const;
 
 /** Public channel panels are separate from private overlay tokens. */

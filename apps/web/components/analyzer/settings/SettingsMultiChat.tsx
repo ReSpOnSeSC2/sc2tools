@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Settings · Overlay · Multi-platform chat.
+ * Settings · Chat & alerts · Multi-platform chat.
  *
  * Configures the `multichat` overlay widget — Twitch, Kick, YouTube
  * and TikTok live chat combined into one OBS Browser Source. Setup
@@ -23,7 +23,7 @@
  * its config every minute, so saves land without touching OBS.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@clerk/nextjs";
 import { ExternalLink, Languages, MessageSquare, Wand2 } from "lucide-react";
@@ -224,13 +224,24 @@ function configFromDraft(
 }
 
 export function SettingsMultiChat({ token }: { token: string | null }) {
-  const { isLoaded, isSignedIn, userId } = useAuth();
+  const { isLoaded, isSignedIn, userId, getToken } = useAuth();
+  const owner = isLoaded && isSignedIn ? userId : null;
+  const scope = useMemo(() => ({ owner, token, active: true }), [owner, token]);
+  const latest = useRef(scope); latest.current = scope;
+  const readToken = useRef(getToken); readToken.current = getToken;
+  useLayoutEffect(() => { scope.active = true; return () => { scope.active = false; }; }, [scope]);
+  const current = useCallback(() => scope.active && latest.current === scope, [scope]);
+  const scopedToken = useCallback(async () => {
+    if (!current()) throw new Error("Account or selected token changed");
+    const bearer = await readToken.current();
+    if (!current()) throw new Error("Account or selected token changed");
+    return bearer;
+  }, [current]);
   if (!isLoaded) return <p className="text-caption text-text-muted">Loading chat settings…</p>;
   if (!isSignedIn || !userId) return <p className="text-caption text-text-muted">Sign in to configure chat settings.</p>;
-  return <OwnerSettingsMultiChat key={userId} token={token} />;
+  return <OwnerSettingsMultiChat key={`${userId}:${token ?? "none"}`} token={token} getToken={scopedToken} isCurrent={current} />;
 }
-function OwnerSettingsMultiChat({ token }: { token: string | null }) {
-  const { getToken } = useAuth();
+function OwnerSettingsMultiChat({ token, getToken, isCurrent }: { token: string | null; getToken: () => Promise<string | null>; isCurrent: () => boolean }) {
   const { toast } = useToast();
   const { data, isLoading, error, mutate } = useApi<MultichatConfig>(
     "/v1/me/preferences/multichat",
@@ -239,10 +250,16 @@ function OwnerSettingsMultiChat({ token }: { token: string | null }) {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [dirty, setDirty] = useState(false);
   // Switching Settings tabs unmounts this form: ask before dropping edits.
-  usePublishDirty("overlay", dirty);
+  usePublishDirty("chat", dirty);
   const [saving, setSaving] = useState(false);
   const saveRequest = useRef<AbortController | null>(null);
-  useEffect(() => () => saveRequest.current?.abort(), []);
+  const detectRequest = useRef<AbortController | null>(null);
+  const live = useRef(true);
+  const revision = useRef(0);
+  useLayoutEffect(() => {
+    live.current = true;
+    return () => { live.current = false; saveRequest.current?.abort(); detectRequest.current?.abort(); };
+  }, []);
   const [detecting, setDetecting] = useState(false);
   const [kickManualOpen, setKickManualOpen] = useState(false);
   const [kickPaste, setKickPaste] = useState("");
@@ -270,6 +287,7 @@ function OwnerSettingsMultiChat({ token }: { token: string | null }) {
   }, [dirty]);
 
   const set = (patch: Partial<Draft>) => {
+    revision.current += 1;
     setDraft((prev) => ({ ...prev, ...patch }));
     setDirty(true);
   };
@@ -306,7 +324,10 @@ function OwnerSettingsMultiChat({ token }: { token: string | null }) {
   }, [draft]);
 
   const save = async () => {
+    if (!live.current || !isCurrent() || saveRequest.current) return;
     const request = new AbortController(); saveRequest.current = request;
+    const sentRevision = revision.current;
+    const admitted = () => live.current && isCurrent() && saveRequest.current === request && !request.signal.aborted;
     setSaving(true);
     try {
       const clean: Draft = {
@@ -322,37 +343,43 @@ function OwnerSettingsMultiChat({ token }: { token: string | null }) {
         body: JSON.stringify(body),
         signal: request.signal,
       });
-      if (request.signal.aborted) return;
-      setDraft(clean);
+      if (!admitted()) return;
       // Refetch BEFORE clearing dirty: the hydrate effect re-fills the
       // draft from SWR `data` the moment dirty flips false, and until
       // the refetch resolves that cache still holds the PRE-save blob —
       // clearing first briefly reverted the form and could silently
       // undo the save if the user kept editing in that window.
-      await mutate();
-      if (request.signal.aborted) return;
-      setDirty(false);
+      const confirmed = await apiCall<MultichatConfig>(getToken, "/v1/me/preferences/multichat", { signal: request.signal });
+      if (!admitted()) return;
+      await mutate(previous => admitted() ? confirmed : previous, { revalidate: false });
+      if (!admitted() || revision.current !== sentRevision) return;
+      setDraft(clean); setDirty(false);
       toast.success("Chat settings saved", {
         description: "The overlay picks changes up within a minute.",
       });
     } catch {
-      if (!request.signal.aborted) toast.error("Could not save chat settings");
+      if (admitted()) toast.error("Could not save chat settings");
     } finally {
-      if (!request.signal.aborted) setSaving(false);
+      if (admitted()) setSaving(false);
+      if (saveRequest.current === request) saveRequest.current = null;
     }
   };
 
   const detectKick = async () => {
     const slug = normalizeKickChannelInput(draft.kickChannel);
-    if (!slug || !token) return;
+    if (!slug || !token || !live.current || !isCurrent() || detectRequest.current) return;
+    const controller = new AbortController(); detectRequest.current = controller;
+    const sentRevision = revision.current;
+    const admitted = () => live.current && isCurrent() && detectRequest.current === controller && !controller.signal.aborted && revision.current === sentRevision;
     setDetecting(true);
     try {
       const res = await fetch(
         `${API_BASE}/v1/multichat/${encodeURIComponent(token)}/kick/resolve?slug=${encodeURIComponent(slug)}`,
-        { cache: "no-store" },
+        { cache: "no-store", signal: controller.signal },
       );
       if (res.ok) {
         const body = (await res.json()) as { chatroomId: number };
+        if (!admitted()) return;
         set({ kickChatroomId: body.chatroomId });
         setKickManualOpen(false);
         toast.success(`Kick chatroom detected (#${body.chatroomId})`, {
@@ -361,6 +388,7 @@ function OwnerSettingsMultiChat({ token }: { token: string | null }) {
         return;
       }
       const body = await res.json().catch(() => null);
+      if (!admitted()) return;
       if (body?.error?.code === "not_found") {
         toast.error("Kick channel not found");
         return;
@@ -368,9 +396,10 @@ function OwnerSettingsMultiChat({ token }: { token: string | null }) {
       // kick_blocked (Cloudflare) → guided manual flow.
       setKickManualOpen(true);
     } catch {
-      setKickManualOpen(true);
+      if (admitted()) setKickManualOpen(true);
     } finally {
-      setDetecting(false);
+      if (live.current && isCurrent() && detectRequest.current === controller) setDetecting(false);
+      if (detectRequest.current === controller) detectRequest.current = null;
     }
   };
 
@@ -395,7 +424,7 @@ function OwnerSettingsMultiChat({ token }: { token: string | null }) {
   return (
     <Section
       title="Multi-platform chat"
-      description="One OBS source that merges your Twitch, Kick, YouTube and TikTok chats into a single live feed. Enable the platforms you stream to, save, then add the Multi-platform chat widget URL above as a Browser Source."
+      description="One OBS source that merges your Twitch, Kick, YouTube and TikTok chats into a single live feed. Enable platforms and save here; copy its Browser Source URL in Overlay → Widgets."
     >
       <Card>
         {isLoading ? (
@@ -441,11 +470,11 @@ function OwnerSettingsMultiChat({ token }: { token: string | null }) {
               </p>
             </div>
 
-            <ChatCommandsCard rankRace={draft.rankRace} editable token={token} />
+            <div id="commands" className="scroll-mt-28"><ChatCommandsCard rankRace={draft.rankRace} editable token={token} /></div>
 
 
 
-            <OfficialPlatformConnections />
+            <div id="platforms" className="scroll-mt-28"><OfficialPlatformConnections />
 
             <PlatformRow
               label="Twitch"
@@ -554,14 +583,15 @@ function OwnerSettingsMultiChat({ token }: { token: string | null }) {
               />
             </PlatformRow>
 
-            <div className="border-t border-border pt-5">
+            </div>
+            <div id="appearance" className="scroll-mt-28 border-t border-border pt-5">
               <SettingsMultiChatAppearance
                 value={draft.appearance}
                 onChange={(appearance) => set({ appearance })}
               />
             </div>
 
-            <div className="border-t border-border pt-5">
+            <div id="alerts" className="scroll-mt-28 border-t border-border pt-5">
               <SettingsMultiChatAlerts
                 value={draft.alerts}
                 onChange={(alerts) => set({ alerts })}
@@ -570,7 +600,7 @@ function OwnerSettingsMultiChat({ token }: { token: string | null }) {
               />
             </div>
 
-            <div className="border-t border-border pt-5">
+            <div id="tts" className="scroll-mt-28 border-t border-border pt-5">
               <SettingsMultiChatTts
                 value={draft.tts}
                 onChange={(tts) => set({ tts })}
@@ -580,7 +610,7 @@ function OwnerSettingsMultiChat({ token }: { token: string | null }) {
               />
             </div>
 
-            <div className="border-t border-border pt-5">
+            <div id="translation" className="scroll-mt-28 border-t border-border pt-5">
               <details className="group min-w-0" open={draft.translate.enabled}>
                 <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 text-body font-medium text-text [&::-webkit-details-marker]:hidden">
                   <Languages className="h-4 w-4 text-accent-cyan" aria-hidden />

@@ -10,7 +10,7 @@ export default function StreamStudioAuthCtas() {
   if (!isLoaded) return <StreamStudioSignedOutCtas />;
   return <><SignedIn>
     <Link href="/settings?tab=overlay" className={buttonClassName({ size: "lg" })}>Open Overlay settings</Link>
-    <Link href="/settings?tab=overlay#stream-dock" className={buttonClassName({ variant: "secondary", size: "lg" })}>Set up my Stream Dock</Link>
+    <Link href="/settings?tab=chat#stream-dock" className={buttonClassName({ variant: "secondary", size: "lg" })}>Set up my Stream Dock</Link>
     <Link href="/stream-studio/learn#crash-course" className={buttonClassName({ variant: "ghost" })}>Continue the crash course</Link>
   </SignedIn><SignedOut><StreamStudioSignedOutCtas /></SignedOut></>;
 }

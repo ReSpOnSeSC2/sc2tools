@@ -32,7 +32,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(list).toHaveCount(1);
     await expect(list).toHaveAttribute("aria-orientation", mobile ? "horizontal" : "vertical");
     expect(await list.getByRole("tab").evaluateAll(nodes => nodes.map(node => node.getAttribute("data-value"))))
-      .toEqual(["account", "profile", "backups", "checkin", "randomizer", "import", "overlay", "voice", "preferences", "help"]);
+      .toEqual(["account", "profile", "backups", "checkin", "randomizer", "import", "overlay", "chat", "voice", "preferences", "help"]);
     expect(evidence.panelReads).toEqual(["preferences"]);
     if (!mobile) {
       const sidebar = page.getByRole("navigation", { name: "Settings navigation", exact: true });
@@ -40,7 +40,7 @@ for (const theme of ["light", "dark"] as const) {
       const devices = sidebar.getByRole("link", { name: "Devices", exact: true });
       await expect(devices).toHaveAttribute("href", "/devices");
       await expect(devices).toHaveAttribute("data-settings-group", "account");
-      await expect(list.getByRole("tab", { name: "Overlay", exact: true })).toHaveAccessibleDescription("Streaming OBS URLs, scenes, theme, chat");
+      await expect(list.getByRole("tab", { name: "Overlay", exact: true })).toHaveAccessibleDescription("Streaming OBS sources, widgets, scenes and theme");
       expect(await list.evaluate(node => getComputedStyle(node).display)).toBe("contents");
       expect(await list.evaluate(node => Array.from(node.children).every(child => child.getAttribute("role") === "tab"))).toBe(true);
       const account = (await list.getByRole("tab", { name: "Account", exact: true }).boundingBox())!;
@@ -78,7 +78,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
     await expect(panel.getByLabel("Local draft", { exact: true })).toHaveValue("Keep this unsaved choice");
-    await expect(page).toHaveURL(/\/settings\?tab=preferences&ref=legacy$/);
+    await expect(page).toHaveURL(/\/settings\?tab=misc&ref=legacy$/);
     await list.getByRole("tab", { name: "Account", exact: true }).click();
     await expect(dialog).toBeVisible();
     await discard.click();
@@ -87,8 +87,8 @@ for (const theme of ["light", "dark"] as const) {
     expect(evidence.panelReads).toEqual(["preferences", "account"]);
 
     await page.evaluate(() => (window as SettingsFixtureWindow).settingsFixtureNavigate("/settings?tab=streaming#platform-connections"));
-    await expect(panel.getByRole("heading", { name: "Overlay panel", exact: true })).toBeVisible();
-    await expect(page).toHaveURL(/\?tab=streaming#platform-connections$/);
+    await expect(panel.getByRole("heading", { name: "Chat & alerts panel", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\?tab=chat#platform-connections$/);
     await expect(panel.locator("#platform-connections")).toHaveAttribute("data-section-flash", /.+/);
     await list.getByRole("tab", { name: "Backups & data", exact: true }).click();
     await expect(panel.getByRole("heading", { name: "Backups & data panel", exact: true })).toBeVisible();
@@ -104,7 +104,7 @@ for (const theme of ["light", "dark"] as const) {
     await list.getByRole("tab", { name: "Preferences", exact: true }).click();
     await expect(panel.getByRole("heading", { name: "Preferences panel", exact: true })).toBeVisible();
     await expect(panel.getByLabel("Local draft", { exact: true })).toHaveValue("");
-    expect(evidence.panelReads).toEqual(["preferences", "account", "overlay", "backups", "checkin", "account", "help", "preferences"]);
+    expect(evidence.panelReads).toEqual(["preferences", "account", "chat", "backups", "checkin", "account", "help", "preferences"]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const selected = list.getByRole("tab", { name: "Preferences", exact: true });
     await expect(selected).toBeInViewport();
@@ -146,7 +146,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByRole("heading", { name: "Devices destination", exact: true })).toBeVisible();
     await expect(page).toHaveURL(/\/devices$/);
     expect(await page.evaluate(() => (window as SettingsFixtureWindow).settingsFixtureRouterPushes())).toEqual(["/devices"]);
-    expect(evidence.panelReads).toEqual(["preferences", "account", "overlay", "backups", "checkin", "account", "help", "preferences"]);
+    expect(evidence.panelReads).toEqual(["preferences", "account", "chat", "backups", "checkin", "account", "help", "preferences"]);
     expect(evidence.errors).toEqual([]);
     expect(evidence.unexpectedRequests).toEqual([]);
     expect(evidence.rejectedWrites).toEqual([]);

@@ -6,6 +6,7 @@
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
 
 const mocks = vi.hoisted(() => ({
   tab: null as string | null,
@@ -17,6 +18,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock("@/lib/instant/useInstantImport", () => ({ useInstantImport: () => mocks.gate }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "synthetic-owner", isLoaded: true, isSignedIn: true }) }));
+vi.mock("@/components/analyzer/settings/SettingsStreamingTokenOwner", () => ({ SettingsStreamingTokenOwner: ({ children }: { children: ReactNode }) => <section aria-label="admitted token owner">{children}</section> }));
+vi.mock("@/components/analyzer/settings/SettingsChat", () => ({ SettingsChat: () => <p>chat body</p> }));
 vi.mock("@/components/analyzer/settings/SettingsFoundation", () => ({ SettingsFoundation: () => <p>foundation body</p> }));
 vi.mock("@/components/analyzer/settings/SettingsProfile", () => ({ SettingsProfile: () => <p>profile body</p> }));
 vi.mock("@/components/analyzer/settings/SettingsOverlay", () => ({ SettingsOverlay: () => <p>overlay body</p> }));
@@ -31,6 +35,7 @@ vi.mock("@/components/build-checkin/BuildCheckInSettings", () => ({ BuildCheckIn
 import SettingsPage from "../page";
 
 beforeEach(() => {
+  window.history.replaceState(null, "", "/settings");
   mocks.tab = null;
   mocks.gate = { enabled: false, mode: "off", loading: false };
 });
@@ -76,6 +81,19 @@ describe("SettingsPage ?tab=", () => {
     mocks.tab = "streaming";
     render(<SettingsPage />);
     expect(await screen.findByText("overlay body")).toBeTruthy();
+  });
+
+  it("never mounts the lazy token creator on Account and resolves old Dock intent directly to Chat", async () => {
+    const view = render(<SettingsPage />);
+    expect(screen.getByText("foundation body")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "admitted token owner" })).toBeNull();
+    mocks.tab = "overlay";
+    window.history.replaceState(null, "", "/settings?tab=overlay#stream-dock");
+    view.rerender(<SettingsPage />);
+    expect(await screen.findByText("chat body")).toBeTruthy();
+    expect(screen.queryByText("overlay body")).toBeNull();
+    expect(screen.getAllByRole("region", { name: "admitted token owner" })).toHaveLength(1);
+    expect(window.location.search + window.location.hash).toBe("?tab=chat#stream-dock");
   });
 
   it("links the help article about the tabs", () => {
