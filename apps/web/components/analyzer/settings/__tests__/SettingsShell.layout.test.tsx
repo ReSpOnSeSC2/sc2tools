@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
 import { SettingsShell } from "../SettingsShell";
+import { SettingsSectionsReady } from "../SettingsSectionNav";
 
 vi.mock("next/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/navigation")>()),
@@ -10,6 +12,23 @@ vi.mock("next/navigation", async (importOriginal) => ({
 afterEach(cleanup);
 
 describe("SettingsShell layout containment", () => {
+  it("adds the third real section rail without remounting the current draft", async () => {
+    function ProfileBody() {
+      const [ready, setReady] = useState(false);
+      return <><SettingsSectionsReady revision={ready} /><input aria-label="Profile draft" defaultValue="saved" />
+        <button onClick={() => setReady(true)}>Admit third section</button><section id="profile-details">Profile details</section>
+        <section id="pulse-ids">Pulse IDs</section>{ready ? <section id="player-channels">Channels</section> : null}</>;
+    }
+    window.history.replaceState(null, "", "/settings?tab=profile");
+    render(<SettingsShell initialTab="profile" renderTab={id => id === "profile" ? <ProfileBody /> : <p>{id}</p>} />);
+    const draft = screen.getByRole("textbox", { name: "Profile draft" });
+    fireEvent.change(draft, { target: { value: "unsaved profile" } });
+    expect(screen.queryByRole("navigation", { name: "On this page" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Admit third section" }));
+    await waitFor(() => expect(screen.getByRole("navigation", { name: "On this page" })).toBeTruthy());
+    expect(screen.getByRole("textbox", { name: "Profile draft" })).toBe(draft);
+    expect((draft as HTMLInputElement).value).toBe("unsaved profile");
+  });
   it("gives the content track a zero minimum width", () => {
     const { container } = render(
       <SettingsShell
@@ -18,7 +37,7 @@ describe("SettingsShell layout containment", () => {
       />,
     );
 
-    const grid = container.firstElementChild;
+    const grid = container.querySelector<HTMLElement>("[data-settings-shell-grid]");
     expect(grid).not.toBeNull();
     expect(grid!.className.split(/\s+/)).toContain(
       "lg:grid-cols-[240px_minmax(0,1fr)]",
@@ -29,6 +48,8 @@ describe("SettingsShell layout containment", () => {
     expect(
       screen.getAllByRole("tab", { name: "Backups & data" }),
     ).toHaveLength(2);
+    expect(screen.getAllByRole("combobox", { name: "Find a setting" })).toHaveLength(1);
+    expect(screen.getByRole("combobox", { name: "Find a setting" }).compareDocumentPosition(grid!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("groups desktop navigation without breaking arrows between groups", () => {

@@ -57,6 +57,9 @@ const article: HelpArticle = {
         ["Help", "Help", "These help articles, with search."],
       ],
     },
+    { type: "heading", text: "Find a setting" },
+    { type: "paragraph", text: "Use **Find a setting** above the tabs, or press **/** while you are not typing in another field. Search field names such as **TTS volume**, **Kick chatroom**, **Pulse ID**, **Delete account**, **Overlay theme** or **Reset overlay URLs**. Use Up and Down to choose a result, Enter to open it and Escape to close the results. Searching only uses setting labels; it does not read the contents of your account or open inactive tools." },
+    { type: "paragraph", text: "A result opens the right tab and briefly outlines its section. It only takes you to the setting: searching for Delete account or Reset overlay URLs does not run that action. If you have unsaved changes in another tab, the same Stay or Discard choice appears before you leave. Browser import tools appear only when enabled for your account; search for Replay import to reach the always-available import settings." },
     { type: "heading", text: "Open a tab from a link" },
     {
       type: "list",
@@ -71,7 +74,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Unsaved changes" },
     {
       type: "paragraph",
-      text: "Overlay and Chat & alerts each have one **On this page** navigator: a rail beside the form on a desktop and a section dropdown on a phone. Their sections stay on one page. Scrolling updates the highlighted section without moving you or changing the address; choosing a section jumps to it and briefly outlines it. Tokens points to the shared controls above the form. Older Overlay Look links now reach Theme, and older Ghost links reach Ghost Build coach. Moving between sections of the same tab keeps your draft.",
+      text: "Tabs with at least three available sections have one **On this page** navigator: a rail beside the form on a desktop and a section dropdown on a phone. Account, Profile, Backups & data, Preferences and Randomizer include their actual sections. Import adds its navigator when its browser tools are available. Overlay and Chat & alerts keep their shared navigator. Scrolling updates the highlighted section without moving you or changing the address; choosing a section jumps to it and briefly outlines it. Tokens points to the shared controls above the streaming form inside its active panel. Older Overlay Look links reach Theme, and older Ghost links reach Ghost Build coach. Moving between sections of the same tab keeps your draft. If a conditional section disappears, the current address stays intact and the navigator highlights an available section.",
     },
     {
       type: "paragraph",

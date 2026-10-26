@@ -10,7 +10,13 @@ import { useState } from "react";
 import { SettingsShell, type SettingsTabId } from "../SettingsShell";
 import { usePublishDirty } from "../SettingsContext";
 
-const callbacks = vi.hoisted(() => ({ confirm: null as (() => void) | null, navigate: null as ((href: string) => void) | null }));
+const callbacks = vi.hoisted(() => ({ confirm: null as (() => void) | null, navigate: null as ((href: string) => void) | null, choose: null as ((value: string) => void) | null }));
+vi.mock("@/components/ui/Combobox", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/components/ui/Combobox")>();
+  return { ...actual, Combobox: (props: Parameters<typeof actual.Combobox>[0]) => {
+    callbacks.choose = props.onChange; return <actual.Combobox {...props} />;
+  } };
+});
 vi.mock("../OverlayManagerNav", async importOriginal => {
   const actual = await importOriginal<typeof import("../OverlayManagerNav")>();
   return { ...actual, OverlayManagerNav: (props: Parameters<typeof actual.OverlayManagerNav>[0]) => { callbacks.navigate = props.onNavigate; return <actual.OverlayManagerNav {...props} />; } };
@@ -42,7 +48,7 @@ function shell(initialTab: SettingsTabId, dirtyTab: SettingsTabId | null = null)
 }
 
 function activePanel() {
-  return screen.getByRole("tabpanel").textContent;
+  return screen.getByRole("tabpanel").querySelector("p")?.textContent;
 }
 
 beforeEach(() => {
@@ -55,6 +61,41 @@ afterEach(() => {
 });
 
 describe("SettingsShell ?tab= sync", () => {
+  it.each([false, true])("retained search choice consults the committed current dirty domain after a tab change=%s", (switchTab) => {
+    function Draft({ id }: { id: string }) {
+      const [value, setValue] = useState("saved"); usePublishDirty(id, value !== "saved");
+      return <><p>draft {id}</p><input aria-label={`${id} draft`} value={value} onChange={event => setValue(event.target.value)} /></>;
+    }
+    window.history.replaceState(null, "", "/settings?tab=profile&ref=retained#pulse-ids");
+    render(<SettingsShell initialTab="profile" ownerKey="a" renderTab={id => <Draft id={id} />} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Find a setting" }), { target: { value: "Delete account" } });
+    const oldChoice = callbacks.choose!;
+    if (switchTab) fireEvent.click(screen.getAllByRole("tab", { name: "Voice" })[0]);
+    const active = switchTab ? "voice" : "profile", beforeHref = window.location.href;
+    const input = screen.getByRole("textbox", { name: `${active} draft` });
+    fireEvent.change(input, { target: { value: "unsaved current owner" } });
+    act(() => oldChoice("gdpr"));
+    expect(screen.getByRole("dialog", { name: "Discard unsaved changes?" })).toBeTruthy();
+    expect(window.location.href).toBe(beforeHref);
+    fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
+    expect(window.location.href).toBe(beforeHref); expect(screen.getByRole("textbox", { name: `${active} draft` })).toBe(input);
+    expect((input as HTMLInputElement).value).toBe("unsaved current owner");
+  });
+  it("routes search through complete dirty admission and restores the admitted URL on Stay", () => {
+    window.history.replaceState(null, "", "/settings?tab=preferences&ref=search#notifications");
+    render(<SettingsShell initialTab="preferences" ownerKey="owner-a" renderTab={id => id === "preferences" ? <DirtyPanel id={id} /> : <p>panel {id}</p>} />);
+    const search = screen.getByRole("combobox", { name: "Find a setting" });
+    fireEvent.change(search, { target: { value: "Pulse ID" } });
+    fireEvent.keyDown(search, { key: "ArrowDown" }); fireEvent.keyDown(search, { key: "Enter" });
+    expect(screen.getByRole("dialog", { name: "Discard unsaved changes?" })).toBeTruthy();
+    expect(activePanel()).toBe("dirty preferences");
+    expect(window.location.search + window.location.hash).toBe("?tab=preferences&ref=search#notifications");
+    fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
+    expect(window.location.search + window.location.hash).toBe("?tab=preferences&ref=search#notifications");
+    fireEvent.focus(search); fireEvent.keyDown(search, { key: "ArrowDown" }); fireEvent.keyDown(search, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "Discard & switch" }));
+    expect(activePanel()).toBe("panel profile"); expect(window.location.search + window.location.hash).toBe("?tab=profile#pulse-ids");
+  });
   it("same-tab section navigation keeps the mounted draft; leaving it still asks first", () => {
     function Draft() {
       const [value, setValue] = useState("saved"); usePublishDirty("overlay", value !== "saved");

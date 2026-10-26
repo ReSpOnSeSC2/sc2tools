@@ -44,6 +44,7 @@ export function ReplayArchiveStatusCard() {
 
   return (
     <Section
+      id="replay-archive" className="scroll-mt-28"
       title="Cloud Replay Archive"
       description="Private originals for clean downloads, alongside the replay analysis already in your account."
     >

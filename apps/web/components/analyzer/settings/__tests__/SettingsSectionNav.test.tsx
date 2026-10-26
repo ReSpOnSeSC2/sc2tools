@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { SettingsSectionNav } from "../SettingsSectionNav";
+import { SettingsSectionNav, SettingsSectionsReady } from "../SettingsSectionNav";
 import { SECTION_WAIT_MS } from "../revealSectionAnchor";
 
 const sections = [{ id: "setup", label: "Setup" }, { id: "theme", label: "Theme" }, { id: "tokens", label: "Tokens" }];
@@ -65,7 +65,51 @@ it("discovers an admitted late target for a bounded interval and retires observe
   await act(async () => { await vi.advanceTimersByTimeAsync(SECTION_WAIT_MS); });
   const afterDeadline = document.createElement("section"); afterDeadline.id = "theme";
   await act(async () => { replacement.replaceWith(afterDeadline); await Promise.resolve(); });
-  expect(records[0].observe).not.toHaveBeenCalledWith(afterDeadline);
+  expect(records[0].observe.mock.calls.some(([target]) => target === afterDeadline)).toBe(false);
   view.unmount(); expect(records[0].disconnect).toHaveBeenCalledOnce();
   intersect(afterDeadline); expect(screen.queryByRole("navigation", { name: "On this page" })).toBeNull();
+});
+
+function MountedHarness({ ready = false, owner = "a" }: { ready?: boolean; owner?: string }) {
+  const scope = useRef<HTMLDivElement>(null);
+  return <div ref={scope} data-testid="mounted-scope">
+    <SettingsSectionNav key={owner} tab="profile" sections={sections} scope={scope} hash="#theme"
+      onNavigate={() => { throw new Error("Readiness must not navigate"); }} targetPolicy="mounted" minimumSections={3} />
+    <div><SettingsSectionsReady revision={ready} /><input aria-label="Local draft" defaultValue="saved" />
+      <section id="setup">Setup</section><section id="tokens">Tokens</section>{ready ? <section id="theme">Theme</section> : null}</div>
+  </div>;
+}
+
+it("rearms one bounded window after actual late readiness without replacing a dirty body or revealing it", async () => {
+  vi.useFakeTimers(); const scroll = vi.fn(); HTMLElement.prototype.scrollIntoView = scroll;
+  window.history.replaceState(null, "", "/settings?tab=profile#theme");
+  const view = render(<MountedHarness />), draft = screen.getByRole("textbox", { name: "Local draft" });
+  fireEvent.change(draft, { target: { value: "unsaved" } }); draft.focus();
+  expect(screen.queryByRole("navigation", { name: "On this page" })).toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(SECTION_WAIT_MS + 1); });
+  view.rerender(<MountedHarness ready />);
+  expect(screen.getByRole("navigation", { name: "On this page" })).toBeTruthy();
+  expect(records).toHaveLength(1);
+  expect(records[0].observe.mock.calls.some(([target]) => target === screen.getByTestId("mounted-scope").querySelector('[id="theme"]'))).toBe(true);
+  expect(screen.getByRole("textbox", { name: "Local draft" })).toBe(draft);
+  expect((draft as HTMLInputElement).value).toBe("unsaved"); expect(document.activeElement).toBe(draft);
+  expect(window.location.hash).toBe("#theme"); expect(scroll).not.toHaveBeenCalled();
+  await act(async () => { await vi.advanceTimersByTimeAsync(SECTION_WAIT_MS + 1); });
+  view.rerender(<MountedHarness />);
+  expect(screen.queryByRole("navigation", { name: "On this page" })).toBeNull();
+  expect(window.location.hash).toBe("#theme"); expect(screen.getByRole("textbox")).toBe(draft);
+  expect(scroll).not.toHaveBeenCalled();
+});
+
+it("retires mounted-only owner A→B→A observers and ignores their queued callbacks", () => {
+  const view = render(<MountedHarness ready owner="a" />);
+  const old = records[0], target = screen.getByTestId("mounted-scope").querySelector('[id="setup"]')!;
+  view.rerender(<MountedHarness ready owner="b" />); view.rerender(<MountedHarness ready owner="a" />);
+  const select = screen.getByRole("combobox", { name: "On this page" });
+  expect((select as HTMLSelectElement).value).toBe("theme");
+  act(() => old.callback([{ target, isIntersecting: true, boundingClientRect: { top: 112 } } as IntersectionObserverEntry], {} as IntersectionObserver));
+  expect((select as HTMLSelectElement).value).toBe("theme");
+  view.unmount();
+  act(() => records.at(-1)!.callback([{ target, isIntersecting: true, boundingClientRect: { top: 112 } } as IntersectionObserverEntry], {} as IntersectionObserver));
+  expect(screen.queryByRole("navigation")).toBeNull();
 });

@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Find a setting
+
+- Search setting names and synonyms above the Settings tabs, with keyboard results and `/` focus outside editable fields. Results use the existing unsaved-changes guard and only navigate; they never run the named action.
+- Add stable section links and one On this page navigator to the remaining tabs with at least three available sections, including Notifications and the nested Randomizer controls. Conditional Import and Gateway sections follow the real admitted page.
+- Keep drafts in place when a section navigator appears, and discover late sections with a bounded local readiness signal that does not restart a cancelled reveal or move focus.
+
 ### Settings section navigation
 
 - Keep Overlay setup, widgets, scenes, Build profile, Ghost Build coach and Theme on one page, with the shared Tokens controls addressable above the form.

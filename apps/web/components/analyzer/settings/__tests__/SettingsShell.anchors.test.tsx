@@ -9,7 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useEffect, useState, type ReactNode } from "react";
 import { SettingsShell, defaultTabVisibility, type SettingsTabId } from "../SettingsShell";
-import { SECTION_FLASH_ATTR, SECTION_FLASH_MS } from "../revealSectionAnchor";
+import { SECTION_FLASH_ATTR, SECTION_FLASH_MS, SECTION_WAIT_MS } from "../revealSectionAnchor";
+import { SettingsSectionsReady } from "../SettingsSectionNav";
 
 vi.mock("next/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/navigation")>()),
@@ -128,6 +129,20 @@ describe("SettingsShell legacy #tab links", () => {
 });
 
 describe("SettingsShell #section anchors", () => {
+  it("late mounted-only readiness never restarts a user-cancelled anchor reveal", async () => {
+    vi.useFakeTimers(); window.history.replaceState(null, "", "/settings?tab=profile#public-profile");
+    function Profile({ ready }: { ready: boolean }) {
+      return <><SettingsSectionsReady revision={ready} /><section id="profile-details">Profile</section>
+        <section id="pulse-ids">Pulse</section>{ready ? <section id="public-profile">Public profile</section> : null}</>;
+    }
+    const shellFor = (ready: boolean) => <SettingsShell initialTab="profile" renderTab={id => id === "profile" ? <Profile ready={ready} /> : <p>{id}</p>} />;
+    const view = render(shellFor(false));
+    fireEvent.keyDown(window, { key: "Tab" });
+    await act(async () => { await vi.advanceTimersByTimeAsync(SECTION_WAIT_MS + 1); });
+    view.rerender(shellFor(true));
+    expect(screen.getByRole("navigation", { name: "On this page" })).toBeTruthy();
+    expect(scrollIntoView).not.toHaveBeenCalled(); expect(window.location.hash).toBe("#public-profile");
+  });
   it("reveals shared Tokens above the private body inside the persistent panel, while excluding chrome", () => {
     window.history.replaceState(null, "", "/settings?tab=overlay&section=tokens");
     const view = render(<main id="main-content"><SettingsShell initialTab="overlay" renderTab={renderPanel}

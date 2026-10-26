@@ -30,6 +30,7 @@ import {
 } from "@/components/imports/useImportStatus";
 import { SettingsLoadError } from "./SettingsLoadError";
 import { setupAgentOnline, type SetupMe } from "./setupHealth";
+import { SettingsSectionsReady } from "./SettingsSectionNav";
 
 // NOTE: this panel previously parsed a `{current: {...}}` envelope and
 // `id`/`totalReplays`/`scanned` fields that the API never returned —
@@ -92,9 +93,9 @@ export function SettingsImportPanel() {
     }
   }
 
-  if (me.error && !me.data) return <SettingsLoadError tab="Desktop app connection" error={me.error} retry={me.mutate} />;
-  if (importStatus.error && !importStatus.job) return <SettingsLoadError tab="Desktop import status" error={importStatus.error} retry={importStatus.refresh} />;
-  if (importStatus.isLoading || !me.data) return <Skeleton rows={3} />;
+  if (me.error && !me.data) return <><SettingsSectionsReady revision="error" /><SettingsLoadError tab="Desktop app connection" error={me.error} retry={me.mutate} /></>;
+  if (importStatus.error && !importStatus.job) return <><SettingsSectionsReady revision="error" /><SettingsLoadError tab="Desktop import status" error={importStatus.error} retry={importStatus.refresh} /></>;
+  if (importStatus.isLoading || !me.data) return <><SettingsSectionsReady revision="loading" /><Skeleton rows={3} /></>;
   const job = importStatus.job;
   const isRunning = importStatus.active;
   const importBlocked = importJobBlocksStart(job?.status);
@@ -105,7 +106,9 @@ export function SettingsImportPanel() {
 
   return (
     <div className="space-y-6">
+      <SettingsSectionsReady />
       <Section
+        id="desktop-import" className="scroll-mt-28"
         title="Desktop agent import"
         description="Pull every replay from your local SC2 install into the cloud. Useful on first run, after switching machines, or to refresh the cloud copy from scratch."
       >
@@ -161,6 +164,7 @@ export function SettingsImportPanel() {
       </Section>
 
       <Section
+        id="import-jobs" className="scroll-mt-28"
         title="Recent jobs"
         description="Your last 10 import runs and their outcome."
       >

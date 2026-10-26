@@ -121,6 +121,7 @@ export function MatchupBuildPicker({
       ) : (
         <>
           <Section
+            id="catalog-builds" className="scroll-mt-28"
             title="Catalog builds"
             description="Builds that come with SC2 Tools, for this matchup or for your race in any matchup."
           >
@@ -135,6 +136,7 @@ export function MatchupBuildPicker({
             />
           </Section>
           <Section
+            id="custom-builds" className="scroll-mt-28"
             title="Build library"
             description="Your custom builds whose race and opponent race fit this matchup. Add more in Build library."
           >

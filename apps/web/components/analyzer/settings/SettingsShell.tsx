@@ -39,6 +39,7 @@ import { revealSectionAnchor } from "./revealSectionAnchor";
 import { settingsSectionsForTab } from "@/lib/settingsIndex";
 import { SettingsSectionNav } from "./SettingsSectionNav";
 import { OverlayManagerNav } from "./OverlayManagerNav";
+import { SettingsSearch } from "./SettingsSearch";
 
 // Preserve existing imports while non-UI consumers can use the pure leaf.
 export {
@@ -192,6 +193,7 @@ function SettingsShellInner({
   // and highlight it, and again whenever the anchor changes. Help opens
   // its own article anchors.
   const panelRegion = useRef<HTMLDivElement>(null);
+  const activeBody = useRef<HTMLDivElement>(null);
   const panelScopeId = useId();
   const desktopRows = SETTINGS_GROUPS.flatMap((group) => {
     const groupTabs = tabs.filter((tab) => tab.group === group.id);
@@ -243,11 +245,13 @@ function SettingsShellInner({
 
   return (
     <>
+      <SettingsSearch key={owner.key ?? "signed-out"} ownerKey={owner.key ?? null} onNavigate={requestSection} />
       <Tabs
         value={active}
         onValueChange={(next) => requestSwitch(next)}
         orientation="vertical"
         className="lg:grid-cols-[240px_minmax(0,1fr)]"
+        data-settings-shell-grid=""
       >
         <MobileSettingsTabs tabs={tabs} active={active} isDirty={ctx.isDirty} requestSwitch={requestSwitch} />
 
@@ -328,7 +332,13 @@ function SettingsShellInner({
             data-settings-panel={`${panelScopeId}-${t.id}`}
             className="space-y-5 pb-24"
           >
-            {renderTab(t.id)}
+            {t.id !== "help" && settingsSectionsForTab(t.id).length >= 3 ? <div ref={activeBody}
+              className="grid min-w-0 gap-5 lg:has-[>nav]:grid-cols-[minmax(0,1fr)_160px]">
+              <SettingsSectionNav key={`${owner.key ?? "signed-out"}:${t.id}`} tab={t.id}
+                sections={settingsSectionsForTab(t.id)} scope={activeBody} hash={destination.hash}
+                onNavigate={requestSection} targetPolicy="mounted" minimumSections={3} />
+              <div className="min-w-0 lg:col-start-1 lg:row-start-1">{renderTab(t.id)}</div>
+            </div> : renderTab(t.id)}
           </Tabs.Content>
           ));
         })()}

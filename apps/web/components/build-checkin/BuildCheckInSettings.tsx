@@ -74,7 +74,7 @@ export function BuildCheckInSettings() {
 
   if (error && data === undefined) {
     return (
-      <Section title="Build check-in">
+      <Section id="build-check-in" className="scroll-mt-28" title="Build check-in">
         <Card role="alert">
           <p className="text-caption text-text-muted">
             Couldn't load your build check-in settings. {buildIntentErrorMessage(error)}
@@ -93,6 +93,7 @@ export function BuildCheckInSettings() {
   return (
     <>
       <Section
+        id="build-check-in" className="scroll-mt-28"
         title="Build check-in"
         description="Game-screen prompts are off by default. Choose which ones you want. A confirmed check-in counts the game toward your planned build's record, even when the replay was classified as something else."
       >

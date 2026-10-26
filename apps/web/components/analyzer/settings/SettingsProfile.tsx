@@ -24,6 +24,7 @@ import { usePublishDirty } from "./SettingsContext";
 import { SettingsPlayerChannels } from "./SettingsPlayerChannels";
 import { SettingsPublicProfile } from "./SettingsPublicProfile";
 import { SettingsLoadError } from "./SettingsLoadError";
+import { SettingsSectionsReady } from "./SettingsSectionNav";
 
 type ProfileRead = {
   battleTag?: string;
@@ -228,12 +229,14 @@ export function SettingsProfile() {
     });
   }
 
-  if (isLoading) return <Skeleton rows={4} />;
-  if (error && data === undefined) return <SettingsLoadError tab="Profile settings" error={error} retry={mutate} />;
+  if (isLoading) return <><SettingsSectionsReady revision="loading" /><Skeleton rows={4} /></>;
+  if (error && data === undefined) return <><SettingsSectionsReady revision="error" /><SettingsLoadError tab="Profile settings" error={error} retry={mutate} /></>;
 
   return (
     <>
+      <SettingsSectionsReady />
       <Section
+        id="profile-details" className="scroll-mt-28"
         title="Profile"
         description="How you appear in your dashboard and overlay cards. BattleTag and Pulse IDs let us link cloud games to your in-game identity."
       >
@@ -321,6 +324,7 @@ export function SettingsProfile() {
       </Section>
 
       <Section
+        id="pulse-ids" className="scroll-mt-28"
         title="Pulse IDs"
         description="Add every SC2Pulse identity you play on. Multi-region streamers usually have one per region; the agent auto-detects new ones from your replays."
       >

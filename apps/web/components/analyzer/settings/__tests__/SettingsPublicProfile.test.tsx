@@ -24,6 +24,8 @@ describe("public player privacy settings", () => {
   it("does no write on mount and creates an address without enabling either public surface", async () => {
     mocks.fetch.mockImplementation(async (_url: string, init?: RequestInit) => init?.method === "PUT" ? response(PLAYER_SETTINGS) : response({ ...PLAYER_SETTINGS, slug: null }));
     mount(); const create = await screen.findByRole("button", { name: "Create player link" });
+    expect(document.querySelectorAll('[id="public-profile"]')).toHaveLength(1);
+    expect(document.getElementById("public-profile")?.contains(create)).toBe(true);
     expect(mocks.fetch.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
     fireEvent.click(create);
     await screen.findByText("Player link created. Your profile is still off.");
