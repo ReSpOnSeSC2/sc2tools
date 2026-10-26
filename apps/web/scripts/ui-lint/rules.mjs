@@ -141,6 +141,10 @@ function isCanonicalBrowserThemeColor(file, node) {
 
 export function analyzeSource(file, text) {
   file = pathName(file);
+  // Physical source line endings are equivalent in JS/TS, including templates.
+  // Canonicalize before parsing so printer-reused raw tokens match on Windows
+  // and Linux. Escaped backslash-r/backslash-n literal content stays untouched.
+  text = text.replace(/\r\n?/g, "\n");
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const bindings = declaredBindings(source);
   const { isShadowed } = bindings;

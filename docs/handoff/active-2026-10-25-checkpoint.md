@@ -94,6 +94,12 @@ resolves to Vercel but is absent from the sc2tools project's Domains list.
    assertions. The source retains the original dossier order and explicit saved
    preferences. **Eleven pre-existing owner PNG edits remain byte-identical and
    unstaged** in `wave3-build-exports`; preserve its branch, worktree and caches.
+   Nav is merged but **production deployment is pending**: no automatic deploy
+   appeared, and one normal manual request for verified main was rejected by
+   Vercel's free daily deployment quota (100), with a 24-hour retry instruction.
+   No retry or upgrade followed. Production remains the delivered PR756/b97
+   source. PR752 still requires successful remote CI/deployment gates before
+   merge; an unattempted or quota-blocked preview is not a successful gate.
 3. **Requested Macro editor and PvT DT correction756** are live as main
    `b97fb80c1dec3aec7e53ece7bfe26852b6d40d9d`. Final published head `f5659d36`
    passed all remote gates, including Windows UI and Vercel; root verified the
@@ -117,6 +123,14 @@ resolves to Vercel but is absent from the sc2tools project's Domains list.
    `codex/wave5-public-player`, based on Nav `9849c107`. Its agents own that pack;
    its next serialized validation slot follows the completed A11y work above.
    No test, deployment or roadmap-completion claim is made for it here.
+
+At PR752 head `301c1b20`, CI passed full web types/lint but exposed one Dock CSS
+ratchet signature differing with Windows CRLF versus Linux LF source. The
+tooling-only repair canonicalizes physical line endings before parsing while
+preserving escaped literal values. All 18 rule tests, strict script lint and
+the 1,645-file scan pass locally; only the existing Dock signature hash changes,
+with identical file/rule/example/count. No waiver or debt increase is accepted.
+The shared runtime remains frozen; root owns repair commit/push and fresh gates.
 
 Latest Randomizer question was answered from source: native page is a silent
 shared-pool editor/saved-result display. Animation/sounds/speech live in widget.

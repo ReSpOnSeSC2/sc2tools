@@ -114,6 +114,28 @@ test("dialog signatures include their element context", () => {
     analyze(`<div role="dialog" aria-label="Two" />`)[0].signature);
 });
 
+test("template CSS and enclosing call signatures are identical for LF and CRLF source", () => {
+  const sources = [
+    ['const view = <style>{`', 'html, body { background: #0b0e14 !important; }', 'body { margin: 0; }', '`}</style>;'].join("\n"),
+    ['window.confirm(`first line', 'second line`);'].join("\n"),
+    ['const css = `color: #fff;', '${theme} { margin: 0; }', '`;'].join("\n"),
+  ];
+  for (const lf of sources) {
+    const expected = aggregateViolations(analyze(lf));
+    assert(expected.length > 0);
+    assert.deepEqual(aggregateViolations(analyze(lf.replaceAll("\n", "\r\n"))), expected);
+    assert.deepEqual(aggregateViolations(analyze(lf.replaceAll("\n", "\r"))), expected);
+  }
+});
+
+test("line-ending canonicalization preserves escaped CRLF versus escaped LF literal content", () => {
+  for (const quote of ['"', '`']) {
+    const signature = content => analyze(`const css = ${quote}#fff;${content}color${quote};`)[0].signature;
+    assert.notEqual(signature("\\r\\n"), signature("\\n"));
+    assert.notEqual(signature("\\r"), signature("\\n"));
+  }
+});
+
 test("ratchet counts identical occurrences and cannot transfer file or rule allowances", () => {
   const baseline = aggregateViolations(analyze(`confirm('x');`));
   assert.equal(compareBaseline(aggregateViolations(analyze(`confirm('x'); confirm('x');`)), baseline).added.length, 1);

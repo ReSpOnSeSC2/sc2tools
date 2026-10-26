@@ -35,6 +35,10 @@ identical second violation exceeds its count; another file or changed element
 cannot borrow that allowance. Existing debt remains visible in the checked-in
 baseline, rather than being represented by path-wide ignores.
 
+Physical CRLF/CR line endings become LF before parsing, including in template
+CSS, so Windows and Linux produce identical signatures. This does not rewrite
+escaped `\r` or `\n` literal content; their distinct values remain checked.
+
 After removing violations, run `node scripts/uiLint.mjs --prune-baseline` and
 review the baseline diff. Pruning fails if any new/increased signature exists;
 it can only remove or reduce allowances. CI rejects stale allowances as well

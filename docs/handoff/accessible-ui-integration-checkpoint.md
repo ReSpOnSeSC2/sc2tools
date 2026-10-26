@@ -83,3 +83,20 @@ root owns ancestry reconciliation and final PR752 commit/push/remote gates.
 No private Admin screenshot/data, production record write, reanalysis,
 migration, installer, release, tag or version change is included. Broad consumer
 migrations and the final owner setup guide remain separate unfinished work.
+
+## CI line-ending repair and rollout state
+
+CI at `301c1b20` passed full web types/lint, then found one Dock CSS allowance
+whose raw template token differed across CRLF/LF checkouts. The checker now
+canonicalizes physical CRLF/CR to LF before AST parsing. Escaped literal CRLF
+and LF remain distinct. All 18 rule regressions, strict script lint and the
+1,645-file source scan pass. The sole baseline change is that existing Dock
+signature's hash; its file, rule, example and one occurrence are identical.
+Baseline totals stay 570 signatures/755 occurrences. No app runtime, budget or
+browser behavior changed, so those proofs were not repeated for this repair.
+
+Nav is merged but not yet production-deployed. A missing automatic deployment
+was followed by one normal manual request, rejected by Vercel's daily free
+deployment quota with a 24-hour retry instruction. No retry/upgrade followed;
+production remains PR756/b97. Root holds PR752's merge until required remote
+CI/deployment gates succeed. Private Admin evidence remains excluded.

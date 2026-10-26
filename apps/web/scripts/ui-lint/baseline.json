@@ -38,7 +38,7 @@
     {
       "file": "app/dock/layout.tsx",
       "rule": "hex-outside-visualization",
-      "signature": "f30c993083b5865bdc77495c078cd3bdb33d3bb0f0f27342119e3c688bafb8ff",
+      "signature": "a290ddfee4bd15d1ce6929fd433d7b245046a62e614a77b2ad3013121bd8408d",
       "count": 1,
       "example": "` html, body { background: #0b0e14 !important; } body > header, body > footer, body > main > footer { display: none !important; } [data-cookie-banner] { display: none !important; }"
     },
