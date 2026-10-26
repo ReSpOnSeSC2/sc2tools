@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { readReferenceBuildOrder } from "@/lib/buildOrderReference";
 import { useAuth } from "@clerk/nextjs";
-import { apiCall, type ClientApiError } from "@/lib/clientApi";
+import { apiCall, useOwnerRequestScope, type ClientApiError } from "@/lib/clientApi";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
 import { BuildEditorModal } from "@/components/builds/editor";
 import type { BuildEditorSaveResult } from "@/components/builds/editor/BuildEditor.types";
 import {
@@ -216,56 +218,80 @@ export function EditCustomBuildLauncher({
   initialFocus,
   intent = "edit",
 }: EditCustomBuildLauncherProps) {
-  const { getToken } = useAuth();
-  const [doc, setDoc] = useState<SavedBuildDoc | null>(null);
-  const [publication, setPublication] =
-    useState<OwnerPublicationSettings | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
+  const { getToken, userId, isLoaded, isSignedIn } = useAuth();
+  const owner = isLoaded && isSignedIn && userId ? userId : null;
+  const runOwned = useOwnerRequestScope(owner, getToken);
+  const runner = useRef(runOwned); runner.current = runOwned;
   const slug = build?.slug ?? null;
+  const scope = useMemo(() => ({ owner, slug, intent, authReady: isLoaded }), [owner, slug, intent, isLoaded]);
+  const current = useRef(scope); current.current = scope;
+  const mounted = useRef(true);
+  const active = useRef<AbortController | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [loaded, setLoaded] = useState<{
+    scope: typeof scope; attempt: number; doc: SavedBuildDoc | null;
+    publication: OwnerPublicationSettings | null; error: string | null; loading: boolean;
+  } | null>(null);
+  const visible = loaded && loaded.scope === scope && loaded.attempt === attempt ? loaded : null;
+  const doc = visible?.doc ?? null;
+  const publication = visible?.publication ?? null;
+  const loadError = visible?.error ?? null;
+  const loading = !visible || visible.loading;
+
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; active.current?.abort(); };
+  }, []);
 
   useEffect(() => {
-    if (!slug) {
-      setDoc(null);
-      setPublication(null);
-      setLoadError(null);
+    const requestOwner = scope.owner;
+    if (!scope.slug) return;
+    const empty = { scope, attempt, doc: null, publication: null };
+    if (!requestOwner) {
+      setLoaded({ ...empty, loading: !scope.authReady, error: scope.authReady ? "Sign in to load this build." : null });
       return;
     }
+    const controller = new AbortController(); active.current = controller;
+    const request = runner.current;
     let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
-    setDoc(null);
-    setPublication(null);
+    setLoaded({ ...empty, loading: true, error: null });
     (async () => {
       try {
-        const [fetched, publicationSettings] = await Promise.all([
-          apiCall<SavedBuildDoc>(
-            getToken,
-            `/v1/custom-builds/${encodeURIComponent(slug)}`,
-          ),
-          intent === "duplicate" ? Promise.resolve({ published: false, authorName: "", publishAnonymously: false, mirrorPending: false }) : apiCall<OwnerPublicationSettings>(
-            getToken,
-            `/v1/community/my-build-publication/${encodeURIComponent(slug)}`,
-          ),
-        ]);
-        if (cancelled) return;
-        setDoc(fetched);
-        setPublication(publicationSettings);
+        const result = await request(requestOwner, async (scopedToken, signal, assertCurrent) => {
+          const peers = new AbortController();
+          const abortPeers = () => peers.abort(signal.reason);
+          if (signal.aborted) abortPeers();
+          else signal.addEventListener("abort", abortPeers, { once: true });
+          try {
+            const [fetched, publicationSettings] = await Promise.all([
+              apiCall<SavedBuildDoc>(scopedToken, `/v1/custom-builds/${encodeURIComponent(scope.slug!)}`, { signal: peers.signal }),
+              scope.intent === "duplicate" ? Promise.resolve({ published: false, authorName: "", publishAnonymously: false, mirrorPending: false })
+                : apiCall<OwnerPublicationSettings>(scopedToken, `/v1/community/my-build-publication/${encodeURIComponent(scope.slug!)}`, { signal: peers.signal }),
+            ]);
+            assertCurrent();
+            return { doc: fetched, publication: publicationSettings };
+          } finally {
+            peers.abort(); signal.removeEventListener("abort", abortPeers);
+          }
+        }, 20_000, controller.signal);
+        if (cancelled || current.current !== scope || controller.signal.aborted) return;
+        setLoaded({ scope, attempt, ...result, loading: false, error: null });
       } catch (err) {
-        if (cancelled) return;
+        if (cancelled || current.current !== scope || controller.signal.aborted) return;
         const message =
           (err as ClientApiError | undefined)?.message ??
           "Couldn't load this build for editing.";
-        setLoadError(message);
+        setLoaded({ ...empty, loading: false, error: message });
       } finally {
-        if (!cancelled) setLoading(false);
+        if (active.current === controller) active.current = null;
       }
     })();
     return () => {
       cancelled = true;
+      controller.abort();
+      if (active.current === controller) active.current = null;
     };
-  }, [slug, getToken, intent]);
+  }, [scope, attempt, getToken]);
 
   const initialDraft = useMemo(
     () => {
@@ -285,34 +311,27 @@ export function EditCustomBuildLauncher({
 
   const open = !!build;
   if (!open) return null;
+  const close = () => {
+    if (!mounted.current || current.current !== scope) return;
+    active.current?.abort(); onClose();
+  };
 
   if (loading || !doc || !publication || !initialDraft) {
+    const pending = !loadError;
     return (
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-busy="true"
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
-        onClick={onClose}
-      >
-        <div
-          className="rounded-lg border border-border bg-bg-surface px-4 py-3 text-caption text-text-muted shadow-[var(--shadow-card)]"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {loadError ? (
-            <span className="text-danger">{loadError}</span>
-          ) : (
-            "Loading build…"
-          )}
+      <Modal open size="xl" title={intent === "duplicate" ? "Duplicate build" : "Edit build"} onClose={close}
+        footer={loadError ? <Button onClick={() => { active.current?.abort(); setAttempt(value => value + 1); }} disabled={!owner}>Retry</Button> : undefined}>
+        <div aria-busy={pending} className="text-caption text-text-muted">
+          {loadError ? <p role="alert" className="text-danger">{loadError}</p> : <p role="status">Loading build…</p>}
         </div>
-      </div>
+      </Modal>
     );
   }
 
   return (
     <BuildEditorModal
       open
-      onClose={onClose}
+      onClose={close}
       mode={intent === "duplicate" ? "create" : "edit"}
       lockedSlug={intent === "duplicate" ? undefined : doc.slug}
       createOnly={intent === "duplicate"}
@@ -329,6 +348,7 @@ export function EditCustomBuildLauncher({
       defaultName={initialDraft.name}
       initialDraft={initialDraft}
       onSaved={(savedSlug, draft, result) => {
+        if (!mounted.current || current.current !== scope) return;
         const saved: CustomBuild = {
           ...(build as CustomBuild),
           slug: savedSlug,

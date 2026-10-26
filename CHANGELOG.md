@@ -16,6 +16,13 @@ corresponding GitHub Release.
 - Keep replay links available in a selected-text dialog when automatic copying is unavailable. Cancelling a device's native share sheet stays a quiet cancellation.
 - Check fresh sharing status before consent or copying, and offer a status check after an interrupted update. Retire delayed account, archive and player actions when their context changes.
 
+### Build dialogs
+
+- Use the shared dialog for build dossiers and saved-build loading or error states, with keyboard focus containment, a 44px Close control and focus return.
+- Bound saved-build loads, offer Retry after failure, and retire earlier account, build and retry responses before showing private editor data.
+- Keep the build menu in its parent dialog's focus domain so Escape closes the menu first and actions retain their editor handoff.
+- Return to the build library after retrying an editor load, restore the Practice trigger after closing its choices, and keep empty composition tabs and rule controls accessible.
+
 ### Copy public build and definition links
 
 - Keep a selected link available when clipboard permission is denied or takes too long: in a shared dialog for Community links, or below a definition's heading. Done or Escape returns to the copy control, and retry stays available.
@@ -119,15 +126,12 @@ corresponding GitHub Release.
 
 - Require the 2-Stargate Void Ray and 2/3-Stargate Phoenix openings to establish their Stargates, two bases and four real air units by 7:00, with matching build definitions.
 
-<<<<<<< HEAD
-=======
 ### Build dossier insights
 
 - Read matchup timing quartiles, trends, decided-game win rates and winner/loser medians from a bounded replay sample. Exact published guide milestones can show a Community comparison; a game's first building occurrence can compare with your own cached median.
 - Inspect declared-plan Held and Knocked-off counts, their separate win rates and bounded recorded examples. Small declaration samples stay hidden, and labels and full-game duration estimates make no claim about execution or causality.
 - Owned games show saved rule counts, distinct event/deadline evidence, shared-clock jumps and private timing ranges after three observations. Unknown rules withhold the percentage; catalog builds show timings only. Practice reuses the existing explicit Ghost controls.
 
->>>>>>> codex/wave4-build-execution
 ### Build editor request ownership
 
 - Cancel pending editor saves, previews and replay inspection when the account, source or open draft changes. Bound stalled requests and suppress stale publication repairs, notifications and completion callbacks. Load the optional editor on demand with Retry and Cancel.

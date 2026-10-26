@@ -160,6 +160,7 @@ export function PhaseCompositionTabs({
   const [active, setActive] = useState<Phase>(initial);
   const tabRefs = useRef<Partial<Record<Phase, HTMLButtonElement | null>>>({});
   const tablist = useRef<HTMLDivElement>(null);
+  const noReachedPhases = PHASE_ORDER.every((phase) => (sampleSize[phase] ?? 0) === 0);
 
   useEffect(() => {
     if (!(sampleSize[active] > 0)) setActive(initial);
@@ -210,7 +211,8 @@ export function PhaseCompositionTabs({
         role="tablist"
         aria-label="Phase compositions"
         aria-orientation="horizontal"
-        className="-mx-1 flex snap-x snap-mandatory items-stretch gap-1 overflow-x-auto border-b border-border px-1 scrollbar-thin"
+        tabIndex={noReachedPhases ? 0 : undefined}
+        className="-mx-1 flex snap-x snap-mandatory items-stretch gap-1 overflow-x-auto border-b border-border px-1 scrollbar-thin focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
         {PHASE_ORDER.map((phase) => {
           const count = sampleSize[phase] ?? 0;

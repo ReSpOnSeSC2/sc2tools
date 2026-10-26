@@ -49,7 +49,7 @@ import {
 
 const TONE_BTN_CLASSES: Record<"win" | "loss" | "neutral", string> = {
   win:
-    "bg-success/15 text-success border border-success/40 hover:bg-success/25",
+    "bg-success/15 text-text border border-success/40 hover:bg-success/25",
   loss:
     "bg-danger/15 text-danger border border-danger/40 hover:bg-danger/25",
   neutral:
@@ -613,7 +613,7 @@ function AddRuleBar({
         }
         disabled={ruleCap}
         title={`Add a building rule that only counts structures placed ${PROXY_RULE_DISTANCE_HINT}.`}
-        className={`${ADD_BUTTON_CLASSES} border border-warning/50 bg-warning/15 text-warning hover:bg-warning/25`}
+        className={`${ADD_BUTTON_CLASSES} border border-warning/50 bg-warning/15 text-text hover:bg-warning/25`}
       >
         <MapPin className="h-3.5 w-3.5" aria-hidden />
         Proxy building

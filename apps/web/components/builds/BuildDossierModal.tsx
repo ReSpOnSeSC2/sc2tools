@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
 import Link from "next/link";
-import { ExternalLink, Pencil, Send, Trash2, X } from "lucide-react";
+import { ExternalLink, Pencil, Send, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
+import { Modal } from "@/components/ui/Modal";
 import {
   coerceRace,
   matchupLabel,
@@ -48,36 +48,13 @@ export function BuildDossierModal({
   onReclassify?: (slug: string) => void;
   onChanged?: () => void | Promise<unknown>;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || document.querySelector('[role="menu"]') || document.querySelectorAll('[role="dialog"][aria-modal="true"]').length > 1) return;
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
-
   const race = coerceRace(build.race);
   const mu = matchupLabel(race, (build.vsRace as VsRace) ?? "Any");
   const apiPath = `/v1/custom-builds/${encodeURIComponent(build.slug)}/matches`;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-6"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${build.name || "Build"} dossier`}
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-4xl space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal open size="xl" title={`${build.name || "Build"} dossier`} onClose={onClose}>
+      <div className="space-y-4">
         <Card padded>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
@@ -100,9 +77,6 @@ export function BuildDossierModal({
                   </Badge>
                 ) : null}
               </div>
-              <h2 className="truncate text-h3 font-semibold text-text">
-                {build.name || "Untitled build"}
-              </h2>
               {build.description ? (
                 <p className="text-caption text-text-muted">
                   {build.description}
@@ -145,14 +119,6 @@ export function BuildDossierModal({
                 <ExternalLink className="h-3 w-3" aria-hidden />
               </Link>
               <BuildKebab slug={build.slug} name={build.name} isPublic={!!build.isPublic} onEdit={onEdit} onPublish={onPublish} onDelete={onDelete} onDuplicate={onDuplicate} onReclassify={onReclassify} onChanged={onChanged} />
-              <button
-                type="button"
-                aria-label="Close build dossier"
-                onClick={onClose}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              >
-                <X className="h-4 w-4" aria-hidden />
-              </button>
             </div>
           </div>
         </Card>
@@ -169,7 +135,7 @@ export function BuildDossierModal({
           )}
         />
       </div>
-    </div>
+    </Modal>
   );
 }
 
