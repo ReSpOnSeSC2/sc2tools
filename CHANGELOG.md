@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Header action links
+
+- Use the shared button styles for Sign in, Get started and Open app in the desktop header, retaining their compact size and return-to-page behavior.
+
 ### Mobile site navigation
 
 - Use the shared right Sheet for the site menu, with a consistent title and Close control, the existing home and destination links, and footer theme choices.

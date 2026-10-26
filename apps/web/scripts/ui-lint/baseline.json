@@ -1143,27 +1143,6 @@
       "example": "\"absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white\""
     },
     {
-      "file": "components/chrome/Header.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "744a6cd0a7abb6c57548c09c54881d17e41e2cc6234e18f0e1c86ad769c11385",
-      "count": 1,
-      "example": "<AuthContextLink kind=\"sign-in\" className={SECONDARY_LINK_CLS}>"
-    },
-    {
-      "file": "components/chrome/Header.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "a08a747bf81d05324946bed239842b28240182525d962c0b0fb2a9abdc249386",
-      "count": 1,
-      "example": "<AuthContextLink kind=\"sign-up\" className={PRIMARY_LINK_CLS}>"
-    },
-    {
-      "file": "components/chrome/Header.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "f44770bc74ccaa49f8327d642c124b484004ada475099f9805a0e77f715e277f",
-      "count": 1,
-      "example": "<Link href=\"/app\" className={PRIMARY_LINK_CLS}>"
-    },
-    {
       "file": "components/chrome/MobileNav.tsx",
       "rule": "handrolled-link-button",
       "signature": "2d025be0d2125fadd454ae054722a33196b2ec39aaaf2ade2178ab84d83fe8c9",
