@@ -72,6 +72,7 @@ function expectSelection(clock: string, army: string) {
 
 beforeEach(() => {
   localStorage.removeItem("sc2tools:timeline-metrics:v1");
+  localStorage.removeItem("sc2tools:timeline-bank-view:v1");
   useApiMock.mockReturnValue({ data: null, error: null, isLoading: false });
   // jsdom does not provide the browser's PointerEvent or ResizeObserver APIs.
   vi.stubGlobal("PointerEvent", class extends MouseEvent {
@@ -378,6 +379,56 @@ describe("Match timeline tabs and read-out", () => {
     tap(overlayOf(/no metric selected/), 150);
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByRole("region", { name: "ReSpOnSe composition at 2:30" })).toBeTruthy();
+  });
+
+  it("compares Total, Minerals and Gas without moving the inspected time or seeking from view controls", () => {
+    const seek = vi.fn();
+    const bankSamples = [{ time: 0, minerals_current: 100, vespene_current: 50 }, { time: 150, minerals_current: 600, vespene_current: 200 }, { time: 300, minerals_current: 900, vespene_current: 400 }];
+    const opponentBank = [{ time: 0, minerals_current: 80, vespene_current: 20 }, { time: 150, minerals_current: 200, vespene_current: 300 }, { time: 300, minerals_current: 500, vespene_current: 100 }];
+    render(<MacroChartSection gameId="bank-views" samples={bankSamples} oppSamples={opponentBank} leaks={[]} gameLengthSec={300} onSeek={seek} />);
+    fireEvent.click(screen.getByRole("button", { name: "Bank" }));
+    fireEvent.click(screen.getByRole("button", { name: "Army" }));
+    const resources = screen.getByRole("group", { name: "Bank resource" });
+    expect(within(resources).getByRole("button", { name: "Total" }).getAttribute("aria-pressed")).toBe("true");
+    tap(overlayOf(/^Unspent minerals and gas/), 150);
+    expect(seek).toHaveBeenCalledTimes(1); expect(seek).toHaveBeenCalledWith(150); seek.mockClear();
+    const breakdown = screen.getByRole("group", { name: "Selected-time bank breakdown" });
+    expect(within(breakdown).getByRole("region", { name: "You bank breakdown" }).textContent).toBe("YouTotal800Minerals600Gas200");
+    expect(within(breakdown).getByRole("region", { name: "Opponent bank breakdown" }).textContent).toBe("OpponentTotal500Minerals200Gas300");
+    const card = within(screen.getByRole("status"));
+    expect(card.getByRole("row", { name: /Bank total/ }).textContent).toContain("800");
+    expect(card.getByRole("row", { name: /Minerals/ }).textContent).toContain("600");
+    expect(card.getByRole("row", { name: /Gas/ }).textContent).toContain("200");
+
+    fireEvent.click(within(resources).getByRole("button", { name: "Gas" }));
+    expect(screen.getByRole("img", { name: /^Unspent gas for both players/ })).toBeTruthy();
+    expect(readout().textContent).toContain("2:30"); expect(readout().textContent).toContain("200"); expect(readout().textContent).toContain("300");
+    expect(within(screen.getByRole("status")).getByRole("row", { name: /Gas/ }).textContent).toContain("300 (ahead)");
+    expect(screen.getByRole("region", { name: "You composition at 2:30" })).toBeTruthy();
+    fireEvent.click(within(resources).getByRole("button", { name: "Minerals" }));
+    expect(screen.getByRole("img", { name: /^Unspent minerals for both players/ })).toBeTruthy();
+    expect(readout().textContent).toContain("600"); expect(readout().textContent).toContain("+400");
+    expect(seek).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Workers" }));
+    expect(screen.getByRole("img", { name: /^Workers and Unspent minerals/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Bank" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(resources).getByRole("button", { name: "Minerals" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("shows known zero and a missing resource honestly in both selected-time and hover breakdowns", () => {
+    localStorage.setItem("sc2tools:timeline-metrics:v1", '["bank"]');
+    render(<MacroChartSection samples={[{ time: 0, minerals_current: 0, vespene_current: 0 }, { time: 30, minerals_current: 450 }]} oppSamples={[]} leaks={[]} gameLengthSec={30} inspectionTime={0} />);
+    let breakdown = screen.getByRole("group", { name: "Selected-time bank breakdown" });
+    expect(within(breakdown).getByRole("region", { name: "You bank breakdown" }).textContent).toBe("YouTotal0Minerals0Gas0");
+    expect(within(breakdown).getByRole("region", { name: "Opponent bank breakdown" }).textContent).toBe("OpponentTotal—Minerals—Gas—");
+    // The fixture's 300px plot spans this 30-second game: its right edge is 0:30.
+    tap(overlayOf(/^Unspent minerals and gas/), 300);
+    breakdown = screen.getByRole("group", { name: "Selected-time bank breakdown" });
+    expect(within(breakdown).getByRole("region", { name: "You bank breakdown" }).textContent).toBe("YouTotal—Minerals450Gas—");
+    const card = within(screen.getByRole("status"));
+    expect(within(card.getByRole("row", { name: /Bank total/ })).getAllByRole("cell").map((cell) => cell.textContent)).toEqual(["—", "—", "—"]);
+    expect(card.getByRole("row", { name: /Minerals/ }).textContent).toContain("450");
+    expect(within(card.getByRole("row", { name: /Gas/ })).getAllByRole("cell").map((cell) => cell.textContent)).toEqual(["—", "—", "—"]);
   });
 
   it("scrubs the locked time with a sideways touch drag", () => {

@@ -24,6 +24,12 @@ corresponding GitHub Release.
 - Reuse one On this page rail for Overlay and Chat & alerts, with a native section dropdown on phones. Scrolling only updates its highlight; explicit navigation keeps same-tab drafts and the existing guard when leaving a tab.
 - Keep older section, Look and Ghost links working, and limit Overlay presence polling to the visible Setup/Widgets area.
 
+### Macro Bank resources
+
+- Compare Total, Minerals or Gas under Bank in the Macro timeline. Show both players' resource breakdown at the inspected time and in the hover card, keeping missing resources unknown.
+- Remember the Bank view separately from the selected metric mix. Switching resource views keeps the selected game time and roster in place.
+- Improve contrast of the roster Army caption with the same neutral text used by other roster labels.
+
 ### Optional personal chart cache
 
 - Add a bounded, opt-in server cache for six personal Trends chart responses, with owner revisions and invalidation for replay, attribution, recompute and history changes. It stays off by default; full API CI and deployment checks remain before an operator enables it.
