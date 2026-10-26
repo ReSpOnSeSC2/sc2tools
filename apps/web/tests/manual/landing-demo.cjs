@@ -2,7 +2,8 @@
  * replay fixture; no API/provider/account/installer is contacted. */
 const fs = require('node:fs'), path = require('node:path'), http = require('node:http');
 const { execFileSync } = require('node:child_process'), { chromium, expect } = require('@playwright/test');
-const root = process.cwd(), shots = '../../docs/handoff/screenshots', api = [], external = [], pageErrors = [];
+const root = process.cwd(), shots = path.resolve(process.env.LANDING_SHOTS_DIR || '../../.cache/landing-demo-evidence'), api = [], external = [], pageErrors = [];
+fs.mkdirSync(shots, { recursive: true });
 const replay = path.resolve('../replay-engine/tests/fixtures/replays/warpgate_adept_tracking.SC2Replay');
 const cssNames = fs.readdirSync('.next/static/css', { recursive: true }).filter(name => name.endsWith('.css'));
 const css = cssNames.map(name => fs.readFileSync(path.join('.next/static/css', name), 'utf8')).join('\n');
@@ -32,10 +33,11 @@ async function noOverflow(page) { await check(page.evaluate(() => document.docum
 async function target44(locator) { const r = await locator.boundingBox(); expect(r && r.width >= 44 && r.height >= 44).toBeTruthy(); checks++; }
 async function hitTest(locator) { await check(locator.evaluate(node => { const r = node.getBoundingClientRect(); const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return r.x >= 0 && r.y >= 0 && r.right <= innerWidth && r.bottom <= innerHeight && !!hit && node.contains(hit); })); }
 async function main() {
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); origin = `http://127.0.0.1:${server.address().port}`;
-  execFileSync(process.execPath, ['tests/manual/landing-demo-fixture.cjs'], { cwd: root, env: { ...process.env, LANDING_DEMO_FIXTURE_ORIGIN: origin }, stdio: 'pipe' });
-  const browser = await chromium.launch({ headless: true, args: ['--proxy-server=direct://', '--proxy-bypass-list=*'] });
+  let browser;
   try {
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); origin = `http://127.0.0.1:${server.address().port}`;
+    execFileSync(process.execPath, ['tests/manual/landing-demo-fixture.cjs'], { cwd: root, env: { ...process.env, LANDING_DEMO_FIXTURE_ORIGIN: origin }, stdio: 'pipe' });
+    browser = await chromium.launch({ headless: true, ...(process.env.PW_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PW_CHROMIUM_EXECUTABLE } : {}), args: ['--proxy-server=direct://', '--proxy-bypass-list=*'] });
     for (const width of [320, 390, 768, 1440]) for (const theme of ['light', 'dark']) {
       const context = await browser.newContext({ viewport: { width, height: 1000 }, colorScheme: theme, reducedMotion: 'reduce', hasTouch: width < 768 });
       await context.route('**/*', route => { const u = new URL(route.request().url()); if (u.origin !== origin) { external.push(u.origin); return route.abort(); } return route.continue(); });
@@ -81,6 +83,6 @@ async function main() {
     }
     expect(pageErrors).toEqual([]); expect(external).toEqual([]); checks += 2;
     console.log(JSON.stringify({ checks, captures, widths: [320, 390, 768, 1440], themes: ['light', 'dark'], productionCss: cssNames, browserApiRequests: 0, compatibilityApiRequests: api.length, externalRequests: external.length, boundary: 'Real demo/editor/session and real worker/fixture replay; local Next/Clerk/analytics/Worker URL adapter. API synthetic only for explicit off/admins compatibility.' }, null, 2));
-  } finally { await browser.close(); server.close(); }
+  } finally { await browser?.close(); server.close(); }
 }
 main().catch(error => { console.error(error); server.close(); process.exitCode = 1; });

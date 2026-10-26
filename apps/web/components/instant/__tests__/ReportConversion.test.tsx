@@ -19,7 +19,7 @@ beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ createLinearGradient: () => ({ addColorStop() {} }), fillRect() {}, fillText() {}, measureText: () => ({ width: 20 }) } as unknown as CanvasRenderingContext2D);
   vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) => callback(new Blob(["mockpng"], { type: "image/png" })));
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 describe("report conversion actions", () => {
   it("previews selected rows, copies identity-free text and mocks native sharing only", async () => {
@@ -44,6 +44,64 @@ describe("report conversion actions", () => {
     mocks.canShare.mockReturnValue(true); mocks.shared.mockRejectedValue(new DOMException("cancelled", "AbortError"));
     fireEvent.click(screen.getByRole("button", { name: "Share PNG" }));
     await screen.findByText("Sharing cancelled."); expect(mocks.event).not.toHaveBeenCalled();
+  });
+
+  it("recovers a held clipboard permission with selected text, then allows a successful retry", async () => {
+    vi.useFakeTimers();
+    let finish!: () => void;
+    mocks.copied.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    render(<ShareReportDialog report={source()} onClose={vi.fn()} />);
+    const copy = screen.getByRole("button", { name: "Copy text" });
+    fireEvent.click(copy);
+    expect(copy.matches(":disabled")).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    const fallback = screen.getByRole("textbox", { name: "Copy report text manually" }) as HTMLTextAreaElement;
+    expect(fallback.value).toContain("3 games");
+    expect(fallback.readOnly).toBe(true);
+    expect(document.activeElement).toBe(fallback);
+    expect([fallback.selectionStart, fallback.selectionEnd]).toEqual([0, fallback.value.length]);
+    expect(copy.matches(":disabled")).toBe(false);
+    expect(screen.getByRole("checkbox", { name: "Totals" }).matches(":disabled")).toBe(false);
+    expect(mocks.event).not.toHaveBeenCalled();
+    await act(async () => { finish(); });
+    expect(screen.getByRole("textbox", { name: "Copy report text manually" })).toBe(fallback);
+    expect(mocks.event).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(copy); });
+    expect(screen.queryByRole("textbox", { name: "Copy report text manually" })).toBeNull();
+    expect(screen.getByText("Report text copied.")).toBeTruthy();
+    expect(mocks.event.mock.calls).toEqual([["instant_report_shared", { method: "text" }]]);
+  });
+
+  it("dismisses the manual copy fallback before closing the share dialog", async () => {
+    const close = vi.fn();
+    mocks.copied.mockRejectedValueOnce(new Error("Clipboard denied"));
+    render(<ShareReportDialog report={source()} onClose={close} />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy text" }));
+    const fallback = await screen.findByRole("textbox", { name: "Copy report text manually" });
+    fireEvent.keyDown(fallback, { key: "Escape" });
+    expect(close).not.toHaveBeenCalled();
+    expect(screen.queryByRole("textbox", { name: "Copy report text manually" })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Copy text" }));
+    expect(mocks.event).not.toHaveBeenCalled();
+  });
+
+  it("retires clipboard completion across report ABA and unmount without late success or focus", async () => {
+    const completions: (() => void)[] = [];
+    mocks.copied.mockImplementation(() => new Promise<void>(resolve => { completions.push(resolve); }));
+    const report = source(), replacement = source();
+    const view = render(<ShareReportDialog report={report} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy text" }));
+    view.rerender(<ShareReportDialog report={replacement} onClose={vi.fn()} />);
+    view.rerender(<ShareReportDialog report={report} onClose={vi.fn()} />);
+    const currentCopy = screen.getByRole("button", { name: "Copy text" }); currentCopy.focus();
+    await act(async () => { completions[0](); });
+    expect(document.activeElement).toBe(currentCopy);
+    expect(screen.queryByText("Report text copied.")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Copy report text manually" })).toBeNull();
+    expect(mocks.event).not.toHaveBeenCalled();
+    fireEvent.click(currentCopy); view.unmount();
+    await act(async () => { completions[1](); });
+    expect(mocks.event).not.toHaveBeenCalled();
   });
 
   it("downloads a local PNG only after the explicit mocked action", async () => {

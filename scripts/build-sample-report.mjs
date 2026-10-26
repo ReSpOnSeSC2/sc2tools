@@ -1,4 +1,4 @@
-/** Run only on explicit generation. No package/prebuild hook or provider access. */
+/** Optional local sample generation, also called after the browser-engine prebuild. No provider access. */
 import { readFile, mkdir, rm, writeFile, rename } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";

@@ -105,11 +105,19 @@ describe("optional sample generation", () => {
     expect(value).toEqual({ status: "skipped", reason: "sample_engine_unavailable" }); expect(existsSync(output)).toBe(false);
     expect(await readFile(availability, "utf8")).toContain("SAMPLE_REPORT_AVAILABLE = false");
   });
-  it("the committed sample, when available, matches the engine release and normalized source hash", async () => {
+  it("the committed sample, when available, matches the current engine bundle and normalized source hash", async () => {
     const output = path.resolve(__dirname, "../../../public/try/sample-payloads.json");
     expect(existsSync(output)).toBe(SAMPLE_REPORT_AVAILABLE);
     if (!SAMPLE_REPORT_AVAILABLE) return;
     const value = JSON.parse(await readFile(output, "utf8"));
+    // The unit-only CI checkout has no ignored engine assets. When a local or
+    // production prebuild has prepared them, also verify bundle-only drift.
+    const current = path.resolve(__dirname, "../../../public/engine/current.json");
+    if (existsSync(current)) {
+      const pointer = JSON.parse(await readFile(current, "utf8"));
+      expect(pointer.engineVersion).toBe(INSTANT_ENGINE_VERSION);
+      expect(pointer.manifest).toBe(`/engine/${INSTANT_ENGINE_VERSION}/${value.engineBundleId}/manifest.json`);
+    }
     expect(value.engineVersion).toBe(INSTANT_ENGINE_VERSION); expect(value.engineVersion).toBe(SAMPLE_REPORT_ENGINE_VERSION);
     expect(value.engineBundleId).toBe(SAMPLE_REPORT_BUNDLE_ID); expect(value.engineSourceHash).toBe(SAMPLE_REPORT_SOURCE_HASH);
     expect(value.engineSourceHash).toBe(await engineSourceHash()); expect(readSampleReport(value, value.engineBundleId)).not.toBeNull();

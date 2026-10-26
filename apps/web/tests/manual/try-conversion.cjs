@@ -9,7 +9,7 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, origin || 'http://127.0.0.1'), p = url.pathname;
   requests.push(p);
   if (req.method !== 'GET') { writes.push(p); res.statusCode = 405; return res.end(); }
-  if (p === '/fixture') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(`<!doctype html><html lang="en" data-theme="${url.searchParams.get('theme') === 'dark' ? 'dark' : 'light'}"><head><title>Local Try conversion verification</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}\n${fonts}</style></head><body><div id="root"></div><script type="module" src="/js/fixture.js"></script></body></html>`); }
+  if (p === '/fixture') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(`<!doctype html><html lang="en" data-theme="${url.searchParams.get('theme') === 'dark' ? 'dark' : 'light'}" data-theme-mode="${url.searchParams.get('theme') === 'dark' ? 'dark' : 'light'}"><head><title>Local Try conversion verification</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}\n${fonts}</style></head><body><div id="root"></div><script type="module" src="/js/fixture.js"></script></body></html>`); }
   if (p === '/engine/current.json' && /case=stale/.test(req.headers.referer || '')) { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ engineVersion: '1.6.12', manifest: '/engine/1.6.12/0000000000000000/manifest.json' })); }
   const base = p.startsWith('/js/') ? out : p.startsWith('/fonts/') ? path.join(root, 'app/fonts') : path.join(root, 'public');
   const relative = p.startsWith('/js/') ? p.slice(4) : p.startsWith('/fonts/') ? p.slice(7) : p.slice(1), file = path.resolve(base, relative);
@@ -22,7 +22,7 @@ async function overflow(page) { await check(page.evaluate(() => document.documen
 async function main() {
   execFileSync(process.execPath, ['tests/manual/try-conversion-fixture.cjs'], { stdio: 'pipe' });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); origin = `http://127.0.0.1:${server.address().port}`;
-  const browser = await chromium.launch({ headless: true, args: ['--proxy-server=direct://', '--proxy-bypass-list=*'] });
+  let browser;
   async function context(width, theme, consent = 'granted') {
     const ctx = await browser.newContext({ viewport: { width, height: 1000 }, colorScheme: theme, reducedMotion: 'reduce', hasTouch: width < 768 });
     await ctx.route('**/*', route => { if (new URL(route.request().url()).origin !== origin) { external.push(route.request().url()); return route.abort(); } return route.continue(); });
@@ -32,7 +32,7 @@ async function main() {
       localStorage.setItem('sc2tools.analyticsConsent.v1', consent); window.gtag = (...args) => window.__ga.push(args);
       Object.defineProperty(navigator, 'share', { configurable: true, value: async data => { window.__shares.push({ text: data.text, files: data.files.map(f => ({ name: f.name, type: f.type, size: f.size })) }); } });
       Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
-      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__copied.push(text); } } });
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { if (window.__holdCopy) return new Promise(resolve => { window.__finishCopy = resolve; }); window.__copied.push(text); } } });
       HTMLAnchorElement.prototype.click = function () { if (this.download) window.__downloads.push(this.download); };
       const draw = CanvasRenderingContext2D.prototype.fillText;
       CanvasRenderingContext2D.prototype.fillText = function (text, ...args) { (window.__drawn ||= []).push(text); return draw.call(this, text, ...args); };
@@ -42,10 +42,12 @@ async function main() {
     const page = await ctx.newPage(); lastPage = page; page.on('pageerror', error => errors.push(error.message)); return { ctx, page };
   }
   try {
+    browser = await chromium.launch({ headless: true, ...(process.env.PW_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PW_CHROMIUM_EXECUTABLE } : {}), args: ['--proxy-server=direct://', '--proxy-bypass-list=*'] });
     for (const width of [320, 390, 768, 1440]) for (const theme of ['light', 'dark']) {
       console.log(JSON.stringify({ width, theme }));
       const { ctx, page } = await context(width, theme); const start = requests.length;
       await page.goto(`${origin}/fixture?theme=${theme}`); await expect(page.getByRole('heading', { name: 'Your instant report' })).toBeVisible(); checks++;
+      expect(await page.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.dataset.themeMode, getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()])).toEqual([theme, theme, theme === 'dark' ? '6 9 14' : '244 246 250']); checks++;
       await page.waitForTimeout(100); await check(page.evaluate(() => scrollY === 0 && window.__warm === 0));
       expect(requests.slice(start).filter(p => /sample-payloads|\/engine\//.test(p))).toEqual([]); checks++;
       await expect(page.getByRole('link', { name: 'PvZ - Adept Glaives (Robo)', exact: true })).toHaveAttribute('href', /utm_source=instant/); checks++;
@@ -53,7 +55,7 @@ async function main() {
       await page.getByRole('button', { name: 'Share report', exact: true }).click(); const dialog = page.getByRole('dialog', { name: 'Share your report' });
       await expect(dialog).toBeVisible(); checks++;
       const close = dialog.getByRole('button', { name: 'Close', exact: true }); await close.focus(); await page.keyboard.press('Shift+Tab'); await expect(dialog.getByText('Report text', { exact: true })).toBeFocused(); await page.keyboard.press('Tab'); await expect(close).toBeFocused(); checks += 2;
-      if (width === 320 || width === 1440) { await page.addScriptTag({ path: require.resolve('axe-core') }); const violations = await dialog.evaluate(async node => (await window.axe.run(node, { rules: { 'color-contrast': { enabled: false } } })).violations.map(row => row.id)); expect(violations).toEqual([]); checks++; }
+      if (width === 320 || width === 1440) { await page.addScriptTag({ path: require.resolve('axe-core') }); const violations = await dialog.evaluate(async node => (await window.axe.run(node)).violations.map(row => row.id)); expect(violations).toEqual([]); checks++; }
       expect(await dialog.locator('canvas').evaluate(node => [node.width, node.height])).toEqual([1200, 630]); checks++;
       expect(await dialog.getByRole('checkbox', { name: 'Best opener' }).count()).toBe(0); checks++;
       await capture(page, `share-${theme}-${width}`, dialog);
@@ -79,6 +81,22 @@ async function main() {
       await check(page.evaluate(() => window.__ga.filter(row => row[1] === 'instant_sample_view').length === 1));
       await ctx.close();
     }
+    const recovery = await context(320, 'light'); await recovery.page.goto(`${origin}/fixture?theme=light`);
+    await recovery.page.getByRole('button', { name: 'Share report', exact: true }).click();
+    const recoveryDialog = recovery.page.getByRole('dialog', { name: 'Share your report' });
+    await recovery.page.evaluate(() => { window.__holdCopy = true; });
+    await recoveryDialog.getByRole('button', { name: 'Copy text', exact: true }).click();
+    const fallback = recoveryDialog.getByRole('textbox', { name: 'Copy report text manually' });
+    await expect(fallback).toBeFocused({ timeout: 10_000 }); checks++;
+    await check(fallback.evaluate(node => node.readOnly && node.selectionStart === 0 && node.selectionEnd === node.value.length));
+    await expect(recoveryDialog.getByRole('checkbox', { name: 'Totals' })).toBeEnabled(); checks++;
+    await recovery.page.evaluate(() => { window.__finishCopy(); window.__holdCopy = false; });
+    await check(recovery.page.evaluate(() => window.__ga.filter(row => row[1] === 'instant_report_shared').length === 0));
+    await overflow(recovery.page); await capture(recovery.page, 'copy-recovery-light-320', fallback);
+    await recovery.page.keyboard.press('Escape'); await expect(recoveryDialog).toBeVisible(); await expect(fallback).toHaveCount(0); await expect(recoveryDialog.getByRole('button', { name: 'Copy text', exact: true })).toBeFocused(); checks += 3;
+    await recoveryDialog.getByRole('button', { name: 'Copy text', exact: true }).click(); await expect(recoveryDialog.getByText('Report text copied.')).toBeVisible(); checks++;
+    await check(recovery.page.evaluate(() => window.__ga.filter(row => row[1] === 'instant_report_shared').length === 1));
+    await recovery.ctx.close();
     for (const focus of ['pvz/adept-glaives-robo', 'pvz/not-published', 'pvz/adept-glaives-robo&focus=pvz/adept-glaives-robo']) {
       const { ctx, page } = await context(390, 'dark'); await page.goto(`${origin}/fixture?theme=dark&focus=${focus}`); await expect(page.getByRole('heading', { name: 'Your instant report' })).toBeAttached();
       await page.waitForTimeout(100);
@@ -112,6 +130,6 @@ async function main() {
   } catch (error) {
     if (lastPage && !lastPage.isClosed()) { await lastPage.screenshot({ path: path.join(evidence, 'failure.png') }); fs.writeFileSync(path.join(evidence, 'failure.json'), JSON.stringify(await lastPage.evaluate(() => ({ clicks: window.__clicks, shares: window.__shares, downloads: window.__downloads, pngTimes: window.__pngTimes, active: document.activeElement?.tagName, dialog: document.querySelector('[role="dialog"]')?.textContent })), null, 2)); }
     throw error;
-  } finally { await browser.close(); server.close(); }
+  } finally { await browser?.close(); server.close(); }
 }
 main().catch(error => { console.error(error); server.close(); process.exitCode = 1; });

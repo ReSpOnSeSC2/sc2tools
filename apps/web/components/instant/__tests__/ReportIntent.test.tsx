@@ -47,4 +47,21 @@ describe("conversion work starts on intent", () => {
     expect(screen.getByRole("button", { name: "Retry sample" })).toBeTruthy();
     expect(mocks.event).not.toHaveBeenCalled();
   });
+
+  it("rejects a same-version old sample bundle and recovers only after explicit Retry", async () => {
+    const { SampleReportPreview } = await import("../SampleReportPreview");
+    let bundle = "fedcba9876543210";
+    mocks.fetch.mockImplementation(async (url: string) => ({ ok: true, json: async () => url === "/engine/current.json"
+      ? { engineVersion: sample.engineVersion, manifest: `/engine/${sample.engineVersion}/${bundle}/manifest.json` }
+      : sample }));
+    render(<SampleReportPreview />);
+    await screen.findByRole("button", { name: "Retry sample" });
+    expect(screen.queryByRole("heading", { name: "Example results" })).toBeNull();
+    expect(mocks.event).not.toHaveBeenCalled();
+    expect(mocks.fetch).toHaveBeenCalledWith("/engine/current.json", expect.objectContaining({ cache: "no-store" }));
+    bundle = sample.engineBundleId;
+    fireEvent.click(screen.getByRole("button", { name: "Retry sample" }));
+    await screen.findByRole("heading", { name: "Example results" });
+    expect(mocks.event.mock.calls).toEqual([["instant_sample_view"]]);
+  });
 });

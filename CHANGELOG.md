@@ -14,6 +14,7 @@ corresponding GitHub Release.
 ### Browser report sharing and examples
 
 - Choose which aggregate report rows to share as a PNG or text, with player identities omitted. See a real anonymized sample before adding replays, and follow detected openers to published matchup guides.
+- Recover from unavailable or delayed clipboard access with selected report text that can be copied manually.
 
 ### Analyzer filters
 
