@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Analyzer date range
+
+- Default fresh analyzer views and Reset to defaults to Auto-track current season, following the current season catalog while retaining explicitly saved dates and views.
+
 ### Header action links
 
 - Use the shared button styles for Sign in, Get started and Open app in the desktop header, retaining their compact size and return-to-page behavior.

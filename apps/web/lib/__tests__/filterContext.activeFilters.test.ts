@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PRESET, PATCH_5_0_17_RELEASE } from "@/lib/datePresets";
+import { DEFAULT_PRESET, resolvePreset } from "@/lib/datePresets";
 import {
   DEFAULT_ANALYZER_FILTERS,
   FILTER_LABELS,
@@ -42,10 +42,11 @@ function keysOf(filters: AnalyzerFilters): string[] {
 }
 
 describe("defaultAnalyzerFilters", () => {
-  it("is the product defaults with the default patch resolved to its start", () => {
+  it("is the product defaults with the current season resolved", () => {
     expect(DEFAULTS).toEqual({
       ...DEFAULT_ANALYZER_FILTERS,
-      since: PATCH_5_0_17_RELEASE.toISOString(),
+      since: resolvePreset("current_season").since?.toISOString(),
+      until: expect.any(String),
     });
     expect(DEFAULTS.preset).toBe(DEFAULT_PRESET);
   });
@@ -125,10 +126,10 @@ describe("describeActiveFilters", () => {
     }
   });
 
-  it("puts the date range back on the default patch, with its dates", () => {
+  it("puts the date range back on the auto-tracked current season", () => {
     const [preset] = describeActiveFilters({ ...DEFAULTS, preset: "all" });
     expect(preset.value).toBe("All time");
-    expect(applyFilterPatch({ ...DEFAULTS, preset: "all" }, preset.clearPatch)).toEqual(DEFAULTS);
+    expect(applyFilterPatch({ ...DEFAULTS, preset: "all" }, preset.clearPatch)).toEqual({ ...DEFAULTS, until: expect.any(String) });
   });
 
   it("names a custom range by its dates", () => {

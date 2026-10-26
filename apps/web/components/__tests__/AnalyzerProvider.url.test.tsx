@@ -4,19 +4,59 @@ import { AnalyzerProvider, filtersFromViewQuery } from "../AnalyzerProvider";
 import { useFilters } from "@/lib/filterContext";
 import { viewFiltersFromQuery } from "@/lib/analyzerViews";
 import { AnalyzerFilterUrlSync } from "../analyzer/AnalyzerFilterUrlSync";
+import { ActiveFilterChips } from "../analyzer/ActiveFilterChips";
+import type { SeasonRow } from "@/lib/useSeasons";
 
 const navigation = vi.hoisted(() => ({ path: "/app/maps", query: "", replace: vi.fn() }));
+const catalog = vi.hoisted(() => ({ data: undefined as { items: SeasonRow[] } | undefined }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "owner" }) }));
 vi.mock("next/navigation", () => ({ usePathname: () => navigation.path, useSearchParams: () => new URLSearchParams(navigation.query), useRouter: () => ({ replace: navigation.replace }) }));
 vi.mock("@/lib/useUserSocket", () => ({ useUserSocket: () => undefined }));
-vi.mock("@/lib/useSeasons", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/useSeasons")>(), useSeasons: () => ({ data: undefined }) }));
+vi.mock("@/lib/useSeasons", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/useSeasons")>(), useSeasons: () => ({ data: catalog.data }) }));
 vi.mock("@/components/analyzer/arcade/hooks/useAnalysisGames", () => ({ AnalysisGamesProvider: ({ children }: { children: React.ReactNode }) => children }));
 function Readout() { const { filters, setFilters } = useFilters(); return <><pre data-testid="filters">{JSON.stringify(filters)}</pre><button onClick={() => setFilters({ ...filters, race: "T" })}>Terran</button></>; }
 const value = () => JSON.parse(screen.getByTestId("filters").textContent!);
-beforeEach(() => { localStorage.clear(); navigation.path = "/app/maps"; navigation.query = ""; navigation.replace.mockReset(); window.history.replaceState(null, "", "/app/maps"); });
+beforeEach(() => { localStorage.clear(); catalog.data = undefined; navigation.path = "/app/maps"; navigation.query = ""; navigation.replace.mockReset(); window.history.replaceState(null, "", "/app/maps"); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("analyzer URL hydration", () => {
+  const season68: SeasonRow = { battlenetId: 68, region: "US", year: 2026, number: 3, start: "2026-09-01T00:00:00.000Z", end: "2026-10-25T23:59:59.999Z" };
+  const season69: SeasonRow = { battlenetId: 69, region: "US", year: 2026, number: 4, start: "2026-10-26T00:00:00.000Z", end: null };
+
+  it("fresh Opponents defaults track the catalog from season 68 to 69", async () => {
+    navigation.path = "/app/opponents";
+    catalog.data = { items: [season68] };
+    const view = render(<AnalyzerProvider><Readout /></AnalyzerProvider>);
+    await waitFor(() => expect(value()).toMatchObject({ preset: "current_season", since: season68.start }));
+    catalog.data = { items: [season69, season68] };
+    view.rerender(<AnalyzerProvider><Readout /></AnalyzerProvider>);
+    await waitFor(() => expect(value()).toMatchObject({ preset: "current_season", since: season69.start }));
+    expect(value().until).toBeUndefined();
+  });
+
+  it("reset returns a pinned date to Auto and persists the relative choice across reloads", async () => {
+    catalog.data = { items: [season69, season68] };
+    localStorage.setItem("analyzer.filters", JSON.stringify({ preset: "season:68" }));
+    const view = render(<AnalyzerProvider><Readout /><ActiveFilterChips /></AnalyzerProvider>);
+    await waitFor(() => expect(value()).toMatchObject({ preset: "season:68", since: season68.start }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
+    expect(value()).toMatchObject({ preset: "current_season", since: season69.start });
+    expect(JSON.parse(localStorage.getItem("analyzer.filters")!).preset).toBe("current_season");
+    view.unmount();
+    render(<AnalyzerProvider><Readout /></AnalyzerProvider>);
+    await waitFor(() => expect(value()).toMatchObject({ preset: "current_season", since: season69.start }));
+  });
+
+  it("retains an explicit numbered season as the current season changes", async () => {
+    catalog.data = { items: [season68] };
+    localStorage.setItem("analyzer.filters", JSON.stringify({ preset: "season:68" }));
+    const view = render(<AnalyzerProvider><Readout /></AnalyzerProvider>);
+    await waitFor(() => expect(value()).toMatchObject({ preset: "season:68", since: season68.start }));
+    catalog.data = { items: [season69, season68] };
+    view.rerender(<AnalyzerProvider><Readout /></AnalyzerProvider>);
+    expect(value()).toMatchObject({ preset: "season:68", since: season68.start, until: season68.end });
+  });
+
   it("URL keys override storage for this session and subsequent changes do not persist them", async () => {
     localStorage.setItem("analyzer.filters", JSON.stringify({ preset: "last_30d", race: "Z", regions: "NA", regions_rev: 1 }));
     const stored = localStorage.getItem("analyzer.filters");

@@ -39,7 +39,7 @@ const article: HelpArticle = {
     "saved views",
     "share filters",
   ],
-  updated: "2026-10-25",
+  updated: "2026-10-26",
   body: [
     { type: "heading", text: "Using filters", anchor: "using-filters" },
     { type: "paragraph", text: "The summary lists your date range, game type, game size, regions, length and any matchup. **Filters** counts all facets that differ from the defaults. On a computer, date, matchup and region stay inline; open Filters for the other choices. On a phone, Filters opens the complete editor, with Reset to defaults and Done at the bottom. Changes apply immediately." },
@@ -51,13 +51,13 @@ const article: HelpArticle = {
     { type: "heading", text: "The defaults", anchor: "defaults" },
     {
       type: "paragraph",
-      text: "A new visit counts your **ranked 1v1 ladder games on the current 12-worker patch**, from every region, of any length, with **too-short games hidden**. Too-short games are replays under 45 seconds: disconnects and instant leaves where no build order happened.",
+      text: "A fresh view counts your **ranked 1v1 ladder games in the current season**, from every region, of any length, with **too-short games hidden**. The date range defaults to **Auto-track current season**, which follows the live season catalog. Too-short games are replays under 45 seconds: disconnects and instant leaves where no build order happened.",
     },
     {
       type: "table",
       head: ["Filter", "Default", "What it does"],
       rows: [
-        ["Date range", "After 5.0.17 · 12 workers", "A patch, a ladder season, a quick range such as Last 30 days, or your own dates."],
+        ["Date range", "Auto-track current season", "Follows the current ladder season. You can also pin a numbered season, choose a patch or quick range, or enter your own dates."],
         ["Matchup", "All", "Only games against one race. **My race** appears when you have games as more than one race."],
         ["Region", "All six on", "Tap a region to hide its games. PTR is the Public Test Realm."],
         ["Game type", "Ranked ladder", "Ranked ladder, Custom games (including unranked), or Both."],
@@ -68,7 +68,7 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "Your choices are remembered on this device, so the next visit opens the way you left it.",
+      text: "Your choices are remembered on this device, so the next visit opens the way you left it. Existing date choices and saved views stay as selected. Choose **Reset to defaults** to return to Auto-track current season. A numbered season stays pinned; Auto-track moves to the new season when the catalog updates.",
     },
     { type: "heading", text: "Patch presets", anchor: "patch-presets" },
     {

@@ -137,7 +137,7 @@ export const DEFAULT_ANALYZER_FILTERS = {
  * map, MMR) goes too.
  *
  * Example: `defaultAnalyzerFilters()` →
- * `{ preset: "after_5_0_17", since: "<5.0.17 release>", exclude_too_short: true, map_pool: "ladder", game_size: "1v1" }`.
+ * `{ preset: "current_season", since: "<current season start>", exclude_too_short: true, map_pool: "ladder", game_size: "1v1" }` (with an end bound when available).
  */
 export function defaultAnalyzerFilters(seasons?: LogicalSeason[]): AnalyzerFilters {
   const range = resolvePreset(DEFAULT_PRESET, undefined, seasons);
@@ -493,7 +493,7 @@ export function summarizeFilters(filters: AnalyzerFilters, seasons?: LogicalSeas
   const preset = filters.preset || "all";
   const regions = activeRegionCodes(filters.regions);
   const labels = [
-    preset === DEFAULT_PRESET ? "Current patch" : presetValue(preset, filters, seasons),
+    presetValue(preset, filters, seasons),
     filters.map_pool === "nonladder" ? "Custom games" : filters.map_pool === "all" ? "Ranked ladder and custom games" : "Ranked ladder",
     filters.game_size === "team" ? "Team games" : filters.game_size === "all" ? "All game sizes" : "1v1",
     regions.length === ANALYZER_REGIONS.length ? "All regions" : regions.join(", "),
