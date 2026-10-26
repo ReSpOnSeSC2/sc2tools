@@ -132,7 +132,7 @@ describe("replay consent and copy admission with real SWR", () => {
     await act(async () => { h.cacheGate!.resolve(); });
     await waitFor(() => expect(h.copy).toHaveBeenCalledTimes(1));
     expect(h.copy).toHaveBeenCalledWith(href("fresh-owner-a"));
-    expect(h.success).toHaveBeenCalledWith("Public replay page is live"); expect(h.success).toHaveBeenCalledWith("Replay page link copied");
+    expect(h.success).not.toHaveBeenCalledWith("Public replay page is live"); expect(h.success).toHaveBeenCalledWith("Replay page link copied");
     expect(reads()).toHaveLength(1); expect(writes()).toHaveLength(1);
   });
 

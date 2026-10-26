@@ -354,7 +354,7 @@ describe("ReplayLibrary", () => {
     });
     expect(sharingState).toEqual({ enabled: true, handle: SHARE_HANDLE });
     expect(mocks.getToken).toHaveBeenCalledTimes(1);
-    expect(mocks.toastSuccess).toHaveBeenCalledWith("Public replay page is live");
+    expect(mocks.toastSuccess).not.toHaveBeenCalledWith("Public replay page is live");
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Replay page link copied");
     expect(screen.getByRole("link", { name: /Preview public page/i }).getAttribute("href")).toBe(
       `/players/${SHARE_HANDLE}/replays`,

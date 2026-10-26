@@ -203,6 +203,15 @@ for (const theme of ["light", "dark"] as const) {
     expect(evidence.apiRequests.filter(row => row.method === "PUT")).toEqual([{ method: "PUT", owner: "copy-owner-a", body: { enabled: true } }]);
     expect(evidence.apiRequests.filter(row => row.method === "GET")).toHaveLength(1);
     expect(await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.writes.length)).toBe(writeCountBeforeConsent + 1);
+    const replayDone = replayManual.getByRole("button", { name: "Done", exact: true });
+    const recoveryFooter = await replayDone.evaluate(node => {
+      const rect = node.getBoundingClientRect(), hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      return { button: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        hit: hit?.outerHTML.slice(0, 300) ?? null, receivesPointer: !!hit && node.contains(hit) };
+    });
+    await info.attach("private-replay-recovery-footer", { body: JSON.stringify(recoveryFooter), contentType: "application/json" });
+    expect(recoveryFooter.receivesPointer, "Manual-copy Done remains clickable immediately after enable acknowledgement").toBe(true);
+    await expect(notifications.getByRole("status")).toHaveCount(0);
     await checkAccessibility(page, info, "/app/replays#copy-recovery", theme);
     await screenshot(page, info, `private-replay-copy-${theme}`);
     await replayManual.getByRole("button", { name: "Done", exact: true }).click();
@@ -212,6 +221,7 @@ for (const theme of ["light", "dark"] as const) {
     expect(await consent.evaluate(node => node.contains(document.activeElement))).toBe(true);
     await consent.getByRole("button", { name: "Turn off sharing", exact: true }).click();
     await expect(consent.getByRole("button", { name: "Turn on and copy link", exact: true })).toBeVisible();
+    await expect(notifications.getByRole("status").filter({ hasText: "Public replay page turned off" })).toHaveCount(1);
     await consent.getByRole("button", { name: "Close", exact: true }).click();
     await expect(consent).toHaveCount(0); await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe("");
     await dismissToasts(page);

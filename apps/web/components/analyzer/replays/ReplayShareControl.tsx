@@ -190,11 +190,12 @@ function OwnerReplayShareControl({ ownerId, getToken }: { ownerId: string | null
         return result;
       }, REQUEST_TIMEOUT_MS, job.controller.signal);
       assertIntent();
-      toast.success(enabled ? "Public replay page is live" : "Public replay page turned off");
       if (copyAfter && next.enabled && next.handle) {
         // A one-shot explicit intent is consumed by the newly committed copy scope.
+        // The current sharing state/copy outcome confirms this combined action;
+        // a global live toast would cover the phone recovery dialog's footer.
         job.phase = "handoff"; queued = true; setHandoff({ job, value: next });
-      }
+      } else toast.success(enabled ? "Public replay page is live" : "Public replay page turned off");
     } catch (error) {
       markUnknown(job);
       if (current(job) && !isAbort(error)) toast.error("Couldn't update replay sharing",

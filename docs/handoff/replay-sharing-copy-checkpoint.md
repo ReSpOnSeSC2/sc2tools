@@ -4,7 +4,7 @@ Date: 2026-10-26. Branch: `codex/wave5-replay-sharing-copy`, starting at `cf81a7
 
 ## Status
 
-Source and focused static verification are complete for root review. Production build, budgets and native-browser verification remain pending; this checkpoint makes no delivery claim. Prior Copy #763 proof belongs to its preserved source. Root owns Git and the shared runtime slot.
+Local source, focused static checks, production build/budgets and native-browser verification are complete for root review. This checkpoint makes no remote CI or delivery claim. Prior Copy #763 proof belongs to its preserved source. Root owns Git and delivery; all local runtime jobs are closed and the shared slot is released.
 
 The exact 15-path manifest was recorded before edits in `.cache/replay-sharing-copy-owned-paths.txt`. Owner `.tmp` scripts, existing caches and original screenshots are preserved and unexecuted. No actual native share, clipboard, account, provider, consent or integration write was performed while authoring.
 
@@ -60,6 +60,33 @@ Only the two retired ReplayLibrary/PublicReplayShareButton prompt allowances are
 - Help generation produced the same 90-article index twice (SHA256 `36c349983b1476de9558c7fb581ee2be7732e3278615b41596438fb0ce807398`). Its generated source is unchanged. All **19 UI rule tests passed**; the ratchet passed over **1,695 source files / 651 existing occurrences**, with no new or stale allowance.
 - Preserved first failures exposed an ambiguous test Close selector, a jsdom-only assumption about native interior Tab, four unsupported RTL type options, and the genuine duplicate account-transition GET. Tests now target the explicit X and managed focus boundaries; browser proof still requires native traversal. The account-transition regression retains exact GET owners `[A, A, B]`, and the shared-provider remount regression still requires a new GET inside SWR's two-second dedupe window. No test was skipped or weakened.
 
-## Pending checks
+## Integrated production and browser proof
 
-After root preserves the reviewed source and integrates its queued UI dependency, one reviewed production build and unchanged budgets, followed by the six-case native-browser matrix. Use new cache-only evidence directories, count synthetic consent PUTs honestly, retain full AA checks and report real failures before expanding product scope. No browser proof count is inferred from authored source.
+Root preserved the initial source at `8b8abaab` and normally merged actual main/UI #764 at `1862bcc5a0a680dc9d10c460337aac8b46978757`. The final local proof uses that integrated source plus the four-file visual repair described below. Evidence is in `.cache/replay-sharing-copy-proof-1862bcc5/`.
+
+- Integrated consumer/Modal/focus/Help verification: **176 tests across 16 suites passed**, maximum two workers. Whole-web types, strict owned lint and deterministic 90-article Help generation passed. All **19 UI rule tests passed**; the ratchet passed over **1,695 files / 649 existing occurrences**, with no new/stale allowance. ReplayLibrary's same three inherited label warnings remain separately recorded.
+- Read-only asset admission matched all **40 normalized engine inputs**, source hash `18a2e1b56111045cdb441d9d8868eee0b36d0b158b34ea0a79e3b9a22a69e2b2`, engine 1.6.12 / agent 0.24.7, canonical bundle `d27b37abb9997712`, and all five asset digests. Engine ZIP remains 1,252,988 bytes / SHA256 `ba357c54c2f3d69b923adc391230dc4382693eabb697b23bf287a665ad1f0858`.
+- The unchanged four-game sample passes the real strict reader and availability metadata. Windows checkout bytes are 163,356 / SHA256 `05e874e4792b9e054021efbe0008a935a4cd1c4e4395b1f3e061508b476f0c40`; canonical LF bytes are 163,355 / SHA256 `91a6735e50f45776c15642ebae53f1a3f9800c1db225a99e0e631be318820473`. The initial raw-length diagnostic is preserved. No engine/sample generation, copy, compilation, download or pruning ran; post-build hashes confirm the retained assets/sample are unchanged.
+- The initial direct build encountered only sandbox `EPERM` while creating generated Next types; its log is preserved. Host-access build completed. Screenshot review then found a real phone obstruction despite the first six passing browser cases: the acknowledged live-sharing toast covered the recovery footer. That first artifact/capture is retained as **visual RED**, not final proof.
+- An immediate `elementFromPoint` assertion reproduced the blocked Done button in 13.4 seconds, without waiting for toast expiry. The narrow leaf repair suppresses the redundant live toast only during enable-and-copy handoff; normal enable/turn-off and copied feedback retain their paths. Its two affected suites (**35 tests**), whole-web types and strict four-file lint passed. No shared layering/helper/API/consent change was made.
+- The required replacement production build passed with final build ID **`bfbsuAnXJij8Qqd7ZZilj`**. All **81 unchanged budgets** passed, including `/community` 188.6/190 kB, `/app` 234.3/240 kB and `/try` 216.7/240 kB. Post-build types, final spec lint and the 1,695-file/649-occurrence ratchet passed.
+- Final pinned Chromium proof: **six cases passed** in 2.9 minutes, one worker, both themes across phone/tablet/desktop projects, real production CSS/fonts. All six immediate recovery-footer hit-tests pass; explicit turn-off confirmation, selected exact URLs, nested Escape/Tab/lock/trigger return, native cancellation, held outcomes, owner/path ABA and compact 320/390 geometry remain asserted. **36 AA reports have zero serious/critical issues**; ordinary Axe incomplete annotations remain attached, with no rule exclusions or new allowances. There are **36 new synthetic cache-only captures**.
+- Each case admits exactly **three synthetic GETs** (owners A, B, A) and **two explicitly requested synthetic PUTs** (`enabled: true`, then `false`): 18 reads and 12 writes across the matrix. Other/nonlocal requests fail closed. Actual consent API writes, account/provider mutations, native shares and host clipboard writes remain zero. The real-SWR unit suite separately verifies exact unknown-status GET/failure/retry and write/visibility/owner retirement behavior.
+
+Final machine-readable evidence: `final-browser-summary.json`, `asset-admission.json` and `final-source-proof.json` in the current proof directory. Original caches, screenshots and owner `.tmp` scripts remain preserved and unexecuted.
+
+Review captures in `browser-final/screenshots/`:
+
+- `mobile-360-private-replay-copy-light.png` and `mobile-360-private-replay-copy-dark.png`: recovered link with unobscured Done.
+- `desktop-1280-public-replay-copy-dark.png`: native-share failure recovery.
+- `mobile-360-compact-copy-light-320.png`: existing compact Community actions retain their geometry.
+
+Root still owns source preservation, remote checks and delivery. This bounded UI consumer pack does not complete the whole UI-primitives roadmap item.
+
+Root independently viewed the corrected private Light and Dark phone recovery,
+public Dark desktop recovery and compact Community phone recovery. Three new
+review copies are byte-identical to final evidence: `replay-copy-private-light-360.png`,
+`replay-copy-public-dark-1280.png` and `replay-copy-compact-light-320.png` under
+`docs/handoff/screenshots/`. Done is visible and immediately receives pointer
+hits; no old or owner image was overwritten. Subsequent edits are checkpoint
+documentation and these review copies, with runtime source hashes retained.
