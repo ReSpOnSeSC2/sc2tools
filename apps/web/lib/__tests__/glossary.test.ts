@@ -1,8 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { GLOSSARY, glossaryHelpPath, glossaryTerm } from "../glossary";
 import { getArticle, helpArticleAnchors } from "../help";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+
+function sourceTerms(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) return entry.name === "__tests__" ? [] : sourceTerms(file);
+    if (!file.endsWith(".tsx") || /\.(test|spec)\.tsx$/.test(file)) return [];
+    return [...readFileSync(file, "utf8").matchAll(/<(?:Term\b[^>]*\bid|InfoTip\b[^>]*\btermId)="([^"]+)"/g)].map(match => match[1]);
+  });
+}
 
 describe("glossary", () => {
+  it("keeps every literal Term/InfoTip consumer ID valid and publishes known glossary anchors", () => {
+    const ids = sourceTerms(path.resolve(__dirname, "../../components"));
+    expect(ids).toContain("group-same-player");
+    for (const id of ids) expect(glossaryTerm(id), id).toBeDefined();
+    const article = getArticle("glossary"); expect(article).toBeDefined();
+    expect(helpArticleAnchors(article!)).toEqual(GLOSSARY.map(term => term.id));
+  });
   it("seeds the opponent and MMR terms the info tips will use", () => {
     expect(GLOSSARY.map((term) => term.id)).toEqual(
       expect.arrayContaining(["pulse-id", "toon", "net-mmr", "verified-pairs", "mmr-impact", "group-same-player", "barcode"]),

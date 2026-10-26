@@ -9,6 +9,7 @@ import { HELP_CATEGORIES, type HelpCategory } from "./categories";
 import { POPULAR_HELP_SLUGS } from "./popular";
 import type { HelpArticle } from "./types";
 import { helpArticlePath } from "./paths";
+import { helpWidgetAnchors } from "./widgets";
 export { helpArticlePath } from "./paths";
 
 export { ALL_HELP_ARTICLES };
@@ -42,7 +43,8 @@ export function getArticle(slug: string): HelpArticle | undefined {
  * Example: `helpArticleAnchors(getArticle("replay-reviews")!)[0]` → "how-it-works".
  */
 export function helpArticleAnchors(article: HelpArticle): string[] {
-  return article.body.flatMap((block) => (block.type === "heading" && block.anchor ? [block.anchor] : []));
+  return article.body.flatMap((block) => block.type === "heading" && block.anchor ? [block.anchor]
+    : block.type === "widget" ? helpWidgetAnchors(block.widget) : []);
 }
 
 /** In-app URL that opens an article in Settings → Help. */
