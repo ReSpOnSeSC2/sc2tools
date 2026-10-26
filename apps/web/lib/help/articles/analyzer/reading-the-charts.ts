@@ -4,7 +4,7 @@ const article: HelpArticle = {
   slug: "reading-the-charts",
   title: "Reading the charts: colors, sample sizes and Min games",
   summary:
-    "How to read any table or chart in the analyzer: what the win-rate colors mean, how many games a number needs before you trust it, and what Min games does.",
+    "How to read analyzer charts: win-rate colors, sample sizes, data tables and the Min games filter.",
   category: "analyzer",
   audience: "player",
   signedInOnly: true,
@@ -31,7 +31,7 @@ const article: HelpArticle = {
     "how are stats calculated",
     "ai",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-25",
   body: [
     {
       type: "paragraph",
@@ -42,8 +42,8 @@ const article: HelpArticle = {
       type: "list",
       items: [
         "Win rates run from red (around 30% and below) through amber (around 50%) to green (around 65% and above).",
-        "A win rate over fewer than 3 games stays **grey**, whatever it is: 1 win from 1 game isn't really 100%.",
-        "In grids such as heatmaps, a fainter cell has fewer games behind it.",
+        "On MMR, macro and head-to-head comparison charts, **hollow or dim marks** flag fewer than 20 decided results. The actual percentage and record remain available; a 1–0 record is still shown as 100% with a small-sample cue.",
+        "Some compact summary tables keep their existing grey cue below 3 games. In heatmaps, background strength shows sample size while labels remain readable.",
       ],
     },
     { type: "heading", text: "How many games is enough?", anchor: "sample-size" },
@@ -57,27 +57,31 @@ const article: HelpArticle = {
       rows: [
         ["1 to 4", "A hint at most. Look at the games themselves."],
         ["5 to 19", "A direction. Compare it with something that has more games."],
-        ["20 or more", "A result you can act on, especially when it stays the same over time."],
+        ["20 or more", "More evidence, with opponents, maps and game length still able to differ. This is a reading aid, not a guarantee."],
       ],
     },
     {
       type: "paragraph",
-      text: "So always read the game count next to a percentage. Most rows show it, and most charts show it when you hover or tap a point.",
+      text: "Read the count next to a percentage. A decided result is a win or loss; other outcomes remain visible in the total. Mechanics averages use the number of measured games instead, and missing counts get a hollow cue.",
     },
     { type: "heading", text: "Min games", anchor: "min-games" },
     {
       type: "paragraph",
-      text: "**Min games** hides rows with fewer games than the number you pick: 1, 3, 5, 10, 20 or your own number. It's on Opponents, Strategies, Maps and Builds, and each section remembers its own setting on this device. Raise it to see only results you can trust; set it to 1 to see everything. If that hides every row, the page says so and offers to lower it to 1.",
+      text: "**Min games** hides rows with fewer games than the number you pick: 1, 3, 5, 10, 20 or your own number. It's on Opponents, Strategies, Maps and Builds, and each section remembers its own setting on this device. Raise it to compare larger samples; set it to 1 to see every recorded group. If that hides every row, the page says so and offers to lower it to 1.",
     },
     { type: "heading", text: "The 50% line and MMR charts", anchor: "mmr-charts" },
     {
       type: "list",
       items: [
         "A 50% line marks a coin flip. Above it you win more than you lose.",
-        "Charts by MMR put games into MMR ranges and skip ranges with fewer games than Min games, so a line can have gaps.",
+        "MMR bands are separate comparison rows on one percentage scale. Rates below the selected minimum are withheld with their counts still visible; no line connects unrelated bands.",
+        "MMR progression and build curves keep their actual time or play-count order. Separate accounts and ladder races keep separate labeled series.",
         "MMR comes from the replay itself, so unranked games and games without an MMR aren't on MMR charts.",
       ],
     },
+    { type: "heading", text: "View as table", anchor: "view-as-table" },
+    { type: "paragraph", text: "Where shown, choose **View as table** to read the same filtered values and counts without hovering. **Show chart** returns to the visual. The table scrolls inside its own focusable area on a narrow screen, and existing game links or drilldown actions remain available." },
+    { type: "paragraph", text: "Series have visible names and, when colors repeat, dash patterns. Recent-form results also have shapes or W/L labels. Charts honor your device's reduced-motion preference; no color or animation is required to read the table." },
     { type: "heading", text: "Dates and times", anchor: "dates" },
     {
       type: "paragraph",

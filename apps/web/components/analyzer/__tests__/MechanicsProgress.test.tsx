@@ -53,11 +53,11 @@ describe("mechanics progress consumers", () => {
 
   it("switches metrics using one timeseries resource with distinct scored counts and hollow points", () => {
     const view = render(<MechanicsTrendCard />);
-    expect(view.container.querySelectorAll('circle[data-hollow="true"]')).toHaveLength(1);
+    expect(view.container.querySelectorAll('circle[data-hollow="true"]')).toHaveLength(2);
     expect(view.container.querySelector('circle[data-n="4"]')).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "APM" }));
     expect(screen.getByRole("img", { name: /APM by calendar/ })).toBeTruthy();
-    expect(view.container.querySelectorAll('circle[data-hollow="true"]')).toHaveLength(0);
+    expect(view.container.querySelectorAll('circle[data-hollow="true"]')).toHaveLength(2);
     expect(screen.getByText("150 · 6 measured games")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Inspect period"), { target: { value: "2026-01-01" } });
     expect(screen.getByText("100 · 5 measured games")).toBeTruthy();

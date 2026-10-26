@@ -1,13 +1,14 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-export const TEXT_TOKENS = ["text", "text-muted", "text-dim", "accent-ink", "accent-ink-hover", "accent-cyan", "signal", "signal-hover", "editorial", "editorial-soft", "success", "warning", "danger", "player-you", "player-opp", "race-protoss", "race-terran", "race-zerg", "race-random"];
+export const TEXT_TOKENS = ["text", "text-muted", "text-dim", "accent-ink", "accent-ink-hover", "accent-cyan", "signal", "signal-hover", "editorial", "editorial-soft", "success", "warning", "danger", "player-you", "player-opp", "race-protoss", "race-terran", "race-zerg", "race-random", "chart-low-sample", "chart-wr-low", "chart-wr-mid", "chart-wr-high"];
 const SURFACES = ["bg", "bg-surface", "bg-elevated"];
 const FILLS = ["accent", "accent-hover", "danger-fill"];
 const BORDERS = ["border", "border-strong", "line"];
+const CHART_MARKS = ["chart-low-sample", "chart-wr-mid"];
 
 function tokens(block) {
-  return Object.fromEntries([...block.matchAll(/--([a-z-]+):\s*(\d+)\s+(\d+)\s+(\d+)\s*;/g)].map(match => [match[1], match.slice(2).map(Number)]));
+  return Object.fromEntries([...block.matchAll(/--([a-z0-9-]+):\s*(\d+)\s+(\d+)\s+(\d+)\s*;/g)].map(match => [match[1], match.slice(2).map(Number)]));
 }
 
 /** Test the actual declarations, including a dark replay inside a light page. */
@@ -43,13 +44,14 @@ export function contrastMatrix(css) {
       ...TEXT_TOKENS.flatMap(foreground => SURFACES.map(background => ({ theme, foreground, background, minimum: 4.5, ratio: contrastRatio(rgb(foreground), rgb(background)) }))),
       ...FILLS.map(background => ({ theme, foreground: "white", background, minimum: 4.5, ratio: contrastRatio([255, 255, 255], rgb(background)) })),
       ...BORDERS.flatMap(foreground => SURFACES.map(background => ({ theme, foreground, background, minimum: 3, ratio: contrastRatio(rgb(foreground), rgb(background)) }))),
+      ...CHART_MARKS.flatMap(token => SURFACES.map(background => ({ theme, foreground: `${token} mark`, background, minimum: 3, ratio: contrastRatio(rgb(token), rgb(background)) }))),
     ];
   });
 }
 
 export function contrastTable(css) {
   const rows = contrastMatrix(css);
-  const labels = [...TEXT_TOKENS, ...FILLS.map(fill => `white on ${fill}`), ...BORDERS];
+  const labels = [...TEXT_TOKENS, ...FILLS.map(fill => `white on ${fill}`), ...BORDERS, ...CHART_MARKS.map(token => `${token} mark`)];
   const themes = Object.keys(contrastThemes(css));
   return ["| Pair (worst of ground, surface and raised) | Dark | Light | Replay on light | Minimum |", "| --- | ---: | ---: | ---: | ---: |", ...labels.map(label => {
     const group = rows.filter(row => (row.foreground === "white" ? `white on ${row.background}` : row.foreground) === label);
