@@ -793,13 +793,6 @@
       "example": "\"min-w-0 outline-none\""
     },
     {
-      "file": "components/analyzer/replays/ReplayLibrary.tsx",
-      "rule": "native-confirm-prompt",
-      "signature": "6bec3b7251688ea54dfd2bc7421b438eeded43a14ff29c96901e53235641fe3b",
-      "count": 1,
-      "example": "window.prompt(\"Copy this replay page link\", href)"
-    },
-    {
       "file": "components/analyzer/replays/ReplayList.tsx",
       "rule": "small-arbitrary-text",
       "signature": "00608f84268afef903bde692af64382266a6f8ba5d317b9991141e9cec0680cc",
@@ -1715,13 +1708,6 @@
       "signature": "840b4248f3d4361ea00c82cc46eed9966b2af7dcd1703e1cb0ebd2272dd15949",
       "count": 1,
       "example": "\"scroll-mt-24 focus:outline-none\""
-    },
-    {
-      "file": "components/public-profile/PublicReplayShareButton.tsx",
-      "rule": "native-confirm-prompt",
-      "signature": "6bec3b7251688ea54dfd2bc7421b438eeded43a14ff29c96901e53235641fe3b",
-      "count": 1,
-      "example": "window.prompt(\"Copy this replay page link\", href)"
     },
     {
       "file": "components/randomizer/RandomizerStage.tsx",

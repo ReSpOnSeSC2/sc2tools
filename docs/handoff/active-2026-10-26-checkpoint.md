@@ -63,45 +63,63 @@ distinguished in the individual checkpoints. Never claim a whole matrix was
 rerun on a later commit unless it was. Keep unchanged route budgets and all
 original evidence.
 
+Build dialogs PR764 is delivered as `4135639b914a85f2a19a02d224887ca9f0974ce2`.
+Exact-head CI passed 8,852 web tests/944 suites (one expected skipped test/suite)
+and 379 browser checks/68 intentional skips. Vercel deployment
+`948akjc562dHpTHPJc9MwCbM6CNh` is visibly Ready/Production/Current Domains
+`sc2tools.com`, with exact source `4135639b`. Local proof is 204 checks/20 suites,
+81 budgets and 329 browser checks/48 AA scans, including all 48 Close controls
+at least 44 by 44 pixels and fully inside their viewport/dialog. Original
+branches, captures and every RED receipt are retained.
+
 ## Active source packs and ownership
 
-1. Build dialogs: `wave3-guides-expansion`, branch
-   `codex/wave5-build-dialogs`, agent `public_player`. Actual Dossier, rich
-   editor, Practice and menu consumer checks found real focus/empty-state
-   issues. Final local proof passes 204 checks/20 suites, types, all 81 route
-   budgets and 329 browser checks/48 full AA scans. All 48 Close controls are
-   at least 44 by 44 pixels and inside the viewport and dialog. A one-line
-   shared Modal header sizing fix removes measured phone clipping; no API
-   changes. Root reviewed/copied three final captures. Remote CI, merge and
-   deployment are pending; local runtime is closed and its slot is released.
-   Root owns Git and this program checkpoint. Preserve every RED receipt.
-2. Replay-sharing copy: `wave4-agent-dashboard`, branch
-   `codex/wave5-replay-sharing-copy`, agent `columns_api`. Source-only work
-   depends on PR763. Shared manual-copy presentation, explicit private consent
-   lifetime and native-share attempt lifetime are being repaired. No runtime
-   grant yet. Unknown consent acknowledgements require a fresh existing GET
-   on the next explicit open; never automatically undo an authorized write,
-   copy a stale handle or claim sharing is off after an uncertain outcome.
-3. Notification Popover: `wave3-game-workspace`, branch
+1. Replay-sharing copy: `wave4-agent-dashboard`, branch
+   `codex/wave5-replay-sharing-copy`. Root preserved `8b8abaab` and integrated
+   actual main413 at `1862bcc5`. Final local proof passes 176 checks/16 suites,
+   35 affected checks after a real toast obstruction fix, types/lint/Help/UI,
+   all 81 budgets and six browser cases/36 AA reports. Each immediate Done
+   hit-test passes; 18 GETs/12 consent PUTs are synthetic, with no real account,
+   provider, clipboard or native-share operation. Root reviewed three copies.
+   Remote CI and delivery are pending; all runtime is closed. Preserve unknown
+   write outcomes and the fresh owner-generation GET; never automatically undo
+   consent, copy a stale handle or claim sharing is off after uncertainty.
+2. Notification Popover: `wave3-game-workspace`, branch
    `codex/wave5-notification-popover`, agent `next_ui_audit`. The ten-path source
-   pack is frozen from `1ad5dafa`. Root's initial focused pass is 36 checks/four
-   suites, after replacing a stale test helper's dialog-only wait with actual
-   lazy-panel readiness. Later static/build/browser/remote gates are unrun.
+   was preserved at `62b8494f`, with actual main413 merged at `06c4311c`.
+   Initial 36 checks/four suites passed. A new held-page/newer-keyboard-Modal
+   case then reproduced real late-focus theft; the Panel's one-shot initial
+   focus is being guarded by existing Modal ownership. Keep exact read ACK and
+   New-state assertions. Cached lazy error focus under the Popover's initial
+   hidden placement still needs actual browser proof. Later gates are pending.
    Preserve lazy data loading, ready-and-merged initial
    focus, read acknowledgements and nonmodal Tab behavior. Existing Popover
    handles outside pointer focus and top-layer Escape. Runtime follows the
    earlier packs; root owns Git.
-4. Mobile navigation: `wave3-owner-neighbors`, branch
+3. Mobile navigation: `wave3-owner-neighbors`, branch
    `codex/wave5-mobile-nav-sheet`. Eight source paths are authored and frozen,
-   with all gates unrun. Reuse standard right Sheet sizing and shared Close,
+   preserved at `d0ee472d` and main413 integrated at `ae3e852a`; all gates unrun.
+   Reuse standard right Sheet sizing and shared Close,
    preserve home/auth/route/theme controls and the controlled-content ID, and
    close at the desktop breakpoint to release the old hidden drawer's lock.
-5. Glossary foundation: `wave3-my-reviews`, branch
+4. Glossary foundation: `wave3-my-reviews`, branch
    `codex/wave5-glossary-infotip`. A 19-path source-only foundation is approved:
    the seven existing definitions, explicit lazy InfoTip/Term, searchable
    normal Help widget/article and one grouping-control consumer. No runtime
    grant. About forty terms, remaining consumers and Reading your stats still
    need later source-verified expansion; do not claim the whole item complete.
+   Source is preserved at `76d9f3b2` and main413 integrated at `47129fa6`.
+   Queued Related navigation now retires on a newer search/focus/action/variant;
+   authored regressions remain unrun. Run the canonical Help generator first
+   when this pack receives its runtime grant; its owned index is still unchanged.
+5. Platform disconnect: `wave3-guides-expansion`, branch
+   `codex/wave5-platform-disconnect-confirm`, source commit `572c4bba`. Exactly
+   eight paths are source-frozen with every runtime gate unrun. Existing
+   useConfirm/ConfirmDialog replaces one native confirm. Preserve synchronous
+   Connect/Reconnect and purpose/scope behavior. Owner/revision/ABA/JWT and
+   expected cache-publication admission prevent stale DELETE completion;
+   require a valid selected disconnected status before success. Validation
+   uses synthetic transport only; no actual provider action is authorized.
 
 Do not switch these active branches, reset their worktrees or stage their
 untracked caches. Source-only agents must not start competing runtime work.
