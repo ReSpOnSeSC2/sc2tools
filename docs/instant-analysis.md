@@ -766,13 +766,25 @@ read it trimmed and case-insensitively, so `All` also requires the engine.
 2. **`admins`.** The engine build becomes required. Dogfood signed-in
    imports and Folder Sync; watch `ingestSource: "browser"` rows,
    `instant_error` kinds and the `browser_ingest_daily` counts.
-3. **`all`.** Open `/try` and the entry points to everyone. The landing
-   replay demo still POSTs to `/v1/public/preview-replay` (its copy says
-   so); moving it onto the in-browser engine and retiring that route is
-   follow-up work.
+3. **`all`.** Open `/try` and the entry points to everyone. The home-page
+   one-replay build editor demo now uses the same browser worker with a
+   one-file, 1v1, all-time session. Hovering/focusing its drop zone starts
+   warm-up; page view alone does not download the engine. It asks which
+   player is yours, keeps both build orders and opens the existing demo
+   editor only after a successful parse. Its "How this works" link opens
+   `/try#home-replay-demo`. Browser failure/unsupported capability never
+   falls back to uploading. No local report is persisted by this demo.
+
+**One-release compatibility window:** `off`/`admins` still use the old
+rate-limited landing server demo and its explicit upload copy. Keep
+`/v1/public/preview-replay`, its health route and `preview_replay_cli.py`
+wiring until the browser path has completed a release. Then remove those
+routes/wiring and their obsolete tests in an explicit retirement change.
+No release or rollout flag was changed while implementing this migration.
 
 The API needs no flag; the daily cap is its safety valve. **Rollback:** set
-the flag to `off` and redeploy. Browser-uploaded games stay valid and are
+the flag to `off` and redeploy; during the compatibility window the landing
+demo returns to its server parser. Browser-uploaded games stay valid and are
 identifiable by `ingestSource: "browser"` and `engineVersion`.
 
 ## Budgets
@@ -855,6 +867,34 @@ venv holding **only** sc2reader and pytest, then builds the bundle and runs
 `test:engine` against the goldens. `web-ci.yml` builds with
 `NEXT_PUBLIC_INSTANT_IMPORT=all` and `INSTANT_ENGINE_REQUIRED=1`, so a
 broken engine build fails the PR. `version-check.yml` pins the versions.
+
+## Local report sharing and optional fixture examples
+
+The /try report offers **Share report**. Its canvas renderer/catalog load only
+after that action, then a preview lets the reader remove rows from both PNG
+and text. The 1200×630 output allows aggregate totals, up to three matchup
+records, a recognized catalog opener with at least three games, and a measured
+macro score. Player/account/game identities are excluded. Native image sharing,
+download and clipboard are explicit local actions; nothing is published by a
+preview. `instant_report_shared` carries only a fixed delivery enum through
+the existing consent gate.
+
+`npm run sample:build` in apps/web (also after its engine prebuild) generates
+`public/try/sample-payloads.json` from existing 1v1 fixtures using the verified
+current bundle. It strips source identities and provenance paths/IDs through
+an allowlist. Version, bundle content address and normalized source hash are
+checked; no-version detector edits cannot retain a stale example. Missing
+Python or a failed generation removes stale output and generates an unavailable
+flag. No engine/native version or environment flag is changed.
+
+**See a sample report** loads this optional artifact and the current engine
+pointer only after a click. It validates freshness, renders a labelled frame
+without saving/uploading games and emits consent-controlled
+`instant_sample_view`. A mobile-only home-page button uses the same flow.
+Existing Instant off/admins/all gates remain in force. The report's guide
+links use the cached published sitemap, exact catalog paths and actual replay
+matchups. Only an explicit validated `/try?focus=<matchup>/<build>` link may
+scroll to a matching own-opener row.
 
 ## Known limitations
 
