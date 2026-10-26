@@ -167,7 +167,7 @@ describe("SettingsShell #section anchors", () => {
     expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById("voice-readout"));
   });
 
-  it("waits for the whole streaming panel behind the fresh-status admission gate", async () => {
+  it("keeps the panel while waiting to reveal a private streaming section behind fresh-status admission", async () => {
     function LateOwner({ children }: { children: ReactNode }) {
       const [ready, setReady] = useState(false);
       useEffect(() => { const timer = window.setTimeout(() => setReady(true), 20); return () => clearTimeout(timer); }, []);
@@ -175,8 +175,11 @@ describe("SettingsShell #section anchors", () => {
     }
     window.history.replaceState(null, "", "/settings?tab=overlay&section=chat#platform-connections");
     render(<SettingsShell initialTab="overlay" renderStreaming={children => <LateOwner>{children}</LateOwner>} renderTab={renderPanel} />);
+    const panel = screen.getByRole("tabpanel", { name: "Chat & alerts" });
+    expect(within(panel).getByText("Checking token status")).toBeTruthy();
     expect(document.getElementById("platform-connections")).toBeNull();
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("tabpanel", { name: "Chat & alerts" })).toBe(panel);
     expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById("platform-connections"));
     expect(window.location.search + window.location.hash).toBe("?tab=chat#platform-connections");
   });

@@ -1,12 +1,17 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { StrictMode, type ReactNode } from "react";
+import { StrictMode, useEffect, useState, type ReactNode } from "react";
 import { SWRConfig, unstable_serialize } from "swr";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContextProvider, usePublishDirty } from "../SettingsContext";
 import { SettingsStreamingTokenOwner, useSettingsStreamingToken } from "../SettingsStreamingTokenOwner";
+import { SettingsShell, type SettingsTabId } from "../SettingsShell";
 
 const auth = vi.hoisted(() => ({ owner: "owner-a" as string | null, getToken: vi.fn() }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: !!auth.owner, userId: auth.owner, getToken: auth.getToken }) }));
+vi.mock("next/navigation", async importOriginal => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ push: vi.fn() }),
+}));
 const token = (id: string, extra = {}) => ({ token: id, label: id, createdAt: "2026-10-26", ...extra });
 const list = (...ids: string[]) => ({ items: ids.map(id => token(id)) });
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
@@ -28,6 +33,19 @@ function Harness({ children, strict = false }: { children: ReactNode; strict?: b
   return strict ? <StrictMode>{content}</StrictMode> : content;
 }
 function owner(children: ReactNode = <Probe />, strict = false) { return <Harness strict={strict}><SettingsStreamingTokenOwner section="setup">{children}</SettingsStreamingTokenOwner></Harness>; }
+function streamingShell(initialTab: "overlay" | "chat", renderTab = (id: SettingsTabId) => id === "overlay" || id === "chat" ? <Probe label={id} /> : <p>panel {id}</p>) {
+  return <SWRConfig value={{ provider: () => cache, dedupingInterval: 2000 }}><SettingsShell initialTab={initialTab} ownerKey={auth.owner ?? "signed-out"} renderStreaming={(children, section) => <SettingsStreamingTokenOwner section={section}>{children}</SettingsStreamingTokenOwner>} renderTab={renderTab} /></SWRConfig>;
+}
+function selectedStreamingPanel(name: "Overlay" | "Chat & alerts") {
+  const panel = screen.getByRole("tabpanel", { name });
+  for (const trigger of screen.getAllByRole("tab")) {
+    expect(document.getElementById(trigger.getAttribute("aria-controls")!)?.getAttribute("role")).toBe("tabpanel");
+  }
+  for (const trigger of screen.getAllByRole("tab", { name, selected: true })) {
+    expect(document.getElementById(trigger.getAttribute("aria-controls")!)).toBe(panel);
+  }
+  return panel;
+}
 beforeEach(() => {
   auth.owner = "owner-a"; auth.getToken.mockReset().mockResolvedValue("synthetic-bearer");
   cache = new Map(); reads.length = 0; writes.length = 0; heldProbe = null;
@@ -39,9 +57,68 @@ beforeEach(() => {
     return transport(String(input), init);
   }));
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); window.history.replaceState(null, "", "/"); });
 
 describe("one admitted streaming-token authority", () => {
+  it("retains the selected panel while fresh status is loading or failed without mounting private children", async () => {
+    window.history.replaceState(null, "", "/settings?tab=chat");
+    const held = deferred<Response>(); transport = () => held.promise;
+    render(streamingShell("chat"));
+    const panel = selectedStreamingPanel("Chat & alerts");
+    expect(screen.queryByTestId("body")).toBeNull();
+    await waitFor(() => expect(reads).toHaveLength(1));
+    expect(writes).toEqual([]);
+    await act(async () => held.resolve(reply({ error: { message: "status unavailable", code: "unavailable" } }, 503)));
+    expect(text(await within(panel).findByRole("alert"))).toContain("status unavailable");
+    expect(selectedStreamingPanel("Chat & alerts")).toBe(panel);
+    expect(screen.queryByTestId("body")).toBeNull(); expect(writes).toEqual([]);
+  });
+  it("keeps a selected panel through creation and unknown remount without admitting a private body or reminting", async () => {
+    window.history.replaceState(null, "", "/settings?tab=chat");
+    const ack = deferred<Response>();
+    transport = async (_url, init) => init.method === "POST" ? ack.promise : reply(list());
+    render(streamingShell("chat"));
+    const panel = selectedStreamingPanel("Chat & alerts");
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(selectedStreamingPanel("Chat & alerts")).toBe(panel);
+    expect(screen.queryByTestId("body")).toBeNull();
+    fireEvent.click(screen.getAllByRole("tab", { name: "Account" })[0]);
+    fireEvent.click(screen.getAllByRole("tab", { name: "Chat & alerts" })[0]);
+    const reopened = selectedStreamingPanel("Chat & alerts");
+    expect(await within(reopened).findByText(/A token change may have completed/)).toBeTruthy();
+    expect(reads).toHaveLength(2); expect(writes).toHaveLength(1);
+    expect(screen.queryByTestId("body")).toBeNull();
+    await act(async () => ack.resolve(reply({ token: "late-token" })));
+    expect(selectedStreamingPanel("Chat & alerts")).toBe(reopened);
+    expect(screen.queryByTestId("body")).toBeNull(); expect(writes).toHaveLength(1);
+  });
+  it("keeps one authority across Shell tabs while remounting only the private tab and credential bodies", async () => {
+    window.history.replaceState(null, "", "/settings?tab=overlay");
+    const mounts: string[] = [];
+    function Body({ id }: { id: string }) {
+      const { token } = useSettingsStreamingToken();
+      const [draft, setDraft] = useState("");
+      useEffect(() => { mounts.push(`${id}:${token.token}`); }, [id, token.token]);
+      return <><Probe label={id} /><input aria-label="Private local draft" value={draft} onChange={event => setDraft(event.target.value)} /></>;
+    }
+    render(streamingShell("overlay", id => id === "overlay" || id === "chat" ? <Body id={id} /> : <p>panel {id}</p>));
+    await screen.findByTestId("body");
+    const panel = selectedStreamingPanel("Overlay");
+    const manager = screen.getByRole("region", { name: "Shared streaming token controls" });
+    fireEvent.change(screen.getByLabelText("Private local draft"), { target: { value: "credential a draft" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "URLs shown for" }), { target: { value: "b" } });
+    expect((screen.getByLabelText("Private local draft") as HTMLInputElement).value).toBe("");
+    fireEvent.change(screen.getByLabelText("Private local draft"), { target: { value: "Overlay local state" } });
+    fireEvent.click(screen.getAllByRole("tab", { name: "Chat & alerts" })[0]);
+    expect(selectedStreamingPanel("Chat & alerts")).toBe(panel);
+    expect(screen.getByRole("region", { name: "Shared streaming token controls" })).toBe(manager);
+    expect(text(screen.getByTestId("body"))).toContain("chat:owner-a:b");
+    expect((screen.getByLabelText("Private local draft") as HTMLInputElement).value).toBe("");
+    fireEvent.click(screen.getAllByRole("tab", { name: "Overlay" })[0]);
+    expect(selectedStreamingPanel("Overlay")).toBe(panel);
+    expect(mounts).toEqual(["overlay:a", "overlay:b", "chat:b", "overlay:b"]);
+    expect(reads).toEqual(["/v1/overlay-tokens"]); expect(writes).toEqual([]);
+  });
   it("forces one current status read, retains selection between the two bodies and renders one manager", async () => {
     const view = render(owner());
     expect(text(await screen.findByTestId("body"))).toContain("overlay:owner-a:a");

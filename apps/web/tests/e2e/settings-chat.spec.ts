@@ -40,7 +40,7 @@ for (const theme of ["light", "dark"] as const) {
 
     await panel.getByLabel(/Loyalty rank theme/).selectOption("zerg");
     await panel.getByLabel("Bot username", { exact: true }).fill("synthetic-bot");
-    await expect(manager.getByLabel("URLs shown for", { exact: true })).toBeDisabled();
+    await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toBeDisabled();
     await expect(manager.getByRole("button", { name: "Rotate", exact: true })).toBeDisabled();
     await list.getByRole("tab", { name: "Overlay", exact: true }).click();
     const guard = page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true });
@@ -55,33 +55,33 @@ for (const theme of ["light", "dark"] as const) {
 
     await panel.getByRole("button", { name: "Save bot settings", exact: true }).click();
     await expect(panel.getByRole("button", { name: "Save bot settings", exact: true })).toBeDisabled();
-    await expect(manager.getByLabel("URLs shown for", { exact: true })).toBeDisabled();
+    await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toBeDisabled();
     await panel.getByRole("button", { name: "Save chat settings", exact: true }).click();
-    await expect(manager.getByLabel("URLs shown for", { exact: true })).toBeEnabled();
+    await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toBeEnabled();
     expect(evidence.writes).toEqual([
       { owner: "owner-a", method: "PUT", path: "/v1/me/chatbot" },
       { owner: "owner-a", method: "PUT", path: "/v1/me/preferences/multichat" },
     ]);
-    await manager.getByLabel("URLs shown for", { exact: true }).selectOption("owner-a-two");
+    await manager.getByRole("combobox", { name: "URLs shown for", exact: true }).selectOption("owner-a-two");
     await list.getByRole("tab", { name: "Overlay", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Synthetic Overlay body", exact: true })).toBeVisible();
     await expect(page.getByText("Selected source: owner-a two.", { exact: false })).toBeVisible();
-    await expect(manager.getByLabel("URLs shown for", { exact: true })).toHaveValue("owner-a-two");
+    await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toHaveValue("owner-a-two");
     await page.getByLabel("Overlay profile draft", { exact: true }).fill("keep profile draft");
-    await expect(manager.getByLabel("URLs shown for", { exact: true })).toBeDisabled();
+    await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toBeDisabled();
     await list.getByRole("tab", { name: "Chat & alerts", exact: true }).click();
     await expect(guard).toBeVisible(); await guard.getByRole("button", { name: "Stay on this tab", exact: true }).click();
     await expect(page.getByLabel("Overlay profile draft", { exact: true })).toHaveValue("keep profile draft");
     await list.getByRole("tab", { name: "Chat & alerts", exact: true }).click();
     await guard.getByRole("button", { name: "Discard & switch", exact: true }).click();
-    await expect(manager.getByLabel("URLs shown for", { exact: true })).toHaveValue("owner-a-two");
+    await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toHaveValue("owner-a-two");
     expect(evidence.reads.filter(row => row.path === "/v1/overlay-tokens")).toHaveLength(1);
 
     await page.evaluate(() => (window as ChatWindow).chatSetOwner("owner-b"));
-    await expect(manager.getByLabel("URLs shown for", { exact: true })).toHaveValue("owner-b-one");
+    await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toHaveValue("owner-b-one");
     await expect(panel.getByLabel("Bot username", { exact: true })).toHaveValue("");
     await page.evaluate(() => (window as ChatWindow).chatSetOwner("owner-a"));
-    await expect(manager.getByLabel("URLs shown for", { exact: true })).toHaveValue("owner-a-one");
+    await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toHaveValue("owner-a-one");
     expect(evidence.reads.filter(row => row.path === "/v1/overlay-tokens")).toEqual([
       { owner: "owner-a", path: "/v1/overlay-tokens" }, { owner: "owner-b", path: "/v1/overlay-tokens" }, { owner: "owner-a", path: "/v1/overlay-tokens" },
     ]);
@@ -119,6 +119,7 @@ for (const theme of ["light", "dark"] as const) {
     const evidence = await openSettingsChatFixture(page, theme, "unknown");
     const list = page.getByRole("tablist", { name: "Settings sections", exact: true });
     await list.getByRole("tab", { name: "Chat & alerts", exact: true }).click();
+    await expect(page.getByRole("tabpanel", { name: "Chat & alerts", exact: true })).toBeVisible();
     await expect.poll(() => evidence.writes.length).toBe(1);
     await list.getByRole("tab", { name: "Account", exact: true }).click();
     await expect(page.getByRole("heading", { name: "account synthetic panel", exact: true })).toBeVisible();
@@ -131,6 +132,11 @@ for (const theme of ["light", "dark"] as const) {
     await evidence.releaseAll();
     await expect(page.getByRole("button", { name: "Create a token explicitly", exact: true })).toBeVisible();
     await expect(page.getByLabel("URLs shown for", { exact: true })).toHaveCount(0);
+    const panel = page.getByRole("tabpanel", { name: "Chat & alerts", exact: true });
+    await expect(panel).toBeVisible();
+    expect(await page.getByRole("tablist", { name: "Settings sections", exact: true }).getByRole("tab").evaluateAll(tabs => tabs.every(tab => document.getElementById(tab.getAttribute("aria-controls") ?? "")?.getAttribute("role") === "tabpanel"))).toBe(true);
+    await expect(panel.getByLabel("Bot username", { exact: true })).toHaveCount(0);
+    await expect(panel.locator("#platform-connections")).toHaveCount(0);
     await checkAccessibility(page, info, "/settings-chat-unknown-status", theme);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await mkdir(shots, { recursive: true }); await page.screenshot({ path: path.join(shots, `${info.project.name}-${theme}-unknown.png`) });

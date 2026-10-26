@@ -16,6 +16,7 @@ corresponding GitHub Release.
 - Give platforms, chat appearance, alerts, TTS, translation, commands, Stream Dock and the bot their own Chat & alerts tab. Keep OBS sources, widgets, scenes and look in Overlay.
 - Share one selected streaming-token manager between the two tabs. Guard token changes while either tab has tracked unsaved edits, and check status before retrying an uncertain token creation.
 - Keep older Chat and Dock links working through the unsaved-changes guard, including their destination section. Bound bot saves and retire delayed account or token requests when their owner changes.
+- Keep the selected streaming tab's accessible panel present while token status is loading, unavailable or uncertain; private forms still wait for an admitted token.
 
 ### Analyzer date range
 

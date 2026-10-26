@@ -77,7 +77,7 @@ export interface SettingsShellProps {
   /** Complete search input: same-tab section links also pass the dirty guard. */
   requestedSearch?: string;
   ownerKey?: string | null;
-  /** One lazy authority around both streaming panels, outside keyed Content. */
+  /** One lazy authority inside the persistent streaming panel, outside its keyed private body. */
   renderStreaming?: (children: ReactNode, section: SettingsOverlayPane) => ReactNode;
 }
 
@@ -278,7 +278,27 @@ function SettingsShellInner({
 
         <div ref={panelRegion} className="min-w-0">
         {(() => {
-          const panels = tabs.map((t) => (
+          if (active === "overlay" || active === "chat") {
+            const body = <div key={active}>{renderTab(active)}</div>;
+            return <>
+              {tabs.filter(tab => tab.id !== active).map(tab => <Tabs.Content
+                key={tab.id}
+                value={tab.id}
+                data-settings-panel={`${panelScopeId}-${tab.id}`}
+                className="space-y-5 pb-24"
+              >{null}</Tabs.Content>)}
+              <Tabs.Content
+              value={active}
+              data-settings-panel={`${panelScopeId}-${active}`}
+              className="space-y-5 pb-24"
+            >
+              {locationReady
+                ? renderStreaming ? renderStreaming(body, destination.overlayPane) : body
+                : <p role="status">Opening streaming settings…</p>}
+              </Tabs.Content>
+            </>;
+          }
+          return tabs.map((t) => (
           <Tabs.Content
             key={t.id}
             value={t.id}
@@ -288,9 +308,6 @@ function SettingsShellInner({
             {renderTab(t.id)}
           </Tabs.Content>
           ));
-          return active === "overlay" || active === "chat"
-            ? locationReady ? renderStreaming ? renderStreaming(panels, destination.overlayPane) : panels : <p role="status">Opening streaming settings…</p>
-            : panels;
         })()}
         </div>
       </Tabs>
