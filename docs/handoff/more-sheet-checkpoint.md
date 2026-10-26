@@ -89,5 +89,7 @@ placement main `1c3d9877`, retaining both changelog sections. All More product,
 consumer-test and fixture bytes are identical to tested `480de6c4`. The build
 artifact contains 81 checks (18 explicit plus 63 default); the earlier PR's
 80-count shorthand is corrected without changing any budget. Current combined
-checks and a new exact-head remote run remain pending; the local production and
-More browser evidence above predates this independent main integration.
+checks pass: 61 tests across the AppChrome, rating inspection and Macro placement
+suites, plus full web TypeScript. A new exact-head remote run remains pending;
+the local production and More browser evidence above predates this independent
+main integration.
