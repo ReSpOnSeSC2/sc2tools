@@ -6,9 +6,9 @@ it("stays uncached without configured invalidation, including long-lived opponen
   expect(communityCacheOptions("macro")).toEqual({ revalidateSec: 0, tags: [] });
   expect(communityCacheOptions(undefined, true)).toEqual({ revalidateSec: 0, tags: [] });
 });
-it("retains planned windows and bounded public tags only when configured", () => {
+it("keeps capability admission fresh even when optional purge is configured", () => {
   vi.stubEnv("COMMUNITY_REVALIDATE_SECRET", "local-only");
-  expect(communityCacheOptions("macro")).toEqual({ revalidateSec: 300, tags: ["community", "community-build:macro"] });
+  expect(communityCacheOptions("macro")).toEqual({ revalidateSec: 0, tags: [] });
   expect(communityCacheOptions(undefined, true)).toEqual({ revalidateSec: 0, tags: [] });
-  expect(communityCacheOptions("../private").tags).toEqual(["community"]);
+  expect(communityCacheOptions("../private").tags).toEqual([]);
 });

@@ -135,6 +135,14 @@ export function communitySitemapRows(
   ];
 }
 
+/** A fresh API consent projection owns profile discovery; never emit UUID aliases. */
+export function publicPlayerSitemapRows(siteUrl: string, payload: { items?: Array<{ handle: string; lastModified?: string | null }> } | null): SitemapRows {
+  const slug = /^[a-z0-9]+(?:-[a-z0-9]+)*-[a-f0-9]{10}$/;
+  return (payload?.items || []).slice(0, 1000).filter(row => typeof row.handle === "string" && row.handle.length <= 64 && slug.test(row.handle)).map(row => ({
+    url: `${siteUrl}/players/${encodeURIComponent(row.handle)}`, ...lastModifiedField(row.lastModified), changeFrequency: COMMUNITY_CHANGE_FREQUENCY, priority: PROFILE_PRIORITY,
+  }));
+}
+
 /**
  * Dedupe by URL (first occurrence wins, so static routes keep their
  * priority) and cap at `max`, dropping from the end — the least

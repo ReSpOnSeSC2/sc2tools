@@ -578,6 +578,7 @@ describe("community + gdpr integration", () => {
       const privateSlug = "private-source-never-public";
       const secretNote = "legacy-private-scouting-note";
       const sourceGameId = "private-replay-identity";
+      await db.users.insertOne({ userId: "u_legacy_public_owner", clerkUserId: "synthetic-legacy-public-owner" });
       await db.communityBuilds.insertOne({
         slug: publicSlug,
         ownerUserId: "u_legacy_public_owner",
@@ -643,7 +644,20 @@ describe("community + gdpr integration", () => {
         expect(detail.build.userId).toBeUndefined();
       } finally {
         await db.communityBuilds.deleteOne({ slug: publicSlug });
+        await db.users.deleteOne({ userId: "u_legacy_public_owner" });
       }
+    });
+
+    test("orphaned named build content stays public without granting a player or author profile", async () => {
+      const slug = "orphan-public-build", ownerUserId = "55555555-5555-4555-8555-555555555555";
+      await db.communityBuilds.insertOne({ slug, ownerUserId, title: "Public orphan build", authorName: "Already public author", removed: false, votes: 1, build: { race: "Protoss" } });
+      try {
+        const content = await request(app).get(`/v1/community/builds/${slug}`);
+        expect(content.status).toBe(200); expect(content.body.title).toBe("Public orphan build");
+        expect(content.body.authorProfileHandle).toBeUndefined();
+        expect((await request(app).get(`/v1/community/authors/${ownerUserId}`)).status).toBe(404);
+        expect((await request(app).get(`/v1/public/players/${ownerUserId}`)).status).toBe(404);
+      } finally { await db.communityBuilds.deleteOne({ slug }); }
     });
 
     test("creator-only community stats reflect durable replay classification", async () => {
@@ -967,6 +981,7 @@ describe("community + gdpr integration", () => {
 
     test("a named profile never includes the same owner's anonymous builds or stats", async () => {
       const ownerUserId = "u_mixed_identity";
+      await db.users.insertOne({ userId: ownerUserId, clerkUserId: "synthetic-mixed-public-owner" });
       await db.communityBuilds.insertMany([
         {
           slug: "mixed-named-build",
@@ -1010,6 +1025,7 @@ describe("community + gdpr integration", () => {
         );
       } finally {
         await db.communityBuilds.deleteMany({ ownerUserId });
+        await db.users.deleteOne({ userId: ownerUserId });
       }
     });
 

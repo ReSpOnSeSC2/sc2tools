@@ -7,7 +7,7 @@ import type { PublicReplayDetailResponse } from "@/components/analyzer/replays/t
 
 const h = vi.hoisted(() => ({ push: vi.fn(), timeline: vi.fn(), mechanics: vi.fn(), observers: [] as Array<(entries: IntersectionObserverEntry[]) => void>, scroll: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: h.push }) }));
-vi.mock("@/components/ui/Toast", () => ({ useToast: () => ({ toast: { success: vi.fn() } }) }));
+vi.mock("@/components/ui/Toast", () => ({ useToast: () => ({ toast: { success: vi.fn() } }), useToastOptional: () => null }));
 vi.mock("../PublicReplayDownloadButton", () => ({ PublicReplayDownloadButton: () => <button>Download shared replay</button> }));
 vi.mock("@/components/analyzer/game/InteractiveTimeline", () => ({ InteractiveTimeline: (props: Record<string, unknown>) => { h.timeline(props); return <div data-testid="interactive-timeline"><input aria-label="Scrub timeline" type="range" /><button>Timeline chart</button></div>; } }));
 vi.mock("@/components/analyzer/game/MechanicsPanel", () => ({ MechanicsPanel: (props: Record<string, unknown>) => { h.mechanics(props); return <p>Mechanics</p>; } }));
