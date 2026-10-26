@@ -2,6 +2,7 @@
 export const COMMUNITY_DETAIL = {
   slug: "fixture-community-polish", title: "Fixture safe opening", matchup: "PvZ", votes: 3,
   authorName: "FixtureBuilder", ownerUserId: "fixture-community-author", publishedAt: "2026-03-01T00:30:00Z", updatedAt: "2026-10-03T23:30:00Z",
+  authorProfileHandle: "fixture-builder-0123456789",
   description: "Scout early and keep worker production steady while preparing a safe expansion. ".repeat(5).trim() + "\n\nUse the second paragraph to plan the transition after defending pressure.",
   build: { race: "Protoss", vsRace: "Zerg", perspective: "you", skillLevel: "diamond", rules: [
     { type: "before", name: "BuildGateway", time_lt: 60 }, { type: "before", name: "BuildCyberneticsCore", time_lt: 120 },

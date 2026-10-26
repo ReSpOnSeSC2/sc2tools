@@ -41,6 +41,8 @@ export async function POST(request: Request) {
   if (verdict.scope !== "community") return reply(400, "bad_scope");
   revalidateTag(COMMUNITY_CACHE_TAG);
   revalidatePath("/community", "layout");
+  revalidatePath("/players", "layout");
+  revalidatePath("/p", "layout");
   revalidatePath("/sitemap.xml");
   return NextResponse.json({ revalidated: true, tag: COMMUNITY_CACHE_TAG }, { headers });
 }

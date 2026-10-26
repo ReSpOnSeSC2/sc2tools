@@ -28,7 +28,7 @@ describe("Stream Studio crash course", () => {
     expect(screen.queryByText(/The agent collects game information/)).toBeNull();
     expect(screen.getByRole("link", { name: "Open Devices" }).getAttribute("href")).toBe("/devices");
 
-    fireEvent.click(screen.getByRole("button", { name: /5\. Add your next feature/ }));
+    fireEvent.click(screen.getByRole("button", { name: /6\. Add a stats panel/ }));
     expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Add your next feature");
     expect(screen.getByRole("link", { name: "Choose randomizer builds" }).getAttribute("href")).toBe("/settings?tab=randomizer");
     expect(screen.getByRole("link", { name: "Set up voice" }).getAttribute("href")).toBe("/settings?tab=voice");
@@ -48,13 +48,13 @@ describe("Stream Studio crash course", () => {
     render(<CrashCourse />);
 
     expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Build your first scene");
-    expect(screen.getByText(/of 5 lessons complete/).textContent).toBe("1 of 5 lessons complete.");
+    expect(screen.getByText(/of 6 lessons complete/).textContent).toBe("1 of 6 lessons complete.");
     expect(screen.getByRole("button", { name: /1\. Connect the dots/ }).textContent).toContain("Complete");
     fireEvent.click(screen.getByRole("button", { name: /1\. Connect the dots/ }));
     expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: "Reset course progress" }));
-    expect(screen.getByText(/of 5 lessons complete/).textContent).toBe("0 of 5 lessons complete.");
+    expect(screen.getByText(/of 6 lessons complete/).textContent).toBe("0 of 6 lessons complete.");
     expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Connect the dots");
     expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
     await waitFor(() => expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!)).toEqual({ activeId: "connect-the-dots", completed: [] }));
@@ -69,7 +69,7 @@ describe("Stream Studio crash course", () => {
     render(<CrashCourse />);
 
     expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Test, then play");
-    expect(screen.getByText(/of 5 lessons complete/).textContent).toBe("1 of 5 lessons complete.");
+    expect(screen.getByText(/of 6 lessons complete/).textContent).toBe("1 of 6 lessons complete.");
     expect(write).toHaveBeenCalledWith(STORAGE_KEY, JSON.stringify({ activeId: "test-with-purpose", completed: ["pair-your-pc"] }));
     expect(write).not.toHaveBeenCalledWith(STORAGE_KEY, JSON.stringify({ activeId: "connect-the-dots", completed: [] }));
   });
@@ -92,13 +92,13 @@ describe("Stream Studio crash course", () => {
 
     expect(screen.getByText(/Browser storage is unavailable/)).toBeTruthy();
     fireEvent.click(screen.getByRole("checkbox"));
-    expect(screen.getByText(/of 5 lessons complete/).textContent).toBe("1 of 5 lessons complete.");
+    expect(screen.getByText(/of 6 lessons complete/).textContent).toBe("1 of 6 lessons complete.");
     fireEvent.click(screen.getByRole("button", { name: "Next lesson" }));
     expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Pair your gaming PC");
     fireEvent.click(screen.getByRole("button", { name: "Previous lesson" }));
     expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Reset course progress" }));
-    expect(screen.getByText(/of 5 lessons complete/).textContent).toBe("0 of 5 lessons complete.");
+    expect(screen.getByText(/of 6 lessons complete/).textContent).toBe("0 of 6 lessons complete.");
   });
 
   it("recovers from malformed saved data and allows a completed lesson to be unchecked", () => {
@@ -108,7 +108,7 @@ describe("Stream Studio crash course", () => {
     expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Connect the dots");
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("checkbox"));
-    expect(screen.getByText(/of 5 lessons complete/).textContent).toBe("0 of 5 lessons complete.");
+    expect(screen.getByText(/of 6 lessons complete/).textContent).toBe("0 of 6 lessons complete.");
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!)).toEqual({ activeId: "connect-the-dots", completed: [] });
   });
 });

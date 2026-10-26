@@ -22,6 +22,8 @@ import type {
 
 export interface PublicProfileProps {
   profile: PublicPlayerProfile;
+  showHero?: boolean;
+  showReviewer?: boolean;
 }
 
 /**
@@ -29,14 +31,14 @@ export interface PublicProfileProps {
  * for /p/[handle].
  *
  * Renders only non-sensitive aggregates (headline record, matchup
- * splits, the player's own signature builds) plus a viral "get your own"
+ * splits, the player's replay-detected signature builds) plus a viral "get your own"
  * CTA. No opponent identities, no per-game rows ever reach this
  * component — the API strips them before the payload leaves the server.
  *
  * Responsive: single column at 360px, two-column content grid from lg.
  * Dark + light via repo tokens. Server-component-safe.
  */
-export function PublicProfile({ profile }: PublicProfileProps) {
+export function PublicProfile({ profile, showHero = true, showReviewer = true }: PublicProfileProps) {
   const race = profile.mainRace ? coerceRace(profile.mainRace) : null;
   const tint = race ? raceTint(race) : null;
   const { games, wins, losses, winRate } = profile.totals;
@@ -63,7 +65,7 @@ export function PublicProfile({ profile }: PublicProfileProps) {
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(personJsonLd) }}
       />
 
-      <Card variant="feature" padded={false} className="relative overflow-hidden">
+      {showHero ? <Card variant="feature" padded={false} className="relative overflow-hidden">
         <GlowHalo color="cyan" position="top-right" />
         <div className="relative px-5 py-6 sm:px-6 sm:py-8">
           <PageHeader
@@ -102,7 +104,7 @@ export function PublicProfile({ profile }: PublicProfileProps) {
             }
           />
         </div>
-      </Card>
+      </Card> : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Games" value={games.toLocaleString()} />
@@ -186,14 +188,14 @@ export function PublicProfile({ profile }: PublicProfileProps) {
         </Card>
       ) : null}
 
-      {profile.reviewer ? <ReviewerSection reviewer={profile.reviewer} /> : null}
+      {showReviewer && profile.reviewer ? <ReviewerSection reviewer={profile.reviewer} /> : null}
 
       <GetYourOwnCTA />
     </article>
   );
 }
 
-function ReviewerSection({ reviewer }: { reviewer: PublicReviewerSection }) {
+export function ReviewerSection({ reviewer }: { reviewer: PublicReviewerSection }) {
   return (
     <Card>
       <div className="space-y-3">
@@ -222,6 +224,7 @@ function ReviewerSection({ reviewer }: { reviewer: PublicReviewerSection }) {
             {reviewer.matchupsReviewed.map((m) => `${m.matchup} (${m.count})`).join(" · ")}
           </p>
         ) : null}
+      {reviewer.matchupsSampled ? <p className="text-caption text-text-muted">Matchup totals use up to 2,000 recent review threads.</p> : null}
         <Link href="/reviews" className="inline-flex text-caption font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">
           Browse replay reviews
         </Link>
@@ -287,6 +290,7 @@ function SignatureBuilds({ rows }: { rows: PublicProfileSignatureBuild[] }) {
         <h2 className="text-caption font-semibold uppercase tracking-wider text-text">
           Signature builds
         </h2>
+        <p className="text-caption text-text-muted">Builds detected from recorded replays.</p>
         {rows.length === 0 ? (
           <EmptyStatePanel
             size="sm"

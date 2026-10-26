@@ -4,6 +4,7 @@ import { useEffect, useId, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { buttonClassName } from "@/components/ui/Button";
 import { ArrowLeft, ArrowRight, Check, RotateCcw } from "lucide-react";
+import { STUDIO_CHANNEL_PANEL_LESSON } from "@/lib/streamStudioLearn";
 
 const STORAGE_KEY = "sc2tools:stream-studio:crash-course:v1";
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
@@ -20,7 +21,7 @@ type Lesson = {
   links: ReadonlyArray<{ href: string; label: string }>;
 };
 
-const LESSONS: ReadonlyArray<Lesson> = [
+const BASE_LESSONS: ReadonlyArray<Lesson> = [
   {
     id: "connect-the-dots",
     title: "Connect the dots",
@@ -152,6 +153,8 @@ const LESSONS: ReadonlyArray<Lesson> = [
   },
 ];
 
+const LESSONS: ReadonlyArray<Lesson> = [...BASE_LESSONS, STUDIO_CHANNEL_PANEL_LESSON];
+
 type Progress = { activeId: string; completed: string[] };
 
 function emptyProgress(): Progress {
@@ -232,7 +235,7 @@ export function CrashCourse() {
             From download to “I’m live.”
           </h2>
           <p className="mt-3 text-body-lg text-text-muted">
-            Five short lessons, a small task in each, and a clear check before you move on. Jump to any lesson and come back when you need it.
+            Six short lessons, a small task in each, and a clear check before you move on. Jump to any lesson and come back when you need it.
           </p>
         </div>
         <button

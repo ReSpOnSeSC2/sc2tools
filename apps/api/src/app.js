@@ -148,6 +148,9 @@ const { LadderMetaService } = require("./services/ladderMeta");
 const { buildLadderMetaRouter } = require("./routes/ladderMeta");
 const { PublicProfileService } = require("./services/publicProfile");
 const { buildPublicProfileRouter } = require("./routes/publicProfile");
+const { PublicPlayerService } = require("./services/publicPlayer");
+const { PublicPlayerPreferencesService } = require("./services/publicPlayerPreferences");
+const { buildPublicPlayersRouter } = require("./routes/publicPlayers");
 const { buildPublicReplaysRouter } = require("./routes/publicReplays");
 const { ChatbotService } = require("./services/chatbot");
 const { buildChatbotRouter } = require("./routes/chatbot");
@@ -861,15 +864,17 @@ function makeServices(deps, clerk, adminClerkIds) {
   gdpr.onCommunityChanged = userId => community.invalidateForUser(userId);
   gdpr.backups = new UserBackupsService(deps.db, { gdpr, store: deps.userBackupsStore || buildUserBackupsStore(deps.config), logger: deps.logger });
   const dataRepairs = new DataRepairsService(deps.db, { gdpr, notifications, logger: deps.logger });
-  // Opt-in public player pages (/p/:handle). Derives entirely from
-  // existing services — a public profile exists iff the user published
-  // a community build under a public authorName (the community opt-in),
-  // so no new user state and no GDPR change.
+  // Canonical player profiles reuse existing aggregate services. Privacy
+  // settings live on the user row (ordinary export/erasure, never restored
+  // from snapshots); legacy named authors retain only their existing scope.
   const publicProfile = new PublicProfileService(deps.db, {
     community,
     aggregations,
     builds,
   });
+  const publicPlayers = new PublicPlayerService(deps.db, { community, profile: publicProfile, aggregations, builds, replayLibrary, seasons });
+  const publicPlayerPreferences = new PublicPlayerPreferencesService(deps.db, { community, onPublicChanged: communityRevalidator.notify, resolveLegacy: (userId) => publicPlayers.resolve(userId) });
+  users.publicPlayerIdentity = (userId) => publicPlayers.identity(userId);
   const gameMoments = new GameMomentsService(deps.db, { users, tokens: overlayTokens, channels: opponentChannels,
     seasons, engagement: multichatEngagement, bot: twitchChatBot, io: deps.io, logger: deps.logger });
   const arcade = new ArcadeService(deps.db, { games, gameDetails });
@@ -1042,6 +1047,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     guideNotes,
     guides,
     publicProfile,
+    publicPlayers,
+    publicPlayerPreferences,
     chatbot,
     pulseDirectory,
     playerChannels,
@@ -1441,6 +1448,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildCommunityRouter({
       community: services.community,
+      publicPlayers: services.publicPlayers,
       auth,
       isAdmin,
     }),
@@ -1449,8 +1457,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   // rate-limited in the router. Public bundle (before authed routers).
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildPublicProfileRouter({ publicProfile: services.publicProfile }),
+    buildPublicProfileRouter({ publicProfile: services.publicProfile, players: services.publicPlayers }),
   );
+  app.use(SERVICE.ROUTE_PREFIX, buildPublicPlayersRouter({ players: services.publicPlayers, preferences: services.publicPlayerPreferences, auth }));
   // Separate default-off publication surface for replay rows, per-game
   // analysis, matched stream POVs and short-lived original-replay downloads.
   // It must mount in the public bundle before auth-eager routers.

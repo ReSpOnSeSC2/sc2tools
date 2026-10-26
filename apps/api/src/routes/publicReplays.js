@@ -5,6 +5,7 @@ const rateLimitModule = require("express-rate-limit");
 const { parseFilters } = require("../util/parseQuery");
 const { validateCasualtyEvents } = require("../validation/casualtyEvents");
 const { publicArchiveOverview } = require("./publicReplaySummary");
+const { validPlayerSlug } = require("../util/publicPlayerConfig");
 
 const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
@@ -223,6 +224,7 @@ function publicProfile(profile) {
   return {
     handle: boundedString(row.handle, 64) || "player",
     displayName: boundedString(row.displayName, 80) || "SC2 Player",
+    ...(validPlayerSlug(row.profileHandle) ? { profileHandle: row.profileHandle } : {}),
   };
 }
 

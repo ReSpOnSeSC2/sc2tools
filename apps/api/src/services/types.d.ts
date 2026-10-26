@@ -30,6 +30,8 @@ export interface ReplayPublicIdentity {
     /** Canonical slug even when the request used a legacy shareId alias. */
     handle: string;
     displayName: string;
+    /** Present only for an explicitly public or named-build legacy profile. */
+    profileHandle?: string;
   };
 }
 

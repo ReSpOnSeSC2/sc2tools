@@ -2,9 +2,9 @@ import type { HelpArticle } from "@/lib/help/types";
 
 const article: HelpArticle = {
   slug: "public-profile",
-  title: "Your public profile and replay page",
+  title: "Your public player page",
   summary:
-    "The two pages anyone can see about you, both off until you turn them on: your public profile with your record and signature builds, and your shared replay archive.",
+    "Choose a public player link, control its sections, and create a channel panel. Profile visibility and replay sharing are separate choices.",
   category: "account-data",
   audience: "all",
   signedInOnly: true,
@@ -23,8 +23,12 @@ const article: HelpArticle = {
     "private",
     "privacy",
     "turn off",
+    "channel panel",
+    "MMR history",
+    "season record",
+    "player link",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-25",
   body: [
     {
       type: "paragraph",
@@ -33,24 +37,31 @@ const article: HelpArticle = {
     { type: "heading", text: "Public profile", anchor: "profile" },
     {
       type: "paragraph",
-      text: "A shareable page with your record, matchup splits and signature builds, at an address like `sc2tools.com/p/` followed by your ID.",
+      text: "Your public page lives at `sc2tools.com/players/` followed by a player link. Its Overview shows your record, matchup splits and replay-detected signature builds. Builds and Reviews tabs appear when you have public content; a Replays tab appears only when replay sharing is on and you choose to link it.",
     },
     {
       type: "list",
       items: [
-        "**Shown:** the author name you chose, your main race, your games, wins, losses and win rate, your results against each race, your most-played builds with their win rates, a featured community build, and your reviewer stats if you write replay reviews.",
-        "**Never shown:** your opponents' names, battle tags or IDs, your individual games, your notes, or your email.",
+        "**Base profile:** the public author name you chose, or your display name when you have no named publication; your main race, games, wins, losses, win rate, results against each race, most-played replay-detected builds and a featured community build. Public reviewer stats have their own tab.",
+        "**Optional sections, initially off:** approved channels, recent results by matchup, a weekly MMR history, cached season records and map records with at least 10 games. Recent form shows up to 20 results from oldest to newest, a streak from two results and last-played time. Its card needs at least three games and never includes opponent names or maps.",
+        "**Never in profile aggregates:** your opponents' names, battle tags or IDs, private notes or email. Optional recent results contain only result, matchup and date. Full replay rows and downloads need the separate replay-sharing choice below.",
       ],
     },
     { type: "heading", text: "Turn it on or off", anchor: "turn-on" },
     {
       type: "steps",
       items: [
-        "Your profile turns on when you publish a build to [Community](/community) under a public author name. Open one of your [custom builds](/builds), choose **Publish**, and leave **Post anonymously** unticked. See [Publish and reuse community builds](/help/publish-community-builds).",
-        "[Settings → Profile](/settings?tab=profile) then shows *Your profile is live*, with **View profile** and **Copy link**.",
-        "To turn it off, take down your named community builds, or publish them anonymously instead. With no build under your name, the page goes away.",
+        "Open [Settings → Profile](/settings?tab=profile) → **Public player page**. If needed, choose **Create player link**. Creating an address keeps the profile and optional sections off.",
+        "Choose **Public profile on**, select only the optional sections you want, then **Save public profile**. Preview the page and copy its link.",
+        "To hide it, clear **Public profile on** and Save. That explicit Off choice wins even if named Community builds remain published. The build publications themselves are unchanged.",
+        "Older accounts with a named published build keep their legacy profile until they save an explicit choice. Their new optional sections start off. Old profile and author links redirect directly to the canonical player address.",
       ],
     },
+    { type: "heading", text: "Choose the player link", anchor: "player-link" },
+    { type: "paragraph", text: "Edit the readable prefix in Settings; the fixed suffix keeps the address unique. Availability checks are advisory until Save. A link can be renamed once every 30 days, and an active shared replay archive must be turned off explicitly before renaming its shared address. Renaming changes the profile link; old renamed links are not retained as aliases." },
+    { type: "heading", text: "Add a channel panel", anchor: "channel-panel" },
+    { type: "paragraph", text: "In the Channel panel card choose Record, Featured build or MMR history, a theme and either 320 × 160 or 320 × 100. Copy the image URL and the panel destination link to your channel editor. The MMR style uses only an enabled MMR-history section. A disabled, private or temporarily unavailable profile always returns a neutral image. These are public panel links, separate from private overlay tokens." },
+    { type: "paragraph", text: "Turning the profile off hides personal stats and makes the panel neutral when the page or image is next opened. It leaves your separate replay-sharing choice unchanged." },
     { type: "heading", text: "Shared replay page", anchor: "replay-page" },
     {
       type: "paragraph",

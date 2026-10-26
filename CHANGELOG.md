@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Public player pages
+
+- Choose an explicit public player page and optional recent form, MMR, channels, season and map sections in Settings → Profile. Turning the profile off hides it even when named Community builds remain published; replay sharing keeps its own switch.
+- Use one player address for Overview, Builds, shared Replays and Reviews. Older profile and author links resolve directly to the canonical page, while private profiles stay private.
+- Copy public channel-panel images in two sizes and themes. Disabled or unavailable profiles return a neutral image, and public pages and images check visibility on each request.
+
 ### Opponent list columns
 
 - Choose latest replay download, map/result, your and the opponent's build, recorded build-order links/dates, game lengths, your macro breakdown/averages and scouting notes. Matching game filters and measured sample counts apply; incomplete build-order dates stay unknown or marked Latest known.

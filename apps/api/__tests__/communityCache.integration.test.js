@@ -57,13 +57,15 @@ describe("public Community cache lifecycle", () => {
     await h.db.communityReports.insertOne({ id: "synthetic-report", targetType: "build", targetId: slug, resolvedAt: null });
     await h.services.community.resolveReport("synthetic-admin", "synthetic-report", { action: "remove" }); expect(changed).toHaveBeenCalledTimes(3);
   });
-  test("only successful explicit public routes have public cache headers", async () => {
+  test("public build content can cache while profile and private admission stays fresh", async () => {
     const { slug } = await publish(); await games();
-    for (const path of ["/builds", `/builds/${slug}`, "/authors/owner", "/arcade-universe", "/sitemap"]) {
+    for (const path of ["/builds", `/builds/${slug}`, "/arcade-universe", "/sitemap"]) {
       const response = await request(h.app).get(`/v1/community${path}`);
       expect(response.status).toBe(200); expect(response.headers["cache-control"]).toBe("public, s-maxage=60, stale-while-revalidate=600");
       expect(response.headers["set-cookie"]).toBeUndefined();
     }
+    const author = await request(h.app).get("/v1/community/authors/owner");
+    expect(author.status).toBe(200); expect(author.headers["cache-control"]).toBe("no-store");
     const opponent = await request(h.app).get(`/v1/community/opponents/${pulse}`);
     expect(opponent.status).toBe(200); expect(opponent.headers["cache-control"]).toBe("private, no-store");
     for (const path of ["/my-builds", "/my-build-stats", "/my-build-publication/private-source", `/builds/${slug}/my-vote`]) {

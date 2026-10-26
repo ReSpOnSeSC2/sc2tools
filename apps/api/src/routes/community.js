@@ -40,6 +40,7 @@ const rateLimit =
  *
  * @param {{
  *   community: import('../services/community').CommunityService,
+ *   publicPlayers?: import('../services/publicPlayer').PublicPlayerService,
  *   auth: import('express').RequestHandler,
  *   isAdmin: (req: import('express').Request) => boolean,
  * }} deps
@@ -111,6 +112,7 @@ function buildCommunityRouter(deps) {
         sort,
         search: search || undefined,
       });
+      if (deps.publicPlayers) result.items = await deps.publicPlayers.withAuthorLinks(result.items);
       res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(result);
     } catch (err) {
       next(err);
@@ -129,6 +131,7 @@ function buildCommunityRouter(deps) {
         perMatchup,
         totalCap,
       });
+      if (deps.publicPlayers) result.items = await deps.publicPlayers.withAuthorLinks(result.items);
       res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(result);
     } catch (err) {
       next(err);
@@ -196,7 +199,8 @@ function buildCommunityRouter(deps) {
         res.status(404).json({ error: { code: "not_found" } });
         return;
       }
-      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(row);
+      const value = deps.publicPlayers ? (await deps.publicPlayers.withAuthorLinks([row]))[0] : row;
+      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(value);
     } catch (err) {
       next(err);
     }
@@ -209,9 +213,10 @@ function buildCommunityRouter(deps) {
    */
   router.get("/community/authors/:userId", async (req, res, next) => {
     try {
-      const profile = await deps.community.getAuthor(
-        String(req.params.userId),
-      );
+      // A later explicit Profile OFF overrides the old named-build gate.
+      // Named publications remain public; this author-profile surface does not.
+      const userId = String(req.params.userId);
+      const profile = deps.publicPlayers ? await deps.publicPlayers.authorProfile(userId) : await deps.community.getAuthor(userId);
       if (!profile) {
         res.status(404).json({
           error: {
@@ -221,7 +226,7 @@ function buildCommunityRouter(deps) {
         });
         return;
       }
-      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(profile);
+      res.set("Cache-Control", "no-store").json(profile);
     } catch (err) {
       next(err);
     }

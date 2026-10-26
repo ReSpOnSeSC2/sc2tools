@@ -18,7 +18,7 @@ export function LearnPage() {
           <h1 className="mt-4 font-serif text-[38px] font-semibold leading-[1.08] tracking-tight text-text sm:text-5xl md:text-[56px]">Your first overlay.<br />Then your whole stream.</h1>
           <p className="mt-5 max-w-xl text-body-lg text-text-muted">Never added a widget before? You&apos;re in the right place. Build one working scene, learn what each widget means, and add the pieces that suit your stream.</p>
           <a href="#crash-course" className={buttonClassName({ size: "lg", className: "mt-6" })}>Start the crash course<ArrowDown className="h-4 w-4" aria-hidden /></a>
-          <p className="mt-4 text-caption text-text-dim">Five short lessons · follow at your own pace · no account needed to learn</p>
+          <p className="mt-4 text-caption text-text-dim">Six short lessons · follow at your own pace · no account needed to learn</p>
         </div>
         <div className="rounded-md border-2 border-line bg-bg-surface p-5 shadow-hard sm:p-7">
           <span className="inline-flex rounded-full bg-editorial/10 px-3 py-1 text-micro font-semibold uppercase tracking-wider text-editorial">The first-stream recipe</span>

@@ -1316,6 +1316,7 @@ class CommunityService {
    * Users who never declare a display name on a publish stay private.
    *
    * @param {string} userId — internal UUID (not Clerk id)
+   * @param {{maxTimeMS?:number,slimProfile?:boolean}} [options]
    * @returns {Promise<{
    *   userId: string,
    *   displayName: string,
@@ -1329,14 +1330,17 @@ class CommunityService {
    *   recent: object[],
    * } | null>}
    */
-  async getAuthor(userId) {
+  async getAuthor(userId, options = {}) {
     if (!userId) return null;
+    const { slimProfile, ...queryOptions } = options;
+    const projection = slimProfile ? { _id: 0, slug: 1, title: 1, matchup: 1, authorName: 1, ownerUserId: 1,
+      votes: 1, publishedAt: 1, updatedAt: 1, build: { race: "$build.race" } } : PUBLIC_AGGREGATE_PROJECTION;
     const rawBuilds = await this.db.communityBuilds.aggregate([
       { $match: { ownerUserId: userId, removed: false } },
       { $sort: { publishedAt: -1 } },
       { $limit: PUBLIC_AUTHOR_BUILD_LIMIT },
-      { $project: PUBLIC_AGGREGATE_PROJECTION },
-    ]).toArray();
+      { $project: projection },
+    ], queryOptions).toArray();
     const allBuilds = rawBuilds.map((row) => publicCommunityBuildSnapshot(row));
     if (allBuilds.length === 0) return null;
     // Anonymous publications are excluded from the profile entirely, not
