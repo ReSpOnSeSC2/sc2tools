@@ -1,5 +1,18 @@
 # Settings registry and grouping — A1 verification boundary
 
+## Full-CI article-date assertion repair
+
+Exact-head2a0783d0 CI passed the browser job but found one old Help route test
+still asserting October25 for the Getting started article, which this pack
+updated on October26. Root preserved its original bytes and bounded failure
+evidence in `.cache/settings-ci-date-2a0783d0/`. The24th owned path is the
+existing `apps/web/app/help/__tests__/pages.test.tsx`. Only the expected visible
+date and matching datetime literal change to October26; breadcrumbs, routes,
+rendering and structured-data assertions stay intact. Product source and the
+validated production artifact are unchanged. This test-only repair is authored
+and awaiting its affected runtime check while the expanded glossary owns the
+serialized slot; it is not a claim that the new assertion has already run.
+
 Root independently verified the23 final owned hashes and five proof artifact
 hashes, and visually reviewed the Light1280 sidebar, Dark360 Preferences and
 Dark1280 Devices-discard dialog. Three byte-identical copies are preserved in
