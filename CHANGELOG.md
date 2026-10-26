@@ -18,6 +18,7 @@ corresponding GitHub Release.
 ### Macro graph inspection
 
 - Keep the Macro graph in place when selecting a time with a mouse or touch. The selected time and unit roster still update; explicit replay actions continue to open the player.
+- Keep game statistics labels and values correctly associated for screen readers.
 
 ### Header action links
 

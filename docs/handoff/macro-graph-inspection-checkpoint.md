@@ -35,3 +35,34 @@ Local evidence is retained in `.cache/analyzer-behavior-fix/` in the
 `wave3-guides-expansion` worktree. Real browser scroll proof and exact-head CI
 remain pending at this source checkpoint. No actual account/API writes,
 reanalysis, native-agent launch, version bump or release tag.
+
+## Native browser proof and accessible statistics
+
+The first four native phone selections preserved focus identity and scrollY,
+but the full-page accessibility scan exposed inherited Mechanics description
+list nesting. MechanicsPanel now uses two valid lists with the same spacing,
+grid classes, values and callbacks. Its actual-render semantic regression and
+all prior assertions pass: 66 affected tests/five suites, whole-web types and
+strict two-file lint zero warnings. Original source/hash and the AA failure
+are retained in the cache; no accessibility rule was excluded.
+
+Final strict loopback browser proof in `graph-final-evidence/` passes 148 checks:
+16 native mouse/touch selections at 360/1280 in both themes preserve focus and
+viewport position while updating the exact delivered clock, both prior-sample
+rosters and URL. All four explicit leak actions still reveal/focus replay.
+Auto/custom/Reset persistence passes. Eight full WCAG scans have zero
+violations; 12 screenshots are retained, with two reviewed byte-identical
+copies tracked. All 216 GETs are classified; 20 exact expected map/sprite
+404s use existing fallbacks. Zero unknown/rejected/nonlocal requests, page
+errors, writes or actual account/provider operations. Server59363 is closed
+and not listening; follow-up listener inventory is empty.
+
+Cache-only first-run repairs preserved their original bytes/logs/captures:
+explicit UTF-8 transport, native pixel-derived clock expectations, recorded
+prior-sample roster labels, and source-backed exact DTO/static contracts.
+No clock/roster/focus/scroll or accessibility assertion was relaxed. No
+runtime asset was generated or downloaded. CSS/fonts come from build XRIB;
+the fixture bundles the current actual components. Final exact-head CI must
+compile the final Help wording and Mechanics tags before merge. Vercel rejected
+one normal exact-ref graph Preview at its daily100-deployment limit; no further
+retry, upgrade, plan change or live-deployment claim.
