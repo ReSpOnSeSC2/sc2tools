@@ -45,6 +45,7 @@ import { useBuildPublicationActions } from "./BuildPublicationActions";
 import { PracticeButton } from "@/components/practice/PracticeButton";
 import type { PracticeSource } from "@/lib/practiceAssignment";
 import { measuredPlanHeldRate, PlanHeldBadge } from "./PlanHeldBadge";
+import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 
 export interface BuildCardProps {
   build: DecoratedBuild;
@@ -332,6 +333,7 @@ export function BuildKebab({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLUListElement>(null);
   const initialFocusRef = useRef<"first" | "last">("first");
+  const scopeRestore = useRef<boolean | "if-lost">(false);
   const menuId = useId();
   const menuItemCount = (compact ? 0 : 4 + (onReclassify ? 1 : 0)) + (onDuplicate ? 1 : 0) + (isPublic ? 3 : 0) + (practiceBuild ? 1 : 0);
   const actions = useBuildPublicationActions({ slug, name, enabled: open && isPublic, onChanged });
@@ -342,7 +344,8 @@ export function BuildKebab({
     e.stopPropagation();
   }
 
-  const closeMenu = useCallback((restoreTriggerFocus = false) => {
+  const closeMenu = useCallback((restoreTriggerFocus = false, restoreScope: boolean | "if-lost" = false) => {
+    scopeRestore.current = restoreScope;
     const focusAtClose = document.activeElement;
     setOpen(false);
     setMenuPosition(null);
@@ -354,6 +357,9 @@ export function BuildKebab({
       });
     }
   }, []);
+
+  useFocusTrap({ open, containerRef: menuRef, returnFocusRef: triggerRef,
+    onClose: () => closeMenu(true, true), trapFocus: false, autoFocus: false, restoreFocus: () => scopeRestore.current });
 
   const updateMenuPosition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -484,16 +490,8 @@ export function BuildKebab({
         : items?.[0];
       item?.focus();
     });
-    const onDocumentKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      closeMenu(true);
-    };
-    document.addEventListener("keydown", onDocumentKeyDown);
     return () => {
       window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener("keydown", onDocumentKeyDown);
     };
   }, [closeMenu, open]);
 
@@ -555,6 +553,7 @@ export function BuildKebab({
           if (open) {
             closeMenu(false);
           } else {
+            scopeRestore.current = false;
             initialFocusRef.current = "first";
             setMenuPosition(null);
             setOpen(true);
@@ -564,6 +563,7 @@ export function BuildKebab({
           if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
           event.preventDefault();
           if (!open) {
+            scopeRestore.current = false;
             initialFocusRef.current = event.key === "ArrowUp" ? "last" : "first";
             setMenuPosition(null);
             setOpen(true);
@@ -585,7 +585,7 @@ export function BuildKebab({
               data-testid="build-menu-scrim"
               onPointerDown={(event) => {
                 event.preventDefault();
-                closeMenu(true);
+                closeMenu(true, "if-lost");
               }}
               className="fixed inset-0 z-[60] cursor-default bg-transparent"
             />
@@ -619,12 +619,12 @@ export function BuildKebab({
                 icon={<Pencil className="h-4 w-4" aria-hidden />}
                 label="Edit"
                 onClick={() => {
-                  closeMenu(false);
+                  closeMenu(false, true);
                   onEdit(slug);
                 }}
               /> : null}
-              {onDuplicate ? <KebabItem icon={<Copy className="h-4 w-4" aria-hidden />} label="Duplicate" onClick={() => { closeMenu(false); onDuplicate(slug); }} /> : null}
-              {practiceBuild ? <KebabItem icon={<Crosshair className="h-4 w-4" aria-hidden />} label="Practice this" onClick={() => { closeMenu(false); setPracticeOpen(true); }} /> : null}
+              {onDuplicate ? <KebabItem icon={<Copy className="h-4 w-4" aria-hidden />} label="Duplicate" onClick={() => { closeMenu(false, true); onDuplicate(slug); }} /> : null}
+              {practiceBuild ? <KebabItem icon={<Crosshair className="h-4 w-4" aria-hidden />} label="Practice this" onClick={() => { closeMenu(false, true); setPracticeOpen(true); }} /> : null}
               {!compact && onReclassify ? (
                 <KebabItem
                   icon={
@@ -646,14 +646,14 @@ export function BuildKebab({
                 icon={<Send className="h-4 w-4" aria-hidden />}
                 label={isPublic ? "Update listing" : "Publish…"}
                 onClick={() => {
-                  closeMenu(false);
+                  closeMenu(false, true);
                   onPublish(slug);
                 }}
               /></> : null}
               {isPublic ? <>
                 <KebabItem icon={<ExternalLink className="h-4 w-4" aria-hidden />} label={actions.publicSlug ? "View on Community" : `View on Community · ${listingState}`} href={actions.publicSlug ? `/community/builds/${encodeURIComponent(actions.publicSlug)}` : undefined} disabled={!actions.publicSlug} onClick={() => closeMenu(false)} />
-                <KebabItem icon={<Link2 className="h-4 w-4" aria-hidden />} label={actions.publicSlug ? "Copy public link" : `Copy public link · ${listingState}`} disabled={!actions.publicSlug} onClick={() => { void actions.copy(); closeMenu(true); }} />
-                <KebabItem icon={<Send className="h-4 w-4" aria-hidden />} label="Unpublish" disabled={!actions.publicSlug} onClick={() => { actions.requestUnpublish(); closeMenu(false); }} />
+                <KebabItem icon={<Link2 className="h-4 w-4" aria-hidden />} label={actions.publicSlug ? "Copy public link" : `Copy public link · ${listingState}`} disabled={!actions.publicSlug} onClick={() => { void actions.copy(); closeMenu(true, true); }} />
+                <KebabItem icon={<Send className="h-4 w-4" aria-hidden />} label="Unpublish" disabled={!actions.publicSlug} onClick={() => { actions.requestUnpublish(); closeMenu(false, true); }} />
                 {actions.publication.error ? <KebabItem icon={<RefreshCw className="h-4 w-4" aria-hidden />} label="Couldn't load listing · Try again" onClick={() => { void actions.publication.mutate(); }} /> : null}
               </> : null}
               {!compact ? <><li role="separator" className="my-1 border-t border-border" /><KebabItem
@@ -661,7 +661,7 @@ export function BuildKebab({
                 label="Delete"
                 tone="danger"
                 onClick={() => {
-                  closeMenu(false);
+                  closeMenu(false, true);
                   onDelete(slug);
                 }}
               /></> : null}

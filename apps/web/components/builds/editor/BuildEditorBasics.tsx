@@ -71,7 +71,6 @@ export function BuildEditorBasics({
               setDraft((d) => ({ ...d, name: e.target.value }))
             }
             placeholder="e.g. PvT — 1-Gate Expand into Stargate"
-            autoFocus
           />
         </Field>
 
