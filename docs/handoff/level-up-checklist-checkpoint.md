@@ -51,7 +51,7 @@ All exact markup utilities already exist in that artifact's four CSS files; all 
 The explicit bridge is `source-css-bridge.json` in the final evidence root. Only markup, fixture cleanup and documentation changed since the retained build; other production behavior was not changed for the visual retry.
 Browser coverage uses actual LevelUp/marker/API/SWR/Help/Modal/Toast in a synthetic framework/auth/HTTP/GameProbe host. It does not prove the entire Today/AnalyzerFrame/GameDetail route; their actual integration seams have separate unit proof.
 The six-command absence check may scan owner history; it is not measured constant query cost. Known Node CJS/MJS and Vite CJS tooling warnings remain raw.
-The 22-path source scope and two reviewed screenshot copies add no infrastructure, migration, index, model feature, provider activation, native release, version bump or tour placeholder. Guided tours are a separate item.
+The original 22 source paths, three legacy fixture follow-ups and two reviewed screenshot copies add no infrastructure, migration, index, model feature, provider activation, native release, version bump or tour placeholder. Guided tours are a separate item.
 
 Reviewed captures: [phone, light](screenshots/level-up-checklist-mobile-light.png) and [desktop, dark](screenshots/level-up-checklist-desktop-dark.png). Original bytes and the copy/hash ledger remain in cache; these are synthetic fixture captures, not deployment observations.
 
@@ -80,4 +80,27 @@ The fixture now retains actual module exports and replaces only its existing
 `useApi` seam. Its signed-out state and all recovery assertions are unchanged;
 the real first-view hook remains mounted. Before bytes are preserved under
 `.cache/activation-recovery-mock-before-aa03e6cc/`. Product source is unchanged;
-focused validation and renewed exact-head CI remain pending.
+at `ee58d0bb`, focused recovery, actual page admission and marker tests passed
+20/20 across three files, with strict single-file lint at zero warnings. All ten
+observed process identities/listeners closed; receipt SHA256 is
+`8da24044a540da0b1d2cba2255cd60d771100fe89cb01b8e9f3ae2df741d8b74`.
+Renewed exact-head CI remains pending.
+
+Two older manual Battle report/Build execution fixtures reject every write and
+assert their write ledgers stay empty. They now explicitly scope out first-view
+bookkeeping, while the real marker stays covered in its unit/integration and
+activation browser fixtures. Their assertions, transport and shipping source
+are unchanged. Before bytes are under
+`.cache/activation-fixture-isolation-before-ee58d0bb/`. Both Node syntax checks
+passed without executing fixture code. Their raw bytes and the three intended
+dirty paths stayed unchanged; all three observed driver/Node identities retired
+with no owned listeners. Receipt SHA256:
+`e806914d64f4e90e6f306f9260f4a54dc811afb3b2a03d22b17708fb06ff4616`.
+
+The original integrated responsive run completed all 525 cases with 92 existing
+skips and no flaky result in 16.0 minutes. Build/setup plus the suite reached
+the job's 20-minute ceiling during completion, so GitHub marked the job
+cancelled. Its raw failed job result remains preserved separately. The workflow
+now allows 25 minutes for this full job, retaining the same test limits, case
+scope, required checks and bundle caps. This is a job-window change, not a
+claim that the cancelled job was green. Renewed exact-head CI is required.
