@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Modal } from "@/components/ui/Modal";
+import { Sheet } from "@/components/ui/Sheet";
 import {
   defaultAnalyzerFilters,
   describeActiveFilters,
@@ -13,7 +13,7 @@ import {
 /**
  * Phone layout of the analyzer filter bar. Below `md` the bar keeps the
  * summary and swaps every control for a "Filters · N active"
- * button that opens them in a bottom sheet (Modal's phone layout: focus
+ * button that opens them in a bottom sheet (focus
  * stays inside, Esc or Done closes it and focus returns to the button).
  * Changes apply as they are made, exactly as on the desktop bar.
  *
@@ -55,7 +55,7 @@ export function FilterSheet({
         ) : null}
       </button>
 
-      <Modal
+      <Sheet
         open={open}
         onClose={() => setOpen(false)}
         title="Filters"
@@ -82,7 +82,7 @@ export function FilterSheet({
         <div className="analyzer-filter-sheet flex flex-col items-start gap-5">
           {children}
         </div>
-      </Modal>
+      </Sheet>
     </>
   );
 }

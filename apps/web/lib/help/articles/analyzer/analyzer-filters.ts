@@ -43,6 +43,7 @@ const article: HelpArticle = {
   body: [
     { type: "heading", text: "Using filters", anchor: "using-filters" },
     { type: "paragraph", text: "The summary lists your date range, game type, game size, regions, length and any matchup. **Filters** counts all facets that differ from the defaults. On a computer, date, matchup and region stay inline; open Filters for the other choices. On a phone, Filters opens the complete editor, with Reset to defaults and Done at the bottom. Changes apply immediately." },
+    { type: "paragraph", text: "Use **Enter** or **Space** to open a filter picker. **Escape** closes the current picker and returns focus to its button. On a phone, the Filters editor stays open when you close its date or length picker; press Escape again to close the editor. Tab stays inside that phone editor. On a computer, the filter popovers let Tab continue to the rest of the page. Choosing a date or pressing Apply commits that picker; closing it without applying does not change the active filters." },
     {
       type: "paragraph",
       text: "The filter bar sits at the top of the analyzer. Opponents and each opponent's page, Strategies, Trends, Macro, Maps, Builds and Replays use these filters. Today includes cards with their own scope, listed below. Arcade and the page for a single game ignore the filter bar.",

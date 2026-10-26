@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { CalendarRange, ChevronDown, X } from "lucide-react";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import {
@@ -17,7 +17,8 @@ import { FilterSheet } from "./FilterSheet";
 import { GameLengthFilter } from "./GameLengthFilter";
 import { MatchupPicker } from "./MatchupPicker";
 import { MoreFiltersPopover } from "./MoreFiltersPopover";
-import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
+import { Popover } from "@/components/ui/Popover";
+import { IconButton } from "@/components/ui/IconButton";
 import {
   PRESETS,
   resolvePreset,
@@ -82,8 +83,7 @@ function DateFilter() {
   const presetId: PresetId = filters.preset || "all";
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap({ open, containerRef: dialogRef, onClose: () => setOpen(false) });
+  const panelId = useId();
   const [customStart, setCustomStart] = useState<string>(() =>
     filters.since ? toDateInputValue(new Date(filters.since)) : "",
   );
@@ -149,117 +149,93 @@ function DateFilter() {
           onClick={() => setOpen((v) => !v)}
           aria-haspopup="dialog"
           aria-expanded={open}
+          aria-controls={open ? panelId : undefined}
           className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-line bg-bg-surface px-3 py-2 text-sm text-text transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
         >
           <span className="font-medium">{triggerLabel}</span>
           <ChevronDown className="h-3.5 w-3.5 text-text-muted" aria-hidden />
         </button>
 
-        {open ? (
-          <>
-            <button
-              type="button"
+        <Popover open={open} onClose={() => setOpen(false)} anchorRef={triggerRef}
+          id={panelId} label="Pick a date range" width={640}>
+          <div className="mb-2 flex items-center justify-between sm:hidden">
+            <h3 className="text-h3 font-semibold text-text">Date range</h3>
+            <IconButton
               aria-label="Close date range picker"
-              className="fixed inset-0 z-30 bg-black/40 backdrop-blur-[1px] sm:bg-transparent sm:backdrop-blur-0"
               onClick={() => setOpen(false)}
-            />
-            <div
-              ref={dialogRef}
-              role="dialog"
-              tabIndex={-1}
-              aria-modal="true"
-              aria-label="Pick a date range"
-              className={[
-                // Mobile: full-width sheet anchored to the bottom, above the
-                // app's tab bar (bottom-above-chrome, z-sheet); desktop:
-                // popover anchored under the trigger. Either way it never
-                // exceeds the viewport.
-                "fixed inset-x-2 bottom-above-chrome z-sheet max-h-[80vh] overflow-y-auto rounded-xl border border-border bg-bg-surface p-4 shadow-card",
-                "sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-0 sm:right-auto sm:top-full sm:mt-1 sm:max-h-[70vh] sm:w-[min(92vw,640px)] sm:rounded-lg sm:p-3",
-              ].join(" ")}
             >
-              <div className="mb-2 flex items-center justify-between sm:hidden">
-                <h3 className="text-h3 font-semibold text-text">Date range</h3>
-                <button
-                  type="button"
-                  aria-label="Close"
-                  onClick={() => setOpen(false)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-md text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                >
-                  <X className="h-4 w-4" aria-hidden />
-                </button>
-              </div>
+              <X className="h-4 w-4" aria-hidden />
+            </IconButton>
+          </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-3">
-                <PresetGroup
-                  title="Quick"
-                  active={presetId}
-                  onPick={(id) => apply(id)}
-                  ids={[
-                    "after_5_0_17",
-                    "patch_5_0_16",
-                    "before_5_0_16",
-                    "all",
-                    "today",
-                    "yesterday",
-                    "last_week",
-                    "last_7d",
-                    "this_month",
-                    "last_30d",
-                    "last_90d",
-                    "this_year",
-                    "last_year",
-                  ]}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-3">
+            <PresetGroup
+              title="Quick"
+              active={presetId}
+              onPick={(id) => apply(id)}
+              ids={[
+                "after_5_0_17",
+                "patch_5_0_16",
+                "before_5_0_16",
+                "all",
+                "today",
+                "yesterday",
+                "last_week",
+                "last_7d",
+                "this_month",
+                "last_30d",
+                "last_90d",
+                "this_year",
+                "last_year",
+              ]}
+            />
+
+            <SeasonGroup
+              title="Season"
+              active={presetId}
+              onPick={(id) => apply(id)}
+              seasons={seasons}
+            />
+
+            <div className="space-y-2">
+              <h4 className="text-xs uppercase tracking-wider text-text-dim">
+                Custom
+              </h4>
+              <label className="block">
+                <span className="text-micro uppercase tracking-wider text-text-dim">
+                  Start
+                </span>
+                <input
+                  type="date"
+                  value={customStart}
+                  max={customEnd || undefined}
+                  onChange={(e) => setCustomStart(e.target.value)}
+                  className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent mt-0.5 min-h-[44px]"
                 />
-
-                <SeasonGroup
-                  title="Season"
-                  active={presetId}
-                  onPick={(id) => apply(id)}
-                  seasons={seasons}
+              </label>
+              <label className="block">
+                <span className="text-micro uppercase tracking-wider text-text-dim">
+                  End
+                </span>
+                <input
+                  type="date"
+                  value={customEnd}
+                  min={customStart || undefined}
+                  onChange={(e) => setCustomEnd(e.target.value)}
+                  className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent mt-0.5 min-h-[44px]"
                 />
-
-                <div className="space-y-2">
-                  <h4 className="text-xs uppercase tracking-wider text-text-dim">
-                    Custom
-                  </h4>
-                  <label className="block">
-                    <span className="text-micro uppercase tracking-wider text-text-dim">
-                      Start
-                    </span>
-                    <input
-                      type="date"
-                      value={customStart}
-                      max={customEnd || undefined}
-                      onChange={(e) => setCustomStart(e.target.value)}
-                      className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none mt-0.5 min-h-[44px]"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-micro uppercase tracking-wider text-text-dim">
-                      End
-                    </span>
-                    <input
-                      type="date"
-                      value={customEnd}
-                      min={customStart || undefined}
-                      onChange={(e) => setCustomEnd(e.target.value)}
-                      className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none mt-0.5 min-h-[44px]"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={onApplyCustom}
-                    disabled={!customStart && !customEnd}
-                    className="mt-1 inline-flex min-h-[44px] w-full items-center justify-center rounded-md border border-border bg-accent/15 px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-accent/15"
-                  >
-                    Apply custom range
-                  </button>
-                </div>
-              </div>
+              </label>
+              <button
+                type="button"
+                onClick={onApplyCustom}
+                disabled={!customStart && !customEnd}
+                className="mt-1 inline-flex min-h-[44px] w-full items-center justify-center rounded-md border border-border bg-accent/15 px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-accent/15"
+              >
+                Apply custom range
+              </button>
             </div>
-          </>
-        ) : null}
+          </div>
+        </Popover>
       </div>
 
       {filters.since || filters.until || eightWorker ? (
