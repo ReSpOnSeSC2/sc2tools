@@ -2,13 +2,67 @@
 
 Roadmap: Wave 5 `auth-return-to-context`; ADR0052.
 
+## Final current-main local proof
+
+Final checked HEAD is `4aa73f14dd4ce1056d3deca789c494fca3a46883`, including
+current main #759. No Auth runtime edits occurred after the preserved integration
+repair. The earlier 244-check/18-suite consumer pack and strict seven-file lint
+remain applicable; they were not repeated without a new source concern.
+
+- Whole web types pass before and after Next refreshes generated route types.
+  All 19 UI-rule regressions and the combined 1,653-source scan pass, with 748
+  inherited occurrences and no new or stale allowance. Main independently
+  retired seven occurrences since the 755-occurrence repair proof below.
+- One direct Next production build passes compilation, types, 144 static pages
+  and tracing. Dummy Clerk keys, local-only API and CI feature flags were used.
+  Retained validated engine 1.6.12/fc21ebe5bf52a53c assets were preserved; no
+  engine compilation/copy, dependency installation or deployment ran. No engine
+  parse or new production-engine validation is part of this Auth proof.
+- All unchanged budgets pass: 18 named routes plus 62 default-budget routes.
+  Examples: Community 188.3/190, Guides 172.6/175, Today 233.7/240, Try 213.7/240
+  and Welcome 174.1/245 kB. No budget was raised.
+- The build ran before `apps/web/tests/manual/auth-return.cjs`, so the manual
+  fixture uses newly generated production CSS and actual local Hanken/Bricolage
+  fonts. It mounts actual return-policy/forms/chrome/Welcome/action consumers;
+  Clerk, navigation, sockets and import bodies remain explicit synthetic
+  boundaries. This does not create or authenticate a real account.
+- Pinned Chromium 1228 passes 145 checks across eight sequential contexts at
+  320/390/768/1440px in both themes, with 16 new captures, 24 authenticated
+  synthetic loopback writes and zero unexpected requests. External requests are
+  recorded and aborted. Save, two-copy vote parity, Ghost assignment/navigation,
+  forced/cross-form destinations, Welcome continuation, rejected external return,
+  resolved theme, overflow and page-error assertions all pass.
+- `AUTH_SHOTS_DIR` points to the new absolute directory
+  `C:\SC2TOOLS\.worktrees\wave4-agent-dashboard\.cache\auth-return-final-shots`.
+  All 16 original committed PNG SHA256 values exactly match the pre-run inventory
+  `.cache/auth-return-final-original-sha256.json`. Originals were not overwritten.
+  Phone Light 320px vote, Dark 390px vote, Dark 1440px Welcome and Light 768px Welcome
+  captures were visually inspected without an observed layout/theme defect.
+  Root independently reviewed the Light 320px vote and Dark 1440px Welcome,
+  then copied them unchanged with matching SHA256 to new review paths
+  `docs/handoff/screenshots/auth-return-current-vote-light-320.png` and
+  `docs/handoff/screenshots/auth-return-current-welcome-dark-1440.png`.
+- The browser and loopback server close successfully; no listener on port 3261 remains.
+  All runtime jobs are closed. Only this checkpoint changes existing source;
+  root owns the two new synthetic review PNGs. The original 16 stay intact.
+  Cache/generated fixture artifacts and the two pre-existing temporary scripts
+  are retained. Neither obsolete temporary script was executed.
+
+Final logs are in root `.cache/auth-return-final-` with suffixes
+`ratchet-rules.log`, `ratchet-scan.log`, `types.log`, `build.log`, `budgets.log`,
+`post-build-types.log` and `manual.log`. New screenshot review paths are
+`.cache/auth-return-final-shots/auth-return-vote-light-320.png` and
+`auth-return-welcome-dark-1440.png` in the same directory. No Git mutation,
+provider operation or production preference/account write was performed by the
+validation workers. Root owns preservation, remote CI and delivery.
+
 ## Current main integration repair
 
 2026-10-25. Current local base `849f2cdb` merges the preserved `d0c58f5e`
 auth source with actual shared-UI/release main. This section records the new
 integration work; verification numbers below belong to earlier frozen heads.
-Focused checks below pass for these repairs. Final production/browser gates,
-merge and deployment remain pending; no provider operation occurred.
+Focused checks below pass for these repairs. Final local production/browser
+proof is recorded above; remote gates and delivery remain root-owned.
 
 - Community action callables now retain their issuing render identity. Saved
   callbacks cannot admit an operation after owner/record changes, ABA or
@@ -44,9 +98,9 @@ strict lint of all seven owned code files, 19 UI-rule regressions and the full
 1,653-source ratchet scan pass. Semantic debt remains 755 occurrences, with no
 new or stale allowance. Current logs are root `.cache/auth-return-repair-*`.
 
-All jobs are closed and the serialized slot is released. The actual local auth
-matrix with cache-only captures and final production build/unchanged budgets
-remain held for root scheduling. Original 16 screenshot hashes remain unchanged.
+All jobs are closed and the serialized slot is released. The fresh actual local
+auth matrix with cache-only captures and final production build/unchanged
+budgets now pass as recorded above. Original 16 screenshot hashes remain unchanged.
 Neither obsolete opponent-order nor air temporary script is used. No dossier
 order change is part of this repair.
 
