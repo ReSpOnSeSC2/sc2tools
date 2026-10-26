@@ -12,11 +12,11 @@ function request(scope = "community", ts = now, signedBy = secret, suffix = "") 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(now); vi.stubEnv("COMMUNITY_REVALIDATE_SECRET", secret); h.tag.mockReset(); h.path.mockReset(); });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 
-it("accepts the same HMAC protocol, purges only public Community/sitemap and never caches its response", async () => {
+it("accepts the same HMAC protocol, purges only public Community/player/sitemap paths and never caches its response", async () => {
   const response = await POST(request()); expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toContain("no-store");
   expect(h.tag).toHaveBeenCalledTimes(1); expect(h.tag).toHaveBeenCalledWith("community");
-  expect(h.path.mock.calls).toEqual([["/community", "layout"], ["/sitemap.xml"]]);
+  expect(h.path.mock.calls).toEqual([["/community", "layout"], ["/players", "layout"], ["/p", "layout"], ["/sitemap.xml"]]);
 });
 it.each([["guides", now, secret, 400], ["community", now - 300001, secret, 401], ["community", now, "wrong", 401]] as const)("rejects scope, stale timestamp or forged digest", async (scope, ts, signedBy, status) => {
   expect((await POST(request(scope, ts, signedBy))).status).toBe(status); expect(h.tag).not.toHaveBeenCalled();

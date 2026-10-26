@@ -43,7 +43,7 @@ it("restores the full course position/checklist with Undo and expires it at eigh
   vi.useFakeTimers(); render(<CrashCourse />);
   fireEvent.click(screen.getByRole("checkbox")); fireEvent.click(screen.getByRole("button", { name: "Next lesson" }));
   fireEvent.click(screen.getByRole("button", { name: "Reset course progress" }));
-  expect(screen.getByText(/0 of 5 lessons/)).toBeTruthy();
+  expect(screen.getByText(/0 of 6 lessons/)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Undo" }));
   expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Pair your gaming PC");
   expect(JSON.parse(localStorage.getItem("sc2tools:stream-studio:crash-course:v1")!)).toEqual({ activeId: "pair-your-pc", completed: ["connect-the-dots"] });

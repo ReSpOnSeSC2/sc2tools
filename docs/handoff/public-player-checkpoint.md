@@ -6,6 +6,13 @@ Its assertion now requires the intentional empty profiles array. All three
 no-PII checks and strict lint for that test pass. This is a test/documentation
 follow-up only; the validated web build and runtime inputs are unchanged.
 
+Full remote web CI later exposed two more stale expectations: the public purge
+test omitted canonical `/players` and legacy `/p` paths, and a separate course
+Undo test still counted five lessons after adding the required sixth lesson.
+Both assertions now match the intended contracts. The two suites pass all 12
+checks, strict lint and full web types. Only tests and this note changed; the
+validated runtime build is reused. Full API CI at b46377f5 passed.
+
 Root visually inspected and copied three unchanged synthetic captures into
 `docs/handoff/screenshots/public-player-{fixture-light-360,fixture-dark-1280,settings-fixture-light-390}.png`
 for PR review. They show fixture accounts only; no private Admin observations
