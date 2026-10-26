@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Macro Bank resources
+
+- Compare Total, Minerals or Gas under Bank in the Macro timeline. Show both players' resource breakdown at the inspected time and in the hover card, keeping missing resources unknown.
+- Remember the Bank view separately from the selected metric mix. Switching resource views keeps the selected game time and roster in place.
+
 ### Optional personal chart cache
 
 - Add a bounded, opt-in server cache for six personal Trends chart responses, with owner revisions and invalidation for replay, attribution, recompute and history changes. It stays off by default; full API CI and deployment checks remain before an operator enables it.
