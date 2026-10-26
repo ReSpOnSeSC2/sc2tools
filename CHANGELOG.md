@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Hosting resource usage
+
+- Stop scheduled website warmups that consume Vercel's server allowance. Keep the existing Render API keepalive and visitor-triggered status checks.
+
 ### Analyzer date range
 
 - Default fresh analyzer views and Reset to defaults to Auto-track current season, following the current season catalog while retaining explicitly saved dates and views.
