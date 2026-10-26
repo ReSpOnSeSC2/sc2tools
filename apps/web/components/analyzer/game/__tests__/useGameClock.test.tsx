@@ -64,3 +64,26 @@ it("keeps slider focus and accepts a paused-stage seek without an external seek 
   expect(replace).toHaveBeenLastCalledWith("/app/game/g1?from=replays&t=90#replay", { scroll: false });
   slider.remove();
 });
+
+it("updates repeated graph inspections without revealing or focusing an offscreen replay", () => {
+  window.history.replaceState(null, "", "/app/game/g1?from=replays#macro");
+  const hook = renderHook(() => useGameClock("g1", 0, 700));
+  const holder = document.createElement("div"); const stage = document.createElement("section");
+  const control = document.createElement("button");
+  stage.setAttribute("data-replay-stage", ""); stage.tabIndex = -1;
+  holder.appendChild(stage); document.body.append(holder, control); control.focus();
+  const scroll = vi.fn(); stage.scrollIntoView = scroll;
+  const focus = vi.spyOn(stage, "focus");
+  vi.spyOn(stage, "getBoundingClientRect").mockReturnValue(new DOMRect(0, -800, 500, 400));
+  hook.result.current.stageRef.current = holder;
+  for (const [index, time] of [300, 330].entries()) {
+    act(() => hook.result.current.seek(time, { reveal: false }));
+    expect(hook.result.current.t).toBe(time);
+    expect(hook.result.current.seekRequest).toEqual({ t: time, seq: index + 1 });
+    expect(scroll).not.toHaveBeenCalled(); expect(focus).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(control); expect(stage.hasAttribute("data-clock-seek")).toBe(false);
+  }
+  act(() => vi.advanceTimersByTime(500));
+  expect(replace).toHaveBeenLastCalledWith("/app/game/g1?from=replays&t=330#macro", { scroll: false });
+  holder.remove(); control.remove();
+});

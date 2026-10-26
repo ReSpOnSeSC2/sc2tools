@@ -186,5 +186,16 @@ difference, and committed-blob diff is empty. No Site product change occurred.
 The earlier663de55c exact-head GitHub web/browser checks both passed. Automatic
 Preview dae2812 was visibly Ready with the same product source;663 only added
 proof-document corrections. New integration-head checks remain required.
-Subsequent hosting requests reached the existing daily100-deployment limit;
-there is no new Site production claim, plan upgrade or further preview retry.
+Some subsequent preview requests reached the existing daily100-deployment
+limit. Automatic previews and production deployments continue to succeed;
+there is no new Site production claim, plan upgrade or further manual retry.
+
+## Reconcile the latest owner fixes
+
+Main now contains Auto-track current season PR773 (`f6b6f524`) and in-place
+Macro graph inspection PR774 (`5b4af736`). Their incoming paths do not modify
+the seven Site code/test/baseline paths. Integration preserves those paths
+against tested `e9cd92f8` and retains all App/Landing, date, Macro and Settings
+changelog entries. The original conflict and active-checkpoint bytes remain
+in `.cache/site-main-5b4-before/`. New exact-head remote checks are required;
+the earlier Site artifact/browser matrix is not claimed rerun on this merge.

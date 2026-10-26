@@ -16,6 +16,15 @@ corresponding GitHub Release.
 - Use the shared action styles for the app's visitor sign-in controls and the landing page's download, browser, dashboard and support links, keeping their destinations and browser rollout choices.
 - Let long landing action labels wrap on a phone while keeping the shared keyboard focus styles.
 
+### Analyzer date range
+
+- Default fresh analyzer views and Reset to defaults to Auto-track current season, following the current season catalog while retaining explicitly saved dates and views.
+
+### Macro graph inspection
+
+- Keep the Macro graph in place when selecting a time with a mouse or touch. The selected time and unit roster still update; explicit replay actions continue to open the player.
+- Keep game statistics labels and values correctly associated for screen readers.
+
 ### Settings groups and compatible links
 
 - Group Settings into Account, Gameplay and Streaming, with descriptions in the desktop sidebar and a Devices link in Account.
