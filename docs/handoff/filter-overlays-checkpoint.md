@@ -1,11 +1,37 @@
 # Analyzer filter overlay migration
 
+Root verified the later shared SiteStats loading/unavailable semantic repair:
+all eight component checks, strict two-file lint and full web types pass. The
+old decorative geometry and one aggregate status remain; no axe allowance was
+added. Exact-head responsive CI must rerun before merge.
+
 2026-10-25. Branch `codex/wave5-filter-overlays`, worktree
 `wave3-private-scouting`, source base `105055e0`.
 
 This is a bounded consumer pack for `ui-primitives-and-dialogs` in
 `docs/handoff/plan/final-plan.json`, not completion of that item. Existing
 shared primitives, focus ownership and accessibility foundations are reused.
+
+## Responsive CI repair
+
+At PR759 head `e691df9c`, responsive job `121368592944` exposed an existing
+shared SiteStats loading state on mobile `/changelog` in both themes. Axe
+reported `aria-prohibited-attr`: generic loading spans used `aria-label`.
+Unavailable dash spans had the same invalid naming pattern.
+
+The narrow repair keeps their layout and decorative visuals, hides those
+visuals from assistive technology and supplies ordinary screen-reader text
+for each count. The existing single aggregate status remains the only live
+announcement; known values stay visible during background refreshes. The
+focused regression checks the actual initial-loading DOM, legal text/decorative
+semantics, one status region and transition to fresh values while revalidating.
+Unavailable-state checks use the readable text and hidden dash.
+
+This repair currently has source verification only (`git diff --check`).
+Runtime checks are pending the serialized chart-kit slot. No axe rule, test
+gate or allowance is weakened. Additional owned paths are
+`apps/web/components/chrome/SiteStats.tsx` and
+`apps/web/components/chrome/__tests__/SiteStats.test.tsx`.
 
 ## Source
 
