@@ -1,4 +1,5 @@
 "use strict";
+const { gameWrite } = require("../util/userRevision");
 const { LIVE_GAME_MATCH, STATS_GAME_MATCH } = require("../util/gameVisibility");
 
 const crypto = require("crypto");
@@ -209,9 +210,11 @@ class GamesService {
    *     } | null>,
    *   },
    *   logger?: { info: (obj: Record<string, unknown>, msg: string) => void },
+   *   userRevision?: import("../util/userRevision").UserRevision,
    * }} [opts]
    */
   constructor(db, opts = {}) {
+    this.userRevision = opts.userRevision || null;
     this.db = db;
     // Optional dep so unit tests that only need the slim-row code
     // path can still construct GamesService without a details stub.
@@ -443,48 +446,50 @@ class GamesService {
     // Do not tear down an active opponent-detail writer's lease/fence. The
     // full replay upsert waits for that short serialized critical section,
     // then atomically invalidates classification state with its fresh row.
-    let res;
-    const leaseDeadline = Date.now() + 1_000;
-    for (;;) {
-      const now = new Date();
-      res = await this.db.games.updateOne(
-        {
-          userId,
-          gameId: game.gameId,
-          _deleted: { $ne: true },
-          _deletionPending: { $ne: true },
-          $or: [
-            { _opponentBuildOrderWriteLease: { $exists: false } },
-            { "_opponentBuildOrderWriteLease.leaseUntil": { $lte: now } },
-            { "_opponentBuildOrderWriteLease.leaseUntil": { $exists: false } },
-          ],
-        },
-        update,
-      );
-      if (res.matchedCount > 0 || res.upsertedCount > 0) break;
-      const existing = await this.db.games.findOne(
-        { userId, gameId: game.gameId },
-        { projection: { _id: 1, _deleted: 1, _deletionPending: 1 } },
-      );
-      if (existing?._deleted || existing?._deletionPending) throw require("../util/deletedGames").gameDeletedError();
-      if (!existing) {
+    return gameWrite(this.userRevision, userId, async () => {
+      let res;
+      const leaseDeadline = Date.now() + 1_000;
+      for (;;) {
+        const now = new Date();
         res = await this.db.games.updateOne(
-          { userId, gameId: game.gameId },
+          {
+            userId,
+            gameId: game.gameId,
+            _deleted: { $ne: true },
+            _deletionPending: { $ne: true },
+            $or: [
+              { _opponentBuildOrderWriteLease: { $exists: false } },
+              { "_opponentBuildOrderWriteLease.leaseUntil": { $lte: now } },
+              { "_opponentBuildOrderWriteLease.leaseUntil": { $exists: false } },
+            ],
+          },
           update,
-          { upsert: true },
         );
-        break;
+        if (res.matchedCount > 0 || res.upsertedCount > 0) break;
+        const existing = await this.db.games.findOne(
+          { userId, gameId: game.gameId },
+          { projection: { _id: 1, _deleted: 1, _deletionPending: 1 } },
+        );
+        if (existing?._deleted || existing?._deletionPending) throw require("../util/deletedGames").gameDeletedError();
+        if (!existing) {
+          res = await this.db.games.updateOne(
+            { userId, gameId: game.gameId },
+            update,
+            { upsert: true },
+          );
+          break;
+        }
+        if (Date.now() >= leaseDeadline) throw opponentBuildOrderBusyError();
+        await wait(50);
       }
-      if (Date.now() >= leaseDeadline) throw opponentBuildOrderBusyError();
-      await wait(50);
-    }
-    this._sessionResolutionGate.invalidate(userId);
-    return {
-      created: res.upsertedCount === 1,
-      customBuildRevision,
-      excluded: controls?.excluded === true,
-      spatial: slimSet.spatial,
-    };
+      this._sessionResolutionGate.invalidate(userId);
+      return {
+        created: res.upsertedCount === 1,
+        customBuildRevision,
+        excluded: controls?.excluded === true,
+        spatial: slimSet.spatial,
+      };
+    });
   }
 
   /**
@@ -558,54 +563,56 @@ class GamesService {
     // an old agent races this marker and inserts the same id first, its row is
     // now visible to the transition below. If this upsert wins, the inserted
     // audit-only row is already quarantined and correctly has no repair work.
-    const ensured = await this.db.games.updateOne(
-      { userId, gameId: currentId },
-      {
-        $setOnInsert: { ...insert, createdAt: new Date() },
-      },
-      { upsert: true },
-    );
-
-    // Existing competitive rows need durable repair work for three cached
-    // surfaces. Persist every work item on the game in the SAME transition
-    // that makes the quarantine flag sticky. A retry can therefore finish a
-    // partially-completed repair without relying on an in-memory date list.
-    const mmrRepairToken = crypto.randomUUID();
-    const marked = await this.db.games.updateMany(
-      {
-        userId,
-        gameId: { $in: gameIds },
-        isResumedFromReplay: { $ne: true },
-      },
-      {
-        $set: {
-          isResumedFromReplay: true,
-          _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
-          _customBuildRevision: crypto.randomUUID(),
-          resumedReplayCounterRepairPending: true,
-          resumedReplayMmrRepairPending: true,
-          resumedReplayMmrRepairToken: mmrRepairToken,
-          resumedReplayBoundaryRepairPending: true,
+    return gameWrite(this.userRevision, userId, async () => {
+      const ensured = await this.db.games.updateOne(
+        { userId, gameId: currentId },
+        {
+          $setOnInsert: { ...insert, createdAt: new Date() },
         },
-        $unset: {
-          _customBuildReclassify: "",
-          _customBuildClassificationSequence: "",
-          _customBuildSlug: "",
-          _customOpponentStrategySlug: "",
-          _opponentBuildOrderWriteLease: "",
-          resumedReplayCounterRepairedAt: "",
-          resumedReplayMmrRepairedAt: "",
-          resumedReplayBoundaryRepairedAt: "",
-        },
-      },
-    );
+        { upsert: true },
+      );
 
-    this._sessionResolutionGate.invalidate(userId);
-    return {
-      created: ensured.upsertedCount === 1,
-      newlyFlaggedExisting: Number(marked.matchedCount || 0),
-      gameIds,
-    };
+      // Existing competitive rows need durable repair work for three cached
+      // surfaces. Persist every work item on the game in the SAME transition
+      // that makes the quarantine flag sticky. A retry can therefore finish a
+      // partially-completed repair without relying on an in-memory date list.
+      const mmrRepairToken = crypto.randomUUID();
+      const marked = await this.db.games.updateMany(
+        {
+          userId,
+          gameId: { $in: gameIds },
+          isResumedFromReplay: { $ne: true },
+        },
+        {
+          $set: {
+            isResumedFromReplay: true,
+            _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
+            _customBuildRevision: crypto.randomUUID(),
+            resumedReplayCounterRepairPending: true,
+            resumedReplayMmrRepairPending: true,
+            resumedReplayMmrRepairToken: mmrRepairToken,
+            resumedReplayBoundaryRepairPending: true,
+          },
+          $unset: {
+            _customBuildReclassify: "",
+            _customBuildClassificationSequence: "",
+            _customBuildSlug: "",
+            _customOpponentStrategySlug: "",
+            _opponentBuildOrderWriteLease: "",
+            resumedReplayCounterRepairedAt: "",
+            resumedReplayMmrRepairedAt: "",
+            resumedReplayBoundaryRepairedAt: "",
+          },
+        },
+      );
+
+      this._sessionResolutionGate.invalidate(userId);
+      return {
+        created: ensured.upsertedCount === 1,
+        newlyFlaggedExisting: Number(marked.matchedCount || 0),
+        gameIds,
+      };
+    });
   }
 
   /**

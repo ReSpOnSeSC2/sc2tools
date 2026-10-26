@@ -1,4 +1,5 @@
 "use strict";
+const { gameWrite } = require("../util/userRevision");
 
 const { STATS_GAME_MATCH, isStatsGame } = require("../util/gameVisibility");
 
@@ -286,6 +287,7 @@ class OpponentsService {
    *   playerIdentities?: {resolveMany: (identities: any[]) => Promise<any[]>} | null,
    *   scoutingIdentities?: import('./scoutingIdentities').ScoutingIdentitiesService|null,
    *   scoutingForecast?: import('./scoutingForecast').ScoutingForecastService|null,
+   *   userRevision?: import('../util/userRevision').UserRevision,
    * }} [opts]
    *        When provided, the profile loader hydrates ``buildLog`` /
    *        ``oppBuildLog`` from the detail store for any game whose
@@ -295,6 +297,7 @@ class OpponentsService {
    *        don't exercise the detail-store path.
    */
   constructor(db, pepper, opts = {}) {
+    this.userRevision = opts.userRevision || null;
     this.db = db;
     this.pepper = pepper;
     this.gameDetails = opts.gameDetails || null;
@@ -2506,10 +2509,10 @@ class OpponentsService {
     if (typeof incomingGame.region === "string") return;
     if (typeof set.region !== "string") return;
     try {
-      await this.db.games.updateOne(
+      await gameWrite(this.userRevision, userId, () => this.db.games.updateOne(
         { userId, gameId },
         { $set: { "opponent.region": set.region } },
-      );
+      ));
     } catch (err) {
       this.logger.warn(
         { err, userId, gameId },
@@ -2541,13 +2544,13 @@ class OpponentsService {
     }
     if (Object.keys(update).length === 0) return 0;
     try {
-      const res = await this.db.games.updateMany(
+      const res = await gameWrite(this.userRevision, userId, () => this.db.games.updateMany(
         {
           userId,
           "opponent.pulseId": pulseId,
         },
         { $set: update },
-      );
+      ));
       return res.modifiedCount || 0;
     } catch (err) {
       this.logger.warn(

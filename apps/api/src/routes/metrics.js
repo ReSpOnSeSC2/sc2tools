@@ -23,6 +23,7 @@ const express = require("express");
  *   token: string,
  *   liveGameBroker?: { counters: Record<string, number> },
  *   guideSamples?: { counters: Record<string, number> },
+ *   userCache?: { enabled:boolean, counters:Record<string,number> },
  * }} deps
  * @returns {import('express').Router}
  */
@@ -47,6 +48,11 @@ function buildMetricsRouter(deps) {
     registerCounterGauges(promClient, registry, deps.guideSamples, {
       prefix: "sc2tools_guide_samples_",
       help: "Guide sample capture counter",
+    });
+  }
+  if (deps.userCache?.enabled) {
+    registerCounterGauges(promClient, registry, deps.userCache, {
+      prefix: "sc2tools_user_cache_", help: "Personal chart cache",
     });
   }
 

@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Optional personal chart cache
+
+- Add a bounded, opt-in server cache for six personal Trends chart responses, with owner revisions and invalidation for replay, attribution, recompute and history changes. It stays off by default; full API CI and deployment checks remain before an operator enables it.
+- Keep existing requests and writes unchanged while disabled. ETags, browser revalidation, broader dashboard caching and local history deltas remain separate work.
+
 ### Account activity writes
 
 - Avoid rewriting recent account activity on every page load. Keep the first week-two return recorded even when another visit occurred within five minutes.
