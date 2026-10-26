@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Browser report sharing and examples
+
+- Choose which aggregate report rows to share as a PNG or text, with player identities omitted. See a real anonymized sample before adding replays, and follow detected openers to published matchup guides.
+- Recover from unavailable or delayed clipboard access with selected report text that can be copied manually.
+
 ### More navigation
 
 - Use the shared bottom Sheet for phone More navigation, preserving theme choices, keyboard focus, report handoff and responsive dismissal.
@@ -88,6 +93,7 @@ corresponding GitHub Release.
 - Change or clear your planned build directly from Macro Breakdown, in both the score popup and the full game page. The game header and other check-in views stay in sync.
 - Create builds from a replay, a detected label or a blank draft in one rich editor. The first-run library also links Community copies; searchable race-aware action pickers show friendly names, proxy eligibility and unknown-action errors.
 - Configure optional Twitch Predictions and live-game stream markers with separate permissions, explicit opt-ins and confirmed Dock controls. A separate server gate defaults off; current desktop telemetry cannot prove ranked queue status, so automatic Predictions remain unavailable.
+- When browser analysis is available, the home-page demo reads one replay locally, opens either player's real build order and offers recovery without uploading the replay. The analyzer warms up on intent, with the existing server demo retained during the rollout compatibility window.
 - Opt in to nine recorded ladder achievements in Event alerts, with per-moment visuals and sounds, local tests, clip timestamps and optional posts through an already connected bot. Supporter alerts keep priority; replay starting MMR and confirmed league evidence remain explicit.
 - Chat commands now share saved aliases, availability and cooldowns across the Twitch bot, Nightbot and on-stream answers. New commands show recorded daily and season stats, recent opponent meetings, prediction leaders and stream-session uptime; owners can add bounded plain-text custom replies with supported variables.
 - Analyzer tables now support keyboard build opening, global matchup chips, a matchup-scoped heatmap and a Strategy games sheet that stays open as filters change. CSV exports save the displayed Builds, Strategy pairs, Matchups, Maps and pool cells with their scope and local date.

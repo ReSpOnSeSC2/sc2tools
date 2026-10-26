@@ -72,6 +72,7 @@ import gettingStarted_howToUseHelp from "./getting-started/how-to-use-help";
 import gettingStarted_importingReplayHistory from "./getting-started/importing-replay-history";
 import gettingStarted_installAndPair from "./getting-started/install-and-pair";
 import gettingStarted_installApp from "./getting-started/install-app";
+import gettingStarted_instantAnalysis from "./getting-started/instant-analysis";
 import gettingStarted_settingsOverview from "./getting-started/settings-overview";
 import opponents_opponentDossier from "./opponents/opponent-dossier";
 import reviewsCoaching_coaching from "./reviews-coaching/coaching";
@@ -163,6 +164,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gettingStarted_importingReplayHistory,
   gettingStarted_installAndPair,
   gettingStarted_installApp,
+  gettingStarted_instantAnalysis,
   gettingStarted_settingsOverview,
   opponents_opponentDossier,
   reviewsCoaching_coaching,

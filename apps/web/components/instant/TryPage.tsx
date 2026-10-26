@@ -45,6 +45,11 @@ import { ParseProgress } from "./ParseProgress";
 import { PlayerChooser } from "./PlayerChooser";
 import { ReplayIntake } from "./ReplayIntake";
 import { SaveGamesCta, TryResume, useTryUpload, type TryUpload } from "./TryResume";
+import { ShareReportButton } from "./ShareReportButton";
+import type { TryGuideProps } from "@/lib/instant/reportGuideTypes";
+import { reportGuideFocus } from "@/lib/instant/reportGuideTypes";
+import { SampleReportButton } from "./SampleReportButton";
+import { useSearchParams } from "next/navigation";
 
 export const PRIVACY_LINE =
   "Your replays are analyzed on this device. Nothing leaves your browser unless you choose to save the games to an account.";
@@ -61,7 +66,7 @@ export const TRY_SESSION_OPTIONS: UseInstantSessionOptions = {
   initialDateWindow: { kind: "all" },
 };
 
-export interface TryPageProps {
+export interface TryPageProps extends TryGuideProps {
   /** Rollout mode (never "off": the route 404s then). */
   mode: Exclude<InstantImportMode, "off">;
 }
@@ -412,16 +417,23 @@ function useWorkspace(): WorkspaceState {
 }
 
 /** The report, the save card and the local-data controls (only once a report exists). */
-function ReportArea({ ws }: { ws: WorkspaceState }) {
+function FocusedReport({ ws, guideLinks }: { ws: WorkspaceState } & TryGuideProps) {
+  const params = useSearchParams();
+  const guideFocus = reportGuideFocus(params.getAll("focus").length === 1 ? params.get("focus") : null, guideLinks ?? []);
   if (!ws.report) return null;
   const moreButton = (
     <Button variant="secondary" onClick={ws.startAdding}>
       Analyze more replays
     </Button>
   );
+  return <InstantReport report={ws.report} guideLinks={guideLinks} guideFocus={guideFocus} actions={<>{ws.showTool ? null : moreButton}<ShareReportButton report={ws.report} /></>} focusKey={ws.reportFocusKey} />;
+}
+
+function ReportArea({ ws, ...guideProps }: { ws: WorkspaceState } & TryGuideProps) {
+  if (!ws.report) return null;
   return (
     <>
-      <InstantReport report={ws.report} actions={ws.showTool ? null : moreButton} focusKey={ws.reportFocusKey} />
+      <Suspense fallback={null}><FocusedReport ws={ws} {...guideProps} /></Suspense>
       {ws.resumeMode ? null : <SaveGamesCta upload={ws.upload} games={ws.stored.games} />}
       <LocalDataControls persisted={ws.stored.persisted} onCleared={ws.onCleared} />
     </>
@@ -434,13 +446,14 @@ function RunFailures({ session }: { session: InstantSession }) {
   return <ParseProgress progress={null} phase="done" total={session.files.length} failed={session.failed} onCancel={session.cancel} />;
 }
 
-function Workspace() {
+function Workspace(props: TryGuideProps) {
   const ws = useWorkspace();
   return (
     <div className="space-y-8">
       <Suspense fallback={null}>
         <TryResume upload={ws.upload} games={ws.stored.games} onResume={ws.markResume} />
       </Suspense>
+      <Suspense fallback={null}><GuideFocusHint report={ws.report} guideLinks={props.guideLinks} /></Suspense>
       {ws.showTool ? (
         <TryTool
           session={ws.session}
@@ -450,13 +463,21 @@ function Workspace() {
       ) : (
         <RunFailures session={ws.session} />
       )}
-      <ReportArea ws={ws} />
+      <ReportArea ws={ws} {...props} />
+      <SampleReportButton />
       <BrowserVsAgentTable />
     </div>
   );
 }
 
-function AdminGate() {
+function GuideFocusHint({ report, guideLinks = [] }: { report: InstantReportData | null } & TryGuideProps) {
+  const params = useSearchParams();
+  const focus = reportGuideFocus(params.getAll("focus").length === 1 ? params.get("focus") : null, guideLinks);
+  if (!focus || report?.games.some((game) => game.matchup === focus.matchup && game.payload.myBuild === focus.name)) return null;
+  return <p role="status" className="rounded-lg border border-line bg-bg-surface p-3 text-body text-text-muted">Looking for <strong className="text-text">{focus.name}</strong> ({focus.matchup}). Add matching replays to highlight this opener in your report.</p>;
+}
+
+function AdminGate(props: TryGuideProps) {
   const gate = useInstantImport();
   if (gate.loading) {
     return (
@@ -465,7 +486,7 @@ function AdminGate() {
       </p>
     );
   }
-  return gate.enabled ? <Workspace /> : <ComingSoon />;
+  return gate.enabled ? <Workspace {...props} /> : <ComingSoon />;
 }
 
 /**
@@ -474,11 +495,11 @@ function AdminGate() {
  * Example:
  *   <TryPage mode={getInstantImportMode() === "all" ? "all" : "admins"} />
  */
-export function TryPage({ mode }: TryPageProps) {
+export function TryPage({ mode, ...guideProps }: TryPageProps) {
   return (
     <div className="mx-auto max-w-4xl space-y-8">
       <TryHero />
-      {mode === "all" ? <Workspace /> : <AdminGate />}
+      {mode === "all" ? <Workspace {...guideProps} /> : <AdminGate {...guideProps} />}
     </div>
   );
 }

@@ -10,7 +10,8 @@
       "components/analyzer/mmr/MmrBucketChart.tsx",
       "components/analyzer/StrategyTendencyChart.tsx",
       "components/analyzer/explorer/ExplorerCharts.tsx",
-      "components/instant/report/OfflineMacroChart.tsx"
+      "components/instant/report/OfflineMacroChart.tsx",
+      "lib/instant/reportCard.ts"
     ]
   },
   "entries": [
@@ -1728,13 +1729,6 @@
       "signature": "fbaf4a66b250e6755cec5785d1fce74f8ef841feba22e08047fc3d4d4a7ceefa",
       "count": 1,
       "example": "\"text-display-lg font-semibold tracking-tight text-text outline-none\""
-    },
-    {
-      "file": "components/public-profile/GetYourOwnCTA.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "65559a145a1eaaecf13e77636459d5e4174050edfff69f60eefcbc324b7393a8",
-      "count": 1,
-      "example": "<Link href=\"/\" className=\"hard-press inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full border-2 border-line bg-accent px-5 font-display text-body font-bold text-whi"
     },
     {
       "file": "components/public-profile/PublicReplayAnalysis.tsx",

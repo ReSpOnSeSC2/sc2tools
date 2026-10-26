@@ -224,6 +224,12 @@ replays and socket traffic only.
 - A conditional receipt on the existing game row prevents duplicate posts on reprocessing. Historical imports, resumed, hidden and deleted games do not create moments. Delivery is best effort after the receipt, so a crash can miss an alert rather than repeat it.
 - Rollback: turn moments and bot posting off in Settings, Save, then revert the feature commit if needed. Existing receipts are harmless; do not remove them to replay history.
 
+## Home-page browser replay demo (Wave 5)
+
+No new environment variable, service, collection, index or migration is required. The existing build-time `NEXT_PUBLIC_INSTANT_IMPORT=all` selects the local one-file demo; `off` and `admins` keep the previous rate-limited server demo during the planned one-release compatibility window. This work does not change a deployed flag or execute a release. The browser parse session uses the same self-hosted worker/engine as `/try`, starts downloading only on intent, performs no policy/API lookup and never falls back to an upload on failure. The parsed demo is memory-only.
+
+Keep `/v1/public/preview-replay`, its health route and the preview CLI wiring for that compatibility release. After an actual release has exercised the local path, retire those routes/wiring and their tests in a separate explicit change. During the window, the existing flag rollback restores the previous server path with its upload disclosure. See `docs/instant-analysis.md` rollout step 3 and `/try#home-replay-demo`.
+
 ## Unified build editor (Wave 4)
 
 - Web-only deployment. No new environment variables, API schema, collection,
@@ -255,6 +261,17 @@ replays and socket traffic only.
   reference payloads. A card requests its reference only on explicit Practice.
 - Paste parsing and exports run locally. No external parser or AI service is
   used. Rollback may leave the optional field stored; older readers ignore it.
+
+### Browser report conversion (ADR 0062)
+
+- No new flags, infrastructure, provider consent, account writes or release.
+  Existing Instant Analysis off/admins/all and Guides flags govern visibility.
+- Sharing runs locally after explicit preview/delivery actions. Analytics still
+  requires existing consent and sends only fixed method names.
+- Optional fixture samples are generated from the current verified engine
+  bundle, with version and source/bundle identity checks. Missing Python hides
+  the sample instead of retaining stale data. No private replay should be used
+  to build the public sample artifact.
 
 ## Optional public Community cache (ADR 0056)
 
