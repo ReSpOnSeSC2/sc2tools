@@ -112,6 +112,39 @@ No runtime/test pass is claimed. Preserve the original source-only receipt;
 the localized replacement freeze is recorded separately in
 `.cache/glossary-infotip-navigation-retirement-sha256.json`.
 
+## Compact link destination repair, still source only
+
+The independent source review found that compact A–Z and Related links used
+fragment-only hrefs while compact Help intentionally emits no matching public
+IDs. A Ctrl/Meta-click from an analyzer Help sheet would therefore open the
+analyzer URL with an unresolved fragment. Within the same nineteen paths,
+compact links now carry the canonical `/help/glossary#…` destination. Public
+glossary links keep their local fragments. Plain compact A–Z scrolling and
+Related filter-clear/focus behavior still use their existing handlers without
+changing the current page hash or the queued-action retirement guards.
+
+The owned GlossaryBrowser tests now verify every A–Z/Related href through the
+real public and compact HelpArticleBody, including two compact copies without
+duplicate IDs. New Ctrl/Meta-click cases require the consumer to leave native
+navigation unprevented, preserve the search and avoid local scrolling, queued
+frames or hash writes. The test observes that consumer decision before a
+document listener suppresses only jsdom's unsupported navigation. Existing
+positive plain navigation and all retirement assertions remain in place.
+
+No tests, generator, types, lint, build, browser or Git action ran for this
+repair. The canonical seven-term module and generated Help index are unchanged.
+The original source-only and navigation-retirement receipts remain preserved;
+the new full nineteen-path freeze is
+`.cache/glossary-infotip-compact-anchor-sha256.json`.
+
+The subsequent source-only typing review removed five unsupported `exact`
+options from RTL ByRole calls in GlossaryBrowser's owned test. String `name`
+matchers retain exact accessible-name matching. The owned InfoTip RTL test
+contains no such option and is unchanged; Playwright's supported `exact`
+options remain. No runtime was run. The compact repair receipt is preserved,
+and the current nineteen-path freeze is
+`.cache/glossary-infotip-rtl-role-options-sha256.json`.
+
 ## Rollback
 
 Revert this web-only foundation to restore prior grouping and Help behavior.

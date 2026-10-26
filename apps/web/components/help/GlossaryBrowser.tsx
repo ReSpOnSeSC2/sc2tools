@@ -82,7 +82,7 @@ export function GlossaryBrowser({ variant = "page" }: { variant?: "page" | "comp
     </div>
     <nav aria-label="Glossary A to Z" className="flex flex-wrap gap-1">
       {Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ").map(letter => letters.includes(letter) ? <a key={letter}
-        href={`#glossary-letter-${letter.toLowerCase()}`} onClick={event => {
+        href={`${variant === "compact" ? "/help/glossary" : ""}#glossary-letter-${letter.toLowerCase()}`} onClick={event => {
           retireNavigation();
           if (variant !== "compact" || event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault(); root.current?.querySelector<HTMLElement>(`[data-glossary-letter="${letter}"]`)?.scrollIntoView({ block: "nearest" });
@@ -97,7 +97,7 @@ export function GlossaryBrowser({ variant = "page" }: { variant?: "page" | "comp
         <dt className="text-body font-semibold text-text">{term.term}</dt>
         <dd className="mt-1 space-y-2 text-caption text-text-muted"><p>{term.short}</p>{term.long ? <p>{term.long}</p> : null}
           <Link href={glossaryHelpPath(term)} className="inline-flex min-h-11 items-center rounded font-semibold text-accent-cyan underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Read {term.term} in context</Link>
-          {term.related.length ? <p>Related: {term.related.map((id, index) => <span key={id}>{index ? ", " : ""}<a href={`#${id}`} onClick={event => showTerm(event, id)} className="rounded text-accent-cyan underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{terms.find(related => related.id === id)?.term ?? id}</a></span>)}</p> : null}
+          {term.related.length ? <p>Related: {term.related.map((id, index) => <span key={id}>{index ? ", " : ""}<a href={`${variant === "compact" ? "/help/glossary" : ""}#${id}`} onClick={event => showTerm(event, id)} className="rounded text-accent-cyan underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{terms.find(related => related.id === id)?.term ?? id}</a></span>)}</p> : null}
         </dd>
       </div>)}</dl>
     </section>)}

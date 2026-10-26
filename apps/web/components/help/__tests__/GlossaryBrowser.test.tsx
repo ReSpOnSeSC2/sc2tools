@@ -24,7 +24,7 @@ function heldNavigation(variant: "page" | "compact" = "page") {
   const view = render(content(variant));
   const input = screen.getByRole("textbox", { name: "Search glossary" });
   fireEvent.change(input, { target: { value: "look-alike" } });
-  const related = screen.getByRole("link", { name: "Pulse ID", exact: true });
+  const related = screen.getByRole("link", { name: "Pulse ID" });
   related.focus(); fireEvent.click(related);
   expect(frames).toHaveLength(1);
   return { ...view, input, related, scroll,
@@ -46,22 +46,66 @@ it("sorts the canonical terms A to Z, filters definition text and clears with Es
 
 it("keeps all published term IDs and contextual links through the real article renderer", () => {
   const { container } = render(<HelpArticleBody article={article} />);
+  for (const link of within(screen.getByRole("navigation", { name: "Glossary A to Z" })).getAllByRole("link")) {
+    expect(link.getAttribute("href")).toBe(`#glossary-letter-${link.textContent!.toLowerCase()}`);
+  }
   for (const term of GLOSSARY) {
     const entry = container.querySelector(`[id="${term.id}"]`)!;
     expect(entry, term.id).not.toBeNull();
     expect(within(entry as HTMLElement).getByRole("term").textContent).toBe(term.term);
     expect(within(entry as HTMLElement).getByRole("link", { name: `Read ${term.term} in context` }).getAttribute("href")).toMatch(/^\/help\//);
+    for (const id of term.related) {
+      const related = GLOSSARY.find(item => item.id === id)!;
+      expect(within(entry as HTMLElement).getByRole("link", { name: related.term }).getAttribute("href")).toBe(`#${id}`);
+    }
   }
 });
 
 it("keeps compact Help anchors local instead of duplicating public IDs", () => {
   const { container } = render(<><HelpArticleBody article={article} variant="compact" /><HelpArticleBody article={article} variant="compact" /></>);
+  for (const navigation of screen.getAllByRole("navigation", { name: "Glossary A to Z" })) {
+    for (const link of within(navigation).getAllByRole("link")) {
+      expect(link.getAttribute("href")).toBe(`/help/glossary#glossary-letter-${link.textContent!.toLowerCase()}`);
+    }
+  }
   for (const term of GLOSSARY) {
     expect(container.querySelector(`[id="${term.id}"]`)).toBeNull();
-    expect(container.querySelectorAll(`[data-help-anchor="${term.id}"]`)).toHaveLength(2);
+    const entries = container.querySelectorAll<HTMLElement>(`[data-help-anchor="${term.id}"]`);
+    expect(entries).toHaveLength(2);
+    for (const entry of entries) for (const id of term.related) {
+      const related = GLOSSARY.find(item => item.id === id)!;
+      expect(within(entry).getByRole("link", { name: related.term }).getAttribute("href")).toBe(`/help/glossary#${id}`);
+    }
   }
   const ids = Array.from(container.querySelectorAll("[id]")).map(node => node.id);
   expect(new Set(ids).size).toBe(ids.length);
+});
+
+it.each(["Ctrl", "Meta"] as const)("keeps compact A–Z and Related destinations native for %s-click", (modifier) => {
+  const frame = vi.fn(), scroll = vi.fn(), replace = vi.spyOn(history, "replaceState");
+  vi.stubGlobal("requestAnimationFrame", frame);
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scroll });
+  render(<HelpArticleBody article={article} variant="compact" />);
+  const input = screen.getByRole("textbox", { name: "Search glossary" });
+  fireEvent.change(input, { target: { value: "look-alike" } });
+  const links = [
+    { link: within(screen.getByRole("navigation", { name: "Glossary A to Z" })).getByRole("link", { name: "B" }), href: "/help/glossary#glossary-letter-b" },
+    { link: screen.getByRole("link", { name: "Pulse ID" }), href: "/help/glossary#pulse-id" },
+  ];
+  for (const { link, href } of links) {
+    expect(link.getAttribute("href")).toBe(href);
+    let consumerPrevented: boolean | undefined;
+    // Observe the consumer's decision after React's delegated handler, then
+    // prevent jsdom's unsupported navigation without altering that decision.
+    const observe = (event: MouseEvent) => { consumerPrevented = event.defaultPrevented; event.preventDefault(); };
+    document.addEventListener("click", observe, { once: true });
+    fireEvent.click(link, modifier === "Ctrl" ? { ctrlKey: true } : { metaKey: true });
+    document.removeEventListener("click", observe);
+    expect(consumerPrevented).toBe(false);
+    expect((input as HTMLInputElement).value).toBe("look-alike");
+    expect(screen.getAllByRole("term").map(node => node.textContent)).toEqual(["Barcode"]);
+  }
+  expect(frame).not.toHaveBeenCalled(); expect(scroll).not.toHaveBeenCalled(); expect(replace).not.toHaveBeenCalled();
 });
 
 it.each(["page", "compact"] as const)("retires queued %s Related navigation when the reader returns to search, even while its target remains", (variant) => {
