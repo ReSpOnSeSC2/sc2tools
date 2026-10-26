@@ -23,14 +23,44 @@ violations. The page clock and roster still update while graph selections keep
 the user's scroll position; explicit replay actions retain reveal behavior.
 See both feature checkpoints for proof chronology and original failures.
 
-Site PR772 is integrating main5b4 with unchanged Site product source and new
-exact-head checks pending. Glossary expansion is locally validated at084b76a
-but not yet delivered. Settings Chat A2 passed its first-static421 tests/47
-suites; its final build/browser proof remains pending. Settings section
-navigation A3 is authored across26 paths and remains source-only/unvalidated.
-Settings search and the remainder of Waves5/6 remain open. Manual deployment
-requests hit the existing daily limit; successful automatic deployments are
-verified separately, without plan changes or repeated manual requests.
+Macro production deployment6wGFtrmBGRoG4XdcJy8gdQ5ogxBc is visibly
+Ready/Production/Latest/Current Domains sc2tools.com at exact5b4af736.
+This is the latest website production source verified by root; later merges
+below are not silently claimed live.
+
+Site PR772 is merged asb9fc50f1d6a01fd2fddd8e021b3c2f280d01d8df. Exactdf951bb8
+CI passed9,025 web tests/950 suites plus one expected skipped test/suite and
+467 browser cases/88 intentional skips/0flaky. Ready PreviewaQ456WNxtd673nyPhAWnjF91NZwP
+was observed. Glossary PR776 is merged asf27d24ae5c2bd59a9aa78d83849a6b8ae3839a22;
+exactbd482a51 CI passed9,043 web tests/950 suites plus one expected skip and
+469 browser cases/92 intentional skips/0flaky. Its local D9 artifact and22
+browser cases are recorded in the glossary checkpoint. Additional automatic
+previews hit the existing daily deployment limit; no manual retry or paid
+upgrade was attempted, and new website production observation remains pending.
+
+Hosting PR775 is merged as087888d8ee38fc45181a1e3ab5ca9c881db1f08e. It removes
+only the scheduled web-warming step; unchanged API shell/YAML invariants and
+syntax checks pass. Application PR CI is correctly omitted by path filters.
+The owner explicitly approved SC2Tools preview retention from30days to1week;
+saved values were verified after reload with Production/Canceled/Errored still
+30days. Hobby remains free, no automatic overage bill was introduced, and no
+manual deployment/branch/alias/asset deletion occurred. Reporting may lag.
+
+Settings Chat A2 final source4936dac5 passes425 tests/47 suites, whole types,
+Help92, UI19/1703/639, all81 unchanged budgets and18 browser cases. Buildp6oHTUoeCQA7WenuSgIcL
+contains the fixed persistent tabpanel;42 shared scans have zero serious/
+critical issues. Strict41 has zero errors/new warnings and eight audited
+inherited warnings (raw exit1). All runtime/listeners are closed, and root
+reviewed/copied three captures. The precise synthetic transport and retained
+original failures remain in settings-chat-checkpoint.md. Remote delivery follows.
+
+Settings sections A3 is preserved at0b002111 with26 owned paths, integrating
+that corrected shared-panel source. Its first-static42-suite check is active;
+the original89-path freeze and all earlier source snapshots are retained.
+Full remaining Settings search/IDs/ToCs A4 has a reviewed44-path source grant
+in a separate checkout; it has no runtime grant. The global command palette
+and remainder of Waves5/6 stay open. Do not mark find-anything complete from
+these subdivisions, and keep the final owner setup guide outstanding.
 
 ## Owner corrections already delivered
 
