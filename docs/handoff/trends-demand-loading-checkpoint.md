@@ -38,53 +38,65 @@ Actual records are in `.cache/trends-demand-static-prep-93a94950/static/`:
 The MediaQueryList fixture amendment is included in this passing run. The two
 earlier 218-pass/1-fail attempts and their raw repair records remain preserved.
 
-## Production and browser work — UNRUN
+## Production result — exact integrated source
 
-The actual preparation packet is
-`.cache/trends-demand-production-prep-93a94950/commands.json` (there is no
-`plan.json`), with its README, receipt and helpers beside it. No production
-build, budget validation, discovery, browser case or paired measurement ran.
+Main `8a810711` was merged into this branch as `85748408948b3bc4cee8ee6f74923677d9425271`
+(tree `655fde36542e0cef771f09f263e640e611d43ff3`). At that exact source, installed
+Next built **145 pages**, all **81 unchanged route budgets** passed, and post-build
+web types exited 0. BUILD_ID is `1TVmStDDPgYRFGOqDzOSR`. The current packet is
+`.cache/trends-demand-production-prep-85748408/`; the earlier 93 packet and its
+historical static proof remain preserved.
 
-The prepared build uses installed Next directly with the nine official dummy/
-local flags, own source/asset guards, unchanged route budgets (81 planned) and
-post-build types. It does not invoke npm prebuild, engine/sample generation,
-asset copying, downloads, pruning or installation. Own asset admission binds
+The build used the nine official dummy/local flags without npm prebuild,
+generation, downloads, copying, pruning or installation. Own asset guards passed:
 40 canonical engine inputs, five active assets, nine retained files and four
-sample payloads to this checkout's retained receipt; no foreign inventory is
-admitted. A fresh current BUILD_ID and complete CSS inventory are required.
+sample payloads. Source/browser guards passed 379 source pins, 22 browser pins,
+the complete four-file CSS set, three fonts and full Chromium 1228, with clean
+tracked source and no unknown untracked paths. Known Next/Browserslist/lint
+warnings and local API `::1:8080` refusal remain raw; backend availability and a
+warning-free build are not established. No historical 219-test run was repeated.
 
-Main browser source declares **18 cases**, 30 shared AA scans and six captures:
-360/768/1280 widths, light/dark, personal/global, navigation/collapse/retention,
-owner retirement and independent Retry. Only actual `--list` can confirm the
-expanded names/count. The cache-only paired plan declares **two cases/four
-fresh UTC contexts**, personal/global dark desktop. Both halves use the same
-real charts, hooks, data, CSS/fonts and actions; only two raw-hashed frozen
-legacy product files are overridden.
+## Browser failure and fixture repair — retry UNRUN
 
-Paired GET ledgers cover cold → filter-before-lower-charts → Performance →
-Inspect retention. This is not full traversal. Keep actual owner/path/query/
-phase/settlement ledgers and static-resource counts separate; no measured GET
-saving or performance percentage exists yet. Framework/auth and unrelated
-Help/report leaves are adapters. Shared AA is the existing serious/critical
-gate, not universal accessibility proof. There is no native invocation counter;
-do not claim instrumented native/socket/clipboard zero. No real account,
-provider or native operation is authorized by this preparation.
+Actual discovery confirmed **18 main cases** and **two paired cases**. The first
+main mobile/light case timed out at the fixture's Trends-heading wait:
+**0 passed, 1 failed, 17 did not run**, zero retries/flaky cases. No AA scan,
+capture or paired measurement completed. The main packet preserves that first
+RED and its successful source/asset postguards; all 26 observed identities,
+including postguard drivers, retired with no owned listeners.
 
-## Fresh-main admission and delivery
+A separate unchanged-fixture diagnostic captured **`ReferenceError: process is
+not defined`** after 707ms, before mount/API reads. Its four document/CSS/script/
+font GETs returned 200; cleanup closed the loopback server. Raw event ledgers,
+HTML and the original failure are retained under
+`C:\SC2TOOLS\.cache\trends-startup-diagnostic-85748408`; all 13 observed diagnostic
+identities retired. The diagnostic is not a feature pass.
 
-Root owns integration, runtime grants, review and delivery. Preserve the 12
-uncontested feature paths and reconcile Changelog after fresh merged PR #780.
-Refresh the exact guard base to that merged main, head/tree, changed raw pins
-and the build runner's hardcoded artifact identity. The old 379-pin packet and
-historical static result remain intact; do not relabel them as current proof.
+The fixture-only repair adds the established whole `process.env` browser literal
+fallback while retaining its specific defines, real code, adapters, 120s bound
+and assertions. Cleanup now includes existing page-error/resource ledgers;
+startup errors and actual server/socket-close behavior remain unchanged. Its
+HTTP-only coverage comment no longer claims native/socket instrumentation.
+**Repair syntax checks and browser retry are UNRUN.** Product source/classes,
+spec assertions, configuration, assets and budgets are unchanged.
 
-Before browser execution, preserve each LIST-generated JSON reporter file under
-its list evidence directory before RUN writes a fresh file. Admit exact new
-untracked evidence paths; the old source whitelist does not include dynamic
-browser outputs or those reporter JSONs. Verify complete CSS filename-set and
-raw-byte equality before/after; the existing browser helper checks supplied rows
-but does not detect an omitted/extra CSS file. Pin current source, fixture/spec,
-fonts and full Chromium 1228, enforce CI=1 and remove A11Y_COLLECT_ONLY. Existing
-configs use one worker, zero retries and maxFailures=1. Preserve first RED, actual
-GET/AA/cleanup receipts and owned host process/listener closure. No automatic
-build-to-browser continuation or new passing/production claim follows here.
+## Remaining validation and delivery
+
+Root owns review, commits, runtime grants and delivery. Preserve the old 857
+build/RED and diagnostic packets. After committing the two-file repair, prepare
+an explicit current-fixture/source → retained-857 production-artifact bridge;
+do not label that retained build as a new-head build. Admit complete CSS filename
+sets/bytes, fonts, Chrome, current source and exact concrete output paths.
+LIST/RUN reporter JSONs must have separate filenames. Keep CI=1, truly remove
+A11Y_COLLECT_ONLY/TRENDS_LIST_ONLY, and retain one worker, zero retries and
+maxFailures=1. Preserve first RED and positive owned identity/listener closure.
+
+The main plan remains 18 cases, 30 shared serious/critical AA scans and six cache
+captures across 360/768/1280, light/dark, personal/global, navigation, retention,
+owner retirement and Retry. Paired work remains two cases/four fresh UTC contexts,
+personal/global dark desktop; only two raw-hashed legacy product files differ.
+Its cold → filter → Performance → Inspect sequence is not full traversal. Keep
+actual GET owner/path/query/phase/settlement and static-resource ledgers separate;
+no measured saving exists yet. Framework/auth and unrelated Help/report leaves
+are adapters. AA is not universal accessibility proof. Page/HTTP ledgers do not
+instrument native invocations, sockets, beacon or clipboard.

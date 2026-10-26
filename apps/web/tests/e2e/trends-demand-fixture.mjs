@@ -52,7 +52,7 @@ async function legacyOverrides(cwd, legacy) {
 async function assets(legacy) {
   const cwd = process.cwd(), overrides = await legacyOverrides(cwd, legacy);
   const result = await build({ stdin: { contents: SOURCE, loader: "tsx", resolveDir: cwd }, bundle: true, write: false, minify: true, format: "iife", platform: "browser", jsx: "automatic", tsconfig: "tsconfig.json",
-    define: { "process.env.NODE_ENV": '"production"', "process.env.NEXT_PUBLIC_API_BASE": JSON.stringify(origin), "process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID": '""' },
+    define: { "process.env.NODE_ENV": '"production"', "process.env.NEXT_PUBLIC_API_BASE": JSON.stringify(origin), "process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID": '""', "process.env": JSON.stringify({ NODE_ENV: "production", NEXT_PUBLIC_API_BASE: origin }) },
     plugins: [{ name: "trends-explicit-boundaries", setup(builder) {
       builder.onResolve({ filter: /.*/ }, args => Object.hasOwn(adapters, args.path) ? { path: args.path, namespace: "trends-adapter" } : undefined);
       builder.onLoad({ filter: /.*/, namespace: "trends-adapter" }, args => ({ contents: adapters[args.path], loader: "tsx", resolveDir: cwd }));
@@ -92,7 +92,7 @@ async function startServer() {
 
 export async function closeTrendsDemandFixtureServer() {
   await active?.releaseAll();
-  const receipt = active ? { reads: active.reads, writes: active.rejectedWrites, unexpectedRequests: active.unexpectedRequests } : {};
+  const receipt = active ? { reads: active.reads, writes: active.rejectedWrites, unexpectedRequests: active.unexpectedRequests, errors: active.errors, resources: active.resources } : {};
   active = null;
   const current = server; server = null;
   if (current) await new Promise(resolve => { current.close(resolve); current.closeAllConnections(); });
@@ -100,8 +100,8 @@ export async function closeTrendsDemandFixtureServer() {
   return { closed: true, listening: current?.listening ?? false, ...receipt };
 }
 
-/** Real Trends/charts, contexts, SWR, clientApi, CSS/fonts. No real account,
- * provider, socket, clipboard or native operation can leave this GET-only host. */
+/** Real Trends/charts, contexts, SWR, clientApi, CSS/fonts. HTTP is confined to
+ * this GET-only loopback fixture. Sockets and native operations are not instrumented. */
 export async function openTrendsDemandFixture(page, { theme = "dark", mode = "personal", legacy = false, observer = true, reducedMotion = true } = {}) {
   await startServer();
   let built;
@@ -137,7 +137,7 @@ export async function openTrendsDemandFixture(page, { theme = "dark", mode = "pe
     }
     unexpectedRequests.push(`${method} ${url.pathname}${url.search}`); return { status: 404, contentType: "text/plain", body: "Unknown fixture resource" };
   };
-  active = { respond, reads, rejectedWrites, unexpectedRequests, errors, releaseAll: async () => { releases.forEach(release => release()); } };
+  active = { respond, reads, resources, rejectedWrites, unexpectedRequests, errors, releaseAll: async () => { releases.forEach(release => release()); } };
   page.on("pageerror", error => errors.push(error.message));
   await page.emulateMedia({ colorScheme: theme, reducedMotion: reducedMotion ? "reduce" : "no-preference" });
   await page.clock.setFixedTime(new Date("2026-10-26T12:00:00Z"));
