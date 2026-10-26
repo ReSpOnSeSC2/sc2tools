@@ -17,6 +17,10 @@ corresponding GitHub Release.
 - Add contextual definitions beside the four Macro KPIs and six Opponents table headers, keeping help separate from sorting and saved preferences.
 - Explain Today, opponent, macro and build scopes in Reading your stats, including detected versus planned labels and the difference between local today and an overlay session.
 
+### Hosting resource usage
+
+- Stop scheduled website warmups that consume Vercel's server allowance. Keep the existing Render API keepalive and visitor-triggered status checks.
+
 ### App and landing action links
 
 - Use the shared action styles for the app's visitor sign-in controls and the landing page's download, browser, dashboard and support links, keeping their destinations and browser rollout choices.

@@ -321,7 +321,13 @@ its original conflict and the original Glossary changelog remain preserved in
 .cache/glossary-main-df951-before/. This is an integration claim, not a rerun
 of the historical D9 build/browser matrix. Fresh exact-head CI is still needed.
 
-The owner raised a Vercel Hobby usage warning during integration. Further
-pushes are held briefly while root completes the read-only usage review;
-no deployment retention, deletion, plan, billing or infrastructure change
-has been made. The locally reviewed Glossary work and every proof remain.
+The owner raised a Vercel Hobby usage warning during integration. Root held
+pushes briefly during the read-only review. The owner subsequently approved
+only changing SC2Tools preview retention from30days to1week; root saved and
+verified it after reload, retaining Production/Canceled/Errored at30days.
+No manual deployment deletion, plan, billing or infrastructure change occurred.
+Hosting PR775 removes only scheduled web warmups; its reviewedc93cff48 source
+and actual merged Site/mainb9fc50f1 are integrated here. Only CHANGELOG.md
+overlaps the22 owned paths on that incoming side. Product/test content remains
+the locally validated084b76a source; historical proof is not presented as a
+rerun on later ancestry. The clean PR stacks on775 until that dependency merges.

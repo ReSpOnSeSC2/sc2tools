@@ -9,7 +9,7 @@ name: api-keepalive
 # regardless of whether the API is up, so a cold-started API gets
 # nudged awake within 5 minutes of going idle.
 #
-# Cost: free. GitHub Actions' cron is best-effort with a few-minute
+# GitHub Actions' cron is best-effort with a few-minute
 # jitter on the start time — that's fine because we're trying to beat
 # Render's 15-minute idle window with significant margin.
 #
@@ -66,35 +66,7 @@ jobs:
               "${url}"
           done
 
-      - name: Ping public web
-        # Vercel serverless functions cold-start per route. Pinging only
-        # /api/ping warms that one lambda; the public SSR pages users
-        # actually land on (community feed, leaderboard, builds index)
-        # stay cold between visits. Hitting them on a cron keeps the
-        # warm pool populated and avoids the multi-second TTFB on a
-        # first visit after a quiet stretch.
-        #
-        # /api/warmup-dashboard loads the same server modules as
-        # app/app/page.tsx (Clerk server SDK, API client). The /app SSR
-        # lambda is its own Vercel function and can't be warmed
-        # directly because Clerk middleware blocks unauthenticated
-        # requests at the edge — pinging the warmup route is the
-        # closest we can get without a service-account session.
-        run: |
-          set -euo pipefail
-          for path in \
-            /api/ping \
-            /api/warmup-dashboard \
-            / \
-            /community \
-            /community/leaderboard \
-            /builds; do
-            url="https://sc2tools.com${path}"
-            echo "==> ${url}"
-            curl --silent --show-error --fail \
-              --max-time 60 \
-              --retry 2 --retry-delay 5 --retry-all-errors \
-              --output /dev/null \
-              --write-out 'http=%{http_code}  time=%{time_total}s\n' \
-              "${url}"
-          done
+      # Do not warm Vercel routes on this schedule. Each serverless route
+      # has its own execution lifetime, and these requests consume web CPU
+      # and invocation allowance and are not needed to keep the Render API awake.
+      # The public status page still checks the web when a visitor opens it.
