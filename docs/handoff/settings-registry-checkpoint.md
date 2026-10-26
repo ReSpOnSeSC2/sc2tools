@@ -1,19 +1,82 @@
 # Settings registry and grouping — A1 verification boundary
 
+Root independently verified the23 final owned hashes and five proof artifact
+hashes, and visually reviewed the Light1280 sidebar, Dark360 Preferences and
+Dark1280 Devices-discard dialog. Three byte-identical copies are preserved in
+`docs/handoff/screenshots/` as `settings-registry-light-1280.png`,
+`settings-registry-dark-360.png` and
+`settings-registry-devices-dark-1280.png`; original captures and copy receipt
+remain. All runtime source stays unchanged after this proof.
+
 Date: 2026-10-26. Branch: `codex/wave5-settings-registry`, starting at
-`c1d0abd5`. This is stage A1 of the `find-anything` item in
+`c1d0abd5`; final integrated product source is `2f042be6253710a017afc2ee129c0ac8242ab2d7`.
+This is stage A1 of the `find-anything` item in
 `docs/handoff/plan/final-plan.json`, including its Settings IA augment.
 The complete roadmap item remains unfinished.
 
 ## Current boundary
 
-The parent completed the first unit/static stage described below. The later
-loopback fixture/spec repair is **source-only and unrun**; its types/lint and
-actual browser behavior still need validation. No production build, budget
-check or browser case is claimed for this pack. Runtime is held by the Header
-pack. This source-only follow-up performed no runtime, Git mutation, provider
-operation or real account request. Existing owner files, caches and original
-screenshots remain untouched and unexecuted.
+Final local validation is GREEN. One direct Next production build generated
+144 static pages, passed all 81 unchanged budgets and passed post-build web
+types. Its build ID is `ESe5OurSX4bfDvU6e6AsG`; Settings measured 182.8/260 kB.
+The original three browser projects in Light and Dark passed all six cases
+with one pinned Chromium 1228 worker, zero retries/skips and 24 full shared AA
+scans, including contrast. No serious or critical AA issue was found.
+
+All browser, build, unit and type processes have exited. The three ephemeral
+loopback listeners reported `closed: true`, `listening: false`; a subsequent
+read-only port inventory found no listener at 49351, 65471 or 55993. Runtime
+was explicitly released to the parent before this receipt update. No Git,
+remote, provider or real account operation was performed. Existing owner
+files, ignored bundles, pointers, caches and earlier screenshots are retained.
+
+The exact 23-path manifest remains
+`.cache/settings-registry-devices-owned-paths.txt`. The only final-stage source
+amendment adds the fresh `.next/BUILD_ID` to the existing fixture evidence and
+its spec attachment; it changes no fixture flow, transport or product behavior.
+Its two before-files and hashes are retained under
+`.cache/settings-final-2f042be6/before-buildid-metadata/`. All 23 prebuild
+hashes remained identical through the browser proof; only this checkpoint
+was then updated. The parent owns Git delivery and any tracked screenshot copies.
+
+## Final integrated static and asset proof
+
+- 298 checks across 33 disjoint suites passed, covering the original Settings
+  registry/page/links/real-form/Overlay consumers plus shared context, tab and
+  focus contracts, Header, Platform disconnect and Glossary integration.
+  This unit pack preceded the metadata-only fixture amendment. Whole web
+  types passed before and after that amendment, and again after Next.
+- Strict lint passed with zero warnings for the 20 owned code files other
+  than SettingsShell. The two amended browser files also passed strict lint
+  and fixture syntax checking. The separate Shell audit reports exactly its
+  one inherited `jsx-a11y/interactive-supports-focus` warning at line 321,
+  unchanged from the first-stage/pre-A1 audit. No tabindex, pragma, waiver or
+  baseline allowance was added to suppress it.
+- Read-only canonical Help generation was deterministic at 91 articles:
+  normalized SHA-256 `b1af2309affec6feaf94224421684fda9de54b05dec06fd6ce8a5e864010a074`.
+  The generated registry was not written. UI proof passed 19 rule tests,
+  1,700 scanned files and 642 existing occurrences with no new/stale allowance.
+- Before and after the build, all 40 normalized engine inputs matched
+  source hash `18a2e1b56111045cdb441d9d8868eee0b36d0b158b34ea0a79e3b9a22a69e2b2`.
+  The retained engine 1.6.12/agent 0.24.7 d27 manifest, ZIP and runtime assets
+  matched their admitted digests and sizes. All nine retained engine/Pyodide
+  files and the older fc21 bundle were preserved; no copy, engine compilation,
+  publisher, generation, pruning or download was needed.
+- All four strict sample payloads passed. The actual CRLF sample bytes were
+  preserved: raw SHA-256 `05e874e4792b9e054021efbe0008a935a4cd1c4e4395b1f3e061508b476f0c40`,
+  canonical LF SHA-256 `91a6735e50f45776c15642ebae53f1a3f9800c1db225a99e0e631be318820473`.
+
+Final evidence is preserved in `.cache/settings-final-2f042be6/`:
+`initial-source.json`, `prebuild-source.json`, `asset-admission-prebuild.json`,
+`asset-admission-postbuild.json`, `help-determinism.json`, `next-build.log`,
+`budgets.log`, `types-postbuild.log`, `browser.log`, `browser-results.json`,
+`build-artifact.json`, `final-browser-summary.json` and `final-source-proof.json`.
+Static logs are `.cache/settings-final-integrated-units.log`,
+`settings-final-integrated-types.log`, `settings-final-strict-20.log`,
+`settings-final-shell-lint.json`, `settings-final-metadata-{syntax,strict,types}.log`
+and `settings-final-ui-{rules,ratchet}.log`.
+
+## Historical first static stage
 
 Parent-reported first static proof, preserved under
 `.cache/settings-first-static-82a82898/`:
@@ -75,8 +138,8 @@ earlier evidence.
 - Desktop tab triggers remain direct siblings of one tab list. CSS grid
   positions them among sibling group headings and the Devices link; those
   non-tab elements are outside the tab list's ownership. The tab list uses
-  `display: contents`. This needs actual-browser accessibility-tree,
-  computed-style, placement and native keyboard proof before approval.
+  `display: contents`. The final browser matrix covers its accessibility
+  ownership, computed style, placement and native keyboard behavior.
 - Mobile retains the scrolling tab row, roving tabindex, panel IDs,
   Left/Right/Home/End activation and existing edge hints. Desktop arrows
   continue across group boundaries. All panels retain their existing eager
@@ -97,7 +160,7 @@ earlier evidence.
   links are kept, and the renamed Preferences how-to retains its published
   heading anchor.
 
-## Coverage and pending browser proof
+## Consumer coverage and final browser proof
 
 Pure registry cases cover group placement/order, canonical IDs, three
 aliases, hash names, unknown/prototype names and visibility filtering.
@@ -108,7 +171,7 @@ ownership, cross-group arrows and mobile Home/End behavior.
 Real Preferences and Notification forms are used in draft tests: stay keeps
 the draft, discard switches without a save request, and resetting one form
 must not erase the other's dirty guard. Existing Overlay multi-form tests
-remain unchanged and are part of pending integration validation.
+remain unchanged and passed in the integrated unit pack.
 Additional real-form cases cover Devices Stay/Discard and modified clicks
 for start-page and notification-only drafts, preservation of the old `misc`
 query/hash, clean navigation, exactly one approved router push and zero save
@@ -159,28 +222,33 @@ unref'ed; `afterAll` closes all connections and attaches a cleanup receipt
 asserting `closed: true` and `listening: false`, including any fallback HTTP
 requests. Real native Control-click, parent draft/URL/no-confirm assertions,
 ordinary Stay, native Enter/Discard, exact reads and the one approved router
-push remain unchanged. This harness repair has not been executed yet.
+push remain unchanged. All six final cases executed this loopback transport
+successfully, including the native new-tab first request.
 
-## Pending serialized verification
+The final ledger contains exactly 48 typed synthetic panel GETs and six
+native Devices document GETs, six approved client router pushes and zero
+save/API writes, unknown requests, rejected requests or nonlocal attempts.
+The fallback HTTP servers handled exactly the six unqueried Devices GETs.
+No real account, provider, preference, clipboard, native-agent or StarCraft
+action occurred. The build ID and the actual production CSS file names are
+attached to every flow; all six refer to the newly built artifact.
 
-1. Review the loopback fixture/spec follow-up first. The first focused
-   registry, consumer, Help, multi-form and unavailable-state pack is green
-   as recorded above; no unchanged pack repeat is needed solely for this
-   harness-only repair.
-2. Rerun whole web types and strict lint for the changed browser files after
-   the next runtime grant. Types command:
-   `node node_modules/typescript/bin/tsc --noEmit --project tsconfig.json`.
-   Existing Help/UI proof is unchanged by the transport repair. No new debt
-   acceptance or baseline waiver is authorized.
-3. After source review and an explicit runtime grant, use current admitted
-   engine/sample assets for one direct Next production build, unchanged
-   performance budgets and post-build types. No engine regeneration,
-   installer, SC2 launch or account operation is needed for this pack.
-4. Run `settings-registry.spec.ts` with one browser worker and the existing
-   `PW_CHROMIUM_EXECUTABLE` pinned Chrome support. The authored fixture uses
-   that fresh build's CSS and local fonts. Preserve any RED artifacts, report
-   real product failures, and review phone/desktop captures before claiming
-   completion.
+The matrix retains its original 360/768/1280 projects and both themes. The
+Devices sidebar section deliberately resizes each project to 1280 after its
+initial width assertions. It therefore proves desktop Devices admission and
+the native modifier path, not phone Account quick-link admission or phone
+Devices-dialog geometry. Browser panels are typed synthetic; the real
+Preferences/Notification dirty-form and multi-form behavior is proved by the
+unit consumers above. No extra 320/390 matrix is claimed.
+
+All 18 new PNGs remain unchanged under `shots/`. Representative visual review
+covered `mobile-360-light-preferences.png`,
+`desktop-1280-dark-preferences.png` and `mobile-360-dark-guard.png`: the phone
+tab row retains its existing horizontal scroller/edge hints, desktop groups
+and descriptions are legible, and the phone discard controls remain visible.
+The proof does not assert that every scroll-row label is fully visible at
+once. Original captures and historical RED logs were not overwritten. There
+was no new final-stage RED or product repair.
 
 ## Remaining roadmap stages
 

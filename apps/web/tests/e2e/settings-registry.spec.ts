@@ -151,6 +151,6 @@ for (const theme of ["light", "dark"] as const) {
     expect(evidence.unexpectedRequests).toEqual([]);
     expect(evidence.rejectedWrites).toEqual([]);
     expect(evidence.externalAttempts).toEqual([]);
-    await info.attach("settings-fixture-transport", { contentType: "application/json", body: JSON.stringify({ panelReads: evidence.panelReads, nativeDeviceLoads: evidence.deviceLoads, serverRequests: evidence.serverRequests, routerPushes: await page.evaluate(() => (window as SettingsFixtureWindow).settingsFixtureRouterPushes()), unexpectedRequests: evidence.unexpectedRequests, rejectedWrites: evidence.rejectedWrites, externalAttempts: evidence.externalAttempts, cssNames: evidence.cssNames, actualAccountWrites: 0 }) });
+    await info.attach("settings-fixture-transport", { contentType: "application/json", body: JSON.stringify({ buildId: evidence.buildId, panelReads: evidence.panelReads, nativeDeviceLoads: evidence.deviceLoads, serverRequests: evidence.serverRequests, routerPushes: await page.evaluate(() => (window as SettingsFixtureWindow).settingsFixtureRouterPushes()), unexpectedRequests: evidence.unexpectedRequests, rejectedWrites: evidence.rejectedWrites, externalAttempts: evidence.externalAttempts, cssNames: evidence.cssNames, actualAccountWrites: 0 }) });
   });
 }

@@ -117,13 +117,14 @@ function fixtureAssets() {
     const cssRoot = path.join(cwd, ".next/static/css");
     const cssNames = (await readdir(cssRoot, { recursive: true })).filter(file => file.endsWith(".css")).sort();
     if (!cssNames.length) throw new Error("Build production CSS before running the Settings fixture");
+    const buildId = (await readFile(path.join(cwd, ".next/BUILD_ID"), "utf8")).trim();
     const css = (await Promise.all(cssNames.map(file => readFile(path.join(cssRoot, file), "utf8")))).join("\n");
     const definitions = [["SettingsHanken", "hanken-grotesk-latin.woff2", "100 900"],
       ["SettingsBricolage", "bricolage-grotesque-latin.woff2", "600 800"], ["SettingsFraunces", "fraunces-latin-normal.woff2", "400 700"]];
     const fonts = new Map(await Promise.all(definitions.map(async ([, file]) => [file, await readFile(path.join(cwd, "app/fonts", file))])));
     const fontCss = definitions.map(([family, file, weight]) => `@font-face{font-family:${family};src:url('/fonts/${file}') format('woff2');font-weight:${weight};font-style:normal;font-display:swap;}`).join("\n")
       + ":root{--font-sans:SettingsHanken;--font-display:SettingsBricolage;--font-serif:SettingsFraunces;}";
-    return { script: result.outputFiles[0].text, css: css + fontCss, cssNames, fonts };
+    return { script: result.outputFiles[0].text, css: css + fontCss, cssNames, fonts, buildId };
   })();
 }
 
@@ -134,7 +135,7 @@ function fixtureAssets() {
  * @param {'light'|'dark'} theme
  */
 export async function openSettingsRegistryFixture(page, theme) {
-  const { script, css, cssNames, fonts } = await fixtureAssets();
+  const { script, css, cssNames, fonts, buildId } = await fixtureAssets();
   // Assets load before the listener starts, so failed bundling/CSS/font reads
   // cannot leave a startup listener behind.
   await fixtureServer();
@@ -182,5 +183,5 @@ export async function openSettingsRegistryFixture(page, theme) {
   await page.goto(`${origin}/settings?tab=misc&ref=legacy`);
   await page.getByRole("heading", { name: "Preferences panel", exact: true }).waitFor();
   await page.evaluate(() => document.fonts.ready);
-  return { errors, unexpectedRequests, rejectedWrites, externalAttempts, panelReads, deviceLoads, serverRequests, cssNames };
+  return { errors, unexpectedRequests, rejectedWrites, externalAttempts, panelReads, deviceLoads, serverRequests, cssNames, buildId };
 }
