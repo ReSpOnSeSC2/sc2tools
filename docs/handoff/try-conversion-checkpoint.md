@@ -251,3 +251,19 @@ infrastructure/budget increase, native/engine version or release change. Shared
 engine prebuilds must use the coordinated current engine and source, without
 pinning an earlier same-version bundle. Root ports
 3210/8080 are reserved; this pack uses disposable loopback fixture ports.
+# Current Auth, analyzer and navigation integration
+
+Main's Auth return and the delivered rating/Macro fixes, plus reviewed More
+source `f3f61832` (PR 762), are normally integrated at `60ab522c`. The merge
+conflicted only in the changelog; all feature sections remain. PR 762 must land
+before this feature merges. Agent/replay-engine trees, engine/sample publisher
+inputs and shared copy primitives are unchanged from fully green `a2df1c16`.
+
+The current combined tree passes 105 checks across ten Auth, Guide, Try/report,
+landing and AppChrome suites, full web types, strict lint on the two overlapping
+Guide/CTA files, all 19 UI rules and the 1,685-file scan with 655 inherited
+occurrences. No new/stale allowance was added. The production and full manual
+browser evidence below predates this independent integration; no Try runtime
+implementation changed in the merge. Fresh exact-head remote checks, including
+the production build and responsive suite, are required before delivery.
+
