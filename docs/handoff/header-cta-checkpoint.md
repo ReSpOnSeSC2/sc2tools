@@ -1,5 +1,21 @@
 # Header action links checkpoint
 
+## First static validation
+
+At `902a75a7` with final Mobile source integrated, the first static stage
+passed 189 tests across 18 disjoint suites: actual Header/auth context,
+Suspense fallback, supported return-path rules, Mobile navigation, shared
+LinkButton and all Help contracts. Whole-web types and strict lint on all
+three owned executable files pass with zero warnings. Help90 is deterministic
+without writing it; all19 UI-rule checks and the unchanged ratchet of1,695
+files/643 existing occurrences pass. No production or test source repair was
+needed. Evidence remains in `.cache/header-first-static-902a75a7/`.
+
+All root jobs are closed. Integrate final provider/glossary source before the
+final artifact stage; build/admission, browser/AA and delivery remain pending.
+
+## Initial source-only stage (historical)
+
 2026-10-26. Source-only pack in `wave4-agent-dashboard`, branch
 `codex/wave5-header-cta`, based on reviewed Mobile/Notification source
 `00df65c7`. The delivered Replay branch and all old caches/images are retained.
