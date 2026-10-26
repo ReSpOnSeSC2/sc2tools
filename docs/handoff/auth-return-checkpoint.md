@@ -2,6 +2,24 @@
 
 Roadmap: Wave 5 `auth-return-to-context`; ADR0052.
 
+## Public-player main integration
+
+Merged current Public main `251cb319` normally at `96a8ab57`, without source
+conflicts. The Auth delta contains no API changes. All 104 checks in seven
+return-policy, continuation, retained-action and author-capability suites pass;
+Help regenerates its 89 articles without a semantic registry change.
+Whole web types, all 19 UI rules and the combined 1,671-source scan pass
+(656 inherited occurrences, no new/stale allowance).
+
+The old local build had a generated checker for the moved Community page.
+Next's supported `typegen` refreshed its current validator; its one obsolete
+per-page checker was retained in a full 120-file cache snapshot, hash-verified,
+then retired from generated output. No source route or type gate was changed.
+Logs are root `.cache/auth-return-public-integration-*`; the snapshot remains
+in `.cache/auth-return-before-public-typegen`. Current-head remote CI will
+validate the integrated production and responsive build. Earlier local browser
+and production proof below remains scoped to its recorded source boundary.
+
 ## Shared chart main integration
 
 Merged chart main `56e725ae` normally at `e5fc04da` without an Auth source
