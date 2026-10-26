@@ -1,4 +1,5 @@
 "use strict";
+const { gameWrite } = require("../util/userRevision");
 const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 
 /**
@@ -232,10 +233,12 @@ class BuildIntentGameState {
    *   options: import('./buildIntentOptions').BuildIntentOptions,
    *   notifier: import('./buildIntentCommon').BuildIntentNotifier,
    *   perGame?: any,
+   *   userRevision?: import("../util/userRevision").UserRevision,
    *   now?: () => number,
    * }} deps
    */
   constructor(deps) {
+    this.userRevision = deps.userRevision || null;
     this.games = deps.db.games;
     this.users = deps.db.users;
     this.options = deps.options;
@@ -391,11 +394,11 @@ class BuildIntentGameState {
       reason, matchup: ctx.matchup, oppOptions: ctx.oppOptions, via, origin, now,
     });
     if (you.length === 0 && opponent.length === 0) return;
-    const res = await this.games.updateOne(
+    const res = await gameWrite(this.userRevision, userId, () => this.games.updateOne(
       { userId, gameId,
           ...LIVE_GAME_MATCH, isResumedFromReplay: { $ne: true } },
       [ensureIntentStage(now), ...you, ...opponent],
-    );
+    ));
     if (res.matchedCount === 0) {
       // Quarantined (or deleted) between the read and the write.
       const gone = !(await this.games.findOne({ userId, gameId, ...LIVE_GAME_MATCH }, { projection: { _id: 1 } }));
@@ -509,7 +512,7 @@ class BuildIntentGameState {
       .map((row) => String(row.gameId));
     if (ids.length === 0) return { dismissed: 0 };
     const now = new Date(this.now());
-    const res = await this.games.updateMany(
+    const res = await gameWrite(this.userRevision, userId, () => this.games.updateMany(
       {
         userId,
         gameId: { $in: ids },
@@ -520,7 +523,7 @@ class BuildIntentGameState {
       clearOverridePipeline({
         status: "skipped", build: null, origin, via, confirmedAt: null, updatedAt: now,
       }),
-    );
+    ));
     this.options.invalidate(userId);
     // The newest games are the ones an agent card or queue may still show.
     for (const gameId of ids.slice(0, BUILD_INTENT.PENDING_LIMIT_MAX)) {

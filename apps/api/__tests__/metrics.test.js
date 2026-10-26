@@ -12,13 +12,25 @@ const express = require("express");
 const request = require("supertest");
 const { buildMetricsRouter } = require("../src/routes/metrics");
 
-function buildApp({ broker, guideSamples } = {}) {
+function buildApp({ broker, guideSamples, userCache } = {}) {
   const app = express();
-  app.use(buildMetricsRouter({ token: "scrape-token", liveGameBroker: broker, guideSamples }));
+  app.use(buildMetricsRouter({ token: "scrape-token", liveGameBroker: broker, guideSamples, userCache }));
   return app;
 }
 
 describe("GET /metrics", () => {
+  test("opt-in chart cache exposes only fixed live gauges behind the existing token", async () => {
+    const userCache = { enabled: true, counters: { hit: 3, miss: 4, bytes: 123, reserved_bytes: 512, pinned_bytes: 64, active: 2, guard_active: 16, guard_rejected: 3 } };
+    const app = buildApp({ userCache }); expect((await request(app).get("/metrics")).status).toBe(401);
+    const res = await request(app).get("/metrics").set("authorization", "Bearer scrape-token");
+    expect(res.text).toContain("sc2tools_user_cache_hit 3"); expect(res.text).toContain("sc2tools_user_cache_bytes 123");
+    expect(res.text).toContain("sc2tools_user_cache_guard_active 16"); expect(res.text).toContain("sc2tools_user_cache_guard_rejected 3");
+    expect(res.text).not.toMatch(/userId|tokenHash|query=/);
+    userCache.counters.bytes = 19;
+    expect((await request(app).get("/metrics").set("authorization", "Bearer scrape-token")).text).toContain("sc2tools_user_cache_bytes 19");
+    const off = await request(buildApp({ userCache: { ...userCache, enabled: false } })).get("/metrics").set("authorization", "Bearer scrape-token");
+    expect(off.text).not.toContain("sc2tools_user_cache_");
+  });
   test("401 without the bearer token", async () => {
     const app = buildApp();
     const res = await request(app).get("/metrics");

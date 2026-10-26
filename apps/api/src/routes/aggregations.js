@@ -13,11 +13,17 @@ const { parseExplorerOptions } = require("../services/trendsExplorer");
  *   macroReport: import('../services/macroReport').MacroReportService,
  *   streak: import('../services/streak').StreakService,
  *   auth: import('express').RequestHandler,
+ *   userCache?: import('../middleware/userCache').UserCache,
  * }} deps
  */
 function buildAggregationsRouter(deps) {
   const router = express.Router();
   router.use(deps.auth);
+  /** @param {any} req @param {any} res @param {string} owner @param {string} route
+   * @param {object} filters @param {object} options @param {()=>Promise<any>} work */
+  const send = (req, res, owner, route, filters, options, work) => deps.userCache
+    ? deps.userCache.send(req, res, owner, route, filters, options, work)
+    : work().then((value) => res.json(value));
 
   router.get(["/trends/explorer/:view", "/trends/explorer/:view/games"], async (req, res, next) => {
     try {
@@ -116,13 +122,11 @@ function buildAggregationsRouter(deps) {
           ? intervalRaw
           : "day";
       const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
-      res.json(
-        await deps.aggregations.timeseries(
+      await send(req, res, userId, "timeseries", filters, { interval, tz }, () => deps.aggregations.timeseries(
           userId,
           { interval, tz },
           filters,
-        ),
-      );
+        ));
     } catch (err) {
       next(err);
     }
@@ -160,9 +164,7 @@ function buildAggregationsRouter(deps) {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
       const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
-      res.json(
-        await deps.aggregations.dayHourHeatmap(userId, { tz }, filters),
-      );
+      await send(req, res, userId, "dayHourHeatmap", filters, { tz }, () => deps.aggregations.dayHourHeatmap(userId, { tz }, filters));
     } catch (err) {
       next(err);
     }
@@ -174,7 +176,7 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.aggregations.lengthBuckets(userId, filters));
+      await send(req, res, userId, "lengthBuckets", filters, {}, () => deps.aggregations.lengthBuckets(userId, filters));
     } catch (err) {
       next(err);
     }
@@ -187,9 +189,7 @@ function buildAggregationsRouter(deps) {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
       const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
-      res.json(
-        await deps.aggregations.activityCalendar(userId, { tz }, filters),
-      );
+      await send(req, res, userId, "activityCalendar", filters, { tz }, () => deps.aggregations.activityCalendar(userId, { tz }, filters));
     } catch (err) {
       next(err);
     }
@@ -226,9 +226,7 @@ function buildAggregationsRouter(deps) {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
       const sessionGapMinutes = parseFiniteInt(req.query.session_gap_minutes);
-      res.json(
-        await deps.aggregations.momentum(userId, filters, { sessionGapMinutes }),
-      );
+      await send(req, res, userId, "momentum", filters, { sessionGapMinutes }, () => deps.aggregations.momentum(userId, filters, { sessionGapMinutes }));
     } catch (err) {
       next(err);
     }
@@ -329,9 +327,7 @@ function buildAggregationsRouter(deps) {
           ? intervalRaw
           : "week";
       const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
-      res.json(
-        await deps.aggregations.mapTrend(userId, { interval, tz }, filters),
-      );
+      await send(req, res, userId, "mapTrend", filters, { interval, tz }, () => deps.aggregations.mapTrend(userId, { interval, tz }, filters));
     } catch (err) {
       next(err);
     }

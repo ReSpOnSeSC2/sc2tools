@@ -1,4 +1,5 @@
 "use strict";
+const { gameWrite } = require("../util/userRevision");
 
 const { createHash, randomUUID } = require("crypto");
 const { BSON } = require("mongodb");
@@ -43,8 +44,9 @@ async function restoreUserSettings(users, userId, key, saved) {
 }
 
 class UserBackupsService {
-  /** @param {import('../db/connect').DbContext} db @param {{store: import('./userBackupsStore').UserBackupsStore|null, gdpr: import('./gdpr').GdprService, logger?: import('pino').Logger}} opts */
+  /** @param {import('../db/connect').DbContext} db @param {{store: import('./userBackupsStore').UserBackupsStore|null, gdpr: import('./gdpr').GdprService, userRevision?: import('../util/userRevision').UserRevision, logger?: import('pino').Logger}} opts */
   constructor(db, opts) {
+    this.userRevision = opts.userRevision || null;
     this.db = db; this.store = opts.store; this.gdpr = opts.gdpr; this.logger = opts.logger;
     this.metadata = db.userBackups || db.db.collection("user_backups");
     this.staging = db.db.collection(STAGING);
@@ -261,14 +263,16 @@ class UserBackupsService {
           continue;
         }
         if (dbKey === "games") contributionChanged = true;
-        await collection.deleteMany(dbKey === "games" ? liveBackupGamesMatch(userId) : { userId });
-        if (dbKey === "games") this.gdpr.notifyGamesChanged?.(userId);
-        /** @type {any[]} */ let rows = []; let bytes = 0;
-        for await (const row of this.staging.find({ operationId: staged.operationId, key }).sort({ ordinal: 1 }).batchSize(BATCH)) {
-          const data = { ...row.data, userId }; delete data._id; rows.push(data); bytes += BSON.calculateObjectSize(data);
-          if (rows.length >= BATCH || bytes >= 4 * 1024 * 1024) { await fence.assert(); await collection.insertMany(rows); rows = []; bytes = 0; }
-        }
-        if (rows.length) { await fence.assert(); await collection.insertMany(rows); }
+        await gameWrite(dbKey === "games" ? this.userRevision : null, userId, async () => {
+          await collection.deleteMany(dbKey === "games" ? liveBackupGamesMatch(userId) : { userId });
+          if (dbKey === "games") this.gdpr.notifyGamesChanged?.(userId);
+          /** @type {any[]} */ let rows = []; let bytes = 0;
+          for await (const row of this.staging.find({ operationId: staged.operationId, key }).sort({ ordinal: 1 }).batchSize(BATCH)) {
+            const data = { ...row.data, userId }; delete data._id; rows.push(data); bytes += BSON.calculateObjectSize(data);
+            if (rows.length >= BATCH || bytes >= 4 * 1024 * 1024) { await fence.assert(); await collection.insertMany(rows); rows = []; bytes = 0; }
+          }
+          if (rows.length) { await fence.assert(); await collection.insertMany(rows); }
+        });
       }
       if (this.gdpr.guideSamples) await this.gdpr.guideSamples.deleteForUser(userId);
       for await (const row of this.staging.find({ operationId: staged.operationId, key: "recountOpponent" }).batchSize(BATCH)) {
