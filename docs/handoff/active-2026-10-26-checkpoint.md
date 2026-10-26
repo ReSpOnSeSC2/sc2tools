@@ -68,9 +68,13 @@ original evidence.
 1. Build dialogs: `wave3-guides-expansion`, branch
    `codex/wave5-build-dialogs`, agent `public_player`. Actual Dossier, rich
    editor, Practice and menu consumer checks found real focus/empty-state
-   issues. Preserve every RED receipt. The agent owns the exclusive local
-   test/build/browser slot through repaired final proof. Root owns Git and
-   this program checkpoint. No shared primitive API expansion is approved.
+   issues. Final local proof passes 204 checks/20 suites, types, all 81 route
+   budgets and 329 browser checks/48 full AA scans. All 48 Close controls are
+   at least 44 by 44 pixels and inside the viewport and dialog. A one-line
+   shared Modal header sizing fix removes measured phone clipping; no API
+   changes. Root reviewed/copied three final captures. Remote CI, merge and
+   deployment are pending; local runtime is closed and its slot is released.
+   Root owns Git and this program checkpoint. Preserve every RED receipt.
 2. Replay-sharing copy: `wave4-agent-dashboard`, branch
    `codex/wave5-replay-sharing-copy`, agent `columns_api`. Source-only work
    depends on PR763. Shared manual-copy presentation, explicit private consent
@@ -79,11 +83,25 @@ original evidence.
    on the next explicit open; never automatically undo an authorized write,
    copy a stale handle or claim sharing is off after an uncertain outcome.
 3. Notification Popover: `wave3-game-workspace`, branch
-   `codex/wave5-notification-popover`, agent `next_ui_audit`. Source-only pack
-   starts from `1ad5dafa`. Preserve lazy data loading, ready-and-merged initial
+   `codex/wave5-notification-popover`, agent `next_ui_audit`. The ten-path source
+   pack is frozen from `1ad5dafa`. Root's initial focused pass is 36 checks/four
+   suites, after replacing a stale test helper's dialog-only wait with actual
+   lazy-panel readiness. Later static/build/browser/remote gates are unrun.
+   Preserve lazy data loading, ready-and-merged initial
    focus, read acknowledgements and nonmodal Tab behavior. Existing Popover
    handles outside pointer focus and top-layer Escape. Runtime follows the
    earlier packs; root owns Git.
+4. Mobile navigation: `wave3-owner-neighbors`, branch
+   `codex/wave5-mobile-nav-sheet`. Eight source paths are authored and frozen,
+   with all gates unrun. Reuse standard right Sheet sizing and shared Close,
+   preserve home/auth/route/theme controls and the controlled-content ID, and
+   close at the desktop breakpoint to release the old hidden drawer's lock.
+5. Glossary foundation: `wave3-my-reviews`, branch
+   `codex/wave5-glossary-infotip`. A 19-path source-only foundation is approved:
+   the seven existing definitions, explicit lazy InfoTip/Term, searchable
+   normal Help widget/article and one grouping-control consumer. No runtime
+   grant. About forty terms, remaining consumers and Reading your stats still
+   need later source-verified expansion; do not claim the whole item complete.
 
 Do not switch these active branches, reset their worktrees or stage their
 untracked caches. Source-only agents must not start competing runtime work.

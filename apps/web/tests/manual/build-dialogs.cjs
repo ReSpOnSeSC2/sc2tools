@@ -17,7 +17,7 @@ fs.mkdirSync(evidence);
 execFileSync(process.execPath, ['tests/manual/build-dialogs-fixture.cjs'], { stdio: 'inherit', env: { ...process.env, BUILD_DIALOGS_HOST_DIR: host } });
 const css = fs.readdirSync('.next/static/css', { recursive: true }).filter(name => name.endsWith('.css')).map(name => fs.readFileSync(path.join('.next/static/css', name), 'utf8')).join('\n');
 const fonts = "@font-face{font-family:FixtureSans;src:url('/fonts/hanken-grotesk-latin.woff2');font-weight:100 900}@font-face{font-family:FixtureDisplay;src:url('/fonts/bricolage-grotesque-latin.woff2');font-weight:600 800}:root{--font-sans:FixtureSans;--font-display:FixtureDisplay;--font-serif:serif}";
-const calls = [], writes = [], previewReads = [], invalidPreviews = [], external = [], errors = [], defaultFocus = [], unexpectedGETs = [];
+const calls = [], writes = [], previewReads = [], invalidPreviews = [], closeBounds = [], external = [], errors = [], defaultFocus = [], unexpectedGETs = [];
 const held = new Set(), errorHeld = new Set();
 let mode = 'ready', publicationSeen = false, checks = 0, captures = 0, aaCalls = 0;
 const docPath = `/v1/custom-builds/${buildDoc.slug}`, pubPath = `/v1/community/my-build-publication/${buildDoc.slug}`;
@@ -127,6 +127,15 @@ const server = http.createServer((req, res) => {
     };
     const capture = async (dialog, state, width, theme) => {
       await dialog.screenshot({ path: path.join(evidence, `${state}-${theme}-${width}.png`) }); captures++;
+      const panel = await dialog.boundingBox();
+      const close = await dialog.getByRole('button', { name: 'Close', exact: true }).boundingBox();
+      closeBounds.push({ state, width, theme, panel, close, viewport: { width, height: 1000 } });
+      expect(panel).not.toBeNull(); expect(close).not.toBeNull();
+      expect(close.width).toBeGreaterThanOrEqual(44); expect(close.height).toBeGreaterThanOrEqual(44);
+      expect(close.x).toBeGreaterThanOrEqual(Math.max(0, panel.x));
+      expect(close.y).toBeGreaterThanOrEqual(Math.max(0, panel.y));
+      expect(close.x + close.width).toBeLessThanOrEqual(Math.min(width, panel.x + panel.width));
+      expect(close.y + close.height).toBeLessThanOrEqual(Math.min(1000, panel.y + panel.height)); checks++;
     };
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(3272, '127.0.0.1', () => { server.off('error', reject); resolve(); }); });
     browser = await chromium.launch({ headless: true, ...(process.env.PW_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PW_CHROMIUM_EXECUTABLE } : {}) });
@@ -216,11 +225,11 @@ const server = http.createServer((req, res) => {
       await context.close(); activePage = null; console.log(JSON.stringify({ width, theme, checks, captures, completed: true }));
     }
     expect(writes).toEqual([]); expect(calls.every(call => call.method === 'GET' || call.method === 'POST' && call.path === previewPath)).toBe(true); expect(unexpectedGETs).toEqual([]); expect(invalidPreviews).toEqual([]); expect(previewReads.length).toBeGreaterThan(0); checks++;
-    const result = { checks, captures, aaCalls, calls, writes, previewReads, invalidPreviews, unexpectedGETs, externalAttempts: external, defaultFocus, errors };
+    const result = { checks, captures, aaCalls, calls, writes, previewReads, invalidPreviews, closeBounds, unexpectedGETs, externalAttempts: external, defaultFocus, errors };
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify(result, null, 2));
     console.log(JSON.stringify({ checks, captures, aaCalls, previewReads: previewReads.length, writes: writes.length, externalAttempts: external.length, evidence }));
   } catch (error) {
-    fs.writeFileSync(path.join(evidence, 'failure.json'), JSON.stringify({ message: error.message, checks, captures, calls, writes, previewReads, invalidPreviews, unexpectedGETs, externalAttempts: external, errors }, null, 2));
+    fs.writeFileSync(path.join(evidence, 'failure.json'), JSON.stringify({ message: error.message, checks, captures, calls, writes, previewReads, invalidPreviews, closeBounds, unexpectedGETs, externalAttempts: external, errors }, null, 2));
     if (activePage && !activePage.isClosed()) {
       fs.writeFileSync(path.join(evidence, 'failure.html'), await activePage.content());
       await activePage.screenshot({ path: path.join(evidence, 'failure.png'), fullPage: true }).catch(() => {});
