@@ -84,6 +84,36 @@ The repair freeze is separate under
 `.cache/revision-cache-source-9a68c480-repair1/`, with all 31 source copies and an
 exact delta against the original source receipt. All repair tests remain unrun.
 
+## Validation boundary amendment: 32-path scope
+
+The parent subsequently added exactly one feature path:
+`apps/api/__tests__/routes.integration.test.js`, plus this existing checkpoint.
+The other 30 feature files remain byte-identical to repair1 f75cdd0a. Before
+amending either file, raw bytes and hashes were preserved under
+`.cache/pulse-fixture-repair-6bd36a9c/before/`; receipt SHA256 is
+`45fe39fc9c286429ba72ce612a42b1258b9cc14b1ddbeb5a4474a412995bcf9d`.
+
+The selected router suite's numeric-Pulse-ID/undefined-marker ingest follows
+the real opponent enrichment path. Its default Pulse service delegated to
+global fetch, while the existing Jest setup blocks only Liquipedia. The fixture
+now injects the same real PulseMmrService with a rejecting fetchImpl already
+used by the shared build-intent harness. Numeric IDs, undefined markers, HTTP
+requests and every assertion are retained. No payload skip, global fetch patch,
+product route, writer or production flag is changed.
+
+For the selected 28-suite packet, 16 suites construct local MongoMemoryServer
+URIs directly, three use shared harnesses that do so, and nine are config/pure/
+fake-DB tests. None imports server/bootstrap/dotenv; config parsing uses explicit
+fixtures. Mongo/R2 environment inspection recorded presence booleans only, all
+false. This is database/config isolation evidence, not a claim that a
+Liquipedia-only setup is a global provider deny rule. Remaining actual selected
+provider paths are being traced before a future validation grant.
+
+The original validation packet 83b7fafd remains immutable and was not executed.
+New validation metadata must add strict JS path 28 and original same-filename
+baseline 20, preserve the same 28 suites and existing dependency dictionary,
+and pin the parent's next source commit/tree. All API checks remain unrun.
+
 ## Validation still required
 
 Prepared tests cover flag-off baseline bodies/headers and zero new commands;
