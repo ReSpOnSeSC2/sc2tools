@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PlayerSectionNav } from "./PlayerSectionNav";
 import { ArrowLeft, ChevronRight, Download, Share2 } from "lucide-react";
 import { ReplayList } from "@/components/analyzer/replays/ReplayList";
 import type { ReplayLibraryResponse } from "@/components/analyzer/replays/types";
@@ -35,6 +36,7 @@ export function PublicReplayLibrary({ data, query }: { data: ReplayLibraryRespon
         <p className="mt-5 flex items-start gap-2 rounded-xl border border-border bg-bg-elevated/55 p-3 text-caption text-text-muted"><Download className="mt-0.5 h-4 w-4 flex-none text-accent-cyan" aria-hidden />Download any replay without an account · Sign in free for the full analysis</p>
       </div>
     </Card>
+    <PlayerSectionNav handle={profile.profileHandle || profile.handle} active="replays" sections={profile.profileHandle ? ["overview", "replays"] : ["replays"]} />
     {query.notice === "page-expired" ? <p role="status" className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-caption text-text">That page link expired. Showing the {query.sort === "date_asc" ? "oldest" : "newest"} replays. <Link href={archiveHref(root, query)} className="inline-flex min-h-11 items-center font-semibold text-accent underline">Dismiss</Link></p> : null}
     <Card padded={false}>
       <ArchiveFilterEnhancer key={archiveHref(root, query)} action={root} search={query.search} build={query.build}>

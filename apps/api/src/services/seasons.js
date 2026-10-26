@@ -36,6 +36,24 @@ class SeasonsService {
       opts.ladderMapPool || new LadderMapPoolService();
   }
 
+  /** Read-only catalog windows for public opt-in statistics. A cold public
+   * page never starts a SC2Pulse or map-pool request.
+   * @returns {Array<{number:number,start:Date,end:Date}>} */
+  cachedWindows() {
+    const grouped = new Map();
+    const latest = Math.max(...(this._cache?.items || []).map(row => row.battlenetId));
+    for (const row of this._cache?.items || []) {
+      // number resets every year; battlenetId is the global Season N.
+      if (!Number.isSafeInteger(row.battlenetId) || !row.start) continue;
+      const start = Date.parse(row.start), end = row.end ? Date.parse(row.end) : row.battlenetId === latest ? this.now() : NaN;
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) continue;
+      const previous = grouped.get(row.battlenetId);
+      grouped.set(row.battlenetId, { number: row.battlenetId, start: Math.min(previous?.start ?? start, start), end: Math.max(previous?.end ?? end, end) });
+    }
+    return [...grouped.values()].sort((a, b) => b.number - a.number).slice(0, 12)
+      .map(row => ({ number: row.number, start: new Date(row.start), end: new Date(row.end) }));
+  }
+
   /**
    * Return the current season catalog. Cached for 6 hours; transparent
    * about which seasons we have. Each entry is one season per region —

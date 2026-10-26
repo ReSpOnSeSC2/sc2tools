@@ -7,6 +7,7 @@ const { OPPONENT_RACE_GROUP, OPPONENT_RACE_PROJECT } = require("../util/opponent
 const {
   BUILD_INTENT_LABEL_PROJECTION,
   COUNTED_BY_CHECKIN_EXPR,
+  DETECTOR_BUILD_EXPR,
   OPP_COUNTED_BY_CHECKIN_EXPR,
   PLANNED_GAME_EXPR,
 } = require("./buildIntentShape");
@@ -72,8 +73,14 @@ class BuildsService {
   /**
    * @param {string} userId
    * @param {object} filters
+   * Public readers request the detector view so private check-in labels and
+   * their counts cannot become public signatures. Owner analytics keep the
+   * effective label by default.
+   * @param {{maxTimeMS?:number, view?:"owner"|"detector"}} [options]
    */
-  async list(userId, filters) {
+  async list(userId, filters, options = {}) {
+    const { view = "owner", ...aggregateOptions } = options;
+    const detector = view === "detector";
     const match = gamesMatchStage(userId, filters);
     const curve = await this.mmrExpectation?.curve() || null;
     const rows = await this.db.games
@@ -82,11 +89,11 @@ class BuildsService {
         { $addFields: { _bucket: bucketSwitch() } },
         {
           $group: {
-            _id: { $ifNull: ["$myBuild", "Unknown"] },
+            _id: { $ifNull: [detector ? DETECTOR_BUILD_EXPR : "$myBuild", "Unknown"] },
             wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
             losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
             total: { $sum: 1 },
-            checkins: { $sum: COUNTED_BY_CHECKIN_EXPR },
+            checkins: { $sum: detector ? 0 : COUNTED_BY_CHECKIN_EXPR },
             lastPlayed: { $max: "$date" },
             ...OPPONENT_RACE_GROUP,
           },
@@ -107,7 +114,7 @@ class BuildsService {
           },
         },
         { $sort: { total: -1 } },
-      ], curve))
+      ], curve), aggregateOptions)
       .toArray();
     return rows.map(row => finishStrength(row, curve));
   }

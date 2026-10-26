@@ -9,11 +9,11 @@ const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
 const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("./twitchAutomationPolicy");
+const { PLAYER_SLUG_RE, PLAYER_UUID_RE, createPlayerSlug } = require("../util/publicPlayerConfig");
 
 const REPLAY_SHARE_ID_RE = /^[A-Za-z0-9_-]{32}$/;
-const REPLAY_SHARE_SLUG_SUFFIX_BYTES = 5;
 const REPLAY_SHARE_SLUG_MAX_LENGTH = 64;
-const REPLAY_SHARE_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*-[a-f0-9]{10}$/;
+const REPLAY_SHARE_SLUG_RE = PLAYER_SLUG_RE;
 
 /**
  * User service. The `users` collection maps Clerk user ids → our
@@ -41,6 +41,8 @@ class UsersService {
     this.db = db;
     this.adminEvents = opts.adminEvents || null;
     this.identityDeletions = opts.identityDeletions || null;
+    /** @type {((userId:string)=>Promise<{displayName:string,profileHandle?:string}|null>)|null} */
+    this.publicPlayerIdentity = null;
   }
 
   /**
@@ -394,7 +396,8 @@ class UsersService {
   async resolveReplaySharing(handle) {
     const slug = validReplayShareSlug(handle);
     const legacyShareId = validReplayShareId(handle);
-    if (!slug && !legacyShareId) return null;
+    const legacyPlayerId = typeof handle === "string" && PLAYER_UUID_RE.test(handle) ? handle : null;
+    if (!slug && !legacyShareId && !legacyPlayerId) return null;
     const projection = {
       _id: 0,
       userId: 1,
@@ -419,6 +422,12 @@ class UsersService {
         { projection },
       );
     }
+    // Compatibility for already-shared /p/<uuid>/replays links. A UUID is
+    // never publication consent: this exact lookup still requires an active
+    // archive and returns its canonical slug, without an owner-id payload.
+    if (!doc && legacyPlayerId) {
+      doc = await this.db.users.findOne({ userId: legacyPlayerId, "replaySharing.enabled": true }, { projection });
+    }
     if (!doc || typeof doc.userId !== "string") return null;
     const canonicalSlug = validReplayShareSlug(doc.replaySharing?.slug)
       || await this._ensureActiveReplaySharingSlug(doc.userId);
@@ -431,9 +440,11 @@ class UsersService {
         .slice(0, 80)
       : "";
     const displayName = publicName || "SC2 Player";
+    const publicIdentity = this.publicPlayerIdentity ? await this.publicPlayerIdentity(doc.userId) : null;
     return {
       userId: doc.userId,
-      profile: { handle: canonicalSlug, displayName },
+      profile: { handle: canonicalSlug, displayName: publicIdentity?.displayName || displayName,
+        ...(publicIdentity?.profileHandle ? { profileHandle: publicIdentity.profileHandle } : {}) },
     };
   }
 
@@ -1376,19 +1387,7 @@ function validReplayShareSlug(value) {
  * @returns {string}
  */
 function createReplayShareSlug(displayName) {
-  const suffix = crypto
-    .randomBytes(REPLAY_SHARE_SLUG_SUFFIX_BYTES)
-    .toString("hex");
-  const maxBaseLength = REPLAY_SHARE_SLUG_MAX_LENGTH - suffix.length - 1;
-  const base = (typeof displayName === "string" ? displayName : "")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, maxBaseLength)
-    .replace(/-+$/g, "") || "player";
-  return `${base}-${suffix}`;
+  return createPlayerSlug(displayName);
 }
 
 /** @returns {Error & {status:number,code:string}} */

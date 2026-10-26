@@ -2,6 +2,7 @@
 
 const express = require("express");
 const rateLimitModule = require("express-rate-limit");
+const { validPlayerSlug, PLAYER_UUID_RE } = require("../util/publicPlayerConfig");
 
 const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
@@ -29,6 +30,7 @@ const PUBLIC_PROFILE_RATE_LIMIT_PER_MIN = 60;
  *
  * @param {{
  *   publicProfile: import('../services/publicProfile').PublicProfileService,
+ *   players?: import('../services/publicPlayer').PublicPlayerService,
  *   rateLimitPerMinute?: number,
  * }} deps
  */
@@ -55,9 +57,12 @@ function buildPublicProfileRouter(deps) {
     limiter,
     async (req, res, next) => {
       try {
-        const profile = await deps.publicProfile.getPublicProfile(
-          String(req.params.handle),
-        );
+        res.set("Cache-Control", "no-store");
+        const handle = String(req.params.handle);
+        // Old API clients also used short internal handles. Preserve that
+        // guarded legacy reader without widening new canonical URL aliases.
+        const canonical = validPlayerSlug(handle) || PLAYER_UUID_RE.test(handle);
+        const profile = deps.players && canonical ? (await deps.players.get(handle))?.profile : await deps.publicProfile.getPublicProfile(handle);
         if (!profile) {
           res.status(404).json({
             error: {

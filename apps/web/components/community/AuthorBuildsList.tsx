@@ -10,7 +10,10 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { CommunityBuildCard } from "./CommunityBuildCard";
 import type { CommunityBuildListItem } from "./types";
 
-export interface AuthorBuildsListProps { builds: CommunityBuildListItem[] }
+/** Browsing needs public metadata, not author identity or ownership hints. */
+export type AuthorBuildListRow = Pick<CommunityBuildListItem,
+  "slug" | "title" | "description" | "matchup" | "votes" | "publishedAt" | "updatedAt" | "build">;
+export interface AuthorBuildsListProps { builds: AuthorBuildListRow[] }
 
 export function AuthorBuildsList({ builds }: AuthorBuildsListProps) {
   const [matchup, setMatchup] = useState("");

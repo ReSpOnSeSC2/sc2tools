@@ -33,11 +33,11 @@ describe("bounded public social image reads", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => { throw Error("private upstream detail"); } }));
     expect(await readPublicOg("/v1/community/builds/public-build")).toBeNull();
   });
-  it("shares configured public Community tags without transporting the secret", async () => {
+  it("reads Community identity freshly even with configured optional purge, without transporting its secret", async () => {
     vi.stubEnv("COMMUNITY_REVALIDATE_SECRET", "local-secret");
     const fetcher = vi.fn().mockResolvedValue(Response.json({ title: "Public" })); vi.stubGlobal("fetch", fetcher);
     await readPublicOg("/v1/community/builds/public-build");
-    expect(fetcher.mock.calls[0][1].next).toEqual({ revalidate: 300, tags: ["community", "community-build:public-build"] });
+    expect(fetcher.mock.calls[0][1].next).toEqual({ revalidate: 0 });
     expect(JSON.stringify(fetcher.mock.calls)).not.toContain("local-secret");
   });
 });

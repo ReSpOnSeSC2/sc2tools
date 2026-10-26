@@ -19,17 +19,17 @@ vi.mock("@/lib/serverApi", () => ({ getJsonWithStatus: (...args: unknown[]) => m
 vi.mock("@/lib/api", () => ({ apiFetch: (...args: unknown[]) => mocks.apiFetch(...args) }));
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("not-found"); }, redirect: () => { throw new Error("redirect"); } }));
 
-import ProfilePage, { generateMetadata as profileMetadata } from "@/app/p/[handle]/page";
+import ProfilePage, { generateMetadata as profileMetadata } from "@/app/players/[player]/page";
 import ArchivePage, { generateMetadata as archiveMetadata } from "@/app/players/[player]/replays/page";
 import AnalysisPage, { generateMetadata as analysisMetadata } from "@/app/players/[player]/replays/[gameId]/page";
 
 beforeEach(() => { for (const table of mocks.tables) table.length = 0; mocks.getJson.mockReset(); mocks.apiFetch.mockReset(); });
-it("shares one cache-enabled profile read between metadata and the page", async () => {
-  mocks.getJson.mockResolvedValue({ status: 200, data: { profile: { displayName: "Player", totals: { games: 0 } } } });
-  await profileMetadata({ params: Promise.resolve({ handle: "player" }) });
-  await ProfilePage({ params: Promise.resolve({ handle: "player" }) });
+it("shares one fresh consent read between metadata and the page", async () => {
+  mocks.getJson.mockResolvedValue({ status: 200, data: { archiveOnly: false, handle: "player-0123456789", displayName: "Player", profile: { handle: "player-0123456789", displayName: "Player", totals: { games: 0 }, matchups: [], signatureBuilds: [] } } });
+  await profileMetadata({ params: Promise.resolve({ player: "player-0123456789" }) });
+  await ProfilePage({ params: Promise.resolve({ player: "player-0123456789" }) });
   expect(mocks.getJson).toHaveBeenCalledTimes(1);
-  expect(mocks.getJson).toHaveBeenCalledWith("/v1/public/profile/player", { revalidateSec: 300 });
+  expect(mocks.getJson).toHaveBeenCalledWith("/v1/public/players/player-0123456789", expect.objectContaining({ revalidateSec: 0, signal: expect.any(AbortSignal) }));
 });
 it("shares an archive read with matching filters despite separately parsed query objects", async () => {
   mocks.getJson.mockResolvedValue({ status: 200, data: { profile: { handle: "player", displayName: "Player" }, items: [], page: { hasMore: false } } });
