@@ -12,6 +12,11 @@ import type { HelpArticle } from "../types";
 const slugs = (query: string) => searchHelp(query).map((result) => result.article.slug);
 const top = (query: string) => slugs(query)[0];
 
+it("indexes glossary widget definitions, not only the article title", () => {
+  expect(slugs("look-alike characters")).toContain("glossary");
+  expect(slugs("verified pairs")).toContain("glossary");
+});
+
 function fixture(slug: string, fields: Partial<HelpArticle>): HelpArticle {
   return {
     slug,

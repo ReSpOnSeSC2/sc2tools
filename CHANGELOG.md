@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Glossary and contextual help foundation
+
+- Browse and search the existing player-identity and verified-MMR definitions A to Z in Help's glossary, with stable term links and full contextual explanations.
+- Open keyboard and touch-accessible explanations beside Group same player. Definitions load on explicit open, with bounded loading, retry and shared popover focus handling.
+
 ### Mobile site navigation
 
 - Use the shared right Sheet for the site menu, with a consistent title and Close control, the existing home and destination links, and footer theme choices.
