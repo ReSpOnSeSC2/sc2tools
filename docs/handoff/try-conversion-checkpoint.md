@@ -1,5 +1,11 @@
 # Try conversion pack — ADR 0062
 
+Root independently inspected the final phone copy fallback, desktop Dark PNG
+preview, phone Dark sample, phone Light landing card and desktop Dark replay
+editor. All are legible and contained. Five unchanged synthetic captures were
+copied with matching SHA256 to `docs/handoff/screenshots/try-current-*` and
+`landing-current-*`; original images and every earlier evidence directory remain.
+
 Worktree: `wave3-owner-neighbors`, new `codex/wave5-try-conversion` from
 Landing `14fd6f59`. Pushed Auth `d0c58f5e` and Scorecard `53aa5356`/its SEO
 worktree remain preserved. The existing Landing worker switch is unchanged.
@@ -19,10 +25,65 @@ Chromium executable and save fresh evidence in root `.cache`; original review
 PNGs remain untouched. The conversion matrix now includes full scoped contrast
 and a held-copy recovery case.
 
-This integration repair passes current-engine generation and integrated
-consumer/static proof below. Final production build/budgets and actual browser
-proof remain due in their coordinated slot.
+This integration repair passes current-engine generation, integrated
+consumer/static checks and the final local production/browser proof below.
 No current validation is inferred from the earlier branch results below.
+
+## Final local production/browser proof
+
+Checked application source is preserved at
+`15f3c1276dcc23d91cecb2dad3fafcffdb805f44`, including chart main. One direct
+Next production build passes compilation, type validation, 145 static pages
+and tracing. It uses dummy Clerk keys and local-only CI feature flags, reusing
+the freshly verified d27 engine/sample without rerunning prebuild. All unchanged
+budgets pass: 18 named routes plus 62 default-budget routes, including Try
+216.7/240, landing 193/215, Today 234.3/240 and Guides 171/175 kB. Full post-Next
+types pass against the generated route types.
+
+The actual-component browser runners then ran sequentially with one pinned
+Chromium 1228 worker, fresh production CSS/local fonts, reduced motion and new
+absolute cache directories. First-attempt and old evidence remain intact.
+
+- Try passes 260 checks and 26 captures plus a standalone 1200×630 report PNG.
+  All four widths 320/390/768/1440 and both themes pass. Four full scoped dialog
+  axe scans at 320/1440 include color contrast with no exclusion. Selected
+  aggregate image/text, keyboard trapping/return, valid report/guide links,
+  sample intent, same-version bundle mismatch Retry, held-copy manual fallback,
+  nested Escape/retry and no late success analytics all pass. Native sharing,
+  downloads and clipboard boundaries are mocked. Writes, external requests and
+  engine boots are all zero; no real native share or account operation occurs.
+- Landing then passes 212 checks and 36 captures at the same widths/themes.
+  It parses the existing repository replay with the actual current local worker,
+  parser/session and editor. Rollout-all makes zero browser API calls; exactly
+  two synthetic loopback calls cover explicit off/admins compatibility. There
+  are zero external requests. Overflow, 44px targets, hit tests, keyboard/focus,
+  close behavior and unsupported-Worker recovery pass. This runner does not
+  perform a separate full Landing axe audit; shared current AA proof and the
+  stated actual keyboard/layout checks are kept distinct.
+- The first Try attempt timed out at the runner's default five-second Share
+  success wait. Evidence recorded one completed delivery and visible success;
+  PNG encoding took 5,021ms. The manual assertion now uses the existing
+  20-second encoder/Download bound. All outcome/privacy/call-count/AA checks
+  remain. The rerun passes; no production/runtime/style repair or second Next
+  build was needed. Strict runner lint and Node syntax also pass.
+- Phone Light/Dark, desktop, copy fallback, sample, editor and unsupported-state
+  captures were visually inspected without an observed defect. All 43 original
+  committed PNG hashes and all 86 old cache-file hashes/counts are unchanged.
+  Both manual processes exited, browsers closed and their loopback servers are
+  gone. No runtime job remains active.
+
+Logs: root `.cache/try-final-production-{build,budgets}.log`,
+`try-final-post-build-types.log`, `try-final-browser-repair.log` and
+`try-final-landing-browser.log`. Try evidence is
+`.cache/try-conversion-final-evidence-2` (with `result.json`); Landing evidence is
+`.cache/landing-demo-final-evidence`. The exact matching bundle is isolated in
+`try-conversion-final-host-2`. Original inventories are
+`try-conversion-final-original-sha256.json` and `try-final-old-cache-sha256.json`.
+First failure log/directory and every earlier evidence directory are preserved.
+The only post-build code delta is the manual Share assertion wait; this
+checkpoint records its proof. No Git, SC2, installer, provider or production
+account operation was performed by these workers. Root owns source preservation,
+remote code CI and delivery; this local proof does not claim a new deployment.
 
 ## Current-engine generation boundary
 
@@ -64,9 +125,8 @@ will verify this narrow directory plumbing; no browser was run in stage 1.
 
 The exclusive runtime slot was released at this clean generation boundary for
 queued Public/Auth combination checks. Try consumer/static proof then ran on
-the integrated source as recorded below. No production Next build or browser
-matrix has run on this refreshed source yet. Later build/browser proof must use
-the current source, not the historical
+the integrated source as recorded below. Final production/browser proof then
+used the refreshed source as recorded above, rather than the historical
 bundle evidence below. Preserved artifacts are root
 `.cache/try-stage1-{engine,sample-generation}.log`,
 `try-stage1-{sample-output-summary,engine-output-summary}.json`,
@@ -104,8 +164,8 @@ Logs are root `.cache/try-stage1-units.log`, `try-stage1-types.log`,
 `try-stage1-ratchet-test-lint.log`; initial setup/test failures are retained too.
 The selected suites and lint targets are listed in the ignored
 `try-conversion-final-{suite,lint}-selection.txt` artifacts. All local runtime
-jobs are closed and the slot is released before Next build/browser. Final
-tracked delta from the preserved integration is only the rule-test fixture and
+jobs were closed and the slot was released before the final build/browser. Stage 1's
+tracked delta from the preserved integration was only the rule-test fixture and
 this checkpoint. No real account/provider/SC2/installer operation occurred.
 
 The local report adds an intent-only share preview and 1200×630 PNG. The same

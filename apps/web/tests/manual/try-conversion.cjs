@@ -64,7 +64,7 @@ async function main() {
       await dialog.getByRole('checkbox', { name: 'Totals' }).uncheck(); await dialog.getByRole('checkbox', { name: 'Macro score' }).uncheck();
       await dialog.getByRole('button', { name: 'Copy text', exact: true }).click(); await expect(dialog.getByText('Report text copied.')).toBeVisible(); checks++;
       const copied = await page.evaluate(() => window.__copied.at(-1)); expect(copied).not.toMatch(/PRIVATE_FIXTURE|local-fixture|Macro score|4 games/); expect(copied).toContain('utm_medium=share'); checks += 2;
-      await dialog.getByRole('button', { name: 'Share PNG', exact: true }).click(); await expect(dialog.getByText('Report shared.')).toBeVisible(); checks++;
+      await dialog.getByRole('button', { name: 'Share PNG', exact: true }).click(); await expect(dialog.getByText('Report shared.')).toBeVisible({ timeout: 20_000 }); checks++;
       await check(page.evaluate(() => window.__shares.length === 1 && window.__shares[0].files[0].type === 'image/png'));
       await dialog.getByRole('button', { name: 'Download PNG', exact: true }).click();
       await expect.poll(() => page.evaluate(() => window.__downloads.length), { timeout: 20_000 }).toBe(1);
