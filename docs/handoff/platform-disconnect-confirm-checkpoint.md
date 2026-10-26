@@ -1,5 +1,36 @@
 # Connected-account disconnect confirmation checkpoint
 
+## Remote CI repair and full project reproof
+
+Exact-head CI on `496ed678` found three Settings overlay-guard unit failures:
+its existing clientApi mock lacked the newly consumed real owner-scope hook.
+The ninth owned path is now the existing `SettingsShell.overlayGuard.test.tsx`.
+Its API/useApi mocks and all three real-form assertions remain; only the real
+`useOwnerRequestScope` and `boundedApiRequest` utility exports are admitted.
+The original file and bounded failure evidence are retained in
+`.cache/platform-ci-unmount-496ed678/`.
+
+The same remote browser job found two held-JWT/unmount failures on mobile and
+tablet. The test queued React's unmount and immediately released the token.
+It now waits for the fixture's existing unmounted status and zero provider
+groups before release. Independent source review confirmed this observes the
+committed unmount and retains every zero-write assertion; no product guard,
+fixture behavior, or assertion was weakened. The original spec is preserved.
+
+Root's reproof passed all **36 cases across the original three projects**, one
+worker, no retries/skips, on the unchanged `IEnFS1aCPXo8Iw5y8UD0u` artifact.
+The 36 per-case ledgers contain **81 synthetic status GETs / 24 explicitly
+armed synthetic DELETEs**, zero rejected writes, external attempts, native
+confirmations or popups. All nine retired-JWT cases pass and all 18 full AA
+reports are clear. Actual account/provider operations remain zero. This is a
+test-only repair; no production source or build was changed. The affected
+real-form/provider pack passes **44 tests / two suites**, whole-web types pass,
+and both affected test files pass strict lint. Logs, the exact spec hash and
+machine-readable ledger summary are retained with the original failures.
+
+The historical eight-path local proof below remains intact. Later exact-head
+remote checks and production deployment still require observation.
+
 Root verified all eight final owned hashes and reviewed three true viewport
 captures. New byte-identical copies are `platform-disconnect-light-320.png`,
 `platform-disconnect-dark-390.png` and `platform-disconnect-light-1440.png`
