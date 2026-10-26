@@ -330,4 +330,7 @@ Hosting PR775 removes only scheduled web warmups; its reviewedc93cff48 source
 and actual merged Site/mainb9fc50f1 are integrated here. Only CHANGELOG.md
 overlaps the22 owned paths on that incoming side. Product/test content remains
 the locally validated084b76a source; historical proof is not presented as a
-rerun on later ancestry. The clean PR stacks on775 until that dependency merges.
+rerun on later ancestry. PR775 subsequently merged as087888d8. Ancestry
+integration0d4fd101 keeps the complete reviewed tree4b943dffe68356b2b3d5f048cb396d24359c861c
+unchanged; the new Glossary PR targets main directly. The integrated pure Help
+check still passes92 deterministic articles, with no index write.
