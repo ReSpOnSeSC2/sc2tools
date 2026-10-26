@@ -114,7 +114,7 @@ white directly with that fill. Replay on light combines the Light root with its
 replay overrides, including tokens that would otherwise inherit.
 
 The contract uses at least 4.5:1 for these text pairs and at least 3:1 for the
-listed boundaries. It does not rely on a large-text exception. Ratios displayed
+listed boundaries and chart marks. It does not rely on a large-text exception. Ratios displayed
 here are rounded; tests compare the unrounded values.
 
 | Pair (worst of ground, surface and raised) | Dark | Light | Replay on light | Minimum |
@@ -138,12 +138,18 @@ here are rounded; tests compare the unrounded values.
 | race-terran | 6.48:1 | 5.43:1 | 6.29:1 | 4.5:1 |
 | race-zerg | 6.61:1 | 4.91:1 | 6.41:1 | 4.5:1 |
 | race-random | 7.05:1 | 5.89:1 | 6.84:1 | 4.5:1 |
+| chart-low-sample | 7.84:1 | 6.35:1 | 7.61:1 | 4.5:1 |
+| chart-wr-low | 6.48:1 | 5.43:1 | 6.29:1 | 4.5:1 |
+| chart-wr-mid | 10.14:1 | 5.24:1 | 9.84:1 | 4.5:1 |
+| chart-wr-high | 8.40:1 | 4.98:1 | 8.15:1 | 4.5:1 |
 | white on accent | 4.83:1 | 4.85:1 | 4.83:1 | 4.5:1 |
 | white on accent-hover | 6.46:1 | 6.46:1 | 6.46:1 | 4.5:1 |
 | white on danger-fill | 5.15:1 | 5.88:1 | 5.15:1 | 4.5:1 |
 | border | 3.23:1 | 3.35:1 | 3.13:1 | 3:1 |
 | border-strong | 4.74:1 | 4.44:1 | 4.60:1 | 3:1 |
 | line | 3.23:1 | 17.35:1 | 3.13:1 | 3:1 |
+| chart-low-sample mark | 7.84:1 | 6.35:1 | 7.61:1 | 3:1 |
+| chart-wr-mid mark | 10.14:1 | 5.24:1 | 9.84:1 | 3:1 |
 
 Regenerate the table after a token change; do not hand-edit ratios:
 
@@ -419,6 +425,36 @@ the whole page. A boundary alone does not retry a cached failed lazy import;
 optional lazy islands need their established retry-loader pattern as well.
 `SkeletonChart` and `SkeletonKpi` add named, busy placeholders to the existing
 skeleton family; they contain no fabricated values.
+
+## Charts
+
+Use `lib/charts/theme.ts` (`useChartKit`) on the existing `useChartTheme`
+foundation. The old hook fields remain compatible. The kit supplies resolved
+grid/axis colors, 12px ticks, tooltip styles, eight paired series colors, a
+theme-aware win-rate ramp, sample cues and the existing reduced-motion signal.
+`--series-1` through `--series-8`, `--chart-low-sample` and the three
+`--chart-wr-*` endpoints live in globals.css, including replay overrides.
+
+Use the existing ChartTooltip API for legible token-based header/value text.
+Use ChartFrame around the plot for its title/legend, QueryState, summary and
+same-data table toggle. A frame may hide its own visible title when its existing
+Card already supplies one. Keep tables keyboard-scrollable, with real headers
+and the same callbacks/rows as the visual; do not fetch another data set for it.
+
+Categories such as MMR or macro-score bands use WinRateComparison on a shared
+percentage scale. Separate counts from percentages; do not add a second axis or
+a line that implies a continuous progression across categories. Preserve the
+endpoint's denominator even when its sample qualifier counts decided results.
+Under 20 decided results are hollow/dim. Mechanics averages instead qualify the
+measured count; absent counts are uncertain. These cues do not establish a true
+win probability or a causal effect.
+
+Series have visible labels and overflow dash patterns. Color-pair tests require
+CIE76 ΔE of at least 15 both normally and under the documented deuteranopia
+simulation; the palette also meets contrast checks in Dark, Light and Replay on
+light. This regression guard supplements labels and tables rather than replacing
+them. Reduced motion must not change values or prevent selection/drilldown.
+See ADR0066 and the Phase 2 Trends review for scope and compatibility details.
 
 ## Accessibility checks and limits
 

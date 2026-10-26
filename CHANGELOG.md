@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Chart comparisons and data tables
+
+- Bring the selected MMR, macro and head-to-head charts onto shared theme-aware colors and 12px axis labels. Tooltips follow Light, Dark and scoped replay colors.
+- Compare MMR and macro-score bands on one percentage scale with separate game counts; preserve existing filters, rate denominators and game drilldowns.
+- Add same-data table views, readable summaries and hollow/dim sample cues below 20 decided results, or 20 measured games for mechanics averages. Existing missing-data gaps and reduced-motion behavior remain explicit.
+
 ### Analyzer filters
 
 - Use shared filter popovers with viewport bounds, keyboard dismissal and focus return. Phone filters stay in a bottom sheet; closing a date or length picker leaves that editor open.
