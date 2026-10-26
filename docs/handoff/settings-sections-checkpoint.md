@@ -59,3 +59,14 @@ Root approved four synthetic actual-consumer captures using current production C
 - The single Light320 diagnostic and earlier three partial passes are historical only and are not included in the fresh 20-case count.
 - Product/browser/Next validation is stopped and runtime released. Only final docs plus four approved PNG copies changed after the clean runtime postguard; app/fixture/spec bytes remain frozen.
 - Root owns fresh-main reconciliation, PR creation and full CI. No screenshots were edited, no existing images overwritten, and no actual account/provider/StarCraft/native-agent operation occurred.
+
+## Pending passive-scroll correction
+
+A responsive CI retry exposed stale scrollspy geometry: an intersecting section
+kept its earlier observer position while the page moved. Selection now ranks live
+rectangles and batches passive capture-scroll/resize reads in one animation frame,
+with listener removal, frame cancellation and retired callbacks on cleanup. One
+unit regression covers stale geometry, batching and cleanup without navigation,
+focus or scroll writes. The browser spec, fixture, timeouts and prior A3/A4 proof
+remain unchanged. These three source-only edits are preserved before/after in
+.cache/settings-scrollspy-live-geometry-before-c25e2592/; validation is pending.

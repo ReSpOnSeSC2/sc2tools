@@ -39,19 +39,29 @@ export function SettingsSectionNav({ tab, sections, scope, hash, onNavigate, tar
     let mutations: MutationObserver | null = null;
     let timeout: number | undefined;
     let discoveryWindow = 0;
+    let frame: number | undefined;
     const targets = new Map<Element, string>();
-    const visible = new Map<Element, number>();
+    const visible = new Set<Element>();
+    const selectVisible = () => {
+      if (!active || !root.isConnected) return;
+      const nearest = [...visible].filter(target => target.isConnected && root.contains(target))
+        .map(target => ({ target, top: target.getBoundingClientRect().top }))
+        .sort((a, b) => Math.abs(a.top - 112) - Math.abs(b.top - 112))[0];
+      const id = nearest && targets.get(nearest.target);
+      if (id) setSelected(id);
+    };
+    const scheduleSelection = () => {
+      if (!active || frame !== undefined) return;
+      frame = window.requestAnimationFrame(() => { frame = undefined; selectVisible(); });
+    };
     const observer = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(entries => {
       if (!active || !root.isConnected) return;
       for (const entry of entries) {
         if (!targets.has(entry.target) || !root.contains(entry.target)) continue;
-        if (entry.isIntersecting) visible.set(entry.target, entry.boundingClientRect.top);
+        if (entry.isIntersecting) visible.add(entry.target);
         else visible.delete(entry.target);
       }
-      const nearest = [...visible].filter(([target]) => target.isConnected && root.contains(target))
-        .sort((a, b) => Math.abs(a[1] - 112) - Math.abs(b[1] - 112))[0];
-      const id = nearest && targets.get(nearest[0]);
-      if (id) setSelected(id);
+      selectVisible();
     }, { rootMargin: "-112px 0px -55% 0px", threshold: 0 });
     const discover = () => {
       if (!active || !root.isConnected) return;
@@ -82,9 +92,14 @@ export function SettingsSectionNav({ tab, sections, scope, hash, onNavigate, tar
       if (event.target instanceof Node && root.contains(event.target)) arm();
     };
     arm();
+    window.addEventListener("scroll", scheduleSelection, { passive: true, capture: true });
+    window.addEventListener("resize", scheduleSelection, { passive: true });
     if (targetPolicy === "mounted") root.addEventListener(SETTINGS_SECTIONS_READY_EVENT, ready);
     return () => {
       active = false; discoveryWindow++; window.clearTimeout(timeout); mutations?.disconnect(); observer?.disconnect();
+      window.removeEventListener("scroll", scheduleSelection, true);
+      window.removeEventListener("resize", scheduleSelection);
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
       root.removeEventListener(SETTINGS_SECTIONS_READY_EVENT, ready);
     };
   }, [scope, sections, targetPolicy]);

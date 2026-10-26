@@ -27,7 +27,8 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); HTMLElement.prototype.scrollIntoView = originalScroll; window.history.replaceState(null, "", "/"); });
 function intersect(target: Element, top = 115) {
-  act(() => records[0].callback([{ target, isIntersecting: true, boundingClientRect: { top } } as IntersectionObserverEntry], {} as IntersectionObserver));
+  vi.spyOn(target, "getBoundingClientRect").mockReturnValue(new DOMRect(0, top, 600, 400));
+  act(() => records[0].callback([{ target, isIntersecting: true, boundingClientRect: target.getBoundingClientRect() } as IntersectionObserverEntry], {} as IntersectionObserver));
 }
 
 it("observes only active scoped targets, including shared controls before the private body", () => {
@@ -47,6 +48,47 @@ it("passive observations change current link/select without navigation, reveal, 
   expect(screen.getByRole("link", { name: "Theme" }).getAttribute("aria-current")).toBe("location");
   expect(navigate).not.toHaveBeenCalled(); expect(scroll).not.toHaveBeenCalled();
   expect(window.location.href).toBe(href); expect(document.activeElement).toBe(focused);
+});
+
+function GeometryHarness({ onNavigate }: { onNavigate: (href: string) => void }) {
+  const scope = useRef<HTMLDivElement>(null);
+  return <div ref={scope} data-testid="geometry-scope">
+    <SettingsSectionNav tab="overlay" sections={[{ id: "widgets", label: "Widgets" }, { id: "scenes", label: "Scenes" }]}
+      scope={scope} hash="#widgets" onNavigate={onNavigate} />
+    <section id="widgets">Widgets content</section><section id="scenes">Scenes content</section>
+  </div>;
+}
+it("ranks live geometry after passive scroll, batches frames and retires queued work on cleanup", () => {
+  const frames: FrameRequestCallback[] = [], request = vi.fn((callback: FrameRequestCallback) => { frames.push(callback); return frames.length; });
+  const cancel = vi.fn(), navigate = vi.fn(), scroll = vi.fn();
+  vi.stubGlobal("requestAnimationFrame", request); vi.stubGlobal("cancelAnimationFrame", cancel);
+  HTMLElement.prototype.scrollIntoView = scroll;
+  const view = render(<GeometryHarness onNavigate={navigate} />), scope = screen.getByTestId("geometry-scope");
+  const widgets = scope.querySelector("#widgets")!, scenes = scope.querySelector("#scenes")!;
+  const widgetsRect = vi.spyOn(widgets, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 112, 600, 1200));
+  const scenesRect = vi.spyOn(scenes, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 300, 600, 900));
+  act(() => records[0].callback([widgets, scenes].map(target => ({
+    target, isIntersecting: true, boundingClientRect: target.getBoundingClientRect(),
+  } as IntersectionObserverEntry)), {} as IntersectionObserver));
+  expect(screen.getByRole("link", { name: "Widgets" }).getAttribute("aria-current")).toBe("location");
+  const select = screen.getByRole("combobox", { name: "On this page" }); select.focus();
+  const href = window.location.href, focused = document.activeElement;
+  widgetsRect.mockReturnValue(new DOMRect(0, -800, 600, 1200));
+  scenesRect.mockReturnValue(new DOMRect(0, 125, 600, 900));
+  fireEvent.scroll(window); fireEvent.resize(window); fireEvent.scroll(window);
+  expect(request).toHaveBeenCalledTimes(1);
+  act(() => frames[0](0));
+  expect(screen.getByRole("link", { name: "Scenes" }).getAttribute("aria-current")).toBe("location");
+  expect((select as HTMLSelectElement).value).toBe("scenes");
+  expect(navigate).not.toHaveBeenCalled(); expect(scroll).not.toHaveBeenCalled();
+  expect(window.location.href).toBe(href); expect(document.activeElement).toBe(focused);
+  fireEvent.scroll(window); expect(request).toHaveBeenCalledTimes(2);
+  widgetsRect.mockClear(); scenesRect.mockClear(); view.unmount();
+  expect(cancel).toHaveBeenCalledWith(2);
+  act(() => frames[1](16));
+  fireEvent.scroll(window); fireEvent.resize(window);
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(widgetsRect).not.toHaveBeenCalled(); expect(scenesRect).not.toHaveBeenCalled();
 });
 it("sends explicit desktop and native-select choices through Shell while modified links remain native", () => {
   const navigate = vi.fn(); render(<Harness onNavigate={navigate} />);
