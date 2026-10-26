@@ -5,10 +5,11 @@
 `C:\SC2TOOLS\.worktrees\wave4-agent-dashboard`. This is the first slice of the
 canonical `level-up-checklist` item. The source and meaningful test cases are
 authored. The canonical Help index generator ran once under a limited grant.
-The first whole-API typecheck failed at one new test assertion; the source-only
-fixture repair below is not yet revalidated. **Tests, lint, web types, build and
-browser checks remain unrun for this slice**. The generated Help index was
-produced by its script and was not hand edited.
+The API assertion repair passed the subsequent whole-API typecheck. The first
+whole-web typecheck then failed at one unsupported Testing Library test option;
+its source-only selector repair below still needs validation. **Tests, lint,
+build and browser checks remain unrun for this slice**. The generated Help index
+was produced by its script and was not hand edited.
 
 ## Behavior
 
@@ -110,8 +111,36 @@ three-argument call with `expect.any(Object)`, `expect.any(Array)` and
 and projection assertions. The exact owner filter assertion, command counts,
 real Mongo call and all other assertions remain. No cast, fake service, mock
 change or product edit was introduced. Other 20 owned bytes are unchanged.
-This assertion-only repair still needs a new admitted typecheck; no rerun,
-lint, test, Mongo execution, web check or browser was performed after it.
+At that source-only repair freeze, validation was still pending. The subsequent
+admitted typecheck below passed; lint, tests, Mongo and browser remain unrun.
+
+## API type retry and first web typecheck
+
+At `6e9a04caf5ace16c41c78d7c7a6fddd0c0cf1e6d`, tree
+`64d99c961e253a311bfd0cbae6d3d484b512e76a`, the parent granted a whole-API type
+retry and, only after its success and closure, one whole-web typecheck. The API
+compiler exited 0 with empty stdout and stderr. Both fresh 22-source and 80
+selected-input guards passed. Its driver and compiler closed; a host read-only
+probe verified their captured descendants and listeners absent. An earlier
+sandbox-denied CIM observation was retained but excluded from closure evidence.
+
+The web compiler then exited 2 with one TS2769 at
+`LevelUpChecklist.test.tsx:125`: Testing Library's `findByRole` does not accept
+the `exact` property used by Playwright. No product type diagnostic was reported.
+Both guards passed again. Its captured driver/compiler descendants and listeners
+were verified absent, and the runtime slot was released without repair or retry.
+Raw results and closures remain under
+`.cache/activation-validation-prep-6e9a04ca/`; the compact types summary records
+the actual API0 and web2 separately.
+
+Before changing this checkpoint and the one test selector, both source files
+and the actual type results were preserved under
+`.cache/activation-web-type-repair-6e9a04ca/`. The selector now uses the anchored
+`/^Retry$/` accessible-name matcher. Every retry, error, data and write assertion
+remains unchanged. Other 20 owned source bytes, all API source/type inputs and
+tool/config pins are unchanged, so the actual API0 is retained. The web type
+retry remains pending. No runtime, lint, test, Mongo, build, browser, generator
+or Git operation accompanied this source-only repair.
 
 ## Validation still required
 

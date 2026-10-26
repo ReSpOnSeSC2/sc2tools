@@ -122,7 +122,7 @@ describe("Today feature suggestions", () => {
     expect(await screen.findByRole("alert")).toBeTruthy(); expect(screen.queryByRole("progressbar")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Retry" })); await waitFor(() => expect(reads).toHaveLength(2));
     expect(await screen.findByRole("alert")).toBeTruthy(); expect(screen.queryByRole("progressbar")).toBeNull();
-    values.set("owner-a", answer({ goals: ["improve"] })); fireEvent.click(await screen.findByRole("button", { name: "Retry", exact: true }));
+    values.set("owner-a", answer({ goals: ["improve"] })); fireEvent.click(await screen.findByRole("button", { name: /^Retry$/ }));
     await screen.findByRole("heading", { name: "Create a build, not yet tried" }); expect(writes).toEqual([]);
   });
 });
