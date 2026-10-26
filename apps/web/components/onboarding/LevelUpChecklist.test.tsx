@@ -40,7 +40,7 @@ describe("Today feature suggestions", () => {
   it.each([["improve", 4, "Create a build"], ["stream", 4, "Connect an overlay link"], ["both", 6, "Create a build"]] as const)("shows the selected %s steps with accessible progress and real destinations", async (goal, total, title) => {
     values.set("owner-a", answer({ goals: goal === "both" ? [] : [goal as "improve" | "stream"] }));
     render(ui()); const card = await screen.findByTestId("level-up-checklist");
-    await within(card).findByRole("heading", { name: `${title}, not yet tried` });
+    await within(card).findByRole("heading", { name: new RegExp(`^${title}\\s*, not yet tried$`) });
     expect(within(card).getAllByRole("listitem")).toHaveLength(total);
     expect(within(card).getByRole("progressbar").getAttribute("aria-valuemax")).toBe(String(total));
     expect(within(card).getByRole("link", { name: "Your first week" }).getAttribute("href")).toBe("/help/your-first-week");
@@ -52,7 +52,7 @@ describe("Today feature suggestions", () => {
     values.set("owner-a", complete); const view = render(ui());
     await screen.findByRole("link", { name: "see What's new" }); expect(screen.queryByText("Your suggested SC2 Tools features are ready to use.")).toBeNull();
     values.set("owner-a", { ...complete, checkIn: false }); await revalidate();
-    await screen.findByRole("heading", { name: "Check in a build, not yet tried" });
+    await screen.findByRole("heading", { name: /^Check in a build\s*, not yet tried$/ });
     values.set("owner-a", complete); await revalidate();
     expect(await screen.findAllByText("Your suggested SC2 Tools features are ready to use.")).toHaveLength(1);
     await revalidate(); view.rerender(ui()); expect(screen.getAllByText("Your suggested SC2 Tools features are ready to use.")).toHaveLength(1);
@@ -96,8 +96,8 @@ describe("Today feature suggestions", () => {
     const held = deferred<Record<string, unknown>>(); put = async () => ({ ok: true, status: 200, json: () => held.promise }) as Response;
     const view = render(ui()); fireEvent.click(await screen.findByRole("button", { name: "Dismiss suggestions" }));
     await waitFor(() => expect(writes).toHaveLength(1));
-    auth.owner = "owner-b"; view.rerender(ui()); await screen.findByRole("heading", { name: "Enable a chat platform, not yet tried" });
-    auth.owner = "owner-a"; view.rerender(ui()); await screen.findByRole("heading", { name: "Create a build, not yet tried" });
+    auth.owner = "owner-b"; view.rerender(ui()); await screen.findByRole("heading", { name: /^Enable a chat platform\s*, not yet tried$/ });
+    auth.owner = "owner-a"; view.rerender(ui()); await screen.findByRole("heading", { name: /^Create a build\s*, not yet tried$/ });
     await act(async () => held.resolve(writes[0].body));
     expect(screen.getByRole("button", { name: "Dismiss suggestions" })).toBeTruthy();
     expect((cache.get(unstable_serialize(["authenticated-api", "owner-a", ACTIVATION_PATH]))?.data as ActivationResponse).levelUpDismissedAt).toBeNull();
@@ -107,7 +107,7 @@ describe("Today feature suggestions", () => {
     const held = deferred<string>(); render(ui()); const button = await screen.findByRole("button", { name: "Dismiss suggestions" });
     auth.getToken.mockImplementationOnce(() => held.promise); fireEvent.click(button);
     await waitFor(() => expect(auth.getToken).toHaveBeenCalledTimes(2));
-    auth.owner = "owner-b"; cleanup(); render(ui()); await screen.findByRole("heading", { name: "Enable a chat platform, not yet tried" });
+    auth.owner = "owner-b"; cleanup(); render(ui()); await screen.findByRole("heading", { name: /^Enable a chat platform\s*, not yet tried$/ });
     await act(async () => held.resolve("jwt-owner-a")); expect(writes).toEqual([]);
   });
   it("waits while signed out or auth is loading, and honors saved independent dismissal", async () => {
@@ -123,6 +123,6 @@ describe("Today feature suggestions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry" })); await waitFor(() => expect(reads).toHaveLength(2));
     expect(await screen.findByRole("alert")).toBeTruthy(); expect(screen.queryByRole("progressbar")).toBeNull();
     values.set("owner-a", answer({ goals: ["improve"] })); fireEvent.click(await screen.findByRole("button", { name: /^Retry$/ }));
-    await screen.findByRole("heading", { name: "Create a build, not yet tried" }); expect(writes).toEqual([]);
+    await screen.findByRole("heading", { name: /^Create a build\s*, not yet tried$/ }); expect(writes).toEqual([]);
   });
 });

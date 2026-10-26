@@ -154,6 +154,33 @@ HTTP, signals and product code are unchanged. This is a source-only test repair,
 not a browser or validation pass. Both prior files were preserved under
 `.cache/activation-decoded-body-repair-8dd73509/` before the edit.
 
+## First selected web test result and heading query repair
+
+At `178c72830ede97ccebefba5e8d7730e68437d099`, whole web types passed and
+strict lint of the 14 selected web files reported zero errors and warnings.
+API types retained its actual exit 0 from `6e9a04ca` because its inputs did not
+change. API strict lint exited 1 on the same 11 function-length warning owners
+present in the four actual base files, with zero errors, new warning owners or
+threshold crossings. The parent reviewed the actual diffs and accepted only
+that inherited debt; the raw strict failure remains preserved.
+
+The first literal ten-file web run executed 108 tests: 101 passed and seven
+failed, all in `LevelUpChecklist.test.tsx` while finding exact feature heading
+names. Its rendered `<h3>` keeps the title and the `, not yet tried` text in
+separate title/span nodes; the accessible-name calculation can insert whitespace
+before the comma. The six affected matcher sites now use anchored expressions
+that keep the complete title and `not yet tried` state, allowing only whitespace
+before that comma. All other assertions, mocks, input data and product markup
+are unchanged. Both prior source files, raw first-run output and closure evidence
+were saved under `.cache/activation-heading-query-repair-178c7283/` before editing.
+
+Both 22-source/80-input guards passed throughout those checks, and host process
+and listener reads verified the known owned processes closed. The first test
+failure stopped the sequence: Help6 and API2 remain unrun. The actual typechecks
+and unaffected lint evidence are retained; the changed test's strict lint and
+web test retry are pending. No runtime, guard refresh or Git operation accompanied
+this source-only two-path repair.
+
 ## Validation still required
 
 New source-only tests cover real Mongo flags, exact six-read shape/projections,
@@ -165,7 +192,8 @@ StrictMode, loading/error admission, dismissal ACK validation, completion
 transitions and the actual Today/GameDetail integration seams. Browser source
 uses actual components with synthetic local transport and framework/auth
 boundaries, production CSS/fonts, full shared accessibility checks and owned
-listener cleanup. These are planned cases, not passing results.
+listener cleanup. Executed results and the pending web retry are recorded above;
+API, Help and browser cases remain unrun.
 
 After source review and preservation, run targeted meaningful API/web tests,
 types and strict changed-source lint with the parent's serialized runtime rules.
