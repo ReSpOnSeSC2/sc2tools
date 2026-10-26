@@ -77,6 +77,20 @@ Public signature-build aggregates use the detector view of recorded replays.
 Private planned selections cannot replace replay-detected labels in this
 public projection. Published Community builds remain separate public content.
 
+The canonical Builds tab reuses the author browser's sorting, matchup filters
+and title/description search. Its DTO selects only slug, title, matchup, votes,
+an already-public description capped at4,000 characters and normalized public
+dates; it excludes owner identity, private snapshots and anonymous publications.
+The existing slim author query projects that bounded description before reading
+rows into the application. Source100/final50 row bounds and query deadlines do
+not change; counts and the displayed cohort are described as recent samples,
+not exact lifetime publication totals.
+Browser rows are attached freshly from author metadata already read for each
+admission. Description-bearing rows never enter the long-lived aggregate cache,
+so a changed description is immediate without a new database read, aggregate
+rebuild or up-to256 copies of the description cohort. Other metric cache keys
+and invalidation semantics remain unchanged.
+
 Recent form reconstructs only result, race matchup and date. Opponent names,
 IDs, maps and raw game rows never enter that section. Streak and last-played
 data share the same explicit section switch. Approved channel links use the

@@ -60,6 +60,20 @@ afterEach(() => {
 });
 
 describe("PublicProfile (presentational)", () => {
+  test("uses semantic text tokens for small matchup and signature rates while keeping rate values", () => {
+    const { container } = render(<PublicProfile profile={{ ...PROFILE,
+      matchups: [{ matchup: "vs T", games: 30, wins: 20, losses: 10, winRate: 2 / 3 }],
+      signatureBuilds: [{ name: "Recorded opener", games: 30, wins: 20, losses: 10, winRate: 2 / 3 }],
+    }} />);
+    for (const label of ["vs Terran", "Recorded opener"]) {
+      const rate = screen.getByText(label).closest("li")!.querySelector<HTMLElement>(".font-mono")!;
+      expect(rate.classList.contains("text-text")).toBe(true); expect(rate.style.color).toBe("");
+      expect(rate.textContent).toMatch(/67/);
+    }
+    const bars = container.querySelectorAll<HTMLElement>(".bg-success[style]");
+    expect(bars).toHaveLength(2);
+    for (const bar of bars) expect(Number.parseFloat(bar.style.width)).toBeCloseTo(100 * 2 / 3);
+  });
   test("renders name, headline stats, matchup splits, and the viral CTA", () => {
     render(<PublicProfile profile={PROFILE} />);
     expect(screen.getByText("Reaver")).toBeTruthy();

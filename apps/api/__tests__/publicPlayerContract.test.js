@@ -237,6 +237,35 @@ describe("public player consent and response boundary", () => {
   test("profile publication never retroactively attributes anonymous build snapshots", () => {
     expect(publicBuilds([{ slug: "anonymous", authorName: null, ownerUserId: ID }, { slug: "blank", authorName: "  " }])).toEqual([]);
   });
+  test("published browser rows expose only bounded public description and date metadata", () => {
+    const rows = publicBuilds([{ slug: "anonymous", authorName: "", description: "UNLINKABLE_ANONYMOUS" },
+      ...Array.from({ length: 60 }, (_, index) => ({ slug: `named-${index}`, title: "Public title", authorName: "Public name",
+        description: "d".repeat(5000), matchup: "PvZ", votes: 4, publishedAt: new Date("2026-10-01"), updatedAt: "2026-10-02",
+        ownerUserId: ID, email: "PRIVATE_EMAIL", sourceGameId: "PRIVATE_GAME", plannedBuild: "PRIVATE_PLAN", build: { notes: "PRIVATE_NOTES" } }))]);
+    expect(rows).toHaveLength(50); expect(rows[0].description).toHaveLength(4000);
+    expect(rows[0].publishedAt).toBe("2026-10-01T00:00:00.000Z"); expect(rows[0].updatedAt).toBe("2026-10-02T00:00:00.000Z");
+    expect(Object.keys(rows[0]).sort()).toEqual(["description", "matchup", "publishedAt", "slug", "title", "updatedAt", "votes"]);
+    expect(JSON.stringify(rows)).not.toMatch(/UNLINKABLE_ANONYMOUS|PRIVATE_|ownerUserId|sourceGameId|plannedBuild|notes/);
+    expect(JSON.stringify(rows)).not.toContain(ID);
+  });
+  test("fresh public descriptions reuse warm aggregates and are never retained in the aggregate cache", async () => {
+    const h = harness();
+    h.community.getAuthor.mockResolvedValue({ ...author, builds: [{ ...author.builds[0], description: "First public summary" }] });
+    const first = await h.players.get(SLUG);
+    expect(first.profile.publishedBuilds[0].description).toBe("First public summary");
+    first.profile.publishedBuilds[0].description = "Mutated returned browser row";
+    h.community.getAuthor.mockResolvedValue({ ...author, builds: [{ ...author.builds[0], description: "Updated public summary" }] });
+    const second = await h.players.get(SLUG);
+    expect(second.profile.publishedBuilds[0].description).toBe("Updated public summary");
+    expect(h.community.getAuthor).toHaveBeenCalledTimes(2);
+    expect(h.opts.aggregations.summary).toHaveBeenCalledTimes(1);
+    expect(h.players.cache.size).toBe(1);
+    for (const entry of h.players.cache.values()) expect(entry.value.profile).not.toHaveProperty("publishedBuilds");
+    expect(JSON.stringify([...h.players.cache.values()])).not.toMatch(/First public summary|Updated public summary|Mutated returned browser row/);
+    expect(JSON.stringify(second)).not.toContain(ID);
+    h.state().publicProfile.enabled = false;
+    expect(await h.players.get(SLUG)).toBeNull();
+  });
 });
 
 describe("recent form allowlist", () => {

@@ -146,7 +146,7 @@ export function PublicProfile({ profile, showHero = true, showReviewer = true }:
           }
           hint={
             profile.publishedBuildCount > 0
-              ? `${profile.publishedBuildCount} published build${profile.publishedBuildCount === 1 ? "" : "s"}`
+              ? `${profile.publishedBuildCount} recent published build${profile.publishedBuildCount === 1 ? "" : "s"}`
               : undefined
           }
         />
@@ -260,8 +260,7 @@ function MatchupSplits({ rows }: { rows: PublicProfileMatchupSplit[] }) {
                     <span className="text-text-dim">–</span>
                     <span className="text-danger">{m.losses}</span>
                     <span
-                      className="ml-2 font-mono"
-                      style={{ color: wrColor(m.winRate, m.wins + m.losses) }}
+                      className="ml-2 font-mono text-text"
                     >
                       {pct(m.winRate)}
                     </span>
@@ -307,8 +306,7 @@ function SignatureBuilds({ rows }: { rows: PublicProfileSignatureBuild[] }) {
                   </span>
                   <span className="shrink-0 tabular-nums text-text-muted">
                     <span
-                      className="font-mono"
-                      style={{ color: wrColor(b.winRate, b.wins + b.losses) }}
+                      className="font-mono text-text"
                     >
                       {pct(b.winRate)}
                     </span>

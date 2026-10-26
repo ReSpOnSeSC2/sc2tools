@@ -1,5 +1,68 @@
 # Public player page checkpoint
 
+## Responsive CI repair source
+
+At head `4ed784de`, responsive CI found two real presentation regressions.
+Small matchup win-rate text used a chart ramp color below the text contrast
+target on Light, and the canonical Builds tab had replaced the existing author
+browser with a plain list. Signature-build rate text used the same ramp.
+
+The narrow repair uses the existing primary text token for both small labels;
+rate calculations, the large headline value and bar colors/math stay unchanged.
+The Builds tab now reuses AuthorBuildsList, retaining New/Top ordering, present
+matchup counts, title/description search, empty-result recovery and hidden
+redundant author links. Publishing month and matchup summary remain visible.
+When the bounded 50-row public cohort is smaller than the source publication
+sample, the page describes the displayed recent sample directly. Neither the
+cap note nor the shared profile caption claims an exact lifetime total from
+the bounded100-row author source. No additional count query is introduced.
+
+The existing slim author query additionally projects only the already-public
+description, bounded at the same 4,000-character limit as Community snapshots.
+The final player DTO adds only description and normalized publication/update
+dates. It carries no owner ID, private build snapshot or planned labels, and
+anonymous/removed rows stay excluded. Query count, source100/final50 limits,
+fresh consent and canonical one-hop redirects are preserved. The existing
+browser's prop type now names public browsing fields rather than owner hints.
+Published browser rows are attached from the author metadata already read on
+each admission and excluded from long-lived aggregate cache entries. A changed
+description therefore appears immediately while warm metric aggregates are
+reused. Other metric key/invalidation semantics remain unchanged. This avoids
+retaining up to256 description cohorts and introduces no additional read.
+
+Source regressions cover the small text tokens and unchanged rate bars;
+canonical Builds sorting/filtering/description search/no-author-link behavior;
+the cap note; explicit DTO keys, date/description bounds and no-PII; warm
+aggregate reuse plus fresh metadata/cache non-retention; and a real Mongo
+slim-projection/no-fanout boundary. The old
+community-detail browser case now selects Builds after the legacy redirect,
+then retains every existing behavioral assertion.
+
+The separately reported offline heading timeout was one retry which passed in
+job `121371278773`. Read-only inspection confirms `public/sw.js` caches only
+`/offline.html`; it never stores navigation/API responses, including `/players`
+and `/p`. Those routes get network admission or a generic offline fallback.
+No deterministic relation to these changed surfaces was found; the worker and
+offline test remain untouched.
+
+Focused verification passes: 37 checks in the two API suites with one real Mongo
+process, full API types and strict public-player helper/test lint. The shared
+Community module has the same four existing max-lines warnings as HEAD, with
+zero errors. Initial sandbox Jest-cache and Mongo-startup failures were setup
+limitations; the reviewed host run passes without a source workaround.
+
+All 25 affected author/profile checks pass. One new test initially retained a
+detached list across the intended empty-state unmount; reacquiring the current
+list fixes that assertion without a runtime change. Full web types, strict
+eight-file lint, 18 UI-rule regressions and the 1,660-file ratchet scan pass with
+734 existing occurrences and no new/stale allowance. Logs are local artifacts
+under this worktree's root `.cache/public-player-responsive-*`.
+
+All jobs are closed. Final build/unchanged budgets and the affected public-player,
+community-detail, privacy/redirect and both-theme accessibility browser cases
+remain held for root scheduling. No new browser, CI or deployment proof is
+claimed for this repair yet.
+
 Root's final repository scan also found the existing guides no-PII fixture
 still expecting UUID profile discovery from the retired Community sitemap.
 Its assertion now requires the intentional empty profiles array. All three

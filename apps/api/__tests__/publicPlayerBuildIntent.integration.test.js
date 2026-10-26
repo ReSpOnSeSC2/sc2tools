@@ -69,6 +69,30 @@ test("both public profile readers expose replay-detected signatures only", async
   expect(JSON.stringify(publicationBefore)).not.toContain("PRIVATE_LIBRARY_NOTES");
 });
 
+test("published browser metadata is projected once, bounded and stripped of private/anonymous source content", async () => {
+  const slugs = ["browser-public", "browser-anonymous", "browser-removed"];
+  await db.communityBuilds.insertMany(slugs.map((slug, index) => ({ slug, ownerUserId: USER,
+    title: "Public browser fixture", authorName: index === 1 ? "" : "Synthetic public author", removed: index === 2,
+    description: "s".repeat(5000), matchup: "PvZ", votes: 3, publishedAt: new Date("2026-10-01"), updatedAt: new Date("2026-10-02"),
+    email: "PRIVATE_SOURCE_EMAIL", plannedBuild: PRIVATE_PLAN, build: { race: "Protoss", notes: "PRIVATE_SOURCE_NOTES", sourceGameId: "PRIVATE_GAME" },
+  })));
+  try {
+    const aggregate = jest.spyOn(db.communityBuilds, "aggregate");
+    const profile = (await players.get(HANDLE)).profile;
+    const row = profile.publishedBuilds.find(build => build.slug === "browser-public");
+    expect(row).toMatchObject({ description: "s".repeat(4000), publishedAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-02T00:00:00.000Z" });
+    expect(profile.publishedBuilds.some(build => ["browser-anonymous", "browser-removed"].includes(build.slug))).toBe(false);
+    expect(Object.keys(row).sort()).toEqual(["description", "matchup", "publishedAt", "slug", "title", "updatedAt", "votes"]);
+    expect(JSON.stringify(profile)).not.toMatch(/PRIVATE_SOURCE_|PRIVATE_GAME|ownerUserId|plannedBuild/);
+    expect(JSON.stringify(profile)).not.toContain(USER); expect(JSON.stringify(profile)).not.toContain(PRIVATE_PLAN);
+    expect(aggregate).toHaveBeenCalledTimes(1);
+    const [pipeline, options] = aggregate.mock.calls[0];
+    expect(pipeline.find(stage => stage.$limit)).toEqual({ $limit: 100 });
+    expect(pipeline.find(stage => stage.$project).$project.description.$substrCP[2]).toBe(4000);
+    expect(options).toEqual({ maxTimeMS: 3000 });
+  } finally { await db.communityBuilds.deleteMany({ ownerUserId: USER, slug: { $in: slugs } }); }
+});
+
 test("profile OFF hides both readers while the intentional public build content stays public", async () => {
   const before = await community.getPublic(published.slug);
   await db.users.updateOne({ userId: USER }, { $set: { publicProfile: { enabled: false } } });

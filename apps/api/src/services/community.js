@@ -1335,6 +1335,7 @@ class CommunityService {
     if (!userId) return null;
     const { slimProfile, ...queryOptions } = options;
     const projection = slimProfile ? { _id: 0, slug: 1, title: 1, matchup: 1, authorName: 1, ownerUserId: 1,
+      description: { $substrCP: [{ $cond: [{ $eq: [{ $type: "$description" }, "string"] }, "$description", ""] }, 0, 4000] },
       votes: 1, publishedAt: 1, updatedAt: 1, build: { race: "$build.race" } } : PUBLIC_AGGREGATE_PROJECTION;
     const rawBuilds = await this.db.communityBuilds.aggregate([
       { $match: { ownerUserId: userId, removed: false } },

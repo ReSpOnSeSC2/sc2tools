@@ -129,11 +129,11 @@ class PublicPlayerService {
     const key = JSON.stringify([user.userId, slug, settings.updatedAt, settings.revision,
       SECTION_KEYS.map(section => settings[section] === true), settings.replaySharingEnabled, displayName, authorRevision(author)]);
     const cached = this.cache.get(key);
-    if (cached && cached.expires > Date.now()) return cached.value;
+    if (cached && cached.expires > Date.now()) return withPublishedBuilds(cached.value, author);
     const value = await this._build(entry);
     if (this.cache.size >= CACHE_MAX) this.cache.delete(this.cache.keys().next().value);
     this.cache.set(key, { expires: Date.now() + CACHE_MS, value });
-    return value;
+    return withPublishedBuilds(value, author);
   }
 
   /** @param {any} entry */
@@ -151,7 +151,7 @@ class PublicPlayerService {
       joinedAt: safeIso(author?.joinedAt), totals: shapeTotals(summary?.totals), matchups: shapeMatchups(summary?.byMatchup),
       signatureBuilds: shapeSignatureBuilds(builds), featuredBuild: shapeFeaturedBuild(author?.topBuild),
       publishedBuildCount: Number.isSafeInteger(author?.totalBuilds) ? author.totalBuilds : 0,
-      publishedBuilds: publicBuilds(author?.builds), reviewer: publicReviewer(reviewer),
+      reviewer: publicReviewer(reviewer),
       sections: Object.fromEntries(SECTION_KEYS.map(key => [key, settings[key] === true])),
       replayArchive: archive ? { handle: slug, total: Number.isSafeInteger(archive.summary?.total) ? archive.summary.total : 0 } : null,
       ...(settings.showRecentForm ? recentForm(summary?.recent) : {}),
@@ -173,12 +173,24 @@ class PublicPlayerService {
   }
 }
 
+/** Fresh browser rows use the author metadata already read for admission.
+ * Descriptions stay out of the long-lived aggregate cache.
+ * @param {any} value @param {any} author */
+function withPublishedBuilds(value, author) {
+  return { ...value, profile: { ...value.profile, publishedBuilds: publicBuilds(author?.builds) } };
+}
+
 /** Already-public named builds only, reconstructed without owner ids/snapshots.
  * @param {unknown} raw */
 function publicBuilds(raw) {
   if (!Array.isArray(raw)) return [];
   return raw.filter(row => typeof row?.slug === "string" && typeof row.authorName === "string" && row.authorName.trim())
-    .slice(0, 50).map(row => ({ slug: row.slug.slice(0, 120), title: String(row.title || row.slug).slice(0, 160), matchup: typeof row.matchup === "string" ? row.matchup.slice(0, 8) : null, votes: Number.isFinite(row.votes) ? Math.trunc(row.votes) : 0 }));
+    .slice(0, 50).map(row => ({ slug: row.slug.slice(0, 120), title: String(row.title || row.slug).slice(0, 160),
+      description: typeof row.description === "string" ? row.description.slice(0, 4000) : "",
+      matchup: typeof row.matchup === "string" ? row.matchup.slice(0, 8) : null,
+      votes: Number.isFinite(row.votes) ? Math.trunc(row.votes) : 0,
+      publishedAt: safeIso(row.publishedAt), updatedAt: safeIso(row.updatedAt),
+    }));
 }
 
 /** The bounded fresh author projection fences unpublish/anonymous/title changes

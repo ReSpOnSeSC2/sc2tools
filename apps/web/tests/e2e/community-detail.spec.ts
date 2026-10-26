@@ -31,6 +31,7 @@ test("community detail keeps phone actions first, readable metadata and measured
 test("author browsing sorts, filters present matchups and searches descriptions without redundant author links", async ({ page }, testInfo) => {
   await page.goto("/community/authors/fixture-community-author");
   const reject = page.locator("[data-cookie-banner]").getByRole("button", { name: "Reject" }); if (await reject.isVisible()) await reject.click();
+  await page.getByRole("navigation", { name: "Player sections" }).getByRole("link", { name: "builds", exact: true }).click();
   const list = page.getByRole("list", { name: "Published builds", exact: true });
   await expect(list.getByRole("heading", { level: 3 }).first()).toHaveText("Fixture safe opening");
   await page.getByRole("radio", { name: "Top", exact: true }).click(); await expect(list.getByRole("heading", { level: 3 }).first()).toHaveText("Fixture opener 4");
