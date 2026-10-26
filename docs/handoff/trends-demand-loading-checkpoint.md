@@ -2,8 +2,8 @@
 
 Canonical item: `faster-dashboards` (Wave 5), web demand-loading portion.
 Worktree: `C:\SC2TOOLS\.worktrees\wave3-my-reviews`; branch:
-`codex/wave5-trends-demand-loading`. Authored scope is 13 text paths, including
-three product files. Six historical screenshot paths remain absent; the browser
+`codex/wave5-trends-demand-loading`. Authored scope is 14 text paths, including
+four product files. Six historical screenshot paths remain absent; the browser
 plan reserves six cache captures for review. No screenshot delivery is claimed.
 
 ## Behavior
@@ -43,7 +43,7 @@ earlier 218-pass/1-fail attempts and their raw repair records remain preserved.
 Main `8a810711` was merged into this branch as `85748408948b3bc4cee8ee6f74923677d9425271`
 (tree `655fde36542e0cef771f09f263e640e611d43ff3`). At that exact source, installed
 Next built **145 pages**, all **81 unchanged route budgets** passed, and post-build
-web types exited 0. BUILD_ID is `1TVmStDDPgYRFGOqDzOSR`. The current packet is
+web types exited 0. BUILD_ID is `1TVmStDDPgYRFGOqDzOSR`. The production packet is
 `.cache/trends-demand-production-prep-85748408/`; the earlier 93 packet and its
 historical static proof remain preserved.
 
@@ -56,7 +56,7 @@ tracked source and no unknown untracked paths. Known Next/Browserslist/lint
 warnings and local API `::1:8080` refusal remain raw; backend availability and a
 warning-free build are not established. No historical 219-test run was repeated.
 
-## Browser failure and fixture repair — retry UNRUN
+## Browser results and pending chart repair
 
 Actual discovery confirmed **18 main cases** and **two paired cases**. The first
 main mobile/light case timed out at the fixture's Trends-heading wait:
@@ -77,15 +77,37 @@ fallback while retaining its specific defines, real code, adapters, 120s bound
 and assertions. Cleanup now includes existing page-error/resource ledgers;
 startup errors and actual server/socket-close behavior remain unchanged. Its
 HTTP-only coverage comment no longer claims native/socket instrumentation.
-**Repair syntax checks and browser retry are UNRUN.** Product source/classes,
-spec assertions, configuration, assets and budgets are unchanged.
+At `f713e621`, all four syntax checks (three helpers plus fixture), fixture-only
+strict lint and fresh 18/2 discovery passed. The retained-857 build bridge verified
+379 source/24 browser pins and 377 unchanged selected rows.
+
+The retry loaded successfully, then the first mobile/light case failed after
+2,777ms at the Time AA gate: an aria-labeled chart div lacked a valid role, and
+the View opponents caption's 80% opacity yielded 4.26 contrast instead of 4.5.
+Main result remained **0 passed, 1 failed, 17 did not run**, zero retries/flaky
+cases; paired work remains unrun. Two AA scans completed (initial: no serious
+issues, contrast incomplete; Time: two serious issues, ARIA/contrast incomplete)
+and one early 360px light capture was retained. All 13 GETs settled: two cold,
+two filter, four passive, five Time; zero page errors, unknown HTTP requests or
+rejected writes. Cleanup closed the server. The f713 packet and decoded AA/GET
+ledgers under `C:\SC2TOOLS\.cache\trends-browser-retry-host-f713e621` preserve the
+first AA RED; source/asset postguards passed and all 30 observed identities,
+including postguard drivers, retired with no owned listeners.
+
+The pending chart repair adds `role="group"` to that labeled wrapper while keeping
+Recharts' interactive accessibility layer, and removes only `opacity-80` from
+the caption. No new CSS utility, handler, data or calculation changes. **Focused
+chart validation and another browser retry are UNRUN.** Spec assertions,
+configuration, fixture, assets and budgets are unchanged by this repair.
 
 ## Remaining validation and delivery
 
-Root owns review, commits, runtime grants and delivery. Preserve the old 857
-build/RED and diagnostic packets. After committing the two-file repair, prepare
-an explicit current-fixture/source → retained-857 production-artifact bridge;
-do not label that retained build as a new-head build. Admit complete CSS filename
+Root owns review, commits, runtime grants and delivery. Preserve the old 857,
+f713 and diagnostic packets. After committing the chart/checkpoint repair, expand
+the explicit current-source → retained-857 artifact bridge to allow this one
+chart's attribute/class-only changes, alongside the fixture/checkpoint. Production
+source is no longer wholly unchanged; do not label the retained build as a new
+build. Admit complete CSS filename
 sets/bytes, fonts, Chrome, current source and exact concrete output paths.
 LIST/RUN reporter JSONs must have separate filenames. Keep CI=1, truly remove
 A11Y_COLLECT_ONLY/TRENDS_LIST_ONLY, and retain one worker, zero retries and
