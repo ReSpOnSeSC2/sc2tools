@@ -17,6 +17,20 @@ corresponding GitHub Release.
 - Rename Foundation to Account and Misc to Preferences while keeping old tab and hash links working. Keep unsaved preference and notification edits guarded when switching tabs.
 - Ask before the sidebar's Devices link leaves unsaved Settings edits; opening the link in a new tab keeps its normal behavior.
 
+### Header action links
+
+- Use the shared button styles for Sign in, Get started and Open app in the desktop header, retaining their compact size and return-to-page behavior.
+
+### Connected-account confirmation
+
+- Confirm the named Twitch, Kick or YouTube account before disconnecting its notifications and stream controls. Cancel or Escape keeps it connected.
+- Retire earlier confirmations and delayed requests when the signed-in account or connection changes; uncertain results require checking status and explicit approval before another attempt.
+
+### Glossary and contextual help foundation
+
+- Browse and search the existing player-identity and verified-MMR definitions A to Z in Help's glossary, with stable term links and full contextual explanations.
+- Open keyboard and touch-accessible explanations beside Group same player. Definitions load on explicit open, with bounded loading, retry and shared popover focus handling.
+
 ### Mobile site navigation
 
 - Use the shared right Sheet for the site menu, with a consistent title and Close control, the existing home and destination links, and footer theme choices.

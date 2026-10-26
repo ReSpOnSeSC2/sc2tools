@@ -107,7 +107,9 @@ branches, captures and every RED receipt are retained.
    8,914 web tests/946 suites (one expected skipped test/suite) and 397 browser
    checks/68 intentional skips; preview succeeded and the fresh-main merge
    tree equalled tested tree `0236dca5e0d0a6ac9acf69d43eaaa716ffa31731`.
-   Production source/domain verification is pending. All runtime is closed.
+   Vercel `AyXZELHrkPufzmnVycxLMam69Vuf` is visibly Ready, Production and
+   Latest, assigns `sc2tools.com` and identifies exact source `2743fafb`.
+   All runtime is closed. No manual retry or upgrade was used.
    Retained assets required exactly three restored files, with no
    generation, download or pruning and no Pyodide runtime copies.
    Preserve lazy data loading, ready-and-merged initial
@@ -126,7 +128,15 @@ branches, captures and every RED receipt are retained.
    Four synthetic GETs and zero writes/unknown/nonlocal requests; no actual
    account/provider/preferences/clipboard actions. Root reviewed three
    byte-identical screenshot copies. No product repair was needed; the initial
-   test mock now forwards href. All runtime is closed; remote delivery is next.
+   test mock now forwards href. PR767 at `c1d0abd5` passes exact-head GitHub
+   checks: 8,923 web tests/946 suites (one expected skipped test/suite) and
+   399 browser checks/72 intentional skips. Vercel preview hit its daily
+   deployment quota. After the next automatic glossary preview succeeded, one
+   ordinary exact-ref Preview retry was accepted on the same plan. Deployment
+   `7Au4gnqSkCGDTVimTcCLuMaVQhLc` is Ready/Preview with exact source `c1d0abd5`;
+   all GitHub checks/statuses are green. Fresh-main tree equality was verified
+   and PR767 is merged as `ea9f668c71c4314209e1684a398bfc015a31892a`.
+   Production verification is pending. No upgrade, budget change or bypass.
    Reuse standard right Sheet sizing and shared Close,
    preserve home/auth/route/theme controls and the controlled-content ID, and
    close at the desktop breakpoint to release the old hidden drawer's lock.
@@ -140,15 +150,39 @@ branches, captures and every RED receipt are retained.
    integrated at `4ec02356`, and first static proof is preserved at `433b0e0a`.
    Queued Related navigation now retires on a newer search/focus/action/variant;
    regressions pass. Compact native links now target the canonical glossary
-   page. First static proof passes 127 tests/18 suites, types, strict 15 files,
+   page. Final proof passes 248 tests/31 suites, full types, strict 15 files,
    Help91 determinism and UI19/1,699 files/646 existing occurrences. Existing
-   HelpArticleBody retains two unchanged lint warnings. Its canonical generator
-   added the glossary article. Agent `public_player` now owns exclusive final
-   runtime; source/asset admission, build and browser proof remain in progress.
+   HelpArticleBody retains two unchanged lint warnings. Build
+   `WGSyoMY1PmbHcxUHTD4bN` passes all 81 unchanged budgets. Browser proof is
+   20 passed/four intentional skips with 40 full AA scans and zero serious/
+   critical findings. Root reviewed three byte-identical image copies.
+   Twenty-two definition loads, six local selection callbacks and twelve
+   native-popup asset GETs are synthetic; zero API/account/provider writes.
+   The fixture's loopback listener is explicitly closed. Source preserved at
+   `35ba1075`; final Mobile integration `c37e1434` changes no web source.
+   All runtime is closed. PR768 initially stacked on Mobile, then retargeted
+   main after its merge. Ancestry-only source `627f7ec2` retains the complete
+   tested tree `2992a0ca402e818271aeffdd86aedb8651c46115`; final exact-head
+   remote checks are running. The original815 preview succeeded. Canonical40
+   terms/first Macro+Opponents consumers are planned separately in cache audits.
 5. Platform disconnect: `wave3-guides-expansion`, branch
    `codex/wave5-platform-disconnect-confirm`, source commit `572c4bba`. Exactly
    eight paths are source-frozen at `03055feb` with actual main9bd integrated
-   and every runtime gate unrun. Existing
+   and final Mobile source integrated at `095de69a`. First static proof passes
+   146 tests/16 suites, full types, strict five-file lint, Help90 determinism
+   and UI19/1,695 files/645 existing occurrences. One test adapter now loads
+   the real request function before its fake clock and uses the real DELETE204
+   response. Product source is unchanged. Final proof at `f9126449` passes
+   275 tests/29 suites, full types, strict five files, Help91 and
+   UI19/1,699 files/645 existing occurrences. Build `IEnFS1aCPXo8Iw5y8UD0u`
+   passes all 81 unchanged budgets. All12 browser cases and six full AA scans
+   pass; root reviewed three viewport-only copies. Thirty status GETs/eight
+   explicitly armed DELETEs are synthetic; zero real provider/account/OAuth/
+   native actions. Connect code's3911 normalized bytes are unchanged.
+   Source is preserved at `42cb254f`, with unchanged glossary ancestry
+   integrated at `bfb241a3`. All runtime is closed; stacked delivery follows.
+   Inherited phone permission-row text squeeze remains a separate responsive
+   follow-up, not a layout claim of this confirmation pack. Existing
    useConfirm/ConfirmDialog replaces one native confirm. Preserve synchronous
    Connect/Reconnect and purpose/scope behavior. Owner/revision/ABA/JWT and
    expected cache-publication admission prevent stale DELETE completion;
@@ -158,7 +192,19 @@ branches, captures and every RED receipt are retained.
    `codex/wave5-header-cta`, preserved at `736d4a3e`. Independent source review
    is clear after test-only corrections. Exactly six paths move the three
    desktop CTA recipes onto existing shared styles, preserving AuthContextLink,
-   return context, Suspense fallback and 36px sizing. All runtime remains unrun.
+   return context, Suspense fallback and36px sizing. First static proof passes
+   189 tests/18 disjoint suites, types, strict three files, Help90 and
+   UI19/1,695 files/643 existing occurrences, without source repair.
+   It is preserved at `89a36c63`; final dependency/build/browser stage follows.
+7. Settings A1: `wave3-game-workspace`, branch `codex/wave5-settings-registry`,
+   source preserved at `8ed58639`, with Devices repair at `82a82898`.
+   The registry/groups/canonical aliases,
+   Preferences dirty publishers, Help and tests are authored. Independent
+   review found the existing Devices link can bypass draft protection; a
+   route destination is being added to the same confirmation, preserving
+   native modified-link behavior. Exactly 23 paths are approved, including
+   the necessary existing router-boundary test. All runtime remains unrun.
+   Search, Chat extraction and the rest of find-anything are later stages.
 
 Do not switch these active branches, reset their worktrees or stage their
 untracked caches. Source-only agents must not start competing runtime work.

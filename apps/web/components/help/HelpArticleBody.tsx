@@ -187,7 +187,7 @@ function Block({
         </div>
       );
     case "widget":
-      return <HelpWidget widget={block.widget} />;
+      return <HelpWidget widget={block.widget} variant={variant} />;
   }
 }
 
