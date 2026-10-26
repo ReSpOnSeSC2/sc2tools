@@ -67,3 +67,15 @@ Final engine/build/browser evidence is in `.cache/copy-consumers-proof-c1b07eae/
 Representative final captures under `browser-third/shots/` are `mobile-360-compact-copy-light-320.png`, `mobile-360-compact-copy-dark-390.png`, `mobile-360-definition-copy-light.png` and `desktop-1280-definition-copy-dark.png`. Earlier evidence and all original committed images remain preserved. No owner `.tmp` script was executed.
 
 Root reviewed the final source and phone/desktop captures. Copies of the reviewed compact Light 320px and desktop Dark definition fields are preserved in `docs/handoff/screenshots/copy-link-manual-light-320.png` and `docs/handoff/screenshots/copy-definition-manual-dark.png`, with matching hashes. Exact-head remote CI and delivery remain pending. Other copy/consumer migrations listed above remain separate roadmap work.
+
+## Combined main validation
+
+Root integrated Execution/Try source at `f7311052`, retaining both copy and timing
+Help and clarifying the existing three-observation game comparison. All 83 checks
+across nine copy, Help, Guide, CTA and real Macro-edit suites pass, along with
+whole web types, strict merged-Help lint and UI19/1,693 files/653 inherited
+occurrences. Both copy runtime files are byte-identical to fully green `b07f1c0f`.
+Actual Execution main `8daff145` is normally reconciled at `877b4525` with an
+identical whole tree before/after the ancestry merge. The recorded local
+production/browser artifact predates only these independent integrations;
+fresh exact-head remote build/web/responsive checks are required.
