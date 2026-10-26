@@ -2,6 +2,18 @@
 
 Branch: `codex/wave4-build-dossier-insights`. ADR0057 owns the bounded design.
 
+The queued combined Scorecard branch at `53aa5356` has a source-only runner
+repair pending normal current-main/Public integration. Dossier fresh captures
+default to `.cache/build-dossier-insights-current-evidence`, optionally selected
+with `DOSSIER_EVIDENCE_DIR`. Pinned Chromium, startup cleanup, theme-before-mount
+storage/HTML and resolved palette assertions are authored. Full-page checks
+call main's shared AA helper instead of disabling contrast; no allowlist or
+product/API source is changed. Original screenshot hashes and the four-file
+manifest are recorded in `.cache/build-evidence-original-shots-sha256.json`
+and `.cache/build-evidence-runner-owned-paths.txt`. No generator, test, browser
+or build has run for this repair. Earlier results below remain historical;
+current engine and AA proof must follow the eventual integrated source.
+
 The API reuses complete owner/visibility-scoped performance aggregations, adds
 confirmed declared-plan facets, and hydrates at most the latest 25 selected
 timing logs through the shared split-store reader. Hidden, deleted, pending,

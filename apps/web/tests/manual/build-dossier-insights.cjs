@@ -5,7 +5,7 @@ const { chromium, expect } = require('@playwright/test');
 const { dossier } = require('./build-dossier-insights-fixture.cjs');
 execFileSync(process.execPath, ['tests/manual/build-dossier-insights-fixture.cjs'], { stdio: 'inherit' });
 const root = process.cwd(), origin = 'http://127.0.0.1:3262', calls = [];
-const evidence = path.resolve('../../.cache/build-dossier-insights-evidence'); fs.mkdirSync(evidence, { recursive: true });
+const evidence = path.resolve(process.env.DOSSIER_EVIDENCE_DIR || '../../.cache/build-dossier-insights-current-evidence'); fs.mkdirSync(evidence, { recursive: true });
 const captureCSS = 'nav.fixed,header.sticky,nav[aria-label="Build sections"]{visibility:hidden!important}';
 const css = fs.readdirSync('.next/static/css').filter(name => name.endsWith('.css')).map(name => fs.readFileSync(path.join('.next/static/css', name), 'utf8')).join('\n');
 const fonts = "@font-face{font-family:FixtureSans;src:url('/fonts/hanken-grotesk-latin.woff2')}@font-face{font-family:FixtureDisplay;src:url('/fonts/bricolage-grotesque-latin.woff2')}:root{--font-sans:FixtureSans;--font-display:FixtureDisplay;--font-serif:serif}";
@@ -23,21 +23,45 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/v1/me') return json({ displayName: 'Synthetic player' });
   if (url.pathname.startsWith('/v1/')) return json({});
   if (url.pathname === '/fixture.js') { res.setHeader('Content-Type', 'text/javascript'); return res.end(fs.readFileSync('.tmp/build-dossier-insights-fixture.js')); }
-  if (url.pathname.startsWith('/builds') || url.pathname.startsWith('/app')) { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(`<!doctype html><html data-theme="light"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}\n${fonts}</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>`); }
+  if (url.pathname.startsWith('/builds') || url.pathname.startsWith('/app')) {
+    const theme = url.searchParams.get('theme') === 'dark' ? 'dark' : 'light';
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.end(`<!doctype html><html lang="en" data-theme="${theme}" data-theme-mode="${theme}"><head><title>Local build dossier verification</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}\n${fonts}</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>`);
+  }
   const base = url.pathname.startsWith('/fonts/') ? path.join(root, 'app/fonts') : path.join(root, 'public');
   const file = path.resolve(base, url.pathname.startsWith('/fonts/') ? url.pathname.slice(7) : url.pathname.slice(1));
   if (!file.startsWith(base + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.statusCode = 404; return res.end(); }
   res.setHeader('Content-Type', ({ '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp' })[path.extname(file)] || 'application/octet-stream'); res.end(fs.readFileSync(file));
 });
 (async () => {
-  await new Promise(resolve => server.listen(3262, '127.0.0.1', resolve));
-  const browser = await chromium.launch({ headless: true }); let checks = 0;
+  let browser, checks = 0;
+  const visit = async (page, route, theme) => {
+    const url = new URL(route, origin); url.searchParams.set('theme', theme);
+    await page.goto(url.href);
+    await expect.poll(() => page.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.dataset.themeMode,
+      getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(), getComputedStyle(document.documentElement).colorScheme]))
+      .toEqual([theme, theme, theme === 'dark' ? '6 9 14' : '244 246 250', theme]); checks++;
+  };
   try {
+    // Compile the current shared AA gate only when this runner is invoked,
+    // after normal main integration. Keep generated adapters out of source.
+    const aaAdapter = path.resolve('.tmp/build-dossier-current-aa.cjs');
+    require('esbuild').buildSync({ entryPoints: ['tests/e2e/accessibility-check.ts'], bundle: true, platform: 'node', format: 'cjs', packages: 'external', outfile: aaAdapter, logLevel: 'warning' });
+    const { checkAccessibility } = require(aaAdapter);
+    const checkAA = async (page, width, theme) => {
+      const route = new URL(page.url()).pathname;
+      await checkAccessibility(page, { project: { name: `manual-${width}` }, attach: async (_name, { body }) => {
+        fs.writeFileSync(path.join(evidence, `aa-${theme}-${width}-${route.replace(/[^a-z0-9]/gi, '_')}.json`), body);
+      } }, route, theme); checks++;
+    };
+    await new Promise((resolve, reject) => { server.once('error', reject); server.listen(3262, '127.0.0.1', () => { server.off('error', reject); resolve(); }); });
+    browser = await chromium.launch({ headless: true, ...(process.env.PW_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PW_CHROMIUM_EXECUTABLE } : {}) });
     for (const width of [320, 390, 768, 1440]) for (const theme of ['light', 'dark']) {
-      const context = await browser.newContext({ viewport: { width, height: 1000 }, timezoneId: 'UTC', reducedMotion: 'reduce' });
+      const context = await browser.newContext({ viewport: { width, height: 1000 }, timezoneId: 'UTC', reducedMotion: 'reduce', colorScheme: theme });
+      await context.addInitScript(mode => localStorage.setItem('sc2tools.theme', mode), theme);
       await context.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
       const page = await context.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
-      await page.goto(origin + '/builds/fixture'); await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+      await visit(page, '/builds/fixture', theme);
       const timing = page.getByRole('region', { name: 'Build key timings', exact: true }), plan = page.getByRole('region', { name: 'Declared build plan survival', exact: true });
       await expect(timing.getByText('12 s slower than community')).toBeVisible(); checks++;
       await expect(timing.getByText(/Based on your last 25 eligible games/)).toBeVisible(); checks++;
@@ -55,19 +79,21 @@ const server = http.createServer((req, res) => {
       await timing.getByRole('button', { name: 'PvZ', exact: true }).click();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); checks++;
       expect(await timing.locator('button').evaluateAll(nodes => nodes.every(node => node.getBoundingClientRect().height >= 43))).toBe(true); checks++;
+      await checkAA(page, width, theme);
       await page.addStyleTag({ content: captureCSS });
       await page.evaluate(() => document.fonts.ready); await timing.screenshot({ path: path.join(evidence, `timings-${theme}-${width}.png`) }); await plan.screenshot({ path: path.join(evidence, `plan-${theme}-${width}.png`) });
-      await page.goto(origin + '/builds/fixture?small=1'); await expect(page.getByRole('heading', { name: 'Key timings', exact: true })).toBeVisible(); await expect(page.getByRole('heading', { name: 'Plan survival', exact: true })).toHaveCount(0); checks++;
-      await page.goto(origin + '/app/game/fixture'); await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+      await visit(page, '/builds/fixture?small=1', theme); await expect(page.getByRole('heading', { name: 'Key timings', exact: true })).toBeVisible(); await expect(page.getByRole('heading', { name: 'Plan survival', exact: true })).toHaveCount(0); checks++;
+      await visit(page, '/app/game/fixture', theme);
       await expect(page.getByText('+12s vs your median', { exact: true })).toHaveCount(1); checks++;
       await expect(page.getByTestId('build-column-opp').getByText(/vs your median/)).toHaveCount(0); checks++;
       await page.getByTestId('build-column-me').getByRole('button', { name: 'Jump to 5:12 Stargate' }).click(); expect(await page.evaluate(() => window.fixtureLastSeek)).toBe(312); checks++;
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); checks++;
+      await checkAA(page, width, theme);
       await page.addStyleTag({ content: captureCSS }); await page.getByTestId('build-order-columns').screenshot({ path: path.join(evidence, `game-${theme}-${width}.png`) });
       const baselineReads = () => calls.filter(call => call.path.startsWith('/v1/builds/')).length, readsBeforeEmpty = baselineReads();
-      await page.goto(origin + '/app/game/fixture?missing=1'); await expect(page.getByText('No build events were parsed from this replay.', { exact: true })).toBeVisible();
+      await visit(page, '/app/game/fixture?missing=1', theme); await expect(page.getByText('No build events were parsed from this replay.', { exact: true })).toBeVisible();
       await page.waitForLoadState('networkidle'); expect(baselineReads()).toBe(readsBeforeEmpty); checks++;
-      await page.goto(origin + '/app/builds/summary'); await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+      await visit(page, '/app/builds/summary', theme);
       await expect(page.getByText('Held 62%', { exact: true })).toBeVisible(); checks++;
       await expect(page.locator('table thead').getByText('Plan held', { exact: true })).toHaveCount(1); checks++;
       if (width >= 768) { await page.locator('table').getByRole('button', { name: 'Plan held', exact: true }).click(); await expect(page.locator('table tbody tr').first()).toContainText('Held most'); checks++; }
@@ -75,19 +101,24 @@ const server = http.createServer((req, res) => {
       await page.getByRole('searchbox', { name: 'Search builds' }).fill('Small sample'); await expect(page.locator('table thead').getByText('Plan held', { exact: true })).toHaveCount(0); checks++;
       await page.getByRole('searchbox', { name: 'Search builds' }).fill('');
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); checks++;
+      await checkAA(page, width, theme);
       await page.addStyleTag({ content: captureCSS }); await page.getByTestId('build-summary-preview').screenshot({ path: path.join(evidence, `summary-${theme}-${width}.png`) });
       expect(errors).toEqual([]); checks++; await context.close();
     }
-    const context = await browser.newContext({ viewport: { width: 390, height: 1000 }, reducedMotion: 'reduce' });
+    const context = await browser.newContext({ viewport: { width: 390, height: 1000 }, reducedMotion: 'reduce', colorScheme: 'light' });
+    await context.addInitScript(mode => localStorage.setItem('sc2tools.theme', mode), 'light');
     await context.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
-    const page = await context.newPage(); await page.goto(origin + '/builds/fixture'); await expect(page.getByText('12 s slower than community')).toBeVisible();
+    const page = await context.newPage(); await visit(page, '/builds/fixture', 'light'); await expect(page.getByText('12 s slower than community')).toBeVisible();
     await page.getByRole('button', { name: /Ground follow-up/ }).click(); await page.evaluate(() => window.fixtureAuth('fixture-owner-a', false));
     await expect(page.getByRole('region', { name: 'Selected sample games' })).toHaveCount(0); checks++;
     await page.evaluate(() => window.fixtureAuth('fixture-owner-b')); await expect(page.getByText('72 s slower than community')).toBeVisible(); checks++;
     await page.evaluate(() => window.fixtureAuth('fixture-owner-a')); await expect(page.getByText('12 s slower than community')).toBeVisible(); await expect(page.getByRole('region', { name: 'Selected sample games' })).toHaveCount(0); checks++;
-    await page.addScriptTag({ path: require.resolve('axe-core/axe.min.js') }); const axe = await page.evaluate(async () => window.axe.run(document.querySelector('main'), { rules: { 'color-contrast': { enabled: false } } })); expect(axe.violations).toEqual([]); checks++;
+    await checkAA(page, 390, 'light');
     expect(calls.every(call => call.method === 'GET')).toBe(true); checks++;
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ checks, captures: 32, calls, externalTraffic: false, writes: 0 }, null, 2));
     console.log(JSON.stringify({ checks, captures: 32, evidence, writes: 0 })); await context.close();
-  } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
+  } finally {
+    try { await browser?.close(); }
+    finally { if (server.listening) await new Promise(resolve => server.close(resolve)); }
+  }
 })().catch(error => { console.error(error); process.exitCode = 1; });
