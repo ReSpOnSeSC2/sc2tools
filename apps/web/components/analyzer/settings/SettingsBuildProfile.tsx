@@ -104,7 +104,7 @@ export function SettingsBuildProfile({ token }: { token: string }) {
   };
 
   return (
-    <Section
+    <Section id="build-profile" className="scroll-mt-28"
       title="Build profile"
       description="Set the five-point graph before a video, then show or hide it here or in your OBS Stream Dock. Both use the same saved ratings."
     >

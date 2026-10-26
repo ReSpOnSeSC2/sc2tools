@@ -108,6 +108,16 @@ function editChatBot() {
 const dialog = () => screen.queryByRole("dialog", { name: "Discard unsaved changes?" });
 
 describe("Chat tab unsaved-changes guard", () => {
+  it("guards a field search against both actual Chat dirty publishers without a write", () => {
+    renderChat(); editMultiChat(); editChatBot();
+    const search = screen.getByRole("combobox", { name: "Find a setting" });
+    fireEvent.change(search, { target: { value: "Delete account" } });
+    fireEvent.keyDown(search, { key: "ArrowDown" }); fireEvent.keyDown(search, { key: "Enter" });
+    expect(dialog()).toBeTruthy(); fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
+    expect((screen.getByLabelText(/Loyalty rank theme/) as HTMLSelectElement).value).toBe("zerg");
+    expect((screen.getByLabelText("Bot username") as HTMLInputElement).value).toBe("mybot");
+    expect(window.location.search).toBe("?tab=chat"); expect(api.apiCall).not.toHaveBeenCalled();
+  });
   it("asks before a tab switch drops Multi-platform chat edits", () => {
     renderChat();
     expect(chatIsDirty()).toBe(false);

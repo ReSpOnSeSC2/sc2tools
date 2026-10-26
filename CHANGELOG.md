@@ -16,6 +16,25 @@ corresponding GitHub Release.
 - Add a Today checklist for your playing and streaming goals, with progress, direct feature links and Help for each suggestion. Keep it separate from the first-import setup checklist.
 - Record the first successfully opened private game once per account. Save suggestion dismissal independently, and show a compact What's new link when the selected steps are complete.
 
+### Find a setting
+
+- Search setting names and synonyms above the Settings tabs, with keyboard results and `/` focus outside editable fields. Results use the existing unsaved-changes guard and only navigate; they never run the named action.
+- Add stable section links and one On this page navigator to the remaining tabs with at least three available sections, including Notifications and the nested Randomizer controls. Conditional Import and Gateway sections follow the real admitted page.
+- Keep drafts in place when a section navigator appears, and discover late sections with a bounded local readiness signal that does not restart a cancelled reveal or move focus.
+- Keep disabled Randomizer and Build check-in explanations readable, with accessible labels and keyboard access in previews.
+
+### Settings section navigation
+
+- Keep Overlay setup, widgets, scenes, Build profile, Ghost Build coach and Theme on one page, with the shared Tokens controls addressable above the form.
+- Reuse one On this page rail for Overlay and Chat & alerts, with a native section dropdown on phones. Scrolling only updates its highlight; explicit navigation keeps same-tab drafts and the existing guard when leaving a tab.
+- Keep older section, Look and Ghost links working, and limit Overlay presence polling to the visible Setup/Widgets area.
+
+### Macro Bank resources
+
+- Compare Total, Minerals or Gas under Bank in the Macro timeline. Show both players' resource breakdown at the inspected time and in the hover card, keeping missing resources unknown.
+- Remember the Bank view separately from the selected metric mix. Switching resource views keeps the selected game time and roster in place.
+- Improve contrast of the roster Army caption with the same neutral text used by other roster labels.
+
 ### Optional personal chart cache
 
 - Add a bounded, opt-in server cache for six personal Trends chart responses, with owner revisions and invalidation for replay, attribution, recompute and history changes. It stays off by default; full API CI and deployment checks remain before an operator enables it.

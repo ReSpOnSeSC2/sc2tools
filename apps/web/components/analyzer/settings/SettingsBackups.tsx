@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ReplayArchiveStatusCard } from "./ReplayArchiveStatusCard";
 import { SnapshotManager } from "./SnapshotManager";
 import { DataRepairCard } from "./DataRepairCard";
+import { SettingsSectionsReady } from "./SettingsSectionNav";
 
 const AccountDeleteDialog = dynamic(() => import("./AccountDeleteDialog"), { ssr: false });
 const HiddenGames = dynamic(() => import("./HiddenGames"), { ssr: false });
@@ -134,6 +135,7 @@ export function SettingsBackups() {
 
   return (
     <div className="space-y-6">
+      <SettingsSectionsReady />
       <ReplayArchiveStatusCard />
 
       <SnapshotManager onRestored={refreshHistory} />
@@ -142,6 +144,7 @@ export function SettingsBackups() {
       <HiddenGames />
 
       <Section
+        id="delete-history" className="scroll-mt-28"
         title="Delete game history"
         description="Wipes your replays, opponent records, and macro jobs. Your Build library, device pairings, overlay tokens, and your account stay intact. Use this before a fresh agent re-sync."
       >
@@ -188,6 +191,7 @@ export function SettingsBackups() {
       </Section>
 
       <Section
+        id="gdpr" className="scroll-mt-28"
         title="Export & delete account (GDPR)"
         description="Download everything stored for your account as one JSON file: your games list, opponents, notes, custom builds, settings and overlay tokens. Build orders and charts aren't in the file; original replays download from your replay history. Deleting your account is permanent."
       >

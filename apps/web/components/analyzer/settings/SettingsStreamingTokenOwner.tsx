@@ -241,7 +241,7 @@ function StreamingOwner({ ownerId, currentOwner, getToken, section, children }: 
     },
   } : null;
   return <div className="space-y-5">
-    {active ? <section aria-label="Shared streaming token controls"><OverlayTokenManager items={items} selected={active} onSelect={selectToken} onRefresh={refresh} onBusyChange={busyChanged} onUnknownOutcome={markUnknown} onMutationDispatched={markAmbiguous} statusPending={phase !== "ready"} /></section> : null}
+    {active ? <section id="tokens" className="scroll-mt-28" aria-label="Shared streaming token controls"><OverlayTokenManager items={items} selected={active} onSelect={selectToken} onRefresh={refresh} onBusyChange={busyChanged} onUnknownOutcome={markUnknown} onMutationDispatched={markAmbiguous} statusPending={phase !== "ready"} /></section> : null}
     {status}
     {value ? <StreamingContext.Provider value={value}><div key={lease!.key}>{children}</div></StreamingContext.Provider> : null}
   </div>;

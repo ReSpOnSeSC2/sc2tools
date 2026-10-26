@@ -39,6 +39,7 @@ export function RandomizerPreview({ matchup, config }: RandomizerPreviewProps) {
 
   return (
     <Section
+      id="randomizer-preview" className="scroll-mt-28"
       title="Live preview"
       description="Preview the complete OBS sequence: the build locks in and clears, then its configured opening Gateway unit or pair is drawn."
     >

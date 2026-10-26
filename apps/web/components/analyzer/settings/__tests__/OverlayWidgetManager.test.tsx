@@ -64,10 +64,11 @@ it("does not send a delayed authenticated mutation after the owner changes", asy
   state.userId = "owner-b"; view.rerender(<OverlayStarterPacks token={token} onUpdated={state.updated} />); await act(async () => release("synthetic-auth"));
   expect(state.sent).toEqual([]); expect(state.updated).not.toHaveBeenCalled();
 });
-it("uses the query as the section authority and retains shareable navigation links", () => {
-  function Preview() { const section = useOverlaySection(); return <OverlayManagerNav section={section} />; }
-  state.query = "tab=overlay&section=look"; render(<Preview />); expect(screen.getByRole("link", { name: /^Look$/ }).getAttribute("aria-current")).toBe("page");
-  expect(screen.getAllByRole("link").map(link => link.textContent)).toEqual(["Setup", "Widgets", "Look", "Scenes", "Tokens"]);
+it("accepts an old Look query hint while navigation uses canonical real-section links", () => {
+  function Preview() { const section = useOverlaySection(); return <><p>Pane hint: {section}</p><OverlayManagerNav scope={{ current: null }} hash="#theme" onNavigate={vi.fn()} /></>; }
+  state.query = "tab=overlay&section=look"; render(<Preview />); expect(screen.getByText("Pane hint: look")).toBeTruthy();
+  expect(screen.getByRole("link", { name: /^Theme$/ }).getAttribute("aria-current")).toBe("location");
+  expect(screen.getAllByRole("link").map(link => link.textContent)).toEqual(["Setup", "Widgets", "Scenes", "Build profile", "Ghost Build coach", "Theme", "Tokens"]);
   expect(screen.queryByRole("link", { name: "Dock & bot" })).toBeNull();
   expect(screen.queryByRole("link", { name: "Chat & alerts" })).toBeNull();
 });

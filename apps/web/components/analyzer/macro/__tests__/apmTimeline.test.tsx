@@ -61,7 +61,9 @@ function showOnly(label: string) {
 
 /** The read-out's "Game average" cells, in column order (you, opponent). */
 function averageCells() {
-  return Array.from(readout().querySelectorAll("dd.flex-wrap")).map((el) => el.textContent);
+  const averages = within(readout()).getByText("APM and SPM over the whole game");
+  const definitions = within(readout()).getAllByRole("definition");
+  return definitions.slice(definitions.indexOf(averages) + 1).map((el) => el.textContent);
 }
 
 beforeEach(() => {

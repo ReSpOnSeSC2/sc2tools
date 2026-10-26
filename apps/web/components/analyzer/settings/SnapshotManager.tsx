@@ -52,7 +52,7 @@ export function SnapshotManager({ onRestored }: { onRestored: () => Promise<void
     });
   }
   const items = backups.data?.items || [];
-  return <Section title="Snapshots" description="Your own restore points for your account. Preview changes before restoring."
+  return <Section id="snapshots" className="scroll-mt-28" title="Snapshots" description="Your own restore points for your account. Preview changes before restoring."
     actions={<Button variant="primary" loading={busy === "create"} disabled={Boolean(busy)} iconLeft={<Camera className="h-4 w-4" aria-hidden />}
       onClick={() => void action("create", async () => { await apiCall(getToken, "/v1/me/backups", { method: "POST", body: "{}" }); await backups.mutate(); toast.success("Snapshot created"); })}>Take a snapshot</Button>}>
     <Card padded={!items.length}>

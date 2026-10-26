@@ -11,6 +11,7 @@ import { QueryState } from "@/components/ui/QueryState";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { REPLAY_HIDE_REASONS, type ReplayControlTarget } from "@/lib/replayGameControls";
 import { GameControlActions } from "../replays/GameControlActions";
+import { SettingsSectionsReady } from "./SettingsSectionNav";
 
 type HiddenGame = ReplayControlTarget & { opponent: string; reason: string | null };
 type HiddenPage = { items: HiddenGame[]; nextCursor: string | null };
@@ -36,7 +37,8 @@ function HiddenGamesList() {
     await q.mutate();
     if (active.current && scope.current === captured) refresh.current?.focus();
   };
-  return <Section title="Hidden games" description="Your hidden replays stay available for playback. Unhide restores their contribution to your statistics and scouting.">
+  return <Section id="hidden-games" className="scroll-mt-28" title="Hidden games" description="Your hidden replays stay available for playback. Unhide restores their contribution to your statistics and scouting.">
+    <SettingsSectionsReady />
     <Card>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <LazyHelpLink slug="hide-or-delete-a-game">Hiding, deletion and retry help</LazyHelpLink>

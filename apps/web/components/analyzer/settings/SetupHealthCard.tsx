@@ -23,7 +23,7 @@ export function SetupHealthCard() {
   const rows = setupHealthRows({ me, doctor, release, overlays, now: Math.max(now, Date.now()) });
   const warnings = rows.filter((row) => row.tone === "warn").length;
   const title = warnings ? `${warnings} thing${warnings === 1 ? "" : "s"} need${warnings === 1 ? "s" : ""} attention` : rows.some((row) => row.tone === "loading") ? "Checking your setup" : "Everything's set up";
-  return <section aria-label="Setup health"><Card title={title} headingLevel={2}>
+  return <section id="setup-health" className="scroll-mt-28" aria-label="Setup health"><Card title={title} headingLevel={2}>
     <p className="mb-3 text-caption text-text-muted">Setup health · <LazyHelpLink slug="setup-health">What these checks mean</LazyHelpLink></p>
     <ul className="divide-y divide-border">{rows.map((row) => <HealthRow key={row.id} row={row} />)}</ul>
     <div className="mt-3"><CopySetupDiagnostics me={me.data} warnings={doctor.data?.warnings?.map((item) => item.id)} /></div>

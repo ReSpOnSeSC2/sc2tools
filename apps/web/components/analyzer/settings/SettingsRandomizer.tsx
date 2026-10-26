@@ -42,6 +42,7 @@ import { MatchupBuildPicker } from "./randomizer/MatchupBuildPicker";
 import { RandomizerPreview } from "./randomizer/RandomizerPreview";
 import { usePublishDirty } from "./SettingsContext";
 import { SettingsLoadError } from "./SettingsLoadError";
+import { SettingsSectionsReady } from "./SettingsSectionNav";
 
 export function SettingsRandomizer() {
   const { getToken } = useAuth();
@@ -101,9 +102,9 @@ export function SettingsRandomizer() {
   }
 
   if (isLoading) {
-    return <Skeleton rows={3} />;
+    return <><SettingsSectionsReady revision="loading" /><Skeleton rows={3} /></>;
   }
-  if (error && data === undefined) return <SettingsLoadError tab="Randomizer settings" error={error} retry={mutate} />;
+  if (error && data === undefined) return <><SettingsSectionsReady revision="error" /><SettingsLoadError tab="Randomizer settings" error={error} retry={mutate} /></>;
 
   const customBuilds = customBuildsApi.data?.items ?? [];
   const activeCount = activeMatchupCount(draft);
@@ -111,7 +112,9 @@ export function SettingsRandomizer() {
 
   return (
     <>
+      <SettingsSectionsReady revision={active.startsWith("P")} />
       <Section
+        id="build-randomizer" className="scroll-mt-28"
         title="Build randomizer"
         description={
           activeCount === 0
@@ -165,6 +168,7 @@ function SoundSettings({
   const pct = Math.round(sound.volume * 100);
   return (
     <Section
+      id="sound-effects" className="scroll-mt-28"
       title="Sound effects"
       description="Procedural sound cues that play during the reveal (wheel ticks, lasers, gallop, bumps) plus a winner fanfare. Plays in OBS and in the preview below."
     >

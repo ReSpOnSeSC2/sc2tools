@@ -81,6 +81,15 @@ function renderMisc() {
   );
 }
 
+it("keeps all three actual Preferences targets, including the independently saved Notifications form", () => {
+  mocks.ownerId = "synthetic-owner"; renderMisc();
+  for (const id of ["app-preferences", "setup-privacy", "notifications"]) {
+    expect(document.querySelectorAll(`[id="${id}"]`)).toHaveLength(1);
+    expect(document.getElementById(id)?.tagName).toBe("SECTION");
+  }
+  expect(mocks.apiCall).not.toHaveBeenCalled();
+});
+
 function analyticsStatus() {
   return screen.getByRole("status").textContent;
 }

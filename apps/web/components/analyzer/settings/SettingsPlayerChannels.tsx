@@ -109,7 +109,7 @@ export function SettingsPlayerChannels({
   }
 
   return (
-    <Section title="Twitch & YouTube" description="Connect your channels to your StarCraft II identities. After admin review, everyone can find them at the top of your opponent profile. Replays show a recording link only when a matching recording and timestamp are available.">
+    <Section id="player-channels" className="scroll-mt-28" title="Twitch & YouTube" description="Connect your channels to your StarCraft II identities. After admin review, everyone can find them at the top of your opponent profile. Replays show a recording link only when a matching recording and timestamp are available.">
       {isLoading ? <Skeleton rows={2} /> : error ? (
         <Card>
           <p role="alert" className="text-body text-danger">Couldn&apos;t load your channels. {error.message}</p>

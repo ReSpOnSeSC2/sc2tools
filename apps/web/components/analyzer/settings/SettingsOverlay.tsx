@@ -21,7 +21,6 @@ import { OverlayScenesSection } from "./OverlayScenesSection";
 import { OverlayAgentUpsell } from "@/components/instant/AgentLiveUpsell";
 import { ConnectionCheck, StuckWidgetHelp } from "./OverlayConnectionCheck";
 import { ActiveTokenHeader, AllInOneRow } from "./OverlayTokenHeader";
-import { OverlayManagerNav } from "./OverlayManagerNav";
 import { OverlayStarterPacks } from "./OverlayStarterPacks";
 import { OverlayHealthProvider } from "@/components/overlay/OverlayHealthContext";
 import { useSettingsStreamingToken } from "./SettingsStreamingTokenOwner";
@@ -35,7 +34,7 @@ import { OverlayHealthBoard } from "./OverlayHealthBoard";
  */
 
 export function SettingsOverlay({ origin }: { origin?: string }) {
-  const { ownerId: userId, token: activeToken, section, getToken: readToken, isCurrent, refresh: mutate, patchToken } = useSettingsStreamingToken();
+  const { ownerId: userId, token: activeToken, getToken: readToken, isCurrent, refresh: mutate, patchToken } = useSettingsStreamingToken();
   const live = useRef(true);
   const request = useRef<AbortController | null>(null);
   useLayoutEffect(() => {
@@ -71,23 +70,20 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
     }
   }
   return (
-    <OverlayProfileEditor key={`${userId}:${activeToken.token}`} token={activeToken} onSaved={saved => { if (current()) patchToken(saved); }}>{({ profile, saving: profileSaving, setTheme, setDuration }) => <OverlayHealthProvider token={activeToken.token} enabledWidgets={activeToken.enabledWidgets} enabled={section === "setup" || section === "widgets"}><div className="space-y-6">
-      <OverlayManagerNav section={section} />
-      <div hidden={section !== "setup" && section !== "widgets"}><OverlayHealthBoard /></div>
-      <div hidden={section !== "setup"} className="space-y-6">
-      {/* Browser-import users without a paired agent: the overlay's live data needs it. */}
-      <OverlayAgentUpsell />
-      <details className="rounded-lg border border-border px-4 py-2">
-        <summary className="cursor-pointer text-body font-medium text-text">Build your first stream setup</summary>
-        <Link href="/stream-studio/learn" target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-11 items-center gap-2 text-caption text-accent underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Open the Stream Studio crash course<span className="sr-only"> (opens in a new tab)</span><ArrowUpRight className="h-4 w-4" aria-hidden /></Link>
-      </details>
-      </div>
-      <div hidden={section !== "setup" && section !== "widgets"} className="space-y-6">
-      <div hidden={section !== "widgets"}><OverlayStarterPacks key={`${userId}:${activeToken.token}`} token={activeToken} onUpdated={() => mutate()} /></div>
-      <Section
+    <OverlayProfileEditor key={`${userId}:${activeToken.token}`} token={activeToken} onSaved={saved => { if (current()) patchToken(saved); }}>{({ profile, saving: profileSaving, setTheme, setDuration }) => <div className="space-y-6">
+      <header><h2 className="text-body-lg font-semibold text-text">Overlay</h2>
+        <Link href="/stream-studio/learn" target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-11 items-center gap-2 text-caption text-accent underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Build your first stream setup<span className="sr-only"> (opens in a new tab)</span><ArrowUpRight className="h-4 w-4" aria-hidden /></Link>
+      </header>
+      {/* One visibility host covers only Setup/Widgets, never Theme or Scenes. */}
+      <OverlayHealthProvider token={activeToken.token} enabledWidgets={activeToken.enabledWidgets} enabled><div className="space-y-6">
+      <Section id="setup" className="scroll-mt-28"
         title="OBS Browser Source URLs"
         description="Copy the URLs you want into OBS. Each widget is transparent and positioned independently. The URLs share the same socket connection so your overlay stays in sync."
       >
+      <div className="space-y-6">
+      <OverlayHealthBoard />
+      {/* Browser-import users without a paired agent: the overlay's live data needs it. */}
+      <OverlayAgentUpsell />
         <Card>
           <div className="flex items-start gap-3 px-2 py-2 text-caption text-text-muted">
             <Tv className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent-cyan" aria-hidden />
@@ -98,7 +94,7 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
               the desktop{" "}
               <a
                 href="/devices"
-                className="text-accent-cyan underline-offset-2 hover:underline"
+                className="text-accent-cyan underline underline-offset-2 hover:underline"
               >
                 agent
               </a>{" "}
@@ -117,7 +113,14 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
             anyTesting={testingWidget !== null}
           />
           <AllInOneRow token={activeToken} origin={origin} theme={profile.theme} />
-          <div hidden={section !== "widgets"}><WidgetList
+        </Card>
+        <ConnectionCheck token={activeToken.token} lastSeenAt={activeToken.lastSeenAt} /><StuckWidgetHelp />
+      </div>
+      </Section>
+      <Section id="widgets" className="scroll-mt-28" title="Widgets" description="Choose, size and test individual OBS sources.">
+        <div className="space-y-6">
+          <OverlayStarterPacks key={`${userId}:${activeToken.token}`} token={activeToken} onUpdated={() => mutate()} />
+          <Card padded={false}><WidgetList
             key={`${userId}:${activeToken.token}`}
             token={activeToken}
             origin={origin}
@@ -130,23 +133,19 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
             onToggleWidget={(w, on) => toggleWidget(activeToken.token, w, on)}
             onTestWidget={(w) => void testWidget(activeToken.token, w)}
             testingWidget={testingWidget}
-          /></div>
-        </Card>
-        <div hidden={section !== "setup"}><ConnectionCheck token={activeToken.token} lastSeenAt={activeToken.lastSeenAt} /><StuckWidgetHelp /></div>
+          /></Card>
+        </div>
       </Section>
-      </div>
+      </div></OverlayHealthProvider>
 
-      <div hidden={section !== "scenes"}>
       <OverlayScenesSection
         token={activeToken.token}
         origin={origin}
         theme={profile.theme}
       />
-      </div>
 
-      <div hidden={section !== "look"} className="space-y-6">
       <SettingsBuildProfile key={activeToken.token} token={activeToken.token} />
-      <Section
+      <Section id="ghost-coach" className="scroll-mt-28"
         title="Ghost Build coach"
         description="Choose an account-synced timed build for each exact matchup. Your Ghost source URL stays the same."
       >
@@ -156,10 +155,9 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
       </Section>
 
       <fieldset className="min-w-0 max-w-full" disabled={profileSaving}><OverlayThemeSection theme={profile.theme} onChange={setTheme} /></fieldset>
-      </div>
 
       <OverlayLiveTestDialog pending={pendingLiveTest} busy={testingWidget !== null} origin={origin}
         onClose={() => setPendingLiveTest(null)} onSend={() => { if (pendingLiveTest) void testWidget(pendingLiveTest.token, pendingLiveTest.widget, true); }} />
-    </div></OverlayHealthProvider>}</OverlayProfileEditor>
+    </div>}</OverlayProfileEditor>
   );
 }
