@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Build dialogs
+
+- Use the shared dialog for build dossiers and saved-build loading or error states, with keyboard focus containment, a 44px Close control and focus return.
+- Bound saved-build loads, offer Retry after failure, and retire earlier account, build and retry responses before showing private editor data.
+- Keep the build menu in its parent dialog's focus domain so Escape closes the menu first and actions retain their editor handoff.
+
 ### More navigation
 
 - Use the shared bottom Sheet for phone More navigation, preserving theme choices, keyboard focus, report handoff and responsive dismissal.

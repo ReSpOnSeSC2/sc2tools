@@ -45,6 +45,7 @@ import { useBuildPublicationActions } from "./BuildPublicationActions";
 import { PracticeButton } from "@/components/practice/PracticeButton";
 import type { PracticeSource } from "@/lib/practiceAssignment";
 import { measuredPlanHeldRate, PlanHeldBadge } from "./PlanHeldBadge";
+import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 
 export interface BuildCardProps {
   build: DecoratedBuild;
@@ -355,6 +356,9 @@ export function BuildKebab({
     }
   }, []);
 
+  useFocusTrap({ open, containerRef: menuRef, returnFocusRef: triggerRef,
+    onClose: () => closeMenu(true), trapFocus: false, autoFocus: false, restoreFocus: false });
+
   const updateMenuPosition = useCallback(() => {
     const trigger = triggerRef.current;
     const menu = menuRef.current;
@@ -484,16 +488,8 @@ export function BuildKebab({
         : items?.[0];
       item?.focus();
     });
-    const onDocumentKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      closeMenu(true);
-    };
-    document.addEventListener("keydown", onDocumentKeyDown);
     return () => {
       window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener("keydown", onDocumentKeyDown);
     };
   }, [closeMenu, open]);
 
