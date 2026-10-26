@@ -1,0 +1,17 @@
+# Account activity write throttle
+
+2026-10-26. Local source review and validation complete; remote CI and delivery follow. Base `ed484b948456ad81bfc6f367f6d0ea106cfe7d5d`, worktree `wave3-guides-expansion`, branch `codex/perf-account-seen-writes`.
+
+Scope is exactly UsersService, its new real-Mongo regression suite, CHANGELOG and this checkpoint. Original bytes and the four-path manifest are preserved in `.cache/account-activity-write-throttle-source/before.json`.
+
+The existing owner-keyed update now admits only activity at least five minutes old, missing/invalid timestamps, or the first eligible week-two return. One atomic Mongo filter prevents concurrent service instances from repeatedly changing a recent row. The existing activation pipeline retains the original return and other fields. A first eligible visit bypasses the activity interval, so crossing the week-two boundary is not lost.
+
+There is no memory success cache: failures still propagate and retries still reach the database. No upsert, index, schema, migration, route/auth change, extra read, warmer or new infrastructure is added. Each invocation still issues one conditional database command; this reduces document writes, not the command count or all `/me` work. Other planned revision caching, stats maintenance, latest-agent/device caching and corpus deltas remain separate work.
+
+The suite uses an isolated local Mongo collection and covers actual modified counts, concurrent service instances, malformed legacy dates, week-two boundaries, original activation preservation, owner isolation, missing-account noncreation, failures and lost acknowledgements. No production query or mutation ran.
+
+Independent review found that query `$type` also matches an array containing a Date. The admitted repair uses expression `$type` to check the scalar field type and adds empty-array, future-Date-array and object regressions. Original source and the first 38-test passing result remain preserved; the repaired source passes **41/41 tests across three suites**, including all 16 new service cases plus existing usersAdmin and opsConsole coverage. The original sandbox run stopped before any test on Jest cache rename EPERM; the reviewed host rerun used the already installed Mongo7.0.14 binary with downloads disabled. An ECONNRESET warning during the existing opsConsole replica-set cleanup is retained in the log; all three suites and their runner completed successfully.
+
+Whole API types pass. Strict owned lint has zero errors and zero new warnings; the raw max-zero command still exits1 for three existing long-method warnings elsewhere in UsersService. Same-filename stdin lint on the original full source reproduces all three messages, columns and method spans, shifted by exactly the eight added lines. The audit proves every source byte outside touch is unchanged after newline normalization; the new test file has no warnings. No waiver or lint configuration changed. Final evidence is `.cache/account-activity-write-throttle-static/{units-scalar-date.json,final-status.json,inherited-audit.json}`.
+
+All launched check sessions completed. The committed map-pool seed remains byte-identical SHA256 `4d525b8e1a7be49b223a24ea8d7700e58159be5e60c42dd5dc3cdee774af042c`. No full web build or browser run is required for this API-only behavior; neither is claimed. The runtime slot is released for the separate Settings pack. This improves only the account-activity write portion of faster-dashboards, not the whole item.
