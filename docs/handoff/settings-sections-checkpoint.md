@@ -60,13 +60,31 @@ Root approved four synthetic actual-consumer captures using current production C
 - Product/browser/Next validation is stopped and runtime released. Only final docs plus four approved PNG copies changed after the clean runtime postguard; app/fixture/spec bytes remain frozen.
 - Root owns fresh-main reconciliation, PR creation and full CI. No screenshots were edited, no existing images overwritten, and no actual account/provider/StarCraft/native-agent operation occurred.
 
-## Pending passive-scroll correction
+## Passive-scroll correction verified
 
-A responsive CI retry exposed stale scrollspy geometry: an intersecting section
-kept its earlier observer position while the page moved. Selection now ranks live
-rectangles and batches passive capture-scroll/resize reads in one animation frame,
-with listener removal, frame cancellation and retired callbacks on cleanup. One
-unit regression covers stale geometry, batching and cleanup without navigation,
-focus or scroll writes. The browser spec, fixture, timeouts and prior A3/A4 proof
-remain unchanged. These three source-only edits are preserved before/after in
-.cache/settings-scrollspy-live-geometry-before-c25e2592/; validation is pending.
+Responsive CI job 121873823488 remains recorded as 512 passed, 92 skipped and one
+retried dark1280 case at the passive Scenes assertion. The correction ranks live
+section rectangles and batches passive capture-scroll/resize reads in one frame,
+with retirement, listener removal and frame cancellation on cleanup.
+
+At source 738e55e5, strict lint of Nav and its test passed with zero warnings;
+all seven unit cases passed, and whole web types with incremental mode disabled
+exited 0. A fresh, separate A3 run passed all 12 cases with no skip, retry or flaky
+result, including dark1280. The unchanged browser spec, fixture and timeouts
+produced 20 shared AA scans and 20 captures. Serious/critical issue arrays were
+empty; aria-prohibited-attr and color-contrast remain recorded as incomplete in
+all 20 scans, so this is not an all-impact-zero claim.
+
+The fixture compiled current 738e Nav source in memory using this checkout's own
+unchanged ErW CSS from source 5629: all four CSS files, three fonts and pinned
+Chrome passed pre/post guards. Nav markup, classes, hrefs and fallback behavior
+were unchanged. No new local Next build or current-head production JavaScript
+claim is made by this CSS bridge.
+
+All 58 synthetic sockets matched disconnects; 12 case listeners and the final
+listener closed. There were zero synthetic writes or unsafe attempts. Host
+CIM/TCP reads verified all 87 captured owned process IDs and their listeners
+absent at 22:39:05 UTC. Source/head guards passed and runtime was released.
+Earlier A3/A4 results remain distinct and unchanged; full current-head CI is
+pending. The [fresh A3 receipt](../../.cache/settings-scrollspy-browser-prep-738e55e5/proof/final-summary.json)
+has SHA256 217dde3fba6b768106074fa7888245b2185c0bf70cd0cc23c11203bdee9ee528.
