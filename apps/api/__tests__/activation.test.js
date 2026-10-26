@@ -167,8 +167,10 @@ test("first view uses one exact live-game read and one projected no-upsert condi
   expect(read.mock.calls[0][0]).toMatchObject({ userId: "owner", gameId: "owned", _deleted: { $ne: true },
     _deletionPending: { $ne: true }, isResumedFromReplay: { $ne: true } });
   expect(write.mock.calls[0][0]).toEqual({ userId: "owner", _gdprMutation: { $exists: false } });
-  expect(write.mock.calls[0][2]).toMatchObject({ upsert: false, returnDocument: "after", maxTimeMS: ACTIVATION_QUERY_MAX_TIME_MS,
-    projection: { _id: 0, "preferences.onboarding.firstGameViewedAt": 1 } });
+  expect(write).toHaveBeenCalledWith(expect.any(Object), expect.any(Array), expect.objectContaining({
+    upsert: false, returnDocument: "after", maxTimeMS: ACTIVATION_QUERY_MAX_TIME_MS,
+    projection: { _id: 0, "preferences.onboarding.firstGameViewedAt": 1 },
+  }));
 });
 
 test.each([{ userId: "other" }, { _deleted: true }, { _deletionPending: true }, { isResumedFromReplay: true }])("first view rejects an ineligible game %j", async patch => {

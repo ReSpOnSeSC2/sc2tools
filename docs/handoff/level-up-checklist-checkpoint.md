@@ -4,9 +4,11 @@
 `9a68c480c9d19278642b5c546fe4b3ab081fa6b1`, checkout
 `C:\SC2TOOLS\.worktrees\wave4-agent-dashboard`. This is the first slice of the
 canonical `level-up-checklist` item. The source and meaningful test cases are
-authored. The canonical Help index generator ran once under a limited grant;
-**tests, types, lint, build and browser checks remain unrun for this slice**.
-The generated Help index was produced by that script and was not hand edited.
+authored. The canonical Help index generator ran once under a limited grant.
+The first whole-API typecheck failed at one new test assertion; the source-only
+fixture repair below is not yet revalidated. **Tests, lint, web types, build and
+browser checks remain unrun for this slice**. The generated Help index was
+produced by its script and was not hand edited.
 
 ## Behavior
 
@@ -83,8 +85,33 @@ checkpoint was updated afterward to record the result.
 Owned generator PID 37532 closed and was observed absent. The runtime slot was
 released immediately. Raw stdout, stderr, before/after index bytes and the
 generator receipt are retained under
-`.cache/activation-help-index-9a68c480/`. No npm lifecycle, test, typecheck, lint,
-build, browser, Git mutation, merge, provider or production operation occurred.
+`.cache/activation-help-index-9a68c480/`. During that generator step, no npm
+lifecycle, test, typecheck, lint, build, browser, Git mutation, merge, provider
+or production operation occurred.
+
+## First API typecheck and assertion repair
+
+The parent preserved all 22 paths and integrated current main, retaining both
+the activation and optional chart-cache dependency wiring and changelog entries.
+At `b1aeac69430a5a795673bcb25536fecce91c73bc`, tree
+`3a6c92f97595c78b328bf48cb3d7919652e37e5a`, one installed-Node invocation of
+`tsc --noEmit --project apps/api/tsconfig.json` exited 2. Its only diagnostic was
+TS2493 at `activation.test.js:170`: Jest's Mongo overload inferred a two-element
+call tuple, so indexing the actual third options argument was rejected by types.
+No product type diagnostic was reported. All 22 source hashes, tool/config pins
+and the clean tracked state were unchanged. Owned PID 12956 closed and was
+observed absent; the runtime slot was released without a retry.
+
+Before changing the test and this checkpoint, both raw source files and the
+first typecheck result were saved under
+`.cache/activation-types-tuple-repair-b1aeac69/`. The test now matches the actual
+three-argument call with `expect.any(Object)`, `expect.any(Array)` and
+`expect.objectContaining` containing the same upsert, returnDocument, deadline
+and projection assertions. The exact owner filter assertion, command counts,
+real Mongo call and all other assertions remain. No cast, fake service, mock
+change or product edit was introduced. Other 20 owned bytes are unchanged.
+This assertion-only repair still needs a new admitted typecheck; no rerun,
+lint, test, Mongo execution, web check or browser was performed after it.
 
 ## Validation still required
 
