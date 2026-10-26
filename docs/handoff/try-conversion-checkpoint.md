@@ -19,9 +19,9 @@ Chromium executable and save fresh evidence in root `.cache`; original review
 PNGs remain untouched. The conversion matrix now includes full scoped contrast
 and a held-copy recovery case.
 
-This integration repair is source-ready. Current engine/sample generation is
-recorded below; affected tests, types, strict lint/ratchet, final production
-budgets and browser proof are still due in their coordinated slots.
+This integration repair passes current-engine generation and integrated
+consumer/static proof below. Final production build/budgets and actual browser
+proof remain due in their coordinated slot.
 No current validation is inferred from the earlier branch results below.
 
 ## Current-engine generation boundary
@@ -63,13 +63,50 @@ to `try-conversion-current-evidence`. Neither prior `try-conversion-host` nor
 will verify this narrow directory plumbing; no browser was run in stage 1.
 
 The exclusive runtime slot was released at this clean generation boundary for
-queued Public/Auth combination checks. No Try consumer tests, types/lint,
-production Next build or browser matrix have run on this refreshed source yet.
-Later build/browser proof must use the current source, not the historical
+queued Public/Auth combination checks. Try consumer/static proof then ran on
+the integrated source as recorded below. No production Next build or browser
+matrix has run on this refreshed source yet. Later build/browser proof must use
+the current source, not the historical
 bundle evidence below. Preserved artifacts are root
 `.cache/try-stage1-{engine,sample-generation}.log`,
 `try-stage1-{sample-output-summary,engine-output-summary}.json`,
 `try-stage1-preserved-assets-sha256.json` and the ignored snapshot directory.
+
+## Stage 1 integrated consumer/static proof
+
+Root preserved the five generation/runner/checkpoint paths at `8e48bba9`, then
+normally merged chart main `56e725ae` at
+`d7931d3063d575734849e30997ecaf2aff611de2`. Chart changes no shipped engine
+source, so the new d27 pointer/sample and restored old bundle remain valid.
+
+- All 177 checks pass across 22 affected suites at two workers: Try, report
+  sharing/conversion/intent, sample retries and actual source/bundle matching,
+  landing/demo, public CTA, shared useCopy and pure report helpers.
+- Whole web types pass. Strict lint passes for all 17 selected source targets,
+  including the changed runner/bundler, generated constants, root generator
+  and adjacent copy/render/projection helpers. Six Node syntax checks pass.
+  Initial repository-root lint could not resolve the existing Next Babel
+  preset; using the existing module path and an ignored project-root adapter
+  fixed invocation resolution without a dependency or source-rule change.
+- The first UI-rule run exposed invalid synthetic syntax: a new exact-canvas
+  case supplied JSX under the plain `.ts` renderer filename. It now uses valid
+  TS object props, already supported by the analyzer, and still requires both
+  dialog and focus violations. The neighboring TSX negative guard and exact
+  color-only path boundary are unchanged. No analyzer/runtime/style waiver was
+  added. All 18 rule regressions pass after that fixture-only correction.
+- The full UI scan passes over 1,662 source files with 676 inherited
+  occurrences, no added/stale allowance. The changed rule test also passes
+  strict lint. All 43 original screenshot hashes remain unchanged.
+
+Logs are root `.cache/try-stage1-units.log`, `try-stage1-types.log`,
+`try-stage1-syntax.log`, `try-stage1-strict-lint-final.log`,
+`try-stage1-ratchet-{rules-repair,scan}.log` and
+`try-stage1-ratchet-test-lint.log`; initial setup/test failures are retained too.
+The selected suites and lint targets are listed in the ignored
+`try-conversion-final-{suite,lint}-selection.txt` artifacts. All local runtime
+jobs are closed and the slot is released before Next build/browser. Final
+tracked delta from the preserved integration is only the rule-test fixture and
+this checkpoint. No real account/provider/SC2/installer operation occurred.
 
 The local report adds an intent-only share preview and 1200×630 PNG. The same
 selected aggregate model feeds the image and text. Player/account/game objects

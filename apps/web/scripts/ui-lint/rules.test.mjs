@@ -69,7 +69,9 @@ test("fragment IDs, URLs and SVG filter references are not mistaken for colors",
 
 test("visualization exceptions never waive focus or dialog violations", () => {
   assert.deepEqual(rules(`<div role="dialog" className="outline-none" />`, "components/overlay/Example.tsx"), ["dialog-outside-ui", "focus-without-ring"]);
-  assert.deepEqual(rules(`<div role="dialog" className="outline-none" />`, "lib/instant/reportCard.ts"), ["dialog-outside-ui", "focus-without-ring"]);
+  // The fixed canvas renderer is plain TypeScript; use valid object props to
+  // verify its color-only exception leaves dialog and focus checks active.
+  assert.deepEqual(rules(`const props = { role: "dialog", className: "outline-none" };`, "lib/instant/reportCard.ts"), ["dialog-outside-ui", "focus-without-ring"]);
 });
 
 test("only the exported canonical before-paint theme color declaration is exempt", () => {
