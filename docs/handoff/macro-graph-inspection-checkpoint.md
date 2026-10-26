@@ -66,3 +66,9 @@ the fixture bundles the current actual components. Final exact-head CI must
 compile the final Help wording and Mechanics tags before merge. Vercel rejected
 one normal exact-ref graph Preview at its daily100-deployment limit; no further
 retry, upgrade, plan change or live-deployment claim.
+
+The final graph source now includes the independently verified Auto default
+and actual merged Settings A1 d7582739, with all three changelog entries
+preserved. Browser-tested graph/Mechanics/filter source hashes are checked
+again after integration; fresh exact-head GitHub checks are required before
+merge. Screenshots remain synthetic, and production remains unverified.
