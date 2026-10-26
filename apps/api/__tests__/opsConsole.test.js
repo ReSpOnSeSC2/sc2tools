@@ -185,3 +185,14 @@ test("a completed wipe is audited even if its HTTP client disconnects before rec
   const pending=admin(request(server).post(`/v1/admin/users/${userId}/wipe-games`));void pending.then(()=>null,()=>null);await began;pending.abort();release();
   try{expect(await waitAudit("user.wipe-games",userId)).toMatchObject({result:{games:1,status:202,ok:true}});expect(await db.games.countDocuments({userId})).toBe(0);}finally{spy.mockRestore();await new Promise(resolve=>server.close(resolve));}
 });
+
+
+test("pending-only admin detail separates live history from authoritative wipe confirmation", async () => {
+  const userId = "pending-only-admin-preview";
+  await db.users.insertOne({ userId, clerkUserId: "pending-only-clerk", createdAt: new Date() });
+  await db.games.insertMany([{ userId, gameId: "pending-record", _deletionPending: true }, { userId, gameId: "deleted-marker", _deleted: true }]);
+  const detail = await admin(request(app).get(`/v1/admin/users/${userId}`));
+  expect(detail.status).toBe(200); expect(detail.body.games.total).toBe(0); expect(detail.body.recentGames).toEqual([]); expect(detail.body.wipeGameCount).toBe(1);
+  const wiped = await admin(request(app).post(`/v1/admin/users/${userId}/wipe-games`).send({ expectedGames: detail.body.wipeGameCount }));
+  expect(wiped.status).toBe(202); expect(await services.gdpr.countGamesForWipe(userId)).toBe(0);
+});

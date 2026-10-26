@@ -135,7 +135,7 @@ export interface ReplayLibraryService {
 export interface OpponentsService {
   list(
     userId: string,
-    opts?: { limit?: number; before?: Date; filters?: object },
+    opts?: { limit?: number; before?: Date; filters?: object; includeListDetails?: boolean },
   ): Promise<{ items: object[]; nextBefore: Date | null }>;
   get(
     userId: string,

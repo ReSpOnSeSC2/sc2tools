@@ -105,6 +105,15 @@ describe("token-auth broadcast routes", () => {
   });
 });
 
+it("renders status without auth, realtime, analytics, background traffic or site chrome", () => {
+  renderAt("/status");
+  expect(screen.getByTestId("route-content")).toBeTruthy();
+  expect(route.clerkRenders).not.toHaveBeenCalled();
+  for (const id of ["clerk-provider", "realtime-provider", "toast-provider", "site-header", "site-footer", "app-chrome", "cookie-banner", "google-analytics", "service-worker", "site-stats", "site-presence"]) {
+    expect(screen.queryByTestId(id)).toBeNull();
+  }
+});
+
 describe("app chrome routes", () => {
   it.each([
     "/app",

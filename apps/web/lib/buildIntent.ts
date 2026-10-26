@@ -310,10 +310,12 @@ export function putGameIntent(
   getToken: TokenGetter,
   gameId: string,
   body: GameIntentRequest,
+  options?: { signal?: AbortSignal },
 ): Promise<GameIntentState> {
   return apiCall<GameIntentState>(getToken, gameIntentPath(gameId), {
     method: "PUT",
     body: JSON.stringify(body),
+    ...(options?.signal ? { signal: options.signal } : {}),
   });
 }
 
@@ -321,6 +323,8 @@ export function putGameIntent(
 export interface GameIntentWriteOptions {
   /** A key corrects the opponent's build, null restores the replay's label. */
   opponentBuildKey?: string | null;
+  /** Local request cancellation; never included in the saved check-in. */
+  signal?: AbortSignal;
 }
 
 function withOptionalFields(
@@ -344,7 +348,7 @@ export function confirmGameIntent(
     action: "confirm",
     buildKey,
     ...withOptionalFields(notes, opts),
-  });
+  }, opts);
 }
 
 /** "No set build": the game keeps the replay's own label. */
@@ -357,7 +361,7 @@ export function skipGameIntent(
   return putGameIntent(getToken, gameId, {
     action: "skip",
     ...withOptionalFields(notes, opts),
-  });
+  }, opts);
 }
 
 /**
@@ -369,20 +373,22 @@ export function setOpponentBuild(
   gameId: string,
   opponentBuildKey: string | null,
   notes?: string,
+  options?: { signal?: AbortSignal },
 ): Promise<GameIntentState> {
   return putGameIntent(getToken, gameId, {
     action: "opponent",
     opponentBuildKey,
     ...(notes === undefined ? {} : { notes }),
-  });
+  }, options);
 }
 
 export function saveGameIntentNotes(
   getToken: TokenGetter,
   gameId: string,
   notes: string,
+  options?: { signal?: AbortSignal },
 ): Promise<GameIntentState> {
-  return putGameIntent(getToken, gameId, { action: "notes", notes });
+  return putGameIntent(getToken, gameId, { action: "notes", notes }, options);
 }
 
 export function dismissPendingIntents(

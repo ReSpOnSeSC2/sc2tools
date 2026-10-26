@@ -35,11 +35,12 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "Search by player, map, build or strategy. Narrow it with the **result** and **matchup** menus, or show the oldest games first.",
-        "The filter bar above applies too: date range, region, ladder or custom games, 1v1 or team games, and game length. **Reset** clears only the search and menus on this page.",
-        "Use **Newer** and **Older** at the bottom to page through.",
+        "Search by player, map, build or strategy. **All**, **Wins** and **Losses** narrow the result; All includes ties. Use the matchup menu or show the oldest games first.",
+        "The global filter bar still applies. **Jump to date** includes that day and earlier games; it never extends an earlier global end date. Remove the Before chip to clear it. **Reset** or **Clear replay filters** clears only this page's controls. **Reset all filters** also restores global defaults when offered.",
+        "Use **Newer** and **Older** to page through. Search, result, matchup, date and sort changes return to the newest matching page. The address keeps these controls and the page, so refresh, copied links and Back from a game retain your place and scroll to its row. If this browser no longer knows the previous cursor, **Back to newest** replaces Newer.",
       ],
     },
+    { type: "paragraph", text: "The compact archive header keeps the count and **Share** controls together. The introductory tip can be dismissed on this device. Sharing still requires the existing confirmation; local searches or copied analyzer links do not publish your archive." },
     { type: "heading", text: "What each row shows", anchor: "rows" },
     {
       type: "list",

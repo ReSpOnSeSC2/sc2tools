@@ -66,11 +66,36 @@ describe("usePersistentSort", () => {
     });
   });
 
-  it("ignores a malformed stored value and keeps the default", async () => {
+  it("reads a malformed entry without writing defaults, then repairs it on an explicit choice", () => {
     localStorage.setItem(KEY, "not json");
     const { result } = renderHook(() => usePersistentSort(KEY, "total", "desc"));
-    await waitFor(() => expect(localStorage.getItem(KEY)).toBe(JSON.stringify({ sortBy: "total", sortDir: "desc" })));
+    expect(localStorage.getItem(KEY)).toBe("not json");
     expect(result.current.sortBy).toBe("total");
     expect(result.current.sortDir).toBe("desc");
+    act(() => result.current.setSortExplicit("winRate", "asc"));
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ sortBy: "winRate", sortDir: "asc" });
+  });
+
+  it("keeps explicit handlers stable and persists multiple actions before an immediate unmount", () => {
+    const { result, unmount } = renderHook(() => usePersistentSort(KEY, "total", "desc"));
+    const { setSort, setSortExplicit } = result.current;
+    act(() => { setSort("winRate"); setSort("winRate"); });
+    expect(result.current.sortBy).toBe("winRate");
+    expect(result.current.sortDir).toBe("asc");
+    expect(result.current.setSort).toBe(setSort);
+    expect(result.current.setSortExplicit).toBe(setSortExplicit);
+    unmount();
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ sortBy: "winRate", sortDir: "asc" });
+  });
+
+  it("allows passive URL application without changing the saved choice", () => {
+    const saved = { sortBy: "games", sortDir: "asc" };
+    localStorage.setItem(KEY, JSON.stringify(saved));
+    const { result } = renderHook(() => usePersistentSort(KEY, "total", "desc"));
+    act(() => result.current.setSortExplicit("name", "desc", { persist: false }));
+    expect(result.current.sortBy).toBe("name");
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual(saved);
+    act(() => result.current.setSortExplicit("name", "asc"));
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ sortBy: "name", sortDir: "asc" });
   });
 });

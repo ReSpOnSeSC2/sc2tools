@@ -13,16 +13,17 @@ import { useLocalStoragePositiveInt, useLocalStorageState } from "@/lib/useLocal
 import {
   groupMatchesSearch,
   groupOpponentsByPlayer,
-  LS_GROUP_BY_PLAYER,
   type OpponentGroup,
   type PulseLinksResponse,
 } from "@/lib/opponentGroups";
 import { useRivals, rivalKeys } from "@/lib/useRivals";
+import { useOpponentScoutingPreference } from "@/lib/useOpponentScoutingPreference";
+import { GroupingPreference } from "./opponents/GroupingPreference";
 import { useRivalSummary } from "@/lib/useRivalSummary";
 import { rivalSummaryGroups } from "@/lib/rivalSummaryGroups";
 import { StarredRivalCards } from "./opponents/StarredRivalCards";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/csvExport";
-import { opponentColumns, opponentRace, OPPONENT_CSV_COLUMNS, type OpponentColumns } from "@/lib/opponentPresentation";
+import { isOpponentColumnOverrides, opponentColumns, opponentDetailSortValue, opponentListDetailsSelected, opponentRace, OPPONENT_CSV_COLUMNS, OPPONENT_DETAIL_CSV_COLUMNS, OPPONENT_DETAIL_SORT_KEYS, type OpponentColumns } from "@/lib/opponentPresentation";
 import { RivalStar } from "./opponents/RivalStar";
 import { RivalriesStrip } from "./opponents/RivalriesStrip";
 import { OpponentHistory, OpponentColumnPicker } from "./opponents/OpponentHistory";
@@ -33,7 +34,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { opponentDossierHref } from "./tabs";
 import { visibleOpponentId } from "./opponentListSort";
-import { useOpponentListNavigation, type MmrImpactFilter, type OpponentListLocation, type OpponentListSnapshot } from "./useOpponentListNavigation";
+import { useOpponentListNavigation, type MmrImpactFilter, type OpponentListLocation, type OpponentListSnapshot, type OpponentListControls } from "./useOpponentListNavigation";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { useAllNetMmrOpponents } from "@/lib/netMmrOpponents";
 import { NoGamesYet, NoOpponentsMatch } from "./EmptyStates";
@@ -69,26 +70,25 @@ export function OpponentsTab({
   location,
   onResultCount,
   onExportAction,
+  controls,
 }: {
   onOpen?: (pulseId: string) => void;
   location?: OpponentListLocation;
   onResultCount?: (count: number) => void;
   onExportAction?: (action: OpponentExportAction | null) => void;
+  controls?: OpponentListControls;
 }) {
   const { filters, dbRev } = useFilters();
-  const { search, setSearch, impact: mmrImpactFilter, setImpact: setMmrImpactFilter, hasNotes, setHasNotes, sort, remember } = useOpponentListNavigation(location);
+  const { search, setSearch, impact: mmrImpactFilter, setImpact: setMmrImpactFilter, hasNotes, setHasNotes, sort, remember } = useOpponentListNavigation(location, controls);
   const rivals = useRivals();
   const [quick, setQuick] = useState<"all" | "regulars" | "week" | "rivals">("all");
-  const [columnOverrides, setColumnOverrides] = useLocalStorageState<Partial<OpponentColumns>>("analyzer.opponents.columns", {}, (value): value is Partial<OpponentColumns> => !!value && typeof value === "object" && !Array.isArray(value) && Object.entries(value).every(([key, visible]) => ["pulseId", "mmr", "netMmr", "mmrWon", "mmrLost"].includes(key) && typeof visible === "boolean"));
+  const [columnOverrides, setColumnOverrides] = useLocalStorageState<Partial<OpponentColumns>>("analyzer.opponents.columns", {}, isOpponentColumnOverrides);
   const searchRef = useRef<HTMLInputElement>(null);
   const deferredSearch = useDeferredValue(search);
   const [visibleCount, setVisibleCount] = useState(100);
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_OPP, 1);
-  const [groupByPlayer, setGroupByPlayer] = useLocalStorageState<boolean>(
-    LS_GROUP_BY_PLAYER,
-    true,
-    (raw): raw is boolean => typeof raw === "boolean",
-  );
+  const grouping = useOpponentScoutingPreference();
+  const { groupByPlayer, setGroupByPlayer } = grouping;
   const showPlayerGroups = groupByPlayer || quick === "rivals";
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
     new Set(),
@@ -103,7 +103,9 @@ export function OpponentsTab({
   // search input mid-edit. Only re-fetch when the actual server-side
   // filters change.
   const params = useMemo(() => ({ ...filters }), [filters]);
-  const path = `/v1/opponents${filtersToQuery(params)}`;
+  const summarySelected = opponentListDetailsSelected(opponentColumns(columnOverrides, false)) || (OPPONENT_DETAIL_SORT_KEYS.has(sort.sortBy) && sort.sortBy !== "region");
+  const listQuery = filtersToQuery(params);
+  const path = `/v1/opponents${listQuery}${summarySelected ? `${listQuery ? "&" : "?"}listDetails=1` : ""}`;
   const {
     items: rawItems,
     isLoading,
@@ -250,7 +252,7 @@ export function OpponentsTab({
 
   const { sortRows } = sort;
   const items = useMemo(
-    () => sortRows(filteredItems, (row, col) => col === "pulseId" ? visibleOpponentId(row) : col === "race" ? opponentRace(row.race) : (row as unknown as Record<string, unknown>)[col]),
+    () => sortRows(filteredItems, (row, col) => col === "pulseId" ? visibleOpponentId(row) : col === "race" ? opponentRace(row.race) : opponentDetailSortValue(row, col)),
     [filteredItems, sortRows],
   );
   // Rows only the Min games picker is hiding, for the empty state.
@@ -323,8 +325,8 @@ export function OpponentsTab({
     if (currentExport.current !== exportScope) return;
     const exportedAt = new Date();
     const scope = `Opponents · ${showPlayerGroups ? "grouped players" : "accounts"} · ${path} · search ${search || "(none)"} · min games ${minGames} · ${quick} · MMR ${mmrImpactFilter} · notes ${hasNotes} · ${sort.sortBy} ${sort.sortDir}`;
-    downloadCsv(csvFilename("opponents", exportedAt), toCsv({ columns: OPPONENT_CSV_COLUMNS, rows: items, scope, exportedAt }));
-  }, [exportScope, showPlayerGroups, path, search, minGames, quick, mmrImpactFilter, hasNotes, sort.sortBy, sort.sortDir, items]);
+    downloadCsv(csvFilename("opponents", exportedAt), toCsv({ columns: summarySelected ? [...OPPONENT_CSV_COLUMNS, ...OPPONENT_DETAIL_CSV_COLUMNS] : OPPONENT_CSV_COLUMNS, rows: items, scope, exportedAt }));
+  }, [exportScope, showPlayerGroups, path, search, minGames, quick, mmrImpactFilter, hasNotes, sort.sortBy, sort.sortDir, items, summarySelected]);
   const exportDisabled = !rivals.owner || !items.length || isLoading || isLoadingMore || hitMaxPages || !!error || search !== deferredSearch;
   useEffect(() => {
     onExportAction?.({ count: items.length, disabled: exportDisabled, download: exportRows });
@@ -356,8 +358,8 @@ export function OpponentsTab({
         <Button variant={quick === "week" ? "primary" : "secondary"} aria-pressed={quick === "week"} onClick={() => setQuick(quick === "week" ? "all" : "week")}>Played this week</Button>
         <Button variant="secondary" onClick={() => { setQuick("all"); sort.setSortExplicit("losses", "desc"); }}>Lost to most</Button>
         <Button variant={quick === "rivals" ? "primary" : "secondary"} aria-pressed={quick === "rivals"} onClick={() => setQuick(quick === "rivals" ? "all" : "rivals")}>Rivals ({rivals.keys.length})</Button>
-        <OpponentColumnPicker columns={columns} onChange={(key, checked) => setColumnOverrides({ ...columnOverrides, [key]: checked })} onReset={() => setColumnOverrides({})} />
         {!onExportAction ? <Button variant="secondary" disabled={exportDisabled} title={`Export all ${items.length.toLocaleString()} matching ${groupByPlayer ? "players" : "accounts"}, including rows outside the render window`} onClick={exportRows}>Export CSV</Button> : null}
+        <div className="ml-auto"><OpponentColumnPicker columns={columns} onChange={(key, checked) => setColumnOverrides({ ...columnOverrides, [key]: checked })} onReset={() => setColumnOverrides({})} /></div>
       </div>
       {rivals.error || rivals.unavailable ? <div role="alert" className="flex flex-wrap items-center gap-2 text-caption text-warning"><p>{rivals.error || "Rival preferences are temporarily unavailable."}</p>{rivals.unavailable ? <Button variant="ghost" size="sm" onClick={rivals.retry}>Retry rival preferences</Button> : null}</div> : null}
       {summary.error ? <p role="status" className="flex flex-wrap items-center gap-2 text-caption text-text-muted">Recent rival details are unavailable.<Button variant="ghost" size="sm" onClick={summary.retry}>Retry rival details</Button></p> : null}
@@ -397,19 +399,7 @@ export function OpponentsTab({
         </label>
         <label className="flex min-h-[44px] items-center gap-2 text-caption text-text-muted"><Toggle checked={hasNotes} onChange={setHasNotes} label="Has notes" /><span>Has notes</span></label>
         {changed ? <Button variant="ghost" size="sm" onClick={reset}>Reset</Button> : null}
-        <label
-          className="flex cursor-pointer items-center gap-2 text-xs text-text-muted"
-          title="Merge accounts linked to the same player into one row"
-        >
-          <Toggle
-            checked={groupByPlayer}
-            onChange={setGroupByPlayer}
-            label="Group same player"
-          />
-          <span className="text-micro uppercase tracking-wider text-text-dim">
-            Group same player
-          </span>
-        </label>
+        <GroupingPreference preference={grouping} />
         <div className="ml-auto flex w-full flex-col items-end gap-1 sm:w-auto">
           <span aria-live="polite" className="text-xs text-text-dim">
             {isRefreshing ? "Updating… · " : isLoadingMore ? `Loading more opponents… (${rawItems.length.toLocaleString()} so far) · ` : ""}

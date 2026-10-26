@@ -1,5 +1,20 @@
 # Owner setup notes (accumulated)
 
+## Analyzer section links
+
+The section-navigation pack is web-only and needs no environment variable,
+secret, endpoint, migration, scheduler or infrastructure change. Existing
+authenticated replay and analyzer endpoints are reused. Copied links contain
+validated global filters plus known section controls; they open the recipient's
+own data and never enable public replay sharing. Replay cursor/row restoration
+uses bounded owner-scoped session storage; clearing it leaves Back to newest.
+Search writes use a short debounce and Strategy sheets own one browser history
+entry. Help covers the behavior under Filters, Replays and Today.
+
+## Linked scouting and deterministic opening forecasts
+
+Deploy the API before the web so the private `opponentScouting` preference is available. No new environment variable, secret, collection, index, migration, job or infrastructure is needed. The existing identity/account caches and k-floor Ladder Meta documents are read with fixed bounds; scouting does not warm upstream identity links or recompute the corpus. Grouping defaults on and saves per signed-in account; the former unscoped browser value is not silently written into another account. Verify the grouping control and `/help/opponent-scouting#how-the-forecast-works` using disposable fixtures. Existing desktop apps keep their compatible brief until a future ordinary update includes the new confidence copy; no version, installer, tag or release was produced. Revert the web before API on rollback; the saved preference can remain unused.
+
 ## Twitch Predictions and game markers (Wave 4)
 
 Deploy API before web. The new `TWITCH_AUTOMATION_ENABLED` server gate defaults off and accepts only the exact value `true`; this work has not set it or activated any integration. Keeping the gate off makes lifecycle hooks, recovery and Dock provider controls inert even if a saved user opt-in is true. Owner enablement is a separate operational decision. No new service, paid plan or production data migration was executed. The bounded `twitch_automation_receipts` metadata collection uses normal startup index definitions (owner/game unique, TTL and bounded recovery/owner lookups), and account erasure removes its owner rows. It is excluded from snapshot restore.

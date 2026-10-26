@@ -517,7 +517,9 @@ describe("pinned rail and accessible More", () => {
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
     const radios = within(dialog).getAllByRole("radio"); radios.at(-1)!.focus(); fireEvent.keyDown(document, { key: "Tab" });
     expect(dialog.contains(document.activeElement)).toBe(true);
-    expect(within(dialog).getByRole("link", { name: "System status" }).getAttribute("rel")).toBe("noopener noreferrer");
+    const statusLink = within(dialog).getByRole("link", { name: "System status" });
+    expect(statusLink.getAttribute("href")).toBe("/status");
+    expect(statusLink.getAttribute("target")).toBeNull();
     fireEvent.keyDown(document, { key: "Escape" }); expect(screen.queryByRole("dialog")).toBeNull(); expect(document.activeElement).toBe(more);
     expect(document.body.style.overflow).toBe("hidden"); unlock(); expect(document.body.style.overflow).toBe("auto"); document.body.style.overflow = "";
   });

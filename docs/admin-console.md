@@ -88,8 +88,11 @@ or search text. No credentials are exported.
 
 User detail measures:
 
-- **Games:** stored games and recorded wins/losses, including undecided games in
-  the total.
+- **Games:** stored live games and recorded wins/losses, including hidden and
+  undecided games in the total. Deleted and pending-deletion markers do not
+  count as replay history. Wipe confirmation uses the existing authoritative
+  deletion preview; it can additionally include records already pending deletion,
+  with an explanation beside the action.
 - **Win rate:** wins divided by wins plus losses; no decided games displays an
   em dash.
 - **Opponents:** stored opponent records for this account.

@@ -29,6 +29,24 @@ def test_full_scouting_renders_the_actual_record_opening_and_private_note():
     assert model.dossier_path == "/app/opponents/1-S2-1-42"
 
 
+def test_shared_posterior_keeps_prior_only_low_confidence_and_aliases_honest():
+    raw = payload()
+    raw["forecast"] = {"method": "posterior", "name": "Hatch First", "share": .6, "samples": 0, "n": 0, "effectiveN": 0, "confidence": "Low"}
+    raw["alsoPlaysAs"] = ["Alt", "Alt", "Another", "not displayed"]
+    model = scouting_model(parse_scouting_brief(raw, "current"), NOW)
+    assert "Forecast: Hatch First (60% · Low confidence · effective n=0.0)" in model.opening_line
+    assert "0 of last 0" not in model.opening_line
+    assert model.record_line.endswith("also: Alt, Another")
+
+
+@pytest.mark.parametrize("patch", [{"effectiveN": float("nan")}, {"share": True}, {"confidence": "Certain"}, {"effectiveN": 76}, {"n": 51}])
+def test_invalid_posterior_cannot_fall_back_to_a_confident_opening(patch):
+    raw = payload()
+    raw["forecast"].update(method="posterior", confidence="Low", effectiveN=2.4)
+    raw["forecast"].update(patch)
+    assert not parse_scouting_brief(raw, "current").opening
+
+
 def test_first_meeting_and_unknown_are_distinct_without_invented_tendencies():
     raw = {"gameKey": "current", "oppName": "New opponent", "h2h": {"w": 0, "l": 0}}
     model = scouting_model(parse_scouting_brief(raw, "current"), NOW)
