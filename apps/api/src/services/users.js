@@ -216,11 +216,19 @@ class UsersService {
 
   /** @param {string} userId */
   async touch(userId) {
+    const now = new Date(Date.now());
+    const weekAgo = new Date(now.getTime() - 7 * 86400000);
+    const twoWeeksAgo = new Date(now.getTime() - 14 * 86400000);
     await this.db.users.updateOne(
-      { userId },
-      [{ $set: { lastSeenAt: new Date(), "activation.week2ReturnAt": { $cond: [
-        { $and: [{ $lte: ["$createdAt", new Date(Date.now() - 7 * 86400000)] }, { $gt: ["$createdAt", new Date(Date.now() - 14 * 86400000)] }] },
-        { $ifNull: ["$activation.week2ReturnAt", new Date()] }, { $ifNull: ["$activation.week2ReturnAt", "$$REMOVE"] },
+      { userId, $or: [
+        { $expr: { $ne: [{ $type: "$lastSeenAt" }, "date"] } },
+        { lastSeenAt: { $lte: new Date(now.getTime() - 5 * 60000) } },
+        // A first week-two visit must still count when lastSeenAt is recent.
+        { createdAt: { $lte: weekAgo, $gt: twoWeeksAgo }, "activation.week2ReturnAt": null },
+      ] },
+      [{ $set: { lastSeenAt: now, "activation.week2ReturnAt": { $cond: [
+        { $and: [{ $lte: ["$createdAt", weekAgo] }, { $gt: ["$createdAt", twoWeeksAgo] }] },
+        { $ifNull: ["$activation.week2ReturnAt", now] }, { $ifNull: ["$activation.week2ReturnAt", "$$REMOVE"] },
       ] } } }],
     );
   }

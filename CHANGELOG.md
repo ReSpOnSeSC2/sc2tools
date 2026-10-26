@@ -16,6 +16,10 @@ corresponding GitHub Release.
 - Load charts below the first Trends row as they approach the viewport, with explicit Load buttons and usable fallbacks. Keep chart selections and unapplied Explorer controls while scrolling; collapsed groups retain their existing close-and-unmount behavior.
 - Highlight the current Trends section during scrolling. Explicit section jumps open and load their destination, while passive scrolling keeps focus, filters and the URL in place.
 
+### Account activity writes
+
+- Avoid rewriting recent account activity on every page load. Keep the first week-two return recorded even when another visit occurred within five minutes.
+
 ### Chat & alerts settings
 
 - Give platforms, chat appearance, alerts, TTS, translation, commands, Stream Dock and the bot their own Chat & alerts tab. Keep OBS sources, widgets, scenes and look in Overlay.
