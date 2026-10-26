@@ -9,11 +9,13 @@ const mocks = vi.hoisted(() => ({
   notFound: vi.fn(() => {
     throw new Error("NEXT_NOT_FOUND");
   }),
+  published: vi.fn(async (): Promise<ReadonlySet<string> | null> => null),
 }));
 
 vi.mock("next/navigation", () => ({ notFound: mocks.notFound }));
 vi.mock("@/components/instant/TryPage", () => ({ TryPage: () => null }));
 vi.mock("@/components/instant/TryExplainer", () => ({ TryExplainer: () => null }));
+vi.mock("@/lib/guides/api", () => ({ fetchPublishedGuidePaths: mocks.published }));
 
 /** The route's element tree as [TryPage props, whether the explainer renders]. */
 function renderedParts(tree: { props: { children: unknown } }) {
@@ -24,6 +26,7 @@ function renderedParts(tree: { props: { children: unknown } }) {
 async function loadRoute(flag: string) {
   vi.resetModules();
   vi.stubEnv("NEXT_PUBLIC_INSTANT_IMPORT", flag);
+  vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "off");
   return import("../page");
 }
 
@@ -36,7 +39,7 @@ describe("/try route", () => {
   it("404s with no /try metadata when the flag is off", async () => {
     const route = await loadRoute("");
     expect(route.metadata).toEqual({});
-    expect(() => route.default()).toThrow("NEXT_NOT_FOUND");
+    await expect(route.default()).rejects.toThrow("NEXT_NOT_FOUND");
     expect(mocks.notFound).toHaveBeenCalledTimes(1);
   });
 
@@ -45,7 +48,7 @@ describe("/try route", () => {
     expect(route.metadata.title).toEqual({ absolute: "SC2 Replay Analyzer: free StarCraft II replay stats | SC2 Tools" });
     expect(route.metadata.alternates?.canonical).toBe("/try");
     expect(route.metadata.robots).toBeUndefined();
-    expect(renderedParts(route.default())).toEqual({ pageProps: { mode: "all" }, explainer: true });
+    expect(renderedParts(await route.default())).toEqual({ pageProps: { mode: "all", guideLinks: [] }, explainer: true });
     expect(mocks.notFound).not.toHaveBeenCalled();
   });
 
@@ -53,6 +56,15 @@ describe("/try route", () => {
     const route = await loadRoute("admins");
     expect(route.metadata.robots).toEqual({ index: false, follow: false });
     // The crawlable explainer stays off a page that is kept out of search.
-    expect(renderedParts(route.default())).toEqual({ pageProps: { mode: "admins" }, explainer: false });
+    expect(renderedParts(await route.default())).toEqual({ pageProps: { mode: "admins", guideLinks: [] }, explainer: false });
+  });
+
+  it("passes only published guide targets without making the page query-dependent", async () => {
+    const route = await loadRoute("all");
+    vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "on");
+    mocks.published.mockResolvedValue(new Set(["/guides/pvz/adept-glaives-robo"]));
+    const parts = renderedParts(await route.default());
+    expect(parts.pageProps).toMatchObject({ guideLinks: [{ name: "PvZ - Adept Glaives (Robo)", matchup: "PvZ" }] });
+    expect(mocks.published).toHaveBeenCalledTimes(1);
   });
 });

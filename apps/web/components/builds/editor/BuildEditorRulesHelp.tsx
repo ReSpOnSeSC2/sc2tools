@@ -35,6 +35,7 @@ export function RulesLegend({ withHelpLink = false }: { withHelpLink?: boolean }
         ))}
       </dl>
       <p className="pb-3 text-micro text-text-dim">{RULES_LEGEND_FOOTER}</p>
+      <p className="pb-3 text-micro text-text-muted">An owned game's Build execution card shows each rule's recorded count and event or deadline. Unavailable evidence stays unknown. <LazyHelpLink slug="build-check-in" anchor="grading-a-game">Grading a game</LazyHelpLink></p>
       {withHelpLink ? (
         <p className="pb-3 text-micro text-text-muted">
           Worked examples: <LazyHelpLink slug="rules-explained">How build rules are counted</LazyHelpLink>

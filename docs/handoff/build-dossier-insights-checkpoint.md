@@ -1,0 +1,189 @@
+# Build dossier insights checkpoint
+
+Branch: `codex/wave4-build-dossier-insights`. ADR0057 owns the bounded design.
+
+## Current combined integration and browser proof
+
+The combined Execution branch normally integrates main/Public `251cb319`,
+Auth main `8d7ec51d` and urgent main `1c3d9877` at current base `35ec229a`.
+Its accepted API source remains identical to the 294-test/18-suite proof.
+The prepared web pack passes 254 tests in 31 suites at the preceding `804a5f6d`
+integration. The reviewed semantic follow-up passes 20 BuildCard/Held checks
+on current main, including three definition-group regressions. Full types,
+19 UI rules and the 1,679-file UI ratchet pass. Strict changed-source lint is
+green with inherited JSX wrapper warnings recorded separately, without a
+waiver. The Execution checkpoint records exact staged proof boundaries.
+
+The first new browser attempt exposed the fixture's removed timingContext
+prop. Its preserved correction `d627eb37` supplies the current typed parent
+execution DTO: Stargate at 312 seconds, median 300, n=12 and delta +12, within
+the bounded 25-game sample. Missing own events, opponent data, repeated later
+buildings, seeking and every request/AA assertion remain unchanged. The next
+attempt exposed real invalid nested definition lists in BuildCard. The approved
+repair keeps the same classes/values/actions while using valid Win rate/Record
+and Held definition groups. Both failed attempts and generated hosts remain
+under the original final/retry evidence directories.
+
+The replacement direct Next build uses integrated current source plus that
+semantic repair, real production CSS/fonts and CI dummy settings. It passes
+142 generated pages, post-build types and all unchanged budgets: 18 listed
+plus 63 default routes (81 actual checks). Game is 315.3/440, opponent
+458.7/500, Builds 202.7/270 and Community 188.4/190 kB. No budget increased.
+The retained validated engine is `1.6.12/d27b37abb9997712`, agent `0.24.7`;
+all 40 normalized shipped inputs match. Its immutable ZIP/manifest were copied
+only when missing, existing runtime assets were hash-verified, and old 25b/
+pointer evidence was retained. No engine compile/download/publisher ran.
+
+Final Dossier proof passes 262 checks and 32 captures at 320/390/768/1440 in
+Light and Dark, including all 25 current full AA calls with contrast enabled
+and `A11Y_COLLECT_ONLY=0`. Theme/storage initialize before mounting. Actual
+timing/plan sample drilldowns, keyboard focus, own-only first-occurrence game
+comparison, seek, absent-log no-read gate, Held sorting/filtering and owner
+loading/B/A retirement all pass. Evidence is
+`.cache/build-dossier-insights-final-semantic-evidence`. The adjacent actual
+GameDetailPage/Execution matrix passes 157 checks/15 captures/nine AA calls
+after removing its stale bare Help mock; real Help now supplies its styles.
+All API calls are asserted GET and zero writes are recorded. Nonlocal traffic
+is blocked; attempted external requests are not counted by these runners.
+All browser/server jobs closed. Phone Light/Dark and desktop representatives
+were visually inspected as legible and contained. All 15 original committed
+PNG hashes, 16 older evidence files and five historical host files are intact.
+Proof/asset/preservation receipts are in `.cache/execution-final-proof.json`.
+
+## Implementation contract and historical proof
+
+The API reuses complete owner/visibility-scoped performance aggregations, adds
+confirmed declared-plan facets, and hydrates at most the latest 25 selected
+timing logs through the shared split-store reader. Hidden, deleted, pending,
+resumed and foreign-owner rows do not enter those cohorts. Unapplied check-ins
+whose declared reference differs from the effective build cannot inflate a
+different build's plan denominator.
+
+Plan labels retain full counts, at most five ranked labels and at most twenty
+latest sample IDs per label for exact owner-only game links. Missing detection
+means no different label was recorded. Median duration is an approximate full
+game duration, not the time or cause of a plan change.
+
+Community timings use one bounded indexed snapshot batch. Exact catalog
+identity, current guide era, publication floors and equivalent first-start
+milestones are required. Private same-name classifiers, mixed/unknown eras,
+morph completion and later occurrences do not produce comparisons. Winner and
+loser medians use the same personal samples and require five of each outcome.
+Timing recency sorts actual timestamps; unknown dates retain quantiles while
+withholding trends and last-seen claims.
+
+API verification: the initial 149 tests across ten suites and one snapshot,
+then 68 compactor/outcome and 62 library/cohort regressions, full API type
+checking and strict helper/test lint pass. The bounded compactor now preserves
+earliest construction-start parity on unordered logs, including morphs. Timing
+win rate uses decided games with an explicit denominator. Library Held summaries
+reuse the same existing grouped query and visibility guards, with no hydration.
+
+Key timings and Plan survival cards, optional native section links and selected
+sample-game integration are implemented. An owner/auth epoch prevents selections
+from resurfacing across loading/signout/ABA transitions. The owned game page uses
+one exact loaded-intent dossier SWR key for all first-occurrence owner building
+deltas; old cohorts, failed cached lookups and unidentified/deleted references
+supply no baseline. Existing supply, actions and shared-clock seeking stay intact.
+The cards remain inside the existing lazy dossier route/modal boundaries; the
+game comparison remains in the existing lazy build-order chunk.
+
+New card/helper/wrapper consumers, the existing game consumers and owner-scoped
+dossier integration/nav tests pass. The final affected web set is 111 tests,
+including the owner game page, Held sorting and visible-cohort CSV. Full types/scoped
+lint pass. Combined API 153 tests/ten suites + one snapshot and all 145 custom-build
+service regressions pass. Independent review cleared the final API additions.
+
+The approved seven-minute cutoff dependency `3dceab1c` was integrated at `2a4c5689`.
+Actual main `e2fa5d08` has a clean merge tree identical to that HEAD tree; no extra
+bookkeeping merge is needed. Required engine `25b300818c31d41b` builds/smokes
+successfully. The production Next baseline passes every unchanged budget:
+landing 214.9/215, Today 239.1/240, game 312.7/440, Builds 197/270,
+opponent 471.7/500, Dock 215.3/225, AIO 238.3/240, widget 322.5/325,
+guide 168.7/175 kB. It uses the public nonfunctional example Clerk key from CI.
+
+The actual-source loopback browser matrix passes 189 checks with 32 captures at
+320/390/768/1440 in both themes using production CSS/fonts. It covers keyboard
+selection/focus, exact example links, matchup/source changes, small samples,
+owner loading/B/A, clock seeking, Held summaries/sort/search, overflow/targets and axe. No external traffic
+or writes are allowed. Captures live under `.cache/build-dossier-insights-evidence`;
+fixed/sticky page chrome is hidden only for element screenshots so it does not
+obscure a stitched card. Heading order and fully visible mobile delta text were
+corrected from the browser evidence; both timeline columns retain equal slots.
+
+Selected examples now carry sampled navigation, requiring the existing explicit
+broader-scope opt-in before Older/Newer. Optional nav removal resets its active
+anchor. The final production/browser pass includes Held summaries in the card
+and table. Actual #738 reconciliation proved BuildCard, types and BuildsTab
+unchanged there; this pack never edits its overlapping editor or library files.
+The Held field remains additive beside future Reference fields. A peer caught a
+valid legacy private-slug alphabet mismatch; the game resource now accepts its
+existing bounded case/underscore/dot alphabet and has a regression.
+
+Actual selected and logged timing counts are separate from the 25-game cap,
+including the case of 30 performance games with only five eligible timings.
+Help, ADR, changelog and owner notes are written. Actual main #741 at
+`59633bfe` is integrated at `2102fa1c`; the two additive changelog/setup conflicts
+retain both packs. App wiring differs from main only by injecting the existing
+game-details reader into BuildsService. Engine/native files are absent from the
+feature diff. Combined service wiring/readers pass 44 tests and one snapshot,
+with full API types. The final integrated production build/budgets and browser
+matrix pass. The catalog/library aggregation test also verifies the same Held
+floor end to end, including zero and small samples, with no hydration.
+
+Eight representative light-phone/dark-desktop captures are committed under
+`docs/handoff/screenshots/build-dossier-*`. Complete captures/call receipts remain
+in the local evidence folder. Independent API review is clear; full UI/visual
+review and expected-head GitHub/Vercel gates are tracked in the attached PR.
+
+Peer UI review confirmed a no-output cost edge: a valid intent could fetch a
+dossier even when own build events were missing, loading, failed or unextracted.
+The wrapper now gates both its resource path and any warm baseline in those
+states. Seven wrapper and six timeline consumers pass; the expanded local
+browser matrix passes 197 checks/32 captures and proves zero extra baseline
+reads for absent own logs. All other UI/sample/first-occurrence/count shaping
+was independently reviewed without another blocker. The inherited shared-useApi
+JWT fence is being repaired separately; integrate its reviewed source before
+the next combined production/head verification.
+
+The reviewed generic editor/request ownership dependency `de9f98e9` is now
+integrated locally at `f0803583`. Only the adjacent changelog entries conflicted;
+both packs are retained. Its editor/private/public/review-page source is exact,
+and the live opponent section order has no delta. Final combined verification
+passes 230 web consumers, 105 affected API cases and one snapshot, both complete
+typechecks, strict web/new-helper lint and configured API lint (zero errors;
+existing large-service warnings remain). Help generation is unchanged.
+
+The isolated Next-only production build reuses the verified 25b engine and
+passes every unchanged budget: landing 190.1/215, Today 238.8/240,
+game 312.3/440, opponent 448.2/500, Builds 197.5/270, Dock 215.7/225,
+AIO 238.7/240 and widget 322.8/325 kB. The final actual-source browser run passes
+197 checks/32 captures, including the absent-log read gate, with blocked external
+traffic and zero writes. All eight representative images were inspected; three
+are refreshed from this exact combined output. Root independently reviewed the
+final timing and survival components plus phone timing/plan and desktop game
+captures; final UI/visual signoff is complete.
+
+The reviewed StrictMode follow-up `1b56cbf6` is integrated at `55c571b9`.
+Capability retirement remains immediate; one microtask lets only the same scope
+object retain a deduplicated read through root StrictMode setup replay. The exact
+follow-up passes 136 focused ownership/review/Dossier/game tests, full web types
+and strict helper lint. A fresh isolated production build, every unchanged budget
+and the complete 197-check/32-capture browser matrix pass again. The actual
+generic squash integration remains the prerequisite for the single coordinated
+push and final expected-head checks.
+
+No production or provider operations were performed. The f96/25b build results
+above are historical. Future asset reuse or builds must match the integrated
+current engine source; preserve historical bundles and pointer evidence.
+# Current combined delivery
+
+The Dossier is included in Execution PR 748. Root preserved the reviewed semantic
+repair, current fixtures, both checkpoints and four new synthetic captures at
+`48f90d5e`, then normally integrated actual More main `378a957d` at `bb543a15`.
+Owned Dossier/Execution sources are unchanged by that integration. All 77 combined
+AppChrome/card/Macro checks and whole web types pass. Existing production and
+full browser evidence predates only this independent navigation integration;
+exact-head remote gates remain pending. Close superseded PR 742 only after the
+combined delivery merges.
+

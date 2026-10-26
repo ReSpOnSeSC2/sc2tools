@@ -52,6 +52,9 @@ test("hex colors use only explicit visualization exceptions", () => {
   assert.deepEqual(rules(source, "components/overlay/widgets/Example.tsx"), []);
   assert.deepEqual(rules(source, "components/analyzer/charts/Example.tsx"), []);
   assert.equal(rules(source, "components/unrelated-chart/Example.tsx").length, 4);
+  assert.deepEqual(rules(source, "lib/instant/reportCard.ts"), []);
+  assert.equal(rules(source, "lib/instant/reportSharing.ts").length, 4);
+  assert.equal(rules(source, "lib/instant/reportCardExtra.ts").length, 4);
   assert.deepEqual(rules(`const anchors = ['#app', '#abcde', '#abcdefgh'];`), []);
 });
 
@@ -66,6 +69,9 @@ test("fragment IDs, URLs and SVG filter references are not mistaken for colors",
 
 test("visualization exceptions never waive focus or dialog violations", () => {
   assert.deepEqual(rules(`<div role="dialog" className="outline-none" />`, "components/overlay/Example.tsx"), ["dialog-outside-ui", "focus-without-ring"]);
+  // The fixed canvas renderer is plain TypeScript; use valid object props to
+  // verify its color-only exception leaves dialog and focus checks active.
+  assert.deepEqual(rules(`const props = { role: "dialog", className: "outline-none" };`, "lib/instant/reportCard.ts"), ["dialog-outside-ui", "focus-without-ring"]);
 });
 
 test("only the exported canonical before-paint theme color declaration is exempt", () => {

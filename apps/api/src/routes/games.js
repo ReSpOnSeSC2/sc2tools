@@ -14,6 +14,7 @@ const {
 const { registerGamesExistsRoute } = require("./gamesExists");
 const { registerGameNeighborsRoute } = require("./gameNeighbors");
 const { registerGameContextRoute } = require("./gameContext");
+const { registerBuildExecutionRoute } = require("./buildExecution");
 const { normalizePoolBuildNames } = require("../util/poolBuildNames");
 const {
   stampIngestProvenance,
@@ -79,6 +80,7 @@ function captureGuideSample(guideSamples, userId, game, customTag, created) {
  * @param {{
  *   games: import('../services/types').GamesService,
  *   gameContext?: import('../services/gameContext').GameContextService,
+ *   gameExecution?: import('../services/buildExecution').BuildExecutionService,
  *   opponents: import('../services/types').OpponentsService,
  *   users?: {
  *     addPulseId: (userId: string, pulseId: string) => Promise<boolean>,
@@ -168,6 +170,7 @@ function buildGamesRouter(deps) {
   registerGamesExistsRoute(router, { games: deps.games });
   registerGameNeighborsRoute(router, { games: deps.games });
   registerGameContextRoute(router, { gameContext: deps.gameContext });
+  registerBuildExecutionRoute(router, { gameExecution: deps.gameExecution });
 
   router.get("/games", async (req, res, next) => {
     try {
@@ -566,6 +569,7 @@ function buildGamesRouter(deps) {
               userId,
               game,
             );
+            deps.gameExecution?.invalidateForUser(userId);
             const outcome = {
               gameId: game.gameId,
               created: marked.created,
@@ -627,12 +631,14 @@ function buildGamesRouter(deps) {
         try {
           if (typeof deps.games.upsertWithRevision === "function") {
             const stored = await deps.games.upsertWithRevision(userId, game);
+            deps.gameExecution?.invalidateForUser(userId);
             if (stored.excluded) { accepted.push({ gameId: game.gameId, created: false, excluded: true }); continue; }
             created = stored.created;
             customBuildRevision = stored.customBuildRevision;
             storedSpatial = stored.spatial;
           } else {
             created = await deps.games.upsert(userId, game);
+            deps.gameExecution?.invalidateForUser(userId);
           }
         } catch (err) {
           const e = /** @type {{ message?: unknown, code?: string }} */ (err);

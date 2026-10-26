@@ -1,5 +1,21 @@
 # Owner setup notes (accumulated)
 
+## Build dossier timings and plan survival
+
+Deploy the API before the web. No environment variable, secret, collection,
+index, migration, background job or provider connection is added. Existing
+replay details supply at most 25 sequential timing-log reads per dossier, and
+existing published guide snapshots supply one bounded indexed comparison batch.
+Do not run a production backfill for this feature.
+
+Open a populated build dossier, choose a timing matchup and inspect a recorded
+sample. Confirm Plan survival and Held summaries stay absent below five confirmed
+declarations. Check a first building on an owned game against its exact build's
+cached median; failed or missing baselines stay absent. Community deltas require
+the guide's era and equivalent first-start milestones, so absence can be correct.
+Both Help sections explain those limits. Rollback is an API/web revert; no stored
+data conversion or cleanup is required.
+
 ## Analyzer section links
 
 The section-navigation pack is web-only and needs no environment variable,
@@ -224,6 +240,20 @@ replays and socket traffic only.
 - A conditional receipt on the existing game row prevents duplicate posts on reprocessing. Historical imports, resumed, hidden and deleted games do not create moments. Delivery is best effort after the receipt, so a crash can miss an alert rather than repeat it.
 - Rollback: turn moments and bot posting off in Settings, Save, then revert the feature commit if needed. Existing receipts are harmless; do not remove them to replay history.
 
+## Private build execution (Wave 4)
+
+- Deploy API before web; no environment variables, collections, indexes, jobs, migrations or provider setup.
+- Open an owned game → Builds. Applied check-ins select the build before detection. Custom rules show observed/unmet/unknown counts; catalog and zero-rule builds have no percentage.
+- One private request supplies card, timeline and rail. The existing sample of up to 25 logs provides timing medians after three observations; public/Community floors are unchanged. Natural skips the starting base; first gas/tech name the observed structure.
+- Missing/unknown rule evidence withholds the overall percentage. Event chips seek observations; Deadline chips mark windows. Practice remains explicit and uses the existing Ghost controls.
+- Reanalysis/log replacement, edits, check-ins and owner visibility changes retire five-minute bounded memory caches. No evidence is added to coach, review, public or overlay routes. Rollback is an API/web revert with no data conversion.
+
+## Home-page browser replay demo (Wave 5)
+
+No new environment variable, service, collection, index or migration is required. The existing build-time `NEXT_PUBLIC_INSTANT_IMPORT=all` selects the local one-file demo; `off` and `admins` keep the previous rate-limited server demo during the planned one-release compatibility window. This work does not change a deployed flag or execute a release. The browser parse session uses the same self-hosted worker/engine as `/try`, starts downloading only on intent, performs no policy/API lookup and never falls back to an upload on failure. The parsed demo is memory-only.
+
+Keep `/v1/public/preview-replay`, its health route and the preview CLI wiring for that compatibility release. After an actual release has exercised the local path, retire those routes/wiring and their tests in a separate explicit change. During the window, the existing flag rollback restores the previous server path with its upload disclosure. See `docs/instant-analysis.md` rollout step 3 and `/try#home-replay-demo`.
+
 ## Unified build editor (Wave 4)
 
 - Web-only deployment. No new environment variables, API schema, collection,
@@ -255,6 +285,17 @@ replays and socket traffic only.
   reference payloads. A card requests its reference only on explicit Practice.
 - Paste parsing and exports run locally. No external parser or AI service is
   used. Rollback may leave the optional field stored; older readers ignore it.
+
+### Browser report conversion (ADR 0062)
+
+- No new flags, infrastructure, provider consent, account writes or release.
+  Existing Instant Analysis off/admins/all and Guides flags govern visibility.
+- Sharing runs locally after explicit preview/delivery actions. Analytics still
+  requires existing consent and sends only fixed method names.
+- Optional fixture samples are generated from the current verified engine
+  bundle, with version and source/bundle identity checks. Missing Python hides
+  the sample instead of retaining stale data. No private replay should be used
+  to build the public sample artifact.
 
 ## Optional public Community cache (ADR 0056)
 

@@ -16,6 +16,11 @@ corresponding GitHub Release.
 - Keep a selected link available when clipboard permission is denied or takes too long: in a shared dialog for Community links, or below a definition's heading. Done or Escape returns to the copy control, and retry stays available.
 - Retire delayed copy results when the public build address changes or its definition leaves the catalog view.
 
+### Browser report sharing and examples
+
+- Choose which aggregate report rows to share as a PNG or text, with player identities omitted. See a real anonymized sample before adding replays, and follow detected openers to published matchup guides.
+- Recover from unavailable or delayed clipboard access with selected report text that can be copied manually.
+
 ### More navigation
 
 - Use the shared bottom Sheet for phone More navigation, preserving theme choices, keyboard focus, report handoff and responsive dismissal.
@@ -93,6 +98,7 @@ corresponding GitHub Release.
 - Change or clear your planned build directly from Macro Breakdown, in both the score popup and the full game page. The game header and other check-in views stay in sync.
 - Create builds from a replay, a detected label or a blank draft in one rich editor. The first-run library also links Community copies; searchable race-aware action pickers show friendly names, proxy eligibility and unknown-action errors.
 - Configure optional Twitch Predictions and live-game stream markers with separate permissions, explicit opt-ins and confirmed Dock controls. A separate server gate defaults off; current desktop telemetry cannot prove ranked queue status, so automatic Predictions remain unavailable.
+- When browser analysis is available, the home-page demo reads one replay locally, opens either player's real build order and offers recovery without uploading the replay. The analyzer warms up on intent, with the existing server demo retained during the rollout compatibility window.
 - Opt in to nine recorded ladder achievements in Event alerts, with per-moment visuals and sounds, local tests, clip timestamps and optional posts through an already connected bot. Supporter alerts keep priority; replay starting MMR and confirmed league evidence remain explicit.
 - Chat commands now share saved aliases, availability and cooldowns across the Twitch bot, Nightbot and on-stream answers. New commands show recorded daily and season stats, recent opponent meetings, prediction leaders and stream-session uptime; owners can add bounded plain-text custom replies with supported variables.
 - Analyzer tables now support keyboard build opening, global matchup chips, a matchup-scoped heatmap and a Strategy games sheet that stays open as filters change. CSV exports save the displayed Builds, Strategy pairs, Matchups, Maps and pool cells with their scope and local date.
@@ -108,6 +114,15 @@ corresponding GitHub Release.
 
 - Require the 2-Stargate Void Ray and 2/3-Stargate Phoenix openings to establish their Stargates, two bases and four real air units by 7:00, with matching build definitions.
 
+<<<<<<< HEAD
+=======
+### Build dossier insights
+
+- Read matchup timing quartiles, trends, decided-game win rates and winner/loser medians from a bounded replay sample. Exact published guide milestones can show a Community comparison; a game's first building occurrence can compare with your own cached median.
+- Inspect declared-plan Held and Knocked-off counts, their separate win rates and bounded recorded examples. Small declaration samples stay hidden, and labels and full-game duration estimates make no claim about execution or causality.
+- Owned games show saved rule counts, distinct event/deadline evidence, shared-clock jumps and private timing ranges after three observations. Unknown rules withhold the percentage; catalog builds show timings only. Practice reuses the existing explicit Ghost controls.
+
+>>>>>>> codex/wave4-build-execution
 ### Build editor request ownership
 
 - Cancel pending editor saves, previews and replay inspection when the account, source or open draft changes. Bound stalled requests and suppress stale publication repairs, notifications and completion callbacks. Load the optional editor on demand with Retry and Cancel.

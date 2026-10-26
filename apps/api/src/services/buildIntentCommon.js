@@ -171,6 +171,7 @@ class BuildIntentNotifier {
     this.io = deps.io || null;
     this.overlayTokens = deps.overlayTokens;
     this.logger = deps.logger || null;
+    /** @type {((userId:string)=>void)|null} */ this.onGamesChanged = null;
   }
 
   /**
@@ -190,6 +191,7 @@ class BuildIntentNotifier {
 
   /** @param {string} userId */
   gamesChanged(userId) {
+    this.onGamesChanged?.(userId);
     if (!this.io) return;
     try {
       this.io.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "build_intent" });

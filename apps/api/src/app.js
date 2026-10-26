@@ -46,6 +46,7 @@ const { deletedGameIds } = require("./util/deletedGames");
 const { GameControlsService } = require("./services/gameControls");
 const { buildGameControlsRouter } = require("./routes/gameControls");
 const { GameContextService } = require("./services/gameContext");
+const { BuildExecutionService } = require("./services/buildExecution");
 const { buildStoreFromConfig } = require("./services/gameDetailsStore");
 const { buildReplayFilesFromConfig } = require("./services/replayFiles");
 const {
@@ -689,7 +690,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const aggregations = new AggregationsService(deps.db, { mmrExpectation });
   const macroReport = new MacroReportService(deps.db);
   const streak = new StreakService(deps.db);
-  const builds = new BuildsService(deps.db, { mmrExpectation });
+  const builds = new BuildsService(deps.db, { mmrExpectation, gameDetails });
   const buildsMmrStats = new BuildsMmrStatsService(deps.db);
   const catalog = new CatalogService(deps.db);
   // Eager-load the JSON catalog so the first build-order /
@@ -711,6 +712,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     perGame,
     logger: deps.logger,
     onReclassified: (userId, result) => {
+      gameExecution.invalidateForUser(userId);
       if (!deps.io) return;
       const changed = Number(result?.tagged || 0) + Number(result?.cleared || 0);
       if (changed > 0) {
@@ -718,6 +720,8 @@ function makeServices(deps, clerk, adminClerkIds) {
       }
     },
   });
+  const gameExecution = new BuildExecutionService(deps.db, { perGame, builds, customBuilds });
+  gameDetails.onBuildLogsChanged = (userId) => gameExecution.invalidateForUser(userId);
   const communityRevalidator = buildCommunityRevalidator({ url: deps.config.communityRevalidateUrl,
     secret: deps.config.communityRevalidateSecret, logger: deps.logger });
   const buildStudio = new AdminBuildStudioService(deps.db, { customBuilds, policies: presetPolicies,
@@ -747,7 +751,11 @@ function makeServices(deps, clerk, adminClerkIds) {
   });
   // A saved, renamed or deleted custom build changes the check-in options:
   // drop the cached lists so "Add new build" can confirm the new build at once.
-  customBuilds.onDefinitionsChanged = (userId) => buildIntents.invalidateOptions(userId);
+  customBuilds.onDefinitionsChanged = (userId) => {
+    buildIntents.invalidateOptions(userId);
+    gameExecution.invalidateForUser(userId);
+  };
+  buildIntents.notifier.onGamesChanged = (userId) => gameExecution.invalidateForUser(userId);
   const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
   const ghostExamples = new GhostExamplesService({ db: deps.db, gameDetails });
   const ghostReferences = new GhostReferencesService({ db: deps.db, gameDetails });
@@ -956,7 +964,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const invalidatePrivateGameCaches = (/** @type {string} */ userId) => {
     games.invalidateForUser(userId);
     // Each owner-aware invalidator fences late in-flight cache completion.
-    for (const service of [overlayLive, rivals, gameContext, tickerFacts, chatStats, aggregations.trendsRequests, streamSeries]) {
+    for (const service of [overlayLive, rivals, gameContext, gameExecution, tickerFacts, chatStats, aggregations.trendsRequests, streamSeries]) {
       service.invalidateForUser(userId);
     }
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
@@ -1033,6 +1041,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     leaguePercentiles,
     mmrExpectation,
     gameContext,
+    gameExecution,
     fingerprintPopulationCalibration,
     skillFingerprint,
     ladderMeta,
@@ -1653,6 +1662,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     buildGamesRouter({
       games: services.games,
       gameContext: services.gameContext,
+      gameExecution: services.gameExecution,
       gameVods: services.gameVods,
       opponents: services.opponents,
       users: services.users,

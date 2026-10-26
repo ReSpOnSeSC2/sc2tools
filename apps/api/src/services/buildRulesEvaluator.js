@@ -262,19 +262,24 @@ function _countMatches(
     const t = Number(ev.time);
     if (!Number.isFinite(t)) continue;
     if (t >= limit) continue;
-    if (eventToken(ev) !== name) continue;
-    if (proxyOnly && ev.is_proxy !== true) continue;
+    if (!matchesRuleEvent(ev, name, prereqIndex, ruleNeedsPrereq, proxyOnly)) continue;
     // Hallucination filter: drop unit events whose tech prerequisite
     // wasn't started by the unit's own time. Building/upgrade tokens
     // are unaffected because they are absent from
     // UNIT_TECH_PREREQUISITES.
-    if (
-      ruleNeedsPrereq &&
-      !_unitPrereqMet(ev, /** @type {Map<string, number>} */ (prereqIndex))
-    ) continue;
     n++;
   }
   return n;
+}
+
+/** Shared eligibility for count verdicts and detailed evidence; callers own
+ * the same strict-before window. No alternate token/prerequisite semantics.
+ * @param {ParsedEvent} event @param {string} name
+ * @param {Map<string,number>|undefined} index @param {boolean} needsPrereq
+ * @param {boolean} proxyOnly */
+function matchesRuleEvent(event, name, index, needsPrereq, proxyOnly) {
+  return eventToken(event) === name && (!proxyOnly || event.is_proxy === true)
+    && (!needsPrereq || _unitPrereqMet(event, /** @type {Map<string,number>} */ (index)));
 }
 
 /**
@@ -483,6 +488,53 @@ function evaluateRules(rules, events) {
   };
 }
 
+/** Add evidence without changing any existing classifier verdict. Missing
+ * extraction differs from a valid empty event list. An incomplete set has no
+ * overall percentage: an unavailable rule is never a failed rule.
+ * @param {ReadonlyArray<BuildRule>} rules
+ * @param {ReadonlyArray<ParsedEvent>|null} events
+ * @param {boolean} [available] */
+function evaluateRulesDetailed(rules, events, available = Array.isArray(events)) {
+  const source = Array.isArray(events) ? events : [];
+  const index = _earliestBuildTimes(source);
+  const rows = (Array.isArray(rules) ? rules : []).map((rule, position) => {
+    const verdict = evaluateRule(rule, source, index);
+    const valid = !!rule && SIG_TOKEN_REGEX.test(String(rule.name || ""))
+      && ["before", "not_before", "count_min", "count_max", "count_exact"].includes(rule.type)
+      && Number.isFinite(rule.time_lt) && rule.time_lt > 0
+      && (["before", "not_before"].includes(rule.type) || Number.isInteger(rule.count) && Number(rule.count) >= 0);
+    const unknown = !available || !valid || verdict.unavailable === true
+      || !verdict.pass && verdict.got === undefined;
+    const need = valid ? rule.type === "before" ? 1 : rule.type === "not_before" ? 0 : Number(rule.count) : null;
+    const times = unknown ? [] : source.filter(event => event && Number.isFinite(Number(event.time))
+      && Number(event.time) < rule.time_lt
+      && matchesRuleEvent(event, rule.name, index, Object.hasOwn(UNIT_TECH_PREREQUISITES, _bareNoun(rule.name)), rule.proxy === true))
+      .map(event => Number(event.time)).sort((a, b) => a - b);
+    const got = unknown ? null : times.length;
+    // A minimum is established at its nth eligible event. An excess is
+    // established at the first disallowed event. Absence/shortfall and upper
+    // bound success are window claims; their chips explicitly say Deadline.
+    let eventAt;
+    if (!unknown && need !== null) {
+      if (verdict.pass && (rule.type === "before" || rule.type === "count_min")) eventAt = times[Math.max(0, need - 1)];
+      else if (!verdict.pass && got !== null && got > need) eventAt = times[need];
+    }
+    const operator = rule?.type === "not_before" ? "none" : rule?.type === "count_max" ? `at most ${need}`
+      : rule?.type === "count_exact" ? `exactly ${need}` : `at least ${need}`;
+    const subject = valid ? rule.name.replace(VERB_PREFIX_RE, "").replace(/([a-z])([A-Z])/g, "$1 $2") : "Rule";
+    return { index: position, name: valid ? rule.name : "", type: valid ? rule.type : "unknown", proxy: rule?.proxy === true,
+      sentence: unknown ? `${subject}: evidence unavailable` : `${subject}${rule.proxy ? " (proxied)" : ""}: needed ${operator} before ${formatTime(rule.time_lt)}; had ${got}`,
+      pass: !unknown && verdict.pass, unavailable: unknown, got, need,
+      deadlineSec: valid ? rule.time_lt : null,
+      evidenceSec: unknown ? null : eventAt ?? rule.time_lt,
+      evidenceKind: unknown ? null : eventAt === undefined ? "deadline" : "event" };
+  });
+  const knownCount = rows.filter(row => !row.unavailable).length;
+  const passedCount = rows.filter(row => row.pass).length;
+  return { rules: rows, passedCount, knownCount, ruleCount: rows.length,
+    matchPct: rows.length > 0 && knownCount === rows.length ? 100 * passedCount / rows.length : null };
+}
+
 /**
  * @param {number} sec
  * @returns {string}
@@ -497,6 +549,7 @@ function formatTime(sec) {
 module.exports = {
   evaluateRule,
   evaluateRules,
+  evaluateRulesDetailed,
   eventToken,
   UNIT_TECH_PREREQUISITES,
 };

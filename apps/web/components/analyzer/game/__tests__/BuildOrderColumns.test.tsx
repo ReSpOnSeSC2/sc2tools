@@ -14,6 +14,16 @@ vi.mock("next/image", () => ({
 afterEach(() => cleanup());
 
 describe("BuildOrderColumns", () => {
+  it("adds a first-owner-occurrence delta without changing seek, supply or the opponent column", () => {
+    const seek = vi.fn();
+    render(<BuildOrderColumns onSeek={seek} myEvents={[{ time: 312, name: "Stargate", category: "building", supply: 30 }, { time: 450, name: "Stargate", category: "building" }]} oppEvents={[{ time: 350, name: "Stargate", category: "building" }]}
+      workspace={{ myMeta: { title: "Mine", sourceUrl: "/g" }, oppMeta: { title: "Theirs", sourceUrl: "/g" } }}
+      myTimingBaseline={{ matchup: "PvZ", data: { matchupTimingsLegacy: { PvZ: { timings: { Stargate: { source: "build_log", medianSeconds: 300, sampleCount: 8 } } } } } }} />);
+    const mine = within(screen.getByTestId("build-column-me")), theirs = within(screen.getByTestId("build-column-opp"));
+    expect(mine.getAllByText("+12s vs your median")).toHaveLength(1);
+    expect(theirs.queryByText(/vs your median/)).toBeNull(); expect(mine.getByText("30")).toBeTruthy();
+    fireEvent.click(mine.getByRole("button", { name: "Jump to 5:12 Stargate" })); expect(seek).toHaveBeenCalledWith(312);
+  });
   it("uses canonical entities when filtering prefixed or spaced workers and supply buildings", () => {
     render(<BuildOrderColumns myEvents={[{ time: 10, name: "TrainSCV" }, { time: 20, name: "BuildSupplyDepot" }, { time: 30, name: "Supply Depot" }]} workspace={{ myMeta: { title: "Mine", sourceUrl: "/g" }, oppMeta: { title: "Theirs", sourceUrl: "/g" } }} />);
     const mine = within(screen.getByTestId("build-column-me"));
