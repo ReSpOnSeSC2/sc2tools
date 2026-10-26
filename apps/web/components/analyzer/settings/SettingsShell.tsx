@@ -36,6 +36,9 @@ import {
   useSettingsContext,
 } from "./SettingsContext";
 import { revealSectionAnchor } from "./revealSectionAnchor";
+import { settingsSectionsForTab } from "@/lib/settingsIndex";
+import { SettingsSectionNav } from "./SettingsSectionNav";
+import { OverlayManagerNav } from "./OverlayManagerNav";
 
 // Preserve existing imports while non-UI consumers can use the pure leaf.
 export {
@@ -140,9 +143,16 @@ function SettingsShellInner({
     admittedHref.current = next.href;
   }, []);
   const requestDestination = useCallback((next: SettingsDestination, fromUrl: boolean) => {
+    if (!mounted.current || latestOwner.current !== owner) return;
     const attempt = {}; action.current = attempt;
     if (!tabs.some(tab => tab.id === next.tab)) return;
-    if (next.tab === active && next.href === admittedHref.current) { setPending(null); return; }
+    if (next.tab === active && next.href === admittedHref.current) {
+      setPending(null);
+      // A player may scroll elsewhere while this anchor stays in the URL.
+      // Only an explicit repeat choice reveals it again; URL sync stays inert.
+      if (!fromUrl) setAnchorChanges(value => value + 1);
+      return;
+    }
     if (next.tab !== active && ctx.isDirty(active)) {
       setPending({ kind: "tab", destination: next, fromUrl, previousHref: admittedHref.current, action: attempt, owner });
       return;
@@ -202,11 +212,17 @@ function SettingsShellInner({
     // The streaming authority gates its children on a fresh token read. Keep
     // the bounded observer on this stable content region while that panel is
     // absent, so a late Chat/Overlay section still reveals once it appears.
-    const panel = document.querySelector<HTMLElement>(`[data-settings-panel="${panelScopeId}-${active}"]`)
-      ?? (active === "overlay" || active === "chat" ? panelRegion.current : null);
+    const panel = active === "overlay" || active === "chat" ? panelRegion.current
+      : document.querySelector<HTMLElement>(`[data-settings-panel="${panelScopeId}-${active}"]`);
     if (!panel) return undefined;
     return revealSectionAnchor(destination.hash, panel);
-  }, [active, destination, anchorChanges, panelScopeId]);
+  }, [active, destination, anchorChanges, panelScopeId, owner]);
+
+  const requestSection = (href: string) => {
+    if (!mounted.current || latestOwner.current !== owner) return;
+    const [search, hash = ""] = href.replace(/^\/settings\?/, "").split("#");
+    requestDestination(resolveSettingsDestination(search, hash ? `#${hash}` : "", active), false);
+  };
 
   const confirmDiscard = () => {
     if (pending && mounted.current && pending.owner === latestOwner.current && pending.action === action.current) {
@@ -288,8 +304,14 @@ function SettingsShellInner({
             {renderTab(t.id)}
           </Tabs.Content>
           ));
+          const sections = settingsSectionsForTab(active);
+          const content = sections.length >= 3 ? <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_160px]">
+            {active === "overlay" ? <OverlayManagerNav scope={panelRegion} hash={destination.hash} onNavigate={requestSection} />
+              : <SettingsSectionNav tab={active} sections={sections} scope={panelRegion} hash={destination.hash} onNavigate={requestSection} />}
+            <div className="min-w-0 lg:col-start-1 lg:row-start-1">{panels}</div>
+          </div> : panels;
           return active === "overlay" || active === "chat"
-            ? locationReady ? renderStreaming ? renderStreaming(panels, destination.overlayPane) : panels : <p role="status">Opening streaming settings…</p>
+            ? locationReady ? renderStreaming ? renderStreaming(content, destination.overlayPane) : content : <p role="status">Opening streaming settings…</p>
             : panels;
         })()}
         </div>

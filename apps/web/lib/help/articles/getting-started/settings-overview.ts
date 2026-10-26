@@ -71,6 +71,10 @@ const article: HelpArticle = {
     { type: "heading", text: "Unsaved changes" },
     {
       type: "paragraph",
+      text: "Overlay and Chat & alerts each have one **On this page** navigator: a rail beside the form on a desktop and a section dropdown on a phone. Their sections stay on one page. Scrolling updates the highlighted section without moving you or changing the address; choosing a section jumps to it and briefly outlines it. Tokens points to the shared controls above the form. Older Overlay Look links now reach Theme, and older Ghost links reach Ghost Build coach. Moving between sections of the same tab keeps your draft.",
+    },
+    {
+      type: "paragraph",
       text: "A dot next to a tab's name means it has edits you haven't saved. Switch tabs with unsaved edits and Settings asks first: **Stay on this tab** keeps them, **Discard & switch** drops them. The sidebar's Devices link also asks before leaving a draft behind: choose **Discard & open Devices** to leave. Opening Devices in a new tab keeps your current Settings draft. Chat & alerts tracks the multi-platform chat and bot forms independently, so saving one does not clear the other's draft. Overlay tracks its profile draft; Preferences includes notification choices and the start page. Commands and Twitch automation keep their own save controls and are not included in this tab-level draft guard.",
     },
     { type: "paragraph", text: "Overlay and Chat & alerts use one streaming-token manager while either tab is open. Save or discard the guarded drafts before selecting, minting, rotating or revoking a token; renaming its label keeps those drafts. Account only checks setup health and never creates a token. If a creation response is lost, choose **Check token status** first. An empty status cannot prove the earlier creation failed, so another token requires the explicit Create action." },

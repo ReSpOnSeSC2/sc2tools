@@ -128,6 +128,32 @@ describe("SettingsShell legacy #tab links", () => {
 });
 
 describe("SettingsShell #section anchors", () => {
+  it("reveals the one shared Tokens target above Content, while keeping chrome out of scope", () => {
+    window.history.replaceState(null, "", "/settings?tab=overlay&section=tokens");
+    const view = render(<main id="main-content"><SettingsShell initialTab="overlay" renderTab={renderPanel}
+      renderStreaming={children => <div><section id="tokens">Shared token manager</section>{children}</div>} /></main>);
+    const tokens = document.getElementById("tokens")!;
+    expect(view.container.querySelectorAll('[id="tokens"]')).toHaveLength(1);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1); expect(scrollIntoView.mock.contexts[0]).toBe(tokens);
+    expect(window.location.search + window.location.hash).toBe("?tab=overlay#tokens");
+    expect(document.getElementById("main-content")?.hasAttribute(SECTION_FLASH_ATTR)).toBe(false);
+    fireEvent.click(screen.getByRole("link", { name: "Setup" }));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("link", { name: "Tokens" }));
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+    const href = window.location.href;
+    fireEvent.click(screen.getByRole("link", { name: "Tokens" }));
+    expect(scrollIntoView).toHaveBeenCalledTimes(3);
+    expect(window.location.href).toBe(href);
+  });
+  it("explicit section nav retains reduced-motion reveal behavior", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    window.history.replaceState(null, "", "/settings?tab=overlay");
+    render(<SettingsShell initialTab="overlay" renderTab={id => id === "overlay" ? <section id="theme">Theme</section> : <p>{id}</p>} />);
+    fireEvent.click(screen.getByRole("link", { name: "Theme" }));
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", behavior: "auto" });
+    vi.unstubAllGlobals();
+  });
   it("gives mobile triggers real panel IDs and keyboard activation", () => {
     render(shell("backups"));
     const mobile = screen.getAllByRole("tablist", { name: "Settings sections" })[0];

@@ -140,7 +140,7 @@ export function OverlayThemeSection({
   }
 
   return (
-    <Section
+    <Section id="theme" className="scroll-mt-28"
       title="Overlay theme"
       description="Restyle every widget — structural frame, texture, accent colour, panel opacity, corners, size and type. Save overlay display to update connected sources. Existing URLs with a ?theme= override keep that look; remove the override once to follow saved changes."
     >

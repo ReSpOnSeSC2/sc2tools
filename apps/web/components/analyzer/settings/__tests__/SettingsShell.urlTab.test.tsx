@@ -6,10 +6,15 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { SettingsShell, type SettingsTabId } from "../SettingsShell";
 import { usePublishDirty } from "../SettingsContext";
 
-const callbacks = vi.hoisted(() => ({ confirm: null as (() => void) | null }));
+const callbacks = vi.hoisted(() => ({ confirm: null as (() => void) | null, navigate: null as ((href: string) => void) | null }));
+vi.mock("../OverlayManagerNav", async importOriginal => {
+  const actual = await importOriginal<typeof import("../OverlayManagerNav")>();
+  return { ...actual, OverlayManagerNav: (props: Parameters<typeof actual.OverlayManagerNav>[0]) => { callbacks.navigate = props.onNavigate; return <actual.OverlayManagerNav {...props} />; } };
+});
 vi.mock("@/components/ui/ConfirmDialog", async importOriginal => {
   const actual = await importOriginal<typeof import("@/components/ui/ConfirmDialog")>();
   return { ...actual, ConfirmDialog: (props: Parameters<typeof actual.ConfirmDialog>[0]) => { callbacks.confirm = props.onConfirm; return <actual.ConfirmDialog {...props} />; } };
@@ -50,6 +55,35 @@ afterEach(() => {
 });
 
 describe("SettingsShell ?tab= sync", () => {
+  it("same-tab section navigation keeps the mounted draft; leaving it still asks first", () => {
+    function Draft() {
+      const [value, setValue] = useState("saved"); usePublishDirty("overlay", value !== "saved");
+      return <><label>Draft theme<input value={value} onChange={event => setValue(event.target.value)} /></label><section id="theme">Theme section</section></>;
+    }
+    window.history.replaceState(null, "", "/settings?tab=overlay&ref=keep");
+    render(<SettingsShell ownerKey="owner-a" initialTab="overlay" renderTab={id => id === "overlay" ? <Draft /> : <p>panel {id}</p>} />);
+    const input = screen.getByRole("textbox", { name: "Draft theme" });
+    fireEvent.change(input, { target: { value: "unsaved accent" } });
+    fireEvent.click(screen.getByRole("link", { name: "Theme" }));
+    expect(screen.getByRole("textbox", { name: "Draft theme" })).toBe(input);
+    expect((input as HTMLInputElement).value).toBe("unsaved accent");
+    expect(window.location.search + window.location.hash).toBe("?tab=overlay&ref=keep#theme");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getAllByRole("tab", { name: "Chat & alerts" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
+    expect((input as HTMLInputElement).value).toBe("unsaved accent");
+    expect(window.location.search + window.location.hash).toBe("?tab=overlay&ref=keep#theme");
+  });
+  it("an earlier section callback cannot navigate after owner A→B→A", () => {
+    window.history.replaceState(null, "", "/settings?tab=overlay");
+    const owner = (ownerKey: string) => <SettingsShell ownerKey={ownerKey} initialTab="overlay" renderTab={id => <p>panel {id}</p>} />;
+    const view = render(owner("a")); const retired = callbacks.navigate!;
+    view.rerender(owner("b")); view.rerender(owner("a"));
+    act(() => retired("/settings?tab=chat#bot"));
+    expect(activePanel()).toBe("panel overlay"); expect(window.location.search).toBe("?tab=overlay");
+    act(() => callbacks.navigate!("/settings?tab=chat#bot"));
+    expect(activePanel()).toBe("panel chat"); expect(window.location.hash).toBe("#bot");
+  });
   it("a retained discard callback cannot admit an older destination or cross owner A→B→A", () => {
     window.history.replaceState(null, "", "/settings?tab=preferences&ref=kept#notifications");
     const renderOwner = (ownerKey: string, requestedSearch: string) => <SettingsShell ownerKey={ownerKey} initialTab="preferences" requestedSearch={requestedSearch} renderTab={id => id === "preferences" ? <DirtyPanel id={id} /> : <p>panel {id}</p>} />;

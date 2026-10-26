@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Settings section navigation
+
+- Keep Overlay setup, widgets, scenes, Build profile, Ghost Build coach and Theme on one page, with the shared Tokens controls addressable above the form.
+- Reuse one On this page rail for Overlay and Chat & alerts, with a native section dropdown on phones. Scrolling only updates its highlight; explicit navigation keeps same-tab drafts and the existing guard when leaving a tab.
+- Keep older section, Look and Ghost links working, and limit Overlay presence polling to the visible Setup/Widgets area.
+
 ### Chat & alerts settings
 
 - Give platforms, chat appearance, alerts, TTS, translation, commands, Stream Dock and the bot their own Chat & alerts tab. Keep OBS sources, widgets, scenes and look in Overlay.

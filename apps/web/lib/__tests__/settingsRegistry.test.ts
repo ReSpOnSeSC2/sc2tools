@@ -51,7 +51,24 @@ describe("Settings registry", () => {
 
 describe("complete bounded Settings destinations", () => {
   it.each([
+    ["tab=overlay&section=look&ref=keep", "", "/settings?tab=overlay&ref=keep#theme"],
+    ["tab=overlay&section=widgets&widget=multichat", "#chat", "/settings?tab=overlay&widget=multichat#widgets"],
+    ["tab=overlay&pack=first-stream", "#platform-connections", "/settings?tab=overlay&pack=first-stream#widgets"],
+    ["tab=overlay&section=look", "#ghost-build", "/settings?tab=overlay#ghost-coach"],
+    ["tab=overlay", "#ghost", "/settings?tab=overlay#ghost-coach"],
+    ["tab=overlay", "#ghost-build", "/settings?tab=overlay#ghost-coach"],
+    ["tab=overlay&section=tokens", "", "/settings?tab=overlay#tokens"],
+    ["tab=chat&section=tts&ref=keep", "", "/settings?tab=chat&ref=keep#tts"],
+  ])("canonicalizes a real section without losing extras: %s %s", (search, hash, href) => {
+    const result = resolveSettingsDestination(search, hash);
+    expect(result.href).toBe(href);
+    const url = new URL(href, "https://fixture.invalid");
+    expect(resolveSettingsDestination(url.search, url.hash)).toEqual(result);
+  });
+  it.each([
     ["tab=overlay&section=chat", "", "/settings?tab=chat"],
+    ["tab=chat&section=chat", "#twitch-automation", "/settings?tab=chat#twitch-automation"],
+    ["tab=chat&section=dock", "#stream-dock", "/settings?tab=chat#stream-dock"],
     ["tab=streaming&section=chat&ref=help", "#twitch-automation", "/settings?tab=chat&ref=help#twitch-automation"],
     ["tab=overlay&section=dock", "", "/settings?tab=chat#dock"],
     ["tab=overlay&section=setup", "#stream-dock", "/settings?tab=chat#stream-dock"],
