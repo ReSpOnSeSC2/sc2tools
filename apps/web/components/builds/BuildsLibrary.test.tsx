@@ -358,10 +358,10 @@ describe("BuildsLibrary signed out", () => {
     expect(harness.paths).toEqual([]);
   });
 
-  it("offers an account (returning to /builds) and the public build pages, never the editor", () => {
+  it("offers an account and public build pages, using the default destination for the private library", () => {
     render(<BuildsLibrary />);
-    expect(screen.getByRole("link", { name: "Create account" }).getAttribute("href")).toBe("/sign-up?redirect_url=%2Fbuilds");
-    expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/sign-in?redirect_url=%2Fbuilds");
+    expect(screen.getByRole("link", { name: "Create account" }).getAttribute("href")).toBe("/sign-up");
+    expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/sign-in");
     expect(screen.getByRole("link", { name: "Browse community builds" }).getAttribute("href")).toBe("/community");
     expect(screen.getByRole("link", { name: "Build definitions" }).getAttribute("href")).toBe("/definitions");
     expect(screen.getByRole("link", { name: "Which pages are public?" }).getAttribute("href")).toBe(

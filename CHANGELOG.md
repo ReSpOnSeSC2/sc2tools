@@ -16,6 +16,16 @@ corresponding GitHub Release.
 - Choose which aggregate report rows to share as a PNG or text, with player identities omitted. See a real anonymized sample before adding replays, and follow detected openers to published matchup guides.
 - Recover from unavailable or delayed clipboard access with selected report text that can be copied manually.
 
+### More navigation
+
+- Use the shared bottom Sheet for phone More navigation, preserving theme choices, keyboard focus, report handoff and responsive dismissal.
+- Keep focus in an underlying dialog when Appearance closes; ordinary account-menu dismissal still returns to the account control.
+
+### Replay and Trends inspection
+
+- Move Macro Breakdown's Change build control below the macro feedback, after What you did well.
+- Highlight the selected rolling matchup-rating window and show its game range, ending date and rating coverage. The overall sample estimate remains visible while inspecting individual windows.
+
 ### Public player pages
 
 - Choose an explicit public player page and optional recent form, MMR, channels, season and map sections in Settings → Profile. Turning the profile off hides it even when named Community builds remain published; replay sharing keeps its own switch.
@@ -79,6 +89,7 @@ corresponding GitHub Release.
   Bound fresh-replay overflow to eight pending jobs during large backlogs.
 
 ### Added
+- Signing in returns you to the public page you were viewing. Setup keeps that destination, and a recent Save, vote or Practice choice can finish when you return to the original page.
 - Change or clear your planned build directly from Macro Breakdown, in both the score popup and the full game page. The game header and other check-in views stay in sync.
 - Create builds from a replay, a detected label or a blank draft in one rich editor. The first-run library also links Community copies; searchable race-aware action pickers show friendly names, proxy eligibility and unknown-action errors.
 - Configure optional Twitch Predictions and live-game stream markers with separate permissions, explicit opt-ins and confirmed Dock controls. A separate server gate defaults off; current desktop telemetry cannot prove ranked queue status, so automatic Predictions remain unavailable.

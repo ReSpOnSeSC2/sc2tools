@@ -5,7 +5,10 @@ import { FIXTURE_BUILD_PUBLISHED, FIXTURE_ME } from "@/lib/guides/__fixtures__";
 const h = vi.hoisted(() => ({ query: { isLoaded: true, isSignedIn: false, data: undefined as typeof FIXTURE_ME | undefined, error: undefined as unknown, isLoading: false } }));
 vi.mock("@/lib/guides/useGuideMe", () => ({ useGuideMe: () => h.query }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => h.query }));
-vi.mock("next/navigation", () => ({ usePathname: () => "/guides/pvz/stargate-into-glaives" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/guides/pvz/stargate-into-glaives",
+  useSearchParams: () => new URLSearchParams(),
+}));
 afterEach(() => { cleanup(); h.query = { isLoaded: true, isSignedIn: false, data: undefined, error: undefined, isLoading: false }; });
 const timings = { ...FIXTURE_BUILD_PUBLISHED.timings!, milestones: FIXTURE_BUILD_PUBLISHED.timings!.milestones.slice(0, 2).map((row, index) => ({ ...row, median: index ? 290 : 18, p25: index ? 280 : 17, p75: index ? 295 : 20 })) };
 const renderTable = async () => { const view = render(<TimingsTable timings={timings} matchupSlug="pvz" buildSlug="stargate-into-glaives" />); await act(async () => { await vi.dynamicImportSettled(); }); return view; };

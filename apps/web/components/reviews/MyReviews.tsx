@@ -7,6 +7,7 @@ import { MessageSquareText, ShieldOff } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { apiCall, useApi } from "@/lib/clientApi";
+import { signInHref } from "@/lib/authLinks";
 import type { MyReviewsResponse, ReviewBlocksResponse } from "@/lib/reviews";
 import { MyReviewerProfile } from "./MyReviewerProfile";
 import { MyReviewRequests } from "./MyReviewRequests";
@@ -41,7 +42,7 @@ export function MyReviews() {
       title="Sign in to see your reviews"
       description="Your review requests, the reviews you've written and the reviewers you've blocked live here."
       action={
-        <Link href={`/sign-in?redirect_url=${encodeURIComponent("/reviews/mine")}`} className="font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">
+        <Link href={signInHref("/reviews/mine")} className="font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">
           Sign in
         </Link>
       }

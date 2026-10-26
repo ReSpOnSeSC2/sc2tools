@@ -18,6 +18,10 @@ const games = Array.from({ length: 25 }, (_, index) => ({ id: `fixture-game-${in
 }));
 games.splice(10, 0, { id: "fixture-unknown", date: "2026-10-01T12:45:00Z", result: "Unknown", map: "Unmeasured map" });
 const DATA = {
+  ratingSeries: [{ matchup: "PvZ", totalGames: 75, sampleGames: 12, windowGames: 10, ratedGames: 10, excludedNoMmr: 2, perfRating: 4100,
+    points: Array.from({ length: 12 }, (_, index) => ({ date: "2026-10-02T12:00:00Z", games: Math.min(index + 1, 10), ratedGames: Math.min(index + 1, 10), excludedNoMmr: 0, perfRating: index === 5 || index === 11 ? null : 4200.1 })) },
+    { matchup: "PvT", totalGames: 10, sampleGames: 10, windowGames: 10, ratedGames: 10, excludedNoMmr: 0, perfRating: null,
+      points: Array.from({ length: 10 }, (_, index) => ({ date: "2026-10-02T12:00:00Z", games: index + 1, ratedGames: index + 1, excludedNoMmr: 0, perfRating: null })) }],
   aging: [24, 20].map((count, index) => ({ build: index ? "Fixture expansion" : "Fixture opening", curve: Array.from({ length: count }, (_, cursor) => {
     const n = cursor + 1, cumulativeWins = index ? Math.floor(n * .7) : Math.ceil(n / 2);
     return { n, wins: 1, losses: 0, cumulativeWins, cumulativeLosses: n - cumulativeWins };
@@ -55,19 +59,20 @@ import {StreaksMomentum} from "@/components/analyzer/h2h/StreaksMomentum";
 import {MacroTrendChart} from "@/components/analyzer/charts/MacroTrendChart";
 import {ScoreBucketsCard} from "@/components/analyzer/macro/report/ScoreBucketsCard";
 import {FormSparkline} from "@/components/analyzer/charts/FormSparkline";
+import {MatchupRatingCard} from "@/components/analyzer/charts/MatchupRatingCard";
 function Palette(){const kit=useChartKit();return <aside aria-label="Chart theme key" data-testid="chart-theme-key" data-axis={kit.axis} data-grid={kit.grid} data-reduced={String(kit.reducedMotion)} className="space-y-2 rounded-lg border border-border p-3 text-caption">
 <p>Resolved chart theme and series key</p><div className="flex flex-wrap items-center gap-3"><span data-testid="chart-tooltip-surface" style={{background:kit.tooltipStyle.background,color:kit.tokens.text,padding:8,border:\"1px solid \"+kit.grid}}>Tooltip surface</span><span data-testid="global-low-sample" style={{color:wrColor(.5,1)}}>Low sample text</span><span data-testid="global-amber" style={{color:wrColor(.475,20)}}>Amber midpoint text</span>{kit.series.map((color,index)=><span key={index} className="inline-flex items-center gap-1"><span data-testid="chart-series-swatch" style={{display:\"inline-block\",width:20,height:12,background:color}}/><span>Series {index+1}</span></span>)}</div></aside>;}
 function Fixture(){const group=location.pathname.slice(1),[mode,setMode]=useState(document.documentElement.getAttribute(\"data-theme\")),[action,setAction]=useState(null),[count,setCount]=useState(0);
 const log=value=>{setAction(value);setCount(current=>current+1);};const select=id=>log({kind:\"game\",id});
 return <main className="mx-auto max-w-6xl space-y-6 p-4"><header className="space-y-3"><h1 className="text-h2">Chart kit {group.toUpperCase()} fixture</h1><p className="text-caption text-text-muted">Synthetic replay data · Protoss vs Terran · Alcyone LE · selected date range.</p><Button onClick={()=>{const next=mode===\"dark\"?\"light\":\"dark\";document.documentElement.setAttribute(\"data-theme\",next);document.documentElement.setAttribute(\"data-theme-mode\",next);setMode(next);}}>Switch fixture theme</Button><output aria-label="Fixture action count">{count}</output><output aria-label="Last fixture action" className="block break-words font-mono text-caption">{JSON.stringify(action)}</output></header><Palette/>
-{group===\"mmr\"?<><Card title="MMR bands"><MmrBucketChart rows={DATA.bands} minSampleSize={3}/></Card><BuildAgingCurve/><MmrProgressionByBuild/><MmrProgressionChart bucket=\"day\"/></>:group===\"macro\"?<><Card title="Macro trend"><MacroTrendChart series={DATA.mechanics} metric=\"macro\" bucket=\"day\"/></Card><ScoreBucketsCard buckets={DATA.scores} onDrill={drill=>log({kind:\"drill\",...drill})}/><Card title="Recent form, small sample"><FormSparkline results={[\"win\",\"loss\",\"loss\"]} title=\"Small recent form\"/></Card><Card title="Recent form, twenty results"><FormSparkline results={Array.from({length:20},(_,index)=>index%2?\"loss\":\"win\")} title=\"Established recent form\"/></Card></>:<><Card title="Match-by-match history"><MatchByMatchTimeline chronoGames={DATA.games} oppRace=\"Zerg\" bucket=\"day\" rollingWindow={10} presetLong=\"Fixture date range\" opponentName=\"Synthetic opponent\" onSelectGame={select}/></Card><Card title="Streak history"><StreaksMomentum chronoGames={DATA.games} presetShort=\"Fixture range\" presetLong=\"Fixture date range\" opponentName=\"Synthetic opponent\" onSelectGame={select}/></Card></>}
+{group===\"rating\"?<MatchupRatingCard/>:group===\"mmr\"?<><Card title="MMR bands"><MmrBucketChart rows={DATA.bands} minSampleSize={3}/></Card><BuildAgingCurve/><MmrProgressionByBuild/><MmrProgressionChart bucket=\"day\"/></>:group===\"macro\"?<><Card title="Macro trend"><MacroTrendChart series={DATA.mechanics} metric=\"macro\" bucket=\"day\"/></Card><ScoreBucketsCard buckets={DATA.scores} onDrill={drill=>log({kind:\"drill\",...drill})}/><Card title="Recent form, small sample"><FormSparkline results={[\"win\",\"loss\",\"loss\"]} title=\"Small recent form\"/></Card><Card title="Recent form, twenty results"><FormSparkline results={Array.from({length:20},(_,index)=>index%2?\"loss\":\"win\")} title=\"Established recent form\"/></Card></>:<><Card title="Match-by-match history"><MatchByMatchTimeline chronoGames={DATA.games} oppRace=\"Zerg\" bucket=\"day\" rollingWindow={10} presetLong=\"Fixture date range\" opponentName=\"Synthetic opponent\" onSelectGame={select}/></Card><Card title="Streak history"><StreaksMomentum chronoGames={DATA.games} presetShort=\"Fixture range\" presetLong=\"Fixture date range\" opponentName=\"Synthetic opponent\" onSelectGame={select}/></Card></>}
 </main>;}
 createRoot(document.getElementById(\"root\")).render(<Fixture/>);`;
 const adapters = {
   "fixture:chart-data": `export const DATA=${JSON.stringify(DATA)};`,
   "@/lib/clientApi": `import {DATA} from "fixture:chart-data";export const API_BASE=${JSON.stringify(ORIGIN)};export const useApi=path=>({data:path.includes("aging-curve")?DATA.aging:DATA.progression,isLoading:false,isValidating:false,error:undefined,mutate:async()=>null});`,
   "@/lib/filterContext": 'export const useFilters=()=>({filters:{race:"P",opp_race:"T",map:"Alcyone LE"},dbRev:7});export const filtersToQuery=()=>"?race=P&opp_race=T&map=Alcyone+LE";',
-  "@/lib/trendsDataContext": 'import {DATA} from "fixture:chart-data";export const useTrendsDataScope=()=>({isGlobal:false,view:"personal"});export const useTrendsApi=path=>({data:path.startsWith("/v1/timeseries/mmr")?DATA.mmr:DATA.daily,isLoading:false,error:undefined,mutate:async()=>null});',
+  "@/lib/trendsDataContext": 'import {DATA} from "fixture:chart-data";export const useTrendsDataScope=()=>({isGlobal:false,view:"personal"});export const useTrendsApi=path=>({data:path.startsWith("/v1/timeseries/mmr")?DATA.mmr:path.startsWith("/v1/timeseries/matchups")?{ratingSeries:DATA.ratingSeries}:DATA.daily,isLoading:false,error:undefined,mutate:async()=>null});',
   "@clerk/nextjs": 'export const useAuth=()=>({isLoaded:true,isSignedIn:true,userId:"synthetic-chart-owner",getToken:async()=>"synthetic-only"});',
   "next/link": 'import React from "react";export default React.forwardRef(function Link({prefetch,replace,scroll,...props},ref){return <a {...props} ref={ref}/>;});',
   "next/image": 'import React from "react";export default function Image({unoptimized,priority,fill,...props}){return <img {...props}/>;}',
@@ -99,7 +104,7 @@ function fixtureAssets() {
  * Only auth, query hooks, navigation, Help and reporting are synthetic adapters.
  * Every browser request is intercepted; no real account/provider is reachable.
  * @param {import('@playwright/test').Page} page
- * @param {'mmr'|'macro'|'h2h'} group
+ * @param {'mmr'|'macro'|'h2h'|'rating'} group
  * @param {{theme?:'light'|'dark',reducedMotion?:boolean}} options
  */
 export async function openChartKitFixture(page, group, { theme = "dark", reducedMotion = false } = {}) {

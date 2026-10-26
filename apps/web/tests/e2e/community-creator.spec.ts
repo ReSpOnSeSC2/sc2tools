@@ -53,6 +53,6 @@ test("signed-out Mine explains the private view and keeps the return destination
   const calls = await openCommunityInteractiveFixture(page, request, { kind: "creator", signedIn: false, initialPath: "/community?mine=1" });
   await expect(page.getByText("Sign in to see your published builds", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in", exact: true })).toHaveAttribute("href", "/sign-in?redirect_url=%2Fcommunity%3Fmine%3D1");
-  await expect(page.getByRole("link", { name: "Sign in to publish", exact: true })).toHaveAttribute("href", "/sign-in?redirect_url=%2Fbuilds%3Fpublish%3D1");
+  await expect(page.getByRole("link", { name: "Sign in to publish", exact: true })).toHaveAttribute("href", "/sign-in?redirect_url=%2Fcommunity%3Fpublish%3D1");
   expect(calls.some((call) => call.pathname.startsWith("/v1/"))).toBe(false);
 });

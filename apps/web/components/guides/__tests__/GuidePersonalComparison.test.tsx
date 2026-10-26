@@ -9,7 +9,10 @@ const harness = vi.hoisted(() => ({
   mutate: vi.fn(),
 }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/guides/pvz/stargate-into-glaives" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/guides/pvz/stargate-into-glaives",
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => harness.auth }));
 vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string) => {

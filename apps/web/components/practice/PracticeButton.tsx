@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, Crosshair } from "lucide-react";
 import { PracticeLazy } from "./PracticeLazy";
 import type { GhostMatchupKey } from "@/lib/ghostBuild";
@@ -11,7 +11,19 @@ const load = () => import("./PracticeController").then(module => module.Practice
 const races: Record<string, string> = { p: "P", protoss: "P", t: "T", terran: "T", z: "Z", zerg: "Z" };
 /** No auth, SWR or reference lookup is loaded for each rendered build card. */
 export function PracticeButton(props: Props) {
-  const [action, setAction] = useState<"quick" | "options" | null>(props.startOpen ? "options" : null);
+  const [action, setAction] = useState<"quick" | "options" | "resume" | null>(props.startOpen ? "options" : null);
+  useEffect(() => {
+    if (props.privateBuild) return;
+    let current = true;
+    // Read only local storage until a matching explicit public action exists.
+    // The heavy auth/controller chunk stays out of ordinary build-card loads.
+    void import("@/lib/pendingIntent").then(({ readPendingIntent }) => {
+      if (!current) return;
+      const intent = readPendingIntent(window.location.pathname + window.location.search, "arm-ghost");
+      if (intent && intent.payload.input.build.slug === props.build.slug && intent.payload.input.build.name === props.build.name && intent.payload.input.guideHref === props.guideHref) setAction("resume");
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [props.privateBuild, props.build.slug, props.build.name, props.guideHref]);
   const myRace = races[props.build.race?.trim().toLowerCase() ?? ""], theirs = races[props.build.vsRace?.trim().toLowerCase() ?? ""];
   const matchup = props.matchup ?? (myRace && theirs ? `${myRace}v${theirs}` : null);
   if (action) return <PracticeLazy loader={load} componentProps={{ ...props, initialAction: action }} label="practice controls" fallback={<span role="status" className="inline-flex min-h-11 items-center text-caption text-text-muted">Loading practice controls…</span>} />;

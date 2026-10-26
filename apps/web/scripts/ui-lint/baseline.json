@@ -1138,16 +1138,16 @@
     {
       "file": "components/chrome/AppChrome.tsx",
       "rule": "handrolled-link-button",
-      "signature": "4e76f705eb6498a19311404ad8aed07d3405138ff0138fb690b1b0da2a7e6816",
+      "signature": "7354488d0681eb8cfb8454fab2037c661c4359421057cf0874fd3529823512e7",
       "count": 1,
-      "example": "<Link href=\"/sign-up\" className=\"hard-press inline-flex h-8 items-center rounded-full border-2 border-line bg-accent px-3.5 font-display text-caption font-bold text-white hover:bg-"
+      "example": "<AuthContextLink kind=\"sign-up\" className=\"hard-press inline-flex h-8 items-center rounded-full border-2 border-line bg-accent px-3.5 font-display text-caption font-bold text-white"
     },
     {
       "file": "components/chrome/AppChrome.tsx",
       "rule": "handrolled-link-button",
-      "signature": "e737c68f52e5c0d44889c52d164784542800e7da7e7c35451e4de27730318f68",
+      "signature": "e08ef71af61e98ffdabb1348f35f69449c839b5ff5eea6fad1f3ee6b84380dbe",
       "count": 1,
-      "example": "<Link href=\"/sign-in\" className=\"hard-press hidden h-8 items-center rounded-full border-2 border-line bg-bg-surface px-3.5 font-display text-caption font-bold text-text hover:bg-bg"
+      "example": "<AuthContextLink kind=\"sign-in\" className=\"hard-press hidden h-8 items-center rounded-full border-2 border-line bg-bg-surface px-3.5 font-display text-caption font-bold text-text h"
     },
     {
       "file": "components/chrome/CoachingBookingAlert.tsx",
@@ -1166,16 +1166,16 @@
     {
       "file": "components/chrome/Header.tsx",
       "rule": "handrolled-link-button",
-      "signature": "0e8eb371647b56ff4aa53b603fb518791f573c6a64246b2e430b355b87f70c3b",
+      "signature": "744a6cd0a7abb6c57548c09c54881d17e41e2cc6234e18f0e1c86ad769c11385",
       "count": 1,
-      "example": "<Link href=\"/sign-in\" className={SECONDARY_LINK_CLS}>"
+      "example": "<AuthContextLink kind=\"sign-in\" className={SECONDARY_LINK_CLS}>"
     },
     {
       "file": "components/chrome/Header.tsx",
       "rule": "handrolled-link-button",
-      "signature": "d228eaac49ea75a175256ed41da62e2e56db1b48b149ef0a386c5088f88ab605",
+      "signature": "a08a747bf81d05324946bed239842b28240182525d962c0b0fb2a9abdc249386",
       "count": 1,
-      "example": "<Link href=\"/sign-up\" className={PRIMARY_LINK_CLS}>"
+      "example": "<AuthContextLink kind=\"sign-up\" className={PRIMARY_LINK_CLS}>"
     },
     {
       "file": "components/chrome/Header.tsx",
@@ -1201,16 +1201,16 @@
     {
       "file": "components/chrome/MobileNav.tsx",
       "rule": "handrolled-link-button",
-      "signature": "15e304dd66307ce6d285e58e806234e773979c38fc9c41a7d85b91e39074a8ee",
+      "signature": "2d025be0d2125fadd454ae054722a33196b2ec39aaaf2ade2178ab84d83fe8c9",
       "count": 1,
-      "example": "<Link href=\"/sign-up\" onClick={onClose} className=\"hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-accent px-3 font-display text-body f"
+      "example": "<AuthContextLink kind=\"sign-up\" onClick={onClose} className=\"hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-accent px-3 font-display t"
     },
     {
       "file": "components/chrome/MobileNav.tsx",
       "rule": "handrolled-link-button",
-      "signature": "4f09266e132be7d52dc06d89f4a23ec45337afc286ce56da46534762c63340ae",
+      "signature": "5a0aad75d8c7fc8b0c0da8f57fb208294eb425503cb33cf1eed23f5230adda65",
       "count": 1,
-      "example": "<Link href=\"/sign-in\" onClick={onClose} className=\"hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-bg-surface px-3 font-display text-bo"
+      "example": "<AuthContextLink kind=\"sign-in\" onClick={onClose} className=\"hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-bg-surface px-3 font-displ"
     },
     {
       "file": "components/chrome/MobileNav.tsx",
@@ -1236,9 +1236,9 @@
     {
       "file": "components/community/SaveToLibraryButton.tsx",
       "rule": "handrolled-link-button",
-      "signature": "daecfa994aa41340fa07c4ffd5f511c442892b65eb6ed3540dbaf83156b460d3",
+      "signature": "bec576b7180048dbbf44e37e77369fd8a16ef349da74b362e7daa8e2e6a0228f",
       "count": 1,
-      "example": "<Link href={signUpHref(returnTo)} className={SECONDARY_LINK_CLASS}>"
+      "example": "<Link href={signUpHref(returnTo)} onClick={() => queuePendingIntent(\"save-build\", { slug: props.communitySlug }, returnTo)} className={SECONDARY_LINK_CLASS}>"
     },
     {
       "file": "components/community/ShareLinkButton.tsx",

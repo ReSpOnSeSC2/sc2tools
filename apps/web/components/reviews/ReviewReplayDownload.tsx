@@ -6,6 +6,7 @@ import { useAuth } from "@clerk/nextjs";
 import { Download, Loader2 } from "lucide-react";
 import { apiCall } from "@/lib/clientApi";
 import { gaEvent } from "@/lib/analytics/gtag";
+import { signInHref } from "@/lib/authLinks";
 
 type DownloadResponse = { url: string; filename: string; expiresIn: number };
 
@@ -47,7 +48,7 @@ export function ReviewReplayDownload({
     const signIn = `Sign in to download replay${suffix}`;
     return (
       <Link
-        href={`/sign-in?redirect_url=${encodeURIComponent(requestUrl)}`}
+        href={signInHref(requestUrl)}
         onClick={(e) => e.stopPropagation()}
         className={cls}
         aria-label={variant === "card" ? signIn : undefined}

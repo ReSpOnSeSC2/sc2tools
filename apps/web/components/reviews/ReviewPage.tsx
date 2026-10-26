@@ -11,6 +11,7 @@ import { Toggle } from "@/components/ui/Toggle";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { MapArtwork } from "@/components/maps/MapArtwork";
 import { apiCall } from "@/lib/clientApi";
+import { signInHref } from "@/lib/authLinks";
 import { usePublicApi } from "@/lib/usePublicApi";
 import type { ReplayMapMarker } from "@/components/analyzer/game/MapReplayer";
 import type { CommentTimelineMarker } from "@/components/analyzer/game/replay/TransportDock";
@@ -388,7 +389,7 @@ export function ComposerGate({
   if (!signedIn || !v.signedIn) {
     return (
       <div className="rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted">
-        <Link href={`/sign-in?redirect_url=${encodeURIComponent(data.request.url)}`} className="font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">Sign in</Link>
+        <Link href={signInHref(data.request.url)} className="font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">Sign in</Link>
         {" "}to comment, vote or mark reviews helpful.
       </div>
     );

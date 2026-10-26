@@ -147,6 +147,19 @@ export function analyzeSource(file, text) {
   // and Linux. Escaped backslash-r/backslash-n literal content stays untouched.
   text = text.replace(/\r\n?/g, "\n");
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  // AuthContextLink still renders an anchor. Passing its classes through a
+  // context-aware wrapper must not hide existing or new hand-rolled CTA debt.
+  const linkTags = new Set(["a", "Link", "AuthContextLink"]);
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !isLiteral(statement.moduleSpecifier)
+      || statement.moduleSpecifier.text !== "@/components/auth/AuthContextLink") continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const binding of bindings.elements) {
+        if ((binding.propertyName ?? binding.name).text === "AuthContextLink") linkTags.add(binding.name.text);
+      }
+    } else if (bindings && ts.isNamespaceImport(bindings)) linkTags.add(`${bindings.name.text}.AuthContextLink`);
+  }
   const bindings = declaredBindings(source);
   const { isShadowed } = bindings;
   const insideUi = file.startsWith("components/ui/");
@@ -187,7 +200,7 @@ export function analyzeSource(file, text) {
         for (const _match of hexColors(node, source)) report("hex-outside-visualization", node);
       }
     }
-    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && !insideUi && ["a", "Link"].includes(node.tagName.getText(source))) {
+    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && !insideUi && linkTags.has(node.tagName.getText(source))) {
       const attribute = node.attributes.properties.find((prop) => ts.isJsxAttribute(prop) && prop.name.getText(source) === "className");
       const classes = attribute && stringValues(attribute.initializer, bindings).join(" ");
       if (classes && /(?:^|\s)hard-press(?:\s|$)/.test(classes) && /(?:^|\s)rounded-full(?:\s|$)/.test(classes)) report("handrolled-link-button", node);

@@ -7,15 +7,17 @@ import type { OwnerBuildsResponse } from "../useOwnerBuilds";
 import Link from "next/link";
 
 const h = vi.hoisted(() => ({ loaded: true, signedIn: true, query: { data: { items: [] } as OwnerBuildsResponse | undefined, error: undefined as Error | undefined, mutate: vi.fn() }, calls: vi.fn() }));
+const navigation = vi.hoisted(() => ({ replace: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation, usePathname: () => "/community", useSearchParams: () => new URLSearchParams() }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: h.loaded, isSignedIn: h.signedIn, userId: "creator" }), SignedIn: ({ children }: { children: ReactNode }) => h.signedIn ? children : null, SignedOut: ({ children }: { children: ReactNode }) => h.signedIn ? null : children }));
 vi.mock("../useOwnerBuilds", () => ({ useOwnerBuilds: () => { h.calls(); return h.query; } }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: ({ children }: { children: ReactNode }) => <Link href="/help/publish-community-builds#publish-from-community">{children}</Link> }));
-beforeEach(() => { h.loaded = true; h.signedIn = true; h.query.data = { items: [] }; h.query.error = undefined; h.query.mutate.mockReset(); h.calls.mockReset(); });
+beforeEach(() => { h.loaded = true; h.signedIn = true; h.query.data = { items: [] }; h.query.error = undefined; h.query.mutate.mockReset(); h.calls.mockReset(); navigation.replace.mockReset(); window.history.replaceState({}, "", "/community"); });
 afterEach(cleanup);
 
 it.each([true, false])("publishing CTA returns to the picker after signing in (signedIn=%s)", (signedIn) => {
   h.signedIn = signedIn; render(<PublishCta />);
-  expect(screen.getByRole("link", { name: signedIn ? "Publish a build" : "Sign in to publish" }).getAttribute("href")).toBe(signedIn ? "/builds?publish=1" : "/sign-in?redirect_url=%2Fbuilds%3Fpublish%3D1");
+  expect(screen.getByRole("link", { name: signedIn ? "Publish a build" : "Sign in to publish" }).getAttribute("href")).toBe(signedIn ? "/builds?publish=1" : "/sign-in?redirect_url=%2Fcommunity%3Fpublish%3D1");
   const disclosure = screen.getByRole("button", { name: "How publishing works" }); expect(disclosure.getAttribute("aria-expanded")).toBe("false");
   fireEvent.click(disclosure); expect(disclosure.getAttribute("aria-expanded")).toBe("true"); expect(screen.getAllByRole("listitem")).toHaveLength(3);
   expect(screen.getByRole("link", { name: "Learn about publishing" }).getAttribute("href")).toContain("#publish-from-community");
@@ -25,6 +27,15 @@ it.each([true, false])("publishing CTA returns to the picker after signing in (s
 it("Mine is account-gated and preserves its sign-in destination", () => {
   h.signedIn = false; render(<MyPublishedBuilds />);
   expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/sign-in?redirect_url=%2Fcommunity%3Fmine%3D1"); expect(h.calls).not.toHaveBeenCalled();
+});
+
+it("resumes the known publish picker through the allowlisted Community destination", () => {
+  window.history.replaceState({}, "", "/community?publish=1"); h.signedIn = false;
+  const view = render(<PublishCta />); expect(navigation.replace).not.toHaveBeenCalled();
+  h.signedIn = true; view.rerender(<PublishCta />);
+  expect(navigation.replace).toHaveBeenCalledWith("/builds?publish=1");
+  fireEvent.click(screen.getByRole("button", { name: "How publishing works" }));
+  expect(navigation.replace).toHaveBeenCalledTimes(1);
 });
 
 it("keeps publishing auth actions hidden until the session is resolved", () => {
