@@ -12,6 +12,8 @@ import {
   trackInstantOpen,
   trackInstantParseDone,
   trackInstantReportView,
+  trackInstantReportShared,
+  trackInstantSampleView,
   trackInstantSignupClick,
   trackInstantUploadDone,
 } from "../analytics";
@@ -43,6 +45,11 @@ describe("instant analytics", () => {
   it("sanitises counts", () => {
     trackInstantParseDone({ ok: -3, failed: Number.NaN, medianMs: null });
     expect(gaEvent).toHaveBeenCalledWith("instant_parse_done", { ok: 0, failed: 0, median_ms: 0 });
+  });
+
+  it("uses fixed share delivery enums and an identity-free sample event", () => {
+    trackInstantReportShared("download"); trackInstantSampleView();
+    expect(gaEvent.mock.calls).toEqual([["instant_report_shared", { method: "download" }], ["instant_sample_view"]]);
   });
 
   it("computes medians", () => {
