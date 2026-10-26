@@ -1,7 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig, type Cache } from "swr";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { Modal } from "@/components/ui/Modal";
 
 type Row = {
   id: string; kind: string; title: string; body: string; href: string;
@@ -95,13 +96,17 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
-function Bell() {
-  return <SWRConfig value={{ provider: () => cache, dedupingInterval, shouldRetryOnError: false }}><NotificationBell /></SWRConfig>;
+function Bell({ children }: { children?: ReactNode }) {
+  return <SWRConfig value={{ provider: () => cache, dedupingInterval, shouldRetryOnError: false }}><NotificationBell />{children}</SWRConfig>;
 }
 const readCalls = () => fetchMock.mock.calls.filter((call) => String(call[0]).endsWith("/notifications/read"));
 const open = async (count: number) => {
-  fireEvent.click(await screen.findByRole("button", { name: `Notifications, ${count} unread` }));
-  return screen.findByRole("dialog", { name: "Notifications" });
+  const trigger = await screen.findByRole("button", { name: `Notifications, ${count} unread` });
+  trigger.focus();
+  fireEvent.click(trigger);
+  const panel = await screen.findByRole("dialog", { name: "Notifications" });
+  await within(panel).findByRole("button", { name: "Unread" });
+  return panel;
 };
 
 describe("NotificationBell unread and history", () => {
@@ -294,8 +299,8 @@ describe("notification center panel behavior", () => {
     fireEvent.click(document.activeElement!);
     const reopened = await screen.findByRole("dialog");
     await waitFor(() => expect(document.activeElement).toBe(within(reopened).getByRole("link", { name: /Review focus/ })));
-    fireEvent.mouseDown(document.body);
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Notifications" }));
+    fireEvent.pointerDown(document.body);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Notifications" })));
   });
 
   it("keeps an unavailable bell rendered and offers a working unread-count retry", async () => {
@@ -341,5 +346,146 @@ describe("notification center panel behavior", () => {
     expect(rows.ann.every((row) => row.readAt)).toBe(true);
     expect(readCalls().filter((call) => JSON.parse(call[1]?.body as string).all === true)).toHaveLength(2);
     expect(within(panel).queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("NotificationBell shared popover contract", () => {
+  it("keeps focus at the bell and performs no read write until the fresh held page is merged", async () => {
+    rows.ann = [notification("held-focus")];
+    deferList = true;
+    render(<Bell />);
+    const panel = await open(1);
+    const trigger = screen.getByRole("button", { name: "Notifications, 1 unread" });
+    await waitFor(() => expect(pendingLists.length).toBeGreaterThan(0));
+    expect(panel.hasAttribute("aria-modal")).toBe(false);
+    expect(trigger.getAttribute("aria-controls")).toBe(panel.id);
+    expect(document.body.style.overflow).not.toBe("hidden");
+    expect(document.activeElement).toBe(trigger);
+    expect(readCalls()).toHaveLength(0);
+    expect(within(panel).queryByText("Review held-focus")).toBeNull();
+
+    await act(async () => {
+      deferList = false;
+      pendingLists.splice(0).forEach((resolve) => resolve());
+    });
+
+    const row = await within(panel).findByRole("link", { name: /Review held-focus/ });
+    await waitFor(() => expect(document.activeElement).toBe(row));
+    await waitFor(() => expect(readCalls()).toHaveLength(1));
+    expect(JSON.parse(readCalls()[0][1]!.body as string)).toEqual({ ids: ["held-focus"] });
+    const all = within(panel).getByRole("button", { name: "All notifications" });
+    all.focus();
+    await act(async () => { harness.handlers?.["notifications:changed"]({}); });
+    expect(document.activeElement).toBe(all);
+    expect(readCalls()).toHaveLength(1);
+  });
+
+  it("lets Tab leave a standalone panel and preserves an outside pointer's native focus", async () => {
+    rows.ann = [notification("pointer")];
+    render(<Bell><button type="button">Outside action</button></Bell>);
+    const panel = await open(1);
+    const last = await within(panel).findByRole("link", { name: "See all notifications" });
+    await waitFor(() => expect(document.activeElement?.hasAttribute("data-notification-row")).toBe(true));
+    last.focus();
+    expect(fireEvent.keyDown(last, { key: "Tab" })).toBe(true);
+    const outside = screen.getByRole("button", { name: "Outside action" });
+    fireEvent.pointerDown(outside);
+    outside.focus();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Notifications" })).toBeNull());
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(document.activeElement).toBe(outside);
+    expect(document.body.style.overflow).not.toBe("hidden");
+    expect(readCalls()).toHaveLength(1);
+  });
+
+  it("does not dismiss the bell behind a newer modal on the first Escape", async () => {
+    function LaterModal() {
+      const [later, setLater] = useState(false);
+      return <Bell><button type="button" onClick={() => setLater(true)}>Open later dialog</button>
+        <Modal open={later} onClose={() => setLater(false)} title="Later dialog"><button type="button">Later action</button></Modal>
+      </Bell>;
+    }
+    rows.ann = [notification("layer")];
+    render(<LaterModal />);
+    const panel = await open(1);
+    const row = await within(panel).findByRole("link", { name: /Review layer/ });
+    await waitFor(() => expect(document.activeElement).toBe(row));
+    // A later programmatic layer must own Escape; no outside pointer is fired.
+    fireEvent.click(screen.getByRole("button", { name: "Open later dialog" }));
+    expect(screen.getByRole("dialog", { name: "Later dialog" })).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Later dialog" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Notifications" })).toBe(panel);
+    expect(document.activeElement).toBe(row);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Notifications" }));
+    expect(document.body.style.overflow).not.toBe("hidden");
+  });
+
+  it("keeps focus in a newer keyboard-opened Modal when the held fresh notification page becomes ready", async () => {
+    function DeferredLaterModal() {
+      const [later, setLater] = useState(false);
+      return <Bell><button type="button" onKeyDown={event => {
+        if (event.key === "Enter") { event.preventDefault(); setLater(true); }
+      }}>Open later dialog by keyboard</button>
+        <Modal open={later} onClose={() => setLater(false)} title="Deferred later dialog"><button type="button">Keep later focus</button></Modal>
+      </Bell>;
+    }
+    rows.ann = [notification("late-layer")];
+    deferList = true;
+    render(<DeferredLaterModal />);
+    const panel = await open(1);
+    await waitFor(() => expect(pendingLists.length).toBeGreaterThan(0));
+    expect(readCalls()).toHaveLength(0);
+    expect(within(panel).queryByText("Review late-layer")).toBeNull();
+
+    // Nonmodal Tab may reach another action. Opening it with a keyboard
+    // event keeps the notification popover mounted; no pointer dismissal.
+    const laterOpener = screen.getByRole("button", { name: "Open later dialog by keyboard" });
+    laterOpener.focus(); fireEvent.keyDown(laterOpener, { key: "Enter" });
+    const laterDialog = screen.getByRole("dialog", { name: "Deferred later dialog" });
+    const laterAction = within(laterDialog).getByRole("button", { name: "Keep later focus" });
+    laterAction.focus(); expect(document.activeElement).toBe(laterAction);
+    expect(screen.getByRole("dialog", { name: "Notifications" })).toBe(panel);
+
+    await act(async () => {
+      deferList = false;
+      pendingLists.splice(0).forEach(resolve => resolve());
+    });
+    const row = await within(panel).findByRole("link", { name: /Review late-layer/ });
+    await waitFor(() => expect(readCalls()).toHaveLength(1));
+    await screen.findByRole("button", { name: "Notifications" });
+    expect(JSON.parse(readCalls()[0][1]!.body as string)).toEqual({ ids: ["late-layer"] });
+    expect(within(row).getByText("New")).toBeTruthy();
+    expect(document.activeElement).toBe(laterAction);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Deferred later dialog" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Notifications" })).toBe(panel);
+    expect(document.activeElement).toBe(laterOpener);
+    expect(document.body.style.overflow).not.toBe("hidden");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Notifications" }));
+    expect(readCalls()).toHaveLength(1);
+  });
+
+  it("does not move focus when a held first page settles after the panel closes", async () => {
+    rows.ann = [notification("late-page")];
+    deferList = true;
+    render(<Bell><button type="button">Keep my focus</button></Bell>);
+    await open(1);
+    await waitFor(() => expect(pendingLists.length).toBeGreaterThan(0));
+    fireEvent.keyDown(document, { key: "Escape" });
+    const outside = screen.getByRole("button", { name: "Keep my focus" });
+    outside.focus();
+    await act(async () => {
+      deferList = false;
+      pendingLists.splice(0).forEach((resolve) => resolve());
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(outside);
+    expect(readCalls()).toHaveLength(0);
   });
 });
