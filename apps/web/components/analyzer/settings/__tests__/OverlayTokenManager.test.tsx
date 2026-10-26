@@ -85,10 +85,10 @@ it("also guards Chat-only drafts, including a retained programmatic selection ev
   const view = render(manager());
   dirty.chat = true; view.rerender(manager());
   const selector = screen.getByRole("combobox", { name: "URLs shown for" });
-  expect(selector).toBeDisabled();
+  expect((selector as HTMLSelectElement).disabled).toBe(true);
   fireEvent.change(selector, { target: { value: items[1].token } });
   expect(select).not.toHaveBeenCalled();
-  for (const name of ["Mint another token", "Rotate", "Revoke"]) expect(screen.getByRole("button", { name })).toBeDisabled();
+  for (const name of ["Mint another token", "Rotate", "Revoke"]) expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
   expect(fetch).not.toHaveBeenCalled();
 });
 
@@ -106,7 +106,7 @@ it("passes operation-specific revoke confirmation only after the real DELETE 204
   const ambiguity = {}, dispatched = vi.fn(() => ambiguity);
   vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }));
   render(<OverlayTokenManager items={items} selected={items[0]} onSelect={select} onRefresh={refresh} onMutationDispatched={dispatched} />);
-  fireEvent.click(screen.getByRole("button", { name: "Revoke", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
   fireEvent.click(screen.getByRole("button", { name: "Revoke permanently" }));
   await waitFor(() => expect(refresh).toHaveBeenCalledWith(undefined, true, { action: "revoke", predecessor: items[0].token, returnedToken: undefined, ambiguity }));
   expect(dispatched).toHaveBeenCalledWith(items[0].token);

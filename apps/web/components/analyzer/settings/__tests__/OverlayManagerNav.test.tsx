@@ -7,7 +7,7 @@ afterEach(cleanup);
 it("keeps only the five remaining compact Overlay panes and preserves unrelated query context", () => {
   render(<OverlayManagerNav section="look" />);
   expect(screen.getAllByRole("link").map(link => link.textContent)).toEqual(["Setup", "Widgets", "Look", "Scenes", "Tokens"]);
-  expect(screen.getByRole("link", { name: "Look" })).toHaveAttribute("aria-current", "page");
+  expect(screen.getByRole("link", { name: "Look" }).getAttribute("aria-current")).toBe("page");
   for (const link of screen.getAllByRole("link")) expect(new URL(link.getAttribute("href")!, "https://fixture.invalid").searchParams.get("ref")).toBe("keep");
 });
 it("does not infer a hidden Chat/Dock pane or substring-match an unknown hash", () => {

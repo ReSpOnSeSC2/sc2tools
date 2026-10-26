@@ -11,6 +11,7 @@ const token = (id: string, extra = {}) => ({ token: id, label: id, createdAt: "2
 const list = (...ids: string[]) => ({ items: ids.map(id => token(id)) });
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
 const reply = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
+const text = (element: HTMLElement) => (element.textContent ?? "").replace(/\s+/g, " ").trim();
 const reads: string[] = [];
 const writes: { method: string; body: string | null }[] = [];
 let transport: (url: string, init: RequestInit) => Promise<Response>;
@@ -43,11 +44,11 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 describe("one admitted streaming-token authority", () => {
   it("forces one current status read, retains selection between the two bodies and renders one manager", async () => {
     const view = render(owner());
-    expect(await screen.findByTestId("body")).toHaveTextContent("overlay:owner-a:a");
+    expect(text(await screen.findByTestId("body"))).toContain("overlay:owner-a:a");
     fireEvent.change(screen.getByLabelText("URLs shown for"), { target: { value: "b" } });
-    expect(screen.getByTestId("body")).toHaveTextContent("owner-a:b");
+    expect(text(screen.getByTestId("body"))).toContain("owner-a:b");
     view.rerender(owner(<Probe label="chat" />));
-    expect(screen.getByTestId("body")).toHaveTextContent("chat:owner-a:b");
+    expect(text(screen.getByTestId("body"))).toContain("chat:owner-a:b");
     expect(screen.getAllByLabelText("URLs shown for")).toHaveLength(1);
     expect(reads).toEqual(["/v1/overlay-tokens"]); expect(writes).toEqual([]);
   });
@@ -57,16 +58,16 @@ describe("one admitted streaming-token authority", () => {
     render(owner()); await waitFor(() => expect(reads).toHaveLength(1));
     expect(screen.queryByTestId("body")).toBeNull(); expect(writes).toEqual([]);
     await act(async () => held.resolve(reply(list("fresh"))));
-    expect(await screen.findByTestId("body")).toHaveTextContent("fresh");
+    expect(text(await screen.findByTestId("body"))).toContain("fresh");
     expect(writes).toEqual([]);
   });
   it("a failed GET cannot mint; a successful explicit status retry admits exactly one Default", async () => {
     let status = 0;
     transport = async (_url, init) => init.method === "POST" ? reply({ token: "new-token" }) : ++status === 1 ? reply({ error: { message: "offline", code: "unavailable" } }, 503) : reply(status === 2 ? list() : list("new-token"));
-    render(owner()); expect(await screen.findByRole("alert")).toHaveTextContent("offline");
+    render(owner()); expect(text(await screen.findByRole("alert"))).toContain("offline");
     expect(writes).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "Check token status" }));
-    expect(await screen.findByTestId("body")).toHaveTextContent("new-token");
+    expect(text(await screen.findByTestId("body"))).toContain("new-token");
     expect(reads).toHaveLength(3); expect(writes).toEqual([{ method: "POST", body: JSON.stringify({ label: "Default" }) }]);
   });
   it("retains unknown automatic creation across full unmount/remount and empty status without a second POST", async () => {
@@ -122,7 +123,7 @@ describe("one admitted streaming-token authority", () => {
     vi.useFakeTimers(); const jwt = deferred<string>(); auth.getToken.mockReturnValueOnce(jwt.promise);
     render(owner());
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
-    expect(screen.getByRole("alert")).toHaveTextContent(/took too long/);
+    expect(text(screen.getByRole("alert"))).toMatch(/took too long/);
     expect(reads).toEqual([]); expect(writes).toEqual([]);
     await act(async () => jwt.resolve("late-jwt"));
     expect(reads).toEqual([]); expect(writes).toEqual([]);
@@ -131,7 +132,7 @@ describe("one admitted streaming-token authority", () => {
     let minted = false;
     transport = async (_url, init) => { if (init.method === "POST") { minted = true; return reply({ token: "new-token" }); } return reply(minted ? list("new-token") : list()); };
     render(owner(<Probe />, true));
-    expect(await screen.findByTestId("body")).toHaveTextContent("new-token");
+    expect(text(await screen.findByTestId("body"))).toContain("new-token");
     expect(writes).toHaveLength(1);
   });
   it("retires held owner-A JWT on A→B→A without fetching or committing the old generation", async () => {
@@ -139,9 +140,9 @@ describe("one admitted streaming-token authority", () => {
     const view = render(owner());
     await waitFor(() => expect(auth.getToken).toHaveBeenCalledOnce());
     auth.owner = "owner-b"; view.rerender(owner());
-    expect(await screen.findByTestId("body")).toHaveTextContent("owner-b");
+    expect(text(await screen.findByTestId("body"))).toContain("owner-b");
     auth.owner = "owner-a"; view.rerender(owner());
-    expect(await screen.findByTestId("body")).toHaveTextContent("owner-a");
+    expect(text(await screen.findByTestId("body"))).toContain("owner-a");
     await act(async () => jwt.resolve("retired-bearer"));
     expect(reads).toHaveLength(2); expect(writes).toEqual([]);
   });
@@ -150,7 +151,7 @@ describe("one admitted streaming-token authority", () => {
     transport = async () => ({ ok: true, status: 200, json: () => body.promise }) as Response;
     const view = render(owner()); await waitFor(() => expect(reads).toHaveLength(1));
     transport = async () => reply(list("owner-b-token")); auth.owner = "owner-b"; view.rerender(owner());
-    expect(await screen.findByTestId("body")).toHaveTextContent("owner-b-token");
+    expect(text(await screen.findByTestId("body"))).toContain("owner-b-token");
     await act(async () => body.resolve(list("private-retired-token")));
     expect(screen.queryByText(/private-retired-token/)).toBeNull();
     expect(cache.get(unstable_serialize(["authenticated-api", "owner-a", "/v1/overlay-tokens"]))?.data).toBeUndefined();
@@ -158,9 +159,9 @@ describe("one admitted streaming-token authority", () => {
   it("blocks selector/mint/rotation for Chat drafts but permits label rename without resetting the body", async () => {
     render(owner(<Probe dirty />)); const body = await screen.findByTestId("body");
     const before = body.textContent;
-    expect(screen.getByLabelText("URLs shown for")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Mint another token" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Rotate" })).toBeDisabled();
+    expect((screen.getByLabelText("URLs shown for") as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Mint another token" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Rotate" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText("URLs shown for"), { target: { value: "b" } });
     expect(body.textContent).toBe(before);
     fireEvent.change(screen.getByLabelText("Token label"), { target: { value: "Renamed" } });
@@ -183,7 +184,7 @@ describe("one admitted streaming-token authority", () => {
     await waitFor(() => expect(reads).toHaveLength(2));
     expect(screen.queryByTestId("body")).toBeNull();
     await act(async () => held.resolve(reply(list("a", "fresh-handle"))));
-    expect(await screen.findByTestId("body")).toHaveTextContent("fresh-handle");
+    expect(text(await screen.findByTestId("body"))).toContain("fresh-handle");
     expect(writes).toHaveLength(1);
   });
   it("keeps paused rotations visible only in the manager, never as Chat/URL bodies", async () => {
@@ -200,9 +201,9 @@ describe("one admitted streaming-token authority", () => {
       return reply(revoked ? minted ? list("replacement-default") : list() : list("last-active"));
     };
     render(owner()); await screen.findByTestId("body");
-    fireEvent.click(screen.getByRole("button", { name: "Revoke", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
     fireEvent.click(screen.getByRole("button", { name: "Revoke permanently" }));
-    expect(await screen.findByTestId("body")).toHaveTextContent("replacement-default");
+    expect(text(await screen.findByTestId("body"))).toContain("replacement-default");
     expect(writes).toEqual([{ method: "DELETE", body: null }, { method: "POST", body: JSON.stringify({ label: "Default" }) }]);
     expect(reads).toHaveLength(3);
     expect(cache.get(unstable_serialize(["settings-streaming-create-ambiguity", "owner-a"]))).toEqual({ data: false });
@@ -215,7 +216,7 @@ describe("one admitted streaming-token authority", () => {
       return reply(revoked ? list() : list("last-active"));
     };
     render(owner()); await screen.findByTestId("body");
-    fireEvent.click(screen.getByRole("button", { name: "Revoke", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
     fireEvent.click(screen.getByRole("button", { name: "Revoke permanently" }));
     expect(await screen.findByText(/A token change may have completed/)).toBeTruthy();
     expect(writes).toEqual([{ method: "DELETE", body: null }]); expect(reads).toHaveLength(2);
@@ -258,11 +259,11 @@ describe("one admitted streaming-token authority", () => {
     fireEvent.click(first.getByRole("button", { name: "Mint another token" }));
     await waitFor(() => expect(reads).toHaveLength(3));
     fireEvent.click(second.getByRole("button", { name: "Mint another token" }));
-    expect(await second.findByTestId("body")).toHaveTextContent("second-new");
+    expect(text(await second.findByTestId("body"))).toContain("second-new");
     const laterMarker = cache.get(unstable_serialize(["settings-streaming-create-ambiguity", "owner-a"]))!.data;
     expect(laterMarker).toMatchObject({ blocked: true, generation: { mayClear: false } });
     await act(async () => held.resolve(reply(list("first-new", "second-new"))));
-    expect(await first.findByTestId("body")).toHaveTextContent("first-new");
+    expect(text(await first.findByTestId("body"))).toContain("first-new");
     expect(cache.get(unstable_serialize(["settings-streaming-create-ambiguity", "owner-a"]))!.data).toBe(laterMarker);
     expect(writes).toHaveLength(2); expect(reads).toHaveLength(4);
   });

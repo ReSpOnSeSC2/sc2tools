@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ServerCog,
   UserRound,
@@ -112,7 +112,7 @@ function SettingsShellInner({
   renderStreaming,
 }: SettingsShellProps & { initialTab: SettingsTabId; isTabVisible: (id: SettingsTabId) => boolean }) {
   const router = useRouter();
-  const tabs = TABS.filter((t) => isTabVisible(t.id));
+  const tabs = useMemo(() => TABS.filter((t) => isTabVisible(t.id)), [isTabVisible]);
   const [active, setActive] = useState<SettingsTabId>(() =>
     tabs.some((t) => t.id === initialTab) ? initialTab : (tabs[0]?.id ?? initialTab),
   );
@@ -129,16 +129,17 @@ function SettingsShellInner({
   const mounted = useRef(true);
   const action = useRef<object>({});
   const admittedHref = useRef("");
+  const [anchorChanges, setAnchorChanges] = useState(0);
   // "Overlay · Settings · SC2 Tools": the browser tab (and a bookmark of
   // the ?tab= URL) names the settings tab that is open.
   const activeLabel = tabs.find((t) => t.id === active)?.label;
   useDocumentTitle(activeLabel ? `${activeLabel} · Settings` : null);
-  const activate = (next: SettingsDestination) => {
+  const activate = useCallback((next: SettingsDestination) => {
     setActive(next.tab); setDestination(next);
     if (window.location.pathname + window.location.search + window.location.hash !== next.href) window.history.replaceState(null, "", next.href);
     admittedHref.current = next.href;
-  };
-  const requestDestination = (next: SettingsDestination, fromUrl: boolean) => {
+  }, []);
+  const requestDestination = useCallback((next: SettingsDestination, fromUrl: boolean) => {
     const attempt = {}; action.current = attempt;
     if (!tabs.some(tab => tab.id === next.tab)) return;
     if (next.tab === active && next.href === admittedHref.current) { setPending(null); return; }
@@ -147,13 +148,13 @@ function SettingsShellInner({
       return;
     }
     setPending(null); activate(next);
-  };
-  const requestSwitch = (next: string) => {
+  }, [tabs, active, ctx, owner, activate]);
+  const requestSwitch = useCallback((next: string) => {
     if (!tabs.some(tab => tab.id === next) || next === active) return;
     const query = new URLSearchParams(window.location.search);
     query.set("tab", next); query.delete("section"); query.delete("pack"); query.delete("widget");
     requestDestination(resolveSettingsDestination(query.toString()), false);
-  };
+  }, [tabs, active, requestDestination]);
   const previousRequest = useRef<string | null>(null);
   const previousInitialTab = useRef<SettingsTabId | null>(null);
   useLayoutEffect(() => {
@@ -170,7 +171,7 @@ function SettingsShellInner({
     if (!locationReady) {
       activate(next); setLocationReady(true);
     } else requestDestination(next, true);
-  });
+  }, [requestedSearch, initialTab, tabs, locationReady, activate, requestDestination, anchorChanges]);
   useLayoutEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; action.current = {}; };
@@ -180,7 +181,6 @@ function SettingsShellInner({
   // `#section` anchors: once the tab is showing, scroll to the section
   // and highlight it, and again whenever the anchor changes. Help opens
   // its own article anchors.
-  const [anchorChanges, setAnchorChanges] = useState(0);
   const panelRegion = useRef<HTMLDivElement>(null);
   const panelScopeId = useId();
   const desktopRows = SETTINGS_GROUPS.flatMap((group) => {
