@@ -29,6 +29,9 @@ async function clean(page: Page, evidence: Evidence) {
   expect(evidence.externalAttempts).toEqual([]); expect(evidence.rejectedWrites).toEqual([]);
   expect(await page.evaluate(() => window.platformDisconnectForbidden)).toEqual({ popups: 0, nativeConfirms: 0 });
   expect(evidence.reads.every(row => row.method === "GET" && row.path === "/v1/me/integrations" && row.search === "" && row.body === null)).toBe(true);
+  await test.info().attach("platform-disconnect-proof", { body: JSON.stringify({ buildId: evidence.buildId, cssNames: evidence.cssNames,
+    reads: evidence.reads, syntheticWrites: evidence.writes, rejectedWrites: evidence.rejectedWrites,
+    externalAttempts: evidence.externalAttempts, forbidden: await page.evaluate(() => window.platformDisconnectForbidden) }), contentType: "application/json" });
 }
 async function bounds(page: Page, panel: Locator) {
   const box = await panel.boundingBox(), viewport = page.viewportSize()!;

@@ -1,11 +1,141 @@
 # Connected-account disconnect confirmation checkpoint
 
-2026-10-26. Source-only pack on `codex/wave5-platform-disconnect-confirm`,
-prepared by root at actual main `4135639b`, in
-`C:\SC2TOOLS\.worktrees\wave3-guides-expansion`. The merged UI branch,
-screenshots, engine/sample assets and all prior caches remain preserved.
+Root verified all eight final owned hashes and reviewed three true viewport
+captures. New byte-identical copies are `platform-disconnect-light-320.png`,
+`platform-disconnect-dark-390.png` and `platform-disconnect-light-1440.png`
+under `docs/handoff/screenshots/`. Original full-page images and every receipt
+remain preserved. Review covers the confirmation; the inherited phone
+permission-row text squeeze remains a separate responsive follow-up. Delivery
+stacks on the verified glossary branch while its main integration checks run.
 
-## First static verification
+2026-10-26. Final local proof on `codex/wave5-platform-disconnect-confirm` at
+`f912644922aae4790904e1d382f261de2c597506`, in
+`C:\SC2TOOLS\.worktrees\wave3-guides-expansion`. Root prepared the original
+pack at main `4135639b`, preserved the first static repair at `90245439` and
+integrated reviewed Glossary/Notification/Mobile dependencies before this
+artifact. Previous UI source, screenshots, engine/sample assets and all prior
+caches remain preserved. All local runtime jobs and browsers are closed;
+root owns source/capture review, Git, ancestry reconciliation and delivery.
+
+## Final integrated local proof
+
+The exact eight-path manifest remains
+`.cache/platform-disconnect-confirm-owned-paths.txt`. Seven files matched the
+first-static receipt; the Changelog differed only through the dependency union.
+The final stage added one machine-readable ledger attachment to the existing
+browser `clean()` helper, preserving every assertion and all twelve authored
+cases. No product or Connect/OAuth implementation changed. All eight prebuild
+hashes remained unchanged through build and browser verification; only this
+checkpoint changes afterward.
+
+Final proof lives in `.cache/platform-final-f9126449/`; integrated static logs
+are also named `.cache/platform-final-*`.
+
+- **275 tests across 29 suites passed**, maximum two workers. All **41**
+  connected-account checks and nine original connection/purpose cases remain.
+  The combined pack includes real owner requests, useConfirm, nested Modal,
+  focus scopes, Notification/Replay sharing, InfoTip/Glossary and actual Help
+  renderer/search contracts. Whole web types passed before and after build.
+  All five owned code/test/fixture/Help files passed strict lint with zero
+  warnings; fixture syntax passed. Whole-app inherited lint warnings remain
+  in the build log, separate from this clean owned-file check.
+- Read-only canonical Help determinism passed for **91 articles**, normalized
+  SHA256 `b1af2309affec6feaf94224421684fda9de54b05dec06fd6ce8a5e864010a074`.
+  Raw CRLF registry SHA256
+  `1abb616ecd0a7145974c7cbfb2a72121c2b6df1a20a27fec5251e6411cf092ab`
+  is preserved; the index was not written. All **19 UI-rule checks** passed;
+  the ratchet passed over **1,699 files / 645 existing occurrences**, with no
+  new or stale allowance.
+- Connect/Reconnect's normalized block is byte-identical to the preserved
+  pre-cache-review source: **3,911 UTF-8 bytes**, SHA256
+  `6448d4b91c847199ed080b90ddfcf1891d36d0258be7d22704f16984b1a6118c`.
+  Synchronous popup, purpose/scopes, polling and callbacks are preserved.
+- All retained assets were already present. Fresh admission matched all
+  **40 normalized engine inputs**, source hash
+  `18a2e1b56111045cdb441d9d8868eee0b36d0b158b34ea0a79e3b9a22a69e2b2`,
+  engine **`1.6.12/d27b37abb9997712`**, agent `0.24.7`, all five active asset
+  digests/sizes and all four strict sample payloads. Raw sample CRLF bytes are
+  **163,356 / SHA256
+  `05e874e4792b9e054021efbe0008a935a4cd1c4e4395b1f3e061508b476f0c40`**;
+  canonical LF bytes are **163,355 / SHA256
+  `91a6735e50f45776c15642ebae53f1a3f9800c1db225a99e0e631be318820473`**.
+  Post-build admission proves all nine old/active engine/Pyodide files,
+  pointer, availability and sample hashes unchanged. No copy, generation,
+  engine compilation, publisher, pruning or download ran.
+- One direct Next production build passed with official dummy/local flags,
+  build ID **`IEnFS1aCPXo8Iw5y8UD0u`**, generating **144 static pages**. All
+  **81 unchanged budgets** passed: Settings 182/260 kB, Community 188.6/190 kB,
+  Today 234.3/240 kB, opponent dossier 460.6/500 kB, Help article 196.1/200 kB
+  and Try 216.8/240 kB. No budget or dependency increased.
+- All **12 authored browser cases passed**, no skips/retries, one worker with
+  installed full Chromium 1228. Its executable SHA256 is
+  `b798f9e53a98d29eb7f36f8c409f905d3184780a04d2bcb56989067194784bd1`.
+  Safe-dismissal flows run both themes at **320/390/1440**; the other ten
+  lifetime/recovery cases run at 390px. This preserves the explicit-width
+  matrix without repeating the same theme/width loops in three projects.
+- Native browser proof covers Cancel-first focus, Tab containment, Cancel,
+  Escape and scrim return, newer-Modal Escape and body-lock ownership, pending
+  unmount/owner ABA/revision retirement, retired held JWTs, one approved
+  mutation/status read, explicit reapproval after errors, and still-connected,
+  missing or invalid authoritative status without stale success/cache changes.
+  Dialog bounds and all shared confirmation controls meet the measured 44px
+  target. All **six full AA scans** have zero serious/critical issues, with
+  collecting-only mode unset and no excluded rule or contrast waiver.
+- Exact browser ledgers record **27 synthetic status GETs / eight explicitly
+  armed synthetic DELETEs** across all recovery cases. The ordinary success
+  case is one initial GET, exactly one DELETE and one follow-up GET; safe and
+  retired flows send zero DELETEs. The failed DELETE has no follow-up GET;
+  each new mutation requires another human-style test approval. Per-case
+  methods, owners, bearer headers, empty bodies and counts are retained.
+  Unknown requests, unapproved/rejected writes, nonlocal traffic, native
+  confirmations and popups are **zero**. Actual account/provider/permission,
+  clipboard, native agent/StarCraft and OAuth actions are **zero**.
+- The browser adapter returns typed synthetic DELETE **200 JSON**; real
+  **204**, held cache-acknowledgement/reconnect ABA, delayed updater/cleared
+  cache, and the 20-second token/DELETE-body/status-body boundaries are the
+  faithful real-request **unit proof**, not browser claims. No production
+  route or action was used to exercise those branches.
+- **Six new cache-only full-page confirmation PNGs** remain in the browser output,
+  one per theme/width. Light 320, Dark 390 and Light 1440 were visually
+  inspected: the confirmation text, Close, Cancel and named destructive action
+  are legible and contained. Underlying provider-row layout and its existing
+  36px triggers are unchanged; only confirmation control bounds are claimed.
+  Full-page captures include underlying content outside the fixed viewport
+  scrim. Root owns any later tracked image copies; none were overwritten.
+
+Root reviewed those full-page originals and kept the inherited responsive
+permission-row text squeeze as a separate follow-up. Its existing `min-w-0
+flex-1` text beside intrinsic action buttons needs an independent phone-layout
+repair; neither that layout nor provider actions changed in this pack.
+
+At root's request, **three additional true viewport-only captures** were made
+at Light 320, Dark 390 and Light 1440, all 1,000px high, in the separate
+`viewport-captures-final/` directory. They use actual native open and Cancel,
+retain Cancel-first focus/return, and add exactly **three synthetic initial
+GETs / zero DELETEs**, unknowns, rejected/nonlocal requests, native confirms
+or popups. Three contexts and the browser were explicitly closed. Native
+PNG dimensions were checked; no raster crop/edit or original replacement ran.
+These contained, legible dialogs are the review counterparts; originals stay
+byte-identical. Total final transport is **30 synthetic GETs / eight armed
+synthetic DELETEs**, with **nine final PNGs** and the original six full AA scans.
+
+No new final-stage RED or product repair occurred. The earlier fake-clock
+adapter/204 setup failures and their source bytes remain preserved below.
+Key receipts are `prebuild-source.json`, `connect-preservation.json`,
+`asset-admission-{prebuild,postbuild}.json`, `help-determinism.json`,
+`next-build.log`, `budgets.log`, `types-postbuild.log`, `build-artifact.json`,
+`browser-results.json`, `browser.log`, `viewport-capture-results.json`,
+`viewport-captures.log`, `final-browser-summary.json` and final
+source hashes. The AA attachment stream retains all six width scans even
+though the optional same-route audit filenames contain only the latest width.
+
+Representative viewport captures, relative to the final proof directory:
+
+- `viewport-captures-final/platform-disconnect-light-320-viewport.png`
+- `viewport-captures-final/platform-disconnect-dark-390-viewport.png`
+- `viewport-captures-final/platform-disconnect-light-1440-viewport.png`
+
+## Earlier first static verification
 
 Root integrated reviewed Mobile source at `095de69a`, then ran the first
 runtime stage. It passes 146 tests/16 suites, full web types, strict owned lint
@@ -21,8 +151,9 @@ the actual API's204 response. Original test bytes and both RED logs remain
 under `.cache/platform-first-static-095de69a/`; no production source changed.
 All41 connected-account tests and all original assertions pass.
 
-All root runtime jobs are closed. Final dependency integration, build/admission,
-browser/AA and delivery remain. No actual provider/account operation ran.
+At that earlier boundary, root runtime jobs were closed and final dependency
+integration/build/browser gates remained. Those local gates are now complete
+above; delivery remains root-owned. No actual provider/account operation ran.
 
 ## Initial source-only boundary (historical)
 
@@ -80,7 +211,7 @@ release or budget changes. Only OfficialPlatformConnections' one retired
 native-confirm baseline entry is removed. No other CTA or dialog migration is
 included.
 
-## Authored proof, not executed
+## Initial authored proof (historical)
 
 The existing streaming suite retains all nine connection/purpose/permission
 cases, with a faithful ready-owner Clerk fixture. New cases use the real
@@ -123,17 +254,11 @@ bounds/44px-control checks. The existing provider trigger is still Button sm
 (36px high); only shared confirmation controls are claimed to meet 44px here.
 No screenshots are yet owned or copied by this pack.
 
-## Remaining gates
+## Delivery gates
 
-Root independent source review, then an explicit serialized runtime grant for
-focused consumers/useConfirm/Modal/private-request tests, whole types, strict
-owned lint, deterministic Help generation and UI ratchet. Retain all real RED
-results; do not weaken consent, auth, count or AA assertions. Any broader file
-scope needs root approval.
-
-Current engine/sample admission, a current-source production build, unchanged
-budgets/post-build types and pinned one-worker actual browser proof remain
-unexecuted. No compiler/publisher/pruning/download is authorized by this pack.
-Current-main reconciliation, exact-head CI, reviewed commit/PR/merge and live
-verification belong to root and remain outstanding. This pack does not finish
-the overall UI roadmap.
+The local static, asset, production-build, budget, browser/AA and visual gates
+above are complete. Root owns final source/capture review, current-main
+reconciliation with runtime-tree equality, exact-head CI, reviewed stacked
+commit/PR/merge and live verification. No production provider action, manual
+deployment retry or plan upgrade is included. This pack does not finish the
+overall UI roadmap; its original eight-path scope remains unchanged.
