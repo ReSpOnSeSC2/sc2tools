@@ -125,6 +125,8 @@ export interface PulseCard {
    * of just landing on the Opponents list.
    */
   targetOpponentId?: string;
+  /** Section-local context, kept separate from global analyzer filters. */
+  targetQuery?: { q?: string; focus?: string; pulseId?: string };
 }
 
 /** Pool entry: eligibility gate + card factory. */
@@ -342,6 +344,7 @@ export const PULSE_POOL: PulseSpec[] = [
         stat: pctLabel(b.recentWinRate),
         statLabel: `last ${b.recentDecided} decided`,
         targetTab: "builds",
+        targetQuery: { q: b.name },
       };
     },
   },
@@ -364,6 +367,7 @@ export const PULSE_POOL: PulseSpec[] = [
         stat: pctLabel(b.careerWinRate),
         statLabel: "career win rate",
         targetTab: "builds",
+        targetQuery: { q: b.name },
       };
     },
   },
@@ -387,6 +391,7 @@ export const PULSE_POOL: PulseSpec[] = [
         statLabel: "your head-to-head",
         targetTab: "opponents",
         targetOpponentId: n.pulseId,
+        targetQuery: n.pulseId ? { pulseId: n.pulseId } : undefined,
       };
     },
   },
@@ -411,6 +416,7 @@ export const PULSE_POOL: PulseSpec[] = [
         statLabel: "head-to-head",
         targetTab: "opponents",
         targetOpponentId: r.pulseId,
+        targetQuery: r.pulseId ? { pulseId: r.pulseId } : undefined,
       };
     },
   },
@@ -433,6 +439,7 @@ export const PULSE_POOL: PulseSpec[] = [
         stat: pctLabel(m.winRate),
         statLabel: `${m.decided} recent decided`,
         targetTab: "battlefield",
+        targetQuery: { focus: m.name },
       };
     },
   },

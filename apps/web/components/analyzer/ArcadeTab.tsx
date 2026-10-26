@@ -9,9 +9,9 @@ import { QuickPlaySurface } from "./arcade/surfaces/QuickPlay";
 import { CollectionSurface } from "./arcade/surfaces/Collection";
 import { MyStatsSurface } from "./arcade/surfaces/MyStats";
 
-type Sub = "today" | "quick-play" | "collection" | "my-stats";
+export type ArcadeSub = "today" | "quick-play" | "collection" | "my-stats";
 
-const SUBS: Array<{ id: Sub; label: string }> = [
+const SUBS: Array<{ id: ArcadeSub; label: string }> = [
   { id: "today", label: "Daily" },
   { id: "quick-play", label: "Quick Play" },
   { id: "collection", label: "Collection" },
@@ -23,12 +23,14 @@ const SUBS: Array<{ id: Sub; label: string }> = [
  * sub-navigation; each sub renders its own surface and composes the
  * shared engine + state hooks.
  */
-export function ArcadeTab() {
-  return <CustomBuildCatalogProvider><ArcadeContent /></CustomBuildCatalogProvider>;
+export function ArcadeTab(props: { sub?: ArcadeSub; onSubChange?: (value: ArcadeSub) => void } = {}) {
+  return <CustomBuildCatalogProvider><ArcadeContent {...props} /></CustomBuildCatalogProvider>;
 }
 
-function ArcadeContent() {
-  const [sub, setSub] = useState<Sub>("today");
+function ArcadeContent({ sub: controlledSub, onSubChange }: { sub?: ArcadeSub; onSubChange?: (value: ArcadeSub) => void }) {
+  const [localSub, setLocalSub] = useState<ArcadeSub>("today");
+  const sub = controlledSub ?? localSub;
+  const setSub = (value: ArcadeSub) => { setLocalSub(value); onSubChange?.(value); };
   return (
     <div className="space-y-4">
       {/* Season Recap — the shareable "Wrapped" card, surfaced above the
@@ -36,7 +38,7 @@ function ArcadeContent() {
           down. Self-gating: shows an unlock prompt below 10 games. */}
       <SeasonRecap />
 
-      <Tabs value={sub} onValueChange={(v) => setSub(v as Sub)} orientation="horizontal">
+      <Tabs value={sub} onValueChange={(v) => setSub(v as ArcadeSub)} orientation="horizontal">
         <Tabs.List ariaLabel="Arcade sections" className="!flex-nowrap overflow-x-auto">
           {SUBS.map((s) => (
             <Tabs.Trigger key={s.id} value={s.id} className="!flex-shrink-0">

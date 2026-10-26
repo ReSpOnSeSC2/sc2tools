@@ -1,0 +1,32 @@
+{
+  "comment": "Synthetic raw engine clocks: building starts, unit appearances/completions. Not a decoded copy of the reported replay. Shared by CPython, native compatibility bridge and verified built Pyodide archive.",
+  "events": [
+    {"type":"building","name":"Nexus","time":0,"x":10,"y":10,"subtype":"init"},
+    {"type":"building","name":"Gateway","time":40,"x":10,"y":10,"subtype":"init"},
+    {"type":"building","name":"Nexus","time":85,"x":40,"y":10,"subtype":"init"},
+    {"type":"building","name":"CyberneticsCore","time":90,"x":10,"y":10,"subtype":"init"},
+    {"type":"building","name":"TwilightCouncil","time":150,"x":10,"y":10,"subtype":"init"},
+    {"type":"building","name":"Gateway","time":190,"x":10,"y":10,"subtype":"init"},
+    {"type":"building","name":"DarkShrine","time":197,"x":120,"y":120,"subtype":"init"},
+    {"type":"building","name":"Nexus","time":270,"x":70,"y":10,"subtype":"init"},
+    {"type":"unit","name":"DarkTemplar","time":273},
+    {"type":"upgrade","name":"Charge","time":403}
+  ],
+  "cases": [
+    {"id":"ground-dt-before-charge","expected":"PvT - DT Rush"},
+    {"id":"real-drop-first","append":[{"type":"building","name":"RoboticsFacility","time":212},{"type":"unit","name":"WarpPrism","time":251}],"expected":"PvT - DT Drop"},
+    {"id":"hallucinated-transport","append":[{"type":"building","name":"RoboticsFacility","time":212},{"type":"unit","name":"WarpPrism","time":251,"hallucinated":true}],"expected":"PvT - DT Rush"},
+    {"id":"late-prism-completion","append":[{"type":"building","name":"RoboticsFacility","time":212},{"type":"unit","name":"WarpPrism","time":351}],"expected":"PvT - DT Rush"},
+    {"id":"shrine-alone","remove":["DarkTemplar"],"expected":"PvT - Macro Transition (Unclassified)"},
+    {"id":"hallucinated-dt","hallucinated":"DarkTemplar","expected":"PvT - Macro Transition (Unclassified)"},
+    {"id":"late-shrine-transition","times":{"DarkShrine":450,"DarkTemplar":530},"expected":"PvT - Charge First (Fast 3rd Nexus)"},
+    {"id":"late-dt-not-rush","times":{"DarkTemplar":360.01},"expected":"PvT - Macro Transition (Unclassified)"},
+    {"id":"inclusive-rush-boundary","times":{"DarkShrine":300,"DarkTemplar":360},"expected":"PvT - DT Rush"},
+    {"id":"late-shrine-boundary","times":{"DarkShrine":300.01,"DarkTemplar":360},"expected":"PvT - Charge First (Fast 3rd Nexus)"},
+    {"id":"missing-shrine-prerequisite","remove":["DarkShrine"],"expected":"PvT - Charge First (Fast 3rd Nexus)"},
+    {"id":"dt-precedes-shrine-prerequisite","times":{"DarkTemplar":190},"expected":"PvT - Macro Transition (Unclassified)"},
+    {"id":"missing-twilight-path","remove":["TwilightCouncil"],"expected":"PvT - Macro Transition (Unclassified)"},
+    {"id":"robo-first-stable","append":[{"type":"building","name":"RoboticsFacility","time":140}],"expected":"PvT - Robo First"},
+    {"id":"stargate-first-stable","append":[{"type":"building","name":"Stargate","time":140}],"expected":"PvT - Stargate into Charge"}
+  ]
+}

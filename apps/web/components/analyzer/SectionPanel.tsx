@@ -17,7 +17,7 @@ const ReplayLibrary = dynamic(
   { loading: () => <Skeleton rows={6} /> },
 );
 const StrategiesTab = dynamic(
-  () => import("./StrategiesTab").then((mod) => mod.StrategiesTab),
+  () => import("./StrategiesUrlView").then((mod) => mod.StrategiesUrlView),
   { loading: () => <Skeleton rows={6} /> },
 );
 const TrendsTab = dynamic(
@@ -29,15 +29,15 @@ const MacroTab = dynamic(
   { loading: () => <Skeleton rows={6} /> },
 );
 const BattlefieldTab = dynamic(
-  () => import("./BattlefieldTab").then((mod) => mod.BattlefieldTab),
+  () => import("./MapsUrlView").then((mod) => mod.MapsUrlView),
   { loading: () => <Skeleton rows={6} /> },
 );
 const BuildsTab = dynamic(
-  () => import("./BuildsTab").then((mod) => mod.BuildsTab),
+  () => import("./BuildsUrlView").then((mod) => mod.BuildsUrlView),
   { loading: () => <Skeleton rows={6} /> },
 );
 const ArcadeTab = dynamic(
-  () => import("./ArcadeTab").then((mod) => mod.ArcadeTab),
+  () => import("./ArcadeUrlView").then((mod) => mod.ArcadeUrlView),
   { loading: () => <Skeleton rows={6} /> },
 );
 

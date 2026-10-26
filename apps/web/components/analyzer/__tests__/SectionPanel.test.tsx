@@ -9,6 +9,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 const loaded = vi.hoisted(() => new Set<string>());
+vi.mock("../StrategiesUrlView", async () => ({ StrategiesUrlView: (await import("../StrategiesTab")).StrategiesTab }));
+vi.mock("../BuildsUrlView", async () => ({ BuildsUrlView: (await import("../BuildsTab")).BuildsTab }));
+vi.mock("../ArcadeUrlView", async () => ({ ArcadeUrlView: (await import("../ArcadeTab")).ArcadeTab }));
+vi.mock("../MapsUrlView", async () => ({ MapsUrlView: (await import("../BattlefieldTab")).BattlefieldTab }));
 
 vi.mock("../replays/ReplayLibrary", () => {
   loaded.add("replays");

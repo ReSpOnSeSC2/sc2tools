@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { BuildRule, RuleType } from "./build-rules";
+import { humanizeRuleEntity as broadcastEntity } from "./build-rule-entity";
 import {
   RULES_LEGEND,
   RULES_LEGEND_FOOTER,
@@ -19,6 +20,19 @@ import {
 } from "./build-rules-copy";
 
 const GLYPHS = /[≥≤=✓✗⚙★▶]/;
+
+test("broadcast display names retain the editor export and legacy punctuation", () => {
+  expect(broadcastEntity).toBe(humanizeRuleEntity);
+  for (const [stored, label] of [
+    ["ResearchAdeptPiercingAttack", "Resonating Glaives"],
+    ["Buildsomethingnew", "Somethingnew"],
+    ["  O'Brien'sLegacyThing2  ", "O'Brien's Legacy Thing 2"],
+    ["ResearchProtossGroundWeaponsLevel1", "Protoss Ground Weapons Level 1"],
+  ]) {
+    expect(broadcastEntity(stored)).toBe(label);
+    expect(humanizeRuleEntity(stored)).toBe(label);
+  }
+});
 
 function rule(
   type: RuleType,

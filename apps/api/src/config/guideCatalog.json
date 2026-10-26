@@ -276,7 +276,7 @@
     "name": "PvT - 3 Gate Charge Opener",
     "race": "Protoss",
     "matchup": "PvT",
-    "description": "Detected if Charge is researched by 9:00 AND Twilight Council was built BEFORE Robotics Facility AND BEFORE Stargate -- a Twilight-first 3-Gate Charge opener.",
+    "description": "Detected if Charge is researched by 9:00 AND Twilight Council was built BEFORE Robotics Facility AND BEFORE Stargate -- a Twilight-first 3-Gate Charge opener. A Dark Shrine started after Twilight and by 5:00 excludes this Charge-first opening, even without proof of a real DT rush.",
     "opener": true
   },
   {
@@ -297,7 +297,7 @@
     "name": "PvT - 8 Gate Charge All-in",
     "race": "Protoss",
     "matchup": "PvT",
-    "description": "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Charge is researched by 9:00, 7+ Gateways exist by 7:30, AND fewer than 3 Nexuses have been taken -- a 2-base Twilight-first mass-Gate Chargelot all-in. The Twilight-first guard keeps Robo-first openers with 7+ Gateways + late Charge off this label (those fall through to Robo First).",
+    "description": "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Charge is researched by 9:00, 7+ Gateways exist by 7:30, AND fewer than 3 Nexuses have been taken -- a 2-base Twilight-first mass-Gate Chargelot all-in. The Twilight-first guard keeps Robo-first openers with 7+ Gateways + late Charge off this label (those fall through to Robo First). A Dark Shrine started after Twilight and by 5:00 excludes this Charge-first opening even if no real DT rush is proven.",
     "opener": true
   },
   {
@@ -311,14 +311,21 @@
     "name": "PvT - Charge First (Fast 3rd Nexus)",
     "race": "Protoss",
     "matchup": "PvT",
-    "description": "Detected if Twilight Council is the FIRST tech building (started before any Robotics Facility AND before any Stargate), Charge is the first completed Twilight upgrade and finishes by 9:00, AND the third Nexus is STARTED before 6:00 -- a Charge-first fast-third macro opener. Nexus timing measures the start of construction, not completion. Later Blink, Robo support, or Stargate transitions do not change the opening label. More-specific proxy, DT, all-in, and Templar rules take precedence.",
+    "description": "Detected if Twilight Council is the FIRST tech building (started before any Robotics Facility AND before any Stargate), Charge is the first completed Twilight upgrade and finishes by 9:00, AND the third Nexus is STARTED before 6:00 -- a Charge-first fast-third macro opener. Nexus timing measures the start of construction, not completion. A Dark Shrine started after Twilight and by 5:00 excludes this Charge-first opening, even without proof of a real DT rush. Later Blink, Robo support, Stargate or late Dark Shrine transitions do not change the opening label. More-specific proxy, DT, all-in, and Templar rules take precedence.",
     "opener": true
   },
   {
     "name": "PvT - DT Drop",
     "race": "Protoss",
     "matchup": "PvT",
-    "description": "Detected if a Dark Shrine is started by 4:15 AND a Robotics Facility is up by 4:30 AND at least one real (non-hallucinated) Dark Templar exists on the field by 5:00 AND a Warp Prism is on the field by 5:15 -- a fast tactical PvT DT drop. The cutoffs are calibrated against a real PvT DT Drop replay (Peruano, Taito Citadel LE 2026-05-11: Shrine 3:13, Robo 3:32, DT 3:51, Prism 4:11) with ~60 seconds of buffer per signal so slower variants still classify. Slower openers that miss these windows are Robo First or late-tech DT support builds, not drop openers.",
+    "description": "Detected if a Dark Shrine is started by 4:15 AND a Robotics Facility is up by 4:30 AND at least one real (non-hallucinated) Dark Templar exists on the field by 5:00 AND a real Warp Prism is on the field by 5:15 -- a fast tactical PvT DT drop. The cutoffs are calibrated against a real PvT DT Drop replay (Peruano, Taito Citadel LE 2026-05-11: Shrine 3:13, Robo 3:32, DT 3:51, Prism 4:11) with ~60 seconds of buffer per signal so slower variants still classify. An early Twilight/Shrine commitment with a real DT by 6:00 can still be DT Rush when the drop proof is missing or late; later DT support does not prove a rush.",
+    "opener": true
+  },
+  {
+    "name": "PvT - DT Rush",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if Twilight Council is the first tech building (before Robotics Facility and Stargate), Dark Shrine starts after Twilight and by 5:00, and at least one real, non-hallucinated Dark Templar is on the field by 6:00. This early DT opening takes precedence over later Charge, Blink and fast-third macro signals. The tighter DT Drop signature with a real early Warp Prism takes precedence. Shrine-only tech, hallucinations and late DT support do not prove a rush; building timestamps are construction starts, not invented completion times.",
     "opener": true
   },
   {
@@ -381,7 +388,7 @@
     "name": "PvT - Standard Charge Macro",
     "race": "Protoss",
     "matchup": "PvT",
-    "description": "Detected if Charge is the first completed Twilight upgrade and finishes by 9:00, the player has taken 3+ Nexuses, the third Nexus is started at 6:00 or later, AND Twilight Council is the FIRST tech building -- Twilight goes down before any Robotics Facility AND before any Stargate. The label describes the OPENER, not the entire composition: a Twilight-first Charge macro that later adds Robo (Observer / Immortal support) or transitions into Stargate tech in the midgame (Skytoss tech-switch, end-game Tempests, late Phoenix harass) still classifies as Standard Charge Macro because the opening was Twilight + Charge. A third Nexus started before 6:00 uses Charge First (Fast 3rd Nexus); later Blink does not turn either Charge-first opening into a Blink build. Robo-first openers (Robo before Twilight) are caught by Robo First instead; Stargate-led openers are caught earlier by Stargate into Charge / Phoenix into Robo.",
+    "description": "Detected if Charge is the first completed Twilight upgrade and finishes by 9:00, the player has taken 3+ Nexuses, the third Nexus is started at 6:00 or later, AND Twilight Council is the FIRST tech building -- Twilight goes down before any Robotics Facility AND before any Stargate. A Dark Shrine started after Twilight and by 5:00 excludes this Charge-first opening, even without proof of a real DT rush. The label describes the OPENER, not the entire composition: a Twilight-first Charge macro that later adds Robo (Observer / Immortal support) or transitions into Stargate tech in the midgame (Skytoss tech-switch, end-game Tempests, late Phoenix harass) still classifies as Standard Charge Macro because the opening was Twilight + Charge. A third Nexus started before 6:00 uses Charge First (Fast 3rd Nexus); later Blink does not turn either Charge-first opening into a Blink build. Robo-first openers (Robo before Twilight) are caught by Robo First instead; Stargate-led openers are caught earlier by Stargate into Charge / Phoenix into Robo.",
     "opener": true
   },
   {

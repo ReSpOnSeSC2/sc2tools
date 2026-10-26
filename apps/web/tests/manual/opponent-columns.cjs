@@ -14,7 +14,8 @@ const buildFixture = require('./opponent-columns-fixture.cjs');
 const root = process.cwd(), origin = 'http://127.0.0.1:3269';
 const output = path.resolve(root, '../../.cache/opponent-columns');
 const columnStorageKey = 'analyzer.opponents.columns';
-const reads = [], unexpected = [], blocked = [], errors = [], cases = [];
+const reads = [], unexpected = [], blocked = [], errors = [], cases = [], groupingWrites = [];
+let groupingPreference = { groupByPlayer: true };
 let javascript = '', holdList = false, heldResponses = [], checks = 0, currentCase = 'initialization';
 const layoutStages = [];
 let lastPickerBounds = null;
@@ -50,7 +51,8 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/v1/')) {
       reads.push({ path: url.pathname, query: url.search, method: req.method, owner: req.headers.authorization || null, held: holdList && url.pathname === '/v1/opponents' });
       const readPost = req.method === 'POST' && ['/v1/player-channels/resolve', '/v1/rivals/summary'].includes(url.pathname);
-      if (req.method !== 'GET' && !readPost) { unexpected.push({ method: req.method, path: url.pathname }); return json(res, { error: { code: 'fixture_mutation_forbidden' } }, 405); }
+      const groupingPut = req.method === 'PUT' && url.pathname === '/v1/me/preferences/opponentScouting';
+      if (req.method !== 'GET' && !readPost && !groupingPut) { unexpected.push({ method: req.method, path: url.pathname }); return json(res, { error: { code: 'fixture_mutation_forbidden' } }, 405); }
       if (url.pathname !== '/v1/player-channels/resolve' && req.headers.authorization !== 'Bearer columns-owner') return json(res, { error: { code: 'fixture_owner_required' } }, 401);
       if (url.pathname === '/v1/opponents') {
         const send = () => { if (!res.destroyed) sendList(res, url.searchParams.get('listDetails') === '1'); };
@@ -59,6 +61,14 @@ const server = http.createServer(async (req, res) => {
       }
       if (url.pathname === '/v1/opponents/pulse-links') return json(res, { links: { 101: { accountId: '900', proId: null, proNickname: null }, 102: { accountId: '900', proId: null, proNickname: null } }, partial: false });
       if (url.pathname === '/v1/me/preferences/rivals') return json(res, { keys: [] });
+      if (url.pathname === '/v1/me/preferences/opponentScouting') {
+        if (req.method === 'PUT') {
+          const value = await readBody(req);
+          if (Object.keys(value).length !== 1 || typeof value.groupByPlayer !== 'boolean') return json(res, { error: { code: 'invalid_synthetic_preference' } }, 400);
+          groupingPreference = { groupByPlayer: value.groupByPlayer }; groupingWrites.push(groupingPreference);
+        }
+        return json(res, groupingPreference);
+      }
       if (url.pathname === '/v1/mmr-by-matchup/opponents') return json(res, { items: [], totalOpponents: 0, offset: 0, limit: 200, summary: { netMmr: 0, mmrWon: 0, mmrLost: 0, pairs: 0, opponents: 0, mostMmrGainedFrom: null, mostMmrLostTo: null } });
       if (url.pathname === '/v1/player-channels/resolve') { const input = await readBody(req); return json(res, { players: input.players.map(player => ({ ...player, channels: {} })) }); }
       if (url.pathname === '/v1/rivals/summary') { await readBody(req); return json(res, { generatedAt: when(25), hasAnyGames: true, recentComplete: true, weekGames: {}, rivals: [] }); }
@@ -143,7 +153,7 @@ async function order(page, width) {
 async function selectSort(page, width, key, label) {
   if (width < 768) await page.getByRole('combobox', { name: 'Sort opponents' }).selectOption(key);
   else await page.getByRole('columnheader', { name: new RegExp('^' + label) }).getByRole('button').click();
-  await expect.poll(() => new URL(page.url()).searchParams.get('sort')).toBe(key);
+  await expect.poll(() => new URL(page.url()).searchParams.get('sort')).toBe(`${key}:desc`);
 }
 async function settled(page) {
   await expect(page.getByRole('button', { name: 'Export CSV', exact: true })).toBeEnabled();
@@ -173,6 +183,7 @@ async function recordLayout(page, stage) {
       if (process.env.OPPONENT_COLUMNS_CASE && process.env.OPPONENT_COLUMNS_CASE !== currentCase) continue;
       let { context, page } = await fresh(width, theme);
       const start = reads.length;
+      const groupingWritesBefore = groupingWrites.length;
       await page.goto(`${origin}/app/opponents?theme=${theme}`); await settled(page);
       await expect(rowFor(page, width, 'Atlas')).toHaveCount(1); checks++;
       expect(reads.slice(start).filter(read => read.path === '/v1/opponents').every(read => !new URLSearchParams(read.query).has('listDetails'))).toBe(true); checks++;
@@ -318,11 +329,11 @@ async function recordLayout(page, stage) {
       await page.reload(); await settled(page); menu = await openPicker(page);
       for (const label of labels) await expect(menu.getByRole('checkbox', { name: label, exact: true })).not.toBeChecked();
       await closePicker(page); checks++;
-      cases.push({ width, theme, checks, persistedInNewContext: true, replayNetworkRequests: reads.filter(read => read.path.endsWith('/replay-download')).length - replayBefore, initialPickerBounds, shorterPickerBounds, chromeReservedPickerBounds, restoredPickerBounds, scrolledPickerBounds });
+      cases.push({ width, theme, checks, persistedInNewContext: true, replayNetworkRequests: reads.filter(read => read.path.endsWith('/replay-download')).length - replayBefore, syntheticGroupingWrites: groupingWrites.length - groupingWritesBefore, initialPickerBounds, shorterPickerBounds, chromeReservedPickerBounds, restoredPickerBounds, scrolledPickerBounds });
       await context.close(); console.log(JSON.stringify(cases.at(-1)));
     }
     expect(errors).toEqual([]); expect(unexpected).toEqual([]); expect(blocked).toEqual([]); checks += 3;
-    const summary = { checks, cases, apiReads: reads.length, explicitReplayRequests: reads.filter(read => read.path.endsWith('/replay-download')).length, unexpected, blocked, errors, layoutStages, productionCssFiles: cssFiles, visualApproval: 'pending root inspection', mutationRequests: 0 };
+    const summary = { checks, cases, apiRequests: reads.length, apiReads: reads.filter(read => read.method !== 'PUT').length, explicitReplayRequests: reads.filter(read => read.path.endsWith('/replay-download')).length, unexpected, blocked, errors, layoutStages, productionCssFiles: cssFiles, visualApproval: 'pending root inspection', syntheticGroupingWrites: groupingWrites.length, mutationRequests: groupingWrites.length, externalMutationRequests: 0 };
     fs.writeFileSync(path.join(output, 'summary.json'), JSON.stringify(summary, null, 2));
     fs.writeFileSync(path.join(output, 'requests.json'), JSON.stringify(reads, null, 2));
     console.log(JSON.stringify(summary));
