@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.24.7
+
+- Package the PvT DT Rush priority fix, seven-minute PvZ air-opening rules and in-game scouting close/minimize controls for desktop users.
+- Include recorded scouting confidence and linked-account names, plus updated Ghost/OBS guidance. Existing replay labels can be refreshed with Recompute analysis after updating.
+
 ### Opponent list columns
 
 - Choose latest replay download, map/result, your and the opponent's build, recorded build-order links/dates, game lengths, your macro breakdown/averages and scouting notes. Matching game filters and measured sample counts apply; incomplete build-order dates stay unknown or marked Latest known.
