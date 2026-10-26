@@ -72,3 +72,14 @@ and actual merged Settings A1 d7582739, with all three changelog entries
 preserved. Browser-tested graph/Mechanics/filter source hashes are checked
 again after integration; fresh exact-head GitHub checks are required before
 merge. Screenshots remain synthetic, and production remains unverified.
+
+The ancestry-only55b865d0 check passed its browser job but exposed an existing
+cold-compilation assumption in the first GameDetailPage unit: beforeAll
+precompiled BuildOrderColumns, while the actual lazy entry is
+GameBuildOrderColumns (which imports that child and BuildExecutionCard).
+The test now precompiles the actual entry. No timeout, mock, assertion or
+application code changed. The original file/hash and bounded first-party
+failure record are preserved in `graph-ci55-lazy-before/` (9,023 tests passed,
+one failed, one expected skip). The affected suite/type/lint proof is retained
+before another exact-head CI run; all native-browser product hashes remain
+unchanged.

@@ -18,7 +18,7 @@ const routerReplaceMock = vi.fn();
 const editorHarness = vi.hoisted(() => ({ props: null as BuildEditorModalProps | null }));
 
 // Compile the real lazy chunks before assertions; bundler work is not UI latency.
-beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns"), import("../BuildWorkspaceActions"), import("../replay/ReplayStage"), import("../GameStoryCard"), import("../GhostGradeContent"), import("@/components/battleReport/GameBattleReport")]); });
+beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../GameBuildOrderColumns"), import("../BuildWorkspaceActions"), import("../replay/ReplayStage"), import("../GameStoryCard"), import("../GhostGradeContent"), import("@/components/battleReport/GameBattleReport")]); });
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: getTokenMock, isLoaded: true, isSignedIn: true, userId: "synthetic-owner" }),
