@@ -261,8 +261,15 @@ branches, captures and every RED receipt are retained.
    Source-only independent review is clear after stronger vertical label/48px
    and native focus baseline proof. First static passes73 checks/four suites,
    types, strict6 zero, Help91 andUI19/1,699/639. Header ancestry integration
-   changed zero file/tree bytes. Final serialized runtime is active; no final
-   build/browser proof is yet claimed for this slice.
+   changed zero file/tree bytes. Final proof at1c9430b9 passes231 tests/20
+   suites, types pre/post, strict6 zero, Help91 andUI19/1,699/639. Build
+   zhXrv06BEo_dNKVZFJgSx passes144 pages/all81 budgets, Landing193.1/215kB.
+   Full appearance passes22 cases/23 intentional skips,158 full AA scans
+   (92 new/66 related) and53 captures. Ten typed Header/Mobile GETs and22
+   bounded landing static GETs; zero forbidden/nonlocal or real actions.
+   No source repair or extra build was needed. All runtime and ports closed.
+   Root verified9 source/six artifact hashes and reviewed/copied3 captures.
+   Remote CI and production delivery follow; this remains one consumer slice.
 
 Do not switch these active branches, reset their worktrees or stage their
 untracked caches. Source-only agents must not start competing runtime work.
