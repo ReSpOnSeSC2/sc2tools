@@ -20,11 +20,12 @@ return <ToastProvider><main className="mx-auto min-w-0 max-w-5xl space-y-6 p-4 s
 createRoot(document.getElementById('root')).render(<Fixture/>);`;
 
 const adapters = {
-  "next/navigation": `import{useSyncExternalStore}from'react';const sub=f=>{addEventListener('popstate',f);return()=>removeEventListener('popstate',f)};export const useSearchParams=()=>new URLSearchParams(useSyncExternalStore(sub,()=>location.search));export const usePathname=()=>useSyncExternalStore(sub,()=>location.pathname);`,
+  "next/navigation": `import{useSyncExternalStore}from'react';const changed='copy-fixture-location';for(const method of['pushState','replaceState']){const native=history[method].bind(history);history[method]=(...args)=>{native(...args);dispatchEvent(new Event(changed))}}const sub=f=>{addEventListener('popstate',f);addEventListener(changed,f);return()=>{removeEventListener('popstate',f);removeEventListener(changed,f)}};export const useSearchParams=()=>new URLSearchParams(useSyncExternalStore(sub,()=>location.search));export const usePathname=()=>useSyncExternalStore(sub,()=>location.pathname);`,
   "next/link": `import React from'react';export default React.forwardRef(function Link({children,prefetch,scroll,replace,onNavigate,...props},ref){return <a ref={ref} {...props}>{children}</a>});`,
   "next/image": `import React from'react';export default function Image({priority,unoptimized,fill,...props}){return <img {...props}/>}`,
   "@/components/practice/PracticeButton": `export const PracticeButton=()=>null;`,
   "./BuildVariantContinuation": `export const BuildVariantContinuation=()=>null;`,
+  "@/components/help/LazyHelpLink": `import React from'react';import{CircleHelp}from'lucide-react';import{HELP_TEXT_LINK_CLASS,HELP_ICON_LINK_CLASS}from'@/components/help/HelpInline';export function LazyHelpLink({slug,anchor,children,variant='inline',className='',onOpen}){return <a href={'/help/'+slug+(anchor?'#'+anchor:'')} className={[(variant==='icon'?HELP_ICON_LINK_CLASS:HELP_TEXT_LINK_CLASS),className].filter(Boolean).join(' ')} onClick={onOpen} aria-label={variant==='icon'?'Help':undefined}>{variant==='icon'?<CircleHelp className="h-4 w-4" aria-hidden/>:children??'Help'}</a>}`,
   "./useCommunityVote": `export function useCommunityVote(_slug,initialVotes){return{votes:initialVotes,myVote:0,authenticated:true,authLoading:false,pending:false,completed:false,error:null,retry:null,cast(){throw new Error('Voting is forbidden in the copy fixture')}}}`,
   "./SaveToLibraryButton": `import React from'react';import{Button}from'@/components/ui/Button';import{Library}from'lucide-react';export function SaveToLibraryButton(){return <div className="space-y-1"><Button variant="primary" fullWidth iconLeft={<Library className="h-4 w-4" aria-hidden/>} onClick={()=>{throw new Error('Library writes are forbidden in the copy fixture')}}>Save to my library</Button><p className="text-micro text-text-muted">Saves a private copy you can edit. The author&apos;s page doesn&apos;t change.</p></div>}`,
   "./CommunityBuildOwnerControls": `export const CommunityBuildOwnerControls=()=>null;`,
@@ -63,7 +64,8 @@ function fixtureAssets() {
 /** Real copy consumers, compact ActionsBar/vote/export controls, Modal/Toast,
  * production CSS and committed fonts. Vote state and the normal library-save
  * leaf are synthetic; their mutation callbacks throw. Variant/practice, owner
- * controls and Next runtime boundaries are omitted; export actions stay closed.
+ * controls, unrelated lazy Help and Next runtime boundaries are omitted;
+ * export actions stay closed.
  * Every request is intercepted; clipboard/native-copy never reaches the host.
  * @param {import('@playwright/test').Page} page
  * @param {'light'|'dark'} theme

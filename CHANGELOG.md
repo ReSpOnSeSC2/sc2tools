@@ -13,7 +13,7 @@ corresponding GitHub Release.
 
 ### Copy public build and definition links
 
-- Keep a selected link visible on the page when clipboard permission is denied or takes too long. Done or Escape returns to the copy control, and retry stays available.
+- Keep a selected link available when clipboard permission is denied or takes too long: in a shared dialog for Community links, or below a definition's heading. Done or Escape returns to the copy control, and retry stays available.
 - Retire delayed copy results when the public build address changes or its definition leaves the catalog view.
 
 ### More navigation
