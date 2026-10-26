@@ -21,6 +21,7 @@ import analyzer_arcade from "./analyzer/arcade";
 import analyzer_builds from "./analyzer/builds";
 import analyzer_dashboardAndAnalyzer from "./analyzer/dashboard-and-analyzer";
 import analyzer_filterByAccount from "./analyzer/filter-by-account";
+import analyzer_glossary from "./analyzer/glossary";
 import analyzer_howAnalysisWorks from "./analyzer/how-analysis-works";
 import analyzer_liveScouting from "./analyzer/live-scouting";
 import analyzer_macro from "./analyzer/macro";
@@ -113,6 +114,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_builds,
   analyzer_dashboardAndAnalyzer,
   analyzer_filterByAccount,
+  analyzer_glossary,
   analyzer_howAnalysisWorks,
   analyzer_liveScouting,
   analyzer_macro,
