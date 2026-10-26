@@ -7,12 +7,9 @@ const { AggregationsService } = require("./aggregations");
 const { BuildsService } = require("./builds");
 
 /**
- * Handle format: our internal user id (a UUID) is the shareable handle.
- * Reusing the internal id (never the Clerk id — see UsersService) keeps
- * the public page decoupled from the auth provider and means the URL is
- * the same stable identifier the community author page already uses.
- * We still hard-validate the shape before touching Mongo: this endpoint
- * is unauthenticated, so a raw ``:handle`` from the URL is hostile input.
+ * Legacy API identifiers only. New player URLs use the separate indexed
+ * canonical slug resolver in PublicPlayerService. The old API keeps its
+ * existing grammar and validates input before touching Mongo.
  */
 const HANDLE_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -36,33 +33,12 @@ const LETTER_TO_RACE = Object.freeze({
 });
 
 /**
- * PublicProfileService — powers the opt-in public player page at
- * ``/p/:handle`` (SSR) via ``GET /v1/public/profile/:handle``.
- *
- * OPT-IN MODEL (deliberately reuses existing state, adds none):
- *   A user has a public profile **iff** they have published at least one
- *   community build carrying a non-empty public ``authorName`` — exactly
- *   the gate {@link CommunityService.getAuthor} already enforces. Setting
- *   a public display name on a published build is an affirmative,
- *   user-initiated act of going public, so we treat it as the single
- *   opt-in signal rather than minting a new ``publicProfileEnabled`` flag
- *   (which would need its own settings toggle + GDPR wiring). Users who
- *   never publish under a name stay private → the route 404s.
- *
- * WHAT WE EXPOSE (non-sensitive aggregates only):
- *   - the chosen public display name + main race
- *   - headline totals (games, W-L, win rate) over the user's OWN games
- *   - matchup splits (vs P / T / Z / Unknown — race letters, not people)
- *   - a few signature builds (the user's own build labels) with win rate
- *   - one featured community build (already public) for the share loop
- *
- * WHAT WE NEVER EXPOSE:
- *   - opponent identities (battle tags, display names, pulse ids)
- *   - raw per-game rows
- *   - any other user's data
- *   The aggregate methods we reuse return opponent display names on their
- *   ``recent`` arrays — we deliberately read ONLY their totals / grouped
- *   splits and drop everything else, so no per-game identity can leak.
+ * Reusable base aggregate shapers and the guarded legacy profile reader.
+ * The main application delegates canonical/public opt-in handling to
+ * PublicPlayerService. A named publication is grandfathered only while the
+ * owner has no explicit privacy preference; Profile OFF wins thereafter.
+ * Raw recent-game rows never enter this base response. Optional identity-free
+ * recent form and other separately selected sections live in PublicPlayerService.
  */
 class PublicProfileService {
   /**
@@ -116,6 +92,8 @@ class PublicProfileService {
       return null;
     }
     const userId = handle;
+    const preference = await this.db.users.findOne({ userId }, { projection: { _id: 0, publicProfile: 1 }, maxTimeMS: 3000 });
+    if (!preference || (Object.prototype.hasOwnProperty.call(preference, "publicProfile") && preference.publicProfile?.enabled !== true)) return null;
 
     // Opt-in gate. getAuthor returns null unless the user has at least
     // one published build with a public authorName — that's the entire
@@ -129,7 +107,7 @@ class PublicProfileService {
     // display names, which must never surface on a public page.
     const [summary, buildRows, mainRace, reviewer] = await Promise.all([
       this.aggregations.summary(userId, {}),
-      this.builds.list(userId, {}),
+      this.builds.list(userId, {}, { view: "detector" }),
       this._mainRace(userId),
       this.reviewerReputation
         ? this.reviewerReputation.publicSection(userId).catch(() => null)
@@ -171,9 +149,10 @@ class PublicProfileService {
    *
    * @private
    * @param {string} userId
+   * @param {{maxTimeMS?:number}} [options]
    * @returns {Promise<string | null>}
    */
-  async _mainRace(userId) {
+  async _mainRace(userId, options = {}) {
     const rows = await this.db.games
       .aggregate([
         {
@@ -191,7 +170,7 @@ class PublicProfileService {
         },
         { $sort: { n: -1 } },
         { $limit: 1 },
-      ])
+      ], options)
       .toArray();
     const letter = rows && rows[0] ? rows[0]._id : null;
     return (letter && LETTER_TO_RACE[letter]) || null;
@@ -249,8 +228,9 @@ function shapeMatchups(byMatchup) {
 
 /**
  * Pick the user's signature builds from the per-build win-rate list.
- * These are the user's OWN ``myBuild`` labels (strategy names like
- * "PvT - Glaive Adept Timing"), never opponent data. Drops the synthetic
+ * These are replay-detected labels (strategy names like
+ * "PvT - Glaive Adept Timing"), never private check-ins or opponent data.
+ * Both public readers request the detector view. Drops the synthetic
  * "Unknown" bucket, too-short-game buckets, and anything below the
  * minimum sample size, then keeps the most-played few.
  *
@@ -314,4 +294,8 @@ module.exports = {
   PublicProfileService,
   SIGNATURE_MIN_GAMES,
   SIGNATURE_LIMIT,
+  shapeTotals,
+  shapeMatchups,
+  shapeSignatureBuilds,
+  shapeFeaturedBuild,
 };

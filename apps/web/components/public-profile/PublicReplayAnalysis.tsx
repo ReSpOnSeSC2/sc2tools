@@ -5,8 +5,6 @@ import Link from "next/link";
 import {
   ArrowLeft,
   BarChart3,
-  Check,
-  Copy,
   Gauge,
   Radio,
   Swords,
@@ -24,7 +22,7 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/Stat";
 import { SectionNav } from "@/components/ui/SectionNav";
-import { useToast } from "@/components/ui/Toast";
+import { PlayerCopyButton } from "./PlayerCopyButton";
 import { fmtDate, fmtDateCompact, fmtMinutes, fmtMmr, macroScoreTone } from "@/lib/format";
 import { coerceRace, raceIconName } from "@/lib/race";
 import { archiveBackLabel, parseArchiveFrom, sharedAnalysisHref } from "./archiveQuery";
@@ -33,8 +31,6 @@ import { PublicMacroLeakCard } from "./PublicMacroLeakCard";
 
 export function PublicReplayAnalysis({ data, from }: { data: PublicReplayDetailResponse; from?: string }) {
   const [scrubTime, setScrubTime] = useState<number | null>(null);
-  const { toast } = useToast();
-  const [copied, setCopied] = useState(false);
   const { profile, game, macroBreakdown, buildOrder, streams } = data;
   const root = `/players/${encodeURIComponent(profile.handle)}/replays`;
   const listFrom = parseArchiveFrom(from);
@@ -48,22 +44,12 @@ export function PublicReplayAnalysis({ data, from }: { data: PublicReplayDetailR
     macroBreakdown?.stats_events?.length || macroBreakdown?.opp_stats_events?.length,
   );
 
-  async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}${canonicalPath}`);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-      toast.success("Replay analysis link copied");
-    } catch {
-      window.prompt("Copy this replay analysis link", `${window.location.origin}${canonicalPath}`);
-    }
-  }
-
   return (
     <article className="space-y-6">
       <Link href={`${root}${listFrom ? `?${listFrom}` : ""}`} className="inline-flex min-h-[44px] items-center gap-2 rounded-md text-caption font-semibold text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <ArrowLeft className="h-4 w-4" aria-hidden />{archiveBackLabel(listFrom, profile.displayName)}
       </Link>
+      {profile.profileHandle ? <Link href={`/players/${encodeURIComponent(profile.profileHandle)}`} className="inline-flex min-h-11 items-center font-semibold text-accent underline">{profile.displayName}&apos;s profile</Link> : null}
 
       <Card variant="feature" padded={false} className="relative overflow-hidden">
         <MapArtwork mapName={game.map} size="hero" eager className="pointer-events-none absolute inset-0 border-0 opacity-35" />
@@ -110,10 +96,7 @@ export function PublicReplayAnalysis({ data, from }: { data: PublicReplayDetailR
                       : `${profile.displayName} vs ${opponentName}`
                   }
                 />
-                <button type="button" onClick={() => void copyLink()} className="hard-press inline-flex h-11 min-w-[44px] items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-                  {copied ? <Check className="h-4 w-4 text-success" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
-                  {copied ? "Copied" : "Copy analysis link"}
-                </button>
+                <PlayerCopyButton path={canonicalPath} label="Copy analysis link" />
               </div>
             }
           />

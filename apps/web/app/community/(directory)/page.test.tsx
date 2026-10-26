@@ -20,7 +20,7 @@ vi.mock("@/components/community/CommunityBuildCard", () => ({
   CommunityBuildCard: ({ build }: { build: { title: string } }) => <span>{build.title}</span>,
 }));
 
-import CommunityPage, { generateMetadata } from "@/app/community/page";
+import CommunityPage, { dynamic, generateMetadata, revalidate } from "@/app/community/(directory)/page";
 
 const search = (sp: Record<string, string> = {}) => Promise.resolve(sp);
 
@@ -31,11 +31,12 @@ afterEach(() => {
 });
 
 describe("/community", () => {
-  it("uses public tagged data for configured cache refresh without caching the private Mine panel", async () => {
+  it("keeps decorated author admission dynamic even when optional purge is configured", async () => {
     vi.stubEnv("COMMUNITY_REVALIDATE_SECRET", "configured-local");
     mocks.getJsonWithStatus.mockResolvedValue({ data: { items: [], total: 0, hasMore: false }, status: 200 });
     await generateMetadata({ searchParams: search() });
-    expect(mocks.getJsonWithStatus.mock.calls[0][1]).toEqual({ revalidateSec: 300, tags: ["community"] });
+    expect(dynamic).toBe("force-dynamic"); expect(revalidate).toBe(0);
+    expect(mocks.getJsonWithStatus.mock.calls[0][1]).toEqual({ revalidateSec: 0, tags: [] });
   });
   it("keeps Mine private and skips every public server fetch", async () => {
     render(await CommunityPage({ searchParams: search({ mine: "1", race: "P", q: "old" }) }));

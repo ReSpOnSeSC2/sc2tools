@@ -34,6 +34,7 @@ vi.mock("next/navigation", () => ({
     (error as Error & { digest: string }).digest = "NEXT_REDIRECT";
     throw error;
   },
+  permanentRedirect: (href: string) => { mocks.redirect(href); throw new Error("NEXT_REDIRECT"); },
 }));
 
 vi.mock("@/lib/serverApi", () => ({
@@ -385,12 +386,13 @@ describe("public replay list route", () => {
   });
 
   it("redirects old /p replay links without dropping filters", async () => {
+    mocks.getJsonWithStatus.mockResolvedValue({ data: PUBLIC_LIST, status: 200 });
     await expect(LegacyPublicReplaysPage({
       params: Promise.resolve({ handle: "legacy token" }),
       searchParams: Promise.resolve({ matchup: "PvT", result: ["win", "loss"] }),
     })).rejects.toThrow("NEXT_REDIRECT");
     expect(mocks.redirect).toHaveBeenCalledWith(
-      "/players/legacy%20token/replays?matchup=PvT&result=win&result=loss",
+      `/players/${PLAYER_SLUG}/replays?matchup=PvT&result=win&result=loss`,
     );
   });
 });

@@ -460,24 +460,31 @@ class ReviewerReputationService {
    * user has reviewed at least once.
    *
    * @param {string} userId
+   * @param {{maxTimeMS?:number}} [options]
    */
-  async publicSection(userId) {
-    const user = await this.db.users.findOne({ userId }, { projection: { _id: 0, reviewer: 1 } });
+  async publicSection(userId, options = {}) {
+    const user = await this.db.users.findOne({ userId }, { ...options, projection: { _id: 0, reviewer: 1 } });
     const stats = reviewerStats(user?.reviewer);
     if (stats.reviews === 0 && stats.karma === 0) return null;
-    const requestIds = await this.db.reviewComments.distinct("requestId", {
+    const match = {
       authorId: userId,
       parentId: null,
       isAskerComment: { $ne: true },
       status: "visible",
-    });
+    };
+    // Public profiles ask for the bounded mode. Read a slim recent sample
+    // before deduplication instead of materializing an unbounded distinct set.
+    const requestRows = options.maxTimeMS ? await this.db.reviewComments.find(match,
+      { ...options, projection: { _id: 0, requestId: 1 } }).sort({ createdAt: -1 }).limit(2001).toArray() : null;
+    const requestIds = requestRows ? [...new Set(requestRows.slice(0, 2000).map(row => row.requestId))]
+      : await this.db.reviewComments.distinct("requestId", match);
     const matchups = await this.db.reviewRequests
       .aggregate([
         { $match: { _id: { $in: requestIds.slice(0, 2000) }, status: { $in: ["open", "answered", "closed"] }, hidden: { $ne: true } } },
         { $group: { _id: "$matchup", count: { $sum: 1 } } },
         { $match: { _id: { $type: "string" } } },
         { $sort: { count: -1, _id: 1 } },
-      ])
+      ], options)
       .toArray();
     const verified = publicVerification(user?.reviewer?.verified);
     return {
@@ -489,6 +496,7 @@ class ReviewerReputationService {
       flair: flairFor(stats, verified),
       verified,
       matchupsReviewed: matchups.map((m) => ({ matchup: m._id, count: m.count })),
+      ...(requestRows && requestRows.length > 2000 ? { matchupsSampled: true, matchupsSampleLimit: 2000 } : {}),
     };
   }
 }

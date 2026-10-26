@@ -49,17 +49,19 @@ class AggregationsService {
    *
    * @param {string} userId
    * @param {object} filters
+   * @param {{maxTimeMS?:number}} [options]
    */
-  async summary(userId, filters) {
-    return applyRaceGrouping(filters, (f) => this._summaryOnce(userId, f));
+  async summary(userId, filters, options = {}) {
+    return applyRaceGrouping(filters, (f) => this._summaryOnce(userId, f, options));
   }
 
   /**
    * @private
    * @param {string} userId
    * @param {object} filters
+   * @param {{maxTimeMS?:number}} [options]
    */
-  async _summaryOnce(userId, filters) {
+  async _summaryOnce(userId, filters, options = {}) {
     const match = gamesMatchStage(userId, filters);
     const cursor = this.db.games.aggregate([
       { $match: match },
@@ -91,6 +93,7 @@ class AggregationsService {
                 map: 1,
                 opponent: { $ifNull: ["$opponent.displayName", ""] },
                 opp_race: { $ifNull: ["$opponent.race", ""] },
+                my_race: { $ifNull: ["$myRace", ""] },
                 opp_strategy: { $ifNull: ["$opponent.strategy", null] },
                 result: 1,
                 build: { $ifNull: ["$myBuild", ""] },
@@ -99,7 +102,7 @@ class AggregationsService {
           ],
         },
       },
-    ]);
+    ], options);
     const [doc] = await cursor.toArray();
     const totals = doc?.totals?.[0] || { wins: 0, losses: 0, total: 0 };
     const winRate = totals.total ? totals.wins / totals.total : 0;

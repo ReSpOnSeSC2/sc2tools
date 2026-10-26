@@ -36,6 +36,9 @@ import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { trimDescription } from "@/lib/seo/trimDescription";
 import { absoluteUrl } from "@/lib/seo/absoluteUrl";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 /**
  * The published build. A 404 from the API is the only "doesn't exist";
  * an unreachable API or a 5xx leaves `data` null with any other status,

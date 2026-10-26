@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { User } from "lucide-react";
-import { hasPublicAuthor, type CommunityBuildListItem } from "./types";
+import type { CommunityBuildListItem } from "./types";
 
 export interface AuthorChipProps {
   /** Matches the projection returned by the community API. */
-  build: Pick<CommunityBuildListItem, "authorName" | "ownerUserId">;
+  build: Pick<CommunityBuildListItem, "authorName" | "ownerUserId" | "authorProfileHandle">;
   size?: "sm" | "md";
   className?: string;
 }
@@ -17,11 +17,9 @@ const SIZE_CLASSES = {
 /**
  * AuthorChip — renders the author handle.
  *
- * When the build carries a non-empty `authorName` AND `ownerUserId`,
- * the chip becomes a Link to /community/authors/{ownerUserId}. When
- * either is missing, we render a static "Anonymous" pill. The chip is
- * the same shape in both states so the surrounding layout doesn't
- * jump when one row is anonymous and the next isn't.
+ * A declared author name remains visible on its published build. Only a fresh
+ * authorProfileHandle capability creates a profile link; an owner UUID is
+ * never enough. Without a declared name the pill stays Anonymous.
  */
 export function AuthorChip({
   build,
@@ -37,7 +35,8 @@ export function AuthorChip({
     .filter(Boolean)
     .join(" ");
 
-  if (!hasPublicAuthor(build)) {
+  const name = typeof build.authorName === "string" ? build.authorName.trim() : "";
+  if (!name) {
     return (
       <span
         className={[baseCls, "text-text-dim"].join(" ")}
@@ -49,12 +48,16 @@ export function AuthorChip({
     );
   }
 
+  if (!build.authorProfileHandle || !/^[a-z0-9]+(?:-[a-z0-9]+)*-[a-f0-9]{10}$/.test(build.authorProfileHandle)) {
+    return <span className={[baseCls, "text-text-muted"].join(" ")}><User className="h-3 w-3 shrink-0" aria-hidden /><span className="truncate">{name}</span></span>;
+  }
+
   return (
     <Link
-      href={`/community/authors/${encodeURIComponent(build.ownerUserId)}`}
+      href={`/players/${encodeURIComponent(build.authorProfileHandle)}`}
       className={[
         baseCls,
-        "text-text transition-colors hover:border-accent-cyan/60 hover:bg-accent-cyan/10 hover:text-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+        "min-h-11 text-text transition-colors hover:border-accent-cyan/60 hover:bg-accent-cyan/10 hover:text-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
       ].join(" ")}
       title={build.authorName}
       aria-label={build.authorName}
