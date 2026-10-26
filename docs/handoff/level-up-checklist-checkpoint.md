@@ -51,7 +51,9 @@ All exact markup utilities already exist in that artifact's four CSS files; all 
 The explicit bridge is `source-css-bridge.json` in the final evidence root. Only markup, fixture cleanup and documentation changed since the retained build; other production behavior was not changed for the visual retry.
 Browser coverage uses actual LevelUp/marker/API/SWR/Help/Modal/Toast in a synthetic framework/auth/HTTP/GameProbe host. It does not prove the entire Today/AnalyzerFrame/GameDetail route; their actual integration seams have separate unit proof.
 The six-command absence check may scan owner history; it is not measured constant query cost. Known Node CJS/MJS and Vite CJS tooling warnings remain raw.
-The 22-path feature scope adds no infrastructure, migration, index, model feature, provider activation, native release, version bump or tour placeholder. Guided tours are a separate item.
+The 22-path source scope and two reviewed screenshot copies add no infrastructure, migration, index, model feature, provider activation, native release, version bump or tour placeholder. Guided tours are a separate item.
+
+Reviewed captures: [phone, light](screenshots/level-up-checklist-mobile-light.png) and [desktop, dark](screenshots/level-up-checklist-desktop-dark.png). Original bytes and the copy/hash ledger remain in cache; these are synthetic fixture captures, not deployment observations.
 
 ## Preserved failures and before bytes
 
