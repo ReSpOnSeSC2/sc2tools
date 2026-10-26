@@ -3,38 +3,56 @@
 Date: 2026-10-26. Worktree: `wave3-my-reviews`, branch
 `codex/wave5-glossary-terms`, starting from merged main `78818d4b`.
 
-## Current final-stage boundary — budget repair awaiting validation
+## Current final boundary — local proof GREEN
 
-The first final build at integrated `4c2504ea` generated145 pages, but the
-unchanged `/help/[slug]` budget failed at202.9/200kB; all80 other budgets passed.
-That artifact and its logs remain in `.cache/glossary-terms-final-1a8d53b6/`.
-No browser run or successful final budget proof is claimed. The33-suite unit
-pack had275 passing checks and one old Getting Started date expectation;
-the parent integrated the test-only Oct25→26 correction, after which the
-affected11-test suite and its strict lint passed. All276 unique checks are
-therefore covered with that chronology retained. Types, strict16 plus the
-separate inherited History warning audit, Help92 and UI19/1701/639 passed.
+Final product source is `a7ce728a7ab03eb57307fb3ad517fdd48e26209c`, with only
+approved framework/identity adapters subsequently added to the owned InfoTip
+fixture. Scope is exactly22 paths. The replacement pack passed278 checks
+across33 suites; whole web types passed before/after Next and after the
+fixture amendments. The strict-lint union covers all18 owned code files
+other than the separately audited, unchanged History warning. Help92 is
+read-only deterministic; UI19/1701/639 passed with no new allowance or waiver.
 
-Compiled inspection found the40-term catalog outside all20 initial analyzer
-route manifests, but synchronously included through HelpArticleBody →
-HelpWidget → GlossaryBrowser in `/help/[slug]`. Actual generated glossary HTML
-still contains40 terms and the canonical Reading Your Stats page has its four
-section anchors. The parent approved a narrow20→22 path scope expansion:
-`HelpWidget.tsx` and existing `HelpArticleBody.test.tsx`; original22 hashes,
-the original20 manifest and the three amended source/test files were copied
-before edits into `before-budget-fix/`. No budget or factual copy changed.
+Replacement build `D9T5fuaCZvToiTep7n6oW` generated145 pages and passed all81
+unchanged budgets. Help articles are193.0/200kB. Generated glossary HTML
+retains40 terms, canonical metadata and one `net-mmr` ID; Reading Your Stats
+retains its canonical URL and four section anchors. The catalog is absent
+from all20 initial analyzer route manifests. The glossary page still loads
+its interactive catalog; ordinary Help articles avoid that synchronous edge.
 
-The authored repair makes HelpWidget a client widget boundary with a
-module-level, explicitly SSR-enabled dynamic GlossaryBrowser import. Existing
-props/variants and static ChatCommandsCard behavior remain. New real-renderer
-tests cover all40 terms, page versus compact anchors and formula search;
-existing real-renderer GlossaryBrowser tests now wait for the actual lazy
-widget before retaining their original link/navigation assertions. This
-amendment is source-only and unvalidated while the parent's urgent date-filter
-pack owns runtime. Before claiming success, a replacement build must prove
-retained public SSR content and unchanged budgets, followed by the full
-InfoTip/stats browser matrix. The glossary page still needs its interactive
-catalog; the boundary aims to avoid charging every Help article for it.
+The complete original three-project InfoTip suite and both new stats matrices
+passed22 cases, with8 intentional project skips and zero failed/flaky/retried
+tests. One pinned Chromium1228 worker used current production CSS/fonts and
+unchanged focus/sort/ABA/native-popup/8-second Retry assertions. All58 full
+shared AA scans passed with zero serious or critical issues. The shared
+helper serializes those impacts, so this is not an all-impact violation
+count. No contrast rule or other AA rule was disabled. All50 new captures
+remain unchanged in a fresh cache directory.
+
+Every browser, build, unit and type process is closed. Three final loopback
+cleanup receipts report closed/not listening, with no listeners remaining on
+56170/58678/61456. Runtime was released before these documentation/hash
+updates. No Git, real account, provider, clipboard, native-agent or StarCraft
+operation was performed. The parent owns delivery and tracked image copies.
+This remains the first expansion slice, not completion of the roadmap.
+
+## Integration and budget chronology
+
+The original33-suite pack had275 passing checks and one old Getting Started
+Oct25 test expectation. The parent integrated the Oct26 test-only correction;
+the affected11-test rerun covered all276 unique checks before the two new
+renderer cases brought the replacement pack to278. Original RED logs remain.
+
+The first build `2KhCbzXmbAvuD5xI8KRi2` failed Help's unchanged202.9/200kB
+limit; all80 other budgets passed. Inspection traced the size increase through
+HelpArticleBody → static HelpWidget → static GlossaryBrowser → the40-term
+catalog. Scope expanded20→22 for HelpWidget and existing HelpArticleBody tests.
+Original22 hashes, original20 manifest and three before-files are preserved in
+`before-budget-fix/`. No formula, caveat, catalog record, calculation or budget
+changed. The SSR-enabled dynamic widget keeps props/variants and static
+ChatCommands behavior. Actual-renderer cases await the lazy widget and retain
+all prior navigation assertions; production HTML/budget checks independently
+establish SSR/splitting.
 
 ## Historical first integrated static proof
 
@@ -51,13 +69,13 @@ Help92's manually inserted index exactly matches two canonical generator
 results, normalized/raw SHA256
 `8bdd0c2ba1458fbc6c0ee5f87adaf6edd3ff9030027c14105488c6fa06242f32`.
 The index was not written. All19 UI-rule checks pass over1,701 files/639
-existing occurrences. No product repair was needed. Production build/budget,
-browser/AA and captures remain unrun; later final proof must retain the exact
-owned scope and keep all budgets unchanged.
+existing occurrences. At that first-stage boundary no product repair was
+needed; production build/budget, browser/AA and captures had not yet run.
+The later final stages above retain that history and all unchanged budgets.
 
-## Boundary
+## Historical authored boundary and preservation
 
-This is the source-only implementation of the exact 20-path slice in
+The original authored stage was the source-only exact20-path slice in
 `C:/SC2TOOLS/.cache/glossary-first-expansion-slice-2026-10-26.md`, backed by
 `C:/SC2TOOLS/.cache/glossary-expansion-audit-2026-10-26.md` and a second
 read-only formula review against current code. At that authored boundary no
@@ -74,7 +92,7 @@ No runtime result is yet claimed by that source integration.
 
 Before source edits:
 
-- `.cache/glossary-terms-owned-paths.txt` recorded the exact 20 paths;
+- `.cache/glossary-terms-owned-paths.txt` initially recorded the exact20 paths;
   SHA-256 `c292448107805d500fd9abbd196c2f769ffbe4908803e5380d81704d8ab48ca4`.
 - `.cache/glossary-terms-original-sha256.json` recorded existence, byte size
   and hash of each path.
@@ -148,10 +166,12 @@ Reading your stats is a normal analyzer Help article with explicit Today,
 Opponents, Macro and Builds anchors. Its text names each cohort before the
 number, explains null versus zero, and avoids causal or future-win claims.
 The canonical generated Help registry was **manually synchronized in its
-normal sorted form under the source-only authorization**. The existing Help
-generator and deterministic registry test remain pending, not claimed run.
+normal sorted form under the original source-only authorization**. It was
+then verified against two canonical generator results at92 articles, raw/
+normalized SHA256 `8bdd0c2ba1458fbc6c0ee5f87adaf6edd3ff9030027c14105488c6fa06242f32`.
+The registry was not rewritten.
 
-## Authored coverage — unrun
+## Verified consumer coverage
 
 - Catalog count/IDs, related targets, contextual links and normal Help anchors.
 - Real public/compact glossary rendering, formula filtering, formula wrapping
@@ -188,25 +208,61 @@ InfoTip open is asserted separately from the eventual production bundle and
 budget checks. All fixture data is synthetic; API/provider/account/clipboard
 writes are unavailable and attempted transports are counted and fail closed.
 
-## Pending serialized proof
+## Final fixture proof and evidence
 
-1. Review source, formula copy, original-seven comparison receipt and exact
-   manifest before any runtime. All current gates are unrun.
-2. Run the normal Help index generator and deterministic generated-index,
-   Help link/search/sitemap, catalog/browser, Macro timeline/KPI, SortableTh
-   and Opponents suites with at most two unit workers. Preserve any RED logs.
-3. Whole web types, strict owned lint, existing UI-rule tests and UI ratchet.
-   No new allowance, baseline acceptance, calculation, API or budget change
-   is authorized. Request any genuinely needed path expansion first.
-4. After source review/runtime grant, admit retained engine/sample assets
-   read-only, then one direct current Next build, unchanged budgets and
-   post-build types. Check actual initial analyzer chunks and tight page
-   budgets, rather than relying on the fixture's lazy import switch.
-5. Run the existing and extended InfoTip browser matrix using one pinned full
-   Chromium worker, fresh production CSS/fonts, full AA and new cache-only
-   capture/ledger directories. Review phone/tablet/desktop captures and the
-   listener cleanup receipt (`closed: true`, `listening: false`). Report real
-   failures without weakening accessibility, focus, sort or request assertions.
+Two full browser attempts failed in setup before product UI assertions:
+esbuild followed framework imports into Next gzip-size and could not resolve
+Node fs/stream/zlib. Both22-setup-RED results/logs and fixture before-bytes/
+hashes remain. The import-edge diagnostic confirmed Clerk's Pages provider →
+next/router → bloom-filter → gzip-size; its65056 server closed with zero reads.
+
+The approved fixture changes are exact framework boundaries only:
+`next/dynamic` uses React.lazy/Suspense with named-export normalization, and
+`@clerk/nextjs` exposes only needed `useAuth`, loaded/signed-out with null
+owner/token. Real HelpWidget, GlossaryBrowser, InfoTip, clientApi and all
+product/data consumers remain. No Node shim, product edit or assertion change
+was introduced. Standalone bundle admission then passed on D9, closed58049
+with no requests, and syntax/strict/whole types passed before the final run.
+
+Controlled stats/public Help identity is not account/permission integration
+proof. Browser rows/columns are typed synthetic props; actual saved-column
+picker persistence remains the real Opponents unit proof. Browser assertions
+cover saved-sort isolation/reload, unchanged rows/column selection on help,
+zero opponent opens, four KPI and six desktop-header definitions, phone
+no-nested-control behavior, missing/zero/loading states and formula search.
+Nonfinite APM/SQ cases retain their pure/consumer unit assertions.
+
+The32 final proof attachments retain bounded definition loads, zero unknown/
+nonlocal/rejected-write ledgers and six explicit synthetic grouping callbacks.
+Sort uses local synthetic storage; its write count is not instrumented.
+Strict loopback fallback handled12 GETs: four glossary documents and their
+four JS/four CSS reads for native popup admission. No real API/account write
+occurred. Actual Next SSR/canonical metadata comes from generated HTML,
+separately from this client fixture's Help data and controlled lazy boundary.
+
+All40 normalized engine inputs, d27 engine1.6.12/agent0.24.7 manifest/five
+assets, nine retained engine/Pyodide files and four strict sample payloads
+matched before/after the build. Actual CRLF sample bytes and older pointers/
+bundles remain unchanged; no copy, engine compile, publisher, generation,
+pruning or download ran. Both original-seven snapshots retain
+`8cd8e9d2ec37b96e880ab3922b5c158823e2e184db99ed817039c95a41bc28ba`;
+the real40-record module's seven original values also compare equal.
+
+Current evidence is `.cache/glossary-terms-ssr-replacement/`: `units.log`,
+`types-{prebuild,postbuild}.log`, `strict.log`, `asset-admission-*.json`,
+`catalog-admission.json`, `help-determinism.json`, `next-build.log`,
+`budgets.log`, `production-boundaries.json`, `fixture-bundle-admission.json`,
+`syntax-clerk.log`, `strict-fixture-clerk.log`, `types-after-fixture-clerk-final.log`,
+`browser-identity-retry.log`, `browser-results-identity-retry.json`,
+`browser-final-cleanup.json`, `build-artifact.json`, `final-browser-summary.json`,
+`final-source-proof.json` and `shots-identity-retry/`. Earlier source/static,
+over-budget and setup-failure artifacts are preserved.
+
+Representative originals reviewed: Light320 SQ tooltip, Dark1280 sortable
+header tooltip and Dark390 public glossary. Controls/portals are contained
+and readable, and public formula paragraphs wrap. The wide table intentionally
+scrolls to reveal selected fixture columns. All50 PNG hashes are recorded;
+no old image was overwritten, cropped or edited.
 
 ## Remaining roadmap scope
 
@@ -247,6 +303,7 @@ Root replacement proof in `.cache/glossary-terms-ssr-replacement/`:
   inputs, four strict sample payloads and all nine retained runtime files
   unchanged. No source generation, asset copy/download or pruning occurred.
 
-This supersedes pending static steps above. The current-artifact browser
-matrix and remote delivery remain pending; the priority owner date/graph
-corrections hold the next serialized browser slot.
+The current-artifact browser matrix subsequently passed as recorded above.
+Only fixture framework/identity adapters and this checkpoint changed after
+the production build; product/data bytes remain frozen. Remote delivery is
+owned by the parent and is not claimed by this local validation record.
