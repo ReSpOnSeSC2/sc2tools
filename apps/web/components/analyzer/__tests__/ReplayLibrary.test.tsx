@@ -50,7 +50,8 @@ vi.mock("@/lib/filterContext", async original => ({
   }),
 }));
 
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@/lib/clientApi", async importOriginal => ({
+  ...(await importOriginal<typeof import("@/lib/clientApi")>()),
   useApi: (...args: unknown[]) => mocks.useApi(...args),
   apiCall: (...args: unknown[]) => mocks.apiCall(...args),
 }));
@@ -120,6 +121,7 @@ const SECOND_PAGE: ReplayLibraryResponse = {
 
 let replayState: "ready" | "error" | "loading" | "empty";
 let sharingState: ReplaySharingResponse;
+let sharingReadSuccess: ((value: ReplaySharingResponse) => void) | undefined;
 const SHARE_HANDLE = "share_token_0123456789abcdefghij";
 
 function replayPaths(): string[] {
@@ -141,16 +143,19 @@ beforeEach(() => {
   navigation.hold = false; navigation.pending = []; router.replace.mockClear(); router.push.mockClear();
   replayState = "ready";
   sharingState = { enabled: false, handle: null };
+  sharingReadSuccess = undefined;
   for (const mock of Object.values(mocks)) mock.mockReset();
   mocks.getToken.mockResolvedValue("test-token");
   mocks.clipboardWrite.mockResolvedValue(undefined);
-  mocks.sharingMutate.mockImplementation(async (next: ReplaySharingResponse) => {
-    sharingState = next;
-    return next;
+  mocks.sharingMutate.mockImplementation(async (next?: ReplaySharingResponse | ((current: ReplaySharingResponse) => ReplaySharingResponse)) => {
+    if (next === undefined) { sharingReadSuccess?.(sharingState); return sharingState; }
+    sharingState = typeof next === "function" ? next(sharingState) : next;
+    return sharingState;
   });
   mocks.apiCall.mockResolvedValue({ enabled: true, handle: SHARE_HANDLE });
-  mocks.useApi.mockImplementation((path: string) => {
+  mocks.useApi.mockImplementation((path: string, config?: { onSuccess?: (value: ReplaySharingResponse) => void }) => {
     if (path === "/v1/me/replay-sharing") {
+      sharingReadSuccess = config?.onSuccess;
       return {
         data: sharingState,
         isLoading: false,
@@ -320,7 +325,7 @@ describe("ReplayLibrary", () => {
   it("requires explicit consent before enabling sharing and copies the canonical public URL", async () => {
     render(<ReplayLibrary />);
     expect(screen.queryByRole("button", { name: "Copy public replay page link" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Share" }));
 
     expect(screen.getByRole("dialog", { name: "Share your replay archive" })).toBeTruthy();
     expect(screen.getByText(/Exactly what visitors can see/i)).toBeTruthy();
@@ -335,18 +340,20 @@ describe("ReplayLibrary", () => {
     fireEvent.click(screen.getByRole("button", { name: "Turn on and copy link" }));
     await waitFor(() => {
       expect(mocks.apiCall).toHaveBeenCalledWith(
-        mocks.getToken,
+        expect.any(Function),
         "/v1/me/replay-sharing",
-        { method: "PUT", body: JSON.stringify({ enabled: true }) },
+        expect.objectContaining({ method: "PUT", body: JSON.stringify({ enabled: true }), signal: expect.any(AbortSignal) }),
       );
       expect(mocks.sharingMutate).toHaveBeenCalledWith(
-        { enabled: true, handle: SHARE_HANDLE },
+        expect.any(Function),
         { revalidate: false },
       );
       expect(mocks.clipboardWrite).toHaveBeenCalledWith(
         `${window.location.origin}/players/${SHARE_HANDLE}/replays`,
       );
     });
+    expect(sharingState).toEqual({ enabled: true, handle: SHARE_HANDLE });
+    expect(mocks.getToken).toHaveBeenCalledTimes(1);
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Public replay page is live");
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Replay page link copied");
     expect(screen.getByRole("link", { name: /Preview public page/i }).getAttribute("href")).toBe(
@@ -359,7 +366,7 @@ describe("ReplayLibrary", () => {
     render(<ReplayLibrary />);
 
     const actions = screen.getByRole("group", { name: "Replay sharing actions" });
-    const sharingButton = screen.getByRole("button", { name: "Sharing on" });
+    const sharingButton = await screen.findByRole("button", { name: "Sharing on" });
     const copyButton = screen.getByRole("button", { name: "Copy public replay page link" });
     expect(sharingButton.parentElement).toBe(actions);
     expect(copyButton.parentElement).toBe(actions);
@@ -381,12 +388,14 @@ describe("ReplayLibrary", () => {
     const prompt = vi.spyOn(window, "prompt").mockReturnValue(null);
     render(<ReplayLibrary />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy public replay page link" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy public replay page link" }));
 
-    await waitFor(() => expect(prompt).toHaveBeenCalledWith(
-      "Copy this replay page link",
-      `${window.location.origin}/players/${SHARE_HANDLE}/replays`,
-    ));
+    const manual = await screen.findByRole("dialog", { name: "Copy replay page link manually" });
+    const input = manual.querySelector("input")!;
+    expect(input.value).toBe(`${window.location.origin}/players/${SHARE_HANDLE}/replays`);
+    expect(input.readOnly).toBe(true);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, input.value.length]);
+    expect(prompt).not.toHaveBeenCalled();
     expect(mocks.apiCall).not.toHaveBeenCalled();
     expect(mocks.toastSuccess).not.toHaveBeenCalledWith("Replay page link copied");
   });

@@ -2,13 +2,17 @@ import { expect, test, type Locator, type Page, type TestInfo } from "@playwrigh
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { checkAccessibility } from "./accessibility-check";
-import { COPY_FIXTURE_ORIGIN, COPY_FIXTURE_PATH, openCopyConsumersFixture } from "./copy-consumers-fixture.mjs";
+import { COPY_FIXTURE_ORIGIN, COPY_FIXTURE_PATH, PUBLIC_REPLAY_FIXTURE_PATH, openCopyConsumersFixture } from "./copy-consumers-fixture.mjs";
 
 type FixtureWindow = typeof window & {
   fixtureCopyPath: (value: string) => void;
   fixtureCopyMode: (mode: "denied" | "held" | "success") => void;
   fixtureCopySettle: (outcome: "resolve" | "reject") => void;
-  fixtureCopyState: { writes: string[]; pending: unknown[]; promptCalls: number; execCalls: number };
+  fixtureReplayOwner: (owner: "copy-owner-a" | "copy-owner-b") => void;
+  fixturePublicReplay: (value: { path: string; name: string }) => void;
+  fixtureNativeMode: (mode: "missing" | "abort" | "failure" | "held" | "success") => void;
+  fixtureNativeSettle: (outcome: "resolve" | "reject" | "abort") => void;
+  fixtureCopyState: { writes: string[]; pending: unknown[]; promptCalls: number; execCalls: number; nativeCalls: unknown[]; nativePending: unknown[] };
 };
 
 async function selectedReadonly(input: Locator, value: string) {
@@ -177,6 +181,80 @@ for (const theme of ["light", "dark"] as const) {
       await expect(notifications.getByRole("status")).toHaveCount(0);
     }
     await page.setViewportSize(originalViewport);
+
+    // Actual private consent, owner-scoped clientApi and SWR run only against
+    // the explicitly intercepted fixture GET/PUT allowlist. These are counted
+    // synthetic writes, not a claim of zero API mutations in this proof.
+    const privateReplay = page.getByRole("region", { name: "Private replay sharing example", exact: true });
+    const consent = page.getByRole("dialog", { name: "Share your replay archive", exact: true });
+    const replayManual = page.getByRole("dialog", { name: "Copy replay page link manually", exact: true });
+    const replayInput = replayManual.getByRole("textbox", { name: "Copy replay page link manually", exact: true });
+    await expect(privateReplay.getByRole("button", { name: "Share", exact: true })).toBeVisible();
+    expect(evidence.apiRequests.filter(row => row.method === "GET")).toHaveLength(1);
+    expect(evidence.apiRequests.filter(row => row.method === "PUT")).toHaveLength(0);
+    const writeCountBeforeConsent = await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.writes.length);
+    await privateReplay.getByRole("button", { name: "Share", exact: true }).click();
+    await expect(consent.getByText(/every synced replay in this archive/)).toBeVisible();
+    expect(evidence.apiRequests.filter(row => row.method === "PUT")).toHaveLength(0);
+    await page.evaluate(() => (window as FixtureWindow).fixtureCopyMode("denied"));
+    await consent.getByRole("button", { name: "Turn on and copy link", exact: true }).click();
+    const privateReplayUrl = `${COPY_FIXTURE_ORIGIN}/players/synthetic-copy-owner-a/replays`;
+    await selectedReadonly(replayInput, privateReplayUrl);
+    expect(evidence.apiRequests.filter(row => row.method === "PUT")).toEqual([{ method: "PUT", owner: "copy-owner-a", body: { enabled: true } }]);
+    expect(evidence.apiRequests.filter(row => row.method === "GET")).toHaveLength(1);
+    expect(await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.writes.length)).toBe(writeCountBeforeConsent + 1);
+    await checkAccessibility(page, info, "/app/replays#copy-recovery", theme);
+    await screenshot(page, info, `private-replay-copy-${theme}`);
+    await replayManual.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(replayManual).toHaveCount(0); await expect(consent.getByRole("button", { name: "Copy link", exact: true })).toBeFocused();
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe("hidden");
+    await page.keyboard.press("Tab");
+    expect(await consent.evaluate(node => node.contains(document.activeElement))).toBe(true);
+    await consent.getByRole("button", { name: "Turn off sharing", exact: true }).click();
+    await expect(consent.getByRole("button", { name: "Turn on and copy link", exact: true })).toBeVisible();
+    await consent.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(consent).toHaveCount(0); await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe("");
+    await dismissToasts(page);
+    await page.evaluate(() => (window as FixtureWindow).fixtureReplayOwner("copy-owner-b"));
+    await expect(privateReplay.getByRole("button", { name: "Share", exact: true })).toBeVisible();
+    await page.evaluate(() => (window as FixtureWindow).fixtureReplayOwner("copy-owner-a"));
+    await expect(privateReplay.getByRole("button", { name: "Share", exact: true })).toBeVisible();
+    expect(evidence.apiRequests.filter(row => row.method === "GET").map(row => row.owner)).toEqual(["copy-owner-a", "copy-owner-b", "copy-owner-a"]);
+    expect(evidence.apiRequests.filter(row => row.method === "PUT")).toEqual([
+      { method: "PUT", owner: "copy-owner-a", body: { enabled: true } },
+      { method: "PUT", owner: "copy-owner-a", body: { enabled: false } },
+    ]);
+    expect(await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.writes.length)).toBe(writeCountBeforeConsent + 1);
+
+    const publicReplay = page.getByRole("region", { name: "Public replay sharing example", exact: true });
+    const nativeTrigger = publicReplay.getByRole("button", { name: "Share Synthetic player's replay page", exact: true });
+    await page.evaluate(() => (window as FixtureWindow).fixtureNativeMode("abort"));
+    const beforeNativeCopy = await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.writes.length);
+    await nativeTrigger.click(); await expect(nativeTrigger).toHaveText("Share replay page");
+    expect(await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.writes.length)).toBe(beforeNativeCopy);
+    await expect(replayManual).toHaveCount(0); await expect(notifications.getByRole("status")).toHaveCount(0);
+    await page.evaluate(() => (window as FixtureWindow).fixtureNativeMode("failure"));
+    await nativeTrigger.click(); await selectedReadonly(replayInput, COPY_FIXTURE_ORIGIN + PUBLIC_REPLAY_FIXTURE_PATH);
+    await checkAccessibility(page, info, "/players/synthetic-player/replays#copy-recovery", theme);
+    await screenshot(page, info, `public-replay-copy-${theme}`);
+    await replayManual.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(replayManual).toHaveCount(0); await expect(nativeTrigger).toBeFocused();
+    await page.evaluate(() => (window as FixtureWindow).fixtureNativeMode("held"));
+    await nativeTrigger.click(); await expect(nativeTrigger).toBeDisabled();
+    const beforeLateNative = await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.writes.length);
+    await page.evaluate(() => (window as FixtureWindow).fixturePublicReplay({ path: "/players/other-player/replays", name: "Other player" }));
+    await expect(publicReplay.getByRole("button", { name: "Share Other player's replay page", exact: true })).toBeEnabled();
+    await page.evaluate(value => (window as FixtureWindow).fixturePublicReplay({ path: value, name: "Synthetic player" }), PUBLIC_REPLAY_FIXTURE_PATH);
+    await expect(nativeTrigger).toBeEnabled(); await search.focus();
+    await page.evaluate(() => (window as FixtureWindow).fixtureNativeSettle("reject"));
+    await expect(search).toBeFocused(); await expect(replayManual).toHaveCount(0);
+    expect(await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.writes.length)).toBe(beforeLateNative);
+    await expect(notifications.getByRole("status")).toHaveCount(0);
+    await page.evaluate(() => (window as FixtureWindow).fixtureNativeMode("success"));
+    await nativeTrigger.click(); await expect(nativeTrigger).toHaveText("Shared"); await dismissToasts(page);
+    expect(evidence.apiRequests.filter(row => row.method === "PUT")).toHaveLength(2);
+    expect(evidence.apiRequests.filter(row => row.method === "GET")).toHaveLength(3);
+    await info.attach("synthetic-replay-consent-requests", { body: JSON.stringify(evidence.apiRequests), contentType: "application/json" });
 
     const definition = page.locator("#pvz-stargate-into-glaives");
     const definitionCopy = definition.getByRole("button", { name: "Copy link to PvZ - Stargate into Glaives", exact: true });
