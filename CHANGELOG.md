@@ -14,6 +14,7 @@ corresponding GitHub Release.
 ### More navigation
 
 - Use the shared bottom Sheet for phone More navigation, preserving theme choices, keyboard focus, report handoff and responsive dismissal.
+- Keep focus in an underlying dialog when Appearance closes; ordinary account-menu dismissal still returns to the account control.
 
 ### Public player pages
 

@@ -2,9 +2,14 @@
 
 2026-10-26. Worktree `wave3-game-workspace`, branch `codex/wave5-more-sheet`,
 from tested Auth `267ebf5801f39c17cb7a97cbade80c70be1f9b42` including chart main
-`56e725ae`. Earlier chart/UI branches, original captures and all prior caches
-remain preserved. This is one consumer slice of `ui-primitives-and-dialogs`,
-not completion of its remaining migrations.
+`56e725ae`. Root preserved the initial consumer at `c7af2852`, integrated Public
+at `37f1881c` and carried the shared clipboard test correction at `44181d75`.
+Actual Auth main `8d7ec51d` is normally merged at `480a3cea`. That reconciliation
+changes only the final Auth checkpoint: application source and all eight owned
+path hashes remain identical to the tested working tree. No runtime repeat is
+needed for that documentation-only merge. Earlier branches, original captures
+and all prior caches remain preserved. This is one consumer slice of
+`ui-primitives-and-dialogs`, not completion of its remaining migrations.
 
 ## Source contract
 
@@ -19,8 +24,11 @@ New AppChrome consumers cover retained Sheet identity through theme changes,
 real Modal report handoff with a concurrent scroll lock, pathname teardown and
 an overlapping Appearance boundary including intermediate focus/Tab ownership.
 The ordinary More flow offers inline themes, not a second Appearance trigger.
-The overlap test invokes the existing account action synthetically; production
-account-focus policy is unchanged. It must be observed before claiming proof.
+The overlap test invokes the existing account action synthetically. Actual
+Chromium exposed the account fallback overriding Modal's return into More.
+The approved AppChrome correction checks current modal ownership inside its
+queued callback: an underlying modal keeps its restoration; ordinary closing
+still returns to the stable account trigger. No trigger or primitive is added.
 
 The existing appearance browser suite gains both-theme phone cases using a
 new intercepted fixture. AppChrome, MoreSheet, Sheet, Modal, theme state and
@@ -30,22 +38,48 @@ The fixture reads actual `.next/static/css` and committed fonts, requires the
 resolved palette, and denies host clipboard access. No server, external request
 or account/provider write is needed. The same mounted Sheet is checked at 360px
 and 700px, covering the old Modal's 640px centering seam below AppChrome's 768px
-desktop teardown. Shared full-page AA checks have no new
-exceptions. Fresh captures default to `.cache/more-sheet-evidence`, optionally
+desktop teardown. Shared full-page AA checks have no new exceptions. Fresh
+captures default to `.cache/more-sheet-evidence`, optionally
 selected with `MORE_SHEET_SHOTS_DIR`; no committed image is overwritten.
 
-## Verification pending
+## Verified local results
 
-Source only. No scripts, generators, unit tests, typecheck, lint, build or browser
-has run for this pack. Try owns the local runtime slot. The exact seven-path
-manifest is `.cache/more-sheet-owned-paths.txt`.
+- Initial focused pack: 84 tests across nine AppChrome/Sheet/Modal/theme/focus
+  suites. After the observed focus correction, all 60 affected tests across
+  three suites pass, including AppChrome's 51 cases and queued desktop teardown.
+- Full web types and six-file strict owned lint pass. New test-only errors
+  (unsupported RTL options and an imprecise fixture Window alias) were corrected
+  without weakening compiler settings or assertions. Supported Next typegen
+  refreshed routes; the sole obsolete Community-page checker was verified
+  against the moved source and preserved under the first proof directory.
+- Help generation is deterministic at 89 articles. All 19 UI-rule tests and the
+  scan pass: 1,671 source files, 656 inherited occurrences, no new/stale allowance.
+- The final direct Next production build and post-build types pass, reusing the
+  validated `1.6.12/fc21ebe5bf52a53c` assets without engine compilation. A Windows
+  generated-directory EPERM was retained and the identical host retry passed.
+  Every unchanged budget passes: Today 233.9/240, Community 188.4/190, Guides
+  172.8/175, Builds 202.4/270, opponent 458.7/500, Dock 216.5/225 and Try
+  213.8/240 kB gzip.
+- Both complete native Chromium cases pass with one worker in 2.8 seconds.
+  They prove real Tab, nested intermediate focus, ordinary account return,
+  report handoff, same/changed-path closure, concurrent locks, both palettes,
+  360/700px bottom bounds, desktop teardown, auth-return links and full AA.
+  Unexpected requests, non-GET attempts and browser errors are asserted empty.
+  Existing public appearance cases remain intact; this bounded run selected the
+  two new synthetic phone cases. No application server was started.
 
-At the coordinated slot: run affected AppChrome/Sheet/theme consumers (at most
-two workers), complete web types, strict owned lint, Help generation and UI
-ratchet. Root reviews the source before one final production build and unchanged
-budgets. Run the two new phone/both-theme appearance cases with one worker and
-the installed Chromium via `PW_CHROMIUM_EXECUTABLE`; retain the existing public
-appearance cases. Check trigger return, real Tab, nested Escape and intermediate
-focus, report transition, same-path/changed-path closure, lock ownership,
-desktop teardown, viewport bounds and actual AA. Report a real overlap failure
-before changing production focus policy or claiming a passing result.
+The first focus failure and the later synthetic Clerk-menu cleanup failure are
+preserved in `.cache/more-sheet-proof-44181d75` and its `-fix` sibling. The fixture
+now closes its overlaid menu on action selection, matching Clerk; the native
+focus and geometry assertions remain strict. Successful build/static logs are
+in `-fix`, and final fixture types/lint, browser JSON/AA records and four captures
+are in `.cache/more-sheet-proof-44181d75-final`. The exact eight-path manifest is
+`.cache/more-sheet-owned-paths.txt`; no original screenshot was overwritten.
+
+All runtime jobs are closed and the heavy slot is released. Root reviewed the
+source and final Light 360px/Dark 700px captures; copies are preserved in
+`screenshots/more-sheet-light-360.png` and `screenshots/more-sheet-dark-700.png`.
+Exact-head remote checks and deployment verification remain pending. No
+provider/account mutation, installer or SC2 operation was performed. MobileNav,
+Bell, copy/confirmation consumers, branding and build dialog migrations remain
+separate work.

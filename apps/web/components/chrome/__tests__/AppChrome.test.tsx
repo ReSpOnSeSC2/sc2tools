@@ -571,15 +571,15 @@ describe("More bottom Sheet lifetimes", () => {
   it("keeps the same Sheet and selected control mounted through Light, Dark and System", async () => {
     setTheme("light");
     render(<AppChrome>Content</AppChrome>);
-    const more = screen.getByRole("button", { name: "More", exact: true }); more.focus(); fireEvent.click(more);
+    const more = screen.getByRole("button", { name: "More" }); more.focus(); fireEvent.click(more);
     const sheet = screen.getByRole("dialog", { name: "More sections" });
-    const light = within(sheet).getByRole("radio", { name: "Light", exact: true }); light.focus();
+    const light = within(sheet).getByRole("radio", { name: "Light" }); light.focus();
     fireEvent.keyDown(light, { key: "ArrowRight" });
-    const dark = within(sheet).getByRole("radio", { name: "Dark", exact: true });
+    const dark = within(sheet).getByRole("radio", { name: "Dark" });
     expect(dark.getAttribute("aria-checked")).toBe("true"); expect(document.activeElement).toBe(dark);
     expect(screen.getByRole("dialog", { name: "More sections" })).toBe(sheet);
     fireEvent.keyDown(dark, { key: "End" });
-    const system = within(sheet).getByRole("radio", { name: "System", exact: true });
+    const system = within(sheet).getByRole("radio", { name: "System" });
     expect(system.getAttribute("aria-checked")).toBe("true"); expect(document.activeElement).toBe(system);
     expect(screen.getByRole("dialog", { name: "More sections" })).toBe(sheet);
     fireEvent.keyDown(system, { key: "Tab" }); expect(sheet.contains(document.activeElement)).toBe(true);
@@ -594,7 +594,7 @@ describe("More bottom Sheet lifetimes", () => {
     const unlock = lockBodyScroll();
     const view = render(<AppChrome>Content</AppChrome>);
     try {
-      const more = screen.getByRole("button", { name: "More", exact: true }); more.focus(); fireEvent.click(more);
+      const more = screen.getByRole("button", { name: "More" }); more.focus(); fireEvent.click(more);
       fireEvent.click(within(screen.getByRole("dialog", { name: "More sections" })).getByRole("button", { name: "Report a problem" }));
       const report = screen.getByRole("dialog", { name: "Report form" });
       await waitFor(() => expect(report.contains(document.activeElement)).toBe(true));
@@ -609,7 +609,7 @@ describe("More bottom Sheet lifetimes", () => {
 
   it("retires the open Sheet on a real pathname change and returns its trigger", async () => {
     const view = render(<AppChrome>Original content</AppChrome>);
-    const more = screen.getByRole("button", { name: "More", exact: true }); more.focus(); fireEvent.click(more);
+    const more = screen.getByRole("button", { name: "More" }); more.focus(); fireEvent.click(more);
     expect(document.body.style.overflow).toBe("hidden");
     harness.pathname = "/settings"; view.rerender(<AppChrome>Changed route</AppChrome>);
     expect(screen.queryByRole("dialog", { name: "More sections" })).toBeNull();
@@ -619,9 +619,9 @@ describe("More bottom Sheet lifetimes", () => {
 
   it("lets overlapping Appearance own Escape, then retains More focus and Tab containment", async () => {
     render(<AppChrome>Content</AppChrome>);
-    const more = screen.getByRole("button", { name: "More", exact: true }); more.focus(); fireEvent.click(more);
+    const more = screen.getByRole("button", { name: "More" }); more.focus(); fireEvent.click(more);
     const sheet = screen.getByRole("dialog", { name: "More sections" });
-    within(sheet).getByRole("radio", { name: "System", exact: true }).focus();
+    within(sheet).getByRole("radio", { name: "System" }).focus();
     // Explicit concurrency boundary: this action is normally in the avatar,
     // while More itself offers inline theme choices rather than another opener.
     fireEvent.click(within(screen.getByRole("list", { name: "Account menu" })).getByRole("button", { name: "Appearance" }));
@@ -634,6 +634,23 @@ describe("More bottom Sheet lifetimes", () => {
     expect(document.body.style.overflow).toBe("hidden");
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() => expect(document.activeElement).toBe(more));
+    expect(document.body.style.overflow).not.toBe("hidden");
+  });
+
+  it("checks the remaining modal at queued restoration time after desktop teardown", async () => {
+    const callbacks = new Set<() => void>();
+    const desktop = { matches: false, addEventListener: (_: string, callback: () => void) => callbacks.add(callback), removeEventListener: (_: string, callback: () => void) => callbacks.delete(callback) };
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => query === "(min-width:768px)" ? desktop : { matches: false, addEventListener() {}, removeEventListener() {} }));
+    render(<AppChrome>Content</AppChrome>);
+    const more = screen.getByRole("button", { name: "More" }); more.focus(); fireEvent.click(more);
+    fireEvent.click(within(screen.getByRole("list", { name: "Account menu" })).getByRole("button", { name: "Appearance" }));
+    await waitFor(() => expect(screen.getByRole("dialog", { name: "Appearance" }).contains(document.activeElement)).toBe(true));
+    act(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
+      desktop.matches = true; callbacks.forEach(callback => callback());
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Account fixture" })));
     expect(document.body.style.overflow).not.toBe("hidden");
   });
 });

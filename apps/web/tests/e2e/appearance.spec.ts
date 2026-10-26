@@ -91,7 +91,7 @@ test("compact theme keyboard options restore focus after closing", async ({ page
   await expect(toggle).toBeFocused();
 });
 
-type MoreFixtureWindow = Window & {
+type MoreFixtureWindow = typeof window & {
   fixtureAppearance: () => void;
   fixtureExtraLock: () => void;
   fixtureUnlock: () => void;
@@ -154,6 +154,12 @@ for (const theme of ["light", "dark"] as const) {
     await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe("hidden");
     await page.keyboard.press("Escape"); await expect(sheet).toBeHidden(); await expect(more).toBeFocused();
 
+    const account = page.getByRole("button", { name: "Fixture account", exact: true });
+    await account.click();
+    await page.getByRole("list", { name: "Fixture account menu" }).getByRole("button", { name: "Appearance", exact: true }).click();
+    await expect(appearance).toBeVisible(); await expect(appearance.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+    await page.keyboard.press("Escape"); await expect(appearance).toBeHidden(); await expect(account).toBeFocused();
+
     await page.evaluate(() => (window as MoreFixtureWindow).fixtureExtraLock());
     await more.click(); await sheet.getByRole("button", { name: "Report a problem", exact: true }).click();
     const report = page.getByRole("dialog", { name: "Local report form", exact: true });
@@ -168,7 +174,8 @@ for (const theme of ["light", "dark"] as const) {
     await page.evaluate(() => (window as MoreFixtureWindow).fixtureUnlock());
     await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe("");
     await more.click(); await page.setViewportSize({ width: 1280, height: 800 });
-    await expect(sheet).toBeHidden(); await expect(more).toHaveAttribute("aria-expanded", "false");
+    await expect(sheet).toBeHidden();
+    await expect(page.getByRole("button", { name: "More", exact: true, includeHidden: true })).toHaveAttribute("aria-expanded", "false");
     await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe("");
     await page.setViewportSize({ width: 360, height: 800 });
     await page.evaluate(() => { (window as MoreFixtureWindow).fixtureNavigate("/community"); (window as MoreFixtureWindow).fixtureAuth(false); });
