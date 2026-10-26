@@ -5,7 +5,7 @@ import { MobileNav } from "../MobileNav";
 import { Modal } from "@/components/ui/Modal";
 import { lockBodyScroll } from "@/lib/bodyScrollLock";
 const clerk = vi.hoisted(() => ({ signedIn: false }));
-vi.mock("next/link", () => ({ default: ({ children, onClick, ...props }: AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} onClick={event => { event.preventDefault(); onClick?.(event); }}>{children}</a> }));
+vi.mock("next/link", () => ({ default: ({ children, href, onClick, ...props }: AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} href={href} onClick={event => { event.preventDefault(); onClick?.(event); }}>{children}</a> }));
 vi.mock("@clerk/nextjs", () => ({ SignedIn: ({ children }: { children: ReactNode }) => clerk.signedIn ? children : null, SignedOut: ({ children }: { children: ReactNode }) => clerk.signedIn ? null : children }));
 const closed = vi.fn();
 let desktop = false;
