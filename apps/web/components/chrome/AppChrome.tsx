@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { AuthContextLink } from "@/components/auth/AuthContextLink";
+import { buttonClassName } from "@/components/ui/buttonStyles";
 import dynamic from "next/dynamic";
 import { backToGameSource, safeGameSource } from "@/lib/gameNavigation";
 import { usePathname } from "next/navigation";
@@ -325,13 +326,13 @@ function AppChromeShell({ children }: { children: ReactNode }) {
                 <HelpMenu signedIn={false} />
                 <AuthContextLink
                   kind="sign-in"
-                  className="hard-press hidden h-8 items-center rounded-full border-2 border-line bg-bg-surface px-3.5 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:inline-flex"
+                  className={buttonClassName({ variant: "secondary", size: "sm", className: "hidden sm:inline-flex" })}
                 >
                   Sign in
                 </AuthContextLink>
                 <AuthContextLink
                   kind="sign-up"
-                  className="hard-press inline-flex h-8 items-center rounded-full border-2 border-line bg-accent px-3.5 font-display text-caption font-bold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className={buttonClassName({ variant: "primary", size: "sm" })}
                 >
                   Get started
                 </AuthContextLink>

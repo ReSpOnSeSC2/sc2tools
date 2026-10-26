@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### App and landing action links
+
+- Use the shared action styles for the app's visitor sign-in controls and the landing page's download, browser, dashboard and support links, keeping their destinations and browser rollout choices.
+- Let long landing action labels wrap on a phone while keeping the shared keyboard focus styles.
+
 ### Analyzer date range
 
 - Default fresh analyzer views and Reset to defaults to Auto-track current season, following the current season catalog while retaining explicitly saved dates and views.

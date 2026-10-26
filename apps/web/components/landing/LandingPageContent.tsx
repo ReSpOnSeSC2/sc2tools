@@ -34,6 +34,10 @@ import {
 import { getInstantImportMode } from "@/lib/instant/flag";
 import { PRODUCT_FACTS } from "@/lib/productFacts";
 import { CompanionShowcase } from "@/components/landing/CompanionShowcase";
+import { LinkButton } from "@/components/ui/Button";
+
+// A long landing label may grow past one line on a phone.
+const WRAPPING_CTA = "h-auto min-h-12 py-2 text-center";
 
 export function LandingPageContent() {
   return (
@@ -111,29 +115,31 @@ function HeroCtas() {
     <div className="mt-7 flex min-h-[44px] flex-wrap items-center gap-3">
       <SignedIn><SignedInCtas /></SignedIn>
       <SignedOut>
-      <CtaLink
+      <LinkButton
         href="/download"
+        size="lg"
+        className={WRAPPING_CTA}
         iconLeft={<Download className="h-5 w-5" aria-hidden />}
         iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}
       >
         Download the free agent
-      </CtaLink>
+      </LinkButton>
       {instant ? (
         <>
-          <CtaLink
+          <LinkButton
             href="/try"
             variant="secondary"
-            size="touch"
+            size="md"
             iconLeft={<MonitorSmartphone className="h-5 w-5" aria-hidden />}
-            className="max-w-full text-balance"
+            className="h-auto min-h-11 max-w-full py-2 text-center text-balance"
           >
             No download — analyze your replays in your browser
-          </CtaLink>
+          </LinkButton>
         </>
       ) : (
-        <CtaLink href="#replay-demo" variant="secondary">
+        <LinkButton href="#replay-demo" variant="secondary" size="lg" className={WRAPPING_CTA}>
           Try a replay
-        </CtaLink>
+        </LinkButton>
       )}
       </SignedOut>
     </div>
@@ -141,7 +147,7 @@ function HeroCtas() {
 }
 
 function SignedInCtas() {
-  return <><CtaLink href="/app" iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>Open your dashboard</CtaLink><CtaLink href="/changelog" variant="secondary">What's new</CtaLink></>;
+  return <><LinkButton href="/app" size="lg" className={WRAPPING_CTA} iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>Open your dashboard</LinkButton><LinkButton href="/changelog" variant="secondary" size="lg" className={WRAPPING_CTA}>What's new</LinkButton></>;
 }
 
 function LandingCarousel() {
@@ -531,7 +537,7 @@ function SupportTeaser() {
           <h2 className="mt-2 font-serif text-h3 font-semibold text-text">No paywall between you and your replays.</h2>
           <p className="mt-2 text-caption text-text-muted">SC2 Tools publishes its real infrastructure costs and keeps support optional.</p>
         </div>
-        <CtaLink href="/donate" variant="secondary" size="md">See costs or chip in</CtaLink>
+        <LinkButton href="/donate" variant="secondary" size="md" className="h-auto min-h-11 py-2 text-center">See costs or chip in</LinkButton>
       </div>
     </section>
   );
@@ -549,8 +555,8 @@ function LandingFinalCta() {
         <p className="mt-5 max-w-2xl text-body-lg text-text-muted">Free to start, no card needed. Sync privately across devices and add OBS whenever you are ready.</p>
         <div className="mt-7 flex min-h-[44px] flex-wrap items-center gap-3">
           <SignedIn><SignedInCtas /></SignedIn>
-          <SignedOut><CtaLink href="/download" iconLeft={<Download className="h-5 w-5" aria-hidden />} iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>Download the agent</CtaLink>
-          <CtaLink href="/community" variant="secondary" iconLeft={<Users className="h-5 w-5" aria-hidden />}>Browse community builds</CtaLink></SignedOut>
+          <SignedOut><LinkButton href="/download" size="lg" className={WRAPPING_CTA} iconLeft={<Download className="h-5 w-5" aria-hidden />} iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>Download the agent</LinkButton>
+          <LinkButton href="/community" variant="secondary" size="lg" className={WRAPPING_CTA} iconLeft={<Users className="h-5 w-5" aria-hidden />}>Browse community builds</LinkButton></SignedOut>
         </div>
       </div>
     </section>
@@ -604,60 +610,6 @@ function EditorialHead({ folio, kicker, title, standfirst }: EditorialHeadProps)
         ) : null}
       </div>
     </div>
-  );
-}
-
-// min-h (not h) so a long label wraps onto two lines on a phone
-// instead of overflowing the button.
-const CTA_SIZE_CLASS: Record<NonNullable<CtaLinkProps["size"]>, string> = {
-  lg: "min-h-12 py-2 px-5 text-body-lg gap-2.5",
-  md: "min-h-10 py-1.5 px-4 text-body gap-2",
-  touch: "min-h-11 py-2 px-4 text-body gap-2",
-};
-
-interface CtaLinkProps {
-  href: string;
-  variant?: "primary" | "secondary";
-  /** "touch": `md` type on a 44px minimum (long labels that may wrap). */
-  size?: "md" | "lg" | "touch";
-  iconLeft?: ReactNode;
-  iconRight?: ReactNode;
-  children: ReactNode;
-  className?: string;
-}
-
-function CtaLink({
-  href,
-  variant = "primary",
-  size = "lg",
-  iconLeft,
-  iconRight,
-  children,
-  className = "",
-}: CtaLinkProps) {
-  const variantClass =
-    variant === "primary"
-      ? "bg-accent text-white hover:brightness-90"
-      : "bg-bg-elevated text-text border-2 border-line hover:bg-bg-subtle";
-  const sizeClass = CTA_SIZE_CLASS[size];
-  return (
-    <Link
-      href={href}
-      className={[
-        "inline-flex min-w-[44px] items-center justify-center rounded-md text-center font-semibold",
-        "transition-colors duration-100",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-        variantClass,
-        sizeClass,
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {iconLeft ? <span className="flex-shrink-0">{iconLeft}</span> : null}
-      {children}
-      {iconRight ? <span className="flex-shrink-0">{iconRight}</span> : null}
-    </Link>
   );
 }
 
