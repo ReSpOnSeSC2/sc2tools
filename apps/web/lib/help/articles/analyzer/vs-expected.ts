@@ -5,7 +5,7 @@ const article: HelpArticle = {
   summary: "Read opponent-strength-adjusted wins, replay-time rating coverage, performance ratings and win-rate uncertainty.",
   category: "analyzer", audience: "player", signedInOnly: true, order: 11,
   keywords: ["vs expected", "expected wins", "strength adjusted", "performance rating", "MMR", "Wilson", "thin sample"],
-  updated: "2026-10-25",
+  updated: "2026-10-26",
   body: [
     { type: "paragraph", text: "**Vs expected** asks how your recorded results compare with a rating-based baseline, given who you played. Find it in [Build stats](/app/builds), [Strategies](/app/strategies) and [Battlefield](/app/maps). It describes past results; it does not forecast your next game or say that a build caused a win." },
     { type: "heading", text: "A worked example", anchor: "example" },
@@ -22,7 +22,7 @@ const article: HelpArticle = {
     { type: "paragraph", text: "Fitting assumptions are explicit: a half-win/half-loss prior avoids exact certainty from finite samples, and mirrored constraints enforce rating-swap symmetry. Mirrored constraints are not additional observations. Tooltips identify the Elo fallback or calibrated model and report the original supported-bin and game counts. Sparse or unavailable calibration falls back to Elo." },
     { type: "heading", text: "Performance rating and matchup lines", anchor: "rating" },
     { type: "paragraph", text: "Performance rating starts from average rated-opponent MMR, then finds the rating offset that matches your observed rated win fraction under the same baseline. A flat fitted interval uses its midpoint. A 0% or 100% rated sample has no finite performance estimate and shows a dash, rather than an arbitrary rating cap." },
-    { type: "paragraph", text: "The [Trends](/app/trends) **Matchup rating** card uses each played matchup's latest 50 decided ranked 1v1 games in the selected filters. Sparklines run in game order, with rolling ten-game estimates; early windows are shorter. Each window excludes missing paired ratings. Null and all-win/all-loss windows interrupt the line. Inspect a window to read its estimate and rated/missing counts. A chart is historical evidence, not a rating award or a promise about future results." },
+    { type: "paragraph", text: "The [Trends](/app/trends) **Matchup rating** card uses each played matchup's latest 50 decided ranked 1v1 games in the selected filters. Sparklines run in game order, with rolling ten-game estimates; early windows are shorter. Each window excludes missing paired ratings. Null and all-win/all-loss windows interrupt the line. **Inspect window** highlights the selected position and shows its game range, ending date, estimate and rated/missing counts. A window without a finite estimate keeps its gap and has no highlighted rating point. The large estimate summarizes the full sample and stays the same when you inspect a window. A chart is historical evidence, not a rating award or a promise about future results." },
     { type: "heading", text: "Ranges and thin samples", anchor: "uncertainty" },
     { type: "paragraph", text: "The faint bar in a win-rate cell is a **95% Wilson interval**, showing uncertainty due to sample size around that displayed raw win rate. It is separate from opponent-strength adjustment. Under ten games, **thin sample** is a reminder that a few results can move the number substantially. The rating card uses its measured rated-game count for this cue." },
   ],

@@ -168,7 +168,6 @@ export function MacroBreakdownPanel({
           onClose={onClose}
         />
         <div className="min-w-0 flex-1 space-y-4 px-4 pb-6 pt-3 sm:px-6 sm:py-5 lg:px-8">
-          <MacroBuildSelector gameId={gameId} />
           {isLoading ? (
             <LoadingState />
           ) : error ? (
@@ -191,6 +190,7 @@ export function MacroBreakdownPanel({
               recomputing={recomputing}
             />
           )}
+          <MacroBuildSelector gameId={gameId} />
         </div>
         <PanelFooter
           recomputing={recomputing}
