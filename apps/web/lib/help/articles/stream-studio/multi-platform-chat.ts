@@ -23,7 +23,7 @@ const article: HelpArticle = {
     "tts",
     "translation",
   ],
-  updated: "2026-10-22",
+  updated: "2026-10-26",
   body: [
     {
       type: "paragraph",
@@ -43,6 +43,9 @@ const article: HelpArticle = {
       text: "From the same page you control the full appearance studio (live preview), alert sounds (50+ bundled real recordings and synth effects, plus your own via link / upload / typed voice line — note that famous copyrighted clips can trigger VOD muting), text-to-speech chat readout, and free on-device translation.",
     },
     { type: "settingsLink", label: "Open Settings → Overlay", href: "/settings?tab=overlay" },
+    { type: "heading", text: "Disconnect a connected account", anchor: "disconnect" },
+    { type: "paragraph", text: "In **Settings → Overlay → Connected accounts**, choose **Disconnect** beside Twitch, Kick or YouTube. Check the platform named in the confirmation: disconnecting stops both its notifications and its authorized stream controls. Choose **Disconnect Twitch**, **Disconnect Kick** or **Disconnect YouTube** to approve that account, or **Cancel** to keep it connected. Escape and closing the confirmation also cancel. No account is disconnected just by opening this confirmation." },
+    { type: "paragraph", text: "Changing your signed-in account or replacing a connection cancels an earlier confirmation. If the result cannot be confirmed, check the account's current status before trying again. A new attempt asks for your approval again. Connecting notification alerts and granting stream-control permission remain separate choices." },
   ],
   related: ["obs-overlay-setup", "viewer-engagement", "troubleshooting-and-support"],
 };

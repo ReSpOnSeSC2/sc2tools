@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Connected-account confirmation
+
+- Confirm the named Twitch, Kick or YouTube account before disconnecting its notifications and stream controls. Cancel or Escape keeps it connected.
+- Retire earlier confirmations and delayed requests when the signed-in account or connection changes; uncertain results require checking status and explicit approval before another attempt.
+
 ### Glossary and contextual help foundation
 
 - Browse and search the existing player-identity and verified-MMR definitions A to Z in Help's glossary, with stable term links and full contextual explanations.

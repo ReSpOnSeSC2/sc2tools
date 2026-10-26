@@ -1,11 +1,12 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useEffect, useRef, useState } from "react";
-import { apiCall, useApi } from "@/lib/clientApi";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { apiCall, useApi, useOwnerRequestScope } from "@/lib/clientApi";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/useConfirm";
 
 type OfficialPlatform = "twitch" | "kick" | "youtube";
 
@@ -24,6 +25,38 @@ type ConnectionStatus = {
 };
 
 type ConnectionsResponse = { platforms: ConnectionStatus[] };
+type DisconnectScope = {
+  owner: string | null; revision: string; active: boolean;
+  pending: boolean; controller: AbortController | null;
+};
+type DisconnectOperation = {
+  source: DisconnectScope; successor: DisconnectScope | null;
+  expectedRevision: string | null; published: boolean; active: boolean; controller: AbortController;
+};
+
+function isConnectionsResponse(value: unknown): value is ConnectionsResponse {
+  if (!value || typeof value !== "object" || !Array.isArray((value as ConnectionsResponse).platforms)) return false;
+  const rows = (value as ConnectionsResponse).platforms;
+  const seen = new Set<string>();
+  return rows.length === 3 && rows.every((row) => {
+    if (!row || typeof row !== "object" || !["twitch", "kick", "youtube"].includes(row.platform) || seen.has(row.platform)
+      || typeof row.configured !== "boolean" || typeof row.connected !== "boolean" || typeof row.ready !== "boolean"
+      || typeof row.platformUserName !== "string" || !Array.isArray(row.scopes) || !row.scopes.every((scope) => typeof scope === "string")
+      || !(row.connectedAt === null || typeof row.connectedAt === "string")
+      || !(row.lastSyncedAt === null || typeof row.lastSyncedAt === "string")
+      || !(row.lastError === null || typeof row.lastError === "string")
+      || !(row.streamingAvailable === undefined || typeof row.streamingAvailable === "boolean")
+      || !(row.streamingConsent === undefined || typeof row.streamingConsent === "boolean")) return false;
+    seen.add(row.platform); return true;
+  });
+}
+
+function connectionRevision(data: ConnectionsResponse | undefined) {
+  return JSON.stringify((["twitch", "kick", "youtube"] as OfficialPlatform[]).map((platform) => {
+    const row = data?.platforms.find((item) => item.platform === platform);
+    return [platform, row?.connected === true, row?.connectedAt ?? null];
+  }));
+}
 
 const COPY: Record<OfficialPlatform, { label: string; coverage: string }> = {
   twitch: {
@@ -41,13 +74,53 @@ const COPY: Record<OfficialPlatform, { label: string; coverage: string }> = {
 };
 
 export function OfficialPlatformConnections() {
-  const { getToken } = useAuth();
+  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
+  const owner = isLoaded && isSignedIn && userId ? userId : null;
   const { toast } = useToast();
   const { data, isLoading, error, mutate } = useApi<ConnectionsResponse>(
     "/v1/me/integrations",
     { refreshInterval: 60_000 },
   );
   const [busy, setBusy] = useState<OfficialPlatform | null>(null);
+  const revision = connectionRevision(data);
+  const operationRef = useRef<DisconnectOperation | null>(null);
+  const scopeRef = useRef<DisconnectScope>({ owner, revision, active: !!owner, pending: false, controller: null });
+  let scope = scopeRef.current;
+  if (scope.owner !== owner || scope.revision !== revision) {
+    const previous = scope;
+    scope.active = false;
+    scope = { owner, revision, active: !!owner, pending: false, controller: null };
+    scopeRef.current = scope;
+    const operation = operationRef.current;
+    if (operation?.active) {
+      if (operation.source === previous && !operation.successor
+        && operation.expectedRevision === revision && owner === previous.owner) {
+        // Admit exactly our expected cache publication, once. Returning to
+        // these same values after another transition cannot revive this intent.
+        operation.successor = scope; scope.pending = true; scope.controller = operation.controller;
+      } else operation.active = false;
+    }
+  }
+  useLayoutEffect(() => {
+    scope.active = !!owner;
+    return () => {
+      scope.active = false;
+      const operation = operationRef.current;
+      const handedOff = operation?.active && operation.source === scope
+        && operation.successor === scopeRef.current && scopeRef.current.active;
+      if (!handedOff) {
+        if (operation && (operation.source === scope || operation.successor === scope)) operation.active = false;
+        scope.controller?.abort();
+      }
+    };
+  }, [scope, owner]);
+  const { confirm, dialog } = useConfirm(scope);
+  const runOwned = useOwnerRequestScope(owner, getToken);
+  const requestRef = useRef(runOwned); requestRef.current = runOwned;
+  const [disconnecting, setDisconnecting] = useState<{ operation: DisconnectOperation; platform: OfficialPlatform } | null>(null);
+  const activeDisconnect = disconnecting?.operation === operationRef.current && disconnecting?.operation.active
+    && (disconnecting.operation.source === scope || disconnecting.operation.successor === scope) ? disconnecting : null;
+  const actionBusy = busy !== null || !!activeDisconnect;
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -152,20 +225,80 @@ export function OfficialPlatformConnections() {
   };
 
   const disconnect = async (platform: OfficialPlatform) => {
-    if (!window.confirm(`Disconnect your ${COPY[platform].label} account? This stops its notifications and stream controls.`)) return;
-    setBusy(platform);
+    const requestOwner = scope.owner;
+    const current = () => mounted.current && scope.active && scopeRef.current === scope && !scope.controller?.signal.aborted;
+    if (!requestOwner || !current() || actionBusy || scope.pending
+      || !data?.platforms.some((item) => item.platform === platform && item.connected)) return;
+    scope.pending = true;
+    let operation: DisconnectOperation | null = null;
     try {
-      await apiCall(getToken, `/v1/me/integrations/${platform}`, {
-        method: "DELETE",
+      const accepted = await confirm({
+        title: `Disconnect ${COPY[platform].label}?`,
+        description: `Disconnect your ${COPY[platform].label} account? This stops its notifications and stream controls.`,
+        confirmLabel: `Disconnect ${COPY[platform].label}`,
+        intent: "danger", focusCancel: true,
       });
-      await mutate();
+      if (!accepted || !current()) return;
+      const controller = new AbortController(); scope.controller = controller;
+      const requestOperation: DisconnectOperation = { source: scope, successor: null, expectedRevision: null, published: false, active: true, controller };
+      operation = requestOperation; operationRef.current = requestOperation;
+      const admitted = () => mounted.current && operationRef.current === requestOperation && requestOperation.active
+        && scopeRef.current.active && !controller.signal.aborted
+        && (scopeRef.current === requestOperation.source || scopeRef.current === requestOperation.successor);
+      setDisconnecting({ operation: requestOperation, platform });
+      const result = await requestRef.current(requestOwner, async (scopedToken, signal, assertCurrent) => {
+        const assertResource = () => {
+          assertCurrent();
+          if (!current()) throw new DOMException("This connection changed.", "AbortError");
+        };
+        const token = async () => {
+          assertResource(); const value = await scopedToken(); assertResource();
+          if (!value) throw new Error("Sign in again before disconnecting this account.");
+          return value;
+        };
+        await apiCall(token, `/v1/me/integrations/${platform}`, { method: "DELETE", signal });
+        assertResource();
+        // Same single status read as revalidation, inside the JWT/body deadline.
+        const fresh = await apiCall<ConnectionsResponse>(token, "/v1/me/integrations", { signal });
+        assertResource();
+        if (!isConnectionsResponse(fresh) || fresh.platforms.find((item) => item.platform === platform)?.connected !== false) {
+          throw new Error("The account status has not confirmed that this connection is disconnected.");
+        }
+        return { fresh, assertOwner: assertCurrent };
+      }, 20_000, controller.signal);
+      if (!current()) return;
+      requestOperation.expectedRevision = connectionRevision(result.fresh);
+      // SWR may invoke this updater later. A retired decision cannot publish
+      // an older disconnected snapshot over a newer connection's cached row.
+      await mutate((cached: ConnectionsResponse | undefined) => {
+        if (!admitted()) return cached;
+        if (!isConnectionsResponse(cached)) { requestOperation.active = false; return cached; }
+        const cachedRevision = connectionRevision(cached);
+        if (cachedRevision !== requestOperation.source.revision && cachedRevision !== requestOperation.expectedRevision) {
+          requestOperation.active = false;
+          return cached;
+        }
+        requestOperation.published = true;
+        return result.fresh;
+      }, false);
+      result.assertOwner();
+      if (!admitted() || !requestOperation.published) return;
       toast.success(`${COPY[platform].label} disconnected`);
     } catch (err) {
-      toast.error(`Could not disconnect ${COPY[platform].label}`, {
-        description: errorMessage(err),
+      if (!current() || err instanceof DOMException && err.name === "AbortError") return;
+      toast.error(`Could not confirm ${COPY[platform].label} disconnection`, {
+        description: `${errorMessage(err)} Check this account's status before trying again.`,
       });
     } finally {
-      if (mounted.current) setBusy(null);
+      scope.pending = false; scope.controller = null;
+      if (operation) {
+        operation.active = false;
+        if (operation.successor) { operation.successor.pending = false; operation.successor.controller = null; }
+        if (operationRef.current === operation) operationRef.current = null;
+      }
+      if (mounted.current && scopeRef.current.active && (scopeRef.current === scope || scopeRef.current === operation?.successor)) {
+        setDisconnecting(previous => previous?.operation === operation ? null : previous);
+      }
     }
   };
 
@@ -241,7 +374,7 @@ export function OfficialPlatformConnections() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      disabled={busy !== null}
+                      disabled={actionBusy}
                       onClick={() => void connect(platform, row?.streamingConsent ? "streaming" : "alerts")}
                     >
                       Reconnect
@@ -249,7 +382,8 @@ export function OfficialPlatformConnections() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      disabled={busy !== null}
+                      disabled={!owner || actionBusy}
+                      loading={activeDisconnect?.platform === platform}
                       onClick={() => void disconnect(platform)}
                     >
                       Disconnect
@@ -259,7 +393,7 @@ export function OfficialPlatformConnections() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    disabled={!configured || busy !== null}
+                    disabled={!configured || actionBusy}
                     onClick={() => void connect(platform)}
                   >
                     {busy === platform ? "Connecting…" : "Connect"}
@@ -267,7 +401,7 @@ export function OfficialPlatformConnections() {
                 )}
                 {!streamControlsAuthorized ? (
                   <Button size="sm" variant="secondary"
-                    disabled={!configured || row?.streamingAvailable !== true || busy !== null}
+                    disabled={!configured || row?.streamingAvailable !== true || actionBusy}
                     onClick={() => void connect(platform, "streaming")}
                   >
                     Connect stream controls
@@ -284,6 +418,7 @@ export function OfficialPlatformConnections() {
         the live TikTok connection above; TikTok does not provide a public
         creator webhook connection for these LIVE events.
       </p>
+      {dialog}
     </div>
   );
 }
