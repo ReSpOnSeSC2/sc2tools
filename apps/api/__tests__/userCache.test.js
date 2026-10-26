@@ -43,7 +43,7 @@ test("typed filters/options isolate owners, equivalent key order reuses actual w
 test("absolute TTL and LRU reclaim exact UTF-8 bytes; 512KiB is a body bound", async () => {
   const { cache, advance } = setup({ entries: 1, ttlMs: 20 });
   const value = { map: "界" }; await request(cache, { work: async () => value }).promise;
-  const [key, entry] = [...cache.completed][0];
+  const [key] = [...cache.completed][0];
   expect(cache.bytes).toBe(Buffer.byteLength(key) + Buffer.byteLength(JSON.stringify(value)));
   advance(21); await request(cache, { work: async () => value }).promise;
   expect(cache.stats.expiry).toBe(1);

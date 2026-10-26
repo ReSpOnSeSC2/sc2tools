@@ -2,9 +2,9 @@
 
 2026-10-26. Base provided by the parent: `9a68c480c9d19278642b5c546fe4b3ab081fa6b1`,
 worktree `wave3-guides-expansion`, branch `codex/wave5-revision-chart-cache`.
-Initial preparation was source only. The later authorized whole-API type run is
-recorded below. No test, lint, build, generator, Git mutation, browser, provider,
-database or production activation was performed by this author.
+Initial preparation was source only. Later authorized whole-API type and strict
+lint runs are recorded below. No test, build, generator, Git mutation, browser,
+provider, database or production activation was performed by this author.
 
 ## Prepared behavior and boundaries
 
@@ -141,6 +141,40 @@ checkpoint. The annotation breaks the inference cycle without changing an
 initializer, runtime behavior, any cast, tsnocheck or lint rule. Other30 source
 paths stay unchanged. Annotation validation is pending independent review,
 parent preservation and a new exact runtime grant.
+
+## Second API validation and response-lease extraction
+
+The parent granted one mechanical, unchanged d21f592a runner invocation at
+sourcebbbbca07/treeada848be using receipt400ac58d. Whole API types passed with
+exit0 and no diagnostics, resolving both earlier inference errors. Strict lint
+then exited1: zero errors and58 warnings across28 files. Its20 original
+same-filename comparisons reported zero errors and56 warnings. Each existing
+file retains its original warning count, but six message strings differ because
+the reported function lengths changed; this is diagnostic evidence, not a
+strict-lint waiver. Jest and Mongo were not started. No retry occurred.
+
+The two warnings in new files were an unused entry binding in userCache.test.js
+and the69-line send method exceeding the60-line rule. After all22 child commands
+closed, the full postflight passed941 inputs,32 owned source paths,26,114
+dependency pins, tools, tracked-cleanbbbb/treeada and map seed4d525b8e. Closure
+observation found all22 recorded child PIDs absent, no Node process remaining
+from the exclusive run window and no known-owned listener; the runtime slot was
+released. Raw result SHA256 is
+`3bff86b3f9a796858613604a88d6fc82e822b96a78610bc24fec8f4a61b01e1a`.
+
+Before the next repair, three raw source files and all97 closed-run evidence
+files were copied under `.cache/response-lease-repair-bbbbca07/`; before receipt
+SHA256 is `ff826fcd92f7a2194f7b6a5a029085715bb7bddb0251de68d5dd00dc3998dae6`.
+The parent authorized only middleware/userCache.js, userCache.test.js and this
+checkpoint. The existing contiguous response-cap, subscriber, close closure and
+listener-registration block is moved verbatim into beginResponse, which returns
+the same sub and close objects. send retains its opt-in/method/route bypass first,
+then obtains those objects and enters its unchanged try/catch. Counter, timer,
+listener, abort, queue, pin, releaseResponse and drain ordering is retained.
+The test removes only the unused entry binding; every assertion is unchanged.
+Other29 source paths remain byte-identical. No lint configuration, suppression,
+new any type or cache behavior is added. This extraction is source-only and
+awaits independent review, parent preservation and a fresh validation grant.
 
 ## Validation still required
 

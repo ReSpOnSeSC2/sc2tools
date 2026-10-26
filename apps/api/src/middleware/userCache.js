@@ -67,10 +67,8 @@ class UserCache {
   }
   busy() { this.stats.rejected += 1; return Object.assign(new Error("user_cache_busy"), { status: 503, code: "user_cache_busy" }); }
   retired() { this.stats.late_fill += 1; return Object.assign(new Error("user_cache_changed"), { status: 503, code: "user_cache_changed" }); }
-  /** @param {any} req @param {any} res @param {string} owner @param {string} route
-   * @param {object} filters @param {object} options @param {()=>Promise<any>} work */
-  async send(req, res, owner, route, filters, options, work) {
-    if (!this.enabled || req.method !== "GET" || !ALLOWED_ROUTES.has(route)) return res.json(await work());
+  /** @param {import('express').Request} req @param {import('express').Response} res */
+  beginResponse(req, res) {
     if (this.responses >= this.limits.responses) { res.set("Retry-After", "1"); throw this.busy(); }
     this.responses += 1;
     const sub = { active: true, entry: /** @type {any} */ (null), task: /** @type {any} */ (null),
@@ -94,6 +92,13 @@ class UserCache {
       this.drain();
     };
     req.once("aborted", close); res.once("close", close); res.once("finish", close);
+    return { sub, close };
+  }
+  /** @param {any} req @param {any} res @param {string} owner @param {string} route
+   * @param {object} filters @param {object} options @param {()=>Promise<any>} work */
+  async send(req, res, owner, route, filters, options, work) {
+    if (!this.enabled || req.method !== "GET" || !ALLOWED_ROUTES.has(route)) return res.json(await work());
+    const { sub, close } = this.beginResponse(req, res);
     try {
       const snapshot = await this.revisions.snapshot(owner);
       if (!sub.active || res.destroyed) return;
