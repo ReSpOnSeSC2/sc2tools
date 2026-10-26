@@ -1,6 +1,16 @@
 # Settings PR A remainder — browser repair checkpoint
 
-2026-10-26 current status: replacement production build `201uuBm1gRyndjs6g9lwo` and all12 formal A3 cases pass. A4 stopped at the first fixture bundle setup before UI/HTTP/AA;19 cases remain unrun. The latest approved fixture-environment/documentation amendment is **UNVALIDATED**. No complete PR A browser matrix or deployed behavior is claimed.
+2026-10-26 current status: replacement production build `201uuBm1gRyndjs6g9lwo` and all12 formal A3 cases pass. The89 A4 retry stopped at fixture setup on a missing Clerk hook export, before UI/HTTP/AA;19 cases remain unrun. The latest framework-boundary/documentation amendment is **UNVALIDATED**. No complete PR A browser matrix or deployed behavior is claimed.
+
+## Latest source-only Clerk boundary amendment
+
+At test source89, the changed fixture's MJS syntax and strict lint, whole types and205/67 source guards are green. The shipping build stays b14/current201uu; original A3 receipt `6f475d507155719ca90ae0f3f5aa831ddbc9e06e40db096cf62c646dfe3447b4` remains at its b14 path with12 cases/20 AA/20 captures. No A3,596/74, full static or build was repeated for the test-only environment fix.
+
+The89 Search retry listed20 tests and ran only its first Light320 case. The faithful client define got past the earlier gzip-size errors; bundling then identified the exact missing framework export `useClerk` from real AccountDeleteDialog. It failed before any mounted app, HTTP, socket, native or AA activity, leaving19 cases unrun. Immutable first-RED receipt SHA `cc9788144663a68fb716568edd9d12bc72975fc0a251fc0f922ee9b81b6c1d85` under `.cache/settings-search-current-search-proof-89d3aec3/search/first-red-preserved/` retains raw compiler/results/trace/PNG and cleanup. All owned listeners/children closed, and post-source/current artifact/CSS/raw assets guards pass.
+
+Source inspection confirms AccountDeleteDialog imports `useClerk` and uses only its `signOut({ redirectUrl: "/goodbye" })` after the explicit DELETE flow. Root approved only adding that hook to the existing exact Clerk adapter. Its async signOut records `Clerk signOut` in `sectionNativeAttempts`, then throws a synthetic denial; no real provider call, SDK import, successful sign-out or account action occurs. Existing zero-native checks catch an unexpected call even when its rejection is handled. useAuth ownership/ABA, all other adapters, the empty NEXT_RUNTIME literal, actual components and20-case HTTP/AA/deadline/owner/native assertions remain unchanged.
+
+The existing A4 fixture plus these two checkpoints are the only changes. Other202 frozen inputs, shipping/A3/74-unit bytes remain identical. The amendment is unrun; root must preserve a new pin before only changed-fixture syntax/strict, types and source guards, followed by a separately granted fresh20-case A4 retry. Current201uu, original full A3 and functional/full-static proofs remain valid; no broader rerun or Next build is claimed.
 
 ## Latest formal proof and fixture-only client environment correction
 

@@ -1,6 +1,16 @@
 # Settings sections — combined browser repair checkpoint
 
-2026-10-26 current status: replacement artifact `201uuBm1gRyndjs6g9lwo` and all12 formal A3 Sections cases pass. A4 Search stopped at its first browser-fixture bundle setup, before app/HTTP/AA execution;19 cases remain unrun. The latest three-path fixture-environment/documentation repair is **source-only and unvalidated**. Root owns preservation and delivery; no complete PR A browser matrix or deployed behavior is claimed.
+2026-10-26 current status: replacement artifact `201uuBm1gRyndjs6g9lwo` and all12 formal A3 Sections cases pass. A4's89 retry stopped at its first fixture bundle setup on a missing Clerk hook export, before app/HTTP/AA execution;19 cases remain unrun. The latest three-path framework-boundary/documentation repair is **source-only and unvalidated**. Root owns preservation and delivery; no complete PR A browser matrix or deployed behavior is claimed.
+
+## Latest A4 framework export repair
+
+Root preserved the faithful client-environment fixture as test source `89d3aec302a923aae60bcc11b2e86f6ac6f8151f`. Its changed-MJS syntax, changed-fixture strict lint, whole-web types and current205/67 source guards pass, without repeating596/74, A3, Help/UI or the build. Actual shipping source remains b14 and artifact `201uuBm1gRyndjs6g9lwo`; the original b14 A3 receipt SHA `6f475d507155719ca90ae0f3f5aa831ddbc9e06e40db096cf62c646dfe3447b4` is referenced in place, not copied or relabelled as a new89 run.
+
+After an exact20-test listing, the first89 Search case no longer reported the previous gzip-size builtin errors. It stopped at one explicit missing framework export: real `AccountDeleteDialog.tsx:4` imports `useClerk`; that hook's `signOut` is called only after the explicit deletion flow. No actual app, HTTP, socket, native or AA consumer ran, and19 cases were unrun. Raw first-RED receipt SHA `cc9788144663a68fb716568edd9d12bc72975fc0a251fc0f922ee9b81b6c1d85` under `.cache/settings-search-current-search-proof-89d3aec3/search/first-red-preserved/` retains results, compiler log, failed PNG, trace and cleanup. Case/final listeners and owned Node/Chromium children closed; source/current CSS/BUILD_ID/raw inputs/assets stayed unchanged.
+
+Root approved only the existing `@clerk/nextjs` fixture boundary's missing export: `useClerk` returns an async `signOut` function that records `Clerk signOut` in the existing native-attempt ledger and throws a synthetic denial. It never imports or calls a real Clerk SDK/provider. An unexpected invocation still fails the unchanged zero-native gate even if a consumer catches the rejection. Existing `useAuth` owner/ABA code, the faithful empty `NEXT_RUNTIME` define, all real components,20 cases, HTTP/AA/deadline/native assertions and other adapter methods are unchanged. No product stub or successful account action is provided.
+
+The latest fixture and these two checkpoints are the only changes; all202 other inputs, shipping JS, A3 fixture/spec and74 unit bytes remain identical. This amendment is unrun. After root preservation, only new source guards, changed-MJS syntax/strict lint and current whole types are needed before another fresh A4-only matrix. The current artifact, full A3 and earlier functional/static proofs remain retained; no new build, A3 or596-check rerun is claimed or authorized here.
 
 ## Current artifact, retained A3 proof and A4 setup RED
 
