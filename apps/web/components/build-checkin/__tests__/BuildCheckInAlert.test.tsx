@@ -24,7 +24,7 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: harness.getToken, isLoaded: true, isSignedIn: true }),
+  useAuth: () => ({ getToken: harness.getToken, isLoaded: true, isSignedIn: true, userId: "synthetic-owner" }),
 }));
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href: string }) => (
@@ -56,7 +56,9 @@ vi.mock("@/components/ui/Toast", () => ({
 }));
 vi.mock("@/lib/clientApi", async () => {
   const React = await import("react");
+  const { useOwnerRequestScope } = await vi.importActual<typeof import("@/lib/clientApi")>("@/lib/clientApi");
   return {
+    useOwnerRequestScope,
     apiCall: (...args: unknown[]) => harness.apiCall(...args),
     useApi: (path: string | null) => {
       // Re-read the canned responses whenever a test calls `refresh()`.
@@ -651,10 +653,12 @@ describe("BuildCheckInQueue — opponent and Add new build", () => {
     // The editor's save is still out when the player leaves the list.
     const onSaved = harness.editor?.onSaved;
     fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
-    act(() => {
+    await act(async () => {
       onSaved?.("custom-two", { name: "Custom Two" } as never, { reclassifyRequested: false });
     });
-    await waitFor(() => expect(harness.toast.error).toHaveBeenCalled());
+    // Closing retires the game's action scope before the saved editor callback.
+    expect(harness.apiCall).not.toHaveBeenCalled();
+    expect(harness.toast.error).not.toHaveBeenCalled();
 
     dialog = openQueue();
     await act(async () => {});
@@ -677,7 +681,8 @@ describe("BuildCheckInQueue — opponent and Add new build", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close editor" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
     await act(async () => fail({ status: 0, message: "Failed to fetch" }));
-    await waitFor(() => expect(harness.toast.error).toHaveBeenCalled());
+    expect(harness.apiCall).toHaveBeenCalledTimes(1);
+    expect(harness.toast.error).not.toHaveBeenCalled();
 
     dialog = openQueue();
     await act(async () => {});
