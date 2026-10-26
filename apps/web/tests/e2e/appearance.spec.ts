@@ -80,6 +80,61 @@ type MobileFixtureWindow = typeof window & {
 };
 
 for (const theme of ["light", "dark"] as const) {
+  test(`desktop Header action links preserve context, sizing and readable states (${theme})`, async ({ page }, info) => {
+    test.skip(info.project.name !== "desktop-1280", "one actual-Header matrix includes all desktop widths");
+    test.setTimeout(180_000);
+    const evidence = await openMobileNavFixture(page, theme);
+    const header = page.getByRole("banner");
+    for (const width of [1024, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const audience of ["out", "player"] as const) {
+        await page.evaluate(mode => (window as MobileFixtureWindow).fixtureMobileAuth(mode), audience);
+        const names = audience === "out" ? ["Sign in", "Get started"] : ["Open app"];
+        for (const name of names) {
+          const link = header.getByRole("link", { name, exact: true });
+          await expect(link).toBeVisible();
+          await expect(link).toHaveAttribute("href", name === "Open app" ? "/app"
+            : `/${name === "Sign in" ? "sign-in" : "sign-up"}?redirect_url=%2Fguides%2Fpvz`);
+          const box = (await link.boundingBox())!;
+          expect(box.height).toBe(36); expect(box.width).toBeGreaterThanOrEqual(44);
+          expect(box.x).toBeGreaterThanOrEqual(0); expect(box.x + box.width).toBeLessThanOrEqual(width);
+          await page.mouse.move(0, 899);
+          const paint = await link.evaluate(node => {
+            const style = getComputedStyle(node);
+            return { color: style.color, background: style.backgroundColor, shadow: style.boxShadow, radius: style.borderRadius };
+          });
+          expect(parseFloat(paint.radius)).toBeGreaterThanOrEqual(box.height / 2);
+          await checkAccessibility(page, info, `/header-cta/${width}/${audience}/${name}/rest`, theme);
+          await link.hover();
+          expect(await link.evaluate(node => getComputedStyle(node).color)).toBe(paint.color);
+          expect(await link.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe(paint.background);
+          await checkAccessibility(page, info, `/header-cta/${width}/${audience}/${name}/hover`, theme);
+          await link.focus(); await page.keyboard.press("Tab"); await page.keyboard.press("Shift+Tab");
+          await expect(link).toBeFocused();
+          expect(await link.evaluate(node => getComputedStyle(node).boxShadow)).not.toBe(paint.shadow);
+          expect(await link.evaluate(node => getComputedStyle(node).borderRadius)).toBe(paint.radius);
+          await checkAccessibility(page, info, `/header-cta/${width}/${audience}/${name}/focus`, theme);
+        }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await captureAccessibility(page, info, `header-cta-${theme}-${width}-${audience}`);
+      }
+    }
+    await page.evaluate(() => (window as MobileFixtureWindow).fixtureMobileAuth("out"));
+    await page.setViewportSize({ width: 1023, height: 900 });
+    await expect(header.getByRole("link", { name: "Get started", exact: true })).toBeHidden();
+    await expect(header.getByRole("button", { name: "Open menu", exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await expect(header.getByRole("link", { name: "Get started", exact: true })).toBeVisible();
+    await expect(header.getByRole("button", { name: "Open menu", exact: true })).toBeHidden();
+    expect(evidence.apiGets.every(row => row.audience === "player")).toBe(true);
+    expect(evidence.apiGets.length).toBeGreaterThanOrEqual(1);
+    expect(evidence.errors).toEqual([]); expect(evidence.unexpectedRequests).toEqual([]);
+    expect(evidence.rejectedWrites).toEqual([]); expect(evidence.externalAttempts).toEqual([]);
+    await info.attach("header-cta-evidence", { body: JSON.stringify(evidence), contentType: "application/json" });
+  });
+}
+
+for (const theme of ["light", "dark"] as const) {
   test(`marketing navigation Sheet ${theme}: audiences, route, breakpoint and focus`, async ({ page }, info) => {
     test.skip(info.project.name !== "mobile-360", "One explicit width matrix covers phone through the lg breakpoint.");
     test.setTimeout(90_000);

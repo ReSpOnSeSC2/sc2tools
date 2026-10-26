@@ -17,6 +17,21 @@ corresponding GitHub Release.
 - Add contextual definitions beside the four Macro KPIs and six Opponents table headers, keeping help separate from sorting and saved preferences.
 - Explain Today, opponent, macro and build scopes in Reading your stats, including detected versus planned labels and the difference between local today and an overlay session.
 
+### Settings groups and compatible links
+
+- Group Settings into Account, Gameplay and Streaming, with descriptions in the desktop sidebar and a Devices link in Account.
+- Rename Foundation to Account and Misc to Preferences while keeping old tab and hash links working. Keep unsaved preference and notification edits guarded when switching tabs.
+- Ask before the sidebar's Devices link leaves unsaved Settings edits; opening the link in a new tab keeps its normal behavior.
+
+### Header action links
+
+- Use the shared button styles for Sign in, Get started and Open app in the desktop header, retaining their compact size and return-to-page behavior.
+
+### Connected-account confirmation
+
+- Confirm the named Twitch, Kick or YouTube account before disconnecting its notifications and stream controls. Cancel or Escape keeps it connected.
+- Retire earlier confirmations and delayed requests when the signed-in account or connection changes; uncertain results require checking status and explicit approval before another attempt.
+
 ### Glossary and contextual help foundation
 
 - Browse and search the existing player-identity and verified-MMR definitions A to Z in Help's glossary, with stable term links and full contextual explanations.

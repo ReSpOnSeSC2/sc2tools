@@ -3,19 +3,15 @@
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import {
-  SettingsShell,
-  defaultTabVisibility,
-  settingsTabFromParam,
-  type SettingsTabId,
-} from "@/components/analyzer/settings/SettingsShell";
+import { SettingsShell } from "@/components/analyzer/settings/SettingsShell";
+import { defaultTabVisibility, settingsTabFromParam, type SettingsTabId } from "@/lib/settingsRegistry";
 import { SettingsFoundation } from "@/components/analyzer/settings/SettingsFoundation";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { Skeleton } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 /*
- * Foundation is the default tab, so it ships with the page. Every other
+ * Account is the default tab, so it ships with the page. Every other
  * tab is its own chunk, fetched the first time it opens (the overlay
  * editor, voice catalogue and import tools are most of Settings' code).
  * While one loads it shows the same skeleton as the page's Suspense
@@ -62,7 +58,7 @@ const SettingsHelp = dynamic(
  * /settings — tabbed account settings. `?tab=<id>` opens a tab directly
  * (e.g. `/settings?tab=import` from the dashboard's "Import in your
  * browser" links), as does a registered alias (`?tab=streaming`);
- * unknown or hidden tabs fall back to Foundation. SettingsShell maps old
+ * unknown or hidden tabs fall back to Account. SettingsShell maps old
  * hash-only links (`#overlay` with no `?tab=`). Import is available to every
  * signed-in user; its browser tools follow the Instant Analysis flag.
  */
@@ -94,7 +90,7 @@ export default function SettingsPage() {
 
 function renderTab(id: SettingsTabId, origin: string) {
   switch (id) {
-    case "foundation":
+    case "account":
       return <SettingsFoundation />;
     case "profile":
       return <SettingsProfile />;
@@ -110,7 +106,7 @@ function renderTab(id: SettingsTabId, origin: string) {
       return <SettingsImport />;
     case "backups":
       return <SettingsBackups />;
-    case "misc":
+    case "preferences":
       return <SettingsMisc />;
     case "help":
       return <SettingsHelp />;

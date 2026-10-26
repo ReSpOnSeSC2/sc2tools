@@ -14,6 +14,12 @@ Runtime remains held by other serialized work. No Git mutation, network,
 provider, account, clipboard, installer or SC2 operation was performed.
 Old branches, owner files, caches and screenshots remain preserved.
 
+That is the authored-stage boundary. Root subsequently verified all20 frozen
+file hashes, preserved source at1ff48215 and integrated the validated Settings,
+Header and provider dependencies before the first runtime stage. Only the
+Changelog needed a retained-both union; the original conflict is preserved.
+No runtime result is yet claimed by that source integration.
+
 Before source edits:
 
 - `.cache/glossary-terms-owned-paths.txt` recorded the exact 20 paths;

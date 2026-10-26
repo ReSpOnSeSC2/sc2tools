@@ -4,10 +4,15 @@
  * unsaved-changes guard for them, and writes hand-picked tabs back to the
  * URL.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SettingsShell, type SettingsTabId } from "../SettingsShell";
 import { usePublishDirty } from "../SettingsContext";
+
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 function DirtyPanel({ id }: { id: string }) {
   usePublishDirty(id, true);
@@ -117,5 +122,25 @@ describe("SettingsShell ?tab= sync", () => {
     const view = render(<SettingsShell initialTab="checkin" isTabVisible={visible} renderTab={(id) => <p>panel {id}</p>} />);
     view.rerender(<SettingsShell initialTab="import" isTabVisible={visible} renderTab={(id) => <p>panel {id}</p>} />);
     expect(activePanel()).toBe("panel checkin");
+  });
+
+  it("guards canonical Preferences when a legacy link resolves to another tab", () => {
+    window.history.replaceState(null, "", "/settings?tab=misc");
+    const view = render(shell("preferences", "preferences"));
+    window.history.replaceState(null, "", "/settings?tab=foundation&ref=old#setup-health");
+    view.rerender(shell("account", "preferences"));
+    expect(screen.getByRole("dialog", { name: "Discard unsaved changes?" })).toBeTruthy();
+    expect(activePanel()).toBe("dirty preferences");
+    fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
+    expect(window.location.search).toBe("?tab=preferences&ref=old");
+    expect(activePanel()).toBe("dirty preferences");
+
+    window.history.replaceState(null, "", "/settings?tab=foundation&ref=old#setup-health");
+    view.rerender(shell("account", "preferences"));
+    // The request prop did not change: a later intentional click still guards.
+    fireEvent.click(screen.getAllByRole("tab", { name: "Account" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Discard & switch" }));
+    expect(activePanel()).toBe("panel account");
+    expect(window.location.search).toBe("?tab=account&ref=old");
   });
 });

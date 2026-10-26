@@ -131,8 +131,14 @@ branches, captures and every RED receipt are retained.
    test mock now forwards href. PR767 at `c1d0abd5` passes exact-head GitHub
    checks: 8,923 web tests/946 suites (one expected skipped test/suite) and
    399 browser checks/72 intentional skips. Vercel preview hit its daily
-   deployment quota, so the draft stays open/unmerged. No retry, upgrade or
-   bypass was attempted. All runtime is closed; later packs may stack source.
+   deployment quota. After the next automatic glossary preview succeeded, one
+   ordinary exact-ref Preview retry was accepted on the same plan. Deployment
+   `7Au4gnqSkCGDTVimTcCLuMaVQhLc` is Ready/Preview with exact source `c1d0abd5`;
+   all GitHub checks/statuses are green. Fresh-main tree equality was verified
+   and PR767 is merged as `ea9f668c71c4314209e1684a398bfc015a31892a`.
+   Successor production `CWAgCQXKjFDxuornEobwT2qVASz1` is visibly Ready,
+   Production and Latest for sc2tools.com, exact source78818d4b, whose ancestry
+   includes Mobile. No upgrade, budget change or bypass.
    Reuse standard right Sheet sizing and shared Close,
    preserve home/auth/route/theme controls and the controlled-content ID, and
    close at the desktop breakpoint to release the old hidden drawer's lock.
@@ -156,7 +162,18 @@ branches, captures and every RED receipt are retained.
    native-popup asset GETs are synthetic; zero API/account/provider writes.
    The fixture's loopback listener is explicitly closed. Source preserved at
    `35ba1075`; final Mobile integration `c37e1434` changes no web source.
-   All runtime is closed. Remote delivery stacks on held Mobile PR767.
+   All runtime is closed. PR768 initially stacked on Mobile, then retargeted
+   main after its merge. Ancestry-only source `627f7ec2` retains the complete
+   tested tree `2992a0ca402e818271aeffdd86aedb8651c46115`. Exact-head GitHub
+   checks passed 8,943 web tests/948 suites (one expected skipped test/suite)
+   and 419 browser checks/76 intentional skips. The ancestry-only627 preview
+   was rate limited; original815 Preview `2b3GQoRyAtuuPQ2fL5CUs4hpBonG` is
+   Ready and has the identical complete tree. PR768 is squash-merged as
+   `78818d4b6d7db3814e26197d03dd586a44ca8e42`. Production
+   `CWAgCQXKjFDxuornEobwT2qVASz1` is visibly Ready/Production/Latest for
+   sc2tools.com at that exact source. No glossary manual retry was used.
+   Canonical40 terms/first Macro+Opponents consumers are now source-only work
+   on `codex/wave5-glossary-terms` in the preserved `wave3-my-reviews` worktree.
 5. Platform disconnect: `wave3-guides-expansion`, branch
    `codex/wave5-platform-disconnect-confirm`, source commit `572c4bba`. Exactly
    eight paths are source-frozen at `03055feb` with actual main9bd integrated
@@ -164,8 +181,32 @@ branches, captures and every RED receipt are retained.
    146 tests/16 suites, full types, strict five-file lint, Help90 determinism
    and UI19/1,695 files/645 existing occurrences. One test adapter now loads
    the real request function before its fake clock and uses the real DELETE204
-   response. Product source is unchanged. Final integrated artifact/browser
-   gates remain unrun. Existing
+   response. Product source is unchanged. Final proof at `f9126449` passes
+   275 tests/29 suites, full types, strict five files, Help91 and
+   UI19/1,699 files/645 existing occurrences. Build `IEnFS1aCPXo8Iw5y8UD0u`
+   passes all 81 unchanged budgets. All12 browser cases and six full AA scans
+   pass; root reviewed three viewport-only copies. Thirty status GETs/eight
+   explicitly armed DELETEs are synthetic; zero real provider/account/OAuth/
+   native actions. Connect code's3911 normalized bytes are unchanged.
+   Source is preserved at `42cb254f`, with unchanged glossary ancestry
+   integrated at `bfb241a3`. PR769's original496 remote CI exposed three
+   incomplete legacy Settings mock cases and two browser unmount cases that
+   released the held token before React committed unmount. The ninth owned
+   existing test now admits the real owner/deadline helpers; the browser waits
+   for the existing unmounted marker/zero groups without weakening assertions.
+   Independent review is clear. Reproof passes all36 original project cases,
+   18 full AA scans and44 affected unit checks, types and strict lint; product
+   bytes and the production artifact are unchanged. Ledgers show81 synthetic
+   GETs/24 explicitly armed DELETEs, zero real/rejected/nonlocal operations.
+   Source5198fed1 reconciles actual main788 without source changes and is
+   passed exact-head GitHub CI:8,975 web tests/948 suites plus one expected
+   skipped test/suite, and455 browser cases/76 intentional skips. Its latest
+   preview was rate limited; earlier496 Preview F3BV9ETaFDsJ1WcUv1C9K4g7s19H
+   is Ready with identical product bytes (only the two test repairs and
+   checkpoint differ). Fresh-main tested tree395aeeae matched; PR769 is merged
+   as0929d0f623f87d7ed755737d66feab1329a46f1a. Production observation follows.
+   Inherited phone permission-row text squeeze remains a separate responsive
+   follow-up, not a layout claim of this confirmation pack. Existing
    useConfirm/ConfirmDialog replaces one native confirm. Preserve synchronous
    Connect/Reconnect and purpose/scope behavior. Owner/revision/ABA/JWT and
    expected cache-publication admission prevent stale DELETE completion;
@@ -175,15 +216,53 @@ branches, captures and every RED receipt are retained.
    `codex/wave5-header-cta`, preserved at `736d4a3e`. Independent source review
    is clear after test-only corrections. Exactly six paths move the three
    desktop CTA recipes onto existing shared styles, preserving AuthContextLink,
-   return context, Suspense fallback and 36px sizing. All runtime remains unrun.
+   return context, Suspense fallback and36px sizing. First static proof passes
+   189 tests/18 disjoint suites, types, strict three files, Help90 and
+   UI19/1,695 files/643 existing occurrences, without source repair.
+   Final proof at `c47047c2` passes243 tests/28 suites, pre/post types, strict
+   three-file lint, Help91 andUI19/1,699/642. Build `2-1RqSXMLXm0hFWUs2bVM`
+   passes144 pages/all81 budgets. Full appearance passes18 cases/15 intentional
+   skips and66 full AA scans (54Header/12 related). Ten typed fixture GETs and
+   zero writes/unknown/rejected/nonlocal/actual actions. Root reviewed three
+   byte-identical captures. Source0231c73d integrates only Platform's verified
+   test repairs after the artifact; Header/product source stays unchanged.
+   All runtime is closed. PR770 has exact-head originalb140 GitHub checks
+   green and one normal exact-ref Preview retry accepted on the same plan as
+   JAQh1hKLCzr4AcMo8BYj9gamNnkM, visibly Ready/Preview at exactb140 source.
+   Ancestry-only89b64be4 targets actual main0929 and keeps the identical whole
+   tree72102a9cf26ac6485af1a5edd5c1051c8200f574; its exact-head CI is running.
 7. Settings A1: `wave3-game-workspace`, branch `codex/wave5-settings-registry`,
-   source preserved at `8ed58639`. The registry/groups/canonical aliases,
+   source preserved at `8ed58639`, with Devices repair at `82a82898`.
+   The registry/groups/canonical aliases,
    Preferences dirty publishers, Help and tests are authored. Independent
-   review found the existing Devices link can bypass draft protection; a
-   route destination is being added to the same confirmation, preserving
-   native modified-link behavior. Exactly 23 paths are approved, including
-   the necessary existing router-boundary test. All runtime remains unrun.
+   review found the existing Devices link could bypass draft protection; the
+   same confirmation now guards its route destination while preserving
+   native modified-link behavior. Exactly23 paths are approved. First static
+   proof passes210 tests/22 suites, types,20 strict files, Help90 andUI19.
+   SettingsShell's one unchanged inherited mobile-keydown lint warning has a
+   separate audit; no waiver or semantic tabIndex change was added. A later
+   source-only loopback native-popup repair is preserved at a9f51f0d. Header,
+   Glossary and repaired Platform are integrated at2f042be6; final serialized
+   final proof passes298 tests/33 suites, whole types before/after metadata
+   amendment/build,20 strict files clean plus the unchanged inherited Shell
+   warning, Help91 andUI19/1,700/642. Build ESe5OurSX4bfDvU6e6AsG passes144
+   pages/all81 budgets. All6 browser cases and24 full AA scans pass, with18
+   captures,48 typed panel GETs,6 native Devices GETs and6 approved client route
+   pushes; zero writes/unknown/rejected/nonlocal/real actions. All three
+   loopback listeners and every runtime job are closed. Root verified23 source
+   and5 artifact hashes and reviewed/copied3 captures; preservation1577f739
+   followed by Header documentation-only integration859063d7. Original REDs
+   and all assets remain. This remains A1; no Chat/search completion claim.
    Search, Chat extraction and the rest of find-anything are later stages.
+8. App and landing CTA consumers: `wave3-owner-neighbors`, branch
+   `codex/wave5-site-cta`, source09f7b351 and first-static preservation1c9430b9.
+   Exactly9 paths replace AppChrome's two visitor recipes and Landing's local
+   CtaLink with shared recipes/LinkButton, preserving auth, routes and rollout.
+   Source-only independent review is clear after stronger vertical label/48px
+   and native focus baseline proof. First static passes73 checks/four suites,
+   types, strict6 zero, Help91 andUI19/1,699/639. Header ancestry integration
+   changed zero file/tree bytes. Final serialized runtime is active; no final
+   build/browser proof is yet claimed for this slice.
 
 Do not switch these active branches, reset their worktrees or stage their
 untracked caches. Source-only agents must not start competing runtime work.
