@@ -3,7 +3,40 @@
 Date: 2026-10-26. Worktree: `wave3-my-reviews`, branch
 `codex/wave5-glossary-terms`, starting from merged main `78818d4b`.
 
-## First integrated static proof
+## Current final-stage boundary — budget repair awaiting validation
+
+The first final build at integrated `4c2504ea` generated145 pages, but the
+unchanged `/help/[slug]` budget failed at202.9/200kB; all80 other budgets passed.
+That artifact and its logs remain in `.cache/glossary-terms-final-1a8d53b6/`.
+No browser run or successful final budget proof is claimed. The33-suite unit
+pack had275 passing checks and one old Getting Started date expectation;
+the parent integrated the test-only Oct25→26 correction, after which the
+affected11-test suite and its strict lint passed. All276 unique checks are
+therefore covered with that chronology retained. Types, strict16 plus the
+separate inherited History warning audit, Help92 and UI19/1701/639 passed.
+
+Compiled inspection found the40-term catalog outside all20 initial analyzer
+route manifests, but synchronously included through HelpArticleBody →
+HelpWidget → GlossaryBrowser in `/help/[slug]`. Actual generated glossary HTML
+still contains40 terms and the canonical Reading Your Stats page has its four
+section anchors. The parent approved a narrow20→22 path scope expansion:
+`HelpWidget.tsx` and existing `HelpArticleBody.test.tsx`; original22 hashes,
+the original20 manifest and the three amended source/test files were copied
+before edits into `before-budget-fix/`. No budget or factual copy changed.
+
+The authored repair makes HelpWidget a client widget boundary with a
+module-level, explicitly SSR-enabled dynamic GlossaryBrowser import. Existing
+props/variants and static ChatCommandsCard behavior remain. New real-renderer
+tests cover all40 terms, page versus compact anchors and formula search;
+existing real-renderer GlossaryBrowser tests now wait for the actual lazy
+widget before retaining their original link/navigation assertions. This
+amendment is source-only and unvalidated while the parent's urgent date-filter
+pack owns runtime. Before claiming success, a replacement build must prove
+retained public SSR content and unchanged budgets, followed by the full
+InfoTip/stats browser matrix. The glossary page still needs its interactive
+catalog; the boundary aims to avoid charging every Help article for it.
+
+## Historical first integrated static proof
 
 Root's first stage at50817173 passes **169 tests /19 suites**, whole-web
 types and strict lint on16 owned code/test/fixture files. OpponentHistory's
@@ -183,3 +216,37 @@ overlay title/secret-token consumers, benchmark/strength-adjusted labels,
 phone detail columns, the MMR-impact filter and analyzer header title-warning
 rules remain later packs. There is no new data request, search API, calculation
 engine, AI dependency or global glossary route in this pack.
+
+## Replacement build after the Help budget failure
+
+The first production build `2KhCbzXmbAvuD5xI8KRi2` completed 145 pages, but
+Help `/help/[slug]` exceeded its unchanged limit at 202.9/200 kB. Its logs and
+chunk/HTML evidence remain in `.cache/glossary-terms-final-1a8d53b6/`.
+The full catalog was absent from analyzer initial chunks, but HelpArticleBody's
+static HelpWidget import made it synchronous on every Help article.
+
+The approved scope expanded from 20 to 22 paths for HelpWidget and its existing
+HelpArticleBody tests. HelpWidget now uses an SSR-enabled dynamic glossary
+boundary; ChatCommands, variants, every definition and formula remain intact.
+The original source/hash receipt and before-files are preserved. The actual
+renderer tests await the lazy widget without removing their assertions.
+
+Root replacement proof in `.cache/glossary-terms-ssr-replacement/`:
+
+- All 278 tests in the integrated 33-suite pack passed, including both new
+  page/compact HelpArticleBody cases; whole-web types before/after build and
+  strict lint of the three amended code/test files passed with zero warnings.
+- Build `D9T5fuaCZvToiTep7n6oW`: 145 pages, all 81 existing route budgets pass;
+  Help is 193.0/200 kB. No limit was raised.
+- Actual generated glossary HTML retains all 40 terms, canonical metadata and
+  the unique net-mmr anchor. Reading your stats retains all four section IDs.
+  The catalog is absent from all 20 initial analyzer route manifests and all
+  Help initial route manifests; its SSR widget chunk remains present.
+- Help index remains deterministic at 92 articles. Catalog source/runtime
+  comparison and canonical engine/sample admission passed, with 40 normalized
+  inputs, four strict sample payloads and all nine retained runtime files
+  unchanged. No source generation, asset copy/download or pruning occurred.
+
+This supersedes pending static steps above. The current-artifact browser
+matrix and remote delivery remain pending; the priority owner date/graph
+corrections hold the next serialized browser slot.
