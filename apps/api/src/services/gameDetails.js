@@ -112,8 +112,17 @@ class GameDetailsService {
       // Skip the write so we don't store an empty blob.
       return;
     }
-    await this.store.write(userId, gameId, date, blob, opts);
-    if (blob.buildLog !== undefined || blob.oppBuildLog !== undefined) this.onBuildLogsChanged?.(userId, gameId);
+    try {
+      await this.store.write(userId, gameId, date, blob, opts);
+    } finally {
+      // A backend can commit before its acknowledgement/metadata write fails.
+      // Retire cached log evidence after every attempted log write; observers
+      // are advisory and must never replace the write's result or error.
+      if (blob.buildLog !== undefined || blob.oppBuildLog !== undefined) {
+        try { void Promise.resolve(this.onBuildLogsChanged?.(userId, gameId)).catch(() => {}); }
+        catch { /* Preserve the store outcome when an observer fails. */ }
+      }
+    }
     if (await isDeleted()) {
       await this.store.delete(userId, gameId);
       throw require("../util/deletedGames").gameDeletedError();

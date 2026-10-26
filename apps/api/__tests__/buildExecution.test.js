@@ -107,6 +107,44 @@ test("actual detail-log replacement invalidates unchanged game/build/rule keys i
   await h.services.gameDetails.upsert("u_owner", "current", date, { buildLog: ["[0:00] Nexus", "[3:50] Stargate"] });
   expect((await endpoint()).body).toMatchObject({ matchPct: 0, rules: [{ got: 1, evidenceKind: "deadline" }] });
 });
+
+test("a committed detail write with a rejected acknowledgement retires a warm unchanged-key grade", async () => {
+  await custom(); await seed("current", { _customBuildSlug: "private" });
+  expect((await endpoint()).body.matchPct).toBe(100);
+  const store = h.services.gameDetails.store, write = store.write.bind(store), failure = new Error("metadata acknowledgement failed");
+  jest.spyOn(store, "write").mockImplementationOnce(async (...args) => { await write(...args); throw failure; });
+  await expect(h.services.gameDetails.upsert("u_owner", "current", date, { buildLog: ["[0:00] Nexus", "[3:50] Stargate"] })).rejects.toBe(failure);
+  expect(h.services.gameExecution.cache.size).toBe(0); expect(h.services.gameExecution.baselines.size).toBe(0);
+  expect((await endpoint()).body).toMatchObject({ matchPct: 0, rules: [{ got: 1, evidenceKind: "deadline" }] });
+  expect(h.services.customBuilds.evaluateBuild).toHaveBeenCalledTimes(2);
+});
+
+test("a held scorecard cannot return old evidence after a committed detail write rejects", async () => {
+  await custom(); await seed("current", { _customBuildSlug: "private" });
+  let release; const held = new Promise(resolve => { release = resolve; });
+  h.services.customBuilds.evaluateBuild.mockReturnValueOnce(held);
+  const pending = endpoint().then(value => value);
+  while (!h.services.customBuilds.evaluateBuild.mock.calls.length) await new Promise(resolve => setImmediate(resolve));
+  const store = h.services.gameDetails.store, write = store.write.bind(store), failure = new Error("metadata acknowledgement failed");
+  jest.spyOn(store, "write").mockImplementationOnce(async (...args) => { await write(...args); throw failure; });
+  await expect(h.services.gameDetails.upsert("u_owner", "current", date, { buildLog: ["[0:00] Nexus", "[3:50] Stargate"] })).rejects.toBe(failure);
+  release(baseline());
+  expect((await pending).status).toBe(503);
+  expect(h.services.gameExecution.cache.size).toBe(0); expect(h.services.gameExecution.baselines.size).toBe(0);
+  expect((await endpoint()).body).toMatchObject({ matchPct: 0, rules: [{ got: 1 }] });
+});
+
+test.each([false, true])("detail-write observers cannot replace the store outcome (write rejects: %s)", async rejects => {
+  const { GameDetailsService } = require("../src/services/gameDetails");
+  const failure = new Error("store acknowledgement failed");
+  const write = rejects ? jest.fn().mockRejectedValue(failure) : jest.fn().mockResolvedValue(undefined);
+  const service = new GameDetailsService({ write });
+  service.onBuildLogsChanged = jest.fn(() => { throw new Error("observer failed"); });
+  const pending = service.upsert("u_owner", "current", date, { buildLog: ["[0:15] Probe"] });
+  if (rejects) await expect(pending).rejects.toBe(failure);
+  else await expect(pending).resolves.toBeUndefined();
+  expect(service.onBuildLogsChanged).toHaveBeenCalledWith("u_owner", "current");
+});
 test("visibility, definition and confirmed-label notifications retire existing owner baselines", async () => {
   const { HIDE_REASONS } = require("../src/services/gameControls");
   await seed(); await endpoint(); expect(h.services.gameExecution.cache.size).toBeGreaterThan(0);

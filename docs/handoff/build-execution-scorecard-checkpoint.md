@@ -2,14 +2,18 @@
 
 ## Required current-main repair before delivery
 
-Read-only integration review found that `GameDetailsService.saveBuildLogs`
+Read-only integration review found that `GameDetailsService.upsert`
 retires execution caches only after the store write acknowledges success.
 The R2 store can commit its object PUT and then reject metadata, leaving an
 unchanged slim-row key with old execution or baseline evidence for five minutes.
 Before merging this pack, invalidate the log attempt in an advisory `finally`
 without masking the original result. Add committed-then-rejected and held-response
 regressions, retaining the existing post-write ownership/deletion guard.
-This repair is not implemented or runtime-verified by the runner-only work below.
+Root has authored the advisory `finally` retirement and four regressions: a real
+committed-then-rejected store write with a warm grade, a held baseline response,
+and observer failures on successful/failed writes. These source changes remain
+unverified until the queued main integration and focused API checks. The runner-
+only work below did not implement or runtime-verify this repair.
 
 Branch `codex/wave4-build-execution` starts at preserved Dossier `62b4939c` in
 the released SEO tree. SEO `eb18ed52` and caches remain preserved. ADR0060
