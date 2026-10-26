@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Replay and Trends inspection
+
+- Move Macro Breakdown's Change build control below the macro feedback, after What you did well.
+- Highlight the selected rolling matchup-rating window and show its game range, ending date and rating coverage. The overall sample estimate remains visible while inspecting individual windows.
+
 ### Public player pages
 
 - Choose an explicit public player page and optional recent form, MMR, channels, season and map sections in Settings → Profile. Turning the profile off hides it even when named Community builds remain published; replay sharing keeps its own switch.

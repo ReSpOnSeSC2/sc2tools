@@ -49,6 +49,15 @@ function eras(headerMeta: PanelHeaderMeta) {
 const DATE = "2026-10-01T20:00:00Z";
 
 describe("MacroBreakdownPanel patch era", () => {
+  it("places Change build below What you did well and above the footer actions", () => {
+    render(<MacroBreakdownPanel open gameId="g1" onClose={vi.fn()} />);
+    const wins = screen.getByRole("heading", { name: "What you did well" });
+    const changeBuild = screen.getByRole("button", { name: "Change build" });
+    const recompute = screen.getByRole("button", { name: "Recompute" });
+    expect(wins.compareDocumentPosition(changeBuild) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(changeBuild.compareDocumentPosition(recompute) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("prices a 5.0.17 game as 12-worker from the row's version, not its date", () => {
     expect(eras({ gameVersion: "5.0.17.98100", dateIso: DATE })).toEqual(["after", "after"]);
   });
