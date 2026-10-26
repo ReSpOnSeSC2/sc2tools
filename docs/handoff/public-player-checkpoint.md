@@ -6,6 +6,11 @@ Its assertion now requires the intentional empty profiles array. All three
 no-PII checks and strict lint for that test pass. This is a test/documentation
 follow-up only; the validated web build and runtime inputs are unchanged.
 
+Root visually inspected and copied three unchanged synthetic captures into
+`docs/handoff/screenshots/public-player-{fixture-light-360,fixture-dark-1280,settings-fixture-light-390}.png`
+for PR review. They show fixture accounts only; no private Admin observations
+or production screenshot is included.
+
 2026-10-25, `codex/wave5-public-player` in `.worktrees/wave3-my-reviews`.
 Parent owns API changes; web source work is delegated to `public_web`.
 
