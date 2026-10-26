@@ -26,6 +26,7 @@ import { Toggle } from "@/components/ui/Toggle";
 import { opponentRace, poolMapRows } from "@/lib/mapVeto";
 import { sumStrength, type StrengthFields } from "@/lib/strengthAdjusted";
 import { StrengthCell, StrengthGuide, StrengthHeader, WinRateRange } from "./StrengthAdjusted";
+import { FormSparkline } from "./charts/FormSparkline";
 
 type Row = StrengthFields & {
   /** Matchup label ("vs P"). */
@@ -72,38 +73,6 @@ const MATCHUP_COLUMNS: readonly (CsvColumn<Row> & { strength?: boolean; recent?:
 const MAP_COLUMNS: readonly CsvColumn<MapMatchupRow>[] = [{ key: "map", label: "Map" }, { key: "matchup", label: "Matchup" }, ...RECORD_COLUMNS];
 
 const LS_MIN_MAPS = "analyzer.battlefield.maps.minGames";
-
-function FormSparkline({
-  results,
-}: {
-  results?: ("win" | "loss")[];
-}) {
-  if (!results || results.length === 0)
-    return <span className="text-micro text-text-dim">no recent</span>;
-  const ordered = [...results].reverse();
-  const summary = ordered.map((result) => (result === "win" ? "win" : "loss")).join(", ");
-  return (
-    <div
-      className="flex items-center gap-[3px]"
-      role="img"
-      aria-label={`Recent form, oldest to newest: ${summary}`}
-    >
-      {ordered.map((r, i) => (
-        <span
-          key={i}
-          aria-hidden="true"
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: 2,
-            background: r === "win" ? "rgb(var(--success))" : "rgb(var(--danger))",
-            display: "inline-block",
-          }}
-        />
-      ))}
-    </div>
-  );
-}
 
 export function BattlefieldTab({ focus: controlledFocus }: { focus?: string | null } = {}) {
   const { filters, dbRev, seasons } = useFilters();
@@ -242,7 +211,7 @@ export function BattlefieldTab({ focus: controlledFocus }: { focus?: string | nu
                         <span className="text-danger">{m.losses}L</span> ·{" "}
                         {m.total} games
                       </span>
-                      <FormSparkline results={m.recent} />
+                      <FormSparkline results={m.recent} title={`${m.name} recent form`} />
                     </div>
                     <WrBar wins={m.wins} losses={m.losses} />
                     <WinRateRange row={m} total={m.total} />
@@ -288,7 +257,7 @@ export function BattlefieldTab({ focus: controlledFocus }: { focus?: string | nu
                         </td>
                         <td className="px-2 py-1.5 text-right"><StrengthCell row={m} /></td>
                         <td className="px-3 py-1.5 text-right">
-                          <FormSparkline results={m.recent} />
+                          <FormSparkline results={m.recent} title={`${m.name} recent form`} />
                         </td>
                       </tr>
                     ))}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type Ref } fr
 import {
   Area,
   Bar,
+  Cell,
   CartesianGrid,
   ComposedChart,
   Line,
@@ -15,7 +16,10 @@ import {
 } from "recharts";
 import { MapLabel } from "@/components/maps/MapArtwork";
 import { EmptyState } from "@/components/ui/Card";
-import { wrColor } from "@/lib/format";
+import { Button } from "@/components/ui/Button";
+import { fmtDate } from "@/lib/format";
+import { useChartKit, isLowSample } from "@/lib/charts/theme";
+import { ChartFrame, ChartLegend, type ChartTableColumn } from "@/components/analyzer/charts/ChartFrame";
 import {
   bucketByPeriod,
   cumulativeSeries,
@@ -26,7 +30,7 @@ import {
   type PeriodPoint,
 } from "@/lib/h2hSeries";
 import { clientTimezone } from "@/lib/timeseries";
-import { raceAccent, normalizeRace } from "./shared/raceAccent";
+import { normalizeRace } from "./shared/raceAccent";
 import { CumulativeTooltip, PeriodTooltip } from "./shared/h2hTooltip";
 
 type Props = {
@@ -51,6 +55,26 @@ const BUCKET_NOUN: Record<Bucket, string> = {
   month: "month",
 };
 
+const PERIOD_COLUMNS: readonly ChartTableColumn<PeriodPoint>[] = [
+  { key: "date", label: "Period starting", render: row => row.date },
+  { key: "wins", label: "Wins", render: row => row.wins, align: "right" },
+  { key: "losses", label: "Losses", render: row => row.losses, align: "right" },
+  { key: "total", label: "Decided games", render: row => row.total, align: "right" },
+  { key: "rate", label: "Win rate", render: row => `${row.winRatePct}%${isLowSample(row.total) ? " · small sample" : ""}`, align: "right" },
+];
+
+function timelineColumns(onSelectGame: Props["onSelectGame"]): readonly ChartTableColumn<CumulativePoint>[] {
+  return [
+    { key: "game", label: "Game", render: row => row.game.id ? <Button variant="ghost" size="sm" className="min-h-11" onClick={() => onSelectGame(row.game.id!)}>Select #{row.index}</Button> : `#${row.index}` },
+    { key: "date", label: "Date", render: row => fmtDate(row.game.date) },
+    { key: "result", label: "Result", render: row => row.isWin ? "Win" : row.isLoss ? "Loss" : "Unknown" },
+    { key: "map", label: "Map", render: row => row.game.map || "—" },
+    { key: "cumulative", label: "Cumulative win rate", render: row => `${row.cumulativeWrPct}% · n=${row.cumulativeWins + row.cumulativeLosses}${isLowSample(row.cumulativeWins + row.cumulativeLosses) ? " · small sample" : ""}`, align: "right" },
+    { key: "rolling", label: "Rolling win rate", render: row => row.rollingWrPct == null ? "Not enough games" : `${row.rollingWrPct}%`, align: "right" },
+    { key: "macro", label: "Macro percentile", render: row => row.macroPercentile == null ? "Unavailable" : `${row.macroPercentile}%`, align: "right" },
+  ];
+}
+
 /**
  * View 1 — Match-by-Match Timeline. Two stacked sub-charts that share
  * an X domain via Recharts `syncId`:
@@ -74,6 +98,7 @@ export function MatchByMatchTimeline({
   opponentName,
   onSelectGame,
 }: Props) {
+  const kit = useChartKit();
   const tz = useMemo(() => clientTimezone(), []);
   const series = useMemo(
     () => cumulativeSeries(chronoGames, rollingWindow),
@@ -84,8 +109,8 @@ export function MatchByMatchTimeline({
     () => bucketByPeriod(chronoGames, bucket, tz),
     [chronoGames, bucket, tz],
   );
-  const accent = raceAccent(oppRace);
   const raceLetter = normalizeRace(oppRace);
+  const accent = `rgb(var(--race-${raceLetter === "P" ? "protoss" : raceLetter === "T" ? "terran" : raceLetter === "Z" ? "zerg" : "random"}))`;
   const [activeIndex, setActiveIndex] = useState<number>(-1);
   const focusableRef = useRef<HTMLElement | null>(null);
 
@@ -95,10 +120,12 @@ export function MatchByMatchTimeline({
 
   if (series.length < 2) {
     return (
+      <ChartFrame title="Match-by-match timeline" summary={`${series.length} decided games against ${opponentName} in ${presetLong}; at least two are needed to plot a trend.`} rows={series} columns={timelineColumns(onSelectGame)} empty={<EmptyState title="Not enough games yet" sub={`Need at least 2 games against ${opponentName} in ${presetLong} to chart a trend.`} />}>
       <EmptyState
         title="Not enough games yet"
         sub={`Need at least 2 games against ${opponentName} in ${presetLong} to chart a trend.`}
       />
+      </ChartFrame>
     );
   }
 
@@ -116,6 +143,7 @@ export function MatchByMatchTimeline({
   });
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
+    if (e.target !== e.currentTarget) return;
     if (series.length === 0) return;
     if (e.key === "ArrowRight") {
       e.preventDefault();
@@ -139,6 +167,8 @@ export function MatchByMatchTimeline({
   const activePoint = activeIndex >= 0 ? series[activeIndex] : null;
 
   return (
+    <ChartFrame title="Match-by-match timeline" summary={figcaption} rows={series} columns={timelineColumns(onSelectGame)}
+      legend={<ChartLegend items={[{ key: "cumulative", label: `Cumulative · n=${totals.total}`, color: accent, strokeDasharray: "4 3" }, { key: "rolling", label: `${rollingLabel}${isLowSample(rollingWindow) ? " · small sample" : ""}`, color: accent }]} />}>
     <figure
       className="m-0 space-y-3"
       ref={focusableRef as Ref<HTMLElement>}
@@ -147,7 +177,6 @@ export function MatchByMatchTimeline({
       onKeyDown={onKeyDown}
       style={{ touchAction: "pan-y" }}
     >
-      <figcaption className="sr-only">{figcaption}</figcaption>
       <TimelineHeader
         opponent={opponentName}
         presetLong={presetLong}
@@ -158,6 +187,7 @@ export function MatchByMatchTimeline({
         accent={accent}
         raceLabel={raceLabelFor(raceLetter)}
       />
+      <p className="text-caption text-text-muted">Hollow game markers and dimmed windows have fewer than 20 decided games. Marker size reflects macro-score percentile within this view. Counts and dates follow this view's filters.</p>
       <div className="rounded-lg border border-border bg-bg-elevated/40 p-2">
         <div className="h-44 sm:h-48 md:h-56">
           <ResponsiveContainer width="100%" height="100%">
@@ -186,24 +216,24 @@ export function MatchByMatchTimeline({
                   <stop offset="100%" stopColor={accent} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2533" />
+              <CartesianGrid strokeDasharray="3 3" stroke={kit.grid} />
               <XAxis
                 dataKey="index"
-                stroke="#6b7280"
-                fontSize={10}
+                stroke={kit.axis}
+                tick={kit.tickStyle}
                 tickFormatter={(v) => `#${v}`}
                 minTickGap={28}
                 tickMargin={4}
               />
               <YAxis
-                stroke="#6b7280"
-                fontSize={10}
+                stroke={kit.axis}
+                tick={kit.tickStyle}
                 domain={[0, 100]}
                 ticks={[0, 25, 50, 75, 100]}
                 tickFormatter={(v) => `${v}%`}
                 width={36}
               />
-              <ReferenceLine y={50} stroke="#3a4252" strokeDasharray="2 4" />
+              <ReferenceLine y={50} stroke={kit.grid} strokeDasharray="2 4" />
               {totals.total > 0 ? (
                 <ReferenceLine
                   y={overallWrPct}
@@ -234,7 +264,7 @@ export function MatchByMatchTimeline({
                 strokeOpacity={0.55}
                 strokeWidth={1.5}
                 strokeDasharray="4 3"
-                dot={renderResultDot(activeIndex)}
+                dot={renderResultDot(activeIndex, kit)}
                 activeDot={false}
                 isAnimationActive={false}
                 legendType="none"
@@ -244,6 +274,7 @@ export function MatchByMatchTimeline({
                 dataKey="rollingWrPct"
                 stroke={accent}
                 strokeWidth={2.4}
+                strokeOpacity={isLowSample(rollingWindow) ? 0.5 : 1}
                 connectNulls={true}
                 dot={false}
                 isAnimationActive={false}
@@ -291,6 +322,7 @@ export function MatchByMatchTimeline({
         </p>
       )}
     </figure>
+    </ChartFrame>
   );
 }
 
@@ -313,13 +345,14 @@ function TimelineHeader({
   accent: string;
   raceLabel: string;
 }) {
+  const kit = useChartKit();
   return (
     <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-caption">
       <span className="font-semibold text-text">{opponent}</span>
       <span className="text-text-dim">{presetLong}</span>
       <span
         className="tabular-nums"
-        style={{ color: wrColor(overallWrPct / 100, totalGames) }}
+        style={{ color: kit.wrColor(overallWrPct / 100, totalGames) }}
       >
         {overallWrPct}% in this view ({totalGames} game{totalGames === 1 ? "" : "s"})
       </span>
@@ -354,6 +387,7 @@ function PeriodicBars({
   bucketNoun: string;
   showYear: boolean;
 }) {
+  const kit = useChartKit();
   if (data.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-bg-elevated/40 p-3 text-caption text-text-dim">
@@ -366,6 +400,7 @@ function PeriodicBars({
   // 1-game bucket renders with visible height.
   const yMax = Math.max(2, ...data.map((p) => p.total));
   return (
+    <ChartFrame title={`Games per ${bucketNoun}`} summary={`${data.length} ${bucketLabel.toLowerCase()} buckets containing ${data.reduce((sum, point) => sum + point.total, 0)} decided games. Wins are stacked above losses; dimmed bars have fewer than 20 decided games.`} rows={data} columns={PERIOD_COLUMNS}>
     <div className="rounded-lg border border-border bg-bg-elevated/40 p-2">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-1 text-caption">
         <span className="font-semibold text-text">
@@ -383,18 +418,18 @@ function PeriodicBars({
             syncId="h2h-timeline"
             margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#1f2533" />
+            <CartesianGrid strokeDasharray="3 3" stroke={kit.grid} />
             <XAxis
               dataKey="date"
-              stroke="#6b7280"
-              fontSize={10}
+              stroke={kit.axis}
+              tick={kit.tickStyle}
               tickFormatter={(v) => formatBucketTick(v, bucket, showYear)}
               minTickGap={28}
               tickMargin={4}
             />
             <YAxis
-              stroke="#6b7280"
-              fontSize={10}
+              stroke={kit.axis}
+              tick={kit.tickStyle}
               allowDecimals={false}
               domain={[0, yMax]}
               width={28}
@@ -403,26 +438,27 @@ function PeriodicBars({
               content={(props) => (
                 <PeriodTooltip {...props} bucketLabel={bucketLabel} />
               )}
-              cursor={{ fill: "rgba(124, 140, 255, 0.06)" }}
+              cursor={{ fill: kit.tokens.accent, fillOpacity: 0.06 }}
             />
             <Bar
               dataKey="losses"
               stackId="games"
-              fill="#ff6b6b"
+              fill={kit.tokens.danger}
               isAnimationActive={false}
               radius={[0, 0, 0, 0]}
-            />
+            >{data.map(point => <Cell key={point.date} fillOpacity={isLowSample(point.total) ? 0.45 : 1} />)}</Bar>
             <Bar
               dataKey="wins"
               stackId="games"
-              fill="#3ec07a"
+              fill={kit.tokens.success}
               isAnimationActive={false}
               radius={[3, 3, 0, 0]}
-            />
+            >{data.map(point => <Cell key={point.date} fillOpacity={isLowSample(point.total) ? 0.45 : 1} />)}</Bar>
           </ComposedChart>
         </ResponsiveContainer>
       </div>
     </div>
+    </ChartFrame>
   );
 }
 
@@ -433,7 +469,7 @@ type DotProps = {
   payload?: CumulativePoint;
 };
 
-function renderResultDot(activeIndex: number) {
+function renderResultDot(activeIndex: number, kit: ReturnType<typeof useChartKit>) {
   const Dot = (props: DotProps) => {
     const { cx, cy, payload, index = 0 } = props;
     if (typeof cx !== "number" || typeof cy !== "number" || !payload) {
@@ -441,10 +477,10 @@ function renderResultDot(activeIndex: number) {
     }
     const r = dotRadius(payload.macroPercentile);
     const fill = payload.isWin
-      ? "#3ec07a"
+      ? kit.tokens.success
       : payload.isLoss
-        ? "#ff6b6b"
-        : "#9aa3b2";
+        ? kit.tokens.danger
+        : kit.lowSample;
     const isActive = index === activeIndex;
     return (
       <g>
@@ -454,7 +490,7 @@ function renderResultDot(activeIndex: number) {
             cy={cy}
             r={r + 3}
             fill="none"
-            stroke="#7c8cff"
+            stroke={kit.tokens.accentCyan}
             strokeWidth={2}
           />
         ) : null}
@@ -462,9 +498,9 @@ function renderResultDot(activeIndex: number) {
           cx={cx}
           cy={cy}
           r={r}
-          fill={fill}
-          stroke="#0b0d12"
-          strokeWidth={1}
+          fill={isLowSample(payload.cumulativeWins + payload.cumulativeLosses) ? kit.tokens.bgSurface : fill}
+          stroke={fill}
+          strokeWidth={isLowSample(payload.cumulativeWins + payload.cumulativeLosses) ? 2 : 1}
         />
       </g>
     );

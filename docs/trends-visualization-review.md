@@ -37,3 +37,36 @@ The central question is what a reader should be able to conclude from each view.
 Regression coverage checks weighted rates, record conservation, unknown outcomes, empty/small samples, historical dates, DST, true time spacing, MMR domain behavior, global scope, and existing drilldowns. Browser QA renders the actual components with synthetic data at 360, 390, 768, and 1280 pixels in both themes. Sample-data preview artifacts are under `outputs/win-rate-qa/`.
 
 Final validation: 164 web tests and 95 API tests passed; both application typechecks passed. Browser checks found no page overflow or runtime errors at the four widths. Mobile interaction checks passed for MMR measure switching, time-grid mode and keyboard selection, calendar day selection, and expanding later session results.
+
+## Phase 2: shared chart kit
+
+The `chart-kit` roadmap item extends the existing theme hook, tooltip and
+WinRateComparison rather than introducing another plotting system. It covers
+the nine specified consumers below and the strategy matrix's ramp. It does not
+declare every chart or the wider UI roadmap complete.
+
+| Consumer | Reading change | Preserved semantics |
+| --- | --- | --- |
+| MMR bands | Separate comparisons per band; common 0–100% scale and count column | Wins divided by tagged games, selected minimum, volume ordering and last supplied band cell |
+| Build aging | Themed series, early hollow points, table | Existing cumulative wins/losses and Nth-play axis; no new mastery score |
+| MMR by build | Themed/dashed labeled series and daily table | Existing timezone/day collapse, recorded values, top-N/minimum filters and domain |
+| H2H timeline | Game/period tables and theme-aware marks | Existing cumulative/rolling series, period buckets, keyboard selection and game callbacks |
+| Streaks/momentum | Named outcomes, larger targets, table and reduced-motion handling | Existing decided-game runs and momentum window/formula |
+| Mechanics trend | 12px ticks, themed marks, measured-count cues and table | Existing metric averages, calendar geometry, missing periods and reference values |
+| Trends MMR | Shared series, table and sample cues | Verified-rating coverage, account/race separation, last-rating versus global equal-weight-average rules, recorded range and domain |
+| Battlefield recent form | Hollow shapes plus ordered results table | Supplied newest-first outcomes displayed oldest-first; no invented timestamps |
+| Macro-score bands | Comparison rows/count column; no dual axis | Endpoint rates, other outcomes and exact inclusive/exclusive drill boundaries |
+
+ChartFrame uses QueryState for first loading/failure/empty states. The accessible
+summary and table use the same supplied rows as the plot. A failed current
+request does not expose a previous-filter summary. Small-sample styling qualifies
+the evidence without recomputing rates: fewer than 20 decided results for rates,
+or fewer than 20 measurements for a mechanics average. Unknown counts stay
+qualified. A table and explicit labels remain available without reading color.
+
+Palette tests use the actual CSS declarations and a conservative CIE76 distance
+regression under normal vision and a deuteranopia simulation; this is not an
+individual-perception or complete accessibility guarantee. Root theme and replay
+tokens, light/dark neutral and amber contrast, and the dark fallback are checked.
+Phase 2 verification and exact limitations are recorded in
+`docs/handoff/chart-kit-checkpoint.md` after the source pack is validated.

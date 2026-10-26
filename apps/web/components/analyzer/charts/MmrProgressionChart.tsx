@@ -6,7 +6,6 @@ import {
   ComposedChart,
   Area,
   Line,
-  Legend,
   XAxis,
   YAxis,
   Tooltip,
@@ -21,6 +20,8 @@ import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
 import { formatTrendDate } from "@/lib/winRateTrend";
 import { ChartTooltip } from "./ChartTooltip";
+import { ChartFrame, ChartLegend, type ChartTableColumn } from "./ChartFrame";
+import { useChartKit, assignChartSeries, isLowSample } from "@/lib/charts/theme";
 import { MmrDailySwings } from "./MmrDailySwings";
 import {
   netMmrByMatchupPath,
@@ -86,12 +87,19 @@ type MmrResponse = {
   latest: { bucket: string; mmr: number } | null;
 };
 
-const COLOR_ACCENT = "rgb(var(--accent))";
-const COLOR_SUCCESS = "rgb(var(--success))";
-const COLOR_DANGER = "rgb(var(--danger))";
-const COLOR_GRID = "rgb(var(--border))";
+type MmrTableRow = { date: string; series: string; mmr: number; min: number; max: number; games: number; wins: number; losses: number; average?: boolean };
+const knownNumber = (value: number) => Number.isFinite(value) ? value.toLocaleString() : "Unavailable";
+const MMR_COLUMNS: readonly ChartTableColumn<MmrTableRow>[] = [
+  { key: "date", label: "Local bucket", render: row => row.date },
+  { key: "series", label: "Account and ladder", render: row => row.series },
+  { key: "mmr", label: "Recorded MMR", render: row => displayMmr(row.mmr, Boolean(row.average)), align: "right" },
+  { key: "range", label: "Observed range", render: row => `${displayMmr(row.min, Boolean(row.average))}–${displayMmr(row.max, Boolean(row.average))}`, align: "right" },
+  { key: "games", label: "Rated games", render: row => knownNumber(row.games), align: "right" },
+  { key: "record", label: "Record", render: row => `${knownNumber(row.wins)}W–${knownNumber(row.losses)}L`, align: "right" },
+  { key: "sample", label: "Decided sample", render: row => `${knownNumber(row.wins + row.losses)}${isLowSample(row.wins + row.losses) ? " · small sample" : ""}`, align: "right" },
+];
+
 const COLOR_TEXT_DIM = "rgb(var(--text-dim))";
-const COLOR_BG_SURFACE = "rgb(var(--bg-surface))";
 
 // Per-region base colours. The first account on a region uses the
 // base; any additional accounts on the same region cycle through the
@@ -142,7 +150,9 @@ export function formatMmrDate(value: string | number | Date, includeYear = false
  */
 export function buildSeriesColors(
   series: Pick<LadderSeries, "seriesKey" | "region">[],
+  palette?: readonly string[],
 ): Record<string, string> {
+  if (palette) return Object.fromEntries([...assignChartSeries(series.map(row => row.seriesKey), palette)].map(([key, value]) => [key, value.color]));
   const seen: Record<string, number> = {};
   const out: Record<string, string> = {};
   for (const a of series) {
@@ -230,6 +240,7 @@ export function MmrProgressionChart({
 }: {
   bucket: "day" | "week" | "month";
 }) {
+  const kit = useChartKit();
   const { isGlobal } = useTrendsDataScope();
   const title = isGlobal ? "Average MMR over time" : "MMR progression";
   const { filters, dbRev } = useFilters();
@@ -264,12 +275,14 @@ export function MmrProgressionChart({
   );
   const multiSeries: MultiSeries[] = useMemo(() => {
     if (series.length) {
-      const colors = buildSeriesColors(series);
+      const colors = buildSeriesColors(series, kit.series);
+      const assignments = assignChartSeries(series.map(row => row.seriesKey), kit.series);
       return series.map((a) => ({
         key: a.seriesKey,
         label: a.label,
         region: a.region,
-        color: colors[a.seriesKey] || COLOR_TEXT_DIM,
+        color: colors[a.seriesKey] || kit.lowSample,
+        strokeDasharray: assignments.get(a.seriesKey)?.strokeDasharray,
         points: a.points,
         peak: a.peak,
         trough: a.trough,
@@ -277,11 +290,13 @@ export function MmrProgressionChart({
       }));
     }
     if (regions.length) {
+      const assignments = assignChartSeries(regions.map(row => row.region), kit.series);
       return regions.map((r) => ({
         key: r.region,
         label: regionLabel(r.region),
         region: r.region,
-        color: (REGION_COLORS[r.region] || [COLOR_TEXT_DIM])[0],
+        color: assignments.get(r.region)?.color || kit.lowSample,
+        strokeDasharray: assignments.get(r.region)?.strokeDasharray,
         points: r.points,
         peak: r.peak,
         trough: r.trough,
@@ -289,7 +304,7 @@ export function MmrProgressionChart({
       }));
     }
     return [];
-  }, [series, regions]);
+  }, [series, regions, kit.series, kit.lowSample]);
   const multi = multiSeries.length > 1;
 
   const displayData = useMemo<MmrResponse | undefined>(() => {
@@ -335,6 +350,11 @@ export function MmrProgressionChart({
           byDate.set(key, row);
         }
         row[s.key] = p.closeMmr;
+        row[`${s.key}__games`] = p.total;
+        row[`${s.key}__wins`] = p.wins;
+        row[`${s.key}__losses`] = p.losses;
+        row[`${s.key}__min`] = p.minMmr;
+        row[`${s.key}__max`] = p.maxMmr;
       }
     }
     return Array.from(byDate.values()).sort((a, b) =>
@@ -351,6 +371,10 @@ export function MmrProgressionChart({
   );
   const hasChartRows = multi ? multiRows.length > 0 : overallRows.length > 0;
   const coverageNotice = mmrCoverageNotice(data?.coverage);
+  const tableRows: MmrTableRow[] = multi ? multiRows.flatMap(row => multiSeries.flatMap(series => row[series.key] == null ? [] : [{
+    date: String(row.date), series: series.label, mmr: Number(row[series.key]), min: Number(row[`${series.key}__min`]), max: Number(row[`${series.key}__max`]),
+    games: Number(row[`${series.key}__games`]), wins: Number(row[`${series.key}__wins`]), losses: Number(row[`${series.key}__losses`]),
+  }])) : overallRows.map(row => ({ date: row.date, series: isGlobal ? "Cohort average" : multiSeries[0]?.label || "Selected ladder", mmr: row.close, min: row.min, max: row.max, games: row.games, wins: row.wins, losses: row.losses, average: isGlobal }));
 
   if (error) return <TrendsRequestError title={title} error={error} retry={mutate} />;
 
@@ -406,6 +430,9 @@ export function MmrProgressionChart({
         </div>
       ) : null}
       <MmrHeadline data={displayData} multiSeries={multiSeries} multi={multi} isGlobal={isGlobal} />
+      <p className="mb-3 text-caption text-text-muted">Hollow points have fewer than 20 decided games in that bucket, or an unavailable sample count. Current filters apply.</p>
+      <ChartFrame title={title} rows={tableRows} columns={MMR_COLUMNS} summary={`${tableRows.length} recorded series buckets at the ${effectiveBucket} interval. ${isGlobal ? "Account/race observations have equal weight in each cohort average." : "Each account and ladder race retains its own recorded history."} Shading is the observed low–high range; small samples have fewer than 20 decided games.`}
+        legend={multi ? <ChartLegend items={multiSeries.map(series => ({ key: series.key, label: series.label, color: series.color, strokeDasharray: series.strokeDasharray }))} /> : undefined}>
       <div className="h-72">
           {multi ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -414,7 +441,7 @@ export function MmrProgressionChart({
               data={multiRows}
               margin={{ top: 8, right: 24, bottom: 4, left: 4 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
+              <CartesianGrid strokeDasharray="3 3" stroke={kit.grid} />
               <XAxis
                 dataKey="time"
                 type="number"
@@ -422,21 +449,21 @@ export function MmrProgressionChart({
                 domain={["dataMin", "dataMax"]}
                 ticks={multiRows.length === 1 ? [Number(multiRows[0].time)] : undefined}
                 tickFormatter={(value: number) => formatMmrDate(value)}
-                stroke={COLOR_TEXT_DIM}
-                fontSize={11}
+                stroke={kit.axis}
+                tick={kit.tickStyle}
                 minTickGap={28}
                 tickMargin={6}
               />
               <YAxis
-                stroke={COLOR_TEXT_DIM}
-                fontSize={11}
+                stroke={kit.axis}
+                tick={kit.tickStyle}
                 domain={yDomain}
                 width={52}
                 tickMargin={4}
                 tickFormatter={(v: number) => v.toLocaleString()}
               />
               <Tooltip
-                cursor={{ stroke: COLOR_ACCENT, strokeDasharray: "3 3" }}
+                cursor={{ stroke: kit.tokens.accent, strokeDasharray: "3 3" }}
                 content={({ active, payload, label }) => {
                   if (!active || !payload || payload.length === 0) return null;
                   const rows = payload
@@ -446,22 +473,12 @@ export function MmrProgressionChart({
                       return {
                         key: String(p.name),
                         label: series ? series.label : String(p.name),
-                        value: Number(p.value).toLocaleString(),
+                        value: `${Number(p.value).toLocaleString()} · n=${Number.isFinite(Number(p.payload?.[`${p.name}__wins`]) + Number(p.payload?.[`${p.name}__losses`])) ? Number(p.payload?.[`${p.name}__wins`]) + Number(p.payload?.[`${p.name}__losses`]) : "unknown"}`,
                         dot: series?.color,
                       };
                     });
                   if (!rows.length) return null;
                   return <ChartTooltip header={formatMmrDate(label, true)} rows={rows} />;
-                }}
-              />
-              <Legend
-                verticalAlign="top"
-                align="right"
-                iconType="line"
-                wrapperStyle={{ fontSize: 11, paddingBottom: 4 }}
-                formatter={(value: string) => {
-                  const series = multiSeries.find((s) => s.key === value);
-                  return series ? series.label : value;
                 }}
               />
               {multiSeries.map((s) => (
@@ -472,12 +489,13 @@ export function MmrProgressionChart({
                   name={s.key}
                   stroke={s.color}
                   strokeWidth={2.5}
-                  dot={s.points.length <= 12 ? { r: 3, strokeWidth: 0 } : false}
+                  strokeDasharray={s.strokeDasharray}
+                  dot={mmrSampleDot(s.color, kit, s.points.length <= 12, `${s.key}__wins`, `${s.key}__losses`)}
                   connectNulls
                   activeDot={{
                     r: 4,
                     fill: s.color,
-                    stroke: COLOR_BG_SURFACE,
+                    stroke: kit.tokens.bgSurface,
                     strokeWidth: 2,
                   }}
                   isAnimationActive={false}
@@ -495,6 +513,7 @@ export function MmrProgressionChart({
             />
           )}
       </div>
+      </ChartFrame>
       <MmrDailySwings
         dailySwings={matchupData?.dailySwings}
         isLoading={dailySwingsLoading}
@@ -515,6 +534,7 @@ type MultiSeries = {
   label: string;
   region: string;
   color: string;
+  strokeDasharray?: string;
   points: MmrPoint[];
   peak: { bucket: string; mmr: number } | null;
   trough: { bucket: string; mmr: number } | null;
@@ -530,6 +550,15 @@ function displayMmr(value: number, isGlobal: boolean) {
   return (isGlobal ? Math.round(value) : value).toLocaleString();
 }
 
+function mmrSampleDot(color: string, kit: ReturnType<typeof useChartKit>, showAll: boolean, winsKey = "wins", lossesKey = "losses") {
+  return function SampleDot({ cx, cy, payload }: { cx?: number; cy?: number; payload?: Record<string, unknown> }) {
+    if (typeof cx !== "number" || typeof cy !== "number" || !payload) return <></>;
+    const decided = Number(payload[winsKey]) + Number(payload[lossesKey]), small = isLowSample(decided);
+    if (!showAll && !small) return <></>;
+    return <circle cx={cx} cy={cy} r={3} fill={small ? kit.tokens.bgSurface : color} stroke={small ? kit.lowSample : color} strokeWidth={small ? 2 : 0} />;
+  };
+}
+
 function SingleSeriesChart({
   rows,
   yDomain,
@@ -542,15 +571,22 @@ function SingleSeriesChart({
     time: number;
     close: number;
     band: [number, number];
+    wins?: number;
+    losses?: number;
   }>;
   yDomain: [number, number] | undefined;
   data: MmrResponse | undefined;
   tz: string;
   isGlobal?: boolean;
 }) {
+  const kit = useChartKit();
   const peakKey = data?.peak ? mmrCalendarTime(data.peak.bucket, tz) : null;
   const troughKey = data?.trough ? mmrCalendarTime(data.trough.bucket, tz) : null;
   const latestKey = data?.latest ? mmrCalendarTime(data.latest.bucket, tz) : null;
+  const smallMarker = (key: number | null) => {
+    const point = rows.find(row => row.time === key);
+    return isLowSample(Number(point?.wins) + Number(point?.losses));
+  };
   return (
     <ResponsiveContainer width="100%" height="100%">
     <ComposedChart
@@ -558,7 +594,7 @@ function SingleSeriesChart({
       data={rows}
       margin={{ top: 8, right: 24, bottom: 4, left: 4 }}
     >
-      <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
+      <CartesianGrid strokeDasharray="3 3" stroke={kit.grid} />
       <XAxis
         dataKey="time"
         type="number"
@@ -566,14 +602,14 @@ function SingleSeriesChart({
         domain={["dataMin", "dataMax"]}
         ticks={rows.length === 1 ? [rows[0].time] : undefined}
         tickFormatter={(value: number) => formatMmrDate(value)}
-        stroke={COLOR_TEXT_DIM}
-        fontSize={11}
+        stroke={kit.axis}
+        tick={kit.tickStyle}
         minTickGap={28}
         tickMargin={6}
       />
       <YAxis
-        stroke={COLOR_TEXT_DIM}
-        fontSize={11}
+        stroke={kit.axis}
+        tick={kit.tickStyle}
         domain={yDomain}
         width={52}
         tickMargin={4}
@@ -582,16 +618,16 @@ function SingleSeriesChart({
       {data?.latest ? (
         <ReferenceLine
           y={data.latest.mmr}
-          stroke={COLOR_ACCENT}
+          stroke={kit.tokens.accent}
           strokeOpacity={0.35}
           strokeDasharray="4 4"
         />
       ) : null}
       <Tooltip
-        cursor={{ stroke: COLOR_ACCENT, strokeDasharray: "3 3" }}
+        cursor={{ stroke: kit.tokens.accent, strokeDasharray: "3 3" }}
         content={({ active, payload, label }) => {
           if (!active || !payload || payload.length === 0) return null;
-          const row = payload[0].payload as { close: number; band?: [number, number]; games?: number };
+          const row = payload[0].payload as { close: number; band?: [number, number]; games?: number; wins?: number; losses?: number };
           if (row.close == null) return null;
           return (
             <ChartTooltip
@@ -608,6 +644,7 @@ function SingleSeriesChart({
                   value: `${displayMmr(row.band[0], isGlobal)}–${displayMmr(row.band[1], isGlobal)}`,
                 }] : []),
                 ...(typeof row.games === "number" ? [{ key: "games", label: "Games with a rating", value: row.games.toLocaleString() }] : []),
+                { key: "sample", label: "Decided sample", value: `${knownNumber(Number(row.wins) + Number(row.losses))}${isLowSample(Number(row.wins) + Number(row.losses)) ? " · small sample" : ""}` },
               ]}
             />
           );
@@ -617,7 +654,7 @@ function SingleSeriesChart({
         type="linear"
         dataKey="band"
         stroke="none"
-        fill={COLOR_ACCENT}
+        fill={kit.tokens.accent}
         fillOpacity={0.12}
         isAnimationActive={false}
         connectNulls
@@ -627,10 +664,10 @@ function SingleSeriesChart({
       <Line
         type="linear"
         dataKey="close"
-        stroke={COLOR_ACCENT}
+        stroke={kit.tokens.accent}
         strokeWidth={2.5}
-        dot={rows.length <= 12 ? { r: 3, strokeWidth: 0 } : false}
-        activeDot={{ r: 5, fill: COLOR_ACCENT, stroke: COLOR_BG_SURFACE, strokeWidth: 2 }}
+        dot={mmrSampleDot(kit.tokens.accent, kit, rows.length <= 12)}
+        activeDot={{ r: 5, fill: kit.tokens.accent, stroke: kit.tokens.bgSurface, strokeWidth: 2 }}
         isAnimationActive={false}
       />
       {peakKey && data?.peak ? (
@@ -638,8 +675,8 @@ function SingleSeriesChart({
           x={peakKey}
           y={data.peak.mmr}
           r={5}
-          fill={COLOR_SUCCESS}
-          stroke={COLOR_BG_SURFACE}
+          fill={smallMarker(peakKey) ? kit.tokens.bgSurface : kit.tokens.success}
+          stroke={smallMarker(peakKey) ? kit.tokens.success : kit.tokens.bgSurface}
           strokeWidth={2}
           isFront
         />
@@ -649,8 +686,8 @@ function SingleSeriesChart({
           x={troughKey}
           y={data.trough.mmr}
           r={5}
-          fill={COLOR_DANGER}
-          stroke={COLOR_BG_SURFACE}
+          fill={smallMarker(troughKey) ? kit.tokens.bgSurface : kit.tokens.danger}
+          stroke={smallMarker(troughKey) ? kit.tokens.danger : kit.tokens.bgSurface}
           strokeWidth={2}
           isFront
         />
@@ -660,8 +697,8 @@ function SingleSeriesChart({
           x={latestKey}
           y={data.latest.mmr}
           r={5}
-          fill={COLOR_ACCENT}
-          stroke={COLOR_BG_SURFACE}
+          fill={smallMarker(latestKey) ? kit.tokens.bgSurface : kit.tokens.accent}
+          stroke={smallMarker(latestKey) ? kit.tokens.accent : kit.tokens.bgSurface}
           strokeWidth={2}
           isFront
         />
@@ -682,6 +719,7 @@ function MmrHeadline({
   multi: boolean;
   isGlobal?: boolean;
 }) {
+  const kit = useChartKit();
   if (!data) return null;
   if (multi) {
     return (
@@ -730,7 +768,7 @@ function MmrHeadline({
     items.push({
       label: isGlobal ? "Latest average" : "Last recorded",
       value: displayMmr(data.latest.mmr, isGlobal),
-      color: COLOR_ACCENT,
+      color: kit.tokens.accent,
     });
   }
   // Deltas describe LAST RECORDED relative to the card's value — a
@@ -744,7 +782,7 @@ function MmrHeadline({
       sub: data.latest && !isGlobal
         ? `last ${delta >= 0 ? "+" : ""}${delta} vs peak`
         : undefined,
-      color: COLOR_SUCCESS,
+      color: kit.tokens.success,
     });
   }
   if (data.trough) {
@@ -755,7 +793,7 @@ function MmrHeadline({
       sub: data.latest && !isGlobal
         ? `last ${delta >= 0 ? "+" : ""}${delta} vs trough`
         : undefined,
-      color: COLOR_DANGER,
+      color: kit.tokens.danger,
     });
   }
   return (

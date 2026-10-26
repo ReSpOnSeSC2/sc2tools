@@ -5,11 +5,13 @@ import { Card } from "@/components/ui/Card";
 import { pct1 } from "@/lib/format";
 import { matrixAxes, matrixCellKey, matrixCellStyle } from "@/lib/strategyMatrix";
 import type { BvsCell } from "./StrategiesTabBuildVs";
+import { useChartKit } from "@/lib/charts/theme";
 
 export function StrategyMatrixHeatmap({ rows, order, minGames, onOpenBvs }: {
   rows: BvsCell[]; order: "games" | "az"; minGames: number;
   onOpenBvs: (build: string, strategy: string) => void;
 }) {
+  const kit = useChartKit();
   const host = useRef<HTMLDivElement>(null);
   const [surface, setSurface] = useState<readonly [number, number, number]>([12, 16, 23]);
   useLayoutEffect(() => {
@@ -31,7 +33,7 @@ export function StrategyMatrixHeatmap({ rows, order, minGames, onOpenBvs }: {
       <tbody>{builds.map(build => <tr key={build}><th scope="row" className="sticky left-0 z-10 max-w-48 break-words bg-bg-surface px-2 py-2 text-left font-medium text-text">{build}</th>{strategies.map(strategy => {
         const cell = lookup.get(matrixCellKey(build, strategy));
         if (!cell) return <td key={strategy} className="p-0.5"><span className="flex min-h-11 items-center justify-center rounded bg-bg-elevated text-text-dim" aria-label="No games">—</span></td>;
-        const { backgroundColor, color } = matrixCellStyle(cell.winRate, cell.total, minGames, surface);
+        const { backgroundColor, color } = matrixCellStyle(cell.winRate, cell.total, minGames, surface, kit.wrRamp);
         return <td key={strategy} className="p-0.5"><button type="button" onClick={() => onOpenBvs(build, strategy)} style={{ backgroundColor, color }} className="min-h-11 w-full rounded px-2 text-micro font-semibold tabular-nums ring-1 ring-inset ring-black/30 hover:ring-2 hover:ring-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={`${build} vs ${strategy}, ${cell.total} games, ${pct1(cell.winRate)} win rate. View games`} title={`${cell.wins}W · ${cell.losses}L · ${cell.total} games`}>{pct1(cell.winRate).replace(".0", "")}<span className="block font-normal">n={cell.total}</span></button></td>;
       })}</tr>)}</tbody>
     </table>
