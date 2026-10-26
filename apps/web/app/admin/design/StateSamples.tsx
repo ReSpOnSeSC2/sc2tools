@@ -42,7 +42,7 @@ function QuerySamples() {
   const data = ready ? ["Example replay"] : state === "empty" ? [] : undefined;
   return <div className="space-y-4">
     <Field label="Query example state"><Select value={state} onChange={event => setState(event.target.value)}>{["loading", "empty", "error", "ready", "previous"].map(value => <option key={value}>{value}</option>)}</Select></Field>
-    <QueryState q={{ data, error: state === "error" ? { status: 503, message: "Synthetic unavailable example" } : undefined, isPreviousData: state === "previous", mutate: () => setState("ready") }}
+    <QueryState q={{ data, error: state === "error" ? { status: 503, code: "example_busy", message: "Synthetic unavailable example" } : undefined, isPreviousData: state === "previous", mutate: () => setState("ready") }}
       skeleton={<SkeletonRows rows={2} label="Example query loading" />} isEmpty={rows => rows.length === 0}
       empty={<EmptyStatePanel title="No example results" description="This is the empty preview state." action={<Button variant="secondary" onClick={() => setState("ready")}>Load example</Button>} />}>
       {(rows, status) => <p className="text-caption">{rows[0]}{status.isPreviousData ? " · Showing the previous example while updating" : " · Ready preview"}</p>}

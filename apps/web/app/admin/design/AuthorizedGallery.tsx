@@ -7,12 +7,22 @@ import { GalleryRetry } from "./GalleryRetry";
 /** The API's account role is authoritative; client metadata and shell visibility
  * cannot grant access. Every failure leaves the gallery unmounted. */
 export async function AuthorizedGallery() {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const result = await apiFetch<{ isAdmin?: boolean }>("/v1/me", { signal: AbortSignal.timeout(5000) });
+    // apiFetch obtains auth and the JWT before fetch; its signal alone cannot
+    // bound that wait. The local race also covers token and response-body work.
+    const result = await Promise.race([
+      apiFetch<{ isAdmin?: boolean }>("/v1/me", { signal: controller.signal }),
+      new Promise<null>(resolve => { timer = setTimeout(() => { controller.abort(); resolve(null); }, 5000); }),
+    ]);
+    if (!result) return <GalleryAccess denied={false} />;
     if (result.ok && result.data?.isAdmin === true) return <DesignGallery />;
     return <GalleryAccess denied={result.ok || result.status === 401 || result.status === 403} />;
   } catch {
     return <GalleryAccess denied={false} />;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 

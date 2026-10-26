@@ -70,7 +70,7 @@ describe("design gallery examples", () => {
     fireEvent.change(choice, { target: { value: "empty" } });
     expect(screen.getByText("No example results")).toBeTruthy();
     fireEvent.change(choice, { target: { value: "error" } });
-    expect(screen.getByRole("alert")).toBeTruthy();
+    expect(screen.getByTestId("request-error")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Retry|Try again/ }));
     await screen.findByText("Example replay · Ready preview");
     fireEvent.change(choice, { target: { value: "previous" } });

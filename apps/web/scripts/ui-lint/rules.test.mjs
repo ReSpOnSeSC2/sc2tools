@@ -35,6 +35,8 @@ test("dialog roles are owned by UI primitives, including object props", () => {
 test("outline removal requires an actual width ring in the same static class", () => {
   assert.deepEqual(rules(`<input className="focus:outline-none focus-visible:ring-2 focus-visible:ring-accent" />`), []);
   assert.deepEqual(rules(`<input className="focus:outline-none ring-offset-2" />`), ["focus-without-ring"]);
+  assert.deepEqual(rules(`<input className="outline-none ring-0" />`), ["focus-without-ring"]);
+  assert.deepEqual(rules(`<input className="outline-none ring-0 focus-visible:ring-2" />`), []);
   assert.deepEqual(rules(`<input className={busy ? 'outline-none' : 'ring-2'} />`), ["focus-without-ring"]);
 });
 

@@ -91,7 +91,7 @@ function stringValues(node, bindings, seen = new Set()) {
 function classViolations(text) {
   const result = [];
   if (/(?:^|\s)(?:[^\s]+:)*outline-none(?:\s|$)/.test(text)
-    && !/(?:^|\s)(?:[^\s]+:)*ring(?:-[01248])?(?:\s|$)/.test(text)) result.push("focus-without-ring");
+    && !/(?:^|\s)(?:[^\s]+:)*ring(?:-[1248])?(?:\s|$)/.test(text)) result.push("focus-without-ring");
   const small = /(?:^|\s)(?:[^\s]+:)*text-\[(?:length:)?(\d*\.?\d+)(px|rem)\](?=\s|$)/g;
   for (const match of text.matchAll(small)) {
     if (Number(match[1]) * (match[2] === "rem" ? 16 : 1) < 12) result.push("small-arbitrary-text");
