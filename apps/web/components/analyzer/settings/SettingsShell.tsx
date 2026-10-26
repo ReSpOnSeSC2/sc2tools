@@ -251,7 +251,6 @@ function SettingsShellInner({
         onValueChange={(next) => requestSwitch(next)}
         orientation="vertical"
         className="lg:grid-cols-[240px_minmax(0,1fr)]"
-        data-settings-shell-grid=""
       >
         <MobileSettingsTabs tabs={tabs} active={active} isDirty={ctx.isDirty} requestSwitch={requestSwitch} />
 

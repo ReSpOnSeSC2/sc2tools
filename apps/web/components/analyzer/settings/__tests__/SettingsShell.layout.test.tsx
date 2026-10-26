@@ -9,7 +9,10 @@ vi.mock("next/navigation", async (importOriginal) => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.history.replaceState(null, "", "/settings");
+});
 
 describe("SettingsShell layout containment", () => {
   it("adds the third real section rail without remounting the current draft", async () => {
@@ -30,14 +33,14 @@ describe("SettingsShell layout containment", () => {
     expect((draft as HTMLInputElement).value).toBe("unsaved profile");
   });
   it("gives the content track a zero minimum width", () => {
-    const { container } = render(
+    render(
       <SettingsShell
         initialTab="overlay"
         renderTab={(id) => <div>{id}</div>}
       />,
     );
 
-    const grid = container.querySelector<HTMLElement>("[data-settings-shell-grid]");
+    const grid = screen.getByRole("navigation", { name: "Settings navigation" }).parentElement;
     expect(grid).not.toBeNull();
     expect(grid!.className.split(/\s+/)).toContain(
       "lg:grid-cols-[240px_minmax(0,1fr)]",

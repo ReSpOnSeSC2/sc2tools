@@ -41,7 +41,7 @@ export function Combobox({ label, value, options, onChange, onInputChange, place
   // A controlled reset must replace a pending search in the same render.
   // Draft-text callers echo the typed value; selection-only callers keep it.
   const currentQuery = query?.value === value ? query.text : null;
-  const selected = options.find(option => option.value === value), needle = key(currentQuery ?? "");
+  const selected = options.find(option => option.value === value), needle = key(currentQuery ?? (onInputChange && !selected ? value : ""));
   const matches = useMemo(() => options.filter(option => !needle || [option.label, option.value, ...(option.searchTerms ?? [])].some(text => key(text).includes(needle))), [needle, options]);
   const visible = matches.slice(0, RESULT_LIMIT), shown = open && !disabled;
   const activeOption = visible[active];
