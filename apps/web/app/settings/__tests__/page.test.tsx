@@ -1,7 +1,7 @@
 /**
  * /settings — `?tab=` deep links: the Import tab opens only while the
  * Instant Analysis flag is on. Every tab body is a MOCK stub; the flag
- * hook and search params are mocked. Tabs other than Foundation load as
+ * hook and search params are mocked. Tabs other than Account load as
  * their own chunks (next/dynamic), so their bodies are awaited.
  */
 import { cleanup, render, screen } from "@testing-library/react";
@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(mocks.tab ? { tab: mocks.tab } : {}),
+  useRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock("@/lib/instant/useInstantImport", () => ({ useInstantImport: () => mocks.gate }));
 vi.mock("@/components/analyzer/settings/SettingsFoundation", () => ({ SettingsFoundation: () => <p>foundation body</p> }));
@@ -94,15 +95,30 @@ describe("SettingsPage ?tab=", () => {
     expect(screen.getByText("foundation body")).toBeTruthy();
   });
 
-  it("ships Foundation with the page and names the open tab in the browser tab", async () => {
+  it("ships Account with the page and names the open tab in the browser tab", async () => {
     render(<SettingsPage />);
     // The default tab is eager: no loading state on the first paint.
     expect(screen.getByText("foundation body")).toBeTruthy();
-    expect(document.title).toBe("Foundation · Settings · SC2 Tools");
+    expect(document.title).toBe("Account · Settings · SC2 Tools");
     cleanup();
     mocks.tab = "voice";
     render(<SettingsPage />);
     expect(await screen.findByText("voice body")).toBeTruthy();
     expect(document.title).toBe("Voice · Settings · SC2 Tools");
+  });
+
+  it.each(["account", "foundation"])("opens the existing Account panel from ?tab=%s", (tab) => {
+    mocks.tab = tab;
+    render(<SettingsPage />);
+    expect(screen.getByRole("tabpanel", { name: "Account" }).textContent).toContain("foundation body");
+    expect(document.title).toBe("Account · Settings · SC2 Tools");
+  });
+
+  it.each(["preferences", "misc"])("opens the lazy Preferences panel from ?tab=%s", async (tab) => {
+    mocks.tab = tab;
+    render(<SettingsPage />);
+    expect(await screen.findByText("misc body")).toBeTruthy();
+    expect(screen.getByRole("tabpanel", { name: "Preferences" }).textContent).toContain("misc body");
+    expect(document.title).toBe("Preferences · Settings · SC2 Tools");
   });
 });

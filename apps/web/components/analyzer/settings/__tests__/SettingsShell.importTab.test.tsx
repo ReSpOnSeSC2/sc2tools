@@ -1,8 +1,8 @@
 /**
- * SettingsShell — the opt-in Import tab: hidden unless the page allows
- * it, and a hidden initial tab falls back to the first visible one.
+ * Import remains available by default; callers can hide a tab, and a
+ * hidden initial tab falls back to the first visible one.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import {
   SettingsShell,
@@ -10,6 +10,11 @@ import {
   isSettingsTabId,
   visibleSettingsTabs,
 } from "../SettingsShell";
+
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 afterEach(cleanup);
 
@@ -36,7 +41,7 @@ describe("SettingsShell import tab", () => {
 
   it("falls back to the first visible tab for a hidden initial tab", () => {
     render(<SettingsShell initialTab="import" isTabVisible={(id) => id !== "import"} renderTab={(id) => <div>panel:{id}</div>} />);
-    expect(screen.getByRole("tabpanel", { name: "Foundation" }).textContent).toBe("panel:foundation");
+    expect(screen.getByRole("tabpanel", { name: "Account" }).textContent).toBe("panel:account");
   });
 
   it("recognises tab ids from the query string", () => {

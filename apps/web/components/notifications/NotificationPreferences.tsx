@@ -24,7 +24,7 @@ function NotificationPreferencesForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<ClientApiError | null>(null);
   const [saved, setSaved] = useState(false);
-  usePublishDirty("misc", form.dirty);
+  usePublishDirty("preferences", form.dirty);
   async function save() {
     if (saving) return; setSaving(true); setError(null); setSaved(false);
     try { const result = await apiCall<{ muted: string[] }>(getToken, "/v1/me/preferences/notifications", { method: "PUT", body: JSON.stringify(form.draft) }); await query.mutate(result, { revalidate: false }); form.markSaved(); setSaved(true); }

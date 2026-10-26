@@ -74,7 +74,7 @@ export function SettingsFoundation() {
 
 function AccountSummary() {
   const me = useApi<Me>("/v1/me");
-  if (me.error && me.data === undefined) return <SettingsLoadError tab="Foundation settings" error={me.error} retry={me.mutate} />;
+  if (me.error && me.data === undefined) return <SettingsLoadError tab="Account settings" error={me.error} retry={me.mutate} />;
 
   if (!hasQueryData(me)) {
     return <QueryState q={me} skeleton={<Skeleton rows={3} />} errorTitle="Account" />;
