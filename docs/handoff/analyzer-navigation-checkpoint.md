@@ -134,3 +134,43 @@ sheet and 390px light/1440px dark dossier images were opened and inspected.
 No blank capture, clipping or layout blocker was found. SHA-256 checks confirm
 all eleven pre-existing dirty PNGs are unchanged. No 3210/8080 listener was used.
 Final exact-head GitHub/Vercel and root-coordinated fresh-main merge gates remain.
+
+## Published Macro, DT and status integration
+
+Published PR756 source `7127d78d584daaaf23da46d9d1f44dbf64bbada9` is
+integrated at `5ea1767ad0a3d62c7c6d660aa1df84273b676124`, preserving the
+reviewed e5b Navigation source. CHANGELOG additions merged as a union. The
+guide-artifact repair `f5659d3648de7695df092f50c3251624835cfadf` is integrated
+at `92a9cb75b4fe06421b8e3d788ac30fb11db789b9`. Its inspected delta is exactly
+two generated API guide files, their generator and two generic checkpoints;
+it changes no shipping web runtime, engine source or CSS. No second production
+build is needed for that metadata-only merge.
+
+Full web and API typechecks, strict lint of eight Navigation integration files,
+and 51 assertions in six URL/sort/column suites pass. The final production
+build and all unchanged budgets pass: landing 190.1/215, Today 232.3/240, game
+313.4/440, Opponents 134.3/180, dossier 452.7/500, Dock 216.4/225, overlay
+233.8/240 and widget 317.9/325 kB gzip. A sandbox output-directory permission
+failure required the usual reviewed retry; there was no source build error.
+Required engine version 1.6.12 produces `fc21ebe5bf52a53c` and passes its real
+replay smoke parse.
+
+Current final-CSS browser proof passes 232 Navigation, 459 opponent-column and
+53 passive-composition/section-scroll checks: 744 assertions across
+320/390/768/1440 in both themes, with one browser running serially. The column
+matrix proves a new browser context retains the selections, detailed sort URLs
+survive navigation, replay requests occur only on explicit download, and short
+or resized picker bounds stay within the viewport. Its 16 grouping writes are
+synthetic loopback fixture operations; there are no external mutations or
+unexpected column requests. The delayed composition proof keeps document focus
+and scroll stable on passive arrival and permits explicit section navigation.
+The obsolete temporary section-order runner was not used.
+
+All captures and logs for these reruns stay in local cache. Representative
+320px light Opponents/column-picker and 1440px dark Strategy sheet captures were
+opened and inspected without a layout blocker. SHA-256 verification confirms
+all eleven pre-existing owner PNG edits remain unchanged and unstaged. The
+seven incoming published Macro/status captures remain committed with their
+parent source. No private Admin observations or replay payloads are added to
+shipping docs or fixtures. Remote exact-head CI/Vercel and root delivery gates
+remain; no push or production data mutation was performed in this integration.
