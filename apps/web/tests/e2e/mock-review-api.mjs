@@ -18,6 +18,7 @@ import { GUIDE_ROUTES } from "./mock-guides-api.mjs";
 import { communityFixture } from "./mock-community-api.mjs";
 import { COMMUNITY_DETAIL_ROUTES } from "./mock-community-detail-api.mjs";
 import { publicArchiveFixture } from "./mock-public-archive-api.mjs";
+import { publicPlayerFixture, publicPlayerControl } from "./mock-public-player-api.mjs";
 
 const PORT = Number(process.env.MOCK_API_PORT || 8080);
 const ID = "e2eReviewFixture";
@@ -127,8 +128,9 @@ const ROUTES = new Map([
   ...COMMUNITY_DETAIL_ROUTES,
 ]);
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const path = (req.url || "/").split("?")[0];
+  if (await publicPlayerControl(req, res, path)) return;
   const cors = {
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "authorization, content-type",
@@ -138,7 +140,18 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "content-type": "text/plain" }).end("ok");
     return;
   }
+  // Bounded synthetic delay proves the index-only route group's fallback.
+  // It is never selected by ordinary Community requests.
+  if (req.method === "GET" && path === "/v1/community/builds"
+      && new URL(req.url || "/", "http://fixture.local").searchParams.get("q") === "fixture-directory-loader") {
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    res.writeHead(200, { ...cors, "content-type": "application/json", "cache-control": "no-store" })
+      .end(JSON.stringify({ items: [], total: 0, hasMore: false }));
+    return;
+  }
   const archive = req.method === "GET" ? publicArchiveFixture(req.url || "/") : null;
+  const player = req.method === "GET" ? publicPlayerFixture(path) : null;
+  if (player) { res.writeHead(player.status, { "content-type": "application/json", "cache-control": "no-store", ...cors }).end(JSON.stringify(player.data)); return; }
   if (archive) { res.writeHead(200, { "content-type": "application/json", ...cors }).end(JSON.stringify(archive)); return; }
   if (path === "/v1/public/replays/missing-shared-player") {
     res.writeHead(404, { "content-type": "application/json" });

@@ -30,10 +30,10 @@ vi.mock("@/lib/serverApi", () => ({
 }));
 
 // Imported after the mocks are declared so the page picks them up.
-import PublicProfilePage, { generateMetadata } from "@/app/p/[handle]/page";
+import PublicProfilePage, { generateMetadata } from "@/app/players/[player]/page";
 
 const PROFILE: PublicPlayerProfile = {
-  handle: "u_a",
+  handle: "reaver-0123456789",
   displayName: "Reaver",
   mainRace: "Protoss",
   joinedAt: "2026-01-01T00:00:00.000Z",
@@ -60,6 +60,20 @@ afterEach(() => {
 });
 
 describe("PublicProfile (presentational)", () => {
+  test("uses semantic text tokens for small matchup and signature rates while keeping rate values", () => {
+    const { container } = render(<PublicProfile profile={{ ...PROFILE,
+      matchups: [{ matchup: "vs T", games: 30, wins: 20, losses: 10, winRate: 2 / 3 }],
+      signatureBuilds: [{ name: "Recorded opener", games: 30, wins: 20, losses: 10, winRate: 2 / 3 }],
+    }} />);
+    for (const label of ["vs Terran", "Recorded opener"]) {
+      const rate = screen.getByText(label).closest("li")!.querySelector<HTMLElement>(".font-mono")!;
+      expect(rate.classList.contains("text-text")).toBe(true); expect(rate.style.color).toBe("");
+      expect(rate.textContent).toMatch(/67/);
+    }
+    const bars = container.querySelectorAll<HTMLElement>(".bg-success[style]");
+    expect(bars).toHaveLength(2);
+    for (const bar of bars) expect(Number.parseFloat(bar.style.width)).toBeCloseTo(100 * 2 / 3);
+  });
   test("renders name, headline stats, matchup splits, and the viral CTA", () => {
     render(<PublicProfile profile={PROFILE} />);
     expect(screen.getByText("Reaver")).toBeTruthy();
@@ -91,37 +105,37 @@ describe("PublicProfilePage (SSR data flow)", () => {
 
   test("renders the profile when the API returns one", async () => {
     getJsonWithStatusMock.mockResolvedValue({
-      data: { profile: PROFILE },
+      data: { profile: PROFILE, archiveOnly: false, handle: PROFILE.handle, displayName: PROFILE.displayName },
       status: 200,
     });
     const ui = await PublicProfilePage({
-      params: Promise.resolve({ handle: "u_a" }),
+      params: Promise.resolve({ player: "reaver-0123456789" }),
     });
     render(ui);
     expect(screen.getByText("Reaver")).toBeTruthy();
     expect(getJsonWithStatusMock).toHaveBeenCalledWith(
-      "/v1/public/profile/u_a",
-      { revalidateSec: 300 },
+      "/v1/public/players/reaver-0123456789",
+      expect.objectContaining({ revalidateSec: 0, signal: expect.any(AbortSignal) }),
     );
   });
 
   test("calls notFound() when the API positively 404s (private / missing)", async () => {
     getJsonWithStatusMock.mockResolvedValue({ data: null, status: 404 });
     await expect(
-      PublicProfilePage({ params: Promise.resolve({ handle: "u_private" }) }),
+      PublicProfilePage({ params: Promise.resolve({ player: "u_private" }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   test("throws a temporary error when a successful response has no profile", async () => {
     getJsonWithStatusMock.mockResolvedValue({ data: {}, status: 200 });
     await expect(
-      PublicProfilePage({ params: Promise.resolve({ handle: "u_a" }) }),
+      PublicProfilePage({ params: Promise.resolve({ player: "reaver-0123456789" }) }),
     ).rejects.toThrow(PublicFetchError);
   });
 
   test.each([null, 429, 500])("throws temporary failure %s instead of caching a noindex page", async (status) => {
     getJsonWithStatusMock.mockResolvedValue({ data: null, status });
-    await expect(PublicProfilePage({ params: Promise.resolve({ handle: "u_a" }) })).rejects.toBeInstanceOf(PublicFetchError);
+    await expect(PublicProfilePage({ params: Promise.resolve({ player: "reaver-0123456789" }) })).rejects.toBeInstanceOf(PublicFetchError);
   });
 });
 
@@ -130,14 +144,14 @@ describe("generateMetadata", () => {
 
   test("indexable, name-bearing metadata for a public profile", async () => {
     getJsonWithStatusMock.mockResolvedValue({
-      data: { profile: PROFILE },
+      data: { profile: PROFILE, archiveOnly: false, handle: PROFILE.handle, displayName: PROFILE.displayName },
       status: 200,
     });
     const md = await generateMetadata({
-      params: Promise.resolve({ handle: "u_a" }),
+      params: Promise.resolve({ player: "reaver-0123456789" }),
     });
     expect(String(md.title)).toContain("Reaver");
-    expect(md.alternates?.canonical).toBe("/p/u_a");
+    expect(md.alternates?.canonical).toBe("/players/reaver-0123456789");
     // Not marked noindex → crawlable.
     expect(md.robots).toBeUndefined();
   });
@@ -148,12 +162,12 @@ describe("generateMetadata", () => {
     // 404 instead of a soft-404 with a 200 status.
     getJsonWithStatusMock.mockResolvedValue({ data: null, status: 404 });
     await expect(
-      generateMetadata({ params: Promise.resolve({ handle: "u_private" }) }),
+      generateMetadata({ params: Promise.resolve({ player: "u_private" }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   test.each([null, 429, 500])("throws temporary failure %s before metadata can de-index a real profile", async (status) => {
     getJsonWithStatusMock.mockResolvedValue({ data: null, status });
-    await expect(generateMetadata({ params: Promise.resolve({ handle: "u_a" }) })).rejects.toMatchObject({ name: "PublicFetchError", status });
+    await expect(generateMetadata({ params: Promise.resolve({ player: "reaver-0123456789" }) })).rejects.toMatchObject({ name: "PublicFetchError", status });
   });
 });

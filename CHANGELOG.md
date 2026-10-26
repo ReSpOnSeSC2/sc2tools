@@ -15,6 +15,12 @@ corresponding GitHub Release.
 
 - Use the shared bottom Sheet for phone More navigation, preserving theme choices, keyboard focus, report handoff and responsive dismissal.
 
+### Public player pages
+
+- Choose an explicit public player page and optional recent form, MMR, channels, season and map sections in Settings → Profile. Turning the profile off hides it even when named Community builds remain published; replay sharing keeps its own switch.
+- Use one player address for Overview, Builds, shared Replays and Reviews. Older profile and author links resolve directly to the canonical page, while private profiles stay private.
+- Copy public channel-panel images in two sizes and themes. Disabled or unavailable profiles return a neutral image, and public pages and images check visibility on each request.
+
 ### Chart comparisons and data tables
 
 - Bring the selected MMR, macro and head-to-head charts onto shared theme-aware colors and 12px axis labels. Tooltips follow Light, Dark and scoped replay colors.

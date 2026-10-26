@@ -20,7 +20,7 @@ test("every sitemap route has its own canonical and coherent social title", asyn
   const origin = new URL(locations[0]).origin;
   const urls = [...new Set([...locations, ...[
     "/reviews/e2eReviewFixture", "/guides/pvz/stargate-into-glaives", "/guides/pvz/counter/12-pool",
-    "/community/builds/fixture-community-polish", "/community/authors/fixture-community-author",
+    "/community/builds/fixture-community-polish", "/players/fixture-builder-0123456789",
   ].map(route => origin + route)])];
 
   const root = await request.get("/");

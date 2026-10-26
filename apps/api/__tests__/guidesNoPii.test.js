@@ -164,7 +164,9 @@ describe("NO-PII: public guides payloads", () => {
     expect(bodies.get("/v1/guides/sitemap").entries.length).toBeGreaterThan(3);
     const community = bodies.get("/v1/community/sitemap");
     expect(community.builds.map((b) => b.slug).sort()).toEqual(["build-anonymous", "build-blank-author", "build-named"]);
-    expect(community.profiles.map((p) => p.handle)).toEqual([PUBLIC_AUTHOR]);
+    // Legacy Community discovery is content-only; profiles use the separate
+    // canonical endpoint with fresh consent admission.
+    expect(community.profiles).toEqual([]);
   });
 
   test("no seeded identifier appears in any public response", () => {

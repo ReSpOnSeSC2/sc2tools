@@ -19,6 +19,8 @@ export interface CommunityBuildListItem {
   description: string;
   matchup?: string;
   authorName?: string;
+  /** Fresh public-profile capability; absence means render a name, not a link. */
+  authorProfileHandle?: string;
   votes: number;
   publishedAt: string;
   updatedAt?: string;
@@ -71,9 +73,8 @@ export interface CommunityAuthorProfile {
 }
 
 /**
- * Test for whether a build has a public author (i.e. `authorName` is
- * present) — drives both link rendering on the list/detail pages and
- * the 404 branch on the author profile.
+ * Legacy named-publication predicate. This is not current profile consent;
+ * only an authorProfileHandle capability may create a player-page link.
  */
 export function hasPublicAuthor(
   b: Pick<CommunityBuildListItem, "authorName" | "ownerUserId">,

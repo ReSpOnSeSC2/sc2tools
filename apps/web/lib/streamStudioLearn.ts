@@ -543,3 +543,17 @@ export const STUDIO_AUTOMATION_GUIDES = [{
   recovery: "Predictions skip rematches within 10 minutes. Games under 60 seconds or no result within 20 minutes request refunds. Unconfirmed creates are never blindly repeated. If Twitch did not return a prediction ID, check the Twitch dashboard manually.",
   settingsHref: "/settings?tab=overlay&section=chat#twitch-automation", helpSlug: "viewer-engagement", helpAnchor: "twitch-predictions",
 }] as const;
+
+/** Public channel panels are separate from private overlay tokens. */
+export const STUDIO_CHANNEL_PANEL_LESSON = {
+  id: "channel-stats-panel", title: "Add a stats panel to your channel", time: "2 min",
+  promise: "Link a small public record or build card from your channel page.",
+  steps: [
+    { title: "Choose what becomes public", body: "Open Settings → Profile → Public player page. Create a player link if needed, then choose Public profile on and the optional sections you want to share. Save public profile. Replay sharing has its own separate switch." },
+    { title: "Copy a panel image and its link", body: "In Channel panel, choose Record, Featured build or MMR history, then Dark or Light and 320 × 160 or 320 × 100. Copy image URL for your channel panel image and Copy panel link for its destination. MMR panels need the separate MMR history section enabled." },
+    { title: "Check the public view", body: "Open the player link while signed out and check only your chosen sections appear. Turning the profile off makes its panel neutral and removes profile links from shared replays; it does not turn replay sharing on or off." },
+  ],
+  tryIt: "Choose a panel style and size, then open its image URL and destination link before adding them to your channel.",
+  expected: "The image has your chosen public information and the link opens your player page. Your private overlay URL is never used as a public channel panel.",
+  links: [{ href: "/settings?tab=profile", label: "Choose public profile and panel" }, { href: "/help/public-profile", label: "Read public player page help" }],
+} as const;

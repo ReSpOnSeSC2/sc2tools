@@ -1,8 +1,10 @@
 "use strict";
 
 /**
- * Community + public-profile entries for the web sitemap
- * (`GET /v1/community/sitemap`, via CommunityService.sitemap()).
+ * Community sitemap projection, via CommunityService.sitemap(). The current
+ * HTTP endpoint skips legacy profiles and returns profiles:[]; canonical
+ * player discovery has its own fresh consent-gated endpoint. The optional
+ * legacy projection remains available only to existing service callers.
  *
  *   builds   — every published (``removed: false``) community build:
  *              ``/community/builds/<slug>``;
@@ -77,11 +79,13 @@ async function sitemapProfiles(coll) {
  * `{ builds: [{ slug: "build-…", lastModified }], profiles: [{ handle, lastModified }] }`.
  *
  * @param {import('mongodb').Collection|undefined} coll
+ * @param {{includeProfiles?:boolean}} [options] Current HTTP discovery uses
+ * canonical players-sitemap instead; skip the retired legacy profile query.
  * @returns {Promise<{ builds: SitemapBuild[], profiles: SitemapProfile[] }>}
  */
-async function communitySitemap(coll) {
+async function communitySitemap(coll, options = {}) {
   if (!coll) return { builds: [], profiles: [] };
-  const [builds, profiles] = await Promise.all([sitemapBuilds(coll), sitemapProfiles(coll)]);
+  const [builds, profiles] = await Promise.all([sitemapBuilds(coll), options.includeProfiles === false ? Promise.resolve([]) : sitemapProfiles(coll)]);
   return { builds, profiles };
 }
 
