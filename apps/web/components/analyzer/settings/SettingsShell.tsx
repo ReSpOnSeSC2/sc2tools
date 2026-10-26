@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -20,113 +21,39 @@ import { Tabs, useTabIds } from "@/components/ui/Tabs";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import {
+  SETTINGS_GROUPS,
+  SETTINGS_TABS,
+  defaultTabVisibility,
+  settingsTabForLegacyHash,
+  type SettingsTabId,
+} from "@/lib/settingsRegistry";
+import {
   SettingsContextProvider,
   useSettingsContext,
 } from "./SettingsContext";
 import { revealSectionAnchor } from "./revealSectionAnchor";
 
-type IconComponent = typeof ServerCog;
+// Preserve existing imports while non-UI consumers can use the pure leaf.
+export {
+  defaultTabVisibility,
+  isSettingsTabId,
+  SETTINGS_TAB_ALIASES,
+  settingsTabFromParam,
+  settingsTabForLegacyHash,
+  visibleSettingsTabs,
+  type SettingsTabId,
+} from "@/lib/settingsRegistry";
 
-interface TabDef {
-  id: SettingsTabId;
-  label: string;
-  Icon: IconComponent;
-}
-
-const TABS: ReadonlyArray<TabDef> = [
-  { id: "foundation", label: "Foundation", Icon: ServerCog },
-  { id: "profile", label: "Profile", Icon: UserRound },
-  { id: "overlay", label: "Overlay", Icon: MonitorPlay },
-  { id: "randomizer", label: "Randomizer", Icon: Dices },
-  { id: "checkin", label: "Build check-in", Icon: ClipboardCheck },
-  { id: "voice", label: "Voice", Icon: Volume2 },
-  { id: "import", label: "Import", Icon: Upload },
-  { id: "backups", label: "Backups & data", Icon: Database },
-  { id: "misc", label: "Misc", Icon: Settings2 },
-  { id: "help", label: "Help", Icon: LifeBuoy },
-];
-
-export type SettingsTabId =
-  | "foundation"
-  | "profile"
-  | "overlay"
-  | "randomizer"
-  | "checkin"
-  | "voice"
-  | "import"
-  | "backups"
-  | "misc"
-  | "help";
-
-/**
- * Every registered tab is available; browser import is gated inside Import.
- *
- * Example:
- *   defaultTabVisibility("import"); // -> true
- */
-export function defaultTabVisibility(id: SettingsTabId): boolean {
-  return TABS.some((tab) => tab.id === id);
-}
-
-/**
- * True for a known settings tab id (e.g. a `?tab=` query value).
- *
- * Example:
- *   isSettingsTabId("overlay"); // -> true
- */
-export function isSettingsTabId(value: unknown): value is SettingsTabId {
-  return TABS.some((tab) => tab.id === value);
-}
-
-/**
- * Other names that still open a tab, as `?tab=<alias>` or an old
- * `/settings#<alias>` link. Add the old id here when a tab is renamed.
- */
-export const SETTINGS_TAB_ALIASES: Readonly<Record<string, SettingsTabId>> = {
-  // The old /streaming page, now the Overlay tab.
-  streaming: "overlay",
+const TAB_ICONS: Record<SettingsTabId, typeof ServerCog> = {
+  account: ServerCog, profile: UserRound, backups: Database,
+  checkin: ClipboardCheck, randomizer: Dices, import: Upload,
+  overlay: MonitorPlay, voice: Volume2, preferences: Settings2, help: LifeBuoy,
 };
-
-const TAB_BY_ALIAS: ReadonlyMap<string, SettingsTabId> = new Map(
-  Object.entries(SETTINGS_TAB_ALIASES),
-);
-
-/**
- * The tab a `?tab=` value names: a tab id or a registered alias.
- *
- * Example:
- *   settingsTabFromParam("streaming"); // -> "overlay"
- *   settingsTabFromParam("nope"); // -> null
- */
-export function settingsTabFromParam(value: string | null | undefined): SettingsTabId | null {
-  if (!value) return null;
-  if (isSettingsTabId(value)) return value;
-  return TAB_BY_ALIAS.get(value) ?? null;
-}
-
-/**
- * The tab an old hash-only link (`/settings#overlay`, from before
- * `?tab=`) points at, or null when the hash names a section instead.
- *
- * Example:
- *   settingsTabForLegacyHash("#profile"); // -> "profile"
- *   settingsTabForLegacyHash("#platform-connections"); // -> null
- */
-export function settingsTabForLegacyHash(hash: string): SettingsTabId | null {
-  return settingsTabFromParam(hash.replace(/^#/, "").toLowerCase());
-}
-
-/**
- * Tab ids shown for a visibility rule, in sidebar order.
- *
- * Example:
- *   visibleSettingsTabs((id) => id !== "voice").includes("voice"); // -> false
- */
-export function visibleSettingsTabs(
-  isTabVisible: (id: SettingsTabId) => boolean = defaultTabVisibility,
-): SettingsTabId[] {
-  return TABS.filter((tab) => isTabVisible(tab.id)).map((tab) => tab.id);
-}
+const TABS = SETTINGS_TABS.map((tab) => ({ ...tab, Icon: TAB_ICONS[tab.id] }));
+type TabDef = (typeof TABS)[number];
+type PendingDestination =
+  | { kind: "tab"; tab: SettingsTabId; fromUrl: boolean }
+  | { kind: "devices" };
 
 export interface SettingsShellProps {
   /**
@@ -141,12 +68,12 @@ export interface SettingsShellProps {
    */
   initialTab?: SettingsTabId;
   renderTab: (id: SettingsTabId) => ReactNode;
-  /** Which tabs to show; defaults to every tab except opt-in ones. */
+  /** Which tabs to show; defaults to every registered tab. */
   isTabVisible?: (id: SettingsTabId) => boolean;
 }
 
 export function SettingsShell({
-  initialTab = "foundation",
+  initialTab = "account",
   renderTab,
   isTabVisible = defaultTabVisibility,
 }: SettingsShellProps) {
@@ -166,13 +93,14 @@ function SettingsShellInner({
   renderTab,
   isTabVisible,
 }: Required<SettingsShellProps>) {
+  const router = useRouter();
   const tabs = TABS.filter((t) => isTabVisible(t.id));
   const [active, setActive] = useState<SettingsTabId>(() =>
     tabs.some((t) => t.id === initialTab) ? initialTab : (tabs[0]?.id ?? initialTab),
   );
   // `fromUrl`: the URL already names the target, so it isn't rewritten
   // (that would drop a `#section` anchor the target tab scrolls to).
-  const [pending, setPending] = useState<{ tab: SettingsTabId; fromUrl: boolean } | null>(
+  const [pending, setPending] = useState<PendingDestination | null>(
     null,
   );
   const ctx = useSettingsContext();
@@ -195,7 +123,7 @@ function SettingsShellInner({
     const target = next as SettingsTabId;
     if (target === active) return;
     if (ctx.isDirty(active)) {
-      setPending({ tab: target, fromUrl });
+      setPending({ kind: "tab", tab: target, fromUrl });
       return;
     }
     activate(target, fromUrl);
@@ -245,6 +173,15 @@ function SettingsShellInner({
   // its own article anchors.
   const [anchorChanges, setAnchorChanges] = useState(0);
   const panelScopeId = useId();
+  const desktopRows = SETTINGS_GROUPS.flatMap((group) => {
+    const groupTabs = tabs.filter((tab) => tab.group === group.id);
+    if (!groupTabs.length && group.id !== "account") return [];
+    return [
+      ...(group.showHeading ? [{ kind: "heading" as const, group }] : []),
+      ...groupTabs.map((tab) => ({ kind: "tab" as const, tab })),
+      ...(group.id === "account" ? [{ kind: "devices" as const }] : []),
+    ];
+  });
   useEffect(() => {
     const onHashChange = () => setAnchorChanges((n) => n + 1);
     window.addEventListener("hashchange", onHashChange);
@@ -259,15 +196,16 @@ function SettingsShellInner({
 
   const confirmDiscard = () => {
     if (pending) {
-      activate(pending.tab, pending.fromUrl);
       setPending(null);
+      if (pending.kind === "devices") router.push("/devices");
+      else activate(pending.tab, pending.fromUrl);
     }
   };
 
   const stay = () => {
     // A link asked for another tab but the player kept their edits: put
     // the URL back on the tab that is actually showing.
-    if (pending?.fromUrl) writeTabToUrl(active);
+    if (pending?.kind === "tab" && pending.fromUrl) writeTabToUrl(active);
     setPending(null);
   };
 
@@ -282,26 +220,44 @@ function SettingsShellInner({
         <MobileSettingsTabs tabs={tabs} active={active} isDirty={ctx.isDirty} requestSwitch={requestSwitch} />
 
         {/* Desktop sidebar */}
-        <div className="hidden space-y-2 lg:block"><Tabs.List ariaLabel="Settings sections" className="flex">
-          {tabs.map((t) => (
-            <Tabs.Trigger key={t.id} value={t.id}>
-              <span className="inline-flex w-full items-center gap-2.5">
-                <t.Icon
-                  className="h-4 w-4 flex-shrink-0"
-                  aria-hidden
-                />
-                <span className="flex-1 truncate text-left">{t.label}</span>
-                {ctx.isDirty(t.id) ? (
-                  <span
-                    aria-label="Unsaved changes"
-                    title="Unsaved changes"
-                    className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-cyan"
-                  />
-                ) : null}
-              </span>
-            </Tabs.Trigger>
-          ))}
-        </Tabs.List><Link href="/devices" className="flex min-h-11 items-center rounded-lg px-4 py-2 text-caption font-medium text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Devices</Link><InstallAppButton className="w-full" /></div>
+        <nav aria-label="Settings navigation" className="hidden space-y-2 lg:block">
+          <div className="sticky top-4 grid gap-0.5 rounded-xl border-2 border-line bg-bg-surface p-1 shadow-hard">
+            {desktopRows.map((row, index) => row.kind === "heading" ? (
+              <h2 key={row.group.id} id={`${panelScopeId}-group-${row.group.id}`} data-settings-group={row.group.id} style={{ gridRow: index + 1 }} className="px-3 pb-1 pt-3 text-caption font-semibold text-text-muted">{row.group.label}</h2>
+            ) : row.kind === "devices" ? (
+              <Link key="devices" href="/devices" aria-label="Devices" aria-describedby={`${panelScopeId}-devices-description`} data-settings-group="account" style={{ gridRow: index + 1 }}
+                onNavigate={(event) => {
+                  // Next only calls onNavigate for same-tab client navigation;
+                  // modified clicks and opening a new tab keep native behavior.
+                  if (ctx.isDirty(active)) {
+                    event.preventDefault();
+                    setPending({ kind: "devices" });
+                  }
+                }}
+                className="block min-h-11 rounded-md px-3 py-2 text-caption font-medium text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                <span className="block">Devices</span>
+                <span id={`${panelScopeId}-devices-description`} className="mt-1 block font-normal leading-snug">Pair and manage your PCs</span>
+              </Link>
+            ) : null)}
+            {/* Grid placement groups the sidebar visually. Only tabs are owned
+                by this one list, and direct siblings share its arrow keys. */}
+            <Tabs.List ariaLabel="Settings sections" style={{ display: "contents" }}>
+              {desktopRows.map((row, index) => row.kind === "tab" ? (
+                <Tabs.Trigger key={row.tab.id} value={row.tab.id} aria-label={row.tab.label}
+                  aria-describedby={[SETTINGS_GROUPS.find((group) => group.id === row.tab.group)?.showHeading ? `${panelScopeId}-group-${row.tab.group}` : null, `${panelScopeId}-${row.tab.id}-description`, ctx.isDirty(row.tab.id) ? `${panelScopeId}-${row.tab.id}-dirty` : null].filter(Boolean).join(" ")}
+                  data-settings-group={row.tab.group} style={{ gridRow: index + 1 }}>
+                  <span className="inline-flex w-full items-center gap-2.5">
+                    <row.tab.Icon className="h-4 w-4 flex-shrink-0" aria-hidden />
+                    <span className="flex-1 truncate text-left">{row.tab.label}</span>
+                    {ctx.isDirty(row.tab.id) ? <span id={`${panelScopeId}-${row.tab.id}-dirty`} role="img" aria-label="Unsaved changes" title="Unsaved changes" className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-cyan"><span className="sr-only">Unsaved changes</span></span> : null}
+                  </span>
+                  <span id={`${panelScopeId}-${row.tab.id}-description`} className="mt-1 block text-caption leading-snug text-text-muted">{row.tab.description}</span>
+                </Tabs.Trigger>
+              ) : null)}
+            </Tabs.List>
+          </div>
+          <InstallAppButton className="w-full" />
+        </nav>
 
         {tabs.map((t) => (
           <Tabs.Content
@@ -320,8 +276,8 @@ function SettingsShellInner({
         onClose={stay}
         onConfirm={confirmDiscard}
         title="Discard unsaved changes?"
-        description="You have edits on this panel that haven't been saved. Switch tabs anyway?"
-        confirmLabel="Discard & switch"
+        description={pending?.kind === "devices" ? "You have edits on this panel that haven't been saved. Leave Settings for Devices?" : "You have edits on this panel that haven't been saved. Switch tabs anyway?"}
+        confirmLabel={pending?.kind === "devices" ? "Discard & open Devices" : "Discard & switch"}
         cancelLabel="Stay on this tab"
         intent="danger"
       />
@@ -382,6 +338,6 @@ function MobileTabTrigger({ tab, active, dirty, onActivate }: { tab: TabDef; act
   return <button type="button" role="tab" id={triggerId + '-mobile'} data-value={tab.id} aria-controls={panelId} aria-selected={active} tabIndex={active ? 0 : -1} onClick={onActivate}
     className={['relative inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-md border px-3 py-2 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', active ? 'border-accent/40 bg-accent/15 text-accent' : 'border-border bg-bg-surface text-text-muted'].join(' ')}>
     <tab.Icon className="h-4 w-4 shrink-0" aria-hidden /><span className="whitespace-nowrap">{tab.label}</span>
-    {dirty ? <span aria-label="Unsaved changes" className="ml-0.5 h-1.5 w-1.5 rounded-full bg-accent-cyan" /> : null}
+    {dirty ? <span role="img" aria-label="Unsaved changes" className="ml-0.5 h-1.5 w-1.5 rounded-full bg-accent-cyan" /> : null}
   </button>;
 }
