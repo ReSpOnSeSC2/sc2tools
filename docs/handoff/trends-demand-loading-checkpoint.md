@@ -93,3 +93,41 @@ reduction, PR, deployment or production claim. Root owns runtime serialization
 after Settings and subsequent Git/integration/delivery. Preserve all original
 failures and before bytes; update this checkpoint with exact proof chronology
 only after those actions actually occur.
+
+## First static attempt and collapsed-observer harness repair
+
+Root preserved source at `d8106981` and merged main `9a68c480` as
+`064f72c49166fc8902a0c72c16a2e78777d023a5` (tree
+`df939e3981c75d29befef8b84fa8a37d88ce155f`). Twelve of the thirteen authored
+text paths remained unchanged; only CHANGELOG changed during integration.
+Six reserved screenshots are still absent.
+
+The first serialized static run used the nineteen literal suites in
+`.cache/trends-demand-static-prep-064f72c4/`. Pure Help rendering passed twice
+with 92 articles and no index write. Units reported 218 passed and one failed
+across nineteen files. The sole failure was the collapsed-state assertion in
+`TrendsTab.demand.test.tsx`: its cumulative observer ledger contained the old
+MMR observer created by the intentional SSR/first-client expanded fallback.
+The saved collapse is restored in the existing storage hook's effect, which
+unmounts that placeholder and disconnects the observer. A historical ledger
+entry does not establish an active observer or an aggregation request.
+
+Root's post-attempt admission verified all 379 source/dependency/config/asset
+metadata pins, with a clean tracked tree and no unknown untracked paths. The
+original failure log, JSON and admission receipt remain in that static folder;
+the runner stopped before types, strict lint and UI checks.
+
+The narrow follow-up changes only the demand test and this checkpoint. Before
+bytes/hashes are retained in
+`.cache/trends-demand-collapse-observer-repair-064f72c4/before/`. The test now
+requires no connected active MMR observer, checks that the historical observer
+was disconnected and detached, and requires zero MMR GETs. It explicitly invokes
+the retired observer's saved callback and again requires no chart mount or GET.
+The existing explicit section navigation, request, heading focus, reduced-motion
+scroll and closing assertions remain intact. No storage hook, shared helper,
+product source, transport or expectation of lazy collapsed data was changed.
+
+This amended test has not been run. A fresh full thirteen-path source receipt
+is required for root review before the next serialized static attempt. The old
+218/1 result remains a historical RED, not a passing result or product failure.
+Build, budget, browser and measured GET-reduction proof remain pending.

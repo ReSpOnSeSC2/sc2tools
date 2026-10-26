@@ -140,7 +140,21 @@ describe("Trends demand integration with actual charts and request hooks", () =>
   it("honours collapsed state, then explicitly opens and focuses the chosen group", async () => {
     window.localStorage.setItem("analyzer.trends.collapsed", JSON.stringify({ performance: true }));
     render(<Fixture />);
-    expect(observers.some((row) => row.target?.getAttribute("data-deferred-chart") === "MMR progression")).toBe(false);
+    // SSR and the first client render share the expanded fallback. Restoring
+    // the saved collapse retires those initial observers without loading data.
+    const retired = observers.filter((row) => row.target?.getAttribute("data-deferred-chart") === "MMR progression");
+    expect(retired.length).toBeGreaterThan(0);
+    expect(retired.filter((row) => row.target?.isConnected && row.disconnect.mock.calls.length === 0)).toHaveLength(0);
+    for (const row of retired) {
+      expect(row.disconnect).toHaveBeenCalled();
+      expect(row.target?.isConnected).toBe(false);
+    }
+    expect(byPath("/v1/timeseries/mmr")).toHaveLength(0);
+    await act(async () => {
+      for (const row of retired) row.callback([{ isIntersecting: true, target: row.target } as IntersectionObserverEntry], {} as IntersectionObserver);
+    });
+    expect(byPath("/v1/timeseries/mmr")).toHaveLength(0);
+    expect(screen.queryByRole("heading", { name: "MMR progression" })).toBeNull();
     vi.stubGlobal("matchMedia", () => ({ matches: true }));
     navigate("Performance & MMR");
     await waitFor(() => expect(byPath("/v1/timeseries/mmr")).toHaveLength(1));
