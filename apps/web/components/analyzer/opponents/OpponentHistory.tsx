@@ -10,6 +10,7 @@ import { SortableTh, type SortState } from "@/components/ui/SortableTh";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Card";
+import { InfoTip } from "@/components/ui/InfoTip";
 import { PlayerChannelLinks } from "../PlayerChannelLinks";
 import type { usePlayerChannels } from "../usePlayerChannels";
 import { AliasChip, IdentityRow, NotePreview, OpponentLink, OpponentRow } from "./OpponentTableRows";
@@ -18,7 +19,7 @@ import { RevealedChip } from "../RevealedChip";
 import { type Opp, type OpenOpponent, notePreview } from "./types";
 import { OpponentDetailCells, UNSORTED_OPPONENT_COLUMNS } from "./OpponentDetailColumns";
 
-const EXTRA_COLUMNS = [{ key: "pulseId", label: "Pulse ID" }, { key: "mmr", label: "Last MMR" }, { key: "netMmr", label: "Net MMR" }, { key: "mmrWon", label: "MMR won" }, { key: "mmrLost", label: "MMR lost" }] as const;
+const EXTRA_COLUMNS = [{ key: "pulseId", label: "Pulse ID", termId: "pulse-id" }, { key: "mmr", label: "Last MMR", termId: "last-mmr" }, { key: "netMmr", label: "Net MMR", termId: "net-mmr" }, { key: "mmrWon", label: "MMR won", termId: "mmr-won" }, { key: "mmrLost", label: "MMR lost", termId: "mmr-lost" }] as const;
 const MOBILE_SORTS = [
   { key: "lastPlayed", label: "Last played" }, { key: "games", label: "Games" }, { key: "winRate", label: "Win rate" },
   { key: "netMmr", label: "Net MMR" }, { key: "name", label: "Name" }, { key: "race", label: "Race" },
@@ -88,12 +89,12 @@ export function OpponentHistory({ items, expanded, visibleCount, onMore, sort, c
       <thead className="bg-bg-elevated"><tr>
         <SortableTh col="name" label="Opponent" {...sort} compact width="12rem" />
         <SortableTh col="race" label="Race" {...sort} compact width="4rem" />
-        {columns.pulseId ? <SortableTh col="pulseId" label="Pulse ID" {...sort} compact /> : null}
+        {columns.pulseId ? <SortableTh col="pulseId" label="Pulse ID" {...sort} compact info={<InfoTip termId="pulse-id" label="Pulse ID" />} /> : null}
         <SortableTh col="wins" label="W" title="Wins" {...sort} compact align="right" />
         <SortableTh col="losses" label="L" title="Losses" {...sort} compact align="right" />
-        <SortableTh col="winRate" label="Win rate" {...sort} compact align="right" />
+        <SortableTh col="winRate" label="Win rate" {...sort} compact align="right" info={<InfoTip termId="opponent-win-rate" label="Win rate" />} />
         <SortableTh col="games" label="Games" {...sort} compact align="right" />
-        {EXTRA_COLUMNS.slice(1).map(column => columns[column.key] ? <SortableTh key={column.key} col={column.key} label={column.label} {...sort} compact align="right" /> : null)}
+        {EXTRA_COLUMNS.slice(1).map(column => columns[column.key] ? <SortableTh key={column.key} col={column.key} label={column.label} {...sort} compact align="right" info={<InfoTip termId={column.termId} label={column.label} />} /> : null)}
         {OPPONENT_DETAIL_COLUMNS.map(column => columns[column.key] ? UNSORTED_OPPONENT_COLUMNS.has(column.key) ? <th key={column.key} className="px-2 py-1.5 text-left text-micro font-semibold uppercase tracking-wide text-text-muted">{column.label}</th> : <SortableTh key={column.key} col={column.key} label={column.label} {...sort} compact /> : null)}
         <SortableTh col="lastPlayed" label="Last" {...sort} compact align="right" />
         <th className="px-1 py-2"><span className="sr-only">Open dossier</span><span aria-hidden>→</span></th>

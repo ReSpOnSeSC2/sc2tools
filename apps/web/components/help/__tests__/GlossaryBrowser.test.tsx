@@ -41,7 +41,20 @@ it("sorts the canonical terms A to Z, filters definition text and clears with Es
   fireEvent.change(input, { target: { value: "LOOK-ALIKE" } });
   expect(screen.getAllByRole("term").map(node => node.textContent)).toEqual(["Barcode"]); expect(screen.getByRole("status").textContent).toBe("1 term");
   fireEvent.change(input, { target: { value: "no glossary definition matches" } }); expect(screen.getByText(/No terms match/)).toBeTruthy();
-  fireEvent.keyDown(input, { key: "Escape" }); expect(screen.getAllByRole("term")).toHaveLength(7);
+  fireEvent.keyDown(input, { key: "Escape" }); expect(screen.getAllByRole("term")).toHaveLength(GLOSSARY.length);
+});
+
+it.each(["page", "compact"] as const)("renders and searches canonical formula text in the %s glossary", (variant) => {
+  render(<GlossaryBrowser variant={variant} />);
+  const input = screen.getByRole("textbox", { name: "Search glossary" });
+  // This coefficient occurs in the formula, not the term/short/long prose.
+  fireEvent.change(input, { target: { value: "0.00137" } });
+  expect(screen.getAllByRole("term").map(node => node.textContent)).toEqual(["Spending Quotient"]);
+  expect(screen.getByText("Formula or rule:").parentElement?.textContent).toContain("0.00137");
+  expect(screen.getByText("Formula or rule:").parentElement?.className).toContain("break-words");
+  expect(screen.getByRole("link", { name: "Read Spending Quotient in context" }).getAttribute("href")).toBe("/help/macro#macro-score");
+  fireEvent.keyDown(input, { key: "Escape" });
+  expect(screen.getAllByRole("term")).toHaveLength(GLOSSARY.length);
 });
 
 it("keeps all published term IDs and contextual links through the real article renderer", () => {
@@ -53,6 +66,7 @@ it("keeps all published term IDs and contextual links through the real article r
     const entry = container.querySelector(`[id="${term.id}"]`)!;
     expect(entry, term.id).not.toBeNull();
     expect(within(entry as HTMLElement).getByRole("term").textContent).toBe(term.term);
+    if (term.formula) expect(within(entry as HTMLElement).getByText("Formula or rule:").parentElement?.textContent).toContain(term.formula);
     expect(within(entry as HTMLElement).getByRole("link", { name: `Read ${term.term} in context` }).getAttribute("href")).toMatch(/^\/help\//);
     for (const id of term.related) {
       const related = GLOSSARY.find(item => item.id === id)!;

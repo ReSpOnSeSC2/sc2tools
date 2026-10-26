@@ -8,6 +8,8 @@ import {
   withinOneEdit,
 } from "../search";
 import type { HelpArticle } from "../types";
+import { getArticle, helpArticleAnchors } from "../index";
+import { helpSitemapRows } from "../sitemap";
 
 const slugs = (query: string) => searchHelp(query).map((result) => result.article.slug);
 const top = (query: string) => slugs(query)[0];
@@ -15,6 +17,15 @@ const top = (query: string) => slugs(query)[0];
 it("indexes glossary widget definitions, not only the article title", () => {
   expect(slugs("look-alike characters")).toContain("glossary");
   expect(slugs("verified pairs")).toContain("glossary");
+  expect(slugs("0.00137")).toContain("glossary");
+});
+
+it("publishes Reading your stats through normal lookup, search, anchors and sitemap", () => {
+  expect(top("reading your stats")).toBe("reading-your-stats");
+  const article = getArticle("reading-your-stats");
+  expect(article).toBeDefined();
+  expect(helpArticleAnchors(article!)).toEqual(["today", "opponents", "macro", "builds"]);
+  expect(helpSitemapRows("https://sc2tools.com").some(row => row.url === "https://sc2tools.com/help/reading-your-stats")).toBe(true);
 });
 
 function fixture(slug: string, fields: Partial<HelpArticle>): HelpArticle {

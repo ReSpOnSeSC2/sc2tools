@@ -35,23 +35,39 @@ function fixtureServer() {
  * on an ephemeral loopback-only listener, never a real or DNS-backed origin. */
 export async function closeInfoTipFixtureServer() {
   const current = server;
-  if (!current) return { closed: true, port: null, requests: [] };
+  if (!current) return { closed: true, listening: false, port: null, requests: [] };
   const port = current.address()?.port;
   activeTransport?.releaseDefinitions(); activeTransport = null;
   await new Promise(resolve => { current.close(resolve); current.closeAllConnections(); });
   if (current.listening) throw new Error("Glossary fixture listener remained open");
   server = null; serverReady = null; assets = null; INFO_TIP_FIXTURE_ORIGIN = "";
-  return { closed: true, port, requests: serverLedger.splice(0) };
+  return { closed: true, listening: current.listening, port, requests: serverLedger.splice(0) };
 }
 const SOURCE = `import React,{useState}from'react';import{createRoot}from'react-dom/client';import{usePathname}from'next/navigation';
 import{InfoTip}from'@/components/ui/InfoTip';import{Term}from'@/components/ui/Term';import{Modal}from'@/components/ui/Modal';
 import{GroupingPreference}from'@/components/analyzer/opponents/GroupingPreference';import{HelpArticleBody}from'@/components/help/HelpArticleBody';
-import{HelpSearch}from'@/components/help/HelpSearch';import article from'@/lib/help/articles/analyzer/glossary';window.fixtureGroupingWrites=[];
+import{HelpSearch}from'@/components/help/HelpSearch';import article from'@/lib/help/articles/analyzer/glossary';import statsArticle from'@/lib/help/articles/analyzer/reading-your-stats';
+import{MacroKpiRow}from'@/components/analyzer/macro/MacroKpiRow';import{OpponentHistory}from'@/components/analyzer/opponents/OpponentHistory';
+import{usePersistentSort}from'@/components/ui/SortableTh';import{opponentDetailSortValue,type OpponentColumns}from'@/lib/opponentPresentation';
+import type{Opp}from'@/components/analyzer/opponents/types';import type{OpponentGroup}from'@/lib/opponentGroups';import type{GameApm}from'@/lib/apm';
+type MetricMode='normal'|'zero'|'missing'|'loading';
+declare global{interface Window{fixtureGroupingWrites:boolean[];fixtureStatsOpens:string[];fixtureUnexpectedTransport:string[];fixtureStatsMode:(mode:MetricMode)=>void}}
+window.fixtureGroupingWrites=[];window.fixtureStatsOpens=[];window.fixtureUnexpectedTransport=[];
+const statsRows:Opp[]=[{pulseId:'example-a',pulseCharacterId:'101',name:'Example A',wins:1,losses:1,games:2,winRate:.5,mmr:4100,netMmr:20,mmrWon:40,mmrLost:20,mmrPairs:2,lastPlayed:'2026-01-01T00:00:00.000Z'},
+{pulseId:'example-b',pulseCharacterId:'202',name:'Example B',wins:0,losses:1,games:1,winRate:0,mmr:null,netMmr:-30,mmrWon:0,mmrLost:30,mmrPairs:1,lastPlayed:null}];
+const statsGroups:OpponentGroup<Opp>[]=statsRows.map(row=>({...row,identities:[row],aliasNames:[],groupSize:1}));
+const statsColumns:OpponentColumns={pulseId:true,mmr:true,netMmr:true,mmrWon:true,mmrLost:true};
+const statsApm:GameApm={windowSec:30,me:{avg:190,avgSpm:30,samples:[]},opp:{avg:250,avgSpm:40,samples:[]}};
+function StatsFixture(){const[mode,setMode]=useState<MetricMode>('normal');window.fixtureStatsMode=setMode;
+ const sort=usePersistentSort('synthetic-glossary-stats-sort','netMmr','desc');const items=sort.sortRows(statsGroups,opponentDetailSortValue);
+ const raw=mode==='normal'?{sq:123.4,supply_blocked_seconds:4,mineral_float_spikes:0}:mode==='zero'?{sq:0,supply_blocked_seconds:0,mineral_float_spikes:0}:{};
+ return <><section aria-label="Macro statistics" className="space-y-3"><h2 className="text-h3 font-display">Macro statistics</h2><MacroKpiRow raw={raw} apm={mode==='normal'?statsApm:null} apmLoading={mode==='loading'}/></section>
+ <section aria-label="Opponent statistics" className="space-y-3"><h2 className="text-h3 font-display">Opponent statistics</h2><OpponentHistory items={items} expanded={new Set<string>()} visibleCount={100} onMore={()=>{}} sort={sort} columns={statsColumns} onToggle={()=>{}} onOpen={id=>{window.fixtureStatsOpens.push(id);return true}} onPrefetch={()=>{}} channelsFor={()=>undefined} star={()=>null} loading={false} busy={false}/></section></>}
 function Fixture(){const route=usePathname(),[term,setTerm]=useState('net-mmr'),[grouped,setGrouped]=useState(true),[parent,setParent]=useState(false),[later,setLater]=useState(false);
 window.fixtureTipTerm=setTerm;window.fixtureTipLater=()=>setLater(true);
 const preference={groupByPlayer:grouped,loading:false,saving:false,unavailable:false,error:'',retry(){},async setGroupByPlayer(value){window.fixtureGroupingWrites.push(value);setGrouped(value);return true}};
 return <main className="mx-auto max-w-3xl space-y-6 p-4"><h1 className="text-h2 font-display">Local glossary example</h1>
-{route==='/help/glossary'?<HelpArticleBody article={article}/>:route==='/compact'?<><section aria-label="Compact glossary one"><HelpArticleBody article={article} variant="compact"/></section><section aria-label="Compact glossary two"><HelpArticleBody article={article} variant="compact"/></section></>:<><section aria-label="Contextual help example" className="space-y-3">
+{route==='/help/glossary'?<HelpArticleBody article={article}/>:route==='/help/reading-your-stats'?<HelpArticleBody article={statsArticle}/>:route==='/stats'?<StatsFixture/>:route==='/compact'?<><section aria-label="Compact glossary one"><HelpArticleBody article={article} variant="compact"/></section><section aria-label="Compact glossary two"><HelpArticleBody article={article} variant="compact"/></section></>:<><section aria-label="Contextual help example" className="space-y-3">
 <div><button type="button" className="min-h-11 rounded px-3 text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Outside action</button></div>
 <Term id={term} label={term==='net-mmr'?'Net MMR':'Pulse ID'}>{term==='net-mmr'?'Net MMR':'Pulse ID'}</Term>
 <GroupingPreference preference={preference}/>
@@ -63,6 +79,11 @@ return <main className="mx-auto max-w-3xl space-y-6 p-4"><h1 className="text-h2 
 const adapters = {
   "next/navigation": `import{useSyncExternalStore}from'react';const sub=f=>{addEventListener('fixture-tip-nav',f);return()=>removeEventListener('fixture-tip-nav',f)};const go=href=>{history.pushState({},'',href);dispatchEvent(new Event('fixture-tip-nav'));requestAnimationFrame(()=>document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView({block:'nearest'}))};window.fixtureTipNavigate=go;export const usePathname=()=>useSyncExternalStore(sub,()=>location.pathname);`,
   "next/link": `import React from'react';export default React.forwardRef(function Link({href,children,onClick,target,prefetch,scroll,...props},ref){return <a ref={ref} href={href} target={target} {...props} onClick={event=>{onClick?.(event);if(!event.defaultPrevented&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey&&(!target||target==='_self')&&String(href).startsWith('/')){event.preventDefault();window.fixtureTipNavigate(href)}}}>{children}</a>});`,
+  "next/image": `import React from'react';export default function Image({priority,unoptimized,fill,...props}){return <img {...props}/>}`,
+  // These optional history features are outside this header-only fixture.
+  // Fail loudly if a future fixture accidentally admits their transport.
+  "../ReplayDownloadButton": `export function ReplayDownloadButton(){window.fixtureUnexpectedTransport.push('replay-download');throw new Error('Replay downloads are outside this fixture')}`,
+  "../usePlayerChannels": `export function usePlayerChannels(){window.fixtureUnexpectedTransport.push('player-channels');throw new Error('Channel queries are outside this fixture')}`,
   "@/components/analyzer/settings/ChatCommandsCard": `export const ChatCommandsCard=()=>null;`,
 };
 
@@ -99,7 +120,8 @@ function fixtureAssets() {
   })();
 }
 
-/** Actual InfoTip/Term/Popover/Modal, GroupingPreference, glossary article/
+/** Actual InfoTip/Term/Popover/Modal, GroupingPreference, MacroKpiRow,
+ * OpponentHistory/SortableTh with real persistent sorting, glossary article/
  * renderer/browser and HelpSearch. The import boundary alone is intercepted;
  * a module-local switch can throw from lookup to exercise retry. Navigation
  * and the existing chat widget are synthetic; all API writes/external requests
@@ -132,7 +154,7 @@ export async function openInfoTipFixture(page, theme, options = {}) {
       definitionLoads.push(url.pathname); if (holding) await new Promise(resolve => held.push(resolve));
       return { contentType: "text/javascript", body: `import{glossaryTerm as lookup}from'/canonical-glossary.mjs';export function glossaryTerm(id){window.fixtureDefinitionLookups.push(id);if(window.fixtureDefinitionFailure)throw new Error('Synthetic lookup failure');return lookup(id)}` };
     }
-    if (["/example", "/compact", "/help/glossary"].includes(url.pathname) && !url.search) return { contentType: "text/html", body:
+    if (["/example", "/compact", "/stats", "/help/glossary", "/help/reading-your-stats"].includes(url.pathname) && !url.search) return { contentType: "text/html", body:
       `<!doctype html><html lang="en" data-theme="${theme}" data-theme-mode="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local glossary proof</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>` };
     unexpectedRequests.push(`${method} ${url.pathname}${url.search}`);
     return denied(404, "Unknown glossary fixture GET");

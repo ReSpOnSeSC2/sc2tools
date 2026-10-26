@@ -8,7 +8,7 @@ import type { HelpWidgetId } from "./types";
  * components themselves live in components/help/HelpWidget.tsx.
  */
 const WIDGET_TEXT: Record<HelpWidgetId, () => string> = {
-  glossary: () => GLOSSARY.flatMap(term => [term.term, term.short, term.long ?? ""]).join(" "),
+  glossary: () => GLOSSARY.flatMap(term => [term.term, term.short, term.long ?? "", term.formula ?? ""]).join(" "),
   "chat-commands": () =>
     COMMAND_GROUPS.flatMap((group) => [
       group.title,
