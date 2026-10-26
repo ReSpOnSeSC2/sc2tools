@@ -42,10 +42,11 @@ const ROUTES: Route[] = [
   { path: "/stream-studio", priority: 0.9, changeFrequency: "monthly", lastModified: "2026-10-16" },
   { path: "/stream-studio/learn", priority: 0.8, changeFrequency: "monthly", lastModified: "2026-10-16" },
   { path: "/community", priority: 0.8, changeFrequency: "daily" },
-  { path: "/definitions", priority: 0.5, changeFrequency: "monthly", lastModified: "2026-09-04" },
+  { path: "/definitions", priority: 0.5, changeFrequency: "monthly", lastModified: "2026-10-25" },
   { path: "/donate", priority: 0.4, changeFrequency: "monthly", lastModified: "2026-08-11" },
   { path: "/legal/privacy", priority: 0.2, changeFrequency: "yearly", lastModified: "2026-09-28" },
   { path: "/legal/terms", priority: 0.2, changeFrequency: "yearly", lastModified: "2026-08-11" },
+  { path: "/legal/accessibility", priority: 0.2, changeFrequency: "yearly", lastModified: "2026-10-25" },
 ];
 
 // /try (in-browser replay analysis) is public only once Instant Analysis

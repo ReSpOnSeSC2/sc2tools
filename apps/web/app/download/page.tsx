@@ -2,13 +2,14 @@ import { serializeJsonLd } from "@/lib/reviewJsonLd";
 import { Banner } from "@/components/Banner";
 import { ResyncNotice, InstalledAgentVersion } from "@/components/onboarding/DownloadAccountStatus";
 import { DownloadInteractive } from "@/components/onboarding/DownloadInteractive";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
-export const metadata = {
+export const metadata = pageMetadata({
   title: "Download the agent",
   description:
     "Download the SC2 Tools Agent to sync replay analysis and original StarCraft II replay files to your private dashboard library.",
-  alternates: { canonical: "/download" },
-};
+  canonical: "/download", routeOgImage: true,
+});
 
 /**
  * SoftwareApplication structured data — lets search engines treat the

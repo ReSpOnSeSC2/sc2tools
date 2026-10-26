@@ -26,11 +26,11 @@ const article: HelpArticle = {
     "widget empty",
     "overlay",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-25",
   body: [
     {
       type: "paragraph",
-      text: "When a game starts, SC2 Tools looks up your earlier games against this opponent and turns them into a short briefing for the overlay. Every number comes from **your own replays** against that exact account (matched by their Battle.net account, not just the name), in **this matchup**. Nothing is borrowed from other players' games.",
+      text: "When a game starts, SC2 Tools turns your earlier games against the identified opponent into a short briefing. Your record, notes and observed counts come from **your own replays** in **this matchup**, with optional linked-account grouping. The opening forecast can also use a clearly labelled, cached public ladder mix. It never borrows another user's private opponent notes or history.",
     },
     { type: "heading", text: "What each widget shows" },
     {
@@ -63,13 +63,26 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "**Which games.** Your last 50 games against this opponent, then only the ones in this matchup. Playing Protoss into their Zerg uses your PvZ games; games where they played Terran don't count. Games shorter than 45 seconds are left out.",
+        "**Which games.** The latest 50 matching saved game summaries: your account, this opponent or resolved group, and both races. Hidden, deleted, resumed and other-matchup games do not use a slot. Short games and unreliable lengths then lower the forecast sample without refilling it with older games. Playing Protoss into their Zerg uses PvZ, not games where they played Terran.",
         "**Which label.** The opening the replay recognised, or the one you chose when you corrected their build with [build check-in](/help/build-check-in).",
-        "**Recent games count more.** For the cheese percentage and the predicted strategies, your last 10 games against them count double. That's the same prediction the opponent dossier shows, so the overlay and the dossier agree.",
+        "**Recent games count more.** The opening forecast uses the formula below. The separate cheese-history percentage retains its plain legacy recency rule: the last ten count double.",
         "**The favourite opening share is plain.** 3 of last 5 games is 60%.",
         "**What counts as cheese.** Openings whose name includes a proxy, a cannon rush, an early pool (6, 8 or 12 pool, pool first), an all-in, a bunker rush or a worker rush.",
       ],
     },
+    { type: "heading", text: "Alternate accounts", anchor: "alternate-accounts" },
+    { type: "paragraph", text: "Turn **Group same player** on or off in the Opponents list or dossier. This choice is saved to your signed-in account and also controls live scouting across devices. Grouping uses approved shared identities or an already-cached Battle.net account link, never a similar display name. Scouting does not start new Pulse lookups to discover alts. Missing or contradictory cached links keep the accounts separate." },
+    { type: "paragraph", text: "Up to 20 of your recorded accounts can contribute to one scouting group. The **also:** chip names other observed accounts. Record, recent meetings and forecast combine that group's games; your note still belongs to the exact current account and is never copied from a sibling. Turning grouping off returns to the current account. The next live update uses the saved choice." },
+    { type: "heading", text: "How the forecast works", anchor: "how-the-forecast-works" },
+    { type: "list", items: [
+      "**Recency:** the newest eligible observation has weight 1. Each following eligible observation has weight 2^(-age/8), so after eight observations it has half the weight. An unlabelled game keeps its share rather than inflating the known openings.",
+      "**Map:** an observation on the selected/current known map gets 1.5 times that weight. Without a known map, all maps use their ordinary weights. The live desktop feed may not supply a map; it does not guess one from your previous game.",
+      "**Ladder prior:** when a suitable cached ladder row exists, its opening mix adds three pseudo-games. To forecast their Zerg opening against your Protoss, this is the ZvP mix against your recorded rating band. If your rating or that table is unavailable, there is no prior. The caption identifies a last-recorded rating; no new live corpus computation runs.",
+      "**Effective n:** the sum of your personal observation weights, including the map factor. It is weighted evidence, not a literal game count. The ladder's three pseudo-games do not increase it. Confidence is Low below 3, Medium from 3 to below 8, and High at 8 or more. A single observation can still produce 100%, labelled Low; it is not certainty.",
+      "**Top three:** their probabilities are shares of all openings. Other and unlabelled openings keep the remaining share. The reasons are raw counts, such as 3 of last 5 vs you or 2 of 2 on this map; a weighted percentage need not equal those plain counts.",
+      "**One method:** the dossier, live brief, overlay and desktop brief use this same deterministic result for the same cohort and context. Analyzer filters or a selected map can change that context. The dossier's date window and local history row selections do not change this recent-history forecast.",
+    ] },
+    { type: "callout", tone: "info", title: "A bounded, honest sample", text: "Forecasts use eligible observations within the latest 50 matching game summaries. Missing/invalid lengths and games under 45 seconds are left out. The dossier also keeps its existing 1,000-summary limit; if that limit is reached before the matching source window can be completed, it shows forecast unavailable instead of filling the gap with the older estimate. Everything uses fixed replay rules, without AI or model APIs." },
     {
       type: "callout",
       tone: "info",

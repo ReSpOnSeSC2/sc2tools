@@ -18,7 +18,7 @@
  */
 import { useEffect, useRef } from "react";
 import { AlertTriangle, MinusCircle } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Button } from "@/components/ui/Button";
 import { percentOf } from "@/lib/instant/displayUnits";
 import { summarizeFailures, type FailureGroup } from "@/lib/instant/errorCopy";
 import { isRunningPhase, type InstantSessionPhase, type SessionProgress } from "@/lib/instant/sessionState";

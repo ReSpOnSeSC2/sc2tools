@@ -35,6 +35,7 @@ class PlayerIdentitiesService {
     this.submissions = db.playerIdentitySubmissions;
     this.directory = new PlayerIdentityDirectory(db);
     this.fetchImpl = opts.fetchImpl || globalThis.fetch;
+    /** @type {(()=>void)|null} */ this.onChanged = null;
   }
 
   /** Verify a pasted character profile against a fixed upstream endpoint before adding it. @param {any} profile */
@@ -244,10 +245,12 @@ class PlayerIdentitiesService {
   async edit(operation) {
     const session = this.db.client.startSession();
     try {
-      return await session.withTransaction(async () => {
+      const result = await session.withTransaction(async () => {
         await this.links.updateOne({ kind: "graph-revision" }, { $inc: { revision: 1 }, $setOnInsert: { kind: "graph-revision" } }, { upsert: true, session });
         return operation(session);
       }, { maxCommitTimeMS: 5000 });
+      try { this.onChanged?.(); } catch { /* Graph commit succeeded; cache invalidation is advisory. */ }
+      return result;
     } finally { await session.endSession(); }
   }
 

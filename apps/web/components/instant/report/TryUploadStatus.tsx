@@ -13,7 +13,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Button } from "@/components/ui/Button";
 import { TRY_SIGN_IN_HREF } from "@/lib/instant/authRedirect";
 import { percentOf, secondsUntilRetry, uploadsResumeText } from "@/lib/instant/displayUnits";
 import { TRY_TTL_DAYS } from "@/lib/instant/localStore";

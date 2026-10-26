@@ -21,12 +21,16 @@ const article: HelpArticle = {
     "support",
     "contact",
     "email",
+    "status",
+    "website",
+    "api",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-25",
   body: [
     {
       type: "list",
       items: [
+        "**Website or data not loading?** Open [System status](/status), also available from the website footer or **More → System status**. It works without signing in. Website and API checks run from your browser when you open the page; select **Refresh checks** to try again. **Reachable** means the public endpoint answered, **Unavailable** means it returned an HTTP error, and **Unknown** means the browser could not verify it. Check the timestamp: these checks do not measure replay processing, every feature or historical uptime.",
         '**Changes not showing in OBS?** Press Save first — widgets re-read their config within ~60 seconds. If it still looks stale, right-click the Browser Source → Interact/Refresh, or "Refresh cache of current page".',
         "**No sound or voice?** Browsers can block audio until a click — open the source with Interact and click once, then TTS/sounds run normally.",
         "**Kick won't auto-detect?** Use the guided manual flow in the Kick row — open the shown URL in your own browser and paste what you see; the id is extracted for you.",

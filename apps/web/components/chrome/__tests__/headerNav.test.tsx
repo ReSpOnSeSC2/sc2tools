@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { headerNavLinks } from "../headerNav";
 
 const harness = vi.hoisted(() => ({
@@ -15,7 +15,10 @@ vi.mock("next/navigation", () => ({
 vi.mock("@clerk/nextjs", () => ({
   SignedIn: ({ children }: { children: ReactNode }) => (harness.signedIn ? <>{children}</> : null),
   SignedOut: ({ children }: { children: ReactNode }) => (harness.signedIn ? null : <>{children}</>),
-  UserButton: () => null,
+  UserButton: Object.assign(({ children }: { children: ReactNode }) => <div><button aria-label="Account fixture" />{children}</div>, {
+    MenuItems: ({ children }: { children: ReactNode }) => <ul aria-label="Header account menu">{children}</ul>,
+    Action: ({ label, onClick }: { label: string; onClick?: () => void }) => <li><button onClick={onClick}>{label}</button></li>,
+  }),
 }));
 vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: harness.me }) }));
 vi.mock("@/components/ui/ThemeToggle", () => ({ ThemeToggle: () => null }));
@@ -24,6 +27,16 @@ vi.mock("@/components/notifications/NotificationBell", () => ({ NotificationBell
 vi.mock("../MobileNav", () => ({ MobileNav: () => null }));
 
 import { Header } from "../Header";
+
+it("opens three appearance modes from the public-header avatar while preserving Clerk defaults", async () => {
+  harness.signedIn = true; render(<Header />);
+  const account = screen.getByRole("button", { name: "Account fixture" });
+  fireEvent.click(screen.getByRole("button", { name: "Appearance" }));
+  const dialog = screen.getByRole("dialog", { name: "Appearance" }); expect(within(dialog).getAllByRole("radio")).toHaveLength(3);
+  expect(screen.getByRole("button", { name: "manageAccount" })).toBeTruthy(); expect(screen.getByRole("button", { name: "signOut" })).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole("radio", { name: "System" })); fireEvent.keyDown(document, { key: "Escape" });
+  expect(screen.queryByRole("dialog")).toBeNull(); await waitFor(() => expect(document.activeElement).toBe(account));
+});
 
 afterEach(() => {
   cleanup();

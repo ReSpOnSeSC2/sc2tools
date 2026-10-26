@@ -11,6 +11,28 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Appearance and accessibility
+
+- Choose Light, Dark or System from appearance controls. System follows device changes and keeps the browser's colour in sync; existing saved choices remain supported.
+- Improve shared text, control and selected-state contrast in both themes. Public-page checks cover serious accessibility findings across phone, tablet and desktop sizes; keyboard navigation and a public accessibility guide explain current support and limits.
+
+### Agent 0.24.7
+
+- Package the PvT DT Rush priority fix, seven-minute PvZ air-opening rules and in-game scouting close/minimize controls for desktop users.
+- Include recorded scouting confidence and linked-account names, plus updated Ghost/OBS guidance. Existing replay labels can be refreshed with Recompute analysis after updating.
+
+### Opponent list columns
+
+- Choose latest replay download, map/result, your and the opponent's build, recorded build-order links/dates, game lengths, your macro breakdown/averages and scouting notes. Matching game filters and measured sample counts apply; incomplete build-order dates stay unknown or marked Latest known.
+- Save opponent column and sort choices immediately in this browser so returning to the page or starting a later session keeps them. Selected details also appear in phone cards, and optional summary fields are available in CSV exports.
+- Cancel replay downloads when the account or replay source changes, and allow retry after a bounded wait.
+
+### Fixed
+
+- Recognize early PvT ground Dark Templar openings as DT Rush before later Charge or Blink follow-ups. An early Dark Shrine excludes Charge-first labels, while a proven Robo and Warp Prism drop retains DT Drop priority.
+- Replace the broken status link with a public website and API reachability page, with separate results, timestamps and manual refresh. The status page works without signing in.
+- The desktop scouting report's X and minimize buttons now work while StarCraft II has focus, alongside the scouting icon. Other report content continues to pass game clicks through.
+
 ### Opponent page position
 
 - Keep your reading position when recorded compositions finish loading. Active phase and section chips scroll only within their own horizontal strips; section links still navigate when selected.
@@ -37,6 +59,7 @@ corresponding GitHub Release.
 
 ### Added
 - Signing in returns you to the public page you were viewing. Setup keeps that destination, and a recent Save, vote or Practice choice can finish when you return to the original page.
+- Change or clear your planned build directly from Macro Breakdown, in both the score popup and the full game page. The game header and other check-in views stay in sync.
 - Create builds from a replay, a detected label or a blank draft in one rich editor. The first-run library also links Community copies; searchable race-aware action pickers show friendly names, proxy eligibility and unknown-action errors.
 - Configure optional Twitch Predictions and live-game stream markers with separate permissions, explicit opt-ins and confirmed Dock controls. A separate server gate defaults off; current desktop telemetry cannot prove ranked queue status, so automatic Predictions remain unavailable.
 - Opt in to nine recorded ladder achievements in Event alerts, with per-moment visuals and sounds, local tests, clip timestamps and optional posts through an already connected bot. Supporter alerts keep priority; replay starting MMR and confirmed league evidence remain explicit.
@@ -44,6 +67,11 @@ corresponding GitHub Release.
 - Analyzer tables now support keyboard build opening, global matchup chips, a matchup-scoped heatmap and a Strategy games sheet that stays open as filters change. CSV exports save the displayed Builds, Strategy pairs, Matchups, Maps and pool cells with their scope and local date.
 - Live scouting on Today and a large second-screen page reuse your recorded opponent history, with bounded opening counts, recent replay links and an exact-account note popover. The Stream Dock Scout view omits private notes and replay/account actions.
 - Ghost practice assignments now sync to your account, with Practice actions on build and guide pages, a quick-disarm chip, explicit browser migration and a permanent OBS coach URL. Legacy Ghost links remain compatible; native Companion controls stay separate.
+- Analyzer links keep section searches, replay controls and pages, Strategy sheets, Arcade tabs and focused maps. Replay history has compact controls and a date jump; Daily Pulse offers keyboard carousel arrows and links directly to the relevant build, map or opponent.
+
+### Linked scouting and opening forecasts
+
+- Save same-player grouping across devices and recognise approved or already-cached alternate accounts in live scouting. Dossier, live and desktop briefs share a deterministic opening forecast with confidence, sample size and count-based explanations; missing or incomplete history stays explicit.
 
 ### PvZ air opening timing
 
@@ -56,7 +84,14 @@ corresponding GitHub Release.
 
 ### Admin Users
 
+- Keep deleted replay markers out of account game counts and recent history, while showing the authoritative pending-record count before a wipe.
+
 - Browse exact totals with sortable pages and signup, admin and inactive-agent filters. Export matching accounts as a bounded private CSV, inspect recent games/activity, and copy account IDs with a manual fallback.
+
+### Public link previews
+
+- Public pages use their own canonical and social titles. Shared community builds and authors, Try and Download gain branded preview cards; build rules show their deadlines clearly. Public member dates use a consistent time zone, and unavailable share data falls back promptly.
+- Public Community lists can refresh through bounded signed cache invalidation after edits and removals. Opponent profiles always recheck current privacy admission; interrupted writes and partial game wipes retire cached contributions safely.
 
 ### Stream Dock
 

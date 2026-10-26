@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { checkAccessibility } from "./accessibility-check";
 
 /**
  * Public-page responsive smoke, run at 360 / 768 / 1280 via the
@@ -17,6 +18,13 @@ import { expect, test, type Locator, type Page, type TestInfo } from "@playwrigh
 const PAGES: Array<{ path: string; expectText: RegExp }> = [
   { path: "/legal/privacy", expectText: /Privacy Policy/ },
   { path: "/legal/terms", expectText: /Terms of Service/ },
+  { path: "/legal/accessibility", expectText: /Accessibility/ },
+  { path: "/help", expectText: /How can we help/ },
+  { path: "/help/appearance", expectText: /Accessibility & appearance/ },
+  { path: "/definitions", expectText: /Build & Strategy Definitions/i },
+  { path: "/reviews", expectText: /replay reviews/i },
+  { path: "/community/builds/fixture-community-polish", expectText: /Fixture safe opening/ },
+  { path: "/community/authors/fixture-community-author", expectText: /FixtureBuilder/ },
   { path: "/", expectText: /opponent|build|replay/i },
   { path: "/guides", expectText: /build order guides/i },
   { path: "/guides/pvz", expectText: /PvZ build orders/i },
@@ -37,6 +45,39 @@ const PAGES: Array<{ path: string; expectText: RegExp }> = [
     ? [{ path: "/try", expectText: /analyze/i }]
     : []),
 ];
+
+for (const theme of ["light", "dark"] as const) {
+  test(`download command regions support keyboard scrolling in ${theme}`, async ({ page }, info) => {
+    test.skip(info.project.name !== "mobile-360", "Check the overflowing command blocks once at the narrow viewport.");
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+    await page.addInitScript(value => localStorage.setItem("sc2tools.theme", value), theme);
+    // Exercise the source-only platform on every host OS without a live release dependency.
+    await page.route("**/api/agent/version?*", route => route.fulfill({ json: { ok: true, latest: null, artifact: null } }));
+    await page.goto("/download");
+    const reject = page.getByRole("button", { name: "Reject", exact: true });
+    if (await reject.isVisible()) await reject.click();
+    await page.getByRole("tab", { name: "Linux", exact: true }).click();
+    await page.getByText("Manual install + verification", { exact: true }).click();
+    let scrolled = 0;
+    for (const name of ["Source installation commands", "Manual source installation commands", "Windows SHA-256 verification command", "macOS and Linux SHA-256 verification command"]) {
+      const commands = page.getByRole("region", { name, exact: true });
+      await commands.focus(); await commands.press("Shift+Tab"); await page.keyboard.press("Tab");
+      await expect(commands).toBeFocused();
+      expect(await commands.evaluate(element => {
+        const style = getComputedStyle(element);
+        return element.matches(":focus-visible") && (style.boxShadow !== "none" || (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0));
+      })).toBe(true);
+      if (await commands.evaluate(element => element.scrollWidth > element.clientWidth)) {
+        await commands.press("ArrowRight");
+        await expect.poll(() => commands.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+        scrolled += 1;
+      }
+    }
+    expect(scrolled).toBeGreaterThan(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await checkAccessibility(page, info, "/download-source-install", theme);
+  });
+}
 
 test("phone sign-in puts the form before collapsed optional marketing", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -112,8 +153,10 @@ test("phone privacy contents links reach the Cookies section", async ({ page }) 
   await expect(page.locator("h2#cookies")).toBeInViewport();
 });
 
-for (const { path, expectText } of PAGES) {
-  test(`${path} renders without horizontal scroll`, async ({ page }) => {
+for (const { path, expectText } of PAGES) for (const theme of ["light", "dark"] as const) {
+  test(`${path} ${theme} renders without horizontal scroll`, async ({ page }, info) => {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+    await page.addInitScript(value => localStorage.setItem("sc2tools.theme", value), theme);
     const response = await page.goto(path);
     expect(response, `no response for ${path}`).not.toBeNull();
     expect(response!.status(), `${path} status`).toBeLessThan(400);
@@ -138,6 +181,7 @@ for (const { path, expectText } of PAGES) {
       overflow.scrollWidth,
       `${path} horizontally overflows: content ${overflow.scrollWidth}px > viewport ${overflow.clientWidth}px`,
     ).toBeLessThanOrEqual(overflow.clientWidth + 1);
+    await checkAccessibility(page, info, path, theme);
   });
 }
 

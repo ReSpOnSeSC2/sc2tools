@@ -145,6 +145,7 @@ function topLabel(labels) {
  *   window: number,
  *   favOpening?: {name: string, share: number, samples: number, of: number},
  *   predictedStrategies?: Array<{name: string, weight: number}>,
+ *   openingForecast?: any,
  *   openingHistory?: Array<{name: string, samples: number, of: number}>,
  *   cheeseProbability?: number,
  *   cheeseHistory?: {samples: number, of: number},

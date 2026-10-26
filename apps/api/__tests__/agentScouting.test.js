@@ -22,6 +22,14 @@ function envelope(key = "current") {
 }
 
 describe("private scouting projection and broker", () => {
+  test("uses the shared posterior rather than a different favourite, including prior-only Low confidence", () => {
+    const env = envelope();
+    env.streamerHistory.openingForecast = { sampleSize: 0, effectiveN: 0, confidence: "Low", top: [{ name: "Hatch First", probability: .6, samples: 0, of: 0 }] };
+    env.streamerHistory.alsoPlaysAs = ["Alt", "Another"];
+    expect(buildScoutingBrief(env)).toMatchObject({ forecast: { method: "posterior", name: "Hatch First", share: .6, samples: 0, n: 0, effectiveN: 0, confidence: "Low" }, alsoPlaysAs: ["Alt", "Another"] });
+    env.streamerHistory.openingForecast.top = [];
+    expect(buildScoutingBrief(env).forecast).toBeNull();
+  });
   test("projects actual cached counts and private note without extra lookups", () => {
     const brief = buildScoutingBrief(envelope());
     expect(brief).toMatchObject({

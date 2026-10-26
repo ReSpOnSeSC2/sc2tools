@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, type MouseEvent, type ReactNode } from "react";
+import { OpponentDetailCells } from "./OpponentDetailColumns";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, CornerDownRight, ExternalLink, StickyNote } from "lucide-react";
 import { fmtAgo, fmtMmr, pct1, wrColor } from "@/lib/format";
@@ -89,6 +90,7 @@ export const OpponentRow = memo(function OpponentRow({ row: o, expanded, onToggl
                         {fmtMmr(o.mmr)}
                       </td> : null}
                       <MmrImpactCells opponent={o} columns={columns} />
+                      <OpponentDetailCells row={o} columns={columns} />
                       <td className="px-2 py-1 text-right text-xs text-text-dim">
                         {o.lastPlayed ? <time dateTime={o.lastPlayed} title={new Date(o.lastPlayed).toLocaleString()}>{fmtAgo(o.lastPlayed)}</time> : "—"}
                       </td>
@@ -208,6 +210,7 @@ export function IdentityRow({
         {fmtMmr(identity.mmr)}
       </td> : null}
       <MmrImpactCells opponent={identity} columns={columns} />
+      <OpponentDetailCells row={identity} columns={columns} />
       <td className="px-2 py-1 text-right text-xs text-text-dim">
         {identity.lastPlayed ? <time dateTime={identity.lastPlayed} title={new Date(identity.lastPlayed).toLocaleString()}>{fmtAgo(identity.lastPlayed)}</time> : "—"}
       </td>

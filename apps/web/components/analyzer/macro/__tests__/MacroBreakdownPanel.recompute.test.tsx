@@ -2,6 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MacroBreakdownPanel } from "../MacroBreakdownPanel";
 
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "synthetic-owner" }) }));
+
 const harness = vi.hoisted(() => ({
   playback: null as Record<string, unknown> | null,
   macroError: null as { status: number; message?: string } | null,

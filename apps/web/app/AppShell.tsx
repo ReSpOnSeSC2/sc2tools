@@ -11,6 +11,7 @@ import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import { ToastProvider } from "@/components/ui/Toast";
 import { clerkAppearanceBase } from "@/lib/clerk-appearance";
 import { isTokenAuthRoute } from "@/lib/tokenAuthRoutes";
+import { isPublicStatusRoute } from "@/lib/publicStatusRoute";
 import { isUntrackedPath } from "@/lib/analytics/pageLocation";
 import { AppChrome } from "@/components/chrome/AppChrome";
 import { isAppSurfacePath } from "@/components/chrome/appNav";
@@ -37,6 +38,9 @@ const MAIN_CLASS =
  * wrapper are omitted there; site-wide concerns (cookies, analytics, service
  * worker) still apply.
  *
+ * `/status` is standalone too: its public checks and links must remain usable
+ * without authentication, app requests or background analytics.
+ *
  * All other routes retain the existing Clerk + site-shell composition. A null
  * pathname is treated conservatively as a normal route so authentication is
  * never skipped while the router is becoming ready.
@@ -49,6 +53,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   // provider; the /p form remains during the legacy-link redirect window)
   // and the operator-only /admin screens. See lib/analytics/pageLocation.
   const analyticsAllowed = !isUntrackedPath(pathname);
+
+  // Reachability checks must work even when authentication or app APIs fail.
+  if (isPublicStatusRoute(pathname)) return <>{children}</>;
 
   if (isTokenSurface) {
     return (

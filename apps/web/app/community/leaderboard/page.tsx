@@ -4,12 +4,14 @@ import { Banner } from "@/components/Banner";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { CommunityShell } from "@/components/community/CommunityShell";
 import { LeaderboardTab, LeaderboardSkeleton } from "@/components/community/LeaderboardTab";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
-export const metadata = {
+export const metadata = pageMetadata({
   title: "Stock Market leaderboard",
   description:
     "Stock Market weekly P&L leaderboard. Players who opted into the public board, ranked by their weekly Arcade portfolio performance.",
-};
+  canonical: "/community/leaderboard",
+});
 
 export default function CommunityLeaderboardPage() {
   return (

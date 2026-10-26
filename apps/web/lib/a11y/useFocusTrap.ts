@@ -1,76 +1,70 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { canReturnFocus, focusableInside, handleFocusScopeKey, isFocusTrapRoot, registerFocusScope, removeFocusScope } from "./focusScopes";
 
 const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
-const scopes: HTMLElement[] = [];
-const topScope = () => scopes.findLast((scope) => scope.isConnected);
-
-const FOCUSABLE_SELECTOR = ["a[href]", "button:not([disabled])", "input:not([disabled])", "select:not([disabled])", "textarea:not([disabled])", "[tabindex]:not([tabindex='-1'])"].join(",");
-
-function focusableInside(root: HTMLElement | null): HTMLElement[] {
-  if (!root) return [];
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter((el) => {
-    if (el.hasAttribute("data-focus-trap-skip") || el.tabIndex < 0 || el.matches(":disabled") || el.closest("[hidden],[inert],[aria-hidden='true']")) return false;
-    // Responsive close buttons and collapsed groups may be in the DOM while
-    // hidden. Focusing those leaves the keyboard outside the active dialog.
-    for (let node: HTMLElement | null = el; node && node !== root.parentElement; node = node.parentElement) {
-      const style = window.getComputedStyle(node);
-      if (style.display === "none" || style.visibility === "hidden") return false;
-    }
-    return true;
-  });
-}
-
-/** Shared dialog/popover keyboard scope, including portalled child dialogs. */
-export function useFocusTrap({ open, containerRef, onClose, initialFocusRef }: {
+/** Modal Tab containment and top-layer Escape, including nonmodal portals. */
+export function useFocusTrap({ open, containerRef, onClose, initialFocusRef, returnFocusRef, trapFocus = true, autoFocus = true, restoreFocus = true }: {
   open: boolean;
   containerRef: RefObject<HTMLElement | null>;
   onClose: () => void;
   initialFocusRef?: RefObject<HTMLElement | null>;
+  returnFocusRef?: RefObject<HTMLElement | null>;
+  /** Nonmodal layers own Escape while the enclosing modal still owns Tab. */
+  trapFocus?: boolean;
+  /** A lazy consumer can keep its own ready-and-merged initial focus timing. */
+  autoFocus?: boolean;
+  /** if-lost waits for the pointer's native focus action before restoring. */
+  restoreFocus?: boolean | "if-lost" | (() => boolean | "if-lost");
 }) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const restoreRef = useRef(restoreFocus); restoreRef.current = restoreFocus;
+  const restoreEpoch = useRef(0);
+  const afterCommit = useRef<(() => void) | null>(null);
   useClientLayoutEffect(() => {
     if (!open) return;
     const scope = containerRef.current;
     if (!scope) return;
-    const previous = document.activeElement;
-    scopes.push(scope);
-    const onKey = (event: KeyboardEvent) => {
-      const root = containerRef.current;
-      if (!root || topScope() !== root) return;
-      const target = event.target instanceof Element ? event.target : document.activeElement;
-      const activeDialog = target?.closest('[role="dialog"]');
-      if (activeDialog && activeDialog !== root) return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        onCloseRef.current();
-      } else if (event.key === "Tab") {
-        const elements = focusableInside(root);
-        if (!elements.length) { event.preventDefault(); root.focus(); return; }
-        const first = elements[0];
-        const last = elements[elements.length - 1];
-        const active = document.activeElement;
-        if (event.shiftKey && (active === first || !root.contains(active))) {
-          event.preventDefault(); last.focus();
-        } else if (!event.shiftKey && (active === last || !root.contains(active))) {
-          event.preventDefault(); first.focus();
-        }
-      }
-    };
+    const epoch = ++restoreEpoch.current;
+    afterCommit.current = null;
+    const record = registerFocusScope(scope, trapFocus, returnFocusRef?.current ?? document.activeElement);
+    const onKey = (event: KeyboardEvent) => handleFocusScopeKey(record, event, () => onCloseRef.current());
     document.addEventListener("keydown", onKey);
     // Focus in the same commit. A zero-delay timer leaves a frame where a
     // newly opened child still sends Escape to its parent's focused button.
-    (initialFocusRef?.current ?? focusableInside(scope)[0] ?? scope).focus();
+    if (autoFocus) (initialFocusRef?.current ?? focusableInside(scope)[0] ?? scope).focus();
     return () => {
       // React may already have detached the closing root before cleanup.
-      const wasTop = scopes.at(-1) === scope;
-      const index = scopes.lastIndexOf(scope);
-      if (index >= 0) scopes.splice(index, 1);
+      const wasTop = removeFocusScope(record);
       document.removeEventListener("keydown", onKey);
-      if (wasTop && previous instanceof HTMLElement && previous.isConnected) previous.focus();
+      const shouldRestore = typeof restoreRef.current === "function" ? restoreRef.current() : restoreRef.current;
+      if (!wasTop || !shouldRestore) return;
+      const before = document.activeElement;
+      const restore = () => {
+        const target = record.previous;
+        const active = document.activeElement;
+        const lost = !active || active === document.body || !active.isConnected
+          || (shouldRestore === "if-lost" && isFocusTrapRoot(active));
+        if (restoreEpoch.current !== epoch || !(target instanceof HTMLElement) || !target.isConnected || !canReturnFocus(target)) return;
+        if (lost || (shouldRestore !== "if-lost" && active === before)) target.focus();
+      };
+      if (shouldRestore === "if-lost") {
+        // Pointer default focus happens after React's close commit.
+        window.setTimeout(restore, 0);
+      } else {
+        restore();
+        // React can restore the commit's earlier selection after cleanup.
+        // Retry in layout for controlled closes, or a microtask on unmount.
+        afterCommit.current = restore;
+        queueMicrotask(() => { if (afterCommit.current === restore) { afterCommit.current = null; restore(); } });
+      }
     };
-  }, [open, containerRef, initialFocusRef]);
+  }, [open, containerRef, initialFocusRef, returnFocusRef, trapFocus, autoFocus]);
+  useClientLayoutEffect(() => {
+    const restore = afterCommit.current;
+    afterCommit.current = null;
+    restore?.();
+  });
 }

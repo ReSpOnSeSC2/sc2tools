@@ -16,6 +16,7 @@ import {
 import { CostBar } from "@/components/donate/CostBar";
 import { CopyPaypalEmail } from "@/components/donate/CopyPaypalEmail";
 import type { LucideIcon } from "lucide-react";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { Badge, Card, GlowHalo, Section } from "@/components/ui";
 import {
   FIXED_MONTHLY_FALLBACK_USD,
@@ -30,12 +31,12 @@ import {
   type InfrastructureCosts,
 } from "@/lib/infrastructureCosts";
 
-export const metadata = {
-  alternates: { canonical: "/donate" },
+export const metadata = pageMetadata({
+  canonical: "/donate",
   title: "Donate",
   description:
     "SC2 Tools is free for everyone. If it's helping your ladder grind, you can chip in via Streamlabs or PayPal.",
-};
+});
 
 const STREAMLABS_URL = "https://streamlabs.com/responsesc2/tip";
 const PAYPAL_EMAIL = "jay1988stud@gmail.com";

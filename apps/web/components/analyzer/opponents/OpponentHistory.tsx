@@ -1,10 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { fmtAgo, pct1 } from "@/lib/format";
 import type { OpponentGroup } from "@/lib/opponentGroups";
 import { opponentRowWindow } from "@/lib/opponentRivalries";
-import { opponentRegion, type OpponentColumns } from "@/lib/opponentPresentation";
+import { OPPONENT_DETAIL_COLUMNS, OPPONENT_EXTRA_COLUMNS, opponentRegion, type OpponentColumns } from "@/lib/opponentPresentation";
 import { useMediaQuery } from "@/lib/useChartTheme";
 import { SortableTh, type SortState } from "@/components/ui/SortableTh";
 import { Button } from "@/components/ui/Button";
@@ -16,10 +16,50 @@ import { AliasChip, IdentityRow, NotePreview, OpponentLink, OpponentRow } from "
 import { OpponentRace } from "./OpponentRace";
 import { RevealedChip } from "../RevealedChip";
 import { type Opp, type OpenOpponent, notePreview } from "./types";
+import { OpponentDetailCells, UNSORTED_OPPONENT_COLUMNS } from "./OpponentDetailColumns";
 
 const EXTRA_COLUMNS = [{ key: "pulseId", label: "Pulse ID" }, { key: "mmr", label: "Last MMR" }, { key: "netMmr", label: "Net MMR" }, { key: "mmrWon", label: "MMR won" }, { key: "mmrLost", label: "MMR lost" }] as const;
+const MOBILE_SORTS = [
+  { key: "lastPlayed", label: "Last played" }, { key: "games", label: "Games" }, { key: "winRate", label: "Win rate" },
+  { key: "netMmr", label: "Net MMR" }, { key: "name", label: "Name" }, { key: "race", label: "Race" },
+  ...OPPONENT_EXTRA_COLUMNS.filter(column => column.key !== "netMmr" && !UNSORTED_OPPONENT_COLUMNS.has(column.key)),
+];
+function useColumnPickerPosition() {
+  const ref = useRef<HTMLDetailsElement>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    let frame = 0;
+    const place = () => {
+      frame = 0;
+      const details = ref.current, panel = details?.querySelector("fieldset");
+      if (!details?.open || !panel) return;
+      const anchor = details.querySelector("summary")!.getBoundingClientRect();
+      const rootStyle = getComputedStyle(document.documentElement);
+      const chromeBottom = Math.max(0, parseFloat(rootStyle.getPropertyValue("--chrome-bottom")) || 0);
+      const edge = innerHeight - chromeBottom;
+      const above = Math.max(0, Math.min(anchor.top, edge) - 8), below = Math.max(0, edge - Math.max(anchor.bottom, 8) - 8);
+      const desired = Math.min(innerHeight * .7, 34 * (parseFloat(rootStyle.fontSize) || 16), panel.scrollHeight);
+      const upward = below < desired && above > below;
+      panel.style.top = upward ? "auto" : `calc(100% + ${Math.max(4, 8 - anchor.bottom)}px)`;
+      panel.style.bottom = upward ? `calc(100% + ${Math.max(4, anchor.top - edge + 4)}px)` : "auto";
+      panel.style.maxHeight = `min(70dvh,34rem,${upward ? above : below}px)`;
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(place); };
+    place();
+    window.addEventListener("resize", schedule);
+    window.addEventListener("scroll", schedule, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("scroll", schedule, true);
+    };
+  }, [open]);
+  return { ref, setOpen };
+}
 export function OpponentColumnPicker({ columns, onChange, onReset }: { columns: OpponentColumns; onChange: (key: keyof OpponentColumns, checked: boolean) => void; onReset: () => void }) {
-  return <details className="relative"><summary className="flex min-h-11 cursor-pointer items-center rounded-lg border border-line px-3 text-caption">Columns</summary><fieldset className="absolute right-0 z-30 min-w-48 rounded-xl border-2 border-line bg-bg-elevated p-3 shadow-hard"><legend className="sr-only">Opponent columns</legend>{EXTRA_COLUMNS.map(column => <label key={column.key} className="flex min-h-11 items-center gap-2 text-caption"><input type="checkbox" checked={columns[column.key]} onChange={event => onChange(column.key, event.target.checked)} />{column.label}</label>)}<Button size="sm" variant="ghost" onClick={onReset}>Reset columns</Button></fieldset></details>;
+  const position = useColumnPickerPosition();
+  return <details ref={position.ref} className="relative" onToggle={event => position.setOpen(event.currentTarget.open)} onKeyDown={event => { if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}><summary className="flex min-h-11 cursor-pointer items-center rounded-lg border border-line px-3 text-caption">Columns</summary><fieldset className="absolute right-0 z-30 max-h-[min(70dvh,34rem)] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border-2 border-line bg-bg-elevated p-3 shadow-hard"><legend className="sr-only">Opponent columns</legend><p className="mb-3 text-caption text-text-muted">Saved automatically in this browser.</p>{Array.from(new Set(OPPONENT_EXTRA_COLUMNS.map(column => column.group))).map(group => <div key={group} className="mb-3"><p className="text-micro font-bold uppercase tracking-wide text-text-dim">{group}</p>{OPPONENT_EXTRA_COLUMNS.filter(column => column.group === group).map(column => <label key={column.key} className="flex min-h-11 items-center gap-2 text-caption"><input type="checkbox" checked={!!columns[column.key]} onChange={event => onChange(column.key, event.target.checked)} />{column.label}</label>)}</div>)}<Button size="sm" variant="ghost" onClick={onReset}>Reset columns</Button></fieldset></details>;
 }
 
 export function OpponentHistory({ items, expanded, visibleCount, onMore, sort, columns, onToggle, onOpen, onPrefetch, channelsFor, star, loading, busy }: {
@@ -32,7 +72,7 @@ export function OpponentHistory({ items, expanded, visibleCount, onMore, sort, c
   const extra = Object.values(columns).filter(Boolean).length;
   return <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard">
     {mobile ? <>
-      <label className="flex items-center gap-3 p-3 text-caption">Sort opponents<Select aria-label="Sort opponents" value={["lastPlayed", "games", "winRate", "netMmr", "name", "race"].includes(sort.sortBy) ? sort.sortBy : "lastPlayed"} onChange={event => sort.setSortExplicit(event.target.value, event.target.value === "name" || event.target.value === "race" ? "asc" : "desc")} className="min-h-11 flex-1"><option value="lastPlayed">Last played</option><option value="games">Games</option><option value="winRate">Win rate</option><option value="netMmr">Net MMR</option><option value="name">Name</option><option value="race">Race</option></Select><Button variant="ghost" aria-label="Reverse sort direction" onClick={() => sort.setSortExplicit(sort.sortBy, sort.sortDir === "asc" ? "desc" : "asc")}>{sort.sortDir === "asc" ? "↑" : "↓"}</Button></label>
+      <label className="flex items-center gap-3 p-3 text-caption">Sort opponents<Select aria-label="Sort opponents" value={MOBILE_SORTS.some(option => option.key === sort.sortBy) ? sort.sortBy : "lastPlayed"} onChange={event => sort.setSortExplicit(event.target.value, ["name", "race", "region", "map", "myBuild", "opponentBuild", "lastResult"].includes(event.target.value) ? "asc" : "desc")} className="min-h-11 flex-1">{MOBILE_SORTS.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}</Select><Button variant="ghost" aria-label="Reverse sort direction" onClick={() => sort.setSortExplicit(sort.sortBy, sort.sortDir === "asc" ? "desc" : "asc")}>{sort.sortDir === "asc" ? "↑" : "↓"}</Button></label>
       <ul aria-label="Opponent history" aria-busy={busy || undefined} className="divide-y divide-line">
         {loading ? <li className="p-3"><Skeleton rows={8} /></li> : rows.map(entry => <li key={`${entry.kind}:${entry.row.pulseId}`} className={entry.kind === "identity" ? "border-l-4 border-l-accent/30 bg-bg-elevated p-3 pl-6" : "p-3"}>
           <MobileOpponent row={entry.row} onOpen={onOpen} onPrefetch={onPrefetch} />
@@ -41,9 +81,10 @@ export function OpponentHistory({ items, expanded, visibleCount, onMore, sort, c
             <NotePreview previews={(entry.kind === "parent" ? entry.row.identities : [entry.row]).map(notePreview).filter(Boolean)} />
             <PlayerChannelLinks channels={channelsFor(entry.row)} playerName={entry.row.name} compact />
           </div>
+          <OpponentDetailCells row={entry.row} columns={columns} mobile />
         </li>)}
       </ul>
-    </> : <div className="overflow-x-auto"><table aria-label="Opponent history" className="w-full text-sm [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-20 [&_thead_th:first-child]:bg-bg-elevated" style={{ minWidth: 640 + extra * 88 }}>
+    </> : <div className="relative overflow-x-auto"><table aria-label="Opponent history" className="w-full text-sm [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-20 [&_thead_th:first-child]:bg-bg-elevated" style={{ minWidth: 640 + extra * 88 }}>
       <thead className="bg-bg-elevated"><tr>
         <SortableTh col="name" label="Opponent" {...sort} compact width="12rem" />
         <SortableTh col="race" label="Race" {...sort} compact width="4rem" />
@@ -53,6 +94,7 @@ export function OpponentHistory({ items, expanded, visibleCount, onMore, sort, c
         <SortableTh col="winRate" label="Win rate" {...sort} compact align="right" />
         <SortableTh col="games" label="Games" {...sort} compact align="right" />
         {EXTRA_COLUMNS.slice(1).map(column => columns[column.key] ? <SortableTh key={column.key} col={column.key} label={column.label} {...sort} compact align="right" /> : null)}
+        {OPPONENT_DETAIL_COLUMNS.map(column => columns[column.key] ? UNSORTED_OPPONENT_COLUMNS.has(column.key) ? <th key={column.key} className="px-2 py-1.5 text-left text-micro font-semibold uppercase tracking-wide text-text-muted">{column.label}</th> : <SortableTh key={column.key} col={column.key} label={column.label} {...sort} compact /> : null)}
         <SortableTh col="lastPlayed" label="Last" {...sort} compact align="right" />
         <th className="px-1 py-2"><span className="sr-only">Open dossier</span><span aria-hidden>→</span></th>
       </tr></thead>

@@ -158,7 +158,8 @@ function ManualInstall({ os }: { os: DetectedOS }) {
           <h4 className="text-caption font-semibold uppercase tracking-wider text-text-muted">
             Run from source
           </h4>
-          <pre className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption">
+          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The named command region must accept keyboard scrolling. */}
+          <pre role="region" aria-label="Manual source installation commands" tabIndex={0} className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption focus-visible:ring-2 focus-visible:ring-accent">
             {sourceInstallSnippet(os)}
           </pre>
         </div>
@@ -169,11 +170,13 @@ function ManualInstall({ os }: { os: DetectedOS }) {
           <p className="text-caption text-text-muted">
             On Windows PowerShell:
           </p>
-          <pre className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption">
+          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The named command region must accept keyboard scrolling. */}
+          <pre role="region" aria-label="Windows SHA-256 verification command" tabIndex={0} className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption focus-visible:ring-2 focus-visible:ring-accent">
             {`Get-FileHash .\\SC2ToolsAgent-Setup-*.exe -Algorithm SHA256`}
           </pre>
           <p className="text-caption text-text-muted">On macOS / Linux:</p>
-          <pre className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption">
+          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The named command region must accept keyboard scrolling. */}
+          <pre role="region" aria-label="macOS and Linux SHA-256 verification command" tabIndex={0} className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption focus-visible:ring-2 focus-visible:ring-accent">
             {`shasum -a 256 sc2tools-agent`}
           </pre>
           <p className="text-caption text-text-muted">
@@ -194,7 +197,6 @@ function RecapCard() {
         <h3 className="text-body-lg font-semibold text-text">What it does</h3>
       </header>
       <ul
-        role="list"
         className="ml-5 list-disc space-y-1 text-caption text-text-muted"
       >
         <li>
@@ -223,7 +225,7 @@ function RecapCard() {
         Already have an account?{" "}
         <Link
           href="/devices"
-          className="text-accent-cyan underline-offset-2 hover:underline"
+          className="text-accent-cyan underline underline-offset-2"
         >
           Pair a new machine →
         </Link>

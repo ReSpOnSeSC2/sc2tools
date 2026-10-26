@@ -3,6 +3,7 @@ import type { StrategyEntry } from "./StrategyTendencyChart";
 import type { Prediction } from "./PredictedStrategiesList";
 import type { ProfileGame } from "./Last5GamesTimeline";
 import type { BuildPhasePayload, BuildTransitionsPayload } from "@/lib/serverApi";
+import type { OpeningForecast } from "@/lib/openingForecast";
 
 export type OpponentProfileResp = {
   globalIdentity?: GlobalPlayerIdentity | null;
@@ -44,6 +45,9 @@ export type OpponentProfileResp = {
   byStrategy?: Record<string, { wins: number; losses: number }>;
   topStrategies?: StrategyEntry[];
   predictedStrategies?: Prediction[];
+  openingForecast?: OpeningForecast;
+  alsoPlaysAs?: string[];
+  mergedAccounts?: number;
   myRace?: string;
   oppRaceModal?: string;
   // Phase distribution for the "Where games end" outcome bar.

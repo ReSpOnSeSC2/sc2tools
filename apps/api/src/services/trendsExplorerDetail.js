@@ -7,6 +7,7 @@ const {
 
 const DETAIL_VERSION = 1;
 const { randomUUID } = require("crypto");
+const { opponentBuildOrderSummaryUpdate } = require("./opponentBuildOrderSummary");
 const CHECKPOINTS = Object.freeze([300, 480, 720]);
 const MAX_SNAPSHOT_AGE_SEC = 30;
 const DETAIL_READ_FIELDS = Object.freeze([
@@ -75,9 +76,12 @@ function extractDetailSummary(fields) {
  * @param {Record<string, any>} fields @returns {Record<string, any>} */
 function detailSummaryUpdate(fields) {
   const summary = extractDetailSummary(fields);
-  if (Object.keys(summary).length === 1) return {};
+  const opponent = opponentBuildOrderSummaryUpdate(fields);
+  const hasTrends = Object.keys(summary).length > 1;
+  if (!hasTrends && Object.keys(opponent).length === 0) return {};
   return {
-    ...Object.fromEntries(Object.entries(summary).map(([key, value]) => [`trendsExplorerDetail.${key}`, value])),
+    ...(hasTrends ? Object.fromEntries(Object.entries(summary).map(([key, value]) => [`trendsExplorerDetail.${key}`, value])) : {}),
+    ...opponent,
     trendsExplorerRevision: randomUUID(),
   };
 }

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -10,10 +11,14 @@ import type {
   ReplayLibraryResponse,
   ReplaySharingResponse,
 } from "../replays/types";
+import { navigation, router, visit } from "../replays/__tests__/navigationFixture";
+import { replayRowMemoryKey } from "@/lib/replayListNavigation";
+import type { AnalyzerFilters } from "@/lib/filterContext";
 import { ReplayLibrary } from "../replays/ReplayLibrary";
 import { gameSourceFromQuery } from "@/lib/gameNavigation";
 import { ownerNeighborPath } from "../game/GameNavigation";
 
+const globalState = vi.hoisted(() => ({ filters: {} as AnalyzerFilters }));
 const mocks = vi.hoisted(() => ({
   apiCall: vi.fn(),
   clipboardWrite: vi.fn(),
@@ -34,18 +39,15 @@ vi.mock("@/components/dashboard/AnalyzerFrame", () => ({
   useDashboardMe: () => ({ userId: "fallback-user" }),
 }));
 
-vi.mock("@/lib/filterContext", () => ({
+vi.mock("next/navigation", () => import("../replays/__tests__/navigationFixture"));
+vi.mock("@/lib/filterContext", async original => ({
+  ...await original<object>(),
   useFilters: () => ({
-    filters: {
-      since: "2026-08-01",
-      regions: "NA",
-      map_pool: "ladder",
-      game_size: "1v1",
-    },
+    filters: globalState.filters,
     dbRev: 9,
+    seasons: [],
+    setFilters: (filters: AnalyzerFilters) => { globalState.filters = filters; },
   }),
-  filtersToQuery: () =>
-    "?since=2026-08-01&regions=NA&map_pool=ladder&game_size=1v1",
 }));
 
 vi.mock("@/lib/clientApi", () => ({
@@ -134,6 +136,9 @@ function latestReplayParams(): URLSearchParams {
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
+  window.sessionStorage.clear(); window.localStorage.clear();
+  globalState.filters = { since: "2026-08-01", regions: "NA", map_pool: "ladder", game_size: "1v1" };
+  navigation.hold = false; navigation.pending = []; router.replace.mockClear(); router.push.mockClear();
   replayState = "ready";
   sharingState = { enabled: false, handle: null };
   for (const mock of Object.values(mocks)) mock.mockReset();
@@ -197,6 +202,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("ReplayLibrary", () => {
@@ -204,7 +210,7 @@ describe("ReplayLibrary", () => {
     window.history.replaceState({ existing: true }, "", "/app/replays?keep=1#archive");
     const view = render(<ReplayLibrary />);
     fireEvent.change(screen.getByRole("textbox", { name: "Search replays" }), { target: { value: "Rival build" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "Filter by result" }), { target: { value: "loss" } });
+    fireEvent.click(screen.getByRole("button", { name: "Losses" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Filter by matchup" }), { target: { value: "PvT" } });
     fireEvent.change(screen.getByRole("combobox", { name: "Sort replays" }), { target: { value: "date_asc" } });
     await waitFor(() => expect(latestReplayParams().get("search")).toBe("Rival build"));
@@ -220,7 +226,7 @@ describe("ReplayLibrary", () => {
     window.history.replaceState(window.history.state, "", source.href);
     render(<ReplayLibrary />);
     expect((screen.getByRole("textbox", { name: "Search replays" }) as HTMLInputElement).value).toBe("Rival build");
-    expect((screen.getByRole("combobox", { name: "Filter by result" }) as HTMLSelectElement).value).toBe("loss");
+    expect(screen.getByRole("button", { name: "Losses" }).getAttribute("aria-pressed")).toBe("true");
     expect((screen.getByRole("combobox", { name: "Filter by matchup" }) as HTMLSelectElement).value).toBe("PvT");
     expect((screen.getByRole("combobox", { name: "Sort replays" }) as HTMLSelectElement).value).toBe("date_asc");
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
@@ -251,9 +257,7 @@ describe("ReplayLibrary", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Search replays" }), {
       target: { value: "Rival build" },
     });
-    fireEvent.change(screen.getByRole("combobox", { name: "Filter by result" }), {
-      target: { value: "win" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Wins" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Filter by matchup" }), {
       target: { value: "PvT" },
     });
@@ -316,7 +320,7 @@ describe("ReplayLibrary", () => {
   it("requires explicit consent before enabling sharing and copies the canonical public URL", async () => {
     render(<ReplayLibrary />);
     expect(screen.queryByRole("button", { name: "Copy public replay page link" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Share replay page" }));
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
 
     expect(screen.getByRole("dialog", { name: "Share your replay archive" })).toBeTruthy();
     expect(screen.getByText(/Exactly what visitors can see/i)).toBeTruthy();
@@ -386,4 +390,69 @@ describe("ReplayLibrary", () => {
     expect(mocks.apiCall).not.toHaveBeenCalled();
     expect(mocks.toastSuccess).not.toHaveBeenCalledWith("Replay page link copied");
   });
+  it("uses the committed q and cursor together while navigation acknowledgements are held", async () => {
+    visit("/app/replays?q=old&cursor=cursor%2B%2F2", true); navigation.hold = true; vi.useFakeTimers();
+    render(<ReplayLibrary />);
+    const input = screen.getByRole("textbox", { name: "Search replays" });
+    fireEvent.change(input, { target: { value: "new draft" } });
+    expect(latestReplayParams().get("search")).toBe("old"); expect(latestReplayParams().get("cursor")).toBe("cursor+/2");
+    expect((screen.getByRole("button", { name: "Older" }) as HTMLButtonElement).disabled).toBe(true);
+    act(() => { vi.advanceTimersByTime(300); });
+    expect(router.replace).toHaveBeenCalledTimes(1); expect(router.push).not.toHaveBeenCalled();
+    expect(latestReplayParams().get("search")).toBe("old");
+    act(() => navigation.acknowledge());
+    expect(latestReplayParams().get("search")).toBe("new draft"); expect(latestReplayParams().has("cursor")).toBe(false);
+    fireEvent.change(input, { target: { value: "flushed text" } }); fireEvent.click(screen.getByRole("button", { name: "Wins" }));
+    expect(router.replace).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("button", { name: "Wins" }).getAttribute("aria-pressed")).toBe("true");
+    expect((screen.getByRole("button", { name: "Older" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(latestReplayParams().has("result")).toBe(false);
+    act(() => navigation.acknowledge());
+    expect(latestReplayParams().get("search")).toBe("flushed text"); expect(latestReplayParams().get("result")).toBe("win");
+    act(() => { vi.advanceTimersByTime(400); }); expect(router.replace).toHaveBeenCalledTimes(2); vi.useRealTimers();
+  });
+  it("recovers session Newer after remount, or Back to newest without page memory", async () => {
+    visit("/app/replays", true); const first = render(<ReplayLibrary />); fireEvent.click(screen.getByRole("button", { name: "Older" }));
+    await waitFor(() => expect(latestReplayParams().get("cursor")).toBe("cursor+/2")); first.unmount();
+    const reloaded = render(<ReplayLibrary />); expect(screen.getByText("Page 2")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Newer" })); expect(latestReplayParams().has("cursor")).toBe(false);
+    reloaded.unmount(); sessionStorage.clear(); visit("/app/replays?cursor=cursor%2B%2F2&q=Rival", true);
+    render(<ReplayLibrary />); expect(screen.getByText("Saved page")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Back to newest" })); expect(latestReplayParams().has("cursor")).toBe(false); expect(latestReplayParams().get("search")).toBe("Rival");
+  });
+  it("suppresses a stale cursor synchronously on global account changes", () => {
+    visit("/app/replays?cursor=cursor%2B%2F2", true); navigation.hold = true;
+    const view = render(<ReplayLibrary />); const before = replayPaths().length;
+    globalState.filters = { ...globalState.filters, accounts: "2-S2-1-123" }; view.rerender(<ReplayLibrary />);
+    for (const path of replayPaths().slice(before)) { const params = new URL(path, "https://fixture.test").searchParams; expect(params.get("accounts")).toBe("2-S2-1-123"); expect(params.has("cursor")).toBe(false); }
+    expect(navigation.pending.at(-1)).not.toContain("cursor=");
+  });
+  it("clamps Jump to date to the earlier global until and clears its cursor", async () => {
+    globalState.filters = { ...globalState.filters, until: "2026-08-12T15:00:00.000Z" };
+    visit("/app/replays?cursor=cursor%2B%2F2", true); render(<ReplayLibrary />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Search replays" }), { target: { value: "Rival" } });
+    fireEvent.change(screen.getByLabelText("Jump to date"), { target: { value: "2026-08-20" } });
+    expect(latestReplayParams().get("until")).toBe("2026-08-12T15:00:00.000Z"); expect(latestReplayParams().has("cursor")).toBe(false);
+    fireEvent.change(screen.getByLabelText("Jump to date"), { target: { value: "2026-08-10" } });
+    expect(latestReplayParams().get("until")).toBe("2026-08-10T23:59:59.999Z"); expect(location.search).toContain("before=2026-08-10");
+    fireEvent.click(screen.getByRole("button", { name: "Clear replay date" })); expect(latestReplayParams().get("until")).toBe("2026-08-12T15:00:00.000Z");
+  });
+  it("clears legacy/local empty filters without widening the global cohort and dismisses the tip", () => {
+    replayState = "empty"; visit("/app/replays?replaySearch=Rival&replayResult=tie&replayMatchup=PvT&before=2026-08-10", true);
+    render(<ReplayLibrary />); expect(screen.getByRole("button", { name: "Ties only ×" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear replay filters" }));
+    expect(latestReplayParams().get("since")).toBe("2026-08-01"); expect(latestReplayParams().get("regions")).toBe("NA");
+    expect(location.search).not.toMatch(/q=|result=|matchup=|before=|replaySearch|replayResult|replayMatchup/);
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss replay tip" })); expect(screen.queryByText(/Personal match tape/)).toBeNull(); expect(localStorage.getItem("replays.introDismissed")).toBe("true");
+  });
+  it("restores the opened row with reduced motion after returning from analysis", async () => {
+    visit("/app/replays", true); Object.defineProperty(window, "matchMedia", { configurable: true, value: vi.fn(() => ({ matches: true })) });
+    const first = render(<ReplayLibrary />); const link = screen.getAllByRole("link", { name: /Open replay analysis/ })[0];
+    link.addEventListener("click", event => event.preventDefault()); fireEvent.click(link);
+    expect(JSON.parse(sessionStorage.getItem(replayRowMemoryKey("owner"))!).gameId).toBe("game-1"); first.unmount();
+    const scroll = vi.mocked(HTMLElement.prototype.scrollIntoView); scroll.mockClear(); render(<ReplayLibrary />);
+    expect(scroll).toHaveBeenCalledWith({ behavior: "auto", block: "center" }); expect(sessionStorage.getItem(replayRowMemoryKey("owner"))).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Older" })); expect(scroll).toHaveBeenCalledWith({ behavior: "auto", block: "start" });
+  });
+
 });

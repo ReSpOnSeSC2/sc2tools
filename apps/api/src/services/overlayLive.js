@@ -6,6 +6,7 @@ const {
   LiveEnrichmentCoordinator,
   invalidateEnrichmentForOpponent: invalidateEnrichmentForOpponentImpl,
   invalidateEnrichmentForUser,
+  invalidateAllEnrichment,
 } = require("./overlayLiveEnrichment");
 const aggregations = require("./overlayLiveAggregations");
 const {
@@ -154,6 +155,11 @@ function applyOpponentTendencies(payload, tendencies, legacyOpenings) {
     payload.cheeseProbability = t.cheeseProbability;
     if (t.cheeseHistory) payload.cheeseHistory = t.cheeseHistory;
   }
+  if (tendencies.openingForecast) {
+    payload.openingForecast = tendencies.openingForecast;
+    payload.predictedStrategies = tendencies.openingForecast.top.map((/** @type {any} */ row) => ({ name: row.name, weight: row.probability }));
+    payload.scouting = payload.predictedStrategies.map((/** @type {any} */ row) => ({ label: row.name, confidence: row.weight }));
+  }
 }
 
 /**
@@ -199,6 +205,8 @@ class OverlayLiveService {
    *   gameDetails?: import('./gameDetails').GameDetailsService | null,
    *   pulseMmr?: import('./pulseMmr').PulseMmrService | null,
    *   rivals?: Pick<import('./rivals').RivalsService,'isStarred'> | null,
+ *   scoutingIdentities?: import('./scoutingIdentities').ScoutingIdentitiesService|null,
+ *   scoutingForecast?: import('./scoutingForecast').ScoutingForecastService|null,
    * }} [services]
    */
   constructor(db, services = {}) {
@@ -222,6 +230,8 @@ class OverlayLiveService {
      */
     this.pulseMmr = services.pulseMmr || null;
     this.rivals = services.rivals || null;
+    this.scoutingIdentities = services.scoutingIdentities || null;
+    this.scoutingForecast = services.scoutingForecast || null;
     /**
      * Per-(userId, oppName, oppRace) cache for live-envelope
      * enrichment. The agent fires envelopes at 1 Hz during a match;
@@ -297,7 +307,7 @@ class OverlayLiveService {
     // pulseId. The opponents row is the cheap pre-aggregated counter;
     // a falsy lookup just means we skip the H2H/Rival/Rematch widgets
     // for this payload, never blocks the broadcast.
-    const oppRow = opp?.pulseId
+    let oppRow = opp?.pulseId
       ? await this.db.opponents
           .findOne(
             { userId, pulseId: opp.pulseId },
@@ -306,6 +316,7 @@ class OverlayLiveService {
                 _id: 0,
                 pulseId: 1,
                 pulseCharacterId: 1,
+                displayNameSample: 1,
                 toonHandle: 1,
                 gameCount: 1,
                 wins: 1,
@@ -318,6 +329,11 @@ class OverlayLiveService {
           )
           .catch(() => null)
       : null;
+
+    const linked = oppRow && this.scoutingIdentities ? await this.scoutingIdentities.resolve(userId, oppRow) : null;
+    if (linked && oppRow) oppRow = { ...oppRow, wins: linked.wins, losses: linked.losses, gameCount: linked.gameCount };
+    const historyOpp = { ...opp, ...(linked ? { pulseIds: linked.pulseIds, characterIds: linked.characterIds } : {}) };
+    if (linked && linked.mergedAccounts > 1) { payload.alsoPlaysAs = linked.alsoPlaysAs; payload.mergedAccounts = linked.mergedAccounts; }
 
     const opponentNotes = await loadOpponentNotes(
       this.db.opponentNotes,
@@ -364,7 +380,7 @@ class OverlayLiveService {
 
     // Favourite opening, predictions and cheese from the streamer's
     // games vs this opponent in this matchup, this game included.
-    const tendencies = await this._opponentTendencies(userId, opp, myRace, oppRace);
+    const tendencies = await this._opponentTendencies(userId, historyOpp, myRace, oppRace, { map: game.map, myMmr: game.myMmr });
     applyOpponentTendencies(payload, tendencies, oppRow?.openings);
     // Too little history to weigh yet: the opening this game just
     // showed still lights the cheese alert on its own.
@@ -447,7 +463,7 @@ class OverlayLiveService {
     if (opp) {
       const recent = await this._recentGamesForOpponent(
         userId,
-        opp,
+        historyOpp,
         myRace,
         oppRace,
         game.gameId,
@@ -549,6 +565,7 @@ class OverlayLiveService {
    * @param {string|number|null} [opponentPulseCharacterId]
    * @param {string} [myRace]
    * @param {string|null} [opponentToonHandle]
+ * @param {{map?:unknown}} [forecastContext]
    * @returns {Promise<object|null>}
    */
   async buildFromOpponentName(
@@ -558,6 +575,7 @@ class OverlayLiveService {
     opponentPulseCharacterId,
     myRace,
     opponentToonHandle,
+    forecastContext = {},
   ) {
     if (!userId || !opponentName) return null;
     /** @type {Record<string, any>} */
@@ -657,6 +675,11 @@ class OverlayLiveService {
       }
     }
 
+    const linked = oppRow && oppRow.matchedBy !== "display_name" && this.scoutingIdentities
+      ? await this.scoutingIdentities.resolve(userId, oppRow) : null;
+    if (linked) oppRow = { ...oppRow, wins: linked.wins, losses: linked.losses, gameCount: linked.gameCount };
+    if (linked && linked.mergedAccounts > 1) { payload.alsoPlaysAs = linked.alsoPlaysAs; payload.mergedAccounts = linked.mergedAccounts; }
+
     // Notes belong to the exact toon identity the streamer edited. When
     // the live envelope carries that handle, keep it authoritative even
     // if Tier A matched an older row through the shared character id.
@@ -750,6 +773,7 @@ class OverlayLiveService {
     // case the row's identifiers are the ones the user's games are
     // stamped with.
     const opp = {
+      ...(linked ? { pulseIds: linked.pulseIds, characterIds: linked.characterIds } : {}),
       pulseId: oppRow?.pulseId || opponentToonHandle || undefined,
       pulseCharacterId: oppRow?.pulseCharacterId || pcidString || undefined,
       displayName: oppRow?.displayNameSample || opponentName,
@@ -775,7 +799,7 @@ class OverlayLiveService {
       ? { pulseId: opponentToonHandle, pulseCharacterId: pcidString }
       : opp;
     const tendencies = await this._opponentTendencies(
-      userId, tendencyIdentity, myRace, opponentRace,
+      userId, tendencyIdentity, myRace, opponentRace, forecastContext,
     );
     applyOpponentTendencies(payload, tendencies,
       oppRow?.matchedBy === "display_name" ? null : oppRow?.openings);
@@ -880,13 +904,15 @@ class OverlayLiveService {
 
   /** @param {string} userId */
   invalidateForUser(userId) {
+    this.scoutingIdentities?.invalidateForUser(userId);
     invalidateEnrichmentForUser(this._enrichmentCache, userId);
     this._lastEnrichedGameKey.delete(userId);
   }
 
   /** Test helper: drop the per-user enrichment cache. */
   clearEnrichmentCache() {
-    this._enrichmentCache.clear();
+    this.scoutingIdentities?.clear();
+    invalidateAllEnrichment(this._enrichmentCache);
     this._lastEnrichedGameKey.clear();
   }
 
@@ -906,6 +932,7 @@ class OverlayLiveService {
    * @param {string|number|null} [pulseCharacterId]
    */
   invalidateEnrichmentForOpponent(userId, opponentName, pulseCharacterId) {
+    if (this.scoutingIdentities) { this.invalidateForUser(userId); return; }
     invalidateEnrichmentForOpponentImpl(
       this._enrichmentCache,
       userId,
@@ -1054,10 +1081,11 @@ class OverlayLiveService {
    * @param {{pulseId?: string|null, pulseCharacterId?: string|null} | null} identity
    * @param {string} [myRace]
    * @param {string} [oppRace]
+   * @param {{myMmr?:unknown,map?:unknown}} [context]
    */
-  _opponentTendencies(userId, identity, myRace, oppRace) {
+  _opponentTendencies(userId, identity, myRace, oppRace, context = {}) {
     return aggregations.opponentTendencies(
-      this.db.games, userId, identity, { myRace, oppRace },
+      this.db.games, userId, identity, { myRace, oppRace }, this.scoutingForecast, context,
     );
   }
 }

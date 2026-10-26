@@ -202,9 +202,8 @@ export function BuildPublishModal({
             Published successfully.
           </div>
           <p className="text-caption text-text-muted">
-            Your build is live at the URL below. The community listing
-            re-fetches on every page load, so it will appear there
-            within seconds.
+            Your build is published at the link below. Community lists may
+            take a few minutes to refresh.
           </p>
           {mirrorPending ? (
             <p className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-caption text-warning">

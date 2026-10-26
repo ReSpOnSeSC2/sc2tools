@@ -7,11 +7,12 @@ import dynamic from "next/dynamic";
 import { backToGameSource, safeGameSource } from "@/lib/gameNavigation";
 import { usePathname } from "next/navigation";
 import { ClerkLoading, useAuth, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
-import { Bug, ChevronLeft, Cpu, LifeBuoy, LogIn, MoreHorizontal, PanelLeftOpen, PanelLeftClose, Settings } from "lucide-react";
+import { Bug, ChevronLeft, Cpu, LifeBuoy, LogIn, Monitor, MoreHorizontal, PanelLeftOpen, PanelLeftClose, Settings } from "lucide-react";
 import { RailGroup, RailLabel, RailLink } from "./ChromeRail";
 import { MoreSheet } from "./MoreSheet";
 import { RAIL_KEY, readRailPinned } from "./railPreference";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { ThemeDialog } from "@/components/ui/ThemeChoice";
 import { SyncStatus } from "@/components/SyncStatus";
 import { LazyReportIssueModal } from "@/components/feedback/LazyReportIssueModal";
 import { useApi } from "@/lib/clientApi";
@@ -115,6 +116,8 @@ function AppChromeShell({ children }: { children: ReactNode }) {
   const backHref = breadcrumb?.backHref ?? match?.backHref ?? "/app";
   const backLabel = breadcrumb?.backLabel ?? `Back to ${match?.backEntry.label ?? "Today"}`;
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const accountRef = useRef<HTMLSpanElement>(null);
   const [pinned, setPinned] = useState(false);
   const { isSignedIn } = useAuth();
   useEffect(() => {
@@ -289,12 +292,12 @@ function AppChromeShell({ children }: { children: ReactNode }) {
                 <NotificationBell compact />
                 <WhatsNewButton />
               </SignedIn>
-              <ThemeToggle />
+              <ThemeToggle size="sm" />
               <ClerkLoading><span aria-hidden className="h-8 w-8 rounded-full bg-bg-elevated motion-safe:animate-pulse" /></ClerkLoading>
               <SignedIn>
                 {/* Phones reach the same items from the More sheet. */}
                 <HelpMenu signedIn onReport={openReport} className="hidden md:block" />
-                <UserButton
+                <span ref={accountRef} className="inline-flex"><UserButton
                   afterSignOutUrl="/"
                   appearance={{ elements: { avatarBox: "h-8 w-8" } }}
                 >
@@ -312,10 +315,11 @@ function AppChromeShell({ children }: { children: ReactNode }) {
                       labelIcon={<Bug className="h-4 w-4" aria-hidden />}
                       onClick={() => openReport("problem")}
                     />
+                    <UserButton.Action label="Appearance" labelIcon={<Monitor className="h-4 w-4" aria-hidden />} onClick={() => setAppearanceOpen(true)} />
                     <UserButton.Action label="manageAccount" />
                     <UserButton.Action label="signOut" />
                   </UserButton.MenuItems>
-                </UserButton>
+                </UserButton></span>
               </SignedIn>
               <SignedOut>
                 <HelpMenu signedIn={false} />
@@ -379,7 +383,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
               className={[
                 "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-micro font-bold",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                !inTabBar ? "bg-accent-cyan/10 text-accent" : "text-text-muted",
+                !inTabBar ? "bg-accent-cyan/10 text-accent-cyan" : "text-text-muted",
               ].join(" ")}
             >
               <MoreHorizontal className="h-5 w-5" aria-hidden />
@@ -405,6 +409,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
         </div>
       </nav>
 
+      <ThemeDialog open={appearanceOpen} onClose={() => { setAppearanceOpen(false); queueMicrotask(() => accountRef.current?.querySelector<HTMLButtonElement>("button")?.focus()); }} />
       {sheetOpen ? (
         <MoreSheet
           entries={sheetEntries}
@@ -463,7 +468,7 @@ function TabBarLink({ entry, active }: { entry: NavEntry; active: boolean }) {
       className={[
         "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-micro font-bold",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        active ? "bg-accent-cyan/10 text-accent" : "text-text-muted hover:text-text",
+        active ? "bg-accent-cyan/10 text-accent-cyan" : "text-text-muted hover:text-text",
       ].join(" ")}
     >
       <Icon className="h-5 w-5" aria-hidden />

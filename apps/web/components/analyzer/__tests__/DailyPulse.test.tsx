@@ -129,9 +129,10 @@ describe("DailyPulse", () => {
     expect(loadAnalysis).not.toHaveBeenCalled();
     expect(window.localStorage.getItem("analyzer.pulse.collapsed")).toBeNull();
     expect(
-      screen.getByText("Replay insights, loaded when you open them"),
+      screen.getByText("See today’s insights from your replays: streaks, rising builds, nemesis sightings"),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /daily pulse/i }));
+    expect(screen.queryByText(/\d+ of \d+/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show insights" }));
     expect(loadAnalysis).toHaveBeenCalledTimes(1);
     expect(window.localStorage.getItem("analyzer.pulse.collapsed")).toBe("0");
   });

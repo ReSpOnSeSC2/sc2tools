@@ -4,6 +4,8 @@ import localFont from "next/font/local";
 import { AppShell } from "@/app/AppShell";
 import { siteVerification } from "@/lib/siteVerification";
 import { SITE_TITLE_TEMPLATE } from "@/lib/siteTitle";
+import { NO_FLASH_THEME_SCRIPT, THEME_COLORS } from "@/lib/theme";
+import { ThemeSync } from "@/components/ui/ThemeSync";
 import "./globals.css";
 
 /**
@@ -113,7 +115,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#06090e",
+  themeColor: [{ media: "(prefers-color-scheme: light)", color: THEME_COLORS.light }, { media: "(prefers-color-scheme: dark)", color: THEME_COLORS.dark }],
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -124,7 +126,6 @@ export const viewport: Viewport = {
  * so data-theme is set before the first style resolution. Keeping it
  * inline (and minimal) avoids any FOUC even on slow networks.
  */
-const NO_FLASH_THEME_SCRIPT = `(function(){try{var s=localStorage.getItem('sc2tools.theme');var m=window.matchMedia('(prefers-color-scheme: light)').matches;var t=s==='light'||s==='dark'?s:(m?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`;
 
 export default function RootLayout({
   children,
@@ -145,6 +146,7 @@ export default function RootLayout({
         />
       </head>
       <body className="flex min-h-dvh flex-col overflow-x-clip">
+        <ThemeSync />
         <AppShell>{children}</AppShell>
       </body>
     </html>

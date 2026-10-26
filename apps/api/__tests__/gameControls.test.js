@@ -56,6 +56,19 @@ test("hide/unhide changes only this owner's contribution and keeps private repla
   expect(await h.db.guideSamples.findOne(samples._key(owner, ID))).not.toHaveProperty("excluded");
 });
 
+test("unknown committed hide still retires owner caches and releases the exclusive fence", async () => {
+  const update = h.db.games.updateOne.bind(h.db.games);
+  const write = jest.spyOn(h.db.games, "updateOne").mockImplementationOnce(async (...args) => { await update(...args); throw new Error("unknown commit"); });
+  const invalidate = jest.spyOn(h.services.games, "invalidateForUser");
+  try {
+    await expect(h.services.gameControls.setExcluded(owner, ID, { excluded: true, reason: "other" })).rejects.toThrow("unknown commit");
+    expect(await h.db.games.findOne({ userId: owner, gameId: ID })).toMatchObject({ excluded: true });
+    expect(await h.db.games.findOne({ userId: other, gameId: ID })).not.toHaveProperty("excluded");
+    expect(invalidate).toHaveBeenCalledWith(owner);
+    expect((await h.db.users.findOne({ userId: owner }))._gdprMutation).toBeUndefined();
+  } finally { write.mockRestore(); invalidate.mockRestore(); }
+});
+
 test("validates hide reasons, owner scope and exact typed confirmation without touching another copy", async () => {
   expect((await request(h.app).patch(gamePath()).send({ excluded: true, reason: "other" })).status).toBe(401);
   expect((await call("patch", "/v1/games/not-owned").send({ excluded: true, reason: "other" })).status).toBe(404);

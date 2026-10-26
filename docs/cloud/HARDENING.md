@@ -93,18 +93,32 @@ Render.
 
 ### 4. Status page
 
-Better Uptime free tier:
+The public page is part of the existing web project at
+`https://sc2tools.com/status`. It does not require Clerk, app data or a new
+monitoring account. Website footer and More links use `/status` directly.
 
-1. https://betteruptime.com → Sign up → Add monitor.
-2. Monitor `https://api.sc2tools.app/v1/health` every 1 min.
-3. Monitor `https://sc2tools.app` every 1 min.
-4. Create a status page → custom domain
-   `status.sc2tools.app`. Add a `CNAME` in Cloudflare pointing at
-   the Better Uptime hostname.
-5. Subscribe yourself to incident emails.
+Live configuration verified 2026-10-25: `status.sc2tools.com` is attached to
+Production with Valid Configuration. Its HTTPS root and a synthetic path/query
+both return308 to the clean primary status URL; that URL returns200. Website
+and API checks both returned Reachable in a browser, including manual Refresh.
 
-The `<a href="https://status.sc2tools.app">` link in the website
-footer is already wired — once the domain resolves it'll just work.
+Attach `status.sc2tools.com` to the existing **sc2tools** Vercel project's
+Production environment. Its middleware redirects that exact hostname to
+`https://sc2tools.com/status`, discarding the incoming path and query. DNS
+resolving to Vercel alone is insufficient: an unattached hostname returns
+`DEPLOYMENT_NOT_FOUND`. Keep the primary domain and existing DNS in place.
+
+The page makes one credential-free request to `/api/ping` and one to the
+configured `NEXT_PUBLIC_API_BASE` plus `/v1/ping` on opening or explicit Refresh.
+Neither check accesses MongoDB, replay blobs or owner data. Missing/invalid
+production API configuration fails closed instead of probing a visitor's
+localhost. Keep the public API's existing CORS allowance for `sc2tools.com`.
+
+Results are browser reachability observations with completion timestamps.
+Unknown covers timeout, network/CORS failures and unrecognized responses;
+HTTP errors show Unavailable. A successful ping does not establish database,
+queue, sign-in or replay-processing health. This page shares website hosting
+and provides no independent monitoring, incident history or uptime percentage.
 
 ### 5. Pen test
 
