@@ -2,8 +2,9 @@
 
 2026-10-26. Base provided by the parent: `9a68c480c9d19278642b5c546fe4b3ab081fa6b1`,
 worktree `wave3-guides-expansion`, branch `codex/wave5-revision-chart-cache`.
-Source authoring only. No test, type, lint, build, generator, Git, browser, network,
-provider, database or production activation was performed by this author.
+Initial preparation was source only. The later authorized whole-API type run is
+recorded below. No test, lint, build, generator, Git mutation, browser, provider,
+database or production activation was performed by this author.
 
 ## Prepared behavior and boundaries
 
@@ -112,7 +113,34 @@ provider paths are being traced before a future validation grant.
 The original validation packet 83b7fafd remains immutable and was not executed.
 New validation metadata must add strict JS path 28 and original same-filename
 baseline 20, preserve the same 28 suites and existing dependency dictionary,
-and pin the parent's next source commit/tree. All API checks remain unrun.
+and pin the parent's next source commit/tree. At this amendment's source freeze,
+all API checks were unrun; the first type result is recorded below.
+
+## First API validation and annotation repair
+
+The parent granted one exact dfffff51 runner invocation at source4ed16b50/treeee9.
+Full preflight passed, then whole API types ran once and exited2 with exactly
+two inference errors in middleware/userCache.js: TS7023 on retiredPinnedBytes
+and TS7022 on _retiredBytes. The getter/property inferred each other through
+numeric byte accounting. Strict lint, its baseline diagnostic audit and Jest
+were not started; no Mongo or provider stage ran. No retry or source repair was
+performed during validation.
+
+The full postflight again passed all941 inputs,32 owned source paths,26,114
+dependency pins, tools, tracked-clean4ed/treeee9 and map seed4d525b8e. TSC PID29432
+closed normally; session24732 ended RED/exit1. Closure observation found no TSC
+process, no Node process remaining in the exclusive run start window and no
+known-owned listener. CIM command-line lookup was unavailable in the sandbox;
+the recorded fallback used Get-Process and numeric netstat, without escalation,
+ACL workaround or unrelated process cleanup. The runtime slot was released.
+
+Raw logs/commands/guards/result/closure and both source-before files are
+preserved under `.cache/type-annotation-repair-4ed16b50/`, with a receipt.
+The parent authorized exactly this getter's numeric return annotation and this
+checkpoint. The annotation breaks the inference cycle without changing an
+initializer, runtime behavior, any cast, tsnocheck or lint rule. Other30 source
+paths stay unchanged. Annotation validation is pending independent review,
+parent preservation and a new exact runtime grant.
 
 ## Validation still required
 

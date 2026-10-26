@@ -30,6 +30,7 @@ class UserCache {
       pinned_bytes: [...this.completed.values()].reduce((n, entry) => n + (entry.refs ? entry.charge : 0), 0)
         + this.retiredPinnedBytes, entries: this.completed.size, active: this.active, queued: this.waiting, response_leases: this.responses };
   }
+  /** @returns {number} */
   get retiredPinnedBytes() { return this._retiredBytes || 0; }
   /** @param {string|null} owner */
   invalidateForUser(owner) {
