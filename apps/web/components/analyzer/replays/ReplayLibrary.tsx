@@ -6,36 +6,26 @@ import {
   useRef,
   useState,
 } from "react";
-import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import {
-  Check,
   ChevronLeft,
   ChevronRight,
-  Copy,
-  ExternalLink,
-  Link2,
-  LockKeyhole,
   RefreshCcw,
   Search,
-  Share2,
-  ShieldCheck,
-  Tv2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
-import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
-import { useToast } from "@/components/ui/Toast";
-import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
+import { useApi, type ClientApiError } from "@/lib/clientApi";
 import { defaultAnalyzerFilters, filtersToQuery, useFilters } from "@/lib/filterContext";
 import { ReplayList } from "./ReplayList";
+import { ReplayShareControl } from "./ReplayShareControl";
 import { ReplayCsvExportButton } from "./ReplayCsvExportButton";
 import { GameControlActions } from "./GameControlActions";
 import { GameSourceLabelProvider } from "../GameAnalysisLink";
-import type { ReplayLibraryResponse, ReplaySharingResponse } from "./types";
+import type { ReplayLibraryResponse } from "./types";
 import { useReplayListFilters } from "@/lib/useReplayListFilters";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { rememberReplayPage, rememberReplayRow, replayPageMemory, replayRowMemoryKey, replayScrollBehavior, replayUntil } from "@/lib/replayListNavigation";
@@ -141,168 +131,6 @@ function ReplayLibraryBody({ ownerId }: { ownerId: string }) {
 function ReplayLibraryTip() {
   const [dismissed, dismiss] = useLocalStorageState("replays.introDismissed", false, (raw): raw is boolean => typeof raw === "boolean");
   return dismissed ? null : <div className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-border bg-bg-elevated/30 p-3"><p className="text-caption text-text-muted">Personal match tape: every replay, ready for review.</p><Button variant="ghost" size="sm" aria-label="Dismiss replay tip" onClick={() => dismiss(true)}>Dismiss</Button></div>;
-}
-
-function ReplayShareControl() {
-  const { getToken } = useAuth();
-  const { toast } = useToast();
-  const sharingReq = useApi<ReplaySharingResponse>("/v1/me/replay-sharing", { revalidateOnFocus: false });
-  const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [copying, setCopying] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const copyResetTimer = useRef<number | null>(null);
-  const sharing = sharingReq.data;
-  const handle = sharing?.enabled ? sharing.handle : null;
-  const path = handle ? `/players/${encodeURIComponent(handle)}/replays` : null;
-
-  useEffect(() => () => {
-    if (copyResetTimer.current !== null) window.clearTimeout(copyResetTimer.current);
-  }, []);
-
-  async function setEnabled(enabled: boolean): Promise<ReplaySharingResponse | null> {
-    if (saving) return null;
-    setSaving(true);
-    try {
-      const next = await apiCall<ReplaySharingResponse>(getToken, "/v1/me/replay-sharing", {
-        method: "PUT",
-        body: JSON.stringify({ enabled }),
-      });
-      await sharingReq.mutate(next, { revalidate: false });
-      toast.success(enabled ? "Public replay page is live" : "Public replay page turned off");
-      return next;
-    } catch (error) {
-      toast.error("Couldn't update replay sharing", { description: (error as ClientApiError)?.message || "Please try again." });
-      return null;
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function copyLink(targetHandle = handle) {
-    if (!targetHandle || copying) return;
-    const targetPath = `/players/${encodeURIComponent(targetHandle)}/replays`;
-    const href = `${window.location.origin}${targetPath}`;
-    setCopying(true);
-    try {
-      await navigator.clipboard.writeText(href);
-      setCopied(true);
-      if (copyResetTimer.current !== null) window.clearTimeout(copyResetTimer.current);
-      copyResetTimer.current = window.setTimeout(() => {
-        copyResetTimer.current = null;
-        setCopied(false);
-      }, 1800);
-      toast.success("Replay page link copied");
-    } catch {
-      window.prompt("Copy this replay page link", href);
-    } finally {
-      setCopying(false);
-    }
-  }
-
-  async function enableAndCopy() {
-    const next = sharing?.enabled && sharing.handle
-      ? sharing
-      : await setEnabled(true);
-    if (next?.handle) await copyLink(next.handle);
-  }
-
-  return (
-    <>
-      <div
-        className="flex w-full shrink-0 flex-col gap-2 sm:w-auto"
-        role="group"
-        aria-label="Replay sharing actions"
-      >
-        <Button
-          variant={sharing?.enabled && handle ? "secondary" : "primary"}
-          onClick={() => setOpen(true)}
-          disabled={saving}
-          iconLeft={sharing?.enabled && handle ? <Check className="h-4 w-4 text-success" aria-hidden /> : <Share2 className="h-4 w-4" aria-hidden />}
-          className="w-full"
-        >
-          {sharing?.enabled && handle ? "Sharing on" : "Share"}
-        </Button>
-        {sharing?.enabled && handle ? (
-          <Button
-            variant="ghost"
-            onClick={() => void copyLink()}
-            loading={copying}
-            disabled={saving}
-            iconLeft={copied ? <Check className="h-4 w-4 text-success" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
-            className="w-full"
-            aria-label="Copy public replay page link"
-          >
-            <span aria-live="polite">{copied ? "Copied" : "Copy link"}</span>
-          </Button>
-        ) : null}
-      </div>
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Share your replay archive"
-        description="A private-by-default player page for teammates, coaches and viewers."
-        size="md"
-        footer={
-          sharingReq.isLoading ? (
-            <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>Close</Button>
-          ) : sharingReq.error ? (
-            <>
-              <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>Close</Button>
-              <Button variant="secondary" size="sm" onClick={() => void sharingReq.mutate()} iconLeft={<RefreshCcw className="h-4 w-4" aria-hidden />}>Try again</Button>
-            </>
-          ) : sharing?.enabled && handle ? (
-            <>
-              <Button variant="ghost" size="sm" onClick={() => void setEnabled(false)} loading={saving}>Turn off sharing</Button>
-              <Button size="sm" onClick={() => void copyLink()} loading={copying} iconLeft={copied ? <Check className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}>
-                {copied ? "Copied" : "Copy link"}
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" onClick={() => void enableAndCopy()} loading={saving} iconLeft={<Link2 className="h-4 w-4" aria-hidden />}>
-              Turn on and copy link
-            </Button>
-          )
-        }
-      >
-        {sharingReq.isLoading ? (
-          <div aria-busy="true"><Skeleton rows={3} /></div>
-        ) : sharingReq.error ? (
-          <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-caption text-danger">Sharing settings could not be loaded. Try the request again or close this dialog.</p>
-        ) : (
-          <div className="space-y-4">
-            <div className="rounded-xl border-2 border-line bg-bg-elevated/45 p-4">
-              <div className="flex items-start gap-3">
-                {sharing?.enabled && handle ? <Tv2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden /> : <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" aria-hidden />}
-                <div className="min-w-0">
-                  <p className="font-semibold text-text">{sharing?.enabled && handle ? "Your player replay page is public" : "Your replay archive is private"}</p>
-                  <p className="mt-1 break-all font-mono text-micro text-text-muted">{path || "Your personal player replay address is created when you turn sharing on."}</p>
-                  {path ? (
-                    <Link href={path} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-md text-caption font-semibold text-accent-cyan hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-                      Preview public page <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                    </Link>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="flex items-center gap-2 text-caption font-semibold text-text"><ShieldCheck className="h-4 w-4 text-accent-cyan" aria-hidden /> Exactly what visitors can see</h3>
-              <p className="text-caption leading-relaxed text-text-muted">
-                Turning this on shares every synced replay in this archive—not only games visible under your current dashboard filters. Anyone can see replay dates, maps, results, player display names and races, game-time MMR, detected builds and strategies, macro scores, matched Twitch or YouTube VOD links, and download archived original replay files. Replay Analysis and the full Macro breakdown require the visitor to sign in to SC2 Tools.
-              </p>
-              <p className="text-caption leading-relaxed text-text-muted">
-                An original .SC2Replay can contain player/account identifiers, chat, team information, and other data Blizzard embeds in the file. Starting a download also gives that visitor a temporary storage URL, which can reveal the storage host and object path until it expires in about one minute.
-              </p>
-              <p className="text-caption leading-relaxed text-text-muted">
-                Turn sharing off at any time to disable the page, analysis access and new downloads. Your player replay address stays assigned to you and becomes available again if you re-enable sharing. A download URL already issued before sharing is disabled can continue working until its one-minute expiry.
-              </p>
-            </div>
-          </div>
-        )}
-      </Modal>
-    </>
-  );
 }
 
 function ReplayError({ error, onRetry }: { error: ClientApiError; onRetry: () => void }) {

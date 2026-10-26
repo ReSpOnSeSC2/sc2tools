@@ -17,6 +17,11 @@ corresponding GitHub Release.
 - Preserve fresh-list entry focus, unread styling, pagination and read acknowledgements while removing duplicate overlay handlers.
 - Keep focus in a newer dialog when notification loading finishes, and focus cached error headings after the panel becomes visible on reopen.
 
+### Replay sharing and copy recovery
+
+- Keep replay links available in a selected-text dialog when automatic copying is unavailable. Cancelling a device's native share sheet stays a quiet cancellation.
+- Check fresh sharing status before consent or copying, and offer a status check after an interrupted update. Retire delayed account, archive and player actions when their context changes.
+
 ### Build dialogs
 
 - Use the shared dialog for build dossiers and saved-build loading or error states, with keyboard focus containment, a 44px Close control and focus return.
