@@ -1,6 +1,6 @@
 # ADR 0066: Extend the shared chart foundations
 
-Status: Source implemented; validation and delivery pending.
+Status: Implemented and locally validated; root delivery pending.
 
 ## Existing foundations and compatibility
 
