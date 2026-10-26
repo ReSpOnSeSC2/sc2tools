@@ -1,6 +1,16 @@
 # Settings sections — combined browser repair checkpoint
 
-2026-10-26 current status: sourceebd passed the corrected main token-read/dirty-navigation assertions and then stopped in the first A4 case at a real disabled-Randomizer text contrast failure;19 cases remain unrun. The latest three-path consumer-style/documentation repair is **SOURCE ONLY, UNVALIDATED** and needs a new production artifact. No full PR A browser completion or deployed behavior is claimed.
+2026-10-26 current status: Randomizer's contrast repair passed a new production artifact and actual browser AA check. The first78fa A4 case later stopped at two disabled Build Check-in explanation contrast findings, leaving19 cases unrun. The latest three-path Check-in style/documentation repair is **SOURCE ONLY, UNVALIDATED** and requires a new production artifact. No full PR A browser completion or deployed behavior is claimed.
+
+## Current Check-in contrast boundary
+
+Source78 `78fa6a37ff509822c4f9335580d859b1db9e6659` passed whole types/source guards and the narrowly audited picker lint (raw exit1, only existing label warning341:5; zero errors/new warnings/suppressions). ONE direct Next build produced145 pages, actual `-4hIB6-IZpyj8yRaWzdYr`, all81 unchanged budgets/post-types/40 inputs/nine retained/four samples/source checks, receipt SHA `16d780b310a7a87937b6604aab47204fc846db4502e070074307956b15f6a18c`. All four raw CSS files match the prior build; inventory metadata5e07 differs from6bcc only by a terminal CRLF, with neither metadata file reformatted. Root accepted A3 bridge3a997 for original b14/201uu receipt6f475 retained in place, without rerunning or relabelling A3.
+
+The new78 A4 retry passed Randomizer AA and reached Check-in. Two explanatory spans under disabled pregame/postgame controls failed serious contrast3.1 instead of4.5. Their local ToggleRow duplicated the same entire-label `opacity-60` fade; the exact consumer-only change removes it while preserving all remaining classes/text/layout/events and the child Toggle's native disabled state/styling. The existing working Randomizer fix and shared primitive are untouched. Actual failing AA supplies regression evidence, without a class-mirror test.
+
+Immutable receipt SHA `1d1a2ab729aa5662a68579bacffba1df712a0f0030c869af55e5e0f8c43229d5` records one failed/19 unrun,10 scans (nine clear shared issue arrays, one scan/two serious nodes; incomplete IDs retained), five normal captures/failed PNG/trace,41 GETs/two exact maps and zero unknown/write/rejected/external/native/socket-rejection events. Four sockets/listeners/drain/owned children closed; source/artifact/CSS/raw40/nine retained/pointer/manifest/sample/Chrome postchecks passed.
+
+Only this existing owned Check-in file/two checkpoints change, within68/206;203 other inputs, A4/A3 fixture/spec/default config/74-unit bytes are unchanged. Source inspection excludes Check-in from A3's actual fixture imports/rendering (its only production importer is real Settings page), but any new retention remains conditional on fresh raw CSS and source proof. Root preservation, narrow lint/types/guards and a new direct production build/budgets/post-types/assets precede formal A4. This amendment has run no checks/build/browser/Git and does not claim completed PR A or deployed behavior.
 
 ## Current Randomizer contrast boundary
 
