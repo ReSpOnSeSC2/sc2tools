@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
 import { NotificationItem } from "./NotificationItem";
 import { CATEGORY_LABELS, NOTIFICATION_CATEGORIES, notificationCategory, notificationFocus, type NotificationCategory, type NotificationRow } from "./notificationModel";
 
 type Props = {
-  items: NotificationRow[]; style?: CSSProperties; ready: boolean; loading: boolean;
+  items: NotificationRow[]; ready: boolean; loading: boolean;
   listError: boolean; unreadError: boolean; readError: boolean; view: "all" | "unread";
   selectView: (view: "all" | "unread") => void; onClose: () => void;
   retryList: () => void; retryUnread: () => void; retryRead: () => void;
@@ -30,8 +30,7 @@ export default function NotificationPanel(p: Props) {
     (panel.current?.querySelector<HTMLElement>("[data-notification-row]") || header.current)?.focus();
     focused.current = true;
   }, [p.ready, p.items, p.listError, p.unreadError]);
-  return <div ref={panel} role="dialog" aria-label="Notifications" style={p.style}
-    className="absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border-2 border-line bg-bg-surface p-2 shadow-hard">
+  return <div ref={panel} className="min-w-0">
     <div className="flex items-center justify-between gap-2 px-2 py-2">
       <h2 ref={header} tabIndex={-1} className={`rounded text-body font-semibold text-text ${notificationFocus}`}>Notifications</h2>
       <button type="button" disabled={p.markingAll || p.unread === 0} onClick={p.markAll} className={`rounded px-1 text-caption text-accent-cyan disabled:text-text-dim ${notificationFocus}`}>{p.markingAll ? "Working…" : "Mark all read"}</button>

@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Notification panel
+
+- Keep the bell panel within the viewport using the shared nonmodal Popover. Escape returns to the bell, outside clicks preserve the clicked control's focus, and a newer dialog receives Escape first.
+- Preserve fresh-list entry focus, unread styling, pagination and read acknowledgements while removing duplicate overlay handlers.
+
 ### Copy public build and definition links
 
 - Keep a selected link available when clipboard permission is denied or takes too long: in a shared dialog for Community links, or below a definition's heading. Done or Escape returns to the copy control, and retry stays available.

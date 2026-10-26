@@ -1675,13 +1675,6 @@
       "example": "\"absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white\""
     },
     {
-      "file": "components/notifications/NotificationPanel.tsx",
-      "rule": "dialog-outside-ui",
-      "signature": "df21f4d07ce2e30502d061835d236c80f8dcc2cba9323bf2950cd1ec9e5dada5",
-      "count": 1,
-      "example": "<div ref={panel} role=\"dialog\" aria-label=\"Notifications\" style={p.style} className=\"absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border-2 border-line bg-b"
-    },
-    {
       "file": "components/onboarding/OnboardingDone.tsx",
       "rule": "focus-without-ring",
       "signature": "d2cda09e3f62dc87d5d9c692dc304dfd321c8e3adc85cd59ae1729ab55580b27",

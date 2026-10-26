@@ -16,3 +16,16 @@ it("focuses the first committed row synchronously after readiness, without steal
   view.rerender(<NotificationPanel {...props} items={[{ ...row, count: 2 }]} ready loading={false} />);
   expect(document.activeElement).toBe(all);
 });
+
+it.each(["empty", "list error", "unread error"] as const)("focuses the header for %s entry without owning a second dialog", (state) => {
+  const noop = () => {};
+  const props = { items: [], ready: state === "empty", loading: state !== "empty", listError: state === "list error", unreadError: state === "unread error", readError: false, view: "all" as const, selectView: noop, onClose: noop, retryList: noop, retryUnread: noop, retryRead: noop, onMore: null, markAll: noop, markingAll: false, unread: 0, openedNew: new Set<string>() };
+  const view = render(<NotificationPanel {...props} />);
+  const header = screen.getByRole("heading", { name: "Notifications" });
+  expect(document.activeElement).toBe(header);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  const toggle = screen.getByRole("button", { name: "All notifications" });
+  toggle.focus();
+  view.rerender(<NotificationPanel {...props} ready loading={false} listError={false} unreadError={false} />);
+  expect(document.activeElement).toBe(toggle);
+});
