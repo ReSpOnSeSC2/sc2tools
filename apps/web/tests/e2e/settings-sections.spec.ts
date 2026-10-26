@@ -150,15 +150,15 @@ for (const theme of ["light", "dark"] as const) {
         await info.attach("sections-health-visibility-cadence", { contentType: "application/json", body: JSON.stringify({ waitMs: 15_100, presenceBefore, presenceAfter, theme, width }) });
       }
 
-      await manager(page).getByLabel("URLs shown for", { exact: true }).selectOption("owner-a-two");
-      await expect(manager(page).getByLabel("URLs shown for", { exact: true })).toHaveValue("owner-a-two");
+      await manager(page).getByRole("combobox", { name: "URLs shown for", exact: true }).selectOption("owner-a-two");
+      await expect(manager(page).getByRole("combobox", { name: "URLs shown for", exact: true })).toHaveValue("owner-a-two");
       await expect(page.getByLabel("Accent hex value", { exact: true })).toBeVisible();
       expect(evidence.reads.filter(row => row.path === "/v1/overlay-tokens")).toHaveLength(1);
 
       // Keep one real profile draft while explicit same-tab navigation changes
       // the reading position. The draft and its DOM owner must stay mounted.
       await page.getByLabel("Accent hex value", { exact: true }).fill("#336699");
-      await expect(manager(page).getByLabel("URLs shown for", { exact: true })).toBeDisabled();
+      await expect(manager(page).getByRole("combobox", { name: "URLs shown for", exact: true })).toBeDisabled();
       await page.evaluate(() => { (window as SectionWindow).sectionManager = document.querySelector("#tokens select"); });
       await selectSection(page, width, "widgets", "Widgets");
       await expect(page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true })).toHaveCount(0);
@@ -188,13 +188,13 @@ for (const theme of ["light", "dark"] as const) {
       expect(await page.locator("#tokens").evaluate(element => element.getBoundingClientRect().top < innerHeight)).toBe(true);
       await expect(page.getByLabel("Accent hex value", { exact: true })).toHaveValue("#336699");
       await page.getByRole("button", { name: "Discard", exact: true }).click();
-      await expect(manager(page).getByLabel("URLs shown for", { exact: true })).toBeEnabled();
+      await expect(manager(page).getByRole("combobox", { name: "URLs shown for", exact: true })).toBeEnabled();
 
       await tabs(page).getByRole("tab", { name: "Chat & alerts", exact: true }).click();
       await expect(page.getByRole("button", { name: "Save chat settings", exact: true })).toBeVisible();
       await uniqueTargets(page, chatSections);
       expect(await page.evaluate(() => (window as SectionWindow).sectionManager === document.querySelector("#tokens select"))).toBe(true);
-      await expect(manager(page).getByLabel("URLs shown for", { exact: true })).toHaveValue("owner-a-two");
+      await expect(manager(page).getByRole("combobox", { name: "URLs shown for", exact: true })).toHaveValue("owner-a-two");
       expect(evidence.reads.filter(row => row.path === "/v1/overlay-tokens")).toHaveLength(1);
       await page.getByLabel(/Loyalty rank theme/).selectOption("zerg");
       await page.getByLabel("Bot username", { exact: true }).fill("retained-two-form-draft");
@@ -202,7 +202,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true })).toHaveCount(0);
       await expect(page.getByLabel("Bot username", { exact: true })).toHaveValue("retained-two-form-draft");
       await expect(page.getByLabel(/Loyalty rank theme/)).toHaveValue("zerg");
-      await expect(manager(page).getByLabel("URLs shown for", { exact: true })).toBeDisabled();
+      await expect(manager(page).getByRole("combobox", { name: "URLs shown for", exact: true })).toBeDisabled();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await checkAccessibility(page, info, `/settings-sections-chat-${width}`, theme);
       await capture(page, info, theme, width, "chat-dock");
@@ -235,9 +235,9 @@ for (const theme of ["light", "dark"] as const) {
         await expect(onThisPage(page)).toHaveCount(0);
         await expect(page.locator("#ghost-coach")).toHaveCount(0);
         await page.evaluate(() => (window as SectionWindow).sectionSetOwner("owner-a"));
-        await expect(manager(page).getByLabel("URLs shown for", { exact: true })).toHaveValue("owner-a-one");
+        await expect(manager(page).getByRole("combobox", { name: "URLs shown for", exact: true })).toHaveValue("owner-a-one");
         evidence.releaseTokenReads(); await evidence.releaseAll();
-        await expect(manager(page).getByLabel("URLs shown for", { exact: true })).toHaveValue("owner-a-one");
+        await expect(manager(page).getByRole("combobox", { name: "URLs shown for", exact: true })).toHaveValue("owner-a-one");
         await expect(onThisPage(page)).toHaveCount(1); await uniqueTargets(page, overlaySections);
         expect(evidence.reads.filter(row => row.path === "/v1/overlay-tokens")).toEqual([
           { owner: "owner-a", path: "/v1/overlay-tokens" }, { owner: "owner-b", path: "/v1/overlay-tokens" }, { owner: "owner-a", path: "/v1/overlay-tokens" },
