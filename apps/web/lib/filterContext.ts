@@ -406,7 +406,7 @@ export type ActiveFilter = {
 /**
  * Every facet that differs from the defaults, in the order the chip row
  * shows them. An empty list means the analyzer shows the default cohort
- * (12-worker patch, ranked ladder 1v1, too-short games hidden, every
+ * (auto-tracked current season, ranked ladder 1v1, too-short games hidden, every
  * region, any length, no drill-down).
  *
  * The same list feeds the chip row, the "Filters · N active" count on
