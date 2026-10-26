@@ -228,3 +228,31 @@ is included.
 
 Guided tours remain a separate dependent item. There is no placeholder button,
 empty registry, fake tour flag or automatic focus/scroll change in this slice.
+
+## Browser retry passed; phone row layout pending
+
+The fresh retry at `231f6b62` passed syntax and strict lint of the repaired MJS,
+then all 12 original browser cases once (no skipped, failed or flaky cases).
+All 36 shared serious/critical AA checks had empty issues; 30 incomplete
+color-contrast observations remain in the raw attachments. All 18 captures
+and 12 transport/closure ledgers were retained. The ledgers recorded 54 exact
+synthetic GETs, six marker PUTs, 12 successful dismissal PUTs and six expected
+503 dismissal attempts, with no unexpected, rejected, external or native
+attempts and zero tracked sockets. Source/build postguards passed and all 68
+captured host process IDs/listeners were absent in the final positive snapshot.
+Raw first RED, sandbox observation and later PID collision were preserved;
+no unrelated process was killed. Current retry evidence is in
+`.cache/activation-browser-retry-231f6b62/proof/`; it supersedes the earlier
+unrun browser status above.
+
+Human review found the phone action compressed each row's text. After preserving
+the component and this checkpoint under
+`.cache/activation-phone-row-layout-before-231f6b62/`, the icon stays left and
+an inner grid gives the text full remaining width with its one action below.
+At `sm`, that inner group returns to a flex row with the action on the right.
+Completed steps create no empty action wrapper. Every utility is already in
+the retained own `txSiXdQcm2MDVtKKf6W7e` CSS. Text, roles, links, data, handlers,
+product logic and all browser assertions are unchanged. This markup repair is
+source-only: its component lint, existing 12 unit cases and fresh browser/phone
+visual verification are still pending. The prior 12/36 result validates the
+socket repair, not this newer layout; no rebuild, API or Help repeat is included.

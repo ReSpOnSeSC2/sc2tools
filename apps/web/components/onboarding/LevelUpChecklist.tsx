@@ -88,6 +88,12 @@ function ProgressRing({ done, total }: { done: number; total: number }) {
 
 function FeatureRow({ row, done }: { row: ActivationRow; done: boolean }) {
   return <li className="rounded-xl border border-border bg-bg-elevated/40 p-3">
-    <div className="flex flex-wrap items-start gap-3"><span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${done ? "border-success text-success" : "border-border text-text-muted"}`}>{done ? "✓" : "○"}</span><div className="min-w-0 flex-1"><h3 className="text-body font-semibold">{row.title}<span className="sr-only">{done ? ", done" : ", not yet tried"}</span></h3><p className="mt-0.5 text-caption text-text-muted">{row.why}</p><LazyHelpLink slug={row.help} className="text-caption">How it works</LazyHelpLink></div>{done ? null : <LinkButton href={row.href} variant="secondary" size="sm">{row.action}</LinkButton>}</div>
+    <div className="flex items-start gap-3">
+      <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${done ? "border-success text-success" : "border-border text-text-muted"}`}>{done ? "✓" : "○"}</span>
+      <div className="grid min-w-0 flex-1 gap-2 sm:flex sm:items-start sm:gap-3">
+        <div className="min-w-0 flex-1"><h3 className="text-body font-semibold">{row.title}<span className="sr-only">{done ? ", done" : ", not yet tried"}</span></h3><p className="mt-0.5 text-caption text-text-muted">{row.why}</p><LazyHelpLink slug={row.help} className="text-caption">How it works</LazyHelpLink></div>
+        {done ? null : <div className="shrink-0"><LinkButton href={row.href} variant="secondary" size="sm">{row.action}</LinkButton></div>}
+      </div>
+    </div>
   </li>;
 }
