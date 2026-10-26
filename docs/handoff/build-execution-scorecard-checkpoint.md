@@ -1,30 +1,52 @@
 # Build execution scorecard checkpoint
 
-## Required current-main repair before delivery
+## Current-main integration and API proof
 
-Read-only integration review found that `GameDetailsService.upsert`
-retires execution caches only after the store write acknowledges success.
-The R2 store can commit its object PUT and then reject metadata, leaving an
-unchanged slim-row key with old execution or baseline evidence for five minutes.
-Before merging this pack, invalidate the log attempt in an advisory `finally`
-without masking the original result. Add committed-then-rejected and held-response
-regressions, retaining the existing post-write ownership/deletion guard.
-Root has authored the advisory `finally` retirement and four regressions: a real
-committed-then-rejected store write with a warm grade, a held baseline response,
-and observer failures on successful/failed writes. These source changes remain
-unverified until the queued main integration and focused API checks. The runner-
-only work below did not implement or runtime-verify this repair.
+Current checked API HEAD is `2e1ef5673bb57a29d031eceb3f6d048e4b9186a1`.
+Root preserved the cache repair at `9e00f9c8`, then normally merged main/Public
+`251cb319`. The three source conflicts retain execution hooks and the centralized
+owner invalidator, Public's privacy observers and detector-view/Mongo options,
+owner-only plan statistics and all setup notes. Source review also confirmed
+store-kind typing, GDPR claim retry, restore/unknown-outcome invalidation, Macro
+build-change refresh, controlled Builds search and their current mocks.
+
+The independently reviewed `GameDetailsService.upsert` fix retires execution
+epochs in an advisory `finally` after every attempted own/opponent log write,
+including a committed write whose acknowledgement rejects. Synchronous and
+asynchronous observer failures cannot replace the store result. The existing
+post-write deletion guard remains. Held scorecard/baseline work cannot return or
+populate retired evidence. The actual R2 store has no lower body/read cache:
+PUT can precede rejected metadata, but subsequent reads issue fresh GetObject
+requests. No additional store cache-flush hook is required for this source.
+
+Focused current-head proof passes all 294 tests in 18 exact suites plus one
+snapshot, using serial Jest, the existing local Mongo 7.0.14 binary, downloading
+disabled and a new writable workspace cache. This includes the four new
+committed-then-rejected/held-response/observer regressions; execution, dossier,
+timing and rule consumers; real Public detector/privacy projections; detail
+stores; GDPR claim/cache paths and backup restore. Full API types and strict
+lint for all 13 feature/repair source/test targets pass without warnings.
+
+The separate three-file legacy lint audit has zero errors and five existing
+`max-lines-per-function` warnings: app's makeServices/applyBaseMiddleware/
+mountRoutes, builds.detail and evaluator.evaluateRule. No whole-owned-files
+zero-warning claim is made. The committed map-pool fixture was copied before
+the run and its hash remains identical afterward:
+`4d525b8e1a7be49b223a24ea8d7700e58159be5e60c42dd5dc3cdee774af042c`.
+Normal Jest's Liquipedia blocker remained active; no fixture or product source
+changed during proof. All API jobs closed; no web, build or browser command ran.
+
+Artifacts are root `.cache/execution-integrated-api{,-types,-strict-lint,-legacy-lint}.log`,
+`execution-integrated-api-suites.txt`, `execution-integrated-api-strict-files.txt`
+and `execution-integrated-api-proof.json`. Web integration checks are queued
+behind MoreSheet's exclusive runtime slot. The earlier `53aa5356` web/build/
+browser evidence below remains historical and does not validate this merged head.
 
 Branch `codex/wave4-build-execution` starts at preserved Dossier `62b4939c` in
 the released SEO tree. SEO `eb18ed52` and caches remain preserved. ADR0060
 records the owner-only/shared-request/cache contract.
 
-Current-main integration audit (source only, no new runtime proof): the old
-branch still needs normal integration with main and the public-player pack.
-Before merge, log-write cache invalidation must cover a store that commits and
-then rejects; the current callback runs only after successful acknowledgement.
-Retain main's store-kind typing, GDPR claim retry, Community observers, Macro
-build-selection refresh and controlled Builds search alongside execution hooks.
+## Browser runner source and pending web proof
 
 The independent browser runner repair is authored but unexecuted. It accepts
 `PW_CHROMIUM_EXECUTABLE`, closes browser/listener resources on startup failure,
@@ -32,16 +54,19 @@ and defaults fresh captures to `.cache/build-execution-current-evidence`
 (`EXECUTION_EVIDENCE_DIR` can choose another disposable directory). Explicit
 theme and storage are set before React mounts; resolved palette/mode checks
 guard every navigation. Full-page checks reuse main's shared AA gate, with no
-disabled contrast rule or new exception. That helper arrives with normal main
-integration. Original committed screenshots and prior cache evidence remain
+disabled contrast rule or new exception. That helper is retained in the normal
+main integration. Original committed screenshots and prior cache evidence remain
 preserved; the 15 Dossier/Execution PNG hashes are inventoried in
 `.cache/build-evidence-original-shots-sha256.json`. The exact four-file runner
 repair manifest is `.cache/build-evidence-runner-owned-paths.txt`.
 
-No tests, fixture generator, engine/sample generation, browser or build has run
-for this repair. All counts below describe earlier verified source; they do not
-verify current-main integration or the new runner. Current engine assets must
+Only the API proof above has run on the current repair. No new web unit pack,
+fixture generator, engine/sample generation, browser or build has run. Counts
+below describe earlier verified source and do not verify the merged web or its
+new runner. Current engine assets must
 follow the integrated source rather than pinning historical bundle25b.
+
+## Historical web/build/browser proof (`53aa5356` and preserved ancestry)
 
 Actual main `d5da6340` is integrated at `29b68dba`; its Reference schema,
 completion clocks, Practice priority, exports and editor guards are retained.
@@ -95,4 +120,5 @@ nonlocal traffic blocked and zero writes. No shared engine rebuild was needed.
 Remaining: coordinated draft PR, Dossier dependency merge, exact-head
 CI/Vercel and merge.
 No production/provider operations or environment/version/release changes.
-Required-engine builds must coordinate current 25b; never run old f96 prebuilds.
+Any future required-engine build must coordinate the integrated current source;
+the bundle IDs in this historical section are evidence, not pins for reuse.
