@@ -23,10 +23,10 @@ const VARIANT_CLASSES: Record<BadgeVariant, string> = {
   neutral: "bg-bg-elevated text-text-muted border-border",
   accent: "bg-accent/15 text-accent border-accent/30",
   cyan: "bg-accent-cyan/15 text-accent-cyan border-accent-cyan/30",
-  signal: "bg-signal/15 text-signal border-signal/30",
-  success: "bg-success/15 text-success border-success/30",
-  warning: "bg-warning/15 text-warning border-warning/30",
-  danger: "bg-danger/15 text-danger border-danger/30",
+  signal: "bg-signal/5 text-signal border-signal/30",
+  success: "bg-success/5 text-success border-success/30",
+  warning: "bg-warning/5 text-warning border-warning/30",
+  danger: "bg-danger/5 text-danger border-danger/30",
 };
 
 // `min-h-` (not `h-`) so a badge that wraps to two lines (e.g. a long

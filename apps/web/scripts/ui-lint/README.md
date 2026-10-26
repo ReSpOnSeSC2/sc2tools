@@ -13,6 +13,13 @@ styled link buttons described in the design-system roadmap. The hex exception
 does not waive any focus, text, dialog or button rule. No filename-contains-chart
 or blanket ignore-comment exception exists.
 
+The two canonical before-paint browser `theme-color` tokens have a separate,
+declaration-shaped exception: only `lib/theme.ts`'s top-level exported
+`const THEME_COLORS`, containing exactly the `light` and `dark` literal six-digit
+hex members, optionally wrapped with `as const`. Browser metadata must be set
+before CSS loads. Other literals in that file, extra/computed members, shadow
+bindings, other paths and unrelated rules remain checked.
+
 AST rules ignore comments and documentation strings that mention calls. Lexical
 bindings distinguish native `confirm()` from a local `useConfirm` result. Native
 member references and destructuring are checked too. Link classes resolve local

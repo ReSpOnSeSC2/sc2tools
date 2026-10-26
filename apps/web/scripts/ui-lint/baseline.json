@@ -52,16 +52,9 @@
     {
       "file": "app/global-error.tsx",
       "rule": "hex-outside-visualization",
-      "signature": "0de5b181f0dcb64823c07945b568a0f00be56f309cfb73d4bbe50248ac5a07e9",
-      "count": 20,
-      "example": "\":root{--crash-bg:#0b0e14;--crash-text:#e6e9f0;--crash-muted:#9aa3b2;--crash-panel:#1a2233;--crash-link:#7dd3fc} @media(prefers-color-scheme:light){:root{--crash-bg:#f8fafc;--crash"
-    },
-    {
-      "file": "app/layout.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "2d3198d4408bd7e34aacf7f957544fad09e18a3d30b924c997f560377b57dba5",
-      "count": 1,
-      "example": "\"#06090e\""
+      "signature": "5dea5816fd202479883b4e525be499e8a684663b18f90dc95c0d68b71394effb",
+      "count": 16,
+      "example": "\":root{--crash-bg:rgb(var(--bg,6 9 14));--crash-text:#e6e9f0;--crash-muted:#9aa3b2;--crash-panel:#1a2233;--crash-link:#7dd3fc} @media(prefers-color-scheme:light){:root{--crash-bg:r"
     },
     {
       "file": "app/manifest.ts",
@@ -2040,13 +2033,6 @@
     {
       "file": "components/landing/CompanionShowcase.tsx",
       "rule": "hex-outside-visualization",
-      "signature": "6e471f37f375659ac180a137ee7a1ba2318921492567ccf93381ce6d9201ffa2",
-      "count": 1,
-      "example": "\"inline-flex min-h-11 items-center gap-2 rounded-sm bg-accent-cyan px-4 py-2 text-caption font-bold text-[#071b22] focus-visible:outline-none focus-visible:ring-2 focus-visible:rin"
-    },
-    {
-      "file": "components/landing/CompanionShowcase.tsx",
-      "rule": "hex-outside-visualization",
       "signature": "ad6a31b71e8a46f3639438666bed79a94f81523150bace149bab82ca85d1e4e4",
       "count": 1,
       "example": "\"overflow-hidden rounded-md border border-border-strong bg-[#10131f] shadow-hard\""
@@ -2131,13 +2117,6 @@
     {
       "file": "components/landing/ProductShowcases.tsx",
       "rule": "hex-outside-visualization",
-      "signature": "91ed12ac3bf07acbf00c2aea7fd3d8c0846a80c9d6a237610b030384d4585496",
-      "count": 1,
-      "example": "\"overflow-hidden rounded-md border-2 border-line bg-[#080b10] shadow-hard\""
-    },
-    {
-      "file": "components/landing/ProductShowcases.tsx",
-      "rule": "hex-outside-visualization",
       "signature": "bd71be9d5df5da1c8eb0406f009fcaf4c8c5e245f700948cb314fd8c8e262a83",
       "count": 1,
       "example": "\"h-3.5 w-3.5 text-[#3ce0d6]\""
@@ -2204,13 +2183,6 @@
       "signature": "619fa8129111a4a9c0272576193cde0ac728f675cb196d76ab43b2046b5dacb6",
       "count": 1,
       "example": "\"inline-flex items-center gap-1.5 rounded-sm border border-white/10 bg-black/45 px-2 py-1 text-[9px] font-bold text-white\""
-    },
-    {
-      "file": "components/landing/ProductShowcases.tsx",
-      "rule": "small-arbitrary-text",
-      "signature": "7320cc71cbc5954494936f4c2978e4b9dd9f8a28413aae8034ff49b8315c29a1",
-      "count": 1,
-      "example": "\"flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[.1em] text-white/45\""
     },
     {
       "file": "components/landing/ProductShowcases.tsx",
@@ -3930,16 +3902,9 @@
     {
       "file": "lib/theme/tokens.ts",
       "rule": "hex-outside-visualization",
-      "signature": "1cac62d8195376c2c09483a35fce4175a86cbe657f311fcfc4d1f7075cd06adb",
+      "signature": "253662a6920a09b1970252219fb6dd26997d013ca73d713f137f4da6c6f76fd4",
       "count": 1,
-      "example": "\"#1c9c56\""
-    },
-    {
-      "file": "lib/theme/tokens.ts",
-      "rule": "hex-outside-visualization",
-      "signature": "23ecaff99e2a5a954492d730f312373ce2fc1966a00a20862281a5ef1d0cc2c3",
-      "count": 1,
-      "example": "\"#b07618\""
+      "example": "\"#157a43\""
     },
     {
       "file": "lib/theme/tokens.ts",
@@ -3979,6 +3944,13 @@
     {
       "file": "lib/theme/tokens.ts",
       "rule": "hex-outside-visualization",
+      "signature": "6adcf4eb2dd4432ce9791ca0920940f38edbf2e7e53324c65a307c4aee62c03b",
+      "count": 1,
+      "example": "\"#8f5f0f\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
       "signature": "798272b1abf3424e54b95912892ae39e2e02bd3c87858a5db5a5864ef3e3752b",
       "count": 1,
       "example": "\"#3ec884\""
@@ -4000,13 +3972,6 @@
     {
       "file": "lib/theme/tokens.ts",
       "rule": "hex-outside-visualization",
-      "signature": "95025d9e4fa2946afba2a06f31e0c4f02e6d4a4f82703fc73ae5fa16e077e54f",
-      "count": 1,
-      "example": "\"#d24449\""
-    },
-    {
-      "file": "lib/theme/tokens.ts",
-      "rule": "hex-outside-visualization",
       "signature": "ced70b0c59a26796a0c06f12c2f03ba92f07356d418693b4f999a05afa335dbc",
       "count": 1,
       "example": "\"#0c1017\""
@@ -4017,6 +3982,13 @@
       "signature": "e28af2ddb43d25a2f4a61debac19fbab9a1a4775ffd1c6405749ee5f82d5a37e",
       "count": 1,
       "example": "\"#157d8c\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "f3fdf0c30e3408f9a4b3f9bc318437e149f94bd121559beaa6956c0519b71acb",
+      "count": 1,
+      "example": "\"#b8333a\""
     },
     {
       "file": "lib/theme/tokens.ts",

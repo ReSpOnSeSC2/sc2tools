@@ -155,7 +155,7 @@ test("native outside-pointer focus is retained or restored and outer scrolling k
 test("right and bottom sheets fit the viewport and denied clipboard offers a visible selected fallback", async ({ page }, info) => {
   const evidence = await openUiPrimitivesFixture(page, "sheets");
   for (const side of ["right", "bottom"] as const) {
-    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, side === "right" ? "dark" : "light");
+    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; document.documentElement.dataset.themeMode = theme; }, side === "right" ? "dark" : "light");
     const opener = page.getByRole("button", { name: `Open ${side} sheet`, exact: true });
     await opener.click();
     const dialog = page.getByRole("dialog", { name: side === "right" ? "Right sheet" : "Bottom sheet", exact: true });

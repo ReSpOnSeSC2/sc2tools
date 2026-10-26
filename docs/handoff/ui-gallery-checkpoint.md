@@ -79,3 +79,16 @@ accessibility checks still apply. See `apps/web/scripts/ui-lint/README.md`.
 No production data/provider changes, private admin evidence, migration, installer,
 release, version or tag is part of this pack. Root still owns final commit,
 current-main reconciliation, PR and exact-head CI/merge gates.
+
+## A11y integration follow-through
+
+The gallery/shared contracts now coexist with the full Light/Dark/System
+foundation in PR752's branch. See
+[accessible-ui-integration-checkpoint.md](accessible-ui-integration-checkpoint.md)
+for final combined tests, measured budget repair and new reviewed captures.
+Explicit fixture mode assertions prevent OS preference from silently changing
+the requested Light gallery. Six new gallery axe scans exposed and verified the
+shared Badge tint repair. The reviewed baseline now has 570 signatures and 755
+occurrences, with no new primitive/gallery debt or stale allowance. Existing
+consumer migrations remain unfinished; no broad native-dialog replacement or
+roadmap completion is claimed.

@@ -26,7 +26,8 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, FlaskConical, ShieldCheck } from "lucide-react";
-import { Button, EmptyStatePanel } from "@/components/ui";
+import { Button } from "@/components/ui/Button";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { trackInstantError, trackInstantOpen, trackInstantReportView } from "@/lib/instant/analytics";
 import { INSTANT_ENGINE_VERSION } from "@/lib/instant/engineVersion";
 import { errorCopy } from "@/lib/instant/errorCopy";
@@ -180,13 +181,13 @@ function ToolBody({ session, onFiles, intakeFocusKey }: ToolViewProps) {
   if (session.busy || phase === "done") {
     return (
       <div className="space-y-3">
-        <ParseProgress
+        {/* eslint-disable-next-line jsx-a11y/no-autofocus -- Controlled run-progress focus after intake, not a native DOM autofocus attribute. */}
+        <ParseProgress autoFocus={session.busy}
           progress={session.progress}
           phase={phase}
           total={session.files.length}
           failed={session.failed}
           onCancel={session.cancel}
-          autoFocus={session.busy}
         />
         {phase === "done" && session.parsed.length === 0 ? (
           <div className="space-y-2">

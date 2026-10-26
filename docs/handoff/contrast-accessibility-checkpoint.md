@@ -88,3 +88,13 @@ Current released main includes Reference editing and the passive opponent
 scrolling fix. Opponent order stays Brief, Tendencies, Timings, History, Ladder,
 Identity. No engine/native/API, model/provider, account, production-data,
 integration enabling, version/release or infrastructure change is included.
+
+## Combined shared-UI verification
+
+The final local A11y/shared-UI/Nav integration is recorded in
+[accessible-ui-integration-checkpoint.md](accessible-ui-integration-checkpoint.md).
+It adds real gallery axe coverage, 63 composite Badge pairs and four new
+root-reviewed synthetic captures without replacing any earlier tracked image.
+All 190 final production browser cases and 126 public axe scans pass; the
+unchanged budget gate passes after behavior-preserving Try leaf imports.
+Root owns final PR752 reconciliation, commit/push and remote gates.

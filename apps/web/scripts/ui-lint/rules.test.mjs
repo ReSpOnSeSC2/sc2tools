@@ -68,6 +68,23 @@ test("visualization exceptions never waive focus or dialog violations", () => {
   assert.deepEqual(rules(`<div role="dialog" className="outline-none" />`, "components/overlay/Example.tsx"), ["dialog-outside-ui", "focus-without-ring"]);
 });
 
+test("only the exported canonical before-paint theme color declaration is exempt", () => {
+  const declaration = `export const THEME_COLORS = { light: '#f4f6fa', dark: '#06090e' } as const;`;
+  assert.deepEqual(rules(declaration, "lib/theme.ts"), []);
+  assert.equal(rules(declaration, "lib/other-theme.ts").length, 2);
+  assert.equal(rules(declaration.replace("THEME_COLORS", "EXTRA_COLORS"), "lib/theme.ts").length, 2);
+  assert.equal(rules(declaration.replace("export ", ""), "lib/theme.ts").length, 2);
+  assert.equal(rules(declaration.replace("const THEME", "let THEME"), "lib/theme.ts").length, 2);
+  assert.equal(rules(`function nested() { ${declaration} }`, "lib/theme.ts").length, 2);
+  assert.equal(rules(declaration.replace("light:", "accent:"), "lib/theme.ts").length, 2);
+  assert.equal(rules(declaration.replace("dark:", "light:"), "lib/theme.ts").length, 2);
+  assert.equal(rules(declaration.replace("light:", "['light']:"), "lib/theme.ts").length, 2);
+  assert.equal(rules(declaration.replace("as const", "as Palette"), "lib/theme.ts").length, 2);
+  assert.equal(rules(declaration.replace(" }", ", accent: '#ffffff' }"), "lib/theme.ts").length, 3);
+  assert.deepEqual(rules(`${declaration} const extra = '#abcdef'; const props = { role: 'dialog', className: 'outline-none' };`, "lib/theme.ts"),
+    ["hex-outside-visualization", "dialog-outside-ui", "focus-without-ring"]);
+});
+
 test("hand-rolled link buttons resolve local class constants and require link elements", () => {
   const source = `const CTA = "hard-press rounded-full bg-accent";
     const primary = <Link className={CTA} href="/app">Go</Link>;

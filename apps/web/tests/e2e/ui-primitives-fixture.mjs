@@ -166,7 +166,7 @@ export async function openUiPrimitivesFixture(page, scenario) {
     if (url.pathname === "/fixture.css") return route.fulfill({ contentType: "text/css; charset=utf-8", body: css });
     if (url.pathname.startsWith("/fonts/") && fonts.has(url.pathname.slice(7))) return route.fulfill({ contentType: "font/woff2", body: fonts.get(url.pathname.slice(7)) });
     if (url.pathname === `/${scenario}`) return route.fulfill({ contentType: "text/html; charset=utf-8", body:
-      '<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><div id="custom-popover-root"></div><button type="button" id="portal-between">Outside between portal and modal</button><script src="/fixture.js"></script></body></html>' });
+      '<!doctype html><html lang="en" data-theme="dark" data-theme-mode="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><div id="custom-popover-root"></div><button type="button" id="portal-between">Outside between portal and modal</button><script src="/fixture.js"></script></body></html>' });
     unexpectedRequests.push(`${request.method()} ${url.pathname}`);
     return route.fulfill({ status: 404, body: "Unknown fixture resource" });
   });

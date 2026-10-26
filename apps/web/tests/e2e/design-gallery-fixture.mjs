@@ -72,7 +72,7 @@ export async function openDesignGalleryFixture(page, theme) {
         try { return route.fulfill({ contentType: "image/png", body: await readFile(icon) }); } catch { /* Unexpected paths are reported below. */ }
       }
     }
-    if (url.pathname === "/admin/design") return route.fulfill({ contentType: "text/html", body: `<!doctype html><html lang="en" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>` });
+    if (url.pathname === "/admin/design") return route.fulfill({ contentType: "text/html", body: `<!doctype html><html lang="en" data-theme="${theme}" data-theme-mode="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Design gallery fixture</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>` });
     unexpectedRequests.push(`${request.method()} ${url.pathname}`); return route.fulfill({ status: 404, body: "Unknown fixture resource" });
   });
   await page.goto(`${ORIGIN}/admin/design`);

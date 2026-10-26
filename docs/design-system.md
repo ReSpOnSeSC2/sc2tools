@@ -265,9 +265,11 @@ control. Check long labels, zoom and narrow viewports with real content.
 | `z-toast` | 60 | Toasts |
 
 Use these named utilities for new viewport-pinned surfaces. The context bar is
-at 30; the existing Modal uses a portal at 50. Sheets and banners sharing 50
-still depend on DOM order, so check any new overlap rather than treating this as
-a universal stacking manager. The skip link sits above the normal chrome.
+at 30. Modal and Popover start at 50; React-owned nested overlays add one layer,
+capped at 59 below Toast. This context crosses React portals. A custom portal
+host must still permit normal stacking: a child's z-index cannot escape an
+ancestor's CSS stacking context. Other sheets and banners sharing 50 still need
+an overlap check. The skip link sits above the normal chrome.
 
 AppChrome measures its mobile tab bar, including safe-area padding, and publishes
 `--chrome-bottom`. It is zero from `md` and removed outside the app. A floating
@@ -296,6 +298,12 @@ Both share `primary`, `secondary`, `ghost` and `danger` variants. Sizes are
 44px width. Small buttons therefore do **not** automatically provide a 44px-high
 touch target. Use a larger size or an explicit minimum height for phone actions
 that need it. Give icon-only actions an accessible name.
+
+`IconButton` requires `aria-label` and supplies a 44px target. `CopyButton` and
+`useCopy` copy only on explicit activation, bound the attempt to five seconds
+and provide selected, visible read-only text when automatic copying fails.
+Supply a scope key for owner/resource changes; stale results cannot update the
+new context. Escape dismisses the manual fallback and returns to its button.
 
 `Button` defaults to `type="button"`. Set `type="submit"` for form submission.
 Its `loading` state disables the native button and sets `aria-busy`; callers own
@@ -332,6 +340,10 @@ The default phone layout is a bottom sheet; from `sm` it is centered. Optional
 layouts. Body content scrolls within the bounded dialog and footer actions wrap.
 Use `portalContainer` when a dialog must remain inside a fullscreen player.
 
+`Sheet` reuses Modal's dismissal, footer, focus and scroll-lock contract with
+`side="bottom"` or `side="right"`. Modal's additive `placement` option supports
+those fixed placements; its default responsive behavior stays the same.
+
 Set `initialFocusRef` when the first control is not the right starting point.
 The shared focus scope handles Tab/Shift+Tab, Escape and focus return, including
 portalled child dialogs. Keep the trigger mounted or provide a sensible focus
@@ -344,7 +356,19 @@ target available while action buttons are disabled.
 destructive action and `focusCancel` when the safe action should receive initial
 focus. It does not implement typed-delete validation or every pending-operation
 policy; specialized replay confirmations handle those requirements themselves.
-Do not document a future Dialog/Popover API as an existing primitive.
+`useConfirm(scopeKey)` returns `confirm`, `cancel` and one `dialog` outlet. It
+settles cancellation, unmount or scope changes as false and rejects a concurrent
+ask as false. Actual mutations stay with the caller. Preserve existing typed
+`UNPAIR` and specialized controlled destructive flows.
+
+`Popover` is a controlled, named nonmodal dialog anchored by `anchorRef`. Its
+trigger supplies `aria-expanded` and matching `aria-controls`/`id`. It flips and
+clamps to the viewport, dismisses on Escape or an outside pointer, and has no
+body lock or Tab trap of its own. An enclosing Modal retains Tab containment
+through registered nonmodal portals; Escape dismisses the top layer first.
+Use `autoFocus={false}` when a lazy consumer must wait for ready content, as the
+notification panel already does. An outside button/input keeps native focus;
+nonfocusable outside dismissal restores the anchor when focus would be lost.
 
 ## Keyboard, focus and motion
 
@@ -393,6 +417,8 @@ offer an action that changes the answer, such as Clear filters or All time.
 Independent sections can use `SectionBoundary` so a render failure does not blank
 the whole page. A boundary alone does not retry a cached failed lazy import;
 optional lazy islands need their established retry-loader pattern as well.
+`SkeletonChart` and `SkeletonKpi` add named, busy placeholders to the existing
+skeleton family; they contain no fabricated values.
 
 ## Accessibility checks and limits
 
@@ -404,6 +430,9 @@ covers the user-facing controls.
 Current automated checks include:
 
 - The source-derived contrast matrix for Dark, Light and Replay on light.
+- All seven shared Badge variants composited over the three tested surfaces in
+  those themes (63 additional pairs). Status tints remain subtle enough to keep
+  their semantic text readable on the page ground as well as white cards.
 - `@axe-core/playwright` in `tests/e2e/public-pages.spec.ts`, using the
   `wcag2a`, `wcag2aa` and `wcag21aa` tags. Serious/critical findings fail unless
   an exact page/theme/viewport-project/rule/target entry has a reviewed reason in
@@ -414,6 +443,14 @@ Current automated checks include:
   MobileNav, shared dialogs and the changed flow.
 - Recommended `eslint-plugin-jsx-a11y` rules as warnings, alongside the existing
   lint checks.
+- `npm run ui:lint` checks normalized file/rule signatures and occurrence counts;
+  new and stale debt fail. The narrow before-paint browser metadata token
+  exception is documented in `apps/web/scripts/ui-lint/README.md`.
+
+The server-gated `/admin/design` gallery demonstrates actual controls and local
+states with synthetic values. A current explicit admin response is required
+before its examples mount; the whole access check has a five-second deadline.
+Its sample actions do not read replays or write application data.
 
 Run the appropriate contract/consumer tests for a changed primitive, then its
 actual rendered keyboard and responsive flow. Review axe `incomplete` results

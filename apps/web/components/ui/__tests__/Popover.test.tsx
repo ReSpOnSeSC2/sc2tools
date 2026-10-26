@@ -8,6 +8,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); document.body.style.overflow = 
 function Standalone({ late = false }: { late?: boolean }) {
   const [open, setOpen] = useState(false); const anchor = useRef<HTMLButtonElement>(null);
   return <><button ref={anchor} onClick={() => setOpen(true)}>Options</button><button>Other action</button><p>Outside text</p>
+    {/* eslint-disable-next-line jsx-a11y/no-autofocus -- Exercises controlled overlay entry focus, not a native DOM autofocus attribute. */}
     <Popover open={open} onClose={() => setOpen(false)} anchorRef={anchor} label="Options panel" autoFocus={!late}><button>First option</button><button>Last option</button></Popover></>;
 }
 it("is nonmodal and lets Tab leave its last control", () => {

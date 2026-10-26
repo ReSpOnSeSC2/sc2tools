@@ -113,6 +113,32 @@ function hexColors(node, source) {
       && !/^\s*(?:\{|:|\.)/.test(node.text.slice(match.index + match[0].length)));
 }
 
+function isCanonicalBrowserThemeColor(file, node) {
+  // These two before-paint browser metadata tokens cannot depend on loaded CSS.
+  // This is a declaration-shaped exception, never a waiver for the theme file.
+  if (file !== "lib/theme.ts" || !isLiteral(node) || !/^#[\da-fA-F]{6}$/.test(node.text)) return false;
+  const member = node.parent;
+  if (!ts.isPropertyAssignment(member) || member.initializer !== node
+    || !["light", "dark"].includes(propertyName(member.name))) return false;
+  const object = member.parent;
+  if (!ts.isObjectLiteralExpression(object) || object.properties.length !== 2
+    || !object.properties.every((property) => ts.isPropertyAssignment(property)
+      && ["light", "dark"].includes(propertyName(property.name)) && isLiteral(property.initializer)
+      && /^#[\da-fA-F]{6}$/.test(property.initializer.text))
+    || new Set(object.properties.map((property) => propertyName(property.name))).size !== 2) return false;
+  let initializer = object;
+  if (ts.isAsExpression(initializer.parent) && initializer.parent.expression === initializer
+    && ts.isTypeReferenceNode(initializer.parent.type) && initializer.parent.type.typeName.getText() === "const") initializer = initializer.parent;
+  const declaration = initializer.parent;
+  if (!ts.isVariableDeclaration(declaration) || declaration.initializer !== initializer
+    || !ts.isIdentifier(declaration.name) || declaration.name.text !== "THEME_COLORS") return false;
+  const declarations = declaration.parent;
+  const statement = declarations.parent;
+  return ts.isVariableDeclarationList(declarations) && Boolean(declarations.flags & ts.NodeFlags.Const)
+    && ts.isVariableStatement(statement) && ts.isSourceFile(statement.parent)
+    && Boolean(statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword));
+}
+
 export function analyzeSource(file, text) {
   file = pathName(file);
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
@@ -152,7 +178,7 @@ export function analyzeSource(file, text) {
       && stringValues(node.initializer, bindings).some((value) => value === "dialog" || value === "alertdialog")) report("dialog-outside-ui", node.parent);
     if (isText(node)) {
       for (const rule of classViolations(node.text)) report(rule, node);
-      if (!hexAllowed) {
+      if (!hexAllowed && !isCanonicalBrowserThemeColor(file, node)) {
         for (const _match of hexColors(node, source)) report("hex-outside-visualization", node);
       }
     }

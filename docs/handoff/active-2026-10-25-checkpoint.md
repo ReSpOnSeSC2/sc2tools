@@ -69,64 +69,54 @@ resolves to Vercel but is absent from the sc2tools project's Domains list.
 
 ## Active source work — preserve all files
 
-1. **UI primitives**, new branch codex/wave5-ui-primitives in
-   `C:\SC2TOOLS\.worktrees\wave3-game-workspace`, now fast-forwarded to mainc7.
-   The previous merged cache branch978a843f and cache are preserved.
-   Subagent columns_api owns source; its copy subagent has four frozen files
-   and18 passing scoped checks. New Sheet/Popover/IconButton/useConfirm/
-   CopyButton/useCopy/SkeletonChart/Kpi plus shared focus/placement helpers and
-   tests are ready for a root local commit. All74focused checks, full types,
-   strict26-filelint and12native browser cases at360/768/1280 pass, including
-   actual fonts/both themes. Root inspected three checked-in captures. Corrected
-   real native focus-return/outside-pointer/portal traversal, radio tab stops,
-   offscreen bounds and stale confirmation callbacks. Layer context preserves
-   root Modal50, nested popup51/child Modal52 and Toast60. No production build
-   or bundle/full-suite proof yet. Serialize local heavy work. This is
-   only the reusable-contract pack; gallery, UI lint and consumer migrations
-   remain, and existing typed UNPAIR/controlled destructive dialogs stay intact.
-2. **Nav731** integrated main9b7ef88 as local commit
-   e5b5a89575bd609b8914757bddba22461e7a29fd in
-   `C:\SC2TOOLS\.worktrees\wave3-build-exports`. Not pushed/tested yet. Union
-   detail-sort whitelist, controlled URL state, passive persist:false and754
-   explicit preference persistence are preserved. Twenty integration cases and
-   synthetic columns-fixture compatibility were added. **Eleven pre-existing
-   owner PNG edits remain byte-identical and unstaged**; hash audits are in
-   .cache/nav-main9b-owner-png-*.json. Never reset/stash/stage those implicitly.
-   Root ran50integration/preference/navigation tests and full types/strict
-   eight-filelint, all passed. Integrate755/mainc7, then build/budget and real
-   navigation/columns/autoscroll browser matrices before final push/CI.
-3. **A11y752**, head99806e8d, worktree wave4-agent-dashboard, is still frozen.
-   Preserve caches and two unrelated web .tmp files. The obsolete opponent
-   section-order temporary script is wrong and must not run. Main9b/status
-   integration and final remote gates remain. Coordinate UI-foundation tokens.
-4. **Requested Macro Breakdown build editor** is committed as52687f69 and
-   937d28b7 on branch codex/macro-build-selector in wave3-coaching-forms, based
-   on mainc7. Prior754 branch/cache are preserved. Native screenshot's Planned
-   badge was a confirmed manual check-in; owner acknowledged the misclick.
-   Existing correction is game page Checked in→Edit→Change→Confirm, or No set
-   build. Owner now explicitly requests the same controls in Macro Breakdown.
-   Both standalone score modal and inline game macro section have an intent-only
-   lazy editor using real BuildCheckInCard, visible through macro loading/error.
-   Existing game/header/provider cache is reused. Overlay agent authors shared
-   owner/game pending-write gate and JWT/body/deadline/ABA retirement, including
-   synchronous callback retirement. All178focused checks,242browser assertions,
-   77Help checks, full types and strict changed-file lint pass. Three final-font
-   captures were inspected. The editor uses existing primitives.
-   Both commits are integrated into urgent build-correction PR756 at7127d78d
-   on codex/fix-pvt-dark-templar-priority in wave3-private-scouting. Combined
-   production build and unchanged budgets pass; exact-head CI is running.
-   This PR is NOT yet claimed shipped.
-5. **PvT DT priority correction**, requested from an8:12Eternity'sEdge screenshot,
-   is committed as6b6face2 and integrated into PR756 above. Personal PvT had a
-   DT Drop rule but no ground DT Rush. New early real DT proof precedes later
-   Charge/Blink; early Shrine commitment excludes all Twilight-first Charge
-   variants and proven real-Prism Drop stays more specific. Existing late-tech
-   transitions and custom/global policy precedence remain. All519focused
-   Python/native checks,12web catalog checks and15shared realPyodide cases pass;
-   verified old bundle reproduced RED before rebuilt1.6.12fc21ebe5bf52a53c GREEN.
-   No production record was reanalyzed. Root later received the private link and
-   inspected the debug view read-only; private evidence is not copied into source
-   or public documentation. Regression fixtures remain explicitly synthetic.
+1. **Shared UI and A11y752** are combined in `wave4-agent-dashboard`, branch
+   `codex/wave5-contrast-accessibility`. Original A11y head `99806e8d`, Nav head
+   `9849c107` and committed UI/gallery head `f1808a33` meet at merge `84193ecd`.
+   Final integration repairs are frozen for root's commit/push and remote gates.
+   Full Light/Dark/System, registered portal focus, typed UNPAIR and existing
+   controlled destructive dialogs are preserved. Gallery authorization remains
+   server-gated and bounded; its actions use synthetic local state. The ratchet
+   has no new/stale debt. Root reviewed four new synthetic captures.
+   Final affected packs cover 762 checks in 62 unit files plus 16 AST checks;
+   full web/API types, 95 owned-file strict lint, 18 gallery/focus browser cases,
+   190 production cases and 126 public axe scans pass. The 23 production skips
+   are intentional viewport/Clerk fixtures, not failed cases. All unchanged
+   budgets pass; `/try` is 213.7/240 kB after seven static leaf imports.
+   See `accessible-ui-integration-checkpoint.md`. Preserve all caches, original
+   17 A11y captures and two unrelated web .tmp files. Never run the obsolete
+   opponent section-order script. Broad consumer migrations remain unfinished.
+   The prior UI worktree/branch and merged cache branch `978a843f` are retained.
+2. **Nav731** is squash merged as
+   `cfcf5abdebc33c74de24435cfa3729548b5ac9e1` after every remote check and Vercel
+   passed. Root verified the fresh main merge tree equals tested head `9849c107`
+   (tree `01b5b50f`). Local proof includes full types, strict lint, 51 focused
+   checks, final production build/budgets and 744 navigation/columns/autoscroll
+   assertions. The source retains the original dossier order and explicit saved
+   preferences. **Eleven pre-existing owner PNG edits remain byte-identical and
+   unstaged** in `wave3-build-exports`; preserve its branch, worktree and caches.
+3. **Requested Macro editor and PvT DT correction756** are live as main
+   `b97fb80c1dec3aec7e53ece7bfe26852b6d40d9d`. Final published head `f5659d36`
+   passed all remote gates, including Windows UI and Vercel; root verified the
+   squash merge tree equals its tested source. Both Macro Breakdown surfaces
+   expose the real intent-only build editor through loading/error states.
+   Owner/game pending-write, JWT/body/deadline and ABA retirement are preserved.
+   Early real ground DT proof precedes later Charge/Blink; early Shrine excludes
+   Charge-first while proven real-Prism Drop stays more specific. Late-tech
+   transitions and custom/global precedence remain. Existing synthetic Python,
+   native, catalog, real-Pyodide, Macro and browser proofs remain in their pack
+   checkpoints. A stale guide-artifact gate was repaired through the normal
+   exporter, which now refreshes both generated API guide files; all 24 affected
+   parity checks and strict generator lint passed before the final CI run.
+   Production built automatically. Root verified the live personal DT label,
+   generic Macro editor controls and public Linux engine `0256093d6981b497`
+   (11 CI engine checks). Windows local builds use `fc21ebe5bf52a53c`; both are
+   version 1.6.12 with platform-built wheels. No production reanalysis, installer,
+   release or tag occurred. Private Admin observations/images must never be
+   copied into source or public documentation; regression fixtures are synthetic.
+4. **Public player work** is source-only in `wave3-my-reviews`, branch
+   `codex/wave5-public-player`, based on Nav `9849c107`. Its agents own that pack;
+   its next serialized validation slot follows the completed A11y work above.
+   No test, deployment or roadmap-completion claim is made for it here.
 
 Latest Randomizer question was answered from source: native page is a silent
 shared-pool editor/saved-result display. Animation/sounds/speech live in widget.

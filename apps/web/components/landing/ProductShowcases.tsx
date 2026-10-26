@@ -353,7 +353,7 @@ const CHAT_LINES = [
 
 export function StreamStudioPreview() {
   return (
-    <figure className="replay-scope overflow-hidden rounded-md border-2 border-line bg-[#080b10] shadow-hard">
+    <figure className="replay-scope overflow-hidden rounded-md border-2 border-line bg-bg shadow-hard">
       <div className="grid xl:grid-cols-[minmax(0,1.25fr)_22rem]">
         <div className="relative min-h-[430px] overflow-hidden border-b border-white/10 xl:border-b-0 xl:border-r">
           <Image
@@ -440,7 +440,7 @@ export function StreamStudioPreview() {
 function DockAction({ icon: Icon, label, value }: { icon: typeof Video; label: string; value: string }) {
   return (
     <div className="rounded-md border border-white/10 bg-white/[.04] p-2.5">
-      <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[.1em] text-white/55">
+      <div className="flex items-center gap-1.5 text-caption font-bold uppercase tracking-[.1em] text-white/55">
         <Icon className="h-3.5 w-3.5 text-[#3ce0d6]" aria-hidden /> {label}
       </div>
       <p className="mt-1 text-[11px] font-semibold text-white/85">{value}</p>

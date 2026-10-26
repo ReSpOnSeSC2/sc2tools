@@ -1,10 +1,14 @@
 import { expect, test } from "@playwright/test";
 import { openDesignGalleryFixture } from "./design-gallery-fixture.mjs";
+import { checkAccessibility } from "./accessibility-check";
 
 for (const theme of ["light", "dark"] as const) {
   test(`design gallery ${theme}: real controls, overlay focus and local states`, async ({ page }, info) => {
     const evidence = await openDesignGalleryFixture(page, theme);
+    await expect(page.locator("html")).toHaveAttribute("data-theme-mode", theme);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     await expect(page.getByRole("heading", { name: "Controls", exact: true })).toBeVisible();
+    await checkAccessibility(page, info, "/admin/design", theme);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await expect(page.getByLabel("Invalid example", { exact: true })).toHaveAttribute("aria-invalid", "true");
     const toggle = page.getByRole("switch", { name: "Enable example", exact: true });
