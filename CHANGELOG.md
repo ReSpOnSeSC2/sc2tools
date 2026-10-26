@@ -16,6 +16,17 @@ corresponding GitHub Release.
 - Confirm the named Twitch, Kick or YouTube account before disconnecting its notifications and stream controls. Cancel or Escape keeps it connected.
 - Retire earlier confirmations and delayed requests when the signed-in account or connection changes; uncertain results require checking status and explicit approval before another attempt.
 
+### Mobile site navigation
+
+- Use the shared right Sheet for the site menu, with a consistent title and Close control, the existing home and destination links, and footer theme choices.
+- Close and release the menu's scroll lock when the desktop navigation becomes available; shared focus handling respects newer dialogs and returns to the opener.
+
+### Notification panel
+
+- Keep the bell panel within the viewport using the shared nonmodal Popover. Escape returns to the bell, outside clicks preserve the clicked control's focus, and a newer dialog receives Escape first.
+- Preserve fresh-list entry focus, unread styling, pagination and read acknowledgements while removing duplicate overlay handlers.
+- Keep focus in a newer dialog when notification loading finishes, and focus cached error headings after the panel becomes visible on reopen.
+
 ### Replay sharing and copy recovery
 
 - Keep replay links available in a selected-text dialog when automatic copying is unavailable. Cancelling a device's native share sheet stays a quiet cancellation.

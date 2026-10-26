@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@clerk/nextjs";
 import { Bell } from "lucide-react";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { useUserSocket } from "@/lib/useUserSocket";
-import { notificationPanelPlacement } from "@/lib/a11y/popoverPlacement";
+import { Popover } from "@/components/ui/Popover";
 export { notificationPanelPlacement } from "@/lib/a11y/popoverPlacement";
 const NotificationPanel = dynamic(() => import("./NotificationPanel"), { ssr: false });
 
@@ -48,6 +48,7 @@ function Bell_({ compact }: { compact: boolean }) {
   const [markingAll, setMarkingAll] = useState(false);
   const openedNew = useRef(new Set<string>());
   const bellRef = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
   const [view, setView] = useState<NotificationView>("all");
   const [cursor, setCursor] = useState<string | null>(null);
   const [items, setItems] = useState<NotificationRow[]>([]);
@@ -63,8 +64,6 @@ function Bell_({ compact }: { compact: boolean }) {
   const failedReads = useRef(new Set<string>());
   const loadedHistoryTail = useRef(false);
   const mounted = useRef(true);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const [panelStyle, setPanelStyle] = useState<CSSProperties | undefined>(undefined);
   const unread = useApi<{ count: number }>("/v1/me/notifications/unread-count", {
     refreshInterval: 120_000,
     revalidateOnFocus: true,
@@ -190,7 +189,7 @@ function Bell_({ compact }: { compact: boolean }) {
     setView(next);
   }
 
-  function closePanel() { setOpen(false); bellRef.current?.focus(); }
+  function closePanel() { setOpen(false); }
   function togglePanel() {
     if (!open) { openedNew.current.clear(); selectView(count > 0 ? "unread" : "all"); setOpen(true); }
     else closePanel();
@@ -209,45 +208,14 @@ function Bell_({ compact }: { compact: boolean }) {
     finally { if (mounted.current) setMarkingAll(false); }
   }
 
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) closePanel();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closePanel();
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    const place = () => {
-      const el = rootRef.current;
-      if (!el) return;
-      const { left, width } = notificationPanelPlacement(
-        el.getBoundingClientRect(),
-        document.documentElement.clientWidth || window.innerWidth,
-      );
-      setPanelStyle({ left, width });
-    };
-    place();
-    window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
-  }, [open]);
-
   return (
-    <div ref={rootRef} className="relative">
+    <div className="relative">
       <button
         ref={bellRef}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
         aria-label={count ? `Notifications, ${count} unread` : "Notifications"}
         onClick={togglePanel}
         className={[
@@ -263,11 +231,14 @@ function Bell_({ compact }: { compact: boolean }) {
           </span>
         ) : null}
       </button>
-      {open ? <NotificationPanel items={items} style={panelStyle} ready={scopeReady && scopeMerged} loading={!!(list.isLoading || list.isValidating)}
+      {/* eslint-disable-next-line jsx-a11y/no-autofocus -- The lazy panel focuses its first row only after the fresh page is ready and merged. */}
+      <Popover open={open} onClose={closePanel} anchorRef={bellRef} label="Notifications" id={panelId} autoFocus={false} className="border-2 border-line !p-2">
+      {open ? <NotificationPanel items={items} ready={scopeReady && scopeMerged} loading={!!(list.isLoading || list.isValidating)}
         listError={!!list.error} unreadError={!!unread.error} readError={readError} view={view} selectView={selectView} onClose={closePanel}
         retryList={() => { if (!scopeReady) setScopeVersion((value) => value + 1); else void list.mutate(); }}
         retryUnread={() => void mutateUnread()} retryRead={() => { if (failedMarkAll.current) { void markAllRead(); return; } failedReads.current.clear(); setReadError(false); setReadRetry((value) => value + 1); }}
         onMore={nextCursor ? () => setCursor(nextCursor) : null} markAll={markAllRead} markingAll={markingAll} unread={count} openedNew={openedNew.current} /> : null}
+      </Popover>
     </div>
   );
 }

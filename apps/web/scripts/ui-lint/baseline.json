@@ -1158,20 +1158,6 @@
     },
     {
       "file": "components/chrome/MobileNav.tsx",
-      "rule": "dialog-outside-ui",
-      "signature": "a6da83daff9a078b1b112567c48b92022036d4d2d06e6d081b74d3e41f00e6d1",
-      "count": 1,
-      "example": "<div ref={drawerRef} id=\"mobile-nav-drawer\" role=\"dialog\" aria-modal=\"true\" aria-label=\"Site navigation\" tabIndex={-1} className={[ \"absolute inset-y-0 right-0 flex w-[88vw] max-w-"
-    },
-    {
-      "file": "components/chrome/MobileNav.tsx",
-      "rule": "focus-without-ring",
-      "signature": "c6cb7182fe0af10b05e35c1b5adaba57dc509c299a7d10c4ea7d5a521776047c",
-      "count": 1,
-      "example": "\"focus:outline-none\""
-    },
-    {
-      "file": "components/chrome/MobileNav.tsx",
       "rule": "handrolled-link-button",
       "signature": "2d025be0d2125fadd454ae054722a33196b2ec39aaaf2ade2178ab84d83fe8c9",
       "count": 1,
@@ -1645,13 +1631,6 @@
       "signature": "c90a4480e04d3179fc0cd14ff185be518846dedccff897b9dc69ae4bbee37b52",
       "count": 1,
       "example": "\"absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white\""
-    },
-    {
-      "file": "components/notifications/NotificationPanel.tsx",
-      "rule": "dialog-outside-ui",
-      "signature": "df21f4d07ce2e30502d061835d236c80f8dcc2cba9323bf2950cd1ec9e5dada5",
-      "count": 1,
-      "example": "<div ref={panel} role=\"dialog\" aria-label=\"Notifications\" style={p.style} className=\"absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border-2 border-line bg-b"
     },
     {
       "file": "components/onboarding/OnboardingDone.tsx",
