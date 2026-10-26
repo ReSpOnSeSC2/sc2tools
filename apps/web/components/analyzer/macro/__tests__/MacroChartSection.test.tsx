@@ -386,10 +386,10 @@ describe("Match timeline tabs and read-out", () => {
     const bankSamples = [{ time: 0, minerals_current: 100, vespene_current: 50 }, { time: 150, minerals_current: 600, vespene_current: 200 }, { time: 300, minerals_current: 900, vespene_current: 400 }];
     const opponentBank = [{ time: 0, minerals_current: 80, vespene_current: 20 }, { time: 150, minerals_current: 200, vespene_current: 300 }, { time: 300, minerals_current: 500, vespene_current: 100 }];
     render(<MacroChartSection gameId="bank-views" samples={bankSamples} oppSamples={opponentBank} leaks={[]} gameLengthSec={300} onSeek={seek} />);
-    fireEvent.click(screen.getByRole("button", { name: "Bank", exact: true }));
-    fireEvent.click(screen.getByRole("button", { name: "Army", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Bank" }));
+    fireEvent.click(screen.getByRole("button", { name: "Army" }));
     const resources = screen.getByRole("group", { name: "Bank resource" });
-    expect(within(resources).getByRole("button", { name: "Total", exact: true }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(resources).getByRole("button", { name: "Total" }).getAttribute("aria-pressed")).toBe("true");
     tap(overlayOf(/^Unspent minerals and gas/), 150);
     expect(seek).toHaveBeenCalledTimes(1); expect(seek).toHaveBeenCalledWith(150); seek.mockClear();
     const breakdown = screen.getByRole("group", { name: "Selected-time bank breakdown" });
@@ -400,19 +400,19 @@ describe("Match timeline tabs and read-out", () => {
     expect(card.getByRole("row", { name: /Minerals/ }).textContent).toContain("600");
     expect(card.getByRole("row", { name: /Gas/ }).textContent).toContain("200");
 
-    fireEvent.click(within(resources).getByRole("button", { name: "Gas", exact: true }));
+    fireEvent.click(within(resources).getByRole("button", { name: "Gas" }));
     expect(screen.getByRole("img", { name: /^Unspent gas for both players/ })).toBeTruthy();
     expect(readout().textContent).toContain("2:30"); expect(readout().textContent).toContain("200"); expect(readout().textContent).toContain("300");
     expect(within(screen.getByRole("status")).getByRole("row", { name: /Gas/ }).textContent).toContain("300 (ahead)");
     expect(screen.getByRole("region", { name: "You composition at 2:30" })).toBeTruthy();
-    fireEvent.click(within(resources).getByRole("button", { name: "Minerals", exact: true }));
+    fireEvent.click(within(resources).getByRole("button", { name: "Minerals" }));
     expect(screen.getByRole("img", { name: /^Unspent minerals for both players/ })).toBeTruthy();
     expect(readout().textContent).toContain("600"); expect(readout().textContent).toContain("+400");
     expect(seek).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Workers", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Workers" }));
     expect(screen.getByRole("img", { name: /^Workers and Unspent minerals/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Bank", exact: true }).getAttribute("aria-pressed")).toBe("true");
-    expect(within(resources).getByRole("button", { name: "Minerals", exact: true }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Bank" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(resources).getByRole("button", { name: "Minerals" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("shows known zero and a missing resource honestly in both selected-time and hover breakdowns", () => {

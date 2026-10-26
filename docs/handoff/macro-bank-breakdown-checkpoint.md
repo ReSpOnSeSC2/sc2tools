@@ -1,7 +1,8 @@
 # Macro Bank breakdown
 
 2026-10-26. Source-only work on `codex/fix-macro-bank-breakdown`, based on
-`dce88719d3fe9faeaab82786dfd0a95279bb4b20`. No checks or runtime execution yet.
+`dce88719d3fe9faeaab82786dfd0a95279bb4b20`. Source repair follows the first
+whole-web typecheck described below; subsequent checks remain pending.
 
 Bank remains one metric in the existing multi-select/All controls. When Bank is
 selected, Total, Minerals and Gas choose which two player lines are plotted.
@@ -29,6 +30,12 @@ No new article path was added, so Help index generation is unnecessary.
 Authored checks cover individual/total values, missing/invalid/zero samples,
 prior-sample alignment, resource-specific layout scales, validated preference
 recovery, independent saved choices, view-switch selection stability and
-unchanged graph-seek behavior. They are **UNRUN**. Whole-web types, focused lint,
-appropriate neighboring tests, Help checks, production build/budgets and a
-current-CSS browser check remain pending the parent's serialized runtime grant.
+unchanged graph-seek behavior. Whole-web types at commit `17e3b95d` returned
+eight TS2769 errors, all from new role-query options in the focused chart test.
+The raw first RED is preserved in
+`.cache/macro-bank-static-prep-17e3b95d/results/Types/`. The source repair removes
+only those eight unsupported `exact: true` options; their string role names
+already match exactly. All assertions, fixtures, mocks and product code remain
+unchanged. No rerun has occurred. Focused lint, unit/Help checks, production
+build/budgets and a current-CSS browser check remain pending the parent's
+serialized runtime grant.
