@@ -33,16 +33,21 @@ vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: async () => "token", isLoaded: true, isSignedIn: true, userId: "synthetic-owner" }),
 }));
 
-vi.mock("@/lib/clientApi", () => ({
-  API_BASE: "https://api.test",
-  useApi: (path: string) => ({
-    data: api.data[path],
-    isLoading: false,
-    error: null,
-    mutate: async () => api.data[path],
-  }),
-  apiCall: api.apiCall,
-}));
+vi.mock("@/lib/clientApi", async (importOriginal) => {
+  const { useOwnerRequestScope, boundedApiRequest } = await importOriginal<typeof import("@/lib/clientApi")>();
+  return {
+    useOwnerRequestScope,
+    boundedApiRequest,
+    API_BASE: "https://api.test",
+    useApi: (path: string) => ({
+      data: api.data[path],
+      isLoading: false,
+      error: null,
+      mutate: async () => api.data[path],
+    }),
+    apiCall: api.apiCall,
+  };
+});
 
 beforeEach(() => {
   api.data = {

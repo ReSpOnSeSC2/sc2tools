@@ -104,7 +104,11 @@ for (const boundary of ["unmount", "owner ABA", "connection revision"] as const)
     await page.evaluate(() => window.platformDisconnectFixture.holdNextToken());
     await disconnect(page).click(); await confirmation(page).getByRole("button", { name: "Disconnect Twitch", exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.platformDisconnectFixture.pendingTokens())).toBe(1);
-    if (boundary === "unmount") await page.evaluate(() => window.platformDisconnectFixture.setMounted(false));
+    if (boundary === "unmount") {
+      await page.evaluate(() => window.platformDisconnectFixture.setMounted(false));
+      await expect(page.getByText("Connection view unmounted", { exact: true })).toBeVisible();
+      await expect(twitch(page)).toHaveCount(0);
+    }
     else if (boundary === "owner ABA") {
       await page.evaluate(() => window.platformDisconnectFixture.setOwner("owner-b")); await settled(page);
       await page.evaluate(() => window.platformDisconnectFixture.setOwner("owner-a")); await settled(page);
