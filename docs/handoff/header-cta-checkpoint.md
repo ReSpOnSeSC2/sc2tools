@@ -7,6 +7,12 @@ Three byte-identical copies now live under `docs/handoff/screenshots/` as
 `header-cta-dark-1280-out.png`. Original images and the verified copy receipt
 remain in the cache. The tested product source is unchanged.
 
+After this artifact, root integrated Platform's test-only CI repairs at
+`0231c73d`: the committed-unmount barrier passes all36 original browser cases,
+and the real-form/provider unit pack passes44 checks with types/strict lint.
+The only incoming changes are two existing test files and its checkpoint;
+no Header or other product bytes changed and no rebuild is claimed.
+
 2026-10-26. Final local proof in `wave4-agent-dashboard`, branch
 `codex/wave5-header-cta`, at
 `c47047c264e2f022866c1aa300efa14a6caadb91`, including reviewed Platform,

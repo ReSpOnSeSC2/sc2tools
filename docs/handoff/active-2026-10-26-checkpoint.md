@@ -162,9 +162,14 @@ branches, captures and every RED receipt are retained.
    `35ba1075`; final Mobile integration `c37e1434` changes no web source.
    All runtime is closed. PR768 initially stacked on Mobile, then retargeted
    main after its merge. Ancestry-only source `627f7ec2` retains the complete
-   tested tree `2992a0ca402e818271aeffdd86aedb8651c46115`; final exact-head
-   remote checks are running. The original815 preview succeeded. Canonical40
-   terms/first Macro+Opponents consumers are planned separately in cache audits.
+   tested tree `2992a0ca402e818271aeffdd86aedb8651c46115`. Exact-head GitHub
+   checks passed 8,943 web tests/948 suites (one expected skipped test/suite)
+   and 419 browser checks/76 intentional skips. The ancestry-only627 preview
+   was rate limited; original815 Preview `2b3GQoRyAtuuPQ2fL5CUs4hpBonG` is
+   Ready and has the identical complete tree. PR768 is squash-merged as
+   `78818d4b6d7db3814e26197d03dd586a44ca8e42`; production is not yet observed.
+   Canonical40 terms/first Macro+Opponents consumers are now source-only work
+   on `codex/wave5-glossary-terms` in the preserved `wave3-my-reviews` worktree.
 5. Platform disconnect: `wave3-guides-expansion`, branch
    `codex/wave5-platform-disconnect-confirm`, source commit `572c4bba`. Exactly
    eight paths are source-frozen at `03055feb` with actual main9bd integrated
@@ -180,7 +185,17 @@ branches, captures and every RED receipt are retained.
    explicitly armed DELETEs are synthetic; zero real provider/account/OAuth/
    native actions. Connect code's3911 normalized bytes are unchanged.
    Source is preserved at `42cb254f`, with unchanged glossary ancestry
-   integrated at `bfb241a3`. All runtime is closed; stacked delivery follows.
+   integrated at `bfb241a3`. PR769's original496 remote CI exposed three
+   incomplete legacy Settings mock cases and two browser unmount cases that
+   released the held token before React committed unmount. The ninth owned
+   existing test now admits the real owner/deadline helpers; the browser waits
+   for the existing unmounted marker/zero groups without weakening assertions.
+   Independent review is clear. Reproof passes all36 original project cases,
+   18 full AA scans and44 affected unit checks, types and strict lint; product
+   bytes and the production artifact are unchanged. Ledgers show81 synthetic
+   GETs/24 explicitly armed DELETEs, zero real/rejected/nonlocal operations.
+   Source5198fed1 reconciles actual main788 without source changes and is
+   pushed for fresh exact-head CI. Runtime is closed; production is pending.
    Inherited phone permission-row text squeeze remains a separate responsive
    follow-up, not a layout claim of this confirmation pack. Existing
    useConfirm/ConfirmDialog replaces one native confirm. Preserve synchronous
@@ -195,15 +210,27 @@ branches, captures and every RED receipt are retained.
    return context, Suspense fallback and36px sizing. First static proof passes
    189 tests/18 disjoint suites, types, strict three files, Help90 and
    UI19/1,695 files/643 existing occurrences, without source repair.
-   It is preserved at `89a36c63`; final dependency/build/browser stage follows.
+   Final proof at `c47047c2` passes243 tests/28 suites, pre/post types, strict
+   three-file lint, Help91 andUI19/1,699/642. Build `2-1RqSXMLXm0hFWUs2bVM`
+   passes144 pages/all81 budgets. Full appearance passes18 cases/15 intentional
+   skips and66 full AA scans (54Header/12 related). Ten typed fixture GETs and
+   zero writes/unknown/rejected/nonlocal/actual actions. Root reviewed three
+   byte-identical captures. Source0231c73d integrates only Platform's verified
+   test repairs after the artifact; Header/product source stays unchanged.
+   All runtime is closed and a stacked PR follows.
 7. Settings A1: `wave3-game-workspace`, branch `codex/wave5-settings-registry`,
    source preserved at `8ed58639`, with Devices repair at `82a82898`.
    The registry/groups/canonical aliases,
    Preferences dirty publishers, Help and tests are authored. Independent
-   review found the existing Devices link can bypass draft protection; a
-   route destination is being added to the same confirmation, preserving
-   native modified-link behavior. Exactly 23 paths are approved, including
-   the necessary existing router-boundary test. All runtime remains unrun.
+   review found the existing Devices link could bypass draft protection; the
+   same confirmation now guards its route destination while preserving
+   native modified-link behavior. Exactly23 paths are approved. First static
+   proof passes210 tests/22 suites, types,20 strict files, Help90 andUI19.
+   SettingsShell's one unchanged inherited mobile-keydown lint warning has a
+   separate audit; no waiver or semantic tabIndex change was added. A later
+   source-only loopback native-popup repair is preserved at a9f51f0d. Header,
+   Glossary and repaired Platform are integrated at2f042be6; final serialized
+   static/build/browser proof is now active. Original REDs and all assets remain.
    Search, Chat extraction and the rest of find-anything are later stages.
 
 Do not switch these active branches, reset their worktrees or stage their
