@@ -20,7 +20,7 @@ export function SettingsSearch({ ownerKey, onNavigate }: {
 }) {
   const [query, setQuery] = useState("");
   const root = useRef<HTMLDivElement>(null), input = useRef<HTMLInputElement>(null);
-  const lifetime = useMemo(() => ({}), [ownerKey, query]);
+  const lifetime = useMemo(() => ({ ownerKey, query }), [ownerKey, query]);
   const latest = useRef(lifetime); latest.current = lifetime;
   const navigate = useRef(onNavigate);
   // Publish only a committed Shell guard. A suspended/abandoned render must
