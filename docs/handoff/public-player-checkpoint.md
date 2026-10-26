@@ -1,5 +1,55 @@
 # Public player page checkpoint
 
+## Final responsive repair verification
+
+Final checked source is preserved repair `3e976e68`, current-main merge
+`6381f44db9fb16a17ea9457a15dcb06987c27cf9`, and root's narrow publication-date
+copy/test adjustment. Publication sample start always uses the earliest rendered
+publication, falling back to the existing joined date only if none is valid.
+The capped sample regression requires Oct 2026 and excludes the source cohort's
+earlier Jan 2025 date. The worker changed no runtime or test source.
+
+- All 25 affected checks in the three author/profile consumer suites pass again.
+  Strict lint passes for the eight affected web runtime/test/fixture files;
+  whole web types pass before and after Next regenerates route types.
+- All 18 shared UI-rule regressions and the combined scan pass: 1,660 files,
+  727 inherited occurrences, no new or stale allowance. Main independently
+  retired seven allowances since the earlier responsive repair proof.
+- One direct Next production build passes compilation, types, 142 static pages
+  and tracing. It uses dummy Clerk keys, a local-only API and CI feature flags,
+  retaining the validated engine 1.6.12/25b300818c31d41b assets and pointer. No
+  engine compilation/copy, dependency installation or deployment ran.
+- All unchanged budgets pass: 18 named routes and 63 default-budget routes.
+  Examples: `/community` 185.9/190 kB, `/app` 233.7/240 kB and `/try` 213.7/240 kB.
+- Actual built-server HTTP/browser proof passes 26 cases; four nonmobile
+  Download-command cases intentionally skip. One pinned Chromium worker covers
+  360/768/1280px, canonical sections and both themes, fresh profile Off/neutral
+  panel bytes, warm Community Off HTML/RSC URL exclusion without optional purge,
+  exact legacy one-hop308/private404/temporary500, directory loading and Download
+  keyboard scrolling/axe. Controlled unavailable-profile503 fixtures produce
+  expected server-render500 logs while their status assertions pass.
+- The original rich author-browsing test passes in all three projects with its
+  sorting, present-matchup counts, description search, Clear, no redundant author
+  link, publication month and two-matchup assertions intact. The author page's
+  Light/Dark serious/critical axe and overflow checks also pass at all widths.
+- New phone375/desktop1440 author-browser and Light360/Dark1280 overview captures
+  were visually inspected; no clipping, overlap or contrast issue was observed.
+  All fixture/Next/browser jobs are closed; no listening8080/3210 socket remains.
+
+Logs are preserved under root `.cache/public-player-final-repair-` with suffixes
+`units.log`, `lint.log`, `types.log`, `ratchet-rules.log`, `ratchet-scan.log`,
+`build.log`, `budgets.log`, `post-build-types.log` and `http.log`. New captures are
+in `.cache/public-player-final-repair-http-artifacts`; older evidence remains
+intact. The ignored final-repair config extends the original config without
+editing it. No real account, provider, production preference or publication was
+changed. Final tracked changes remain exactly root's two date-copy/test paths
+plus this checkpoint; source preservation/delivery remains root-owned.
+
+Root independently inspected the final 375px and 1440px author-browser captures
+and copied the unchanged synthetic images, with matching SHA256, to
+`docs/handoff/screenshots/public-player-builds-fixture-light-{375,1440}.png`.
+The original committed profile/settings images and all cached evidence remain.
+
 ## Responsive CI repair source
 
 At head `4ed784de`, responsive CI found two real presentation regressions.
@@ -16,6 +66,10 @@ When the bounded 50-row public cohort is smaller than the source publication
 sample, the page describes the displayed recent sample directly. Neither the
 cap note nor the shared profile caption claims an exact lifetime total from
 the bounded100-row author source. No additional count query is introduced.
+The displayed sample's start month uses the earliest rendered publication,
+including when capped, rather than an earlier date from the source cohort.
+The focused cap regression checks that distinction; its final consumer rerun and
+actual build/browser proof are recorded above.
 
 The existing slim author query additionally projects only the already-public
 description, bounded at the same 4,000-character limit as Community snapshots.
@@ -58,10 +112,9 @@ eight-file lint, 18 UI-rule regressions and the 1,660-file ratchet scan pass wit
 734 existing occurrences and no new/stale allowance. Logs are local artifacts
 under this worktree's root `.cache/public-player-responsive-*`.
 
-All jobs are closed. Final build/unchanged budgets and the affected public-player,
-community-detail, privacy/redirect and both-theme accessibility browser cases
-remain held for root scheduling. No new browser, CI or deployment proof is
-claimed for this repair yet.
+The final local build, unchanged budgets and affected public-player,
+community-detail, privacy/redirect and both-theme accessibility browser proof
+are now recorded above. No new remote CI or deployment proof is claimed here.
 
 Root's final repository scan also found the existing guides no-PII fixture
 still expecting UUID profile discovery from the retired Community sitemap.

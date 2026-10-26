@@ -33,7 +33,7 @@ function PublishedBuilds({ profile }: { profile: PublicPlayerProfile }) {
   const matchupCount = new Set(builds.map(row => row.matchup).filter(Boolean)).size;
   return <div className="space-y-4">
     <section aria-label="Publishing summary" className="flex flex-wrap gap-x-5 gap-y-2 text-caption text-text-muted">
-      <p>Publication sample from <span className="text-text">{publicDate(sampled ? profile.joinedAt : firstPublished || profile.joinedAt)}</span></p>
+      <p>Publication sample from <span className="text-text">{publicDate(firstPublished || profile.joinedAt)}</span></p>
       <p>Across {matchupCount} matchup{matchupCount === 1 ? "" : "s"}</p>
       {sampled ? <p>Showing the latest {builds.length} build{builds.length === 1 ? "" : "s"} in this recent publication sample.</p> : null}
     </section>

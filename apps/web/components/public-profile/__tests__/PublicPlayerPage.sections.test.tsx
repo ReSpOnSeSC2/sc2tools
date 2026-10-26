@@ -57,5 +57,6 @@ it("describes the bounded browser cohort without claiming it includes every publ
     publishedBuilds: [{ slug: "recent", title: "Recent published build", description: "Public", matchup: null, votes: 0, publishedAt: "2026-10-01", updatedAt: null }] }} />);
   expect(screen.getByText("Showing the latest 1 build in this recent publication sample.")).toBeTruthy();
   expect(screen.queryByText(/of 100|100 published builds/)).toBeNull();
-  expect(screen.getByText("Jan 2025")).toBeTruthy();
+  expect(screen.getByText("Oct 2026")).toBeTruthy();
+  expect(screen.queryByText("Jan 2025")).toBeNull();
 });
