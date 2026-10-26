@@ -70,3 +70,14 @@ All paths below are cache evidence, never product/CI dependencies or staged arti
 - Before this documentation-only condensation: `.cache/activation-checkpoint-finalize-before-4c04b200/`.
 
 The first failures remain failures in their raw receipts; later passes do not overwrite them. This checkpoint update launched no runtime/build and changed no product or tests.
+
+## Integrated CI recovery-fixture repair
+
+PR781 at `aa03e6cc` reported 9,198 passed, four failed and one skipped web tests.
+All four failures are in the existing GameDetail recovery fixture, whose full
+`clientApi` mock omitted the owner-request hook now used by first-view admission.
+The fixture now retains actual module exports and replaces only its existing
+`useApi` seam. Its signed-out state and all recovery assertions are unchanged;
+the real first-view hook remains mounted. Before bytes are preserved under
+`.cache/activation-recovery-mock-before-aa03e6cc/`. Product source is unchanged;
+focused validation and renewed exact-head CI remain pending.
