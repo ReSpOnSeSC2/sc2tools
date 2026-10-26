@@ -13,6 +13,11 @@ import { SettingsShell } from "../SettingsShell";
 import { SettingsMultiChat } from "../SettingsMultiChat";
 import { OverlayBotSettings } from "../OverlayDockSetup";
 
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 const BOT = {
   enabled: false,
   username: "",

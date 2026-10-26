@@ -7,6 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { AnchorHTMLAttributes } from "react";
 import { ToastProvider } from "@/components/ui/Toast";
 import { readConsent, setConsent } from "@/lib/analytics/consent";
 import { SettingsMisc, miscForSave } from "../SettingsMisc";
@@ -18,6 +19,30 @@ const mocks = vi.hoisted(() => ({
   configured: true,
   ownerId: null as string | null,
   notifications: { muted: [] as string[] },
+  routerPush: vi.fn(),
+}));
+
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ push: mocks.routerPush }),
+}));
+
+// Same-tab Next Link admission is synthetic. Native modifiers are left
+// unhandled, matching Next's onNavigate contract; tests cancel JSDOM's
+// navigation only after observing whether the component prevented it.
+vi.mock("next/link", () => ({
+  default: ({ href, children, onClick, onNavigate, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href: string;
+    onNavigate?: (event: { preventDefault: () => void }) => void;
+  }) => <a href={href} {...props} onClick={(event) => {
+    onClick?.(event);
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0
+      || (event.currentTarget.target && event.currentTarget.target !== "_self") || event.currentTarget.hasAttribute("download")) return;
+    let prevented = false;
+    onNavigate?.({ preventDefault: () => { prevented = true; } });
+    event.preventDefault();
+    if (!prevented) mocks.routerPush(href);
+  }}>{children}</a>,
 }));
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: mocks.ownerId, getToken: async () => "token" }) }));
@@ -38,6 +63,7 @@ beforeEach(() => {
   mocks.ownerId = null;
   mocks.notifications = { muted: [] };
   mocks.apiCall.mockReset();
+  mocks.routerPush.mockReset();
   mocks.apiCall.mockResolvedValue({});
   window.localStorage.clear();
 });
@@ -58,6 +84,73 @@ function renderMisc() {
 function analyticsStatus() {
   return screen.getByRole("status").textContent;
 }
+
+function renderPreferencesShell() {
+  return render(<ToastProvider><SettingsShell initialTab="preferences" renderTab={(id) => id === "preferences" ? <SettingsMisc /> : <p>panel {id}</p>} /></ToastProvider>);
+}
+
+function makePreferencesDirty(source: "preferences" | "notifications") {
+  if (source === "preferences") fireEvent.change(screen.getByLabelText("Default tab"), { target: { value: "macro" } });
+  else fireEvent.click(screen.getByRole("checkbox", { name: "New reviews" }));
+}
+
+function expectPreferencesDraft(source: "preferences" | "notifications") {
+  if (source === "preferences") expect((screen.getByLabelText("Default tab") as HTMLSelectElement).value).toBe("macro");
+  else expect((screen.getByRole("checkbox", { name: "New reviews" }) as HTMLInputElement).checked).toBe(false);
+}
+
+describe("Devices navigation from real Preferences forms", () => {
+  it.each(["preferences", "notifications"] as const)("guards %s edits, keeps them on Stay, and routes only after explicit Discard", (source) => {
+    mocks.ownerId = "synthetic-settings-owner";
+    window.history.replaceState(null, "", "/settings?tab=misc&ref=devices#local-anchor");
+    renderPreferencesShell();
+    makePreferencesDirty(source);
+    const devices = screen.getByRole("link", { name: "Devices" });
+    expect(devices.getAttribute("href")).toBe("/devices");
+    fireEvent.click(devices);
+    expect(screen.getByRole("dialog", { name: "Discard unsaved changes?" })).toBeTruthy();
+    expect(mocks.routerPush).not.toHaveBeenCalled();
+    expect(mocks.apiCall).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expectPreferencesDraft(source);
+    expect(window.location.search + window.location.hash).toBe("?tab=misc&ref=devices#local-anchor");
+    fireEvent.click(devices);
+    fireEvent.click(screen.getByRole("button", { name: "Discard & open Devices" }));
+    expect(mocks.routerPush).toHaveBeenCalledTimes(1);
+    expect(mocks.routerPush).toHaveBeenCalledWith("/devices");
+    expect(mocks.apiCall).not.toHaveBeenCalled();
+  });
+
+  it.each(["preferences", "notifications"] as const)("leaves modified Devices clicks native while retaining %s edits", (source) => {
+    mocks.ownerId = "synthetic-settings-owner";
+    window.history.replaceState(null, "", "/settings?tab=preferences&ref=devices");
+    renderPreferencesShell();
+    makePreferencesDirty(source);
+    const devices = screen.getByRole("link", { name: "Devices" });
+    for (const modifier of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
+      let wasPrevented: boolean | undefined;
+      const cancelJSDOMNavigation = (event: Event) => { wasPrevented = event.defaultPrevented; event.preventDefault(); };
+      document.addEventListener("click", cancelJSDOMNavigation, { once: true });
+      fireEvent.click(devices, modifier);
+      expect(wasPrevented).toBe(false);
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expectPreferencesDraft(source);
+    }
+    expect(mocks.routerPush).not.toHaveBeenCalled();
+    expect(mocks.apiCall).not.toHaveBeenCalled();
+    expect(window.location.search).toBe("?tab=preferences&ref=devices");
+  });
+
+  it("keeps clean same-tab Devices navigation available without a dialog", () => {
+    renderPreferencesShell();
+    fireEvent.click(screen.getByRole("link", { name: "Devices" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(mocks.routerPush).toHaveBeenCalledTimes(1);
+    expect(mocks.routerPush).toHaveBeenCalledWith("/devices");
+    expect(mocks.apiCall).not.toHaveBeenCalled();
+  });
+});
 
 describe("SettingsMisc default tab", () => {
   it("keeps notification-only edits guarded after resetting the other Preferences form", () => {

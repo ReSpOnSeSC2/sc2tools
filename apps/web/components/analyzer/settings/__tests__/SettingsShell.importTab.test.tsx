@@ -2,7 +2,7 @@
  * Import remains available by default; callers can hide a tab, and a
  * hidden initial tab falls back to the first visible one.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import {
   SettingsShell,
@@ -10,6 +10,11 @@ import {
   isSettingsTabId,
   visibleSettingsTabs,
 } from "../SettingsShell";
+
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 afterEach(cleanup);
 

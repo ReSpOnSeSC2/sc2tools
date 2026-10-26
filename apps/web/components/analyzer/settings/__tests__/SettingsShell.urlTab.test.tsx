@@ -4,10 +4,15 @@
  * unsaved-changes guard for them, and writes hand-picked tabs back to the
  * URL.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SettingsShell, type SettingsTabId } from "../SettingsShell";
 import { usePublishDirty } from "../SettingsContext";
+
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 function DirtyPanel({ id }: { id: string }) {
   usePublishDirty(id, true);

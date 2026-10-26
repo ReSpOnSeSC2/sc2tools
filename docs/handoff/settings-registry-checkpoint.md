@@ -16,13 +16,22 @@ untouched and unexecuted.
 Before edits, the exact owned manifest and original per-file byte/SHA-256
 inventory were recorded in:
 
-- `.cache/settings-registry-owned-paths.txt`
-- `.cache/settings-registry-original-sha256.json`
+- `.cache/settings-registry-owned-paths.txt` (original 22)
+- `.cache/settings-registry-original-sha256.json` (original 22)
+- `.cache/settings-registry-devices-owned-paths.txt` (current 23)
+- `.cache/settings-registry-devices-original-sha256.json` (current 23)
 
-The manifest contains 22 paths. The parent approved the four narrow additions
+The original manifest contains 22 paths. The parent approved the four narrow additions
 before their original hashes were recorded and before they were edited:
 the Help link validator, Notification preferences' dirty publisher, the
 Account loading error label and its corresponding existing test assertion.
+Source at `8ed58639` and its original frozen receipt
+`.cache/settings-registry-source-only-sha256.json` are preserved. Independent
+review then found that the existing global Devices link could leave a dirty
+panel through client navigation without the discard confirmation. The parent
+approved a source-only repair and one required 23rd test path:
+`SettingsShell.overlayGuard.test.tsx`, solely for its router boundary mock.
+The original guard assertions remain in place.
 
 ## Authored behavior
 
@@ -53,6 +62,13 @@ Account loading error label and its corresponding existing test assertion.
   form publish under `preferences`, with separate dirty sources. Existing
   save endpoints, payloads, token behavior, request lifecycle, beforeunload
   handling and discard confirmation remain unchanged.
+- Devices keeps its real `/devices` href. Its ordinary same-tab Next Link
+  `onNavigate` admission now uses the existing discard dialog for any dirty
+  active panel. Pending destinations distinguish this fixed route from the
+  existing tab/from-URL intent. Stay leaves the current URL and draft intact;
+  explicit Discard calls the current Next router. Modified/new-tab activation
+  stays native and never prompts or discards the current panel. Tab-switch
+  confirmation labels and URL/hash handling retain their existing behavior.
 - The Help link validator normalizes aliases before checking canonical
   visibility. `isSettingsTabId` remains a canonical-only type guard. Old Help
   links are kept, and the renamed Preferences how-to retains its published
@@ -70,6 +86,12 @@ Real Preferences and Notification forms are used in draft tests: stay keeps
 the draft, discard switches without a save request, and resetting one form
 must not erase the other's dirty guard. Existing Overlay multi-form tests
 remain unchanged and are part of pending integration validation.
+Additional real-form cases cover Devices Stay/Discard and modified clicks
+for start-page and notification-only drafts, preservation of the old `misc`
+query/hash, clean navigation, exactly one approved router push and zero save
+requests. The unit Next Link adapter models same-tab `onNavigate` admission;
+modified events remain unhandled until a test-only document listener observes
+their default state and cancels JSDOM's unavailable navigation.
 
 `tests/e2e/settings-registry-fixture.mjs` mounts the actual SettingsShell,
 registry, SettingsContext and shared confirmation Modal. Typed synthetic
@@ -89,6 +111,14 @@ including contrast and body bounds. Screenshots default to a new timestamped
 `.cache/settings-registry-browser-*` directory; `SETTINGS_SHOTS_DIR` can point
 to a new cache-only evidence directory. There are no original screenshot
 writes or axe exclusions.
+
+The same six browser cases additionally reveal the desktop sidebar after
+their original width assertions, open Devices with a native Control-click in
+an intercepted new tab, retain the parent draft without a dialog, then cover
+ordinary-click Stay and native Enter/explicit Discard. Context-wide routing
+intercepts the new tab's first document too. Expected extra transport is one
+synthetic native Devices GET and one recorded client router push; parent
+panel reads stay exactly eight, with zero actual account/provider writes.
 
 ## Pending serialized verification
 

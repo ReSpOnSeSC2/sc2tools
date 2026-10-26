@@ -15,6 +15,7 @@ corresponding GitHub Release.
 
 - Group Settings into Account, Gameplay and Streaming, with descriptions in the desktop sidebar and a Devices link in Account.
 - Rename Foundation to Account and Misc to Preferences while keeping old tab and hash links working. Keep unsaved preference and notification edits guarded when switching tabs.
+- Ask before the sidebar's Devices link leaves unsaved Settings edits; opening the link in a new tab keeps its normal behavior.
 
 ### Mobile site navigation
 

@@ -11,6 +11,11 @@ import { useEffect, useState } from "react";
 import { SettingsShell, defaultTabVisibility, type SettingsTabId } from "../SettingsShell";
 import { SECTION_FLASH_ATTR, SECTION_FLASH_MS } from "../revealSectionAnchor";
 
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 function LateSection({ id }: { id: string }) {
   // Like a section that waits for its fetch before rendering.
   const [ready, setReady] = useState(false);

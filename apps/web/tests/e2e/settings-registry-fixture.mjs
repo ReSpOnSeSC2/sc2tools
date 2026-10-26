@@ -7,7 +7,7 @@ const SOURCE = `import React,{useEffect,useState,useSyncExternalStore}from'react
 import{createRoot}from'react-dom/client';
 import{SettingsShell}from'@/components/analyzer/settings/SettingsShell';
 import{usePublishDirty}from'@/components/analyzer/settings/SettingsContext';
-import{SETTINGS_TABS,settingsTabFromParam,type SettingsTabId}from'@/lib/settingsRegistry';
+import{settingsTabFromParam,type SettingsTabId}from'@/lib/settingsRegistry';
 import{Button}from'@/components/ui/Button';import{Field}from'@/components/ui/Field';import{Input}from'@/components/ui/Input';
 type PanelData={id:SettingsTabId;title:string};
 function readPanel(value:unknown,id:SettingsTabId):PanelData{
@@ -32,13 +32,15 @@ function SyntheticPanel({id}:{id:SettingsTabId}){
 }
 const subscribe=(listener:()=>void)=>{addEventListener('fixture-location',listener);addEventListener('popstate',listener);return()=>{removeEventListener('fixture-location',listener);removeEventListener('popstate',listener)}};
 function navigate(href:string){history.pushState({},'',href);dispatchEvent(new Event('fixture-location'))}
-declare global{interface Window{settingsFixtureNavigate:(href:string)=>void}}
+declare global{interface Window{settingsFixtureNavigate:(href:string)=>void;settingsFixtureRouterPush:(href:string)=>void;settingsFixtureRouterPushes:()=>string[]}}
 window.settingsFixtureNavigate=navigate;
-function App(){const search=useSyncExternalStore(subscribe,()=>location.search);return <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6"><h1 className="font-display text-h2 text-text">Settings</h1><SettingsShell initialTab={settingsTabFromParam(new URLSearchParams(search).get('tab'))??undefined} renderTab={id=><SyntheticPanel key={id} id={id}/>}/></main>}
+const routerPushes:string[]=[];window.settingsFixtureRouterPushes=()=>routerPushes.slice();window.settingsFixtureRouterPush=href=>{routerPushes.push(href);navigate(href)};
+function App(){const current=useSyncExternalStore(subscribe,()=>location.pathname+location.search);if(current==='/devices')return <main className="p-6"><h1 className="font-display text-h2 text-text">Devices destination</h1><p className="text-body text-text-muted">Synthetic client navigation. No account transport is available.</p></main>;return <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6"><h1 className="font-display text-h2 text-text">Settings</h1><SettingsShell initialTab={settingsTabFromParam(new URLSearchParams(location.search).get('tab'))??undefined} renderTab={id=><SyntheticPanel key={id} id={id}/>}/></main>}
 createRoot(document.getElementById('root')!).render(<App/>);`;
 
 const adapters = {
-  "next/link": `import React from'react';export default React.forwardRef(function Link({href,children,prefetch,...props},ref){return <a ref={ref} href={href} {...props}>{children}</a>});`,
+  "next/link": `import React from'react';import{useRouter}from'next/navigation';export default React.forwardRef(function Link({href,children,prefetch,scroll,replace,onClick,onNavigate,...props},ref){const router=useRouter();return <a ref={ref} href={href} {...props} onClick={event=>{onClick?.(event);if(event.defaultPrevented||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||event.button!==0||(event.currentTarget.target&&event.currentTarget.target!=='_self')||event.currentTarget.hasAttribute('download'))return;event.preventDefault();let prevented=false;onNavigate?.({preventDefault(){prevented=true}});if(!prevented)router.push(href)}}>{children}</a>});`,
+  "next/navigation": `const router={push:href=>window.settingsFixtureRouterPush(href)};export const useRouter=()=>router;`,
   // Installation is unrelated to Settings grouping; no browser install prompt.
   "@/components/pwa/InstallAppButton": "export const InstallAppButton=()=>null;",
 };
@@ -75,14 +77,15 @@ function fixtureAssets() {
  */
 export async function openSettingsRegistryFixture(page, theme) {
   const { script, css, cssNames, fonts } = await fixtureAssets();
-  const errors = [], unexpectedRequests = [], panelReads = [];
+  const errors = [], unexpectedRequests = [], panelReads = [], deviceLoads = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
   await page.addInitScript(mode => {
     localStorage.setItem("sc2tools.theme", mode);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("Fixture clipboard unavailable"); } } });
   }, theme);
-  await page.route("**/*", async route => {
+  // Context routing also intercepts native modified-click/new-tab documents.
+  await page.context().route("**/*", async route => {
     const request = route.request(), url = new URL(request.url());
     if (url.origin !== ORIGIN || request.method() !== "GET") {
       unexpectedRequests.push(`${request.method()} ${url.origin}${url.pathname}`); return route.abort();
@@ -99,11 +102,15 @@ export async function openSettingsRegistryFixture(page, theme) {
       }
     }
     if (url.pathname === "/settings") return route.fulfill({ contentType: "text/html", body: `<!doctype html><html lang="en" data-theme="${theme}" data-theme-mode="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local Settings registry proof</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>` });
+    if (url.pathname === "/devices") {
+      deviceLoads.push(request.method());
+      return route.fulfill({ contentType: "text/html", body: '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Synthetic Devices</title><link rel="icon" href="data:,"></head><body><h1>Devices destination</h1><p>Native link boundary; no account transport.</p></body></html>' });
+    }
     unexpectedRequests.push(`${request.method()} ${url.pathname}`);
     return route.fulfill({ status: 404, body: "Unknown fixture resource" });
   });
   await page.goto(`${ORIGIN}/settings?tab=misc&ref=legacy`);
   await page.getByRole("heading", { name: "Preferences panel", exact: true }).waitFor();
   await page.evaluate(() => document.fonts.ready);
-  return { errors, unexpectedRequests, panelReads, cssNames };
+  return { errors, unexpectedRequests, panelReads, deviceLoads, cssNames };
 }

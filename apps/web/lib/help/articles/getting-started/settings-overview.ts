@@ -70,7 +70,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Unsaved changes" },
     {
       type: "paragraph",
-      text: "A dot next to a tab's name means it has edits you haven't saved. Switch tabs with unsaved edits and Settings asks first: **Stay on this tab** keeps them, **Discard & switch** drops them. On the Overlay tab this covers every form with its own Save button, including Multi-platform chat and the chat bot.",
+      text: "A dot next to a tab's name means it has edits you haven't saved. Switch tabs with unsaved edits and Settings asks first: **Stay on this tab** keeps them, **Discard & switch** drops them. The sidebar's Devices link also asks before leaving a draft behind: choose **Discard & open Devices** to leave. Opening Devices in a new tab keeps your current Settings draft. On the Overlay tab the guard covers every form with its own Save button, including Multi-platform chat and the chat bot; in Preferences it covers notification choices as well as the start page.",
     },
     { type: "heading", text: "Start page, setup and analytics (Preferences)", anchor: "start-page-setup-and-analytics-misc" },
     {

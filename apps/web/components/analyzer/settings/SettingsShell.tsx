@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -50,6 +51,9 @@ const TAB_ICONS: Record<SettingsTabId, typeof ServerCog> = {
 };
 const TABS = SETTINGS_TABS.map((tab) => ({ ...tab, Icon: TAB_ICONS[tab.id] }));
 type TabDef = (typeof TABS)[number];
+type PendingDestination =
+  | { kind: "tab"; tab: SettingsTabId; fromUrl: boolean }
+  | { kind: "devices" };
 
 export interface SettingsShellProps {
   /**
@@ -89,13 +93,14 @@ function SettingsShellInner({
   renderTab,
   isTabVisible,
 }: Required<SettingsShellProps>) {
+  const router = useRouter();
   const tabs = TABS.filter((t) => isTabVisible(t.id));
   const [active, setActive] = useState<SettingsTabId>(() =>
     tabs.some((t) => t.id === initialTab) ? initialTab : (tabs[0]?.id ?? initialTab),
   );
   // `fromUrl`: the URL already names the target, so it isn't rewritten
   // (that would drop a `#section` anchor the target tab scrolls to).
-  const [pending, setPending] = useState<{ tab: SettingsTabId; fromUrl: boolean } | null>(
+  const [pending, setPending] = useState<PendingDestination | null>(
     null,
   );
   const ctx = useSettingsContext();
@@ -118,7 +123,7 @@ function SettingsShellInner({
     const target = next as SettingsTabId;
     if (target === active) return;
     if (ctx.isDirty(active)) {
-      setPending({ tab: target, fromUrl });
+      setPending({ kind: "tab", tab: target, fromUrl });
       return;
     }
     activate(target, fromUrl);
@@ -191,15 +196,16 @@ function SettingsShellInner({
 
   const confirmDiscard = () => {
     if (pending) {
-      activate(pending.tab, pending.fromUrl);
       setPending(null);
+      if (pending.kind === "devices") router.push("/devices");
+      else activate(pending.tab, pending.fromUrl);
     }
   };
 
   const stay = () => {
     // A link asked for another tab but the player kept their edits: put
     // the URL back on the tab that is actually showing.
-    if (pending?.fromUrl) writeTabToUrl(active);
+    if (pending?.kind === "tab" && pending.fromUrl) writeTabToUrl(active);
     setPending(null);
   };
 
@@ -219,7 +225,16 @@ function SettingsShellInner({
             {desktopRows.map((row, index) => row.kind === "heading" ? (
               <h2 key={row.group.id} id={`${panelScopeId}-group-${row.group.id}`} data-settings-group={row.group.id} style={{ gridRow: index + 1 }} className="px-3 pb-1 pt-3 text-caption font-semibold text-text-muted">{row.group.label}</h2>
             ) : row.kind === "devices" ? (
-              <Link key="devices" href="/devices" aria-label="Devices" aria-describedby={`${panelScopeId}-devices-description`} data-settings-group="account" style={{ gridRow: index + 1 }} className="block min-h-11 rounded-md px-3 py-2 text-caption font-medium text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+              <Link key="devices" href="/devices" aria-label="Devices" aria-describedby={`${panelScopeId}-devices-description`} data-settings-group="account" style={{ gridRow: index + 1 }}
+                onNavigate={(event) => {
+                  // Next only calls onNavigate for same-tab client navigation;
+                  // modified clicks and opening a new tab keep native behavior.
+                  if (ctx.isDirty(active)) {
+                    event.preventDefault();
+                    setPending({ kind: "devices" });
+                  }
+                }}
+                className="block min-h-11 rounded-md px-3 py-2 text-caption font-medium text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
                 <span className="block">Devices</span>
                 <span id={`${panelScopeId}-devices-description`} className="mt-1 block font-normal leading-snug">Pair and manage your PCs</span>
               </Link>
@@ -261,8 +276,8 @@ function SettingsShellInner({
         onClose={stay}
         onConfirm={confirmDiscard}
         title="Discard unsaved changes?"
-        description="You have edits on this panel that haven't been saved. Switch tabs anyway?"
-        confirmLabel="Discard & switch"
+        description={pending?.kind === "devices" ? "You have edits on this panel that haven't been saved. Leave Settings for Devices?" : "You have edits on this panel that haven't been saved. Switch tabs anyway?"}
+        confirmLabel={pending?.kind === "devices" ? "Discard & open Devices" : "Discard & switch"}
         cancelLabel="Stay on this tab"
         intent="danger"
       />

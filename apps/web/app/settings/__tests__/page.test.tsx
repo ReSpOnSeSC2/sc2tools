@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(mocks.tab ? { tab: mocks.tab } : {}),
+  useRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock("@/lib/instant/useInstantImport", () => ({ useInstantImport: () => mocks.gate }));
 vi.mock("@/components/analyzer/settings/SettingsFoundation", () => ({ SettingsFoundation: () => <p>foundation body</p> }));

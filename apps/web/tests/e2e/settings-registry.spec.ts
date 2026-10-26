@@ -4,7 +4,10 @@ import path from "node:path";
 import { checkAccessibility } from "./accessibility-check";
 import { openSettingsRegistryFixture } from "./settings-registry-fixture.mjs";
 
-type SettingsFixtureWindow = typeof window & { settingsFixtureNavigate: (href: string) => void };
+type SettingsFixtureWindow = typeof window & {
+  settingsFixtureNavigate: (href: string) => void;
+  settingsFixtureRouterPushes: () => string[];
+};
 const shots = path.resolve(process.env.SETTINGS_SHOTS_DIR ?? path.join("../../.cache", `settings-registry-browser-${Date.now()}`));
 
 for (const theme of ["light", "dark"] as const) {
@@ -101,8 +104,44 @@ for (const theme of ["light", "dark"] as const) {
     const buttonBox = (await selected.boundingBox())!;
     expect(buttonBox.height).toBeGreaterThanOrEqual(44);
     await checkAccessibility(page, info, "/settings-registry-final", theme);
+
+    // Sidebar destinations use the desktop layout. Keep the original phone
+    // geometry/AA assertions above, then exercise native link admission too.
+    if (mobile) await page.setViewportSize({ width: 1280, height: 900 });
+    const devices = page.getByRole("navigation", { name: "Settings navigation", exact: true }).getByRole("link", { name: "Devices", exact: true });
+    await expect(devices).toBeVisible();
+    await panel.getByLabel("Local draft", { exact: true }).fill("Keep this before opening Devices");
+    const settingsUrl = page.url();
+    const popupPromise = page.context().waitForEvent("page");
+    await devices.click({ modifiers: ["Control"] });
+    const nativePage = await popupPromise;
+    await expect(nativePage.getByRole("heading", { name: "Devices destination", exact: true })).toBeVisible();
+    await nativePage.close(); await page.bringToFront();
+    expect(evidence.deviceLoads).toEqual(["GET"]);
+    await expect(dialog).toHaveCount(0);
+    await expect(page).toHaveURL(settingsUrl);
+    await expect(panel.getByLabel("Local draft", { exact: true })).toHaveValue("Keep this before opening Devices");
+    expect(await page.evaluate(() => (window as SettingsFixtureWindow).settingsFixtureRouterPushes())).toEqual([]);
+
+    await devices.click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Discard & open Devices", exact: true })).toBeVisible();
+    await checkAccessibility(page, info, "/settings-registry-devices-guard", theme);
+    await page.screenshot({ path: path.join(shots, `${info.project.name}-${theme}-devices-guard.png`) });
+    await dialog.getByRole("button", { name: "Stay on this tab", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page).toHaveURL(settingsUrl);
+    await expect(panel.getByLabel("Local draft", { exact: true })).toHaveValue("Keep this before opening Devices");
+    expect(await page.evaluate(() => (window as SettingsFixtureWindow).settingsFixtureRouterPushes())).toEqual([]);
+    await devices.focus(); await page.keyboard.press("Enter");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Discard & open Devices", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Devices destination", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/devices$/);
+    expect(await page.evaluate(() => (window as SettingsFixtureWindow).settingsFixtureRouterPushes())).toEqual(["/devices"]);
+    expect(evidence.panelReads).toEqual(["preferences", "account", "overlay", "backups", "checkin", "account", "help", "preferences"]);
     expect(evidence.errors).toEqual([]);
     expect(evidence.unexpectedRequests).toEqual([]);
-    await info.attach("settings-fixture-transport", { contentType: "application/json", body: JSON.stringify({ panelReads: evidence.panelReads, unexpectedRequests: evidence.unexpectedRequests, cssNames: evidence.cssNames, actualAccountWrites: 0 }) });
+    await info.attach("settings-fixture-transport", { contentType: "application/json", body: JSON.stringify({ panelReads: evidence.panelReads, nativeDeviceLoads: evidence.deviceLoads, routerPushes: await page.evaluate(() => (window as SettingsFixtureWindow).settingsFixtureRouterPushes()), unexpectedRequests: evidence.unexpectedRequests, cssNames: evidence.cssNames, actualAccountWrites: 0 }) });
   });
 }
