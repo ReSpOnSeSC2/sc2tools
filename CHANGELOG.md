@@ -16,12 +16,18 @@ corresponding GitHub Release.
 - Search setting names and synonyms above the Settings tabs, with keyboard results and `/` focus outside editable fields. Results use the existing unsaved-changes guard and only navigate; they never run the named action.
 - Add stable section links and one On this page navigator to the remaining tabs with at least three available sections, including Notifications and the nested Randomizer controls. Conditional Import and Gateway sections follow the real admitted page.
 - Keep drafts in place when a section navigator appears, and discover late sections with a bounded local readiness signal that does not restart a cancelled reveal or move focus.
+- Keep disabled Randomizer and Build check-in explanations readable, with accessible labels and keyboard access in previews.
 
 ### Settings section navigation
 
 - Keep Overlay setup, widgets, scenes, Build profile, Ghost Build coach and Theme on one page, with the shared Tokens controls addressable above the form.
 - Reuse one On this page rail for Overlay and Chat & alerts, with a native section dropdown on phones. Scrolling only updates its highlight; explicit navigation keeps same-tab drafts and the existing guard when leaving a tab.
 - Keep older section, Look and Ghost links working, and limit Overlay presence polling to the visible Setup/Widgets area.
+
+### Optional personal chart cache
+
+- Add a bounded, opt-in server cache for six personal Trends chart responses, with owner revisions and invalidation for replay, attribution, recompute and history changes. It stays off by default; full API CI and deployment checks remain before an operator enables it.
+- Keep existing requests and writes unchanged while disabled. ETags, browser revalidation, broader dashboard caching and local history deltas remain separate work.
 
 ### Account activity writes
 
