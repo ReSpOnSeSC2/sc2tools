@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Settings groups and compatible links
+
+- Group Settings into Account, Gameplay and Streaming, with descriptions in the desktop sidebar and a Devices link in Account.
+- Rename Foundation to Account and Misc to Preferences while keeping old tab and hash links working. Keep unsaved preference and notification edits guarded when switching tabs.
+
 ### Mobile site navigation
 
 - Use the shared right Sheet for the site menu, with a consistent title and Close control, the existing home and destination links, and footer theme choices.

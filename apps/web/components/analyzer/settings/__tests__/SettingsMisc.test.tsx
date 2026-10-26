@@ -1,5 +1,5 @@
 /**
- * Settings → Misc: the default tab starts on Today, "Run setup again"
+ * Settings → Preferences: the default tab starts on Today, "Run setup again"
  * links to /welcome, and the analytics row shows and changes the real
  * consent for this browser (the cookie banner's store) instead of a
  * saved switch nothing read. Retired keys are dropped on the next save.
@@ -10,17 +10,20 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { ToastProvider } from "@/components/ui/Toast";
 import { readConsent, setConsent } from "@/lib/analytics/consent";
 import { SettingsMisc, miscForSave } from "../SettingsMisc";
+import { SettingsShell } from "../SettingsShell";
 
 const mocks = vi.hoisted(() => ({
   misc: {} as Record<string, unknown>,
   apiCall: vi.fn(),
   configured: true,
+  ownerId: null as string | null,
+  notifications: { muted: [] as string[] },
 }));
 
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "token" }) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: mocks.ownerId, getToken: async () => "token" }) }));
 
 vi.mock("@/lib/clientApi", () => ({
-  useApi: (url: string) => ({ data: url.endsWith("/notifications") ? { muted: [] } : mocks.misc, isLoading: false, error: null, mutate: async () => mocks.misc }),
+  useApi: (url: string) => ({ data: url.endsWith("/notifications") ? mocks.notifications : mocks.misc, isLoading: false, error: null, mutate: async () => mocks.misc }),
   apiCall: mocks.apiCall,
 }));
 
@@ -32,12 +35,17 @@ vi.mock("@/lib/analytics/consent", async (importOriginal) => ({
 beforeEach(() => {
   mocks.misc = {};
   mocks.configured = true;
+  mocks.ownerId = null;
+  mocks.notifications = { muted: [] };
   mocks.apiCall.mockReset();
   mocks.apiCall.mockResolvedValue({});
   window.localStorage.clear();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.history.replaceState(null, "", "/");
+});
 
 function renderMisc() {
   return render(
@@ -52,6 +60,43 @@ function analyticsStatus() {
 }
 
 describe("SettingsMisc default tab", () => {
+  it("keeps notification-only edits guarded after resetting the other Preferences form", () => {
+    mocks.ownerId = "synthetic-settings-owner";
+    render(<ToastProvider><SettingsShell initialTab="preferences" renderTab={(id) => id === "preferences" ? <SettingsMisc /> : <p>panel {id}</p>} /></ToastProvider>);
+    const notifications = screen.getByRole("checkbox", { name: "New reviews" });
+    fireEvent.click(notifications);
+    fireEvent.change(screen.getByLabelText("Default tab"), { target: { value: "macro" } });
+    fireEvent.click(within(screen.getByRole("region", { name: "Unsaved changes" })).getByRole("button", { name: "Discard" }));
+    expect(screen.getAllByRole("img", { name: "Unsaved changes" })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole("tab", { name: "Profile" })[0]);
+    expect(screen.getByRole("dialog", { name: "Discard unsaved changes?" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
+    expect((notifications as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: /^Reset$/ }));
+    expect(screen.queryAllByRole("img", { name: "Unsaved changes" })).toHaveLength(0);
+    fireEvent.click(screen.getAllByRole("tab", { name: "Profile" })[0]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("tabpanel").textContent).toBe("panel profile");
+    expect(mocks.apiCall).not.toHaveBeenCalled();
+  });
+
+  it("publishes real draft edits under Preferences and guards leaving without saving", () => {
+    window.history.replaceState(null, "", "/settings?tab=misc");
+    render(<ToastProvider><SettingsShell initialTab="preferences" renderTab={(id) => id === "preferences" ? <SettingsMisc /> : <p>panel {id}</p>} /></ToastProvider>);
+    fireEvent.change(screen.getByLabelText("Default tab"), { target: { value: "macro" } });
+    expect(screen.getAllByRole("img", { name: "Unsaved changes" })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole("tab", { name: "Profile" })[0]);
+    expect(screen.getByRole("dialog", { name: "Discard unsaved changes?" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
+    expect((screen.getByLabelText("Default tab") as HTMLSelectElement).value).toBe("macro");
+    expect(mocks.apiCall).not.toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole("tab", { name: "Profile" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Discard & switch" }));
+    expect(screen.getByRole("tabpanel").textContent).toBe("panel profile");
+    expect(screen.queryAllByRole("img", { name: "Unsaved changes" })).toHaveLength(0);
+    expect(mocks.apiCall).not.toHaveBeenCalled();
+  });
+
   it("lists Today first and shows it when nothing is chosen", () => {
     renderMisc();
     const select = screen.getByLabelText("Default tab") as HTMLSelectElement;

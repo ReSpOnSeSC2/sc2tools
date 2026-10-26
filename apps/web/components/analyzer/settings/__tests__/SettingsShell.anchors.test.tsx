@@ -65,6 +65,10 @@ describe("SettingsShell legacy #tab links", () => {
     ["#checkin", "checkin", "panel checkin"],
     ["#backups", "backups", "panel backups"],
     ["#streaming", "overlay", "panel overlay"],
+    ["#foundation", "account", "panel account"],
+    ["#account", "account", "panel account"],
+    ["#misc", "preferences", "panel preferences"],
+    ["#preferences", "preferences", "panel preferences"],
   ])("opens %s as ?tab=%s and drops the hash", (hash, tab, panel) => {
     window.history.replaceState(null, "", `/settings${hash}`);
     render(shell());
@@ -93,7 +97,7 @@ describe("SettingsShell legacy #tab links", () => {
   it("leaves a hash that names no tab alone", () => {
     window.history.replaceState(null, "", "/settings#platform-connections");
     render(shell());
-    expect(activePanel()).toBe("panel foundation");
+    expect(activePanel()).toBe("panel account");
     expect(window.location.search).toBe("");
     expect(window.location.hash).toBe("#platform-connections");
   });
@@ -101,7 +105,7 @@ describe("SettingsShell legacy #tab links", () => {
   it("waits for a tab a caller temporarily hides", () => {
     window.history.replaceState(null, "", "/settings#import");
     const view = render(shell(undefined, (id) => id !== "import"));
-    expect(activePanel()).toBe("panel foundation");
+    expect(activePanel()).toBe("panel account");
     expect(window.location.hash).toBe("#import");
     view.rerender(shell(undefined, () => true));
     expect(activePanel()).toBe("panel import");
@@ -128,7 +132,7 @@ describe("SettingsShell #section anchors", () => {
     expect(active.tabIndex).toBe(0);
     fireEvent.keyDown(active, { key: "Home" });
     expect(document.activeElement?.getAttribute("aria-selected")).toBe("true");
-    expect(activePanel()).toContain("panel foundation");
+    expect(activePanel()).toContain("panel account");
   });
   it("scrolls to and highlights the section once its tab is showing", () => {
     vi.useFakeTimers();

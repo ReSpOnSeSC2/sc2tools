@@ -118,4 +118,24 @@ describe("SettingsShell ?tab= sync", () => {
     view.rerender(<SettingsShell initialTab="import" isTabVisible={visible} renderTab={(id) => <p>panel {id}</p>} />);
     expect(activePanel()).toBe("panel checkin");
   });
+
+  it("guards canonical Preferences when a legacy link resolves to another tab", () => {
+    window.history.replaceState(null, "", "/settings?tab=misc");
+    const view = render(shell("preferences", "preferences"));
+    window.history.replaceState(null, "", "/settings?tab=foundation&ref=old#setup-health");
+    view.rerender(shell("account", "preferences"));
+    expect(screen.getByRole("dialog", { name: "Discard unsaved changes?" })).toBeTruthy();
+    expect(activePanel()).toBe("dirty preferences");
+    fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
+    expect(window.location.search).toBe("?tab=preferences&ref=old");
+    expect(activePanel()).toBe("dirty preferences");
+
+    window.history.replaceState(null, "", "/settings?tab=foundation&ref=old#setup-health");
+    view.rerender(shell("account", "preferences"));
+    // The request prop did not change: a later intentional click still guards.
+    fireEvent.click(screen.getAllByRole("tab", { name: "Account" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Discard & switch" }));
+    expect(activePanel()).toBe("panel account");
+    expect(window.location.search).toBe("?tab=account&ref=old");
+  });
 });
