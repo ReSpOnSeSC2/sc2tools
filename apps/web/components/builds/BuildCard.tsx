@@ -197,8 +197,8 @@ function BuildStatsRow({
   const latest = played || build.updatedAt;
   const lowSample = total > 0 && total < 5;
   return (
-    <dl className="mt-4 flex flex-wrap items-end justify-between gap-3 text-caption">
-      <div className="flex items-baseline gap-3">
+    <div className="mt-4 flex flex-wrap items-end justify-between gap-3 text-caption">
+      <dl className="flex items-baseline gap-3">
         <div>
           <dt className="text-micro uppercase tracking-wider text-text-dim">
             Win rate
@@ -245,8 +245,8 @@ function BuildStatsRow({
             </dd>
           ) : null}
         </div>
-      </div>
-      {!statsPending && !statsUnavailable && build.perspective !== "opponent" && measuredPlanHeldRate(stats?.planHeldRate) ? <div><dt className="sr-only">Plan held</dt><dd><PlanHeldBadge rate={stats?.planHeldRate} /></dd></div> : null}
+      </dl>
+      {!statsPending && !statsUnavailable && build.perspective !== "opponent" && measuredPlanHeldRate(stats?.planHeldRate) ? <dl><dt className="sr-only">Plan held</dt><dd><PlanHeldBadge rate={stats?.planHeldRate} /></dd></dl> : null}
       <div className="text-right">
         {latest ? (
           <div title={new Date(latest).toLocaleString()} className="mt-1 text-micro text-text-dim">
@@ -254,7 +254,7 @@ function BuildStatsRow({
           </div>
         ) : null}
       </div>
-    </dl>
+    </div>
   );
 }
 

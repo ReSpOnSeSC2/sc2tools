@@ -2,17 +2,55 @@
 
 Branch: `codex/wave4-build-dossier-insights`. ADR0057 owns the bounded design.
 
-The queued combined Scorecard branch at `53aa5356` has a source-only runner
-repair pending normal current-main/Public integration. Dossier fresh captures
-default to `.cache/build-dossier-insights-current-evidence`, optionally selected
-with `DOSSIER_EVIDENCE_DIR`. Pinned Chromium, startup cleanup, theme-before-mount
-storage/HTML and resolved palette assertions are authored. Full-page checks
-call main's shared AA helper instead of disabling contrast; no allowlist or
-product/API source is changed. Original screenshot hashes and the four-file
-manifest are recorded in `.cache/build-evidence-original-shots-sha256.json`
-and `.cache/build-evidence-runner-owned-paths.txt`. No generator, test, browser
-or build has run for this repair. Earlier results below remain historical;
-current engine and AA proof must follow the eventual integrated source.
+## Current combined integration and browser proof
+
+The combined Execution branch normally integrates main/Public `251cb319`,
+Auth main `8d7ec51d` and urgent main `1c3d9877` at current base `35ec229a`.
+Its accepted API source remains identical to the 294-test/18-suite proof.
+The prepared web pack passes 254 tests in 31 suites at the preceding `804a5f6d`
+integration. The reviewed semantic follow-up passes 20 BuildCard/Held checks
+on current main, including three definition-group regressions. Full types,
+19 UI rules and the 1,679-file UI ratchet pass. Strict changed-source lint is
+green with inherited JSX wrapper warnings recorded separately, without a
+waiver. The Execution checkpoint records exact staged proof boundaries.
+
+The first new browser attempt exposed the fixture's removed timingContext
+prop. Its preserved correction `d627eb37` supplies the current typed parent
+execution DTO: Stargate at 312 seconds, median 300, n=12 and delta +12, within
+the bounded 25-game sample. Missing own events, opponent data, repeated later
+buildings, seeking and every request/AA assertion remain unchanged. The next
+attempt exposed real invalid nested definition lists in BuildCard. The approved
+repair keeps the same classes/values/actions while using valid Win rate/Record
+and Held definition groups. Both failed attempts and generated hosts remain
+under the original final/retry evidence directories.
+
+The replacement direct Next build uses integrated current source plus that
+semantic repair, real production CSS/fonts and CI dummy settings. It passes
+142 generated pages, post-build types and all unchanged budgets: 18 listed
+plus 63 default routes (81 actual checks). Game is 315.3/440, opponent
+458.7/500, Builds 202.7/270 and Community 188.4/190 kB. No budget increased.
+The retained validated engine is `1.6.12/d27b37abb9997712`, agent `0.24.7`;
+all 40 normalized shipped inputs match. Its immutable ZIP/manifest were copied
+only when missing, existing runtime assets were hash-verified, and old 25b/
+pointer evidence was retained. No engine compile/download/publisher ran.
+
+Final Dossier proof passes 262 checks and 32 captures at 320/390/768/1440 in
+Light and Dark, including all 25 current full AA calls with contrast enabled
+and `A11Y_COLLECT_ONLY=0`. Theme/storage initialize before mounting. Actual
+timing/plan sample drilldowns, keyboard focus, own-only first-occurrence game
+comparison, seek, absent-log no-read gate, Held sorting/filtering and owner
+loading/B/A retirement all pass. Evidence is
+`.cache/build-dossier-insights-final-semantic-evidence`. The adjacent actual
+GameDetailPage/Execution matrix passes 157 checks/15 captures/nine AA calls
+after removing its stale bare Help mock; real Help now supplies its styles.
+All API calls are asserted GET and zero writes are recorded. Nonlocal traffic
+is blocked; attempted external requests are not counted by these runners.
+All browser/server jobs closed. Phone Light/Dark and desktop representatives
+were visually inspected as legible and contained. All 15 original committed
+PNG hashes, 16 older evidence files and five historical host files are intact.
+Proof/asset/preservation receipts are in `.cache/execution-final-proof.json`.
+
+## Implementation contract and historical proof
 
 The API reuses complete owner/visibility-scoped performance aggregations, adds
 confirmed declared-plan facets, and hydrates at most the latest 25 selected
@@ -135,5 +173,6 @@ and the complete 197-check/32-capture browser matrix pass again. The actual
 generic squash integration remains the prerequisite for the single coordinated
 push and final expected-head checks.
 
-No production or provider operations were performed. Never run an old f96
-engine prebuild; shared engine writes must remain coordinated on 25b source.
+No production or provider operations were performed. The f96/25b build results
+above are historical. Future asset reuse or builds must match the integrated
+current engine source; preserve historical bundles and pointer evidence.

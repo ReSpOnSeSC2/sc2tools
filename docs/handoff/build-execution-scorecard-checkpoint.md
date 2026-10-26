@@ -38,33 +38,86 @@ changed during proof. All API jobs closed; no web, build or browser command ran.
 
 Artifacts are root `.cache/execution-integrated-api{,-types,-strict-lint,-legacy-lint}.log`,
 `execution-integrated-api-suites.txt`, `execution-integrated-api-strict-files.txt`
-and `execution-integrated-api-proof.json`. Web integration checks are queued
-behind MoreSheet's exclusive runtime slot. The earlier `53aa5356` web/build/
-browser evidence below remains historical and does not validate this merged head.
+and `execution-integrated-api-proof.json`. The accepted API/agent/engine source
+remains identical through the current web integration below. The earlier
+`53aa5356` web/build/browser evidence remains historical.
 
 Branch `codex/wave4-build-execution` starts at preserved Dossier `62b4939c` in
 the released SEO tree. SEO `eb18ed52` and caches remain preserved. ADR0060
 records the owner-only/shared-request/cache contract.
 
-## Browser runner source and pending web proof
+## Current integrated web/build/browser proof
 
-The independent browser runner repair is authored but unexecuted. It accepts
-`PW_CHROMIUM_EXECUTABLE`, closes browser/listener resources on startup failure,
-and defaults fresh captures to `.cache/build-execution-current-evidence`
-(`EXECUTION_EVIDENCE_DIR` can choose another disposable directory). Explicit
-theme and storage are set before React mounts; resolved palette/mode checks
-guard every navigation. Full-page checks reuse main's shared AA gate, with no
-disabled contrast rule or new exception. That helper is retained in the normal
-main integration. Original committed screenshots and prior cache evidence remain
-preserved; the 15 Dossier/Execution PNG hashes are inventoried in
-`.cache/build-evidence-original-shots-sha256.json`. The exact four-file runner
-repair manifest is `.cache/build-evidence-runner-owned-paths.txt`.
+Root preserved the API checkpoint at `d5d36c76`, integrated main `8d7ec51d` at
+`804a5f6d`, preserved the Dossier fixture correction at `d627eb37`, then normally
+integrated urgent main `1c3d9877` at `35ec229a`. The final local source adds the
+reviewed BuildStatsRow semantic repair and its existing-test regression, plus
+removal of the stale Execution Help mock. The urgent Macro selector placement
+is integrated normally, with its callbacks retained. No API, native or engine
+source changed from the accepted 294-test proof.
 
-Only the API proof above has run on the current repair. No new web unit pack,
-fixture generator, engine/sample generation, browser or build has run. Counts
-below describe earlier verified source and do not verify the merged web or its
-new runner. Current engine assets must
-follow the integrated source rather than pinning historical bundle25b.
+The prepared web pack passes 254 checks in 31 exact suites at `804a5f6d` using
+at most two workers. Current-main semantic follow-up passes 20 checks in the
+two BuildCard/Held suites, including ready/loading/unavailable definition-group
+regressions. Full web types pass before and after the replacement production
+build. Strict lint passes for 35 changed files and the narrow follow-up test/
+fixture files. The separate inherited audit records four existing JSX wrapper
+warnings across BuildCard and BuildsTab.tablePolish, zero errors; the later
+BuildCard-only audit retains its same two warnings. No waiver was added.
+All 19 UI rules and the 1,679-file/656-existing-occurrence ratchet pass with no
+new or stale allowance. Help generation yields 89 articles with unchanged
+content; its LF rewrite was restored to the exact original CRLF SHA256.
+
+Initial types found a stale ignored Community index checker. All 115 prior
+generated type files were copied and hash-verified in
+`.cache/execution-before-public-typegen`; supported Next typegen refreshed the
+current routes. Only the unchanged obsolete checker was retired after verifying
+the old source was absent and the directory-group source existed. No tsconfig,
+source exclusion or broad cache cleanup changed.
+
+The retained current engine is `1.6.12/d27b37abb9997712`, agent `0.24.7`.
+All 40 normalized allowlisted inputs match the validated Try source. Its ZIP
+is 1,252,988 bytes with SHA256
+`ba357c54c2f3d69b923adc391230dc4382693eabb697b23bf287a665ad1f0858`.
+Only its missing immutable ZIP/manifest were copied; four matching Pyodide
+assets were reused, the ignored pointer changed atomically, and old 25b files/
+pointer bytes were preserved. No engine compile, download, publisher or pruning
+ran. Receipts are `.cache/execution-current-{engine-input,assets}-proof.json`.
+
+Actual browser proof exposed three issues before the final green runs. The
+Dossier host passed removed timingContext instead of the parent's execution
+DTO; its fixture now supplies a typed bounded synthetic timing sample. Shared
+full AA then caught invalid nested definition lists in BuildCard. Its layout
+wrapper is now a div, Win rate/Record form one valid dl, and Held has its own
+dl; classes, values and handlers are unchanged. Execution's bare Help mock
+dropped the actual link styles, so that mock was removed and real current Help
+links now run. All original interaction and AA assertions remain enabled.
+Failed evidence/logs/host bundles are preserved in the three initial final/
+retry evidence directories. The first production artifact is historical to
+that failure; the replacement build validates the repaired integrated source.
+
+The replacement direct Next build passes 142 generated pages and every
+unchanged limit: 18 listed routes plus 63 default routes (81 actual checks).
+Game is 315.3/440, opponent 458.7/500, Builds 202.7/270 and Community 188.4/190
+kB. Post-build full types pass. The pinned Chromium 1228 matrices use the new
+production CSS/fonts at 320/390/768/1440 in Light and Dark, with reduced motion,
+theme-before-mount checks and `A11Y_COLLECT_ONLY=0`. Dossier passes 262 checks,
+32 captures and 25 full AA calls; Execution passes 157 checks, 15 captures and
+nine full AA calls. Contrast is enabled with no new exception. Clock/canvas
+identity, event/deadline seeking, rail percentage, one execution read, absent
+log withholding, Practice, Retry and held-owner ABA assertions all pass.
+
+Final evidence is `.cache/build-dossier-insights-final-semantic-evidence` and
+`.cache/build-execution-final-real-help-evidence`. Every API call is asserted
+GET and zero writes are recorded. Nonlocal requests are blocked; these runners
+do not count attempted external requests, so their hardcoded externalTraffic
+field is not evidence of zero attempts. All browser/listener jobs closed.
+Six phone/desktop representatives were visually inspected as contained and
+legible. Original 15 committed PNGs, 16 older evidence files, five old host
+files and prior engine assets retain their recorded hashes; the map fixture
+hash above is unchanged. `.cache/execution-final-proof.json` records the exact
+staged boundaries, preservation and final receipts. No production/provider,
+native SC2/agent or release operation ran.
 
 ## Historical web/build/browser proof (`53aa5356` and preserved ancestry)
 
