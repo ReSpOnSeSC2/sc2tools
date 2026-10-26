@@ -16,6 +16,12 @@ corresponding GitHub Release.
 - Use the shared dialog for build dossiers and saved-build loading or error states, with keyboard focus containment, a 44px Close control and focus return.
 - Bound saved-build loads, offer Retry after failure, and retire earlier account, build and retry responses before showing private editor data.
 - Keep the build menu in its parent dialog's focus domain so Escape closes the menu first and actions retain their editor handoff.
+- Return to the build library after retrying an editor load, restore the Practice trigger after closing its choices, and keep empty composition tabs and rule controls accessible.
+
+### Copy public build and definition links
+
+- Keep a selected link available when clipboard permission is denied or takes too long: in a shared dialog for Community links, or below a definition's heading. Done or Escape returns to the copy control, and retry stays available.
+- Retire delayed copy results when the public build address changes or its definition leaves the catalog view.
 
 ### Browser report sharing and examples
 
