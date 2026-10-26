@@ -155,7 +155,16 @@ describe("Trends demand integration with actual charts and request hooks", () =>
     });
     expect(byPath("/v1/timeseries/mmr")).toHaveLength(0);
     expect(screen.queryByRole("heading", { name: "MMR progression" })).toBeNull();
-    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    vi.stubGlobal("matchMedia", (media: string): MediaQueryList => ({
+      media,
+      matches: media === "(prefers-reduced-motion: reduce)",
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(() => true),
+    }));
     navigate("Performance & MMR");
     await waitFor(() => expect(byPath("/v1/timeseries/mmr")).toHaveLength(1));
     const heading = screen.getByRole("heading", { name: "Performance & MMR" });

@@ -127,7 +127,41 @@ The existing explicit section navigation, request, heading focus, reduced-motion
 scroll and closing assertions remain intact. No storage hook, shared helper,
 product source, transport or expectation of lazy collapsed data was changed.
 
-This amended test has not been run. A fresh full thirteen-path source receipt
-is required for root review before the next serialized static attempt. The old
-218/1 result remains a historical RED, not a passing result or product failure.
-Build, budget, browser and measured GET-reduction proof remain pending.
+The observer repair was preserved at
+`0cd70bc18fe56faf979d898a1d206931f3b5aa26`; its next serialized attempt is
+recorded below. The original 218/1 result remains a historical RED, not a
+passing result or product failure. Build, budget, browser and measured
+GET-reduction proof remain pending.
+
+## Second static attempt and MediaQueryList fixture repair
+
+The unchanged nineteen-file pack ran once from
+`.cache/trends-demand-static-prep-0cd70bc1/`. Pure Help92 passed without an index
+write. Units again reported 218 passed and one failed (219 cases). The repaired
+observer assertions reached explicit chart mounting, where the test's old
+`matchMedia` stub supplied only `matches: true`. The real `useReducedMotion`
+hook then attempted its native listener API and failed with
+`mq.addListener is not a function`. This was a missing fixture capability,
+not evidence of an application or shared-hook defect.
+
+The first-RED runner stopped before types, strict lint or UI checks. Its raw
+log/JSON remains untouched in that cache. A separately authorized postguard
+passed all 379 source/dependency/config/asset metadata pins at exact head0cd,
+with no tracked/index change or unknown untracked file. Closure inspection
+found no owned Node/Mongo process and no listener on 3210 or 8080. No retry,
+product repair or later validation stage ran.
+
+Before this second narrow source repair, the existing demand test and this
+checkpoint were copied with hashes to
+`.cache/trends-demand-mediaquery-repair-0cd70bc1/before/`. The test now returns a
+typed complete `MediaQueryList`: its media string, null onchange, modern and
+legacy listener methods and dispatchEvent are present. It matches only the
+reduced-motion query, retaining the expected `auto` scroll. All observer,
+native focus, navigation, exact GET and close assertions remain unchanged;
+the real charts and request/theme hooks remain unmocked. The other eleven
+feature files and all product/helper/storage/config/asset bytes are unchanged.
+
+This MediaQueryList amendment is source-only and unrun. It requires root review,
+preservation and a fresh frozen validation packet before another static run.
+Both historical RED attempts remain preserved. No new passing count, build,
+browser or production claim follows from this test-only repair.
