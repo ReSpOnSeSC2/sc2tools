@@ -26,7 +26,7 @@ export function GlossaryBrowser({ variant = "page" }: { variant?: "page" | "comp
   }, []);
   useEffect(() => () => retireNavigation(), [view, retireNavigation]);
   const terms = useMemo(() => [...GLOSSARY].sort((a, b) => a.term.localeCompare(b.term, "en")), []);
-  const filtered = terms.filter(term => normalize([term.term, term.short, term.long ?? ""].join(" ")).includes(normalize(query.trim())));
+  const filtered = terms.filter(term => normalize([term.term, term.short, term.long ?? "", term.formula ?? ""].join(" ")).includes(normalize(query.trim())));
   const letters = [...new Set(filtered.map(term => term.term.charAt(0).toUpperCase()))];
   function showTerm(event: MouseEvent<HTMLAnchorElement>, id: string) {
     retireNavigation();
@@ -96,6 +96,7 @@ export function GlossaryBrowser({ variant = "page" }: { variant?: "page" | "comp
         data-glossary-id={term.id} tabIndex={-1} className="scroll-mt-24 rounded-lg border border-border p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <dt className="text-body font-semibold text-text">{term.term}</dt>
         <dd className="mt-1 space-y-2 text-caption text-text-muted"><p>{term.short}</p>{term.long ? <p>{term.long}</p> : null}
+          {term.formula ? <p className="break-words"><span className="font-semibold text-text">Formula or rule: </span>{term.formula}</p> : null}
           <Link href={glossaryHelpPath(term)} className="inline-flex min-h-11 items-center rounded font-semibold text-accent-cyan underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Read {term.term} in context</Link>
           {term.related.length ? <p>Related: {term.related.map((id, index) => <span key={id}>{index ? ", " : ""}<a href={`${variant === "compact" ? "/help/glossary" : ""}#${id}`} onClick={event => showTerm(event, id)} className="rounded text-accent-cyan underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{terms.find(related => related.id === id)?.term ?? id}</a></span>)}</p> : null}
         </dd>

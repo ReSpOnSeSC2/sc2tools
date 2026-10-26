@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OpponentsTab } from "../OpponentsTab";
+import { glossaryTerm } from "@/lib/glossary";
 
 const useApiMock = vi.fn();
 const useApiPaginatedMock = vi.fn();
@@ -160,6 +161,39 @@ afterEach(() => {
 });
 
 describe("opponent list controls and navigation", () => {
+  it("keeps six canonical header tips outside sort buttons without changing the list or selected columns", async () => {
+    const onOpen = vi.fn();
+    const location = { pathname: "/app/opponents", query: "sort=netMmr&dir=desc", replace: vi.fn(), prefetch: vi.fn(), navigate: vi.fn() };
+    render(<OpponentsTab onOpen={onOpen} location={location} />);
+    for (const name of ["Pulse ID", "MMR won", "MMR lost"]) fireEvent.click(screen.getByRole("checkbox", { name }));
+    const table = screen.getByRole("table", { name: "Opponent history" });
+    const names = () => Array.from(table.querySelectorAll("tbody tr")).map(row => row.querySelector("a")?.textContent);
+    const originalNames = names();
+    const states = within(table).getAllByRole("columnheader").map(header => header.getAttribute("aria-sort"));
+    for (const [label, id] of [["Pulse ID", "pulse-id"], ["Last MMR", "last-mmr"], ["Net MMR", "net-mmr"], ["MMR won", "mmr-won"], ["MMR lost", "mmr-lost"], ["Win rate", "opponent-win-rate"]]) {
+      const header = within(table).getByRole("columnheader", { name: label });
+      const sort = within(header).getByRole("button", { name: label });
+      const help = within(header).getByRole("button", { name: `About ${label}` });
+      expect(sort.contains(help)).toBe(false);
+      expect(header.querySelector("button button")).toBeNull();
+      fireEvent.click(help);
+      const tip = await screen.findByRole("dialog", { name: `About ${label}` });
+      expect(await within(tip).findByText(glossaryTerm(id)!.short)).toBeTruthy();
+      expect(within(tip).getByRole("link", { name: "Learn more" }).getAttribute("href")).toBe(`/help/glossary#${id}`);
+      expect(names()).toEqual(originalNames);
+      expect(within(table).getAllByRole("columnheader").map(node => node.getAttribute("aria-sort"))).toEqual(states);
+      fireEvent.click(help);
+    }
+    for (const name of ["Pulse ID", "MMR won", "MMR lost"]) expect((screen.getByRole("checkbox", { name }) as HTMLInputElement).checked).toBe(true);
+    expect(within(table).getByText("4100")).toBeTruthy();
+    expect(within(table).getByText("66.7%")).toBeTruthy();
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(downloadCsvMock).not.toHaveBeenCalled();
+    fireEvent.click(within(within(table).getByRole("columnheader", { name: "Net MMR" })).getByRole("button", { name: "Net MMR" }));
+    expect(within(table).getByRole("columnheader", { name: "Net MMR" }).getAttribute("aria-sort")).toBe("ascending");
+    expect(names()).toEqual(["Beta", "Alpha"]);
+  });
+
   it("uses dossier links and leaves modified row clicks, alias buttons and selected text alone", () => {
     const onOpen = vi.fn(); render(<OpponentsTab onOpen={onOpen} />);
     const table = screen.getByRole("table");

@@ -9,6 +9,23 @@
 > cover it; until then treat the M10 references as aspirational, and do
 > not assume M10-only index/perf headroom in code.
 
+The keepalive workflow targets the Render API only. Do not add Vercel page
+warmups to its five-minute schedule: those requests consume the website's
+server execution allowance, and warming a separate endpoint does not ensure
+the dashboard's function stays warm. The public status page checks website
+reachability when a visitor opens it.
+
+For Vercel usage, distinguish retained Deployment Storage (website outputs and
+assets), Functions Storage (server-function packages) and Fluid Active CPU
+(time spent executing server code). Review Usage by project and the same date
+range. Vercel's free Hobby plan can restrict service after usage limits;
+it does not automatically add paid overage. Consult the current
+[Hobby rules](https://vercel.com/docs/plans/hobby) and
+[storage optimization guide](https://vercel.com/docs/deployment-storage/optimize).
+Review rollback requirements before deleting old deployments or shortening
+retention. Reducing new output or traffic does not immediately erase prior
+usage from the reporting window.
+
 This guide walks you through wiring the three pieces of cloud infrastructure
 together so the community-builds feature works end-to-end:
 

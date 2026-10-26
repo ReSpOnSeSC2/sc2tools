@@ -383,8 +383,12 @@ describe("AppChrome for signed-out visitors", () => {
     expect(railHrefs()).not.toContain("/coaching");
 
     const header = screen.getByRole("banner");
-    expect(within(header).getByRole("link", { name: "Sign in" })).toBeTruthy();
-    expect(within(header).getByRole("link", { name: "Get started" })).toBeTruthy();
+    for (const [name, route] of [["Sign in", "sign-in"], ["Get started", "sign-up"]]) {
+      const action = within(header).getByRole("link", { name });
+      expect(action.getAttribute("href")).toBe(`/${route}?redirect_url=%2Fcommunity%2Fbuilds%2Fshared-slug`);
+      expect(action.tagName).toBe("A");
+      expect(action.querySelector("a,button")).toBeNull();
+    }
     expect(screen.queryByTestId("user-button")).toBeNull();
     expect(screen.queryByTestId("build-checkin-alert-slot")).toBeNull();
 
