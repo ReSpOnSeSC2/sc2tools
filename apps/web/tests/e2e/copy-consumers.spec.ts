@@ -4,7 +4,7 @@ import path from "node:path";
 import { checkAccessibility } from "./accessibility-check";
 import { COPY_FIXTURE_ORIGIN, COPY_FIXTURE_PATH, openCopyConsumersFixture } from "./copy-consumers-fixture.mjs";
 
-type FixtureWindow = Window & {
+type FixtureWindow = typeof window & {
   fixtureCopyPath: (value: string) => void;
   fixtureCopyMode: (mode: "denied" | "held" | "success") => void;
   fixtureCopySettle: (outcome: "resolve" | "reject") => void;
