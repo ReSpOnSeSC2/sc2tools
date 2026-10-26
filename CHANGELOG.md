@@ -23,6 +23,11 @@ corresponding GitHub Release.
 - Rename Foundation to Account and Misc to Preferences while keeping old tab and hash links working. Keep unsaved preference and notification edits guarded when switching tabs.
 - Ask before the sidebar's Devices link leaves unsaved Settings edits; opening the link in a new tab keeps its normal behavior.
 
+### App and landing action links
+
+- Use the shared action styles for the app's visitor sign-in controls and the landing page's download, browser, dashboard and support links, keeping their destinations and browser rollout choices.
+- Let long landing action labels wrap on a phone while keeping the shared keyboard focus styles.
+
 ### Header action links
 
 - Use the shared button styles for Sign in, Get started and Open app in the desktop header, retaining their compact size and return-to-page behavior.
