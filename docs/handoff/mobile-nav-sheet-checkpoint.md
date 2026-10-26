@@ -1,14 +1,106 @@
 # Mobile navigation Sheet checkpoint
 
-2026-10-26. Branch `codex/wave5-mobile-nav-sheet`, current static-proof source
-`fae1ba88d0901b0691f269235d8dc60733ee4e63`, in
+2026-10-26. Branch `codex/wave5-mobile-nav-sheet`, final local proof at
+`00df65c739604bb59079a6dd1ea7ba6eec65dea0`, in
 `.worktrees/wave3-owner-neighbors`. Root preserved the original eight-path
-source as `d0ee472d` and normally integrated main `9bd` before this proof.
-Prior Try source, assets and caches are preserved. Notification integration
-is still required before the final artifact; no MobileNav build or browser
-proof has run yet.
+source as `d0ee472d`, its static proof as `c5c93fc8`, then normally integrated
+the reviewed Notification dependency before the final artifact. Prior Try
+source, assets, captures and caches are preserved. All local runtime jobs,
+browsers and servers are closed. Root owns Git, capture copies and delivery.
 
-## Current static proof
+Root verified all seven non-checkpoint final hashes, visually reviewed the
+320px Light,390px Dark and1023px Light captures and added new byte-identical
+copies as `mobile-nav-sheet-light-320.png`, `mobile-nav-sheet-dark-390.png` and
+`mobile-nav-sheet-light-1023.png` in `docs/handoff/screenshots/`. The phone body
+scrolls independently to reach lower links; title,44px Close and theme footer
+remain visible. Original images and all prior receipts are preserved. Actual
+main2743 has exactly the reviewed Notification dependency's tree, so its normal
+ancestry reconciliation must leave this delivery tree unchanged.
+
+## Final integrated local proof
+
+The exact original eight-path manifest remains
+`.cache/mobile-nav-sheet-owned-paths.txt`. All eight prebuild hashes stayed
+unchanged through build, browser and visual verification. Only this checkpoint
+changes afterward. Frozen production code required no repair during the final
+runtime stage. Proof files are under `.cache/mobile-nav-final-00df65c7/`, with
+integrated unit/static logs also named `.cache/mobile-nav-final-*`.
+
+- **210 checks across 23 suites passed**, maximum two workers. This includes
+  MobileNav and Header, Sheet/Modal/focus scopes, ThemeChoice/theme, Help,
+  integrated Notification focus/placement, Replay sharing, copy recovery and
+  owner-scoped requests. Whole web types passed before and after the build.
+  Strict lint passed for all five owned code/test/fixture/Help paths with zero
+  warnings and no inherited-warning exclusion. Fixture syntax was already
+  verified in the static stage. The whole-app build retains its pre-existing
+  lint warnings; it is not claimed warning-free.
+- Canonical Help generation ran twice for **90 articles**; the generated
+  content and SHA256 were deterministic and the original raw registry bytes
+  were restored. All **19 UI-rule checks** passed. The full ratchet passed
+  across **1,695 source files / 646 existing occurrences**, with no new or
+  stale allowance: Notification's one retirement plus MobileNav's two.
+- Fresh asset admission matched **40 normalized engine inputs**, source hash
+  `18a2e1b56111045cdb441d9d8868eee0b36d0b158b34ea0a79e3b9a22a69e2b2`,
+  canonical engine **`1.6.12/d27b37abb9997712`**, agent `0.24.7` and all five
+  active asset digests/sizes. The strict sample reader accepted all four
+  scrubbed payloads. This worktree's sample uses LF: raw and canonical bytes
+  both measure **163,355**, SHA256
+  `91a6735e50f45776c15642ebae53f1a3f9800c1db225a99e0e631be318820473`.
+  All nine retained engine/Pyodide files, active pointer, sample and
+  availability hashes are unchanged after the build. No asset copy,
+  generation, engine compilation, download or pruning ran.
+- One completed direct Next production build passed with official dummy/local
+  CI flags, build ID **`26CpTnHkbQpXtrlB5bx6w`**, generating **143 static pages**.
+  All **81 unchanged route budgets** passed: Community 188.6/190 kB, Today
+  234.3/240 kB, opponent dossier 458.9/500 kB and Try 216.7/240 kB. No npm
+  prebuild or publisher ran. Post-build web types and repeated asset admission
+  passed.
+- The **whole appearance suite passed 16 cases**, with **11 intentional
+  skips**, across its original phone/tablet/desktop projects, one worker and
+  zero retries. Both new MobileNav flows cover **320/390/768/1023 pixels** and
+  **1024-pixel teardown**, using actual current production CSS/local fonts
+  and installed Chromium 1228. Its executable SHA256 is
+  `b798f9e53a98d29eb7f36f8c409f905d3184780a04d2bcb56989067194784bd1`.
+- Native keyboard proof covers Close-first focus, the selected theme radio's
+  Tab wrap, Close/Escape/scrim/destination/home closure, route changes,
+  signed-out/player/admin destinations and auth return URLs, a newer Modal's
+  first Escape, independent scroll-lock ownership and breakpoint cleanup.
+  Measured geometry confirms the right edge, full height and up-to-448px
+  width, viewport-contained header/footer, 44px Close and a scrollable phone
+  content region. No body-level horizontal overflow was found.
+- All **12 full AA scans** have zero serious/critical issues; no rule was
+  disabled and `A11Y_COLLECT_ONLY` was unset. The two MobileNav fixture
+  receipts record exactly **four synthetic `/v1/me` GETs**: one player and
+  one admin GET per theme. Their unknown requests, rejected writes and
+  nonlocal attempts are zero. No API write, actual account/provider action,
+  account preference, clipboard or native agent/StarCraft operation ran.
+  Theme changes are confined to synthetic browser contexts.
+- **17 new cache-only captures** are retained: eight MobileNav widths/themes,
+  existing real-page phone/compact captures and four More captures. The
+  Light 320, Dark 390 and Light 1023 MobileNav images were visually inspected:
+  text, header/Close and theme footer are legible and contained; the phone
+  body scrolls independently for lower destinations and CTAs. Root owns any
+  tracked review-image copies; no prior capture was overwritten.
+
+Two setup expectations were preserved before correction. The cache-only
+admission script initially expected Notification's CRLF sample bytes, rejected
+this worktree's legitimate LF bytes, and was then corrected to the exact raw
+canonical hash above without changing the sample. The first sandboxed build
+attempt failed with filesystem `EPERM` creating ignored
+`.next/static/chunks/app/overlay/[token]`; the unchanged direct build passed in
+the approved host context. Neither was a product source failure. Original
+scripts/logs remain alongside the final proof.
+
+Key receipts: `asset-admission-{prebuild,postbuild}.json`, `prebuild-source.json`,
+`build-artifact.json`, `next-build.log`, `budgets.log`, `types-postbuild.log`,
+`browser-results.json`, `browser.log`, `final-browser-summary.json` and the
+final source proof. Representative review captures are:
+
+- `shots/contrast-accessibility-mobile-360-mobile-nav-light-320.png`
+- `shots/contrast-accessibility-mobile-360-mobile-nav-dark-390.png`
+- `shots/contrast-accessibility-mobile-360-mobile-nav-light-1023.png`
+
+## Earlier static proof, before Notification integration
 
 - 87 checks in 14 focused suites passed: MobileNav (12), Header navigation
   (13), shared Sheet/Modal/focus scopes, ThemeChoice/theme and Help contracts.
@@ -80,19 +172,14 @@ later approved static proof is recorded above separately from that history.
   are authored. The matrix runs once per theme in the mobile project; the
   other projects intentionally skip this duplicate explicit-width matrix.
 
-## Remaining gates
+## Delivery gates
 
-- Root integration of verified Notification source before artifact validation.
-  Static gates above passed; no broader path or waiver was required.
-- After root's normal retained engine/sample source/hash admission, one
-  current production build, post-build types and unchanged route budgets.
-  No engine compilation, pruning, dependency install or budget increase.
-- Actual-source browser matrix with one worker and installed pinned Chromium;
-  preserve failure artifacts and review representative captures. Screenshots
-  are not yet owned; root must approve exact new committed paths.
-- Current main reconciliation, exact-head CI, reviewed commit/PR/merge and live
-  source/domain verification. This is one consumer migration, not completion
-  of the full roadmap.
+The local static, asset, build, budget, browser and visual gates above are
+complete. Root owns final source/capture review, any fresh-main reconciliation
+with runtime-tree equality, exact-head CI, reviewed commit/PR/merge and live
+source/domain verification. Screenshots require root's exact path approval.
+No broader path, primitive/API change, waiver, dependency or budget increase
+was needed. This is one consumer migration, not completion of the full roadmap.
 
 ## Rollback
 
