@@ -1087,13 +1087,6 @@
       "example": "<Link href=\"/builds\" className=\"inline-flex min-h-[44px] items-center gap-2 hard-press rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold text-te"
     },
     {
-      "file": "components/builds/BuildDossierModal.tsx",
-      "rule": "dialog-outside-ui",
-      "signature": "5fd2e0841c7e748683b496ccdf9be348e34c04c260f95c3e303bbd5d4006ff91",
-      "count": 1,
-      "example": "<div className=\"fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-6\" role=\"dialog\" aria-modal=\"true\" aria-label={`${build.name || \"Build\"} dossier`} "
-    },
-    {
       "file": "components/builds/BuildsLibrary.tsx",
       "rule": "focus-without-ring",
       "signature": "251f3858e5fd7cbd1f8a92ed0fab8423ad1d69ab737d8347d5ffbe14b6ed8d76",
@@ -1106,13 +1099,6 @@
       "signature": "4d12d7f4e2feaf497c8849fa7a5f05c8700ba7304b52f10dd93bb6f00ea80926",
       "count": 1,
       "example": "<Link href=\"/definitions\" className=\"hard-press inline-flex min-h-[44px] items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold te"
-    },
-    {
-      "file": "components/builds/EditCustomBuildLauncher.tsx",
-      "rule": "dialog-outside-ui",
-      "signature": "f196c47634a17f6d1ef8527a0ab8762bba515761f75b88e659ba1549c16a077b",
-      "count": 1,
-      "example": "<div role=\"dialog\" aria-modal=\"true\" aria-busy=\"true\" className=\"fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6\" onClick={onClose}>"
     },
     {
       "file": "components/builds/editor/BuildEditorBasics.tsx",

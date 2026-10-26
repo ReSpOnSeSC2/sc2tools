@@ -1,7 +1,9 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { BuildCard } from "./BuildCard";
+import { BuildCard, BuildKebab } from "./BuildCard";
+import { Modal } from "@/components/ui/Modal";
 import type { DecoratedBuild } from "./types";
 const publication = vi.hoisted(() => ({ data: undefined as undefined | { published: boolean; publicSlug: string | null; mirrorPending: boolean }, paths: [] as Array<string | null>, mutate: vi.fn(), call: vi.fn(), token: vi.fn(async () => "token") }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: publication.token }) }));
@@ -130,6 +132,39 @@ describe("BuildCard replay-stat states", () => {
 });
 
 describe("BuildCard actions menu", () => {
+  it("keeps the menu in its parent's Tab domain and returns to the library opener after an editor handoff", async () => {
+    function Host() {
+      const [dossier, setDossier] = useState(false);
+      const [editing, setEditing] = useState(false);
+      return <><button onClick={() => setDossier(true)}>Library opener</button>
+        {dossier ? <Modal open title="Parent dossier" onClose={() => setDossier(false)}>
+          <BuildKebab slug="fixture" name="Fixture" isPublic={false} onEdit={() => { setEditing(true); setDossier(false); }} onPublish={vi.fn()} onDelete={vi.fn()} />
+          <button>Parent end</button>
+        </Modal> : null}
+        {editing ? <Modal open title="Rich editor" onClose={() => setEditing(false)}><input aria-label="Editor field" /></Modal> : null}
+      </>;
+    }
+    render(<Host />);
+    const launch = screen.getByRole("button", { name: "Library opener" }); launch.focus(); fireEvent.click(launch);
+    const trigger = screen.getByRole("button", { name: "Build options for Fixture" }); trigger.focus(); fireEvent.click(trigger);
+    const menu = screen.getByRole("menu");
+    const first = within(menu).getByRole("menuitem", { name: "Open full page" });
+    await waitFor(() => expect(document.activeElement).toBe(first));
+    fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Parent end" }));
+    expect(screen.queryByRole("menu")).toBeNull();
+    trigger.focus(); fireEvent.click(trigger);
+    const reopened = screen.getByRole("menu");
+    await waitFor(() => expect(document.activeElement).toBe(within(reopened).getByRole("menuitem", { name: "Open full page" })));
+    fireEvent.click(within(reopened).getByRole("menuitem", { name: "Edit" }));
+    const editor = await screen.findByRole("dialog", { name: "Rich editor" });
+    const close = within(editor).getByRole("button", { name: "Close" });
+    await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
+    expect(document.activeElement).toBe(close); expect(screen.queryByRole("menu")).toBeNull();
+    fireEvent.click(close);
+    await waitFor(() => expect(document.activeElement).toBe(launch));
+  });
+
   it("portals every action outside the clipped card and closes on an outside tap", () => {
     const onReclassify = vi.fn();
     render(
