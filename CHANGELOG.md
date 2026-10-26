@@ -16,6 +16,11 @@ corresponding GitHub Release.
 - Browse and search the existing player-identity and verified-MMR definitions A to Z in Help's glossary, with stable term links and full contextual explanations.
 - Open keyboard and touch-accessible explanations beside Group same player. Definitions load on explicit open, with bounded loading, retry and shared popover focus handling.
 
+### Replay sharing and copy recovery
+
+- Keep replay links available in a selected-text dialog when automatic copying is unavailable. Cancelling a device's native share sheet stays a quiet cancellation.
+- Check fresh sharing status before consent or copying, and offer a status check after an interrupted update. Retire delayed account, archive and player actions when their context changes.
+
 ### Build dialogs
 
 - Use the shared dialog for build dossiers and saved-build loading or error states, with keyboard focus containment, a 44px Close control and focus return.
