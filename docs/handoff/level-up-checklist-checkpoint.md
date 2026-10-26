@@ -1,258 +1,70 @@
-# Level-up checklist — source checkpoint
+# Level-up checklist — final local checkpoint
 
-2026-10-26. Branch `codex/wave5-activation`, base
-`9a68c480c9d19278642b5c546fe4b3ab081fa6b1`, checkout
-`C:\SC2TOOLS\.worktrees\wave4-agent-dashboard`. This is the first slice of the
-canonical `level-up-checklist` item. The source and meaningful test cases are
-authored. The canonical Help index generator ran once under a limited grant.
-The API assertion repair passed the subsequent whole-API typecheck. The first
-whole-web typecheck then failed at one unsupported Testing Library test option;
-its source-only selector repair below still needs validation. **Tests, lint,
-build and browser checks remain unrun for this slice**. The generated Help index
-was produced by its script and was not hand edited.
+2026-10-26 · `codex/wave5-activation` · checkout
+`C:\SC2TOOLS\.worktrees\wave4-agent-dashboard`.
+Validated product head: `4c04b200037657b7f19843f788c8cbbc7bab8491`;
+tree: `3ab0f9cc102926f5583229b475974d1937c27532`.
+Local checks and root visual review are complete; integrated exact-head CI and merge remain pending.
 
-## Behavior
+## Behavior and contracts
 
-- Today alone mounts the suggestions after at least one game and after the
-  existing first-run checklist admits the page. Existing `onboardingView` and
-  `useDashboardMe` provide that decision; AnalyzerFrame is unchanged. The leaf
-  loads dynamically and does not add a card to analyzer subpages.
-- Authenticated `/v1/me/activation` returns six booleans plus normalized goals
-  and independent dismissal metadata. The service issues precisely six bounded
-  projected `findOne` calls: three users reads, one custom-build read, one games
-  existence read and one overlay-token existence read. The final metadata read
-  checks that the owner still exists without a GDPR fence. This count excludes
-  ordinary HTTP authentication; it is not a constant rows-examined claim.
-- Common steps are identity and opening a game. Improve adds custom build and
-  confirmed replay check-in; Stream adds an overlay-link connection and enabled
-  chat. Improve-only and Stream-only each show four rows; both, empty or invalid
-  goals show six. Every row has a real destination and Help link.
-- An existing nondeleted custom definition counts even when disabled. Confirmed
-  intent must belong to a live, non-pending-delete, non-resumed owner game;
-  owner-visible excluded games can count. Historical token activity, including
-  a revoked token, counts as a link connection. Chat requires exact boolean
-  `true` on one of the four supported platform settings. These checks do not
-  claim a verified profile, live broadcast, connected chat or build execution.
-- `/v1/me/activation/first-game` accepts one bounded game ID. It verifies the
-  exact eligible owned game and uses one guarded, projected, no-upsert users
-  command to stamp server time only when the marker is missing or null. Existing
-  valid stamps survive concurrent attempts unchanged. The normal authenticated
-  write lease covers the route; no nested lease is added. Generic onboarding
-  updates cannot write this server-owned marker.
-- The actual private GameDetailPage passes its successful current game answer
-  to the marker hook. Loading, errors, previous data, mismatched IDs, signed-out
-  owners and public pages do not mark. Fresh owner/game/lifetime identities fence
-  held JWTs and response bodies across owner A→B→A, game1→game2→game1 and unmount.
-  Duplicate conditional HTTP attempts are allowed; the server stamp is write-once.
-  No full `/me` or activation GET is added to each game view. Only an already
-  existing exact-owner activation cache answer may be patched after an admitted
-  ACK; the other five flags are never fabricated.
-- Suggestions use owner-keyed SWR with 60-second dedupe and visible refresh.
-  Dismissal writes only `levelUpDismissedAt`, and hides only after an admitted
-  response confirms the exact issuing stamp. Errors or malformed successful
-  responses leave a visible retry. Setup dismissal and all other onboarding
-  fields remain independent. Retired owners cannot hide a new card or update
-  its cache.
-- Completion hides expanded rows and shows “You're all set — see What's new”.
-  Only an observed current-owner incomplete→complete transition shows the
-  existing accessible toast. Initially complete or dismissed data does not toast.
-  Progress follows current saved state and may regress; there is no seventh
-  permanent completion flag.
+- Today alone dynamically mounts suggestions after games exist and the existing first-run checklist admits them; no analyzer subpage duplicates.
+- Six live flags yield four rows for Improve or Stream alone, six for both/unset/malformed goals. Progress can regress; no seventh completion flag.
+- The API uses six bounded, projected `findOne` calls. Its final metadata read requires a surviving owner without a GDPR fence. Failed reads return an honest failure, not false flags.
+- Identity requires valid recorded identity data. A nondeleted custom build counts even disabled; confirmed intent requires an eligible live owned game, including owner-visible excluded games.
+- Historical overlay-token activity, including revoked tokens, means a link was connected, not a live broadcast. Chat requires exact `true` on a supported platform setting.
+- First-game PUT verifies the exact live owned game, then conditionally stamps server time only for a missing/null marker. Valid stamps survive duplicates; no upsert, resurrection or nested lease.
+- Generic onboarding updates cannot set `firstGameViewedAt`. Independent `levelUpDismissedAt` is validated and merged without resetting other onboarding fields.
+- Private GameDetail admission rejects loading/errors/previous data/mismatched IDs/public pages. Owner/game/lifetime identities retire held JWTs and decoded bodies across ABA changes and unmount.
+- Owner-keyed SWR dedupes for 60 seconds and refreshes while visible. An admitted ACK may patch only an existing exact-owner activation answer; no fabricated tuple or extra activation GET per game.
+- Dismissal hides only after the exact issuing stamp is acknowledged. Failed/malformed answers retain retry and focus. First-run dismissal remains independent.
+- Only current-owner incomplete→complete transitions toast. Initial completion shows the existing What's new link; completed cards still permit dismissal.
+- Each row retains one action and its Help link. Phones keep the icon left and action below full-width text; `sm` places the action right. Completed rows have no empty action wrapper.
 
-## Scope and preserved work
+## Completed proof
 
-The approved footprint is 22 paths: six API files, 16 web/content/checkpoint
-files including the generated index. No AnalyzerFrame, token manager,
-Settings registry, tour registry, native, infrastructure, index, migration,
-version or release source is owned. The previous completed Settings Chat branch
-and all old caches and temporary scripts remain preserved. The obsolete
-opponent-order script must not be executed.
+- Canonical Help generation exited 0 and indexed 93 articles; the new Your first week article uses the generated registry, with no hand edits.
+- Retained API and whole-web types passed. Two API real-Mongo files: 44/44 tests; six Help files: 46/46. Selected web proof totals 108: 96 retained tests plus the repaired 12.
+- At `4c04b200`, strict lint of `LevelUpChecklist.tsx` had 0 errors/warnings; its existing 12 unit cases passed again. Eight owned process identities/listeners closed.
+- API strict lint preserves its raw inherited 11 function-length warnings, zero errors/new owners/threshold crossings; root accepted only that existing debt.
+- The own cda direct Next build, unchanged budgets and postbuild types passed. Its accepted build ID is `txSiXdQcm2MDVtKKf6W7e`.
+- Final layout browser RUN at `4c04b200`: 12/12 passed once in 32.1 s, zero skipped/failed/flaky, one full Chrome 1228 worker, retries=0/maxFailures=1, CI=1 and true collection-only key removal.
+- All 36 shared WCAG2A/AA/2.1AA serious/critical scans had `issues: []`; raw attachments retain 30 incomplete color-contrast observations. This is not a claim that every contrast node was resolved.
+- All 18 captures and 12 fixture closure ledgers were retained; every tracked socket count was 0. Root approved phone light/dark captures: readable text, action below description, no clipping.
+- Ledgers contain 54 synthetic GETs and 24 exact PUTs: six marker 200, 12 dismissal 200 and six expected dismissal 503. Errors/unknown/rejected/external/native attempts were 0.
+- Positive host closure at 22:47:32 UTC found all 71 recorded PID/name/parent/creation identities and owned listeners absent; no PID reuse or kills in the final run.
+- Pre/post guards retained clean `4c04b200`, nine source pins/checkpoint/config, original LIST12/spec, four own CSS files/three fonts/artifact and Chrome bytes. No source/docs/Git changes occurred during that run.
 
-Before raw bytes and absence records are under
-`.cache/activation-web-before-9a68c480/before.json` and
-`.cache/activation-api-before-9a68c480/before.json`. These caches are not product
-or CI dependencies and must not be staged.
+Earlier API/Help/web receipts: `.cache/activation-validation-prep-cda8a531/runs/`; parent-owned host closures are retained beside those runs.
+Final evidence root: `.cache/activation-browser-layout-4c04b200/`.
+Proof SHA-256 values (files under `proof/`):
 
-## Canonical Help index generation
+- `results.json`: `bd52e4234796e53e6325daebcf0e1bcf2af08b629a9b6e2377c89edad1d5b99e`
+- `final-receipt.json`: `5747222863fc992de88101fe7bca2447033178be3b5918af1b895219d173aa61`
+- `postguard.json`: `bf75394c2b8948bd8b86365d9f1cd8c8dd9c00da8783c9972608394a360ab805`
+- `closure-host.json`: `e2f0b0dd369253dc180e44cd6090f6242c5c6e19835f358e39120949f8b420b0`
 
-The parent granted only one installed-Node invocation of
-`scripts/gen-help-index.mjs` from `apps/web`. It exited 0 and reported 93 articles;
-stderr was empty. The generator added precisely the import and array entry for
-`getting-started/your-first-week`, with all other index content equal after LF
-normalization. Its canonical writer changed the previous CRLF file to LF.
-The other 21 owned source hashes were unchanged during generation. Only this
-checkpoint was updated afterward to record the result.
+## Source, CSS and browser limits
 
-Owned generator PID 37532 closed and was observed absent. The runtime slot was
-released immediately. Raw stdout, stderr, before/after index bytes and the
-generator receipt are retained under
-`.cache/activation-help-index-9a68c480/`. During that generator step, no npm
-lifecycle, test, typecheck, lint, build, browser, Git mutation, merge, provider
-or production operation occurred.
+Current component `e19a11fe…` and fixture `43f9ac27…` are freshly esbuild-rendered real sources. The retained own CSS/font artifact remains honestly at sourceHead `cda8a531938f1790614a61625f7e95ad16be1fdf`; it is not a new production build of `4c04b200`.
+All exact markup utilities already exist in that artifact's four CSS files; all three own fonts and complete raw hashes match. Artifact path: `.cache/activation-build-prep-cda8a531/browser-build-artifact.json`; SHA `66aef007b775469238b68a0e4f4948885fb15146d0e934f5d395239a0293cef9`.
+The explicit bridge is `source-css-bridge.json` in the final evidence root. Only markup, fixture cleanup and documentation changed since the retained build; other production behavior was not changed for the visual retry.
+Browser coverage uses actual LevelUp/marker/API/SWR/Help/Modal/Toast in a synthetic framework/auth/HTTP/GameProbe host. It does not prove the entire Today/AnalyzerFrame/GameDetail route; their actual integration seams have separate unit proof.
+The six-command absence check may scan owner history; it is not measured constant query cost. Known Node CJS/MJS and Vite CJS tooling warnings remain raw.
+The 22-path feature scope adds no infrastructure, migration, index, model feature, provider activation, native release, version bump or tour placeholder. Guided tours are a separate item.
 
-## First API typecheck and assertion repair
+## Preserved failures and before bytes
 
-The parent preserved all 22 paths and integrated current main, retaining both
-the activation and optional chart-cache dependency wiring and changelog entries.
-At `b1aeac69430a5a795673bcb25536fecce91c73bc`, tree
-`3a6c92f97595c78b328bf48cb3d7919652e37e5a`, one installed-Node invocation of
-`tsc --noEmit --project apps/api/tsconfig.json` exited 2. Its only diagnostic was
-TS2493 at `activation.test.js:170`: Jest's Mongo overload inferred a two-element
-call tuple, so indexing the actual third options argument was rejected by types.
-No product type diagnostic was reported. All 22 source hashes, tool/config pins
-and the clean tracked state were unchanged. Owned PID 12956 closed and was
-observed absent; the runtime slot was released without a retry.
+All paths below are cache evidence, never product/CI dependencies or staged artifacts.
 
-Before changing the test and this checkpoint, both raw source files and the
-first typecheck result were saved under
-`.cache/activation-types-tuple-repair-b1aeac69/`. The test now matches the actual
-three-argument call with `expect.any(Object)`, `expect.any(Array)` and
-`expect.objectContaining` containing the same upsert, returnDocument, deadline
-and projection assertions. The exact owner filter assertion, command counts,
-real Mongo call and all other assertions remain. No cast, fake service, mock
-change or product edit was introduced. Other 20 owned bytes are unchanged.
-At that source-only repair freeze, validation was still pending. The subsequent
-admitted typecheck below passed; lint, tests, Mongo and browser remain unrun.
+- Original API/web before bytes: `.cache/activation-api-before-9a68c480/`, `.cache/activation-web-before-9a68c480/`.
+- First API tuple diagnostic and repair: `.cache/activation-types-tuple-repair-b1aeac69/`.
+- First web type failure and actual API0: `.cache/activation-validation-prep-6e9a04ca/`; selector before bytes: `.cache/activation-web-type-repair-6e9a04ca/`.
+- Decoded held-body strengthening: `.cache/activation-decoded-body-repair-8dd73509/`.
+- First 108-test run (101 passed/7 heading-query failures), raw closure and before bytes: `.cache/activation-heading-query-repair-178c7283/`.
+- First browser afterEach socket RED, trace and raw ledgers: `.cache/activation-browser-prep-cda8a531/proof/`; before repair: `.cache/activation-socket-drain-repair-cda8a531/`.
+- Intermediate `231f6b62` 12-case/36-AA pass, sandbox-denied host observation and later unrelated conhost PID collision: `.cache/activation-browser-retry-231f6b62/proof/`; no unrelated process was killed.
+- Before phone markup: `.cache/activation-phone-row-layout-before-231f6b62/`; final component lint/12 unit cases: `.cache/activation-layout-checks-4c04b200/`.
+- Before this documentation-only condensation: `.cache/activation-checkpoint-finalize-before-4c04b200/`.
 
-## API type retry and first web typecheck
-
-At `6e9a04caf5ace16c41c78d7c7a6fddd0c0cf1e6d`, tree
-`64d99c961e253a311bfd0cbae6d3d484b512e76a`, the parent granted a whole-API type
-retry and, only after its success and closure, one whole-web typecheck. The API
-compiler exited 0 with empty stdout and stderr. Both fresh 22-source and 80
-selected-input guards passed. Its driver and compiler closed; a host read-only
-probe verified their captured descendants and listeners absent. An earlier
-sandbox-denied CIM observation was retained but excluded from closure evidence.
-
-The web compiler then exited 2 with one TS2769 at
-`LevelUpChecklist.test.tsx:125`: Testing Library's `findByRole` does not accept
-the `exact` property used by Playwright. No product type diagnostic was reported.
-Both guards passed again. Its captured driver/compiler descendants and listeners
-were verified absent, and the runtime slot was released without repair or retry.
-Raw results and closures remain under
-`.cache/activation-validation-prep-6e9a04ca/`; the compact types summary records
-the actual API0 and web2 separately.
-
-Before changing this checkpoint and the one test selector, both source files
-and the actual type results were preserved under
-`.cache/activation-web-type-repair-6e9a04ca/`. The selector now uses the anchored
-`/^Retry$/` accessible-name matcher. Every retry, error, data and write assertion
-remains unchanged. Other 20 owned source bytes, all API source/type inputs and
-tool/config pins are unchanged, so the actual API0 is retained. The web type
-retry remains pending. No runtime, lint, test, Mongo, build, browser, generator
-or Git operation accompanied this source-only repair.
-
-## Browser held-body proof strengthening
-
-Source review found that the synthetic response parsed JSON only after its hold
-was released, allowing native fetch cancellation to reject the parse before a
-stale decoded answer reached the consumer. The fixture now decodes and captures
-the real response first, then records the held event and installs its gate in
-the same synchronous continuation. Releasing the gate returns that captured DTO
-even after abort. Existing assertions therefore wait for a decoded held answer;
-HTTP, signals and product code are unchanged. This is a source-only test repair,
-not a browser or validation pass. Both prior files were preserved under
-`.cache/activation-decoded-body-repair-8dd73509/` before the edit.
-
-## First selected web test result and heading query repair
-
-At `178c72830ede97ccebefba5e8d7730e68437d099`, whole web types passed and
-strict lint of the 14 selected web files reported zero errors and warnings.
-API types retained its actual exit 0 from `6e9a04ca` because its inputs did not
-change. API strict lint exited 1 on the same 11 function-length warning owners
-present in the four actual base files, with zero errors, new warning owners or
-threshold crossings. The parent reviewed the actual diffs and accepted only
-that inherited debt; the raw strict failure remains preserved.
-
-The first literal ten-file web run executed 108 tests: 101 passed and seven
-failed, all in `LevelUpChecklist.test.tsx` while finding exact feature heading
-names. Its rendered `<h3>` keeps the title and the `, not yet tried` text in
-separate title/span nodes; the accessible-name calculation can insert whitespace
-before the comma. The six affected matcher sites now use anchored expressions
-that keep the complete title and `not yet tried` state, allowing only whitespace
-before that comma. All other assertions, mocks, input data and product markup
-are unchanged. Both prior source files, raw first-run output and closure evidence
-were saved under `.cache/activation-heading-query-repair-178c7283/` before editing.
-
-Both 22-source/80-input guards passed throughout those checks, and host process
-and listener reads verified the known owned processes closed. The first test
-failure stopped the sequence: Help6 and API2 remain unrun. The actual typechecks
-and unaffected lint evidence are retained; the changed test's strict lint and
-web test retry are pending. No runtime, guard refresh or Git operation accompanied
-this source-only two-path repair.
-
-## First browser run and owned socket drain
-
-The first actual RUN at cda8a531 used the accepted new own build
-`txSiXdQcm2MDVtKKf6W7e` and stopped with zero passed, one failed and 11 unrun.
-The Light360 main flow completed its assertions and five clear serious/critical
-AA scans (raw incomplete: color-contrast), with two captures, five activation
-GETs and two exact synthetic dismissal PUTs (503 then 200). Unknown, rejected,
-external and native attempts were zero. Its only failure was afterEach's raw
-socket count: the HTTP server was closed/not listening but one tracked socket
-had not yet emitted close. The old-source postguard passed; all 13 captured
-host processes and owned listeners were gone. Raw results and trace remain in
-`.cache/activation-browser-prep-cda8a531/proof/`.
-
-Before repair, both files were preserved under
-`.cache/activation-socket-drain-repair-cda8a531/`. Cleanup now awaits actual close
-events for every socket still tracked after the server close callback. It does
-not clear the set, filter away sockets or weaken the assertion. Product, API,
-hook and spec bytes are unchanged; the build remains retained. This source-only
-cleanup repair is unrun and requires a renewed grant with fresh browser outputs.
-
-## Validation still required
-
-New source-only tests cover real Mongo flags, exact six-read shape/projections,
-privacy, deadlines, historical activity, malformed dates, owner erasure and
-fences, actual no-confirmation query cost, concurrent first-view stamps, route
-ownership and independent preference merges. Web cases exercise the pure 4/4/6
-mapping, real owner-scoped request code, held JWT/body retirement, record changes,
-StrictMode, loading/error admission, dismissal ACK validation, completion
-transitions and the actual Today/GameDetail integration seams. Browser source
-uses actual components with synthetic local transport and framework/auth
-boundaries, production CSS/fonts, full shared accessibility checks and owned
-listener cleanup. Executed results and the pending web retry are recorded above;
-API, Help and browser cases remain unrun.
-
-After source review and preservation, run targeted meaningful API/web tests,
-types and strict changed-source lint with the parent's serialized runtime rules.
-The Help generator is complete; its registry/content checks remain unrun.
-Then perform the production build, unchanged bundle
-budgets and actual browser/visual verification. Integrate fresh main, resolve
-shared app/changelog content normally, and require exact-head CI before merging.
-The absence check can scan owner history despite one bounded command; do not
-weaken it to a recent-games cap or claim measured constant cost. No production
-migration, provider activation, publishing, model feature or new infrastructure
-is included.
-
-Guided tours remain a separate dependent item. There is no placeholder button,
-empty registry, fake tour flag or automatic focus/scroll change in this slice.
-
-## Browser retry passed; phone row layout pending
-
-The fresh retry at `231f6b62` passed syntax and strict lint of the repaired MJS,
-then all 12 original browser cases once (no skipped, failed or flaky cases).
-All 36 shared serious/critical AA checks had empty issues; 30 incomplete
-color-contrast observations remain in the raw attachments. All 18 captures
-and 12 transport/closure ledgers were retained. The ledgers recorded 54 exact
-synthetic GETs, six marker PUTs, 12 successful dismissal PUTs and six expected
-503 dismissal attempts, with no unexpected, rejected, external or native
-attempts and zero tracked sockets. Source/build postguards passed and all 68
-captured host process IDs/listeners were absent in the final positive snapshot.
-Raw first RED, sandbox observation and later PID collision were preserved;
-no unrelated process was killed. Current retry evidence is in
-`.cache/activation-browser-retry-231f6b62/proof/`; it supersedes the earlier
-unrun browser status above.
-
-Human review found the phone action compressed each row's text. After preserving
-the component and this checkpoint under
-`.cache/activation-phone-row-layout-before-231f6b62/`, the icon stays left and
-an inner grid gives the text full remaining width with its one action below.
-At `sm`, that inner group returns to a flex row with the action on the right.
-Completed steps create no empty action wrapper. Every utility is already in
-the retained own `txSiXdQcm2MDVtKKf6W7e` CSS. Text, roles, links, data, handlers,
-product logic and all browser assertions are unchanged. This markup repair is
-source-only: its component lint, existing 12 unit cases and fresh browser/phone
-visual verification are still pending. The prior 12/36 result validates the
-socket repair, not this newer layout; no rebuild, API or Help repeat is included.
+The first failures remain failures in their raw receipts; later passes do not overwrite them. This checkpoint update launched no runtime/build and changed no product or tests.
