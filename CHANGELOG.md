@@ -17,6 +17,10 @@ corresponding GitHub Release.
 - Share one selected streaming-token manager between the two tabs. Guard token changes while either tab has tracked unsaved edits, and check status before retrying an uncertain token creation.
 - Keep older Chat and Dock links working through the unsaved-changes guard, including their destination section. Bound bot saves and retire delayed account or token requests when their owner changes.
 
+### Analyzer date range
+
+- Default fresh analyzer views and Reset to defaults to Auto-track current season, following the current season catalog while retaining explicitly saved dates and views.
+
 ### Settings groups and compatible links
 
 - Group Settings into Account, Gameplay and Streaming, with descriptions in the desktop sidebar and a Devices link in Account.
