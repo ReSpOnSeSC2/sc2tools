@@ -5,7 +5,7 @@ import { SettingsPublicProfile } from "../SettingsPublicProfile";
 import { PLAYER_SETTINGS } from "@/components/public-profile/__fixtures__/publicPlayer";
 const mocks = vi.hoisted(() => ({ owner: "owner-a" as string | null, token: vi.fn(), fetch: vi.fn() }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: mocks.owner, isLoaded: true, isSignedIn: Boolean(mocks.owner), getToken: mocks.token }) }));
-vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: () => <a href="/help/public-profile">Help</a> }));
+vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: () => <span>Help</span> }));
 const response = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: { "content-type": "application/json" } });
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(next => { resolve = next; }); return { promise, resolve }; }
 function mount() {
@@ -88,6 +88,30 @@ describe("public player privacy settings", () => {
   it("keeps unavailable-prefix responses distinct from transient availability failures", async () => {
     mocks.fetch.mockImplementation(async (url: string) => url.includes("/public-profile/slug?") ? response({ slug: "reserved-0123456789", available: false, reason: "invalid_or_reserved" }) : response(PLAYER_SETTINGS));
     mount(); const prefix = await screen.findByRole("textbox", { name: "Player link prefix" }); fireEvent.change(prefix, { target: { value: "reserved" } });
+    await screen.findByText("That prefix is unavailable or reserved.");
+    expect(screen.getByRole("button", { name: "Save public profile" })).toHaveProperty("disabled", true);
+  });
+  it("retires out-of-order availability answers across prefix A to B to A", async () => {
+    const firstA = deferred<Response>(), secondA = deferred<Response>(), beta = deferred<Response>();
+    let alphaCalls = 0;
+    mocks.fetch.mockImplementation(async (url: string) => {
+      if (url.includes("slug=alpha-")) return ++alphaCalls === 1 ? firstA.promise : secondA.promise;
+      if (url.includes("slug=beta-")) return beta.promise;
+      return response(PLAYER_SETTINGS);
+    });
+    mount(); const prefix = await screen.findByRole("textbox", { name: "Player link prefix" });
+    fireEvent.change(prefix, { target: { value: "alpha" } });
+    await waitFor(() => expect(alphaCalls).toBe(1));
+    fireEvent.change(prefix, { target: { value: "beta" } });
+    await waitFor(() => expect(mocks.fetch.mock.calls.some(([url]) => url.includes("slug=beta-"))).toBe(true));
+    fireEvent.change(prefix, { target: { value: "alpha" } });
+    await waitFor(() => expect(alphaCalls).toBe(2));
+    await act(async () => {
+      firstA.resolve(response({ slug: "alpha-0123456789", available: true, reason: null }));
+      beta.resolve(response({ slug: "beta-0123456789", available: true, reason: null }));
+    });
+    expect(screen.getByRole("button", { name: "Save public profile" })).toHaveProperty("disabled", true);
+    await act(async () => secondA.resolve(response({ slug: "alpha-0123456789", available: false, reason: "taken" })));
     await screen.findByText("That prefix is unavailable or reserved.");
     expect(screen.getByRole("button", { name: "Save public profile" })).toHaveProperty("disabled", true);
   });

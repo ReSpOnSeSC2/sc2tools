@@ -1303,10 +1303,11 @@ class CommunityService {
    * Web sitemap entries: published builds and opt-in public profiles
    * (services/communitySitemap.js). Slugs, handles and dates only.
    *
+   * @param {{includeProfiles?:boolean}} [options]
    * @returns {ReturnType<typeof communitySitemap>}
    */
-  async sitemap() {
-    return communitySitemap(this.db.communityBuilds);
+  async sitemap(options = {}) {
+    return communitySitemap(this.db.communityBuilds, options);
   }
 
   /**

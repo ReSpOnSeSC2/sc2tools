@@ -42,16 +42,34 @@ fresh no-store reads. React request memoization deduplicates metadata/page work
 inside one request only. The API may cache bounded aggregates for five minutes
 only behind a fresh consent/name lookup.
 
+Community list/detail DTOs can also carry a current author-profile capability.
+Their decorated HTTP responses, Next data reads, pages and Community social
+images stay no-store even with an optional purge service configured. A failed
+purge cannot preserve a profile link after Off. Internal published-content
+caches and unrelated pure guide/review caches keep their existing policies;
+current capabilities are decorated only after the content cache lookup.
+
+The legacy Community sitemap keeps only cached published-build URLs with an
+empty `profiles` array and skips the unused legacy UUID aggregation. Canonical
+profile discovery comes solely from the fresh no-store players sitemap. The
+web sitemap has no output cache while unrelated list contributions retain
+their existing bounded data caches.
+
 Channel images also admit the current profile before a bounded server bitmap
 cache. That cache lasts at most one hour, holds at most 48 entries and 8 MiB,
 and contains only selected public-card bytes keyed by a hash. CDN caching never
 bypasses admission. Disabled, missing, archive-only and unavailable profiles use
 the same neutral image data without identity, MMR or record values.
 
-The player segment intentionally has no loading route that can flush HTTP200
-before authoritative admission. A real404 is neutral missing/private;429,5xx,
+The player and legacy author redirect segments intentionally have no loading
+route or ancestor that can flush HTTP200 before authoritative admission. A
+real404 is neutral missing/private;429,5xx,
 malformed successful responses and timeouts remain temporary errors. This
 preserves the existing public status-boundary contract.
+
+Community's directory index keeps its original loader inside an index-only
+`(directory)` route group. It cannot wrap the legacy author redirect; child
+build and opponent skeletons retain their existing routes and behavior.
 
 ## Data boundaries and operational effects
 

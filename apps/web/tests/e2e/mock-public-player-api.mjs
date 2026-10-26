@@ -1,6 +1,6 @@
 // Synthetic publication state for public HTTP/privacy tests. This module is
 // imported only by the local fixture server; it has no production API route.
-import { COMMUNITY_AUTHOR } from "./mock-community-detail-api.mjs";
+import { COMMUNITY_AUTHOR, COMMUNITY_DETAIL } from "./mock-community-detail-api.mjs";
 export const PUBLIC_PLAYER_HANDLE = "fixture-builder-0123456789";
 const sections = { showReplays: false, showChannels: false, showRecentForm: true, showMmrHistory: true, showSeasons: true, showMaps: true };
 const profile = {
@@ -16,6 +16,8 @@ const profile = {
 const visibility = new Map();
 const PRIVATE_CASE = /^fixture-privacy-[a-f0-9]{10}$/;
 export function publicPlayerFixture(path) {
+  const build = /^\/v1\/community\/builds\/(fixture-privacy-[a-f0-9]{10})$/.exec(path);
+  if (build) return { status: 200, data: { ...COMMUNITY_DETAIL, slug: build[1], authorName: "Privacy Fixture", authorProfileHandle: visibility.get(build[1]) === false ? undefined : build[1] } };
   if (path === "/v1/public/players-sitemap") return { status: 200, data: { items: [{ handle: PUBLIC_PLAYER_HANDLE, lastModified: "2026-10-23T12:00:00Z" }] } };
   if (!path.startsWith("/v1/public/players/")) return null;
   const handle = decodeURIComponent(path.slice("/v1/public/players/".length));

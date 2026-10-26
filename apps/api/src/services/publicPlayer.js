@@ -1,7 +1,7 @@
 "use strict";
 
 const { createHash } = require("crypto");
-const { PLAYER_SLUG_RE, PLAYER_UUID_RE, createPlayerSlug, validPlayerSlug, publicPlayerSettings, safeIso, playerError } = require("../util/publicPlayerConfig");
+const { PLAYER_SLUG_RE, PLAYER_UUID_RE, SECTION_KEYS, createPlayerSlug, validPlayerSlug, publicPlayerSettings, safeIso, playerError } = require("../util/publicPlayerConfig");
 const { cleanDisplayName } = require("../util/contentFilter");
 const { shapeTotals, shapeMatchups, shapeSignatureBuilds, shapeFeaturedBuild } = require("./publicProfile");
 const { recentForm, extraAggregates, publicReviewer } = require("./publicPlayerAggregates");
@@ -123,10 +123,11 @@ class PublicPlayerService {
     const entry = await this.resolve(handle);
     if (!entry) return null;
     if (!entry.profilePublic) return { profile: null, archiveOnly: true, handle: entry.slug, displayName: entry.displayName };
-    const { user, author, settings, displayName } = entry;
+    const { user, author, settings, slug, displayName } = entry;
     // New/removed section consent, renamed author and disabled archives all
     // change this key. Admission above is never served from this cache.
-    const key = JSON.stringify([user.userId, settings.updatedAt, settings.revision, settings.replaySharingEnabled, displayName, authorRevision(author)]);
+    const key = JSON.stringify([user.userId, slug, settings.updatedAt, settings.revision,
+      SECTION_KEYS.map(section => settings[section] === true), settings.replaySharingEnabled, displayName, authorRevision(author)]);
     const cached = this.cache.get(key);
     if (cached && cached.expires > Date.now()) return cached.value;
     const value = await this._build(entry);
@@ -151,7 +152,7 @@ class PublicPlayerService {
       signatureBuilds: shapeSignatureBuilds(builds), featuredBuild: shapeFeaturedBuild(author?.topBuild),
       publishedBuildCount: Number.isSafeInteger(author?.totalBuilds) ? author.totalBuilds : 0,
       publishedBuilds: publicBuilds(author?.builds), reviewer: publicReviewer(reviewer),
-      sections: Object.fromEntries(["showReplays", "showChannels", "showRecentForm", "showMmrHistory", "showSeasons", "showMaps"].map(key => [key, settings[key] === true])),
+      sections: Object.fromEntries(SECTION_KEYS.map(key => [key, settings[key] === true])),
       replayArchive: archive ? { handle: slug, total: Number.isSafeInteger(archive.summary?.total) ? archive.summary.total : 0 } : null,
       ...(settings.showRecentForm ? recentForm(summary?.recent) : {}),
       ...(settings.showChannels ? { channels } : {}), ...extras,

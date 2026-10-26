@@ -47,6 +47,9 @@ const rateLimit =
  */
 function buildCommunityRouter(deps) {
   const router = express.Router();
+  // Profile capabilities must be admitted on every read, independently of a
+  // best-effort purge. Content-only legacy routers retain their shared cache.
+  const buildCacheControl = deps.publicPlayers ? "no-store" : PUBLIC_COMMUNITY_CACHE_CONTROL;
   // Errors, authenticated reads and all writes stay private. Only the explicit
   // successful public DTO routes below may opt into the shared response cache.
   router.use((_req, res, next) => { res.set("Cache-Control", "private, no-store"); next(); });
@@ -113,7 +116,7 @@ function buildCommunityRouter(deps) {
         search: search || undefined,
       });
       if (deps.publicPlayers) result.items = await deps.publicPlayers.withAuthorLinks(result.items);
-      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(result);
+      res.set("Cache-Control", buildCacheControl).json(result);
     } catch (err) {
       next(err);
     }
@@ -132,7 +135,7 @@ function buildCommunityRouter(deps) {
         totalCap,
       });
       if (deps.publicPlayers) result.items = await deps.publicPlayers.withAuthorLinks(result.items);
-      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(result);
+      res.set("Cache-Control", buildCacheControl).json(result);
     } catch (err) {
       next(err);
     }
@@ -185,8 +188,10 @@ function buildCommunityRouter(deps) {
 
   router.get("/community/sitemap", async (_req, res, next) => {
     try {
-      const sitemap = await deps.community.sitemap();
-      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(sitemap);
+      // Legacy profiles[] is intentionally retired. Canonical player discovery
+      // has its own fresh consent gate; this endpoint remains content-only.
+      const sitemap = await deps.community.sitemap({ includeProfiles: false });
+      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json({ builds: sitemap.builds, profiles: [] });
     } catch (err) {
       next(err);
     }
@@ -200,7 +205,7 @@ function buildCommunityRouter(deps) {
         return;
       }
       const value = deps.publicPlayers ? (await deps.publicPlayers.withAuthorLinks([row]))[0] : row;
-      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(value);
+      res.set("Cache-Control", buildCacheControl).json(value);
     } catch (err) {
       next(err);
     }

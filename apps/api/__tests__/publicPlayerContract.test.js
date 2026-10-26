@@ -114,6 +114,32 @@ describe("public player consent and response boundary", () => {
     const after = await h.players.get(SLUG);
     for (const key of ["recentForm", "currentStreak", "lastPlayedAt"]) expect(after.profile).not.toHaveProperty(key);
   });
+  test.each(SECTION_KEYS)("same-revision %s OFF is honored before a warm aggregate cache", async section => {
+    const enabled = Object.fromEntries(SECTION_KEYS.map(key => [key, true]));
+    const h = harness({ config: { enabled: true, revision: 0, ...enabled }, sharing: true });
+    expect((await h.players.get(SLUG)).profile.sections[section]).toBe(true);
+    h.state().publicProfile[section] = false;
+    const after = (await h.players.get(SLUG)).profile;
+    expect(after.sections[section]).toBe(false);
+    const hidden = { showChannels: ["channels"], showRecentForm: ["recentForm", "currentStreak", "lastPlayedAt"],
+      showMmrHistory: ["mmrHistory"], showSeasons: ["seasons", "seasonDataAvailable"], showMaps: ["maps"] };
+    if (section === "showReplays") expect(after.replayArchive).toBeNull();
+    else for (const key of hidden[section]) expect(after).not.toHaveProperty(key);
+    expect(h.state().publicProfile.revision).toBe(0);
+    expect(h.opts.aggregations.summary).toHaveBeenCalledTimes(2);
+  });
+  test("a changed canonical address cannot reuse a warm response from the old slug", async () => {
+    const h = harness({ config: { enabled: true, revision: 0, ...flags, showReplays: true }, sharing: true });
+    expect((await h.players.get(SLUG)).profile.replayArchive.handle).toBe(SLUG);
+    const changed = "renamed-player-0123456789";
+    h.state().replaySharing.slug = changed;
+    const after = await h.players.get(changed);
+    expect(after.handle).toBe(changed);
+    expect(after.profile.handle).toBe(changed);
+    expect(after.profile.replayArchive.handle).toBe(changed);
+    expect(await h.players.get(SLUG)).toBeNull();
+    expect(h.state().publicProfile.revision).toBe(0);
+  });
   test("the reviewer section drops arbitrary identity, token and unknown matchup leaves", async () => {
     const h = harness();
     h.opts.profile.reviewerReputation = { publicSection: jest.fn(async () => ({ karma: 5, reviews: 1, helpful: 0, bestAnswers: 0, badges: [], flair: null, token: "PRIVATE_REVIEW_TOKEN", userId: ID,

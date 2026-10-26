@@ -20,6 +20,9 @@ import type { CommunityBuildListResponse } from "@/components/community/types";
 import { clearCommunityFilters, communityEmptyTitle, communityHref, COMMUNITY_PAGE_SIZE, parseCommunityQuery, type CommunityQuery } from "@/lib/communityQuery";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const METADATA: Metadata = pageMetadata({
   canonical: "/community", title: "Community builds",
   description: "Player-published StarCraft II builds and the Stock Market weekly leaderboard. Filter by race, opponent and skill level, search or sort by votes, publication or updates, and save builds to your private library.",
@@ -66,7 +69,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Co
           <CommunityActiveFilters query={query} />
         </div>
         {!data ? <CommunityUnavailable title="Community builds are temporarily unavailable" retryHref={communityHref(query)} /> : pastEnd ? <Card><EmptyStatePanel size="lg" title="No more results" description="This page is past the end of the list." action={<LinkButton href={communityHref({ ...query, offset: 0 })} variant="secondary">Back to page 1</LinkButton>} /></Card> : !items.length ? <Card><EmptyStatePanel size="lg" title={communityEmptyTitle(query)} description={filtered ? "Try a different keyword or clear a filter to see more published builds." : "Be the first to publish a build to the community."} action={<LinkButton href={filtered ? communityHref(clearCommunityFilters(query)) : "/builds"} variant="secondary">{filtered ? "Reset filters" : "Open my library"}</LinkButton>} /></Card> : <>
-          <ul role="list" aria-label="Community builds" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{items.map((build) => <li key={build.slug} role="listitem" className="h-full"><CommunityBuildCard build={build} /></li>)}</ul>
+          <ul aria-label="Community builds" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{items.map((build) => <li key={build.slug} className="h-full"><CommunityBuildCard build={build} /></li>)}</ul>
           <Pagination query={query} limit={COMMUNITY_PAGE_SIZE} total={total} hasMore={data.hasMore} />
         </>}
         </>}

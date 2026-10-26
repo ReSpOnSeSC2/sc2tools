@@ -100,9 +100,8 @@ export async function getJson<T>(
   path: string,
   opts: { revalidateSec?: number; tags?: string[] } = {},
 ): Promise<T | null> {
-  // Default: no cache. Public Community callers opt into a bounded tagged
-  // cache only when their purge secret is configured; private and opponent
-  // admission reads keep the uncached default.
+  // Default: no cache. Pure public-content callers may opt into bounded data
+  // caches; current consent/capability and private admission stay uncached.
   const revalidate =
     typeof opts.revalidateSec === "number" && opts.revalidateSec > 0
       ? opts.revalidateSec

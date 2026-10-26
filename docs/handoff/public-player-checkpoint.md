@@ -58,6 +58,25 @@ Parent owns API changes; web source work is delegated to `public_web`.
   new-file lint pass; the changed legacy files have only the existing
   `builds.detail` max-lines warning. Its initial new-fixture setup failure was
   a missing required Community slug secret; a synthetic test secret fixed it.
+- Live section flags and the canonical address also participate directly in
+  the bounded cache key, alongside revision/updatedAt. Seven focused regressions
+  first reproduced stale responses when each section turned Off or the address
+  changed without a revision bump. All66 checks in the three affected privacy,
+  real-Mongo preferences and route suites pass after the fix, as do API types
+  and strict changed-file lint. Fresh admission therefore does not depend on
+  a version-bump assumption for optional-section privacy or canonical links.
+- A final review found Community DTOs could cache a decorated profile link
+  after Profile Off when the optional purge failed. Decorated list, detail and
+  Arcade responses now use no-store admission; the author endpoint already did.
+  A warm shared-response regression first failed, then passed with the repair.
+  The final affected API pack passes130 checks in6 suites; types and strict
+  changed pure-helper/sitemap-test lint pass. Six inherited large-function and
+  suite-registration lint warnings remain in the touched legacy files.
+  The old Community sitemap retains cached published builds and intentionally
+  returns profiles:[]; an additive service option skips its unused legacy UUID
+  aggregation. A real Mongo regression proves one build query, no UUID discovery
+  for an explicitly private named publisher, and unchanged public build content.
+  Canonical player discovery keeps its separate fresh privacy gate.
 - Initial Jest stopped before fixtures on a Windows temporary-cache rename
   restriction (zero tests). A writable workspace cache and reviewed local
   Mongo runtime resolved that environment issue.
@@ -76,14 +95,71 @@ Parent owns API changes; web source work is delegated to `public_web`.
 - Logs are in `apps/api/.cache/public-player-*`. No generated map-pool fixture
   diff or production operation resulted from validation.
 
-## Web and delivery verification still required
+## Web verification
 
-No web tests, types, lint, build or browser jobs were run during source delegation.
-Shared UI/A11y integration is required before the new CopyButton leaf import
-resolves. Added contract tests cover
-fresh admission/temporary failures, single-hop aliases, optional sections,
-capability-only author links, owner/ABA/deadline settings and real PNG rendering.
-Existing profile, replay, metadata, sitemap and lesson fixtures are being updated
-for the final contract. Final current-main integration and full exact-head CI
-remain root-owned gates. No production account, visibility switch, replay,
-provider, installer or data migration was changed during implementation.
+- Shared UI/A11y and 0.24.7 release parents are integrated. Final checked HEAD is
+  `2f97a948954f1a6f158dca474d1ff6a3272e0665`, with the reviewed pending feature
+  fixes. The ancestry merge changed only three handoff documents; root verified
+  all 3,221 web-file hashes against the successful replacement build inputs.
+  Later changes were test fixtures/assertions and a relative test import only.
+- Whole web types pass against regenerated route-group types. Strict changed
+  source, units and browser fixtures pass without warnings. UI ratchet passes
+  1,660 source files/734 existing occurrences, with no new or stale allowances.
+  Sixteen retired allowances were pruned from `scripts/ui-lint/baseline.json`;
+  none were added. Help generation succeeds with 89 articles; its generated
+  index has a stat/line-ending-only working change and no content diff.
+- The expanded focused pack passes 389 tests in 57 suites at two workers.
+  Subsequent route-group checks pass 17 tests in three suites, and the existing
+  route-loader consumer passes four tests after its relative import update.
+  Coverage includes warm-cache/failed-purge author-capability removal, fresh
+  metadata/errors, optional-section boundaries, owner and slug A→B→A retirement,
+  deadlines, Help drift and real PNG rendering. All panel styles render real
+  320×100/160 images in both themes; Community OG renders a real 1200×630 PNG
+  with no-store even when optional purge is configured.
+- A real availability render loop was found: the shared owner-request closure
+  changes identity on renders. Availability now snapshots it through a ref
+  while retaining owner/slug/needed/attempt retirement and request cleanup.
+  Held old A/B answers cannot unlock Save for a newer A. Stale lesson/card
+  fixture expectations were updated to the new public-capability contract.
+- The isolated browser settings fixture passes two cases at one worker using
+  actual components, ownership helpers, CSS/fonts and synthetic intercepted
+  requests. All eight 320/390/768/1440 light/dark views fit. Clipboard denial
+  gives a visible selected fallback with Escape focus restoration; a held
+  save cannot complete into a later A→B→A account.
+- Final built-server HTTP/browser checks pass 17 cases; four nonmobile
+  Download-command cases intentionally skip because that regression runs once
+  per theme at 360px. The three projects cover 360/768/1280px, both profile
+  themes, profile Off, neutral panel bytes, Community link Off without purge,
+  exact legacy 308/private404/temporary500, directory loading and Download
+  keyboard scrolling/axe. A strengthened three-project rerun also proves the
+  fresh Off Community HTML/RSC body contains no author-profile URL.
+- The first artifact exposed a real streamed200 on the legacy Community author
+  redirect. Its leaf loader was removed; the original Community index loader
+  moved with the page/test into `(directory)` so it cannot wrap author routes.
+  Final HTTP checks prove both the directory's visible loading→content flow
+  and correct author statuses. Child build/opponent skeletons are unchanged.
+- The root-authorized replacement production build passes compilation, full
+  type validation, 143 static pages and tracing. Direct Next build reused the
+  warmed engine assets; no duplicate engine compilation or install ran. The
+  initial sandbox mkdir EPERM was resolved with reviewed host access. Existing
+  whole-repository lint warnings remain; strict owned source is clean. All 18
+  named and 63 default bundle budgets pass without a budget change.
+- Browser launch uses existing pinned Chromium1228 with reviewed host access;
+  no browser was installed. Initial missing sandbox-cache/startup failures
+  were environmental. A test-only selector initially matched visible and hidden
+  streamed spans; its visible-content assertion was corrected, while raw body
+  exclusion independently proves no hidden capability remains.
+- Preserved logs: `.cache/public-player-final-build.log`,
+  `public-player-final-http.log` (initial locator RED),
+  `public-player-final-http-green.log`, `public-player-raw-off-http.log` and
+  `public-player-visual-http.log`. Clean phone light/dark and desktop screenshots
+  were visually inspected in `.cache/public-player-visual-artifacts/`; settings
+  evidence remains in `.cache/public-player-browser-artifacts/`. No clipping or
+  body overflow was observed. All test servers and runtime jobs are closed.
+
+## Delivery boundary
+
+Source is frozen for root-owned preservation/review and exact-head CI. No
+production account, publication switch, replay, provider or data migration was
+changed by this workstream. No Git commit, push or deployment was performed by
+the delegated web worker.

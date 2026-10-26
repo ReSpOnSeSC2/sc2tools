@@ -3,8 +3,20 @@
 const request = require("supertest");
 const { startHarness } = require("./helpers/browserIngestHarness");
 const { createBackupStore } = require("./helpers/userBackupsStore");
+const { SECTION_KEYS } = require("../src/util/publicPlayerConfig");
 jest.mock("@clerk/backend", () => ({ verifyToken: jest.fn(async () => ({ sub: "clerk_cache_owner" })) }));
 const pulse = "1-S2-1-123";
+// Model a shared cache that obeys response admission headers. A failed optional
+// purge must never let it retain a capability-bearing public response.
+function sharedCacheClient(app) {
+  const entries = new Map();
+  return async path => {
+    if (entries.has(path)) return entries.get(path);
+    const response = await request(app).get(`/v1/community${path}`);
+    if (/\bs-maxage=/.test(response.headers["cache-control"] || "")) entries.set(path, response);
+    return response;
+  };
+}
 describe("public Community cache lifecycle", () => {
   let h, changed;
   beforeAll(async () => { h = await startHarness("community_cache_lifecycle"); h.services.gdpr.backups.store = createBackupStore(); });
@@ -57,13 +69,15 @@ describe("public Community cache lifecycle", () => {
     await h.db.communityReports.insertOne({ id: "synthetic-report", targetType: "build", targetId: slug, resolvedAt: null });
     await h.services.community.resolveReport("synthetic-admin", "synthetic-report", { action: "remove" }); expect(changed).toHaveBeenCalledTimes(3);
   });
-  test("public build content can cache while profile and private admission stays fresh", async () => {
+  test("decorated public content and profile admission stay fresh while the content-only sitemap can cache", async () => {
     const { slug } = await publish(); await games();
-    for (const path of ["/builds", `/builds/${slug}`, "/arcade-universe", "/sitemap"]) {
+    for (const path of ["/builds", `/builds/${slug}`, "/arcade-universe"]) {
       const response = await request(h.app).get(`/v1/community${path}`);
-      expect(response.status).toBe(200); expect(response.headers["cache-control"]).toBe("public, s-maxage=60, stale-while-revalidate=600");
+      expect(response.status).toBe(200); expect(response.headers["cache-control"]).toBe("no-store");
       expect(response.headers["set-cookie"]).toBeUndefined();
     }
+    const sitemap = await request(h.app).get("/v1/community/sitemap");
+    expect(sitemap.headers["cache-control"]).toBe("public, s-maxage=60, stale-while-revalidate=600");
     const author = await request(h.app).get("/v1/community/authors/owner");
     expect(author.status).toBe(200); expect(author.headers["cache-control"]).toBe("no-store");
     const opponent = await request(h.app).get(`/v1/community/opponents/${pulse}`);
@@ -74,6 +88,50 @@ describe("public Community cache lifecycle", () => {
     }
     const missing = await request(h.app).get("/v1/community/builds/missing");
     expect(missing.status).toBe(404); expect(missing.headers["cache-control"]).toContain("no-store");
+  });
+  test("a warm shared content response cannot retain profile links after OFF when optional purge fails", async () => {
+    const { slug } = await publish(), handle = "synthetic-author-0123456789";
+    const flags = Object.fromEntries(SECTION_KEYS.map(key => [key, false]));
+    await h.db.users.updateOne({ userId: "owner" }, { $set: { publicProfile: { enabled: true, revision: 0, ...flags }, "replaySharing.slug": handle } });
+    const read = sharedCacheClient(h.app);
+    const sources = [
+      { path: "/builds", row: response => response.body.items.find(item => item.slug === slug) },
+      { path: `/builds/${slug}`, row: response => response.body },
+      { path: "/arcade-universe", row: response => response.body.items.find(item => item.slug === slug) },
+    ];
+    for (const source of sources) expect(source.row(await read(source.path)).authorProfileHandle).toBe(handle);
+    expect((await read("/authors/owner")).status).toBe(200);
+    const preferences = h.services.publicPlayerPreferences, previousPurge = preferences.onPublicChanged;
+    const failedPurge = jest.fn(async () => { throw new Error("Synthetic optional purge unavailable"); });
+    preferences.onPublicChanged = failedPurge;
+    try {
+      const saved = await request(h.app).put("/v1/me/public-profile").set("authorization", "Bearer fixture").send({ enabled: false, slug: handle, revision: 0, ...flags });
+      expect(saved.status).toBe(200); expect(failedPurge).toHaveBeenCalledTimes(1);
+      for (const source of sources) {
+        const response = await read(source.path), row = source.row(response);
+        expect(response.status).toBe(200);
+        expect(row).not.toHaveProperty("authorProfileHandle");
+        expect(response.headers["cache-control"]).toBe("no-store");
+        expect(row).toMatchObject({ slug, title: "Synthetic macro", authorName: "Synthetic author" });
+      }
+      const author = await read("/authors/owner");
+      expect(author.status).toBe(404); expect(author.headers["cache-control"]).toContain("no-store");
+      expect((await h.db.communityBuilds.findOne({ slug })).removed).toBe(false);
+    } finally { preferences.onPublicChanged = previousPurge; }
+  });
+  test("legacy sitemap keeps build caching but skips retired private-profile UUID discovery", async () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    await h.db.users.insertOne({ userId: id, clerkUserId: "synthetic-sitemap-off", publicProfile: { enabled: false }, replaySharing: { slug: "sitemap-private-0123456789", enabled: false } });
+    await h.db.communityBuilds.insertOne({ slug: "synthetic-published-build", ownerUserId: id, authorName: "Synthetic public author", removed: false, publishedAt: new Date("2026-10-20") });
+    const aggregate = jest.spyOn(h.db.communityBuilds, "aggregate");
+    try {
+      const response = await request(h.app).get("/v1/community/sitemap");
+      expect(response.status).toBe(200);
+      expect(response.headers["cache-control"]).toBe("public, s-maxage=60, stale-while-revalidate=600");
+      expect(response.body.builds).toEqual([{ slug: "synthetic-published-build", lastModified: "2026-10-20T00:00:00.000Z" }]);
+      expect(response.body.profiles).toEqual([]); expect(JSON.stringify(response.body)).not.toContain(id);
+      expect(aggregate).toHaveBeenCalledTimes(1);
+    } finally { aggregate.mockRestore(); }
   });
   test("a warm aggregate still checks the current floor and removal before returning its cached payload", async () => {
     await games(); const service = h.services.community, spy = jest.spyOn(h.db.games, "find");

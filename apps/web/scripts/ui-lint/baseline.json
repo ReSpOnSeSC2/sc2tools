@@ -22,13 +22,6 @@
       "example": "<a href={signedOut ? \"/sign-in\" : \"/app\"} className=\"hard-press mt-5 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-2 border-line bg-accent px-5 fon"
     },
     {
-      "file": "app/community/authors/[userId]/page.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "2699b71749e93d4f594ad5a0c1e3d14a87f5b9b21db03b9dfb9f48062e7f9ca5",
-      "count": 1,
-      "example": "<Link href=\"/community\" className=\"inline-flex min-h-[44px] items-center gap-2 hard-press rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold text"
-    },
-    {
       "file": "app/dock/layout.tsx",
       "rule": "hex-outside-visualization",
       "signature": "00e10787b30cbe7df6116f17536cc000ceb600c07543f3a2e69e83a2afb7b221",
@@ -62,104 +55,6 @@
       "signature": "2d3198d4408bd7e34aacf7f957544fad09e18a3d30b924c997f560377b57dba5",
       "count": 1,
       "example": "\"#06090e\""
-    },
-    {
-      "file": "app/p/[handle]/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "133f5fb1066c9de4fcb3c817266bffde7262bfde75ce23d2609ab06b5e34a795",
-      "count": 1,
-      "example": "\"#e7edf0\""
-    },
-    {
-      "file": "app/p/[handle]/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "1d26326e7449c343d06d3325774d75d102bbe59ea15443831cd94b114a8d900d",
-      "count": 1,
-      "example": "\"#3ce0d6\""
-    },
-    {
-      "file": "app/p/[handle]/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "2d3198d4408bd7e34aacf7f957544fad09e18a3d30b924c997f560377b57dba5",
-      "count": 1,
-      "example": "\"#06090e\""
-    },
-    {
-      "file": "app/p/[handle]/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "2ff541a20efe4440280de24801480b894be200ab4006cca789f18918e634f671",
-      "count": 1,
-      "example": "`2px solid #1c2430`"
-    },
-    {
-      "file": "app/p/[handle]/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "38d47f1a0609a754b4aef9d15a2f8a9a12ce0247c15fddea05216d75669ff942",
-      "count": 1,
-      "example": "\"#ff6b6b\""
-    },
-    {
-      "file": "app/p/[handle]/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
-      "count": 1,
-      "example": "\"#9aa3b2\""
-    },
-    {
-      "file": "app/p/[handle]/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "798272b1abf3424e54b95912892ae39e2e02bd3c87858a5db5a5864ef3e3752b",
-      "count": 1,
-      "example": "\"#3ec884\""
-    },
-    {
-      "file": "app/p/[handle]/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "ced70b0c59a26796a0c06f12c2f03ba92f07356d418693b4f999a05afa335dbc",
-      "count": 1,
-      "example": "\"#0c1017\""
-    },
-    {
-      "file": "app/p/[handle]/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "e28af2ddb43d25a2f4a61debac19fbab9a1a4775ffd1c6405749ee5f82d5a37e",
-      "count": 1,
-      "example": "\"#157d8c\""
-    },
-    {
-      "file": "app/p/[handle]/replays/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "133f5fb1066c9de4fcb3c817266bffde7262bfde75ce23d2609ab06b5e34a795",
-      "count": 1,
-      "example": "\"#e7edf0\""
-    },
-    {
-      "file": "app/p/[handle]/replays/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "1d26326e7449c343d06d3325774d75d102bbe59ea15443831cd94b114a8d900d",
-      "count": 3,
-      "example": "\"#3ce0d6\""
-    },
-    {
-      "file": "app/p/[handle]/replays/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
-      "count": 2,
-      "example": "\"#9aa3b2\""
-    },
-    {
-      "file": "app/p/[handle]/replays/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "7ee8cfcd30ae05f05387ed53ea7256123ad5c3725608ccb293c646abeb75b6fb",
-      "count": 1,
-      "example": "\"2px solid #157d8c\""
-    },
-    {
-      "file": "app/p/[handle]/replays/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "fb0ad21e06c09fbcca9b99e68c43e2d423cce97ef8e4b1ba498341f5cc652feb",
-      "count": 3,
-      "example": "\"radial-gradient(900px 520px at 100% 0%, #157d8c55 0%, #06090e 58%), #06090e\""
     },
     {
       "file": "app/players/[player]/replays/opengraph-image.tsx",
@@ -2295,13 +2190,6 @@
       "signature": "840b4248f3d4361ea00c82cc46eed9966b2af7dcd1703e1cb0ebd2272dd15949",
       "count": 1,
       "example": "\"scroll-mt-24 focus:outline-none\""
-    },
-    {
-      "file": "components/public-profile/PublicReplayAnalysis.tsx",
-      "rule": "native-confirm-prompt",
-      "signature": "acffa785e2827a8cf391fda40a321fa429cb441ab28635a46088db3d2c41ca89",
-      "count": 1,
-      "example": "window.prompt(\"Copy this replay analysis link\", `${window.location.origin}${canonicalPath}`)"
     },
     {
       "file": "components/public-profile/PublicReplayLibrary.tsx",

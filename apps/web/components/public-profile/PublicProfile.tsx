@@ -250,7 +250,7 @@ function MatchupSplits({ rows }: { rows: PublicProfileMatchupSplit[] }) {
             description="Stats appear once games have been synced."
           />
         ) : (
-          <ul role="list" className="space-y-3">
+          <ul className="space-y-3">
             {rows.map((m) => (
               <li key={m.matchup} className="space-y-1">
                 <div className="flex items-baseline justify-between gap-3 text-body">
@@ -298,7 +298,7 @@ function SignatureBuilds({ rows }: { rows: PublicProfileSignatureBuild[] }) {
             description="A build shows up here once it's been played a few times."
           />
         ) : (
-          <ul role="list" className="space-y-3">
+          <ul className="space-y-3">
             {rows.map((b) => (
               <li key={b.name} className="space-y-1">
                 <div className="flex items-baseline justify-between gap-3 text-body">
