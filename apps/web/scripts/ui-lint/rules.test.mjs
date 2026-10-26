@@ -101,6 +101,21 @@ test("local class constants resolve in their lexical scope", () => {
     function Second() { return <Link className={CTA} />; }`), ["handrolled-link-button"]);
 });
 
+test("context-aware auth anchors retain link debt through direct, aliased and namespace names", () => {
+  const source = `import {AuthContextLink as Login} from '@/components/auth/AuthContextLink';
+    import * as Auth from '@/components/auth/AuthContextLink';
+    const CTA = 'hard-press rounded-full';
+    const links = <><AuthContextLink kind="sign-in" className={CTA}/><Login kind="sign-up" className={CTA}/>
+      <Auth.AuthContextLink kind="sign-in" className={CTA}/></>;`;
+  assert.deepEqual(rules(source), ["handrolled-link-button", "handrolled-link-button", "handrolled-link-button"]);
+  assert.deepEqual(rules(`<AuthContextLink className="rounded-lg bg-accent"/>`, "app/page.tsx"), ["handrolled-accent-link"]);
+  const direct = analyze(`<AuthContextLink kind="sign-in" className="hard-press rounded-full"/>`);
+  const otherFile = analyze(`<AuthContextLink kind="sign-in" className="hard-press rounded-full"/>`, "components/other.tsx");
+  const baseline = aggregateViolations(direct);
+  assert.equal(compareBaseline(aggregateViolations([...direct, ...direct]), baseline).added.length, 1);
+  assert.equal(compareBaseline(aggregateViolations(otherFile), baseline).added.length, 1);
+});
+
 test("signatures ignore comments, line numbers, formatting and literal quote style", () => {
   const first = analyze(`window.confirm("Delete?");`)[0];
   const second = analyze(`\n\n // comment\n window . confirm ( 'Delete?' ) ;`)[0];

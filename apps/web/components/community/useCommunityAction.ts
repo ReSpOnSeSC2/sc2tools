@@ -13,15 +13,19 @@ export function useCommunityAction(record: string) {
   const owner = isLoaded && isSignedIn && userId ? userId : null;
   const scope = JSON.stringify([owner, record]);
   const identity = useRef({ scope }); if (identity.current.scope !== scope) identity.current = { scope };
+  // Bind the callable to the render which issued it, not the scope current at
+  // a later invocation. A saved callback must not enter a new owner/record.
+  const captured = identity.current;
   const active = useRef<AbortController | null>(null), mounted = useRef(false);
   const [busy, setBusy] = useState({ scope, value: false });
   useLayoutEffect(() => {
     mounted.current = true; setBusy({ scope, value: false });
     return () => { mounted.current = false; active.current?.abort(); active.current = null; };
-  }, [scope]);
+  }, [scope, captured]);
   async function run<T>(operation: (context: IntentResumeContext) => Promise<T>, onError: (error: unknown) => void, supplied?: IntentResumeContext): Promise<T> {
-    if (!owner || active.current || supplied && !supplied.isCurrent()) throw cancelled();
-    const controller = new AbortController(), captured = identity.current;
+    if (!mounted.current || identity.current !== captured || !owner || active.current
+      || supplied && (supplied.signal.aborted || !supplied.isCurrent())) throw cancelled();
+    const controller = new AbortController();
     const abort = () => controller.abort(); supplied?.signal.addEventListener("abort", abort, { once: true });
     if (supplied?.signal.aborted) controller.abort(); active.current = controller;
     const valid = () => mounted.current && identity.current === captured && active.current === controller && !controller.signal.aborted && (!supplied || supplied.isCurrent());

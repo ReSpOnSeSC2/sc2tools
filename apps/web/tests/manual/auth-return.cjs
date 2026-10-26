@@ -4,7 +4,7 @@ const fs = require('node:fs'), path = require('node:path'), http = require('node
 process.chdir(path.resolve(__dirname, '../..'));
 const { chromium, expect } = require('@playwright/test');
 const origin = 'http://127.0.0.1:3261', writes = [], unexpected = [];
-const shots = process.env.AUTH_SHOTS_DIR || '../../docs/handoff/screenshots';
+const shots = process.env.AUTH_SHOTS_DIR || '.cache/auth-return-shots';
 let saved = [], vote = 0, config = { v: 2, revision: 0, slots: {} };
 const css = fs.readdirSync('.next/static/css', { recursive: true }).filter(n => n.endsWith('.css')).map(n => fs.readFileSync(path.join('.next/static/css', n), 'utf8')).join('\n');
 const fonts = `@font-face{font-family:FixtureSans;src:url('/fonts/hanken-grotesk-latin.woff2');font-weight:100 900}@font-face{font-family:FixtureDisplay;src:url('/fonts/bricolage-grotesque-latin.woff2');font-weight:100 900}:root{--font-sans:FixtureSans;--font-display:FixtureDisplay;--font-serif:serif}`;
@@ -40,20 +40,33 @@ const server = http.createServer(async (req, res) => {
   const assets = path.resolve('public'), asset = path.resolve(assets, '.' + p);
   if (asset.startsWith(assets + path.sep) && fs.existsSync(asset) && fs.statSync(asset).isFile()) { res.setHeader('content-type', ({ '.svg': 'image/svg+xml', '.webp': 'image/webp', '.png': 'image/png' })[path.extname(asset)] || 'application/octet-stream'); return res.end(fs.readFileSync(asset)); }
   res.setHeader('content-type', 'text/html;charset=utf-8');
-  res.end(`<!doctype html><html data-theme="${url.searchParams.get('theme') === 'dark' ? 'dark' : 'light'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}\n${fonts}</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>`);
+  const theme = url.searchParams.get('theme') === 'dark' ? 'dark' : 'light';
+  res.end(`<!doctype html><html lang="en" data-theme="${theme}" data-theme-mode="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script>try{const mode=localStorage.getItem('sc2tools.theme');if(mode==='light'||mode==='dark'){document.documentElement.dataset.theme=mode;document.documentElement.dataset.themeMode=mode;}}catch{}</script><style>${css}\n${fonts}</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>`);
 });
 (async () => {
   await require('./auth-return-fixture.cjs')(origin);
   await new Promise(resolve => server.listen(3261, '127.0.0.1', resolve));
-  const browser = await chromium.launch({ headless: true }); let checks = 0;
+  let browser; let checks = 0;
   fs.mkdirSync(shots, { recursive: true });
   try {
+    browser = await chromium.launch({ headless: true, ...(process.env.PW_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PW_CHROMIUM_EXECUTABLE } : {}) });
     for (const width of [320, 390, 768, 1440]) for (const theme of ['light', 'dark']) {
       const context = await browser.newContext({ viewport: { width, height: 1000 }, reducedMotion: 'reduce' });
-      await context.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
-      await context.addInitScript(theme => { localStorage.setItem('sc2tools:theme', theme); }, theme);
+      await context.route('**/*', route => {
+        if (route.request().url().startsWith(origin + '/')) return route.continue();
+        unexpected.push(route.request().method() + ' ' + route.request().url()); return route.abort();
+      });
+      await context.addInitScript(theme => { localStorage.setItem('sc2tools.theme', theme); }, theme);
       const page = await context.newPage(), errors = []; page.on('pageerror', e => errors.push(e.message));
-      const go = async href => { await page.goto(origin + href); await page.evaluate(() => document.fonts.ready); };
+      const go = async href => {
+        await page.goto(origin + href); await page.evaluate(() => document.fonts.ready);
+        await page.getByRole('banner').waitFor();
+        await expect(page.locator('html')).toHaveAttribute('data-theme-mode', theme);
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        expect(await page.evaluate(() => localStorage.getItem('sc2tools.theme'))).toBe(theme);
+        expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()))
+          .toBe(theme === 'light' ? '244 246 250' : '6 9 14');
+      };
       const complete = async () => { await page.getByRole('button', { name: 'Complete fixture authentication' }).click(); };
       saved = []; vote = 0; config = { v: 2, revision: 0, slots: {} };
       const detail = `/community/builds/blink?theme=${theme}`;
@@ -98,5 +111,5 @@ const server = http.createServer(async (req, res) => {
     }
     expect(unexpected).toEqual([]);
     console.log(JSON.stringify({ checks: checks + 1, contexts: 8, captures: 16, syntheticWrites: writes.length, unexpected }));
-  } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
+  } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

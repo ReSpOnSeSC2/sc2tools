@@ -15,6 +15,12 @@ describe("safeReturnPath", () => {
     expect(safeReturnPath("%2ftry%3fresume%3d1")).toBe("/try?resume=1");
     expect(safeReturnPath(encodeURIComponent(encodeURIComponent("/try?resume=1")))).toBeNull();
   });
+  it("keeps canonical player and archive context without changing the redirect policy", () => {
+    for (const path of ["/players/fixture-player-0123456789?tab=builds", "/players/fixture-player-0123456789/replays?race=P&result=win"]) {
+      expect(safeReturnPath(path)).toBe(path);
+    }
+    expect(returnPathLabel("/players/fixture-player-0123456789?tab=builds")).toBe("Player page");
+  });
   it("uses a friendly page label without publishing a private query or slug", () => {
     expect(returnPathLabel("/guides/PvZ/private-name?secret=value")).toBe("Build guide");
   });

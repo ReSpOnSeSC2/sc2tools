@@ -2,6 +2,54 @@
 
 Roadmap: Wave 5 `auth-return-to-context`; ADR0052.
 
+## Current main integration repair
+
+2026-10-25. Current local base `849f2cdb` merges the preserved `d0c58f5e`
+auth source with actual shared-UI/release main. This section records the new
+integration work; verification numbers below belong to earlier frozen heads.
+Focused checks below pass for these repairs. Final production/browser gates,
+merge and deployment remain pending; no provider operation occurred.
+
+- Community action callables now retain their issuing render identity. Saved
+  callbacks cannot admit an operation after owner/record changes, ABA or
+  unmount, even when the operation has no token lookup of its own. Six new
+  focused cases cover those boundaries and a stale callback competing with
+  the current busy slot. Existing in-flight JWT/body/deadline fences remain.
+- Automatic chrome integration retains Header/AppChrome Appearance dialogs,
+  Light/Dark/System choices, MobileNav's stable close reference and visible
+  focus filtering. The merged unit mocks already preserve compound Clerk
+  menu components together with auth-return search-parameter hooks.
+- The manual auth fixture now models Clerk's compound menu, uses the current
+  theme storage key and explicit mode, and asserts the mounted page's actual
+  resolved palette and CSS background token. Its default captures go to local
+  cache, with `AUTH_SHOTS_DIR` still supported. The original sixteen committed
+  images are preserved; their SHA256 snapshot is a local review artifact.
+  All writes stay synthetic on loopback, external attempts are recorded and
+  blocked, and cleanup also closes the server if browser launch fails.
+- UI lint recognizes AuthContextLink as an anchor, including canonical-module
+  aliases and namespace imports. Exactly seven existing CTA allowances change
+  signatures: six chrome auth wrappers and Save's existing sign-up anchor's
+  new intent callback. File, rule and occurrence counts are unchanged. No
+  allowance, file waiver or rule exception is added. The scoped migration
+  audit is `apps/web/.cache/auth-return-baseline-migrations.json`.
+- Running only the existing canonical `gen-build-variant-ids.mjs` generator
+  yields 198 IDs, including `pvt-dt-rush`, and no semantic generated-file delta.
+  Exact catalog-ID admission remains narrow. The canonical player/archive
+  return-path test is additive; no allowlist expansion or consent bypass.
+
+Verification: 244 checks pass across 18 directly affected suites, covering the
+six new retained-callback cases plus Community/resume/Practice/Welcome/auth
+forms/links/chrome/ThemeChoice and exact definition-ID parity. Full web types,
+strict lint of all seven owned code files, 19 UI-rule regressions and the full
+1,653-source ratchet scan pass. Semantic debt remains 755 occurrences, with no
+new or stale allowance. Current logs are root `.cache/auth-return-repair-*`.
+
+All jobs are closed and the serialized slot is released. The actual local auth
+matrix with cache-only captures and final production build/unchanged budgets
+remain held for root scheduling. Original 16 screenshot hashes remain unchanged.
+Neither obsolete opponent-order nor air temporary script is used. No dossier
+order change is part of this repair.
+
 The web implementation centralizes safe return paths and both Clerk forms'
 forced/cross-form destinations. Header/mobile/app navigation, Community,
 Guides and Reviews preserve allowed public context. Welcome displays the
