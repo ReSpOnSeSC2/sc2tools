@@ -53,6 +53,27 @@ function expectTargets(ids: readonly string[]) {
 describe("actual Settings section owners", () => {
   it("renders Account's native setup health and two summary Sections exactly once", () => {
     mount(<SettingsFoundation />); expectTargets(SETTINGS_SECTIONS.account.map(section => section.id));
+    const list = document.querySelector("#account-summary dl");
+    expect(list).not.toBeNull();
+    const rows = Array.from(list!.children);
+    const pairs = [
+      ["Email", "fixture@example.invalid"],
+      ["Cloud user ID", "synthetic-owner"],
+      ["Games synced", "0"],
+      ["Latest sync", "—"],
+      ["Agent version", "Not paired"],
+    ];
+    expect(rows).toHaveLength(pairs.length);
+    rows.forEach((row, index) => {
+      expect(row.tagName).toBe("DIV");
+      expect(row.parentElement).toBe(list);
+      expect(Array.from(row.children).map(child => child.tagName)).toEqual(["DT", "DD"]);
+      const [term, definition] = Array.from(row.children);
+      expect(term.textContent).toBe(pairs[index][0]);
+      expect(definition.textContent).toContain(pairs[index][1]);
+      expect(term.closest("dl")).toBe(list);
+      expect(definition.closest("dl")).toBe(list);
+    });
   });
   it("renders all six actual Backups owners including its lazy Hidden games Section", async () => {
     mount(<SettingsBackups />);

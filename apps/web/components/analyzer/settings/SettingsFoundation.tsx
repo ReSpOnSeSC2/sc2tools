@@ -159,10 +159,10 @@ function AccountSummary() {
 function SummaryRowItem({ label, value, Icon, mono }: SummaryRow) {
   return (
     <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-bg-elevated px-3 py-2.5">
-      <div className="flex min-w-0 items-center gap-2">
+      <dt className="flex min-w-0 items-center gap-2">
         <Icon className="h-4 w-4 flex-shrink-0 text-text-muted" aria-hidden />
-        <dt className="text-caption text-text-muted">{label}</dt>
-      </div>
+        <span className="text-caption text-text-muted">{label}</span>
+      </dt>
       <dd
         className={[
           "min-w-0 text-right text-body text-text",

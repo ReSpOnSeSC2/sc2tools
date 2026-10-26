@@ -1,6 +1,16 @@
 # Settings PR A remainder — browser repair checkpoint
 
-2026-10-26 current status: replacement production build `201uuBm1gRyndjs6g9lwo` and all12 formal A3 cases pass. The89 A4 retry stopped at fixture setup on a missing Clerk hook export, before UI/HTTP/AA;19 cases remain unrun. The latest framework-boundary/documentation amendment is **UNVALIDATED**. No complete PR A browser matrix or deployed behavior is claimed.
+2026-10-26 current status: the6733 Search retry mounted Account, then stopped on six serious description-list AA findings in its first case;19 cases remain unrun. The latest semantic product/test/documentation amendment is **UNVALIDATED** and requires a new current production artifact. Earlier201uu and original A3 results remain historical proof boundaries; no complete PR A browser matrix or deployed behavior is claimed.
+
+## Latest actual Account AA repair
+
+At6733, narrowed changed-fixture syntax/strict, whole types and source guards are green; current201uu/CSS6bcc/raw assets and original A3 provenance matched before launch. The listed20-case A4 retry reached the real Account body, confirming the Clerk boundary now permits faithful rendering without a real sign-out. Its first Light320 AA scan found six serious nodes: one invalid `definition-list` plus five `dlitem`. A second `div` wrapped each `dt` inside the otherwise valid outer `dl` row group. The case failed,19 cases stayed unrun and no normal capture was produced.
+
+Immutable AA RED receipt SHA `f9da545e964f2e5221fc15c8e9ac274d9db354ebb461b1f4c2a6805aa48917cd` under `.cache/settings-search-current-search-proof-6733ef76/search/first-red-preserved/` retains the full scan (incomplete IDs empty), raw results/log/PNG/trace and cleanup. Four synthetic GETs occurred with zero errors/unknown/writes/rejected/external/native/socket attempts. Case/final listeners and owned Node/Chromium children closed; post-source/current artifact/CSS/40 raw input/nine retained asset/pointer/manifest/sample/Chrome integrity passed. No retry or gate weakening occurred.
+
+Root approved only SettingsFoundation, its already-owned actual ready-case test in `SettingsIndex.targets.test.tsx` and these checkpoints. The existing flex label wrapper changes from `div` to `dt`, and the nested caption changes from `dt` to `span`; all classes, icons, outer list/group row, `dd`, copy controls, labels and values retain their order/behavior. The existing test gains valid direct description-list group ancestry and all five original label/value assertions while retaining target/no-write checks. No API fixture or accessibility allowance changes.
+
+The latest four-path source amendment is unrun; other201 frozen inputs remain identical. After root review/preservation, only the focused target test, types, strict changed product/test and UI rules/scan precede a newly granted current production build/all81 budgets/posttypes/assets. No596/74 repeat. Retain original A3 only after proving new CSS raw bytes and all A3 actual dependencies/fixture/spec unchanged; otherwise rerun it. Search's full20-case proof must use the new artifact. None of that runtime is authorized by this documentation alone.
 
 ## Latest source-only Clerk boundary amendment
 
