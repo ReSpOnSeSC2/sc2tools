@@ -5,6 +5,7 @@ import { ReplayLibrary } from "../ReplayLibrary";
 import { FiltersContext, type AnalyzerFilters } from "@/lib/filterContext";
 import { ToastProvider } from "@/components/ui/Toast";
 vi.mock("next/link", () => ({ default: ({ children, href, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a href={href} {...rest}>{children}</a> }));
+vi.mock("next/navigation", () => import("./navigationFixture"));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "owner", isLoaded: true, isSignedIn: true, getToken: async () => "synthetic" }) }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: ({ children }: { children: React.ReactNode }) => <span>{children}</span> }));
 vi.mock("@/lib/clientApi", async importOriginal => ({ ...(await importOriginal<typeof import("@/lib/clientApi")>()), API_BASE: "https://example.test", apiCall: vi.fn(), useApi: (path: string | null) => ({

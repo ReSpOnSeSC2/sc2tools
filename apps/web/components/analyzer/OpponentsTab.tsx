@@ -13,11 +13,12 @@ import { useLocalStoragePositiveInt, useLocalStorageState } from "@/lib/useLocal
 import {
   groupMatchesSearch,
   groupOpponentsByPlayer,
-  LS_GROUP_BY_PLAYER,
   type OpponentGroup,
   type PulseLinksResponse,
 } from "@/lib/opponentGroups";
 import { useRivals, rivalKeys } from "@/lib/useRivals";
+import { useOpponentScoutingPreference } from "@/lib/useOpponentScoutingPreference";
+import { GroupingPreference } from "./opponents/GroupingPreference";
 import { useRivalSummary } from "@/lib/useRivalSummary";
 import { rivalSummaryGroups } from "@/lib/rivalSummaryGroups";
 import { StarredRivalCards } from "./opponents/StarredRivalCards";
@@ -33,7 +34,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { opponentDossierHref } from "./tabs";
 import { visibleOpponentId } from "./opponentListSort";
-import { useOpponentListNavigation, type MmrImpactFilter, type OpponentListLocation, type OpponentListSnapshot } from "./useOpponentListNavigation";
+import { useOpponentListNavigation, type MmrImpactFilter, type OpponentListLocation, type OpponentListSnapshot, type OpponentListControls } from "./useOpponentListNavigation";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { useAllNetMmrOpponents } from "@/lib/netMmrOpponents";
 import { NoGamesYet, NoOpponentsMatch } from "./EmptyStates";
@@ -69,14 +70,16 @@ export function OpponentsTab({
   location,
   onResultCount,
   onExportAction,
+  controls,
 }: {
   onOpen?: (pulseId: string) => void;
   location?: OpponentListLocation;
   onResultCount?: (count: number) => void;
   onExportAction?: (action: OpponentExportAction | null) => void;
+  controls?: OpponentListControls;
 }) {
   const { filters, dbRev } = useFilters();
-  const { search, setSearch, impact: mmrImpactFilter, setImpact: setMmrImpactFilter, hasNotes, setHasNotes, sort, remember } = useOpponentListNavigation(location);
+  const { search, setSearch, impact: mmrImpactFilter, setImpact: setMmrImpactFilter, hasNotes, setHasNotes, sort, remember } = useOpponentListNavigation(location, controls);
   const rivals = useRivals();
   const [quick, setQuick] = useState<"all" | "regulars" | "week" | "rivals">("all");
   const [columnOverrides, setColumnOverrides] = useLocalStorageState<Partial<OpponentColumns>>("analyzer.opponents.columns", {}, isOpponentColumnOverrides);
@@ -84,11 +87,8 @@ export function OpponentsTab({
   const deferredSearch = useDeferredValue(search);
   const [visibleCount, setVisibleCount] = useState(100);
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_OPP, 1);
-  const [groupByPlayer, setGroupByPlayer] = useLocalStorageState<boolean>(
-    LS_GROUP_BY_PLAYER,
-    true,
-    (raw): raw is boolean => typeof raw === "boolean",
-  );
+  const grouping = useOpponentScoutingPreference();
+  const { groupByPlayer, setGroupByPlayer } = grouping;
   const showPlayerGroups = groupByPlayer || quick === "rivals";
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
     new Set(),
@@ -399,19 +399,7 @@ export function OpponentsTab({
         </label>
         <label className="flex min-h-[44px] items-center gap-2 text-caption text-text-muted"><Toggle checked={hasNotes} onChange={setHasNotes} label="Has notes" /><span>Has notes</span></label>
         {changed ? <Button variant="ghost" size="sm" onClick={reset}>Reset</Button> : null}
-        <label
-          className="flex cursor-pointer items-center gap-2 text-xs text-text-muted"
-          title="Merge accounts linked to the same player into one row"
-        >
-          <Toggle
-            checked={groupByPlayer}
-            onChange={setGroupByPlayer}
-            label="Group same player"
-          />
-          <span className="text-micro uppercase tracking-wider text-text-dim">
-            Group same player
-          </span>
-        </label>
+        <GroupingPreference preference={grouping} />
         <div className="ml-auto flex w-full flex-col items-end gap-1 sm:w-auto">
           <span aria-live="polite" className="text-xs text-text-dim">
             {isRefreshing ? "Updating… · " : isLoadingMore ? `Loading more opponents… (${rawItems.length.toLocaleString()} so far) · ` : ""}

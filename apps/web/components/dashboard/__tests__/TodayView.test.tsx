@@ -1,6 +1,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TodayView } from "../TodayView";
+import { FiltersContext } from "@/lib/filterContext";
+import type { PulseCard } from "@/lib/dailyPulse";
 
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
@@ -41,7 +43,7 @@ vi.mock("@/components/analyzer/DashboardKpiStrip", () => ({
 }));
 
 vi.mock("@/components/analyzer/DailyPulse", () => ({
-  DailyPulse: () => <section data-testid="daily-pulse" />,
+  DailyPulse: ({ hrefForCard }: { hrefForCard?: (card: PulseCard) => string | null }) => <section data-testid="daily-pulse">{hrefForCard ? <a href={hrefForCard({ id: "build", category: "build", tone: "positive", kicker: "Build", title: "Rising build", body: "Recorded", targetTab: "builds", targetQuery: { q: "Forge expand" } }) ?? undefined}>Rising build</a> : null}</section>,
 }));
 
 vi.mock("@/components/analyzer/LadderPulse", () => ({
@@ -61,6 +63,15 @@ afterEach(() => {
 });
 
 describe("TodayView", () => {
+  it("passes contextual Pulse hrefs with the complete current global filter snapshot", () => {
+    render(<FiltersContext.Provider value={{ filters: { race: "P", map: "Global map", accounts: "1-S2-1-42" }, setFilters: vi.fn(), dbRev: 0, bumpRev: vi.fn(), seasons: [] }}><TodayView /></FiltersContext.Provider>);
+    const url = new URL(screen.getByRole("link", { name: "Rising build" }).getAttribute("href")!, "http://fixture.invalid");
+    expect(url.pathname).toBe("/app/builds");
+    expect(url.searchParams.get("q")).toBe("Forge expand");
+    expect(url.searchParams.get("map")).toBe("Global map");
+    expect(url.searchParams.get("accounts")).toBe("1-S2-1-42");
+    expect(url.searchParams.get("filters")).toBe("1");
+  });
   it("places Daily Pulse above Ladder Pulse", async () => {
     render(<TodayView />);
 

@@ -20,8 +20,9 @@
  * state so the loaded corpus can still be collapsed and released.
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowRight, ChevronDown, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { ArrowLeft, ArrowRight, ChevronDown, Loader2 } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { selectDailyPulse, type PulseCard, type PulseTone } from "@/lib/dailyPulse";
 import {
@@ -97,10 +98,12 @@ const TONE_CLASSES: Record<
 export function DailyPulse({
   onNavigate,
   onOpenOpponent,
+  hrefForCard,
 }: {
   onNavigate?: (tab: TabId) => void;
   /** Opens one opponent dossier directly (nemesis / rival cards). */
   onOpenOpponent?: (pulseId: string) => void;
+  hrefForCard?: (card: PulseCard) => string | null;
 }) {
   const seed = useDailySeed();
 
@@ -208,16 +211,7 @@ export function DailyPulse({
       ) : gamesRes.error ? (
         <DailyPulseStatus failed onRetry={loadPulse} />
       ) : selection.cards.length > 0 ? (
-        <div className="flex snap-x gap-3 overflow-x-auto pb-1">
-          {selection.cards.map((card) => (
-            <PulseCardView
-              key={card.id}
-              card={card}
-              onNavigate={onNavigate}
-              onOpenOpponent={onOpenOpponent}
-            />
-          ))}
-        </div>
+        <PulseCarousel cards={selection.cards} onNavigate={onNavigate} onOpenOpponent={onOpenOpponent} hrefForCard={hrefForCard} />
       ) : (
         <p className="px-1 py-1 text-xs text-text-dim">
           No replay insights yet. More games will unlock your daily pulse.
@@ -302,29 +296,20 @@ function DailyPulseGate({ onLoad }: { onLoad: () => void }) {
       aria-label="Daily Pulse"
       className="overflow-hidden rounded-xl border-2 border-line bg-bg-surface shadow-hard"
     >
-      <button
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0 flex-1 basis-56">
+          <h2 className="text-caption font-semibold text-text">Daily Pulse</h2>
+          <p className="mt-1 text-caption text-text-muted">See today’s insights from your replays: streaks, rising builds, nemesis sightings</p>
+        </div>
+        <button
         type="button"
         onClick={onLoad}
         aria-expanded={false}
-        className="flex min-h-[48px] w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+        className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 text-caption font-semibold text-accent transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
       >
-        <span className="flex min-w-0 items-center gap-2.5">
-          <span aria-hidden className="relative flex h-2 w-2 flex-shrink-0">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-accent opacity-60 motion-safe:animate-ping" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
-          </span>
-          <span className="text-caption font-semibold text-text">
-            Daily Pulse
-          </span>
-          <span className="truncate text-micro text-text-dim">
-            Replay insights, loaded when you open them
-          </span>
-        </span>
-        <span className="inline-flex flex-shrink-0 items-center gap-1 text-micro font-semibold text-accent">
-          Load
-          <ArrowRight aria-hidden className="h-3 w-3" />
-        </span>
-      </button>
+        Show insights <ArrowRight aria-hidden className="h-4 w-4" />
+        </button>
+      </div>
     </section>
   );
 }
@@ -345,7 +330,7 @@ function DailyPulseStatus({
         <button
           type="button"
           onClick={onRetry}
-          className="inline-flex min-h-[36px] items-center justify-center rounded-full border border-line bg-bg-surface px-3 text-micro font-semibold text-accent transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="inline-flex min-h-11 items-center justify-center rounded-full border border-line bg-bg-surface px-3 text-micro font-semibold text-accent transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           Try again
         </button>
@@ -367,10 +352,12 @@ function PulseCardView({
   card,
   onNavigate,
   onOpenOpponent,
+  hrefForCard,
 }: {
   card: PulseCard;
   onNavigate?: (tab: TabId) => void;
   onOpenOpponent?: (pulseId: string) => void;
+  hrefForCard?: (card: PulseCard) => string | null;
 }) {
   const tone = TONE_CLASSES[card.tone];
   // Opponent cards deep-link into the player's dossier; every other
@@ -384,7 +371,8 @@ function PulseCardView({
       ? () => onNavigate(card.targetTab as TabId)
       : null;
   const onOpen = openOpponent ?? openTab;
-  const clickable = onOpen !== null;
+  const href = hrefForCard?.(card);
+  const clickable = !!href || onOpen !== null;
   const body = (
     <>
       <div className="flex items-start justify-between gap-3">
@@ -422,18 +410,56 @@ function PulseCardView({
     </>
   );
 
-  const baseClass = `w-[280px] flex-shrink-0 snap-start rounded-lg border border-border border-l-4 ${tone.border} bg-bg-elevated/60 px-3.5 py-3 sm:w-[300px]`;
+  const baseClass = `w-[280px] max-w-full flex-shrink-0 snap-start rounded-lg border border-border border-l-4 ${tone.border} bg-bg-elevated/60 px-3.5 py-3 sm:w-[300px]`;
 
+  const interactiveClass = `${baseClass} block text-left transition-colors hover:border-accent hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface`;
+  if (href) return <Link href={href} data-pulse-card className={interactiveClass}>{body}</Link>;
   if (onOpen) {
     return (
       <button
         type="button"
         onClick={onOpen}
-        className={`${baseClass} text-left transition-colors hover:border-accent hover:bg-bg-elevated`}
+        data-pulse-card
+        className={interactiveClass}
       >
         {body}
       </button>
     );
   }
-  return <article className={baseClass}>{body}</article>;
+  return <article data-pulse-card className={baseClass}>{body}</article>;
+}
+
+function PulseCarousel({ cards, ...navigation }: { cards: PulseCard[] } & Pick<Parameters<typeof PulseCardView>[0], "onNavigate" | "onOpenOpponent" | "hrefForCard">) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ index: 0, start: true, end: false });
+  const key = cards.map(card => card.id).join("|");
+  useEffect(() => {
+    const root = scroller.current; if (!root) return;
+    const children = Array.from(root.children) as HTMLElement[];
+    const ratios = new Map<Element, number>();
+    const update = () => {
+      const left = root.getBoundingClientRect().left;
+      const visible = children.map((child, index) => ({ index, ratio: ratios.get(child) ?? 0, distance: Math.abs(child.getBoundingClientRect().left - left) }))
+        .filter(child => child.ratio > 0).sort((a, b) => a.distance - b.distance);
+      setPosition(previous => ({ index: visible[0]?.index ?? previous.index, start: root.scrollLeft <= 2, end: root.scrollLeft + root.clientWidth >= root.scrollWidth - 2 }));
+    };
+    root.scrollTo?.({ left: 0, behavior: "auto" }); setPosition({ index: 0, start: true, end: false }); update();
+    const observer = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(entries => { entries.forEach(entry => ratios.set(entry.target, entry.intersectionRatio)); update(); }, { root, threshold: [0, .25, .5, .75, 1] });
+    children.forEach(child => observer?.observe(child));
+    root.addEventListener("scroll", update, { passive: true }); window.addEventListener("resize", update);
+    return () => { observer?.disconnect(); root.removeEventListener("scroll", update); window.removeEventListener("resize", update); };
+  }, [key]);
+  const scroll = (direction: -1 | 1) => {
+    const root = scroller.current; if (!root) return;
+    const first = root.children[0] as HTMLElement, second = root.children[1] as HTMLElement;
+    const step = second ? second.offsetLeft - first.offsetLeft : first?.clientWidth || root.clientWidth;
+    root.scrollTo({ left: Math.max(0, root.scrollLeft + direction * step), behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  };
+  const arrowClass = "hidden h-11 w-11 items-center justify-center rounded-full border border-line text-accent disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 md:inline-flex";
+  return <div className="space-y-2">
+    <div className="flex items-center justify-end gap-2"><span aria-live="polite" aria-atomic="true" className="mr-1 text-caption text-text-muted">{position.index + 1} of {cards.length}</span><button type="button" aria-label="Previous insight" disabled={position.start} onClick={() => scroll(-1)} className={arrowClass}><ArrowLeft aria-hidden className="h-4 w-4" /></button><button type="button" aria-label="Next insight" disabled={position.end} onClick={() => scroll(1)} className={arrowClass}><ArrowRight aria-hidden className="h-4 w-4" /></button></div>
+    <div ref={scroller} role="region" aria-label="Daily Pulse insights" aria-roledescription="carousel" tabIndex={0} style={{ scrollPaddingInline: "0.25rem" }} className="flex snap-x snap-mandatory gap-3 overflow-x-auto p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onKeyDown={event => { if (event.target === event.currentTarget && ["ArrowLeft", "ArrowRight"].includes(event.key)) { event.preventDefault(); scroll(event.key === "ArrowLeft" ? -1 : 1); } }}>
+      {cards.map(card => <PulseCardView key={card.id} card={card} {...navigation} />)}
+    </div>
+  </div>;
 }

@@ -56,6 +56,11 @@ corresponding GitHub Release.
 - Analyzer tables now support keyboard build opening, global matchup chips, a matchup-scoped heatmap and a Strategy games sheet that stays open as filters change. CSV exports save the displayed Builds, Strategy pairs, Matchups, Maps and pool cells with their scope and local date.
 - Live scouting on Today and a large second-screen page reuse your recorded opponent history, with bounded opening counts, recent replay links and an exact-account note popover. The Stream Dock Scout view omits private notes and replay/account actions.
 - Ghost practice assignments now sync to your account, with Practice actions on build and guide pages, a quick-disarm chip, explicit browser migration and a permanent OBS coach URL. Legacy Ghost links remain compatible; native Companion controls stay separate.
+- Analyzer links keep section searches, replay controls and pages, Strategy sheets, Arcade tabs and focused maps. Replay history has compact controls and a date jump; Daily Pulse offers keyboard carousel arrows and links directly to the relevant build, map or opponent.
+
+### Linked scouting and opening forecasts
+
+- Save same-player grouping across devices and recognise approved or already-cached alternate accounts in live scouting. Dossier, live and desktop briefs share a deterministic opening forecast with confidence, sample size and count-based explanations; missing or incomplete history stays explicit.
 
 ### PvZ air opening timing
 

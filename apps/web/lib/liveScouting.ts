@@ -1,5 +1,6 @@
 import type { LiveGameEnvelope } from "@/components/overlay/types";
 import { resolveLiveOpponentMmr } from "@/components/overlay/liveGameOpponentMmr";
+import { parseOpeningForecast, scoutingAliases, type OpeningForecast } from "./openingForecast";
 
 const text = (value: unknown, max = 160) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const count = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
@@ -12,9 +13,10 @@ export type DockScouting = {
   h2h: { wins: number; losses: number } | null; enriched: boolean;
   rival: string; rematch: boolean; openings: { name: string; samples: number; of: number }[];
   answer: string; cheese: number | null;
+  forecast?: OpeningForecast | null; alsoPlaysAs?: string[];
 };
 
-/** New object, explicit stream-safe allowlist. No notes, identities or replay links. */
+/** New object, explicit stream-safe allowlist. No notes, identity ids or replay links. */
 export function projectDockScouting(live: LiveGameEnvelope | null): DockScouting | null {
   if (!liveScoutingActive(live)) return null;
   const opponent = record(live?.opponent), history = matchedHistory(live);
@@ -36,6 +38,8 @@ export function projectDockScouting(live: LiveGameEnvelope | null): DockScouting
     rival: Object.keys(record(history.rival)).length ? record(history.rival).starred === true || (wins ?? 0) + (losses ?? 0) >= 6 ? "Rival" : "Familiar" : "",
     rematch: record(history.rematch).isRematch === true,
     openings, answer: text(record(history.bestAnswer).build),
+    forecast: history.openingForecast !== undefined ? parseOpeningForecast(history.openingForecast) : undefined,
+    alsoPlaysAs: scoutingAliases(history.alsoPlaysAs),
     cheese: typeof cheese === "number" && Number.isFinite(cheese) && cheese >= .4 && cheese <= 1 ? cheese : null,
   };
 }

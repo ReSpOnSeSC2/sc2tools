@@ -17,9 +17,9 @@ it("reads explicit URL state over storage and debounces only the query while pre
   act(() => result.current.setSearch("Beta"));
   act(() => vi.advanceTimersByTime(299)); expect(location.replace).not.toHaveBeenCalled();
   act(() => vi.advanceTimersByTime(1));
-  expect(location.replace).toHaveBeenLastCalledWith("/app/opponents?q=Beta&sort=name&dir=asc&impact=tracked&notes=1&future=keep");
+  expect(location.replace).toHaveBeenLastCalledWith("/app/opponents?q=Beta&sort=name%3Aasc&impact=tracked&notes=1&future=keep");
   act(() => result.current.sort.setSortExplicit("wins", "desc"));
-  expect(location.replace).toHaveBeenLastCalledWith("/app/opponents?q=Beta&sort=wins&impact=tracked&notes=1&future=keep");
+  expect(location.replace).toHaveBeenLastCalledWith("/app/opponents?q=Beta&sort=wins%3Adesc&impact=tracked&notes=1&future=keep");
   expect(JSON.parse(localStorage.getItem("analyzer.opponents.sort")!)).toEqual({ sortBy: "wins", sortDir: "desc" });
 });
 it("applies browser Back URL state without briefly rewriting it with the previous controls", () => {
@@ -67,6 +67,13 @@ it("omits defaults and ignores invalid URL enum values without removing future p
   expect(readOpponentListQuery("sort=invalid&dir=invalid&impact=invalid")).toEqual(readOpponentListQuery(""));
   for (const listUrl of ["https://elsewhere.example/app/opponents?q=x", "/app/settings"]) {
     sessionStorage.setItem("opponents:list-state", JSON.stringify({ listUrl })); expect(storedOpponentListUrl()).toBe("/app/opponents");
+  }
+});
+it.each(["region", "lastResult", "lastGameLength", "avgGameLength", "map", "myBuild", "opponentBuild", "macroBreakdown", "avgMacroScore", "buildOrderDate"])("retains the added %s column sort in canonical and legacy list URLs", column => {
+  for (const query of [`sort=${column}%3Aasc`, `sort=${column}&dir=asc`]) {
+    const state = readOpponentListQuery(query);
+    expect(state.sort).toBe(column); expect(state.dir).toBe("asc");
+    expect(writeOpponentListQuery("future=keep&dir=desc", state)).toBe(`future=keep&sort=${column}%3Aasc`);
   }
 });
 it("renders shared revealed chips at both sizes without calling an unverified Pulse label confirmed", () => {
