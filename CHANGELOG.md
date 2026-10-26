@@ -15,6 +15,7 @@ corresponding GitHub Release.
 
 - Compare Total, Minerals or Gas under Bank in the Macro timeline. Show both players' resource breakdown at the inspected time and in the hover card, keeping missing resources unknown.
 - Remember the Bank view separately from the selected metric mix. Switching resource views keeps the selected game time and roster in place.
+- Improve contrast of the roster Army caption with the same neutral text used by other roster labels.
 
 ### Optional personal chart cache
 

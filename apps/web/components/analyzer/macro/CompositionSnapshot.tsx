@@ -415,7 +415,6 @@ function PlayerStrip({
     side === "me"
       ? "border-player-you/50 bg-player-you/[0.04]"
       : "border-player-opp/50 bg-player-opp/[0.04]";
-  const labelTone = side === "me" ? "text-player-you" : "text-player-opp";
 
   return (
     <section
@@ -437,7 +436,7 @@ function PlayerStrip({
         </span>
         <span className="flex items-baseline gap-2 tabular-nums text-text-muted">
           <span>
-            <span className={`mr-1 text-micro uppercase tracking-wider ${labelTone}`}>
+            <span className="mr-1 text-micro uppercase tracking-wider text-text-muted">
               army
             </span>
             <span className="font-semibold text-text">

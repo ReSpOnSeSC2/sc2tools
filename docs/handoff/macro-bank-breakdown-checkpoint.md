@@ -1,41 +1,38 @@
 # Macro Bank breakdown
 
-2026-10-26. Source-only work on `codex/fix-macro-bank-breakdown`, based on
-`dce88719d3fe9faeaab82786dfd0a95279bb4b20`. Source repair follows the first
-whole-web typecheck described below; subsequent checks remain pending.
+2026-10-26. `codex/fix-macro-bank-breakdown`, based on `dce88719`.
 
-Bank remains one metric in the existing multi-select/All controls. When Bank is
-selected, Total, Minerals and Gas choose which two player lines are plotted.
-New device preferences default to Total; the validated resource choice is saved
-separately from the existing metric mix. Both modal and full-game Macro share
-this chart path.
+Bank offers Total (default), Minerals and Gas within the existing metric
+multi-select/All controls. Its validated device preference is saved separately.
+The selected-time panel and hover card show all three values for both players
+from the roster's prior sample. Components stay independent; Total requires
+both. Measured zero remains zero and missing/invalid data stays unknown.
+Changing resource view preserves inspection time, roster and existing in-place
+graph seeking. Modal and full-game Macro share this implementation.
 
-The selected-time panel and hover card show Total, Minerals and Gas for each
-player, all from the same prior stats sample as the roster. Valid individual
-components remain visible when the other is absent; Total requires both.
-Zero is a measured value. Missing, negative or nonfinite components remain
-unknown. No API, engine or native payload change is required.
+The roster Army caption now uses the existing neutral text utility for both
+sides; colored card borders and numeric values are unchanged. This repairs the
+first browser accessibility failure without requiring a new CSS utility.
 
-View changes do not alter inspection/seek callbacks. Existing graph taps and
-scrubs still use the previously shipped in-place clock/roster behavior.
-Explicit replay links keep their existing behavior.
+Validation at `67131607`: whole-web types passed; UI rules 19/19 and the
+unchanged ratchet passed; focused web tests 108/108 and Help tests 46/46 passed.
+Strict lint retained one source-supported inherited Supply blocks label warning
+as a separate raw exit1. The host direct Next build generated 145 pages; all 81
+unchanged route budgets, post-build types and own asset pre/post checks passed.
+Build `wRb84uDIwOd8STObHsL8o` preserves canonical source 40, retained assets 9 and
+sample games 4. No API, engine or agent release changes are needed.
 
-The 13-path scope consists of eight shared macro product files, two existing
-focused test files, the existing game-page Help article, changelog and this
-checkpoint. Raw before copies are preserved in
-`.cache/macro-bank-before-dce88719/`, receipt SHA
-`c38f963ec41cdf3b371575ec87fc8ba75d8a6c76396383fbf577f0a9cbc64bb5`.
-No new article path was added, so Help index generation is unnecessary.
+The first shared-chart browser run stopped at light320 Total: one serious
+contrast issue on the existing opponent Army caption (4.34:1); three cases did
+not run. Its fixture closed with 12 loopback GETs, no unknown/writes and no live
+owned listener. The caption repair still needs its focused check and a fresh
+four-case browser run. Reusing the accepted 671 CSS must be recorded as an
+explicit source/CSS bridge; it is not a build of the subsequent repair commit.
+This fixture does not establish fresh full-game/modal E2E coverage. Missing,
+zero and invalid resource cases are unit evidence.
 
-Authored checks cover individual/total values, missing/invalid/zero samples,
-prior-sample alignment, resource-specific layout scales, validated preference
-recovery, independent saved choices, view-switch selection stability and
-unchanged graph-seek behavior. Whole-web types at commit `17e3b95d` returned
-eight TS2769 errors, all from new role-query options in the focused chart test.
-The raw first RED is preserved in
-`.cache/macro-bank-static-prep-17e3b95d/results/Types/`. The source repair removes
-only those eight unsupported `exact: true` options; their string role names
-already match exactly. All assertions, fixtures, mocks and product code remain
-unchanged. No rerun has occurred. Focused lint, unit/Help checks, production
-build/budgets and a current-CSS browser check remain pending the parent's
-serialized runtime grant.
+First failures remain under `.cache/macro-bank-static-prep-17e3b95d/results/Types/`,
+`.cache/macro-bank-build-prep-67131607/first-red-receipt.json` (sandbox EPERM),
+and `.cache/macro-bank-browser-67131607/first-red-browser-receipt.json`.
+The shipped scope is 14 paths including the existing CompositionSnapshot file.
+No new Help path was added, so Help index generation is unnecessary.
