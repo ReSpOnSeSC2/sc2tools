@@ -172,3 +172,19 @@ Mobile attachment serialized its in-memory `errors` array; that attachment
 omits it while the browser directly asserts it. The parser now respects the
 existing attachment shape; its original diagnostic log/script are retained.
 No unit, build or browser RED, source repair or extra production build occurred.
+
+## Reconcile the merged Settings A1 pack
+
+Settings A1 is merged as d7582739cbb53f7aa624243aee89c216b7f41308.
+Site integration16acb412 preserves both changelog sections and the newer Site
+proof in the active checkpoint; original conflict files are retained in
+`.cache/site-main-d758-before/`. All seven Site code/test/baseline paths match
+the integrated Glossary build D9T5fuaCZvToiTep7n6oW in canonical source content.
+Six also match raw bytes; the fixture has only the existing LF/CRLF checkout
+difference, and committed-blob diff is empty. No Site product change occurred.
+
+The earlier663de55c exact-head GitHub web/browser checks both passed. Automatic
+Preview dae2812 was visibly Ready with the same product source;663 only added
+proof-document corrections. New integration-head checks remain required.
+Subsequent hosting requests reached the existing daily100-deployment limit;
+there is no new Site production claim, plan upgrade or further preview retry.
