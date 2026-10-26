@@ -1,4 +1,18 @@
-# Settings PR A remainder — source-only checkpoint
+# Settings PR A remainder — browser repair checkpoint
+
+2026-10-26 current status: the combined e82 static/build proof below is complete for its historical artifact, while the first A3 browser case failed and A4 Search remains unrun. The latest approved AA/map source repair is **UNVALIDATED**. No complete browser matrix, deployed behavior or final production artifact is claimed; root owns the next source preservation and replacement validation grant.
+
+## Combined proof and first browser failure
+
+Frozen source `e82de609cfd7cc86b636e36ba1535c07779eb187` passed591/591 checks in73 literal files, whole-web types,79 strict-clean files and a separate nine-file/14 proven inherited-warning audit, deterministic no-write Help92, and UI19/1706 files/639 existing occurrences. Production artifact `SzF81SEgOj5e0SOazGe6R` generated145 pages and passed all81 unchanged budgets, postbuild types and asset/source checks. Four production CSS files were retained under inventory SHA `d9d0dc61e549f23520b84e0e45c40b1e5b0798f94411b782c56b8c0c06be919d`. This artifact is historical after the approved product markup changes; it cannot prove the repaired source.
+
+One Light320 A3 case failed before Search started. The shared serious/critical scan retained26 serious findings:23 labelled RaceIcon spans missing a graphic role, two color-only inline agent links, and one scrollable theme preview without keyboard access. An exact unknown public Alcyone map-image request was also preserved in the strict failure ledger. A3's other11 cases and all20 A4 cases were unrun. Root approved narrow source repairs without weakening full AA, cases, assertions, transport rejection or any allowance.
+
+First-RED receipt `.cache/settings-search-union-proof-308896ba/sections/first-red-preserved/receipt.json` (SHA `1440f9570f7d70d8d7ec64aa5a853e8b06b91a9ceee7dfd952760960c7334e91`) retains raw AA, screenshot/trace references,13 synthetic API GETs and one exact unknown map GET. Zero writes, rejected writes, external or native attempts occurred; the listener and both synthetic sockets closed, with no drain error. No second matrix ran. The complete ten-path before snapshot is `.cache/settings-search-aa-map-repair-e82/before.json`, SHA `cd5d7df4a393510eefb9b295d6375cd998679a5f2da5c29abd2730000ece259d`.
+
+The approved source-only repair is limited to four markup files, two existing semantic tests, both existing browser fixtures and these two checkpoints. RaceIcon retains its canonical name and decorative image/fallback inside a valid image role. The two agent links gain resting underline. The existing theme preview gains a named focusable region and normal focus-visible styling. Fixtures serve only the exact anonymous local empty-body `GET /v1/map-image?map=Alcyone%20LE` from the committed44,558-byte Alcyone WebP, SHA `eec73e40ffb44867a3026f9c555bebd2dc942256723a5126f7ca1fa7feef9d51`, recorded separately from private API GETs. Other map/query/method/auth requests stay denied. Feature ownership expands64→67 only for WidgetShell, its existing test and the existing Theme test. No API, native, MapArtwork, token, ownership or guard behavior changes; no repaired-source runtime has run.
+
+## Historical source-authoring checkpoint
 
 Workspace: `C:\SC2TOOLS\.worktrees\wave3-owner-neighbors`; branch supplied by root: `codex/wave5-settings-search`; base supplied by root: `0b0021114e608e539e50996ece36d00fed1eb5cb`.
 

@@ -1,4 +1,18 @@
-# Settings sections — A3 first-static checkpoint
+# Settings sections — combined browser repair checkpoint
+
+2026-10-26 current status: the combined PR A browser attempt stopped on its first Light320 Overlay case. A4 Search was not started. The approved accessibility and exact public-map fixture repairs below are **source-only and unvalidated**. Root owns source preservation, the replacement artifact, validation and delivery; no deployed behavior or completed browser matrix is claimed.
+
+## Combined static/build boundary and first browser RED
+
+At integrated source `e82de609cfd7cc86b636e36ba1535c07779eb187`, the combined static pack passed591/591 checks across73 literal files, whole-web types,79 strict-clean files, a separate nine-file/14 inherited-warning audit, pure no-write Help92 and UI19/1706 scanned files/639 existing occurrences. The completed production artifact `SzF81SEgOj5e0SOazGe6R` generated145 pages and passed all81 unchanged budgets, postbuild types, source and retained-asset checks. Those results describe that frozen source; the artifact becomes historical after the subsequent product markup repair.
+
+The first browser run recorded one failed case and11 unrun A3 cases, with A4 entirely unrun. Its one shared serious/critical AA scan found26 serious nodes:23 race-icon wrappers carried an accessible label without a valid graphic role, two inline agent links were distinguished only by color, and the horizontally scrollable theme preview had no keyboard focus target. The strict transport ledger also caught the legitimate anonymous sample-map GET `/v1/map-image?map=Alcyone%20LE`, absent from the fixture contract. No gate, allowance, assertion or planned case was weakened.
+
+The immutable first-RED packet is `.cache/settings-search-union-proof-308896ba/sections/first-red-preserved/receipt.json`, SHA `1440f9570f7d70d8d7ec64aa5a853e8b06b91a9ceee7dfd952760960c7334e91`; raw AA, failed screenshot, trace and all cleanup attachments remain beside it. It records13 synthetic API GETs, one unknown map request, zero writes/rejected writes/external/native attempts, both synthetic sockets disconnected, and the listener closed with no drain error. The extra global Playwright notice only reports stopping at the first allowed failure. All owned runtime was closed before repairs.
+
+Root approved exactly ten existing repair paths after before-file preservation under `.cache/settings-search-aa-map-repair-e82/`. Four product edits give the existing named RaceIcon wrapper `role="img"`, add resting underline only to the two inline agent links, and make the existing theme preview a named keyboard-focusable region with standard focus-visible styling. Two existing tests cover the graphic's canonical/error/missing-race names and native focus on the unchanged three-widget preview. Both existing browser fixtures admit only the exact anonymous, empty-body local Alcyone image GET with committed file size/SHA verification and a separate public-image ledger; all other map requests remain denied. These sources and this documentation have not run. Three newly owned existing files expand the feature manifest64→67; token authority, guards, calculations, API and MapArtwork remain unchanged.
+
+## Historical A3 first-static checkpoint
 
 2026-10-26. The A3 section-navigation part of canonical `find-anything` PR A has passed first-static validation. Settings field search remains the separate A4 source pack. Root will deliver both through one combined PR A build/browser matrix; no A3 production build or browser proof is claimed. Global search and the whole roadmap remain incomplete. Root owns Git, scheduling and delivery.
 

@@ -390,7 +390,10 @@ export function OverlayThemePreview({ theme }: { theme: OverlayTheme }) {
       </div>
       <div
         data-testid="overlay-theme-preview"
-        className="ov-theme-preview relative overflow-x-auto rounded-lg border border-border p-4"
+        role="region"
+        aria-label="Overlay theme sample preview"
+        tabIndex={0}
+        className="ov-theme-preview relative overflow-x-auto rounded-lg border border-border p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         style={{ ...CHECKERBOARD, ...vars } as CSSProperties}
       >
         <style>{PREVIEW_CSS}</style>

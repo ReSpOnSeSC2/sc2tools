@@ -94,7 +94,7 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
               the desktop{" "}
               <a
                 href="/devices"
-                className="text-accent-cyan underline-offset-2 hover:underline"
+                className="text-accent-cyan underline underline-offset-2 hover:underline"
               >
                 agent
               </a>{" "}

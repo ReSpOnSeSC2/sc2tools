@@ -1,6 +1,7 @@
 import { build } from "esbuild";
+import { createHash } from "node:crypto";
 import { createServer } from "node:http";
-import { readFile, readdir } from "node:fs/promises";
+import { open, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 let server, origin = "", active;
@@ -37,7 +38,7 @@ async function startServer() {
         request.resume(); response.writeHead(403); response.end(); return;
       }
       const chunks = []; for await (const chunk of request) chunks.push(chunk);
-      const value = await active.respond(new URL(request.url ?? "/", origin), request.method ?? "", Buffer.concat(chunks).toString("utf8"), request.headers.authorization ?? "");
+      const value = await active.respond(new URL(request.url ?? "/", origin), request.method ?? "", Buffer.concat(chunks).toString("utf8"), request.headers.authorization);
       serverRequests.push({ method: request.method, path: request.url });
       if (!response.destroyed) { response.writeHead(value.status ?? 200, { "content-type": value.contentType, "cache-control": "no-store" }); response.end(value.body); }
     } catch (error) { active?.errors.push(String(error)); if (!response.destroyed) { response.writeHead(500); response.end(); } }
@@ -58,6 +59,27 @@ export async function closeSettingsSearchFixtureServer() {
   const current = server; server = null;
   if (current) await new Promise(resolve => { current.close(resolve); current.closeAllConnections(); });
   const receipt = { closed: true, listening: current?.listening ?? false, requests: serverRequests.splice(0), http, drainError }; origin = ""; return receipt;
+}
+
+const PUBLIC_MAP_IMAGE_BYTES = 44558;
+const PUBLIC_MAP_IMAGE_SHA256 = "eec73e40ffb44867a3026f9c555bebd2dc942256723a5126f7ca1fa7feef9d51";
+
+async function readPublicMapImage(cwd) {
+  const file = await open(path.join(cwd, "../replay-engine/data/map-images/alcyone_le.webp"), "r");
+  try {
+    const metadata = await file.stat();
+    if (!metadata.isFile() || metadata.size !== PUBLIC_MAP_IMAGE_BYTES) throw new Error("Pinned public map image size changed");
+    const buffer = Buffer.alloc(PUBLIC_MAP_IMAGE_BYTES + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const { bytesRead } = await file.read(buffer, length, buffer.length - length, length);
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    const pixels = buffer.subarray(0, length);
+    if (length !== PUBLIC_MAP_IMAGE_BYTES || createHash("sha256").update(pixels).digest("hex") !== PUBLIC_MAP_IMAGE_SHA256) throw new Error("Pinned public map image content changed");
+    return pixels;
+  } finally { await file.close(); }
 }
 
 async function assets(mode) {
@@ -91,7 +113,7 @@ export async function openSettingsSearchFixture(page, theme, options = {}) {
   const { script, css, cssNames, fonts, buildId, cwd } = built;
   const initialHref = options.initialHref ?? "/settings?tab=account";
   if (!["/settings?tab=account", "/settings?tab=profile#public-profile", "/settings?tab=backups", "/settings?tab=import", "/settings?tab=overlay&section=look#theme"].includes(initialHref)) throw new Error("Unknown fixture entry");
-  const errors = [], unexpectedRequests = [], rejectedWrites = [], externalAttempts = [], reads = [], writes = [], images = [], iframes = [], popupLoads = [], abortedResponses = [];
+  const errors = [], unexpectedRequests = [], rejectedWrites = [], externalAttempts = [], reads = [], writes = [], images = [], publicImages = [], iframes = [], popupLoads = [], abortedResponses = [];
   const flights = new Set(), releases = [];
   let holdTokenRead = !!options.holdTokenRead;
   let holdProfileRead = !!options.holdProfileRead, holdMeRead = !!options.holdMeRead;
@@ -99,9 +121,15 @@ export async function openSettingsSearchFixture(page, theme, options = {}) {
   const json = value => ({ contentType: "application/json", body: JSON.stringify(value) });
   const denied = status => ({ status, contentType: "text/plain", body: "Unadmitted synthetic request" });
   const html = body => ({ contentType: "text/html", body: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local scene</title></head><body>${body}</body></html>` });
-  const respond = async (url, method, _body = "", authorization = "") => {
+  const respond = async (url, method, body = "", authorization) => {
     if (url.origin !== origin) { externalAttempts.push(`${method} ${url.origin}${url.pathname}${url.search}`); if (method !== "GET") rejectedWrites.push(`${method} ${url.pathname}${url.search}`); return denied(403); }
     if (method !== "GET") { rejectedWrites.push(`${method} ${url.pathname}${url.search}`); unexpectedRequests.push(`${method} ${url.pathname}${url.search}`); return denied(405); }
+    if (url.pathname === "/v1/map-image") {
+      if (url.search !== "?map=Alcyone%20LE" || url.hash || authorization !== undefined || body !== "") { unexpectedRequests.push(`${method} ${url.pathname}${url.search}`); return denied(405); }
+      const pixels = await readPublicMapImage(cwd);
+      publicImages.push({ method, path: url.pathname, query: url.search, anonymous: true, bytes: pixels.length, sha256: PUBLIC_MAP_IMAGE_SHA256 });
+      return { contentType: "image/webp", body: pixels };
+    }
     if (!url.search && !url.hash) {
       if (url.pathname === "/fixture.js") return { contentType: "text/javascript", body: script };
       if (url.pathname === "/fixture.css") return { contentType: "text/css", body: css };
@@ -163,7 +191,7 @@ export async function openSettingsSearchFixture(page, theme, options = {}) {
     unexpectedRequests.push(`${method} ${url.pathname}${url.search}`); return denied(405);
   };
   const releaseAll = async () => { releases.splice(0).forEach(resolve => resolve()); await Promise.all([...flights]); };
-  const snapshot = () => JSON.parse(JSON.stringify({ errors, unexpectedRequests, rejectedWrites, externalAttempts, reads, writes, images, iframes, popupLoads, abortedResponses, cssNames, buildId, mode, admin: !!options.admin }));
+  const snapshot = () => JSON.parse(JSON.stringify({ errors, unexpectedRequests, rejectedWrites, externalAttempts, reads, writes, images, publicImages, iframes, popupLoads, abortedResponses, cssNames, buildId, mode, admin: !!options.admin }));
   active = { respond, errors, externalAttempts, releaseAll, snapshot };
   const watch = candidate => candidate.on("pageerror", error => errors.push(error.message)); watch(page); page.context().on("page", watch);
   await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
@@ -203,7 +231,7 @@ export async function openSettingsSearchFixture(page, theme, options = {}) {
   await page.context().route("**/*", async route => {
     const request = route.request();
     const flight = (async () => {
-      const value = await respond(new URL(request.url()), request.method(), request.postData() ?? "", (await request.allHeaders()).authorization ?? "");
+      const value = await respond(new URL(request.url()), request.method(), request.postData() ?? "", (await request.allHeaders()).authorization);
       if (value.status === 403 || value.status === 405) return route.abort();
       await route.fulfill({ ...value, headers: { "cache-control": "no-store" } }).catch(error => {
         if (request.failure()?.errorText.includes("ERR_ABORTED")) abortedResponses.push({ method: request.method(), path: new URL(request.url()).pathname });
@@ -213,7 +241,7 @@ export async function openSettingsSearchFixture(page, theme, options = {}) {
     flights.add(flight); try { await flight; } finally { flights.delete(flight); }
   });
   await page.goto(origin + initialHref); await page.getByRole("heading", { level: 1, name: "Settings", exact: true }).waitFor(); await page.evaluate(() => document.fonts.ready);
-  return { errors, unexpectedRequests, rejectedWrites, externalAttempts, reads, writes, images, iframes, popupLoads, abortedResponses, cssNames, buildId, releaseAll,
+  return { errors, unexpectedRequests, rejectedWrites, externalAttempts, reads, writes, images, publicImages, iframes, popupLoads, abortedResponses, cssNames, buildId, releaseAll,
     holdNextTokenRead: () => { holdTokenRead = true; },
     releaseTokenReads: () => { releases.splice(0).forEach(resolve => resolve()); },
     releaseReads: () => { releases.splice(0).forEach(resolve => resolve()); },
