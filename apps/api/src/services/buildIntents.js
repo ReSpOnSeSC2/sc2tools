@@ -31,6 +31,7 @@ class BuildIntentsService {
    *   perGame?: import('./perGameCompute').PerGameComputeService|null,
    *   logger?: import('pino').Logger|null,
    *   now?: () => number,
+   *   userRevision?: import('../util/userRevision').UserRevision,
    * }} [opts]
    */
   constructor(db, opts = {}) {
@@ -41,7 +42,7 @@ class BuildIntentsService {
       overlayTokens: db.overlayTokens,
       logger: opts.logger || null,
     });
-    const shared = { db, options: this.options, notifier: this.notifier, now };
+    const shared = { db, options: this.options, notifier: this.notifier, now, userRevision: opts.userRevision };
     this.live = new BuildIntentLive({
       ...shared,
       broker: opts.liveGameBroker || null,

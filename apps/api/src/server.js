@@ -264,6 +264,7 @@ async function main() {
   // rows, refresh the public aggregate immediately instead of leaving the
   // recovered sample invisible until the next nightly rebuild.
   const opponentMmrEnrichment = buildOpponentMmrEnrichmentJob({
+    userRevision: /** @type {any} */ (services).userRevision,
     jobLedger: /** @type {any} */ (services).jobLedger,
     db,
     pulseMmr: /** @type {any} */ (services).pulseMmr,

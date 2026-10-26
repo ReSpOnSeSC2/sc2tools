@@ -16,6 +16,11 @@ corresponding GitHub Release.
 - Add a Today checklist for your playing and streaming goals, with progress, direct feature links and Help for each suggestion. Keep it separate from the first-import setup checklist.
 - Record the first successfully opened private game once per account. Save suggestion dismissal independently, and show a compact What's new link when the selected steps are complete.
 
+### Optional personal chart cache
+
+- Add a bounded, opt-in server cache for six personal Trends chart responses, with owner revisions and invalidation for replay, attribution, recompute and history changes. It stays off by default; full API CI and deployment checks remain before an operator enables it.
+- Keep existing requests and writes unchanged while disabled. ETags, browser revalidation, broader dashboard caching and local history deltas remain separate work.
+
 ### Account activity writes
 
 - Avoid rewriting recent account activity on every page load. Keep the first week-two return recorded even when another visit occurred within five minutes.

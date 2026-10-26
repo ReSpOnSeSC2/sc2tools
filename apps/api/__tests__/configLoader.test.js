@@ -10,6 +10,15 @@ const BASE_ENV = {
   SERVER_PEPPER_HEX: "a".repeat(64),
 };
 
+describe("personal chart cache opt-in", () => {
+  test.each([undefined, "", "false", "TRUE", "1", " true "])("stays off for %j", (value) => {
+    expect(loadConfig({ ...BASE_ENV, USER_CACHE_ENABLED: value }).userCacheEnabled).toBe(false);
+  });
+  test("requires literal true", () => {
+    expect(loadConfig({ ...BASE_ENV, USER_CACHE_ENABLED: "true" }).userCacheEnabled).toBe(true);
+  });
+});
+
 describe("config loader - label-only support Gmail", () => {
   const supportEnv = { ...BASE_ENV, SUPPORT_GMAIL_CLIENT_ID: "id",
     SUPPORT_GMAIL_CLIENT_SECRET: "secret", SUPPORT_GMAIL_REFRESH_TOKEN: "refresh",

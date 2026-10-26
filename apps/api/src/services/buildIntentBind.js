@@ -1,4 +1,5 @@
 "use strict";
+const { gameWrite } = require("../util/userRevision");
 
 /**
  * Bind an ingested replay to its live check-in record (``POST /v1/games``,
@@ -126,10 +127,12 @@ class BuildIntentBind {
    *   options: import('./buildIntentOptions').BuildIntentOptions,
    *   notifier: import('./buildIntentCommon').BuildIntentNotifier,
    *   perGame?: any,
+   *   userRevision?: import("../util/userRevision").UserRevision,
    *   now?: () => number,
    * }} deps
    */
   constructor(deps) {
+    this.userRevision = deps.userRevision || null;
     this.games = deps.db.games;
     this.users = deps.db.users;
     this.live = deps.db.buildIntentLive;
@@ -296,10 +299,10 @@ class BuildIntentBind {
     if (!prefs.checkin.enabled) return null;
     const suggestion = await this._suggest(userId, game, row, matchup, null, null);
     const now = new Date(this.now());
-    const res = await this.games.updateOne(
+    const res = await gameWrite(this.userRevision, userId, () => this.games.updateOne(
       { userId, gameId: row.gameId, buildIntent: { $exists: false } },
       mergeIntentPipeline({ ...defaultIntent(now), status: "pending", suggestion }),
-    );
+    ));
     if (res.matchedCount === 0) return null;
     this._changed(userId, String(row.gameId));
     return { bound: false, status: "pending" };
@@ -329,10 +332,10 @@ class BuildIntentBind {
       const guard = intent
         ? { "buildIntent.updatedAt": intent.updatedAt instanceof Date ? intent.updatedAt : { $exists: false } }
         : { buildIntent: null };
-      const res = await this.games.updateOne(
+      const res = await gameWrite(this.userRevision, userId, () => this.games.updateOne(
         { userId, gameId: game.gameId, "buildIntent.gameKey": { $exists: false }, ...guard },
         plan.pipeline,
-      );
+      ));
       if (res.matchedCount > 0) return { bound: true, status: plan.status };
     }
     return null;

@@ -1,4 +1,5 @@
 "use strict";
+const { gameWrite } = require("../util/userRevision");
 
 const { randomUUID } = require("crypto");
 const { stampVersion } = require("../db/schemaVersioning");
@@ -126,6 +127,7 @@ class GdprService {
    *   siteStats?: import('./siteStats').SiteStatsService,
    *   onCommunityChanged?:(userId:string)=>void,
    *   onGamesChanged?:(userId:string)=>void,
+   *   userRevision?: import("../util/userRevision").UserRevision,
    * }} [opts]
    *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
    *   chain a pulse-character-id backfill so the admin "Rebuild
@@ -134,6 +136,7 @@ class GdprService {
    *   exercise export/delete.
    */
   constructor(db, opts = {}) {
+    this.userRevision = opts.userRevision || null;
     this.db = db;
     /** @type {import("./userBackups").UserBackupsService|null} */
     this.backups = null;
@@ -179,7 +182,14 @@ class GdprService {
   async communityMutation(userId, operation, changed, gamesChanged = false) {
     const notify = () => gamesChanged ? this.notifyGamesChanged(userId) : this.notifyCommunityChanged(userId);
     let known = false;
-    try { const value = await operation(); const didChange = changed(value); known = true; if (didChange) notify(); return value; }
+    const perform = async () => {
+      const value = await operation(); const didChange = changed(value); known = true;
+      if (didChange) notify(); return { value, didChange };
+    };
+    try {
+      const result = await (gamesChanged ? gameWrite(this.userRevision, userId, perform, (value) => value.didChange) : perform());
+      return result.value;
+    }
     finally { if (!known) notify(); }
   }
 
@@ -519,10 +529,10 @@ class GdprService {
       else await this.identityDeletions.recordIntent(userId, clerkUserId);
     }
     clearInterval(gdprFence.timer);
-    const userRes = await this.db.users.deleteOne({
-      userId,
-      "_gdprMutation.id": gdprFence.id,
-    });
+    let userRes;
+    try {
+      userRes = await this.db.users.deleteOne({ userId, "_gdprMutation.id": gdprFence.id });
+    } finally { this.userRevision?.forget(userId); }
     if (!userRes.deletedCount && await this.db.users.findOne({ userId }, { projection: { _id: 1 } })) throw new Error("gdpr_operation_lease_lost");
     counts.users = userRes.deletedCount || 0;
     this.io?.in(`user:${userId}`).disconnectSockets(true);

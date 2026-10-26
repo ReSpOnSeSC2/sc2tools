@@ -7,6 +7,7 @@ const pino = require("pino");
 
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
+const { PulseMmrService } = require("../src/services/pulseMmr");
 
 // Bypass Clerk for this test by mocking the verifyToken export to
 // recognise a magic string and return a stable claim.
@@ -47,6 +48,11 @@ describe("HTTP integration", () => {
       db,
       logger: pino({ level: "silent" }),
       config,
+      pulseMmr: new PulseMmrService({
+        fetchImpl: async () => {
+          throw new Error("network_disabled_in_tests");
+        },
+      }),
     });
     app = built.app;
     services = built.services;

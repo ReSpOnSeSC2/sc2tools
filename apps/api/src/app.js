@@ -45,6 +45,8 @@ const { GameVodLinksService } = require("./services/gameVodLinks");
 const { GameDetailsService } = require("./services/gameDetails");
 const { deletedGameIds } = require("./util/deletedGames");
 const { GameControlsService } = require("./services/gameControls");
+const { UserRevision } = require("./util/userRevision");
+const { UserCache } = require("./middleware/userCache");
 const { buildGameControlsRouter } = require("./routes/gameControls");
 const { GameContextService } = require("./services/gameContext");
 const { BuildExecutionService } = require("./services/buildExecution");
@@ -376,6 +378,9 @@ function makeServices(deps, clerk, adminClerkIds) {
   const supportMessages = new SupportMessagesService(deps.db, notifications, adminEvents);
   const announcements = new AnnouncementsService(deps.db, { notifications, io: deps.io, logger: deps.logger });
   const identityDeletions = new IdentityDeletionsService(deps.db, { clerk, secret: deps.config.serverPepper, logger: deps.logger });
+  const userRevision = new UserRevision(deps.db.users, { enabled: deps.config.userCacheEnabled,
+    isDeleted: (id) => identityDeletions.isDeleted(id), logger: deps.logger });
+  const userCache = new UserCache(userRevision, { enabled: deps.config.userCacheEnabled });
   const users = new UsersService(deps.db, { adminEvents, identityDeletions });
   const activation = new ActivationService(deps.db);
   // Pluggable backend for the per-game heavy blob. Defaults to
@@ -498,6 +503,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     deps.db,
     deps.config.serverPepper,
     {
+      userRevision,
       gameDetails,
       logger: deps.logger,
       pulseResolver,
@@ -527,6 +533,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   // which of the five fallback tiers is failing for a streamer who
   // sees ``— MMR`` on the overlay.
   const games = new GamesService(deps.db, {
+    userRevision,
     gameDetails,
     users,
     pulseMmr,
@@ -704,12 +711,14 @@ function makeServices(deps, clerk, adminClerkIds) {
   // through to the local KNOWN_BUILDING_NAMES set.
   Promise.resolve(catalog.catalog()).catch(() => {});
   const perGame = new PerGameComputeService(deps.db, {
+    userRevision,
     catalog: catalog.catalogLookup(),
     gameDetails,
     users: deps.db.users,
   });
   const presetPolicies = new PresetPoliciesService(deps.db);
   const customBuilds = new CustomBuildsService(deps.db, {
+    userRevision,
     presetPolicies,
     perGame,
     logger: deps.logger,
@@ -746,6 +755,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   // per-game check-ins. Reads the live broker (declare window, roll reports)
   // and the detail store (suggestions on a single-game read).
   const buildIntents = new BuildIntentsService(deps.db, {
+    userRevision,
     io: deps.io,
     liveGameBroker,
     perGame,
@@ -851,6 +861,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const guideNotes = new GuideNotesService(deps.db);
   const guides = new GuidesService(deps.db, { guideNotes, guideVideos, logger: deps.logger });
   const gdpr = new GdprService(deps.db, {
+    userRevision,
     siteStats,
     opponents,
     logger: deps.logger,
@@ -872,7 +883,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     onPublicChanged: communityRevalidator.notify,
   });
   gdpr.onCommunityChanged = userId => community.invalidateForUser(userId);
-  gdpr.backups = new UserBackupsService(deps.db, { gdpr, store: deps.userBackupsStore || buildUserBackupsStore(deps.config), logger: deps.logger });
+  gdpr.backups = new UserBackupsService(deps.db, { gdpr, userRevision, store: deps.userBackupsStore || buildUserBackupsStore(deps.config), logger: deps.logger });
   const dataRepairs = new DataRepairsService(deps.db, { gdpr, notifications, logger: deps.logger });
   // Canonical player profiles reuse existing aggregate services. Privacy
   // settings live on the user row (ordinary export/erasure, never restored
@@ -972,12 +983,20 @@ function makeServices(deps, clerk, adminClerkIds) {
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
   };
   gdpr.onGamesChanged = invalidatePrivateGameCaches;
+  if (userRevision.enabled) userRevision.addInvalidator((owner) => {
+    if (owner !== null) aggregations.trendsRequests.invalidateForUser(owner);
+    else {
+      // A missing owner in an enrichment row cannot leave an old inner join.
+      aggregations.trendsRequests.pending.clear(); aggregations.trendsRequests.completed.clear();
+      aggregations.trendsRequests.revisions.clear();
+    }
+  });
   const gameControls = new GameControlsService(deps.db, { gdpr, onChanged: async (userId) => {
     invalidatePrivateGameCaches(userId); community.invalidateForUser(userId);
     deps.io?.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "game-control" });
   } });
   return {
-    jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
+    userRevision, userCache, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
     users,
     activation,
     opponents,
@@ -1259,6 +1278,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
         token: deps.config.metricsToken,
         liveGameBroker: services.liveGameBroker,
         guideSamples: services.guideSamples,
+        userCache: services.userCache,
       }),
     );
   }
@@ -1727,6 +1747,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildAggregationsRouter({
+      userCache: services.userCache,
       aggregations: services.aggregations,
       macroReport: services.macroReport,
       streak: services.streak,

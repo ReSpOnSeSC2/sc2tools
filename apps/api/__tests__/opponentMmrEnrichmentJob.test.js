@@ -11,6 +11,7 @@ const { MongoMemoryServer } = require("mongodb-memory-server");
 
 const { connect } = require("../src/db/connect");
 const { GamesService } = require("../src/services/games");
+const { UserRevision } = require("../src/util/userRevision");
 const {
   buildOpponentMmrEnrichmentJob,
   __internal,
@@ -456,4 +457,18 @@ function pulseFake(responses = {}) {
     expect(pulseMmr.getRaceBreakdown).toHaveBeenCalledTimes(1);
     const row = await db.games.findOne({ gameId: "flight-1001" });
     expect(row.opponent.mmr).toBe(5100);
+  });
+
+  test("bounded candidates forward their real owner and retire an MMR stamp even on lost acknowledgement", async () => {
+    await db.users.updateOne({ userId: "user-1" }, { $set: { dataRev: 0 } }, { upsert: true });
+    await db.games.insertOne(game("revision-2001", { pulseCharacterId: "2001", leagueId: 4 }));
+    const revisions = new UserRevision(db.users, { enabled: true }), before = await revisions.snapshot("user-1");
+    const original = db.games.updateOne.bind(db.games);
+    const spy = jest.spyOn(db.games, "updateOne").mockImplementationOnce(async (...args) => { await original(...args); throw new Error("lost MMR ack"); });
+    try {
+      const summary = await build(pulseFake({ 2001: [{ race: "PROTOSS", mmr: 4100 }] }), { userRevision: revisions }).runOnce();
+      expect(summary.writeErrors).toBe(1); expect((await db.games.findOne({ gameId: "revision-2001" })).opponent.mmr).toBe(4100);
+      expect(revisions.current(before)).toBe(false); expect((await db.users.findOne({ userId: "user-1" })).dataRev).toBe(1);
+      expect(revisions.owners.has("user-1")).toBe(true); expect(revisions.overflow).toBe(0);
+    } finally { spy.mockRestore(); }
   });

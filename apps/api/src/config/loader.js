@@ -39,6 +39,7 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *   keepaliveIntervalMs: number,
  *   slowQueryMs: number,
  *   metricsToken: string|null,
+ *   userCacheEnabled: boolean,
  *   gameDetailsStore: "mongo"|"r2",
  *   replayFilesStore: "disabled"|"r2",
  *   r2BrowserCorsAuto: boolean,
@@ -147,6 +148,7 @@ function loadConfig(env = process.env) {
     // Bearer token guarding GET /v1/metrics (Prometheus scrape).
     // Unset = endpoint disabled.
     metricsToken: env.METRICS_TOKEN || null,
+    userCacheEnabled: env.USER_CACHE_ENABLED === "true",
     gameDetailsStore: parseGameDetailsStore(env.GAME_DETAILS_STORE),
     ...parseReplayStoreConfig(env),
     r2: parseR2Config(env),
