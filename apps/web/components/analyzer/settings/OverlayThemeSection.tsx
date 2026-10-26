@@ -388,11 +388,8 @@ export function OverlayThemePreview({ theme }: { theme: OverlayTheme }) {
           </span>
         ) : null}
       </div>
-      <div
-        data-testid="overlay-theme-preview"
-        role="region"
-        aria-label="Overlay theme sample preview"
-        tabIndex={0}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The named overflow region must accept keyboard scrolling. */}
+      <div data-testid="overlay-theme-preview" role="region" aria-label="Overlay theme sample preview" tabIndex={0}
         className="ov-theme-preview relative overflow-x-auto rounded-lg border border-border p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         style={{ ...CHECKERBOARD, ...vars } as CSSProperties}
       >
