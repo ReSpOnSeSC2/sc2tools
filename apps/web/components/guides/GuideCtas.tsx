@@ -5,6 +5,7 @@ import { lazy, Suspense } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { ArrowRight, TrendingUp } from "lucide-react";
 import { gaEvent } from "@/lib/analytics/gtag";
+import { signUpHref } from "@/lib/authLinks";
 import type { GhostTarget } from "@/lib/ghostBuild";
 import type { GuideMatchup } from "@/lib/guides/types";
 import {
@@ -37,12 +38,13 @@ export interface GuideCtasProps {
 export function GuideCtas({ matchup, buildSlug, matchupPath, ghostTarget }: GuideCtasProps) {
   const { isLoaded, isSignedIn } = useAuth();
   const signedIn = isLoaded && isSignedIn;
+  const returnTo = buildSlug ? `${matchupPath}/${encodeURIComponent(buildSlug)}` : matchupPath;
   const track = (cta: CtaName) => gaEvent(CTA_EVENT, { cta, matchup, build: buildSlug });
 
   return (
     <div className="space-y-2">
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Link href={signedIn ? "#your-record" : "/sign-up"} onClick={(event) => {
+        <Link href={signedIn ? "#your-record" : signUpHref(returnTo)} onClick={(event) => {
           track(signedIn ? "record" : "track");
           if (signedIn) {
             const target = document.getElementById("your-record");

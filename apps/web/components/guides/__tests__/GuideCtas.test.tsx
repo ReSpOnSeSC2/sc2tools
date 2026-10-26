@@ -50,12 +50,12 @@ describe("GuideCtas", () => {
   it("preserves the visitor CTA while authentication loads", () => {
     mocks.auth = { isLoaded: false, isSignedIn: false };
     renderCtas();
-    expect(screen.getByRole("link", { name: /Track your win rate/ }).getAttribute("href")).toBe("/sign-up");
+    expect(screen.getByRole("link", { name: /Track your win rate/ }).getAttribute("href")).toBe("/sign-up?redirect_url=%2Fguides%2Fpvz%2Fstargate-into-glaives");
   });
   it("links sign-up and the matchup page and fires gaEvent for each", () => {
     renderCtas();
     const track = screen.getByRole("link", { name: /Track your win rate with this build — free/ });
-    expect(track.getAttribute("href")).toBe("/sign-up");
+    expect(track.getAttribute("href")).toBe("/sign-up?redirect_url=%2Fguides%2Fpvz%2Fstargate-into-glaives");
     fireEvent.click(track);
     expect(mocks.gaEvent).toHaveBeenCalledWith("guide_cta_click", {
       cta: "track",

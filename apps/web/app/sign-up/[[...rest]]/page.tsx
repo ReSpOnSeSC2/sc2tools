@@ -15,7 +15,9 @@ import {
 import { TrySavePanel } from "@/components/auth/TrySavePanel";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { appearanceFor } from "@/lib/clerk-appearance";
-import { isTryResumeRedirect, safeAuthRedirect } from "@/lib/instant/authRedirect";
+import { isTryResumeRedirect } from "@/lib/instant/authRedirect";
+import { signInHref } from "@/lib/authLinks";
+import { authDestinations } from "@/lib/authDestinations";
 import { getInstantImportMode } from "@/lib/instant/flag";
 import type { Theme } from "@/lib/theme";
 
@@ -43,19 +45,20 @@ function SignUpContent() {
 
 function SignUpWidget({ theme }: { theme: Theme }) {
   const searchParams = useSearchParams();
-  // Only the allowlisted /try hand-off may override the default; any
-  // other ?redirect_url= is ignored (no open redirects).
-  const redirect = safeAuthRedirect(searchParams.get("redirect_url"));
+  // Public actions continue after setup. The existing /try claim keeps its
+  // direct hand-off so the visitor can save the report already on this device.
+  const destination = authDestinations(searchParams.get("redirect_url"));
   return (
     <SignUp
       key={theme}
       appearance={appearanceFor(theme)}
-      signInUrl="/sign-in"
+      signInUrl={signInHref(destination.returnTo)}
       // New accounts land in the /welcome wizard (download → pair →
       // first sync) instead of an empty dashboard — unless they came
       // from /try to save the games they just analysed. Returning users
       // signing IN keep going straight to /app.
-      forceRedirectUrl={redirect ?? WELCOME_PATH}
+      forceRedirectUrl={destination.signUp}
+      signInForceRedirectUrl={destination.signIn}
       fallbackRedirectUrl={WELCOME_PATH}
     />
   );

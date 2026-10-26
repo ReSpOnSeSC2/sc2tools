@@ -5,12 +5,13 @@ import { CommunityVotePanel } from "../CommunityVotePanel";
 import { CommunityBuildReport } from "../CommunityBuildReport";
 
 const mocks = vi.hoisted(() => ({ signedIn: true, apiCall: vi.fn(), useApi: vi.fn(), mutate: vi.fn(), data: { votes: 5, myVote: 1 } }));
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isSignedIn: mocks.signedIn, userId: "reader", getToken: async () => "token" }), SignedIn: ({ children }: { children: ReactNode }) => mocks.signedIn ? children : null, SignedOut: ({ children }: { children: ReactNode }) => mocks.signedIn ? null : children }));
-vi.mock("@/lib/clientApi", () => ({ apiCall: (...args: unknown[]) => mocks.apiCall(...args), useApi: (...args: unknown[]) => mocks.useApi(...args) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: mocks.signedIn, userId: "reader", getToken: async () => "token" }), SignedIn: ({ children }: { children: ReactNode }) => mocks.signedIn ? children : null, SignedOut: ({ children }: { children: ReactNode }) => mocks.signedIn ? null : children }));
+vi.mock("@/lib/clientApi", async original => ({ ...await original<typeof import("@/lib/clientApi")>(), apiCall: (...args: unknown[]) => mocks.apiCall(...args), useApi: (...args: unknown[]) => mocks.useApi(...args) }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: ({ children }: { children: ReactNode }) => <span>{children}</span> }));
 beforeEach(() => {
   mocks.signedIn = true; mocks.data = { votes: 5, myVote: 1 };
   mocks.apiCall.mockReset(); mocks.mutate.mockReset(); mocks.useApi.mockReset();
+  sessionStorage.clear(); mocks.mutate.mockImplementation(async data => { if (data) mocks.data = data; return data; });
   mocks.useApi.mockImplementation(() => ({ data: mocks.data, isLoading: false, mutate: mocks.mutate }));
 });
 afterEach(cleanup);
@@ -56,6 +57,6 @@ it.each([true, false])("requires a report category, caps details, and follows al
 
 it("does not request a private vote signed out and keeps the build as the sign-in destination", () => {
   mocks.signedIn = false; render(<CommunityVotePanel slug="macro" initialVotes={5} />);
-  expect(mocks.useApi).toHaveBeenCalledWith(null);
+  expect(mocks.useApi).toHaveBeenCalledWith(null, undefined, { timeoutMs: 20_000 });
   expect(screen.getByRole("link", { name: "Sign in to vote" }).getAttribute("href")).toBe("/sign-in?redirect_url=%2Fcommunity%2Fbuilds%2Fmacro");
 });

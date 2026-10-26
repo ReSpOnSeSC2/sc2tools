@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/Button";
 import { gaEvent } from "@/lib/analytics/gtag";
 import type { OnboardingStepId } from "./types";
 import { WELCOME_STEPS as STEPS } from "./welcomeState";
+import Link from "next/link";
+import { returnPathLabel, safeReturnPath } from "@/lib/safeReturnPath";
 
 export interface OnboardingHelpers {
   /** Move forward; clamped to the last step. */
@@ -36,6 +38,7 @@ export interface OnboardingShellProps {
    * and the shell renders only Back + Skip.
    */
   hideDefaultNav?: boolean;
+  returnTo?: string | null;
 }
 
 /**
@@ -61,7 +64,9 @@ export function OnboardingShell({
   onClose,
   renderStep,
   hideDefaultNav = false,
+  returnTo,
 }: OnboardingShellProps) {
+  const destination = safeReturnPath(returnTo);
   const [internal, setInternal] = useState<OnboardingStepId>(initial);
   const active = activeStep || internal;
   const setActive = useCallback((step: OnboardingStepId) => {
@@ -114,6 +119,7 @@ export function OnboardingShell({
       <main className="flex-1 px-4 pb-24 pt-6 sm:px-6 sm:pt-10">
         <div className="mx-auto w-full max-w-2xl">
           <StepIndicatorMobile idx={idx} total={STEPS.length} completed={completedSteps} onSelect={setActive} />
+          {destination ? <p className="mb-5 rounded-lg border border-border bg-bg-elevated p-3 text-caption text-text-muted">Continue where you left off: <Link href={destination} className="font-semibold text-accent underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{returnPathLabel(destination)}</Link></p> : null}
           {renderStep(helpers)}
         </div>
       </main>

@@ -27,7 +27,7 @@ const article: HelpArticle = {
     "dashboard",
     "new user",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-25",
   body: [
     {
       type: "paragraph",
@@ -45,7 +45,11 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "Refreshing keeps the step in the page URL. Completed numbered circles let you revisit earlier steps. If you choose browser import on Download, Back from Import returns to Download. Skip for now opens your dashboard; [Setup](/welcome) and the dashboard checklist help you continue later. Setup resumes at Import when a PC is paired, or Done when games have arrived, unless you explicitly revisit a step.",
+      text: "Signed up from a guide or build? You'll be taken back to it. The setup banner names your return page, and both Skip for now and the final Continue button return there. Otherwise, they open your dashboard. Refreshing keeps the setup step in the page URL. Completed numbered circles let you revisit earlier steps. If you choose browser import on Download, Back from Import returns to Download. [Setup](/welcome) and the dashboard checklist help you continue later. Setup resumes at Import when a PC is paired, or Done when games have arrived, unless you explicitly revisit a step.",
+    },
+    {
+      type: "paragraph",
+      text: "Choose Save, a vote or Practice on a public build while signed out to finish that action after sign-in. That browser tab remembers the choice for 15 minutes and only the original page can use it. A saved Practice choice opens Ghost settings with a confirmation; your existing Ghost source URL stays the same. If the choice expires or a request fails, use the action button again. Switching accounts or leaving a page stops its pending confirmation.",
     },
     {
       type: "callout",

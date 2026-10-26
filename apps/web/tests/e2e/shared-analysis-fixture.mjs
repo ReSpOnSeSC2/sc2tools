@@ -17,7 +17,7 @@ function fixtureBundle() {
     define: { "process.env": "{}", "process.env.NODE_ENV": '"production"', "process.env.NEXT_PUBLIC_API_BASE": '"https://shared-analysis-fixture.local"' },
     plugins: [{ name: "explicit-fixture-navigation", setup(builder) {
       builder.onResolve({ filter: /^next\/navigation$|^@clerk\/nextjs$/ }, (args) => ({ path: args.path, namespace: "fixture" }));
-      builder.onLoad({ filter: /.*/, namespace: "fixture" }, (args) => ({ resolveDir: process.cwd(), contents: args.path === "next/navigation" ? 'const router={push(path){location.assign(path)},refresh(){}}; export const useRouter=()=>router;' : 'const auth={isLoaded:true,isSignedIn:true,userId:"fixture-viewer",getToken:async()=>"fixture-token"};export const useAuth=()=>auth;export const SignedIn=({children})=>children;export const SignedOut=()=>null;' }));
+      builder.onLoad({ filter: /.*/, namespace: "fixture" }, (args) => ({ resolveDir: process.cwd(), contents: args.path === "next/navigation" ? 'import {useSyncExternalStore} from "react";const subscribe=fn=>{addEventListener("popstate",fn);return()=>removeEventListener("popstate",fn)};export const usePathname=()=>useSyncExternalStore(subscribe,()=>location.pathname,()=>"/try");export const useSearchParams=()=>new URLSearchParams(useSyncExternalStore(subscribe,()=>location.search,()=>""));const router={push(path){location.assign(path)},refresh(){}};export const useRouter=()=>router;' : 'const auth={isLoaded:true,isSignedIn:true,userId:"fixture-viewer",getToken:async()=>"fixture-token"};export const useAuth=()=>auth;export const SignedIn=({children})=>children;export const SignedOut=()=>null;' }));
     } }],
   }).then((result) => result.outputFiles[0].text);
   return bundle;

@@ -16,7 +16,7 @@ function fixtureBundle() {
     define: { "process.env": "{}", "process.env.NODE_ENV": '"production"', "process.env.NEXT_PUBLIC_API_BASE": '"https://guide-timings-fixture.local"' },
     plugins: [{ name: "explicit-fixture-auth", setup(builder) {
       builder.onResolve({ filter: /^next\/navigation$|^@clerk\/nextjs$/ }, (args) => ({ path: args.path, namespace: "fixture" }));
-      builder.onLoad({ filter: /.*/, namespace: "fixture" }, (args) => ({ resolveDir: process.cwd(), contents: args.path === "next/navigation" ? 'export const usePathname=()=>"/guides/pvz/stargate-into-glaives";export const useRouter=()=>({refresh(){}});' : 'const auth={isLoaded:true,isSignedIn:true,userId:"fixture-guide-viewer",getToken:async()=>"fixture-only-token"};export const useAuth=()=>auth;' }));
+      builder.onLoad({ filter: /.*/, namespace: "fixture" }, (args) => ({ resolveDir: process.cwd(), contents: args.path === "next/navigation" ? 'import {useSyncExternalStore} from "react";const subscribe=fn=>{addEventListener("popstate",fn);return()=>removeEventListener("popstate",fn)};export const usePathname=()=>useSyncExternalStore(subscribe,()=>location.pathname,()=>"/guides/pvz/stargate-into-glaives");export const useSearchParams=()=>new URLSearchParams(useSyncExternalStore(subscribe,()=>location.search,()=>""));export const useRouter=()=>({refresh(){}});' : 'const auth={isLoaded:true,isSignedIn:true,userId:"fixture-guide-viewer",getToken:async()=>"fixture-only-token"};export const useAuth=()=>auth;' }));
     } }],
   }).then((result) => result.outputFiles[0].text);
   return bundle;

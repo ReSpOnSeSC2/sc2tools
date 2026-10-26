@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
 import { CheckCircle2, Copy, Library, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useToastOptional } from "@/components/ui/Toast";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { signInHref, signUpHref } from "@/lib/authLinks";
+import { queuePendingIntent } from "@/lib/pendingIntent";
+import { usePendingIntentResume, type IntentResumeContext } from "@/lib/usePendingIntentResume";
+import { useCommunityAction } from "./useCommunityAction";
 import { slugifyBuildName, type BuildRuleLike } from "@/lib/build-events";
 import { isProxyStructureToken, SKILL_LEVELS } from "@/lib/build-rules";
 import type { CustomBuild } from "@/components/builds/types";
@@ -89,7 +92,8 @@ interface ForkLookup {
 
 /** Older API deployments may ignore the filter; verify the provenance too. */
 function existingCopy(data: ForkLookup | undefined, communitySlug: string): string | null {
-  return data?.items?.find((item) => item.forkedFrom?.communitySlug === communitySlug)?.slug ?? null;
+  return Array.isArray(data?.items) ? data.items.find(item => item?.forkedFrom?.communitySlug === communitySlug &&
+    typeof item.slug === "string" && /^[a-z0-9][a-z0-9_-]{0,79}$/i.test(item.slug))?.slug ?? null : null;
 }
 
 /** The caller's existing copy of a community build, as a list path. */
@@ -126,6 +130,7 @@ export interface SaveToLibraryButtonProps {
  * link), both returning to this page afterwards.
  */
 export function SaveToLibraryButton(props: SaveToLibraryButtonProps) {
+  const { userId, isLoaded, isSignedIn } = useAuth();
   if (!props.build) {
     // Only community docs published before the `build` snapshot field
     // existed land here (publish() always stores it now). A permanently
@@ -138,26 +143,22 @@ export function SaveToLibraryButton(props: SaveToLibraryButtonProps) {
     );
   }
   const returnTo = `/community/builds/${encodeURIComponent(props.communitySlug)}`;
+  if (!isLoaded) return <p role="status" className="text-caption text-text-muted">Loading library saving…</p>;
+  if (isSignedIn && userId) return <SignedInSave key={`${userId}:${props.communitySlug}`} {...props} build={props.build} />;
   return (
-    <>
-      <SignedIn>
-        <SignedInSave {...props} build={props.build} />
-      </SignedIn>
-      <SignedOut>
         <div className="space-y-2">
-          <Link href={signUpHref(returnTo)} className={SECONDARY_LINK_CLASS}>
+          <Link href={signUpHref(returnTo)} onClick={() => queuePendingIntent("save-build", { slug: props.communitySlug }, returnTo)} className={SECONDARY_LINK_CLASS}>
             <UserPlus className="h-4 w-4" aria-hidden />
             Sign up free to save this build
           </Link>
           <p className="text-center text-micro text-text-muted">
             Have an account?{" "}
-            <Link href={signInHref(returnTo)} className={TEXT_LINK_CLASS}>
+            <Link href={signInHref(returnTo)} onClick={() => queuePendingIntent("save-build", { slug: props.communitySlug }, returnTo)} className={TEXT_LINK_CLASS}>
               Sign in
             </Link>
           </p>
+          <p className="text-center text-micro text-text-muted">Return here after signing in to finish saving this build.</p>
         </div>
-      </SignedOut>
-    </>
   );
 }
 
@@ -167,38 +168,46 @@ function SignedInSave({
   communitySlug,
   version,
 }: SaveToLibraryButtonProps & { build: Partial<CustomBuild> }) {
-  const { getToken } = useAuth();
+  const action = useCommunityAction(communitySlug);
   const toastCtx = useToastOptional();
   const lookupPath = forkLookupPath(communitySlug);
-  const lookup = useApi<ForkLookup>(lookupPath, { revalidateOnFocus: false });
-  const [busy, setBusy] = useState(false);
+  const lookup = useApi<ForkLookup>(action.owner ? lookupPath : null, { revalidateOnFocus: false }, { timeoutMs: 20_000 });
   const [savedSlug, setSavedSlug] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const existingSlug = savedSlug ?? existingCopy(lookup.data, communitySlug);
-  const checking = !lookup.data && !lookup.error;
+  const existingSlug = savedSlug ?? (!lookup.isPreviousData ? existingCopy(lookup.data, communitySlug) : null);
+  const checking = (!lookup.data && !lookup.error) || lookup.isPreviousData;
 
   /** A fresh check right before saving, so a second tab or click never duplicates. */
-  async function findExistingCopy(): Promise<string | null> {
+  async function findExistingCopy(context: IntentResumeContext, strict: boolean): Promise<string | null> {
     try {
-      const fresh = await apiCall<ForkLookup>(getToken, lookupPath);
+      const fresh = await apiCall<ForkLookup>(context.getToken, lookupPath, { signal: context.signal });
+      if (!context.isCurrent()) throw new DOMException("Account changed", "AbortError");
+      if (!fresh || !Array.isArray(fresh.items)) throw new Error("Couldn't check your library. Try saving again.");
       return existingCopy(fresh, communitySlug);
-    } catch {
+    } catch (error) {
+      if (!context.isCurrent() || strict) throw error;
       // The lookup is a convenience; a failed check never blocks saving.
       return null;
     }
   }
 
-  async function save(options: { allowDuplicate: boolean }) {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
+  async function publishSaved(slug: string, context: IntentResumeContext) {
+    if (!context.isCurrent()) return false;
+    setSavedSlug(slug);
+    await lookup.mutate({ items: [{ slug, forkedFrom: { communitySlug } }] }, { revalidate: false });
+    return context.isCurrent();
+  }
+
+  async function save(options: { allowDuplicate: boolean }, supplied?: IntentResumeContext): Promise<boolean> {
+    if (!supplied) resume.clearError();
+    return action.run(async context => {
+      setError(null);
       if (!options.allowDuplicate) {
-        const found = existingSlug ?? (await findExistingCopy());
+        // Automatic return always rechecks the authenticated owner's library.
+        const found = supplied ? await findExistingCopy(context, true) : existingSlug ?? (await findExistingCopy(context, false));
         if (found) {
-          setSavedSlug(found);
-          return;
+          return publishSaved(found, context);
         }
       }
       const stamp = `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
@@ -244,12 +253,12 @@ function SignedInSave({
         // Never overwrite or revive one of the user's own builds.
         createOnly: true,
       };
-      await apiCall(getToken, `/v1/custom-builds/${encodeURIComponent(slug)}`, {
+      await apiCall(context.getToken, `/v1/custom-builds/${encodeURIComponent(slug)}`, {
         method: "PUT",
+        signal: context.signal,
         body: JSON.stringify(payload),
       });
-      setSavedSlug(slug);
-      void lookup.mutate();
+      if (!context.isCurrent()) return false;
       toastCtx?.toast.success("Saved to your library", {
         description: (
           <Link href={`/builds/${encodeURIComponent(slug)}`} className={TEXT_LINK_CLASS}>
@@ -257,12 +266,15 @@ function SignedInSave({
           </Link>
         ),
       });
-    } catch (err: unknown) {
+      return publishSaved(slug, context);
+    }, (err: unknown) => {
       setError(errorMessage(err, "Save failed."));
-    } finally {
-      setBusy(false);
-    }
+    }, supplied);
   }
+  const resume = usePendingIntentResume("save-build", `/community/builds/${encodeURIComponent(communitySlug)}`,
+    !!action.owner && !!lookup.data && !lookup.isPreviousData && !lookup.error,
+    payload => payload.slug === communitySlug, (_intent, context) => save({ allowDuplicate: false }, context));
+  const busy = action.running || resume.running, visibleError = error ?? resume.error;
 
   if (existingSlug) {
     return (
@@ -277,7 +289,7 @@ function SignedInSave({
         <div className="flex justify-center">
           <button
             type="button"
-            onClick={() => void save({ allowDuplicate: true })}
+            onClick={() => void save({ allowDuplicate: true }).catch(() => {})}
             disabled={busy}
             aria-busy={busy || undefined}
             className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md px-2 text-caption font-medium text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
@@ -286,9 +298,9 @@ function SignedInSave({
             {busy ? "Saving a copy…" : "Save another copy"}
           </button>
         </div>
-        {error ? (
+        {visibleError ? (
           <p role="alert" className="text-micro text-danger">
-            {error}
+            {visibleError}
           </p>
         ) : null}
       </div>
@@ -299,7 +311,7 @@ function SignedInSave({
     <div className="space-y-1">
       <Button
         variant="primary"
-        onClick={() => void save({ allowDuplicate: false })}
+        onClick={() => void save({ allowDuplicate: false }).catch(() => {})}
         loading={busy || checking}
         iconLeft={<Library className="h-4 w-4" aria-hidden />}
         fullWidth
@@ -309,9 +321,9 @@ function SignedInSave({
       <p className="text-micro text-text-muted">
         Saves a private copy you can edit. The author&apos;s page doesn&apos;t change.
       </p>
-      {error ? (
+      {visibleError ? (
         <p role="alert" className="text-micro text-danger">
-          {error}
+          {visibleError}
         </p>
       ) : null}
     </div>
