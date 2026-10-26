@@ -40,8 +40,9 @@ Combined PR780 web CI at `4d01aa81` reported 9,157 passed, two failed and one
 skipped. Both failures came from the APM test's `dd.flex-wrap` selector also
 matching the newly wrapped instantaneous values. The helper now anchors to the
 game-average definition and reads the following pace definitions. Both exact
-expected average strings and all assertions are unchanged. Focused APM test
-and lint validation remain pending; no metric or product source changed.
+expected average strings and all assertions are unchanged. Focused APM validation
+at `93e8d225` passed 18/18 tests and strict single-file lint; no metric or product
+source changed.
 
 First failures remain under `.cache/macro-bank-static-prep-17e3b95d/results/Types/`,
 `.cache/macro-bank-build-prep-67131607/first-red-receipt.json` (sandbox EPERM),
