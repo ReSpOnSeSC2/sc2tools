@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Mobile site navigation
+
+- Use the shared right Sheet for the site menu, with a consistent title and Close control, the existing home and destination links, and footer theme choices.
+- Close and release the menu's scroll lock when the desktop navigation becomes available; shared focus handling respects newer dialogs and returns to the opener.
+
 ### Copy public build and definition links
 
 - Keep a selected link available when clipboard permission is denied or takes too long: in a shared dialog for Community links, or below a definition's heading. Done or Escape returns to the copy control, and retry stays available.

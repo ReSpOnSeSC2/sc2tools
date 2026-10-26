@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { captureAccessibility, checkAccessibility } from "./accessibility-check";
 import { openMoreAppearanceFixture } from "./appearance-more-fixture.mjs";
+import { openMobileNavFixture } from "./mobile-nav-fixture.mjs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -49,7 +50,7 @@ test("phone navigation traps focus, offers all themes and restores its trigger",
   await page.keyboard.press("Enter");
   const drawer = page.getByRole("dialog", { name: "Site navigation", exact: true });
   await expect(drawer).toBeVisible();
-  const first = drawer.getByRole("link", { name: "SC2 Tools — home", exact: true });
+  const first = drawer.getByRole("button", { name: "Close", exact: true });
   await expect(first).toBeFocused();
   await captureAccessibility(page, info, "dark-menu");
   await page.keyboard.press("Shift+Tab");
@@ -69,6 +70,116 @@ test("phone navigation traps focus, offers all themes and restores its trigger",
   await expect(drawer).toHaveCount(0);
   await expect(trigger).toBeFocused();
 });
+
+type MobileFixtureWindow = typeof window & {
+  fixtureMobileNavigate: (href: string) => void;
+  fixtureMobileAuth: (audience: "out" | "player" | "admin") => void;
+  fixtureMobileOpenLater: () => void;
+  fixtureMobileAddLock: () => void;
+  fixtureMobileReleaseLock: () => void;
+};
+
+for (const theme of ["light", "dark"] as const) {
+  test(`marketing navigation Sheet ${theme}: audiences, route, breakpoint and focus`, async ({ page }, info) => {
+    test.skip(info.project.name !== "mobile-360", "One explicit width matrix covers phone through the lg breakpoint.");
+    test.setTimeout(90_000);
+    const evidence = await openMobileNavFixture(page, theme);
+    const originalViewport = page.viewportSize()!;
+    const trigger = page.getByRole("button", { name: "Open menu", exact: true });
+    const sheet = page.getByRole("dialog", { name: "Site navigation", exact: true });
+    const close = sheet.getByRole("button", { name: "Close", exact: true });
+    const home = sheet.getByRole("link", { name: "SC2 Tools — home", exact: true });
+    const widthReceipts = [];
+    for (const width of [320, 390, 768, 1023]) {
+      await page.setViewportSize({ width, height: width < 400 ? 640 : 800 });
+      await page.evaluate(() => { (window as MobileFixtureWindow).fixtureMobileAuth("out"); (window as MobileFixtureWindow).fixtureMobileNavigate("/guides/pvz"); });
+      await trigger.focus(); await page.keyboard.press("Enter");
+      await expect(sheet).toBeVisible(); await expect(close).toBeFocused();
+      await expect(trigger).toHaveAttribute("aria-expanded", "true");
+      await expect(trigger).toHaveAttribute("aria-controls", "mobile-nav-drawer");
+      expect(await sheet.locator("#mobile-nav-drawer").count()).toBe(1);
+      await expect(home).toHaveAttribute("href", "/");
+      await expect(sheet.getByRole("link", { name: "Guides", exact: true })).toHaveAttribute("aria-current", "page");
+      expect(await sheet.getByRole("navigation", { name: "Primary", exact: true }).locator("ul a").evaluateAll(nodes => nodes.map(node => node.getAttribute("href"))))
+        .toEqual(["/try", "/stream-studio", "/guides", "/community", "/reviews", "/help", "/download"]);
+      await expect(sheet.getByRole("link", { name: "Sign in", exact: true })).toHaveAttribute("href", "/sign-in?redirect_url=%2Fguides%2Fpvz");
+      await expect(sheet.getByRole("link", { name: "Get started", exact: true })).toHaveAttribute("href", "/sign-up?redirect_url=%2Fguides%2Fpvz");
+      await expect(sheet.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
+      await expect(sheet.getByRole("link", { name: "Admin", exact: true })).toHaveCount(0);
+      const box = (await sheet.boundingBox())!;
+      const viewport = page.viewportSize()!;
+      expect(Math.abs(box.x + box.width - width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(box.width - Math.min(width, 448))).toBeLessThanOrEqual(1);
+      expect(box.y).toBeGreaterThanOrEqual(-1); expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      const closeBox = (await close.boundingBox())!;
+      expect(closeBox.width).toBeGreaterThanOrEqual(44); expect(closeBox.height).toBeGreaterThanOrEqual(44);
+      expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden");
+      const selected = sheet.getByRole("radio", { name: theme === "light" ? "Light" : "Dark", exact: true });
+      await selected.focus(); await page.keyboard.press("Tab"); await expect(close).toBeFocused();
+      await page.keyboard.press("Shift+Tab"); await expect(selected).toBeFocused();
+      const footerBox = (await sheet.locator("footer").boundingBox())!;
+      expect(footerBox.y).toBeGreaterThanOrEqual(box.y); expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(viewport.height + 1);
+      if (width === 320) {
+        expect(await sheet.locator("#mobile-nav-drawer").locator("..").evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
+        await sheet.getByRole("link", { name: "Download", exact: true }).scrollIntoViewIfNeeded();
+        await expect(close).toBeInViewport(); await expect(selected).toBeInViewport();
+      }
+      await checkAccessibility(page, info, `/mobile-nav-sheet/${width}`, theme);
+      widthReceipts.push({ width, box, footerBox });
+      await captureAccessibility(page, info, `mobile-nav-${theme}-${width}`);
+      await page.keyboard.press("Escape"); await expect(sheet).toHaveCount(0); await expect(trigger).toBeFocused();
+      expect(await page.evaluate(() => document.body.style.overflow)).not.toBe("hidden");
+    }
+
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.evaluate(() => (window as MobileFixtureWindow).fixtureMobileAuth("player"));
+    await expect.poll(() => evidence.apiGets.filter(row => row.audience === "player").length).toBe(1);
+    await trigger.click(); await expect(close).toBeFocused();
+    await expect(sheet.getByRole("link", { name: "Open app", exact: true })).toHaveAttribute("href", "/app");
+    await expect(sheet.getByRole("link", { name: "Build library", exact: true })).toBeVisible();
+    await expect(sheet.getByRole("link", { name: "Settings", exact: true })).toBeVisible();
+    await expect(sheet.getByRole("link", { name: "Admin", exact: true })).toHaveCount(0);
+    await expect(sheet.getByRole("link", { name: "Sign in", exact: true })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => (window as MobileFixtureWindow).fixtureMobileAuth("admin"));
+    await expect.poll(() => evidence.apiGets.filter(row => row.audience === "admin").length).toBe(1);
+    await trigger.click(); await expect(close).toBeFocused();
+    await expect(sheet.getByRole("link", { name: "Admin", exact: true })).toBeVisible();
+    await checkAccessibility(page, info, "/mobile-nav-sheet/admin", theme);
+
+    await page.evaluate(() => (window as MobileFixtureWindow).fixtureMobileOpenLater());
+    const later = page.getByRole("dialog", { name: "Later navigation dialog", exact: true });
+    await expect(later).toBeVisible();
+    await page.keyboard.press("Escape"); await expect(later).toHaveCount(0); await expect(sheet).toBeVisible(); await expect(close).toBeFocused();
+    await page.keyboard.press("Escape"); await expect(sheet).toHaveCount(0); await expect(trigger).toBeFocused();
+    await page.evaluate(() => (window as MobileFixtureWindow).fixtureMobileAddLock());
+    await trigger.click(); await close.click(); await expect(sheet).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden");
+    await page.evaluate(() => (window as MobileFixtureWindow).fixtureMobileReleaseLock());
+    expect(await page.evaluate(() => document.body.style.overflow)).not.toBe("hidden");
+
+    await trigger.click(); await sheet.getByRole("link", { name: "Help", exact: true }).click();
+    await expect(sheet).toHaveCount(0); await expect(page).toHaveURL(/\/help$/);
+    await trigger.click(); await home.click(); await expect(sheet).toHaveCount(0); await expect(page).toHaveURL(/\/$/);
+    await trigger.click(); await page.evaluate(() => (window as MobileFixtureWindow).fixtureMobileNavigate("/guides/pvz"));
+    await expect(sheet).toHaveCount(0);
+    await page.setViewportSize({ width: 768, height: 800 }); await trigger.click();
+    await page.getByRole("button", { name: "Close dialog", exact: true }).click({ position: { x: 8, y: 8 } });
+    await expect(sheet).toHaveCount(0); await expect(trigger).toBeFocused();
+    await page.setViewportSize({ width: 1023, height: 800 }); await trigger.click(); await expect(sheet).toBeVisible();
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await expect(sheet).toHaveCount(0); await expect(trigger).toBeHidden();
+    expect(await page.evaluate(() => document.body.style.overflow)).not.toBe("hidden");
+    await page.setViewportSize({ width: 390, height: 800 }); await expect(trigger).toBeVisible();
+    await trigger.click(); await expect(close).toBeFocused(); await close.click(); await expect(trigger).toBeFocused();
+    await page.setViewportSize(originalViewport);
+    expect(evidence.errors).toEqual([]); expect(evidence.unexpectedRequests).toEqual([]);
+    expect(evidence.rejectedWrites).toEqual([]); expect(evidence.externalAttempts).toEqual([]);
+    await info.attach("mobile-navigation-proof", { body: JSON.stringify({ buildId: evidence.buildId, cssNames: evidence.cssNames,
+      widthReceipts, apiGets: evidence.apiGets, rejectedWrites: evidence.rejectedWrites, externalAttempts: evidence.externalAttempts }), contentType: "application/json" });
+  });
+}
 
 test("compact theme keyboard options restore focus after closing", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop-1280", "desktop compact control");
