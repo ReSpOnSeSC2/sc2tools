@@ -268,7 +268,7 @@ branches, captures and every RED receipt are retained.
    (92 new/66 related) and53 captures. Ten typed Header/Mobile GETs and22
    bounded landing static GETs; zero forbidden/nonlocal or real actions.
    No source repair or extra build was needed. All runtime and ports closed.
-   Root verified9 source/five artifact hashes and reviewed/copied3 captures.
+   Root verified9 source/six artifact hashes and reviewed/copied3 captures.
    Remote CI and production delivery follow; this remains one consumer slice.
 
 Do not switch these active branches, reset their worktrees or stage their

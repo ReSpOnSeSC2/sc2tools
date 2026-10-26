@@ -1,6 +1,6 @@
 # App and landing action styles checkpoint
 
-Root independently verified all9 final owned hashes and five proof artifact
+Root independently verified all9 final owned hashes and six proof artifact
 hashes, then visually reviewed the Light320 app header, Dark320 visitor
 landing and Light1440 player landing captures. Three byte-identical copies
 are under `docs/handoff/screenshots/`: `site-cta-app-light-320.png`,
