@@ -15,6 +15,10 @@ corresponding GitHub Release.
 
 - Default fresh analyzer views and Reset to defaults to Auto-track current season, following the current season catalog while retaining explicitly saved dates and views.
 
+### Macro graph inspection
+
+- Keep the Macro graph in place when selecting a time with a mouse or touch. The selected time and unit roster still update; explicit replay actions continue to open the player.
+
 ### Header action links
 
 - Use the shared button styles for Sign in, Get started and Open app in the desktop header, retaining their compact size and return-to-page behavior.
