@@ -144,9 +144,12 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.getByLabel("Default tab", { exact: true })).toHaveValue("macro");
       await expect(page.getByRole("checkbox", { name: "New reviews", exact: true })).not.toBeChecked();
       await checkAccessibility(page, info, `/settings-search-preferences-${width}`, theme); await capture(page, info, theme, width, "preferences");
+      const tokenReadsBeforeOverlay = evidence.reads.filter(row => row.owner === "owner-a" && row.path === "/v1/overlay-tokens").length;
       await choose(page, "Overlay theme"); await confirm(page).getByRole("button", { name: "Discard & switch" }).click();
       const manager = page.getByRole("region", { name: "Shared streaming token controls", exact: true });
       await expect(manager).toHaveCount(1); await page.getByRole("combobox", { name: "URLs shown for" }).selectOption("owner-a-two");
+      await expect.poll(() => evidence.reads.filter(row => row.owner === "owner-a" && row.path === "/v1/overlay-tokens").length).toBe(tokenReadsBeforeOverlay + 1);
+      const readyManagerTokenReads = evidence.reads.filter(row => row.owner === "owner-a" && row.path === "/v1/overlay-tokens").length;
       await page.evaluate(() => { (window as SearchWindow).searchManager = document.getElementById("tokens"); });
       const accent = page.getByLabel("Accent hex value", { exact: true }); await accent.fill("#4cc3f1");
       await expect(page.getByRole("combobox", { name: "URLs shown for" })).toBeDisabled();
@@ -156,7 +159,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page).toHaveURL(/\?tab=chat#tts$/);
       expect(await manager.evaluate(element => element === (window as SearchWindow).searchManager)).toBe(true);
       await expect(page.getByRole("combobox", { name: "URLs shown for" })).toHaveValue("owner-a-two");
-      expect(evidence.reads.filter(row => row.path === "/v1/overlay-tokens")).toHaveLength(1);
+      expect(evidence.reads.filter(row => row.owner === "owner-a" && row.path === "/v1/overlay-tokens")).toHaveLength(readyManagerTokenReads);
       await page.getByLabel(/Loyalty rank theme/).selectOption("zerg"); await page.getByLabel("Bot username", { exact: true }).fill("fixturebot");
       await choose(page, "Kick chatroom"); await expect(confirm(page)).toHaveCount(0); await expect(page).toHaveURL(/\?tab=chat#platforms$/);
       await choose(page, "Overlay theme"); await confirm(page).getByRole("button", { name: "Stay on this tab" }).click();
@@ -200,11 +203,14 @@ for (const theme of ["light", "dark"] as const) {
 
   test(`Settings search ${theme} owner A→B→A retires the old search input and held token read`, async ({ page }, info) => {
     test.setTimeout(120_000); await page.setViewportSize({ width: 390, height: 900 });
-    const evidence = await openSettingsSearchFixture(page, theme, { holdTokenRead: true });
-    await targets(page, ["setup-health", "account-summary", "quick-links"]); await choose(page, "Reset overlay URLs");
+    const evidence = await openSettingsSearchFixture(page, theme, { initialHref: "/settings?tab=overlay&section=look#theme", holdTokenRead: true });
+    await expect(page.getByRole("tabpanel", { name: "Overlay", exact: true })).toBeVisible(); await expect(search(page)).toBeVisible();
+    await expect(page.getByRole("region", { name: "Shared streaming token controls", exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("Accent hex value", { exact: true })).toHaveCount(0);
     await expect.poll(() => evidence.reads.filter(row => row.owner === "owner-a" && row.path === "/v1/overlay-tokens").length).toBe(1);
     const oldInput = await search(page).elementHandle();
     await page.evaluate(() => (window as SearchWindow).sectionSetOwner("owner-b"));
+    await expect(page.getByRole("region", { name: "Shared streaming token controls", exact: true })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "URLs shown for" })).toHaveValue("owner-b-one");
     await page.evaluate(() => (window as SearchWindow).sectionSetOwner("owner-a"));
     await expect(page.getByRole("combobox", { name: "URLs shown for" })).toHaveValue("owner-a-one");
