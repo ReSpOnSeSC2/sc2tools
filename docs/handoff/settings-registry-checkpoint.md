@@ -9,9 +9,13 @@ evidence in `.cache/settings-ci-date-2a0783d0/`. The24th owned path is the
 existing `apps/web/app/help/__tests__/pages.test.tsx`. Only the expected visible
 date and matching datetime literal change to October26; breadcrumbs, routes,
 rendering and structured-data assertions stay intact. Product source and the
-validated production artifact are unchanged. This test-only repair is authored
-and awaiting its affected runtime check while the expanded glossary owns the
-serialized slot; it is not a claim that the new assertion has already run.
+validated production artifact are unchanged. The affected actual Help route
+suite now passes11/11 checks with strict lint zero in the integrated glossary
+checkout at4c2504ea. The test, Getting started article and HelpArticleBody bytes
+match this A1 checkout; the shared hash receipt is preserved in the glossary
+proof directory. The original CI and local old-date failures remain retained.
+Actual main0033919d was reconciled at994a02ba without changing the complete
+reviewed tree; fresh exact-head remote checks still follow.
 
 Root independently verified the23 final owned hashes and five proof artifact
 hashes, and visually reviewed the Light1280 sidebar, Dark360 Preferences and
