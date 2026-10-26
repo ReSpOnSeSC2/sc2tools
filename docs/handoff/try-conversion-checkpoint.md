@@ -1,5 +1,25 @@
 # Try conversion pack — ADR 0062
 
+## Current Public main compatibility
+
+Public main `251cb319` is integrated normally at `55667913`, preserving both
+feature changelog sections. The shared effect-aware clipboard test repair from
+Auth CI is also present (`dad4e5f0`); it changes no product behavior.
+All 36 checks in five report/intent/CTA/profile suites pass with the intended
+unit rollout environment; the CTA suite independently covers all three modes.
+An initial invocation inherited build mode All and conflicted with a separate
+test's default-mode expectation; no assertion or product code was changed.
+Full web types, all 18 UI rules and the 1,677-source scan pass with 655 inherited
+occurrences and no new/stale allowance.
+
+Supported Next route type generation refreshed the validator after the Public
+Community route-group move. The single obsolete checker was hash-matched to a
+preserved 120-file snapshot before retirement; no source route or type gate was
+changed. Logs and snapshot are root `.cache/try-public-integration-*` and
+`.cache/try-before-public-typegen`. Full local build/browser evidence below
+precedes this independent Public integration; remote current-head CI must build
+and exercise the combined source.
+
 Root independently inspected the final phone copy fallback, desktop Dark PNG
 preview, phone Dark sample, phone Light landing card and desktop Dark replay
 editor. All are legible and contained. Five unchanged synthetic captures were
