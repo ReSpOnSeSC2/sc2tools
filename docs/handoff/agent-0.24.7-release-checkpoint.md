@@ -37,5 +37,25 @@ production remains on b97fb80c with the DT browser engine and Macro build editor
 the tested cfcf5abd navigation source is merged but its production rollout is
 pending the quota reset. Desktop tagging is a separate pipeline.
 
-Final release commit, PR checks, merge and the single `agent-v0.24.7` tag push
-remain to be recorded. Never replace an existing tag or push unrelated tags.
+## Verified delivery
+
+PR757 passed every exact-head check at
+`7158b79bb9c6aa25bb66f4da1b1386150006aa6e`, including both Windows partitions
+and their aggregate gate, web/responsive checks, engine parity, versions and
+Vercel preview. Fresh-main reconciliation matched tested tree
+`f228adabee3c2f25dd3d4ef46cdd6ee785829e4a`.
+
+The PR was squash-merged as `ae21f7a284176112021cdcb80781ca7613fc5032`.
+The single annotated `agent-v0.24.7` tag was pushed; GitHub's remote tag object
+`6f4aa9b29df8c30a3125fed8f9c861d8b905b22d` was verified to point to that commit.
+Never replace this tag or push unrelated tags.
+
+The tag's installer run, `40256176096`, resolved version 0.24.7 successfully
+and then failed at **Check signing configuration** with the existing approved
+SignPath prerequisite error. Bundle, signature, installer upload and release
+steps were skipped. No installer was produced or installed. The signing guard
+and owner setup requirements remain intact.
+
+The automatic website production status for merged main ae21f7a2 was also
+rate-limited by Vercel. No deployment retry or plan upgrade was attempted;
+production rollout remains separate from the verified desktop Git tag.

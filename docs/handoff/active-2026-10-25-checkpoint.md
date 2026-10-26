@@ -147,8 +147,35 @@ backups/restore, Render/Vercel/R2/Clerk, deployment order and optional features.
 ## Constraints
 
 No AI/model calls; no production migrations/deletions or provider feature
-activation/title publication; no signing/releases/version bumps/tags. Keep
+activation/title publication. The owner explicitly authorized agent 0.24.7's
+version bump, changelogs and single tag; that work is complete as recorded
+below. No signing setup or installer execution was included in that request. Keep
 infrastructure flat and bundle budgets unchanged. Preserve primary owner work,
 every branch, worktree and cache. Use only first-party app check diagnostics for
 CI, exact full head SHA and returned IDs. Small local worker counts; serialize
 builds, test packs and browser processes after the earlier PC crash.
+
+## Agent 0.24.7 delivery and subsequent UI reconciliation
+
+PR757 passed all exact-head checks and merged as
+`ae21f7a284176112021cdcb80781ca7613fc5032`. The annotated `agent-v0.24.7` tag
+is pushed and verified to reference that exact merged commit. Its installer
+workflow `40256176096` resolved 0.24.7, then failed at the existing missing
+SignPath configuration gate; no installer or draft release was produced.
+The automatic production web deployment was rate-limited, so no rollout retry
+or plan upgrade was made. See the dedicated agent release checkpoint.
+
+PR752's later Linux CI exposed a keyboard-inaccessible overflowing source
+command block. The five-file a98575ee repair names and tab-enables all four
+command regions with visible focus rings, adds narrow Linux keyboard/axe
+coverage and passes 12 focused checks, full web types/lint and the unchanged
+18-test UI ratchet. This UI branch now reconciles actual main ae21f7a2 before
+the next remote checks. Existing owner temporary files remain untracked.
+
+The public-player pack has independent privacy review and focused API/web
+proof, with final production/browser validation still in progress. The review
+found and repaired cached Community profile capabilities after explicit OFF;
+decorated responses are fresh while content caches remain. The old Community
+sitemap retains cached build discovery and returns profiles:[]; canonical
+player discovery has its own fresh consent gate. No profile was enabled or
+production record changed. Do not claim that pending feature is shipped.

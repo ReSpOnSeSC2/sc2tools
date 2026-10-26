@@ -100,3 +100,24 @@ was followed by one normal manual request, rejected by Vercel's daily free
 deployment quota with a 24-hour retry instruction. No retry/upgrade followed;
 production remains PR756/b97. Root holds PR752's merge until required remote
 CI/deployment gates succeed. Private Admin evidence remains excluded.
+
+## Linux command focus and agent release reconciliation
+
+CI at 06910887 found one real narrow Linux download failure: source-install
+commands could overflow horizontally without accepting keyboard focus. The
+four source/verification command blocks now have distinct accessible names,
+native tab focus and visible accent focus rings. Two deterministic 360px
+browser cases force the Linux branch, check Tab and ArrowRight in both themes,
+and retain strict axe. Existing default-platform cases are unchanged.
+
+The five-file repair at a98575ee passes 12 focused component checks, full web
+types, strict changed-file lint, all 18 ratchet regressions and the unchanged
+1,645-file/755-occurrence UI scan. No accessibility allowance was added.
+Production-browser verification uses the integrated public-player build.
+
+PR757 is merged as ae21f7a2 after all exact-head checks passed. Agent version
+and both changelogs are 0.24.7; the owner-authorized agent-v0.24.7 tag is pushed
+and remotely verified. Its installer workflow stopped at the existing missing
+SignPath configuration gate, before producing any executable. This branch now
+reconciles that actual main ancestry and records delivery in the release
+checkpoint. No signing configuration or installer execution was performed.
