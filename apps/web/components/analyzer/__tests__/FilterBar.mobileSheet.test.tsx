@@ -120,8 +120,12 @@ describe("FilterBar phone sheet", () => {
       />,
     );
     const dialog = await openSheet();
+    const beforeReset = Date.now();
     fireEvent.click(within(dialog).getByRole("button", { name: "Reset to defaults" }));
-    expect(state()).toEqual(DEFAULTS);
+    const reset = state();
+    expect(reset).toEqual({ ...DEFAULTS, preset: "current_season", until: expect.any(String) });
+    expect(new Date(reset.until!).getTime()).toBeGreaterThanOrEqual(beforeReset);
+    expect(new Date(reset.until!).getTime()).toBeLessThanOrEqual(Date.now());
     const done = within(dialog).getByRole("button", { name: "Done" });
     expect(document.activeElement).toBe(done);
     expect(

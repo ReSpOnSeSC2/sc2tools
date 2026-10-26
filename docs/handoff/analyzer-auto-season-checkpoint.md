@@ -39,3 +39,11 @@ Local evidence: `.cache/analyzer-behavior-fix/` in the retained
 `wave3-guides-expansion` worktree. Browser proof and remote exact-head delivery
 are still pending at this source checkpoint. No data migration, replay
 recomputation, version/tag change or production preference mutation.
+
+Exact-head CI on the stacked graph source exposed one additional existing
+phone Reset test comparing a module-time `until` snapshot to the new rolling
+season window. All fields matched; `until` advanced by 596 ms. Its original
+file/hash and bounded first-party failure evidence are retained under
+`mobile-reset-ci-before/`. The test now retains the complete default-field
+comparison and checks that the resolved end lies between the actual Reset
+start/end times; all focus, disabled-button and Done assertions remain.
