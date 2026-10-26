@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { checkAccessibility } from "./accessibility-check";
 
 /**
  * Public-page responsive smoke, run at 360 / 768 / 1280 via the
@@ -17,6 +18,13 @@ import { expect, test, type Locator, type Page, type TestInfo } from "@playwrigh
 const PAGES: Array<{ path: string; expectText: RegExp }> = [
   { path: "/legal/privacy", expectText: /Privacy Policy/ },
   { path: "/legal/terms", expectText: /Terms of Service/ },
+  { path: "/legal/accessibility", expectText: /Accessibility/ },
+  { path: "/help", expectText: /How can we help/ },
+  { path: "/help/appearance", expectText: /Accessibility & appearance/ },
+  { path: "/definitions", expectText: /Build & Strategy Definitions/i },
+  { path: "/reviews", expectText: /replay reviews/i },
+  { path: "/community/builds/fixture-community-polish", expectText: /Fixture safe opening/ },
+  { path: "/community/authors/fixture-community-author", expectText: /FixtureBuilder/ },
   { path: "/", expectText: /opponent|build|replay/i },
   { path: "/guides", expectText: /build order guides/i },
   { path: "/guides/pvz", expectText: /PvZ build orders/i },
@@ -112,8 +120,10 @@ test("phone privacy contents links reach the Cookies section", async ({ page }) 
   await expect(page.locator("h2#cookies")).toBeInViewport();
 });
 
-for (const { path, expectText } of PAGES) {
-  test(`${path} renders without horizontal scroll`, async ({ page }) => {
+for (const { path, expectText } of PAGES) for (const theme of ["light", "dark"] as const) {
+  test(`${path} ${theme} renders without horizontal scroll`, async ({ page }, info) => {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+    await page.addInitScript(value => localStorage.setItem("sc2tools.theme", value), theme);
     const response = await page.goto(path);
     expect(response, `no response for ${path}`).not.toBeNull();
     expect(response!.status(), `${path} status`).toBeLessThan(400);
@@ -138,6 +148,7 @@ for (const { path, expectText } of PAGES) {
       overflow.scrollWidth,
       `${path} horizontally overflows: content ${overflow.scrollWidth}px > viewport ${overflow.clientWidth}px`,
     ).toBeLessThanOrEqual(overflow.clientWidth + 1);
+    await checkAccessibility(page, info, path, theme);
   });
 }
 

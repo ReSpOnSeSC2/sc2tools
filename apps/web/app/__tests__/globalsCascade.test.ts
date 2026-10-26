@@ -152,8 +152,8 @@ describe("app/globals.css cascade", () => {
 
   it("keeps the link colour and its hover in the base layer", () => {
     const base = baseLayerRules(root);
-    expect(declarations(base.get("a"))).toEqual({ color: "rgb(var(--accent))" });
-    expect(declarations(base.get(":where(a):hover"))).toEqual({ color: "rgb(var(--accent-hover))" });
+    expect(declarations(base.get("a"))).toEqual({ color: "rgb(var(--accent-ink))" });
+    expect(declarations(base.get(":where(a):hover"))).toEqual({ color: "rgb(var(--accent-ink-hover))" });
   });
 
   it("draws the focus ring as an outline that leaves the element's corners alone", () => {
@@ -185,7 +185,7 @@ describe("compiled stylesheet order", () => {
 
     const at = {
       preflightLink: ruleIndex(rules, "a", ["color", "inherit"]),
-      link: ruleIndex(rules, "a", ["color", "rgb(var(--accent))"]),
+      link: ruleIndex(rules, "a", ["color", "rgb(var(--accent-ink))"]),
       linkHover: ruleIndex(rules, ":where(a):hover"),
       focusRing: ruleIndex(rules, ":where(*):focus-visible"),
       textWhite: ruleIndex(rules, ".text-white"),

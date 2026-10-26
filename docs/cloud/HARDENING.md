@@ -97,6 +97,11 @@ The public page is part of the existing web project at
 `https://sc2tools.com/status`. It does not require Clerk, app data or a new
 monitoring account. Website footer and More links use `/status` directly.
 
+Live configuration verified 2026-10-25: `status.sc2tools.com` is attached to
+Production with Valid Configuration. Its HTTPS root and a synthetic path/query
+both return308 to the clean primary status URL; that URL returns200. Website
+and API checks both returned Reachable in a browser, including manual Refresh.
+
 Attach `status.sc2tools.com` to the existing **sc2tools** Vercel project's
 Production environment. Its middleware redirects that exact hostname to
 `https://sc2tools.com/status`, discarding the incoming path and query. DNS

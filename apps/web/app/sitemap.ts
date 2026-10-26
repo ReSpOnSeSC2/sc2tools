@@ -47,6 +47,7 @@ const ROUTES: Route[] = [
   { path: "/donate", priority: 0.4, changeFrequency: "monthly", lastModified: "2026-08-11" },
   { path: "/legal/privacy", priority: 0.2, changeFrequency: "yearly", lastModified: "2026-09-28" },
   { path: "/legal/terms", priority: 0.2, changeFrequency: "yearly", lastModified: "2026-08-11" },
+  { path: "/legal/accessibility", priority: 0.2, changeFrequency: "yearly", lastModified: "2026-10-25" },
 ];
 
 // /try (in-browser replay analysis) is public only once Instant Analysis

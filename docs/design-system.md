@@ -1,433 +1,481 @@
-# SC2 Tools — Design System
+# SC2 Tools web design system
 
-The SC2 Tools design system is the single source of truth for color,
-typography, spacing, motion, and elevation across every surface we ship:
-the React SPA analyzer, the Tkinter desktop GUI, the OBS browser-
-source overlay widgets, and the future web dashboard / React Native mobile
-app.
+This guide describes the web app as implemented in `apps/web`. It covers the
+analyzer, public pages, Settings and shared web controls. Native desktop widgets
+and OBS rendering have their own constraints; this document does not make their
+palettes or accessibility behavior identical to the website.
 
-Token files (do not edit one without editing the others):
+## Sources of truth
 
-- `reveal-sc2-opponent-main/SC2-Overlay/design-tokens.css` — CSS custom
-  properties on `:root`. Authoritative for any web surface.
-- `reveal-sc2-opponent-main/SC2-Overlay/design-tokens.json` — Style
-  Dictionary v4 format, consumed by the Node backend and any future build
-  tooling that wants to emit native iOS / Android assets.
-- `reveal-sc2-opponent-main/gui/design_tokens.py` — frozen dataclasses
-  exposed as `COLORS`, `FONT_FAMILIES`, `FONT_SIZES`, `FONT_WEIGHTS`,
-  `LINE_HEIGHTS`, `SPACING`, `RADII`, `MOTION`. Used by Tkinter /
-  customtkinter / PyQt code.
+| Concern | Implementation |
+| --- | --- |
+| Theme palettes, replay scope, global focus and motion | [globals.css](../apps/web/app/globals.css) |
+| Utility names, fonts, type scale and named layers | [tailwind.config.ts](../apps/web/tailwind.config.ts) |
+| Committed fonts and pre-paint appearance setup | [layout.tsx](../apps/web/app/layout.tsx) |
+| Saved mode, resolved palette, OS and cross-tab updates | [theme.ts](../apps/web/lib/theme.ts) |
+| Contrast calculation and documentation table | [contrast-tokens.mjs](../apps/web/scripts/contrast-tokens.mjs) |
+| Shared controls | [components/ui](../apps/web/components/ui) |
 
-If you change a token value in one file, change it in all three. CI will
-flag drift.
+Colors are space-separated RGB channel triples, used through
+`rgb(var(--token) / <alpha-value>)`. Define theme values in CSS and expose their
+roles in Tailwind. Keep both root palettes and any affected `.replay-scope`
+overrides consistent. The older overlay token files are not the source for these
+web utilities.
 
-## Color usage rules
+## Color roles
 
-The palette has three orthogonal axes — surface, race accent, and semantic
-state. They never conflict; one always wins.
+The ground is cool blue-black in Dark and pale paper in Light. Cards use solid
+surfaces, a visible outline and a hard offset shadow. Cyan/teal marks interaction;
+amber `signal` is reserved for occasional emphasis. Clay `editorial` colors give
+public editorial layouts a separate accent.
 
-### Surfaces (`--color-bg-*`)
+| Token | Dark | Light | Role |
+| --- | --- | --- | --- |
+| `--bg` | `#06090e` | `#f4f6fa` | Page ground |
+| `--bg-surface` | `#0c1017` | `#ffffff` | Card/control surface |
+| `--bg-elevated` | `#111720` | `#f9fbfe` | Raised/hover surface |
+| `--bg-subtle` | `#1a212e` | `#ebeff5` | Subtle fill |
+| `--text` | `#e7edf0` | `#0d121a` | Primary text |
+| `--text-muted` | `#9fadb9` | `#3f4856` | Secondary text |
+| `--text-dim` | `#86929f` | `#515b6b` | Low-priority text |
+| `--accent` | `#157d8c` | `#0e7d8c` | Primary fill |
+| `--accent-hover` | `#096875` | `#096875` | Primary hover fill |
+| `--accent-ink` | `#1f9eaf` | `#08666d` | Accent text |
+| `--accent-ink-hover` | `#3ce0d6` | `#096875` | Accent hover text |
+| `--accent-cyan` | `#3ce0d6` | `#08666d` | Cyan emphasis |
+| `--signal` | `#f5b84a` | `#8f5c0c` | Rare warm emphasis |
+| `--signal-hover` | `#fac86e` | `#7a4e0a` | Warm hover |
+| `--editorial` | `#d6846e` | `#a54834` | Editorial accent |
+| `--editorial-soft` | `#e8b2a2` | `#9d4f3b` | Editorial secondary accent |
+| `--success` | `#3ec884` | `#157a43` | Success/win text |
+| `--warning` | `#e89c38` | `#8f5f0f` | Caution text |
+| `--danger` | `#ff6b6b` | `#b8333a` | Error/loss text |
+| `--danger-fill` | `#c9363c` | `#b8333a` | Destructive fill |
+| `--player-you` | `#6092ff` | `#2563eb` | Your comparison series |
+| `--player-opp` | `#ff6363` | `#d62839` | Opponent comparison series |
+| `--race-protoss` | `#7c8cff` | `#4a5ae6` | Protoss series |
+| `--race-terran` | `#ff6b6b` | `#b8333a` | Terran series |
+| `--race-zerg` | `#a78bfa` | `#7154d7` | Zerg series |
+| `--race-random` | `#96a4b0` | `#546072` | Random series |
+| `--border` | `#5c697c` | `#7c879b` | Control boundary |
+| `--border-strong` | `#75849b` | `#65738a` | Stronger boundary |
+| `--line` | `#5c697c` | `#0d121a` | Structural outline |
 
-The dark space theme uses a three-level elevation ladder. Every UI lives
-on one of these.
+### Separate text ink from filled controls
 
-| Token            | Hex       | Use                                       |
-| ---------------- | --------- | ----------------------------------------- |
-| `bg-primary`     | `#0A0E1A` | Page / app background.                    |
-| `bg-surface`     | `#111827` | Cards, panels, sidebars, dialog bodies.   |
-| `bg-elevated`    | `#1F2937` | Hovered card, modal, tooltip, active row. |
+The same color cannot serve every foreground and background role. Tailwind maps
+these utilities deliberately:
 
-The OBS overlay widgets float on a transparent OBS source, so they reach
-into the `--color-overlay-*` group instead — see "Overlay legacy palette"
-below.
+| Utility or CSS token | Role |
+| --- | --- |
+| `text-accent` / `--accent-ink` | Links, active labels and accent text on a solid page/card surface |
+| `hover:text-accent-hover` / `--accent-ink-hover` | Accent text on hover |
+| `bg-accent`, `hover:bg-accent-hover` | Filled controls with `text-white` |
+| `text-danger` / `--danger` | Error and loss text |
+| `bg-danger` / `--danger-fill` | Destructive control fill with `text-white` |
+| `text-accent-cyan` | Strong cyan emphasis; uses a darker teal in Light |
+| `border-border`, `border-border-strong`, `border-line` | Boundaries and structural outlines |
 
-### Race accents (`--color-race-*`)
+`text-accent` does **not** read `--accent`. Likewise, `bg-danger` does **not** read
+`--danger`. For inline styles, choose the equivalent ink or fill token explicitly.
+Do not put white body text on a semantic text token merely because its name
+matches a button's purpose.
 
-Use for race-identifying chrome only — race chips, race badges, race-
-tinted matchup labels, race-coded win-rate bars on the Matchups tab.
+Use `text-text` for primary text, `text-text-muted` for secondary text and
+`text-text-dim` for lower-priority labels. All three pass the tested solid-surface
+matrix at full opacity. Reducing opacity, adding a translucent background or
+placing text on an image creates a new pair that needs its own check.
 
-| Token          | Hex       |
-| -------------- | --------- |
-| `race-terran`  | `#3B82F6` |
-| `race-zerg`    | `#A855F7` |
-| `race-protoss` | `#F59E0B` |
-| `race-random`  | `#94A3B8` |
+Race tokens identify Protoss, Terran, Zerg and Random; player tokens identify you
+and the opponent in comparisons. Keep a visible name, icon, pattern or status
+label alongside meaningful color. A win, error or selected state must remain
+understandable without distinguishing hues.
 
-Race accents NEVER carry win/loss meaning. A Zerg loss colors red, not
-purple. If both a race accent and a semantic color apply to the same
-element, the semantic color wins and the race accent moves to a secondary
-chip or icon.
+### Replay and overlay surfaces
 
-### Semantic state (`--color-success` / `danger` / `warning` / `info`)
+`.replay-scope` sets a self-contained dark palette and `color-scheme: dark`, even
+inside a Light page. Its ground is `#070a0f`, surface `#0c1018` and elevated
+surface `#141a24`; its text and interaction tokens are overridden as well. Use
+those scoped variables for surrounding player controls rather than borrowing a
+light-page color. The matrix below explicitly checks this mixed-theme case.
 
-| Token     | Hex       | Use                                              |
-| --------- | --------- | ------------------------------------------------ |
-| `success` | `#10B981` | Wins, healthy KPIs, completed steps.             |
-| `danger`  | `#EF4444` | Losses, errors, blockers, destructive CTAs.      |
-| `warning` | `#F59E0B` | Caution, low-confidence (n=1), stale data.       |
-| `info`    | `#3B82F6` | Tip, hint, neutral CTA, "more info" affordances. |
+OBS browser sources may composite transparent content over arbitrary footage.
+A contrast ratio against a website surface says nothing about that footage.
+Review the chosen overlay skin, its actual backing panel and broadcast-size text
+separately. Do not assume the web theme automatically controls every overlay.
 
-Note: `warning` and `race-protoss` share a hex value (`#F59E0B`). That is
-intentional — the spec defines them that way — but do not conflate them
-in code. Use whichever token names the role you actually want.
+## Generated contrast matrix
 
-### Text (`--color-text-*`)
+The table below is generated from the declarations in `globals.css`, using the
+same matrix as [contrastTokens.test.ts](../apps/web/lib/__tests__/contrastTokens.test.ts).
+For text and boundaries, each cell is the **lowest** ratio across ground
+(`bg`), surface (`bg-surface`) and elevated (`bg-elevated`). Fill rows compare
+white directly with that fill. Replay on light combines the Light root with its
+replay overrides, including tokens that would otherwise inherit.
 
-| Token            | Hex       | Use                                                                   |
-| ---------------- | --------- | --------------------------------------------------------------------- |
-| `text-primary`   | `#F1F5F9` | Body copy, headings, button text.                                     |
-| `text-secondary` | `#94A3B8` | Field labels, helper text, footnote rows.                             |
-| `text-muted`     | `#64748B` | Timestamps, low-priority labels, decorative captions.                 |
-| `text-on-accent` | `#0A0E1A` | Dark foreground when sitting on a race-accent or semantic-color fill. |
+The contract uses at least 4.5:1 for these text pairs and at least 3:1 for the
+listed boundaries. It does not rely on a large-text exception. Ratios displayed
+here are rounded; tests compare the unrounded values.
 
-`text-muted` does NOT pass WCAG AA on `bg-elevated`. Never use it for body
-copy on an elevated surface — promote it to `text-secondary`.
+| Pair (worst of ground, surface and raised) | Dark | Light | Replay on light | Minimum |
+| --- | ---: | ---: | ---: | ---: |
+| text | 15.22:1 | 17.35:1 | 15.06:1 | 4.5:1 |
+| text-muted | 7.84:1 | 8.54:1 | 8.92:1 | 4.5:1 |
+| text-dim | 5.68:1 | 6.35:1 | 6.15:1 | 4.5:1 |
+| accent-ink | 5.63:1 | 6.20:1 | 5.46:1 | 4.5:1 |
+| accent-ink-hover | 10.99:1 | 5.97:1 | 10.66:1 | 4.5:1 |
+| accent-cyan | 10.99:1 | 6.20:1 | 10.67:1 | 4.5:1 |
+| signal | 10.14:1 | 5.24:1 | 9.84:1 | 4.5:1 |
+| signal-hover | 11.61:1 | 6.64:1 | 11.27:1 | 4.5:1 |
+| editorial | 6.33:1 | 5.43:1 | 6.14:1 | 4.5:1 |
+| editorial-soft | 9.70:1 | 5.37:1 | 9.41:1 | 4.5:1 |
+| success | 8.40:1 | 4.98:1 | 8.15:1 | 4.5:1 |
+| warning | 7.92:1 | 5.09:1 | 7.68:1 | 4.5:1 |
+| danger | 6.48:1 | 5.43:1 | 6.29:1 | 4.5:1 |
+| player-you | 6.04:1 | 4.78:1 | 5.86:1 | 4.5:1 |
+| player-opp | 6.18:1 | 4.60:1 | 6.00:1 | 4.5:1 |
+| race-protoss | 6.04:1 | 4.98:1 | 5.86:1 | 4.5:1 |
+| race-terran | 6.48:1 | 5.43:1 | 6.29:1 | 4.5:1 |
+| race-zerg | 6.61:1 | 4.91:1 | 6.41:1 | 4.5:1 |
+| race-random | 7.05:1 | 5.89:1 | 6.84:1 | 4.5:1 |
+| white on accent | 4.83:1 | 4.85:1 | 4.83:1 | 4.5:1 |
+| white on accent-hover | 6.46:1 | 6.46:1 | 6.46:1 | 4.5:1 |
+| white on danger-fill | 5.15:1 | 5.88:1 | 5.15:1 | 4.5:1 |
+| border | 3.23:1 | 3.35:1 | 3.13:1 | 3:1 |
+| border-strong | 4.74:1 | 4.44:1 | 4.60:1 | 3:1 |
+| line | 3.23:1 | 17.35:1 | 3.13:1 | 3:1 |
 
-### Overlay legacy palette (`--color-overlay-*`)
+Regenerate the table after a token change; do not hand-edit ratios:
 
-The OBS browser-source widgets ship with a deliberately more saturated,
-neon palette so they read clearly when composited over busy SC2 footage
-on a livestream. These tokens are decorative and preserve that exact
-look. New surfaces — analyzer SPA, Tkinter GUI, mobile, dashboard —
-should prefer the semantic tokens above.
+```sh
+node apps/web/scripts/contrast-tokens.mjs
+```
 
-The overlay tokens cover: gradient endpoints, accent bars (gold, cyan,
-purple, red, rival-amber), victory / defeat text colors, scout /
-cheese / rival widget skins, build-step pills, and translucent fills
-for win-streak / loss-streak chips. See `design-tokens.css` section 6
-for the full list.
+From `apps/web`, run the corresponding contract test:
 
-## Typography rules
+```sh
+npx vitest run lib/__tests__/contrastTokens.test.ts
+```
 
-Two families:
+The matrix is a check of named, opaque pairs. It does not verify gradients,
+translucent states, disabled controls, arbitrary chart marks, images, canvas
+pixels or every combination of utilities in a rendered page.
 
-- `--font-family-ui` — **Inter** (with `system-ui` / `Segoe UI` fallbacks).
-  Used for headings, body copy, button labels, every regular UI string.
-- `--font-family-mono` — **JetBrains Mono** (with `Consolas` fallback).
-  Used **only** for stats and timings:
-  - MMR values and deltas (`+24 MMR`, `3120`).
-  - Build-order timestamps (`3:42`).
-  - Numeric counts in stat cards (`12W - 5L`).
-  - Win-rate percentages (`64.7%`).
+## Appearance: Light, Dark and System
 
-If a number is part of a sentence ("you played 47 games this week"), it
-stays in the UI family. Mono is reserved for atomic numeric values that
-need column alignment.
+`ThemeMode` is the saved preference (`light`, `dark` or `system`); `Theme` is the
+resolved palette (`light` or `dark`). Keep these types separate when consuming
+[theme.ts](../apps/web/lib/theme.ts).
 
-### Scale
+- The browser stores an explicit choice under `sc2tools.theme`. Missing or
+  invalid storage means System. Blocked storage still permits a choice in the
+  current tab.
+- The synchronous head bootstrap resolves the mode before first paint. It sets
+  `data-theme-mode`, the resolved `data-theme` and `color-scheme` on `<html>`.
+- `ThemeSync` subscribes for the lifetime of the page. Controls share one storage
+  listener and an OS `matchMedia` listener only while System is active. Forcing
+  Light or Dark stops following OS changes; choosing System resumes it.
+- Storage changes from another tab update the current page. Merely defaulting to
+  System does not write a preference.
+- The layout exports Light and Dark media variants for `theme-color`. Bootstrap
+  and runtime updates rewrite the meta elements to the resolved palette, so a
+  forced choice also controls supported browser chrome. The colors are
+  `#f4f6fa` for Light and `#06090e` for Dark.
 
-| Token          | Pixels | Use                                                  |
-| -------------- | ------ | ---------------------------------------------------- |
-| `font-size-xs` | 11     | Footnotes, table tooltips, microcopy.                |
-| `font-size-sm` | 13     | Helper text, small labels.                           |
-| `font-size-base` | 15   | Body copy, default UI.                               |
-| `font-size-lg` | 18     | Card titles, prominent labels.                       |
-| `font-size-xl` | 22     | Sub-section headings.                                |
-| `font-size-2xl`| 28     | Page-level headings.                                 |
-| `font-size-3xl`| 36     | Hero numbers (session W-L), splash titles.           |
+The More sheet and MobileNav footer contain `ThemeChoice`: Sun, Moon and Monitor
+buttons in a three-option radiogroup. Arrow keys wrap through choices; Home and
+End choose the first and last. Only the selected option is in the normal tab
+order. The account menu's Appearance action opens the same chooser in a Modal;
+the Clerk menu retains its supported default actions.
 
-### Line height
+The context-bar `ThemeToggle` stays a one-click palette switch. Clicking chooses
+the opposite resolved palette and exits System. Press and hold, right-click or
+press Arrow Down to open all three modes. This shortcut supplements the labeled
+chooser; it is not the only way to reach System.
 
-`tight` (1.2) for hero numbers and headlines. `normal` (1.5) for body
-copy. `relaxed` (1.75) for long-form text in dialogs and onboarding.
+## Typography
 
-## Spacing rhythm
+Fonts are committed Latin WOFF2 files loaded through `next/font/local`, so the
+production build does not depend on Google Fonts. The layout uses `display: swap`
+and fallback metrics.
 
-The spacing scale is `0 / 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 / 96`,
-exposed as `--space-0` through `--space-24` (the number is the multiple of
-the 4 px base unit; `--space-6` = 24 px, `--space-12` = 48 px).
+| Utility | Family | Use |
+| --- | --- | --- |
+| `font-sans` | Hanken Grotesk, then system sans | Body, labels and regular UI |
+| `font-display` | Bricolage Grotesque, then Hanken/system sans | Headings, wordmark, prominent numbers and button labels |
+| `font-serif` | Fraunces, then system serif | Editorial landing-page headings; not preloaded on every route |
+| `font-mono` | System monospace | Atomic timings, aligned counts and technical values |
 
-Pick the closest step. **Do not invent in-betweens** — `padding: 14px` is
-not allowed; use `--space-3` (12) or `--space-4` (16).
+The root heading rules apply the display face to `h1` through `h4`. Heading
+semantics and visual size are independent: choose the correct heading level,
+then a scale utility. Use `PageHeader` for a page heading; use its section mode
+and `as="h2"` where the app context already supplies the page's `h1`.
 
-Common pairings that keep vertical rhythm consistent:
+| Utility | Size / line height | Default role |
+| --- | --- | --- |
+| `text-display-xl` | 64 / 68 px | Large display headline |
+| `text-display-lg` | 48 / 52 px | Display headline |
+| `text-h1` | 36 / 42 px | Page title |
+| `text-h2` | 28 / 34 px | Major section |
+| `text-h3` | 22 / 28 px | Section/card title |
+| `text-h4` | 18 / 24 px | Small heading |
+| `text-body-lg` | 17 / 26 px | Introductory copy |
+| `text-body` | 15 / 24 px | Body and regular UI |
+| `text-caption` | 13 / 20 px | Secondary labels |
+| `text-micro` | 12 / 16 px | Dense labels/overlines; smallest shared scale token |
+| `text-mono` | 14 / 22 px | Numeric/technical readout |
 
-- Section gap inside a card: `--space-4` (16).
-- Stack of related rows in a list: `--space-2` (8).
-- Card padding: `--space-6` / `--space-4` (24 vertical, 16 horizontal).
-- Section heading → first content row: `--space-3` (12).
-- Inter-card grid gap: `--space-4` (16) on desktop, `--space-3` (12) on
-  mobile.
+Use tabular numerals where values need comparison. A number inside a sentence
+can stay in the body face. Do not shrink essential instructions to make a layout
+fit; allow wrapping or change the layout.
 
-## Radii & shadows
+## Layout, surfaces and layers
 
-| Radius          | Use                                              |
-| --------------- | ------------------------------------------------ |
-| `radius-sm` 4   | Inline pills, table cells.                       |
-| `radius-md` 8   | Buttons, input fields, small cards.              |
-| `radius-lg` 12  | Standard cards, modal bodies.                    |
-| `radius-xl` 16  | Hero cards, OBS widget shells.                   |
-| `radius-full`   | Avatars, race chips, segmented toggles.          |
+Use Tailwind's existing spacing and radius utilities. There is no separate
+cross-platform `--space-*` or `--radius-*` contract for the current web app.
+Common shared patterns are 16px card bodies (`p-4`), 16px horizontal/12px vertical
+card headers (`px-4 py-3`), and 8–16px gaps between related controls or sections.
+Responsive layouts can use other existing scale steps where their content needs
+them.
 
-Shadows use a four-step ladder (`sm` / `md` / `lg` / `xl`); reach for the
-lowest one that still establishes the elevation you need. The overlay
-widgets reuse `--shadow-overlay-card`, `--shadow-overlay-tile`, and
-`--shadow-overlay-streak` to preserve the existing OBS-friendly drop.
+`Card` uses `rounded-xl`, a 2px structural outline and `shadow-hard`. Default and
+elevated variants currently share `bg-bg-surface`; the feature variant changes
+the outline to accent. Its default `overflow-hidden` clips descendants, so menus
+that must escape a card need an intentional portal or a scoped overflow change.
+`Card.Header`, `.Body` and `.Footer` support explicit composition; the legacy
+`title`/`right` props remain available.
 
-## Layers and the bottom edge
+The hard shadow is 3px by 3px without blur: cyan-tinted in Dark and near-black in
+Light. `shadow-halo-cyan` and `shadow-halo-accent` are decorative emphasis, not a
+replacement for a visible boundary.
 
-Everything pinned to the viewport uses a named layer from
-`apps/web/tailwind.config.ts`, never a raw `z-40` / `z-50` / `z-[60]`:
+AppChrome content is capped at 1680px, with 16px phone padding, 24px from `sm` and
+32px from `lg`. Reading pages can use a narrower measure. Keep grid/flex children
+shrinkable (`min-w-0`) and put wide tables or tab strips in their own horizontal
+scrollers. Body clipping must not conceal an unusable table or inaccessible
+control. Check long labels, zoom and narrow viewports with real content.
 
-| Class      | z  | Use                                                                 |
-| ---------- | -- | ------------------------------------------------------------------- |
-| `z-nav`    | 40 | The app rail and the mobile tab bar.                                |
-| `z-sheet`  | 50 | Sheets and drawers opened from the nav (More sheet, install steps). |
-| `z-banner` | 50 | Bars that float over content: Save bar, update prompt, cookie banner. |
-| `z-toast`  | 60 | Toasts, above everything except the skip link (`z-[100]`).          |
+### Layers and the bottom edge
 
-The sticky context bar stays at `z-30`, under the nav. Sheets and banners
-share 50: a sheet opened later is later in the DOM, so it paints on top.
-Modals manage their own stacking and are not part of this scale.
+| Named utility | z-index | Purpose |
+| --- | ---: | --- |
+| `z-nav` | 40 | App rail and mobile tab bar |
+| `z-sheet` | 50 | Navigation sheets/drawers |
+| `z-banner` | 50 | Save bar, update prompt and floating banners |
+| `z-toast` | 60 | Toasts |
 
-**Bottom edge.** On a phone the app has a tab bar along the bottom.
-AppChrome measures it (safe-area padding included) and publishes the
-height as `--chrome-bottom` on `<html>`: 0 on `md+`, where the bar is
-hidden, and unset outside the app. A surface that floats at the bottom
-uses `bottom-above-chrome` instead of `bottom-0`:
+Use these named utilities for new viewport-pinned surfaces. The context bar is
+at 30. Modal and Popover start at 50; React-owned nested overlays add one layer,
+capped at 59 below Toast. This context crosses React portals. A custom portal
+host must still permit normal stacking: a child's z-index cannot escape an
+ancestor's CSS stacking context. Other sheets and banners sharing 50 still need
+an overlap check. The skip link sits above the normal chrome.
+
+AppChrome measures its mobile tab bar, including safe-area padding, and publishes
+`--chrome-bottom`. It is zero from `md` and removed outside the app. A floating
+bottom surface such as `SaveBar` uses `bottom-above-chrome`:
 
 ```css
 bottom: calc(max(var(--chrome-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 0.75rem);
 ```
 
-So it sits 12 px above the tab bar in the app, and 12 px above the home
-indicator everywhere else. Don't use it inside a modal (a dialog's own
-footer, like the build editor's save bar, stays put) or on the overlay
-and dock routes, which have no chrome.
+This leaves 12px above the tab bar or safe area. A dialog's own footer stays
+inside the dialog. Top-pinned app chrome accounts for `safe-area-inset-top`;
+additional fixed surfaces need to account for the same inset where relevant.
 
-**Top edge.** The installed iOS app draws the page under the status bar,
-so the app's sticky context bar pads itself with
-`pt-[env(safe-area-inset-top)]`. Anything else pinned to the top needs the
-same.
+## Controls, forms and dialogs
 
-## Motion
+### Buttons and navigation
 
-Three durations:
+Use `Button` for an action and `LinkButton` for navigation. Both are exported by
+[Button.tsx](../apps/web/components/ui/Button.tsx); there is no separate
+`LinkButton.tsx`. Server components can import `buttonClassName` from
+[buttonStyles.ts](../apps/web/components/ui/buttonStyles.ts) to style a `Link`
+without importing the client Button module.
 
-- `--duration-state` (200 ms) for hover, focus, toggle, color changes.
-- `--duration-entrance` (400 ms) for cards mounting / dismissing.
-- `--duration-celebrate` (600 ms) for the streak splash and match-result
-  hero pop.
+Both share `primary`, `secondary`, `ghost` and `danger` variants. Sizes are
+`sm` (36px high), `md` (44px, the default) and `lg` (48px), each with a minimum
+44px width. Small buttons therefore do **not** automatically provide a 44px-high
+touch target. Use a larger size or an explicit minimum height for phone actions
+that need it. Give icon-only actions an accessible name.
 
-Three curves:
+`IconButton` requires `aria-label` and supplies a 44px target. `CopyButton` and
+`useCopy` copy only on explicit activation, bound the attempt to five seconds
+and provide selected, visible read-only text when automatic copying fails.
+Supply a scope key for owner/resource changes; stale results cannot update the
+new context. Escape dismisses the manual fallback and returns to its button.
 
-- `--ease-out` for state transitions (the value you usually want).
-- `--ease-in-out` for entrance / exit.
-- `--ease-spring` for celebration moments (rivalry alert pulse, MMR-up
-  pop). Has a small overshoot baked into the cubic-bezier.
+`Button` defaults to `type="button"`. Set `type="submit"` for form submission.
+Its `loading` state disables the native button and sets `aria-busy`; callers own
+progress copy and focus if the focused submit becomes disabled. `LinkButton`
+remains an anchor and has no Button loading/disabled contract. Do not nest a
+button or link inside another interactive control.
 
-`design-tokens.css` already wraps motion tokens in a
-`@media (prefers-reduced-motion: reduce)` block that zeroes every
-duration, so OS-level reduce-motion is honored without extra work.
+### Forms and unsaved changes
 
-## Accessibility — WCAG AA contrast
+Use `Field` around a single `Input` or `Select` for a visible label and associated
+hint/error. `Field` wires IDs, `aria-describedby` and `aria-invalid` onto its
+single child. If the child already has an ID, pass the same value as `htmlFor`.
+Composite controls must forward those attributes or wire their labels themselves.
+Errors use text as well as a danger color and render with
+`role="alert"`. Mark required native controls explicitly; the `Field` required
+asterisk is only a visual label cue.
 
-Every text/background pair we ship is documented below with its contrast
-ratio (computed from the WCAG 2.1 relative-luminance formula). WCAG AA
-requires ≥ 4.5:1 for body text and ≥ 3:1 for large text (≥ 18 px regular
-or ≥ 14 px bold).
+`Input` and `Select` keep native form behavior. Their heights are 32px (`sm`),
+40px (`md`) and 48px (`lg`), so choose or extend sizes deliberately for the
+surface's touch requirements. Preserve readable labels, native keyboard access
+and a visible focus treatment.
 
-### Text on surface
+Settings forms use `useDirtyForm` with `SaveBar` where appropriate. Keep drafts
+separate from the saved state, show saving/error feedback, and do not make a
+network failure look like a successful save. `SaveBar` floats above app chrome;
+modal forms use their own footer.
 
-| Foreground       | Background     | Ratio  | Body | Large |
-| ---------------- | -------------- | ------ | :--: | :---: |
-| `text-primary`   | `bg-primary`   | 17.0:1 | ✅   | ✅    |
-| `text-primary`   | `bg-surface`   | 15.2:1 | ✅   | ✅    |
-| `text-primary`   | `bg-elevated`  | 11.9:1 | ✅   | ✅    |
-| `text-secondary` | `bg-primary`   | 7.3:1  | ✅   | ✅    |
-| `text-secondary` | `bg-surface`   | 6.5:1  | ✅   | ✅    |
-| `text-secondary` | `bg-elevated`  | 5.1:1  | ✅   | ✅    |
-| `text-muted`     | `bg-primary`   | 4.0:1  | ❌   | ✅    |
-| `text-muted`     | `bg-surface`   | 3.6:1  | ❌   | ✅    |
-| `text-muted`     | `bg-elevated`  | 2.8:1  | ❌   | ❌    |
+### Dialogs
 
-Use `text-muted` only on `bg-primary` or `bg-surface`, only for large
-text, and never on `bg-elevated`. For body copy on any surface, use
-`text-secondary` or `text-primary`.
+Use the existing portal-based `Modal` for dialogs. It supplies a labeled
+`role="dialog"`, optional description, body scroll lock and `useFocusTrap`.
+The default phone layout is a bottom sheet; from `sm` it is centered. Optional
+`mobileLayout="center"` and `desktopLayout="side"` support the existing alternate
+layouts. Body content scrolls within the bounded dialog and footer actions wrap.
+Use `portalContainer` when a dialog must remain inside a fullscreen player.
 
-### Race & semantic accents on surface
+`Sheet` reuses Modal's dismissal, footer, focus and scroll-lock contract with
+`side="bottom"` or `side="right"`. Modal's additive `placement` option supports
+those fixed placements; its default responsive behavior stays the same.
 
-| Foreground      | Background    | Ratio | Body | Large |
-| --------------- | ------------- | ----- | :--: | :---: |
-| `race-terran`   | `bg-primary`  | 5.2:1 | ✅   | ✅    |
-| `race-terran`   | `bg-surface`  | 4.7:1 | ✅   | ✅    |
-| `race-terran`   | `bg-elevated` | 3.7:1 | ❌   | ✅    |
-| `race-zerg`     | `bg-primary`  | 4.8:1 | ✅   | ✅    |
-| `race-zerg`     | `bg-surface`  | 4.3:1 | ❌   | ✅    |
-| `race-zerg`     | `bg-elevated` | 3.3:1 | ❌   | ✅    |
-| `race-protoss`  | `bg-primary`  | 8.7:1 | ✅   | ✅    |
-| `race-protoss`  | `bg-surface`  | 7.8:1 | ✅   | ✅    |
-| `race-protoss`  | `bg-elevated` | 6.1:1 | ✅   | ✅    |
-| `race-random`   | `bg-primary`  | 7.3:1 | ✅   | ✅    |
-| `race-random`   | `bg-surface`  | 6.5:1 | ✅   | ✅    |
-| `race-random`   | `bg-elevated` | 5.1:1 | ✅   | ✅    |
-| `success`       | `bg-primary`  | 7.4:1 | ✅   | ✅    |
-| `success`       | `bg-surface`  | 6.6:1 | ✅   | ✅    |
-| `success`       | `bg-elevated` | 5.1:1 | ✅   | ✅    |
-| `danger`        | `bg-primary`  | 5.0:1 | ✅   | ✅    |
-| `danger`        | `bg-surface`  | 4.4:1 | ❌   | ✅    |
-| `danger`        | `bg-elevated` | 3.5:1 | ❌   | ✅    |
-| `warning`       | `bg-primary`  | 8.7:1 | ✅   | ✅    |
-| `warning`       | `bg-surface`  | 7.8:1 | ✅   | ✅    |
-| `warning`       | `bg-elevated` | 6.1:1 | ✅   | ✅    |
-| `info`          | `bg-primary`  | 5.2:1 | ✅   | ✅    |
-| `info`          | `bg-surface`  | 4.7:1 | ✅   | ✅    |
-| `info`          | `bg-elevated` | 3.7:1 | ❌   | ✅    |
+Set `initialFocusRef` when the first control is not the right starting point.
+The shared focus scope handles Tab/Shift+Tab, Escape and focus return, including
+portalled child dialogs. Keep the trigger mounted or provide a sensible focus
+return target in the calling flow. `hideClose` only hides the X;
+`disableScrimClose` only disables scrim dismissal. Callers must gate `onClose`
+when a pending operation needs to block Escape/close, and keep an in-dialog focus
+target available while action buttons are disabled.
 
-Cells marked ❌ for body must either use the color for ≥ 18 px text only
-(headings, hero numbers) or back the element with a darker surface.
-`race-zerg` body copy on `bg-surface` (4.3:1) is the most common
-near-miss; promote to a heading size or a chip with a tinted fill.
+`ConfirmDialog` is the current confirmation preset. Use `intent="danger"` for a
+destructive action and `focusCancel` when the safe action should receive initial
+focus. It does not implement typed-delete validation or every pending-operation
+policy; specialized replay confirmations handle those requirements themselves.
+`useConfirm(scopeKey)` returns `confirm`, `cancel` and one `dialog` outlet. It
+settles cancellation, unmount or scope changes as false and rejects a concurrent
+ask as false. Actual mutations stay with the caller. Preserve existing typed
+`UNPAIR` and specialized controlled destructive flows.
 
-### Overlay widgets
+`Popover` is a controlled, named nonmodal dialog anchored by `anchorRef`. Its
+trigger supplies `aria-expanded` and matching `aria-controls`/`id`. It flips and
+clamps to the viewport, dismisses on Escape or an outside pointer, and has no
+body lock or Tab trap of its own. An enclosing Modal retains Tab containment
+through registered nonmodal portals; Escape dismisses the top layer first.
+Use `autoFocus={false}` when a lazy consumer must wait for ready content, as the
+notification panel already does. An outside button/input keeps native focus;
+nonfocusable outside dismissal restores the anchor when focus would be lost.
 
-Overlay widgets composite onto a transparent OBS source over arbitrary
-SC2 footage. Their internal background is the gradient
-`--color-overlay-bg-from` → `--color-overlay-bg-to` (≈ `#11141C`–`#1A1E29`),
-which gives 16:1 contrast for `--color-overlay-text` (white) — well above
-AA. Decorative accents (gold, cyan, purple, neon green for victory) are
-used for chrome and large-text moments only; the body copy inside every
-overlay card is white on the dark gradient.
+## Keyboard, focus and motion
 
-### Reduced motion
+Global link and focus defaults live in Tailwind's `@layer base`. Links use accent
+ink; hover uses accent-hover ink. The base focus-visible rule draws a 2px accent
+outline with a 2px offset and follows the element's own corners. Components may
+replace it with an explicit focus ring, but removing the outline requires a
+visible replacement.
 
-All token-driven animations honor `@media (prefers-reduced-motion: reduce)`
-because the motion tokens zero out under that media query. New components
-should not use raw `transition` / `animation` durations — pull from
-`--duration-*` and `--ease-*` so opt-out works automatically.
+State selectors use `:where()` so utilities can override defaults. A link with
+its own `text-*` class also needs an intentional hover style. Avoid unlayered
+universal or element pseudo-class rules that override every control; the cascade
+regression test protects this boundary.
 
-### Keyboard & focus
+Use native links/buttons and meaningful heading order. The skip link targets
+`main-content`. MobileNav traps focus, ignores hidden/disabled/non-tabbable
+controls, closes with Escape and returns focus to its trigger. Check keyboard
+entry, wrapping, Escape and return focus whenever a menu or dialog changes.
+Use local horizontal reveal for passive tab updates; reserve page navigation for
+an explicit user action.
 
-Beyond the token system: every interactive element gets a visible focus
-ring. The default ring is a 2 px outline using
-`--color-info` (`#3B82F6`) at full opacity, offset 2 px from the element.
-This is established at component level (button, input, link) — see the
-component documentation in `docs/component-library.md` (forthcoming).
+The shared motion defaults are `--dur-base: 150ms`,
+`--ease-out: cubic-bezier(0.2, 0, 0, 1)` and
+`--ease-in-out: cubic-bezier(0.4, 0, 0.2, 1)`. Some existing component animations
+have their own durations. The global reduced-motion query sets CSS animation and
+transition durations to zero and scroll behavior to `auto`; use `motion-safe`
+for optional motion. JavaScript/canvas animation and imperative smooth scrolling
+must check the preference themselves. Avoid motion as the sole way to convey a
+state change.
 
-## Links, focus and the cascade
+## Data states and page anatomy
 
-How the web app (`apps/web/app/globals.css`) styles links and the focus
-ring, and what that means when you style one yourself.
+Use a stable page heading, then filters/actions and the content. `PageHeader`
+actions wrap; admin pages use `AdminPageHeader`, labeled filters and
+`AdminPagination`. Keep loading, failure, empty and ready states distinct.
 
-- **The defaults live in `@layer base`.** Tailwind emits the base layer
-  before its utilities, so a utility class on an element always beats a
-  default. A plain link is `--accent` and turns `--accent-hover` on hover.
-  Every focusable element gets a 2 px `--accent` outline, offset 2 px, on
-  `:focus-visible`.
-- **State selectors are wrapped in `:where()`.** `:where(a):hover` and
-  `:where(*):focus-visible` weigh the same as one class, so source order
-  decides and the utility wins. The resting `a` rule keeps its element
-  weight on purpose: it has to beat Preflight's `a { color: inherit }`,
-  and it still loses to any class.
-- **A link that sets its own colour sets its own hover.** Once a link has
-  a `text-*` colour, the default hover recolour no longer applies, so say
-  what hover should do: `hover:bg-accent-hover` on a primary CTA (the
-  label stays white), `hover:text-text` on a muted nav or footer link,
-  `hover:text-accent-hover` or `hover:underline` on an inline link.
-- **The ring follows the element's corners.** It sets no `border-radius`,
-  so a focused pill stays a pill. A control that draws its own ring opts
-  out with `focus-visible:outline-none focus-visible:ring-2
-  focus-visible:ring-accent`. A bare `outline-none` removes the ring, so
-  never use it without a replacement.
-- **Don't add an unlayered element rule with a pseudo-class** (`a:hover`,
-  `button:focus`, `*:focus-visible`) to `globals.css`. Unlayered rules
-  come after the utilities, so a rule like that overrides them on every
-  element it matches. That is how primary CTA labels used to vanish on
-  hover and focused pills turned square.
-  `apps/web/app/__tests__/globalsCascade.test.ts` fails if one comes
-  back; put the rule in `@layer base` behind `:where()`.
+`QueryState` is the existing shared adapter for `useApi`: skeleton before the
+first answer, `RequestError` with Retry on a failed request, a relevant empty
+state for a successful empty answer, then content. A failed background refresh
+can retain current data. Private query helpers mask a previous owner's data;
+previous-filter data is permitted only within the supported same-owner/resource
+scope. Do not render one owner's fallback data as another owner's result.
 
-## Admin page anatomy
+Use shaped `Skeleton` content to limit layout shifts. Filtered empty states should
+offer an action that changes the answer, such as Clear filters or All time.
+Independent sections can use `SectionBoundary` so a render failure does not blank
+the whole page. A boundary alone does not retry a cached failed lazy import;
+optional lazy islands need their established retry-loader pattern as well.
+`SkeletonChart` and `SkeletonKpi` add named, busy placeholders to the existing
+skeleton family; they contain no fabricated values.
 
-Admin tabs use `AdminPageHeader` (the shared `PageHeader` with an Admin eyebrow
-and a Help link to the matching section of `docs/admin-console.md`). Keep the
-same title while loading, after a failure and after data arrives. A forbidden
-page shows `ForbiddenCard` before rendering header actions.
+## Accessibility checks and limits
 
-Follow the header with a filter card, then the table or cards and
-`AdminPagination`. Use `Field` with labelled `Input` and `Select` controls and
-shared `Button` variants for actions. Render `EmptyStatePanel` with Clear filters
-or Refresh when no rows match; render `RequestError` with the original error and
-the request's mutate function when it fails. Independent requests retain their
-own loading, failure and Retry states. Status uses text and an icon as well as
-colour. Metadata titles identify the tab and Admin, never an account's email.
+The public statement at [/legal/accessibility](../apps/web/app/legal/accessibility/page.tsx)
+sets a **WCAG 2.2 Level AA target**, describes known limits and explains how to
+report a barrier. [Help: Accessibility & appearance](../apps/web/lib/help/articles/account-data/appearance.ts)
+covers the user-facing controls.
 
-## Data states
+Current automated checks include:
 
-Every section that loads data has four states, always checked in this
-order: **loading, failed, empty, ready**. The order is the rule. The
-API runs on one paid instance; connection failures, restarts and deployments
-can interrupt requests. A failed request must show Retry, never an empty
-state. "No matchups match" while the server is down tells the player
-something false about their games.
+- The source-derived contrast matrix for Dark, Light and Replay on light.
+- All seven shared Badge variants composited over the three tested surfaces in
+  those themes (63 additional pairs). Status tints remain subtle enough to keep
+  their semantic text readable on the page ground as well as white cards.
+- `@axe-core/playwright` in `tests/e2e/public-pages.spec.ts`, using the
+  `wcag2a`, `wcag2aa` and `wcag21aa` tags. Serious/critical findings fail unless
+  an exact page/theme/viewport-project/rule/target entry has a reviewed reason in
+  `accessibility-allowlist.json`; no global rule disable is the escape hatch.
+- Public-page checks in both themes at the viewport projects in
+  `playwright.config.ts`, including page rendering and body overflow checks.
+- Targeted keyboard/focus consumers and browser proof for the skip link,
+  MobileNav, shared dialogs and the changed flow.
+- Recommended `eslint-plugin-jsx-a11y` rules as warnings, alongside the existing
+  lint checks.
+- `npm run ui:lint` checks normalized file/rule signatures and occurrence counts;
+  new and stale debt fail. The narrow before-paint browser metadata token
+  exception is documented in `apps/web/scripts/ui-lint/README.md`.
 
-- **Use `QueryState`** (`apps/web/components/ui/QueryState.tsx`) for
-  anything read with `useApi`:
+The server-gated `/admin/design` gallery demonstrates actual controls and local
+states with synthetic values. A current explicit admin response is required
+before its examples mount; the whole access check has a five-second deadline.
+Its sample actions do not read replays or write application data.
 
-  ```tsx
-  <QueryState
-    q={useApi<Row[]>(path)}
-    skeleton={<Skeleton rows={4} />}
-    isEmpty={(rows) => rows.length === 0}
-    empty={<NoFilterMatches />}
-    filtered
-  >
-    {(rows) => <Table rows={rows} />}
-  </QueryState>
-  ```
+Run the appropriate contract/consumer tests for a changed primitive, then its
+actual rendered keyboard and responsive flow. Review axe `incomplete` results
+and lower-severity findings too; a serious/critical CI gate does not establish
+complete accessibility. Do not add a broad allowlist entry to hide a regression.
 
-  A view that computes a lot from the data can return early instead:
-  `if (!hasQueryData(q)) return <QueryState q={q} skeleton={…} />;`.
-- **Failed** is `RequestError` (`components/ui/RequestError.tsx`):
-  plain copy chosen from the error (can't reach the server, busy,
-  timed out, signed out, server error), a Retry button that calls
-  `mutate()` and stays focusable with `aria-busy` while it runs, and the
-  API's Error ID with a Copy button. Pass `filtered` on analyzer views
-  to add "Your filters are still applied." Override the copy for one
-  kind of failure with `copy` (the dossier's "busy" message does).
-  Waiting-type failures use the warning tone, the rest danger.
-- **A 404 is usually not an error.** Use `renderError` to show an
-  empty state instead, e.g. the dossier's "We couldn't find this
-  opponent in your replays" with a way back.
-- **A background refresh that fails keeps the data on screen.** Only a
-  request with nothing current to show renders RequestError. The
-  connection banner covers a dropped connection.
-- **Loading** is a skeleton shaped like the content (see
-  `components/ui/Skeleton.tsx`: `SkeletonBar`, `SkeletonCard`,
-  `SkeletonRows`, `SkeletonPageHeader`, wrapped in `SkeletonRegion` so
-  screen readers hear one "Loading …"). Not the text "Loading…", and
-  not a spinner for a whole section. Route-level skeletons live in
-  `loading.tsx` next to the page.
-- **Changing a filter keeps the last answer on screen** while the new
-  one loads (`keepPreviousData`, set app-wide in
-  `components/chrome/ConnectionStatus.tsx`). `useApi` only keeps it
-  within the same account and resource path; another opponent or game
-  starts from the skeleton. `children` gets `{ isPreviousData }` if a
-  view wants to dim stale content.
-- **Empty** in a filtered analyzer view is `NoFilterMatches`
-  (`components/analyzer/EmptyStates.tsx`). It lists the applied filters
-  and offers only the ways out that would change the answer: lower Min
-  games, reset filters, widen to all time. Elsewhere use `EmptyState`
-  (`Card.tsx`) or `EmptyStatePanel`; `helpSlug` adds a "Learn how" link.
-- **Render crashes** are caught by `SectionBoundary`
-  (`components/ui/SectionBoundary.tsx`): "Couldn't show …", Try again,
-  Report this problem (prefilled with the page and Sentry event id) and
-  Details. Wrap independent sections so one bad payload can't blank the
-  page.
-- **Connection banner.** `ConnectionBanner` in the app chrome says
-  "Reconnecting to SC2 Tools… your data is safe" when the browser is
-  offline or after three connection failures in a row, pings the API
-  while it shows, and retries failed requests when it answers. It never
-  renders on the overlay or dock pages.
+Replay maps and some charts convey spatial information in canvas or other visual
+rendering. Text controls and event lists provide partial alternatives, not a
+complete description of every visual event. OBS overlays are broadcast visuals.
+Clerk account forms and embedded players also depend on third-party behavior.
+Test the task with real keyboard use and relevant assistive technology; passing
+these automated checks is not a full conformance claim.
 
-The player-facing explanation is the help article
-`something-went-wrong`; link it from new error surfaces.
+## Changing the system
 
-## Adding a new token
+1. Change the relevant root tokens and replay overrides in `globals.css`, then
+   expose the intended ink/fill role in Tailwind where needed.
+2. Run the contrast contract and regenerate the table in this document from
+   `contrast-tokens.mjs`.
+3. Check the actual light/dark rendered state, focus, hover, narrow-screen layout
+   and reduced-motion behavior. New translucent/image/canvas combinations need
+   their own evidence.
+4. Reuse the current shared primitives and add focused consumer regression
+   coverage for changed behavior. Update the public statement or appearance Help
+   only when their user-facing contract changes.
 
-1. Add the value to all three files (`design-tokens.css`,
-   `design-tokens.json`, `design_tokens.py`).
-2. If it's a color, document its WCAG AA pair coverage in this file.
-3. Update `CHANGELOG.md` with a `feat(design-system):` entry.
-4. Bump the design-tokens version in any future package.json that
-   exports them.
+A token test protects its declared pair, not every screen that uses it. Keep the
+implementation, this guide and the visible behavior in agreement.

@@ -458,8 +458,9 @@ Code-side shipped in this drop; account-side runbook lives in
 - [ ] **MongoDB Atlas alerts** — account-side. See [`HARDENING.md`](HARDENING.md#2-mongodb-atlas-alerts).
 - [ ] **Cloudflare WAF** in front of `api.sc2tools.app` — account-side.
   See [`HARDENING.md`](HARDENING.md#3-cloudflare-waf).
-- [ ] **Status page** at `sc2tools.com/status`, with the `status.sc2tools.com`
-  alias attached to the existing Vercel project. Verify deployment and alias; see
+- [x] **Public status page** at `sc2tools.com/status`, with `status.sc2tools.com`
+  attached to existing Vercel Production and redirecting to that page. Browser
+  reachability and Refresh verified on 2026-10-25; see
   [`HARDENING.md`](HARDENING.md#4-status-page).
 - [ ] **Penetration smoke test** with OWASP ZAP — operational. See
   [`HARDENING.md`](HARDENING.md#5-pen-test).

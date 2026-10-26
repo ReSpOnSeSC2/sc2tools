@@ -17,6 +17,11 @@ corresponding GitHub Release.
 - Use one player address for Overview, Builds, shared Replays and Reviews. Older profile and author links resolve directly to the canonical page, while private profiles stay private.
 - Copy public channel-panel images in two sizes and themes. Disabled or unavailable profiles return a neutral image, and public pages and images check visibility on each request.
 
+### Appearance and accessibility
+
+- Choose Light, Dark or System from appearance controls. System follows device changes and keeps the browser's colour in sync; existing saved choices remain supported.
+- Improve shared text, control and selected-state contrast in both themes. Public-page checks cover serious accessibility findings across phone, tablet and desktop sizes; keyboard navigation and a public accessibility guide explain current support and limits.
+
 ### Opponent list columns
 
 - Choose latest replay download, map/result, your and the opponent's build, recorded build-order links/dates, game lengths, your macro breakdown/averages and scouting notes. Matching game filters and measured sample counts apply; incomplete build-order dates stay unknown or marked Latest known.

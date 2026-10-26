@@ -263,6 +263,7 @@ export function ReplayDemo() {
               <input
                 ref={inputRef}
                 type="file"
+                aria-label="Choose a replay file"
                 accept={accept}
                 className="sr-only"
                 onChange={(e) => { const file = e.currentTarget.files?.[0] ?? null; e.currentTarget.value = ""; void onPick(file); }}

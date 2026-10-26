@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
-import { Menu } from "lucide-react";
+import { Menu, Monitor } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { ThemeDialog } from "@/components/ui/ThemeChoice";
 import { useApi } from "@/lib/clientApi";
 import { MobileNav } from "./MobileNav";
 import { NavAuthGate } from "./NavAuthGate";
@@ -45,6 +46,8 @@ export function Header() {
   const pathname = usePathname() ?? "/";
   const [scrolled, setScrolled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const accountRef = useRef<HTMLSpanElement>(null);
   // useApi gates on isSignedIn internally, so this fetch is a no-op
   // for signed-out visitors — they never see the Admin link anyway.
   const { data: me } = useApi<MeAdminProbe>("/v1/me");
@@ -121,14 +124,18 @@ export function Header() {
                   Open app
                 </Link>
               </div>
-              <UserButton
+              <span ref={accountRef} className="inline-flex"><UserButton
                 afterSignOutUrl="/"
                 appearance={{
                   elements: {
                     avatarBox: "h-9 w-9",
                   },
                 }}
-              />
+              ><UserButton.MenuItems>
+                <UserButton.Action label="Appearance" labelIcon={<Monitor className="h-4 w-4" aria-hidden />} onClick={() => setAppearanceOpen(true)} />
+                <UserButton.Action label="manageAccount" />
+                <UserButton.Action label="signOut" />
+              </UserButton.MenuItems></UserButton></span>
             </SignedIn>
             <button
               type="button"
@@ -149,6 +156,7 @@ export function Header() {
           </div>
         </div>
       </header>
+      <ThemeDialog open={appearanceOpen} onClose={() => { setAppearanceOpen(false); queueMicrotask(() => accountRef.current?.querySelector<HTMLButtonElement>("button")?.focus()); }} />
       <MobileNav
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -217,7 +225,7 @@ function NavLink({ href, label, active, wideOnly = false }: NavLinkProps) {
         "motion-safe:transition-colors motion-safe:duration-150",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         active
-          ? "bg-accent/15 text-accent"
+          ? "bg-accent/10 text-accent-cyan"
           : "text-text-muted hover:bg-bg-elevated hover:text-text",
       ].join(" ")}
     >

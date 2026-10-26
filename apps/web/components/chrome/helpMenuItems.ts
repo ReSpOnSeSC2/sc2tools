@@ -50,6 +50,8 @@ const HELP_ITEMS: readonly HelpMenuItem[] = [
     href: "/download",
     group: "help",
   },
+  { key: "appearance", label: "Accessibility & appearance", icon: BookOpen, href: "/help/appearance", group: "help" },
+  { key: "accessibility", label: "Accessibility statement", icon: BookOpen, href: "/legal/accessibility", group: "help" },
 ];
 
 const REPORT_ITEMS: readonly HelpMenuItem[] = [

@@ -194,7 +194,6 @@ function RecapCard() {
         <h3 className="text-body-lg font-semibold text-text">What it does</h3>
       </header>
       <ul
-        role="list"
         className="ml-5 list-disc space-y-1 text-caption text-text-muted"
       >
         <li>
@@ -223,7 +222,7 @@ function RecapCard() {
         Already have an account?{" "}
         <Link
           href="/devices"
-          className="text-accent-cyan underline-offset-2 hover:underline"
+          className="text-accent-cyan underline underline-offset-2"
         >
           Pair a new machine →
         </Link>
