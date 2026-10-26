@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Mobile site navigation
+
+- Use the shared right Sheet for the site menu, with a consistent title and Close control, the existing home and destination links, and footer theme choices.
+- Close and release the menu's scroll lock when the desktop navigation becomes available; shared focus handling respects newer dialogs and returns to the opener.
+
 ### Notification panel
 
 - Keep the bell panel within the viewport using the shared nonmodal Popover. Escape returns to the bell, outside clicks preserve the clicked control's focus, and a newer dialog receives Escape first.

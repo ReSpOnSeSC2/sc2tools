@@ -102,8 +102,13 @@ branches, captures and every RED receipt are retained.
    cached-error focus were reproduced and repaired. Exact read ACK and New
    assertions pass; 198 GETs/42 read-ack POSTs are synthetic and actual account,
    provider, consent, clipboard and native writes are zero. Root reviewed four
-   byte-identical tracked image copies. All runtime is closed; remote delivery
-   is next. Retained assets required exactly three restored files, with no
+   byte-identical tracked image copies. PR766 is merged as
+   `2743fafbab91cbdc42ffdc720091fbbcd1539291`. Exact-head remote CI passed
+   8,914 web tests/946 suites (one expected skipped test/suite) and 397 browser
+   checks/68 intentional skips; preview succeeded and the fresh-main merge
+   tree equalled tested tree `0236dca5e0d0a6ac9acf69d43eaaa716ffa31731`.
+   Production source/domain verification is pending. All runtime is closed.
+   Retained assets required exactly three restored files, with no
    generation, download or pruning and no Pyodide runtime copies.
    Preserve lazy data loading, ready-and-merged initial
    focus, read acknowledgements and nonmodal Tab behavior. Existing Popover
@@ -112,23 +117,34 @@ branches, captures and every RED receipt are retained.
 3. Mobile navigation: `wave3-owner-neighbors`, branch
    `codex/wave5-mobile-nav-sheet`. Eight source paths are authored and frozen,
    preserved at `d0ee472d` and actual main9bd integrated at `fae1ba88`.
-   First static proof passed 87 tests/14 suites, full types, strict owned lint,
-   Help90 determinism and UI19/1,695 files/647 existing occurrences. A test Link
-   mock now forwards its real href explicitly; no product fix was required.
-   Build/browser remain held until reviewed Notification source is integrated.
+   Final local proof at `00df65c7`, with reviewed Notification integrated,
+   passed 210 tests/23 suites, types before/after build, strict five-file lint
+   without warnings, Help90 and UI19/1,695 files/646 existing occurrences.
+   Build `26CpTnHkbQpXtrlB5bx6w` passes all 81 unchanged route budgets.
+   Appearance browser proof passes 16 cases with 11 intentional project skips,
+   both themes and 320/390/768/1023→1024 behavior; all 12 full AA scans are clear.
+   Four synthetic GETs and zero writes/unknown/nonlocal requests; no actual
+   account/provider/preferences/clipboard actions. Root reviewed three
+   byte-identical screenshot copies. No product repair was needed; the initial
+   test mock now forwards href. All runtime is closed; remote delivery is next.
    Reuse standard right Sheet sizing and shared Close,
    preserve home/auth/route/theme controls and the controlled-content ID, and
    close at the desktop breakpoint to release the old hidden drawer's lock.
 4. Glossary foundation: `wave3-my-reviews`, branch
    `codex/wave5-glossary-infotip`. A 19-path source-only foundation is approved:
    the seven existing definitions, explicit lazy InfoTip/Term, searchable
-   normal Help widget/article and one grouping-control consumer. No runtime
-   grant. About forty terms, remaining consumers and Reading your stats still
+   normal Help widget/article and one grouping-control consumer. About forty
+   terms, remaining consumers and Reading your stats still
    need later source-verified expansion; do not claim the whole item complete.
-   Source is preserved at `76d9f3b2` and actual main9bd integrated at `615b7072`.
+   Source is preserved at `76d9f3b2`; reviewed Notification/Mobile source is
+   integrated at `4ec02356`, and first static proof is preserved at `433b0e0a`.
    Queued Related navigation now retires on a newer search/focus/action/variant;
-   authored regressions remain unrun. Run the canonical Help generator first
-   when this pack receives its runtime grant; its owned index is still unchanged.
+   regressions pass. Compact native links now target the canonical glossary
+   page. First static proof passes 127 tests/18 suites, types, strict 15 files,
+   Help91 determinism and UI19/1,699 files/646 existing occurrences. Existing
+   HelpArticleBody retains two unchanged lint warnings. Its canonical generator
+   added the glossary article. Agent `public_player` now owns exclusive final
+   runtime; source/asset admission, build and browser proof remain in progress.
 5. Platform disconnect: `wave3-guides-expansion`, branch
    `codex/wave5-platform-disconnect-confirm`, source commit `572c4bba`. Exactly
    eight paths are source-frozen at `03055feb` with actual main9bd integrated
@@ -138,6 +154,11 @@ branches, captures and every RED receipt are retained.
    expected cache-publication admission prevent stale DELETE completion;
    require a valid selected disconnected status before success. Validation
    uses synthetic transport only; no actual provider action is authorized.
+6. Header CTA source pack: `wave4-agent-dashboard`, branch
+   `codex/wave5-header-cta`, preserved at `736d4a3e`. Independent source review
+   is clear after test-only corrections. Exactly six paths move the three
+   desktop CTA recipes onto existing shared styles, preserving AuthContextLink,
+   return context, Suspense fallback and 36px sizing. All runtime remains unrun.
 
 Do not switch these active branches, reset their worktrees or stage their
 untracked caches. Source-only agents must not start competing runtime work.
