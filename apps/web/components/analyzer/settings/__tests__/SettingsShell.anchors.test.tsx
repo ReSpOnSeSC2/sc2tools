@@ -7,7 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { SettingsShell, defaultTabVisibility, type SettingsTabId } from "../SettingsShell";
 import { SECTION_FLASH_ATTR, SECTION_FLASH_MS } from "../revealSectionAnchor";
 
@@ -27,10 +27,10 @@ function LateSection({ id }: { id: string }) {
 }
 
 function renderPanel(id: SettingsTabId) {
-  if (id === "overlay") {
+  if (id === "chat") {
     return (
       <>
-        <p>panel overlay</p>
+        <p>panel chat</p>
         <div id="platform-connections">Connected accounts</div>
       </>
     );
@@ -99,11 +99,11 @@ describe("SettingsShell legacy #tab links", () => {
     expect(window.location.hash).toBe("#overlay");
   });
 
-  it("leaves a hash that names no tab alone", () => {
+  it("resolves a recognized moved platform hash to Chat before mounting the destination", () => {
     window.history.replaceState(null, "", "/settings#platform-connections");
     render(shell());
-    expect(activePanel()).toBe("panel account");
-    expect(window.location.search).toBe("");
+    expect(activePanel()).toContain("panel chat");
+    expect(window.location.search).toBe("?tab=chat");
     expect(window.location.hash).toBe("#platform-connections");
   });
 
@@ -165,6 +165,23 @@ describe("SettingsShell #section anchors", () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
     expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById("voice-readout"));
+  });
+
+  it("keeps the panel while waiting to reveal a private streaming section behind fresh-status admission", async () => {
+    function LateOwner({ children }: { children: ReactNode }) {
+      const [ready, setReady] = useState(false);
+      useEffect(() => { const timer = window.setTimeout(() => setReady(true), 20); return () => clearTimeout(timer); }, []);
+      return ready ? children : <p>Checking token status</p>;
+    }
+    window.history.replaceState(null, "", "/settings?tab=overlay&section=chat#platform-connections");
+    render(<SettingsShell initialTab="overlay" renderStreaming={children => <LateOwner>{children}</LateOwner>} renderTab={renderPanel} />);
+    const panel = screen.getByRole("tabpanel", { name: "Chat & alerts" });
+    expect(within(panel).getByText("Checking token status")).toBeTruthy();
+    expect(document.getElementById("platform-connections")).toBeNull();
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("tabpanel", { name: "Chat & alerts" })).toBe(panel);
+    expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById("platform-connections"));
+    expect(window.location.search + window.location.hash).toBe("?tab=chat#platform-connections");
   });
 
   it("stops waiting once the player starts using the page", async () => {

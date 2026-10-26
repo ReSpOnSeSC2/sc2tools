@@ -67,7 +67,9 @@ it("does not send a delayed authenticated mutation after the owner changes", asy
 it("uses the query as the section authority and retains shareable navigation links", () => {
   function Preview() { const section = useOverlaySection(); return <OverlayManagerNav section={section} />; }
   state.query = "tab=overlay&section=look"; render(<Preview />); expect(screen.getByRole("link", { name: /^Look$/ }).getAttribute("aria-current")).toBe("page");
-  expect(screen.getByRole("link", { name: "Dock & bot" }).getAttribute("href")).toContain("section=dock");
+  expect(screen.getAllByRole("link").map(link => link.textContent)).toEqual(["Setup", "Widgets", "Look", "Scenes", "Tokens"]);
+  expect(screen.queryByRole("link", { name: "Dock & bot" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "Chat & alerts" })).toBeNull();
 });
 
 

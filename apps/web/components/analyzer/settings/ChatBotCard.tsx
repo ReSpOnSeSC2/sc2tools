@@ -12,10 +12,10 @@
  * saving with the password field untouched keeps the stored token.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Bot, RefreshCw } from "lucide-react";
-import { apiCall, useApi } from "@/lib/clientApi";
+import { apiCall, boundedApiRequest, useApi } from "@/lib/clientApi";
 import { Button } from "@/components/ui/Button";
 import { Toggle } from "@/components/ui/Toggle";
 import { useToast } from "@/components/ui/Toast";
@@ -45,10 +45,35 @@ const STATE_LABEL: Record<string, { text: string; tone: string }> = {
   error: { text: "Error", tone: "text-danger" },
 };
 
-export function ChatBotCard({ twitchChannel }: { twitchChannel: string }) {
-  const { getToken } = useAuth();
+export function ChatBotCard({ twitchChannel, isCurrent }: { twitchChannel: string; isCurrent?: () => boolean }) {
+  const { getToken, userId, isLoaded, isSignedIn } = useAuth();
+  const owner = isLoaded && isSignedIn && userId ? userId : null;
+  const scope = useMemo(() => ({ active: true, owner }), [owner]);
+  const latest = useRef(scope); latest.current = scope;
+  const readToken = useRef(getToken); readToken.current = getToken;
+  const selectedCurrent = useRef(isCurrent); selectedCurrent.current = isCurrent;
+  useLayoutEffect(() => { scope.active = true; return () => { scope.active = false; }; }, [scope]);
+  const current = useCallback(() => scope.active && latest.current === scope && selectedCurrent.current?.() !== false, [scope]);
+  const scopedToken = useCallback(async () => {
+    if (!current()) throw new Error("Account or selected token changed");
+    const token = await readToken.current();
+    if (!current()) throw new Error("Account or selected token changed");
+    return token;
+  }, [current]);
+  if (!owner) return null;
+  return <OwnerChatBotCard key={owner} twitchChannel={twitchChannel} getToken={scopedToken} isCurrent={current} />;
+}
+
+function OwnerChatBotCard({ twitchChannel, getToken, isCurrent }: { twitchChannel: string; getToken: () => Promise<string | null>; isCurrent: () => boolean }) {
   const { toast } = useToast();
-  const { data, mutate } = useApi<BotView>("/v1/me/chatbot");
+  const { data, mutate } = useApi<BotView>("/v1/me/chatbot", { keepPreviousData: false }, { timeoutMs: 20_000 });
+  const live = useRef(true);
+  const operation = useRef<AbortController | null>(null);
+  const revision = useRef(0);
+  useLayoutEffect(() => {
+    live.current = true;
+    return () => { live.current = false; operation.current?.abort(); };
+  }, []);
 
   const [draft, setDraft] = useState({
     enabled: false,
@@ -63,7 +88,7 @@ export function ChatBotCard({ twitchChannel }: { twitchChannel: string }) {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   // Its own Save button: unsaved bot edits guard a tab switch too.
-  usePublishDirty("overlay", dirty);
+  usePublishDirty("chat", dirty);
 
   useEffect(() => {
     if (!data || dirty) return;
@@ -80,32 +105,43 @@ export function ChatBotCard({ twitchChannel }: { twitchChannel: string }) {
   }, [data, dirty]);
 
   const set = useCallback((patch: Partial<typeof draft>) => {
+    revision.current += 1;
     setDirty(true);
     setDraft((d) => ({ ...d, ...patch }));
   }, []);
 
   const save = async () => {
+    if (!live.current || !isCurrent() || operation.current || !dirty) return;
+    const controller = new AbortController(); operation.current = controller;
+    const sentRevision = revision.current;
+    const admitted = () => live.current && isCurrent() && operation.current === controller && !controller.signal.aborted;
     setSaving(true);
     try {
-      const res = await apiCall<BotView>(getToken, "/v1/me/chatbot", {
+      const res = await boundedApiRequest(signal => apiCall<BotView>(getToken, "/v1/me/chatbot", {
         method: "PUT",
+        signal,
         body: JSON.stringify({
           ...draft,
           channel: draft.channel || twitchChannel || draft.username,
         }),
-      });
-      setDirty(false);
+      }), 20_000, controller.signal);
+      if (!admitted()) return;
+      await mutate(previous => admitted() ? res : previous, { revalidate: false });
+      if (!admitted()) return;
       setHasToken(res.hasToken);
-      await mutate();
-      toast.success(
+      if (revision.current === sentRevision) {
+        setDirty(false);
+        toast.success(
         res.enabled
           ? "Chat bot saved — connecting to Twitch chat."
           : "Chat bot saved.",
-      );
+        );
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Save failed.");
+      if (admitted()) toast.error(err instanceof Error ? err.message : "Save failed.");
     } finally {
-      setSaving(false);
+      if (admitted()) setSaving(false);
+      if (operation.current === controller) operation.current = null;
     }
   };
 

@@ -580,7 +580,7 @@ function ConnectedMultiChatWidget({
               }}
             >
               No chat platforms configured yet. Open{" "}
-              <b>Settings → Overlay → Multi-platform chat</b> on sc2tools.com,
+              <b>Settings → Chat &amp; alerts</b> on sc2tools.com,
               add your channels, and this source lights up automatically.
             </div>
           </div>

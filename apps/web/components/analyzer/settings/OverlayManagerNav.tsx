@@ -2,22 +2,19 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { OVERLAY_PANES, resolveSettingsDestination } from "@/lib/settingsRegistry";
 
 export const OVERLAY_SECTIONS = [
-  ["setup", "Setup"], ["widgets", "Widgets"], ["look", "Look"], ["chat", "Chat & alerts"],
-  ["scenes", "Scenes"], ["dock", "Dock & bot"], ["tokens", "Tokens"],
+  ["setup", "Setup"], ["widgets", "Widgets"], ["look", "Look"],
+  ["scenes", "Scenes"], ["tokens", "Tokens"],
 ] as const;
 export type OverlaySection = typeof OVERLAY_SECTIONS[number][0];
 export function useOverlaySection(): OverlaySection {
   const query = useSearchParams(), requested = query.get("section");
   const [hash, setHash] = useState("");
   useEffect(() => { const update = () => setHash(location.hash); update(); addEventListener("hashchange", update); return () => removeEventListener("hashchange", update); }, []);
-  if (OVERLAY_SECTIONS.some(([id]) => id === requested)) return requested as OverlaySection;
-  if (query.has("pack") || query.has("widget")) return "widgets";
-  if (/platform-connections|multichat|chat/.test(hash)) return "chat";
-  if (/ghost|theme|build-profile/.test(hash)) return "look";
-  if (/scene/.test(hash)) return "scenes";
-  return "setup";
+  if (OVERLAY_PANES.some(id => id === requested)) return requested as OverlaySection;
+  return resolveSettingsDestination(query.toString(), hash, "overlay").overlayPane;
 }
 export function OverlayManagerNav({ section }: { section: OverlaySection }) {
   const query = useSearchParams();

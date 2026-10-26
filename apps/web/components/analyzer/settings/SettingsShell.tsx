@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ServerCog,
   UserRound,
@@ -16,6 +16,7 @@ import {
   LifeBuoy,
   Upload,
   ClipboardCheck,
+  MessagesSquare,
 } from "lucide-react";
 import { Tabs, useTabIds } from "@/components/ui/Tabs";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -24,7 +25,10 @@ import {
   SETTINGS_GROUPS,
   SETTINGS_TABS,
   defaultTabVisibility,
-  settingsTabForLegacyHash,
+  resolveSettingsDestination,
+  settingsTabFromParam as settingsTabFromParamForShell,
+  type SettingsDestination,
+  type SettingsOverlayPane,
   type SettingsTabId,
 } from "@/lib/settingsRegistry";
 import {
@@ -47,13 +51,13 @@ export {
 const TAB_ICONS: Record<SettingsTabId, typeof ServerCog> = {
   account: ServerCog, profile: UserRound, backups: Database,
   checkin: ClipboardCheck, randomizer: Dices, import: Upload,
-  overlay: MonitorPlay, voice: Volume2, preferences: Settings2, help: LifeBuoy,
+  overlay: MonitorPlay, chat: MessagesSquare, voice: Volume2, preferences: Settings2, help: LifeBuoy,
 };
 const TABS = SETTINGS_TABS.map((tab) => ({ ...tab, Icon: TAB_ICONS[tab.id] }));
 type TabDef = (typeof TABS)[number];
 type PendingDestination =
-  | { kind: "tab"; tab: SettingsTabId; fromUrl: boolean }
-  | { kind: "devices" };
+  | { kind: "tab"; destination: SettingsDestination; fromUrl: boolean; previousHref: string; action: object; owner: object }
+  | { kind: "devices"; action: object; owner: object };
 
 export interface SettingsShellProps {
   /**
@@ -70,12 +74,20 @@ export interface SettingsShellProps {
   renderTab: (id: SettingsTabId) => ReactNode;
   /** Which tabs to show; defaults to every registered tab. */
   isTabVisible?: (id: SettingsTabId) => boolean;
+  /** Complete search input: same-tab section links also pass the dirty guard. */
+  requestedSearch?: string;
+  ownerKey?: string | null;
+  /** One lazy authority inside the persistent streaming panel, outside its keyed private body. */
+  renderStreaming?: (children: ReactNode, section: SettingsOverlayPane) => ReactNode;
 }
 
 export function SettingsShell({
   initialTab = "account",
   renderTab,
   isTabVisible = defaultTabVisibility,
+  requestedSearch,
+  ownerKey = null,
+  renderStreaming,
 }: SettingsShellProps) {
   return (
     <SettingsContextProvider>
@@ -83,6 +95,9 @@ export function SettingsShell({
         initialTab={initialTab}
         renderTab={renderTab}
         isTabVisible={isTabVisible}
+        requestedSearch={requestedSearch}
+        ownerKey={ownerKey}
+        renderStreaming={renderStreaming}
       />
     </SettingsContextProvider>
   );
@@ -92,86 +107,81 @@ function SettingsShellInner({
   initialTab,
   renderTab,
   isTabVisible,
-}: Required<SettingsShellProps>) {
+  requestedSearch,
+  ownerKey,
+  renderStreaming,
+}: SettingsShellProps & { initialTab: SettingsTabId; isTabVisible: (id: SettingsTabId) => boolean }) {
   const router = useRouter();
-  const tabs = TABS.filter((t) => isTabVisible(t.id));
+  const tabs = useMemo(() => TABS.filter((t) => isTabVisible(t.id)), [isTabVisible]);
   const [active, setActive] = useState<SettingsTabId>(() =>
     tabs.some((t) => t.id === initialTab) ? initialTab : (tabs[0]?.id ?? initialTab),
   );
-  // `fromUrl`: the URL already names the target, so it isn't rewritten
-  // (that would drop a `#section` anchor the target tab scrolls to).
+  // URL-origin requests retain the full admitted destination and the previous
+  // href; Stay can restore aliases, extras and section hashes exactly.
   const [pending, setPending] = useState<PendingDestination | null>(
     null,
   );
   const ctx = useSettingsContext();
-  const lastRequested = useRef(initialTab);
+  const [destination, setDestination] = useState(() => resolveSettingsDestination(`tab=${initialTab}`));
+  const [locationReady, setLocationReady] = useState(false);
+  const owner = useMemo(() => ({ key: ownerKey }), [ownerKey]);
+  const latestOwner = useRef(owner); latestOwner.current = owner;
+  const mounted = useRef(true);
+  const action = useRef<object>({});
+  const admittedHref = useRef("");
+  const [anchorChanges, setAnchorChanges] = useState(0);
   // "Overlay · Settings · SC2 Tools": the browser tab (and a bookmark of
   // the ?tab= URL) names the settings tab that is open.
   const activeLabel = tabs.find((t) => t.id === active)?.label;
   useDocumentTitle(activeLabel ? `${activeLabel} · Settings` : null);
-  const previousInitialTab = useRef(initialTab);
-
-  const activate = (tab: SettingsTabId, fromUrl: boolean) => {
-    setActive(tab);
-    // The shown tab is now the last one asked for, so a later link back
-    // to the previous tab is a change even before the URL catches up.
-    lastRequested.current = tab;
-    if (!fromUrl) writeTabToUrl(tab);
-  };
-
-  const requestSwitch = (next: string, fromUrl = false) => {
-    const target = next as SettingsTabId;
-    if (target === active) return;
-    if (ctx.isDirty(active)) {
-      setPending({ kind: "tab", tab: target, fromUrl });
+  const activate = useCallback((next: SettingsDestination) => {
+    setActive(next.tab); setDestination(next);
+    if (window.location.pathname + window.location.search + window.location.hash !== next.href) window.history.replaceState(null, "", next.href);
+    admittedHref.current = next.href;
+  }, []);
+  const requestDestination = useCallback((next: SettingsDestination, fromUrl: boolean) => {
+    const attempt = {}; action.current = attempt;
+    if (!tabs.some(tab => tab.id === next.tab)) return;
+    if (next.tab === active && next.href === admittedHref.current) { setPending(null); return; }
+    if (next.tab !== active && ctx.isDirty(active)) {
+      setPending({ kind: "tab", destination: next, fromUrl, previousHref: admittedHref.current, action: attempt, owner });
       return;
     }
-    activate(target, fromUrl);
-  };
-
-  // A search-param-only navigation keeps this component mounted, so a
-  // link to another tab arrives as a new `initialTab`. Don't remount the
-  // shell for it: that would drop unsaved edits without asking.
-  useEffect(() => {
-    // Only a new value is a new request; the mount run is not (an old
-    // `#tab` link may already have opened another tab by then).
-    if (initialTab === previousInitialTab.current) return;
-    previousInitialTab.current = initialTab;
-    if (initialTab === lastRequested.current) return;
-    lastRequested.current = initialTab;
-    if (tabs.some((t) => t.id === initialTab)) requestSwitch(initialTab, true);
-    // Only a changed request matters; the guard reads the current tab.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialTab]);
-
-  // Old `/settings#overlay` links (from before `?tab=`): open the tab
-  // and rewrite the URL to `?tab=overlay` before the first paint. Checks
-  // again on later renders until it has decided, because a tab can
-  // appear late (Import waits on a feature flag).
-  const legacyHashHandled = useRef(false);
+    setPending(null); activate(next);
+  }, [tabs, active, ctx, owner, activate]);
+  const requestSwitch = useCallback((next: string) => {
+    if (!tabs.some(tab => tab.id === next) || next === active) return;
+    const query = new URLSearchParams(window.location.search);
+    query.set("tab", next); query.delete("section"); query.delete("pack"); query.delete("widget");
+    requestDestination(resolveSettingsDestination(query.toString()), false);
+  }, [tabs, active, requestDestination]);
+  const previousRequest = useRef<string | null>(null);
+  const previousInitialTab = useRef<SettingsTabId | null>(null);
   useLayoutEffect(() => {
-    if (legacyHashHandled.current) return;
-    const url = new URL(window.location.href);
-    const legacyTab = url.searchParams.has("tab") ? null : settingsTabForLegacyHash(url.hash);
-    if (legacyTab === null) {
-      legacyHashHandled.current = true;
-      return;
-    }
-    if (!tabs.some((t) => t.id === legacyTab)) return;
-    legacyHashHandled.current = true;
-    url.searchParams.set("tab", legacyTab);
-    url.hash = "";
-    window.history.replaceState(null, "", url);
-    // When the rewritten URL comes back as `initialTab`, the tab is
-    // already the last one asked for.
-    lastRequested.current = legacyTab;
-    requestSwitch(legacyTab, true);
-  });
+    const query = new URLSearchParams(requestedSearch ?? window.location.search);
+    // Keep the existing standalone initialTab contract used by consumers.
+    if (requestedSearch === undefined && initialTab !== previousInitialTab.current &&
+        (previousInitialTab.current !== null || query.has("tab")) && settingsTabFromParamForShell(query.get("tab")) !== initialTab) query.set("tab", initialTab);
+    previousInitialTab.current = initialTab;
+    const requestKey = `${query}#${window.location.hash}`;
+    if (requestKey === previousRequest.current) return;
+    const next = resolveSettingsDestination(query.toString(), window.location.hash, initialTab);
+    if (!tabs.some(tab => tab.id === next.tab)) return;
+    previousRequest.current = requestKey;
+    if (!locationReady) {
+      activate(next); setLocationReady(true);
+    } else requestDestination(next, true);
+  }, [requestedSearch, initialTab, tabs, locationReady, activate, requestDestination, anchorChanges]);
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; action.current = {}; };
+  }, []);
+  useEffect(() => { action.current = {}; setPending(null); }, [owner]);
 
   // `#section` anchors: once the tab is showing, scroll to the section
   // and highlight it, and again whenever the anchor changes. Help opens
   // its own article anchors.
-  const [anchorChanges, setAnchorChanges] = useState(0);
+  const panelRegion = useRef<HTMLDivElement>(null);
   const panelScopeId = useId();
   const desktopRows = SETTINGS_GROUPS.flatMap((group) => {
     const groupTabs = tabs.filter((tab) => tab.group === group.id);
@@ -189,23 +199,29 @@ function SettingsShellInner({
   }, []);
   useEffect(() => {
     if (active === "help") return undefined;
-    const panel = document.querySelector<HTMLElement>(`[data-settings-panel="${panelScopeId}-${active}"]`);
+    // The streaming authority gates its children on a fresh token read. Keep
+    // the bounded observer on this stable content region while that panel is
+    // absent, so a late Chat/Overlay section still reveals once it appears.
+    const panel = document.querySelector<HTMLElement>(`[data-settings-panel="${panelScopeId}-${active}"]`)
+      ?? (active === "overlay" || active === "chat" ? panelRegion.current : null);
     if (!panel) return undefined;
-    return revealSectionAnchor(window.location.hash, panel);
-  }, [active, anchorChanges, panelScopeId]);
+    return revealSectionAnchor(destination.hash, panel);
+  }, [active, destination, anchorChanges, panelScopeId]);
 
   const confirmDiscard = () => {
-    if (pending) {
+    if (pending && mounted.current && pending.owner === latestOwner.current && pending.action === action.current) {
       setPending(null);
       if (pending.kind === "devices") router.push("/devices");
-      else activate(pending.tab, pending.fromUrl);
+      else activate(pending.destination);
     }
   };
 
   const stay = () => {
     // A link asked for another tab but the player kept their edits: put
     // the URL back on the tab that is actually showing.
-    if (pending?.kind === "tab" && pending.fromUrl) writeTabToUrl(active);
+    if (!pending || !mounted.current || pending.owner !== latestOwner.current || pending.action !== action.current) return;
+    if (pending.kind === "tab" && pending.fromUrl) window.history.replaceState(null, "", pending.previousHref);
+    action.current = {};
     setPending(null);
   };
 
@@ -231,7 +247,8 @@ function SettingsShellInner({
                   // modified clicks and opening a new tab keep native behavior.
                   if (ctx.isDirty(active)) {
                     event.preventDefault();
-                    setPending({ kind: "devices" });
+                    const attempt = {}; action.current = attempt;
+                    setPending({ kind: "devices", action: attempt, owner });
                   }
                 }}
                 className="block min-h-11 rounded-md px-3 py-2 text-caption font-medium text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
@@ -259,7 +276,29 @@ function SettingsShellInner({
           <InstallAppButton className="w-full" />
         </nav>
 
-        {tabs.map((t) => (
+        <div ref={panelRegion} className="min-w-0">
+        {(() => {
+          if (active === "overlay" || active === "chat") {
+            const body = <div key={active}>{renderTab(active)}</div>;
+            return <>
+              {tabs.filter(tab => tab.id !== active).map(tab => <Tabs.Content
+                key={tab.id}
+                value={tab.id}
+                data-settings-panel={`${panelScopeId}-${tab.id}`}
+                className="space-y-5 pb-24"
+              >{null}</Tabs.Content>)}
+              <Tabs.Content
+              value={active}
+              data-settings-panel={`${panelScopeId}-${active}`}
+              className="space-y-5 pb-24"
+            >
+              {locationReady
+                ? renderStreaming ? renderStreaming(body, destination.overlayPane) : body
+                : <p role="status">Opening streaming settings…</p>}
+              </Tabs.Content>
+            </>;
+          }
+          return tabs.map((t) => (
           <Tabs.Content
             key={t.id}
             value={t.id}
@@ -268,7 +307,9 @@ function SettingsShellInner({
           >
             {renderTab(t.id)}
           </Tabs.Content>
-        ))}
+          ));
+        })()}
+        </div>
       </Tabs>
 
       <ConfirmDialog
@@ -283,20 +324,6 @@ function SettingsShellInner({
       />
     </>
   );
-}
-
-/**
- * Keep `?tab=` in step with the tab on screen so a refresh, a copied URL
- * or a later link to the same tab behaves. Replaces the history entry:
- * switching tabs isn't a navigation.
- */
-function writeTabToUrl(tab: SettingsTabId): void {
-  if (typeof window === "undefined") return;
-  const url = new URL(window.location.href);
-  if (url.searchParams.get("tab") === tab) return;
-  url.searchParams.set("tab", tab);
-  url.hash = "";
-  window.history.replaceState(null, "", url);
 }
 
 function MobileSettingsTabs({ tabs, active, isDirty, requestSwitch }: { tabs: readonly TabDef[]; active: SettingsTabId; isDirty: (id: SettingsTabId) => boolean; requestSwitch: (id: string) => void }) {

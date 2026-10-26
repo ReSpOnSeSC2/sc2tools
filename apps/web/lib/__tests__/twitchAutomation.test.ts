@@ -18,7 +18,7 @@ describe("Twitch automation bounded public contract", () => {
   });
   it("publishes a real Learn anchor and matching Help section without adding a fake widget", () => {
     const guide = STUDIO_AUTOMATION_GUIDES.find(row => row.id === "twitch-predictions")!;
-    expect(guide.capability).toContain("cannot prove ranked queue status"); expect(guide.settingsHref).toContain("section=chat#twitch-automation");
+    expect(guide.capability).toContain("cannot prove ranked queue status"); expect(guide.settingsHref).toBe("/settings?tab=chat#twitch-automation");
     expect(WIDGET_GUIDES.some(row => String(row.id) === "twitch-predictions")).toBe(false);
     expect(engagement.body.some(row => row.type === "heading" && row.anchor === guide.helpAnchor)).toBe(true);
   });

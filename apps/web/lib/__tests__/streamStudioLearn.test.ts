@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import sharp from "sharp";
 import { ALL_WIDGETS } from "@/components/overlay/widgetLifecycle";
 import { getArticle } from "@/lib/help";
-import { WIDGET_GROUPS, WIDGET_GUIDES } from "@/lib/streamStudioLearn";
+import { WIDGET_GROUPS, WIDGET_GUIDES, STUDIO_AUTOMATION_GUIDES } from "@/lib/streamStudioLearn";
 import presenceRules from "@/lib/overlayPresenceRules.json";
 
 function source(path: string) {
@@ -12,6 +12,16 @@ function source(path: string) {
 }
 
 describe("Stream Studio learning catalog", () => {
+  it("separates Chat configuration from Overlay source-enable links", () => {
+    expect(STUDIO_AUTOMATION_GUIDES[0].settingsHref).toBe("/settings?tab=chat#twitch-automation");
+    expect(WIDGET_GUIDES.find(guide => guide.id === "multichat")!.setup.join(" ")).toContain("Settings → Chat & alerts");
+    for (const guide of WIDGET_GUIDES) {
+      const destination = new URL(guide.settingsHref, "https://fixture.invalid");
+      expect(destination.searchParams.get("tab")).toBe("overlay");
+      expect(destination.searchParams.get("section")).toBe("widgets");
+      expect(destination.searchParams.get("widget")).toBe(guide.id);
+    }
+  });
   it("covers every supported widget exactly once", () => {
     const ids = WIDGET_GUIDES.map((guide) => guide.id);
     expect(new Set(ids).size).toBe(ids.length);

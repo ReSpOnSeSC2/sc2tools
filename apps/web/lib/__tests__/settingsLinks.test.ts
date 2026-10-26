@@ -123,6 +123,7 @@ describe("legacy hash links", () => {
     ["#checkin", "checkin"],
     ["#Overlay", "overlay"],
     ["#streaming", "overlay"],
+    ["#chat", "chat"],
   ])("%s opens the %s tab", (hash, tab) => {
     expect(settingsTabForLegacyHash(hash)).toBe(tab);
   });

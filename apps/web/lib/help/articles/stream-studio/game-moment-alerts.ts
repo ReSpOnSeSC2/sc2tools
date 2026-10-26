@@ -13,7 +13,7 @@ const article: HelpArticle = {
   body: [
     { type: "paragraph", text: "Game moments use newly recorded competitive 1v1 replays. They appear as **Ladder** cards in your existing **Event alerts** Browser Source. Subscriptions, raids and other supporter alerts play first; a delayed Ladder card expires after two minutes. Each accepted moment also appears in **Stream Dock → Clips**." },
     { type: "steps", items: [
-      "Open **Settings → Overlay → Multi-platform chat** and expand **Game moments** in the event alert settings.",
+      "Open **Settings → Chat & alerts** and expand **Game moments** in the event alert settings.",
       "Turn on the achievements you want. Choose each visual and optional sound. Everything starts off and silent; bot posting starts off too.",
       "Use **Test locally** beside a moment. The labelled sample appears in this browser only. It does not save choices, send an OBS event, change a replay or post chat.",
       "Choose **Save chat settings** to apply the draft. Enable Event alerts in the widget manager and copy its URL into an OBS Browser Source. Refresh an already open source once after this update.",
@@ -33,7 +33,7 @@ const article: HelpArticle = {
     { type: "callout", tone: "info", title: "Recorded MMR is a starting rating", text: "A replay stores the rating at the start of its game. A milestone or peak does **not** claim that this game's win awarded that rating. Missing evidence, unavailable season data or an incomplete bounded history suppresses the corresponding claim." },
     { type: "paragraph", text: "**Post moments through the configured Twitch bot** is optional and uses only your already connected bot. Turning it on does not connect a platform. Several moments from one game share one bounded chat message. Keep it off for overlay and clip-log alerts without bot posts." },
     { type: "paragraph", text: "Historical imports, resumed replays, hidden or deleted games and repeat processing do not trigger moments. Only a new replay recorded within 15 minutes of its game time is eligible. Reopening the source does not replay old moments. **Hide game widgets** suppresses Ladder cards while supporter alerts continue; skipped cards do not return when you resume." },
-    { type: "settingsLink", label: "Open Overlay settings", href: "/settings?tab=overlay#chat" },
+    { type: "settingsLink", label: "Open Chat & alerts", href: "/settings?tab=chat#alerts" },
   ],
   related: ["multi-platform-chat", "viewer-engagement", "stream-dock"],
 };

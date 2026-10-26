@@ -50,7 +50,8 @@ const article: HelpArticle = {
         ["Gameplay", "Build check-in", "When the desktop app asks which build you were going for."],
         ["Gameplay", "Randomizer", "Which builds the build randomizer picks from, and its sound effects."],
         ["Gameplay", "Import", "Start or scan desktop replay imports, pick a folder on your PC, and inspect recent import jobs. Browser import also appears when it is enabled for your account."],
-        ["Streaming", "Overlay", "OBS widget URLs, overlay tokens and themes, the Ghost Build coach, multi-platform chat, the chat bot and your connected Twitch, Kick and YouTube accounts."],
+        ["Streaming", "Overlay", "OBS widget URLs and themes, scenes, the Ghost Build coach and Build profile."],
+        ["Streaming", "Chat & alerts", "Connected platforms, multi-platform chat, alerts, TTS, translation, commands, Stream Dock and the chat bot. Overlay and Chat share one selected streaming token."],
         ["Streaming", "Voice", "The scouting report read aloud through your overlay."],
         ["Preferences", "Preferences (previously Misc)", "The page SC2 Tools opens on, running setup again, notification preferences and analytics cookies for this browser."],
         ["Help", "Help", "These help articles, with search."],
@@ -60,8 +61,8 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "Add `?tab=` and the tab's name to the Settings address to open that tab, for example [/settings?tab=overlay](/settings?tab=overlay). The names are `account`, `profile`, `backups`, `checkin`, `randomizer`, `import`, `overlay`, `voice`, `preferences` and `help`.",
-        "Add `#` and a section name to jump to one section of the tab. `/settings?tab=overlay#platform-connections` opens **Connected accounts** on the Overlay tab. The section is outlined for a moment so you can spot it.",
+        "Add `?tab=` and the tab's name to the Settings address to open that tab, for example [/settings?tab=overlay](/settings?tab=overlay). The names are `account`, `profile`, `backups`, `checkin`, `randomizer`, `import`, `overlay`, `chat`, `voice`, `preferences` and `help`.",
+        "Add `#` and a section name to jump to one section of the tab. [/settings?tab=chat#platform-connections](/settings?tab=chat#platform-connections) opens **Connected accounts** in Chat & alerts. Older Overlay chat and Dock links open their moved destination before loading streaming controls. The section is outlined for a moment so you can spot it.",
         "Older `foundation` and `misc` links still open Account and Preferences. The `streaming` alias still opens Overlay. Older hash-only tab links continue to work too.",
         "Picking a tab updates the address, so a copied link or a refresh brings you back to the same tab.",
         "Use Up and Down to move through desktop sidebar tabs, including between groups. On a phone use Left and Right in the scrolling tab row. Home and End reach the first and last tabs. Devices is a separate link, reached with Tab.",
@@ -70,8 +71,9 @@ const article: HelpArticle = {
     { type: "heading", text: "Unsaved changes" },
     {
       type: "paragraph",
-      text: "A dot next to a tab's name means it has edits you haven't saved. Switch tabs with unsaved edits and Settings asks first: **Stay on this tab** keeps them, **Discard & switch** drops them. The sidebar's Devices link also asks before leaving a draft behind: choose **Discard & open Devices** to leave. Opening Devices in a new tab keeps your current Settings draft. On the Overlay tab the guard covers every form with its own Save button, including Multi-platform chat and the chat bot; in Preferences it covers notification choices as well as the start page.",
+      text: "A dot next to a tab's name means it has edits you haven't saved. Switch tabs with unsaved edits and Settings asks first: **Stay on this tab** keeps them, **Discard & switch** drops them. The sidebar's Devices link also asks before leaving a draft behind: choose **Discard & open Devices** to leave. Opening Devices in a new tab keeps your current Settings draft. Chat & alerts tracks the multi-platform chat and bot forms independently, so saving one does not clear the other's draft. Overlay tracks its profile draft; Preferences includes notification choices and the start page. Commands and Twitch automation keep their own save controls and are not included in this tab-level draft guard.",
     },
+    { type: "paragraph", text: "Overlay and Chat & alerts use one streaming-token manager while either tab is open. Save or discard the guarded drafts before selecting, minting, rotating or revoking a token; renaming its label keeps those drafts. Account only checks setup health and never creates a token. If a creation response is lost, choose **Check token status** first. An empty status cannot prove the earlier creation failed, so another token requires the explicit Create action." },
     { type: "heading", text: "Start page, setup and analytics (Preferences)", anchor: "start-page-setup-and-analytics-misc" },
     {
       type: "list",
