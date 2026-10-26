@@ -1,4 +1,5 @@
 import { COMMAND_GROUPS } from "@/lib/multichat/commandsGuide";
+import { GLOSSARY } from "@/lib/glossary";
 import type { HelpWidgetId } from "./types";
 
 /**
@@ -7,6 +8,7 @@ import type { HelpWidgetId } from "./types";
  * components themselves live in components/help/HelpWidget.tsx.
  */
 const WIDGET_TEXT: Record<HelpWidgetId, () => string> = {
+  glossary: () => GLOSSARY.flatMap(term => [term.term, term.short, term.long ?? ""]).join(" "),
   "chat-commands": () =>
     COMMAND_GROUPS.flatMap((group) => [
       group.title,
@@ -27,4 +29,9 @@ export const HELP_WIDGET_IDS = Object.keys(WIDGET_TEXT) as HelpWidgetId[];
  */
 export function helpWidgetText(id: HelpWidgetId): string {
   return WIDGET_TEXT[id]();
+}
+
+/** Published glossary links remain known to the existing Help anchor API. */
+export function helpWidgetAnchors(id: HelpWidgetId): string[] {
+  return id === "glossary" ? GLOSSARY.map(term => term.id) : [];
 }

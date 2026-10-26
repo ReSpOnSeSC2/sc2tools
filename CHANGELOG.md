@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Glossary and contextual help foundation
+
+- Browse and search the existing player-identity and verified-MMR definitions A to Z in Help's glossary, with stable term links and full contextual explanations.
+- Open keyboard and touch-accessible explanations beside Group same player. Definitions load on explicit open, with bounded loading, retry and shared popover focus handling.
+
 ### Copy public build and definition links
 
 - Keep a selected link available when clipboard permission is denied or takes too long: in a shared dialog for Community links, or below a definition's heading. Done or Escape returns to the copy control, and retry stays available.
