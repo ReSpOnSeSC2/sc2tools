@@ -16,6 +16,11 @@ corresponding GitHub Release.
 - Use the shared right Sheet for the site menu, with a consistent title and Close control, the existing home and destination links, and footer theme choices.
 - Close and release the menu's scroll lock when the desktop navigation becomes available; shared focus handling respects newer dialogs and returns to the opener.
 
+### Replay sharing and copy recovery
+
+- Keep replay links available in a selected-text dialog when automatic copying is unavailable. Cancelling a device's native share sheet stays a quiet cancellation.
+- Check fresh sharing status before consent or copying, and offer a status check after an interrupted update. Retire delayed account, archive and player actions when their context changes.
+
 ### Build dialogs
 
 - Use the shared dialog for build dossiers and saved-build loading or error states, with keyboard focus containment, a 44px Close control and focus return.

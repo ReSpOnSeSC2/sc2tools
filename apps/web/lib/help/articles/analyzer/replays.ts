@@ -25,7 +25,7 @@ const article: HelpArticle = {
     "newer",
     "older",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-26",
   body: [
     {
       type: "paragraph",
@@ -59,7 +59,7 @@ const article: HelpArticle = {
     {
       type: "steps",
       items: [
-        "Press **Share replay page** at the top of the page.",
+        "Press **Share** at the top of the page. Sharing status is checked before its controls become available.",
         "Read **Exactly what visitors can see**: every synced game, not only the ones in your current filters, with maps, results, names, races, MMR, builds, macro scores, stream links and the original files to download.",
         "Press **Turn on and copy link**. Send the link to a teammate, coach or your viewers.",
       ],
@@ -68,6 +68,9 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "Visitors need to sign in to open the full analysis of a game. Press **Turn off sharing** at any time to close the page and stop new downloads. Your replay page keeps the same address if you turn it on again later.",
     },
+    { type: "paragraph", text: "**Turn on and copy link** changes sharing first. If copying is unavailable or takes too long, **Copy replay page link manually** shows the selected address. Use Ctrl+C, ⌘C or your browser's Copy command. **Done**, the close button or Escape returns to the current copy action. Closing manual copy does not turn sharing off; use **Turn off sharing** separately." },
+    { type: "paragraph", text: "If an update ends without confirmation, **Check sharing status** refreshes the current setting before another change or copy. A change already sent may have completed even if you closed its dialog. A settings-load failure also offers a status check, without assuming sharing is on or off." },
+    { type: "paragraph", text: "On a public replay page, **Share replay page** opens your device's native sharing sheet when available. Closing that sheet cancels sharing quietly. If the device cannot share, the copy action and selected-address dialog remain available; cancelling the native sheet does not copy a link automatically." },
     {
       type: "callout",
       tone: "warning",
