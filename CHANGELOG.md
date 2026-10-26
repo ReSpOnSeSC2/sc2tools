@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Account activity writes
+
+- Avoid rewriting recent account activity on every page load. Keep the first week-two return recorded even when another visit occurred within five minutes.
+
 ### Chat & alerts settings
 
 - Give platforms, chat appearance, alerts, TTS, translation, commands, Stream Dock and the bot their own Chat & alerts tab. Keep OBS sources, widgets, scenes and look in Overlay.
