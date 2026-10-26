@@ -77,6 +77,15 @@ describe("MMR progression scale", () => {
 });
 
 describe("MMR progression regions", () => {
+  it("accepts the themed palette without changing the legacy helper default", () => {
+    const rows = [{ seriesKey: "na-main", region: "NA" }, { seriesKey: "na-alt", region: "NA" }, { seriesKey: "ptr", region: "PTR" }];
+    const palette = ["themed-a", "themed-b", "themed-c", "themed-d"];
+    const themed = buildSeriesColors(rows, palette);
+    expect(Object.values(themed).every(color => palette.includes(color))).toBe(true);
+    expect(new Set(Object.values(themed)).size).toBe(3);
+    expect(buildSeriesColors([...rows].reverse(), palette)).toEqual(themed);
+    expect(buildSeriesColors(rows).ptr).toMatch(/^#[0-9a-f]{6}$/);
+  });
   it("labels the PTR and unknown regions", () => {
     expect(regionLabel("PTR")).toBe("PTR");
     expect(regionLabel("SEA")).toBe("SEA");

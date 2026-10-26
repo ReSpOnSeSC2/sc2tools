@@ -3,6 +3,7 @@
 import { MapLabel } from "@/components/maps/MapArtwork";
 import type { CumulativePoint, PeriodPoint } from "@/lib/h2hSeries";
 import { fmtDate, fmtMinutes } from "@/lib/format";
+import { useChartKit, isLowSample } from "@/lib/charts/theme";
 
 /**
  * Recharts custom tooltip renderers shared by the H2H timeline and
@@ -21,6 +22,7 @@ export function CumulativeTooltip({
   payload,
   rollingLabel,
 }: TooltipPayload<CumulativePoint> & { rollingLabel: string }) {
+  const kit = useChartKit();
   if (!active || !payload || payload.length === 0) return null;
   const point = payload[0]?.payload;
   if (!point) return null;
@@ -29,6 +31,7 @@ export function CumulativeTooltip({
     <div
       role="tooltip"
       className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-xs shadow-[var(--shadow-card)]"
+      style={kit.tooltipStyle}
     >
       <div className="mb-1 flex items-center justify-between gap-3">
         <span className="font-mono text-micro text-text-dim">
@@ -85,6 +88,7 @@ export function CumulativeTooltip({
           </>
         ) : null}
       </div>
+      {isLowSample(point.cumulativeWins + point.cumulativeLosses) ? <p className="mt-2 text-caption text-text-muted">Small sample · n={point.cumulativeWins + point.cumulativeLosses} decided games</p> : null}
     </div>
   );
 }
@@ -94,6 +98,7 @@ export function PeriodTooltip({
   payload,
   bucketLabel,
 }: TooltipPayload<PeriodPoint> & { bucketLabel: string }) {
+  const kit = useChartKit();
   if (!active || !payload || payload.length === 0) return null;
   const point = payload[0]?.payload;
   if (!point) return null;
@@ -101,6 +106,7 @@ export function PeriodTooltip({
     <div
       role="tooltip"
       className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-xs shadow-[var(--shadow-card)]"
+      style={kit.tooltipStyle}
     >
       <div className="mb-1 font-mono text-micro text-text-dim">
         {bucketLabel} · {point.date}
@@ -113,6 +119,7 @@ export function PeriodTooltip({
           {point.wins}-{point.losses} ({point.total})
         </span>
       </div>
+      {isLowSample(point.total) ? <p className="mt-2 text-caption text-text-muted">Small sample · n={point.total} decided games</p> : null}
     </div>
   );
 }

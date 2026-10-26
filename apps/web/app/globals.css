@@ -112,6 +112,21 @@
   --race-zerg:    167 139 250;   /* #a78bfa — violet, ladder canon */
   --race-random:  150 164 176;   /* muted neutral */
 
+  /* Qualitative chart identities, paired across themes. Labels and dashes
+     accompany color; palette separation is regression-tested under CVD. */
+  --series-1: 66 190 215;
+  --series-2: 238 75 43;
+  --series-3: 68 127 243;
+  --series-4: 233 150 150;
+  --series-5: 184 249 228;
+  --series-6: 173 137 245;
+  --series-7: 190 215 66;
+  --series-8: 192 217 242;
+  --chart-low-sample: 159 173 185;
+  --chart-wr-low: 255 107 107;
+  --chart-wr-mid: 245 184 74;
+  --chart-wr-high: 62 200 132;
+
   --shadow-card: var(--shadow-hard);
 }
 
@@ -164,6 +179,19 @@
   --race-terran:  184 51 58;    /* #b8333a */
   --race-zerg:    113 84 215;   /* #7154d7 */
   --race-random:  84 96 114;     /* matches text-muted */
+
+  --series-1: 22 91 105;
+  --series-2: 212 50 17;
+  --series-3: 13 64 165;
+  --series-4: 105 22 22;
+  --series-5: 10 118 82;
+  --series-6: 82 17 212;
+  --series-7: 91 105 22;
+  --series-8: 31 89 147;
+  --chart-low-sample: 81 91 107;
+  --chart-wr-low: 184 51 58;
+  --chart-wr-mid: 143 92 12;
+  --chart-wr-high: 21 122 67;
 
   --shadow-card: var(--shadow-hard);
 }
@@ -626,6 +654,19 @@ h4 {
   --race-terran: 255 107 107;
   --race-zerg: 167 139 250;
   --race-random: 150 164 176;
+
+  --series-1: 66 190 215;
+  --series-2: 238 75 43;
+  --series-3: 68 127 243;
+  --series-4: 233 150 150;
+  --series-5: 184 249 228;
+  --series-6: 173 137 245;
+  --series-7: 190 215 66;
+  --series-8: 192 217 242;
+  --chart-low-sample: 159 173 185;
+  --chart-wr-low: 255 107 107;
+  --chart-wr-mid: 245 184 74;
+  --chart-wr-high: 62 200 132;
 
   color: rgb(var(--text));
 }

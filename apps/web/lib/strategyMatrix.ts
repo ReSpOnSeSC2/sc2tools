@@ -23,8 +23,8 @@ const luminance = (rgb: Rgb) => rgb.map(value => { const x = value / 255; return
 export const colorContrast = (a: Rgb, b: Rgb) => { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
 
 /** Encode sample size in the background only; retain readable, opaque labels. */
-export function matrixCellStyle(rate: number, games: number, minGames: number, surface: Rgb) {
-  const rgb = Number.isFinite(rate) ? wrRamp(rate) : [154, 163, 178];
+export function matrixCellStyle(rate: number, games: number, minGames: number, surface: Rgb, ramp = wrRamp) {
+  const rgb = Number.isFinite(rate) ? ramp(rate) : [154, 163, 178];
   const n = Number.isFinite(games) ? Math.max(0, games) : 0, floor = Number.isFinite(minGames) && minGames > 0 ? minGames : 1;
   const desired = Math.round((.35 + .65 * Math.min(1, n / (floor * 5))) * 1000) / 1000;
   const candidates = [desired, ...Array.from({ length: 66 }, (_, i) => Math.min(1, Math.round((desired + (i + 1) * .01) * 1000) / 1000)),

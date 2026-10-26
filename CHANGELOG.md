@@ -16,6 +16,12 @@ corresponding GitHub Release.
 - Choose which aggregate report rows to share as a PNG or text, with player identities omitted. See a real anonymized sample before adding replays, and follow detected openers to published matchup guides.
 - Recover from unavailable or delayed clipboard access with selected report text that can be copied manually.
 
+### Chart comparisons and data tables
+
+- Bring the selected MMR, macro and head-to-head charts onto shared theme-aware colors and 12px axis labels. Tooltips follow Light, Dark and scoped replay colors.
+- Compare MMR and macro-score bands on one percentage scale with separate game counts; preserve existing filters, rate denominators and game drilldowns.
+- Add same-data table views, readable summaries and hollow/dim sample cues below 20 decided results, or 20 measured games for mechanics averages. Existing missing-data gaps and reduced-motion behavior remain explicit.
+
 ### Analyzer filters
 
 - Use shared filter popovers with viewport bounds, keyboard dismissal and focus return. Phone filters stay in a bottom sheet; closing a date or length picker leaves that editor open.
