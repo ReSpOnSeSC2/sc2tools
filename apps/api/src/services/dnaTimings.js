@@ -19,6 +19,7 @@
 
 const TimingCatalog = require("./timingCatalog");
 const { toStartSeconds } = require("./buildDurations");
+const { resultBucket } = require("../util/parseQuery");
 
 const TIMING_LINE_RE = /^\[(\d+):(\d{2})\]\s+(\w+)/;
 const TREND_ABS_SECONDS = 5.0;
@@ -65,6 +66,11 @@ const TREND_REL_FRACTION = 0.05;
  *   lastSeenSeconds: number|null,
  *   lastSeenDisplay: string,
  *   winRateWhenBuilt: number|null,
+ *   winRateSampleCount: number,
+ *   winnerMedianSeconds: number|null,
+ *   loserMedianSeconds: number|null,
+ *   winnerSampleCount: number,
+ *   loserSampleCount: number,
  *   trend: "unknown"|"stable"|"later"|"earlier",
  *   source: "build_log"|"opp_build_log",
  *   samples: TimingSample[],
@@ -85,6 +91,25 @@ function median(arr) {
   const s = [...arr].sort((a, b) => a - b);
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/** Both sides need five actual decided outcomes from these same observations.
+ * A draw/unknown result never becomes a losing sample. No further read occurs.
+ * @param {TimingSample[]} samples */
+function timingOutcomeMedians(samples) {
+  const valid = samples.filter(sample => Number.isFinite(sample.seconds) && sample.seconds >= 0);
+  const winners = valid.filter(sample => resultBucket(sample.result) === "win").map(sample => sample.seconds);
+  const losers = valid.filter(sample => resultBucket(sample.result) === "loss").map(sample => sample.seconds);
+  const enough = winners.length >= 5 && losers.length >= 5;
+  return { winnerMedianSeconds: enough ? median(winners) : null, loserMedianSeconds: enough ? median(losers) : null,
+    winnerSampleCount: winners.length, loserSampleCount: losers.length };
+}
+
+/** Mongo Dates stringify with weekday names; they must sort by timestamp.
+ * @param {TimingSample} sample */
+function timingSampleDate(sample) {
+  const value = sample.date instanceof Date ? sample.date.getTime() : Date.parse(sample.date);
+  return Number.isFinite(value) ? value : null;
 }
 
 /** @param {number[]} sortedAsc @param {number} p @returns {number|null} */
@@ -135,6 +160,8 @@ function emptyTokenRow(token, source) {
     lastSeenSeconds: null,
     lastSeenDisplay: "-",
     winRateWhenBuilt: null,
+    winRateSampleCount: 0,
+    ...timingOutcomeMedians([]),
     trend: "unknown",
     source,
     samples: [],
@@ -238,7 +265,7 @@ function gameResult(g) {
 
 /** @param {unknown} result @returns {boolean} */
 function isWonResult(result) {
-  return result === "Win" || result === "Victory";
+  return resultBucket(result) === "win";
 }
 
 /** @param {any} g @returns {string} */
@@ -447,7 +474,8 @@ function finaliseSamples(samples, ordering, ownInternalSet) {
       out[tk.internalName] = emptyTokenRow(tk, source);
       continue;
     }
-    list2.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const dated = list2.every(sample => timingSampleDate(sample) !== null);
+    list2.sort((a, b) => (timingSampleDate(a) ?? -Infinity) - (timingSampleDate(b) ?? -Infinity));
     const secondsList = list2.map((s) => s.seconds);
     const sortedAsc = [...secondsList].sort((a, b) => a - b);
     const n = secondsList.length;
@@ -462,8 +490,9 @@ function finaliseSamples(samples, ordering, ownInternalSet) {
     );
     const mn = sortedAsc[0];
     const mx = sortedAsc[n - 1];
-    const lastSeen = list2[list2.length - 1].seconds;
-    const winsCount = list2.reduce((a, s) => a + (s.won ? 1 : 0), 0);
+    const lastSeen = dated ? list2[list2.length - 1].seconds : null;
+    const winsCount = list2.filter(s => resultBucket(s.result) === "win").length;
+    const decidedCount = list2.filter(s => { const bucket = resultBucket(s.result); return bucket === "win" || bucket === "loss"; }).length;
 
     out[tk.internalName] = {
       sampleCount: n,
@@ -478,11 +507,13 @@ function finaliseSamples(samples, ordering, ownInternalSet) {
       maxSeconds: mx,
       maxDisplay: formatSeconds(mx),
       lastSeenSeconds: lastSeen,
-      lastSeenDisplay: formatSeconds(lastSeen),
-      winRateWhenBuilt: winsCount / n,
-      trend: computeTrend(secondsList),
+      lastSeenDisplay: lastSeen === null ? "-" : formatSeconds(lastSeen),
+      winRateWhenBuilt: decidedCount ? winsCount / decidedCount : null,
+      winRateSampleCount: decidedCount,
+      trend: dated ? computeTrend(secondsList) : "unknown",
       source,
       samples: list2.slice().reverse(),
+      ...timingOutcomeMedians(list2),
       displayName: tk.displayName,
       iconFile: tk.iconFile,
     };
@@ -573,6 +604,7 @@ function topStrategiesFromBy(byStrategy, limit = 5) {
 module.exports = {
   formatSeconds,
   median,
+  timingOutcomeMedians,
   percentileInclusive,
   computeTrend,
   emptyTokenRow,

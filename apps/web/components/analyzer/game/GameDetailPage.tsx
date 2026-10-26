@@ -29,7 +29,8 @@ import { MapReplaySection } from "./MapReplaySection";
 import { MechanicsPanel } from "./MechanicsPanel";
 import { GameContextCard } from "./GameContextCard";
 import { useGameContext } from "@/lib/useBenchmarks";
-const BuildOrderColumns = dynamic(() => import("./BuildOrderColumns").then((value) => value.BuildOrderColumns), { loading: () => <div role="status" aria-label="Loading build orders" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
+import { checkedMatchPercentage, type BuildExecution } from "@/lib/buildExecution";
+const BuildOrderColumns = dynamic(() => import("./GameBuildOrderColumns").then((value) => value.GameBuildOrderColumns), { loading: () => <div role="status" aria-label="Loading build orders" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
 const BuildWorkspaceActions = dynamic(() => import("./BuildWorkspaceActions").then(value => value.BuildWorkspaceActions));
 const GameDataMenu = dynamic(() => import("./GameDataMenu").then(value => value.GameDataMenu));
 const GameMacroSection = dynamic(() => import("./GameMacroSection").then((value) => value.GameMacroSection), { loading: () => <div role="status" aria-label="Loading macro breakdown" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
@@ -128,6 +129,14 @@ function GameDetailContent({
   const { revision: checkinRevision } = useBuildCheckInRevision(false);
   const intentReq = useGameBuildIntent(gameId || null, checkinRevision);
   const contextReq = useGameContext(gameReq.data ? gameId : null, checkinRevision);
+  // One owner-keyed request supplies scorecard, rail and every timeline row.
+  // Missing own logs never initiate the bounded timing-baseline hydration.
+  const executionEnabled = !!gameReq.data && !buildReq.error && !buildReq.isPreviousData
+    && buildReq.data?.my_status !== "empty" && buildReq.data?.my_status !== "not_extracted"
+    && Array.isArray(buildReq.data?.events) && buildReq.data.events.length > 0;
+  const executionReq = useApi<BuildExecution>(executionEnabled ? `/v1/games/${enc}/build-execution?revision=${checkinRevision}` : null,
+    { keepPreviousData: false, dedupingInterval: 60_000, revalidateOnFocus: false, shouldRetryOnError: false }, { timeoutMs: 20_000 });
+  const execution = executionEnabled && !executionReq.error && !executionReq.isPreviousData ? executionReq.data : undefined;
 
   // Every timestamp seeks the mounted player; playback also drives the page.
   const clock = useGameClock(gameId, initialTimeSec, gameReq.data?.durationSec ?? macroReq.data?.game_length_sec);
@@ -294,7 +303,8 @@ function GameDetailContent({
         controller={playbackController}
         initialTimeSec={initialTimeSec}
         seekRequest={clock.seekRequest} onPlaybackTimeChange={clock.onPlaybackTimeChange} onPlaybackStateChange={clock.onPlaybackStateChange} onStageSeek={clock.onStageSeek} banked={banked} upgrades={upgrades} clockLink={<GameClockLink time={clock.t} getHref={clock.linkAtCurrentTime} />}
-        buildName={checkinBuild?.label ?? game.myBuild}
+        buildName={execution?.build?.name ?? checkinBuild?.label ?? game.myBuild}
+        buildMatchPct={checkedMatchPercentage(execution)}
         myName={myName}
         oppName={oppName}
         myRace={ghostMyRace}
@@ -319,6 +329,8 @@ function GameDetailContent({
       /></SectionBoundary>
 
       <SectionBoundary key={`build orders:${game.gameId}`} label="build orders" title="Build orders hit a problem"><BuildOrderColumns
+        gameId={game.gameId} execution={execution} executionLoading={executionEnabled && executionReq.isLoading}
+        executionError={executionReq.error} onExecutionRetry={() => executionReq.mutate()}
         workspace={{
           myMeta: { title: checkinBuild?.label ?? buildReq.data?.my_build ?? game.myBuild ?? "My build", matchup: `${ghostMyRace || "Unknown"} vs ${ghostOpponentRace || "Unknown"}`, author: myName, sourceUrl: `/app/game/${encodeURIComponent(game.gameId)}#builds` },
           oppMeta: { title: checkinOpponent?.label ?? buildReq.data?.opp_strategy ?? game.opponent?.strategy ?? "Opponent build", matchup: `${ghostOpponentRace || "Unknown"} vs ${ghostMyRace || "Unknown"}`, author: oppName, sourceUrl: `/app/game/${encodeURIComponent(game.gameId)}#builds` },

@@ -2,6 +2,10 @@
 
 const { gamesMatchStage } = require("../util/parseQuery");
 const { computeDossierExtras } = require("./buildDossier");
+const { hydrateDossierTimings } = require("./buildDossierTimingSample");
+const { naturalTimingBaselines } = require("./buildExecutionTimings");
+const { readCommunityTimings } = require("./buildCommunityTimings");
+const { planFacets, finishPlan, planGroupFields, planHeldRate } = require("./buildPlanSurvival");
 const { strengthPipeline, finishStrength } = require("./strengthAdjusted");
 const { OPPONENT_RACE_GROUP, OPPONENT_RACE_PROJECT } = require("../util/opponentRaceCounts");
 const {
@@ -10,6 +14,7 @@ const {
   DETECTOR_BUILD_EXPR,
   OPP_COUNTED_BY_CHECKIN_EXPR,
   PLANNED_GAME_EXPR,
+  AGREES_WITH_DETECTOR_MATCH,
 } = require("./buildIntentShape");
 const { agreesWithDetector } = require("./buildIntentReaders");
 
@@ -29,8 +34,6 @@ const DOSSIER_PROJECTION = {
   macroScore: 1,
   apm: 1,
   spq: 1,
-  buildLog: 1,
-  oppBuildLog: 1,
   opponent: 1,
   // Build check-in labels: median timings describe the build's shape, so
   // they use only games whose replay agrees with the label.
@@ -63,11 +66,13 @@ const BUCKET_BRANCHES = [
  * for corrected opponent builds on ``opponent.strategy``.
  */
 class BuildsService {
-  /** @param {{games: import('mongodb').Collection}} db
-   * @param {{mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'>}} [opts] */
+  /** @param {{games: import('mongodb').Collection,guideStats?:import('mongodb').Collection}} db
+   * @param {{mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'>,
+   * gameDetails?:Pick<import('./gameDetails').GameDetailsService,'findMany'>}} [opts] */
   constructor(db, opts = {}) {
     this.db = db;
     this.mmrExpectation = opts.mmrExpectation;
+    this.gameDetails = opts.gameDetails;
   }
 
   /**
@@ -94,6 +99,7 @@ class BuildsService {
             losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
             total: { $sum: 1 },
             checkins: { $sum: detector ? 0 : COUNTED_BY_CHECKIN_EXPR },
+            ...(!detector ? planGroupFields() : {}),
             lastPlayed: { $max: "$date" },
             ...OPPONENT_RACE_GROUP,
           },
@@ -106,6 +112,7 @@ class BuildsService {
             losses: 1,
             total: 1,
             checkins: 1,
+            ...(!detector ? { planDeclared: 1, planHeld: 1 } : {}),
             lastPlayed: 1,
             myMatchups: OPPONENT_RACE_PROJECT,
             winRate: {
@@ -116,28 +123,36 @@ class BuildsService {
         { $sort: { total: -1 } },
       ], curve), aggregateOptions)
       .toArray();
-    return rows.map(row => finishStrength(row, curve));
+    return rows.map(row => {
+      const result = finishStrength(row, curve);
+      if (!detector) result.planHeldRate = planHeldRate(row);
+      return result;
+    });
   }
 
   /**
    * @param {string} userId
    * @param {string} name
    * @param {object} filters
+   * @param {{signal?:AbortSignal,catalogOnly?:boolean}} [options]
    * @returns {Promise<object | null>}
    */
-  async detail(userId, name, filters) {
+  async detail(userId, name, filters, options = {}) {
     if (!name) return null;
-    const baseMatch = { ...gamesMatchStage(userId, filters), myBuild: name };
+    const provenance = options.catalogOnly ? { _customBuildSlug: { $in: [null, ""] } } : {};
+    const baseMatch = { ...gamesMatchStage(userId, filters), myBuild: name, ...provenance };
     const resumedMatch = {
       ...gamesMatchStage(userId, filters),
       isResumedFromReplay: true,
       myBuild: name,
+      ...provenance,
     };
     const cursor = this.db.games.aggregate([
       { $match: baseMatch },
       { $addFields: { _bucket: bucketSwitch() } },
       {
         $facet: {
+          ...planFacets("$_bucket"),
           totals: [
             {
               $group: {
@@ -270,11 +285,19 @@ class BuildsService {
         .sort({ date: -1 })
         .toArray()
       : [];
-    const extras = computeDossierExtras(dossierGames, {
-      timingGames: dossierGames.filter(agreesWithDetector),
-    });
+    const timingCandidates = totals.total ? await this.db.games.find({ $and: [baseMatch, AGREES_WITH_DETECTOR_MATCH] },
+      { projection: DOSSIER_PROJECTION }).sort({ date: -1 }).limit(25).toArray() : [];
+    const timingGames = await hydrateDossierTimings({ games: this.db.games, details: this.gameDetails }, userId, timingCandidates, options.signal);
+    const extras = computeDossierExtras(dossierGames, { timingGames: timingGames.filter(agreesWithDetector) });
     return {
       name,
+      naturalTimings: naturalTimingBaselines(timingGames.filter(agreesWithDetector)),
+      plan: finishPlan(doc),
+      communityTimings: await readCommunityTimings(this.db.guideStats, name, timingGames),
+      timingSampleGames: timingGames.filter(game => game.buildLog.length > 0 || game.oppBuildLog.length > 0).length,
+      timingSampleSelected: timingGames.length,
+      timingSampleLimit: 25,
+      timingsTruncated: totals.total > 25,
       totals: { ...totals, winRate: totals.total ? totals.wins / totals.total : 0 },
       byMatchup: addWinRates(doc?.byMatchup || []),
       byMap: addWinRates(doc?.byMap || []),

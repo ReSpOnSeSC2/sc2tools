@@ -14,7 +14,11 @@ const { computeTransitions } = require("./buildTransitions");
 const { publicBuildMongoExpression } = require("./communityBuildSnapshot");
 const { referenceBuildOrderMongoExpression } = require("./referenceBuildOrderSnapshot");
 const { ruleNameFromUnit } = require("./knownBuildings");
-const TimingCatalog = require("./timingCatalog");
+const { hydrateDossierTimings } = require("./buildDossierTimingSample");
+const { naturalTimingBaselines } = require("./buildExecutionTimings");
+const { readCommunityTimings } = require("./buildCommunityTimings");
+const { planFacets, finishPlan, planGroupFields, planHeldRate } = require("./buildPlanSurvival");
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 const {
   CUSTOM_BUILD_PAGE_SIZE,
   CUSTOM_BUILD_MAX_PAGE_SIZE,
@@ -1340,8 +1344,12 @@ class CustomBuildsService {
    *   scannedGames: number,
    *   ruleCount: number,
    *   timingSampleGames: number,
+   *   timingSampleSelected: number,
    *   timingSampleLimit: number,
    *   timingsTruncated: boolean,
+   *   plan: Record<string,any>|null,
+   *   communityTimings: Record<string,any>,
+   *   naturalTimings: Record<string,any>,
    * }>}
    */
   async evaluateBuild(userId, slug, opts = {}) {
@@ -1352,12 +1360,12 @@ class CustomBuildsService {
     const perspective = buildPerspective(build);
     const provenanceField = customBuildProvenanceField(perspective);
     const baseMatch = {
-      userId,
+      userId, ...STATS_GAME_MATCH,
       [provenanceField]: slug,
       isResumedFromReplay: { $ne: true },
     };
     const resumedMatch = {
-      userId,
+      userId, ...STATS_GAME_MATCH,
       [provenanceField]: slug,
       isResumedFromReplay: true,
     };
@@ -1379,6 +1387,7 @@ class CustomBuildsService {
         { $addFields: { _customBuildResult: customBuildResultBucket() } },
         {
           $facet: {
+            ...(ownBuild ? planFacets("$_customBuildResult") : {}),
             totals: [
               {
                 $group: {
@@ -1487,6 +1496,9 @@ class CustomBuildsService {
     return {
       slug: build.slug,
       name: build.name || build.slug,
+      naturalTimings: ownBuild ? naturalTimingBaselines(timingGames) : {},
+      plan: ownBuild ? finishPlan(doc) : null,
+      communityTimings: ownBuild ? await readCommunityTimings(/** @type {any} */ (this.db).guideStats, build.name || build.slug, timingGames, opts.signal) : {},
       totals: {
         ...totals,
         checkins,
@@ -1503,6 +1515,7 @@ class CustomBuildsService {
       timingSampleGames: timingGames.filter((game) => (
         game.buildLog.length > 0 || game.oppBuildLog.length > 0
       )).length,
+      timingSampleSelected: timingGames.length,
       timingSampleLimit: CLASSIFIED_TIMING_SAMPLE_LIMIT,
       timingsTruncated: totals.total > CLASSIFIED_TIMING_SAMPLE_LIMIT,
       ...extras,
@@ -1520,54 +1533,7 @@ class CustomBuildsService {
    * @returns {Promise<Array<Record<string, any> & {buildLog: string[], oppBuildLog: string[]}>>}
    */
   async _hydrateClassifiedTimingSample(userId, games, signal) {
-    if (!Array.isArray(games) || games.length === 0) return [];
-    const gameDetails = /** @type {any} */ (this.perGame)?.gameDetails;
-    const compact = [];
-    for (const game of games) {
-      if (signal?.aborted) throw abortError();
-      const gameId = String(game.gameId || "");
-      /** @type {Record<string, any>} */
-      let blob = {};
-      if (gameDetails && gameId) {
-        const one = await gameDetails.findMany(userId, [gameId], {
-          fields: ["buildLog", "oppBuildLog"],
-          concurrency: 1,
-          signal,
-        });
-        blob = one.get(gameId) || {};
-      }
-      if (signal?.aborted) throw abortError();
-
-      // Pre-detail-store rows can still have inline logs. Fetch at most one
-      // such row at a time, and only when object storage did not supply both
-      // selected fields, so raw logs never accumulate across the sample.
-      /** @type {Record<string, any>} */
-      let legacy = {};
-      if (
-        gameId
-        && (!Array.isArray(blob.buildLog) || !Array.isArray(blob.oppBuildLog))
-      ) {
-        legacy = await this._gamesCollection().findOne(
-          { userId, gameId },
-          {
-            projection: { _id: 0, buildLog: 1, oppBuildLog: 1 },
-            ...(signal ? { signal } : {}),
-          },
-        ) || {};
-      }
-      compact.push({
-        ...game,
-        buildLog: compactDossierTimingLog(
-          Array.isArray(blob.buildLog) ? blob.buildLog : legacy.buildLog,
-        ),
-        oppBuildLog: compactDossierTimingLog(
-          Array.isArray(blob.oppBuildLog)
-            ? blob.oppBuildLog
-            : legacy.oppBuildLog,
-        ),
-      });
-    }
-    return compact;
+    return hydrateDossierTimings({ games: this._gamesCollection(), details: /** @type {any} */ (this.perGame)?.gameDetails }, userId, games, signal);
   }
 
   /**
@@ -1813,7 +1779,7 @@ class CustomBuildsService {
    * ``checkins`` counts the games included only through a build check-in
    * (an opponent correction for opponent-perspective definitions).
    *
-   * @returns {Promise<Array<{name: string, slug: string, total: number, wins: number, losses: number, checkins: number, winRate: number, lastPlayed: Date|null, ruleCount: number}>>}
+   * @returns {Promise<Array<{name: string, slug: string, total: number, wins: number, losses: number, checkins: number, planHeldRate: number|null, winRate: number, lastPlayed: Date|null, ruleCount: number}>>}
    */
   async evaluateAllStats(userId, opts = {}) {
     if (opts.slugs && (opts.slugs.length > CUSTOM_BUILD_MAX_PAGE_SIZE || opts.slugs.some((slug) => typeof slug !== "string" || !slug || slug.length > 80))) {
@@ -1844,6 +1810,7 @@ class CustomBuildsService {
               {
                 $match: {
                   userId,
+                  ...STATS_GAME_MATCH,
                   [provenanceField]: { $in: slugs },
                   isResumedFromReplay: { $ne: true },
                 },
@@ -1855,6 +1822,7 @@ class CustomBuildsService {
                   wins: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "win"] }, 1, 0] } },
                   losses: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "loss"] }, 1, 0] } },
                   total: { $sum: 1 },
+                  ...(perspective === "you" ? planGroupFields() : {}),
                   checkins: {
                     $sum: perspective === "you"
                       ? COUNTED_BY_CHECKIN_EXPR
@@ -1887,6 +1855,7 @@ class CustomBuildsService {
           wins: row.wins,
           losses: row.losses,
           checkins: Math.max(0, Number(row.checkins) || 0),
+          planHeldRate: buildPerspective(b) === "you" ? planHeldRate(row) : null,
           winRate: decided > 0 ? row.wins / decided : 0,
           lastPlayed: row.lastPlayed,
           ruleCount: extractRules(b).length,
@@ -3429,6 +3398,7 @@ function classifiedDossierProjection(opts = {}) {
     map: 1,
     myRace: 1,
     myBuild: 1,
+    _customBuildSlug: 1,
     durationSec: 1,
     macroScore: 1,
     apm: 1,
@@ -3448,55 +3418,6 @@ function classifiedDossierProjection(opts = {}) {
     projection.oppBuildLog = 1;
   }
   return projection;
-}
-
-const DOSSIER_TIMING_TOKENS = Object.freeze(
-  Object.values(TimingCatalog.RACE_BUILDINGS)
-    .flat()
-    .map((row) => String(row.token || "").toLowerCase())
-    .filter(Boolean),
-);
-
-// Legacy detail objects pre-date the ingest validator and may contain a very
-// large log string. Inspect only a small prefix and synthesize a canonical
-// timing row; never lowercase or retain the full untrusted input line.
-const DOSSIER_TIMING_PREFIX_SCAN_LENGTH = 256;
-const DOSSIER_TIMING_LINE_RE = /^\[(\d{1,5}):([0-5]\d)\]\s+([A-Za-z0-9_]{1,64})(?=\s|$)/;
-
-/**
- * Dossier timing code uses only first occurrence, so keep at most one line per
- * catalog token after the small detail sample has been hydrated.
- * @param {unknown} value
- */
-function compactDossierTimingLog(value) {
-  if (!Array.isArray(value)) return [];
-  const seen = new Set();
-  const out = [];
-  for (const raw of value) {
-    if (typeof raw !== "string") continue;
-    const match = DOSSIER_TIMING_LINE_RE.exec(
-      raw.slice(0, DOSSIER_TIMING_PREFIX_SCAN_LENGTH),
-    );
-    if (!match) continue;
-    // V8 may represent String#slice / regex captures as views into the giant
-    // parent string. Round-trip the <=64-byte ASCII token so retained output
-    // cannot keep the legacy multi-megabyte backing store alive.
-    const safeName = Buffer.from(match[3], "ascii").toString("ascii");
-    const lower = safeName.toLowerCase();
-    let keep = false;
-    for (const token of DOSSIER_TIMING_TOKENS) {
-      if (seen.has(token) || !lower.includes(token)) continue;
-      seen.add(token);
-      keep = true;
-    }
-    if (keep) {
-      // dnaTimings only needs the timestamp and token. Normalizing the minute
-      // field also guarantees every retained row is tiny and parser-safe.
-      const seconds = String(Number(match[2])).padStart(2, "0");
-      out.push(`[${Number(match[1])}:${seconds}] ${safeName}`);
-    }
-  }
-  return out;
 }
 
 /** @param {{wins?: number, losses?: number}} row */
@@ -3539,6 +3460,7 @@ function toClassifiedRecent(game) {
 
 module.exports = {
   CustomBuildsService,
+  extractRules,
   CUSTOM_BUILD_PAGE_SIZE,
   CUSTOM_BUILD_MAX_PAGE_SIZE,
   CUSTOM_BUILD_CLASSIFIER_BATCH_SIZE,

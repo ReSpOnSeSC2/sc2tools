@@ -16,6 +16,8 @@ export type DossierTimingRow = {
   sampleCount?: number; count?: number; medianSeconds?: number | null; median?: number | null; medianDisplay?: string;
   p25Seconds?: number | null; p75Seconds?: number | null; p25Display?: string; p75Display?: string;
   lastSeenSeconds?: number | null; lastSeenDisplay?: string; winRateWhenBuilt?: number | null;
+  winRateSampleCount?: number; winnerMedianSeconds?: number | null; loserMedianSeconds?: number | null;
+  winnerSampleCount?: number; loserSampleCount?: number;
   trend?: "unknown" | "stable" | "later" | "earlier"; source?: DossierTimingSource;
   displayName?: string; iconFile?: string; samples?: { gameId?: string | number | null; date?: string | Date }[];
 };

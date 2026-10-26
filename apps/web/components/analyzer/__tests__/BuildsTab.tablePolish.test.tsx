@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FiltersContext, type AnalyzerFilters } from "@/lib/filterContext";
 
-type Row = { name: string; total: number; wins: number; losses: number; winRate: number; ratedGames?: number; winsAboveExpected?: number | null; myMatchups?: Record<string, number> };
+type Row = { name: string; total: number; wins: number; losses: number; winRate: number; planHeldRate?: number | null; ratedGames?: number; winsAboveExpected?: number | null; myMatchups?: Record<string, number> };
 const harness = vi.hoisted(() => ({ rows: [] as Row[], paths: [] as string[], filters: [] as AnalyzerFilters[] }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: vi.fn() }) }));
 vi.mock("@/lib/clientApi", () => ({ apiCall: vi.fn(), useApi: (path: string) => {
@@ -26,6 +26,38 @@ beforeEach(() => {
   harness.rows = [{ name: "Gateway opener", total: 5, wins: 3, losses: 2, winRate: .6, myMatchups: { P: 2, T: 3, Z: 0 } }];
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+it("shows and sorts measured Held rates while omitting an all-small-sample column", () => {
+  harness.rows = [{ ...harness.rows[0], name: "Measured zero", planHeldRate: 0 }, { ...harness.rows[0], name: "Held most", planHeldRate: .8 }, { ...harness.rows[0], name: "Small sample", planHeldRate: null }];
+  const view = render(<Tab />); const table = within(screen.getByRole("table"));
+  expect(table.getByRole("columnheader", { name: "Plan held" })).toBeTruthy();
+  expect(within(table.getByRole("row", { name: /Measured zero/ })).getByText("0.0%")).toBeTruthy();
+  expect(within(table.getByRole("row", { name: /Small sample/ })).getByRole("cell", { name: "—" })).toBeTruthy();
+  fireEvent.click(table.getByRole("button", { name: "Plan held" }));
+  const names = () => table.getAllByRole("row").slice(1).map(row => within(row).getAllByRole("button")[0].textContent);
+  expect(names()).toEqual(["Held most", "Measured zero", "Small sample"]);
+  fireEvent.click(table.getByRole("button", { name: "Plan held" }));
+  expect(names()).toEqual(["Measured zero", "Held most", "Small sample"]);
+  expect(screen.getByText("Held 0%")).toBeTruthy();
+  cleanup(); localStorage.clear(); harness.rows = [{ ...harness.rows[0], planHeldRate: null }]; render(<Tab />);
+  expect(screen.queryByRole("columnheader", { name: "Plan held" })).toBeNull();
+  view.unmount();
+});
+
+it("exports the displayed Held column as raw fractions and removes it for an all-unknown visible cohort", async () => {
+  vi.useFakeTimers();
+  harness.rows = [{ ...harness.rows[0], name: "Measured", planHeldRate: .8 }, { ...harness.rows[0], name: "Small", planHeldRate: null }];
+  let blob: Blob | null = null; vi.stubGlobal("Blob", NodeBlob);
+  vi.stubGlobal("URL", class extends URL { static createObjectURL(value: Blob) { blob = value; return "blob:fixture-held"; } static revokeObjectURL = vi.fn(); });
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  render(<Tab />); fireEvent.click(screen.getByRole("button", { name: "Export these rows as CSV" }));
+  const csv = Buffer.from(await blob!.arrayBuffer()).toString("utf8");
+  expect(csv).toContain("Build,W,L,Games,WR,Plan held,Vs expected,W/L split"); expect(csv).toContain("Measured,3,2,5,0.6,0.8,,3W 2L"); expect(csv).toContain("Small,3,2,5,0.6,,,3W 2L");
+  fireEvent.change(screen.getByRole("searchbox", { name: "Search builds" }), { target: { value: "Small" } });
+  fireEvent.click(screen.getByRole("button", { name: "Export these rows as CSV" }));
+  expect(Buffer.from(await blob!.arrayBuffer()).toString("utf8")).not.toContain("Plan held");
+  vi.runOnlyPendingTimers();
+});
 
 it("exposes a focusable named build button and retains row-click convenience without bubbling activation", () => {
   const outer = vi.fn(); render(<div onClick={outer}><Tab /></div>);
