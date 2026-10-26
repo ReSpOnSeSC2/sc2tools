@@ -409,7 +409,15 @@ function AppChromeShell({ children }: { children: ReactNode }) {
         </div>
       </nav>
 
-      <ThemeDialog open={appearanceOpen} onClose={() => { setAppearanceOpen(false); queueMicrotask(() => accountRef.current?.querySelector<HTMLButtonElement>("button")?.focus()); }} />
+      <ThemeDialog open={appearanceOpen} onClose={() => {
+        setAppearanceOpen(false);
+        queueMicrotask(() => {
+          // A remaining modal owns restoration to its captured control. The
+          // stable account fallback is only for the ordinary avatar close.
+          if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+          accountRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+        });
+      }} />
       {sheetOpen ? (
         <MoreSheet
           entries={sheetEntries}
