@@ -22,12 +22,14 @@ unchanged route budgets, post-build types and own asset pre/post checks passed.
 Build `wRb84uDIwOd8STObHsL8o` preserves canonical source 40, retained assets 9 and
 sample games 4. No API, engine or agent release changes are needed.
 
-The first shared-chart browser run stopped at light320 Total: one serious
-contrast issue on the existing opponent Army caption (4.34:1); three cases did
-not run. Its fixture closed with 12 loopback GETs, no unknown/writes and no live
-owned listener. The caption repair still needs its focused check and a fresh
-four-case browser run. Reusing the accepted 671 CSS must be recorded as an
-explicit source/CSS bridge; it is not a build of the subsequent repair commit.
+Caption validation at `56ec58cb`: roster tests 14/14 and strict single-file lint
+passed; four shared-chart cases (light/dark, 320/1280) passed with eight shared
+AA scans reporting no issues. The fixture closed after 88 loopback GETs with
+no unknown/writes; browser ledgers and owned host listeners were clear.
+The proof explicitly bridges current source to original `67131607` build/CSS,
+not a build of the repair commit. Root visual review found narrow-phone padding
+and a truncated readout value; source-only polish now uses existing `!px-2.5`
+and `flex-wrap` utilities. Its focused lint/browser validation is pending.
 This fixture does not establish fresh full-game/modal E2E coverage. Missing,
 zero and invalid resource cases are unit evidence.
 
