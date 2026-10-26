@@ -12,8 +12,8 @@ import {
 } from "../datePresets";
 
 describe("patch era date presets", () => {
-  it("defaults new analyzer sessions to the 12-worker patch 5.0.17", () => {
-    expect(DEFAULT_PRESET).toBe("after_5_0_17");
+  it("defaults new analyzer sessions to the auto-tracked season while retaining patch choices", () => {
+    expect(DEFAULT_PRESET).toBe("current_season");
     expect(PRESETS[0].id).toBe("after_5_0_17");
   });
 

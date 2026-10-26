@@ -6,6 +6,7 @@ import {
   type AnalyzerFilters,
 } from "@/lib/filterContext";
 import { DashboardKpiStrip } from "../DashboardKpiStrip";
+import { resolvePreset } from "@/lib/datePresets";
 
 const requestedUrls: string[] = [];
 let dataForUrl: (url: string) => unknown = () => undefined;
@@ -139,7 +140,7 @@ describe("DashboardKpiStrip labels", () => {
     expect(screen.getByText("Own timeframe · ignores date, matchup, region and Strategies filters")).toBeTruthy();
     // Its own request carries no global date bounds.
     const wrUrl = requestedUrls.find(
-      (url) => url.startsWith("/v1/timeseries") && queryOf(url).get("since") === "2026-09-30T04:00:00.000Z",
+      (url) => url.startsWith("/v1/timeseries") && queryOf(url).get("since") === resolvePreset("current_season").since?.toISOString(),
     );
     expect(wrUrl).toBeTruthy();
   });
@@ -151,7 +152,7 @@ describe("DashboardKpiStrip labels", () => {
 
   it("counts a matchup or Strategies pick on Games in range", () => {
     renderStrip({ ...DEFAULT_ANALYZER_FILTERS, opp_race: "Z" });
-    expect(screen.getByText("Uses filters · 12-worker patch · 1 more filter")).toBeTruthy();
+    expect(screen.getByText("Uses filters · Current season · 1 more filter")).toBeTruthy();
   });
 });
 

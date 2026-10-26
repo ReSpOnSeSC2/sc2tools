@@ -150,10 +150,12 @@ describe("hydrateStoredFilters", () => {
     expect(out.until).toBeUndefined();
   });
 
-  it("defaults a missing or unknown stored preset to the 12-worker patch", () => {
+  it("defaults a missing or unknown stored preset to auto-track current season", () => {
     expect(hydrateStoredFilters(null).preset).toBe(DEFAULT_PRESET);
     expect(hydrateStoredFilters({ preset: "bogus" as PresetId }).preset).toBe(DEFAULT_PRESET);
-    expect(DEFAULT_PRESET).toBe("after_5_0_17");
+    expect(DEFAULT_PRESET).toBe("current_season");
+    expect(hydrateStoredFilters({ preset: "after_5_0_17" }).preset).toBe("after_5_0_17");
+    expect(hydrateStoredFilters({ preset: "season:68" }).preset).toBe("season:68");
   });
 
   it("restores a stored game-length range", () => {

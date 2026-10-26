@@ -600,7 +600,7 @@ function SeasonGroup({
                 : "text-text-muted hover:bg-bg-elevated hover:text-text",
             ].join(" ")}
           >
-            <span className="text-sm font-medium">Current season</span>
+            <span className="text-sm font-medium">Auto-track current season</span>
             <span className="text-micro text-text-dim">Auto-tracks the live season</span>
           </button>
         </li>

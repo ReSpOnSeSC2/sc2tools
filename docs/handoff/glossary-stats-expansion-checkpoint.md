@@ -307,3 +307,21 @@ The current-artifact browser matrix subsequently passed as recorded above.
 Only fixture framework/identity adapters and this checkpoint changed after
 the production build; product/data bytes remain frozen. Remote delivery is
 owned by the parent and is not claimed by this local validation record.
+
+## Current-main reconciliation after local proof
+
+Root integrated Site df951bb8 (including actual main5b4af736) after the local
+D9 proof. The incoming side touched only CHANGELOG.md among the22 owned paths;
+all21 feature paths remain byte-identical to084b76a before this documentation
+note. The seven Site code/test/baseline paths already match the tested union.
+No shared CSS/font/theme/Popover/InfoTip/Modal delta was introduced. Date/Macro
+product changes are disjoint; their final exact-head CI passed before merge.
+The add/add Settings A1 checkpoint conflict takes the newer merged proof;
+its original conflict and the original Glossary changelog remain preserved in
+.cache/glossary-main-df951-before/. This is an integration claim, not a rerun
+of the historical D9 build/browser matrix. Fresh exact-head CI is still needed.
+
+The owner raised a Vercel Hobby usage warning during integration. Further
+pushes are held briefly while root completes the read-only usage review;
+no deployment retention, deletion, plan, billing or infrastructure change
+has been made. The locally reviewed Glossary work and every proof remain.
