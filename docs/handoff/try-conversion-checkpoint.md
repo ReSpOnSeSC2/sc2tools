@@ -19,10 +19,57 @@ Chromium executable and save fresh evidence in root `.cache`; original review
 PNGs remain untouched. The conversion matrix now includes full scoped contrast
 and a held-copy recovery case.
 
-This integration repair is source-ready, with runtime verification pending the
-coordinated slot. Current engine/sample regeneration, affected tests, types,
-strict lint/ratchet, final production budgets and browser proof are still due.
+This integration repair is source-ready. Current engine/sample generation is
+recorded below; affected tests, types, strict lint/ratchet, final production
+budgets and browser proof are still due in their coordinated slots.
 No current validation is inferred from the earlier branch results below.
+
+## Current-engine generation boundary
+
+At preserved repair `5a783205`, the canonical required engine build/smoke
+completed before the canonical sample generator, matching package prebuild
+ordering. Current engine 1.6.12 bundle is `d27b37abb9997712` (agent metadata
+0.24.7), with 223 shipped files, 79 compiled modules and a 142,939-byte successful
+smoke parse. Its zip is 1,252,988 bytes, SHA256
+`ba357c54c2f3d69b923adc391230dc4382693eabb697b23bf287a665ad1f0858`.
+
+The generator verified that fresh pointer, canonical manifest, zip digest and
+normalized shipped-source bytes before parsing the four existing repository
+fixtures and publishing only its scrubbed allowlist. Output remains four games
+and 163,355 bytes. The four public game payloads are unchanged; only bundle and
+source-hash metadata change in `public/try/sample-payloads.json` and the two
+matching constants in `lib/instant/sampleAvailability.generated.ts`. New source
+hash is `18a2e1b56111045cdb441d9d8868eee0b36d0b158b34ea0a79e3b9a22a69e2b2`;
+sample JSON SHA256 is
+`91a6735e50f45776c15642ebae53f1a3f9800c1db225a99e0e631be318820473`.
+No raw replay identity, provenance or private screenshot was exported.
+
+The canonical publisher prunes earlier same-version bundles. All resolved
+pruning/snapshot targets were checked inside this named Try workspace, then
+nine engine/Pyodide/old-sample files were snapshotted with hashes before the
+unchanged publisher ran. Its old `25b300818c31d41b` bundle was restored alongside
+the new bundle, without replacing any new path or the new current pointer.
+Restored bundle and Pyodide hashes match the snapshot; pinned wheels came from
+the existing cache without installation. All 43 original committed Try/Landing
+PNG hashes remain unchanged.
+
+The future conversion runner and its fixture bundler now share an optional
+`TRY_CONVERSION_HOST_DIR` and default to the new root cache directory
+`try-conversion-current-host`. The runner explicitly passes the resolved path
+to its child bundler, so the generated writer and HTTP reader cannot diverge.
+`TRY_CONVERSION_EVIDENCE_DIR` independently overrides captures/results, defaulting
+to `try-conversion-current-evidence`. Neither prior `try-conversion-host` nor
+`try-conversion-evidence` is overwritten. Syntax/lint and the later actual run
+will verify this narrow directory plumbing; no browser was run in stage 1.
+
+The exclusive runtime slot was released at this clean generation boundary for
+queued Public/Auth combination checks. No Try consumer tests, types/lint,
+production Next build or browser matrix have run on this refreshed source yet.
+Later build/browser proof must use the current source, not the historical
+bundle evidence below. Preserved artifacts are root
+`.cache/try-stage1-{engine,sample-generation}.log`,
+`try-stage1-{sample-output-summary,engine-output-summary}.json`,
+`try-stage1-preserved-assets-sha256.json` and the ignored snapshot directory.
 
 The local report adds an intent-only share preview and 1200×630 PNG. The same
 selected aggregate model feeds the image and text. Player/account/game objects

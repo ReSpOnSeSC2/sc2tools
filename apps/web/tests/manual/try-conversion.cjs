@@ -1,6 +1,7 @@
 const fs = require('node:fs'), path = require('node:path'), http = require('node:http');
 const { execFileSync } = require('node:child_process'), { chromium, expect } = require('@playwright/test');
-const root = process.cwd(), out = path.resolve('../../.cache/try-conversion-host'), evidence = path.resolve('../../.cache/try-conversion-evidence');
+const root = process.cwd(), out = path.resolve(process.env.TRY_CONVERSION_HOST_DIR || '../../.cache/try-conversion-current-host');
+const evidence = path.resolve(process.env.TRY_CONVERSION_EVIDENCE_DIR || '../../.cache/try-conversion-current-evidence');
 fs.mkdirSync(evidence, { recursive: true });
 const css = fs.readdirSync('.next/static/css', { recursive: true }).filter(n => n.endsWith('.css')).map(n => fs.readFileSync(path.join('.next/static/css', n), 'utf8')).join('\n');
 const fonts = `@font-face{font-family:FixtureSans;src:url('/fonts/hanken-grotesk-latin.woff2');font-weight:100 900}@font-face{font-family:FixtureDisplay;src:url('/fonts/bricolage-grotesque-latin.woff2');font-weight:100 900}:root{--font-sans:FixtureSans;--font-display:FixtureDisplay}`;
@@ -20,7 +21,7 @@ async function check(value) { expect(await value).toBe(true); checks++; }
 async function capture(page, name, target) { await target.scrollIntoViewIfNeeded(); await page.evaluate(() => document.fonts.ready); await page.screenshot({ path: path.join(evidence, `${name}.png`) }); captures++; }
 async function overflow(page) { await check(page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)); }
 async function main() {
-  execFileSync(process.execPath, ['tests/manual/try-conversion-fixture.cjs'], { stdio: 'pipe' });
+  execFileSync(process.execPath, ['tests/manual/try-conversion-fixture.cjs'], { stdio: 'pipe', env: { ...process.env, TRY_CONVERSION_HOST_DIR: out } });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); origin = `http://127.0.0.1:${server.address().port}`;
   let browser;
   async function context(width, theme, consent = 'granted') {

@@ -1,7 +1,7 @@
 /* Actual Try/report/dialog/guide/sample components. Boundaries: Next, Clerk,
  * local persistence/session and delivery APIs. No engine or account writes. */
 const fs = require('node:fs'), path = require('node:path'), { build } = require('esbuild');
-const root = process.cwd(), out = path.resolve('../../.cache/try-conversion-host');
+const root = process.cwd(), out = path.resolve(process.env.TRY_CONVERSION_HOST_DIR || '../../.cache/try-conversion-current-host');
 fs.mkdirSync(out, { recursive: true });
 const sample = JSON.parse(fs.readFileSync('public/try/sample-payloads.json', 'utf8'));
 const games = sample.games.map((game, i) => {
