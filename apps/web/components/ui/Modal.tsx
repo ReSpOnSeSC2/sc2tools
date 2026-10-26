@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { lockBodyScroll } from "@/lib/bodyScrollLock";
 import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
+import { OverlayLayerProvider, useOverlayLayer } from "./OverlayLayer";
 
 /**
  * Modal — portal-based dialog with focus trap and Esc-close.
@@ -31,6 +32,7 @@ import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 export type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
 export type ModalMobileLayout = "sheet" | "center";
 export type ModalDesktopLayout = "center" | "side";
+export type ModalPlacement = "responsive" | "bottom" | "right";
 
 const SIZE_CLASSES: Record<ModalSize, string> = {
   sm: "sm:max-w-md",
@@ -39,6 +41,14 @@ const SIZE_CLASSES: Record<ModalSize, string> = {
   xl: "sm:max-w-4xl",
   "2xl": "sm:max-w-6xl",
   "3xl": "sm:max-w-[1400px]",
+};
+const SIDE_SIZE_CLASSES: Record<ModalSize, string> = {
+  sm: "max-w-md",
+  md: "max-w-lg",
+  lg: "max-w-2xl",
+  xl: "max-w-4xl",
+  "2xl": "max-w-6xl",
+  "3xl": "max-w-[1400px]",
 };
 
 export interface ModalProps {
@@ -59,6 +69,8 @@ export interface ModalProps {
    * full-height panel to the right edge, for reading alongside the page.
    */
   desktopLayout?: ModalDesktopLayout;
+  /** Explicit sheet placement at every viewport; responsive keeps existing layouts. */
+  placement?: ModalPlacement;
   /** Hide the X close button (still closes on Esc / scrim click). */
   hideClose?: boolean;
   /** Disable scrim-click dismissal — useful for in-progress flows. */
@@ -78,12 +90,14 @@ export function Modal({
   size = "md",
   mobileLayout = "sheet",
   desktopLayout = "center",
+  placement = "responsive",
   hideClose = false,
   disableScrimClose = false,
   initialFocusRef,
   children,
   footer,
 }: ModalProps) {
+  const layer = useOverlayLayer();
   const titleId = useId();
   const descId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -103,15 +117,25 @@ export function Modal({
     if (!disableScrimClose) onClose();
   };
 
-  const centerOnMobile = mobileLayout === "center";
-  const sideOnDesktop = desktopLayout === "side";
+  const centerOnMobile = placement === "responsive" && mobileLayout === "center";
+  const sideOnDesktop = placement === "responsive" && desktopLayout === "side";
+  const sheetPlacement = placement === "right"
+    ? "h-[100dvh] max-h-[100dvh] rounded-none border-y-0 border-r-0"
+    : placement === "bottom"
+      ? "max-h-[90dvh] rounded-t-2xl pb-[env(safe-area-inset-bottom,0px)]"
+      : "";
 
   return createPortal(
+    <OverlayLayerProvider value={layer}>
     <div
+      style={{ zIndex: layer }}
       className={[
-        "fixed inset-0 z-50 flex justify-center",
-        sideOnDesktop ? "sm:items-stretch sm:justify-end" : "sm:items-center sm:p-4",
-        centerOnMobile ? "items-center p-4" : "items-end",
+        "fixed inset-0 z-50 flex",
+        placement === "right" ? "items-stretch justify-end" : placement === "bottom" ? "items-end justify-center" : [
+          "justify-center",
+          sideOnDesktop ? "sm:items-stretch sm:justify-end" : "sm:items-center sm:p-4",
+          centerOnMobile ? "items-center p-4" : "items-end",
+        ].join(" "),
       ].join(" ")}
       role="presentation"
     >
@@ -134,6 +158,7 @@ export function Modal({
         className={[
           "relative w-full min-w-0 bg-bg-surface text-text border border-border shadow-[var(--shadow-card)]",
           "overflow-hidden flex flex-col",
+          placement !== "responsive" ? sheetPlacement : [
           centerOnMobile ? "max-h-[85dvh]" : "max-h-[100dvh]",
           // The side panel spans the full height; 3xl gets more vertical
           // room for the build editor's timeline.
@@ -150,7 +175,8 @@ export function Modal({
           centerOnMobile
             ? "sm:pb-0"
             : "pb-[env(safe-area-inset-bottom,0px)]",
-          SIZE_CLASSES[size],
+          ].join(" "),
+          placement === "right" ? SIDE_SIZE_CLASSES[size] : SIZE_CLASSES[size],
         ].join(" ")}
       >
         <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
@@ -182,7 +208,8 @@ export function Modal({
           </footer>
         ) : null}
       </div>
-    </div>,
+    </div>
+    </OverlayLayerProvider>,
     portalContainer ?? document.body,
   );
 }

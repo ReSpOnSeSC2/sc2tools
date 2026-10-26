@@ -14,7 +14,7 @@
  */
 import { useEffect, useId, useRef } from "react";
 import { UserRound } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Button } from "@/components/ui/Button";
 import type { MeCandidate } from "@/lib/instant/meDetection";
 
 export interface PlayerChooserProps {

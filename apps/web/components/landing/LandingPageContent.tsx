@@ -291,7 +291,7 @@ function OutcomeRail() {
             className="group bg-bg px-5 py-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:px-6"
           >
             <div className="flex items-center justify-between gap-3">
-              <span className="font-serif text-h3 text-editorial/60">{num}</span>
+              <span className="font-serif text-h3 text-editorial">{num}</span>
               <Icon className="h-5 w-5 text-accent-cyan" aria-hidden />
             </div>
             <p className="kicker mt-5">{kicker}</p>

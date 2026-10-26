@@ -26,7 +26,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { CloudUpload } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Button } from "@/components/ui/Button";
 import { API_BASE } from "@/lib/clientApi";
 import { trackInstantError, trackInstantSignupClick, trackInstantUploadDone } from "@/lib/instant/analytics";
 import { TRY_SIGN_IN_HREF, TRY_SIGN_UP_HREF } from "@/lib/instant/authRedirect";

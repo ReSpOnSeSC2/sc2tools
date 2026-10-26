@@ -17,3 +17,14 @@ it("switches the complete source-install instructions with the selected OS and a
   }
   expect(document.body.textContent).not.toContain("217 MB"); expect(screen.getByText(/Installer size is shown when release information is available/)).toBeTruthy();
 });
+it("admits every expanded manual command region to keyboard focus with a distinct name", () => {
+  render(<DownloadInteractive />);
+  const summary = screen.getByText("Manual install + verification").closest("summary")!;
+  fireEvent.click(summary);
+  const manual = within(summary.closest("details")!);
+  for (const name of ["Manual source installation commands", "Windows SHA-256 verification command", "macOS and Linux SHA-256 verification command"]) {
+    const commands = manual.getByRole("region", { name });
+    expect(commands.tabIndex).toBe(0);
+    commands.focus(); expect(document.activeElement).toBe(commands);
+  }
+});

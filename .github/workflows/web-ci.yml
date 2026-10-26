@@ -50,6 +50,8 @@ jobs:
         run: npm run typecheck
       - name: Lint
         run: npm run lint
+      - name: UI baseline ratchet
+        run: npm run ui:lint
       - name: Test
         run: npm test
 

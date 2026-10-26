@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Appearance and accessibility
+
+- Choose Light, Dark or System from appearance controls. System follows device changes and keeps the browser's colour in sync; existing saved choices remain supported.
+- Improve shared text, control and selected-state contrast in both themes. Public-page checks cover serious accessibility findings across phone, tablet and desktop sizes; keyboard navigation and a public accessibility guide explain current support and limits.
+
 ### Agent 0.24.7
 
 - Package the PvT DT Rush priority fix, seven-minute PvZ air-opening rules and in-game scouting close/minimize controls for desktop users.

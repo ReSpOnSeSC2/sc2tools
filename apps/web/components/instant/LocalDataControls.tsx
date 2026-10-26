@@ -13,7 +13,8 @@
  */
 import { useState } from "react";
 import { HardDrive, Trash2 } from "lucide-react";
-import { Button, ConfirmDialog } from "@/components/ui";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { TRY_TTL_DAYS, clearTryData } from "@/lib/instant/localStore";
 
 /**

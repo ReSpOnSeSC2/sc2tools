@@ -10,8 +10,12 @@ describe("dossier brief and all-time series consumers", () => {
     const write = vi.fn().mockRejectedValue(new Error("denied")); Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: write } });
     const view = render(<ScoutingBriefCard profile={{ totals: { wins: 2, losses: 1, total: 3, winRate: 2 / 3 } }} />);
     fireEvent.click(screen.getByRole("button", { name: "Copy brief" })); const field = await screen.findByRole("textbox", { name: "Copy this scouting brief" });
-    expect(document.activeElement).toBe(field); expect((field as HTMLTextAreaElement).value).toContain("This view: 2W–1L");
-    expect((field as HTMLTextAreaElement).selectionEnd).toBe((field as HTMLTextAreaElement).value.length);
+    // DOM discovery can precede the component's passive focus/select effect.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(field);
+      expect((field as HTMLTextAreaElement).selectionEnd).toBe((field as HTMLTextAreaElement).value.length);
+    });
+    expect((field as HTMLTextAreaElement).value).toContain("This view: 2W–1L");
     view.rerender(<ScoutingBriefCard profile={{ name: "Different", totals: { wins: 0, losses: 0, total: 0, winRate: 0 } }} />);
     await waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
   });
