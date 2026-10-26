@@ -73,7 +73,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
     needs: [liveAgent, "Opponent identification; profile and head-to-head details depend on available data."],
     setup: sourceSetup("Opponent identity"),
     check: "Test displays sample identity data. Then start a real match with the agent running to verify the opponent's identity comes through.",
-    troubleshooting: "A first meeting can have no head-to-head history, and a profile lookup can be unavailable. If no live identity appears at all, check the agent pairing and the overlay connection in Settings.",
+    troubleshooting: "A first meeting can have no recorded history. Group same player is saved in your Opponents list/dossier and live scouting; approved identities or cached account links can reveal a known alt, but similar names never merge. Missing cached links or profile data remain unknown. If no live identity appears, check pairing and the overlay connection.",
     placement: "A small corner card works well. Keep it clear of the minimap, resources, and unit selection.",
     source: "all-in-one", settingsHref: OVERLAY_SETTINGS, related: ["scouting", "rematch", "rival"],
   },
@@ -245,7 +245,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
     needs: [liveAgent, replayHistory, "Opponent identification. Opening and cheese lines need at least 2 earlier games vs this opponent in this matchup; the \"Games usually end\" line needs 3."],
     setup: sourceSetup("Scouting tells"),
     check: "Test previews a sample report. Start a real game to check the agent's game-start path; a completed result is not supposed to reopen this briefing.",
-    troubleshooting: "A loading screen alone does not trigger the report. Wait for gameplay; if the card stays thin, check opponent lookup and processed history. A first meeting shows identity only. Any optional voice readout also needs audio enabled in OBS.",
+    troubleshooting: "A loading screen alone does not trigger the report. Wait for gameplay; if the card stays thin, check identity links and processed history. The also chip uses approved/cached links and your saved grouping choice. Forecast confidence reflects your weighted sample, with an optional labelled cached ladder prior; Low or unavailable is not a live read of their build. Unknown map/rating adds no guessed weighting. Voice readout also needs OBS audio.",
     placement: "Give this larger card room to breathe, keeping the minimap and active game controls uncovered.",
     source: "all-in-one", settingsHref: OVERLAY_SETTINGS, related: ["opponent", "fav-opening", "best-answer"],
     helpSlug: "opponent-scouting",
@@ -543,3 +543,17 @@ export const STUDIO_AUTOMATION_GUIDES = [{
   recovery: "Predictions skip rematches within 10 minutes. Games under 60 seconds or no result within 20 minutes request refunds. Unconfirmed creates are never blindly repeated. If Twitch did not return a prediction ID, check the Twitch dashboard manually.",
   settingsHref: "/settings?tab=overlay&section=chat#twitch-automation", helpSlug: "viewer-engagement", helpAnchor: "twitch-predictions",
 }] as const;
+
+/** Public channel panels are separate from private overlay tokens. */
+export const STUDIO_CHANNEL_PANEL_LESSON = {
+  id: "channel-stats-panel", title: "Add a stats panel to your channel", time: "2 min",
+  promise: "Link a small public record or build card from your channel page.",
+  steps: [
+    { title: "Choose what becomes public", body: "Open Settings → Profile → Public player page. Create a player link if needed, then choose Public profile on and the optional sections you want to share. Save public profile. Replay sharing has its own separate switch." },
+    { title: "Copy a panel image and its link", body: "In Channel panel, choose Record, Featured build or MMR history, then Dark or Light and 320 × 160 or 320 × 100. Copy image URL for your channel panel image and Copy panel link for its destination. MMR panels need the separate MMR history section enabled." },
+    { title: "Check the public view", body: "Open the player link while signed out and check only your chosen sections appear. Turning the profile off makes its panel neutral and removes profile links from shared replays; it does not turn replay sharing on or off." },
+  ],
+  tryIt: "Choose a panel style and size, then open its image URL and destination link before adding them to your channel.",
+  expected: "The image has your chosen public information and the link opens your player page. Your private overlay URL is never used as a public channel panel.",
+  links: [{ href: "/settings?tab=profile", label: "Choose public profile and panel" }, { href: "/help/public-profile", label: "Read public player page help" }],
+} as const;

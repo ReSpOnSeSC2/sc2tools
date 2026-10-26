@@ -5,7 +5,7 @@ vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: harness.ownerId, isL
 vi.mock("swr", () => ({ useSWRConfig: () => ({ mutate: harness.refresh }) }));
 vi.mock("@/lib/filterContext", async (load) => ({ ...await load<typeof import("@/lib/filterContext")>(), useFilters: () => ({ filters: harness.filters, seasons: [], dbRev: harness.rev }) }));
 vi.mock("@/lib/useMyDisplayName", () => ({ useMyDisplayName: () => "Me" }));
-vi.mock("@/lib/useLocalStorageState", () => ({ useLocalStorageState: () => [true, vi.fn()] }));
+vi.mock("@/lib/useOpponentScoutingPreference", () => ({ useOpponentScoutingPreference: () => ({ groupByPlayer: true, setGroupByPlayer: vi.fn(), loading: false, saving: false, unavailable: false, error: "", retry: vi.fn() }) }));
 vi.mock("@/components/ui/Toast", () => ({ useToastOptional: () => ({ toast: { success: harness.toast, info: harness.toast } }) }));
 vi.mock("../usePlayerChannels", () => ({ usePlayerChannels: () => () => undefined }));
 vi.mock("../OpponentNotesCard", () => ({ OpponentNotesCard: () => <section aria-label="Notes" /> }));

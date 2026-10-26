@@ -116,6 +116,7 @@ describe("services/overlayLive.enrichEnvelope (cached merge)", () => {
       null,
       "Protoss",
       null,
+      { map: "" },
     );
     spy.mockRestore();
   });

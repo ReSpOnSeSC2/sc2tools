@@ -102,7 +102,7 @@ def test_pvt_charge_first_later_third_is_standard_macro(third_start):
 
 
 @pytest.mark.parametrize("blink_name", [None, "Blink", "BlinkTech"])
-def test_pvt_shadow_stride_does_not_turn_charge_first_into_blink(blink_name):
+def test_pvt_shadow_stride_does_not_prove_real_dt_or_stalker_blink(blink_name):
     ev = _opener(gates=(40, 190)) + [
         _b("TwilightCouncil", 170), _b("DarkShrine", 220),
         _b("Nexus", 270, THIRD), _up("DarkTemplarBlinkUpgrade", 330),
@@ -110,7 +110,10 @@ def test_pvt_shadow_stride_does_not_turn_charge_first_into_blink(blink_name):
     ]
     if blink_name:
         ev.append(_up(blink_name, 470))
-    assert _classify(PVT, ev) == "PvT - Charge First (Fast 3rd Nexus)"
+    # An early Shrine following Twilight excludes Charge-first, even when
+    # Shadow Stride is the only observed DT-tech outcome. It is not proof of
+    # a real DT rush, and Shadow Stride is still not Stalker Blink.
+    assert _classify(PVT, ev) == "PvT - Macro Transition (Unclassified)"
 
 
 @pytest.mark.parametrize("gates", [

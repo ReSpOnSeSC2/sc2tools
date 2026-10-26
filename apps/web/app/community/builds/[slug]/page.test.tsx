@@ -51,7 +51,7 @@ vi.mock("@/components/community/SaveToLibraryButton", () => ({
 }));
 vi.mock("@/components/community/ShareLinkButton", () => ({ ShareLinkButton: () => null }));
 
-import CommunityBuildPage, { generateMetadata } from "@/app/community/builds/[slug]/page";
+import CommunityBuildPage, { dynamic, generateMetadata, revalidate } from "@/app/community/builds/[slug]/page";
 
 const HOSTILE_TITLE = 'Fixture opener</script><script>window.__pwned = 1</script><!--';
 
@@ -212,17 +212,11 @@ describe("/community/builds/[slug] when the build can't be fetched", () => {
   it.each([
     ["the API is unreachable", null],
     ["the API fails", 503],
-  ])("says it is temporarily unavailable when %s, never a 404", async (_label, status) => {
+  ])("keeps %s distinct from an authoritative missing build", async (_label, status) => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status });
-    const { container } = render(await CommunityBuildPage({ params: params() }));
+    await expect(CommunityBuildPage({ params: params() })).rejects.toThrow("This build is temporarily unavailable");
     expect(mocks.notFound).not.toHaveBeenCalled();
-    const heading = container.querySelector("h1");
-    expect(heading?.textContent).toBe("This build is temporarily unavailable");
-    expect(container.textContent).toContain("The connection may have dropped, or the server may be restarting or being updated.");
-    const retry = Array.from(container.querySelectorAll("a")).find((a) => a.textContent?.includes("Try again"));
-    expect(retry?.getAttribute("href")).toBe("/community/builds/build-fixture0001");
-    const metadata = await generateMetadata({ params: params() });
-    expect(metadata.robots).toEqual({ index: false, follow: false });
+    await expect(generateMetadata({ params: params() })).rejects.toThrow("This build is temporarily unavailable");
   });
 
   it("returns a real 404 only when the API says the build doesn't exist", async () => {
@@ -237,5 +231,15 @@ describe("/community/builds/[slug] when the build can't be fetched", () => {
     const metadata = await generateMetadata({ params: params() });
     expect(metadata.robots).toBeUndefined();
     expect(metadata.title).toBe("Glaive adepts · Community build");
+  });
+
+  it("keeps metadata and page author capability admission fresh with configured optional purge", async () => {
+    vi.stubEnv("COMMUNITY_REVALIDATE_SECRET", "synthetic-purge-offline");
+    mocks.getJsonWithStatus.mockResolvedValue({ data: detail("Current publication"), status: 200 });
+    await generateMetadata({ params: params() });
+    await CommunityBuildPage({ params: params() });
+    expect(dynamic).toBe("force-dynamic"); expect(revalidate).toBe(0);
+    for (const call of mocks.getJsonWithStatus.mock.calls) expect(call[1]).toEqual({ revalidateSec: 0, tags: [] });
+    vi.unstubAllEnvs();
   });
 });

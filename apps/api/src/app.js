@@ -26,6 +26,8 @@ const { sanitiseRequestForLog, sanitiseResponseForLog } = require("./middleware/
 const { UsersService } = require("./services/users");
 const { buildClerkClient, noopClerkClient } = require("./services/clerkClient");
 const { OpponentsService } = require("./services/opponents");
+const { ScoutingIdentitiesService } = require("./services/scoutingIdentities");
+const { ScoutingForecastService } = require("./services/scoutingForecast");
 const { RivalsService } = require("./services/rivals");
 const { RivalsPulseService } = require("./services/rivalsPulse");
 const { buildRivalsRouter } = require("./routes/rivals");
@@ -122,6 +124,7 @@ const { GuideSamplesService } = require("./services/guideSamples");
 const { buildGuideSamplesBackfillJob } = require("./jobs/guideSamplesBackfillJob");
 const { GuideStatsService } = require("./services/guideStats");
 const { buildGuideRevalidator } = require("./services/guideRevalidate");
+const { buildCommunityRevalidator } = require("./services/communityRevalidate");
 const { buildGuideStatsRecomputeJob } = require("./jobs/guideStatsRecomputeJob");
 const { GuideVideosService } = require("./services/guideVideos");
 const { buildGuideVideosSyncJob } = require("./jobs/guideVideosSyncJob");
@@ -146,6 +149,9 @@ const { LadderMetaService } = require("./services/ladderMeta");
 const { buildLadderMetaRouter } = require("./routes/ladderMeta");
 const { PublicProfileService } = require("./services/publicProfile");
 const { buildPublicProfileRouter } = require("./routes/publicProfile");
+const { PublicPlayerService } = require("./services/publicPlayer");
+const { PublicPlayerPreferencesService } = require("./services/publicPlayerPreferences");
+const { buildPublicPlayersRouter } = require("./routes/publicPlayers");
 const { buildPublicReplaysRouter } = require("./routes/publicReplays");
 const { ChatbotService } = require("./services/chatbot");
 const { buildChatbotRouter } = require("./routes/chatbot");
@@ -473,6 +479,8 @@ function makeServices(deps, clerk, adminClerkIds) {
   // served PUBLICLY by routes/ladderMeta.js for the analyzer's Ladder
   // Pulse (the old /meta page now redirects to the /guides pages).
   const ladderMeta = new LadderMetaService(deps.db, { logger: deps.logger });
+  const scoutingIdentities = new ScoutingIdentitiesService(deps.db);
+  const scoutingForecast = new ScoutingForecastService(ladderMeta);
   // Skill Fingerprint — replay-derived build, game-length, and matchup
   // tendencies plus a player-population-calibrated archetype for Trends.
   const fingerprintPopulationCalibration =
@@ -495,6 +503,8 @@ function makeServices(deps, clerk, adminClerkIds) {
       pulseDirectory,
       pulseLinks,
       playerIdentities,
+      scoutingIdentities,
+      scoutingForecast,
     },
   );
   // Private unresolved-barcode matcher. It reads compact behavior evidence
@@ -587,7 +597,10 @@ function makeServices(deps, clerk, adminClerkIds) {
     gameDetails,
     pulseMmr,
     rivals,
+    scoutingIdentities,
+    scoutingForecast,
   });
+  playerIdentities.onChanged = () => overlayLive.clearEnrichmentCache();
   // LiveGameBroker — in-process pub/sub for the agent → web SSE
   // bridge AND the agent → OBS overlay Socket.io fan-out.
   // Constructed once at app boot so every agent POST shares the
@@ -709,7 +722,10 @@ function makeServices(deps, clerk, adminClerkIds) {
   });
   const gameExecution = new BuildExecutionService(deps.db, { perGame, builds, customBuilds });
   gameDetails.onBuildLogsChanged = (userId) => gameExecution.invalidateForUser(userId);
-  const buildStudio = new AdminBuildStudioService(deps.db, { customBuilds, policies: presetPolicies });
+  const communityRevalidator = buildCommunityRevalidator({ url: deps.config.communityRevalidateUrl,
+    secret: deps.config.communityRevalidateSecret, logger: deps.logger });
+  const buildStudio = new AdminBuildStudioService(deps.db, { customBuilds, policies: presetPolicies,
+    onCommunityChanged: communityRevalidator.notify });
   // Opponent-log recomputes replace data consumed by opponent-perspective
   // custom rules. Coalesce a fresh all-build pass after the detail write so a
   // scan that overlapped the write cannot silently complete on old details.
@@ -851,18 +867,22 @@ function makeServices(deps, clerk, adminClerkIds) {
   const community = new CommunityService(deps.db, {
     slugSecret: deps.config.serverPepper,
     notifications,
+    onPublicChanged: communityRevalidator.notify,
   });
+  gdpr.onCommunityChanged = userId => community.invalidateForUser(userId);
   gdpr.backups = new UserBackupsService(deps.db, { gdpr, store: deps.userBackupsStore || buildUserBackupsStore(deps.config), logger: deps.logger });
   const dataRepairs = new DataRepairsService(deps.db, { gdpr, notifications, logger: deps.logger });
-  // Opt-in public player pages (/p/:handle). Derives entirely from
-  // existing services — a public profile exists iff the user published
-  // a community build under a public authorName (the community opt-in),
-  // so no new user state and no GDPR change.
+  // Canonical player profiles reuse existing aggregate services. Privacy
+  // settings live on the user row (ordinary export/erasure, never restored
+  // from snapshots); legacy named authors retain only their existing scope.
   const publicProfile = new PublicProfileService(deps.db, {
     community,
     aggregations,
     builds,
   });
+  const publicPlayers = new PublicPlayerService(deps.db, { community, profile: publicProfile, aggregations, builds, replayLibrary, seasons });
+  const publicPlayerPreferences = new PublicPlayerPreferencesService(deps.db, { community, onPublicChanged: communityRevalidator.notify, resolveLegacy: (userId) => publicPlayers.resolve(userId) });
+  users.publicPlayerIdentity = (userId) => publicPlayers.identity(userId);
   const gameMoments = new GameMomentsService(deps.db, { users, tokens: overlayTokens, channels: opponentChannels,
     seasons, engagement: multichatEngagement, bot: twitchChatBot, io: deps.io, logger: deps.logger });
   const arcade = new ArcadeService(deps.db, { games, gameDetails });
@@ -1025,6 +1045,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     fingerprintPopulationCalibration,
     skillFingerprint,
     ladderMeta,
+    scoutingIdentities,
+    scoutingForecast,
     guideSamples,
     guideSamplesBackfill,
     guideStats,
@@ -1034,6 +1056,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     guideNotes,
     guides,
     publicProfile,
+    publicPlayers,
+    publicPlayerPreferences,
     chatbot,
     pulseDirectory,
     playerChannels,
@@ -1408,6 +1432,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       buildIntents: services.buildIntents,
       ghostConfig: services.ghostConfig,
       onRivalsChanged: (userId) => { services.overlayLive.invalidateForUser(userId); services.rivals.invalidateForUser(userId); },
+      onScoutingChanged: (userId) => services.overlayLive.invalidateForUser(userId),
       logger: deps.logger,
     }),
   );
@@ -1432,6 +1457,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildCommunityRouter({
       community: services.community,
+      publicPlayers: services.publicPlayers,
       auth,
       isAdmin,
     }),
@@ -1440,8 +1466,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   // rate-limited in the router. Public bundle (before authed routers).
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildPublicProfileRouter({ publicProfile: services.publicProfile }),
+    buildPublicProfileRouter({ publicProfile: services.publicProfile, players: services.publicPlayers }),
   );
+  app.use(SERVICE.ROUTE_PREFIX, buildPublicPlayersRouter({ players: services.publicPlayers, preferences: services.publicPlayerPreferences, auth }));
   // Separate default-off publication surface for replay rows, per-game
   // analysis, matched stream POVs and short-lived original-replay downloads.
   // It must mount in the public bundle before auth-eager routers.

@@ -18,11 +18,11 @@ describe("GET /api/site/stats", () => {
   });
   afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
-  it("returns only validated aggregate data without a cache or identity", async () => {
+  it("publicly caches only validated aggregate data for the short edge window without identity", async () => {
     fetchMock.mockResolvedValue(Response.json({ ...snapshot, internalDetails: "private" }));
     const response = await GET();
     expect(await response.json()).toEqual(snapshot);
-    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(response.headers.get("cache-control")).toBe("public, s-maxage=15, stale-while-revalidate=60");
     expect(response.headers.get("set-cookie")).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith("https://api.sc2tools.test/v1/site/stats", {
       cache: "no-store", signal: expect.any(AbortSignal),
@@ -39,6 +39,7 @@ describe("GET /api/site/stats", () => {
     fetchMock.mockResolvedValue(Response.json({ ...snapshot, activeUsers }));
     const response = await GET();
     expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toContain("no-store");
     expect(await response.json()).toEqual({ error: "site_stats_unavailable" });
   });
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getJsonWithStatus } from "@/lib/serverApi";
+import { communityCacheOptions } from "@/lib/communityCache";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
@@ -32,6 +33,7 @@ export async function RelatedBuilds({
   }
   const { data } = await getJsonWithStatus<CommunityBuildListResponse>(
     `/v1/community/builds?matchup=${encodeURIComponent(matchup)}&sort=top&limit=6`,
+    communityCacheOptions(),
   );
   if (!data) {
     return null;

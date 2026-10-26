@@ -15,11 +15,11 @@ export type ChartTooltipRow = {
   dot?: string;
 };
 
-const BG = "#11141b";
-const BORDER = "#1f2533";
-const HEADER = "#7c8cff";
-const ROW_LABEL = "#9aa3b2";
-const ROW_VALUE = "#e5e7eb";
+const BG = "rgb(var(--bg-elevated))";
+const BORDER = "rgb(var(--border))";
+const HEADER = "rgb(var(--accent-ink))";
+const ROW_LABEL = "rgb(var(--text-muted))";
+const ROW_VALUE = "rgb(var(--text))";
 
 /**
  * Shared tooltip box for every Recharts chart on the analyzer.
@@ -30,7 +30,7 @@ const ROW_VALUE = "#e5e7eb";
  * background — unreadable. Rather than fight that per-chart with
  * `itemStyle`/`labelStyle` overrides, every chart renders its tooltip
  * through this component, which pins the header, captions, and values
- * to fixed legible colours and lays them out so all data stays visible
+ * to theme/scoped tokens and lays them out so all data stays visible
  * in the box on both mobile and desktop.
  *
  * Pass it to Recharts via the `content` prop with a render callback:

@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({ getJson: vi.fn(), fetchGuideSitemap: vi.fn() }
 vi.mock("@/lib/serverApi", () => ({ getJson: mocks.getJson }));
 vi.mock("@/lib/guides/api", () => ({ fetchGuideSitemap: mocks.fetchGuideSitemap }));
 
-import sitemap, { revalidate } from "@/app/sitemap";
+import sitemap, { dynamic, revalidate } from "@/app/sitemap";
 import { communitySitemapRows, finalizeSitemap, guideSitemapRows, SITEMAP_MAX_URLS } from "@/lib/sitemapEntries";
 import { FIXTURE_SITEMAP } from "@/lib/guides/__fixtures__";
 import { ALL_HELP_ARTICLES } from "@/lib/help";
@@ -31,7 +31,7 @@ async function urls(): Promise<string[]> {
 }
 
 beforeEach(() => {
-  apiRoutes({ "/v1/community/sitemap": COMMUNITY });
+  apiRoutes({ "/v1/community/sitemap": COMMUNITY, "/v1/public/players-sitemap": { items: [{ handle: "fixture-author-0123456789", lastModified: "2026-10-20T00:00:00Z" }] } });
   mocks.fetchGuideSitemap.mockResolvedValue({ kind: "ok", data: FIXTURE_SITEMAP });
 });
 
@@ -42,10 +42,11 @@ afterEach(() => {
 });
 
 describe("sitemap", () => {
-  it("regenerates at most hourly and never lists the retired /meta", async () => {
-    expect(revalidate).toBe(3600);
+  it("checks player consent on every request and never lists the retired /meta", async () => {
+    expect(dynamic).toBe("force-dynamic"); expect(revalidate).toBe(0);
     vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "on");
     expect(await urls()).not.toContain(`${SITE}/meta`);
+    expect(mocks.getJson).toHaveBeenCalledWith("/v1/public/players-sitemap", { revalidateSec: 0 });
   });
 
   it("leaves out /builds, whose signed-out intro is client-rendered", async () => {
@@ -81,7 +82,8 @@ describe("sitemap", () => {
   it("lists community builds and author profiles, dropping malformed slugs and handles", async () => {
     const list = await urls();
     expect(list).toContain(`${SITE}/community/builds/build-0123456789abcdef0123456789abcdef`);
-    expect(list).toContain(`${SITE}/p/fixture-author`);
+    expect(list).toContain(`${SITE}/players/fixture-author-0123456789`);
+    expect(list).not.toContain(`${SITE}/p/fixture-author`);
     expect(list.some((url) => url.includes("admin") || url.includes("bad"))).toBe(false);
     expect(mocks.getJson).toHaveBeenCalledWith("/v1/community/sitemap", { revalidateSec: 3600 });
   });
@@ -116,7 +118,7 @@ describe("sitemap", () => {
     const home = rows.find((row) => row.url === `${SITE}/`);
     expect(home?.lastModified).toEqual(new Date("2026-09-29"));
     expect(rows.find((row) => row.url === `${SITE}/stream-studio`)?.lastModified).toEqual(new Date("2026-10-16"));
-    expect(rows.find((row) => row.url === `${SITE}/stream-studio/learn`)?.lastModified).toEqual(new Date("2026-10-16"));
+    expect(rows.find((row) => row.url === `${SITE}/stream-studio/learn`)?.lastModified).toEqual(new Date("2026-10-25"));
     // A listing fed by the API carries no invented date.
     const community = rows.find((row) => row.url === `${SITE}/community`);
     expect(community).toBeTruthy();

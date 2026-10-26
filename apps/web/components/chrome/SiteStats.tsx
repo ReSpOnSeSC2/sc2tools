@@ -90,9 +90,9 @@ export function SiteStats({ wide = false, syncStatus, variant = "marketing", sig
                 </dt>
                 <dd className="order-1 font-mono text-caption font-normal tabular-nums text-text">
                   {isLoading && !data ? (
-                    <span aria-label="Loading" className="inline-block h-3 w-6 rounded bg-bg-subtle motion-safe:animate-pulse" />
+                    <><span aria-hidden="true" className="inline-block h-3 w-6 rounded bg-bg-subtle motion-safe:animate-pulse" /><span className="sr-only">Loading</span></>
                   ) : value == null || unavailable ? (
-                    <span aria-label="Unavailable" className="text-text-dim">—</span>
+                    <><span aria-hidden="true" className="text-text-dim">—</span><span className="sr-only">Unavailable</span></>
                   ) : value >= 1_000 ? (
                     <span title={NUMBER_FORMAT.format(value)}>
                       <span aria-hidden className={value >= 100_000 ? "2xl:hidden" : "sm:hidden"}>{COMPACT_NUMBER_FORMAT.format(value)}</span>

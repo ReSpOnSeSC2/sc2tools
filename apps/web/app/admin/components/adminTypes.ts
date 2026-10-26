@@ -74,6 +74,8 @@ export type UsersListResp = {
 };
 
 export type AdminUserDetail = {
+  /** Existing wipe preview includes records already pending deletion. */
+  wipeGameCount?: number;
   userId: string;
   clerkUserId: string | null;
   email: string | null;

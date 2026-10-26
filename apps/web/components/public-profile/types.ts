@@ -1,7 +1,7 @@
 /**
- * Public-API shapes for the opt-in player page at /p/[handle].
+ * Public-API shapes for the opt-in player page at /players/[player].
  *
- * Mirrors the payload built by apps/api/src/services/publicProfile.js.
+ * Mirrors the payloads in services/publicProfile.js and services/publicPlayer.js.
  * Kept deliberately narrow: only non-sensitive aggregates cross this
  * boundary — no opponent identities, no per-game rows. If the server
  * ever grows a field, it stays invisible here until it's added on
@@ -26,7 +26,7 @@ export interface PublicProfileMatchupSplit {
 }
 
 export interface PublicProfileSignatureBuild {
-  /** The player's own build label, e.g. "PvT - Glaive Adept Timing". */
+  /** Replay-detected build label; private planned/check-in labels are excluded. */
   name: string;
   games: number;
   wins: number;
@@ -39,6 +39,13 @@ export interface PublicProfileFeaturedBuild {
   title: string;
   matchup: string | null;
   votes: number;
+}
+
+/** Named, currently published browser rows; never private build snapshots. */
+export interface PublicProfilePublishedBuild extends PublicProfileFeaturedBuild {
+  description: string;
+  publishedAt: string | null;
+  updatedAt: string | null;
 }
 
 export interface PublicPlayerProfile {
@@ -54,6 +61,42 @@ export interface PublicPlayerProfile {
   publishedBuildCount: number;
   /** Replay Review Exchange section; absent until they have reviewed. */
   reviewer?: PublicReviewerSection | null;
+  publishedBuilds?: PublicProfilePublishedBuild[];
+  sections?: Record<"showReplays" | "showChannels" | "showRecentForm" | "showMmrHistory" | "showSeasons" | "showMaps", boolean>;
+  replayArchive?: { handle: string; total: number } | null;
+  recentForm?: Array<{ result: "W" | "L" | "T"; matchup: string; date: string }>;
+  currentStreak?: { kind: "W" | "L"; count: number } | null;
+  lastPlayedAt?: string | null;
+  channels?: Array<{ platform: "twitch" | "youtube"; url: string }>;
+  mmrHistory?: Array<{ date: string; mmr: number; games: number }>;
+  seasons?: Array<{ season: number; games: number; wins: number; losses: number; peakMmr: number | null; mainRace: string | null }>;
+  seasonDataAvailable?: boolean;
+  maps?: Array<{ name: string; games: number; wins: number; losses: number }>;
+}
+
+export interface PublicPlayerResponse {
+  profile: PublicPlayerProfile | null;
+  archiveOnly: boolean;
+  handle: string;
+  displayName: string;
+}
+
+export interface PublicPlayerSettings {
+  /** Private preview of the name that an explicit opt-in will publish. */
+  publicDisplayName?: string;
+  enabled: boolean;
+  legacyPublic: boolean;
+  slug: string | null;
+  updatedAt: string | null;
+  renameAvailableAt: string | null;
+  replaySharingEnabled: boolean;
+  revision: number;
+  showReplays: boolean;
+  showChannels: boolean;
+  showRecentForm: boolean;
+  showMmrHistory: boolean;
+  showSeasons: boolean;
+  showMaps: boolean;
 }
 
 export interface PublicReviewerSection {
@@ -71,6 +114,8 @@ export interface PublicReviewerSection {
     regions?: Array<{ region: string; band: { id: number; label: string }; race: string | null }>;
   } | null;
   matchupsReviewed: Array<{ matchup: string; count: number }>;
+  matchupsSampled?: true;
+  matchupsSampleLimit?: number;
 }
 
 /** Envelope returned by GET /v1/public/profile/:handle. */

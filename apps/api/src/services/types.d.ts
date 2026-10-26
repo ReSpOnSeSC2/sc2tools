@@ -30,6 +30,8 @@ export interface ReplayPublicIdentity {
     /** Canonical slug even when the request used a legacy shareId alias. */
     handle: string;
     displayName: string;
+    /** Present only for an explicitly public or named-build legacy profile. */
+    profileHandle?: string;
   };
 }
 
@@ -135,7 +137,7 @@ export interface ReplayLibraryService {
 export interface OpponentsService {
   list(
     userId: string,
-    opts?: { limit?: number; before?: Date; filters?: object },
+    opts?: { limit?: number; before?: Date; filters?: object; includeListDetails?: boolean },
   ): Promise<{ items: object[]; nextBefore: Date | null }>;
   get(
     userId: string,

@@ -187,6 +187,7 @@ describe("buildPulseContext", () => {
     const recent = spread(6, 2, () => ({ myBuild: "8 Pool" }));
     const ctx = buildPulseContext([...career, ...recent], DAY, TZ);
     expect(ctx.risingBuild?.name).toBe("8 Pool");
+    expect(PULSE_POOL.find(spec => spec.id === "rising-build")!.build(ctx).targetQuery).toEqual({ q: "8 Pool" });
     expect(ctx.risingBuild!.recentWinRate).toBe(1);
     expect(ctx.risingBuild!.careerDecided).toBe(18);
     expect(RISING_BUILD_MIN_RECENT_DECIDED).toBeLessThanOrEqual(6);

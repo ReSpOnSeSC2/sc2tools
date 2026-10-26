@@ -1,16 +1,13 @@
 import type { Metadata } from "next";
 import { LearnPage } from "@/components/stream-studio/LearnPage";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
 const TITLE = "Learn Stream Studio: widget guides & OBS crash course | SC2 Tools";
-const DESCRIPTION = "Build your first StarCraft II stream overlay with a five-lesson crash course, setup guides for every widget, suggested starter scenes and practical troubleshooting.";
+const DESCRIPTION = "Build your first StarCraft II stream overlay with a six-lesson crash course, setup guides for every widget, public channel panels, suggested starter scenes and practical troubleshooting.";
 
 export const metadata: Metadata = {
-  // Search-tuned and already branded, so it skips the title template.
+  ...pageMetadata({ title: "Learn Stream Studio: widget guides & OBS crash course", description: DESCRIPTION, canonical: "/stream-studio/learn", shareTitle: TITLE }),
   title: { absolute: TITLE },
-  description: DESCRIPTION,
-  alternates: { canonical: "/stream-studio/learn" },
-  openGraph: { type: "website", siteName: "SC2 Tools", url: "/stream-studio/learn", title: TITLE, description: DESCRIPTION },
-  twitter: { card: "summary", title: TITLE, description: DESCRIPTION },
 };
 
 export default function StreamStudioLearnRoute() {

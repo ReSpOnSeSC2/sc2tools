@@ -52,6 +52,8 @@ export interface ReplayLibraryItem {
 export interface ReplayLibraryProfile {
   handle: string;
   displayName: string;
+  /** Only when the owner separately permits the public profile. */
+  profileHandle?: string;
 }
 
 export interface ReplayLibraryPageInfo {

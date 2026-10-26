@@ -1,112 +1,15 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { getJsonWithStatus } from "@/lib/serverApi";
-import { Card } from "@/components/ui/Card";
-import { EmptyStatePanel } from "@/components/ui/EmptyState";
-import { AuthorProfile } from "@/components/community/AuthorProfile";
-import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
-import type { CommunityAuthorProfile } from "@/components/community/types";
-
-/**
- * Public author profile route.
- *
- * Resolution: GET /v1/community/authors/:userId returns 200 with the
- * aggregate when the author has at least one published build with a
- * non-empty `authorName`. Any other state (no builds, all anonymous,
- * or unknown user id) returns 404, which we surface as a NotFound
- * panel rather than the global 404 — the wording stays neutral so a
- * user who deliberately stays anonymous isn't outed by the message.
- * An unreachable API or a 5xx is an outage, not a missing profile: it
- * gets the "temporarily unavailable" panel. Both are noindex.
- */
-export const revalidate = 300;
-
-interface PageParams {
-  params: Promise<{ userId: string }>;
+import { notFound, permanentRedirect } from "next/navigation";
+import { publicPlayerPath, resolvePublicPlayer } from "@/lib/publicPlayer";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export async function generateMetadata({ params }: { params: Promise<{ userId: string }> }) {
+  const { data } = await resolvePublicPlayer((await params).userId);
+  if (!data?.profile) notFound();
+  return { title: "Player profile", robots: { index: false, follow: false }, alternates: { canonical: publicPlayerPath(data.handle) } };
 }
-
-/** generateMetadata and the page make the same request; Next dedupes it. */
-function loadProfile(userId: string) {
-  return getJsonWithStatus<CommunityAuthorProfile>(
-    `/v1/community/authors/${encodeURIComponent(userId)}`,
-  );
-}
-
-const UNAVAILABLE_TITLE = "This profile is temporarily unavailable";
-
-export async function generateMetadata({ params }: PageParams): Promise<Metadata> {
+export default async function LegacyAuthor({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params;
-  const { data: profile, status } = await loadProfile(userId);
-  if (!profile) {
-    return status === 404
-      ? {
-          title: "Author profile",
-          description: "This SC2 Tools community profile is private or doesn't exist.",
-          robots: { index: false, follow: false },
-        }
-      : {
-          title: UNAVAILABLE_TITLE,
-          robots: { index: false, follow: false },
-        };
-  }
-  const description =
-    profile.totalBuilds === 1
-      ? `1 published build by ${profile.displayName}.`
-      : `${profile.totalBuilds} published builds by ${profile.displayName}.`;
-  return {
-    title: `${profile.displayName} · Community`,
-    description,
-    openGraph: {
-      title: `${profile.displayName} — SC2 Tools community`,
-      description,
-      images: [{ url: "/og.jpg", width: 1200, height: 630 }],
-    },
-  };
-}
-
-export default async function CommunityAuthorPage({ params }: PageParams) {
-  const { userId } = await params;
-  const { data: profile, status } = await loadProfile(userId);
-  if (!profile) {
-    return status === 404 ? (
-      <NotFoundPanel />
-    ) : (
-      <CommunityUnavailable
-        title={UNAVAILABLE_TITLE}
-        retryHref={`/community/authors/${encodeURIComponent(userId)}`}
-        standalone
-      />
-    );
-  }
-  return <AuthorProfile profile={profile} />;
-}
-
-function NotFoundPanel() {
-  return (
-    <article className="space-y-6">
-      <Link
-        href="/community"
-        className="inline-flex min-h-[44px] items-center gap-1.5 text-caption font-medium text-text-muted hover:text-text"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden />
-        Back to community
-      </Link>
-      <Card>
-        <EmptyStatePanel
-          size="lg"
-          title="This profile is private or doesn't exist"
-          description="Either the author hasn't declared a public name on any of their builds, or the profile id doesn't match an SC2 Tools account."
-          action={
-            <Link
-              href="/community"
-              className="inline-flex min-h-[44px] items-center gap-2 hard-press rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-            >
-              Browse community builds
-            </Link>
-          }
-        />
-      </Card>
-    </article>
-  );
+  const { data } = await resolvePublicPlayer(userId);
+  if (!data?.profile) notFound();
+  permanentRedirect(publicPlayerPath(data.handle));
 }

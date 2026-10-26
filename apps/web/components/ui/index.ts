@@ -14,6 +14,8 @@ export { Card } from "./Card";
 export type { CardVariant } from "./Card";
 export { ConfirmDialog } from "./ConfirmDialog";
 export type { ConfirmDialogProps } from "./ConfirmDialog";
+export { CopyButton } from "./CopyButton";
+export type { CopyButtonProps } from "./CopyButton";
 export { DeviceFrame } from "./DeviceFrame";
 export type { DeviceFrameProps, DeviceFrameVariant } from "./DeviceFrame";
 export { EmptyStatePanel } from "./EmptyState";
@@ -24,10 +26,16 @@ export { GlowHalo } from "./GlowHalo";
 export type { GlowHaloProps, GlowHaloColor, GlowHaloPosition } from "./GlowHalo";
 export { Icon } from "./Icon";
 export type { IconProps, IconSize } from "./Icon";
+export { IconButton } from "./IconButton";
+export type { IconButtonProps } from "./IconButton";
 export { Input } from "./Input";
 export type { InputProps, InputSize } from "./Input";
 export { Modal, ModalActions } from "./Modal";
-export type { ModalProps, ModalSize } from "./Modal";
+export type { ModalProps, ModalSize, ModalPlacement } from "./Modal";
+export { Sheet } from "./Sheet";
+export type { SheetProps } from "./Sheet";
+export { Popover } from "./Popover";
+export type { PopoverProps } from "./Popover";
 export { PageHeader } from "./PageHeader";
 export type { PageHeaderProps } from "./PageHeader";
 export { QueryState, hasQueryData } from "./QueryState";
@@ -38,6 +46,8 @@ export { SectionBoundary } from "./SectionBoundary";
 export {
   SkeletonBar,
   SkeletonCard,
+  SkeletonChart,
+  SkeletonKpi,
   SkeletonPageHeader,
   SkeletonRegion,
   SkeletonRows,
@@ -66,3 +76,5 @@ export { SaveBar } from "./SaveBar";
 export type { SaveBarProps } from "./SaveBar";
 export { useDirtyForm } from "./useDirtyForm";
 export type { UseDirtyFormResult } from "./useDirtyForm";
+export { useConfirm } from "./useConfirm";
+export type { ConfirmOptions } from "./useConfirm";

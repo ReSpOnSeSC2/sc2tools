@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import BuildsLoading from "../builds/loading";
-import CommunityLoading from "../community/loading";
+import CommunityLoading from "../community/(directory)/loading";
 import DevicesLoading from "../devices/loading";
 import SettingsLoading from "../settings/loading";
 

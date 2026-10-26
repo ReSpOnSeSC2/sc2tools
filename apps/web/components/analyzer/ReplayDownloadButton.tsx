@@ -1,9 +1,9 @@
 "use client";
 
-import { useId, useState, type MouseEvent } from "react";
+import { useId, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { AlertCircle, Download, Loader2 } from "lucide-react";
-import { apiCall, type ClientApiError } from "@/lib/clientApi";
+import { apiCall, useOwnerRequestScope, type ClientApiError } from "@/lib/clientApi";
 import { useToastOptional } from "@/components/ui/Toast";
 import { buttonClassName, type ButtonSize, type ButtonVariant } from "@/components/ui/buttonStyles";
 
@@ -14,6 +14,11 @@ type ReplayDownloadResponse = {
 };
 
 type DownloadState = "idle" | "loading" | "error";
+type DownloadScope = {
+  owner: string | null; gameId: string | null; path: string;
+  available: boolean; filename: string | null; active: boolean;
+  controller: AbortController | null;
+};
 
 export function ReplayDownloadButton({
   gameId,
@@ -45,36 +50,64 @@ export function ReplayDownloadButton({
   size?: ButtonSize;
   variant?: ButtonVariant;
 }) {
-  const { getToken } = useAuth();
+  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
+  const owner = isLoaded && isSignedIn && userId ? userId : null;
+  const runOwned = useOwnerRequestScope(owner, getToken);
+  const path = downloadPath || `/v1/games/${encodeURIComponent(gameId ?? "")}/replay-download`;
+  const scopeRef = useRef<DownloadScope>({
+    owner, gameId: gameId ?? null, path, available: available === true,
+    filename: filename ?? null, active: !!owner, controller: null,
+  });
+  let scope = scopeRef.current;
+  if (scope.owner !== owner || scope.gameId !== (gameId ?? null) || scope.path !== path
+    || scope.available !== (available === true) || scope.filename !== (filename ?? null)) {
+    scope.active = false;
+    scope = {
+      owner, gameId: gameId ?? null, path, available: available === true,
+      filename: filename ?? null, active: !!owner, controller: null,
+    };
+    scopeRef.current = scope;
+  }
+  useLayoutEffect(() => {
+    scope.active = !!owner;
+    return () => { scope.active = false; scope.controller?.abort(); scope.controller = null; };
+  }, [scope, owner]);
   const toastContext = useToastOptional();
   const statusId = useId();
-  const [state, setState] = useState<DownloadState>("idle");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [request, setRequest] = useState<{ scope: DownloadScope; state: DownloadState; errorMessage: string | null }>({ scope, state: "idle", errorMessage: null });
+  const state = request.scope === scope ? request.state : "idle";
+  const errorMessage = request.scope === scope ? request.errorMessage : null;
 
   const canDownload = available === true && !!gameId;
   const loading = state === "loading";
   const resolvedUnavailableMessage = unavailableMessage
     || "Original replay unavailable. Update to the latest desktop agent, then run Re-sync.";
   const sizeLabel = formatSize(sizeBytes);
+  const accessMessage = owner ? null : isLoaded ? "Sign in to download this replay." : "Checking replay access…";
 
   async function download(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
     event.stopPropagation();
+    if (!owner || !scope.active || scopeRef.current !== scope) return;
     if (!canDownload) {
       toastContext?.toast.info("Replay unavailable", {
         description: resolvedUnavailableMessage,
       });
       return;
     }
-    if (loading || !gameId) return;
+    if (loading || scope.controller || !gameId) return;
 
-    setState("loading");
-    setErrorMessage(null);
+    const controller = new AbortController();
+    scope.controller = controller;
+    const current = () => scope.active && scopeRef.current === scope && scope.controller === controller && !controller.signal.aborted;
+    setRequest({ scope, state: "loading", errorMessage: null });
     try {
-      const result = await apiCall<ReplayDownloadResponse>(
-        getToken,
-        downloadPath || `/v1/games/${encodeURIComponent(gameId)}/replay-download`,
-      );
+      const result = await runOwned(owner, async (scopedToken, signal, assertCurrent) => {
+        const value = await apiCall<ReplayDownloadResponse>(scopedToken, path, { signal });
+        assertCurrent();
+        return value;
+      }, 20_000, controller.signal);
+      if (!current()) return;
       const href = safeSignedUrl(result?.url);
       if (!href) throw new Error("The replay download link was invalid.");
 
@@ -93,41 +126,44 @@ export function ReplayDownloadButton({
       } finally {
         anchor.remove();
       }
-      setState("idle");
+      if (!current()) return;
+      setRequest({ scope, state: "idle", errorMessage: null });
       toastContext?.toast.success("Replay download started");
     } catch (error) {
+      if (!current()) return;
       const message = replayDownloadError(error);
-      setState("error");
-      setErrorMessage(message);
+      setRequest({ scope, state: "error", errorMessage: message });
       toastContext?.toast.error("Couldn't download replay", {
         description: message,
       });
+    } finally {
+      if (scope.controller === controller) scope.controller = null;
     }
   }
 
-  const baseLabel = !canDownload
+  const baseLabel = accessMessage ? isLoaded ? "Sign in to download replay" : "Checking replay access" : !canDownload
     ? "Replay unavailable"
     : loading
       ? "Downloading replay"
       : state === "error"
         ? "Retry replay download"
         : "Download replay";
-  const label = contextLabel ? `${baseLabel} — ${contextLabel}` : baseLabel;
-  const title = !canDownload
+  const label = owner && contextLabel ? `${baseLabel} — ${contextLabel}` : baseLabel;
+  const title = accessMessage || (!canDownload
     ? resolvedUnavailableMessage
     : state === "error"
       ? errorMessage || "Retry replay download"
       : `${filename ? `Download ${filename}` : "Download original replay"}${
           sizeLabel ? ` (${sizeLabel})` : ""
-        }`;
+        }`);
 
   return (
     <>
       <button
         type="button"
         onClick={download}
-        disabled={loading}
-        aria-disabled={!canDownload || undefined}
+        disabled={loading || !owner}
+        aria-disabled={!canDownload || !owner || undefined}
         aria-label={label}
         aria-busy={loading || undefined}
         aria-describedby={statusId}
@@ -155,14 +191,14 @@ export function ReplayDownloadButton({
         )}
         {mobile || showLabel ? (
           <span>
-            {!canDownload
+            {accessMessage ? baseLabel : !canDownload
               ? "Replay unavailable"
               : loading
                 ? "Downloading…"
                 : state === "error"
                   ? "Try download again"
                   : "Download replay"}
-            {canDownload && sizeLabel && !loading ? (
+            {owner && canDownload && sizeLabel && !loading ? (
               <span className="ml-1 font-normal text-text-dim">
                 · {sizeLabel}
               </span>
@@ -175,13 +211,13 @@ export function ReplayDownloadButton({
         className="sr-only"
         role={state === "error" ? "alert" : "status"}
       >
-        {!canDownload
+        {accessMessage || (!canDownload
           ? resolvedUnavailableMessage
           : state === "error"
             ? errorMessage
             : loading
               ? "Preparing a secure replay download."
-              : ""}
+              : "")}
       </span>
     </>
   );
@@ -225,6 +261,7 @@ function formatSize(value: number | null | undefined): string | null {
 
 function replayDownloadError(error: unknown): string {
   const apiError = error as ClientApiError | undefined;
+  if (apiError?.code === "request_timeout") return "Preparing the replay download took too long. Try again.";
   if (
     apiError?.code === "replay_unavailable"
     || apiError?.code === "not_found"

@@ -8,7 +8,7 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
       // Auth-gated, token-gated, and API surfaces — no SEO value, keep crawlers out.
-      disallow: ["/app/", "/admin/", "/devices/", "/settings/", "/streaming/", "/overlay/", "/api/"],
+      disallow: ["/app", "/admin/", "/devices/", "/settings", "/sign-in", "/sign-up", "/streaming/", "/overlay/", "/api/"],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
     host: SITE_URL,

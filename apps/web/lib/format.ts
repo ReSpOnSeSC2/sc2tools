@@ -81,8 +81,21 @@ export function macroScoreTone(score?: number | null): string {
  * (< 3 games) so a 1-0 day doesn't blare full green.
  */
 export function wrColor(rate: number | null | undefined, games: number): string {
-  if (rate == null || !Number.isFinite(rate) || games < 3) return "#9aa3b2";
-  return wrRampHex(rate);
+  if (rate == null || !Number.isFinite(rate) || games < 3) return "rgb(var(--chart-low-sample))";
+  return wrRampCss(rate);
+}
+
+/** CSS consumers follow the selected theme without a second observer or a
+ * hydration-time DOM read. Concrete RGB consumers use useChartKit.wrRamp;
+ * legacy wrRamp/wrRampHex defaults remain stable for existing callers. */
+export function wrRampCss(rate: number): string {
+  if (!Number.isFinite(rate)) return "rgb(var(--chart-low-sample))";
+  const t = clamp((rate - .3) / (.65 - .3), 0, 1);
+  if (t === 0) return "rgb(var(--chart-wr-low))";
+  if (t === 1) return "rgb(var(--chart-wr-high))";
+  const first = t <= .5 ? "low" : "mid", second = t <= .5 ? "mid" : "high";
+  const weight = t <= .5 ? t * 2 : (t - .5) * 2;
+  return `color-mix(in srgb, rgb(var(--chart-wr-${first})) ${((1 - weight) * 100).toFixed(3)}%, rgb(var(--chart-wr-${second})) ${(weight * 100).toFixed(3)}%)`;
 }
 
 /**
@@ -91,8 +104,8 @@ export function wrColor(rate: number | null | undefined, games: number): string 
  * full colour range. Useful in chart cells / summary cards where the
  * caller doesn't want to think about thresholds.
  */
-export function wrRampHex(rate: number): string {
-  const [r, g, b] = wrRamp(rate);
+export function wrRampHex(rate: number, palette?: WrRampPalette): string {
+  const [r, g, b] = wrRamp(rate, palette);
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
@@ -102,10 +115,11 @@ export function wrRampHex(rate: number): string {
  * into mud. Exported so cell-style charts (calendar, heatmap) can
  * combine the colour with their own opacity for the volume signal.
  */
-export function wrRamp(rate: number): [number, number, number] {
-  const RED: [number, number, number] = [180, 35, 45];
-  const AMBER: [number, number, number] = [220, 165, 50];
-  const GREEN: [number, number, number] = [40, 145, 75];
+export type WrRampPalette = { red: readonly [number, number, number]; amber: readonly [number, number, number]; green: readonly [number, number, number] };
+export function wrRamp(rate: number, palette?: WrRampPalette): [number, number, number] {
+  const RED = palette?.red ?? [180, 35, 45];
+  const AMBER = palette?.amber ?? [220, 165, 50];
+  const GREEN = palette?.green ?? [40, 145, 75];
   const t = clamp((rate - 0.3) / (0.65 - 0.3), 0, 1);
   if (t <= 0.5) {
     const k = t / 0.5;

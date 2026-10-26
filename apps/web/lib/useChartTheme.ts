@@ -29,24 +29,30 @@ export type ChartThemeTokens = {
   success: string;
   warning: string;
   danger: string;
+  /** Optional so older chart consumers and their token fixtures stay valid. */
+  chart?: ChartPalette;
 };
+
+export type ChartPalette = { series: readonly string[]; lowSample: string; red: string; amber: string; green: string };
 
 // SSR / first paint fallback. Values match the dark-theme defaults in
 // app/globals.css so an SSR snapshot lines up with the hydrated chart.
-const DARK_FALLBACK: ChartThemeTokens = {
-  bg: "rgb(11 13 18)",
-  bgSurface: "rgb(17 20 27)",
-  bgElevated: "rgb(22 26 35)",
-  text: "rgb(230 232 238)",
-  textMuted: "rgb(154 163 178)",
-  textDim: "rgb(107 114 128)",
-  border: "rgb(31 37 51)",
-  borderStrong: "rgb(42 49 66)",
-  accent: "rgb(124 140 255)",
-  accentCyan: "rgb(62 192 199)",
-  success: "rgb(62 192 122)",
-  warning: "rgb(230 180 80)",
+export const DARK_FALLBACK: ChartThemeTokens = {
+  bg: "rgb(6 9 14)",
+  bgSurface: "rgb(12 16 23)",
+  bgElevated: "rgb(17 23 32)",
+  text: "rgb(231 237 240)",
+  textMuted: "rgb(159 173 185)",
+  textDim: "rgb(134 146 159)",
+  border: "rgb(92 105 124)",
+  borderStrong: "rgb(117 132 155)",
+  accent: "rgb(21 125 140)",
+  accentCyan: "rgb(60 224 214)",
+  success: "rgb(62 200 132)",
+  warning: "rgb(232 156 56)",
   danger: "rgb(255 107 107)",
+  chart: { series: [[66, 190, 215], [238, 75, 43], [68, 127, 243], [233, 150, 150], [184, 249, 228], [173, 137, 245], [190, 215, 66], [192, 217, 242]].map(rgb => `rgb(${rgb.join(" ")})`),
+    lowSample: "rgb(159 173 185)", red: "rgb(255 107 107)", amber: "rgb(245 184 74)", green: "rgb(62 200 132)" },
 };
 
 function readTokens(): ChartThemeTokens {
@@ -70,6 +76,9 @@ function readTokens(): ChartThemeTokens {
     success: read("--success", DARK_FALLBACK.success),
     warning: read("--warning", DARK_FALLBACK.warning),
     danger: read("--danger", DARK_FALLBACK.danger),
+    chart: { series: Array.from({ length: 8 }, (_, index) => read(`--series-${index + 1}`, DARK_FALLBACK.chart!.series[index])),
+      lowSample: read("--chart-low-sample", DARK_FALLBACK.chart!.lowSample), red: read("--chart-wr-low", DARK_FALLBACK.chart!.red),
+      amber: read("--chart-wr-mid", DARK_FALLBACK.chart!.amber), green: read("--chart-wr-high", DARK_FALLBACK.chart!.green) },
   };
 }
 
@@ -79,7 +88,7 @@ function readTokens(): ChartThemeTokens {
  * the dark palette until hydration.
  */
 export function useChartTheme(): ChartThemeTokens {
-  const [tokens, setTokens] = useState<ChartThemeTokens>(() => readTokens());
+  const [tokens, setTokens] = useState<ChartThemeTokens>(DARK_FALLBACK);
   useEffect(() => {
     if (typeof window === "undefined") return;
     setTokens(readTokens());

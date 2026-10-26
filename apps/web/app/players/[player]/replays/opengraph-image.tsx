@@ -1,15 +1,12 @@
 import { ImageResponse } from "next/og";
 import type { ReplayLibraryResponse } from "@/components/analyzer/replays/types";
+import { readPublicReplayIdentity } from "@/lib/publicReplayIdentity";
 
 export const alt = "Shared StarCraft II replay archive on SC2 Tools";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const revalidate = 0;
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE
-  || process.env.SC2TOOLS_API_BASE
-  || "http://localhost:8080";
+export const dynamic = "force-dynamic";
 
 export default async function ReplayOpenGraphImage({
   params,
@@ -62,18 +59,13 @@ export default async function ReplayOpenGraphImage({
         </div>
       </div>
     </div>,
-    size,
+    { ...size, headers: { "Cache-Control": "private, no-store, max-age=0" } },
   );
 }
 
 async function loadArchive(player: string): Promise<ReplayLibraryResponse | null> {
   try {
-    const response = await fetch(
-      `${API_BASE}/v1/public/replays/${encodeURIComponent(player)}?limit=1&fields=profile`,
-      { headers: { accept: "application/json" }, cache: "no-store" },
-    );
-    if (!response.ok) return null;
-    return await response.json() as ReplayLibraryResponse;
+    return (await readPublicReplayIdentity(player)).data;
   } catch {
     return null;
   }

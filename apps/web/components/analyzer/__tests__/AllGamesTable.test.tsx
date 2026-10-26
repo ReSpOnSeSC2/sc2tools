@@ -24,10 +24,12 @@ vi.mock("@clerk/nextjs", () => ({
     getToken: getTokenMock,
     isLoaded: true,
     isSignedIn: true,
+    userId: "synthetic-owner",
   }),
 }));
 
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@/lib/clientApi", async original => ({
+  ...await original<typeof import("@/lib/clientApi")>(),
   useApi: (...args: unknown[]) => useApiMock(...args),
   apiCall: (...args: unknown[]) => apiCallMock(...args),
 }));

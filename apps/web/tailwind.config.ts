@@ -72,6 +72,11 @@ const config: Config = {
         // Courtside structural outline — the bold 2px line on cards/buttons.
         line: channel("--line"),
       },
+      // Text and filled controls need different contrast on each surface.
+      textColor: {
+        accent: { DEFAULT: channel("--accent-ink"), hover: channel("--accent-ink-hover"), cyan: channel("--accent-cyan") },
+      },
+      backgroundColor: { danger: channel("--danger-fill") },
       // Named layers for everything pinned to the viewport, lowest first.
       // Use these instead of raw z-40/z-50/z-[60] so a new floating surface
       // lands in the right place. Scale and rules: docs/design-system.md

@@ -2,7 +2,7 @@
 
 const express = require("express");
 const rateLimitModule = require("express-rate-limit");
-const { GUIDE_CACHE_CONTROL } = require("../config/guides");
+const PUBLIC_COMMUNITY_CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=600";
 
 const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
@@ -40,12 +40,19 @@ const rateLimit =
  *
  * @param {{
  *   community: import('../services/community').CommunityService,
+ *   publicPlayers?: import('../services/publicPlayer').PublicPlayerService,
  *   auth: import('express').RequestHandler,
  *   isAdmin: (req: import('express').Request) => boolean,
  * }} deps
  */
 function buildCommunityRouter(deps) {
   const router = express.Router();
+  // Profile capabilities must be admitted on every read, independently of a
+  // best-effort purge. Content-only legacy routers retain their shared cache.
+  const buildCacheControl = deps.publicPlayers ? "no-store" : PUBLIC_COMMUNITY_CACHE_CONTROL;
+  // Errors, authenticated reads and all writes stay private. Only the explicit
+  // successful public DTO routes below may opt into the shared response cache.
+  router.use((_req, res, next) => { res.set("Cache-Control", "private, no-store"); next(); });
 
   // Per-user write limits. These sit AFTER deps.auth in each chain, so
   // the key is the authenticated userId (IP fallback covers the
@@ -108,7 +115,8 @@ function buildCommunityRouter(deps) {
         sort,
         search: search || undefined,
       });
-      res.json(result);
+      if (deps.publicPlayers) result.items = await deps.publicPlayers.withAuthorLinks(result.items);
+      res.set("Cache-Control", buildCacheControl).json(result);
     } catch (err) {
       next(err);
     }
@@ -126,7 +134,8 @@ function buildCommunityRouter(deps) {
         perMatchup,
         totalCap,
       });
-      res.json(result);
+      if (deps.publicPlayers) result.items = await deps.publicPlayers.withAuthorLinks(result.items);
+      res.set("Cache-Control", buildCacheControl).json(result);
     } catch (err) {
       next(err);
     }
@@ -179,8 +188,10 @@ function buildCommunityRouter(deps) {
 
   router.get("/community/sitemap", async (_req, res, next) => {
     try {
-      const sitemap = await deps.community.sitemap();
-      res.set("Cache-Control", GUIDE_CACHE_CONTROL).json(sitemap);
+      // Legacy profiles[] is intentionally retired. Canonical player discovery
+      // has its own fresh consent gate; this endpoint remains content-only.
+      const sitemap = await deps.community.sitemap({ includeProfiles: false });
+      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json({ builds: sitemap.builds, profiles: [] });
     } catch (err) {
       next(err);
     }
@@ -193,7 +204,8 @@ function buildCommunityRouter(deps) {
         res.status(404).json({ error: { code: "not_found" } });
         return;
       }
-      res.json(row);
+      const value = deps.publicPlayers ? (await deps.publicPlayers.withAuthorLinks([row]))[0] : row;
+      res.set("Cache-Control", buildCacheControl).json(value);
     } catch (err) {
       next(err);
     }
@@ -206,9 +218,10 @@ function buildCommunityRouter(deps) {
    */
   router.get("/community/authors/:userId", async (req, res, next) => {
     try {
-      const profile = await deps.community.getAuthor(
-        String(req.params.userId),
-      );
+      // A later explicit Profile OFF overrides the old named-build gate.
+      // Named publications remain public; this author-profile surface does not.
+      const userId = String(req.params.userId);
+      const profile = deps.publicPlayers ? await deps.publicPlayers.authorProfile(userId) : await deps.community.getAuthor(userId);
       if (!profile) {
         res.status(404).json({
           error: {
@@ -218,7 +231,7 @@ function buildCommunityRouter(deps) {
         });
         return;
       }
-      res.json(profile);
+      res.set("Cache-Control", "no-store").json(profile);
     } catch (err) {
       next(err);
     }
@@ -240,6 +253,9 @@ function buildCommunityRouter(deps) {
         });
         return;
       }
+      // A separate HTTP cache cannot execute current contributor/removal
+      // admission or receive Next's tag purge. Keep this privacy-sensitive
+      // endpoint uncached; the bounded service LRU still avoids materialization.
       res.json(result);
     } catch (err) {
       next(err);

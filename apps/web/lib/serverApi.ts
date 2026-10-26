@@ -98,13 +98,10 @@ const API_BASE =
 
 export async function getJson<T>(
   path: string,
-  opts: { revalidateSec?: number } = {},
+  opts: { revalidateSec?: number; tags?: string[] } = {},
 ): Promise<T | null> {
-  // Default: no cache. The community list is the only place a freshly
-  // published build needs to appear immediately, and a 60s ISR cache
-  // was making "I just published it but it's not there" the most
-  // common support thread. Pages that genuinely benefit from caching
-  // can opt back in by passing a positive revalidateSec.
+  // Default: no cache. Pure public-content callers may opt into bounded data
+  // caches; current consent/capability and private admission stay uncached.
   const revalidate =
     typeof opts.revalidateSec === "number" && opts.revalidateSec > 0
       ? opts.revalidateSec
@@ -113,7 +110,7 @@ export async function getJson<T>(
     const res = await fetch(`${API_BASE}${path}`, {
       // Public endpoints — no auth header needed.
       headers: { accept: "application/json" },
-      next: { revalidate },
+      next: { revalidate, ...(opts.tags?.length ? { tags: opts.tags } : {}) },
     });
     if (!res.ok) return null;
     return (await res.json()) as T;
@@ -134,7 +131,7 @@ export async function getJson<T>(
  */
 export async function getJsonWithStatus<T>(
   path: string,
-  opts: { revalidateSec?: number } = {},
+  opts: { revalidateSec?: number; signal?: AbortSignal; tags?: string[] } = {},
 ): Promise<{ data: T | null; status: number | null }> {
   const revalidate =
     typeof opts.revalidateSec === "number" && opts.revalidateSec > 0
@@ -143,7 +140,8 @@ export async function getJsonWithStatus<T>(
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       headers: { accept: "application/json" },
-      next: { revalidate },
+      next: { revalidate, ...(opts.tags?.length ? { tags: opts.tags } : {}) },
+      ...(opts.signal ? { signal: opts.signal } : {}),
     });
     if (!res.ok) return { data: null, status: res.status };
     return { data: (await res.json()) as T, status: res.status };

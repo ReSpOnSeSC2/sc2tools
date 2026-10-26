@@ -54,9 +54,11 @@ const BUILD_COLUMNS: readonly (CsvColumn<BuildRow> & { sortKey?: string; strengt
 ];
 
 /** Custom and detected builds share the same filtered replay statistics. */
-export function BuildsTab() {
+export function BuildsTab({ search: controlledSearch, onSearchChange }: { search?: string; onSearchChange?: (value: string) => void } = {}) {
   const { filters, setFilters, dbRev, seasons } = useFilters();
-  const [search, setSearch] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
+  const search = controlledSearch ?? localSearch;
+  const setSearch = (value: string) => { setLocalSearch(value); onSearchChange?.(value); };
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_BUILDS, 1);
   const [editing, setEditing] = useState<string | null>(null);
   const [bucket, setBucket] = useLocalStorageState<MechanicsBucket>("analyzer.trends.bucket", "week", isMechanicsBucket);

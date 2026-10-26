@@ -8,7 +8,8 @@ import { GlowHalo } from "@/components/ui/GlowHalo";
 import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/Stat";
-import { fmtAgo, pct, wrColor } from "@/lib/format";
+import { pct, wrColor } from "@/lib/format";
+import { publicDate } from "@/lib/seo/publicDate";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { verifiedRegionsLabel } from "@/lib/reviews";
 import { GetYourOwnCTA } from "./GetYourOwnCTA";
@@ -21,6 +22,8 @@ import type {
 
 export interface PublicProfileProps {
   profile: PublicPlayerProfile;
+  showHero?: boolean;
+  showReviewer?: boolean;
 }
 
 /**
@@ -28,14 +31,14 @@ export interface PublicProfileProps {
  * for /p/[handle].
  *
  * Renders only non-sensitive aggregates (headline record, matchup
- * splits, the player's own signature builds) plus a viral "get your own"
+ * splits, the player's replay-detected signature builds) plus a viral "get your own"
  * CTA. No opponent identities, no per-game rows ever reach this
  * component — the API strips them before the payload leaves the server.
  *
  * Responsive: single column at 360px, two-column content grid from lg.
  * Dark + light via repo tokens. Server-component-safe.
  */
-export function PublicProfile({ profile }: PublicProfileProps) {
+export function PublicProfile({ profile, showHero = true, showReviewer = true }: PublicProfileProps) {
   const race = profile.mainRace ? coerceRace(profile.mainRace) : null;
   const tint = race ? raceTint(race) : null;
   const { games, wins, losses, winRate } = profile.totals;
@@ -62,7 +65,7 @@ export function PublicProfile({ profile }: PublicProfileProps) {
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(personJsonLd) }}
       />
 
-      <Card variant="feature" padded={false} className="relative overflow-hidden">
+      {showHero ? <Card variant="feature" padded={false} className="relative overflow-hidden">
         <GlowHalo color="cyan" position="top-right" />
         <div className="relative px-5 py-6 sm:px-6 sm:py-8">
           <PageHeader
@@ -88,7 +91,7 @@ export function PublicProfile({ profile }: PublicProfileProps) {
                 ) : null}
                 {profile.joinedAt ? (
                   <span className="text-micro uppercase tracking-wider text-text-dim">
-                    Member {fmtAgo(profile.joinedAt)}
+                    Member since {publicDate(profile.joinedAt)}
                   </span>
                 ) : null}
               </span>
@@ -101,7 +104,7 @@ export function PublicProfile({ profile }: PublicProfileProps) {
             }
           />
         </div>
-      </Card>
+      </Card> : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Games" value={games.toLocaleString()} />
@@ -143,7 +146,7 @@ export function PublicProfile({ profile }: PublicProfileProps) {
           }
           hint={
             profile.publishedBuildCount > 0
-              ? `${profile.publishedBuildCount} published build${profile.publishedBuildCount === 1 ? "" : "s"}`
+              ? `${profile.publishedBuildCount} recent published build${profile.publishedBuildCount === 1 ? "" : "s"}`
               : undefined
           }
         />
@@ -185,14 +188,14 @@ export function PublicProfile({ profile }: PublicProfileProps) {
         </Card>
       ) : null}
 
-      {profile.reviewer ? <ReviewerSection reviewer={profile.reviewer} /> : null}
+      {showReviewer && profile.reviewer ? <ReviewerSection reviewer={profile.reviewer} /> : null}
 
       <GetYourOwnCTA />
     </article>
   );
 }
 
-function ReviewerSection({ reviewer }: { reviewer: PublicReviewerSection }) {
+export function ReviewerSection({ reviewer }: { reviewer: PublicReviewerSection }) {
   return (
     <Card>
       <div className="space-y-3">
@@ -221,6 +224,7 @@ function ReviewerSection({ reviewer }: { reviewer: PublicReviewerSection }) {
             {reviewer.matchupsReviewed.map((m) => `${m.matchup} (${m.count})`).join(" · ")}
           </p>
         ) : null}
+      {reviewer.matchupsSampled ? <p className="text-caption text-text-muted">Matchup totals use up to 2,000 recent review threads.</p> : null}
         <Link href="/reviews" className="inline-flex text-caption font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">
           Browse replay reviews
         </Link>
@@ -246,7 +250,7 @@ function MatchupSplits({ rows }: { rows: PublicProfileMatchupSplit[] }) {
             description="Stats appear once games have been synced."
           />
         ) : (
-          <ul role="list" className="space-y-3">
+          <ul className="space-y-3">
             {rows.map((m) => (
               <li key={m.matchup} className="space-y-1">
                 <div className="flex items-baseline justify-between gap-3 text-body">
@@ -256,8 +260,7 @@ function MatchupSplits({ rows }: { rows: PublicProfileMatchupSplit[] }) {
                     <span className="text-text-dim">–</span>
                     <span className="text-danger">{m.losses}</span>
                     <span
-                      className="ml-2 font-mono"
-                      style={{ color: wrColor(m.winRate, m.wins + m.losses) }}
+                      className="ml-2 font-mono text-text"
                     >
                       {pct(m.winRate)}
                     </span>
@@ -286,6 +289,7 @@ function SignatureBuilds({ rows }: { rows: PublicProfileSignatureBuild[] }) {
         <h2 className="text-caption font-semibold uppercase tracking-wider text-text">
           Signature builds
         </h2>
+        <p className="text-caption text-text-muted">Builds detected from recorded replays.</p>
         {rows.length === 0 ? (
           <EmptyStatePanel
             size="sm"
@@ -293,7 +297,7 @@ function SignatureBuilds({ rows }: { rows: PublicProfileSignatureBuild[] }) {
             description="A build shows up here once it's been played a few times."
           />
         ) : (
-          <ul role="list" className="space-y-3">
+          <ul className="space-y-3">
             {rows.map((b) => (
               <li key={b.name} className="space-y-1">
                 <div className="flex items-baseline justify-between gap-3 text-body">
@@ -302,8 +306,7 @@ function SignatureBuilds({ rows }: { rows: PublicProfileSignatureBuild[] }) {
                   </span>
                   <span className="shrink-0 tabular-nums text-text-muted">
                     <span
-                      className="font-mono"
-                      style={{ color: wrColor(b.winRate, b.wins + b.losses) }}
+                      className="font-mono text-text"
                     >
                       {pct(b.winRate)}
                     </span>

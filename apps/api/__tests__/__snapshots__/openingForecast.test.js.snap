@@ -1,0 +1,45 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`golden posterior combines three prior games with exponential recency and the current map 1`] = `
+{
+  "confidence": "Low",
+  "effectiveN": 2.417004,
+  "limit": 50,
+  "map": "Alcyone",
+  "matchup": "PvZ",
+  "otherProbability": 0,
+  "partial": false,
+  "prior": {
+    "bandLabel": "4000–4499",
+    "matchup": "ZvP",
+    "n": 100,
+    "pseudoGames": 3,
+  },
+  "sampleSize": 2,
+  "sourceWindowSize": 2,
+  "top": [
+    {
+      "name": "Hatch First",
+      "of": 2,
+      "probability": 0.50157,
+      "samples": 1,
+      "why": [
+        "1 of last 2 vs you",
+        "0 of 1 on Alcyone",
+        "Ladder vs 4000–4499: 60%",
+      ],
+    },
+    {
+      "name": "12 Pool",
+      "of": 2,
+      "probability": 0.49843,
+      "samples": 1,
+      "why": [
+        "1 of last 2 vs you",
+        "1 of 1 on Alcyone",
+        "Ladder vs 4000–4499: 40%",
+      ],
+    },
+  ],
+}
+`;

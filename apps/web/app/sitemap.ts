@@ -11,6 +11,7 @@ import {
   finalizeSitemap,
   guideSitemapRows,
   sitemapDate,
+  publicPlayerSitemapRows,
   type SitemapRows,
 } from "@/lib/sitemapEntries";
 
@@ -40,12 +41,13 @@ const ROUTES: Route[] = [
   { path: "/", priority: 1.0, changeFrequency: "weekly", lastModified: "2026-09-29" },
   { path: "/download", priority: 0.9, changeFrequency: "weekly", lastModified: "2026-09-29" },
   { path: "/stream-studio", priority: 0.9, changeFrequency: "monthly", lastModified: "2026-10-16" },
-  { path: "/stream-studio/learn", priority: 0.8, changeFrequency: "monthly", lastModified: "2026-10-16" },
+  { path: "/stream-studio/learn", priority: 0.8, changeFrequency: "monthly", lastModified: "2026-10-25" },
   { path: "/community", priority: 0.8, changeFrequency: "daily" },
-  { path: "/definitions", priority: 0.5, changeFrequency: "monthly", lastModified: "2026-09-04" },
+  { path: "/definitions", priority: 0.5, changeFrequency: "monthly", lastModified: "2026-10-25" },
   { path: "/donate", priority: 0.4, changeFrequency: "monthly", lastModified: "2026-08-11" },
   { path: "/legal/privacy", priority: 0.2, changeFrequency: "yearly", lastModified: "2026-09-28" },
   { path: "/legal/terms", priority: 0.2, changeFrequency: "yearly", lastModified: "2026-08-11" },
+  { path: "/legal/accessibility", priority: 0.2, changeFrequency: "yearly", lastModified: "2026-10-25" },
 ];
 
 // /try (in-browser replay analysis) is public only once Instant Analysis
@@ -59,10 +61,10 @@ function staticRoutes(): Route[] {
 const REVIEW_ID_RE = /^[A-Za-z0-9_-]{16}$/;
 const LIST_REVALIDATE_SEC = 3600;
 
-// Regenerated at most hourly (the reviews list moves fastest); the guide
-// list is also purged on demand by /api/revalidate-guides after the
-// nightly recompute. The API lists are already capped.
-export const revalidate = 3600;
+// Player consent is checked for every sitemap request. Other bounded list
+// contributions retain their existing data caches and guide purge behavior.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function staticRows(): SitemapRows {
   return staticRoutes().map((route) => {
@@ -128,12 +130,19 @@ async function guideRows(): Promise<SitemapRows> {
   return guideSitemapRows(SITE_URL, result.kind === "ok" ? result.data : null);
 }
 
-/** Published community builds and their authors' public /p/ profiles. */
+/** Published community builds; canonical player URLs have their own consent gate. */
 async function communityRows(): Promise<SitemapRows> {
   const payload = await getJson<CommunitySitemapPayload>("/v1/community/sitemap", {
     revalidateSec: LIST_REVALIDATE_SEC,
   });
-  return communitySitemapRows(SITE_URL, payload);
+  // Legacy UUID profile URLs are no longer index targets. The independent
+  // consent-aware player list below supplies canonical public addresses.
+  return communitySitemapRows(SITE_URL, payload ? { ...payload, profiles: [] } : null);
+}
+
+async function playerRows(): Promise<SitemapRows> {
+  const payload = await getJson<{ items: Array<{ handle: string; lastModified?: string | null }> }>("/v1/public/players-sitemap", { revalidateSec: 0 });
+  return publicPlayerSitemapRows(SITE_URL, payload);
 }
 
 /**
@@ -143,6 +152,6 @@ async function communityRows(): Promise<SitemapRows> {
  * never an error.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [reviews, guides, community] = await Promise.all([reviewRows(), guideRows(), communityRows()]);
-  return finalizeSitemap([...staticRows(), ...helpSitemapRows(SITE_URL), ...reviews, ...guides, ...community]);
+  const [reviews, guides, community, players] = await Promise.all([reviewRows(), guideRows(), communityRows(), playerRows()]);
+  return finalizeSitemap([...staticRows(), ...helpSitemapRows(SITE_URL), ...reviews, ...guides, ...community, ...players]);
 }

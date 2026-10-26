@@ -5,6 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Calendar } from "lucide-react";
 import { getJsonWithStatus } from "@/lib/serverApi";
+import { communityCacheOptions } from "@/lib/communityCache";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -12,7 +13,6 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { fmtAgo } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { AuthorChip } from "@/components/community/AuthorChip";
-import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
 import { CommunityBuildSignatureTimeline } from "@/components/community/CommunityBuildSignatureTimeline";
 import { CommunityGamePlan } from "@/components/community/CommunityGamePlan";
 import { CommunityVotePanel } from "@/components/community/CommunityVotePanel";
@@ -32,6 +32,12 @@ import { SavedBuildExportMenu } from "@/components/builds/SavedBuildExportMenu";
 import { PracticeButton } from "@/components/practice/PracticeButton";
 import { serializeJsonLd } from "@/lib/reviewJsonLd";
 import { communityDescription } from "@/lib/communityDescription";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
+import { trimDescription } from "@/lib/seo/trimDescription";
+import { absoluteUrl } from "@/lib/seo/absoluteUrl";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 /**
  * The published build. A 404 from the API is the only "doesn't exist";
@@ -43,6 +49,7 @@ import { communityDescription } from "@/lib/communityDescription";
 function loadBuild(slug: string) {
   return getJsonWithStatus<CommunityBuildDetail>(
     `/v1/community/builds/${encodeURIComponent(slug)}`,
+    communityCacheOptions(slug),
   );
 }
 
@@ -57,23 +64,17 @@ export async function generateMetadata({
   const { data, status } = await loadBuild(slug);
   if (status === 404) notFound();
   if (!data) {
-    return {
-      title: UNAVAILABLE_TITLE,
-      robots: { index: false, follow: false },
-    };
+    throw new Error(UNAVAILABLE_TITLE);
   }
   const description =
-    data.description?.slice(0, 200) ||
+    trimDescription(data.description || "", 200) ||
     `Player-published StarCraft II build for ${data.matchup || "any matchup"}.`;
-  return {
+  return pageMetadata({
     title: `${data.title} · Community build`,
     description,
-    openGraph: {
-      title: `${data.title} — SC2 Tools community build`,
-      description,
-      images: [{ url: "/og.jpg", width: 1200, height: 630 }],
-    },
-  };
+    canonical: `/community/builds/${encodeURIComponent(data.slug)}`,
+    shareTitle: `${data.title} — SC2 Tools community build`, routeOgImage: true,
+  });
 }
 
 /**
@@ -97,13 +98,7 @@ export default async function CommunityBuildPage({
   const { data, status } = await loadBuild(slug);
   if (status === 404) notFound();
   if (!data) {
-    return (
-      <CommunityUnavailable
-        title={UNAVAILABLE_TITLE}
-        retryHref={`/community/builds/${encodeURIComponent(slug)}`}
-        standalone
-      />
-    );
+    throw new Error(UNAVAILABLE_TITLE);
   }
 
   const build = data.build || {};
@@ -131,13 +126,13 @@ export default async function CommunityBuildPage({
         "@type": "ListItem",
         position: 1,
         name: "Community",
-        item: "/community",
+        item: absoluteUrl("/community"),
       },
       {
         "@type": "ListItem",
         position: 2,
         name: data.title,
-        item: `/community/builds/${data.slug}`,
+        item: absoluteUrl(`/community/builds/${encodeURIComponent(data.slug)}`),
       },
     ],
   };

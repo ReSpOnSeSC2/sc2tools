@@ -45,8 +45,8 @@ const PRODUCT_LINKS: readonly FooterLink[] = [
   { href: "/download", label: "Download agent" },
 ];
 
-/** The public status page (an external site). */
-export const STATUS_PAGE_URL = "https://status.sc2tools.com";
+/** The public, authentication-independent reachability page. */
+export const STATUS_PAGE_URL = "/status";
 
 /** The site owner's channel, where the build-order videos are published. */
 export const YOUTUBE_CHANNEL_URL = "https://www.youtube.com/@ReSpOnSeSC2";
@@ -66,6 +66,7 @@ const RESOURCES_LINKS: readonly FooterLink[] = [
 const LEGAL_LINKS: readonly FooterLink[] = [
   { href: "/legal/privacy", label: "Privacy" },
   { href: "/legal/terms", label: "Terms" },
+  { href: "/legal/accessibility", label: "Accessibility" },
 ];
 
 /** Resources column; "Build guides" only while the guides flag is on. */
@@ -194,15 +195,12 @@ function FooterLinkGate({ auth, children }: { auth?: FooterLink["auth"]; childre
 
 function StatusBadge() {
   return (
-    <a
+    <Link
       href={STATUS_PAGE_URL}
-      target="_blank"
-      rel="noopener noreferrer"
+      prefetch={false}
       className="inline-flex min-h-[28px] items-center gap-1.5 rounded-full border border-border bg-bg-elevated px-2.5 py-1 text-micro font-medium text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       System status
-      <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
-      <span className="sr-only"> (opens in a new tab)</span>
-    </a>
+    </Link>
   );
 }

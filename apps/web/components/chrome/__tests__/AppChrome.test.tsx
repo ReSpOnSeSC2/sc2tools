@@ -34,7 +34,7 @@ vi.mock("@clerk/nextjs", () => ({
   // The avatar menu: our items render as plain links and buttons so the
   // tests can see their order against Clerk's two defaults.
   UserButton: Object.assign(
-    ({ children }: { children?: ReactNode }) => <div data-testid="user-button">{children}</div>,
+    ({ children }: { children?: ReactNode }) => <div data-testid="user-button"><button aria-label="Account fixture" />{children}</div>,
     {
       MenuItems: ({ children }: { children: ReactNode }) => <ul aria-label="Account menu">{children}</ul>,
       Link: ({ label, href }: { label: string; href: string }) => (
@@ -432,6 +432,7 @@ describe("AppChrome help & support", () => {
       "Devices",
       "Help",
       "Report a problem",
+      "Appearance",
       "manageAccount",
       "signOut",
     ]);
@@ -442,6 +443,14 @@ describe("AppChrome help & support", () => {
     expect(reportForm()?.getAttribute("data-type")).toBe("problem");
     fireEvent.click(screen.getByRole("button", { name: "Close form" }));
     expect(reportForm()).toBeNull();
+  });
+
+  it("opens the shared appearance group from the avatar and returns to the account control", async () => {
+    render(<AppChrome>content</AppChrome>);
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }));
+    const dialog = screen.getByRole("dialog", { name: "Appearance" }); expect(within(dialog).getAllByRole("radio")).toHaveLength(3);
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Dark" })); fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+    expect(screen.queryByRole("dialog")).toBeNull(); await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Account fixture" })));
   });
 
   it("renders the avatar menu items only when signed in", () => {
@@ -508,7 +517,9 @@ describe("pinned rail and accessible More", () => {
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
     const radios = within(dialog).getAllByRole("radio"); radios.at(-1)!.focus(); fireEvent.keyDown(document, { key: "Tab" });
     expect(dialog.contains(document.activeElement)).toBe(true);
-    expect(within(dialog).getByRole("link", { name: "System status" }).getAttribute("rel")).toBe("noopener noreferrer");
+    const statusLink = within(dialog).getByRole("link", { name: "System status" });
+    expect(statusLink.getAttribute("href")).toBe("/status");
+    expect(statusLink.getAttribute("target")).toBeNull();
     fireEvent.keyDown(document, { key: "Escape" }); expect(screen.queryByRole("dialog")).toBeNull(); expect(document.activeElement).toBe(more);
     expect(document.body.style.overflow).toBe("hidden"); unlock(); expect(document.body.style.overflow).toBe("auto"); document.body.style.overflow = "";
   });

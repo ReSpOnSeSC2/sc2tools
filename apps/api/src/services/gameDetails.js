@@ -56,6 +56,7 @@ const HEAVY_FIELDS = Object.freeze([
 class GameDetailsService {
   /**
    * @param {{
+   *   kind?: string,
    *   write: (userId: string, gameId: string, date: Date, blob: object, opts?: {signal?: AbortSignal, assertLease?: () => Promise<void>}) => Promise<void>,
    *   read: (userId: string, gameId: string) => Promise<object | null>,
    *   readMany: (userId: string, gameIds: string[], opts?: object) => Promise<Map<string, object>>,

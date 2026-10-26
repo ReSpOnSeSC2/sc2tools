@@ -25,6 +25,7 @@ type Props = {
   rateLabel?: string;
   precision?: 0 | 1;
   ariaLabel?: string;
+  separateCount?: boolean;
 };
 
 const COLUMNS = "grid grid-cols-[minmax(0,5.5rem)_minmax(0,1fr)_3.5rem] items-center gap-x-2";
@@ -39,13 +40,15 @@ export function WinRateComparison({
   rateLabel = "Win rate",
   precision = 0,
   ariaLabel = "Win rate comparison",
+  separateCount = false,
 }: Props) {
+  const columns = separateCount ? "grid grid-cols-[minmax(0,1fr)_3.5rem_3rem] items-center gap-x-2 gap-y-1 sm:grid-cols-[minmax(0,4.5rem)_minmax(0,1fr)_3.5rem_3rem]" : COLUMNS;
   const baselinePct = baseline != null && Number.isFinite(baseline)
     ? Math.max(0, Math.min(100, baseline * 100))
     : null;
   const hasSmallSample = rows.some((row) => {
-    const n = row.sampleSize ?? row.games;
-    return n > 0 && n < smallSampleThreshold;
+    const n = row.sampleSize ?? row.wins + row.losses;
+    return row.games > 0 && n < smallSampleThreshold;
   });
 
   return (
@@ -59,25 +62,26 @@ export function WinRateComparison({
           </span>
         )}
       </div>
-      <div aria-hidden="true" className={`${COLUMNS} px-2 text-micro tabular-nums text-text-dim`}>
+      <div aria-hidden="true" className={`${columns} px-2 text-micro tabular-nums text-text-dim`}>
+        <span className={separateCount ? "hidden sm:block" : undefined} />
+        <div data-testid="comparison-scale" className="flex justify-between"><span>0%</span><span className={separateCount ? undefined : "hidden min-[360px]:inline"}>50%</span><span>100%</span></div>
         <span />
-        <div className="flex justify-between"><span>0%</span><span className="hidden min-[360px]:inline">50%</span><span>100%</span></div>
-        <span />
+        {separateCount ? <span className="text-right">Games</span> : null}
       </div>
       <ul aria-label={ariaLabel} className="mt-1 divide-y divide-border">
         {rows.map((row) => {
-          const sample = row.sampleSize ?? row.games;
-          const rate = row.rate != null && Number.isFinite(row.rate) && sample > 0
+          const sample = row.sampleSize ?? row.wins + row.losses;
+          const rate = row.rate != null && Number.isFinite(row.rate) && (row.sampleSize ?? row.games) > 0
             ? Math.max(0, Math.min(100, row.rate * 100))
             : null;
-          const small = sample > 0 && sample < smallSampleThreshold;
+          const small = row.games > 0 && sample < smallSampleThreshold;
           const other = row.other ?? Math.max(0, row.games - row.wins - row.losses);
           const label = row.games === 1 ? recordLabel.replace(/s$/, "") : recordLabel;
           const record = `${row.games.toLocaleString()} ${label} · ${row.wins.toLocaleString()}W · ${row.losses.toLocaleString()}L${other > 0 ? ` · ${other.toLocaleString()} other` : ""}`;
           const content = (
             <>
-              <div className={COLUMNS}>
-                <span className="break-words text-caption font-semibold leading-snug text-text">{row.label}</span>
+              <div className={columns}>
+                <span className={`${separateCount ? "col-span-3 sm:col-span-1 " : ""}break-words text-caption font-semibold leading-snug text-text`}>{row.label}</span>
                 <div aria-hidden="true" className="relative mx-1 h-2 rounded-full bg-text-dim/10">
                   <span className="absolute inset-y-0 left-1/2 border-l border-text-dim/20" />
                   {rate != null && <>
@@ -87,6 +91,7 @@ export function WinRateComparison({
                   {baselinePct != null && <span className="absolute -bottom-1 -top-1 border-l-2 border-dashed border-text-dim/70" style={{ left: `${baselinePct}%` }} />}
                 </div>
                 <span className="text-right text-sm font-semibold tabular-nums text-text">{rate == null ? "—" : `${rate.toFixed(precision)}%`}</span>
+                {separateCount ? <span className="text-right text-caption tabular-nums text-text-muted">{row.games.toLocaleString()}</span> : null}
               </div>
               <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-micro text-text-muted">
                 <span className="tabular-nums">{row.games === 0 ? "No games" : record}</span>
@@ -97,7 +102,7 @@ export function WinRateComparison({
             </>
           );
           return (
-            <li key={row.key}>
+            <li key={row.key} data-small-sample={small}>
               {row.onSelect ? (
                 <button type="button" aria-label={row.ariaLabel} onClick={row.onSelect} className="block min-h-11 w-full rounded-lg px-2 py-3 text-left transition-colors hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
                   {content}

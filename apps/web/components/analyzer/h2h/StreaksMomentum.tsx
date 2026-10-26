@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { ChartFrame, type ChartTableColumn } from "@/components/analyzer/charts/ChartFrame";
+import { useChartKit, isLowSample } from "@/lib/charts/theme";
 import { fmtDate } from "@/lib/format";
 import { decidedOnly, gameOutcome, type H2HGame } from "@/lib/h2hSeries";
 import {
@@ -21,6 +24,17 @@ type Props = {
 
 const MOMENTUM_WINDOW = 10;
 
+function streakColumns(onSelectGame: Props["onSelectGame"]): readonly ChartTableColumn<H2HGame>[] {
+  return [
+    { key: "date", label: "Date", render: row => fmtDate(row.date) },
+    { key: "result", label: "Result", render: row => gameOutcome(row) === "W" ? "Win" : gameOutcome(row) === "L" ? "Loss" : "Unknown" },
+    { key: "map", label: "Map", render: row => row.map || "—" },
+    { key: "build", label: "My build", render: row => row.my_build || "—" },
+    { key: "strategy", label: "Opponent strategy", render: row => row.opp_strategy || "—" },
+    { key: "game", label: "Game", render: row => row.id ? <Button variant="ghost" size="sm" className="min-h-11" aria-label={`Select game from ${fmtDate(row.date)}`} onClick={() => onSelectGame(row.id!)}>View game</Button> : "Unavailable" },
+  ];
+}
+
 /**
  * View 2 — Performance Streaks & Momentum.
  *
@@ -35,6 +49,7 @@ export function StreaksMomentum({
   opponentName,
   onSelectGame,
 }: Props) {
+  const kit = useChartKit();
   const decided = useMemo(() => decidedOnly(chronoGames), [chronoGames]);
   const summary = useMemo(() => streaksSummary(chronoGames), [chronoGames]);
   const score = useMemo(() => momentumScore(chronoGames, MOMENTUM_WINDOW), [chronoGames]);
@@ -45,17 +60,20 @@ export function StreaksMomentum({
   const [pulseIndexes, setPulseIndexes] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
+    if (kit.reducedMotion) { if (pulseIndexes.size) setPulseIndexes(new Set()); return; }
     if (pulseIndexes.size === 0) return;
     const t = window.setTimeout(() => setPulseIndexes(new Set()), 2000);
     return () => window.clearTimeout(t);
-  }, [pulseIndexes]);
+  }, [pulseIndexes, kit.reducedMotion]);
 
   if (decided.length === 0) {
     return (
+      <ChartFrame title="Streaks and momentum" summary={`No decided games against ${opponentName} in ${presetLong}.`} rows={decided} columns={streakColumns(onSelectGame)} empty={<EmptyState title="No decided games yet" sub={`No wins or losses against ${opponentName} in ${presetLong}.`} />}>
       <EmptyState
         title="No decided games yet"
         sub={`No wins or losses against ${opponentName} in ${presetLong}.`}
       />
+      </ChartFrame>
     );
   }
 
@@ -71,14 +89,14 @@ export function StreaksMomentum({
   const highlightRun = (run: StreakRun) => {
     const indexes = new Set<number>();
     for (let i = run.start; i <= run.end; i++) indexes.add(i);
-    setPulseIndexes(indexes);
+    if (!kit.reducedMotion) setPulseIndexes(indexes);
     const firstId = run.games[0]?.id;
     if (firstId) onSelectGame(firstId);
   };
 
   return (
+    <ChartFrame title="Streaks and momentum" summary={`${figcaption} ${decided.length} decided games; momentum uses up to ${MOMENTUM_WINDOW} recent decided games.`} rows={decided} columns={streakColumns(onSelectGame)}>
     <figure className="m-0 space-y-4" aria-label="Streaks and momentum">
-      <figcaption className="sr-only">{figcaption}</figcaption>
       <HeadlineStrip
         current={summary.current}
         longestWin={summary.longestWin}
@@ -86,18 +104,23 @@ export function StreaksMomentum({
         score={score}
         delta={delta}
         presetShort={presetShort}
+        kit={kit}
+        sampleSize={Math.min(MOMENTUM_WINDOW, decided.length)}
       />
+      <p className="text-caption text-text-muted">{decided.length} decided games in this view{isLowSample(decided.length) ? " · small sample" : ""}. W and L mark recorded outcomes; momentum summarizes up to 10 recent decided games.</p>
       <StreakRibbon
         decided={decided}
         currentIndexes={summary.current.indexes}
         pulseIndexes={pulseIndexes}
         onSelectGame={onSelectGame}
+        kit={kit}
       />
       <NotableRunsList
         runs={summary.notableRuns}
         onActivate={highlightRun}
       />
     </figure>
+    </ChartFrame>
   );
 }
 
@@ -108,6 +131,8 @@ function HeadlineStrip({
   score,
   delta,
   presetShort,
+  kit,
+  sampleSize,
 }: {
   current: ReturnType<typeof streaksSummary>["current"];
   longestWin: StreakRun | null;
@@ -115,6 +140,8 @@ function HeadlineStrip({
   score: number;
   delta: number | null;
   presetShort: string;
+  kit: ReturnType<typeof useChartKit>;
+  sampleSize: number;
 }) {
   return (
     <div className="flex flex-wrap gap-3">
@@ -151,7 +178,7 @@ function HeadlineStrip({
         valueClass="text-danger"
         glyph={longestLoss ? "▼" : null}
       />
-      <MomentumChip score={score} delta={delta} presetShort={presetShort} />
+      <MomentumChip score={score} delta={delta} presetShort={presetShort} kit={kit} sampleSize={sampleSize} />
     </div>
   );
 }
@@ -187,11 +214,16 @@ function MomentumChip({
   score,
   delta,
   presetShort,
+  kit,
+  sampleSize,
 }: {
   score: number;
   delta: number | null;
   presetShort: string;
+  kit: ReturnType<typeof useChartKit>;
+  sampleSize: number;
 }) {
+  const gradientId = useId();
   // Map score [-100, 100] to [0, 100] for the SVG x position.
   const x = ((score + 100) / 200) * 100;
   const deltaArrow =
@@ -233,19 +265,19 @@ function MomentumChip({
         aria-label={`Momentum gauge ${score} of 100`}
       >
         <defs>
-          <linearGradient id="h2hMomentumGradient" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#ff6b6b" />
-            <stop offset="50%" stopColor="#6b7280" />
-            <stop offset="100%" stopColor="#3ec07a" />
+          <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor={kit.tokens.danger} />
+            <stop offset="50%" stopColor={kit.axis} />
+            <stop offset="100%" stopColor={kit.tokens.success} />
           </linearGradient>
         </defs>
-        <rect x="0" y="3" width="100" height="6" rx="3" fill="url(#h2hMomentumGradient)" />
+        <rect x="0" y="3" width="100" height="6" rx="3" fill={`url(#${gradientId})`} fillOpacity={isLowSample(sampleSize) ? 0.45 : 1} />
         <line
           x1="50"
           x2="50"
           y1="2"
           y2="10"
-          stroke="rgba(0,0,0,0.3)"
+          stroke={kit.tokens.text}
           strokeWidth="0.5"
         />
         <rect
@@ -254,13 +286,13 @@ function MomentumChip({
           width="2"
           height="11"
           rx="1"
-          fill="#e6e8ee"
-          stroke="#0b0d12"
+          fill={kit.tokens.text}
+          stroke={kit.tokens.bgSurface}
           strokeWidth="0.4"
         />
       </svg>
       <span className="mt-0.5 text-micro text-text-dim">
-        last {MOMENTUM_WINDOW} games · {presetShort}
+        last {MOMENTUM_WINDOW} games · n={sampleSize} decided · {presetShort}{isLowSample(sampleSize) ? " · small sample" : ""}
       </span>
     </div>
   );
@@ -271,11 +303,13 @@ function StreakRibbon({
   currentIndexes,
   pulseIndexes,
   onSelectGame,
+  kit,
 }: {
   decided: H2HGame[];
   currentIndexes: number[];
   pulseIndexes: Set<number>;
   onSelectGame: (gameId: string) => void;
+  kit: ReturnType<typeof useChartKit>;
 }) {
   const currentSet = useMemo(() => new Set(currentIndexes), [currentIndexes]);
   return (
@@ -286,7 +320,7 @@ function StreakRibbon({
           oldest → newest · {decided.length} game{decided.length === 1 ? "" : "s"}
         </span>
       </div>
-      <div className="grid grid-cols-[repeat(8,minmax(0,1fr))] gap-[2px] sm:grid-cols-[repeat(16,minmax(0,1fr))] xl:grid-cols-[repeat(24,minmax(0,1fr))]">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-0.5">
         {decided.map((g, i) => {
           const o = gameOutcome(g);
           const isWin = o === "W";
@@ -298,6 +332,7 @@ function StreakRibbon({
               isCurrent={currentSet.has(i)}
               isPulsing={pulseIndexes.has(i)}
               onSelect={onSelectGame}
+              kit={kit}
             />
           );
         })}
@@ -312,12 +347,14 @@ function RibbonCell({
   isCurrent,
   isPulsing,
   onSelect,
+  kit,
 }: {
   game: H2HGame;
   isWin: boolean;
   isCurrent: boolean;
   isPulsing: boolean;
   onSelect: (id: string) => void;
+  kit: ReturnType<typeof useChartKit>;
 }) {
   const id = game.id || "";
   const tooltip = [
@@ -329,10 +366,10 @@ function RibbonCell({
   ]
     .filter(Boolean)
     .join(" · ");
-  const ringColour = isWin ? "rgba(62,192,122,0.95)" : "rgba(255,107,107,0.95)";
+  const ringColour = kit.tokens.text;
   const baseClasses = isWin
-    ? "bg-success/80 hover:bg-success"
-    : "bg-danger/80 hover:bg-danger";
+    ? "bg-success hover:opacity-90"
+    : "bg-danger hover:opacity-90";
   return (
     <button
       type="button"
@@ -343,7 +380,7 @@ function RibbonCell({
       className={[
         "aspect-square rounded-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-bg disabled:cursor-default",
         baseClasses,
-        isPulsing ? "motion-safe:animate-pulse" : "",
+        isPulsing && !kit.reducedMotion ? "motion-safe:animate-pulse" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -353,8 +390,8 @@ function RibbonCell({
           : undefined
       }
     >
-      <span aria-hidden className="block text-micro font-bold leading-none text-bg/0">
-        {isWin ? "▲" : "▼"}
+      <span aria-hidden className="block text-caption font-bold leading-none text-bg">
+        {isWin ? "W" : "L"}
       </span>
     </button>
   );

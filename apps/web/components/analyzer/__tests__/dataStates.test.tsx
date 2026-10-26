@@ -124,7 +124,8 @@ describe("failed requests show Retry, not an empty state", () => {
 describe("opponent dossier", () => {
   function mockProfile(response: object) {
     harness.useApi.mockImplementation((path: string | null) =>
-      path && /^\/v1\/opponents\/[^/]+(\?|$)/.test(path) ? response : { data: undefined, isLoading: false },
+      path === "/v1/me/preferences/opponentScouting" ? { data: { groupByPlayer: true }, isLoading: false }
+        : path && /^\/v1\/opponents\/[^/]+(\?|$)/.test(path) ? response : { data: undefined, isLoading: false },
     );
   }
 

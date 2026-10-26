@@ -1,6 +1,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "synthetic-owner" }) }));
+
 vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string | null) => ({
     data: path?.endsWith("/macro-breakdown")

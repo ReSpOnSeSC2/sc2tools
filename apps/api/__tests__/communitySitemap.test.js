@@ -3,12 +3,11 @@
 
 /**
  * GET /v1/community/sitemap — published community build slugs and the
- * opt-in public profile handles (owners of a named, published build) for
- * the web sitemap. Public, cached like the guides, slugs/handles/dates only.
+ * content-only web sitemap. Legacy profiles[] stays empty; canonical profile
+ * discovery uses its separately gated source. Public build caching remains.
  */
 
 const request = require("supertest");
-const { GUIDE_CACHE_CONTROL } = require("../src/config/guides");
 const { COMMUNITY_SITEMAP_MAX } = require("../src/services/communitySitemap");
 const { createGuidesHarness } = require("./helpers/guidesHarness");
 
@@ -32,7 +31,7 @@ describe("GET /v1/community/sitemap", () => {
     if (h) await h.close();
   });
 
-  test("published builds newest first; named authors become profiles", async () => {
+  test("published builds stay newest first; retired profile discovery stays empty", async () => {
     await h.db.communityBuilds.insertMany([
       { slug: "build-a", ownerUserId: "author-1", authorName: "Alice", removed: false, publishedAt: day(1), updatedAt: day(5) },
       { slug: "build-b", ownerUserId: "author-1", authorName: "Alice", removed: false, publishedAt: day(7) },
@@ -46,7 +45,7 @@ describe("GET /v1/community/sitemap", () => {
     ]);
     const res = await get();
     expect(res.status).toBe(200);
-    expect(res.headers["cache-control"]).toBe(GUIDE_CACHE_CONTROL);
+    expect(res.headers["cache-control"]).toBe("public, s-maxage=60, stale-while-revalidate=600");
     expect(res.body.builds).toEqual([
       { slug: "build-b", lastModified: day(7).toISOString() },
       { slug: "build-f", lastModified: day(6).toISOString() },
@@ -55,11 +54,7 @@ describe("GET /v1/community/sitemap", () => {
       { slug: "build-d", lastModified: day(2).toISOString() },
       { slug: "build-g", lastModified: day(1).toISOString() },
     ]);
-    expect(res.body.profiles).toEqual([
-      { handle: "author-5", lastModified: day(8).toISOString() },
-      { handle: "author-1", lastModified: day(7).toISOString() },
-      { handle: "author-2", lastModified: day(6).toISOString() },
-    ]);
+    expect(res.body.profiles).toEqual([]);
     expect(Object.keys(res.body).sort()).toEqual(["builds", "profiles"]);
   });
 
@@ -69,7 +64,7 @@ describe("GET /v1/community/sitemap", () => {
     expect(res.body).toEqual({ builds: [], profiles: [] });
   });
 
-  test(`each list is capped at ${COMMUNITY_SITEMAP_MAX}, newest kept`, async () => {
+  test(`published builds are capped at ${COMMUNITY_SITEMAP_MAX}, newest kept`, async () => {
     const base = day(1).getTime();
     const docs = Array.from({ length: COMMUNITY_SITEMAP_MAX + 5 }, (_, i) => ({
       slug: `build-${i}`, ownerUserId: `author-${i}`, authorName: "Named", removed: false,
@@ -78,7 +73,7 @@ describe("GET /v1/community/sitemap", () => {
     await h.db.communityBuilds.insertMany(docs);
     const res = await get();
     expect(res.body.builds).toHaveLength(COMMUNITY_SITEMAP_MAX);
-    expect(res.body.profiles).toHaveLength(COMMUNITY_SITEMAP_MAX);
+    expect(res.body.profiles).toEqual([]);
     expect(res.body.builds[0].slug).toBe(`build-${COMMUNITY_SITEMAP_MAX + 4}`);
     expect(res.body.builds.some((b) => b.slug === "build-0")).toBe(false);
   });

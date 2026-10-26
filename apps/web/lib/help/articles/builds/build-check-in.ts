@@ -24,6 +24,8 @@ const article: HelpArticle = {
     "build record",
     "win rate",
     "planned badge",
+    "macro breakdown",
+    "change build",
   ],
   updated: "2026-10-25",
   body: [
@@ -80,6 +82,8 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "Playing Random, or facing a Random opponent? There's no loading card because the matchup isn't known yet. You're asked after the game, with the real matchup.",
     },
+    { type: "heading", text: "Correct an accidental selection", anchor: "change-build" },
+    { type: "paragraph", text: "Open the game page, find **Checked in: …**, then select **Edit → Change…**, choose the correct build and press **Confirm**. You can also do this in **Macro Breakdown → Build selection → Change build**, including the popup opened from a macro score. **No set build** removes your planned choice so the game uses the replay's detected label again. A **Planned** badge identifies the saved check-in; its tooltip names the replay's detected build." },
     { type: "heading", text: "The opponent's build" },
     {
       type: "paragraph",
