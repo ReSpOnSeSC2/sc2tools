@@ -181,6 +181,26 @@ and unaffected lint evidence are retained; the changed test's strict lint and
 web test retry are pending. No runtime, guard refresh or Git operation accompanied
 this source-only two-path repair.
 
+## First browser run and owned socket drain
+
+The first actual RUN at cda8a531 used the accepted new own build
+`txSiXdQcm2MDVtKKf6W7e` and stopped with zero passed, one failed and 11 unrun.
+The Light360 main flow completed its assertions and five clear serious/critical
+AA scans (raw incomplete: color-contrast), with two captures, five activation
+GETs and two exact synthetic dismissal PUTs (503 then 200). Unknown, rejected,
+external and native attempts were zero. Its only failure was afterEach's raw
+socket count: the HTTP server was closed/not listening but one tracked socket
+had not yet emitted close. The old-source postguard passed; all 13 captured
+host processes and owned listeners were gone. Raw results and trace remain in
+`.cache/activation-browser-prep-cda8a531/proof/`.
+
+Before repair, both files were preserved under
+`.cache/activation-socket-drain-repair-cda8a531/`. Cleanup now awaits actual close
+events for every socket still tracked after the server close callback. It does
+not clear the set, filter away sockets or weaken the assertion. Product, API,
+hook and spec bytes are unchanged; the build remains retained. This source-only
+cleanup repair is unrun and requires a renewed grant with fresh browser outputs.
+
 ## Validation still required
 
 New source-only tests cover real Mongo flags, exact six-read shape/projections,

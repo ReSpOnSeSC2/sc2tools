@@ -56,7 +56,12 @@ async function startServer() {
 export async function closeActivationChecklistFixtureServer() {
   const previous = active; await previous?.releaseAll(); active = null;
   const current = server; server = null;
-  if (current) await new Promise(resolve => { current.close(resolve); current.closeAllConnections(); });
+  if (current) {
+    await new Promise(resolve => { current.close(resolve); current.closeAllConnections(); });
+    // The server callback may precede socket close events. Set entries are
+    // removed only by those events; wait for every remaining owned socket.
+    await Promise.all([...connections].map(socket => new Promise(resolve => socket.once("close", resolve))));
+  }
   origin = "";
   return { closed: true, listening: current?.listening ?? false, sockets: connections.size, requests: serverRequests.splice(0), http: previous?.ledger ?? null };
 }
