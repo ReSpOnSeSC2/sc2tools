@@ -47,3 +47,23 @@ file/hash and bounded first-party failure evidence are retained under
 `mobile-reset-ci-before/`. The test now retains the complete default-field
 comparison and checks that the resolved end lies between the actual Reset
 start/end times; all focus, disabled-button and Done assertions remain.
+
+## Current browser proof and main integration
+
+The shared strict loopback proof passes 148 checks in four Light/Dark phone
+and desktop contexts. Actual AnalyzerProvider/FilterBar/ActiveFilterChips
+verify fresh Auto season68, native custom dates, Reset and persisted relative
+selection. The separate graph checks pass all16 native picks and explicit
+replay actions. All eight accessibility scans have zero violations. There are
+216 classified GETs, 20 exact expected map/sprite404s and zero unknown,
+rejected, nonlocal or actual write operations. All runtime/listeners are closed.
+A reviewed byte-identical Auto phone capture is tracked; complete receipts
+and prior cache-only fixture failures remain in `graph-final-evidence/`.
+
+Settings A1 d7582739 is integrated from current main; both changelog sections
+are retained. The Auto application source is unchanged after browser proof.
+The original Auto source f306b6b4 reached Ready in Preview61a4KdqxzvLNrn9RzMPoNGVV9oxD.
+The subsequent changes repair the test, reconcile main and record evidence;
+fresh integration-head CI is required. Vercel has reached its existing daily
+100-deployment limit, so no current source is claimed live and no additional
+retry, upgrade or plan change is being made.

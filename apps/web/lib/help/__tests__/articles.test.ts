@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { defaultTabVisibility, isSettingsTabId } from "@/components/analyzer/settings/SettingsShell";
+import { defaultTabVisibility, settingsTabFromParam } from "@/lib/settingsRegistry";
 import { listHelpArticleFiles } from "@/scripts/gen-help-index.mjs";
 import { ALL_HELP_ARTICLES, getArticle, helpArticleAnchors, resolveLegacyAnchor } from "../index";
 import { helpSitemapRows } from "../sitemap";
@@ -55,7 +55,8 @@ function brokenInternalLink(href: string): string | null {
   if (!routeExists(url.pathname.split("/").filter(Boolean))) return `no page at ${url.pathname}`;
   if (url.pathname === "/settings") {
     const tab = url.searchParams.get("tab");
-    if (tab !== null && !(isSettingsTabId(tab) && defaultTabVisibility(tab))) return `no visible settings tab "${tab}"`;
+    const canonicalTab = settingsTabFromParam(tab);
+    if (tab !== null && !(canonicalTab && defaultTabVisibility(canonicalTab))) return `no visible settings tab "${tab}"`;
     if (url.hash && tab === "help" && !resolveLegacyAnchor(url.hash)
       && !(url.hash === "#my-reports" && readFileSync(path.join(process.cwd(), "components/notifications/MyReports.tsx"), "utf8").includes('id="my-reports"'))) return `no help section ${url.hash}`;
   }
@@ -67,6 +68,14 @@ function allTextFields(article: HelpArticle): string[] {
 }
 
 describe("help articles", () => {
+  it.each(["account", "foundation", "preferences", "misc", "overlay", "streaming"])("accepts the visible Settings destination %s, including old aliases", (tab) => {
+    expect(brokenInternalLink(`/settings?tab=${tab}`)).toBeNull();
+  });
+
+  it("still rejects an unknown Settings destination", () => {
+    expect(brokenInternalLink("/settings?tab=no-such-tab")).toBe('no visible settings tab "no-such-tab"');
+  });
+
   it("ships the Settings → Help guide plus the new getting-started articles", () => {
     for (const slug of [
       "getting-started",

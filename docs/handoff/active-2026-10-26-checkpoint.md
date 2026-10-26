@@ -136,7 +136,9 @@ branches, captures and every RED receipt are retained.
    `7Au4gnqSkCGDTVimTcCLuMaVQhLc` is Ready/Preview with exact source `c1d0abd5`;
    all GitHub checks/statuses are green. Fresh-main tree equality was verified
    and PR767 is merged as `ea9f668c71c4314209e1684a398bfc015a31892a`.
-   Production verification is pending. No upgrade, budget change or bypass.
+   Successor production `CWAgCQXKjFDxuornEobwT2qVASz1` is visibly Ready,
+   Production and Latest for sc2tools.com, exact source78818d4b, whose ancestry
+   includes Mobile. No upgrade, budget change or bypass.
    Reuse standard right Sheet sizing and shared Close,
    preserve home/auth/route/theme controls and the controlled-content ID, and
    close at the desktop breakpoint to release the old hidden drawer's lock.
@@ -167,7 +169,9 @@ branches, captures and every RED receipt are retained.
    and 419 browser checks/76 intentional skips. The ancestry-only627 preview
    was rate limited; original815 Preview `2b3GQoRyAtuuPQ2fL5CUs4hpBonG` is
    Ready and has the identical complete tree. PR768 is squash-merged as
-   `78818d4b6d7db3814e26197d03dd586a44ca8e42`; production is not yet observed.
+   `78818d4b6d7db3814e26197d03dd586a44ca8e42`. Production
+   `CWAgCQXKjFDxuornEobwT2qVASz1` is visibly Ready/Production/Latest for
+   sc2tools.com at that exact source. No glossary manual retry was used.
    Canonical40 terms/first Macro+Opponents consumers are now source-only work
    on `codex/wave5-glossary-terms` in the preserved `wave3-my-reviews` worktree.
 5. Platform disconnect: `wave3-guides-expansion`, branch
@@ -195,7 +199,12 @@ branches, captures and every RED receipt are retained.
    bytes and the production artifact are unchanged. Ledgers show81 synthetic
    GETs/24 explicitly armed DELETEs, zero real/rejected/nonlocal operations.
    Source5198fed1 reconciles actual main788 without source changes and is
-   pushed for fresh exact-head CI. Runtime is closed; production is pending.
+   passed exact-head GitHub CI:8,975 web tests/948 suites plus one expected
+   skipped test/suite, and455 browser cases/76 intentional skips. Its latest
+   preview was rate limited; earlier496 Preview F3BV9ETaFDsJ1WcUv1C9K4g7s19H
+   is Ready with identical product bytes (only the two test repairs and
+   checkpoint differ). Fresh-main tested tree395aeeae matched; PR769 is merged
+   as0929d0f623f87d7ed755737d66feab1329a46f1a. Production observation follows.
    Inherited phone permission-row text squeeze remains a separate responsive
    follow-up, not a layout claim of this confirmation pack. Existing
    useConfirm/ConfirmDialog replaces one native confirm. Preserve synchronous
@@ -217,7 +226,11 @@ branches, captures and every RED receipt are retained.
    zero writes/unknown/rejected/nonlocal/actual actions. Root reviewed three
    byte-identical captures. Source0231c73d integrates only Platform's verified
    test repairs after the artifact; Header/product source stays unchanged.
-   All runtime is closed and a stacked PR follows.
+   All runtime is closed. PR770 has exact-head originalb140 GitHub checks
+   green and one normal exact-ref Preview retry accepted on the same plan as
+   JAQh1hKLCzr4AcMo8BYj9gamNnkM, visibly Ready/Preview at exactb140 source.
+   Ancestry-only89b64be4 targets actual main0929 and keeps the identical whole
+   tree72102a9cf26ac6485af1a5edd5c1051c8200f574; its exact-head CI is running.
 7. Settings A1: `wave3-game-workspace`, branch `codex/wave5-settings-registry`,
    source preserved at `8ed58639`, with Devices repair at `82a82898`.
    The registry/groups/canonical aliases,
@@ -230,8 +243,26 @@ branches, captures and every RED receipt are retained.
    separate audit; no waiver or semantic tabIndex change was added. A later
    source-only loopback native-popup repair is preserved at a9f51f0d. Header,
    Glossary and repaired Platform are integrated at2f042be6; final serialized
-   static/build/browser proof is now active. Original REDs and all assets remain.
+   final proof passes298 tests/33 suites, whole types before/after metadata
+   amendment/build,20 strict files clean plus the unchanged inherited Shell
+   warning, Help91 andUI19/1,700/642. Build ESe5OurSX4bfDvU6e6AsG passes144
+   pages/all81 budgets. All6 browser cases and24 full AA scans pass, with18
+   captures,48 typed panel GETs,6 native Devices GETs and6 approved client route
+   pushes; zero writes/unknown/rejected/nonlocal/real actions. All three
+   loopback listeners and every runtime job are closed. Root verified23 source
+   and5 artifact hashes and reviewed/copied3 captures; preservation1577f739
+   followed by Header documentation-only integration859063d7. Original REDs
+   and all assets remain. This remains A1; no Chat/search completion claim.
    Search, Chat extraction and the rest of find-anything are later stages.
+8. App and landing CTA consumers: `wave3-owner-neighbors`, branch
+   `codex/wave5-site-cta`, source09f7b351 and first-static preservation1c9430b9.
+   Exactly9 paths replace AppChrome's two visitor recipes and Landing's local
+   CtaLink with shared recipes/LinkButton, preserving auth, routes and rollout.
+   Source-only independent review is clear after stronger vertical label/48px
+   and native focus baseline proof. First static passes73 checks/four suites,
+   types, strict6 zero, Help91 andUI19/1,699/639. Header ancestry integration
+   changed zero file/tree bytes. Final serialized runtime is active; no final
+   build/browser proof is yet claimed for this slice.
 
 Do not switch these active branches, reset their worktrees or stage their
 untracked caches. Source-only agents must not start competing runtime work.

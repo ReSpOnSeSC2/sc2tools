@@ -82,7 +82,7 @@ export function SettingsMisc() {
     DEFAULT_MISC,
   );
 
-  usePublishDirty("misc", dirty);
+  usePublishDirty("preferences", dirty);
 
   async function save() {
     if (saving) return;
@@ -109,7 +109,7 @@ export function SettingsMisc() {
   }
 
   if (isLoading) return <Skeleton rows={3} />;
-  if (error && data === undefined) return <SettingsLoadError tab="Misc settings" error={error} retry={mutate} />;
+  if (error && data === undefined) return <SettingsLoadError tab="Preferences" error={error} retry={mutate} />;
 
   return (
     <>

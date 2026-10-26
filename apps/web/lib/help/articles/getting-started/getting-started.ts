@@ -27,7 +27,7 @@ const article: HelpArticle = {
     "dashboard",
     "new user",
   ],
-  updated: "2026-10-25",
+  updated: "2026-10-26",
   body: [
     {
       type: "paragraph",
@@ -60,6 +60,10 @@ const article: HelpArticle = {
     {
       type: "paragraph",
       text: "Your [build library](/builds) needs a free account; [Community builds](/community) and [Definitions](/definitions) are public. See [Which pages are public?](/help/a-page-asked-me-to-sign-in) for the full list.",
+    },
+    {
+      type: "paragraph",
+      text: "[Settings](/settings) groups your tools into Account, Gameplay and Streaming. Account includes setup health, Profile, Backups & data and a Devices link. Preferences holds your start page and browser choices. Older links named Foundation or Misc still open Account or Preferences. See [Finding things in Settings](/help/settings-overview) for tab links and keyboard navigation.",
     },
     {
       type: "paragraph",

@@ -15,6 +15,12 @@ corresponding GitHub Release.
 
 - Default fresh analyzer views and Reset to defaults to Auto-track current season, following the current season catalog while retaining explicitly saved dates and views.
 
+### Settings groups and compatible links
+
+- Group Settings into Account, Gameplay and Streaming, with descriptions in the desktop sidebar and a Devices link in Account.
+- Rename Foundation to Account and Misc to Preferences while keeping old tab and hash links working. Keep unsaved preference and notification edits guarded when switching tabs.
+- Ask before the sidebar's Devices link leaves unsaved Settings edits; opening the link in a new tab keeps its normal behavior.
+
 ### Header action links
 
 - Use the shared button styles for Sign in, Get started and Open app in the desktop header, retaining their compact size and return-to-page behavior.

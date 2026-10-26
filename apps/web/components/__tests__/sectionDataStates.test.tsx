@@ -93,7 +93,7 @@ describe("migrated sections offer recovery when their request fails", () => {
   it.each(SECTIONS)("%s", async (_name, renderSection, falseState) => {
     render(renderSection());
     expect(screen.getAllByTestId("request-error").length).toBeGreaterThan(0);
-    if (_name === "Settings account") expect(screen.getByText("Couldn't load your Foundation settings")).toBeTruthy();
+    if (_name === "Settings account") expect(screen.getByText("Couldn't load your Account settings")).toBeTruthy();
     if (falseState) expect(screen.queryByText(falseState)).toBeNull();
     await act(async () => {
       fireEvent.click(screen.getAllByRole("button", { name: _name === "Settings account" ? "Try again" : "Retry" })[0]);
