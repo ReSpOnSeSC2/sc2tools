@@ -15,6 +15,8 @@ function invalidateEnrichmentForUser(cache, userId) {
   revisionsFor(cache).invalidate(userId);
   for (const key of cache.keys()) if (key.startsWith(`${userId}|`)) cache.delete(key);
 }
+/** @param {Map<string,any>} cache */
+function invalidateAllEnrichment(cache) { revisionsFor(cache).clear(); cache.clear(); }
 
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 
@@ -55,6 +57,7 @@ const { regionFromToonHandle } = require("../util/regionFromToonHandle");
  *
  * @typedef {{
  *   players?: unknown,
+ *   map?: unknown,
  *   user?: { name?: unknown, race?: unknown } | null,
  *   opponent?: {
  *     name?: unknown,
@@ -235,8 +238,10 @@ function buildEnrichmentKey(parts) {
  *     opponentRace?: string,
  *     opponentPulseCharacterId?: string|number|null,
  *     myRace?: string,
- *     opponentToonHandle?: string|null
+ *     opponentToonHandle?: string|null,
+ *     forecastContext?: {map?:unknown}
  *   ) => Promise<object|null>,
+ *   scoutingIdentities?: import('./scoutingIdentities').ScoutingIdentitiesService|null,
  * }} service the ``OverlayLiveService`` instance, used
  *   for its ``buildFromOpponentName`` method.
  * @param {Map<string, {payload: object|null, ts: number}>} cache
@@ -294,7 +299,7 @@ async function enrichEnvelope(
   const myRace = pickStreamerRace(envelope);
   const region = pickEnvelopeRegion(opp, profile);
 
-  const key = buildEnrichmentKey({
+  const baseKey = buildEnrichmentKey({
     userId,
     pulseCharacterId,
     name,
@@ -302,6 +307,11 @@ async function enrichEnvelope(
     region,
     myRace,
   });
+  const map = typeof envelope.map === "string" ? envelope.map.trim().slice(0, 200) : "";
+  const mapKey = map ? `|map:${JSON.stringify(map)}` : "";
+  const currentKey = () => baseKey + mapKey + (service.scoutingIdentities
+    ? `|group:${JSON.stringify(service.scoutingIdentities.cacheKey(userId, pulseCharacterId === null ? null : String(pulseCharacterId), toonHandle))}` : "");
+  const key = currentKey();
   const now = Date.now();
   // First envelope of a new gameKey skips the cache check — every
   // other tick uses it. The result is still cached below so the
@@ -324,6 +334,7 @@ async function enrichEnvelope(
         pulseCharacterId,
         myRace || undefined,
         toonHandle,
+        { map },
       );
     } catch {
       // Best-effort enrichment — never block the broker on a Mongo blip.
@@ -331,7 +342,7 @@ async function enrichEnvelope(
     }
   };
   const coordinated = coordinator
-    ? await coordinator.run(`${key}|visibility:${revision.id}`, compute)
+    ? await coordinator.run(`${baseKey}${mapKey}|visibility:${revision.id}`, compute)
     : { admitted: true, value: await compute() };
   // Capacity shedding is deliberately not cached. A later 1 Hz tick can
   // retry after one of the bounded lanes becomes available.
@@ -340,7 +351,7 @@ async function enrichEnvelope(
   const history = coordinated.value;
   // Cache even null results so a Pulse-miss / unknown-opponent case
   // doesn't repeatedly hit the aggregation.
-  cache.set(key, { payload: history || null, ts: now });
+  cache.set(currentKey(), { payload: history || null, ts: now });
   if (cache.size > maxSize) {
     // Drop the oldest entry (Map iteration order is insertion order).
     const oldest = cache.keys().next().value;
@@ -469,6 +480,7 @@ function invalidateEnrichmentForOpponent(cache, userId, opponentName, pulseChara
 }
 
 module.exports = {
+  canonicalLiveRace,
   pickStreamerRace,
   pickEnvelopeRegion,
   buildEnrichmentKey,
@@ -476,4 +488,5 @@ module.exports = {
   LiveEnrichmentCoordinator,
   invalidateEnrichmentForOpponent,
   invalidateEnrichmentForUser,
+  invalidateAllEnrichment,
 };

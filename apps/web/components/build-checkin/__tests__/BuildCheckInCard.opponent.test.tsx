@@ -24,7 +24,7 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: harness.getToken, isLoaded: true, isSignedIn: true }),
+  useAuth: () => ({ getToken: harness.getToken, isLoaded: true, isSignedIn: true, userId: "synthetic-owner" }),
 }));
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href: string }) => (
@@ -54,7 +54,9 @@ vi.mock("@/components/builds/editor", () => ({
 }));
 vi.mock("@/lib/clientApi", async () => {
   const React = await import("react");
+  const { useOwnerRequestScope } = await vi.importActual<typeof import("@/lib/clientApi")>("@/lib/clientApi");
   return {
+    useOwnerRequestScope,
     apiCall: (...args: unknown[]) => harness.apiCall(...args),
     useApi: (path: string | null) => {
       const [, rerender] = React.useReducer((value: number) => value + 1, 0);

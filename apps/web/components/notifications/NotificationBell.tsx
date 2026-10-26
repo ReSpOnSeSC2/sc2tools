@@ -6,6 +6,8 @@ import { useAuth } from "@clerk/nextjs";
 import { Bell } from "lucide-react";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { useUserSocket } from "@/lib/useUserSocket";
+import { notificationPanelPlacement } from "@/lib/a11y/popoverPlacement";
+export { notificationPanelPlacement } from "@/lib/a11y/popoverPlacement";
 const NotificationPanel = dynamic(() => import("./NotificationPanel"), { ssr: false });
 
 type NotificationRow = {
@@ -36,28 +38,6 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
   const { userId } = useAuth();
   if (!userId) return null;
   return <Bell_ key={userId || "signed-out"} compact={compact} />;
-}
-
-/** Gap kept between the panel and the viewport edges, in px. */
-const PANEL_GUTTER = 16;
-/** Preferred panel width (22rem) — narrower viewports shrink it. */
-const PANEL_MAX_WIDTH = 352;
-
-/**
- * Where the dropdown sits, relative to the bell's wrapper. Right-aligning
- * to the bell only works when the bell is the right-most header control;
- * on phones the theme toggle and avatar sit to its right, so a
- * right-aligned panel spills off the left edge. Clamp it inside the
- * viewport instead.
- */
-export function notificationPanelPlacement(
-  anchor: { left: number; right: number },
-  viewportWidth: number,
-): { left: number; width: number } {
-  const width = Math.max(0, Math.min(PANEL_MAX_WIDTH, viewportWidth - PANEL_GUTTER * 2));
-  const maxLeft = viewportWidth - PANEL_GUTTER - width;
-  const viewportLeft = Math.min(Math.max(anchor.right - width, PANEL_GUTTER), maxLeft);
-  return { left: viewportLeft - anchor.left, width };
 }
 
 function Bell_({ compact }: { compact: boolean }) {

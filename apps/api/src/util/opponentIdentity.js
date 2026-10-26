@@ -98,6 +98,25 @@ function attachOpponentIdsToFilter(filter, ids) {
   return filter;
 }
 
+/** Same indexed owner-side join for a server-resolved, capped identity group.
+ * @param {Record<string,any>} filter @param {any} ids
+ */
+function attachScoutingIdsToFilter(filter, ids) {
+  const pulseIds = Array.isArray(ids?.pulseIds) ? ids.pulseIds : [];
+  const characterIds = Array.isArray(ids?.characterIds) ? ids.characterIds : [];
+  if (!pulseIds.length && !characterIds.length) return attachOpponentIdsToFilter(filter, ids);
+  if (pulseIds.length > 20 || characterIds.length > 20) return null;
+  const clauses = [];
+  const handles = [...new Set(pulseIds.map(cleanId).filter(Boolean))];
+  const cids = [...new Set(characterIds.map(cleanId).filter(Boolean))];
+  if (handles.length) clauses.push({ "opponent.pulseId": { $in: handles } });
+  if (cids.length) clauses.push({ "opponent.pulseCharacterId": { $in: cids } });
+  if (!clauses.length) return null;
+  if (!Array.isArray(filter.$and)) filter.$and = [];
+  filter.$and.push({ $or: clauses });
+  return filter;
+}
+
 /** @param {unknown} v @returns {string | null} */
 function cleanId(v) {
   if (typeof v !== "string") return null;
@@ -108,4 +127,5 @@ function cleanId(v) {
 module.exports = {
   opponentGamesFilter,
   attachOpponentIdsToFilter,
+  attachScoutingIdsToFilter,
 };

@@ -101,7 +101,7 @@ export function DownloadCard({
         <input type="hidden" name="artifactUrl" value={artifact.downloadUrl} />
         <button
           type="submit"
-          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accent-cyan px-5 text-body-lg font-semibold text-white shadow-halo-cyan transition-colors hover:bg-accent-cyan/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:w-auto"
+          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accent px-5 text-body-lg font-semibold text-white shadow-halo-cyan transition-colors hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:w-auto"
           aria-describedby="download-verify-hint"
         >
           <Download className="h-5 w-5" aria-hidden />
@@ -262,7 +262,7 @@ function NextSteps() {
         Already paired this machine?{" "}
         <Link
           href="/devices"
-          className="text-accent-cyan underline-offset-2 hover:underline"
+          className="text-accent-cyan underline underline-offset-2"
         >
           Manage your devices →
         </Link>
@@ -308,7 +308,8 @@ function DownloadCardNoArtifact({ os }: { os: DetectedOS }) {
           </p>
         </div>
       </header>
-      <pre className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption">
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The named command region must accept keyboard scrolling. */}
+      <pre role="region" aria-label="Source installation commands" tabIndex={0} className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption focus-visible:ring-2 focus-visible:ring-accent">
         {sourceInstallSnippet(os)}
       </pre>
     </article>
@@ -328,7 +329,7 @@ function BrowserAnalyzerLead() {
       </p>
       <Link
         href="/try"
-        className="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg bg-accent-cyan px-4 text-body font-semibold text-white hover:bg-accent-cyan/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+        className="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-4 text-body font-semibold text-white hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
         Open the replay analyzer
       </Link>

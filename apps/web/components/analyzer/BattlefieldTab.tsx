@@ -105,7 +105,7 @@ function FormSparkline({
   );
 }
 
-export function BattlefieldTab() {
+export function BattlefieldTab({ focus: controlledFocus }: { focus?: string | null } = {}) {
   const { filters, dbRev, seasons } = useFilters();
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_MAPS, 3);
   const [previewMap, setPreviewMap] = useState<string | null>(null);
@@ -113,7 +113,8 @@ export function BattlefieldTab() {
   const [poolPreference, setPoolPreference] = useState<boolean | null>(null);
   const catalog = useSeasons(); const pool = useCurrentMapPool(catalog.data);
   const poolOnly = poolPreference ?? pool.fresh;
-  const focus = useMapFocus(), handledFocus = useRef<string | null>(null), scrolledFocus = useRef<string | null>(null);
+  const localFocus = useMapFocus(), focus = controlledFocus === undefined ? localFocus : controlledFocus;
+  const handledFocus = useRef<string | null>(null), scrolledFocus = useRef<string | null>(null);
 
   const muApi = useApi<MatchupRow[]>(
     `/v1/matchups${filtersToQuery(filters)}#${dbRev}`,

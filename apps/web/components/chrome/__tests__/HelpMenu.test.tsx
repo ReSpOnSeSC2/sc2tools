@@ -20,6 +20,8 @@ describe("helpMenuItems", () => {
       "Search help",
       "Stream Studio crash course",
       "Download / update the desktop app",
+      "Accessibility & appearance",
+      "Accessibility statement",
       "Report a problem",
       "Suggest a feature",
       "How reports work",

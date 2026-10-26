@@ -3,6 +3,8 @@
 import { EmptyState } from "@/components/ui/Card";
 import { pct } from "@/lib/format";
 import { StrategyLabel } from "@/components/definitions/StrategyLabel";
+import { ForecastStats } from "@/components/scouting/ForecastStats";
+import { ForecastExplanation } from "@/components/scouting/ForecastExplanation";
 
 export type Prediction = {
   strategy: string;
@@ -10,15 +12,17 @@ export type Prediction = {
 };
 
 /**
- * Recency-weighted "likely strategies next" list. Mirrors the legacy
- * `PredictedStrategiesList` — last 10 games count 2x, every other
- * game 1x, sorted by probability descending.
+ * Shared posterior when present. Older APIs retain their explicitly labelled
+ * legacy weighting; an incomplete new forecast never substitutes that list.
  */
 export function PredictedStrategiesList({
   predictions,
+  forecast,
 }: {
   predictions?: Prediction[];
+  forecast?: unknown;
 }) {
+  if (forecast !== undefined) return <div className="space-y-2"><ForecastStats value={forecast} /><ForecastExplanation /></div>;
   if (!predictions || predictions.length === 0) {
     return <EmptyState sub="Not enough games to predict" />;
   }

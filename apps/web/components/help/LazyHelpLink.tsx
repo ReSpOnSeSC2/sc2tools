@@ -31,7 +31,7 @@ export function LazyHelpLink({ slug, anchor, children, variant = "inline", class
       </a>
     ) : (
       <a href={href} onClick={onOpen} className={[HELP_TEXT_LINK_CLASS, className].filter(Boolean).join(" ")}>
-        {children}
+        {children ?? "Help"}
       </a>
     );
   return (

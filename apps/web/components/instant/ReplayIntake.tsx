@@ -43,7 +43,7 @@ import {
   type RefObject,
 } from "react";
 import { FileUp, FolderOpen, FolderSync, UploadCloud } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Button } from "@/components/ui/Button";
 import { type DateWindow, type ParseEstimate } from "@/lib/instant/fileIntake";
 import type { IntakeSource } from "@/lib/instant/types";
 import { DateWindowSelect } from "./DateWindowSelect";

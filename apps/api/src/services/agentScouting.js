@@ -68,11 +68,14 @@ function buildScoutingBrief(envelope) {
     }));
   const wins = count(records.headToHead?.wins);
   const losses = count(records.headToHead?.losses);
-  const favorite = records.favOpening;
+  const posterior = records.openingForecast && typeof records.openingForecast === "object" ? records.openingForecast : null;
+  const favorite = posterior ? posterior.top?.[0] : records.favOpening;
   const opening = text(favorite?.name, 160);
   const samples = count(favorite?.samples);
-  const n = count(favorite?.of);
-  const openingShare = share(favorite?.share);
+  const n = count(posterior ? posterior.sampleSize : favorite?.of);
+  const openingShare = share(posterior ? favorite?.probability : favorite?.share);
+  const confidence = ["Low", "Medium", "High"].includes(posterior?.confidence) ? posterior.confidence : null;
+  const effectiveN = typeof posterior?.effectiveN === "number" && Number.isFinite(posterior.effectiveN) && posterior.effectiveN >= 0 && posterior.effectiveN <= 75 ? posterior.effectiveN : null;
   const answer = records.bestAnswer;
   const build = text(answer?.build, 160);
   const total = count(answer?.total);
@@ -84,7 +87,9 @@ function buildScoutingBrief(envelope) {
     lastMet: last3[0]?.at ? { at: last3[0].at, result: last3[0].result, map: last3[0].map } : null,
     last3,
     forecast: opening && samples !== null && n !== null && samples <= n && openingShare !== null
-      ? { name: opening, share: openingShare, samples, n } : null,
+      && (!posterior || (confidence && effectiveN !== null))
+      ? { name: opening, share: openingShare, samples, n, ...(posterior ? { method: "posterior", confidence, effectiveN } : {}) } : null,
+    alsoPlaysAs: Array.isArray(records.alsoPlaysAs) ? [...new Set(records.alsoPlaysAs.slice(0, 19).map((/** @type {unknown} */ value) => text(value, 120)).filter(Boolean))].slice(0, 3) : [],
     bestAnswer: build && total !== null && answerWins !== null
       ? { build, w: answerWins, l: total - answerWins } : null,
     cheese: share(records.cheeseProbability),

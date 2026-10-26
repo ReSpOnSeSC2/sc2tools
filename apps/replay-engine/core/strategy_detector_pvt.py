@@ -46,6 +46,15 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     robo_time = building_time("RoboticsFacility")
     sg_time = building_time("Stargate")
     twilight_time = building_time("TwilightCouncil")
+    dark_shrine_time = building_time("DarkShrine")
+    # Early Shrine commitment following a Twilight opener excludes the
+    # Charge-first family, even if no real DT appears. Missing unit proof
+    # stays unclassified rather than inventing a rush. Late Shrine support
+    # does not rewrite a Charge opening.
+    early_dark_shrine = (
+        twilight_time < dark_shrine_time <= 300
+        and twilight_time < min(robo_time, sg_time)
+    )
     ta_time = building_time("TemplarArchive")
     gate_count_730 = count_started_before(buildings, "Gateway", 450)
     gate_starts = start_times(buildings, "Gateway")
@@ -249,6 +258,19 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     ):
         return "PvT - DT Drop"
 
+    # Ground DT openers are also Twilight-first. A later Charge / Blink
+    # completion or fast third does not replace an established early DT
+    # opening. Keep the existing generic DT-rush windows and require a real
+    # unit, so a Shrine alone, a hallucination, or late support DTs cannot
+    # manufacture a rush. The tighter real-Prism Drop proof above wins first.
+    # Building times are construction STARTS; a valid early DT supplies the
+    # causal tech-completion evidence, rather than an invented finish clock.
+    if (
+        early_dark_shrine
+        and count_units("DarkTemplar", 360) >= 1
+    ):
+        return "PvT - DT Rush"
+
     # 7-Gate Blink All-in vs 3-base Blink macro: the 5th Gateway must
     # be STARTED before the 3rd Nexus is STARTED. "Taken" the 3rd
     # Nexus means construction was initiated, not finished -- a player
@@ -316,6 +338,7 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         and gate_count_730 >= 7
         and total_nexuses < 3
         and pvt_charge_time == pvt_first_twilight_upgrade
+        and not early_dark_shrine
         and twilight_time < robo_time
         and twilight_time < sg_time
     ):
@@ -403,6 +426,7 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         and twilight_time < sg_time
         and twilight_time < robo_time
         and pvt_charge_time == pvt_first_twilight_upgrade
+        and not early_dark_shrine
     ):
         if third_nexus_time < 360:
             return "PvT - Charge First (Fast 3rd Nexus)"
@@ -417,6 +441,7 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         and twilight_time < robo_time
         and twilight_time < sg_time
         and pvt_charge_time == pvt_first_twilight_upgrade
+        and not early_dark_shrine
     ):
         return "PvT - 3 Gate Charge Opener"
 

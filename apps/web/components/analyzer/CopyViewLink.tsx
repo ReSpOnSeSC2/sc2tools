@@ -1,23 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useFilters } from "@/lib/filterContext";
-import { analyzerViewHref, isAnalyzerViewPath } from "@/lib/analyzerViews";
+import { isAnalyzerViewPath } from "@/lib/analyzerViews";
+import { sectionViewHref } from "@/lib/sectionViewHref";
 
 export function CopyViewLink() {
   const pathname = usePathname(), { filters } = useFilters();
+  const search = useSearchParams()?.toString() ?? "";
   const [copied, setCopied] = useState(false), [fallback, setFallback] = useState("");
   const field = useRef<HTMLInputElement>(null);
   const attempt = useRef({ id: 0 }), scope = useRef({ filters, pathname });
   scope.current = { filters, pathname };
-  useEffect(() => { const generation = attempt.current; generation.id++; setCopied(false); setFallback(""); return () => { generation.id++; }; }, [filters, pathname]);
+  useEffect(() => { const generation = attempt.current; generation.id++; setCopied(false); setFallback(""); return () => { generation.id++; }; }, [filters, pathname, search]);
   useEffect(() => { if (fallback) { field.current?.focus(); field.current?.select(); } }, [fallback]);
   if (!pathname || !isAnalyzerViewPath(pathname)) return null;
   const copy = async () => {
     const id = ++attempt.current.id;
-    const url = `${window.location.origin}${analyzerViewHref({ section: pathname.split("/")[2] || "today", filters })}`;
-    const current = () => attempt.current.id === id && scope.current.filters === filters && scope.current.pathname === pathname;
+    const href = sectionViewHref(pathname, window.location.search, filters), url = `${window.location.origin}${href}`;
+    const current = () => attempt.current.id === id && scope.current.filters === filters && scope.current.pathname === pathname && sectionViewHref(pathname, window.location.search, filters) === href;
     try { await navigator.clipboard.writeText(url); if (current()) { setCopied(true); setFallback(""); } }
     catch { if (current()) setFallback(url); }
   };

@@ -148,6 +148,7 @@ class MongoDetailsStore {
           _schemaVersion: 0,
           trendsExplorerDetail: 0,
           trendsExplorerRevision: 0,
+          opponentListDetail: 0,
         },
       },
     );
@@ -171,7 +172,7 @@ class MongoDetailsStore {
     const fields = normaliseReadFields(opts.fields);
     const projection = fields
       ? Object.fromEntries([["_id", 0], ["gameId", 1], ...fields.map((f) => [f, 1])])
-      : { _id: 0, userId: 0, date: 0, createdAt: 0, _schemaVersion: 0, trendsExplorerDetail: 0, trendsExplorerRevision: 0 };
+      : { _id: 0, userId: 0, date: 0, createdAt: 0, _schemaVersion: 0, trendsExplorerDetail: 0, trendsExplorerRevision: 0, opponentListDetail: 0 };
     const cursor = this.db.gameDetails.find(
       { userId, gameId: { $in: gameIds } },
       { projection },
@@ -450,6 +451,7 @@ class R2DetailsStore {
         }
         await this._writeMetadata(userId, gameId, date, opts, detailSummaryUpdate({
           buildLog: merged.buildLog, macroBreakdown: merged.macroBreakdown,
+          ...(Object.prototype.hasOwnProperty.call(merged, "oppBuildLog") ? { oppBuildLog: merged.oppBuildLog } : {}),
         }), current.etag);
         return;
       }
@@ -502,6 +504,7 @@ class R2DetailsStore {
       if (!writtenEtag) throw new Error("r2_details_missing_write_etag");
       await this._writeMetadata(userId, gameId, date, opts, detailSummaryUpdate({
         buildLog: merged.buildLog, macroBreakdown: merged.macroBreakdown,
+        ...(Object.prototype.hasOwnProperty.call(merged, "oppBuildLog") ? { oppBuildLog: merged.oppBuildLog } : {}),
       }), writtenEtag);
       return;
     }

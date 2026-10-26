@@ -2,6 +2,26 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.24.7
+
+### Fixed
+- Recognize early PvT ground Dark Templar openings as DT Rush before later
+  Charge or Blink follow-ups. An early Dark Shrine excludes Charge-first
+  labels; a proven Robo and real Warp Prism drop retains DT Drop priority.
+- Require PvZ 2-Stargate Void Ray and 2/3-Stargate Phoenix openings to establish
+  their Stargates, two bases and four real air units by 7:00.
+- Let the floating scouting report's close and minimize buttons work while
+  StarCraft II has focus, with other report content still passing clicks through.
+
+### Changed
+- Show recorded opening forecast percentages, confidence and effective sample
+  size, plus linked account names when supplied by the scouting service.
+- Clarify that account-synced Ghost practice assignments update their existing
+  OBS source URL automatically, and include current widget-size recommendations.
+
+After updating, use Recompute analysis to refresh an existing replay's stored
+detected build. Confirmed planned-build selections remain separate from detection.
+
 ## 0.24.6
 
 ### Fixed - Reduce game-start and match-time load

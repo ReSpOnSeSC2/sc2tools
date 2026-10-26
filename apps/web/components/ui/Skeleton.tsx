@@ -68,6 +68,23 @@ export function SkeletonCard({ className = "", children }: { className?: string;
   );
 }
 
+/** A chart-shaped loading state with one announcement and decorative bars. */
+export function SkeletonChart({ label = "Loading chart", className = "" }: { label?: string; className?: string }) {
+  return <SkeletonRegion label={label} className={className}>
+    <div aria-hidden className="flex h-48 items-end gap-3 rounded-xl border border-border p-4">
+      {["h-1/3", "h-2/3", "h-1/2", "h-4/5", "h-3/5", "h-full"].map((height, index) =>
+        <SkeletonBar key={index} className={`min-w-0 flex-1 ${height}`} />)}
+    </div>
+  </SkeletonRegion>;
+}
+
+/** A statistic-shaped loading state; never presents a fake numeric value. */
+export function SkeletonKpi({ label = "Loading statistics", className = "" }: { label?: string; className?: string }) {
+  return <SkeletonRegion label={label} className={className}>
+    <SkeletonCard className="space-y-3"><SkeletonBar className="h-3 w-24" /><SkeletonBar className="h-9 w-20" /><SkeletonBar className="h-3 w-32 max-w-full" /></SkeletonCard>
+  </SkeletonRegion>;
+}
+
 /**
  * Wraps a skeleton so assistive tech hears one "Loading …" message
  * instead of a run of empty boxes.

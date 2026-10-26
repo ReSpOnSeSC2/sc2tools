@@ -1,69 +1,26 @@
 "use client";
-
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Moon, Sun } from "lucide-react";
-import {
-  THEME_STORAGE_KEY,
-  type Theme,
-  getTheme,
-  toggleTheme,
-} from "@/lib/theme";
+import { toggleTheme } from "@/lib/theme";
+import { ThemeDialog, useThemeState } from "./ThemeChoice";
 
-/**
- * ThemeToggle — light/dark switch wired to lib/theme.
- * Subscribes to the storage event so the toggle stays in sync across tabs.
- */
-export function ThemeToggle({ className = "" }: { className?: string }) {
-  const [mounted, setMounted] = useState(false);
-  const [theme, setTheme] = useState<Theme>("dark");
-
-  useEffect(() => {
-    setMounted(true);
-    setTheme(getTheme());
-
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === THEME_STORAGE_KEY) {
-        setTheme(getTheme());
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  // Render the same DOM shape on server + client to avoid hydration
-  // mismatch; the icon swaps after mount.
-  const isDark = theme === "dark";
-  const Label = isDark ? "Switch to light theme" : "Switch to dark theme";
-
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        const next = toggleTheme();
-        setTheme(next);
-      }}
-      aria-label={Label}
-      aria-pressed={mounted ? !isDark : undefined}
-      title={Label}
-      className={[
-        "hard-press inline-flex h-9 w-9 items-center justify-center rounded-full",
-        "border-2 border-line bg-bg-surface text-text",
-        "hover:bg-bg-elevated",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {mounted ? (
-        isDark ? (
-          <Sun className="h-4 w-4" aria-hidden />
-        ) : (
-          <Moon className="h-4 w-4" aria-hidden />
-        )
-      ) : (
-        <span className="h-4 w-4" aria-hidden />
-      )}
-    </button>
-  );
+/** One click flips the palette; hold/right-click/Arrow Down opens all modes. */
+export function ThemeToggle({ className = "", size = "md" }: { className?: string; size?: "sm" | "md" }) {
+  const { theme } = useThemeState();
+  const [open, setOpen] = useState(false);
+  const hintId = useId();
+  const hold = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), consumed = useRef(false);
+  const clear = () => { clearTimeout(hold.current); hold.current = undefined; };
+  useEffect(() => clear, []);
+  const label = theme === "dark" ? "Switch to light theme" : "Switch to dark theme";
+  return <><button type="button" onClick={event => { const held = consumed.current; consumed.current = false; if (held && event.detail !== 0) return; toggleTheme(); }}
+    onPointerDown={event => { if (event.button !== 0) return; clear(); consumed.current = false; hold.current = setTimeout(() => { consumed.current = true; setOpen(true); }, 500); }}
+    onPointerUp={clear} onPointerCancel={clear} onPointerLeave={clear}
+    onContextMenu={event => { event.preventDefault(); clear(); setOpen(true); }}
+    onKeyDown={event => { if (event.key === "ArrowDown") { event.preventDefault(); clear(); setOpen(true); } }}
+    aria-label={label} aria-describedby={hintId}
+    aria-expanded={open} aria-pressed={theme === "light"} title={`${label} · hold for System options`}
+    className={`hard-press inline-flex ${size === "sm" ? "h-8 w-8" : "h-9 w-9"} items-center justify-center rounded-full border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${className}`}>
+    {theme === "dark" ? <Sun className="h-4 w-4" aria-hidden /> : <Moon className="h-4 w-4" aria-hidden />}
+  </button><span id={hintId} className="sr-only">Press and hold, right-click, or press Arrow Down for Light, Dark and System options.</span><ThemeDialog open={open} onClose={() => setOpen(false)} /></>;
 }

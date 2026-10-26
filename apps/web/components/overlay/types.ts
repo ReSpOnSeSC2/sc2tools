@@ -19,6 +19,8 @@
 // authoritative replay-derived fields (build, durationSec, etc.).
 
 /** Replay-observed tendency rates; these are frequencies, not player skill ratings. */
+import type { OpeningForecast } from "@/lib/openingForecast";
+
 export interface PlayerCardProfile {
   version: 1;
   sampleSize: number;
@@ -103,6 +105,9 @@ export type LiveGamePayload = {
   headToHead?: { wins: number; losses: number };
   /** Opponent tendencies observed in the cloud's recent replay sample. */
   playerCard?: PlayerCardProfile;
+  openingForecast?: OpeningForecast;
+  alsoPlaysAs?: string[];
+  mergedAccounts?: number;
   /** Private scouting note; always visual, optionally included in TTS. */
   opponentNotes?: { text: string; readAloud: boolean };
   /** Current win/loss streak. */
@@ -514,7 +519,7 @@ export interface LiveGameEnvelope {
   opponentChannels?: { twitch?: string; youtube?: string };
   /** Cloud-observed ended match, with no opponent data. Key expires after 30min. */
   lastEndedGame?: { gameKey?: string; endedAt: number };
-  /** Optional live source data; current desktop agents may omit it. */
+  /** Optional live source data; omitted maps keep all-map forecast weights. */
   map?: string;
   type: "liveGameState";
   phase: LiveGamePhase;
@@ -592,6 +597,9 @@ export interface LiveGameEnvelope {
     | "matchup"
     | "headToHead"
     | "playerCard"
+    | "openingForecast"
+    | "alsoPlaysAs"
+    | "mergedAccounts"
     | "opponentNotes"
     | "streak"
     | "cheeseProbability"

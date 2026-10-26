@@ -34,7 +34,7 @@ describe("strategy table and sheet", () => {
     expect(within(view).getByRole("radio", { name: /By opponent strategy/ }).getAttribute("aria-checked")).toBe("true");
     fireEvent.keyDown(within(view).getByRole("radio", { name: /By opponent strategy/ }), { key: "ArrowLeft" });
     const opener = screen.getByRole("button", { name: /^Z Build$/ }); opener.focus(); fireEvent.click(opener);
-    expect(screen.getByRole("dialog", { name: /Z Build.*Z Strategy.*1 games/ })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: /Z Build.*Z Strategy.*1 game/ })).toBeTruthy();
     expect(opener.isConnected).toBe(true);
     expect(screen.getByText(/Fixture games table/)).toBeTruthy();
     expect(state.paths.some(path => path?.startsWith("/v1/games-list") && path.includes("opp_race=P"))).toBe(true);
