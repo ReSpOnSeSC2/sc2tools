@@ -148,8 +148,9 @@ for (const theme of ["light", "dark"] as const) {
       const manager = page.getByRole("region", { name: "Shared streaming token controls", exact: true });
       await expect(manager).toHaveCount(1); await page.getByRole("combobox", { name: "URLs shown for" }).selectOption("owner-a-two");
       await page.evaluate(() => { (window as SearchWindow).searchManager = document.getElementById("tokens"); });
-      const accent = page.getByLabel("Accent hex value", { exact: true }); await accent.fill("4CC3F1");
-      await choose(page, "Overlay theme"); await expect(accent).toHaveValue("4CC3F1"); await expect(confirm(page)).toHaveCount(0);
+      const accent = page.getByLabel("Accent hex value", { exact: true }); await accent.fill("#4cc3f1");
+      await expect(page.getByRole("combobox", { name: "URLs shown for" })).toBeDisabled();
+      await choose(page, "Overlay theme"); await expect(accent).toHaveValue("#4cc3f1"); await expect(confirm(page)).toHaveCount(0);
       await checkAccessibility(page, info, `/settings-search-overlay-${width}`, theme); await overflow(page);
       await choose(page, "TTS volume"); await confirm(page).getByRole("button", { name: "Discard & switch" }).click();
       await expect(page).toHaveURL(/\?tab=chat#tts$/);

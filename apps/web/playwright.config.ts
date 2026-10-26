@@ -60,10 +60,12 @@ export default defineConfig({
   projects: [
     {
       name: "mobile-360",
+      testIgnore: ["**/settings-sections.spec.ts", "**/settings-search.spec.ts"],
       use: { browserName: BROWSER, viewport: { width: 360, height: 800 } },
     },
     {
       name: "tablet-768",
+      testIgnore: ["**/settings-sections.spec.ts", "**/settings-search.spec.ts"],
       use: { browserName: BROWSER, viewport: { width: 768, height: 1024 } },
     },
     {

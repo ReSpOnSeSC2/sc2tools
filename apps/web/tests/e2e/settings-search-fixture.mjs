@@ -152,6 +152,9 @@ export async function openSettingsSearchFixture(page, theme, options = {}) {
       && url.searchParams.get("view") === "summary" && url.searchParams.get("includeGeneric") === "true") {
       reads.push({ owner, path: url.pathname, query: url.search }); return json({ items: [], total: 0, nextCursor: null });
     }
+    if (owner && url.pathname === "/v1/me/preferences/onboarding" && !url.search && !url.hash && body === "") {
+      reads.push({ owner, path: url.pathname }); return json({ dismissedAt: null });
+    }
     if (owner && !url.search && !url.hash) {
       const fixed = new Map([
         ["/v1/me", { userId: owner, email: "fixture@example.invalid", isAdmin: !!options.admin, agentPaired: true, agentLastSeenAt: null, agentVersion: "0.24.7", games: { total: 0, latest: null }, onboarding: { goals: ["play"] } }],
