@@ -62,6 +62,31 @@ describe("saved build editor", () => {
     expect(screen.queryByText("Loading build…")).toBeNull();
   });
 
+  it("returns to the Library opener after an error retries into the ready editor", async () => {
+    let failing = true;
+    const doc = { slug: "fixture", name: "Fixture", race: "Protoss" as const };
+    api.call.mockImplementation(async (_token, path) => {
+      if (path.includes("my-build-publication")) return { published: false, authorName: "", publishAnonymously: false, mirrorPending: false };
+      if (failing) throw { status: 503, message: "Synthetic unavailable" };
+      return doc;
+    });
+    function Host() {
+      const [open, setOpen] = useState(false);
+      return <ToastProvider><button onClick={() => setOpen(true)}>Library opener</button>{open ? <EditCustomBuildLauncher build={doc} onClose={() => setOpen(false)} onSaved={vi.fn()} /> : null}</ToastProvider>;
+    }
+    render(<Host />);
+    const launch = screen.getByRole("button", { name: "Library opener" });
+    launch.focus(); fireEvent.click(launch);
+    await screen.findByRole("alert");
+    failing = false; fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await screen.findByLabelText(/^Name/);
+    const close = within(screen.getByRole("dialog")).getByRole("button", { name: "Close" });
+    expect(document.activeElement).toBe(close);
+    fireEvent.click(close);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(launch));
+  });
+
   it("retires held resource and account-ABA deliveries before showing private editor data", async () => {
     const pending: Array<(value: unknown) => void> = [];
     api.call.mockImplementation(() => new Promise(resolve => { pending.push(resolve); }));

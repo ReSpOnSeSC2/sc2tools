@@ -3,7 +3,8 @@
 Branch `codex/wave5-build-dialogs` starts at frozen Execution
 `9f59fa96`. The old Execution branch, its 47 current captures and all caches
 remain preserved. The exact ten-path ownership manifest was recorded before
-edits in `.cache/build-dialogs-owned-paths.txt`.
+edits in `.cache/build-dialogs-owned-paths.txt`, then expanded to twelve paths
+before authoring the two approved manual browser files.
 
 ## Authored implementation
 
@@ -38,9 +39,12 @@ publication GET. No editor, API or shared primitive contract changes.
 BuildKebab registers its existing portal as a nonmodal focus scope. The parent
 Modal owns Tab containment and the menu owns first Escape. Existing first/last
 requestAnimationFrame focus, arrows/Home/End, placement, scrolling, actions and
-conditional trigger restoration remain. Hook autoFocus and restoreFocus are
-disabled to preserve the menu's ready timing and its dialog-action handoff.
-Only its duplicate document Escape listener is removed.
+conditional trigger restoration remain. Hook autoFocus is disabled to preserve
+the menu's ready timing. A ref-backed restore policy resets when opened: Escape
+and explicit dialog/replacement actions retain the opener chain, outside pointer
+dismissal uses if-lost, and blur/Tab, geometry and ordinary toggles retain their
+existing no-restore behavior. The old duplicate document Escape listener is
+removed. No shared focus primitive or API changed.
 
 Exactly the two retired dialog-outside-ui allowances for these consumers are
 pruned. No replacement allowance or broad baseline regeneration is authored.
@@ -78,12 +82,27 @@ allowance. Logs, suite manifest and JSON results are under
 `.cache/build-dialogs-*`; `.cache/build-dialogs-static-proof.json` records the
 boundary. Every launched runtime job closed and the slot was released.
 
-Production build and actual-browser proof remain pending root's final scope
-grant. Planned proof uses real DossierModal, launcher/rich editor, Practice,
-menu and current shared AA with production CSS/fonts. It will check the 896px
+Root preserved the feature at `e42e9649` and normally integrated current
+Execution/Try main at `e0fb1819`. An early real-Modal handoff extension then
+confirmed a product RED: after replacing a dossier/menu with the editor, closing
+the editor focused body rather than the Library opener. The initial menu
+restoreFocus:false discarded the opener transferred from its disappearing
+parent. The approved ref-backed consumer policy above fixes that chain without
+stealing Tab or new-dialog focus. The preserved failing case passes afterward,
+and all combined 108 checks/11 suites plus whole types pass again before any
+production build. Both original RED and fixed logs/results are retained.
+
+Production build and actual-browser proof remain unexecuted. The two authored
+manual files use the actual full BuildsLibrary, DossierModal, launcher/rich
+editor, Practice, menu, Help and current shared AA with production CSS/fonts.
+They count every API GET and blocked nonlocal attempt, reject API writes and
+use new root-cache host/evidence directories. They will check the 896px
 desktop maximum and phone fit, real Practice child Escape/body locks, menu-first
 Escape, and menu Edit through held loading to ready notes focus and close
-return. Synthetic loopback responses will reject API writes and count/abort
-nonlocal attempts, with new host/evidence paths that preserve old fixtures and
-captures. Mocked-shell tests alone are not browser proof. No Git mutations,
+return. Ordinary menu Edit retains the existing default focus; the separate real
+empty-notes action verifies explicit notes focus. Current asset admission must
+include the scrubbed sample JSON as well as engine/Pyodide. Its tracked CRLF
+bytes are retained, with raw and normalized hashes recorded; no engine/sample
+generation is authorized. Runtime is briefly held for root's Copy combination
+proof. Mocked-shell tests alone are not browser proof. No Git mutations,
 provider/account operations, engine/native edits or budget changes occurred.

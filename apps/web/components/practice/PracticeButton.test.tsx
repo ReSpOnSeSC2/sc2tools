@@ -35,6 +35,30 @@ describe("shared Practice split button", () => {
     await waitFor(() => expect(h.assign).toHaveBeenCalledOnce()); expect(h.assign.mock.calls[0][1]).toBe("PvZ");
     expect(screen.getByRole("link", { name: "Open Ghost settings" }).getAttribute("href")).toBe("/settings?tab=overlay&section=look");
   });
+  it("returns focus to the live options trigger after the lazy dialog closes", async () => {
+    render(<PracticeButton build={build} privateBuild />);
+    const original = screen.getByRole("button", { name: "Practice options for Blink opening" });
+    original.focus();
+    fireEvent.click(original);
+    const dialog = await screen.findByRole("dialog", { name: "Practice Blink opening" });
+    expect(original.isConnected).toBe(false);
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Practice options for Blink opening" })));
+    expect(h.assign).not.toHaveBeenCalled();
+  });
+  it("returns focus to the live quick trigger when its missing matchup opens choices", async () => {
+    render(<PracticeButton build={{ ...build, vsRace: undefined }} privateBuild />);
+    const original = screen.getByRole("button", { name: "Practice this" });
+    original.focus();
+    fireEvent.click(original);
+    const dialog = await screen.findByRole("dialog", { name: "Practice Blink opening" });
+    expect(original.isConnected).toBe(false);
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Practice this" })));
+    expect(h.assign).not.toHaveBeenCalled();
+  });
   it("queues a public Practice action for sign-in without making an anonymous assignment", async () => {
     h.auth = { ...h.auth, isSignedIn: false }; render(<PracticeButton build={build} />);
     fireEvent.click(screen.getByRole("button", { name: "Practice in PvT" }));

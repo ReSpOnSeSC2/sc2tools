@@ -132,16 +132,20 @@ describe("BuildCard replay-stat states", () => {
 });
 
 describe("BuildCard actions menu", () => {
-  it("keeps a portaled menu in its parent's Tab domain and preserves new-dialog focus on an action", async () => {
+  it("keeps the menu in its parent's Tab domain and returns to the library opener after an editor handoff", async () => {
     function Host() {
+      const [dossier, setDossier] = useState(false);
       const [editing, setEditing] = useState(false);
-      return <Modal open title="Parent dossier" onClose={vi.fn()}>
-        <BuildKebab slug="fixture" name="Fixture" isPublic={false} onEdit={() => setEditing(true)} onPublish={vi.fn()} onDelete={vi.fn()} />
-        <button>Parent end</button>
+      return <><button onClick={() => setDossier(true)}>Library opener</button>
+        {dossier ? <Modal open title="Parent dossier" onClose={() => setDossier(false)}>
+          <BuildKebab slug="fixture" name="Fixture" isPublic={false} onEdit={() => { setEditing(true); setDossier(false); }} onPublish={vi.fn()} onDelete={vi.fn()} />
+          <button>Parent end</button>
+        </Modal> : null}
         {editing ? <Modal open title="Rich editor" onClose={() => setEditing(false)}><input aria-label="Editor field" /></Modal> : null}
-      </Modal>;
+      </>;
     }
     render(<Host />);
+    const launch = screen.getByRole("button", { name: "Library opener" }); launch.focus(); fireEvent.click(launch);
     const trigger = screen.getByRole("button", { name: "Build options for Fixture" }); trigger.focus(); fireEvent.click(trigger);
     const menu = screen.getByRole("menu");
     const first = within(menu).getByRole("menuitem", { name: "Open full page" });
@@ -157,6 +161,8 @@ describe("BuildCard actions menu", () => {
     const close = within(editor).getByRole("button", { name: "Close" });
     await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
     expect(document.activeElement).toBe(close); expect(screen.queryByRole("menu")).toBeNull();
+    fireEvent.click(close);
+    await waitFor(() => expect(document.activeElement).toBe(launch));
   });
 
   it("portals every action outside the clipped card and closes on an outside tap", () => {
