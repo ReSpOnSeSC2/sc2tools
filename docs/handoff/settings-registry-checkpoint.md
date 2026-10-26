@@ -1,4 +1,4 @@
-# Settings registry and grouping — source-only A1
+# Settings registry and grouping — A1 verification boundary
 
 Date: 2026-10-26. Branch: `codex/wave5-settings-registry`, starting at
 `c1d0abd5`. This is stage A1 of the `find-anything` item in
@@ -7,11 +7,29 @@ The complete roadmap item remains unfinished.
 
 ## Current boundary
 
-Source is authored; **no tests, types, lint, generators, production build,
-budget checks or browser cases have run for this pack**. The runtime slot is
-held by another pack. No Git mutation, provider operation or real account
-request was performed. Existing owner files, caches and screenshots remain
-untouched and unexecuted.
+The parent completed the first unit/static stage described below. The later
+loopback fixture/spec repair is **source-only and unrun**; its types/lint and
+actual browser behavior still need validation. No production build, budget
+check or browser case is claimed for this pack. Runtime is held by the Header
+pack. This source-only follow-up performed no runtime, Git mutation, provider
+operation or real account request. Existing owner files, caches and original
+screenshots remain untouched and unexecuted.
+
+Parent-reported first static proof, preserved under
+`.cache/settings-first-static-82a82898/`:
+
+- Final focused pack: 210 tests across 22 suites passed; whole web types passed.
+- Strict lint: 20 owned files passed with zero warnings. SettingsShell has one
+  inherited mobile delegated-keydown `jsx-a11y/interactive-supports-focus`
+  warning, proved unchanged from pre-A1 `c1d0abd5`; the separate audit is
+  `inherited-shell-lint.json`. No new waiver or baseline debt was added.
+- Help: 90 tests and read-only deterministic generation passed. UI: 19 rule
+  tests, 1,696 scanned files and 646 existing allowances passed.
+- Two narrow parent fixes are included: remove the new literal hash-only
+  Settings URL example from Help prose to satisfy the existing link guard,
+  and expose the real boundedApiRequest utility in the Overlay multi-form
+  suite's transport mock. Original assertions remain; the affected 28 tests
+  and then the full 210-test pack passed. RED logs and source copies remain.
 
 Before edits, the exact owned manifest and original per-file byte/SHA-256
 inventory were recorded in:
@@ -32,6 +50,11 @@ panel through client navigation without the discard confirmation. The parent
 approved a source-only repair and one required 23rd test path:
 `SettingsShell.overlayGuard.test.tsx`, solely for its router boundary mock.
 The original guard assertions remain in place.
+Source at `82a82898` and its 23-path receipt `ca336092…` remain preserved.
+Before the next fixture-only repair, exact fixture/spec/checkpoint bytes,
+SHA-256 inventory and the previous receipt were copied into
+`.cache/settings-registry-loopback-before-82a82898/` without overwriting any
+earlier evidence.
 
 ## Authored behavior
 
@@ -74,7 +97,7 @@ The original guard assertions remain in place.
   links are kept, and the renamed Preferences how-to retains its published
   heading anchor.
 
-## Authored coverage — unrun
+## Coverage and pending browser proof
 
 Pure registry cases cover group placement/order, canonical IDs, three
 aliases, hash names, unknown/prototype names and visibility filtering.
@@ -97,8 +120,8 @@ their default state and cancels JSDOM's unavailable navigation.
 registry, SettingsContext and shared confirmation Modal. Typed synthetic
 panels use an intercepted GET-only local transport. It replaces no shared
 focus or dialog code. Install prompting is stubbed because it is unrelated
-to grouping. Every external or non-GET request is denied and recorded; no
-real account, provider or clipboard operation is available.
+to grouping. Every external, unknown or non-GET request is denied and
+recorded; no real account, provider or clipboard operation is available.
 
 `tests/e2e/settings-registry.spec.ts` authors six cases: Light and Dark in
 the existing phone, tablet and desktop projects. It checks actual resolved
@@ -116,22 +139,39 @@ The same six browser cases additionally reveal the desktop sidebar after
 their original width assertions, open Devices with a native Control-click in
 an intercepted new tab, retain the parent draft without a dialog, then cover
 ordinary-click Stay and native Enter/explicit Discard. Context-wide routing
-intercepts the new tab's first document too. Expected extra transport is one
+intercepts the new tab's first document when Chrome admits that interception.
+Expected extra transport is one
 synthetic native Devices GET and one recorded client router push; parent
 panel reads stay exactly eight, with zero actual account/provider writes.
 
+The fake DNS hostname has been replaced in source by an ephemeral
+`http://127.0.0.1:<port>` listener, following the verified InfoTip fixture
+pattern. Full Chrome can start a native no-opener new tab before context
+routing attaches; the same exact GET allowlist now serves that initial
+request from loopback. The allowlist covers only the initial Settings URL,
+fixture JS/CSS, three known fonts, canonical synthetic panel GETs and the
+unqueried Devices document. It rejects extra query/hash variants and all
+writes, unknown paths or nonlocal origins; the listener additionally checks
+its exact Host and loopback peer. Denials have separate counters.
+
+Assets are prepared before opening the listener. A listening server is
+unref'ed; `afterAll` closes all connections and attaches a cleanup receipt
+asserting `closed: true` and `listening: false`, including any fallback HTTP
+requests. Real native Control-click, parent draft/URL/no-confirm assertions,
+ordinary Stay, native Enter/Discard, exact reads and the one approved router
+push remain unchanged. This harness repair has not been executed yet.
+
 ## Pending serialized verification
 
-1. Review the frozen source and manifest first. Run focused registry,
-   SettingsShell layout/URL/Import/anchor, SettingsMisc, Settings page,
-   settings-link, Help-article and existing unavailable-state suites; include
-   unchanged SettingsContext and Overlay multi-form guards. Maximum two
-   unit workers, minimum one.
-2. Whole web types via
+1. Review the loopback fixture/spec follow-up first. The first focused
+   registry, consumer, Help, multi-form and unavailable-state pack is green
+   as recorded above; no unchanged pack repeat is needed solely for this
+   harness-only repair.
+2. Rerun whole web types and strict lint for the changed browser files after
+   the next runtime grant. Types command:
    `node node_modules/typescript/bin/tsc --noEmit --project tsconfig.json`.
-   Strict lint only owned TS/TSX/MJS sources. Run the existing deterministic
-   Help index generator and Help contracts, then UI-rule tests and the UI
-   ratchet. No new debt acceptance or baseline waiver is authorized.
+   Existing Help/UI proof is unchanged by the transport repair. No new debt
+   acceptance or baseline waiver is authorized.
 3. After source review and an explicit runtime grant, use current admitted
    engine/sample assets for one direct Next production build, unchanged
    performance budgets and post-build types. No engine regeneration,

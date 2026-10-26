@@ -2,7 +2,14 @@ import { expect, test } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { checkAccessibility } from "./accessibility-check";
-import { openSettingsRegistryFixture } from "./settings-registry-fixture.mjs";
+import { closeSettingsRegistryFixtureServer, openSettingsRegistryFixture } from "./settings-registry-fixture.mjs";
+
+test.afterAll(async ({ browserName }, info) => {
+  const transport = await closeSettingsRegistryFixtureServer();
+  expect(transport.closed).toBe(true);
+  expect(transport.listening).toBe(false);
+  await info.attach("settings-fixture-transport-cleanup", { contentType: "application/json", body: JSON.stringify({ browserName, ...transport }) });
+});
 
 type SettingsFixtureWindow = typeof window & {
   settingsFixtureNavigate: (href: string) => void;
@@ -142,6 +149,8 @@ for (const theme of ["light", "dark"] as const) {
     expect(evidence.panelReads).toEqual(["preferences", "account", "overlay", "backups", "checkin", "account", "help", "preferences"]);
     expect(evidence.errors).toEqual([]);
     expect(evidence.unexpectedRequests).toEqual([]);
-    await info.attach("settings-fixture-transport", { contentType: "application/json", body: JSON.stringify({ panelReads: evidence.panelReads, nativeDeviceLoads: evidence.deviceLoads, routerPushes: await page.evaluate(() => (window as SettingsFixtureWindow).settingsFixtureRouterPushes()), unexpectedRequests: evidence.unexpectedRequests, cssNames: evidence.cssNames, actualAccountWrites: 0 }) });
+    expect(evidence.rejectedWrites).toEqual([]);
+    expect(evidence.externalAttempts).toEqual([]);
+    await info.attach("settings-fixture-transport", { contentType: "application/json", body: JSON.stringify({ panelReads: evidence.panelReads, nativeDeviceLoads: evidence.deviceLoads, serverRequests: evidence.serverRequests, routerPushes: await page.evaluate(() => (window as SettingsFixtureWindow).settingsFixtureRouterPushes()), unexpectedRequests: evidence.unexpectedRequests, rejectedWrites: evidence.rejectedWrites, externalAttempts: evidence.externalAttempts, cssNames: evidence.cssNames, actualAccountWrites: 0 }) });
   });
 }

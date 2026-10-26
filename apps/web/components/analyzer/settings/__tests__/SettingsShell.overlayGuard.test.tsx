@@ -38,7 +38,8 @@ vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: async () => "token", isLoaded: true, isSignedIn: true, userId: "synthetic-owner" }),
 }));
 
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@/lib/clientApi", async (importOriginal) => ({
+  boundedApiRequest: (await importOriginal<typeof import("@/lib/clientApi")>()).boundedApiRequest,
   API_BASE: "https://api.test",
   useApi: (path: string) => ({
     data: api.data[path],

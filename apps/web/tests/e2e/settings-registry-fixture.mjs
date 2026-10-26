@@ -1,8 +1,65 @@
 import { build } from "esbuild";
+import { createServer } from "node:http";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
-const ORIGIN = "https://settings-registry-fixture.local";
+let origin = "", server, serverReady, activeTransport;
+const serverLedger = [];
+function fixtureServer() {
+  return serverReady ??= new Promise((resolve, reject) => {
+    const current = createServer(async (request, response) => {
+      const state = activeTransport;
+      if (!state) { response.writeHead(503); response.end(); return; }
+      const method = request.method ?? "";
+      try {
+        const url = new URL(request.url ?? "/", origin);
+        const entry = { method, path: url.pathname, search: url.search };
+        state.serverRequests.push(entry); serverLedger.push(entry);
+        if (request.headers.host !== new URL(origin).host
+          || !["127.0.0.1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress ?? "")) {
+          state.externalAttempts.push(`${method} invalid loopback Host or peer`);
+          if (method !== "GET") state.rejectedWrites.push(`${method} ${url.pathname}${url.search}`);
+          request.resume(); response.writeHead(403); response.end("Nonlocal fixture transport rejected"); return;
+        }
+        const reply = await state.respond(url, method);
+        if (method !== "GET") request.resume();
+        if (!response.destroyed) {
+          response.writeHead(reply.status ?? 200, { "Content-Type": reply.contentType, "Cache-Control": "no-store" });
+          response.end(reply.body);
+        }
+      } catch (error) {
+        state.errors.push(String(error));
+        if (!response.destroyed) { response.writeHead(500); response.end(); }
+      }
+    });
+    server = current;
+    const startupError = error => {
+      if (server === current) { server = null; serverReady = null; origin = ""; }
+      reject(error);
+    };
+    current.once("error", startupError);
+    current.listen(0, "127.0.0.1", () => {
+      current.removeListener("error", startupError);
+      current.on("error", error => activeTransport?.errors.push(String(error)));
+      origin = `http://127.0.0.1:${current.address().port}`;
+      current.unref(); resolve(current);
+    });
+  });
+}
+
+/** Native no-opener Control-click may reach the network before Chrome
+ * attaches context routing. Serve the identical strict GET classifier from
+ * an ephemeral loopback listener, and close it in the spec's afterAll. */
+export async function closeSettingsRegistryFixtureServer() {
+  const current = server;
+  if (!current) return { closed: true, listening: false, port: null, requests: serverLedger.splice(0) };
+  const port = current.address()?.port ?? null;
+  activeTransport = null;
+  await new Promise(resolve => { current.close(resolve); current.closeAllConnections(); });
+  if (current.listening) throw new Error("Settings fixture listener remained open");
+  server = null; serverReady = null; assets = null; origin = "";
+  return { closed: true, listening: current.listening, port, requests: serverLedger.splice(0) };
+}
 const SOURCE = `import React,{useEffect,useState,useSyncExternalStore}from'react';
 import{createRoot}from'react-dom/client';
 import{SettingsShell}from'@/components/analyzer/settings/SettingsShell';
@@ -71,46 +128,59 @@ function fixtureAssets() {
 }
 
 /** Actual Shell, registry, dirty guard and Modal; typed synthetic panels/read
- * transport replace account data. All requests are intercepted; writes fail.
+ * transport replace account data. Context routing and a loopback-only server
+ * share one exact GET allowlist; writes, unknown and nonlocal requests fail.
  * @param {import('@playwright/test').Page} page
  * @param {'light'|'dark'} theme
  */
 export async function openSettingsRegistryFixture(page, theme) {
   const { script, css, cssNames, fonts } = await fixtureAssets();
-  const errors = [], unexpectedRequests = [], panelReads = [], deviceLoads = [];
-  page.on("pageerror", error => errors.push(error.message));
+  // Assets load before the listener starts, so failed bundling/CSS/font reads
+  // cannot leave a startup listener behind.
+  await fixtureServer();
+  const errors = [], unexpectedRequests = [], rejectedWrites = [], externalAttempts = [], panelReads = [], deviceLoads = [], serverRequests = [];
+  const watchErrors = candidate => candidate.on("pageerror", error => errors.push(error.message));
+  watchErrors(page); page.context().on("page", watchErrors);
   await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
   await page.addInitScript(mode => {
     localStorage.setItem("sc2tools.theme", mode);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("Fixture clipboard unavailable"); } } });
   }, theme);
-  // Context routing also intercepts native modified-click/new-tab documents.
-  await page.context().route("**/*", async route => {
-    const request = route.request(), url = new URL(request.url());
-    if (url.origin !== ORIGIN || request.method() !== "GET") {
-      unexpectedRequests.push(`${request.method()} ${url.origin}${url.pathname}`); return route.abort();
+  const denied = (status, message) => ({ status, contentType: "text/plain", body: message });
+  const respond = async (url, method) => {
+    if (method !== "GET") rejectedWrites.push(`${method} ${url.origin}${url.pathname}${url.search}`);
+    if (url.origin !== origin) {
+      externalAttempts.push(`${method} ${url.origin}${url.pathname}${url.search}`);
+      return denied(403, "Nonlocal Settings fixture request rejected");
     }
-    if (url.pathname === "/fixture.js") return route.fulfill({ contentType: "text/javascript", body: script });
-    if (url.pathname === "/fixture.css") return route.fulfill({ contentType: "text/css", body: css });
-    if (url.pathname.startsWith("/fonts/") && fonts.has(url.pathname.slice(7))) return route.fulfill({ contentType: "font/woff2", body: fonts.get(url.pathname.slice(7)) });
-    if (url.pathname.startsWith("/synthetic/panels/")) {
+    if (method !== "GET") return denied(405, "Settings fixture writes rejected");
+    if (url.pathname === "/fixture.js" && !url.search && !url.hash) return { contentType: "text/javascript", body: script };
+    if (url.pathname === "/fixture.css" && !url.search && !url.hash) return { contentType: "text/css", body: css };
+    if (url.pathname.startsWith("/fonts/") && !url.search && !url.hash && fonts.has(url.pathname.slice(7))) return { contentType: "font/woff2", body: fonts.get(url.pathname.slice(7)) };
+    if (url.pathname.startsWith("/synthetic/panels/") && !url.search && !url.hash) {
       const id = url.pathname.slice("/synthetic/panels/".length);
       const titles = { account: "Account", profile: "Profile", backups: "Backups & data", checkin: "Build check-in", randomizer: "Randomizer", import: "Import", overlay: "Overlay", voice: "Voice", preferences: "Preferences", help: "Help" };
       if (Object.hasOwn(titles, id)) {
         panelReads.push(id);
-        return route.fulfill({ contentType: "application/json", body: JSON.stringify({ id, title: titles[id] }) });
+        return { contentType: "application/json", body: JSON.stringify({ id, title: titles[id] }) };
       }
     }
-    if (url.pathname === "/settings") return route.fulfill({ contentType: "text/html", body: `<!doctype html><html lang="en" data-theme="${theme}" data-theme-mode="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local Settings registry proof</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>` });
-    if (url.pathname === "/devices") {
-      deviceLoads.push(request.method());
-      return route.fulfill({ contentType: "text/html", body: '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Synthetic Devices</title><link rel="icon" href="data:,"></head><body><h1>Devices destination</h1><p>Native link boundary; no account transport.</p></body></html>' });
+    if (url.pathname === "/settings" && url.search === "?tab=misc&ref=legacy" && !url.hash) return { contentType: "text/html", body: `<!doctype html><html lang="en" data-theme="${theme}" data-theme-mode="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local Settings registry proof</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>` };
+    if (url.pathname === "/devices" && !url.search && !url.hash) {
+      deviceLoads.push(method);
+      return { contentType: "text/html", body: '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Synthetic Devices</title><link rel="icon" href="data:,"></head><body><h1>Devices destination</h1><p>Native link boundary; no account transport.</p></body></html>' };
     }
-    unexpectedRequests.push(`${request.method()} ${url.pathname}`);
-    return route.fulfill({ status: 404, body: "Unknown fixture resource" });
+    unexpectedRequests.push(`${method} ${url.pathname}${url.search}${url.hash}`);
+    return denied(404, "Unknown Settings fixture GET");
+  };
+  activeTransport = { respond, errors, serverRequests, rejectedWrites, externalAttempts };
+  await page.context().route("**/*", async route => {
+    const request = route.request(), reply = await respond(new URL(request.url()), request.method());
+    if (reply.status === 403 || reply.status === 405) return route.abort();
+    return route.fulfill({ ...reply, headers: { "cache-control": "no-store" } });
   });
-  await page.goto(`${ORIGIN}/settings?tab=misc&ref=legacy`);
+  await page.goto(`${origin}/settings?tab=misc&ref=legacy`);
   await page.getByRole("heading", { name: "Preferences panel", exact: true }).waitFor();
   await page.evaluate(() => document.fonts.ready);
-  return { errors, unexpectedRequests, panelReads, deviceLoads, cssNames };
+  return { errors, unexpectedRequests, rejectedWrites, externalAttempts, panelReads, deviceLoads, serverRequests, cssNames };
 }

@@ -62,7 +62,7 @@ const article: HelpArticle = {
       items: [
         "Add `?tab=` and the tab's name to the Settings address to open that tab, for example [/settings?tab=overlay](/settings?tab=overlay). The names are `account`, `profile`, `backups`, `checkin`, `randomizer`, `import`, `overlay`, `voice`, `preferences` and `help`.",
         "Add `#` and a section name to jump to one section of the tab. `/settings?tab=overlay#platform-connections` opens **Connected accounts** on the Overlay tab. The section is outlined for a moment so you can spot it.",
-        "Older `foundation` and `misc` links still open Account and Preferences. The `streaming` alias still opens Overlay. Hash-only links such as `/settings#misc` open the right tab too.",
+        "Older `foundation` and `misc` links still open Account and Preferences. The `streaming` alias still opens Overlay. Older hash-only tab links continue to work too.",
         "Picking a tab updates the address, so a copied link or a refresh brings you back to the same tab.",
         "Use Up and Down to move through desktop sidebar tabs, including between groups. On a phone use Left and Right in the scrolling tab row. Home and End reach the first and last tabs. Devices is a separate link, reached with Tab.",
       ],
