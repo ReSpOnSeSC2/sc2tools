@@ -1,6 +1,16 @@
 # Settings sections — combined browser repair checkpoint
 
-2026-10-26 current status: current shipping artifact `-JCAtCX4vQd32MlQSHhnN` and the original A3 source/CSS retention bridge remain validated. Test source574 passed narrow checks and exact default-discovery deduplication; its first A4 case then stopped at an incorrectly scoped token-read assertion, leaving19 unrun. The latest three-path test/documentation repair is **SOURCE ONLY, UNVALIDATED**. No full PR A browser completion or deployed behavior is claimed.
+2026-10-26 current status: sourceebd passed the corrected main token-read/dirty-navigation assertions and then stopped in the first A4 case at a real disabled-Randomizer text contrast failure;19 cases remain unrun. The latest three-path consumer-style/documentation repair is **SOURCE ONLY, UNVALIDATED** and needs a new production artifact. No full PR A browser completion or deployed behavior is claimed.
+
+## Current Randomizer contrast boundary
+
+Root preserved the actual-manager token-read test correction as `ebd720057445b3411245a57635847c3634f73cdc`; changed-spec strict lint, whole types and206/68 clean guards passed. Existing unchanged MJS/config/default596 inventory, build and original A3 proofs were not repeated. The fresh20-case listing/current `-JCAt`/four CSS/raw40/nine retained/Chrome/bridge admission passed. In the first Light320 case, the fresh-manager +1 and no Overlay→Chat extra-read assertions, actual dirty/discard and persistent manager/token selection passed. The pending owner-ABA case remained unrun.
+
+A4 then found one serious Randomizer description contrast node (3.1, `#8c919a` on `#fbfdfe`, required4.5) because the consumer's disabled custom-weight ToggleRow faded its entire label with `opacity-60`. The narrow existing MatchupBuildPicker change removes only that outer fade; all remaining classes/layout/text and child Toggle's native disabled state/styling/events are unchanged. No shared primitive, AA rule, test count or API contract changes. Actual failing AA is meaningful evidence; no class-mirror test is added.
+
+The immutable ebd first-RED receipt SHA `c8324ee731e57027dc49725aea5950cd414238f09aad8d7994187548a91be0e0` records one failed/19 unrun, seven scans (six `issues:[]`, one serious contrast finding; incomplete IDs retained), four normal captures/failed PNG/trace,36 synthetic GETs/two exact maps and zero unknown/write/rejected/external/native/socket-rejection events. Three sockets/listeners/drain/owned children closed, and source/artifact/CSS/raw40/nine retained/pointer/manifest/sample/Chrome postchecks passed.
+
+This picker plus two checkpoints are the only latest source edits, within existing68/206; all203 other inputs and A4/A3 fixture/spec/74-unit bytes stay unchanged. A new current production artifact/all81 budgets/post-types/assets is required after root preservation and narrow checks. Original A3 may only be retained through a new explicit unchanged-dependency/render and raw-CSS proof; nothing here claims that future proof or an A4 retry. All preceding failed artifacts remain preserved.
 
 ## Current token-read scope correction
 
