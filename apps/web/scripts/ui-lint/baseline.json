@@ -1108,20 +1108,6 @@
       "example": "\"h-8 w-16 rounded border border-accent-cyan bg-bg-elevated px-1 font-mono text-caption tabular-nums text-text focus:outline-none\""
     },
     {
-      "file": "components/chrome/AppChrome.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "7354488d0681eb8cfb8454fab2037c661c4359421057cf0874fd3529823512e7",
-      "count": 1,
-      "example": "<AuthContextLink kind=\"sign-up\" className=\"hard-press inline-flex h-8 items-center rounded-full border-2 border-line bg-accent px-3.5 font-display text-caption font-bold text-white"
-    },
-    {
-      "file": "components/chrome/AppChrome.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "e08ef71af61e98ffdabb1348f35f69449c839b5ff5eea6fad1f3ee6b84380dbe",
-      "count": 1,
-      "example": "<AuthContextLink kind=\"sign-in\" className=\"hard-press hidden h-8 items-center rounded-full border-2 border-line bg-bg-surface px-3.5 font-display text-caption font-bold text-text h"
-    },
-    {
       "file": "components/chrome/CoachingBookingAlert.tsx",
       "rule": "handrolled-link-button",
       "signature": "5b9d7e257ccf0c26d47c4cef88c8b299f1f2751a17cebeab5415812b6b3555c8",
@@ -1421,13 +1407,6 @@
       "signature": "fa2c83cb600c1a8683676b5afd9dfa642c03cfbb94a1ae130604b198c36654ee",
       "count": 1,
       "example": "<Link href=\"/donate\" className=\"inline-flex h-12 items-center justify-center gap-2 rounded-md bg-accent px-5 text-body-lg font-semibold text-white transition-colors hover:bg-accent"
-    },
-    {
-      "file": "components/landing/LandingPageContent.tsx",
-      "rule": "handrolled-accent-link",
-      "signature": "2434ca8f99dd44a9c586e6b80f521088f0171a515c38bd7c9dbd30a9296581a8",
-      "count": 1,
-      "example": "<Link href={href} className={[ \"inline-flex min-w-[44px] items-center justify-center rounded-md text-center font-semibold\", \"transition-colors duration-100\", \"focus-visible:outline"
     },
     {
       "file": "components/landing/ProductShowcases.tsx",

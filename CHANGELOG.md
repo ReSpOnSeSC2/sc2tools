@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### App and landing action links
+
+- Use the shared action styles for the app's visitor sign-in controls and the landing page's download, browser, dashboard and support links, keeping their destinations and browser rollout choices.
+- Let long landing action labels wrap on a phone while keeping the shared keyboard focus styles.
+
 ### Header action links
 
 - Use the shared button styles for Sign in, Get started and Open app in the desktop header, retaining their compact size and return-to-page behavior.
