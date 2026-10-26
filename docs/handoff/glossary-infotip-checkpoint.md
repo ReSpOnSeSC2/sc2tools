@@ -7,6 +7,17 @@ MobileNav. Preserved Execution source, refs, assets, captures and caches remain.
 All local runtime jobs, browsers and servers are closed. Root owns final
 review, source preservation, ancestry reconciliation and stacked delivery.
 
+Root verified all nineteen final hashes and visually reviewed the public
+390px Light glossary, compact320px Dark glossary and360px Light ready tip.
+New byte-identical copies are `glossary-public-light-390.png`,
+`glossary-compact-dark-320.png` and `infotip-ready-light-360.png` under
+`docs/handoff/screenshots/`; original images remain preserved. Source is
+preserved at `35ba1075`. Normal integration of the final Mobile dependency
+at `c37e1434` changed only documentation/review images; an explicit diff proves
+every `apps/web` byte unchanged. Delivery is stacked on Mobile PR767 while
+its preview is held by the hosting deployment quota. No manual retry, upgrade
+or bypass was attempted.
+
 ## Final integrated local proof
 
 The exact nineteen-path manifest remains
