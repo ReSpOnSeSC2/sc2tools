@@ -18,6 +18,42 @@ describe("Matchup rating bounded consumer", () => {
     expect(within(panel).getByText(/2\/3 paired replay ratings · 1 missing · thin sample/)).toBeTruthy();
     expect(panel.querySelectorAll("circle")).toHaveLength(1); expect(screen.getByText(/No finite rating · 2\/3 rated · 1 missing/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText("PvZ rating window"), { target: { value: "1" } }); expect(screen.getByText(/4,100 performance rating · 2\/2 rated/)).toBeTruthy();
+    expect(within(panel).getByRole("status").textContent).toContain("Games 1–2");
+    expect(panel.querySelector('[data-rating-selection="1"]')).not.toBeNull();
+    expect(screen.getByLabelText("PvZ rating window").getAttribute("aria-describedby")).toContain(within(panel).getByRole("status").id);
+  });
+  it("moves the selection by game index even when dates and rounded estimates match, preserving the full-cohort estimate and gaps", () => {
+    const row = fixture();
+    row.sampleGames = 12;
+    row.points = Array.from({ length: 12 }, (_, index) => ({ date: "2026-10-02", games: Math.min(index + 1, 10), ratedGames: Math.min(index + 1, 10), excludedNoMmr: 0, perfRating: index === 5 || index === 11 ? null : 4200.1 }));
+    state.rows = [row];
+    render(<MatchupRatingCard />);
+    const panel = screen.getByRole("region", { name: "PvZ performance rating" });
+    const select = screen.getByLabelText("PvZ rating window");
+    const paths = () => Array.from(panel.querySelectorAll("path"), path => path.getAttribute("d"));
+    const originalPaths = paths();
+    expect(originalPaths).toHaveLength(2);
+    expect(panel.querySelector("strong")?.textContent).toBe("4,100");
+    expect(within(panel).getByRole("status").textContent).toContain("Games 3–12");
+    expect(panel.querySelector("[data-rating-selection]")).toBeNull();
+    expect(panel.querySelector("[data-rating-cursor]")?.getAttribute("x1")).toBe("235");
+    fireEvent.change(select, { target: { value: "8" } });
+    const firstX = panel.querySelector("[data-rating-selection]")?.getAttribute("cx");
+    expect(within(panel).getByRole("status").textContent).toContain("Games 1–9");
+    expect(within(panel).getByRole("status").textContent).toContain("4,200 performance rating");
+    fireEvent.change(select, { target: { value: "10" } });
+    expect(panel.querySelector('[data-rating-selection="10"]')?.getAttribute("cx")).not.toBe(firstX);
+    expect(within(panel).getByRole("status").textContent).toContain("Games 2–11");
+    expect(within(panel).getByRole("status").textContent).toContain("4,200 performance rating");
+    fireEvent.change(select, { target: { value: "5" } });
+    expect(panel.querySelector("[data-rating-selection]")).toBeNull();
+    expect(panel.querySelector('[data-rating-cursor="5"]')).not.toBeNull();
+    expect(within(panel).getByRole("status").textContent).toContain("No finite rating");
+    expect(within(panel).getByRole("status").getAttribute("aria-atomic")).toBe("true");
+    expect(paths()).toEqual(originalPaths);
+    expect(panel.querySelector("strong")?.textContent).toBe("4,100");
+    expect(within(panel).getByText("12-game estimate")).toBeTruthy();
+    expect(new Set(state.paths).size).toBe(1);
   });
   it("does not present a previous cohort's rating while filters are refreshing", () => {
     state.previous = true; render(<MatchupRatingCard />); expect(screen.queryByRole("region", { name: "PvZ performance rating" })).toBeNull();
@@ -25,6 +61,10 @@ describe("Matchup rating bounded consumer", () => {
   it("leaves wholly unbounded windows as an explicit empty line, and filters unknown race pairs", () => {
     state.rows = [{ ...fixture(), perfRating: null, points: fixture().points.map(point => ({ ...point, perfRating: null })) }, { ...fixture(), matchup: "UvZ" }];
     render(<MatchupRatingCard />); expect(screen.getByText(/No finite window estimate yet/)).toBeTruthy(); expect(screen.queryByRole("region", { name: "UvZ performance rating" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("PvZ rating window"), { target: { value: "0" } });
+    expect(screen.getByRole("status").textContent).toContain("Games 1–1");
+    expect(screen.getByRole("status").textContent).toContain("No finite rating · 1/1 rated · 0 missing");
+    expect(document.querySelector("circle")).toBeNull();
   });
   it("shows recovery and no-data states without inventing zero ratings", () => {
     state.rows = []; const view = render(<MatchupRatingCard />); expect(screen.getByText("No eligible matchup games")).toBeTruthy();
