@@ -4,7 +4,32 @@
 in `.worktrees/wave3-my-reviews`. Preserved Execution source, refs and caches
 remain. Notification and MobileNav packs are frozen in separate worktrees.
 
-## Source-only stage
+## First static validation
+
+Root preserved compact-link repairs at `80bb1085` and integrated reviewed
+Notification/Mobile source at `4ec02356`. The canonical Help generator added
+the glossary as article91; two more generations produced identical bytes
+(SHA256 `b1af2309affec6feaf94224421684fda9de54b05dec06fd6ce8a5e864010a074`).
+The old index is preserved in `.cache/glossary-first-static-4ec02356/`.
+
+- 127 tests across18 suites pass, maximum two workers, including InfoTip,
+  compact/public glossary navigation and retired frames, canonical terms,
+  all Help contracts, Popover, nested Modal and MobileNav.
+- Whole-web types pass. Fifteen owned code/Help/test/fixture files pass strict
+  lint with zero warnings. The existing HelpArticleBody has two inherited
+  accessibility warnings at unchanged lines79/162 and zero errors; its only
+  change passes the existing variant through to HelpWidget at line190.
+  The initial strict result and separate inherited-warning JSON are retained;
+  no rule or allowance changed to hide them.
+- All19 UI-rule tests and the unchanged ratchet pass over1,699 source files /
+  646 existing occurrences. Browser fixture syntax passes.
+
+All root static jobs are closed. Final integrated checks, retained asset
+admission, production build, browser/AA, screenshots and delivery remain.
+This foundation still contains only the canonical seven terms. The additional
+33-term source audit is preserved separately; it is not implemented here.
+
+## Source-only stage (historical)
 
 The initial exact eighteen-path manifest was written before edits as
 `.cache/glossary-infotip-owned-paths.txt`. Root approved one additional path,
