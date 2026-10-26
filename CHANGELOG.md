@@ -16,6 +16,11 @@ corresponding GitHub Release.
 - Use the shared bottom Sheet for phone More navigation, preserving theme choices, keyboard focus, report handoff and responsive dismissal.
 - Keep focus in an underlying dialog when Appearance closes; ordinary account-menu dismissal still returns to the account control.
 
+### Replay and Trends inspection
+
+- Move Macro Breakdown's Change build control below the macro feedback, after What you did well.
+- Highlight the selected rolling matchup-rating window and show its game range, ending date and rating coverage. The overall sample estimate remains visible while inspecting individual windows.
+
 ### Public player pages
 
 - Choose an explicit public player page and optional recent form, MMR, channels, season and map sections in Settings → Profile. Turning the profile off hides it even when named Community builds remain published; replay sharing keeps its own switch.

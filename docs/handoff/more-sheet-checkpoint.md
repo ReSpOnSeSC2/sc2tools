@@ -83,3 +83,11 @@ Exact-head remote checks and deployment verification remain pending. No
 provider/account mutation, installer or SC2 operation was performed. MobileNav,
 Bell, copy/confirmation consumers, branding and build dialog migrations remain
 separate work.
+
+Root normally integrated the independently tested rating-inspection/Macro
+placement main `1c3d9877`, retaining both changelog sections. All More product,
+consumer-test and fixture bytes are identical to tested `480de6c4`. The build
+artifact contains 81 checks (18 explicit plus 63 default); the earlier PR's
+80-count shorthand is corrected without changing any budget. Current combined
+checks and a new exact-head remote run remain pending; the local production and
+More browser evidence above predates this independent main integration.
