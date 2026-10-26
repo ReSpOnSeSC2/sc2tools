@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
 import {
   MAX_GAME_LENGTH_MINUTES,
@@ -9,7 +9,8 @@ import {
   useFilters,
 } from "@/lib/filterContext";
 import { PillButton } from "./FilterPill";
-import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
+import { Popover } from "@/components/ui/Popover";
+import { IconButton } from "@/components/ui/IconButton";
 
 /**
  * Quick game-length bands offered beside the custom range.
@@ -56,8 +57,7 @@ export function GameLengthFilter() {
   const { filters, setFilters } = useFilters();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap({ open, containerRef: dialogRef, onClose: () => setOpen(false) });
+  const panelId = useId();
 
   const min = filters.min_minutes;
   const max = filters.max_minutes;
@@ -130,6 +130,7 @@ export function GameLengthFilter() {
           onClick={() => setOpen((v) => !v)}
           aria-haspopup="dialog"
           aria-expanded={open}
+          aria-controls={open ? panelId : undefined}
           aria-pressed={isCustom}
           title={
             customLabel
@@ -149,98 +150,77 @@ export function GameLengthFilter() {
           <ChevronDown className="h-3 w-3" aria-hidden />
         </button>
 
-        {open ? (
-          <>
+        <Popover open={open} onClose={() => setOpen(false)} anchorRef={triggerRef}
+          id={panelId} label="Custom game length" width={320}>
+          <div className="mb-2 flex items-center justify-between sm:hidden">
+            <h3 className="text-h3 font-semibold text-text">Game length</h3>
+            <IconButton
+              aria-label="Close game length picker"
+              onClick={() => setOpen(false)}
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </IconButton>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="text-micro uppercase tracking-wider text-text-dim">
+                Min (min)
+              </span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_GAME_LENGTH_MINUTES}
+                value={draftMin}
+                placeholder="any"
+                onChange={(e) => setDraftMin(e.target.value)}
+                className="mt-0.5 min-h-[44px] w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              />
+            </label>
+            <label className="block">
+              <span className="text-micro uppercase tracking-wider text-text-dim">
+                Max (min)
+              </span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_GAME_LENGTH_MINUTES}
+                value={draftMax}
+                placeholder="any"
+                onChange={(e) => setDraftMax(e.target.value)}
+                className="mt-0.5 min-h-[44px] w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              />
+            </label>
+          </div>
+          <p className="mt-1.5 text-micro text-text-dim">
+            Min included, max excluded — “10 to 20” covers 10:00 through
+            19:59. Leave a box empty for no bound.
+          </p>
+          <div className="mt-2 flex gap-2">
             <button
               type="button"
-              aria-label="Close game length picker"
-              className="fixed inset-0 z-30 bg-black/40 backdrop-blur-[1px] sm:bg-transparent sm:backdrop-blur-0"
-              onClick={() => setOpen(false)}
-            />
-            <div
-              ref={dialogRef}
-              role="dialog"
-              tabIndex={-1}
-              aria-modal="true"
-              aria-label="Custom game length"
-              className={[
-                "fixed inset-x-2 bottom-above-chrome z-sheet rounded-xl border border-border bg-bg-surface p-4 shadow-card",
-                "sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-full sm:mt-1 sm:w-[min(92vw,320px)] sm:rounded-lg sm:p-3",
-              ].join(" ")}
+              onClick={applyCustom}
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-md border border-border bg-accent/15 px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
             >
-              <div className="mb-2 flex items-center justify-between sm:hidden">
-                <h3 className="text-h3 font-semibold text-text">Game length</h3>
-                <button
-                  type="button"
-                  aria-label="Close"
-                  onClick={() => setOpen(false)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-md text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                >
-                  <X className="h-4 w-4" aria-hidden />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <label className="block">
-                  <span className="text-micro uppercase tracking-wider text-text-dim">
-                    Min (min)
-                  </span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={MAX_GAME_LENGTH_MINUTES}
-                    value={draftMin}
-                    placeholder="any"
-                    onChange={(e) => setDraftMin(e.target.value)}
-                    className="mt-0.5 min-h-[44px] w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-micro uppercase tracking-wider text-text-dim">
-                    Max (min)
-                  </span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={MAX_GAME_LENGTH_MINUTES}
-                    value={draftMax}
-                    placeholder="any"
-                    onChange={(e) => setDraftMax(e.target.value)}
-                    className="mt-0.5 min-h-[44px] w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
-                  />
-                </label>
-              </div>
-              <p className="mt-1.5 text-micro text-text-dim">
-                Min included, max excluded — “10 to 20” covers 10:00 through
-                19:59. Leave a box empty for no bound.
-              </p>
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={applyCustom}
-                  className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-md border border-border bg-accent/15 px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                >
-                  Apply
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    applyBounds({
-                      min_minutes: undefined,
-                      max_minutes: undefined,
-                    });
-                    setOpen(false);
-                  }}
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-md border border-border px-3 py-2 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-          </>
-        ) : null}
+              Apply
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                applyBounds({
+                  min_minutes: undefined,
+                  max_minutes: undefined,
+                });
+                setOpen(false);
+              }}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-md border border-border px-3 py-2 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+            >
+              Clear
+            </button>
+          </div>
+        </Popover>
       </div>
     </fieldset>
   );
