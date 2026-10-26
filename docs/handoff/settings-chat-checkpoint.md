@@ -71,3 +71,21 @@ The approved repair moves the persistent streaming panel shell outside the crede
 Root reviewed three fresh representative captures as readable and contained within those fixture limits: `shots-chat/mobile-360-light-chat.png`, `shots-chat/phone-700-dark-dock.png` and `shots-registry/desktop-1280-dark-preferences.png` in the final browser evidence directory. Three byte-identical copies are published under docs/handoff/screenshots/settings-chat-*.png; original36 PNGs remain untouched in cache. The copy hashes are recorded in root-reviewed-copies.json. Root owns commit, PR and delivery. No installer, engine rebuild, SC2 launch or production mutation belongs to this pack.
 
 CommandsEditor and Twitch automation retain their existing separate request/save behavior and are deliberately **not enrolled** in the Chat tab's dirty publisher. This pack does not claim to guard every Chat-related draft. It does not implement A3 canonical all-section scrollspy, Settings search, a command palette or the entire find-anything roadmap item. Root owns the separate current-season default and Macro chart auto-scroll fixes; those sources are untouched here.
+
+## Exact-head CI compatibility expectations
+
+PR777 source3ff534e1 reached Ready automatic Preview9hpSqqibJQtJWeXhj2k3pDX7mAhN.
+Its first web CI found three older producer-link expectations outside the
+original43-path pack: StreamStudioPolish expected the Dock under Overlay,
+DockModeration expected the old managed-user label, and twitchAutomation
+expected the old partial section query. It passed9,091 other tests; the three
+failures and one expected skip remain in `.cache/settings-chat-ci-3ff/`.
+
+The source manifest expands only to those three existing tests (46 paths).
+Their exact one-line corrections retain every other assertion and strengthen
+the Twitch destination to a full canonical URL. The legacy Overlay Dock URL
+input in page.test.tsx remains unchanged. All20 checks in the three affected
+suites and strict lint pass. Product source, BUILD_IDp6o, artifact7ae3 and all
+four CSS files are unchanged; no second runtime/build matrix is claimed.
+Original files, exact replacement proof and the final summary remain in
+`.cache/settings-chat-ci-repair-3ff/`. Final fresh-head CI follows.
