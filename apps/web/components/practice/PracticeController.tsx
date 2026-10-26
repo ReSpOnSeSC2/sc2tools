@@ -31,6 +31,8 @@ export function PracticeController({ build, target, guideHref, privateBuild, mat
   const scope = `${owner ?? ""}:${privateBuild ? "private" : "public"}:${build.slug ?? build.name}:${build.sourceGameId ?? ""}:${guideHref ?? ""}`;
   const current = useRef(scope); current.current = scope;
   const active = useRef<AbortController | null>(null);
+  const quickTrigger = useRef<HTMLButtonElement>(null);
+  const optionsTrigger = useRef<HTMLButtonElement>(null);
   const { mutate } = useSWRConfig();
   const [open, setOpen] = useState(startOpen);
   const [state, setState] = useState<{ scope: string; busy: boolean; message: string; error: boolean }>({ scope, busy: false, message: "", error: false });
@@ -85,16 +87,20 @@ export function PracticeController({ build, target, guideHref, privateBuild, mat
     const timer = setTimeout(() => {
       launched.current = true;
       if (initialAction === "quick" && matchup && (owner || !privateBuild && path)) void assignRef.current(matchup);
-      else if (initialAction !== "resume") setOpen(true);
+      else if (initialAction !== "resume") {
+        const trigger = initialAction === "options" ? optionsTrigger.current : quickTrigger.current;
+        if (!startOpen && trigger?.isConnected && !trigger.disabled) trigger.focus({ preventScroll: true });
+        setOpen(true);
+      }
     }, 0);
     return () => clearTimeout(timer);
-  }, [initialAction, auth.isLoaded, owner, matchup, scope, privateBuild, path]);
+  }, [initialAction, auth.isLoaded, owner, matchup, scope, privateBuild, path, startOpen]);
   const busy = state.scope === scope && state.busy || resumed.running;
   return <span className="inline-flex min-w-0 max-w-full flex-col gap-1" onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()}>
     {resumed.error ? <span role="alert" className="text-caption text-danger">{resumed.error}</span> : resumed.running ? <span role="status" className="text-caption text-text-muted">Finishing your practice assignment…</span> : null}
     {!startOpen ? <span className="inline-flex max-w-full rounded-md border border-border bg-bg-surface">
-      <button type="button" disabled={!auth.isLoaded || busy} className="inline-flex min-h-11 min-w-0 items-center gap-2 rounded-l-md px-3 text-caption font-semibold text-accent disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => matchup ? void assign(matchup) : setOpen(true)}><Crosshair className="h-4 w-4 shrink-0" aria-hidden />{busy ? "Saving practice…" : matchup ? `Practice in ${matchup}` : "Practice this"}</button>
-      <button type="button" disabled={busy || !auth.isLoaded} aria-label={`Practice options for ${build.name}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)} className="min-h-11 min-w-11 rounded-r-md border-l border-border px-3 text-accent disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><ChevronDown className="h-4 w-4" aria-hidden /></button>
+      <button ref={quickTrigger} type="button" disabled={!auth.isLoaded || busy} className="inline-flex min-h-11 min-w-0 items-center gap-2 rounded-l-md px-3 text-caption font-semibold text-accent disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => matchup ? void assign(matchup) : setOpen(true)}><Crosshair className="h-4 w-4 shrink-0" aria-hidden />{busy ? "Saving practice…" : matchup ? `Practice in ${matchup}` : "Practice this"}</button>
+      <button ref={optionsTrigger} type="button" disabled={busy || !auth.isLoaded} aria-label={`Practice options for ${build.name}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)} className="min-h-11 min-w-11 rounded-r-md border-l border-border px-3 text-accent disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><ChevronDown className="h-4 w-4" aria-hidden /></button>
     </span> : null}
     {state.scope === scope && state.message ? <span role={state.error ? "alert" : "status"} className={`max-w-sm break-words text-caption ${state.error ? "text-danger" : "text-text-muted"}`}>{state.message}</span> : null}
     {open ? owner || !privateBuild && path ? <PracticeDialog key={scope} name={build.name} race={myRace ?? (matchup ? matchup[0] : undefined)} matchup={matchup} busy={busy} message={state.scope === scope ? state.message : ""} onAssign={assign} onClose={close} /> : <span className="text-caption"><Link className="inline-flex min-h-11 items-center text-accent underline" href={signInHref(path)}>Sign in to save practice assignments</Link><button className="min-h-11 px-3" onClick={close}>Close</button></span> : null}

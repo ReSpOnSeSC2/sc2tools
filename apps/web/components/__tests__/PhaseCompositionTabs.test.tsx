@@ -176,6 +176,29 @@ describe("PhaseCompositionTabs", () => {
     expect(panel?.getAttribute("data-active-phase")).toBe("early");
   });
 
+  it("keeps an empty phase scroller keyboard reachable and restores tab navigation when data arrives", () => {
+    const empty = baseProps({
+      sampleSize: { early: 0, earlyMid: 0, mid: 0, midLate: 0, late: 0 },
+    });
+    const view = render(<PhaseCompositionTabs {...empty} />);
+    const tablist = view.getByRole("tablist", { name: "Phase compositions" });
+    const tabs = view.getAllByRole("tab") as HTMLButtonElement[];
+    expect(tablist.getAttribute("tabindex")).toBe("0");
+    tablist.focus();
+    expect(document.activeElement).toBe(tablist);
+    expect(tabs.every((tab) => tab.disabled)).toBe(true);
+    expect(view.getAllByTestId("phase-tab-count").map((count) => count.textContent)).toEqual(["0", "0", "0", "0", "0"]);
+
+    view.rerender(<PhaseCompositionTabs {...baseProps()} />);
+    expect(tablist.hasAttribute("tabindex")).toBe(false);
+    expect(tabs[0].disabled).toBe(false);
+    expect(tabs[0].tabIndex).toBe(0);
+    expect(tabs[3].disabled).toBe(true);
+    fireEvent.keyDown(tabs[0], { key: "ArrowRight" });
+    expect(document.activeElement).toBe(tabs[1]);
+    expect(tabs[1].getAttribute("aria-selected")).toBe("true");
+  });
+
   it("opens games only from the explicit action with the correct phase and signature", () => {
     const onSignatureClick = vi.fn();
     const { container } = render(
