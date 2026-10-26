@@ -17,6 +17,10 @@ corresponding GitHub Release.
 - Compare MMR and macro-score bands on one percentage scale with separate game counts; preserve existing filters, rate denominators and game drilldowns.
 - Add same-data table views, readable summaries and hollow/dim sample cues below 20 decided results, or 20 measured games for mechanics averages. Existing missing-data gaps and reduced-motion behavior remain explicit.
 
+### Analyzer filters
+
+- Use shared filter popovers with viewport bounds, keyboard dismissal and focus return. Phone filters stay in a bottom sheet; closing a date or length picker leaves that editor open.
+
 ### Appearance and accessibility
 
 - Choose Light, Dark or System from appearance controls. System follows device changes and keeps the browser's colour in sync; existing saved choices remain supported.

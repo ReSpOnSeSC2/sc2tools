@@ -50,12 +50,25 @@ describe("public community activity", () => {
     expect(screen.getByText(/Signed-in users count once across devices/)).toBeTruthy();
   });
 
-  it("shows loading placeholders without inventing counts", () => {
+  it("uses decorative loading placeholders with readable text and one aggregate status", () => {
     response.isLoading = true;
-    render(<SiteStats />);
-    expect(screen.getAllByLabelText("Loading")).toHaveLength(3);
+    const { rerender } = render(<SiteStats />);
+    const counts = screen.getByRole("group", { name: "Game sync and site activity" }).querySelectorAll("dd");
+    expect(counts).toHaveLength(3);
+    for (const count of counts) {
+      expect(count.textContent).toBe("Loading");
+      expect(count.querySelector("[aria-label]")).toBeNull();
+      expect(count.querySelector("[aria-hidden='true']")?.className).toContain("motion-safe:animate-pulse");
+    }
     expect(screen.queryByText("0")).toBeNull();
+    expect(screen.getAllByRole("status")).toHaveLength(1);
     expect(screen.getByRole("status").textContent).toBe("Loading activity");
+    // A background refresh with a fresh snapshot must not announce loading
+    // again or replace known values with placeholders.
+    snapshot(); rerender(<SiteStats />);
+    expect(screen.queryAllByText("Loading")).toHaveLength(0);
+    expect(screen.getByText("12,345")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Updates every 30 seconds");
   });
 
   it("keeps independently available metrics when one source fails", () => {
@@ -64,7 +77,7 @@ describe("public community activity", () => {
     render(<SiteStats />);
     expect(screen.getByText("12,345")).toBeTruthy();
     expect(screen.getByText("12")).toBeTruthy();
-    expect(screen.getAllByLabelText("Unavailable")).toHaveLength(1);
+    expect(screen.getAllByText("Unavailable")).toHaveLength(1);
     expect(screen.getByRole("status").textContent).toBe("Some counts unavailable");
   });
 
@@ -73,7 +86,12 @@ describe("public community activity", () => {
     response.error = new Error("Network unavailable");
     render(<SiteStats />);
     expect(screen.queryByText("12,345")).toBeNull();
-    expect(screen.getAllByLabelText("Unavailable")).toHaveLength(3);
+    expect(screen.getAllByText("Unavailable")).toHaveLength(3);
+    for (const text of screen.getAllByText("Unavailable")) {
+      expect(text.hasAttribute("aria-label")).toBe(false);
+      expect(text.previousElementSibling?.getAttribute("aria-hidden")).toBe("true");
+    }
+    expect(screen.getAllByRole("status")).toHaveLength(1);
     expect(screen.getByRole("status").textContent).toBe("Updates unavailable");
   });
 
@@ -83,7 +101,7 @@ describe("public community activity", () => {
     response.data!.generatedAt = new Date(Date.now() - 100_000).toISOString();
     response.data!.receivedAt = Date.now() - 100_000;
     render(<SiteStats />);
-    expect(screen.getAllByLabelText("Unavailable")).toHaveLength(3);
+    expect(screen.getAllByText("Unavailable")).toHaveLength(3);
     expect(screen.queryByText("12,345")).toBeNull();
   });
 
@@ -92,7 +110,7 @@ describe("public community activity", () => {
     response.data!.generatedAt = new Date(Date.now() - 3_600_000).toISOString();
     render(<SiteStats />);
     expect(screen.getByText("12,345")).toBeTruthy();
-    expect(screen.queryByLabelText("Unavailable")).toBeNull();
+    expect(screen.queryByText("Unavailable")).toBeNull();
   });
 });
 
