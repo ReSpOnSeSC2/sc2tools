@@ -2,6 +2,16 @@
 
 Roadmap: Wave 5 `auth-return-to-context`; ADR0052.
 
+## Full-suite clipboard assertion repair
+
+At `6556b058`, responsive CI passes; full web CI passes 8,727 tests and fails
+one existing ChatCommandsEditor focus assertion (one expected test is skipped).
+That test found the fallback input at DOM commit before its focus effect ran.
+The assertion now waits for focus and full text selection, retaining read-only
+and owner-change checks. All four editor checks and strict test lint pass.
+Product code and the validated build/browser inputs are unchanged. The shared
+test-only repair is preserved as `5ec5d18c`; current-head full CI must rerun.
+
 ## Public-player main integration
 
 Merged current Public main `251cb319` normally at `96a8ab57`, without source
