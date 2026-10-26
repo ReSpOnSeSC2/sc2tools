@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Read your stats and measured terms
+
+- Expand the glossary from seven to 40 terms, with searchable formulas, sample limits and plain explanations of missing measurements and different win-rate denominators.
+- Add contextual definitions beside the four Macro KPIs and six Opponents table headers, keeping help separate from sorting and saved preferences.
+- Explain Today, opponent, macro and build scopes in Reading your stats, including detected versus planned labels and the difference between local today and an overlay session.
+
 ### Hosting resource usage
 
 - Stop scheduled website warmups that consume Vercel's server allowance. Keep the existing Render API keepalive and visitor-triggered status checks.

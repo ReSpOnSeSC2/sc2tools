@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MacroChartSection } from "../MacroChartSection";
 import { MacroKpiRow } from "../MacroKpiRow";
+import { SpendingQuotientStat } from "../SpendingQuotientStat";
+import { glossaryTerm } from "@/lib/glossary";
 import type { StatsEvent } from "../MacroBreakdownPanel.types";
 import { readGameApm, type ApmCurveResponse, type GameApm } from "@/lib/apm";
 import realCurves from "@/lib/__tests__/fixtures/apmCurves.json";
@@ -136,22 +138,66 @@ describe("APM tile", () => {
 
   it("shows your average with the opponent's beneath", () => {
     render(<MacroKpiRow raw={raw} apm={APM} apmLoading={false} />);
-    const tile = screen.getByText("APM").closest("div")!.parentElement!;
+    const tile = screen.getByRole("group", { name: "APM" });
     expect(tile.textContent).toContain("190");
     expect(tile.textContent).toContain("Opponent 250");
   });
 
-  it("says when APM wasn't measured, and explains how to add it", () => {
+  it("says when APM wasn't measured and links to canonical recovery advice", async () => {
     render(<MacroKpiRow raw={raw} apm={null} apmLoading={false} />);
-    const tile = screen.getByText("APM").closest("div")!.parentElement!;
+    const tile = screen.getByRole("group", { name: "APM" });
     expect(tile.textContent).toContain("—");
     expect(tile.textContent).toContain("Not measured for this game");
-    fireEvent.click(screen.getByRole("button", { name: "Show APM explanation" }));
-    expect(screen.getByRole("note").textContent).toMatch(/Recompute/);
+    fireEvent.click(within(tile).getByRole("button", { name: "About APM" }));
+    const tip = await screen.findByRole("dialog", { name: "About APM" });
+    expect((await within(tip).findByRole("link", { name: "Learn more" })).getAttribute("href")).toBe("/help/glossary#apm");
+    expect(glossaryTerm("apm")?.long).toMatch(/Recompute or Re-sync/);
   });
 
   it("stays quiet while the curve is loading", () => {
     render(<MacroKpiRow raw={raw} apm={null} apmLoading />);
     expect(screen.queryByText("Not measured for this game")).toBeNull();
+  });
+
+  it.each([
+    ["Spending Quotient", "spending-quotient"], ["Supply blocked", "supply-blocked"],
+    ["Float spikes", "float-spikes"], ["APM", "apm"],
+  ])("opens the canonical %s definition beside its measured value", async (label, id) => {
+    render(<MacroKpiRow raw={raw} apm={APM} apmLoading={false} />);
+    const tile = screen.getByRole("group", { name: label });
+    const trigger = within(tile).getByRole("button", { name: `About ${label}` });
+    expect(trigger.closest("button")?.querySelector("button")).toBeNull();
+    fireEvent.click(trigger);
+    const tip = await screen.findByRole("dialog", { name: `About ${label}` });
+    expect(await within(tip).findByText(glossaryTerm(id)!.short)).toBeTruthy();
+    expect(within(tip).getByRole("link", { name: "Learn more" }).getAttribute("href")).toBe(`/help/glossary#${id}`);
+  });
+
+  it("keeps real numeric zeros visible and does not clamp high SQ to the macro-score range", () => {
+    const view = render(<MacroKpiRow raw={{ sq: 0, supply_blocked_seconds: 0, mineral_float_spikes: 0 }} apm={null} apmLoading={false} />);
+    expect(within(screen.getByRole("group", { name: "Spending Quotient" })).getByText("0.0")).toBeTruthy();
+    expect(within(screen.getByRole("group", { name: "Supply blocked" })).getByText("0")).toBeTruthy();
+    expect(within(screen.getByRole("group", { name: "Float spikes" })).getByText("0")).toBeTruthy();
+    view.rerender(<MacroKpiRow raw={{ ...raw, sq: 123.4 }} apm={null} apmLoading={false} />);
+    const sq = screen.getByRole("group", { name: "Spending Quotient" });
+    expect(within(sq).getByText("123.4")).toBeTruthy();
+    expect(within(sq).getByText("Pro tier")).toBeTruthy();
+    expect(screen.getByText("Samples >800 minerals from 4:00")).toBeTruthy();
+  });
+
+  it.each([null, undefined, Number.NaN, Number.POSITIVE_INFINITY])("shows unavailable SQ without a tier for %s", (value) => {
+    render(<SpendingQuotientStat label="Spending Quotient" termId="spending-quotient" value={value} tone="cyan" decimals={1} />);
+    const tile = screen.getByRole("group", { name: "Spending Quotient" });
+    expect(within(tile).getByText("—")).toBeTruthy();
+    expect(within(tile).queryByText(/tier$/)).toBeNull();
+  });
+
+  it("keeps a zero trusted average unavailable instead of inventing 0 APM", () => {
+    const zeroAverage = readGameApm({ v: 3, has_data: true, players: [{ is_me: true, avg_apm: 0, samples: [{ t: 0, apm: 0, spm: 0 }] }] });
+    expect(zeroAverage?.me.avg).toBeNull();
+    render(<MacroKpiRow raw={raw} apm={zeroAverage} apmLoading={false} />);
+    const tile = screen.getByRole("group", { name: "APM" });
+    expect(within(tile).getByText("—")).toBeTruthy();
+    expect(within(tile).queryByText("0")).toBeNull();
   });
 });

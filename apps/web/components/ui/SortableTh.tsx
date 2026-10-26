@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 
 export type SortDir = "asc" | "desc";
@@ -132,6 +132,7 @@ export function SortableTh({
   width,
   title,
   compact = false,
+  info,
 }: {
   col: string;
   label: string;
@@ -144,20 +145,17 @@ export function SortableTh({
   title?: string;
   /** Use tighter table-cell padding for dense, horizontally scrollable tables. */
   compact?: boolean;
+  /** Optional help control beside the sort button; never inside it. */
+  info?: ReactNode;
 }) {
   const active = sortBy === col;
   const arrow = active ? (sortDir === "asc" ? "↑" : "↓") : "";
-  return (
-    <th
-      aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
-      className="p-0"
-      style={width ? { width } : undefined}
-    >
+  const button = (
       <button
         type="button"
         onClick={() => setSort(col)}
         title={title}
-        className={`flex w-full items-center gap-1 text-micro uppercase tracking-wider hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent ${
+        className={`${info ? "flex min-h-11 min-w-0 flex-1" : "flex w-full"} items-center gap-1 text-micro uppercase tracking-wider hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent ${
           compact ? "px-2 py-1.5" : "px-3 py-2"
         } ${
           align === "right" ? "justify-end text-right" : "justify-start text-left"
@@ -166,6 +164,15 @@ export function SortableTh({
         <span>{label}</span>
         {arrow ? <span aria-hidden>{arrow}</span> : null}
       </button>
+  );
+  return (
+    <th
+      aria-label={info ? label : undefined}
+      aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+      className="p-0"
+      style={width ? { width } : undefined}
+    >
+      {info ? <div className="flex items-center gap-1">{button}<span className="shrink-0">{info}</span></div> : button}
     </th>
   );
 }
