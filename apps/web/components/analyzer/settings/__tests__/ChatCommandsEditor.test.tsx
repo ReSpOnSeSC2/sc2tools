@@ -33,7 +33,12 @@ it("adds a custom command locally, saves explicitly, previews exactly and copies
 it("has a selected read-only clipboard fallback and clears private draft/preview on account change", async () => {
   writeText.mockRejectedValue(new Error("synthetic clipboard unavailable")); const view = render(<ChatCommandsEditor token="synthetic-A" onSaved={vi.fn()} />);
   fireEvent.click(await screen.findByRole("button", { name: "Copy Nightbot · !mmr" })); const field = await screen.findByRole("textbox", { name: "Copy this Nightbot snippet" });
-  expect(field).toHaveProperty("readOnly", true); expect(document.activeElement).toBe(field); expect((field as HTMLInputElement).selectionEnd).toBe((field as HTMLInputElement).value.length);
+  expect(field).toHaveProperty("readOnly", true);
+  await waitFor(() => {
+    expect(document.activeElement).toBe(field);
+    expect((field as HTMLInputElement).selectionStart).toBe(0);
+    expect((field as HTMLInputElement).selectionEnd).toBe((field as HTMLInputElement).value.length);
+  });
   fireEvent.change(screen.getByRole("textbox", { name: "Alias for !mmr" }), { target: { value: "private_alias" } });
   env.auth.userId = "B"; view.rerender(<ChatCommandsEditor token="synthetic-B" onSaved={vi.fn()} />);
   await waitFor(() => expect(screen.getByRole("textbox", { name: "Alias for !mmr" })).toHaveProperty("value", "mmr")); expect(screen.queryByDisplayValue(/synthetic-A/)).toBeNull();
