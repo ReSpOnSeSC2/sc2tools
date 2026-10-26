@@ -5,7 +5,26 @@ prepared by root at actual main `4135639b`, in
 `C:\SC2TOOLS\.worktrees\wave3-guides-expansion`. The merged UI branch,
 screenshots, engine/sample assets and all prior caches remain preserved.
 
-## Current boundary: authored, unverified
+## First static verification
+
+Root integrated reviewed Mobile source at `095de69a`, then ran the first
+runtime stage. It passes 146 tests/16 suites, full web types, strict owned lint
+on all five executable/Help files with zero warnings, deterministic Help90
+without writing the index, all19 UI-rule tests and the unchanged ratchet of
+1,695 source files/645 existing occurrences.
+
+The original deadline test reached its body boundary nondeterministically
+because the adapter imported the real request module during the fake clock.
+The test now resolves that real function in setup and calls it directly during
+the request, preserving real JWT/header/body handling. The nonheld DELETE uses
+the actual API's204 response. Original test bytes and both RED logs remain
+under `.cache/platform-first-static-095de69a/`; no production source changed.
+All41 connected-account tests and all original assertions pass.
+
+All root runtime jobs are closed. Final dependency integration, build/admission,
+browser/AA and delivery remain. No actual provider/account operation ran.
+
+## Initial source-only boundary (historical)
 
 The exact eight paths were recorded before edits in
 `.cache/platform-disconnect-confirm-owned-paths.txt`. No unit test, types,

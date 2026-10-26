@@ -8,6 +8,7 @@ const mutateMock = vi.fn();
 const successMock = vi.fn();
 const errorMock = vi.fn();
 const getToken = vi.fn();
+let actualApiCall: typeof import("@/lib/clientApi").apiCall;
 const auth = vi.hoisted(() => ({ owner: "owner-a" as string | null, loaded: true, signedIn: true }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken, userId: auth.owner, isLoaded: auth.loaded, isSignedIn: auth.signedIn }) }));
 vi.mock("@/lib/clientApi", async original => ({
@@ -26,7 +27,8 @@ function response(overrides: Record<string, unknown> = {}) {
   })) };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  actualApiCall = (await vi.importActual<typeof import("@/lib/clientApi")>("@/lib/clientApi")).apiCall;
   vi.useFakeTimers();
   apiCallMock.mockReset(); useApiMock.mockReset(); mutateMock.mockReset();
   successMock.mockReset(); errorMock.mockReset();
@@ -129,10 +131,7 @@ function mockDisconnectTransport() {
   vi.stubGlobal("fetch", transport);
   mutateMock.mockImplementation(async update => typeof update === "function" ? update(connected()) : update);
   // Keep real JWT/header/body handling and the real owner-request hook.
-  apiCallMock.mockImplementation(async (token: () => Promise<string | null>, path: string, init?: RequestInit) => {
-    const actual = await vi.importActual<typeof import("@/lib/clientApi")>("@/lib/clientApi");
-    return actual.apiCall(token, path, init);
-  });
+  apiCallMock.mockImplementation((token: () => Promise<string | null>, path: string, init?: RequestInit) => actualApiCall(token, path, init));
   return transport;
 }
 function showConnection(data = connected()) {
@@ -342,7 +341,7 @@ describe("whole disconnect request deadline", () => {
       if ((held === "delete body") === (init?.method === "DELETE")) {
         return { ok: true, status: 200, json: () => new Promise(resolve => { release = resolve; }) } as Response;
       }
-      return json({ disconnected: true });
+      return init?.method === "DELETE" ? new Response(null, { status: 204 }) : json(response());
     });
     render(<OfficialPlatformConnections />);
     fireEvent.click(within(screen.getByRole("group", { name: "Twitch account permissions" })).getByRole("button", { name: "Disconnect" }));
