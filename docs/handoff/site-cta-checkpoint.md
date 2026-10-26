@@ -46,9 +46,15 @@ GET assets, rejects/counts writes, unknown and external requests, and exposes
 no real API, account, provider or clipboard operation. Existing AppChrome's
 strict More appearance fixture is reused without edits.
 
-All tests, types, lint, engine/sample admission, production build/budget,
-browser/AA and screenshot review for this new slice are **unrun**. Runtime is
-serialized behind Settings A1. Independent source review found no production
+Root's first static stage at09f7b351 passes **73 tests / four suites**, whole
+web types, strict lint on all six owned code/test/browser files, Help91
+read-only determinism and all19 UI rules over1,699 files/639 existing
+occurrences. No source repair or RED was needed. Logs and the unchanged Help
+hashes are in `.cache/site-cta-first-static-09f7/`. Header's actual-main
+ancestry was integrated at1403a20e with **zero file/tree changes**.
+
+Engine/sample admission, production build/budget, browser/AA and screenshot
+review for this new slice remain **unrun**. Independent source review found no production
 blocker and identified a proof gap: horizontal bounds alone could miss
 multiline vertical clipping or a48px action becoming44px. The authored matrix
 now checks exact48/44 minimums, vertical scroll containment and real text Range
