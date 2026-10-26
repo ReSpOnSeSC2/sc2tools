@@ -142,6 +142,18 @@ tool/config pins are unchanged, so the actual API0 is retained. The web type
 retry remains pending. No runtime, lint, test, Mongo, build, browser, generator
 or Git operation accompanied this source-only repair.
 
+## Browser held-body proof strengthening
+
+Source review found that the synthetic response parsed JSON only after its hold
+was released, allowing native fetch cancellation to reject the parse before a
+stale decoded answer reached the consumer. The fixture now decodes and captures
+the real response first, then records the held event and installs its gate in
+the same synchronous continuation. Releasing the gate returns that captured DTO
+even after abort. Existing assertions therefore wait for a decoded held answer;
+HTTP, signals and product code are unchanged. This is a source-only test repair,
+not a browser or validation pass. Both prior files were preserved under
+`.cache/activation-decoded-body-repair-8dd73509/` before the edit.
+
 ## Validation still required
 
 New source-only tests cover real Mongo flags, exact six-read shape/projections,
