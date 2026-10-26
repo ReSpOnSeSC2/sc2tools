@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Connected-account confirmation
+
+- Confirm the named Twitch, Kick or YouTube account before disconnecting its notifications and stream controls. Cancel or Escape keeps it connected.
+- Retire earlier confirmations and delayed requests when the signed-in account or connection changes; uncertain results require checking status and explicit approval before another attempt.
+
 ### Build dialogs
 
 - Use the shared dialog for build dossiers and saved-build loading or error states, with keyboard focus containment, a 44px Close control and focus return.

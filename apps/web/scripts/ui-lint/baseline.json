@@ -842,13 +842,6 @@
       "example": "\"w-full rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none\""
     },
     {
-      "file": "components/analyzer/settings/OfficialPlatformConnections.tsx",
-      "rule": "native-confirm-prompt",
-      "signature": "9a389e214ba0a6762f923b95b382f3789dcfc5dd514ea547b7e1de5e6ea5b5ed",
-      "count": 1,
-      "example": "window.confirm(`Disconnect your ${COPY[platform].label} account? This stops its notifications and stream controls.`)"
-    },
-    {
       "file": "components/analyzer/settings/OverlayThemeSection.tsx",
       "rule": "hex-outside-visualization",
       "signature": "85af107e292c5e2d0bcdaac820d8f92d9a1206e248f61b7cca7d914480111965",
