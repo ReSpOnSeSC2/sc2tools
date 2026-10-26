@@ -17,6 +17,10 @@ corresponding GitHub Release.
 - Use one player address for Overview, Builds, shared Replays and Reviews. Older profile and author links resolve directly to the canonical page, while private profiles stay private.
 - Copy public channel-panel images in two sizes and themes. Disabled or unavailable profiles return a neutral image, and public pages and images check visibility on each request.
 
+### Analyzer filters
+
+- Use shared filter popovers with viewport bounds, keyboard dismissal and focus return. Phone filters stay in a bottom sheet; closing a date or length picker leaves that editor open.
+
 ### Appearance and accessibility
 
 - Choose Light, Dark or System from appearance controls. System follows device changes and keeps the browser's colour in sync; existing saved choices remain supported.

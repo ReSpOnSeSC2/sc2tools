@@ -190,34 +190,6 @@
       "example": "<Link href={w.cta.href} className=\"hard-press inline-flex shrink-0 items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 py-[0.55rem] font-display text-xs font-bo"
     },
     {
-      "file": "components/analyzer/FilterBar.tsx",
-      "rule": "dialog-outside-ui",
-      "signature": "68f1365adc364fa1bb2e3922df45c1ec71da37a2758de1dcb952e24304d21122",
-      "count": 1,
-      "example": "<div ref={dialogRef} role=\"dialog\" tabIndex={-1} aria-modal=\"true\" aria-label=\"Pick a date range\" className={[ \"fixed inset-x-2 bottom-above-chrome z-sheet max-h-[80vh] overflow-y-"
-    },
-    {
-      "file": "components/analyzer/FilterBar.tsx",
-      "rule": "focus-without-ring",
-      "signature": "a99773a64c7584252da59f2a6691764335e36c425c9e79f6f883bf859c921b60",
-      "count": 2,
-      "example": "\"w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none mt-0.5 min-h-[4"
-    },
-    {
-      "file": "components/analyzer/GameLengthFilter.tsx",
-      "rule": "dialog-outside-ui",
-      "signature": "231d0c2bbebbc6afd5d363c63203ec6eb1c930a868e2f1fd4a05da54dd42b9ca",
-      "count": 1,
-      "example": "<div ref={dialogRef} role=\"dialog\" tabIndex={-1} aria-modal=\"true\" aria-label=\"Custom game length\" className={[ \"fixed inset-x-2 bottom-above-chrome z-sheet rounded-xl border borde"
-    },
-    {
-      "file": "components/analyzer/GameLengthFilter.tsx",
-      "rule": "focus-without-ring",
-      "signature": "2e87bbdcb4346c83f8fe0c20d7b0bcd4108e265fa4f90f0285d3c9c47044748e",
-      "count": 2,
-      "example": "\"mt-0.5 min-h-[44px] w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-"
-    },
-    {
       "file": "components/analyzer/GameStreamLinks.tsx",
       "rule": "hex-outside-visualization",
       "signature": "85b03a89fb53989fbe10da5c438c19960c72a884f07c59948f01b4dd06f1d331",
@@ -265,13 +237,6 @@
       "signature": "975b9889e34cafa3dadb40fa3c1daa4c7718b12c11d29f5aef8904670b5ae154",
       "count": 1,
       "example": "\"#3ec07a\""
-    },
-    {
-      "file": "components/analyzer/MoreFiltersPopover.tsx",
-      "rule": "dialog-outside-ui",
-      "signature": "254e53e073cc5200128b11d4167b74c856c5a403797f84169ca2aed206044101",
-      "count": 1,
-      "example": "<div ref={dialogRef} role=\"dialog\" aria-modal=\"true\" aria-label=\"More filters\" tabIndex={-1} style={position || { visibility: \"hidden\" }} className=\"fixed z-40 flex flex-col items-"
     },
     {
       "file": "components/analyzer/OpponentDossierStates.tsx",

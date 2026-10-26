@@ -131,7 +131,7 @@ describe("FilterBar phone sheet", () => {
     expect(screen.queryByRole("dialog", { name: "Filters" })).toBeNull();
   });
 
-  it("opens the phone date picker from the full editor above the app's tab bar", async () => {
+  it("opens a nonmodal date picker inside the phone filter sheet", async () => {
     render(<Harness />);
     await openSheet();
     // The date range button sits right after its "Date range" label.
@@ -139,9 +139,9 @@ describe("FilterBar phone sheet", () => {
     const trigger = within(label.nextElementSibling as HTMLElement).getByRole("button");
     fireEvent.click(trigger);
     const picker = screen.getByRole("dialog", { name: "Pick a date range" });
-    expect(picker.className).toContain("bottom-above-chrome");
-    expect(picker.className).toContain("z-sheet");
-    expect(picker.className).not.toMatch(/(^|\s)bottom-2(\s|$)/);
+    expect(picker.hasAttribute("aria-modal")).toBe(false);
+    expect(screen.getByRole("dialog", { name: "Filters" }).contains(picker)).toBe(true);
+    expect(trigger.getAttribute("aria-controls")).toBe(picker.id);
   });
 
   it("links the filters help article from the bar", async () => {
