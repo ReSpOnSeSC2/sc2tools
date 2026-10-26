@@ -2,9 +2,35 @@
 
 2026-10-26. Base provided by the parent: `9a68c480c9d19278642b5c546fe4b3ab081fa6b1`,
 worktree `wave3-guides-expansion`, branch `codex/wave5-revision-chart-cache`.
-Initial preparation was source only. Later authorized whole-API type and strict
-lint runs are recorded below. No test, build, generator, Git mutation, browser,
-provider, database or production activation was performed by this author.
+Initial preparation was source only. Authorized local type, lint and Jest runs
+are recorded below; database execution used local MongoMemoryServer fixtures.
+No build, generator, Git mutation, browser, provider or production database
+operation or activation was performed by this author.
+
+## Current validation status
+
+Validated code/test revision: `c207530501f954f78f7871552bd8bf1999311622`, tree
+`d9a4d6f2f1bc0f7c2abea0d4528831f51d7ae505`. Only this checkpoint and the existing
+changelog entry are finalized afterward; product and test bytes are unchanged.
+
+- Evidence covers **475 distinct selected cases across 28 files**: 467 prior
+  passing cases from 27 unchanged files plus eight actual fresh passing cases
+  in the repaired attribution-writer file. The entire old failed file, including
+  its six old passes, is excluded from retention. This is not a fresh 28-file
+  rerun or a 473-plus-eight count.
+- Whole API types passed. Raw strict lint exited 1 with exactly 56 accepted
+  inherited warnings; the separate full-tuple audit exited 0. The 12 warned
+  files retain their raw-byte pins; the other 16 files have zero warnings.
+  There are zero lint errors, suppressed messages or new warnings. Raw lint
+  remains recorded as failed; no rule, threshold or configuration was changed.
+- Full API tests and CI remain unrun. `USER_CACHE_ENABLED` stays default-off;
+  no production activation, deployment validation or measured savings is claimed.
+  Before enabling, verify one instance and a fully settled deployment with every
+  writer upgraded. Broader dashboard, ETag and corpus work remains separate.
+
+The focused result, retention arithmetic, immutable receipts and process closure
+are recorded under Final focused validation below. Historical sections preserve
+the earlier failures and source-only freezes rather than replacing their evidence.
 
 ## Prepared behavior and boundaries
 
@@ -41,7 +67,7 @@ dataRev is not a corpus watermark or distributed transaction guarantee.
 
 ## Exact approved source manifest
 
-The 31 paths comprise:
+The initial 31 paths comprised:
 
 - 17 product: util/userRevision; middleware/userCache; app/server; aggregation and
   metrics routers; games, customBuilds, buildIntents, buildIntentGameState,
@@ -83,7 +109,8 @@ requested three repairs, authored only within the same manifest:
 
 The repair freeze is separate under
 `.cache/revision-cache-source-9a68c480-repair1/`, with all 31 source copies and an
-exact delta against the original source receipt. All repair tests remain unrun.
+exact delta against the original source receipt. Repair tests were unrun at
+that source freeze; later results are recorded below.
 
 ## Validation boundary amendment: 32-path scope
 
@@ -107,8 +134,9 @@ URIs directly, three use shared harnesses that do so, and nine are config/pure/
 fake-DB tests. None imports server/bootstrap/dotenv; config parsing uses explicit
 fixtures. Mongo/R2 environment inspection recorded presence booleans only, all
 false. This is database/config isolation evidence, not a claim that a
-Liquipedia-only setup is a global provider deny rule. Remaining actual selected
-provider paths are being traced before a future validation grant.
+Liquipedia-only setup is a global provider deny rule. The remaining actual
+selected provider paths were traced before later validation; this remains a
+bounded selected-path source audit.
 
 The original validation packet 83b7fafd remains immutable and was not executed.
 New validation metadata must add strict JS path 28 and original same-filename
@@ -139,8 +167,9 @@ preserved under `.cache/type-annotation-repair-4ed16b50/`, with a receipt.
 The parent authorized exactly this getter's numeric return annotation and this
 checkpoint. The annotation breaks the inference cycle without changing an
 initializer, runtime behavior, any cast, tsnocheck or lint rule. Other30 source
-paths stay unchanged. Annotation validation is pending independent review,
-parent preservation and a new exact runtime grant.
+paths stayed unchanged. At that annotation freeze, validation was pending
+independent review, parent preservation and a new exact runtime grant; the next
+run resolved both type errors.
 
 ## Second API validation and response-lease extraction
 
@@ -173,8 +202,8 @@ then obtains those objects and enters its unchanged try/catch. Counter, timer,
 listener, abort, queue, pin, releaseResponse and drain ordering is retained.
 The test removes only the unused entry binding; every assertion is unchanged.
 Other29 source paths remain byte-identical. No lint configuration, suppression,
-new any type or cache behavior is added. This extraction is source-only and
-awaits independent review, parent preservation and a fresh validation grant.
+new any type or cache behavior was added. The extraction was source-only at
+that freeze; its later validation is recorded below.
 
 ## First selected Jest run and promotion-fixture repair
 
@@ -221,9 +250,55 @@ and verifies the persisted label changes from Unclassified to Gateway opener
 with slugopener before throwing the same error. The original rejection-identity
 and final-retirement assertions remain, with an exact single-injection check.
 The Gateway log/rule and all other fixtures, positive tests and real services
-remain unchanged. Other30 source paths and all12 inherited-warning source-file pins
-remain byte-identical. This fixture repair is unrun and awaits independent
-review, parent preservation and a fresh focused validation grant.
+remain unchanged. Other30 source paths and all12 inherited-warning source-file
+pins remained byte-identical. The fixture repair was unrun at that freeze;
+independent review, parent preservation and focused validation followed.
+
+## Final focused validation
+
+The parent preserved the two-path fixture repair as c2075305/tree d9a4d6f2,
+source32 receipt
+`8be6f957074c74217159b14b4f8babee4f90951c22846358151107dac8a58450`.
+The focused packet reused byte-identical reviewed runner e5ab59d2, auditor
+99721145 and dictionary d367de86. Its only execution-list change selected the
+one actual attribution-writer file, without a case-name filter or skip.
+Packet receipt SHA256 is
+`cf273db82981e6f40af081dea2dd352655d22086a2c9f1226114a0805cd0d6c4`.
+
+That single invocation passed whole API types and the exact inherited-warning
+audit, preserving raw strict exit1/audit exit0 with 56 exact warnings and no new
+warnings, errors or suppressions. Actual Jest output reports one file and all
+eight cases passed, with zero failures or pending cases. The strengthened
+single/all promotion and quick-tag cases therefore exercised the real Mongo
+commit, changed persisted labels, retirement during the attempt and the same
+post-commit error. No broader 28-file replay or retry was performed.
+
+Retention receipt SHA256
+`b03a4a8d4ff92cedcc10f41d87a726a930493c5dbd13843a5db7bbdef620dc3f`
+records the actual 467 passing cases in 27 unchanged files from the earlier
+Jest JSON, with case identities, source hashes and six raw context copies.
+All eight old attribution-writer cases are excluded, including the six old
+passes. The combined evidence is **467 retained plus eight fresh = 475 distinct
+passing cases across 28 selected files**. Its SHA256 is
+`d72f6567e842bba4afdb5e9a2e0d2e0bc2b08c212f64503ace5102155b0b854d`.
+
+Full final guards passed all 941 inputs, 26,114 dependency pins, 217 retained
+proof pins, the 12 warning-source pins, tools, tracked-clean c207/tree d9a4 and
+the unchanged map seed4d525b8e. The captured runner and three recorded child
+PIDs closed; no owned Mongo process or listener remained. Two other Node
+processes created during the window were traced to separate Codex branches,
+outside the captured runner tree, and left untouched. The final closure makes
+no global process-zero claim. Its SHA256 is
+`f2ba047423f78179b226578dd1094c48aeb7aaa055b9c270e2ee4f5ea74031bc`.
+The runtime slot was released.
+
+Raw result SHA256 is
+`0163ed8d8c5af1409f800e2cf38c0e97cf929ea4a6d4629fd659b31d287a75be`;
+fresh Jest JSON SHA256 is
+`a0e79ee9ee13d2ea6df2103e81b639c39fd95612ad8d078cef4630485359c529`.
+These records are retained under
+`.cache/revision-cache-validation-c2075305-prep/runs/2026-10-26T19-50-56.219Z-d7870a5c-b747-40da-9107-4c8548f4c591/`.
+Earlier source copies, failed-run reports and receipts remain immutable.
 
 ## Validation still required
 
@@ -232,16 +307,22 @@ typed owner/filter/option isolation; six-only allowlist; auth/revoke/deletion an
 GDPR guards; exact byte edges, LRU/TTL, pinned retirement/reservations;
 queue/join/response/owner caps and cancellation; late fills; unknown write and
 partial restore/recompute failures; and a real local Mongo revision predicate.
-The first selected run's473 passes and2 failures are recorded above; the new
-fixture repair has **not been run**. Preserve that failure evidence and rerun
-only the changed footprint authorized by the parent. Retained passing cases
-and fresh reruns must not be counted twice.
+The selected evidence and focused repair validation are complete as recorded
+above. Preserve the earlier failures and keep retained versus fresh case counts
+separate. These selected cases do not establish a full API or CI pass.
 
 The selected TrendsRequests/date-probe, visibility/GDPR, game controls/backups,
 custom-build and intent guard/rollback, macro, filter and history neighbors ran
-in that invocation. Full API tests remain pending beyond this selected packet.
-Measure actual aggregation executions on cold/repeat/after-mutation requests.
-No performance percentage or complete-feature validation is claimed here.
+in the original invocation. Full API tests and CI remain pending beyond this
+selected packet. Before deployment activation, complete those checks and verify
+the single-instance/fully upgraded writer gate. Actual aggregation executions
+on cold/repeat/after-mutation requests have not been measured; no percentage
+or savings is claimed.
+
+Nonblocking metric follow-up: malformed stored dataRev reads bypass retention
+without incrementing revision_failure, which currently counts revision
+persistence and invalidator failures. No product change is included for this
+visibility gap.
 
 Whole faster-dashboards remains incomplete: ETag/304/client support, broader
 dependency-safe caching, maintained gameStats, latestAgent/device-token cache and
