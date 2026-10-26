@@ -46,6 +46,39 @@ const PAGES: Array<{ path: string; expectText: RegExp }> = [
     : []),
 ];
 
+for (const theme of ["light", "dark"] as const) {
+  test(`download command regions support keyboard scrolling in ${theme}`, async ({ page }, info) => {
+    test.skip(info.project.name !== "mobile-360", "Check the overflowing command blocks once at the narrow viewport.");
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+    await page.addInitScript(value => localStorage.setItem("sc2tools.theme", value), theme);
+    // Exercise the source-only platform on every host OS without a live release dependency.
+    await page.route("**/api/agent/version?*", route => route.fulfill({ json: { ok: true, latest: null, artifact: null } }));
+    await page.goto("/download");
+    const reject = page.getByRole("button", { name: "Reject", exact: true });
+    if (await reject.isVisible()) await reject.click();
+    await page.getByRole("tab", { name: "Linux", exact: true }).click();
+    await page.getByText("Manual install + verification", { exact: true }).click();
+    let scrolled = 0;
+    for (const name of ["Source installation commands", "Manual source installation commands", "Windows SHA-256 verification command", "macOS and Linux SHA-256 verification command"]) {
+      const commands = page.getByRole("region", { name, exact: true });
+      await commands.focus(); await commands.press("Shift+Tab"); await page.keyboard.press("Tab");
+      await expect(commands).toBeFocused();
+      expect(await commands.evaluate(element => {
+        const style = getComputedStyle(element);
+        return element.matches(":focus-visible") && (style.boxShadow !== "none" || (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0));
+      })).toBe(true);
+      if (await commands.evaluate(element => element.scrollWidth > element.clientWidth)) {
+        await commands.press("ArrowRight");
+        await expect.poll(() => commands.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+        scrolled += 1;
+      }
+    }
+    expect(scrolled).toBeGreaterThan(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await checkAccessibility(page, info, "/download-source-install", theme);
+  });
+}
+
 test("phone sign-in puts the form before collapsed optional marketing", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/sign-in");

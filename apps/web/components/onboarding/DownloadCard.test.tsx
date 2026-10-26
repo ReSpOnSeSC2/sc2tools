@@ -121,6 +121,13 @@ it("shows no-installer instructions only after a successful empty release", () =
   expect(screen.getByRole("heading", { name: "No installer published yet for Linux" })).toBeTruthy();
   expect(screen.queryByText(/Couldn't reach/)).toBeNull();
 });
+it.each(["windows", "macos", "linux"] as const)("admits the %s source commands to keyboard focus", os => {
+  useReleaseInfoMock.mockReturnValue({ isLoading: false, error: null, data: { artifact: null } });
+  render(<DownloadCard os={os} />);
+  const commands = screen.getByRole("region", { name: "Source installation commands" });
+  expect(commands.tagName).toBe("PRE"); expect(commands.tabIndex).toBe(0);
+  commands.focus(); expect(document.activeElement).toBe(commands);
+});
 it("keeps release notes plain-safe behind an accessible toggle and links all releases", () => {
   useReleaseInfoMock.mockReturnValue({ isLoading: false, data: { latest: "0.19.0", artifact: { downloadUrl: "https://example.com/a.exe", sha256: "a", sizeBytes: 100 }, releaseNotes: "## Changes\n- **A fix**\n<script>unsafe</script>" } });
   const { container } = render(<DownloadCard os="windows" />);
