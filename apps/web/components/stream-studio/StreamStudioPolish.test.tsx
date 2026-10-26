@@ -22,7 +22,7 @@ it("preserves useful signed-out SSR while Clerk loads and shows all signed-in sh
   const view = render(<StreamStudioCtas />); expect(screen.getByRole("link", { name: "Create a free account" })).toBeTruthy();
   auth.isLoaded = true; auth.isSignedIn = true; view.rerender(<StreamStudioCtas />);
   expect(screen.getByRole("link", { name: "Open Overlay settings" }).getAttribute("href")).toBe("/settings?tab=overlay");
-  expect(screen.getByRole("link", { name: "Set up my Stream Dock" }).getAttribute("href")).toBe("/settings?tab=overlay#stream-dock");
+  expect(screen.getByRole("link", { name: "Set up my Stream Dock" }).getAttribute("href")).toBe("/settings?tab=chat#stream-dock");
   expect(screen.getByRole("link", { name: "Continue the crash course" }).getAttribute("href")).toBe("/stream-studio/learn#crash-course");
   expect(screen.queryByRole("link", { name: "Create a free account" })).toBeNull();
 });

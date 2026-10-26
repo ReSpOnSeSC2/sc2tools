@@ -52,7 +52,7 @@ it("disables Block at 50 and exposes Settings-managed users read-only", async ()
   const details = screen.getByText(/Blocked users \(51\)/).closest("details")!; details.open = true;
   expect(within(details).getByText("50 of 50 Dock blocks")).toBeTruthy();
   fireEvent.change(within(details).getByRole("searchbox"), { target: { value: "settingsuser" } });
-  expect(within(details).getByRole("link", { name: "Managed in Settings → Overlay" })).toBeTruthy();
+  expect(within(details).getByRole("link", { name: "Managed in Settings → Chat & alerts" })).toBeTruthy();
   expect(within(details).queryByRole("button", { name: /Unblock/ })).toBeNull(); expect(posts).toHaveLength(0);
 });
 it.each(["dock", "settings"])("excludes case-insensitive %s blocks from the Dock poll tally", async (source) => {
