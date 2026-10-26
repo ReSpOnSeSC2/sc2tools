@@ -176,6 +176,55 @@ Other29 source paths remain byte-identical. No lint configuration, suppression,
 new any type or cache behavior is added. This extraction is source-only and
 awaits independent review, parent preservation and a fresh validation grant.
 
+## First selected Jest run and promotion-fixture repair
+
+The parent reviewed the new exact inherited-warning auditor and granted one
+e804abcda/4070fd08 invocation, receiptf705ee45. Whole API types passed. Raw strict
+lint remained exit1 with exactly56 accepted inherited warnings, zero errors and
+zero suppressed messages; the separate exact-tuple audit passed with exit0.
+All12 warned source files matched their raw-byte pins and the other16 files
+were clean. This is accepted prior debt, not a strict-clean or all-zero result.
+
+The one in-band local-Mongo Jest invocation ran all28 selected suites:27 passed
+and1 failed, with473 tests passing and2 failing out of475, no pending tests and
+no retry. Both failures were the reclassify/reclassifyAll unknown-promotion cases
+in userRevisionAttributionWriters.test.js. Source tracing established that the
+unqualified first-updateMany spy intercepted expired opponent-write lease
+maintenance before either semantic promotion fence. The fresh row has no lease,
+so that maintenance matches zero rows. Its rejection leaves the earlier snapshot
+current, as expected for that operation. Actual single/all promotions already
+call gameWrite around their runId-filtered commit pipeline; no product fence gap
+was found in these two paths.
+
+Full final guards passed941 inputs,32 feature paths,26,114 dependency pins,
+217 retained proof pins, the12 warned source pins, tools, tracked-clean
+e804/tree4070 and map seed4d525b8e. All three recorded children closed. The host
+closure observation with explicit UTC bounds found no Node/mongod process from
+the exclusive run window and no known-owned listener. An earlier mixed-DateTime
+observation was retained but superseded by the corrected UTC record; unrelated
+processes were never touched. The runtime slot was released. Raw result SHA256
+is `8ceb68b20967c72e72986dd6d77a332b02687115e26b34471c5f7977a16903e1`;
+Jest JSON SHA256 is
+`ec4490e6fdacd24457b6d31e998b958066dd6cfc43fefc583cb31542877c0455`.
+
+Before the next repair, this test and checkpoint plus all22 closed-run raw
+records were preserved under `.cache/promotion-fixture-repair-e804abcd/`;
+before receipt SHA256 is
+`8a510b013ebf3f280c856baabd1ae3dd986901c6e9f4ad51bca1021196096482`.
+The parent authorized exactly those two existing paths. The spy now delegates
+all non-target writes to real Mongo and injects once only at the actual
+promotion: a nonempty runId filter and an array commit whose first $set owns
+myBuild, or the actual quick-tag findOneAndUpdate. It excludes lease maintenance
+and marker-only cleanup. During the selected attempt it asserts retirement,
+calls the bound original Mongo write, checks matched/modified1 for updateMany,
+and verifies the persisted label changes from Unclassified to Gateway opener
+with slugopener before throwing the same error. The original rejection-identity
+and final-retirement assertions remain, with an exact single-injection check.
+The Gateway log/rule and all other fixtures, positive tests and real services
+remain unchanged. Other30 source paths and all12 inherited-warning source-file pins
+remain byte-identical. This fixture repair is unrun and awaits independent
+review, parent preservation and a fresh focused validation grant.
+
 ## Validation still required
 
 Prepared tests cover flag-off baseline bodies/headers and zero new commands;
@@ -183,14 +232,16 @@ typed owner/filter/option isolation; six-only allowlist; auth/revoke/deletion an
 GDPR guards; exact byte edges, LRU/TTL, pinned retirement/reservations;
 queue/join/response/owner caps and cancellation; late fills; unknown write and
 partial restore/recompute failures; and a real local Mongo revision predicate.
-They have **not been run**. Independent source review and a parent-serialized
-runtime slot are still required. Preserve any inherited failure evidence.
+The first selected run's473 passes and2 failures are recorded above; the new
+fixture repair has **not been run**. Preserve that failure evidence and rerun
+only the changed footprint authorized by the parent. Retained passing cases
+and fresh reruns must not be counted twice.
 
-After focused suites, run existing TrendsRequests/date-probe, visibility/GDPR,
-game controls/backups, custom-build and intent guard/rollback, macro, filter and
-history regressions, then API lint/types/full tests as authorized by the parent.
+The selected TrendsRequests/date-probe, visibility/GDPR, game controls/backups,
+custom-build and intent guard/rollback, macro, filter and history neighbors ran
+in that invocation. Full API tests remain pending beyond this selected packet.
 Measure actual aggregation executions on cold/repeat/after-mutation requests.
-No performance percentage or passing result is claimed here.
+No performance percentage or complete-feature validation is claimed here.
 
 Whole faster-dashboards remains incomplete: ETag/304/client support, broader
 dependency-safe caching, maintained gameStats, latestAgent/device-token cache and

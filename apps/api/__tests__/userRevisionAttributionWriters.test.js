@@ -54,10 +54,30 @@ test.each(["reclassify", "reclassifyAll", "tagSingleGame"])("%s's unknown promot
   await db.customBuilds.insertOne({ ...definition, userId: "a" });
   const custom = new CustomBuildsService(db, { perGame: new PerGameComputeService(db), userRevision: revisions });
   const name = method === "tagSingleGame" ? "findOneAndUpdate" : "updateMany", original = db.games[name].bind(db.games), error = new Error("unknown promote");
-  const spy = jest.spyOn(db.games, name).mockImplementationOnce(async (...args) => { await original(...args); throw error; });
   const before = await revisions.snapshot("a");
+  let injections = 0;
+  const spy = jest.spyOn(db.games, name).mockImplementation(async (...args) => {
+    const [filter, update] = args;
+    const promotion = filter.userId === "a" && (method === "tagSingleGame"
+      ? filter.gameId === "game"
+      : typeof filter["_customBuildReclassify.runId"] === "string"
+        && filter["_customBuildReclassify.runId"].length > 0
+        && Array.isArray(update) && Object.hasOwn(update[0]?.$set || {}, "myBuild"));
+    if (!promotion || injections) return original(...args);
+    injections += 1;
+    expect(revisions.current(before)).toBe(false);
+    expect((await db.games.findOne({ userId: "a", gameId: "game" })).myBuild).toBe("Unclassified");
+    const result = await original(...args);
+    if (name === "updateMany") {
+      expect(result.matchedCount).toBe(1); expect(result.modifiedCount).toBe(1);
+    }
+    expect(await db.games.findOne({ userId: "a", gameId: "game" })).toMatchObject({ myBuild: definition.name, _customBuildSlug: "opener" });
+    expect(revisions.current(before)).toBe(false);
+    throw error;
+  });
   const run = method === "reclassify" ? custom.reclassify("a", "opener") : method === "reclassifyAll" ? custom.reclassifyAll("a") : custom.tagSingleGame("a", row());
   await expect(run).rejects.toBe(error); spy.mockRestore(); expect(revisions.current(before)).toBe(false);
+  expect(injections).toBe(1);
 });
 test("confirm/skip/opponent/note/defer/dismiss writes retire independently of notifier labels", async () => {
   const ref = { key: "custom:opener", source: "custom", slug: "opener", name: definition.name };
