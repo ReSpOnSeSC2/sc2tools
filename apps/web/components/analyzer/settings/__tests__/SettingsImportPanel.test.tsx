@@ -17,6 +17,14 @@ afterEach(() => { cleanup(); vi.useRealTimers(); });
 function show() { return render(<ToastProvider><SettingsImportPanel /></ToastProvider>); }
 
 describe("desktop import controls", () => {
+  it("offers two real desktop section targets without sending a command", () => {
+    show();
+    for (const id of ["desktop-import", "import-jobs"]) {
+      expect(document.querySelectorAll(`[id="${id}"]`)).toHaveLength(1);
+      expect(document.getElementById(id)?.tagName).toBe("SECTION");
+    }
+    expect(h.apiCall).not.toHaveBeenCalled();
+  });
   it("starts an actual agent command only while the PC is online", async () => {
     show(); await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Start full import" })); });
     expect(h.apiCall.mock.calls[0]).toMatchObject([expect.any(Function), "/v1/import/start", { method: "POST", body: "{}" }]);

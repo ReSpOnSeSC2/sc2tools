@@ -9,7 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useEffect, useState, type ReactNode } from "react";
 import { SettingsShell, defaultTabVisibility, type SettingsTabId } from "../SettingsShell";
-import { SECTION_FLASH_ATTR, SECTION_FLASH_MS } from "../revealSectionAnchor";
+import { SECTION_FLASH_ATTR, SECTION_FLASH_MS, SECTION_WAIT_MS } from "../revealSectionAnchor";
+import { SettingsSectionsReady } from "../SettingsSectionNav";
 
 vi.mock("next/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/navigation")>()),
@@ -128,6 +129,50 @@ describe("SettingsShell legacy #tab links", () => {
 });
 
 describe("SettingsShell #section anchors", () => {
+  it("late mounted-only readiness never restarts a user-cancelled anchor reveal", async () => {
+    vi.useFakeTimers(); window.history.replaceState(null, "", "/settings?tab=profile#public-profile");
+    function Profile({ ready }: { ready: boolean }) {
+      return <><SettingsSectionsReady revision={ready} /><section id="profile-details">Profile</section>
+        <section id="pulse-ids">Pulse</section>{ready ? <section id="public-profile">Public profile</section> : null}</>;
+    }
+    const shellFor = (ready: boolean) => <SettingsShell initialTab="profile" renderTab={id => id === "profile" ? <Profile ready={ready} /> : <p>{id}</p>} />;
+    const view = render(shellFor(false));
+    fireEvent.keyDown(window, { key: "Tab" });
+    await act(async () => { await vi.advanceTimersByTimeAsync(SECTION_WAIT_MS + 1); });
+    view.rerender(shellFor(true));
+    expect(screen.getByRole("navigation", { name: "On this page" })).toBeTruthy();
+    expect(scrollIntoView).not.toHaveBeenCalled(); expect(window.location.hash).toBe("#public-profile");
+  });
+  it("reveals shared Tokens above the private body inside the persistent panel, while excluding chrome", () => {
+    window.history.replaceState(null, "", "/settings?tab=overlay&section=tokens");
+    const view = render(<main id="main-content"><SettingsShell initialTab="overlay" renderTab={renderPanel}
+      renderStreaming={children => <div><section id="tokens">Shared token manager</section>{children}</div>} /></main>);
+    const tokens = document.getElementById("tokens")!;
+    const panel = screen.getByRole("tabpanel", { name: "Overlay" });
+    expect(panel.contains(tokens)).toBe(true);
+    expect(panel.contains(screen.getByRole("navigation", { name: "On this page" }))).toBe(true);
+    expect(tokens.compareDocumentPosition(screen.getByText("panel overlay")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(view.container.querySelectorAll('[id="tokens"]')).toHaveLength(1);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1); expect(scrollIntoView.mock.contexts[0]).toBe(tokens);
+    expect(window.location.search + window.location.hash).toBe("?tab=overlay#tokens");
+    expect(document.getElementById("main-content")?.hasAttribute(SECTION_FLASH_ATTR)).toBe(false);
+    fireEvent.click(screen.getByRole("link", { name: "Setup" }));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("link", { name: "Tokens" }));
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+    const href = window.location.href;
+    fireEvent.click(screen.getByRole("link", { name: "Tokens" }));
+    expect(scrollIntoView).toHaveBeenCalledTimes(3);
+    expect(window.location.href).toBe(href);
+  });
+  it("explicit section nav retains reduced-motion reveal behavior", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    window.history.replaceState(null, "", "/settings?tab=overlay");
+    render(<SettingsShell initialTab="overlay" renderTab={id => id === "overlay" ? <section id="theme">Theme</section> : <p>{id}</p>} />);
+    fireEvent.click(screen.getByRole("link", { name: "Theme" }));
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", behavior: "auto" });
+    vi.unstubAllGlobals();
+  });
   it("gives mobile triggers real panel IDs and keyboard activation", () => {
     render(shell("backups"));
     const mobile = screen.getAllByRole("tablist", { name: "Settings sections" })[0];

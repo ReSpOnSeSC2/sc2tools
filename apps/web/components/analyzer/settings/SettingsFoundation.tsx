@@ -17,6 +17,7 @@ import { Section } from "@/components/ui/Section";
 import { fmtAgo } from "@/lib/format";
 import { SetupHealthCard } from "./SetupHealthCard";
 import { CopyUserId } from "./SetupDiagnostics";
+import { SettingsSectionsReady } from "./SettingsSectionNav";
 
 type Me = {
   userId: string;
@@ -74,10 +75,10 @@ export function SettingsFoundation() {
 
 function AccountSummary() {
   const me = useApi<Me>("/v1/me");
-  if (me.error && me.data === undefined) return <SettingsLoadError tab="Account settings" error={me.error} retry={me.mutate} />;
+  if (me.error && me.data === undefined) return <><SettingsSectionsReady revision="error" /><SettingsLoadError tab="Account settings" error={me.error} retry={me.mutate} /></>;
 
   if (!hasQueryData(me)) {
-    return <QueryState q={me} skeleton={<Skeleton rows={3} />} errorTitle="Account" />;
+    return <><SettingsSectionsReady revision="loading" /><QueryState q={me} skeleton={<Skeleton rows={3} />} errorTitle="Account" /></>;
   }
 
   const games = me.data.games ?? { total: 0, latest: null };
@@ -105,7 +106,9 @@ function AccountSummary() {
 
   return (
     <div className="space-y-6">
+      <SettingsSectionsReady />
       <Section
+        id="account-summary" className="scroll-mt-28"
         title="Account"
         description="Read-only summary of your cloud profile and the data we already have."
       >
@@ -119,6 +122,7 @@ function AccountSummary() {
       </Section>
 
       <Section
+        id="quick-links" className="scroll-mt-28"
         title="Quick links"
         description="Jump to the management surfaces for your devices, overlays, and builds."
       >
@@ -155,10 +159,10 @@ function AccountSummary() {
 function SummaryRowItem({ label, value, Icon, mono }: SummaryRow) {
   return (
     <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-bg-elevated px-3 py-2.5">
-      <div className="flex min-w-0 items-center gap-2">
+      <dt className="flex min-w-0 items-center gap-2">
         <Icon className="h-4 w-4 flex-shrink-0 text-text-muted" aria-hidden />
-        <dt className="text-caption text-text-muted">{label}</dt>
-      </div>
+        <span className="text-caption text-text-muted">{label}</span>
+      </dt>
       <dd
         className={[
           "min-w-0 text-right text-body text-text",

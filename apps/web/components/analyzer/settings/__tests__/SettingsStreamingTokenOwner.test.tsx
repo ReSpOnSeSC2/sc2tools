@@ -127,6 +127,9 @@ describe("one admitted streaming-token authority", () => {
     view.rerender(owner(<Probe label="chat" />));
     expect(text(screen.getByTestId("body"))).toContain("chat:owner-a:b");
     expect(screen.getAllByLabelText("URLs shown for")).toHaveLength(1);
+    const shared = screen.getByRole("region", { name: "Shared streaming token controls" });
+    expect(shared.id).toBe("tokens"); expect(document.querySelectorAll('[id="tokens"]')).toHaveLength(1);
+    expect(shared.compareDocumentPosition(screen.getByTestId("body")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(reads).toEqual(["/v1/overlay-tokens"]); expect(writes).toEqual([]);
   });
   it("never admits a warm empty list or warm token before its fresh status completes", async () => {

@@ -14,6 +14,7 @@
 
 import { Lock } from "lucide-react";
 import { Icon } from "@/components/ui/Icon";
+import { Button } from "@/components/ui/Button";
 import { formatApm, type GamePace } from "@/lib/apm";
 import { formatGameClock } from "@/lib/macro";
 import type { SeriesPoint } from "./activeArmyLayout";
@@ -22,7 +23,9 @@ import {
   formatSigned,
   metricIcon,
   metricLead,
+  TIMELINE_BANK_VIEWS,
   timelineMetricsFor,
+  type TimelineBankView,
   type TimelineMetric,
   type TimelineMetricDef,
 } from "./timelineMetrics";
@@ -163,6 +166,20 @@ export function MetricSwitch({
   );
 }
 
+/** Bank stays one metric; choose which resource its two player lines compare. */
+export function BankViewSwitch({ view, onChange }: {
+  view: TimelineBankView;
+  onChange: (next: TimelineBankView) => void;
+}) {
+  return <div role="group" aria-label="Bank resource" className="flex max-w-full flex-wrap items-center gap-1">
+    <span className="mr-1 text-micro font-semibold text-text-muted">Bank</span>
+    {TIMELINE_BANK_VIEWS.map((item) => <Button key={item.key} variant={view === item.key ? "primary" : "ghost"} aria-pressed={view === item.key}
+      onClick={() => onChange(item.key)} className="shrink-0 rounded-full !px-2.5 text-caption">
+      {item.label}
+    </Button>)}
+  </div>;
+}
+
 /** "Game time" with the lock badge once a tap or click has pinned it. */
 function GameTimeLabel({ locked, compact = false }: { locked: boolean; compact?: boolean }) {
   return (
@@ -300,7 +317,7 @@ function PlayerCell({
         {/* The chosen metric is already on the switch on a phone. */}
         <span className="sr-only sm:not-sr-only sm:whitespace-nowrap"> {caption}</span>
       </dt>
-      <dd className={`flex items-baseline gap-1.5 text-h4 font-bold tabular-nums ${tone}`}>
+      <dd className={`flex flex-wrap items-baseline gap-1.5 text-h4 font-bold tabular-nums ${tone}`}>
         <span className="truncate">{value}</span>
         {lead > 0 ? (
           <span

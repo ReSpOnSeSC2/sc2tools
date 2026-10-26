@@ -31,7 +31,7 @@ function NotificationPreferencesForm() {
     catch (cause) { setError(cause as ClientApiError); }
     finally { setSaving(false); }
   }
-  return <Section title="Notifications" description="Choose which in-app updates you receive. Muting affects future notifications; existing rows stay in your inbox for up to 90 days.">
+  return <Section id="notifications" className="scroll-mt-28" title="Notifications" description="Choose which in-app updates you receive. Muting affects future notifications; existing rows stay in your inbox for up to 90 days.">
     {query.error && !query.data ? <RequestError error={query.error} onRetry={() => query.mutate()} /> : !query.data ? <Skeleton rows={3} /> : <Card>
       {error ? <RequestError error={error} onRetry={save} /> : null}
       <fieldset disabled={saving} className="grid gap-3 sm:grid-cols-2">{NOTIFICATION_KINDS.map(([kind, label]) => <label key={kind} className="flex min-h-11 items-center gap-2 text-caption"><input type="checkbox" checked={!form.draft.muted.includes(kind)} onChange={(e) => { const enabled = e.target.checked; form.setDraft((draft) => ({ muted: enabled ? draft.muted.filter((item) => item !== kind) : [...draft.muted, kind] })); setSaved(false); }} />{label}</label>)}</fieldset>

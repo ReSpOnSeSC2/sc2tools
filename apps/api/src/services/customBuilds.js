@@ -1,4 +1,5 @@
 "use strict";
+const { gameWrite } = require("../util/userRevision");
 
 const { policyLabelForGame } = require("./presetIngest");
 const { createHash, randomUUID } = require("crypto");
@@ -379,6 +380,7 @@ class CustomBuildsService {
    *   onReclassified?: (userId: string, result: Record<string, any>) => void|Promise<void>,
    *   onGamesChanged?: (userId: string, count: number) => void,
    *   onDefinitionsChanged?: (userId: string) => void|Promise<void>,
+   *   userRevision?: import("../util/userRevision").UserRevision,
    * }} [opts] ``onGamesChanged`` hears replay-label writes outside
    *   reclassification (a renamed build's check-in rows); hosts that wire
    *   only ``onReclassified`` hear them as ``{tagged: count}``.
@@ -387,6 +389,7 @@ class CustomBuildsService {
    *   construction
    */
   constructor(db, opts = {}) {
+    this.userRevision = opts.userRevision || null;
     this.db = db;
     // Production uses a dedicated, stable per-user job document. Focused
     // legacy test doubles fall back to a sibling collection from the same DB.
@@ -619,7 +622,7 @@ class CustomBuildsService {
    * @param {{expectedRevision?:number, expectedId?:string, recordHistory?:boolean}} [options]
    */
   async upsert(userId, build, options = {}) {
-    return this._withUserBuildMutation(userId, async () => {
+    return this._withUserBuildMutation(userId, () => gameWrite(this.userRevision, userId, async () => {
       const client = this.db.client;
       if (!client) {
         if (options.expectedRevision !== undefined) throw definitionTransactionsRequired();
@@ -655,7 +658,7 @@ class CustomBuildsService {
       }
       if (renamedCheckins > 0) this._notifyGamesChanged(userId, renamedCheckins);
       this._notifyDefinitionsChanged(userId);
-    });
+    }));
   }
 
   /**
@@ -2091,10 +2094,10 @@ class CustomBuildsService {
     // A writer that starts after this scan began rotates the replay revision;
     // its stale staged rows therefore match zero documents at commit. Queued
     // all-build work is coalesced by the writer after its final fence.
-    await gamesCollection.updateMany(
+    await gameWrite(this.userRevision, userId, () => gamesCollection.updateMany(
       { userId, "_customBuildReclassify.runId": runId },
       commitReclassifyRunPipeline(runId, jobSequence),
-    );
+    ));
     } catch (err) {
       // A partial/failed history scan must have zero destructive effects.
       await gamesCollection.updateMany(
@@ -2390,10 +2393,10 @@ class CustomBuildsService {
       // Commit every staged decision in one server-side update. `$$REMOVE`
       // clears definitive stale tags and the private marker; set actions copy
       // their desired value to the marker's declared perspective.
-      await games.updateMany(
+      await gameWrite(this.userRevision, userId, () => games.updateMany(
         { userId, "_customBuildReclassify.runId": runId },
         commitReclassifyRunPipeline(runId, jobSequence),
-      );
+      ));
     } catch (err) {
       await games.updateMany(
         { userId, "_customBuildReclassify.runId": runId },
@@ -2573,7 +2576,7 @@ class CustomBuildsService {
       : null;
     /** @param {{you: AxisOutcome, opponent: AxisOutcome, clearStaging: boolean}} decision */
     const writeDecision = async (decision) => {
-      const written = await this._gamesCollection().findOneAndUpdate(
+      const written = await gameWrite(this.userRevision, userId, () => this._gamesCollection().findOneAndUpdate(
         {
           userId,
           gameId: probe.gameId,
@@ -2584,7 +2587,7 @@ class CustomBuildsService {
           payloadStrategy: decision.opponent.mode === "unset" ? policyStrategy ?? payloadStrategy : payloadStrategy,
           policyBuild, policyStrategy }),
         { projection: { _id: 1 } },
-      );
+      ));
       if (fenced && !written) {
         const err = new Error("custom_build_tag_superseded");
         /** @type {any} */ (err).code = "custom_build_tag_superseded";

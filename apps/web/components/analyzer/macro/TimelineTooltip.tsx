@@ -23,7 +23,7 @@ import { formatGameClock } from "@/lib/macro";
 import { COLOR_OPP, COLOR_YOU, type HoverState } from "./ActiveArmyChartParts";
 import type { ChartLayout } from "./activeArmyLayout";
 import { LineKey } from "./TimelineControls";
-import { describeMetric, formatSigned, metricLead } from "./timelineMetrics";
+import { describeMetric, formatSigned, metricLead, timelineMetric, TIMELINE_BANK_VIEWS } from "./timelineMetrics";
 
 /** Below this chart width the card drops the margin column. */
 const ROOMY_CHART_PX = 420;
@@ -55,7 +55,7 @@ export function TimelineTooltip({
 }) {
   const containerW = layout.width * scaleX;
   const roomy = containerW >= ROOMY_CHART_PX;
-  const table = layout.tracks.length > 1;
+  const table = layout.tracks.length > 1 || layout.tracks.some(({ metric }) => metric.key === "bank");
   const fixedW = table ? null : roomy ? 204 : 176;
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [measured, setMeasured] = useState({ w: 0, h: 0 });
@@ -239,9 +239,17 @@ function MetricRows({
     { key: "my", name: myName, color: COLOR_YOU, blocked: myBlocked, underline: "decoration-player-you" },
     { key: "opp", name: oppName, color: COLOR_OPP, blocked: oppBlocked, underline: "decoration-player-opp" },
   ] as const;
+  const rows = layout.tracks.flatMap(({ metric }) => metric.key === "bank"
+    ? TIMELINE_BANK_VIEWS.map((view) => ({
+      metric: timelineMetric("bank", view.key),
+      key: `bank-${view.key}`,
+      label: view.key === "total" ? "Bank total" : view.label,
+      plotted: metric.title === timelineMetric("bank", view.key).title,
+    }))
+    : [{ metric, key: metric.key, label: metric.label, plotted: true }]);
   return (
     <table className="border-collapse tabular-nums">
-      <caption className="sr-only">Every plotted metric at {formatGameClock(hover.t)}</caption>
+      <caption className="sr-only">{layout.tracks.some(({ metric }) => metric.key === "bank") ? "Plotted metrics and bank resource breakdown" : "Every plotted metric"} at {formatGameClock(hover.t)}</caption>
       <thead>
         <tr className="border-b border-bg/25">
           <th scope="col" className="pb-1.5 pr-2 text-left align-bottom">
@@ -288,15 +296,15 @@ function MetricRows({
         </tr>
       </thead>
       <tbody>
-        {layout.tracks.map(({ metric }, i) => {
+        {rows.map(({ metric, key, label, plotted }, i) => {
           const lead = metricLead(metric, hover.my, hover.opp);
           const pad = i === 0 ? "pt-1.5" : "pt-1";
           return (
-            <tr key={metric.key}>
+            <tr key={key}>
               <th scope="row" className={`pr-2 text-left font-medium ${pad}`}>
                 <span className="flex items-center gap-1.5 whitespace-nowrap">
-                  <LineKey dash={metric.dash} />
-                  {metric.label}
+                  {plotted ? <LineKey dash={metric.dash} /> : <span aria-hidden="true" className="w-[22px]" />}
+                  {label}
                 </span>
               </th>
               {players.map((p) => {

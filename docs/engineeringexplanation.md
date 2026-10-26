@@ -334,3 +334,84 @@ The auth callback requests a current Clerk token for every namespace handshake. 
 `games:changed` carries `{ count, inserted, bulk, reason }`. Ingest obtains `inserted` from actual upsert outcomes; `bulk` is the inverse of the existing `pickFreshOverlayGame` gate. Reclassifications and build-intent edits use `inserted: 0` with an explicit reason. The header increments by `inserted`, never by accepted or rewritten rows, and updates its relative timestamp every 30 seconds with an absolute-time tooltip.
 
 The shared chart clock trails ordinary game events by two seconds with a ten-second maximum wait. An explicit bulk event or more than three events in ten seconds switches to a 30-second refresh cadence. All chart consumers receive the same aggregated invalidation; the active Arcade corpus skips its older extra 30-second quiet delay when fed by AnalyzerProvider (standalone corpus users retain that fallback). the header receives raw inserted counts immediately and shows the bulk refresh notice. Import progress, booking alerts, notifications, and admin events remain immediate. The all-consumer integration test mounts SyncStatus, NotificationBell, CoachingBookingAlert, BuildCheckInProvider, AnalyzerProvider, AnalyzerFrame, useImportStatus, AdminShell, Dashboard, Notifications, and CoachingPractice together and asserts one socket plus event and reconnect fan-out.
+
+## Per-user revision cache (opt-in source)
+
+`USER_CACHE_ENABLED` enables the first chart-cache slice only when its value is
+the literal string `true`. The default and `.env.example` are false. While off,
+the six routes call their original services and `res.json` directly; revision
+hooks add no database command, owner lookup, retained body, admission limit or
+new busy response. The flag is not changed by source preparation.
+
+Before enabling, an operator must verify one API instance, a fully settled
+deployment and upgraded writers throughout that instance. The Render blueprint
+already pins one instance for process-local realtime state. This implementation
+does not establish distributed coherence during a rolling overlap or an
+out-of-band database write. Do not enable during either condition; no migration,
+index, warmer or new infrastructure is part of this slice.
+
+The allowlist is `/v1/timeseries`, `/v1/timeseries/day-hour`,
+`/v1/length-buckets`, `/v1/activity-calendar`, `/v1/momentum` and
+`/v1/timeseries/maps`. Existing parsing, filters, calculations and history bounds
+stay in their original aggregation methods. All global filters are dependencies:
+even a time chart's membership can change after an opponent MMR or region stamp.
+Doctor/health, opponents and notes, build stats, Explorer, global calibration,
+exports, streams and tokens are outside this allowlist.
+
+Every selected-input writer calls `gameWrite` inside its service or existing
+job around the semantic Mongo attempt. `UserRevision` retires owner tokens
+before and after the attempt and invalidates both response bytes and existing
+TrendsRequests joins. This applies without Socket.io and after unknown write
+outcomes, swallowed metadata errors, partial restores and later detail failures.
+Reclassification retires at promotion, not at every staging page. Custom-build
+rename fencing spans transaction commit. Active work retains its admission
+permit after invalidation. Internal bookkeeping, storage leases and the legacy
+isLadderMap backfill do not change these six chart inputs.
+
+An existing user's absent `dataRev` seeds as zero; a guarded `$inc` creates it on
+the first semantic change. There is no revision upsert or automatic legacy-data
+repair. Invalid/unsafe revisions and ambiguous persistence failures bypass cache
+reuse. The original mutation result/error wins over revision or logging failure.
+Persistence accepts only missing or safe integral BSON int/long/double fields;
+Decimal128, unsafe Longs, nonfinite and other invalid legacy values stay unchanged.
+Revision persistence has four active permits and no waiter queue; saturation
+retires local generations and bypasses retention instead of adding database work.
+In-memory owner identities and a random process epoch fence late completion and
+eviction ABA. Durable revisions are advisory monotonic versions, not a game
+count, transactional snapshot or corpus change watermark. Snapshot restore never
+copies an archived dataRev over current lifecycle state.
+
+Every retained hit follows existing authentication plus a fresh unique-user and
+identity-deletion guard, including device requests. GDPR locks cannot use cache.
+A delayed computation rechecks owner deletion before sending. Typed canonical
+keys retain the authenticated owner, route, every parsed filter/option, revision
+and generation; JSON objects are serialized once and never shared as mutable DTOs.
+Generation identity is captured before the guard and checked after work and at
+subscriber publication. A retired generation returns 503 with Retry-After: 1,
+without an old DTO or automatic retry; the next explicit request reads fresh.
+Cache eligibility is separate: stable-generation dirty/active/invalid-revision
+reads may still perform bounded fresh work without retaining its body.
+Owner/identity guards have an independent 16-operation limit and no queue. Their
+permit lasts until findOne and isDeleted actually settle, including post-compute
+guards and aborted/closed HTTP responses. Saturation returns 503; fixed
+guard_active/guard_rejected gauges share the existing private metrics registry.
+
+Retention is limited to 64 MiB of UTF-8 body/key bytes, a 512 KiB body, 512 entries,
+16 KiB keys and an absolute ten-minute TTL. Response-pinned retired buffers remain
+charged; reservations precede computation. This budget does not claim to bound
+all Node/Mongo working memory. Oversized responses retain their original schema
+and are sent uncached while holding admission through response completion.
+There are at most four active computations (two per owner), 32 waiting
+subscribers, 16 subscribers per key and 64 response leases. Queue deadline is five
+seconds; a slow response closes after 30 seconds. Cancellation releases its own
+waiter, never another subscriber's running permit. Capacity failures use 503 and
+Retry-After: 1 instead of launching unbounded fallback work.
+
+Enabled successful responses use ordinary 200 JSON and `private, no-store`, including a
+request carrying If-None-Match. Canonical weak ETags, private/no-cache conditional
+responses, CORS exposure and owner-scoped browser body reconstruction are still
+pending. The existing client treats a raw 304 as an error and is unchanged.
+Identifier-free cache counters and byte/admission gauges use the existing private
+METRICS_TOKEN registry only. Maintained gameStats, latest-agent/token caches,
+admin-health presentation, broader dependencies and IndexedDB/corpus deltas also
+remain separate work. Source and test preparation is not measured speedup.

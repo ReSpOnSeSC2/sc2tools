@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Combobox, type ComboboxOption } from "../Combobox";
 import { Modal } from "../Modal";
@@ -12,8 +12,37 @@ function Harness({ spy = vi.fn() }: { spy?: (value: string) => void }) {
   const [value, setValue] = useState("BuildGateway");
   return <><Combobox label="Build action" value={value} options={options} onChange={next => { spy(next); setValue(next); }} /><button type="button">Next field</button></>;
 }
+function DraftHarness({ spy = vi.fn(), selectValue = false }: { spy?: (value: string) => void; selectValue?: boolean }) {
+  const [value, setValue] = useState("");
+  return <><Combobox label="Find field" value={value} options={options} onInputChange={setValue}
+    onChange={next => { spy(next); if (selectValue) setValue(next); }} /><button type="button">Outside field</button></>;
+}
 afterEach(cleanup);
 describe("Combobox keyboard and selection contract", () => {
+  it.each(["Escape", "Tab", "outside", "choice"])("retains the displayed controlled draft filter after %s and reopening", (closeBy) => {
+    const spy = vi.fn(); render(<DraftHarness spy={spy} />);
+    const input = screen.getByRole("combobox"), outside = screen.getByRole("button", { name: "Outside field" });
+    act(() => input.focus()); expect(document.activeElement).toBe(input);
+    fireEvent.change(input, { target: { value: "production" } });
+    expect(screen.getAllByRole("option")).toHaveLength(1); expect(screen.getByRole("option").textContent).toContain("Gateway");
+    if (closeBy === "outside") fireEvent.pointerDown(screen.getByRole("button", { name: "Outside field" }));
+    else if (closeBy === "choice") { fireEvent.keyDown(input, { key: "ArrowDown" }); fireEvent.keyDown(input, { key: "Enter" }); }
+    else fireEvent.keyDown(input, { key: closeBy });
+    expect(screen.queryByRole("listbox")).toBeNull(); expect((input as HTMLInputElement).value).toBe("production");
+    if (closeBy === "choice") expect(spy).toHaveBeenLastCalledWith("BuildGateway");
+    else expect(spy).not.toHaveBeenCalled();
+    act(() => outside.focus()); expect(document.activeElement).toBe(outside);
+    act(() => input.focus()); expect(document.activeElement).toBe(input);
+    expect(screen.getAllByRole("option")).toHaveLength(1); expect(screen.getByRole("option").textContent).toContain("Gateway");
+  });
+  it("offers all options after a draft caller stores a valid chosen token", () => {
+    render(<DraftHarness selectValue />); const input = screen.getByRole("combobox"), outside = screen.getByRole("button", { name: "Outside field" });
+    act(() => input.focus()); expect(document.activeElement).toBe(input);
+    fireEvent.change(input, { target: { value: "production" } }); fireEvent.keyDown(input, { key: "ArrowDown" }); fireEvent.keyDown(input, { key: "Enter" });
+    expect((input as HTMLInputElement).value).toBe("Gateway");
+    act(() => outside.focus()); act(() => input.focus()); expect(document.activeElement).toBe(input);
+    expect(screen.getAllByRole("option")).toHaveLength(3); expect(screen.getAllByRole("option").some(row => row.textContent?.includes("Stargate"))).toBe(true);
+  });
   it("replaces a pending query when its controlled selection is reset", () => {
     const view = render(<Combobox label="Reset" value="BuildGateway" options={options} onChange={vi.fn()} />);
     const input = screen.getByRole("combobox"); fireEvent.change(input, { target: { value: "no match" } });
@@ -33,6 +62,7 @@ describe("Combobox keyboard and selection contract", () => {
     fireEvent.keyDown(input, { key: "ArrowDown" }); fireEvent.keyDown(input, { key: "ArrowDown" });
     const active = input.getAttribute("aria-activedescendant"); expect(document.getElementById(active!)?.textContent).toContain("Stargate"); expect(document.activeElement).toBe(input);
     fireEvent.keyDown(input, { key: "Enter" }); expect(spy).toHaveBeenLastCalledWith("BuildStargate"); expect((input as HTMLInputElement).value).toBe("Stargate"); expect(input.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.focus(input); expect(screen.getAllByRole("option")).toHaveLength(3);
   });
   it("searches friendly names, tokens and aliases without saving a query", () => {
     const spy = vi.fn(); render(<Harness spy={spy} />); const input = screen.getByRole("combobox");

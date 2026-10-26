@@ -33,7 +33,7 @@ export function GhostPracticeSettings() {
   };
   const move = async (config: GhostBuildConfig) => { if (await practice.migrate(config)) dismiss(); };
   const disabled = practice.loading || practice.saving || !!practice.readError;
-  return <div id="ghost" className="min-w-0 scroll-mt-24 space-y-5">
+  return <div className="min-w-0 space-y-5">
     <p className="text-caption text-text-muted">Assignments are saved to your account. Your Ghost source URL stays the same when you change or clear a build. The desktop Companion&apos;s separate practice panel remains under its own controls.</p>
     {practice.loading ? <p role="status">Loading account assignments…</p> : null}
     {practice.readError ? <p role="status" className="text-caption text-warning">{practice.offline ? "Showing this account’s cached assignments. " : ""}Couldn&apos;t load account assignments. <button className="min-h-11 px-2 underline" onClick={practice.retry}>Try again</button></p> : null}

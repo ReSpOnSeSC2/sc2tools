@@ -381,6 +381,7 @@ export function RaceIcon({
 
   return (
     <span
+      role="img"
       style={{
         display: "inline-flex",
         alignItems: "center",

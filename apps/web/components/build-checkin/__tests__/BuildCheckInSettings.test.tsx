@@ -56,6 +56,8 @@ describe("BuildCheckInSettings", () => {
     harness.data = {};
     render(<BuildCheckInSettings />);
     expect(screen.getByRole("heading", { name: "Build check-in" })).toBeTruthy();
+    expect(document.querySelectorAll('[id="build-check-in"]')).toHaveLength(1);
+    expect(document.getElementById("build-check-in")?.tagName).toBe("SECTION");
     for (const name of ["Build check-ins", "Ask during the loading screen", "Ask after each game"]) {
       expect(switchFor(name).getAttribute("aria-checked")).toBe("false");
     }

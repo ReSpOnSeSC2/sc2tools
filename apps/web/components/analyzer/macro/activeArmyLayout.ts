@@ -22,6 +22,7 @@ import type {
 import {
   formatAxisValue,
   timelineMetric,
+  type TimelineBankView,
   type TimelineMetric,
   type TimelineMetricDef,
 } from "./timelineMetrics";
@@ -130,6 +131,9 @@ export interface SeriesPoint {
   income?: number;
   /** Measured unspent minerals and gas; absent when either field is missing. */
   bank?: number;
+  /** Individually measured unspent resources; missing values stay unknown. */
+  bankMinerals?: number;
+  bankGas?: number;
   /**
    * Actions per minute around ``t`` from the game's APM curve (see
    * lib/apm.ts); absent when the game has no trusted curve.
@@ -207,6 +211,8 @@ export interface ChartLayout {
 export interface LayoutOptions {
   /** Metrics to plot, in switch order (default: army value alone). */
   metrics?: readonly TimelineMetric[];
+  /** Resource plotted by the Bank metric; other metrics are unchanged. */
+  bankView?: TimelineBankView;
   /** Measured drawing size in CSS pixels. */
   width?: number;
   height?: number;
@@ -318,8 +324,8 @@ export function buildSeries(
 /** Supply and collection rate off a stats sample, when it carries them. */
 function economyFields(
   sample: StatsEvent,
-): Pick<SeriesPoint, "supply" | "supplyCap" | "income" | "bank"> {
-  const out: Pick<SeriesPoint, "supply" | "supplyCap" | "income" | "bank"> = {};
+): Pick<SeriesPoint, "supply" | "supplyCap" | "income" | "bank" | "bankMinerals" | "bankGas"> {
+  const out: Pick<SeriesPoint, "supply" | "supplyCap" | "income" | "bank" | "bankMinerals" | "bankGas"> = {};
   const num = (v: unknown) =>
     typeof v === "number" && Number.isFinite(v) ? v : undefined;
   const used = num(sample.food_used);
@@ -333,7 +339,9 @@ function economyFields(
   }
   const mineralBank = num(sample.minerals_current);
   const gasBank = num(sample.vespene_current);
-  if (mineralBank !== undefined && gasBank !== undefined && mineralBank >= 0 && gasBank >= 0) out.bank = mineralBank + gasBank;
+  if (mineralBank !== undefined && mineralBank >= 0) out.bankMinerals = mineralBank;
+  if (gasBank !== undefined && gasBank >= 0) out.bankGas = gasBank;
+  if (out.bankMinerals !== undefined && out.bankGas !== undefined && Number.isFinite(out.bankMinerals + out.bankGas)) out.bank = out.bankMinerals + out.bankGas;
   return out;
 }
 
@@ -379,7 +387,7 @@ export function buildLayout(
   const clipped = clipToGame(mySeries, oppSeries, gameLengthSec);
   if (!clipped) return null;
   const { maxT, myArr, oppArr } = clipped;
-  const metrics = (opts.metrics ?? ["army"]).map(timelineMetric);
+  const metrics = (opts.metrics ?? ["army"]).map((key) => timelineMetric(key, opts.bankView));
   const indexed = metrics.length > 1;
   const width = sizeOr(opts.width, DEFAULT_VIEW_W, 160);
   const height = sizeOr(opts.height, DEFAULT_VIEW_H, 120);

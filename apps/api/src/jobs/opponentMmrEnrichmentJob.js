@@ -25,6 +25,7 @@ const { observeJob } = require("../util/jobLedger");
  */
 
 const { randomUUID } = require("crypto");
+const { gameWrite } = require("../util/userRevision");
 const { canonicalRaceName, pickRaceMmr } = require("../services/oppMmrStamp");
 const { MMR_FLOOR, MMR_CEILING } = require("../util/mmrBracketing");
 
@@ -76,6 +77,7 @@ const LEAGUE_IDS = /** @type {Readonly<Record<string, number>>} */ (Object.freez
  *   windowDays?: number,
  *   nowFn?: () => number,
  *   onLeagueEnriched?: (summary: TickResult) => Promise<void>|void,
+ *   userRevision?: import('../util/userRevision').UserRevision,
  * }} deps
  */
 function buildOpponentMmrEnrichmentJob(deps) {
@@ -92,6 +94,7 @@ function buildOpponentMmrEnrichmentJob(deps) {
   const context = {
     config,
     games: deps.db.games,
+    userRevision: deps.userRevision,
     lock,
     logger,
     now,
@@ -197,6 +200,7 @@ function publicConfig(config) {
  *   logger: import('pino').Logger,
  *   now: () => number,
  *   onLeagueEnriched?: (summary: TickResult) => Promise<void>|void,
+ *   userRevision?: import('../util/userRevision').UserRevision,
  *   pulseMmr: { getRaceBreakdown(ids: string[], opts?: object): Promise<Array<any>> },
  * }} context
  * @returns {Promise<TickResult>}
@@ -265,6 +269,7 @@ async function findCandidates(context) {
     .find(filter, {
       projection: {
         _id: 1,
+        userId: 1,
         createdAt: 1,
         "opponent.pulseCharacterId": 1,
         "opponent.race": 1,
@@ -376,7 +381,7 @@ async function attemptCandidate(context, row, cache, summary) {
       field: "opponent.mmr",
       marker: "opponent.mmrLookupAttempted",
       value: mmr,
-    });
+    }, context.userRevision, row.userId);
     matched = matched || result.matched;
     enriched = enriched || (result.matched && mmr !== null);
     writeError = writeError || result.failed;
@@ -408,22 +413,24 @@ async function attemptCandidate(context, row, cache, summary) {
  * @param {import('mongodb').Collection} games
  * @param {any} rowId
  * @param {{field: string, marker: string, value: number|null}} input
+ * @param {import('../util/userRevision').UserRevision} [userRevision]
+ * @param {string} [owner]
  * @returns {Promise<{matched: boolean, failed: boolean}>}
  */
-async function stampMissingField(games, rowId, input) {
+async function stampMissingField(games, rowId, input, userRevision, owner = "") {
   /** @type {Record<string, boolean|number|string>} */
   const set = { [input.marker]: true };
   if (input.value !== null) set[input.field] = input.value;
   if (input.field === "opponent.mmr" && input.value !== null) set["opponent.mmrSource"] = "pulse";
   try {
-    const res = await games.updateOne(
+    const res = await gameWrite(userRevision, owner, () => games.updateOne(
       {
         _id: rowId,
         [input.field]: { $not: { $type: "number" } },
         [input.marker]: { $ne: true },
       },
       { $set: set },
-    );
+    ));
     return { matched: (res.matchedCount || 0) > 0, failed: false };
   } catch {
     return { matched: false, failed: true };

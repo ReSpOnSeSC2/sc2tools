@@ -76,8 +76,14 @@ const CHAT_ANCHORS: ReadonlyMap<string, string> = new Map([
   ["dock", "dock"], ["stream-dock", "stream-dock"], ["bot", "bot"],
 ]);
 const OVERLAY_ANCHORS: ReadonlyMap<string, SettingsOverlayPane> = new Map([
-  ["ghost", "look"], ["ghost-build", "look"], ["theme", "look"],
-  ["build-profile", "look"], ["scenes", "scenes"],
+  ["ghost", "look"], ["ghost-build", "look"], ["ghost-coach", "look"], ["theme", "look"],
+  ["look", "look"], ["build-profile", "look"], ["scenes", "scenes"],
+  ["setup", "setup"], ["widgets", "widgets"], ["tokens", "tokens"],
+]);
+const OVERLAY_SECTION_IDS: ReadonlyMap<string, string> = new Map([
+  ["setup", "setup"], ["widgets", "widgets"], ["look", "theme"],
+  ["theme", "theme"], ["scenes", "scenes"], ["build-profile", "build-profile"],
+  ["ghost", "ghost-coach"], ["ghost-build", "ghost-coach"], ["ghost-coach", "ghost-coach"], ["tokens", "tokens"],
 ]);
 
 /** Pure, bounded legacy admission. It never mounts a panel or creates a token. */
@@ -121,6 +127,25 @@ export function resolveSettingsDestination(
   if (tab === "chat" && (section === "chat" || section === "dock")) {
     query.delete("section"); rewritten = true;
     if (!targetHash && section === "dock") targetHash = "#dock";
+  }
+  if (tab === "overlay") {
+    const sectionId = section ? OVERLAY_SECTION_IDS.get(section) : undefined;
+    const anchorId = OVERLAY_SECTION_IDS.get(anchor);
+    if (sectionId) {
+      // Keep a more specific anchor within the same old pane, such as look#ghost.
+      const samePane = anchorId && OVERLAY_ANCHORS.get(anchor) === OVERLAY_ANCHORS.get(section!);
+      targetHash = `#${samePane ? anchorId : sectionId}`;
+      query.delete("section"); rewritten = true;
+    } else if (hasSourceIntent && !anchorId) {
+      targetHash = "#widgets"; rewritten = true;
+    } else if (anchorId && targetHash !== `#${anchorId}`) {
+      targetHash = `#${anchorId}`; rewritten = true;
+    }
+    pane = OVERLAY_ANCHORS.get(targetHash.slice(1)) ?? pane;
+  } else if (tab === "chat" && section && section !== "chat" && section !== "dock" && CHAT_ANCHORS.has(section)) {
+    const canonical = CHAT_ANCHORS.get(section);
+    targetHash = canonical ? `#${canonical}` : "";
+    query.delete("section"); rewritten = true;
   }
   if (legacyTab) query.set("tab", tab);
   // Keep valid old query aliases/extras intact until an explicit tab action.

@@ -27,7 +27,7 @@ function OwnedPublicProfile() {
   const { baseline, draft, busy, slug } = editor;
   const published = Boolean(baseline?.enabled || baseline?.legacyPublic);
   const cooldown = Boolean(baseline?.renameAvailableAt && Date.parse(baseline.renameAvailableAt) > Date.now());
-  return <Section title="Public player page" description="Choose whether anyone can see your record and the sections you share.">
+  return <Section id="public-profile" className="scroll-mt-28" title="Public player page" description="Choose whether anyone can see your record and the sections you share.">
     {editor.request.error && !baseline ? <RequestError error={editor.request.error} onRetry={() => editor.reload()} /> : !baseline || !draft ? <Skeleton rows={3} /> : <Card padded>
       <form className="min-w-0 space-y-5" onSubmit={event => { event.preventDefault(); void editor.save(); }}>
         <p className="text-caption text-text-muted">Your profile and replay archive have separate switches. Turning this profile off also removes profile links from shared replays. <LazyHelpLink slug="public-profile">Help</LazyHelpLink></p>

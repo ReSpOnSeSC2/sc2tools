@@ -1,4 +1,5 @@
 "use strict";
+const { gameWrite } = require("../util/userRevision");
 const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 
 const { randomUUID } = require("crypto");
@@ -144,9 +145,11 @@ class PerGameComputeService {
    *   gameDetails?: import('./gameDetails').GameDetailsService,
    *   onOpponentBuildOrderWritten?: (userId: string, gameId: string) => void|Promise<void>,
    *   users?: import('mongodb').Collection,
+   *   userRevision?: import("../util/userRevision").UserRevision,
    * }} [opts]
    */
   constructor(db, opts = {}) {
+    this.userRevision = opts.userRevision || null;
     this.db = db;
     this.catalog = opts.catalog || null;
     // ``gameDetails`` may be omitted in narrow unit tests that only
@@ -492,10 +495,10 @@ class PerGameComputeService {
       set.top3Leaks = payload.top3Leaks;
     }
     stampVersion(set, COLLECTIONS.GAMES);
-    await this.db.games.updateOne(
+    await gameWrite(this.userRevision, userId, () => this.db.games.updateOne(
       { userId, gameId, ...LIVE_GAME_MATCH },
       { $set: set, $unset: { macroBreakdown: "" } },
-    );
+    ));
     if (this.gameDetails) {
       const slim = await this.db.games.findOne(
         { userId, gameId, ...LIVE_GAME_MATCH },

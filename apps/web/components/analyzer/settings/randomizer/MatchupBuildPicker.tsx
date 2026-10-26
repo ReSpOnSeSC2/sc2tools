@@ -121,6 +121,7 @@ export function MatchupBuildPicker({
       ) : (
         <>
           <Section
+            id="catalog-builds" className="scroll-mt-28"
             title="Catalog builds"
             description="Builds that come with SC2 Tools, for this matchup or for your race in any matchup."
           >
@@ -135,6 +136,7 @@ export function MatchupBuildPicker({
             />
           </Section>
           <Section
+            id="custom-builds" className="scroll-mt-28"
             title="Build library"
             description="Your custom builds whose race and opponent race fit this matchup. Add more in Build library."
           >
@@ -336,12 +338,7 @@ function ToggleRow({
   disabled?: boolean;
 }) {
   return (
-    <label
-      className={[
-        "flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-bg-elevated px-3 py-2.5",
-        disabled ? "opacity-60" : "",
-      ].join(" ")}
-    >
+    <label className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-bg-elevated px-3 py-2.5">
       <span className="min-w-0 flex-1">
         <span className="block text-body font-medium text-text">{title}</span>
         <span className="mt-0.5 block text-caption text-text-muted">
