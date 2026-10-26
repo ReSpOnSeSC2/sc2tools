@@ -2,7 +2,8 @@ import { expect, test } from "@playwright/test";
 import { captureAccessibility, checkAccessibility } from "./accessibility-check";
 import { openMoreAppearanceFixture } from "./appearance-more-fixture.mjs";
 import { openMobileNavFixture } from "./mobile-nav-fixture.mjs";
-import { mkdir } from "node:fs/promises";
+import { openLandingCtaFixture } from "./site-cta-fixture.mjs";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 test("System follows device changes and updates browser chrome", async ({ page }) => {
@@ -264,6 +265,125 @@ type MoreFixtureWindow = typeof window & {
   fixtureNavigate: (href: string) => void;
   fixtureAuth: (signedIn: boolean) => void;
 };
+
+type SiteCtaFixtureWindow = typeof window & {
+  siteCtaFixture: { setOptions(signedIn: boolean, mode: "all" | "off"): void };
+};
+
+for (const theme of ["light", "dark"] as const) {
+  test(`app visitor actions use readable shared states and preserve auth context (${theme})`, async ({ page }, info) => {
+    test.skip(info.project.name !== "desktop-1280", "one matrix covers phone and desktop app chrome");
+    test.setTimeout(180_000);
+    expect(process.env.A11Y_COLLECT_ONLY).not.toBe("1");
+    const evidence = await openMoreAppearanceFixture(page, theme);
+    await page.evaluate(() => {
+      (window as MoreFixtureWindow).fixtureAuth(false);
+      (window as MoreFixtureWindow).fixtureNavigate("/community/public-cta?tab=builds");
+    });
+    const header = page.getByRole("banner");
+    for (const width of [320, 390, 640, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      const signIn = header.getByRole("link", { name: "Sign in", exact: true });
+      if (width < 640) await expect(signIn).toBeHidden(); else await expect(signIn).toBeVisible();
+      for (const name of width < 640 ? ["Get started"] : ["Sign in", "Get started"]) {
+        const action = header.getByRole("link", { name, exact: true });
+        await expect(action).toHaveAttribute("href", `/${name === "Sign in" ? "sign-in" : "sign-up"}?redirect_url=%2Fcommunity%2Fpublic-cta%3Ftab%3Dbuilds`);
+        const box = (await action.boundingBox())!;
+        expect(box.height).toBe(36); expect(box.width).toBeGreaterThanOrEqual(44);
+        expect(box.x).toBeGreaterThanOrEqual(0); expect(box.x + box.width).toBeLessThanOrEqual(width);
+        // A focused action survives resizing. Capture rest from a distinct
+        // control before comparing the later native-keyboard focus ring.
+        await page.getByRole("button", { name: "Page action", exact: true }).focus();
+        await page.mouse.move(0, 899);
+        const rest = await action.evaluate(node => { const style = getComputedStyle(node); return { shadow: style.boxShadow, color: style.color, background: style.backgroundColor, radius: style.borderRadius }; });
+        await checkAccessibility(page, info, `/app-cta/${width}/${name}/rest`, theme);
+        await action.hover();
+        expect(await action.evaluate(node => getComputedStyle(node).color)).toBe(rest.color);
+        expect(await action.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe(rest.background);
+        await checkAccessibility(page, info, `/app-cta/${width}/${name}/hover`, theme);
+        await action.focus(); await page.keyboard.press("Tab"); await page.keyboard.press("Shift+Tab");
+        await expect(action).toBeFocused();
+        expect(await action.evaluate(node => getComputedStyle(node).boxShadow)).not.toBe(rest.shadow);
+        expect(await action.evaluate(node => getComputedStyle(node).borderRadius)).toBe(rest.radius);
+        await checkAccessibility(page, info, `/app-cta/${width}/${name}/focus`, theme);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await captureAccessibility(page, info, `app-cta-${theme}-${width}`);
+    }
+    await header.getByRole("link", { name: "Get started", exact: true }).press("Enter");
+    await expect(page).toHaveURL(/\/sign-up\?redirect_url=%2Fcommunity%2Fpublic-cta%3Ftab%3Dbuilds$/);
+    expect(evidence.errors).toEqual([]); expect(evidence.unexpectedRequests).toEqual([]);
+    await info.attach("app-cta-proof", { body: JSON.stringify({ buildId: (await readFile(".next/BUILD_ID", "utf8")).trim(), cssNames: evidence.cssNames, errors: evidence.errors, unexpectedRequests: evidence.unexpectedRequests, actualAccountActions: 0 }), contentType: "application/json" });
+  });
+
+  test(`landing actions wrap and retain visitor, rollout and dashboard destinations (${theme})`, async ({ page }, info) => {
+    test.skip(info.project.name !== "desktop-1280", "one matrix covers all landing action widths");
+    test.setTimeout(180_000);
+    expect(process.env.A11Y_COLLECT_ONLY).not.toBe("1");
+    const evidence = await openLandingCtaFixture(page, theme);
+    const hero = page.getByRole("heading", { level: 1 }).locator("..").locator("..");
+    for (const width of [320, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const audience of ["visitor", "player"] as const) {
+        await page.evaluate(signedIn => (window as SiteCtaFixtureWindow).siteCtaFixture.setOptions(signedIn, "all"), audience === "player");
+        const expected = audience === "visitor" ? [
+          ["Download the free agent", "/download"], ["No download — analyze your replays in your browser", "/try"],
+          ["Download the agent", "/download"], ["Browse community builds", "/community"], ["See costs or chip in", "/donate"],
+        ] : [["Open your dashboard", "/app"], ["What's new", "/changelog"], ["See costs or chip in", "/donate"]];
+        for (const [name, href] of expected) {
+          const actions = page.getByRole("link", { name, exact: true });
+          await expect(actions).toHaveCount(audience === "player" && ["Open your dashboard", "What's new"].includes(name) ? 2 : 1);
+          for (const action of await actions.all()) {
+            await expect(action).toHaveAttribute("href", href);
+            expect(await action.locator("a,button").count()).toBe(0);
+            const box = (await action.boundingBox())!;
+            const minimum = ["No download — analyze your replays in your browser", "See costs or chip in"].includes(name) ? 44 : 48;
+            expect(box.height).toBeGreaterThanOrEqual(minimum); expect(box.width).toBeGreaterThanOrEqual(44);
+            expect(box.x).toBeGreaterThanOrEqual(0); expect(box.x + box.width).toBeLessThanOrEqual(width + 1);
+            expect(await action.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+            expect(await action.evaluate(node => node.scrollHeight <= node.clientHeight + 1)).toBe(true);
+            if (width <= 390 && name === "No download — analyze your replays in your browser") {
+              const label = await action.evaluate(node => {
+                const text = Array.from(node.childNodes).find(child => child.nodeType === Node.TEXT_NODE && child.textContent?.includes("No download"));
+                if (!text) throw new Error("Expected visible browser action text");
+                const range = document.createRange(); range.selectNodeContents(text);
+                const rect = range.getBoundingClientRect(), button = node.getBoundingClientRect();
+                return { lines: range.getClientRects().length, top: rect.top - button.top, bottom: button.bottom - rect.bottom };
+              });
+              expect(label.lines).toBeGreaterThan(1); expect(box.height).toBeGreaterThan(44);
+              expect(label.top).toBeGreaterThanOrEqual(0); expect(label.bottom).toBeGreaterThanOrEqual(0);
+            }
+          }
+        }
+        await expect(page.getByRole("link", { name: "Open your dashboard", exact: true })).toHaveCount(audience === "player" ? 2 : 0);
+        await expect(page.getByRole("link", { name: "Download the free agent", exact: true })).toHaveCount(audience === "visitor" ? 1 : 0);
+        const focus = hero.getByRole("link", { name: audience === "visitor" ? "Download the free agent" : "Open your dashboard", exact: true });
+        await page.mouse.move(0, 899);
+        const rest = await focus.evaluate(node => { const style = getComputedStyle(node); return { shadow: style.boxShadow, color: style.color, background: style.backgroundColor }; });
+        await checkAccessibility(page, info, `/landing-cta/${width}/${audience}/rest`, theme);
+        await focus.hover();
+        expect(await focus.evaluate(node => getComputedStyle(node).color)).toBe(rest.color);
+        expect(await focus.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe(rest.background);
+        await checkAccessibility(page, info, `/landing-cta/${width}/${audience}/hover`, theme);
+        await focus.focus(); await page.keyboard.press("Tab"); await page.keyboard.press("Shift+Tab"); await expect(focus).toBeFocused();
+        expect(await focus.evaluate(node => getComputedStyle(node).boxShadow)).not.toBe(rest.shadow);
+        await checkAccessibility(page, info, `/landing-cta/${width}/${audience}/focus`, theme);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await page.evaluate(() => scrollTo(0, 0));
+        await captureAccessibility(page, info, `landing-cta-${theme}-${width}-${audience}`);
+      }
+      await page.evaluate(() => (window as SiteCtaFixtureWindow).siteCtaFixture.setOptions(false, "off"));
+      await expect(hero.getByRole("link", { name: "Try a replay", exact: true })).toHaveAttribute("href", "#replay-demo");
+      await expect(page.getByRole("link", { name: "No download — analyze your replays in your browser", exact: true })).toHaveCount(0);
+      await hero.getByRole("link", { name: "Try a replay", exact: true }).press("Enter");
+      await expect(page).toHaveURL(/#replay-demo$/);
+      await checkAccessibility(page, info, `/landing-cta/${width}/browser-off`, theme);
+    }
+    expect(evidence.errors).toEqual([]); expect(evidence.unknownRequests).toEqual([]);
+    expect(evidence.rejectedWrites).toEqual([]); expect(evidence.externalAttempts).toEqual([]);
+    await info.attach("landing-cta-proof", { body: JSON.stringify(evidence), contentType: "application/json" });
+  });
+}
 
 for (const theme of ["light", "dark"] as const) {
   test(`More bottom sheet ${theme}: keyboard, theme, report handoff and teardown`, async ({ page }, info) => {

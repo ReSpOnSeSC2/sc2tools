@@ -81,3 +81,8 @@ CPU amount is claimed. Active aliases/branches and recent deployment
 exceptions may retain output beyond the selected period. Further manual
 cleanup requires its own concrete reviewed scope and action-time approval.
 Existing program work and every local proof/ref/cache remain preserved.
+
+Site PR772 merged asb9fc50f1 after9,025 web tests and467 browser cases passed.
+The hosting fix reconciles that current main while preserving both changelog
+entries. Its workflow remains byte-identical to the independently reviewed
+and locally verified6f01522e source; only the shared changelog conflicts.
