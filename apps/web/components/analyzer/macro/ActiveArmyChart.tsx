@@ -34,7 +34,8 @@ import {
   type ActiveArmySupplyBlockWindow,
   type HoverState,
 } from "./ActiveArmyChartParts";
-import { MetricSwitch, TimelineSummary } from "./TimelineControls";
+import { BankViewSwitch, MetricSwitch, TimelineSummary } from "./TimelineControls";
+import { BankBreakdown } from "./BankBreakdown";
 import { TimelineTooltip } from "./TimelineTooltip";
 import type { HoverEvent } from "./timelineSelection";
 import type { GamePace } from "@/lib/apm";
@@ -42,6 +43,7 @@ import {
   DEFAULT_TIMELINE_METRIC,
   selectedMetrics,
   timelineMetricsFor,
+  type TimelineBankView,
   type TimelineMetric,
   type TimelineMetricDef,
 } from "./timelineMetrics";
@@ -106,6 +108,8 @@ export interface ActiveArmyChartProps {
   /** Optional host-owned selection, shared with metric-specific details. */
   selected?: readonly TimelineMetric[];
   onSelectionChange?: (next: TimelineMetric[]) => void;
+  bankView?: TimelineBankView;
+  onBankViewChange?: (next: TimelineBankView) => void;
   /** Each player's game-average APM and SPM, shown under the APM view. */
   apmAverages?: { my: GamePace | null; opp: GamePace | null } | null;
   /** Draw the supply-block bands (the host owns the on/off switch). */
@@ -170,6 +174,8 @@ export function ActiveArmyChart({
   metrics = BASE_METRICS,
   selected,
   onSelectionChange,
+  bankView,
+  onBankViewChange,
   apmAverages = null,
   showSupplyBlocks = true,
   showTitle = true,
@@ -182,6 +188,8 @@ export function ActiveArmyChart({
   const gesture = useRef<TouchGesture | null>(null);
   const [containerRef, size] = useElementSize();
   const [chosen, setChosen] = useState<TimelineMetric[]>([DEFAULT_TIMELINE_METRIC]);
+  const [chosenBankView, setChosenBankView] = useState<TimelineBankView>("total");
+  const resourceView = bankView ?? chosenBankView;
   const shown = useMemo(
     () => selectedMetrics(selected ?? chosen, metrics).map((m) => m.key),
     [selected, chosen, metrics],
@@ -191,10 +199,11 @@ export function ActiveArmyChart({
     () =>
       buildLayout(mySeries, oppSeries, gameLengthSec, {
         metrics: shown,
+        bankView: resourceView,
         width: size?.width,
         height: size?.height,
       }),
-    [mySeries, oppSeries, gameLengthSec, shown, size],
+    [mySeries, oppSeries, gameLengthSec, shown, resourceView, size],
   );
 
   const dismiss = useCallback(() => onHover?.({ type: "dismiss" }), [onHover]);
@@ -327,6 +336,11 @@ export function ActiveArmyChart({
         metrics={metrics}
       />
 
+      {shown.includes("bank") ? <BankViewSwitch view={resourceView} onChange={(next) => {
+        setChosenBankView(next);
+        onBankViewChange?.(next);
+      }} /> : null}
+
       <div
         ref={containerRef}
         // Vertical drags scroll the page; sideways drags stay with the
@@ -394,6 +408,9 @@ export function ActiveArmyChart({
         oppName={them}
         averages={apmAverages}
       />
+
+      {shown.includes("bank") ? <BankBreakdown my={readout.my} opp={readout.opp} myName={you} oppName={them}
+        label="Selected-time bank breakdown" className="rounded-lg border border-border px-3 py-2 text-text" /> : null}
 
       <AccessibleLeakTable leaks={leaks} highlightedKey={highlightedKey} />
     </figure>

@@ -52,6 +52,12 @@ describe("SettingsBackups copy", () => {
   it("describes streamed retention and export without unverified daily-backup promises", () => {
     renderBackups([]);
 
+    for (const id of ["replay-archive", "snapshots", "repair-data", "delete-history", "gdpr"]) {
+      expect(document.querySelectorAll(`[id="${id}"]`)).toHaveLength(1);
+      expect(document.getElementById(id)?.tagName).toBe("SECTION");
+    }
+    expect(apiCallMock).not.toHaveBeenCalled();
+
     expect(screen.getByText(/Your own restore points for your account/)).toBeTruthy();
     expect(screen.getByText(/5 manual snapshots, 2 weekly automatic snapshots and 3 snapshots/)).toBeTruthy();
     expect(screen.queryByText(/MongoDB Atlas/)).toBeNull();

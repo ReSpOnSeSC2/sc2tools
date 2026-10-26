@@ -30,7 +30,7 @@ import {
   selectedMetrics,
   timelineMetricsFor,
 } from "./timelineMetrics";
-import { useTimelineMetrics } from "./useTimelineMetrics";
+import { useTimelineBankView, useTimelineMetrics } from "./useTimelineMetrics";
 import {
   INITIAL_HOVER,
   nextHover,
@@ -138,6 +138,7 @@ export function MacroChartSection({
   const [hover, setHover] = useState<HoverState>(INITIAL_HOVER);
   const [showBlocks, setShowBlocks] = useState(true);
   const [chosenMetrics, setChosenMetrics] = useTimelineMetrics();
+  const [bankView, setBankView] = useTimelineBankView();
   const hasBlocks =
     (supplyBlockWindows?.length ?? 0) + (oppSupplyBlockWindows?.length ?? 0) > 0;
 
@@ -247,6 +248,8 @@ export function MacroChartSection({
         metrics={metrics}
         selected={chosenMetrics}
         onSelectionChange={setChosenMetrics}
+        bankView={bankView}
+        onBankViewChange={setBankView}
         apmAverages={apmAverages}
         showSupplyBlocks={showBlocks}
         showTitle={false}

@@ -6,7 +6,7 @@
  * on at once: each keeps its players' colours and gets its own line
  * pattern (``dash``) so the lines stay apart.
  *
- * The first four read tracker ``PlayerStatsEvent`` fields the agent
+ * The first five read tracker ``PlayerStatsEvent`` fields the agent
  * already uploads, so they work on existing games. APM comes from the
  * game's APM curve (lib/apm.ts) and is only offered when that curve is
  * trusted. Who leads, and by how much, is shown on every metric (shading
@@ -18,6 +18,13 @@ import { Keyboard, Wallet, type LucideIcon } from "lucide-react";
 import type { SeriesPoint } from "./activeArmyLayout";
 
 export type TimelineMetric = "army" | "workers" | "supply" | "income" | "bank" | "apm";
+export type TimelineBankView = "total" | "minerals" | "gas";
+
+export const TIMELINE_BANK_VIEWS = [
+  { key: "total", label: "Total" },
+  { key: "minerals", label: "Minerals" },
+  { key: "gas", label: "Gas" },
+] as const;
 
 type RaceLetter = "P" | "T" | "Z";
 
@@ -124,8 +131,12 @@ export function timelineMetricsFor({ apm }: { apm: boolean }): readonly Timeline
 
 export const DEFAULT_TIMELINE_METRIC: TimelineMetric = "army";
 
-export function timelineMetric(key: TimelineMetric): TimelineMetricDef {
-  return TIMELINE_METRICS.find((m) => m.key === key) ?? TIMELINE_METRICS[0];
+export function timelineMetric(key: TimelineMetric, bankView: TimelineBankView = "total"): TimelineMetricDef {
+  const metric = TIMELINE_METRICS.find((m) => m.key === key) ?? TIMELINE_METRICS[0];
+  if (key !== "bank" || bankView === "total") return metric;
+  return bankView === "minerals"
+    ? { ...metric, label: "Bank: minerals", title: "Unspent minerals", caption: "banked minerals", read: (p) => p.bankMinerals ?? null }
+    : { ...metric, label: "Bank: gas", title: "Unspent gas", caption: "banked gas", read: (p) => p.bankGas ?? null };
 }
 
 /**

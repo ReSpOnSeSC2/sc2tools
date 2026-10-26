@@ -36,6 +36,10 @@ import {
   useSettingsContext,
 } from "./SettingsContext";
 import { revealSectionAnchor } from "./revealSectionAnchor";
+import { settingsSectionsForTab } from "@/lib/settingsIndex";
+import { SettingsSectionNav } from "./SettingsSectionNav";
+import { OverlayManagerNav } from "./OverlayManagerNav";
+import { SettingsSearch } from "./SettingsSearch";
 
 // Preserve existing imports while non-UI consumers can use the pure leaf.
 export {
@@ -140,9 +144,16 @@ function SettingsShellInner({
     admittedHref.current = next.href;
   }, []);
   const requestDestination = useCallback((next: SettingsDestination, fromUrl: boolean) => {
+    if (!mounted.current || latestOwner.current !== owner) return;
     const attempt = {}; action.current = attempt;
     if (!tabs.some(tab => tab.id === next.tab)) return;
-    if (next.tab === active && next.href === admittedHref.current) { setPending(null); return; }
+    if (next.tab === active && next.href === admittedHref.current) {
+      setPending(null);
+      // A player may scroll elsewhere while this anchor stays in the URL.
+      // Only an explicit repeat choice reveals it again; URL sync stays inert.
+      if (!fromUrl) setAnchorChanges(value => value + 1);
+      return;
+    }
     if (next.tab !== active && ctx.isDirty(active)) {
       setPending({ kind: "tab", destination: next, fromUrl, previousHref: admittedHref.current, action: attempt, owner });
       return;
@@ -182,6 +193,7 @@ function SettingsShellInner({
   // and highlight it, and again whenever the anchor changes. Help opens
   // its own article anchors.
   const panelRegion = useRef<HTMLDivElement>(null);
+  const activeBody = useRef<HTMLDivElement>(null);
   const panelScopeId = useId();
   const desktopRows = SETTINGS_GROUPS.flatMap((group) => {
     const groupTabs = tabs.filter((tab) => tab.group === group.id);
@@ -202,11 +214,17 @@ function SettingsShellInner({
     // The streaming authority gates its children on a fresh token read. Keep
     // the bounded observer on this stable content region while that panel is
     // absent, so a late Chat/Overlay section still reveals once it appears.
-    const panel = document.querySelector<HTMLElement>(`[data-settings-panel="${panelScopeId}-${active}"]`)
-      ?? (active === "overlay" || active === "chat" ? panelRegion.current : null);
+    const panel = active === "overlay" || active === "chat" ? panelRegion.current
+      : document.querySelector<HTMLElement>(`[data-settings-panel="${panelScopeId}-${active}"]`);
     if (!panel) return undefined;
     return revealSectionAnchor(destination.hash, panel);
-  }, [active, destination, anchorChanges, panelScopeId]);
+  }, [active, destination, anchorChanges, panelScopeId, owner]);
+
+  const requestSection = (href: string) => {
+    if (!mounted.current || latestOwner.current !== owner) return;
+    const [search, hash = ""] = href.replace(/^\/settings\?/, "").split("#");
+    requestDestination(resolveSettingsDestination(search, hash ? `#${hash}` : "", active), false);
+  };
 
   const confirmDiscard = () => {
     if (pending && mounted.current && pending.owner === latestOwner.current && pending.action === action.current) {
@@ -227,6 +245,7 @@ function SettingsShellInner({
 
   return (
     <>
+      <SettingsSearch key={owner.key ?? "signed-out"} ownerKey={owner.key ?? null} onNavigate={requestSection} />
       <Tabs
         value={active}
         onValueChange={(next) => requestSwitch(next)}
@@ -279,7 +298,14 @@ function SettingsShellInner({
         <div ref={panelRegion} className="min-w-0">
         {(() => {
           if (active === "overlay" || active === "chat") {
-            const body = <div key={active}>{renderTab(active)}</div>;
+            const sections = settingsSectionsForTab(active);
+            const body = <div key={active}>
+              <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_160px]">
+                {active === "overlay" ? <OverlayManagerNav scope={panelRegion} hash={destination.hash} onNavigate={requestSection} />
+                  : <SettingsSectionNav tab={active} sections={sections} scope={panelRegion} hash={destination.hash} onNavigate={requestSection} />}
+                <div className="min-w-0 lg:col-start-1 lg:row-start-1">{renderTab(active)}</div>
+              </div>
+            </div>;
             return <>
               {tabs.filter(tab => tab.id !== active).map(tab => <Tabs.Content
                 key={tab.id}
@@ -305,7 +331,13 @@ function SettingsShellInner({
             data-settings-panel={`${panelScopeId}-${t.id}`}
             className="space-y-5 pb-24"
           >
-            {renderTab(t.id)}
+            {t.id !== "help" && settingsSectionsForTab(t.id).length >= 3 ? <div ref={activeBody}
+              className="grid min-w-0 gap-5 lg:has-[>nav]:grid-cols-[minmax(0,1fr)_160px]">
+              <SettingsSectionNav key={`${owner.key ?? "signed-out"}:${t.id}`} tab={t.id}
+                sections={settingsSectionsForTab(t.id)} scope={activeBody} hash={destination.hash}
+                onNavigate={requestSection} targetPolicy="mounted" minimumSections={3} />
+              <div className="min-w-0 lg:col-start-1 lg:row-start-1">{renderTab(t.id)}</div>
+            </div> : renderTab(t.id)}
           </Tabs.Content>
           ));
         })()}

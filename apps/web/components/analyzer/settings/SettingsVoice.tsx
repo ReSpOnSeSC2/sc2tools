@@ -319,6 +319,7 @@ export function SettingsVoice() {
   return (
     <>
       <Section
+        id="voice-readout" className="scroll-mt-28"
         title="Voice readout"
         description="Reads the scouting report aloud through the OBS overlay's Web Speech API. Browsers require a one-time click to enable speech — the overlay shows a banner the first time."
       >

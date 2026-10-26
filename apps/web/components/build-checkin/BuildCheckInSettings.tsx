@@ -74,7 +74,7 @@ export function BuildCheckInSettings() {
 
   if (error && data === undefined) {
     return (
-      <Section title="Build check-in">
+      <Section id="build-check-in" className="scroll-mt-28" title="Build check-in">
         <Card role="alert">
           <p className="text-caption text-text-muted">
             Couldn't load your build check-in settings. {buildIntentErrorMessage(error)}
@@ -93,6 +93,7 @@ export function BuildCheckInSettings() {
   return (
     <>
       <Section
+        id="build-check-in" className="scroll-mt-28"
         title="Build check-in"
         description="Game-screen prompts are off by default. Choose which ones you want. A confirmed check-in counts the game toward your planned build's record, even when the replay was classified as something else."
       >
@@ -162,12 +163,7 @@ function ToggleRow({
   onChange: (next: boolean) => void;
 }) {
   return (
-    <label
-      className={[
-        "flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-bg-elevated px-3 py-2.5",
-        disabled ? "opacity-60" : "",
-      ].join(" ")}
-    >
+    <label className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-bg-elevated px-3 py-2.5">
       <span className="min-w-0 flex-1">
         <span className="block text-body font-medium text-text">{title}</span>
         <span className="mt-0.5 block text-caption text-text-muted">{description}</span>

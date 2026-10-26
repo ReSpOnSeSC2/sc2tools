@@ -66,6 +66,7 @@ export function BuildUnitRollEditor({
 
   return (
     <Section
+      id="gateway-draw" className="scroll-mt-28"
       title="Opening Gateway draw"
       description="After a build wins and its reveal clears, draw one opening unit for a 1 Gate build or two for a 2 Gate build. Each build keeps its own unit odds."
     >

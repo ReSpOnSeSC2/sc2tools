@@ -140,7 +140,7 @@ export function OverlayThemeSection({
   }
 
   return (
-    <Section
+    <Section id="theme" className="scroll-mt-28"
       title="Overlay theme"
       description="Restyle every widget — structural frame, texture, accent colour, panel opacity, corners, size and type. Save overlay display to update connected sources. Existing URLs with a ?theme= override keep that look; remove the override once to follow saved changes."
     >
@@ -388,9 +388,9 @@ export function OverlayThemePreview({ theme }: { theme: OverlayTheme }) {
           </span>
         ) : null}
       </div>
-      <div
-        data-testid="overlay-theme-preview"
-        className="ov-theme-preview relative overflow-x-auto rounded-lg border border-border p-4"
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The named overflow region must accept keyboard scrolling. */}
+      <div data-testid="overlay-theme-preview" role="region" aria-label="Overlay theme sample preview" tabIndex={0}
+        className="ov-theme-preview relative overflow-x-auto rounded-lg border border-border p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         style={{ ...CHECKERBOARD, ...vars } as CSSProperties}
       >
         <style>{PREVIEW_CSS}</style>

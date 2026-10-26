@@ -103,7 +103,7 @@ export function OverlayScenesSection({
       : appendOverlayCreditToUrl(`${base}/overlay/${token}/scene/${preview}?demo=1`, showCredit);
 
   return (
-    <Section
+    <Section id="scenes" className="scroll-mt-28"
       title="Full-screen scenes"
       description="Animated broadcast scenes, a transparent Stream Dock cover, and seven static virtual sets you can place behind your camera."
     >
@@ -117,7 +117,7 @@ export function OverlayScenesSection({
             The desktop{" "}
             <a
               href="/devices"
-              className="text-accent-cyan underline-offset-2 hover:underline"
+              className="text-accent-cyan underline underline-offset-2 hover:underline"
             >
               agent
             </a>{" "}

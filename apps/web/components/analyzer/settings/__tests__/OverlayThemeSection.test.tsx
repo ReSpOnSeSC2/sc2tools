@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import {
   OverlayThemePreview,
   OverlayThemeSection,
@@ -20,6 +20,17 @@ afterEach(cleanup);
  */
 
 describe("OverlayThemePreview", () => {
+  it("offers a named keyboard focus target for the scrollable sample widgets", () => {
+    const view = render(<OverlayThemePreview theme={{}} />);
+    const preview = view.getByRole("region", { name: "Overlay theme sample preview" });
+    expect(preview.tabIndex).toBe(0);
+    act(() => preview.focus());
+    expect(document.activeElement).toBe(preview);
+    expect(preview.textContent).toContain("VICTORY");
+    expect(preview.textContent).toContain("Alcyone LE");
+    expect(preview.querySelectorAll(".widget-shell")).toHaveLength(3);
+  });
+
   it("renders the three sample widgets with static data", () => {
     const { container } = render(<OverlayThemePreview theme={{}} />);
     const text = container.textContent ?? "";

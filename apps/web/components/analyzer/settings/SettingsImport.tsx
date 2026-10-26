@@ -22,6 +22,7 @@ import { FolderSyncCard, useFolderSync } from "@/components/instant/FolderSyncCa
 import { useInstantImport } from "@/lib/instant/useInstantImport";
 import { SettingsImportPanel } from "./SettingsImportPanel";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+import { SettingsSectionsReady } from "./SettingsSectionNav";
 
 /**
  * The Import settings tab.
@@ -31,7 +32,7 @@ import { LazyHelpLink } from "@/components/help/LazyHelpLink";
  */
 export function SettingsImport() {
   const instant = useInstantImport();
-  return <div className="space-y-6"><LazyHelpLink slug="importing-replay-history">Importing your replay history</LazyHelpLink><SettingsImportPanel />{instant.enabled ? <BrowserSettingsImport /> : null}</div>;
+  return <div className="space-y-6"><SettingsSectionsReady revision={instant.enabled} /><LazyHelpLink slug="importing-replay-history">Importing your replay history</LazyHelpLink><SettingsImportPanel />{instant.enabled ? <BrowserSettingsImport /> : null}</div>;
 }
 
 function BrowserSettingsImport() {
@@ -39,6 +40,7 @@ function BrowserSettingsImport() {
   return (
     <div className="space-y-6">
       <Section
+        id="browser-import" className="scroll-mt-28"
         title="Browser import (no agent)"
         description="Analyze replays right here in your browser — on Windows, Mac, Chromebook or iPad — and upload the results to your account. Replay files stay on your device unless the backup option below is on (it starts on when backups are available)."
       >

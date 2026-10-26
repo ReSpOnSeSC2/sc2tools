@@ -34,6 +34,9 @@ describe("SettingsProfile Pulse ID help anchor", () => {
     const help = document.getElementById("pulse-id-help");
     expect(help).toBeTruthy();
     expect(help?.textContent).toContain("Two ways to find your Pulse ID");
+    expect(document.querySelectorAll('[id="pulse-ids"]')).toHaveLength(1);
+    expect(document.getElementById("pulse-ids")?.contains(help)).toBe(true);
+    expect(document.getElementById("profile-details")?.tagName).toBe("SECTION");
     expect(
       screen.getByRole("button", { name: "How do I find my Pulse ID?" }).getAttribute("aria-expanded"),
     ).toBe("true");

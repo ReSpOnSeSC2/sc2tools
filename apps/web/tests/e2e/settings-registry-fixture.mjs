@@ -98,7 +98,7 @@ createRoot(document.getElementById('root')!).render(<App/>);`;
 
 const adapters = {
   "next/link": `import React from'react';import{useRouter}from'next/navigation';export default React.forwardRef(function Link({href,children,prefetch,scroll,replace,onClick,onNavigate,...props},ref){const router=useRouter();return <a ref={ref} href={href} {...props} onClick={event=>{onClick?.(event);if(event.defaultPrevented||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||event.button!==0||(event.currentTarget.target&&event.currentTarget.target!=='_self')||event.currentTarget.hasAttribute('download'))return;event.preventDefault();let prevented=false;onNavigate?.({preventDefault(){prevented=true}});if(!prevented)router.push(href)}}>{children}</a>});`,
-  "next/navigation": `const router={push:href=>window.settingsFixtureRouterPush(href)};export const useRouter=()=>router;`,
+  "next/navigation": `import{useSyncExternalStore}from'react';const subscribe=listener=>{addEventListener('fixture-location',listener);addEventListener('popstate',listener);return()=>{removeEventListener('fixture-location',listener);removeEventListener('popstate',listener)}};const router={push:href=>window.settingsFixtureRouterPush(href)};export const useRouter=()=>router;export const useSearchParams=()=>new URLSearchParams(useSyncExternalStore(subscribe,()=>location.search));`,
   // Installation is unrelated to Settings grouping; no browser install prompt.
   "@/components/pwa/InstallAppButton": "export const InstallAppButton=()=>null;",
 };

@@ -423,6 +423,7 @@ function OwnerSettingsMultiChat({ token, getToken, isCurrent }: { token: string 
 
   return (
     <Section
+      id="chat-settings" className="scroll-mt-28"
       title="Multi-platform chat"
       description="One OBS source that merges your Twitch, Kick, YouTube and TikTok chats into a single live feed. Enable platforms and save here; copy its Browser Source URL in Overlay → Widgets."
     >

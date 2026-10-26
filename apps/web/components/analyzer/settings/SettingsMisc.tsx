@@ -27,6 +27,7 @@ import { useDirtyForm } from "@/components/ui/useDirtyForm";
 import { TODAY_DEFAULT_TAB } from "@/components/analyzer/tabs";
 import { usePublishDirty } from "./SettingsContext";
 import { RestoreSetupChecklist } from "./RestoreSetupChecklist";
+import { SettingsSectionsReady } from "./SettingsSectionNav";
 
 type Misc = {
   defaultTab?: string;
@@ -108,12 +109,14 @@ export function SettingsMisc() {
     }
   }
 
-  if (isLoading) return <Skeleton rows={3} />;
-  if (error && data === undefined) return <SettingsLoadError tab="Preferences" error={error} retry={mutate} />;
+  if (isLoading) return <><SettingsSectionsReady revision="loading" /><Skeleton rows={3} /></>;
+  if (error && data === undefined) return <><SettingsSectionsReady revision="error" /><SettingsLoadError tab="Preferences" error={error} retry={mutate} /></>;
 
   return (
     <>
+      <SettingsSectionsReady />
       <Section
+        id="app-preferences" className="scroll-mt-28"
         title="App preferences"
         description="Where SC2 Tools opens, and the small dials that don't fit elsewhere."
       >
@@ -140,7 +143,7 @@ export function SettingsMisc() {
         </Card>
       </Section>
 
-      <Section title="Setup & privacy">
+      <Section id="setup-privacy" className="scroll-mt-28" title="Setup & privacy">
         <Card>
           <div className="divide-y divide-border">
             <SettingRow
