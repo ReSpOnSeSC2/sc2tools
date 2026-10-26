@@ -65,7 +65,7 @@ it("discovers an admitted late target for a bounded interval and retires observe
   await act(async () => { await vi.advanceTimersByTimeAsync(SECTION_WAIT_MS); });
   const afterDeadline = document.createElement("section"); afterDeadline.id = "theme";
   await act(async () => { replacement.replaceWith(afterDeadline); await Promise.resolve(); });
-  expect(records[0].observe).not.toHaveBeenCalledWith(afterDeadline);
+  expect(records[0].observe.mock.calls.some(([target]) => target === afterDeadline)).toBe(false);
   view.unmount(); expect(records[0].disconnect).toHaveBeenCalledOnce();
   intersect(afterDeadline); expect(screen.queryByRole("navigation", { name: "On this page" })).toBeNull();
 });

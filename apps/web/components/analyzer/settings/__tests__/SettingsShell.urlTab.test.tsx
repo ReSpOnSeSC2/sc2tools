@@ -42,7 +42,8 @@ function shell(initialTab: SettingsTabId, dirtyTab: SettingsTabId | null = null)
 }
 
 function activePanel() {
-  return screen.getByRole("tabpanel").textContent;
+  // The persistent panel also owns navigation; inspect the unchanged stub body.
+  return screen.getByRole("tabpanel").querySelector("p")?.textContent;
 }
 
 beforeEach(() => {
