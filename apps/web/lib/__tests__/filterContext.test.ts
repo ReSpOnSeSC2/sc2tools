@@ -11,7 +11,7 @@ import {
 
 describe("plain filter summary", () => {
   it("names every default facet in order", () => {
-    expect(summarizeFilters(DEFAULT_ANALYZER_FILTERS)).toBe("Current patch · Ranked ladder · 1v1 · All regions · Any length");
+    expect(summarizeFilters(DEFAULT_ANALYZER_FILTERS)).toBe("Auto-track current season · Ranked ladder · 1v1 · All regions · Any length");
   });
   it("keeps stored values while explaining mixed facets and a matchup", () => {
     expect(summarizeFilters({ preset: "all", map_pool: "nonladder", game_size: "team", regions: "NA,EU", min_minutes: 10, max_minutes: 20, race: "P", opp_race: "Z" })).toMatch(/All time · Custom games · Team games · NA, EU · .*10.*20.* · P vs Z/);
@@ -39,9 +39,9 @@ describe("filtersToQuery", () => {
   });
 
   it("sends a patch preset's patch_era, and never the preset id", () => {
-    // Default: "After 5.0.17 · 12 workers" keeps 12-worker games only, so a
+    // Explicit "After 5.0.17 · 12 workers" keeps 12-worker games only, so a
     // game still played on 5.0.16 after the 5.0.17 notes stays out.
-    expect(params(filtersToQuery(DEFAULT_ANALYZER_FILTERS)).get("patch_era")).toBe("after");
+    expect(params(filtersToQuery({ preset: "after_5_0_17" })).get("patch_era")).toBe("after");
     // "5.0.16 · 8 workers" has no dates: the version alone selects it, so
     // the 5.0.16 PTR games played before the live release are kept.
     const eightWorker = params(filtersToQuery({ preset: "patch_5_0_16" }));
@@ -53,7 +53,7 @@ describe("filtersToQuery", () => {
     const before = params(filtersToQuery({ preset: "before_5_0_16", until: "2026-06-22T19:14:59.999Z" }));
     expect(before.get("patch_era")).toBe("after");
     expect(before.get("until")).toBe("2026-06-22T19:14:59.999Z");
-    for (const preset of ["all", "last_7d", "custom", "season:67"]) {
+    for (const preset of ["all", "last_7d", "custom", "season:67", "current_season"]) {
       expect(params(filtersToQuery({ preset })).has("patch_era")).toBe(false);
     }
     // An explicit value wins over the preset's.

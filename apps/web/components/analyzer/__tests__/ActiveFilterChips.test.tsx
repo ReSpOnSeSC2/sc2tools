@@ -147,7 +147,7 @@ describe("ActiveFilterChips", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
-    expect(state()).toEqual(DEFAULTS);
+    expect(state()).toEqual({ ...DEFAULTS, preset: "current_season", until: expect.any(String) });
     expect(screen.queryByRole("list", { name: "Active filters" })).toBeNull();
     expect(document.activeElement).toBe(screen.getByTestId("active-filter-chips"));
     expect(announcement()).toBe("Filters reset to defaults.");

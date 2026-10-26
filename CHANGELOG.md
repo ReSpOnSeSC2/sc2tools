@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Analyzer date range
+
+- Default fresh analyzer views and Reset to defaults to Auto-track current season, following the current season catalog while retaining explicitly saved dates and views.
+
 ### Settings groups and compatible links
 
 - Group Settings into Account, Gameplay and Streaming, with descriptions in the desktop sidebar and a Devices link in Account.
