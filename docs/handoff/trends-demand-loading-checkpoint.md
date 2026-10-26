@@ -1,167 +1,90 @@
-# Trends charts on demand — source checkpoint
+# Trends charts on demand — handoff
 
-Canonical parent item: `faster-dashboards` (Wave 5), web demand-loading portion.
-This pack does not complete the per-user API cache, lighter `/me`, device-auth
-cache or local analysis-corpus items. No performance percentage is claimed.
+Canonical item: `faster-dashboards` (Wave 5), web demand-loading portion.
+Worktree: `C:\SC2TOOLS\.worktrees\wave3-my-reviews`; branch:
+`codex/wave5-trends-demand-loading`. Authored scope is 13 text paths, including
+three product files. Six historical screenshot paths remain absent; the browser
+plan reserves six cache captures for review. No screenshot delivery is claimed.
 
-## Source and ownership
+## Behavior
 
-Worktree `C:\SC2TOOLS\.worktrees\wave3-my-reviews`, branch
-`codex/wave5-trends-demand-loading`, starts at main
-`ed484b948456ad81bfc6f367f6d0ea106cfe7d5d`. Root approved the exact 19-path
-manifest on October 26. Raw pre-edit files and absent-path records remain in
-`.cache/trends-demand-prep-ed484b94/`; the original before-receipt SHA256 is
-`e94c97b941eeb072220c75828266103b8024aed2741e7f7e47f6fe530d936604`.
-Six eventual screenshot paths are reserved but remain absent until root's
-serialized browser proof and image review. No source path expansion is granted.
+Summary, Games played and Win rate stay immediate. Lower charts activate on
+approach (400px margin), explicit Load or section navigation, then retain their
+controls while scrolling. Missing/unusable observation falls back to usable
+content. Explorer preserves its true viewport signal for existing polling;
+forced admission does not keep that signal true indefinitely. Existing collapse
+storage and unmount semantics remain.
 
-## Product behavior
+Passive scroll/resize observation changes only the section-nav highlight.
+Explicit jumps alone admit/open destinations and own heading focus/scroll.
+Retired callbacks cannot enqueue focus. The outer Explorer heading now uses
+`trends-explorer-section-heading`; the real card's original heading ID remains.
+No chart calculation, request-path builder, owner/filter API, server cache,
+Settings, infrastructure or performance budget changed. This does not complete
+the parent item's API-cache, lighter `/me`, device-auth or local-corpus work.
 
-The existing summary/Games played and Win rate first row stay immediate.
-`DeferredSection` admits the lower charts on approach (the preserved 400px
-margin), an explicit Load, or a section jump. It reserves space, falls back to
-usable content when observation is missing/unusable, and retains mounted
-controls while scrolling. Explorer reuses it and retains the true near-viewport
-signal for its existing polling rules; forced activation does not pin that
-signal true indefinitely. Existing collapse persistence/unmount semantics stay.
+## Verified static result — exact historical source
 
-The existing sticky section nav now follows the viewed section. Passive scroll,
-resize and size observation only update aria-current. Explicit user jumps alone
-open/activate a destination and own heading focus/scroll. Both nav-height and
-scroll-spy observation keep the window-resize fallback if construction or
-observe fails. Late passive callbacks and retired jump generations cannot
-enqueue a new focus action.
+At `93a94950772f358cf02f2a1672d2333d567a46f2` (tree
+`f8b7e15536ae1dcadb201c4037da314c7c5ebff4`, base `9a68c480`), the retained
+static run passed **219 tests across 19 files**, whole-web types, strict lint
+for 11 files, Help rendering (92 articles) and 19 UI rule tests. The UI ratchet passed with 1,704
+source files and 639 existing occurrences. These results apply to that exact source;
+they are not proof of a later documentation or fresh-main integration commit.
 
-The outer Explorer group originally duplicated the real Explorer card's
-`trends-explorer-heading`. Its heading now uses
-`trends-explorer-section-heading`; the original card ID and `trends-explorer`
-section ID remain. A source search for the old heading/hash under apps/web and
-docs found only the actual card's aria-labelledby/header and the local group
-reference, with no known link consumer. This does not establish what an
-external user's bookmark might contain; keeping the original card ID preserves
-that target when the card is loaded.
+Actual records are in `.cache/trends-demand-static-prep-93a94950/static/`:
+`stages.json`, `units-results.json`, `units.log`, `types.log`, `strict.json`,
+`help-determinism.json`, `ui-rules.log` and `ui-scan.log`. All six stages exited 0.
+The MediaQueryList fixture amendment is included in this passing run. The two
+earlier 218-pass/1-fail attempts and their raw repair records remain preserved.
 
-No chart calculation, request path builder, owner scope, filter/context API,
-Settings, API/index, infrastructure or budget source changed.
+## Production and browser work — UNRUN
 
-## Authored verification, not executed
+The actual preparation packet is
+`.cache/trends-demand-production-prep-93a94950/commands.json` (there is no
+`plan.json`), with its README, receipt and helpers beside it. No production
+build, budget validation, discovery, browser case or paired measurement ran.
 
-Four owned unit/integration suites cover helper admission/identity/fallback,
-Explorer viewport/selection behavior, existing layout/hydration contracts and
-actual chart/request-hook integration. The new integration suite uses real
-charts, FiltersContext, TrendsDataProvider, SWR and clientApi with synthetic
-fetch/auth; only native Recharts rendering is stubbed there. Native rendering
-belongs to the browser matrix. It includes exact shared matchup GET behavior,
-current filters on delayed admission, passive focus/URL boundaries, observer
-construction/observe failures, collapsed navigation, global cohort routing and
-held-body owner A→B→A retirement.
+The prepared build uses installed Next directly with the nine official dummy/
+local flags, own source/asset guards, unchanged route budgets (81 planned) and
+post-build types. It does not invoke npm prebuild, engine/sample generation,
+asset copying, downloads, pruning or installation. Own asset admission binds
+40 canonical engine inputs, five active assets, nine retained files and four
+sample payloads to this checkout's retained receipt; no foreign inventory is
+admitted. A fresh current BUILD_ID and complete CSS inventory are required.
 
-The browser fixture mounts real Trends and child charts/Recharts, real data
-contexts, SWR and clientApi, current production CSS and local fonts. Framework,
-auth and unrelated Help/report leaves are explicit adapters. It uses a strict
-GET-only loopback host with exact synthetic DTOs; every aggregation request is
-logged with owner, real pathname, query, phase and outcome. Static/map-image
-resources are counted separately. Unknown/nonlocal requests and all writes are
-rejected. Listener/server cleanup has its own receipt.
+Main browser source declares **18 cases**, 30 shared AA scans and six captures:
+360/768/1280 widths, light/dark, personal/global, navigation/collapse/retention,
+owner retirement and independent Retry. Only actual `--list` can confirm the
+expanded names/count. The cache-only paired plan declares **two cases/four
+fresh UTC contexts**, personal/global dark desktop. Both halves use the same
+real charts, hooks, data, CSS/fonts and actions; only two raw-hashed frozen
+legacy product files are overridden.
 
-`compareTrendsDemand` in the fixture is the local paired measurement entry:
-run it after the approved build with a browser, identical viewport/theme/mode
-and fresh UTC contexts. It verifies and loads only the two exact frozen legacy
-product files, then compares them with current source using identical actual
-children, hooks, data, CSS, clock, storage and SWR settings. It preserves cold,
-filter-before-lower-charts and traversal GET ledgers. Normal CI tests exercise
-current source and have no dependency on the cache snapshot. Do not infer
-savings from mounted chart count: daily/grouped timeseries differ, and several
-chart pairs share an endpoint. Full traversal can perform similar total work.
+Paired GET ledgers cover cold → filter-before-lower-charts → Performance →
+Inspect retention. This is not full traversal. Keep actual owner/path/query/
+phase/settlement ledgers and static-resource counts separate; no measured GET
+saving or performance percentage exists yet. Framework/auth and unrelated
+Help/report leaves are adapters. Shared AA is the existing serious/critical
+gate, not universal accessibility proof. There is no native invocation counter;
+do not claim instrumented native/socket/clipboard zero. No real account,
+provider or native operation is authorized by this preparation.
 
-Browser cases are authored for the existing three viewport projects, both
-themes, personal/global views, nav/collapse/scroll boundaries, filter/cohort
-changes, retained Inspect window and Explorer drafts, missing observer fallback,
-held tokens/bodies, and independent error/Retry. Shared accessibility checks
-remain unmodified and establish their existing serious/critical gate only.
+## Fresh-main admission and delivery
 
-## Open validation/delivery state
+Root owns integration, runtime grants, review and delivery. Preserve the 12
+uncontested feature paths and reconcile Changelog after fresh merged PR #780.
+Refresh the exact guard base to that merged main, head/tree, changed raw pins
+and the build runner's hardcoded artifact identity. The old 379-pin packet and
+historical static result remain intact; do not relabel them as current proof.
 
-Source-only authoring is complete and frozen for independent review in
-`.cache/trends-demand-source-ed484b94/receipt.json` (13 text paths; the six
-reserved screenshot paths remain absent). The exact source bytes are copied
-beside that receipt. Any review repair needs a fresh receipt before runtime.
-No tests, types, lint, Help/UI generation, build, budget checks, browser, native
-app, Git write, network, database, provider or production operation ran in this
-source grant. There is no new passing test result, browser image, measured GET
-reduction, PR, deployment or production claim. Root owns runtime serialization
-after Settings and subsequent Git/integration/delivery. Preserve all original
-failures and before bytes; update this checkpoint with exact proof chronology
-only after those actions actually occur.
-
-## First static attempt and collapsed-observer harness repair
-
-Root preserved source at `d8106981` and merged main `9a68c480` as
-`064f72c49166fc8902a0c72c16a2e78777d023a5` (tree
-`df939e3981c75d29befef8b84fa8a37d88ce155f`). Twelve of the thirteen authored
-text paths remained unchanged; only CHANGELOG changed during integration.
-Six reserved screenshots are still absent.
-
-The first serialized static run used the nineteen literal suites in
-`.cache/trends-demand-static-prep-064f72c4/`. Pure Help rendering passed twice
-with 92 articles and no index write. Units reported 218 passed and one failed
-across nineteen files. The sole failure was the collapsed-state assertion in
-`TrendsTab.demand.test.tsx`: its cumulative observer ledger contained the old
-MMR observer created by the intentional SSR/first-client expanded fallback.
-The saved collapse is restored in the existing storage hook's effect, which
-unmounts that placeholder and disconnects the observer. A historical ledger
-entry does not establish an active observer or an aggregation request.
-
-Root's post-attempt admission verified all 379 source/dependency/config/asset
-metadata pins, with a clean tracked tree and no unknown untracked paths. The
-original failure log, JSON and admission receipt remain in that static folder;
-the runner stopped before types, strict lint and UI checks.
-
-The narrow follow-up changes only the demand test and this checkpoint. Before
-bytes/hashes are retained in
-`.cache/trends-demand-collapse-observer-repair-064f72c4/before/`. The test now
-requires no connected active MMR observer, checks that the historical observer
-was disconnected and detached, and requires zero MMR GETs. It explicitly invokes
-the retired observer's saved callback and again requires no chart mount or GET.
-The existing explicit section navigation, request, heading focus, reduced-motion
-scroll and closing assertions remain intact. No storage hook, shared helper,
-product source, transport or expectation of lazy collapsed data was changed.
-
-The observer repair was preserved at
-`0cd70bc18fe56faf979d898a1d206931f3b5aa26`; its next serialized attempt is
-recorded below. The original 218/1 result remains a historical RED, not a
-passing result or product failure. Build, budget, browser and measured
-GET-reduction proof remain pending.
-
-## Second static attempt and MediaQueryList fixture repair
-
-The unchanged nineteen-file pack ran once from
-`.cache/trends-demand-static-prep-0cd70bc1/`. Pure Help92 passed without an index
-write. Units again reported 218 passed and one failed (219 cases). The repaired
-observer assertions reached explicit chart mounting, where the test's old
-`matchMedia` stub supplied only `matches: true`. The real `useReducedMotion`
-hook then attempted its native listener API and failed with
-`mq.addListener is not a function`. This was a missing fixture capability,
-not evidence of an application or shared-hook defect.
-
-The first-RED runner stopped before types, strict lint or UI checks. Its raw
-log/JSON remains untouched in that cache. A separately authorized postguard
-passed all 379 source/dependency/config/asset metadata pins at exact head0cd,
-with no tracked/index change or unknown untracked file. Closure inspection
-found no owned Node/Mongo process and no listener on 3210 or 8080. No retry,
-product repair or later validation stage ran.
-
-Before this second narrow source repair, the existing demand test and this
-checkpoint were copied with hashes to
-`.cache/trends-demand-mediaquery-repair-0cd70bc1/before/`. The test now returns a
-typed complete `MediaQueryList`: its media string, null onchange, modern and
-legacy listener methods and dispatchEvent are present. It matches only the
-reduced-motion query, retaining the expected `auto` scroll. All observer,
-native focus, navigation, exact GET and close assertions remain unchanged;
-the real charts and request/theme hooks remain unmocked. The other eleven
-feature files and all product/helper/storage/config/asset bytes are unchanged.
-
-This MediaQueryList amendment is source-only and unrun. It requires root review,
-preservation and a fresh frozen validation packet before another static run.
-Both historical RED attempts remain preserved. No new passing count, build,
-browser or production claim follows from this test-only repair.
+Before browser execution, preserve each LIST-generated JSON reporter file under
+its list evidence directory before RUN writes a fresh file. Admit exact new
+untracked evidence paths; the old source whitelist does not include dynamic
+browser outputs or those reporter JSONs. Verify complete CSS filename-set and
+raw-byte equality before/after; the existing browser helper checks supplied rows
+but does not detect an omitted/extra CSS file. Pin current source, fixture/spec,
+fonts and full Chromium 1228, enforce CI=1 and remove A11Y_COLLECT_ONLY. Existing
+configs use one worker, zero retries and maxFailures=1. Preserve first RED, actual
+GET/AA/cleanup receipts and owned host process/listener closure. No automatic
+build-to-browser continuation or new passing/production claim follows here.
