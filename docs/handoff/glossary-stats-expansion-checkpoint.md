@@ -3,14 +3,33 @@
 Date: 2026-10-26. Worktree: `wave3-my-reviews`, branch
 `codex/wave5-glossary-terms`, starting from merged main `78818d4b`.
 
+## First integrated static proof
+
+Root's first stage at50817173 passes **169 tests /19 suites**, whole-web
+types and strict lint on16 owned code/test/fixture files. OpponentHistory's
+column-picker details element has one inherited keyboard-listener warning:
+`jsx-a11y/no-noninteractive-element-interactions`, prepack78818d4b line62 and
+current line63. The separately executed same-filename lint audit proves the
+message, column and complete warned declaration unchanged, with zero errors.
+No waiver, new tab stop or unrelated picker rewrite was added. The original
+strict RED and both JSON audits remain in `.cache/glossary-terms-first-static/`.
+
+Help92's manually inserted index exactly matches two canonical generator
+results, normalized/raw SHA256
+`8bdd0c2ba1458fbc6c0ee5f87adaf6edd3ff9030027c14105488c6fa06242f32`.
+The index was not written. All19 UI-rule checks pass over1,701 files/639
+existing occurrences. No product repair was needed. Production build/budget,
+browser/AA and captures remain unrun; later final proof must retain the exact
+owned scope and keep all budgets unchanged.
+
 ## Boundary
 
 This is the source-only implementation of the exact 20-path slice in
 `C:/SC2TOOLS/.cache/glossary-first-expansion-slice-2026-10-26.md`, backed by
 `C:/SC2TOOLS/.cache/glossary-expansion-audit-2026-10-26.md` and a second
-read-only formula review against current code. **No tests, types, lint,
-generator, build, budget check or browser cases have run for this pack.**
-Runtime remains held by other serialized work. No Git mutation, network,
+read-only formula review against current code. At that authored boundary no
+tests, types, lint, generator, build, budget check or browser case had run.
+The authored stage performed no Git mutation, network,
 provider, account, clipboard, installer or SC2 operation was performed.
 Old branches, owner files, caches and screenshots remain preserved.
 
