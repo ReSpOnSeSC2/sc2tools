@@ -22,16 +22,19 @@ unchanged route budgets, post-build types and own asset pre/post checks passed.
 Build `wRb84uDIwOd8STObHsL8o` preserves canonical source 40, retained assets 9 and
 sample games 4. No API, engine or agent release changes are needed.
 
-Caption validation at `56ec58cb`: roster tests 14/14 and strict single-file lint
-passed; four shared-chart cases (light/dark, 320/1280) passed with eight shared
-AA scans reporting no issues. The fixture closed after 88 loopback GETs with
-no unknown/writes; browser ledgers and owned host listeners were clear.
-The proof explicitly bridges current source to original `67131607` build/CSS,
-not a build of the repair commit. Root visual review found narrow-phone padding
-and a truncated readout value; source-only polish now uses existing `!px-2.5`
-and `flex-wrap` utilities. Its focused lint/browser validation is pending.
-This fixture does not establish fresh full-game/modal E2E coverage. Missing,
-zero and invalid resource cases are unit evidence.
+Final repair checks: roster tests 14/14 and strict single-file lint passed at
+`56ec58cb`; TimelineControls strict lint passed at `d1d5511a`. The final four
+shared-chart cases (light/dark, 320/1280) passed with eight shared AA scans and
+no issues. The fixture closed after 89 loopback GETs with no unknown/writes;
+browser ledgers and owned host listeners were clear. Root reviewed all four
+captures: phone resource buttons fit one row and 600 stays readable with the
+lead below; desktop remains clear.
+
+This proof explicitly bridges current `d1d5511a` source to original `67131607`
+build/CSS, not a build of the later class-only repairs. It does not establish
+fresh full-game/modal E2E coverage. Missing, zero and invalid resource cases
+remain unit evidence. Final cached evidence is
+`.cache/macro-bank-browser-d1d5511a/final-receipt.json`.
 
 First failures remain under `.cache/macro-bank-static-prep-17e3b95d/results/Types/`,
 `.cache/macro-bank-build-prep-67131607/first-red-receipt.json` (sandbox EPERM),
