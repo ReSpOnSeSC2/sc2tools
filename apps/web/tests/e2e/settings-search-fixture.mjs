@@ -85,7 +85,7 @@ async function readPublicMapImage(cwd) {
 async function assets(mode) {
   const cwd = process.cwd();
   const result = await build({ stdin: { contents: SOURCE, loader: "tsx", resolveDir: cwd }, bundle: true, write: false, minify: true, format: "iife", platform: "browser", jsx: "automatic", tsconfig: "tsconfig.json",
-    define: { "process.env.NODE_ENV": '"production"', "process.env.NEXT_PUBLIC_API_BASE": JSON.stringify(origin), "process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID": JSON.stringify(""), "process.env": JSON.stringify({ NODE_ENV: "production", NEXT_PUBLIC_API_BASE: origin, NEXT_PUBLIC_INSTANT_IMPORT: mode }) },
+    define: { "process.env.NODE_ENV": '"production"', "process.env.NEXT_RUNTIME": JSON.stringify(""), "process.env.NEXT_PUBLIC_API_BASE": JSON.stringify(origin), "process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID": JSON.stringify(""), "process.env": JSON.stringify({ NODE_ENV: "production", NEXT_PUBLIC_API_BASE: origin, NEXT_PUBLIC_INSTANT_IMPORT: mode }) },
     plugins: [{ name: "settings-search-local-boundaries", setup(builder) {
       builder.onResolve({ filter: /.*/ }, args => Object.hasOwn(adapters, args.path) ? { path: args.path, namespace: "sections-adapter" } : undefined);
       builder.onLoad({ filter: /.*/, namespace: "sections-adapter" }, args => ({ contents: adapters[args.path], loader: "tsx", resolveDir: cwd }));
