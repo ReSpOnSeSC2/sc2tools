@@ -1,0 +1,4022 @@
+{
+  "schemaVersion": 1,
+  "hexAllowlist": {
+    "prefixes": [
+      "components/overlay/",
+      "components/analyzer/charts/"
+    ],
+    "files": [
+      "components/cards/RadarChart.tsx",
+      "components/analyzer/mmr/MmrBucketChart.tsx",
+      "components/analyzer/StrategyTendencyChart.tsx",
+      "components/analyzer/explorer/ExplorerCharts.tsx",
+      "components/instant/report/OfflineMacroChart.tsx"
+    ]
+  },
+  "entries": [
+    {
+      "file": "app/app/layout.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "17c8be93acae5b5fc51f343cc92714ae119f3f2f49f0c689ecb1e773cef8128a",
+      "count": 1,
+      "example": "<a href={signedOut ? \"/sign-in\" : \"/app\"} className=\"hard-press mt-5 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-2 border-line bg-accent px-5 fon"
+    },
+    {
+      "file": "app/community/authors/[userId]/page.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "2699b71749e93d4f594ad5a0c1e3d14a87f5b9b21db03b9dfb9f48062e7f9ca5",
+      "count": 1,
+      "example": "<Link href=\"/community\" className=\"inline-flex min-h-[44px] items-center gap-2 hard-press rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold text"
+    },
+    {
+      "file": "app/dock/layout.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "00e10787b30cbe7df6116f17536cc000ceb600c07543f3a2e69e83a2afb7b221",
+      "count": 1,
+      "example": "\"#0b0e14\""
+    },
+    {
+      "file": "app/dock/layout.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "f30c993083b5865bdc77495c078cd3bdb33d3bb0f0f27342119e3c688bafb8ff",
+      "count": 1,
+      "example": "` html, body { background: #0b0e14 !important; } body > header, body > footer, body > main > footer { display: none !important; } [data-cookie-banner] { display: none !important; }"
+    },
+    {
+      "file": "app/donate/page.tsx",
+      "rule": "handrolled-accent-link",
+      "signature": "9598fcb83e92cc26a9a001e3ec0af9c70523ed0d99e3e42b6e514e62eaa98d5c",
+      "count": 1,
+      "example": "<a href={channel.href} target=\"_blank\" rel=\"noopener\" className=\"mt-auto inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-accent px-4 text-body font-semibold text-w"
+    },
+    {
+      "file": "app/global-error.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "0de5b181f0dcb64823c07945b568a0f00be56f309cfb73d4bbe50248ac5a07e9",
+      "count": 20,
+      "example": "\":root{--crash-bg:#0b0e14;--crash-text:#e6e9f0;--crash-muted:#9aa3b2;--crash-panel:#1a2233;--crash-link:#7dd3fc} @media(prefers-color-scheme:light){:root{--crash-bg:#f8fafc;--crash"
+    },
+    {
+      "file": "app/layout.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2d3198d4408bd7e34aacf7f957544fad09e18a3d30b924c997f560377b57dba5",
+      "count": 1,
+      "example": "\"#06090e\""
+    },
+    {
+      "file": "app/manifest.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "2d3198d4408bd7e34aacf7f957544fad09e18a3d30b924c997f560377b57dba5",
+      "count": 1,
+      "example": "\"#06090e\""
+    },
+    {
+      "file": "app/p/[handle]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "133f5fb1066c9de4fcb3c817266bffde7262bfde75ce23d2609ab06b5e34a795",
+      "count": 1,
+      "example": "\"#e7edf0\""
+    },
+    {
+      "file": "app/p/[handle]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "1d26326e7449c343d06d3325774d75d102bbe59ea15443831cd94b114a8d900d",
+      "count": 1,
+      "example": "\"#3ce0d6\""
+    },
+    {
+      "file": "app/p/[handle]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2d3198d4408bd7e34aacf7f957544fad09e18a3d30b924c997f560377b57dba5",
+      "count": 1,
+      "example": "\"#06090e\""
+    },
+    {
+      "file": "app/p/[handle]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2ff541a20efe4440280de24801480b894be200ab4006cca789f18918e634f671",
+      "count": 1,
+      "example": "`2px solid #1c2430`"
+    },
+    {
+      "file": "app/p/[handle]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "38d47f1a0609a754b4aef9d15a2f8a9a12ce0247c15fddea05216d75669ff942",
+      "count": 1,
+      "example": "\"#ff6b6b\""
+    },
+    {
+      "file": "app/p/[handle]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
+      "count": 1,
+      "example": "\"#9aa3b2\""
+    },
+    {
+      "file": "app/p/[handle]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "798272b1abf3424e54b95912892ae39e2e02bd3c87858a5db5a5864ef3e3752b",
+      "count": 1,
+      "example": "\"#3ec884\""
+    },
+    {
+      "file": "app/p/[handle]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "ced70b0c59a26796a0c06f12c2f03ba92f07356d418693b4f999a05afa335dbc",
+      "count": 1,
+      "example": "\"#0c1017\""
+    },
+    {
+      "file": "app/p/[handle]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "e28af2ddb43d25a2f4a61debac19fbab9a1a4775ffd1c6405749ee5f82d5a37e",
+      "count": 1,
+      "example": "\"#157d8c\""
+    },
+    {
+      "file": "app/p/[handle]/replays/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "133f5fb1066c9de4fcb3c817266bffde7262bfde75ce23d2609ab06b5e34a795",
+      "count": 1,
+      "example": "\"#e7edf0\""
+    },
+    {
+      "file": "app/p/[handle]/replays/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "1d26326e7449c343d06d3325774d75d102bbe59ea15443831cd94b114a8d900d",
+      "count": 3,
+      "example": "\"#3ce0d6\""
+    },
+    {
+      "file": "app/p/[handle]/replays/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
+      "count": 2,
+      "example": "\"#9aa3b2\""
+    },
+    {
+      "file": "app/p/[handle]/replays/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "7ee8cfcd30ae05f05387ed53ea7256123ad5c3725608ccb293c646abeb75b6fb",
+      "count": 1,
+      "example": "\"2px solid #157d8c\""
+    },
+    {
+      "file": "app/p/[handle]/replays/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "fb0ad21e06c09fbcca9b99e68c43e2d423cce97ef8e4b1ba498341f5cc652feb",
+      "count": 3,
+      "example": "\"radial-gradient(900px 520px at 100% 0%, #157d8c55 0%, #06090e 58%), #06090e\""
+    },
+    {
+      "file": "app/players/[player]/replays/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "133f5fb1066c9de4fcb3c817266bffde7262bfde75ce23d2609ab06b5e34a795",
+      "count": 1,
+      "example": "\"#e7edf0\""
+    },
+    {
+      "file": "app/players/[player]/replays/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "1d26326e7449c343d06d3325774d75d102bbe59ea15443831cd94b114a8d900d",
+      "count": 3,
+      "example": "\"#3ce0d6\""
+    },
+    {
+      "file": "app/players/[player]/replays/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
+      "count": 2,
+      "example": "\"#9aa3b2\""
+    },
+    {
+      "file": "app/players/[player]/replays/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "7ee8cfcd30ae05f05387ed53ea7256123ad5c3725608ccb293c646abeb75b6fb",
+      "count": 1,
+      "example": "\"2px solid #157d8c\""
+    },
+    {
+      "file": "app/players/[player]/replays/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "fb0ad21e06c09fbcca9b99e68c43e2d423cce97ef8e4b1ba498341f5cc652feb",
+      "count": 3,
+      "example": "\"radial-gradient(900px 520px at 100% 0%, #157d8c55 0%, #06090e 58%), #06090e\""
+    },
+    {
+      "file": "app/reviews/[id]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "03e6ea568dbac317e845155bf505197ea3cd2d9701433769a047a695f6135ccc",
+      "count": 2,
+      "example": "\"2px solid #1c2430\""
+    },
+    {
+      "file": "app/reviews/[id]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "133f5fb1066c9de4fcb3c817266bffde7262bfde75ce23d2609ab06b5e34a795",
+      "count": 1,
+      "example": "\"#e7edf0\""
+    },
+    {
+      "file": "app/reviews/[id]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "1d26326e7449c343d06d3325774d75d102bbe59ea15443831cd94b114a8d900d",
+      "count": 1,
+      "example": "\"#3ce0d6\""
+    },
+    {
+      "file": "app/reviews/[id]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2d3198d4408bd7e34aacf7f957544fad09e18a3d30b924c997f560377b57dba5",
+      "count": 1,
+      "example": "\"#06090e\""
+    },
+    {
+      "file": "app/reviews/[id]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
+      "count": 1,
+      "example": "\"#9aa3b2\""
+    },
+    {
+      "file": "app/reviews/[id]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "ced70b0c59a26796a0c06f12c2f03ba92f07356d418693b4f999a05afa335dbc",
+      "count": 1,
+      "example": "\"#0c1017\""
+    },
+    {
+      "file": "app/reviews/[id]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "e28af2ddb43d25a2f4a61debac19fbab9a1a4775ffd1c6405749ee5f82d5a37e",
+      "count": 1,
+      "example": "\"#157d8c\""
+    },
+    {
+      "file": "app/reviews/[id]/opengraph-image.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "f1eb27e53baa3e45d30ace4f9882ba22751696535b782310e219bfc5a0b090fe",
+      "count": 1,
+      "example": "\"#f0c43c\""
+    },
+    {
+      "file": "components/CookieBanner.tsx",
+      "rule": "dialog-outside-ui",
+      "signature": "39fe269dbcaad7c728a8c9b55395493fbd5128466118b1d0432996f858d2191a",
+      "count": 1,
+      "example": "<div ref={panel} data-cookie-banner role=\"dialog\" aria-labelledby=\"cookie-title\" aria-describedby=\"cookie-body\" tabIndex={-1} onKeyDown={(event) => { if (event.key === \"Escape\" && "
+    },
+    {
+      "file": "components/CookieBanner.tsx",
+      "rule": "focus-without-ring",
+      "signature": "24ac93513ff9f5b5c76b1452373b9acb82a7a5aa5e8530699a059fbd36d12c23",
+      "count": 1,
+      "example": "\"fixed inset-x-0 bottom-above-chrome z-banner px-3 focus:outline-none sm:left-auto sm:right-4 sm:max-w-md sm:px-0\""
+    },
+    {
+      "file": "components/SyncStatus.tsx",
+      "rule": "dialog-outside-ui",
+      "signature": "9017a23364573d8faa6a067475c2cc027e105a74e80cbe83cbc130043f1a4c42",
+      "count": 1,
+      "example": "<div id={id} role=\"dialog\" aria-label=\"Desktop app details\" className=\"absolute left-0 top-full z-40 mt-1 w-[min(22rem,calc(100vw-2rem))] space-y-2 rounded-xl border border-border "
+    },
+    {
+      "file": "components/analyzer/ActiveFilterChips.tsx",
+      "rule": "focus-without-ring",
+      "signature": "c6cb7182fe0af10b05e35c1b5adaba57dc509c299a7d10c4ea7d5a521776047c",
+      "count": 1,
+      "example": "\"focus:outline-none\""
+    },
+    {
+      "file": "components/analyzer/BuildEditorModal.tsx",
+      "rule": "focus-without-ring",
+      "signature": "edfb2a08d6952b77ee9e08fced3570d4e0ac4c76c93d54b4ffdc35adb83b178e",
+      "count": 1,
+      "example": "\"w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[120px]\""
+    },
+    {
+      "file": "components/analyzer/DoctorBanner.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "ce54e77315c77ee18a17258c96f650fc80fe1859301c294c7c3ec132d5e4814b",
+      "count": 1,
+      "example": "<Link href={w.cta.href} className=\"hard-press inline-flex shrink-0 items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 py-[0.55rem] font-display text-xs font-bo"
+    },
+    {
+      "file": "components/analyzer/FilterBar.tsx",
+      "rule": "dialog-outside-ui",
+      "signature": "68f1365adc364fa1bb2e3922df45c1ec71da37a2758de1dcb952e24304d21122",
+      "count": 1,
+      "example": "<div ref={dialogRef} role=\"dialog\" tabIndex={-1} aria-modal=\"true\" aria-label=\"Pick a date range\" className={[ \"fixed inset-x-2 bottom-above-chrome z-sheet max-h-[80vh] overflow-y-"
+    },
+    {
+      "file": "components/analyzer/FilterBar.tsx",
+      "rule": "focus-without-ring",
+      "signature": "a99773a64c7584252da59f2a6691764335e36c425c9e79f6f883bf859c921b60",
+      "count": 2,
+      "example": "\"w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none mt-0.5 min-h-[4"
+    },
+    {
+      "file": "components/analyzer/GameLengthFilter.tsx",
+      "rule": "dialog-outside-ui",
+      "signature": "231d0c2bbebbc6afd5d363c63203ec6eb1c930a868e2f1fd4a05da54dd42b9ca",
+      "count": 1,
+      "example": "<div ref={dialogRef} role=\"dialog\" tabIndex={-1} aria-modal=\"true\" aria-label=\"Custom game length\" className={[ \"fixed inset-x-2 bottom-above-chrome z-sheet rounded-xl border borde"
+    },
+    {
+      "file": "components/analyzer/GameLengthFilter.tsx",
+      "rule": "focus-without-ring",
+      "signature": "2e87bbdcb4346c83f8fe0c20d7b0bcd4108e265fa4f90f0285d3c9c47044748e",
+      "count": 2,
+      "example": "\"mt-0.5 min-h-[44px] w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-"
+    },
+    {
+      "file": "components/analyzer/GameStreamLinks.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "85b03a89fb53989fbe10da5c438c19960c72a884f07c59948f01b4dd06f1d331",
+      "count": 4,
+      "example": "\"text-[#9146ff] hover:bg-[#9146ff]/15 hover:text-[#a970ff] focus-visible:ring-[#9146ff]\""
+    },
+    {
+      "file": "components/analyzer/GameStreamLinks.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d7ab0488fadd22e74584b786655f231c24f6046826671bddb49e6e8c23d3e781",
+      "count": 4,
+      "example": "\"text-[#ff0000] hover:bg-[#ff0000]/15 hover:text-[#ff3333] focus-visible:ring-[#ff0000]\""
+    },
+    {
+      "file": "components/analyzer/GameStreamLinks.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "52684874a680121d30445c25407ea970ae615a4ea2199d54be3da552e998fb3d",
+      "count": 1,
+      "example": "\"inline-flex items-center border-r border-border-strong px-1.5 text-[10px] font-bold uppercase tracking-wide text-text-muted\""
+    },
+    {
+      "file": "components/analyzer/GameVodToolbar.tsx",
+      "rule": "focus-without-ring",
+      "signature": "efbd41fc67eb26950500c61579df45f9a665e4baf7bc7c91ef9249ef2cda65fb",
+      "count": 1,
+      "example": "\"min-h-11 rounded px-3 py-2 text-caption text-text hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none\""
+    },
+    {
+      "file": "components/analyzer/Last5GamesTimeline.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "38d47f1a0609a754b4aef9d15a2f8a9a12ce0247c15fddea05216d75669ff942",
+      "count": 1,
+      "example": "\"#ff6b6b\""
+    },
+    {
+      "file": "components/analyzer/Last5GamesTimeline.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
+      "count": 1,
+      "example": "\"#9aa3b2\""
+    },
+    {
+      "file": "components/analyzer/Last5GamesTimeline.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "975b9889e34cafa3dadb40fa3c1daa4c7718b12c11d29f5aef8904670b5ae154",
+      "count": 1,
+      "example": "\"#3ec07a\""
+    },
+    {
+      "file": "components/analyzer/MoreFiltersPopover.tsx",
+      "rule": "dialog-outside-ui",
+      "signature": "254e53e073cc5200128b11d4167b74c856c5a403797f84169ca2aed206044101",
+      "count": 1,
+      "example": "<div ref={dialogRef} role=\"dialog\" aria-modal=\"true\" aria-label=\"More filters\" tabIndex={-1} style={position || { visibility: \"hidden\" }} className=\"fixed z-40 flex flex-col items-"
+    },
+    {
+      "file": "components/analyzer/OpponentDossierStates.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "0d41aebf6e22a5593cc9710b5ac9cbaf4d9c77f399dcf9186225f77a6ddb5c0a",
+      "count": 1,
+      "example": "<Link href=\"/app/opponents\" className=\"hard-press inline-flex h-9 min-w-[44px] items-center justify-center rounded-full border-2 border-line bg-bg-surface px-4 font-display text-ca"
+    },
+    {
+      "file": "components/analyzer/OpponentIdentityCandidateEvidence.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "5b0993859eab9470d661f521fda5c3826fd2a24b7bc94991d826b84773935dc4",
+      "count": 1,
+      "example": "\"mt-0.5 block text-[0.625rem] text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/OpponentIdentityCandidates.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "18ce3ea9194c8a311e37fa18d832dd0e57e9fec4dcdd79c64846dc95ae21cdcb",
+      "count": 1,
+      "example": "\"mt-1 text-[0.625rem] leading-relaxed text-warning\""
+    },
+    {
+      "file": "components/analyzer/OpponentIdentityCandidates.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "68173019d6426d8248c4d6b5d6472efcaae27f1cd519d2fa5fe9fd8bbed7a2a2",
+      "count": 1,
+      "example": "\"mt-1.5 text-[0.625rem] leading-relaxed text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/OpponentIdentityCandidates.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "f898c3fdf15f41da20e598282eb818cb2e7357b956b978cbe9c2bd6b7d8e1bc9",
+      "count": 3,
+      "example": "\"text-[0.625rem] uppercase tracking-wider text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/PlayerChannelLinks.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "28229fc4262833855e47921c9211ee17fe8f3d2d3142682e98fff0ce9af68649",
+      "count": 1,
+      "example": "\"text-[#e52222]\""
+    },
+    {
+      "file": "components/analyzer/PlayerChannelLinks.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d315604c30f3b5dd7ea50abb23fa1d248f55d7e6ee4950c476734567d23d1716",
+      "count": 1,
+      "example": "\"text-[#9146ff]\""
+    },
+    {
+      "file": "components/analyzer/StrategiesTab.tsx",
+      "rule": "focus-without-ring",
+      "signature": "2ff7eeb4721eea6607d4dad1c74ca2e4fd471115e609862f3921743e9871256b",
+      "count": 1,
+      "example": "\"w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none\""
+    },
+    {
+      "file": "components/analyzer/TrendsTab.tsx",
+      "rule": "focus-without-ring",
+      "signature": "dcc3180058c5973b3e50cd3c6e0d5cc9d05c08b15311c081198e85ed43c611ec",
+      "count": 1,
+      "example": "\"rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors focus:border-accent focus:outline-none text-sm\""
+    },
+    {
+      "file": "components/analyzer/arcade/SeasonRecap.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "08c560579118e3535538d666f975028791b03b69008372332f9341e95c0f2f1b",
+      "count": 1,
+      "example": "\"#7DC8FF\""
+    },
+    {
+      "file": "components/analyzer/arcade/SeasonRecap.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "0c8b634b0e5a2e437730edc4e88f151f014646d3327e843b3bcd661ba2f71634",
+      "count": 1,
+      "example": "\"#c7d0dc\""
+    },
+    {
+      "file": "components/analyzer/arcade/SeasonRecap.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "358e31b195a1ed392aeb54cd3ba6af5997d90d47388c69c034018be86419e0a5",
+      "count": 2,
+      "example": "\"#8a96a8\""
+    },
+    {
+      "file": "components/analyzer/arcade/SeasonRecap.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "592da3a1f24b31867e3495558162bfec47122384b0c796bf0def4a27d0898aab",
+      "count": 2,
+      "example": "\"#ffffff\""
+    },
+    {
+      "file": "components/analyzer/arcade/ShareCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "067a8adf92fe673f9ba15d59e0f06ef15f70c568813c02f166bc3d235b3827c7",
+      "count": 1,
+      "example": "\"#e6edf3\""
+    },
+    {
+      "file": "components/analyzer/arcade/ShareCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "08c560579118e3535538d666f975028791b03b69008372332f9341e95c0f2f1b",
+      "count": 2,
+      "example": "\"#7DC8FF\""
+    },
+    {
+      "file": "components/analyzer/arcade/ShareCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "21cb70c299e1235d0c34035bdd3ec822bb26f98a33811ed2c0e54c4092dba079",
+      "count": 1,
+      "example": "\"#28A06B\""
+    },
+    {
+      "file": "components/analyzer/arcade/ShareCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "358e31b195a1ed392aeb54cd3ba6af5997d90d47388c69c034018be86419e0a5",
+      "count": 2,
+      "example": "\"#8a96a8\""
+    },
+    {
+      "file": "components/analyzer/arcade/ShareCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "4890d563d064e60a0b5316e18e4fe1df8e09a5d9216e83d8d33dcea327057036",
+      "count": 2,
+      "example": "\"#7a8597\""
+    },
+    {
+      "file": "components/analyzer/arcade/ShareCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "510293e5bbb5100c900ca355e9d1002f749a40081470b98325fd00b8b9145a65",
+      "count": 1,
+      "example": "\"#161b22\""
+    },
+    {
+      "file": "components/analyzer/arcade/ShareCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "592da3a1f24b31867e3495558162bfec47122384b0c796bf0def4a27d0898aab",
+      "count": 1,
+      "example": "\"#ffffff\""
+    },
+    {
+      "file": "components/analyzer/arcade/ShareCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "8621694f03836c9b3f27fab8eddc8294476f6db59f3ed61088ea8905b29a405f",
+      "count": 1,
+      "example": "\"#272d36\""
+    },
+    {
+      "file": "components/analyzer/arcade/ShareCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "9de59243fc3c6d9c3d33f1b493a0a0c990610dec8deec37139cb1c982e69e6f7",
+      "count": 2,
+      "example": "\"#0e1218\""
+    },
+    {
+      "file": "components/analyzer/arcade/ShareCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "a6e10d188404251a22cc6c5dc80537d46587068d6d68a6a8061085bcb63495ea",
+      "count": 1,
+      "example": "\"#DA4150\""
+    },
+    {
+      "file": "components/analyzer/arcade/ShareCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "dc500fb3018072a8df42901d6c15d96f90063edb518fc9072c86c1f9ed19b944",
+      "count": 1,
+      "example": "\"#c9d1d9\""
+    },
+    {
+      "file": "components/analyzer/arcade/modes/games/stockMarket.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "22bc41e8c695deb3fcb2baca09bc2ab16cdfe9c0e4fadef493bad2235c957d70",
+      "count": 1,
+      "example": "\"var(--text-muted, #a1a1aa)\""
+    },
+    {
+      "file": "components/analyzer/arcade/modes/games/stockMarket.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "c26c4779f774ab3291da146fa416c21ec5df4c009c38bf2971b9739d65e710a8",
+      "count": 1,
+      "example": "\"var(--warning, #f5a524)\""
+    },
+    {
+      "file": "components/analyzer/arcade/modes/games/stockMarket.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "f38d6946fbd108a20cbe9a8773e91e802aff507a2f426ee78e27234c34a57a2c",
+      "count": 1,
+      "example": "\"var(--text-dim, #71717a)\""
+    },
+    {
+      "file": "components/analyzer/charts/MixOverTimeChart.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "8c7d7af96ffbab4c7e61e4db5f86cf22f3735b2c2a512e697f65e9d76d3623b4",
+      "count": 1,
+      "example": "\"grid h-6 min-w-6 max-w-9 flex-1 basis-6 select-none place-items-center rounded-[5px] text-[10px] font-semibold tabular-nums text-text\""
+    },
+    {
+      "file": "components/analyzer/charts/MixOverTimeChart.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "ac1d76d4abd9a0b17d6561c39db53dc3a4437a78fdf66c29584a031a4ba71e6c",
+      "count": 1,
+      "example": "\"absolute left-1/2 top-0.5 -translate-x-1/2 whitespace-nowrap text-[10px] tabular-nums\""
+    },
+    {
+      "file": "components/analyzer/charts/TimeOfDayHeatmap.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "b3fe94914b42effe28dd4a3d4dc57a5e8cc78a26b9127cb240852dfa2c1cb56b",
+      "count": 1,
+      "example": "\"relative text-[10px] leading-3 text-text-muted\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerCharts.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "1183f751faf34cb02580dc8066a1c00dc9599b531ab6ad6e21350dc6bda92ef7",
+      "count": 1,
+      "example": "\"text-[10px] text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerCharts.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "2f7790146379b99e6d1a629fb1c86b8853d3ecfbd9a4b6c89e3d77435e47f433",
+      "count": 1,
+      "example": "\"mt-2 text-[11px] leading-relaxed text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerCharts.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "682608c1aba67af24e99e03216f23ddcbf01c9797cba37793d23f0976e7f739a",
+      "count": 1,
+      "example": "\"mt-1 text-[10px] text-accent\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerCharts.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "9b17230f170f4a107accc5cfff1a726148ee08d9ad73d8b052b718f6747614fa",
+      "count": 1,
+      "example": "\"text-[11px] text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerCharts.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "b19146ee4b01b283f1856368c08a20855c8dd422902e3123f28cf9fc0d362b23",
+      "count": 1,
+      "example": "\"bg-bg-elevated text-[11px] text-text-muted\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerCharts.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "f58abea61809630907a373c820816e1f2e632e30e918d14587d25f7d61cc49f3",
+      "count": 1,
+      "example": "\"mt-2 border-t border-border pt-1.5 text-[10px] text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerControls.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "be5bc0fbf969390057cacefd064925672a1f96650c9821df43fcf5f41ab6c744",
+      "count": 1,
+      "example": "\"shrink-0 text-[11px] tabular-nums text-text-muted\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerControls.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "e2e4842aad17c5830c126d86ec054f81b71bc56250ea76dfc7631615f464354b",
+      "count": 1,
+      "example": "\"block truncate text-[10px] text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerGamesModal.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "216bf42ac148170c480f7182edb03332763080356df5c2dbe43374486954c4f9",
+      "count": 1,
+      "example": "\"mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] tabular-nums text-text-muted\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerGamesModal.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "38594ef0674a01c11a105c84721c76b586f672151515a934110b531ea00e979b",
+      "count": 4,
+      "example": "\"mt-1 text-[10px] text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerGamesModal.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "aff2424741e6c445d4ba6760ca44aebc1c0778ede5da75389b7584be8e657844",
+      "count": 1,
+      "example": "\"mt-1 truncate text-[10px] text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerGamesModal.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "b19146ee4b01b283f1856368c08a20855c8dd422902e3123f28cf9fc0d362b23",
+      "count": 1,
+      "example": "\"bg-bg-elevated text-[11px] text-text-muted\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerGamesModal.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "e34e2420754c8198a3a7e0acf9aa1b951401009c56a575adbd17b00e20dc2e00",
+      "count": 1,
+      "example": "\"mt-2 break-words text-[11px] text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerGamesModal.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "f5835a3a45b13480a170eee34e23823308ffcbd00796d7aa4baf9b1b9d4f8dc2",
+      "count": 1,
+      "example": "`inline-flex rounded-md px-2 py-1 text-[11px] font-semibold ${"
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerPrimitives.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "33ba3aa344051226130aae6cb99ddd0489326b7273246a14b749314d2c712994",
+      "count": 1,
+      "example": "\"text-[11px] font-medium text-text-muted\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerPrimitives.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "b4218b8edd800578829d1953ea971f8d9bb2136374885c647e81518d10cca5cf",
+      "count": 1,
+      "example": "\"text-[11px] font-normal leading-relaxed text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/explorer/ExplorerPrimitives.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "bde13c4e55b9e40a81bf4b6551d8af2fda5bed88bcaa7c29960e36aeb968fb45",
+      "count": 1,
+      "example": "\"mt-1 text-[11px] leading-relaxed text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/explorer/TrendsExplorer.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "03f9250d7768ceac5601ccc9702134a89abfa31852e9fa946bcd8c07257d12a5",
+      "count": 1,
+      "example": "\"min-h-8 cursor-pointer py-1 text-[11px] font-medium text-text-muted\""
+    },
+    {
+      "file": "components/analyzer/explorer/TrendsExplorer.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "bcd0789cf367fcf807d0ca582be88b53301f2a468731e5c45870046b126f246a",
+      "count": 1,
+      "example": "\"space-y-1.5 pb-1 pl-4 pt-2 text-[11px] leading-relaxed text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/game/MapReplayer.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "6c41b312a7ad9ff4efd7ec991108efc3a520bf6bda53f62c85885c689400dc8c",
+      "count": 1,
+      "example": "} h-full overflow-auto bg-[#070a0f] p-3`"
+    },
+    {
+      "file": "components/analyzer/game/MapReplayer.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "c6828fa57ef98080cb73c60b1a47ea98673648bbadf72c01f39fe3bc2c369ffc",
+      "count": 1,
+      "example": "\"block h-full w-full rounded-lg bg-[#0a0d13] shadow-[0_10px_40px_-16px_rgba(0,0,0,0.9)] ring-1 ring-inset ring-white/[0.14]\""
+    },
+    {
+      "file": "components/analyzer/game/MapReplayer.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "df3d8437832ea78f24b1ea673567bb0ca786210040d94a72ca5a2c25bdc9930d",
+      "count": 1,
+      "example": "\"h-6 w-full cursor-pointer accent-[#3ec0c7]\""
+    },
+    {
+      "file": "components/analyzer/game/MapReplayer.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "ea6f1619836f7f5baf2f4777d3f8754c3eef66ad3edccede1198dad6e0c74aa4",
+      "count": 1,
+      "example": "\"inline-flex h-8 w-8 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus"
+    },
+    {
+      "file": "components/analyzer/game/replay/ReplayIcon.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "39b8c5164598aa3fc385272baf4826667b7686fbf0b277d5643ffe14155211c7",
+      "count": 1,
+      "example": "} inline-flex shrink-0 items-center justify-center rounded-sm border border-border bg-bg-subtle text-[0.55rem] font-semibold leading-none text-text-dim`"
+    },
+    {
+      "file": "components/analyzer/game/replay/ReplaySettings.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "80ea47e072c344c79e44f772ade5d176b571e51c6ed65810eac7c0fab129cf1e",
+      "count": 1,
+      "example": "\"h-4 w-4 accent-[#3ec0c7]\""
+    },
+    {
+      "file": "components/analyzer/game/replay/TransportDock.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "31d59a94e4fff1ce67504329aa079019cb447f72e638f288942a38b0d629eafe",
+      "count": 1,
+      "example": "\"#f0a83c\""
+    },
+    {
+      "file": "components/analyzer/game/replay/TransportDock.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "89c9608baab078ed165d6ef91ca210d3c9fe756584c94d9c8e2150f94ca6373c",
+      "count": 1,
+      "example": "\"absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-sm bg-[#f0c43c] ring-1 ring-black/60 transition-transform hover:scale-125 focus-visible:scale-125 focus-visible:outline-"
+    },
+    {
+      "file": "components/analyzer/game/replay/TransportDock.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d3df25defcdc5dc4af14cdbf7c8525d9aab23fc4d45b49d0d0ec899de3118ab1",
+      "count": 1,
+      "example": "\"#9b7bd4\""
+    },
+    {
+      "file": "components/analyzer/game/replay/mapCanvasAssets.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "0f0554a4e0a7afdd2f4ca1ce388ea62d9a01188b3028ee30373190b9feb7c807",
+      "count": 1,
+      "example": "\"#3ec0c7\""
+    },
+    {
+      "file": "components/analyzer/game/replay/mapCanvasAssets.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "141b92d0079a3efaa1c49cd18fd80dd50660872593a51f5ba2664527a43f07e1",
+      "count": 1,
+      "example": "\"#9cc8ff\""
+    },
+    {
+      "file": "components/analyzer/game/replay/mapCanvasAssets.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "46aa41071ad36f9b7e67241a7010de6eaa7219e90f08318ed5708346d2a3aa7f",
+      "count": 2,
+      "example": "\"#cfcab2\""
+    },
+    {
+      "file": "components/analyzer/game/replay/mapCanvasAssets.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "4c2849981eab43e4a018672664b85c88cce17030bb85f07e35ba405d11474931",
+      "count": 1,
+      "example": "\"#3f7fd6\""
+    },
+    {
+      "file": "components/analyzer/game/replay/mapCanvasAssets.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "5516d407f706a9efca2c9ae34265ebca74de9b18b452c21bde1512e1b29ef31d",
+      "count": 1,
+      "example": "\"#ffd97a\""
+    },
+    {
+      "file": "components/analyzer/game/replay/mapCanvasAssets.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "6eb8e01f080269a120658728a3c35301bcc9b5cb9ea14a4a92bfab555d4b87c0",
+      "count": 1,
+      "example": "\"#3a4a41\""
+    },
+    {
+      "file": "components/analyzer/game/replay/mapCanvasAssets.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "98f23cee3465189bb7eb2bf2bcee35fe382e9e5f1c90f8941b4cd1c0af5757c9",
+      "count": 1,
+      "example": "\"#e05656\""
+    },
+    {
+      "file": "components/analyzer/game/replay/mapCanvasAssets.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "aa5b4bc42c3a0903b1429fb6b68a00e034566fd42d35fb1b4fa78a91c9882b2d",
+      "count": 1,
+      "example": "\"#8d887a\""
+    },
+    {
+      "file": "components/analyzer/game/replay/mapCanvasAssets.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "ad2121632d164f5d7c5aa3b61afc657843f679f0fb0b469aaad460bc96067dee",
+      "count": 1,
+      "example": "\"#6e6a5e\""
+    },
+    {
+      "file": "components/analyzer/game/replay/mapCanvasAssets.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "b960197d9317653740f5f6a0dd2fe384f90e03bf2c9d6365c310bd151903b88f",
+      "count": 1,
+      "example": "\"#57c785\""
+    },
+    {
+      "file": "components/analyzer/game/replay/mapCanvasAssets.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "e7d08c5b40934657c924ae103be07936c3dfb435d6879a2d5dac7f9d8e3b5f7b",
+      "count": 1,
+      "example": "\"#b6f0cd\""
+    },
+    {
+      "file": "components/analyzer/game/replay/mapCanvasAssets.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "fa393eb75a06a52605fa3feb30f47edf19c9a46538fde8cd1d1fada7be1c5b7f",
+      "count": 1,
+      "example": "\"#c9992e\""
+    },
+    {
+      "file": "components/analyzer/game/replay/replayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "052b65c255f3d2bafe7ed73f7c6dff0d73cce0ae944ab975eddfcbbf47e3a961",
+      "count": 1,
+      "example": "\"#070a0f\""
+    },
+    {
+      "file": "components/analyzer/game/replay/replayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "0f0554a4e0a7afdd2f4ca1ce388ea62d9a01188b3028ee30373190b9feb7c807",
+      "count": 1,
+      "example": "\"#3ec0c7\""
+    },
+    {
+      "file": "components/analyzer/game/replay/replayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "98f23cee3465189bb7eb2bf2bcee35fe382e9e5f1c90f8941b4cd1c0af5757c9",
+      "count": 1,
+      "example": "\"#e05656\""
+    },
+    {
+      "file": "components/analyzer/h2h/MatchByMatchTimeline.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "35eabcc605465c4dc085e98c50b249aa64537d263570c10fd3fc7ba4d6edd217",
+      "count": 1,
+      "example": "\"#0b0d12\""
+    },
+    {
+      "file": "components/analyzer/h2h/MatchByMatchTimeline.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "38d47f1a0609a754b4aef9d15a2f8a9a12ce0247c15fddea05216d75669ff942",
+      "count": 2,
+      "example": "\"#ff6b6b\""
+    },
+    {
+      "file": "components/analyzer/h2h/MatchByMatchTimeline.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
+      "count": 1,
+      "example": "\"#9aa3b2\""
+    },
+    {
+      "file": "components/analyzer/h2h/MatchByMatchTimeline.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "925eb13b07cdbe0ed68e3c5f1f0ef5212468c89d3c5f09a501dc64deb6d4450e",
+      "count": 4,
+      "example": "\"#6b7280\""
+    },
+    {
+      "file": "components/analyzer/h2h/MatchByMatchTimeline.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "975b9889e34cafa3dadb40fa3c1daa4c7718b12c11d29f5aef8904670b5ae154",
+      "count": 2,
+      "example": "\"#3ec07a\""
+    },
+    {
+      "file": "components/analyzer/h2h/MatchByMatchTimeline.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "a502e0b402b68e2183ea38e491410914ccec2f2853e2e3bc1511cb5b6171edd4",
+      "count": 1,
+      "example": "\"#3a4252\""
+    },
+    {
+      "file": "components/analyzer/h2h/MatchByMatchTimeline.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "bdffdccddc2d012b81b367973923e7f90560bc1f13c2d16ebb2c0b9878df8344",
+      "count": 1,
+      "example": "\"#7c8cff\""
+    },
+    {
+      "file": "components/analyzer/h2h/MatchByMatchTimeline.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d7b01669dbb100c1cf46b50a4af5f21c54c46c8cd21bf9d8c3b5cae96cb2eed3",
+      "count": 2,
+      "example": "\"#1f2533\""
+    },
+    {
+      "file": "components/analyzer/h2h/StreaksMomentum.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "35eabcc605465c4dc085e98c50b249aa64537d263570c10fd3fc7ba4d6edd217",
+      "count": 1,
+      "example": "\"#0b0d12\""
+    },
+    {
+      "file": "components/analyzer/h2h/StreaksMomentum.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "38d47f1a0609a754b4aef9d15a2f8a9a12ce0247c15fddea05216d75669ff942",
+      "count": 1,
+      "example": "\"#ff6b6b\""
+    },
+    {
+      "file": "components/analyzer/h2h/StreaksMomentum.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "66f3343e493327b4580f4fa0724452094d6695eb847e4c56fb26658d0d63a45b",
+      "count": 1,
+      "example": "\"#e6e8ee\""
+    },
+    {
+      "file": "components/analyzer/h2h/StreaksMomentum.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "925eb13b07cdbe0ed68e3c5f1f0ef5212468c89d3c5f09a501dc64deb6d4450e",
+      "count": 1,
+      "example": "\"#6b7280\""
+    },
+    {
+      "file": "components/analyzer/h2h/StreaksMomentum.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "975b9889e34cafa3dadb40fa3c1daa4c7718b12c11d29f5aef8904670b5ae154",
+      "count": 1,
+      "example": "\"#3ec07a\""
+    },
+    {
+      "file": "components/analyzer/h2h/shared/raceAccent.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "38d47f1a0609a754b4aef9d15a2f8a9a12ce0247c15fddea05216d75669ff942",
+      "count": 1,
+      "example": "\"#ff6b6b\""
+    },
+    {
+      "file": "components/analyzer/h2h/shared/raceAccent.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
+      "count": 2,
+      "example": "\"#9aa3b2\""
+    },
+    {
+      "file": "components/analyzer/h2h/shared/raceAccent.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "bdffdccddc2d012b81b367973923e7f90560bc1f13c2d16ebb2c0b9878df8344",
+      "count": 1,
+      "example": "\"#7c8cff\""
+    },
+    {
+      "file": "components/analyzer/h2h/shared/raceAccent.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "e97fddf9dc5dc52b06ba44a877ea6b88ccdcc259bb8a25a0b0854f87751b31b7",
+      "count": 1,
+      "example": "\"#a78bfa\""
+    },
+    {
+      "file": "components/analyzer/macro/MacroBreakdownPanel.tsx",
+      "rule": "dialog-outside-ui",
+      "signature": "4f2bc9ebc7a78fa3d55a653824933dc30d0c4bdb6e87a6b41820d513ef5abe43",
+      "count": 1,
+      "example": "<div ref={dialogRef} role=\"dialog\" aria-modal=\"true\" aria-labelledby={titleId} tabIndex={-1} className=\"relative mx-auto flex min-h-[100dvh] w-full min-w-0 max-w-[1440px] flex-col "
+    },
+    {
+      "file": "components/analyzer/macro/report/ScoreBucketsCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "925eb13b07cdbe0ed68e3c5f1f0ef5212468c89d3c5f09a501dc64deb6d4450e",
+      "count": 3,
+      "example": "\"#6b7280\""
+    },
+    {
+      "file": "components/analyzer/macro/report/ScoreBucketsCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "a502e0b402b68e2183ea38e491410914ccec2f2853e2e3bc1511cb5b6171edd4",
+      "count": 1,
+      "example": "\"#3a4252\""
+    },
+    {
+      "file": "components/analyzer/macro/report/ScoreBucketsCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "bdffdccddc2d012b81b367973923e7f90560bc1f13c2d16ebb2c0b9878df8344",
+      "count": 2,
+      "example": "\"#7c8cff\""
+    },
+    {
+      "file": "components/analyzer/macro/report/ScoreBucketsCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d7b01669dbb100c1cf46b50a4af5f21c54c46c8cd21bf9d8c3b5cae96cb2eed3",
+      "count": 1,
+      "example": "\"#1f2533\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "0422185fa0fe6603c0447eb0bab2aaa77c7909f50416c819e738972228ced046",
+      "count": 1,
+      "example": "\"#f43f5e\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "0c9e4273b0f7aa627141906a22eeb98fced15c6f8312f633b57dddf079df3e46",
+      "count": 1,
+      "example": "\"#3b82f6\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "1f2a25f1b45a02b2c0ef57a1467400483c7bcdfba2592e24cffc7e4a5bab3b5c",
+      "count": 1,
+      "example": "\"#ef4444\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2957c284da5417616124b1ef4cdfa24f05788d036f9b5a5467f0bf2a70e5fe68",
+      "count": 1,
+      "example": "\"#a855f7\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "306cf5483ec61a0681c2b3fcaee3d9145c113f91c79aa5144a34824764afb81f",
+      "count": 1,
+      "example": "\"#f97316\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "32aa70ff916711e9fa681a6ed0bfe820320856595d8764f0a8399c7294596097",
+      "count": 1,
+      "example": "\"#4ade80\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "5509369c51957079632b6ae0d281948859e28c8abc32fdd5e058f376641e234c",
+      "count": 1,
+      "example": "\"#06b6d4\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "6832a6ee158827335152d396c7841e3888818f16b0b7320c490bf6e302523934",
+      "count": 1,
+      "example": "\"#ec4899\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "6aeb4024c3156c52b2ae22930fee070caf30cf3a1803038f1d053b5378a00a61",
+      "count": 1,
+      "example": "\"#eab308\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "7a20c22170dc6d6efdf54d452a622e76c06a9c87e7a32b5ebd020a81d16c083d",
+      "count": 1,
+      "example": "\"#84cc16\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "9020e3c684ec0608156968ddb79c28ddf919aab87a0ad65b37dfe36de7874bb7",
+      "count": 1,
+      "example": "\"#fb923c\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "90da190ee6817ad879454ad796cc03e0c400dfa240e87b93054c43bb173dc495",
+      "count": 1,
+      "example": "\"#14b8a6\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "925eb13b07cdbe0ed68e3c5f1f0ef5212468c89d3c5f09a501dc64deb6d4450e",
+      "count": 3,
+      "example": "\"#6b7280\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "97fbe29d08cd50f224eaa6070742f800b762f61c1fe901f643421ea67ffbed7b",
+      "count": 1,
+      "example": "\"#11141b\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "a502e0b402b68e2183ea38e491410914ccec2f2853e2e3bc1511cb5b6171edd4",
+      "count": 1,
+      "example": "\"#3a4252\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "a55412605edbde2989bee7acc5650fe927a7f1cb8134b6a73145d135688aef3c",
+      "count": 1,
+      "example": "\"#22d3ee\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "b8e1fa8bc21c236fad34592f0aa1fc23178d4bf52d058a42eaea9fd1e2062500",
+      "count": 1,
+      "example": "\"#fbbf24\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "c6f461b1d1b40bcaff6999e37c55364c0d164c9f25fc2f8a64c55c9fe05bd5af",
+      "count": 1,
+      "example": "\"#e879f9\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d395492f8856ac50dfa35c093ea5334f46c9251bba66573783ee395677373b62",
+      "count": 1,
+      "example": "\"1px solid #1f2533\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d7b01669dbb100c1cf46b50a4af5f21c54c46c8cd21bf9d8c3b5cae96cb2eed3",
+      "count": 1,
+      "example": "\"#1f2533\""
+    },
+    {
+      "file": "components/analyzer/mmr/BuildAgingCurve.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "e34af2f91fc8fa653404b94ecbe53c0fdfbb328fac7354a9be9f4d16b9d722d4",
+      "count": 1,
+      "example": "\"#10b981\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "0422185fa0fe6603c0447eb0bab2aaa77c7909f50416c819e738972228ced046",
+      "count": 1,
+      "example": "\"#f43f5e\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "0c9e4273b0f7aa627141906a22eeb98fced15c6f8312f633b57dddf079df3e46",
+      "count": 1,
+      "example": "\"#3b82f6\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "1f2a25f1b45a02b2c0ef57a1467400483c7bcdfba2592e24cffc7e4a5bab3b5c",
+      "count": 1,
+      "example": "\"#ef4444\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2957c284da5417616124b1ef4cdfa24f05788d036f9b5a5467f0bf2a70e5fe68",
+      "count": 1,
+      "example": "\"#a855f7\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "306cf5483ec61a0681c2b3fcaee3d9145c113f91c79aa5144a34824764afb81f",
+      "count": 1,
+      "example": "\"#f97316\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "32aa70ff916711e9fa681a6ed0bfe820320856595d8764f0a8399c7294596097",
+      "count": 1,
+      "example": "\"#4ade80\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "5509369c51957079632b6ae0d281948859e28c8abc32fdd5e058f376641e234c",
+      "count": 1,
+      "example": "\"#06b6d4\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "6832a6ee158827335152d396c7841e3888818f16b0b7320c490bf6e302523934",
+      "count": 1,
+      "example": "\"#ec4899\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "6aeb4024c3156c52b2ae22930fee070caf30cf3a1803038f1d053b5378a00a61",
+      "count": 1,
+      "example": "\"#eab308\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "7a20c22170dc6d6efdf54d452a622e76c06a9c87e7a32b5ebd020a81d16c083d",
+      "count": 1,
+      "example": "\"#84cc16\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "9020e3c684ec0608156968ddb79c28ddf919aab87a0ad65b37dfe36de7874bb7",
+      "count": 1,
+      "example": "\"#fb923c\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "90da190ee6817ad879454ad796cc03e0c400dfa240e87b93054c43bb173dc495",
+      "count": 1,
+      "example": "\"#14b8a6\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "925eb13b07cdbe0ed68e3c5f1f0ef5212468c89d3c5f09a501dc64deb6d4450e",
+      "count": 2,
+      "example": "\"#6b7280\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "97fbe29d08cd50f224eaa6070742f800b762f61c1fe901f643421ea67ffbed7b",
+      "count": 1,
+      "example": "\"#11141b\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "a55412605edbde2989bee7acc5650fe927a7f1cb8134b6a73145d135688aef3c",
+      "count": 1,
+      "example": "\"#22d3ee\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "b8e1fa8bc21c236fad34592f0aa1fc23178d4bf52d058a42eaea9fd1e2062500",
+      "count": 1,
+      "example": "\"#fbbf24\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "c6f461b1d1b40bcaff6999e37c55364c0d164c9f25fc2f8a64c55c9fe05bd5af",
+      "count": 1,
+      "example": "\"#e879f9\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d395492f8856ac50dfa35c093ea5334f46c9251bba66573783ee395677373b62",
+      "count": 1,
+      "example": "\"1px solid #1f2533\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d7b01669dbb100c1cf46b50a4af5f21c54c46c8cd21bf9d8c3b5cae96cb2eed3",
+      "count": 1,
+      "example": "\"#1f2533\""
+    },
+    {
+      "file": "components/analyzer/mmr/MmrProgressionByBuild.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "e34af2f91fc8fa653404b94ecbe53c0fdfbb328fac7354a9be9f4d16b9d722d4",
+      "count": 1,
+      "example": "\"#10b981\""
+    },
+    {
+      "file": "components/analyzer/replays/ReplayLibrary.tsx",
+      "rule": "native-confirm-prompt",
+      "signature": "6bec3b7251688ea54dfd2bc7421b438eeded43a14ff29c96901e53235641fe3b",
+      "count": 1,
+      "example": "window.prompt(\"Copy this replay page link\", href)"
+    },
+    {
+      "file": "components/analyzer/replays/ReplayList.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "00608f84268afef903bde692af64382266a6f8ba5d317b9991141e9cec0680cc",
+      "count": 1,
+      "example": "\"grid h-6 w-6 shrink-0 place-items-center rounded-md border border-border text-[10px] text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/replays/ReplayList.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "10970f9964af6ab51e0580185ec5b05704c3efd26d4ada1c0ed5ae7bd948b69e",
+      "count": 1,
+      "example": "\"text-[10px] uppercase tracking-wide text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/replays/ReplayList.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "59cc8031c1ba954dc3c556c41d90f1ac1f9c3c599154c884f89d1cdd7f6be7e4",
+      "count": 1,
+      "example": "\"block text-[10px] font-normal text-text-dim\""
+    },
+    {
+      "file": "components/analyzer/settings/AgentStatusIndicator.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "3d8f5e479649374cbaa0962eb876433aeb89ab0452e183e16ed7279d61052ca8",
+      "count": 1,
+      "example": "\"var(--color-text-dim, #5b6473)\""
+    },
+    {
+      "file": "components/analyzer/settings/AgentStatusIndicator.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "ba31b24bb12d4f6d027327cf64ddcc6b35de9d86140ad3459a012931686aca8d",
+      "count": 1,
+      "example": "\"var(--color-success, #3ec07a)\""
+    },
+    {
+      "file": "components/analyzer/settings/ChatBotCard.tsx",
+      "rule": "focus-without-ring",
+      "signature": "a986cdc816ba8644cd14bfada96bde963d95483075e873641ee45f84b0794c3e",
+      "count": 3,
+      "example": "\"w-full rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none\""
+    },
+    {
+      "file": "components/analyzer/settings/OfficialPlatformConnections.tsx",
+      "rule": "native-confirm-prompt",
+      "signature": "9a389e214ba0a6762f923b95b382f3789dcfc5dd514ea547b7e1de5e6ea5b5ed",
+      "count": 1,
+      "example": "window.confirm(`Disconnect your ${COPY[platform].label} account? This stops its notifications and stream controls.`)"
+    },
+    {
+      "file": "components/analyzer/settings/OverlayThemeSection.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "85af107e292c5e2d0bcdaac820d8f92d9a1206e248f61b7cca7d914480111965",
+      "count": 1,
+      "example": "\"var(--ov-accent-track, var(--ov-accent, #7c8cff))\""
+    },
+    {
+      "file": "components/analyzer/settings/OverlayThemeSection.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "f464955f1567bf781b4b2664fce725c643b161c611b3eac6a0caf2959a894d34",
+      "count": 2,
+      "example": "\"var(--ov-panel-bg, linear-gradient(135deg, #0b0d12, #161a23))\""
+    },
+    {
+      "file": "components/analyzer/settings/OverlayWidgetDisplay.tsx",
+      "rule": "dialog-outside-ui",
+      "signature": "a4edbe0a8f3622d7fd3334c8aa4f0cff33faee30feb01c418ddceb7c3eb9460f",
+      "count": 1,
+      "example": "<div ref={panel} id={panelId} role=\"dialog\" aria-label={`Display for ${name}`} tabIndex={-1} className=\"fixed z-sheet space-y-2 overflow-y-auto rounded-lg border border-border bg-b"
+    },
+    {
+      "file": "components/analyzer/settings/ReplayArchiveStatusCard.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "08fcf6e0193046dea18d27c1f77a03acea786c9b2338941161af398c1c616da8",
+      "count": 1,
+      "example": "<Link href=\"/download\" className={[ \"hard-press inline-flex min-h-11 flex-shrink-0 items-center justify-center gap-2 rounded-full border-2 border-line px-4 font-display text-captio"
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMisc.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "56efad99b2d3749c01957ed7af16e67d2d11e30e2873a134eda9840ce0e71ceb",
+      "count": 1,
+      "example": "<Link href=\"/welcome\" className={[ \"hard-press inline-flex min-h-11 flex-shrink-0 items-center justify-center gap-2 rounded-full border-2 border-line bg-bg-surface px-4 font-displa"
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChat.tsx",
+      "rule": "focus-without-ring",
+      "signature": "30f406b96c98cc37553fb9d1bfc3841efe3d594d549d1c6a4edbc92a7684dd0b",
+      "count": 1,
+      "example": "\"w-full min-w-0 max-w-md rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:"
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChat.tsx",
+      "rule": "focus-without-ring",
+      "signature": "5ff4034756c81e9be728cfae2e72a9c3b4f805832a6214709c3ed0cae7ad373e",
+      "count": 1,
+      "example": "\"w-24 min-w-0 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-50\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChat.tsx",
+      "rule": "focus-without-ring",
+      "signature": "7152cb30791410c538a61b6e9d142dd179eb4fcc1f2c9fada05a6bdb0c7430f9",
+      "count": 2,
+      "example": "\"w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-5"
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChat.tsx",
+      "rule": "focus-without-ring",
+      "signature": "d18f96d11e5ff297793fe85a6f62d2fffa3476ce3c666fbbea997462f5a2ad68",
+      "count": 1,
+      "example": "\"w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatAlerts.tsx",
+      "rule": "focus-without-ring",
+      "signature": "e0d5ed7eb0d52985e60df7a4e50d44ab384a6717cdd4a90bd7ab80af3b1d5461",
+      "count": 1,
+      "example": "\"w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-caption text-text focus:border-accent focus:outline-none\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatAlerts.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "47d2ca0ca5ec7906d0982c71aa6b1d233a6da51e9480ec6e48a42cb7b3b50bb6",
+      "count": 1,
+      "example": "\"w-full accent-[var(--accent,#3ec0c7)]\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatAlerts.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "5231220e314f5499b2103e190d73bacdee8e2bc2d9fd66c862c003322ee4695e",
+      "count": 2,
+      "example": "\"repeating-conic-gradient(#2a2f3a 0% 25%, #1c212b 0% 50%) 0 0 / 18px 18px\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatAppearance.tsx",
+      "rule": "focus-without-ring",
+      "signature": "4cb352343d5162667b5dfdab258ebccff1c758d5f9d3bc20787ebe47e1112be5",
+      "count": 1,
+      "example": "\"w-full min-w-0 max-w-md rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatAppearance.tsx",
+      "rule": "focus-without-ring",
+      "signature": "d18f96d11e5ff297793fe85a6f62d2fffa3476ce3c666fbbea997462f5a2ad68",
+      "count": 1,
+      "example": "\"w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatAppearance.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "364c4cd06c5fadd75e76ccf0f426a13fe45351b9d7fd8c80b9a9f6f95dd9e25a",
+      "count": 1,
+      "example": "\"#75FD48\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatAppearance.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "44395b5b3c8a4812dd28a6f832240326779170b2fef235f9c80ba1036f841b16",
+      "count": 1,
+      "example": "\"#FF69B4\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatAppearance.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "47d2ca0ca5ec7906d0982c71aa6b1d233a6da51e9480ec6e48a42cb7b3b50bb6",
+      "count": 2,
+      "example": "\"w-full accent-[var(--accent,#3ec0c7)]\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatAppearance.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "5231220e314f5499b2103e190d73bacdee8e2bc2d9fd66c862c003322ee4695e",
+      "count": 2,
+      "example": "\"repeating-conic-gradient(#2a2f3a 0% 25%, #1c212b 0% 50%) 0 0 / 18px 18px\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatAppearance.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "f20b2835e975e13c9ff0f69848ea9664dfa6e8a75e2ff4d1d0fcf87000f8734b",
+      "count": 1,
+      "example": "\"#1E90FF\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatSounds.tsx",
+      "rule": "focus-without-ring",
+      "signature": "a7fd0aef130c1d2481ca1c772f5f16d92925ee5d364f90641aadf485e3053cdc",
+      "count": 1,
+      "example": "\"min-w-0 flex-1 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatSounds.tsx",
+      "rule": "focus-without-ring",
+      "signature": "dfba8c0d082e597f4a2ecba4ebb28a464fafd0037bbc5ee91952d8122404cd5e",
+      "count": 2,
+      "example": "\"w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatSounds.tsx",
+      "rule": "focus-without-ring",
+      "signature": "ea91acdf0df74282d9f684b08c404118231e1c69e315d3966b250f8227f61843",
+      "count": 1,
+      "example": "\"min-w-0 flex-1 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatTts.tsx",
+      "rule": "focus-without-ring",
+      "signature": "d18f96d11e5ff297793fe85a6f62d2fffa3476ce3c666fbbea997462f5a2ad68",
+      "count": 2,
+      "example": "\"w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatTts.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "1e3e528f59da055207cb3861180594fce2d607763a3be9aad414dc6dfab0c9eb",
+      "count": 1,
+      "example": "\"mt-0.5 h-3.5 w-3.5 accent-[var(--accent,#3ec0c7)]\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatTts.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "47d2ca0ca5ec7906d0982c71aa6b1d233a6da51e9480ec6e48a42cb7b3b50bb6",
+      "count": 5,
+      "example": "\"w-full accent-[var(--accent,#3ec0c7)]\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsMultiChatTts.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "67a6e49cc817fba56e908c3a2eabf93bf899b4d9fc65987643a5cdad222323f8",
+      "count": 1,
+      "example": "\"h-3.5 w-3.5 accent-[var(--accent,#3ec0c7)]\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsProfile.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "5e15549e4a549e2e3f2c18a40207ec683cae947c4526ac4138d8246ce0bae079",
+      "count": 1,
+      "example": "\"e.g. PlayerName#1234 — auto-filled from SC2Pulse when you have a Pulse ID\""
+    },
+    {
+      "file": "components/analyzer/settings/SettingsProfile.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "e604a0150edb73bdf04918f775b69ef934b5fdbd800d47a76f9d1587d8cfbd93",
+      "count": 1,
+      "example": "\"Name#1234\""
+    },
+    {
+      "file": "components/analyzer/settings/randomizer/RandomizerPreview.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "bdcba23b1aa9335c9b7533a746c82dc7b27d922d0006da2b451c4d6dafc67726",
+      "count": 1,
+      "example": "\"flex w-full items-center justify-center rounded-xl border border-border bg-[#0b0d12] p-6\""
+    },
+    {
+      "file": "components/build-checkin/BuildCheckInAlert.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "c90a4480e04d3179fc0cd14ff185be518846dedccff897b9dc69ae4bbee37b52",
+      "count": 1,
+      "example": "\"absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white\""
+    },
+    {
+      "file": "components/build-checkin/BuildCheckInQueue.tsx",
+      "rule": "focus-without-ring",
+      "signature": "6dd1285707bb113becc66fb891be73543941cb4a7da06ff3b97324c6c732e7a4",
+      "count": 1,
+      "example": "\"rounded-lg focus:outline-none\""
+    },
+    {
+      "file": "components/builds/BuildCard.tsx",
+      "rule": "focus-without-ring",
+      "signature": "62e0826748397b783432806d48eccad0996432c4f848a50b0fb07830424478f1",
+      "count": 2,
+      "example": "\"focus-visible:outline-none focus-visible:bg-bg-elevated\""
+    },
+    {
+      "file": "components/builds/BuildCard.tsx",
+      "rule": "focus-without-ring",
+      "signature": "e091f7a65e680f7c54933898b85d7f605c266de67641eedee042a60f5db3ec31",
+      "count": 1,
+      "example": "\"flex min-h-11 w-full items-center gap-2 px-3 py-2.5 text-left text-caption focus-visible:outline-none focus-visible:bg-bg-elevated disabled:cursor-not-allowed disabled:opacity-60\""
+    },
+    {
+      "file": "components/builds/BuildDetailView.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "dc961b68536786c9c5cec7f65d869f6506ab21941f13e25fd56f49281ce25101",
+      "count": 1,
+      "example": "<Link href=\"/builds\" className=\"inline-flex min-h-[44px] items-center gap-2 hard-press rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold text-te"
+    },
+    {
+      "file": "components/builds/BuildDossierModal.tsx",
+      "rule": "dialog-outside-ui",
+      "signature": "5fd2e0841c7e748683b496ccdf9be348e34c04c260f95c3e303bbd5d4006ff91",
+      "count": 1,
+      "example": "<div className=\"fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-6\" role=\"dialog\" aria-modal=\"true\" aria-label={`${build.name || \"Build\"} dossier`} "
+    },
+    {
+      "file": "components/builds/BuildsLibrary.tsx",
+      "rule": "focus-without-ring",
+      "signature": "251f3858e5fd7cbd1f8a92ed0fab8423ad1d69ab737d8347d5ffbe14b6ed8d76",
+      "count": 1,
+      "example": "\"my-3 text-h3 font-semibold focus:outline-none\""
+    },
+    {
+      "file": "components/builds/BuildsLibrary.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "4d12d7f4e2feaf497c8849fa7a5f05c8700ba7304b52f10dd93bb6f00ea80926",
+      "count": 1,
+      "example": "<Link href=\"/definitions\" className=\"hard-press inline-flex min-h-[44px] items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold te"
+    },
+    {
+      "file": "components/builds/EditCustomBuildLauncher.tsx",
+      "rule": "dialog-outside-ui",
+      "signature": "f196c47634a17f6d1ef8527a0ab8762bba515761f75b88e659ba1549c16a077b",
+      "count": 1,
+      "example": "<div role=\"dialog\" aria-modal=\"true\" aria-busy=\"true\" className=\"fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6\" onClick={onClose}>"
+    },
+    {
+      "file": "components/builds/editor/BuildEditorBasics.tsx",
+      "rule": "focus-without-ring",
+      "signature": "13aa5f0a80eba7ed29e002c5c5e73453afa28b8b519f5202134f97329ba753ba",
+      "count": 1,
+      "example": "\"min-w-[80px] flex-1 bg-transparent text-body text-text placeholder:text-text-dim focus:outline-none\""
+    },
+    {
+      "file": "components/builds/editor/BuildEditorPreview.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "80fb6108d936b0d7300ca352adf35f5f286482092a51fdfb8d72ab3ae3dd59ed",
+      "count": 1,
+      "example": "\"rounded border border-warning/50 bg-warning/10 px-1 text-[10px] font-semibold uppercase tracking-wide text-warning\""
+    },
+    {
+      "file": "components/builds/editor/BuildEditorRuleRow.tsx",
+      "rule": "focus-without-ring",
+      "signature": "df8c482ac0f715e0f5138c51db312ee186464816dde5c29b52046343ba57835e",
+      "count": 1,
+      "example": "\"h-8 w-16 rounded border border-accent-cyan bg-bg-elevated px-1 font-mono text-caption tabular-nums text-text focus:outline-none\""
+    },
+    {
+      "file": "components/chrome/AppChrome.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "4e76f705eb6498a19311404ad8aed07d3405138ff0138fb690b1b0da2a7e6816",
+      "count": 1,
+      "example": "<Link href=\"/sign-up\" className=\"hard-press inline-flex h-8 items-center rounded-full border-2 border-line bg-accent px-3.5 font-display text-caption font-bold text-white hover:bg-"
+    },
+    {
+      "file": "components/chrome/AppChrome.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "e737c68f52e5c0d44889c52d164784542800e7da7e7c35451e4de27730318f68",
+      "count": 1,
+      "example": "<Link href=\"/sign-in\" className=\"hard-press hidden h-8 items-center rounded-full border-2 border-line bg-bg-surface px-3.5 font-display text-caption font-bold text-text hover:bg-bg"
+    },
+    {
+      "file": "components/chrome/CoachingBookingAlert.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "5b9d7e257ccf0c26d47c4cef88c8b299f1f2751a17cebeab5415812b6b3555c8",
+      "count": 1,
+      "example": "<Link href=\"/coaching?view=schedule\" aria-label={`${label}. ${data.unreadCount} unread. Open Coaching.`} title={`${label} — open Coaching`} className={[ \"hard-press relative inline"
+    },
+    {
+      "file": "components/chrome/CoachingBookingAlert.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "c90a4480e04d3179fc0cd14ff185be518846dedccff897b9dc69ae4bbee37b52",
+      "count": 1,
+      "example": "\"absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white\""
+    },
+    {
+      "file": "components/chrome/Header.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "0e8eb371647b56ff4aa53b603fb518791f573c6a64246b2e430b355b87f70c3b",
+      "count": 1,
+      "example": "<Link href=\"/sign-in\" className={SECONDARY_LINK_CLS}>"
+    },
+    {
+      "file": "components/chrome/Header.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "d228eaac49ea75a175256ed41da62e2e56db1b48b149ef0a386c5088f88ab605",
+      "count": 1,
+      "example": "<Link href=\"/sign-up\" className={PRIMARY_LINK_CLS}>"
+    },
+    {
+      "file": "components/chrome/Header.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "f44770bc74ccaa49f8327d642c124b484004ada475099f9805a0e77f715e277f",
+      "count": 1,
+      "example": "<Link href=\"/app\" className={PRIMARY_LINK_CLS}>"
+    },
+    {
+      "file": "components/chrome/MobileNav.tsx",
+      "rule": "dialog-outside-ui",
+      "signature": "a6da83daff9a078b1b112567c48b92022036d4d2d06e6d081b74d3e41f00e6d1",
+      "count": 1,
+      "example": "<div ref={drawerRef} id=\"mobile-nav-drawer\" role=\"dialog\" aria-modal=\"true\" aria-label=\"Site navigation\" tabIndex={-1} className={[ \"absolute inset-y-0 right-0 flex w-[88vw] max-w-"
+    },
+    {
+      "file": "components/chrome/MobileNav.tsx",
+      "rule": "focus-without-ring",
+      "signature": "c6cb7182fe0af10b05e35c1b5adaba57dc509c299a7d10c4ea7d5a521776047c",
+      "count": 1,
+      "example": "\"focus:outline-none\""
+    },
+    {
+      "file": "components/chrome/MobileNav.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "15e304dd66307ce6d285e58e806234e773979c38fc9c41a7d85b91e39074a8ee",
+      "count": 1,
+      "example": "<Link href=\"/sign-up\" onClick={onClose} className=\"hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-accent px-3 font-display text-body f"
+    },
+    {
+      "file": "components/chrome/MobileNav.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "4f09266e132be7d52dc06d89f4a23ec45337afc286ce56da46534762c63340ae",
+      "count": 1,
+      "example": "<Link href=\"/sign-in\" onClick={onClose} className=\"hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-bg-surface px-3 font-display text-bo"
+    },
+    {
+      "file": "components/chrome/MobileNav.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "f9439b6585d2b4c7c133fe5926e0af8b951724bd8d0796154e0c9c3fe74cd33a",
+      "count": 1,
+      "example": "<Link href=\"/app\" onClick={onClose} className=\"hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-accent px-3 font-display text-body font-"
+    },
+    {
+      "file": "components/community/CommunityOwnerMenu.tsx",
+      "rule": "focus-without-ring",
+      "signature": "78ed8173c3169916d0f16398b54e3996edd92aceadf49f01100ba9f62fc9e18e",
+      "count": 1,
+      "example": "\"flex min-h-11 w-full items-center rounded-md px-3 text-left text-caption text-danger hover:bg-danger/10 focus:bg-danger/10 focus:outline-none\""
+    },
+    {
+      "file": "components/community/CommunityOwnerMenu.tsx",
+      "rule": "focus-without-ring",
+      "signature": "b28ea2a88ac0b1596a607f1f59ca44eab2f4c79ce692a3b380c3653db4844486",
+      "count": 2,
+      "example": "\"flex min-h-11 items-center rounded-md px-3 text-caption text-text hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none\""
+    },
+    {
+      "file": "components/community/SaveToLibraryButton.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "daecfa994aa41340fa07c4ffd5f511c442892b65eb6ed3540dbaf83156b460d3",
+      "count": 1,
+      "example": "<Link href={signUpHref(returnTo)} className={SECONDARY_LINK_CLASS}>"
+    },
+    {
+      "file": "components/community/ShareLinkButton.tsx",
+      "rule": "native-confirm-prompt",
+      "signature": "493d90ac6d25ae27a445c22a7c35bb1543bb36669a06fa78670b01b6edfd44f3",
+      "count": 1,
+      "example": "window.prompt(\"Copy this link\", href)"
+    },
+    {
+      "file": "components/dashboard/AgentUpgradeNotice.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "db0821a9eee99015997401dd9fec653358a27b0edd6d71236c0589a277df38a0",
+      "count": 1,
+      "example": "<Link href=\"/download\" className=\"hard-press inline-flex min-h-[44px] w-full flex-shrink-0 items-center justify-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 py"
+    },
+    {
+      "file": "components/definitions/DefinitionsCatalog.tsx",
+      "rule": "focus-without-ring",
+      "signature": "3bc9066f77a889e916e4a20fd0df2d1376ba9f3dc1bbe9858ebdfe6f8c380139",
+      "count": 1,
+      "example": "\"min-w-0 break-words pt-1.5 text-body font-semibold text-text focus:outline-none\""
+    },
+    {
+      "file": "components/definitions/DefinitionsCatalog.tsx",
+      "rule": "native-confirm-prompt",
+      "signature": "493d90ac6d25ae27a445c22a7c35bb1543bb36669a06fa78670b01b6edfd44f3",
+      "count": 1,
+      "example": "window.prompt(\"Copy this link\", href)"
+    },
+    {
+      "file": "components/dock/DockChat.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "38d47f1a0609a754b4aef9d15a2f8a9a12ce0247c15fddea05216d75669ff942",
+      "count": 1,
+      "example": "\"#ff6b6b\""
+    },
+    {
+      "file": "components/dock/DockChat.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "5bf55c7890d02bee2fdf1e459a138ec594f718e6458743b39de9c898ee115d0e",
+      "count": 1,
+      "example": "\"ml-auto font-bold tabular-nums text-[#f2c66d]\""
+    },
+    {
+      "file": "components/dock/DockChat.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "6e4143dcae16961d8fbc5fe4c02b07a969816c3dde1d1cb60ad956a4c06fa471",
+      "count": 1,
+      "example": "\"#f5b942\""
+    },
+    {
+      "file": "components/dock/DockChat.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "72c8cc8af810724a4da8ff5063fa1c380131a007028b755e0f3c169a8194d861",
+      "count": 1,
+      "example": "\"#c92a2a\""
+    },
+    {
+      "file": "components/dock/DockChat.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "925eb13b07cdbe0ed68e3c5f1f0ef5212468c89d3c5f09a501dc64deb6d4450e",
+      "count": 3,
+      "example": "\"#6b7280\""
+    },
+    {
+      "file": "components/dock/DockChat.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "975b9889e34cafa3dadb40fa3c1daa4c7718b12c11d29f5aef8904670b5ae154",
+      "count": 1,
+      "example": "\"#3ec07a\""
+    },
+    {
+      "file": "components/dock/DockScenes.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2b2e977cb14e2b75d51eda3146091017042a84ec79ae8da73addbbc5649261ba",
+      "count": 1,
+      "example": "\"min-w-0 flex-1 accent-[var(--accent,#3ec0c7)]\""
+    },
+    {
+      "file": "components/dock/DockTwitchAutomation.tsx",
+      "rule": "focus-without-ring",
+      "signature": "961c3471981ebc298993612e4fefcbbfeb5a32be540a244f9b8616edee16b49b",
+      "count": 1,
+      "example": "\"text-caption outline-none\""
+    },
+    {
+      "file": "components/feedback/ReportIssueModal.tsx",
+      "rule": "focus-without-ring",
+      "signature": "b4f0595512b0221d3215a52695b6ea03eb8d92c3012d6923a632c37b8a96f8da",
+      "count": 1,
+      "example": "\"text-body font-semibold text-text focus:outline-none\""
+    },
+    {
+      "file": "components/guides/og/GuideOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "133f5fb1066c9de4fcb3c817266bffde7262bfde75ce23d2609ab06b5e34a795",
+      "count": 1,
+      "example": "\"#e7edf0\""
+    },
+    {
+      "file": "components/guides/og/GuideOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "1d26326e7449c343d06d3325774d75d102bbe59ea15443831cd94b114a8d900d",
+      "count": 1,
+      "example": "\"#3ce0d6\""
+    },
+    {
+      "file": "components/guides/og/GuideOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2d3198d4408bd7e34aacf7f957544fad09e18a3d30b924c997f560377b57dba5",
+      "count": 1,
+      "example": "\"#06090e\""
+    },
+    {
+      "file": "components/guides/og/GuideOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "31cfc106dc6eef67114bfd10c6cf23f688c205b743c550439bc2967c4d3ff719",
+      "count": 1,
+      "example": "\"#1c2430\""
+    },
+    {
+      "file": "components/guides/og/GuideOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
+      "count": 1,
+      "example": "\"#9aa3b2\""
+    },
+    {
+      "file": "components/guides/og/GuideOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "c316708563a97c9903277e3e2d052b1107183694f1c42e07c5e2c3920f9a3cdd",
+      "count": 1,
+      "example": "\"#1a2230\""
+    },
+    {
+      "file": "components/guides/og/GuideOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "ced70b0c59a26796a0c06f12c2f03ba92f07356d418693b4f999a05afa335dbc",
+      "count": 1,
+      "example": "\"#0c1017\""
+    },
+    {
+      "file": "components/guides/og/GuideOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "e28af2ddb43d25a2f4a61debac19fbab9a1a4775ffd1c6405749ee5f82d5a37e",
+      "count": 1,
+      "example": "\"#157d8c\""
+    },
+    {
+      "file": "components/guides/og/PublicOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "133f5fb1066c9de4fcb3c817266bffde7262bfde75ce23d2609ab06b5e34a795",
+      "count": 1,
+      "example": "\"#e7edf0\""
+    },
+    {
+      "file": "components/guides/og/PublicOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "1d26326e7449c343d06d3325774d75d102bbe59ea15443831cd94b114a8d900d",
+      "count": 1,
+      "example": "\"#3ce0d6\""
+    },
+    {
+      "file": "components/guides/og/PublicOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2d3198d4408bd7e34aacf7f957544fad09e18a3d30b924c997f560377b57dba5",
+      "count": 1,
+      "example": "\"#06090e\""
+    },
+    {
+      "file": "components/guides/og/PublicOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "31cfc106dc6eef67114bfd10c6cf23f688c205b743c550439bc2967c4d3ff719",
+      "count": 1,
+      "example": "\"#1c2430\""
+    },
+    {
+      "file": "components/guides/og/PublicOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
+      "count": 1,
+      "example": "\"#9aa3b2\""
+    },
+    {
+      "file": "components/guides/og/PublicOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "ced70b0c59a26796a0c06f12c2f03ba92f07356d418693b4f999a05afa335dbc",
+      "count": 1,
+      "example": "\"#0c1017\""
+    },
+    {
+      "file": "components/guides/og/PublicOgCard.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "e28af2ddb43d25a2f4a61debac19fbab9a1a4775ffd1c6405749ee5f82d5a37e",
+      "count": 1,
+      "example": "\"#157d8c\""
+    },
+    {
+      "file": "components/help/HelpArticleBody.tsx",
+      "rule": "focus-without-ring",
+      "signature": "c6cb7182fe0af10b05e35c1b5adaba57dc509c299a7d10c4ea7d5a521776047c",
+      "count": 1,
+      "example": "\"focus:outline-none\""
+    },
+    {
+      "file": "components/instant/AgentLiveUpsell.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "43e0a8b1793ad3a2df7765eadaa972fe9bbc38c18f1afc7a35f4c07ebe552499",
+      "count": 1,
+      "example": "<Link href=\"/download\" className={DOWNLOAD_LINK_CLASS}>"
+    },
+    {
+      "file": "components/instant/ImportSummary.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "e6255ce3603fc92491df06c4bad3e1d491cc97cb67bdae5363fbd7073b20c51e",
+      "count": 1,
+      "example": "<Link href=\"/app\" className={LINK_CLASS}>"
+    },
+    {
+      "file": "components/instant/InstantReport.tsx",
+      "rule": "focus-without-ring",
+      "signature": "86366a9841e6ec51af9444b380f3e47fe9654c0dd21c14c104ebeaa793dc0606",
+      "count": 1,
+      "example": "\"font-display text-h2 text-text focus:outline-none\""
+    },
+    {
+      "file": "components/instant/PlayerChooser.tsx",
+      "rule": "focus-without-ring",
+      "signature": "1d76cbc7187f66105bfa67b7feb0d92e9fb29df90d4ddccae9e2e60dad09cb61",
+      "count": 1,
+      "example": "\"font-display text-h3 text-text focus:outline-none\""
+    },
+    {
+      "file": "components/instant/TryResume.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "fded28a3b04226e8a44aa9ffc63b9f36f42a28409fb3379954e118c5349a7783",
+      "count": 1,
+      "example": "<Link href={TRY_SIGN_UP_HREF} onClick={() => trackInstantSignupClick()} className={[ \"inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-2 border-line b"
+    },
+    {
+      "file": "components/landing/CompanionShowcase.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2b6cdc76dee94b75655ba85b90e69e60bd775afbb91768891f8f6b61e8769cf1",
+      "count": 4,
+      "example": "\"overflow-hidden rounded-md border border-border-strong bg-[#10131f]\""
+    },
+    {
+      "file": "components/landing/CompanionShowcase.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "6e471f37f375659ac180a137ee7a1ba2318921492567ccf93381ce6d9201ffa2",
+      "count": 1,
+      "example": "\"inline-flex min-h-11 items-center gap-2 rounded-sm bg-accent-cyan px-4 py-2 text-caption font-bold text-[#071b22] focus-visible:outline-none focus-visible:ring-2 focus-visible:rin"
+    },
+    {
+      "file": "components/landing/CompanionShowcase.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "ad6a31b71e8a46f3639438666bed79a94f81523150bace149bab82ca85d1e4e4",
+      "count": 1,
+      "example": "\"overflow-hidden rounded-md border border-border-strong bg-[#10131f] shadow-hard\""
+    },
+    {
+      "file": "components/landing/DonateBanner.tsx",
+      "rule": "handrolled-accent-link",
+      "signature": "fa2c83cb600c1a8683676b5afd9dfa642c03cfbb94a1ae130604b198c36654ee",
+      "count": 1,
+      "example": "<Link href=\"/donate\" className=\"inline-flex h-12 items-center justify-center gap-2 rounded-md bg-accent px-5 text-body-lg font-semibold text-white transition-colors hover:bg-accent"
+    },
+    {
+      "file": "components/landing/LandingPageContent.tsx",
+      "rule": "handrolled-accent-link",
+      "signature": "2434ca8f99dd44a9c586e6b80f521088f0171a515c38bd7c9dbd30a9296581a8",
+      "count": 1,
+      "example": "<Link href={href} className={[ \"inline-flex min-w-[44px] items-center justify-center rounded-md text-center font-semibold\", \"transition-colors duration-100\", \"focus-visible:outline"
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "0c67076dcebb56383a962cf646ac218edd278a3c73e398f761016e4c14c80da8",
+      "count": 3,
+      "example": "\"radial-gradient(circle at 54% 56%, rgba(60,224,214,.12), transparent 24%), radial-gradient(circle at 72% 36%, rgba(255,107,107,.10), transparent 22%), repeating-linear-gradient(30"
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "223daa6ad009c236b6abf7a12b52e81ccda3f7c2de05a233bef55fdbf0ba576c",
+      "count": 1,
+      "example": "\"bg-[#25f4ee]\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2495414e132368bcfb446eb6e5b22a86c9d5b08fec1dc6b04d9442416cdd7037",
+      "count": 1,
+      "example": "\"text-micro font-bold uppercase tracking-[.16em] text-[#3ce0d6]\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2c776162340bcdb4dd237f22356c2a1ffc0065602aba3d99780a139709796b6b",
+      "count": 1,
+      "example": "\"bg-[#ff2c2c]\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2fd4029b1ea4a7f68105b9ba85dc878b1906a1f02f32094ed3db644af9256a36",
+      "count": 2,
+      "example": "\"mt-3 rounded-md border border-[#f5b84a]/35 bg-[#f5b84a]/10 p-3\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "65db3f728d25cff089d11cb5f87fac0a54c1d6f1956cc39dc2e55beab6b7c299",
+      "count": 1,
+      "example": "\"bg-[#0c1017] p-4 text-white sm:p-5\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "78bcf3a97d2975cbdf0262ca6e9e329c76d3471b6eb9c6e561908b0dc6a442fe",
+      "count": 1,
+      "example": "\"bg-[#9146ff]\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "85678d4a3c746fbde89323c559bb7320868f5bd87b30c47920b427c5427c9e7f",
+      "count": 1,
+      "example": "\"text-[#ff8585]\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "904f05f346e653ca666b2dd33ab923da637641bb2268b913bd7e30c7a1db601d",
+      "count": 1,
+      "example": "\"bg-[#53fc18]\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "91ed12ac3bf07acbf00c2aea7fd3d8c0846a80c9d6a237610b030384d4585496",
+      "count": 1,
+      "example": "\"overflow-hidden rounded-md border-2 border-line bg-[#080b10] shadow-hard\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "bd71be9d5df5da1c8eb0406f009fcaf4c8c5e245f700948cb314fd8c8e262a83",
+      "count": 1,
+      "example": "\"h-3.5 w-3.5 text-[#3ce0d6]\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d7bcfa2afe8e44d204f386a4fa6798d3b1d0c0421c6ac0dd269766053e0741ea",
+      "count": 1,
+      "example": "\"text-[#b89cff]\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d9f1b92aa838fcbbab6407141067c50e422a46f4a379e725e68ce8c3b20dca5d",
+      "count": 1,
+      "example": "\"text-micro font-bold uppercase tracking-[.12em] text-[#f5b84a]\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "dc8ed2ace8be8409b131591053a29740ed7322fe3f18bb58dae269433d381391",
+      "count": 2,
+      "example": "\"rounded-full bg-[#3ec884]/15 px-2 py-1 text-micro font-bold text-[#66e1a2]\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "ed9519205e3f3a79eca36eef6d9bb40d741538dc88f7f4aa11c8129b12f2769c",
+      "count": 1,
+      "example": "\"replay-scope overflow-hidden rounded-md border-2 border-line bg-[#070a0f] shadow-hard\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "f024512d34bcb1ca278e4781109a3d13c6cf9d2cbb8711c390932c8b459d0ff8",
+      "count": 1,
+      "example": "\"h-4 w-4 text-[#f5b84a]\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "2a133638fd28e4708e0eda2f418b5abf1e9caf1441918eb07f841253600d80ea",
+      "count": 1,
+      "example": "\"absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-sm bg-black/70 px-2 py-1 text-[9px] font-bold tracking-[.12em] text-accent-cyan\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "433e82e9734f48d164a715a76f3ff2b71b5e3bef04283423e385ab2ee608f7c2",
+      "count": 1,
+      "example": "`text-[9px] font-bold ${"
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "583b57ad4ca4b401f59a136cd6b0645064bec57686b1212afb1a3c89aaebb332",
+      "count": 1,
+      "example": "\"mt-4 flex flex-wrap gap-2 text-[9px] font-semibold text-white/55\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "619fa8129111a4a9c0272576193cde0ac728f675cb196d76ab43b2046b5dacb6",
+      "count": 1,
+      "example": "\"inline-flex items-center gap-1.5 rounded-sm border border-white/10 bg-black/45 px-2 py-1 text-[9px] font-bold text-white\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "7320cc71cbc5954494936f4c2978e4b9dd9f8a28413aae8034ff49b8315c29a1",
+      "count": 1,
+      "example": "\"flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[.1em] text-white/45\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "b69be5b915ad334f409bc197671062fda9610ea5adbe12e5bb2f806c0ab98bef",
+      "count": 1,
+      "example": "\"mr-1 rounded-sm bg-white/10 px-1 py-0.5 text-[8px] font-bold text-white/65\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "d4a55428c6eba4da2aa643038a986474d2e09bde94c275294eeec6bf939c13dc",
+      "count": 1,
+      "example": "\"text-[11px] leading-5 text-white/75\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "e93de3e9574b0415cfeb30fb569595fd49850041276b0385f52590f2a8fd1420",
+      "count": 1,
+      "example": "\"mt-1 text-[11px] font-semibold text-white/85\""
+    },
+    {
+      "file": "components/landing/ReplayDemo.tsx",
+      "rule": "focus-without-ring",
+      "signature": "3ffb5ca74f2e92c107e2880fdfe0c2a72f79122f5a4a4030b280b7c5a49cf8d6",
+      "count": 1,
+      "example": "\"font-medium focus:outline-none\""
+    },
+    {
+      "file": "components/legal/LegalLayout.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "cd7124c7ec41e657c1c1933d5c5c0c64ff88c4f7a7c62b85d3087656bb28edbb",
+      "count": 2,
+      "example": "'@media print { header, footer, [data-legal-toc], [data-cookie-banner] { display:none!important } [data-legal] > header { display:block!important } html,body,[data-legal],[data-leg"
+    },
+    {
+      "file": "components/maps/MapArtwork.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "117f62b167e6e902038a88ee8ed92b28d6602353937879efcee13900a9b6ca4e",
+      "count": 2,
+      "example": "\"text-[9px]\""
+    },
+    {
+      "file": "components/notifications/NotificationBell.tsx",
+      "rule": "small-arbitrary-text",
+      "signature": "c90a4480e04d3179fc0cd14ff185be518846dedccff897b9dc69ae4bbee37b52",
+      "count": 1,
+      "example": "\"absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white\""
+    },
+    {
+      "file": "components/notifications/NotificationPanel.tsx",
+      "rule": "dialog-outside-ui",
+      "signature": "df21f4d07ce2e30502d061835d236c80f8dcc2cba9323bf2950cd1ec9e5dada5",
+      "count": 1,
+      "example": "<div ref={panel} role=\"dialog\" aria-label=\"Notifications\" style={p.style} className=\"absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border-2 border-line bg-b"
+    },
+    {
+      "file": "components/onboarding/OnboardingDone.tsx",
+      "rule": "focus-without-ring",
+      "signature": "d2cda09e3f62dc87d5d9c692dc304dfd321c8e3adc85cd59ae1729ab55580b27",
+      "count": 1,
+      "example": "\"text-display-lg font-semibold outline-none\""
+    },
+    {
+      "file": "components/onboarding/OnboardingDownload.tsx",
+      "rule": "focus-without-ring",
+      "signature": "fbaf4a66b250e6755cec5785d1fce74f8ef841feba22e08047fc3d4d4a7ceefa",
+      "count": 1,
+      "example": "\"text-display-lg font-semibold tracking-tight text-text outline-none\""
+    },
+    {
+      "file": "components/onboarding/OnboardingImport.tsx",
+      "rule": "focus-without-ring",
+      "signature": "fbaf4a66b250e6755cec5785d1fce74f8ef841feba22e08047fc3d4d4a7ceefa",
+      "count": 2,
+      "example": "\"text-display-lg font-semibold tracking-tight text-text outline-none\""
+    },
+    {
+      "file": "components/onboarding/OnboardingPair.tsx",
+      "rule": "focus-without-ring",
+      "signature": "fbaf4a66b250e6755cec5785d1fce74f8ef841feba22e08047fc3d4d4a7ceefa",
+      "count": 1,
+      "example": "\"text-display-lg font-semibold tracking-tight text-text outline-none\""
+    },
+    {
+      "file": "components/onboarding/OnboardingWelcome.tsx",
+      "rule": "focus-without-ring",
+      "signature": "fbaf4a66b250e6755cec5785d1fce74f8ef841feba22e08047fc3d4d4a7ceefa",
+      "count": 1,
+      "example": "\"text-display-lg font-semibold tracking-tight text-text outline-none\""
+    },
+    {
+      "file": "components/public-profile/GetYourOwnCTA.tsx",
+      "rule": "handrolled-link-button",
+      "signature": "65559a145a1eaaecf13e77636459d5e4174050edfff69f60eefcbc324b7393a8",
+      "count": 1,
+      "example": "<Link href=\"/\" className=\"hard-press inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full border-2 border-line bg-accent px-5 font-display text-body font-bold text-whi"
+    },
+    {
+      "file": "components/public-profile/PublicReplayAnalysis.tsx",
+      "rule": "focus-without-ring",
+      "signature": "68eeabac3db1303a37e85bdcb2534b02ff9bb250fc306e17a0de865d22d14da2",
+      "count": 3,
+      "example": "\"scroll-mt-24 space-y-4 focus:outline-none\""
+    },
+    {
+      "file": "components/public-profile/PublicReplayAnalysis.tsx",
+      "rule": "focus-without-ring",
+      "signature": "840b4248f3d4361ea00c82cc46eed9966b2af7dcd1703e1cb0ebd2272dd15949",
+      "count": 1,
+      "example": "\"scroll-mt-24 focus:outline-none\""
+    },
+    {
+      "file": "components/public-profile/PublicReplayAnalysis.tsx",
+      "rule": "native-confirm-prompt",
+      "signature": "acffa785e2827a8cf391fda40a321fa429cb441ab28635a46088db3d2c41ca89",
+      "count": 1,
+      "example": "window.prompt(\"Copy this replay analysis link\", `${window.location.origin}${canonicalPath}`)"
+    },
+    {
+      "file": "components/public-profile/PublicReplayLibrary.tsx",
+      "rule": "focus-without-ring",
+      "signature": "840b4248f3d4361ea00c82cc46eed9966b2af7dcd1703e1cb0ebd2272dd15949",
+      "count": 1,
+      "example": "\"scroll-mt-24 focus:outline-none\""
+    },
+    {
+      "file": "components/public-profile/PublicReplayShareButton.tsx",
+      "rule": "native-confirm-prompt",
+      "signature": "6bec3b7251688ea54dfd2bc7421b438eeded43a14ff29c96901e53235641fe3b",
+      "count": 1,
+      "example": "window.prompt(\"Copy this replay page link\", href)"
+    },
+    {
+      "file": "components/randomizer/RandomizerStage.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "3d0f1ddd28e9f27d9dc1bff4361574a114888f97941a3facb073b9f9cd9792c1",
+      "count": 1,
+      "example": "\"#aab2c3\""
+    },
+    {
+      "file": "components/randomizer/reveals/AsteroidLockReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "0f0554a4e0a7afdd2f4ca1ce388ea62d9a01188b3028ee30373190b9feb7c807",
+      "count": 1,
+      "example": "\"#3ec0c7\""
+    },
+    {
+      "file": "components/randomizer/reveals/AsteroidLockReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "878242612310c3d111550ef8ee1f13e00697d813c8a6c7333d73bb00e84f6132",
+      "count": 1,
+      "example": "\"#e6b450\""
+    },
+    {
+      "file": "components/randomizer/reveals/BattleRoyaleReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "38d47f1a0609a754b4aef9d15a2f8a9a12ce0247c15fddea05216d75669ff942",
+      "count": 1,
+      "example": "\"#ff6b6b\""
+    },
+    {
+      "file": "components/randomizer/reveals/BattleRoyaleReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "66f3343e493327b4580f4fa0724452094d6695eb847e4c56fb26658d0d63a45b",
+      "count": 2,
+      "example": "\"#e6e8ee\""
+    },
+    {
+      "file": "components/randomizer/reveals/BattleRoyaleReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "878242612310c3d111550ef8ee1f13e00697d813c8a6c7333d73bb00e84f6132",
+      "count": 1,
+      "example": "\"#e6b450\""
+    },
+    {
+      "file": "components/randomizer/reveals/BattleRoyaleReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "ff9da4df16d55499ae10ac9259ab99de104e4ece04a549cd2b1a82a8f28ef170",
+      "count": 1,
+      "example": "\"#aeb5c5\""
+    },
+    {
+      "file": "components/randomizer/reveals/CaseUnboxingReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "4407ffa6ee759bdd4f9bec931de4f4a9e333307799f87637e46728f9bcc11226",
+      "count": 1,
+      "example": "\"#e6b45088\""
+    },
+    {
+      "file": "components/randomizer/reveals/CaseUnboxingReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "66f3343e493327b4580f4fa0724452094d6695eb847e4c56fb26658d0d63a45b",
+      "count": 1,
+      "example": "\"#e6e8ee\""
+    },
+    {
+      "file": "components/randomizer/reveals/CaseUnboxingReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "878242612310c3d111550ef8ee1f13e00697d813c8a6c7333d73bb00e84f6132",
+      "count": 1,
+      "example": "\"#e6b450\""
+    },
+    {
+      "file": "components/randomizer/reveals/ClawMachineReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "878242612310c3d111550ef8ee1f13e00697d813c8a6c7333d73bb00e84f6132",
+      "count": 1,
+      "example": "\"#e6b450\""
+    },
+    {
+      "file": "components/randomizer/reveals/FighterBrawlReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "38d47f1a0609a754b4aef9d15a2f8a9a12ce0247c15fddea05216d75669ff942",
+      "count": 1,
+      "example": "\"#ff6b6b\""
+    },
+    {
+      "file": "components/randomizer/reveals/FighterBrawlReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "878242612310c3d111550ef8ee1f13e00697d813c8a6c7333d73bb00e84f6132",
+      "count": 3,
+      "example": "\"#e6b450\""
+    },
+    {
+      "file": "components/randomizer/reveals/FighterBrawlReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "975b9889e34cafa3dadb40fa3c1daa4c7718b12c11d29f5aef8904670b5ae154",
+      "count": 1,
+      "example": "\"#3ec07a\""
+    },
+    {
+      "file": "components/randomizer/reveals/HorseRaceReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "5136df0b4fe2cf02f68135687fb6b1d9157d5fc8b4c880b1ce3ac13add2344d6",
+      "count": 2,
+      "example": "\"repeating-linear-gradient(45deg, #e6e8ee 0 5px, #11131a 5px 10px)\""
+    },
+    {
+      "file": "components/randomizer/reveals/HorseRaceReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
+      "count": 1,
+      "example": "\"#9aa3b2\""
+    },
+    {
+      "file": "components/randomizer/reveals/HorseRaceReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "878242612310c3d111550ef8ee1f13e00697d813c8a6c7333d73bb00e84f6132",
+      "count": 2,
+      "example": "\"#e6b450\""
+    },
+    {
+      "file": "components/randomizer/reveals/HungrySwarmReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "878242612310c3d111550ef8ee1f13e00697d813c8a6c7333d73bb00e84f6132",
+      "count": 1,
+      "example": "\"#e6b450\""
+    },
+    {
+      "file": "components/randomizer/reveals/SlotMachineReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "4c038a39c0da9f492030dad341805c66d3f6dcc3cc14cc75bc93947d5758efd4",
+      "count": 1,
+      "example": "\"2px solid #e6b450\""
+    },
+    {
+      "file": "components/randomizer/reveals/SlotMachineReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "66f3343e493327b4580f4fa0724452094d6695eb847e4c56fb26658d0d63a45b",
+      "count": 1,
+      "example": "\"#e6e8ee\""
+    },
+    {
+      "file": "components/randomizer/reveals/SumoShoveReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "878242612310c3d111550ef8ee1f13e00697d813c8a6c7333d73bb00e84f6132",
+      "count": 1,
+      "example": "\"#e6b450\""
+    },
+    {
+      "file": "components/randomizer/reveals/WheelSpinReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "35eabcc605465c4dc085e98c50b249aa64537d263570c10fd3fc7ba4d6edd217",
+      "count": 1,
+      "example": "\"#0b0d12\""
+    },
+    {
+      "file": "components/randomizer/reveals/WheelSpinReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "4407ffa6ee759bdd4f9bec931de4f4a9e333307799f87637e46728f9bcc11226",
+      "count": 1,
+      "example": "\"#e6b45088\""
+    },
+    {
+      "file": "components/randomizer/reveals/WheelSpinReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "66f3343e493327b4580f4fa0724452094d6695eb847e4c56fb26658d0d63a45b",
+      "count": 1,
+      "example": "\"#e6e8ee\""
+    },
+    {
+      "file": "components/randomizer/reveals/WheelSpinReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "878242612310c3d111550ef8ee1f13e00697d813c8a6c7333d73bb00e84f6132",
+      "count": 1,
+      "example": "\"#e6b450\""
+    },
+    {
+      "file": "components/randomizer/reveals/revealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "0f0554a4e0a7afdd2f4ca1ce388ea62d9a01188b3028ee30373190b9feb7c807",
+      "count": 2,
+      "example": "\"#3ec0c7\""
+    },
+    {
+      "file": "components/randomizer/reveals/revealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "38d47f1a0609a754b4aef9d15a2f8a9a12ce0247c15fddea05216d75669ff942",
+      "count": 1,
+      "example": "\"#ff6b6b\""
+    },
+    {
+      "file": "components/randomizer/reveals/revealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "66f3343e493327b4580f4fa0724452094d6695eb847e4c56fb26658d0d63a45b",
+      "count": 1,
+      "example": "\"#e6e8ee\""
+    },
+    {
+      "file": "components/randomizer/reveals/revealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
+      "count": 3,
+      "example": "\"#9aa3b2\""
+    },
+    {
+      "file": "components/randomizer/reveals/revealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "878242612310c3d111550ef8ee1f13e00697d813c8a6c7333d73bb00e84f6132",
+      "count": 2,
+      "example": "\"#e6b450\""
+    },
+    {
+      "file": "components/randomizer/reveals/revealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "975b9889e34cafa3dadb40fa3c1daa4c7718b12c11d29f5aef8904670b5ae154",
+      "count": 2,
+      "example": "\"#3ec07a\""
+    },
+    {
+      "file": "components/randomizer/reveals/revealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "afbeae3fa6fcc10b304e43162b6f979d2921a30a7b008d4ac5f93e2f51e32414",
+      "count": 2,
+      "example": "\"#d16ba5\""
+    },
+    {
+      "file": "components/randomizer/reveals/revealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "bdffdccddc2d012b81b367973923e7f90560bc1f13c2d16ebb2c0b9878df8344",
+      "count": 1,
+      "example": "\"#7c8cff\""
+    },
+    {
+      "file": "components/randomizer/reveals/revealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "e97fddf9dc5dc52b06ba44a877ea6b88ccdcc259bb8a25a0b0854f87751b31b7",
+      "count": 1,
+      "example": "\"#a78bfa\""
+    },
+    {
+      "file": "components/randomizer/reveals/spriteShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "74c15a41c7165b6a7792dcbe82de3676927cd077ae4e8f0c60a7cf47ccc60c69",
+      "count": 1,
+      "example": "\"#7d8595\""
+    },
+    {
+      "file": "components/randomizer/reveals/spriteShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "878242612310c3d111550ef8ee1f13e00697d813c8a6c7333d73bb00e84f6132",
+      "count": 1,
+      "example": "\"#e6b450\""
+    },
+    {
+      "file": "components/randomizer/reveals/spriteShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "9f3844df2868577974ea3c6e268e30df47df66ef3c0b01fff7733e880734082d",
+      "count": 1,
+      "example": "\"#f0f2f6\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/HoloDraftReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2285d59f90853d6e02ee261284c65c2290b06e305142aea86749d67b517f112d",
+      "count": 1,
+      "example": "\"#f8d970\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/HoloDraftReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "250d114d997d92c9fb88df16be25f62dd5994091ff0d294b4c9c882384e26d07",
+      "count": 1,
+      "example": "\"#78eaff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/HoloDraftReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "2707d9f1886f521ea210bc0c6738005ecb30f08693fb7f5e763af9b83a5a4f72",
+      "count": 1,
+      "example": "\"#9ba8ce\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/HoloDraftReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "55d82fff08c1bd20688e46f8cdc117482d20fce57fe7316ad5a17eb2b32a14e6",
+      "count": 1,
+      "example": "\"#effdff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/HoloDraftReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "5ff4d0ea29442f6c62d74910158613c19134883f32eccec5779c1709b230c357",
+      "count": 1,
+      "example": "\"#b6bfdc\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/HoloDraftReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "6405c3520ff796cb9e81e5519f10586adf4d0338e7fc090fe5d4795c2219c8be",
+      "count": 1,
+      "example": "\"#7183b7\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/HoloDraftReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "9f883363b4430bff645d57895a6ee5a0d301fdbf6482db63aa36e171275a6034",
+      "count": 1,
+      "example": "\"#f4f6ff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/HoloDraftReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "bf52b7143a1e95854664f1337c31d7f9042b2b06a4f71a041d923685cb5ad26f",
+      "count": 1,
+      "example": "\"#f6d677\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/HoloDraftReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d29864dbcad22cead7e138858e8679dcc86614ae4c27408d27be9ac813e25a4d",
+      "count": 1,
+      "example": "\"#7f8db7\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/HoloDraftReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "dccf0334e1f9459aa90a39748c1bffd4b32b43227f4a16dd854a27dc83ff6f1f",
+      "count": 1,
+      "example": "\"#7e8caf\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/HoloDraftReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "f68ffdc29ac9ee94cad411e324c3d9a7ee880aa4a354e8805e96756a3a883037",
+      "count": 1,
+      "example": "\"#75e7ff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "0eb41da1ef1d5def88abb1e958a9955b352091ecb4aaf37d3392f09f97f39590",
+      "count": 1,
+      "example": "\"#9aa6c8\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "24097c9e33fddbd4bdab412caa575abb8fb694e4e9f6e5536957f53004042046",
+      "count": 1,
+      "example": "\"#72e6ff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "246afa7d8c20d58906f3e646c756ff5e228f0f8d8c1db8cff84fcd1dceba23f4",
+      "count": 1,
+      "example": "\"#7181a9\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "31e679625d4f368cb50fb6a79e8ec93e19a6a06f7904bda65591fec778c3720b",
+      "count": 1,
+      "example": "\"#f3cf69\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "34e4e62459afe1422676bb4d6789b9b5ea7707e307629f9ddfc12547730a64c5",
+      "count": 1,
+      "example": "\"0 0 8px #72dff8\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "39b105f341c2bff52137e3c00d2480732d36eb5f1b03d480838be4f66af628c2",
+      "count": 1,
+      "example": "\"#f2f6ff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "477b0cf535bf1f2d74597a4e92b8c5389e74f419cef0cc7d5f903d1d20dc3831",
+      "count": 1,
+      "example": "\"linear-gradient(#67e7ff, transparent)\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "4ec3bb346768fff7e7e960cbe0a7c3e965fce35f522741aa5d1ff85d90172177",
+      "count": 1,
+      "example": "\"#f2cb63\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "86c4b65c123f914feb327b9a049efef305f5b346801918b81e023c1204ce8373",
+      "count": 1,
+      "example": "\"#a0acca\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "86f0d2fa76ea3db1b57601e9ebf9b2356059cee058b6998925e16e65337f648c",
+      "count": 1,
+      "example": "\"linear-gradient(90deg, transparent, #86eeff, transparent)\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "89c2ba3272448106a9969881a90278946b771e8fcea3d6378ba2a216397e71b5",
+      "count": 1,
+      "example": "\"#63daf5\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "9151d2df9a001c8a0033996444506398da8ba4529331e53669d4abfe814aad66",
+      "count": 1,
+      "example": "\"#7284b4\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d02bd67fbdb6bf7853bba2e48bf0e116a198dba51fbabe935cf532efc38fe112",
+      "count": 1,
+      "example": "\"0 0 9px #70eaff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "d842208412d25fe8a8fcd0bba7737fb5282d55ca5918745b570a3c16b534fe49",
+      "count": 1,
+      "example": "\"0 0 8px #67e7ff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "dba1e7ffc2408897050027d7ea3eebf14e9ad9590ab090db700afd7e86eca564",
+      "count": 1,
+      "example": "\"#edf6ff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "f00b0377bfc419cf29abc4a8a213d64e7e7a9b7efd6df4652ce7568c6c1d5242",
+      "count": 1,
+      "example": "\"linear-gradient(90deg, transparent, #a9f4ff, transparent)\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/PowerSurgeReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "f1366c33312bb70dcdf83024d60454dc223dc62f8301a064e6858c7fe2b8b5f8",
+      "count": 1,
+      "example": "\"0 0 11px #67e7ff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/WarpGateChambersReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "39321c46ebeebfde1406de2ba7f102d7539889ba8b3c8144fca818f900a1f56c",
+      "count": 1,
+      "example": "\"#7485bd\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/WarpGateChambersReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "397534355ca3a5c634209e080a061e6ba2594e0c53872c935d583db0dc24b41e",
+      "count": 1,
+      "example": "\"#f6d472\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/WarpGateChambersReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "a8a9cd2efa38214386766566a2edb28d7ebeec6aef6353f040c84366b2c99a97",
+      "count": 1,
+      "example": "\"#b7c2e5\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/WarpGateChambersReveal.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "f2774d01ba6e0e3d1d572d8c2e409871a626272b507e38e11aaa1273b2031b0a",
+      "count": 1,
+      "example": "\"#fff1b8\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/unitRevealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "377b8015069faf93a655dd5c6b70fb6c9ed0ed5237839d76d089f31a63aa2270",
+      "count": 1,
+      "example": "\"#8193cb\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/unitRevealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "469282efe5ea7770962c8375d38f1be4ba2ec5173da73bc286528feb8ef8ecef",
+      "count": 1,
+      "example": "\"#76dff6\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/unitRevealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "517f7bb11ae0ca6e974434a1ab239d254123d2de959eb36ffbaa02cc20efeb28",
+      "count": 1,
+      "example": "\"#8f99bd\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/unitRevealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "8e8796081d8c51b65cbb1a5faa2d0b38b1ae4976add756c2e27c52c640d85f34",
+      "count": 1,
+      "example": "\"#aeb8dc\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/unitRevealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "98461c24b868598578c8ec6ecf4678d6fc27fe902b07a9a666d3b3d341b6f8ed",
+      "count": 1,
+      "example": "\"#7ee7ff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/unitRevealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "ad80c550e13decaa6fffe18c41b2d26b7c822b2e8a85e48c22f74bf0bdc95e33",
+      "count": 1,
+      "example": "\"#9aa9ff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/unitRevealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "b05f0779cdb647d0873c02e05d506e8fb5fafdaf329a7c04a5e04024708e007c",
+      "count": 1,
+      "example": "\"#f3f6ff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/unitRevealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "bfad3575e748900d8686f60ec6cc9c6d17119d12df13eba5da90ae6bb0614b5b",
+      "count": 1,
+      "example": "\"#72dfff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/unitRevealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "cef7c65db084e6b88fd3b6b5d332856bff0d133e19e6f2fe8723dbb3797c6858",
+      "count": 1,
+      "example": "\"#eef2ff\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/unitRevealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "e237d7e5aeec5f56afa00f1fda413b17993df4fac11e459809c972244278a299",
+      "count": 1,
+      "example": "\"#d8defa\""
+    },
+    {
+      "file": "components/randomizer/unit-reveals/unitRevealShared.tsx",
+      "rule": "hex-outside-visualization",
+      "signature": "f3c8c6bb1581c104cbe8449fa39a604ba42ed8c99d843c9544caf79a457112a6",
+      "count": 1,
+      "example": "\"#f7d87d\""
+    },
+    {
+      "file": "components/reviews/ReviewMenu.tsx",
+      "rule": "focus-without-ring",
+      "signature": "4bb92c57974664d513a03b7e03dbcf3bb2863efc36c7dd1c4e44cade756d72c1",
+      "count": 1,
+      "example": "\"min-h-10 rounded px-3 py-2 text-left text-caption font-semibold text-text hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none disabled:opacity-50\""
+    },
+    {
+      "file": "components/reviews/ReviewMenu.tsx",
+      "rule": "focus-without-ring",
+      "signature": "5dc97f5912118487af0b753a0e2d23e16f564a1db0734e4e620d1c690b17a4f5",
+      "count": 1,
+      "example": "\"flex min-h-10 items-center rounded px-3 py-2 text-left text-caption font-semibold text-text hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none\""
+    },
+    {
+      "file": "components/scouting/ScoutingNotePopover.tsx",
+      "rule": "dialog-outside-ui",
+      "signature": "dd2a0af4858728743eeac9438deb3d140db1c0949b1ed4023895810d3366f530",
+      "count": 1,
+      "example": "<div ref={dialog} role=\"dialog\" aria-modal=\"true\" aria-label=\"Opponent note\" tabIndex={-1} style={position} className=\"fixed z-40 space-y-3 overflow-y-auto rounded-xl border-2 bord"
+    },
+    {
+      "file": "components/stream-studio/WidgetExplorer.tsx",
+      "rule": "focus-without-ring",
+      "signature": "b4ca80ef84eeae7f695b97ae589b2616e3e3be74a82f7fed7e48c0895c0b1464",
+      "count": 1,
+      "example": "\"min-w-0 scroll-mt-28 overflow-hidden rounded-md border-2 border-line bg-bg-surface shadow-hard focus:outline-none\""
+    },
+    {
+      "file": "components/ui/Tabs.tsx",
+      "rule": "focus-without-ring",
+      "signature": "a992712b0d1da156b0c043f4256a0f32985b1c1fdfc377fce6f5019c77dbbc8e",
+      "count": 1,
+      "example": "\"min-w-0 focus-visible:outline-none\""
+    },
+    {
+      "file": "lib/battleCard.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "067a8adf92fe673f9ba15d59e0f06ef15f70c568813c02f166bc3d235b3827c7",
+      "count": 1,
+      "example": "\"#e6edf3\""
+    },
+    {
+      "file": "lib/battleCard.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "08c560579118e3535538d666f975028791b03b69008372332f9341e95c0f2f1b",
+      "count": 1,
+      "example": "\"#7DC8FF\""
+    },
+    {
+      "file": "lib/battleCard.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "21cb70c299e1235d0c34035bdd3ec822bb26f98a33811ed2c0e54c4092dba079",
+      "count": 1,
+      "example": "\"#28A06B\""
+    },
+    {
+      "file": "lib/battleCard.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "a6e10d188404251a22cc6c5dc80537d46587068d6d68a6a8061085bcb63495ea",
+      "count": 1,
+      "example": "\"#DA4150\""
+    },
+    {
+      "file": "lib/battleCard.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "dc500fb3018072a8df42901d6c15d96f90063edb518fc9072c86c1f9ed19b944",
+      "count": 1,
+      "example": "\"#c9d1d9\""
+    },
+    {
+      "file": "lib/clerk-appearance.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "592da3a1f24b31867e3495558162bfec47122384b0c796bf0def4a27d0898aab",
+      "count": 1,
+      "example": "\"#ffffff\""
+    },
+    {
+      "file": "lib/format.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "35eabcc605465c4dc085e98c50b249aa64537d263570c10fd3fc7ba4d6edd217",
+      "count": 1,
+      "example": "\"#0b0d12\""
+    },
+    {
+      "file": "lib/format.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "38d47f1a0609a754b4aef9d15a2f8a9a12ce0247c15fddea05216d75669ff942",
+      "count": 1,
+      "example": "\"#ff6b6b\""
+    },
+    {
+      "file": "lib/format.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "592da3a1f24b31867e3495558162bfec47122384b0c796bf0def4a27d0898aab",
+      "count": 1,
+      "example": "\"#ffffff\""
+    },
+    {
+      "file": "lib/format.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "724c8ab8f77bf76021ea918ca9a8d5088c76f05a5f93485db8f8e0008fa3cb9c",
+      "count": 2,
+      "example": "\"#9aa3b2\""
+    },
+    {
+      "file": "lib/format.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "bdffdccddc2d012b81b367973923e7f90560bc1f13c2d16ebb2c0b9878df8344",
+      "count": 1,
+      "example": "\"#7c8cff\""
+    },
+    {
+      "file": "lib/format.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "e97fddf9dc5dc52b06ba44a877ea6b88ccdcc259bb8a25a0b0854f87751b31b7",
+      "count": 1,
+      "example": "\"#a78bfa\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "00ce0481e9ed4ad3018c5d5fda8bedc4a15073becd7b099afb09a78b913848d9",
+      "count": 1,
+      "example": "\"#16a34a\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "0266779d17e20368852ee6e2d11291c6a66dbc920cc0e59e3f61b9be7cb45e72",
+      "count": 1,
+      "example": "\"#1d4ed8\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "0422185fa0fe6603c0447eb0bab2aaa77c7909f50416c819e738972228ced046",
+      "count": 4,
+      "example": "\"#f43f5e\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "0939f9fc2b4b2ee82e27c22cdfc6f345d73fa1280cae47f538d47a9aa7f0d352",
+      "count": 1,
+      "example": "\"#166534\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "0b35c898345236808ffbfb5dd283497d484626267fd5993edb93a606587f5e54",
+      "count": 5,
+      "example": "\"#f472b6\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "0bfe573251f41232171d626ca24eadcf95d9add06f7964d217bd3a712a4b92f6",
+      "count": 2,
+      "example": "\"#65a30d\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "0c9e4273b0f7aa627141906a22eeb98fced15c6f8312f633b57dddf079df3e46",
+      "count": 2,
+      "example": "\"#3b82f6\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "0f0554a4e0a7afdd2f4ca1ce388ea62d9a01188b3028ee30373190b9feb7c807",
+      "count": 1,
+      "example": "\"#3ec0c7\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "1e4888d57bf93b4369d545b4e6e94b146a983c4fd567539dcf403ebaf13b7dfd",
+      "count": 4,
+      "example": "\"#f8fafc\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "1f2a25f1b45a02b2c0ef57a1467400483c7bcdfba2592e24cffc7e4a5bab3b5c",
+      "count": 4,
+      "example": "\"#ef4444\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "1fa8bcd1cfd90681a45676d354f9507363ccbb1aba0fcc4a60ae68957245b842",
+      "count": 1,
+      "example": "\"#64748b\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "21df8e92936c1620a762c64e0ff14a7f46a26a01475189ec250ab3779a17a824",
+      "count": 1,
+      "example": "\"#d97706\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "23797b6c2002885aa7faae7ace2b17353d34fd5a19aeaf7feca26cb714738dd5",
+      "count": 1,
+      "example": "\"#25f4ee\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "277cc72808aa7e0556f603217aa19acae0a9304edbed218b0583d2e1c428e6bb",
+      "count": 1,
+      "example": "\"#58c7f3\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "28f81c5d5ed4d1594f44d8c9d35249eb4a9d31a50d84a87fad0faf4dae808564",
+      "count": 1,
+      "example": "\"#f87171\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "2957c284da5417616124b1ef4cdfa24f05788d036f9b5a5467f0bf2a70e5fe68",
+      "count": 5,
+      "example": "\"#a855f7\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "306cf5483ec61a0681c2b3fcaee3d9145c113f91c79aa5144a34824764afb81f",
+      "count": 2,
+      "example": "\"#f97316\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "32829f44628efe1d89987525b0a87a3f3df5e8f2e049193ea5597d96a959dedd",
+      "count": 1,
+      "example": "\"#c2410c\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "336c2a2708f771eac334daa438a05004fd0251ff3a70205a14c63da2fccf634c",
+      "count": 1,
+      "example": "\"#e0f2fe\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "3447449eae3c7d454fb00fd35890734a2ffb17b55396bf576432c4a8aa6fdc62",
+      "count": 1,
+      "example": "\"#d9f99d\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "3a15d244987222af3ea9ff9f50bc0d1792cbc6b168409ec05d9d6488f83a52c8",
+      "count": 3,
+      "example": "\"#fde68a\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "3b4f586f8834fb55488436e45e3486b7bce7a12904dd69de13812aa09375ee0a",
+      "count": 1,
+      "example": "\"#7e22ce\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "423fe1856212d132828aba9c5e2321c36606db357fee364507ad74ec7725037c",
+      "count": 2,
+      "example": "\"#38bdf8\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "4b0f945cd432197544235b8f3d650e95ac2ccb54b2144bbed96ba907ae8eef2d",
+      "count": 1,
+      "example": "\"#bef264\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "4b72ce0e593ef00dde7b37906137685ec3c9995e60f020828c2285ba420348d7",
+      "count": 1,
+      "example": "\"#8be9ef\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "4bb9e4ba9747eae1b8ba9f16aa207a19154d40249e379de8f9f5e40479a4d273",
+      "count": 2,
+      "example": "\"#7c3aed\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "5509369c51957079632b6ae0d281948859e28c8abc32fdd5e058f376641e234c",
+      "count": 3,
+      "example": "\"#06b6d4\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "5873ece51cdf5e5d86de0d6a28938ae203fc4e4a8895d7380c3e779618abfe15",
+      "count": 2,
+      "example": "\"#fff7ed\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "5ec2145b2d09d5759efeb7ee46951a503a1b0160e1c180f669af4bf7cf1c4f41",
+      "count": 4,
+      "example": "\"#dc2626\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "5f5751fdec00147f4901434231957c7fafd09c5aad083634d66fbbc91f8a13d4",
+      "count": 1,
+      "example": "\"#6d28d9\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "60fb21b6564044b76b92e27449ac3be154df666de214538f83f0a01bf913467e",
+      "count": 1,
+      "example": "\"#fef08a\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "6832a6ee158827335152d396c7841e3888818f16b0b7320c490bf6e302523934",
+      "count": 1,
+      "example": "\"#ec4899\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "69361bfba551db3b2ae1971bce88465c03293bbeac2fe52a0d6339ee0bf96730",
+      "count": 1,
+      "example": "\"#d9f5ff\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "6aeb4024c3156c52b2ae22930fee070caf30cf3a1803038f1d053b5378a00a61",
+      "count": 1,
+      "example": "\"#eab308\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "7827ef4ad4a27c4ec93c262fffbea85f191c59398eeaa0a384ee29d4cafca54e",
+      "count": 1,
+      "example": "\"#fbcfe8\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "7a20c22170dc6d6efdf54d452a622e76c06a9c87e7a32b5ebd020a81d16c083d",
+      "count": 2,
+      "example": "\"#84cc16\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "9020e3c684ec0608156968ddb79c28ddf919aab87a0ad65b37dfe36de7874bb7",
+      "count": 2,
+      "example": "\"#fb923c\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "90da190ee6817ad879454ad796cc03e0c400dfa240e87b93054c43bb173dc495",
+      "count": 1,
+      "example": "\"#14b8a6\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "92ec245b89f349dab51cf7df8bd1db4c2573a62757d500e0c7b33363e2f31248",
+      "count": 1,
+      "example": "\"#bbf7d0\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "930de46072f83586cc7beaea9e5c654a950afe0038699eb4d697a02727b4d8b8",
+      "count": 1,
+      "example": "\"#fef3c7\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "94928bbc86f10fe65baae80d03c8dc7be0b4365c56fa5e738532a4606177fb6d",
+      "count": 2,
+      "example": "\"#67e8f9\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "94fe42befb3d4ccbcb06f473e7335989913771b0c518b37d7233738c9ef92386",
+      "count": 2,
+      "example": "\"#a3e635\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "98ddeaacc985c0b8954e2a11041e797c534166e9de8d11b019c86af329da9372",
+      "count": 1,
+      "example": "\"#15803d\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "a55412605edbde2989bee7acc5650fe927a7f1cb8134b6a73145d135688aef3c",
+      "count": 7,
+      "example": "\"#22d3ee\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "ae982235fd0a8b17a163f315f27d34548ff540c51677226076e24358876df60e",
+      "count": 2,
+      "example": "\"#60a5fa\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "b2cc202b9ef5fc1b653d951d90f365680fbe7ea452283578e2574b4061131c69",
+      "count": 3,
+      "example": "\"#f59e0b\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "b8e1fa8bc21c236fad34592f0aa1fc23178d4bf52d058a42eaea9fd1e2062500",
+      "count": 3,
+      "example": "\"#fbbf24\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "be8b642cae413be58182323ff6006fc5d7be02b61b7d9e007ea60a635979e0d3",
+      "count": 3,
+      "example": "\"#fb7185\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "bf2873f2c460b8f52445ed1cead0f943edce1fac5b1c4936e16194112571865f",
+      "count": 10,
+      "example": "\"#facc15\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "bfb3e5936f6b459788bc730c442008fa225527a0a2a12386d8f9af080a7d4d95",
+      "count": 1,
+      "example": "\"#8b5cf6\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "c6e292127dfe0dc41169d0693eb4304eacfba0544ae92630bccec9f068e07af0",
+      "count": 1,
+      "example": "\"#ea580c\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "c6f461b1d1b40bcaff6999e37c55364c0d164c9f25fc2f8a64c55c9fe05bd5af",
+      "count": 2,
+      "example": "\"#e879f9\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "d476c64e0933dd5df781cc1de3cfe3a48010423d7ddb5fdcd6adcf19c4fb7cb6",
+      "count": 1,
+      "example": "\"#0f172a\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "d766fe55357988d6068943b950c1799c3e2aa802a6a0f743ab48c1d3ec96ea31",
+      "count": 1,
+      "example": "\"#fed7aa\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "d92f9dc622ef14009d4b51c0184f76d3ea0cc1f98a563590b6f54c1e27e7f338",
+      "count": 1,
+      "example": "\"#c4b5fd\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "da4a17a4a0c3f3e2f05bd76c26816ed251ccb809515cabd2d838ecc5d7f67814",
+      "count": 1,
+      "example": "\"#93c5fd\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "e0b029d1675202cfa88c6cdc8e9031de16ef3edc9d9ae69e01e4820d6fcf5705",
+      "count": 2,
+      "example": "\"#9333ea\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "e183df7a74e86820ef38e20605bf7a056d172645b4341adbed3d42fe72fdc345",
+      "count": 2,
+      "example": "\"#e2e8f0\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "e34af2f91fc8fa653404b94ecbe53c0fdfbb328fac7354a9be9f4d16b9d722d4",
+      "count": 1,
+      "example": "\"#10b981\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "e7bd92da7f69726def055de66eb1627fce8cd237edc842c645490a3148ae8bfb",
+      "count": 4,
+      "example": "\"#22c55e\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "e97fddf9dc5dc52b06ba44a877ea6b88ccdcc259bb8a25a0b0854f87751b31b7",
+      "count": 2,
+      "example": "\"#a78bfa\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "ead5a85147be0e14b741db965754db435e74d1cce8ee7597f29b84f839fa46b1",
+      "count": 1,
+      "example": "\"#0ea5e9\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "eb446f1b46d40a83a612b357a3f755fbcada05ad7cabe30db77f32355c604bf5",
+      "count": 4,
+      "example": "\"#fde047\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "ec447940785664a51dd616bdc5724c202f8bff34ee74690402053599c89173c9",
+      "count": 1,
+      "example": "\"#fef9c3\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "f497cc866f83097fd12ba8cf91a39d9a2ca9dfc0caa3225563303287ee37c847",
+      "count": 3,
+      "example": "\"#2563eb\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "f68892aae23a016050a1a0b75d17c7bfbda974e9c69997c40957d9919c95e828",
+      "count": 1,
+      "example": "\"#a3a3a3\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "f776ccef4960a978ac1595a5cc7a239135801f8911f6914dcea658d4a935e55b",
+      "count": 1,
+      "example": "\"#86efac\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "fa6b4d465b81b359c817fe6af57c92e500b9e11e0077fa5eb662115e157bebb5",
+      "count": 2,
+      "example": "\"#94a3b8\""
+    },
+    {
+      "file": "lib/multichat/alerts.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "fd31d524cf4eeb3e5aa4c75feab163957085225e030eefa0bc466aeb2e397a4b",
+      "count": 1,
+      "example": "\"#059669\""
+    },
+    {
+      "file": "lib/multichat/appearance.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "430f44e0f33e71b2fbfa75d2369eaaca224b1ac2d683d9f90c126829d7ccb047",
+      "count": 1,
+      "example": "\"#a6e879\""
+    },
+    {
+      "file": "lib/multichat/appearance.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "592da3a1f24b31867e3495558162bfec47122384b0c796bf0def4a27d0898aab",
+      "count": 2,
+      "example": "\"#ffffff\""
+    },
+    {
+      "file": "lib/multichat/appearance.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "5d1fbac7be98b2442f339dde0093e5adafcedeba2dde10c8d33e54c7281aea76",
+      "count": 1,
+      "example": "\"#000000\""
+    },
+    {
+      "file": "lib/multichat/appearance.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "97fbe29d08cd50f224eaa6070742f800b762f61c1fe901f643421ea67ffbed7b",
+      "count": 2,
+      "example": "\"#11141b\""
+    },
+    {
+      "file": "lib/overlayPreviewStyles.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "051e56e21547e7cb9965a85e4d77f4c4fe0224e0b70e71d8f4d88d1e88a40bad",
+      "count": 2,
+      "example": "\"repeating-conic-gradient(#4a505c 0% 25%, #3d424d 0% 50%)\""
+    },
+    {
+      "file": "lib/overlayPreviewStyles.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "ba98708eac4fdf02613e9a8b93795e5b9f11c89e37f02b53eded4be475ead8c6",
+      "count": 1,
+      "example": "\"#3d424d\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "107a778e4f107bf718809093f3e9cc2016a2a7a6c193bc2cd04bd92278db6c7b",
+      "count": 1,
+      "example": "\"#8ab4ff\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "19bd92cb350e0bb18de00ea6048a9bef0515156768f3bdd0d0eafe42a5e430d1",
+      "count": 1,
+      "example": "\"linear-gradient(135deg, transparent 0 42%, var(--ov-accent, #67e8f9) 43% 56%, transparent 57%)\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "4562d9334027307d6bb33137f5a4448766f63d443ba5c894e365d31c98790fd4",
+      "count": 1,
+      "example": "\"#10141a\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "6d6d99fa08a4b6c011c6e61a6cecc3ae8ab813b608e79575eaa3ddd440370d03",
+      "count": 1,
+      "example": "\"repeating-linear-gradient(90deg, #6df0ff 0 6px, transparent 6px 10px)\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "76cec033c2b7e3a5be72e00e12dbff9996600417c2bc13ffbb334f8e3f195758",
+      "count": 1,
+      "example": "\"#c4a7ff\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "7c9ff46da89b33e36fa1c9128ab3695e1c33965beb13e09c23389a423f82f9ef",
+      "count": 1,
+      "example": "\"var(--ov-accent, #ff7676)\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "86c0e2b5341bae569015afb5fcf587cf38d4180b006dc85f9fc56de0a6f76aac",
+      "count": 3,
+      "example": "\"repeating-linear-gradient(90deg, var(--ov-accent, #ff72d2) 0 18px, #6df0ff 18px 27px, #ffe66d 27px 34px, transparent 34px 40px)\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "9082fee1f4e7ab19d898bd1209fef548e22e570a06ed57cde2a2ad5987781451",
+      "count": 2,
+      "example": "\"#ffd166\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "94928bbc86f10fe65baae80d03c8dc7be0b4365c56fa5e738532a4606177fb6d",
+      "count": 1,
+      "example": "\"#67e8f9\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "9f25fda52726bb9b607d839676aef769688a61ce2cb6d32645f74adf43a26c64",
+      "count": 1,
+      "example": "\"#4af626\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "aa3dbdc6c6dc8149df5baa0bde6f21d9b35c663abfc2ec0d60c0d463c1a15bc3",
+      "count": 1,
+      "example": "\"3px solid var(--ov-accent, #ff72d2)\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "ab21231c46393e94d2ff1614362f341610b949a40086c64fa8cd7b4f432c6a5a",
+      "count": 1,
+      "example": "\"linear-gradient(90deg, var(--ov-accent, #ffd166), transparent)\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "afb83e68d094fcf3428e45bacd81aeb308188aeab5268d99c7b61974a2a94be1",
+      "count": 1,
+      "example": "\"#ff72d2\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "b237054a6f53d165e099a59b6a2076d9faf67ab1a2570a268a2e1f47ad613922",
+      "count": 1,
+      "example": "\"#9adce6\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "b40446a5c32fdadb7d3432976f1ecd79d1e15663fcbe1f7e5f29f299b031362f",
+      "count": 3,
+      "example": "\"linear-gradient(180deg, #67e8f9 0%, var(--ov-accent, #c4a7ff) 46%, #ff78c9 100%)\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "b9042a28a02cfac1dd66978f0701d7aa0ce3c694a6c9261e6b32f29cab9a72d3",
+      "count": 1,
+      "example": "\"#ff7676\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "bdffdccddc2d012b81b367973923e7f90560bc1f13c2d16ebb2c0b9878df8344",
+      "count": 1,
+      "example": "\"#7c8cff\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "e2d5512a95eea76ef088a11d163c87cdc47b26fc791eb840c0ced8b1bb9b7e97",
+      "count": 2,
+      "example": "\"linear-gradient(90deg, var(--ov-accent, #67e8f9) 0 58%, transparent 58% 64%, var(--ov-accent, #67e8f9) 64% 78%, transparent 78%)\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "e4310cc1107446d9d92e33b5abcdb31098a9f61fa04ca069e8d7955670ddec9c",
+      "count": 2,
+      "example": "\"repeating-linear-gradient(135deg, var(--ov-accent, #ffd166) 0 8px, #17130d 8px 16px)\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "ee0ba1f86f3e0781263383dca981d39a7286938dd090befa2de4f18ff19e34ee",
+      "count": 1,
+      "example": "\"linear-gradient(90deg, var(--ov-accent, #ff7676) 0 34%, rgba(255,255,255,0.9) 34% 36%, transparent 36% 100%)\""
+    },
+    {
+      "file": "lib/overlayTheme.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "f9edbfa1d816342ac7e7387d4db4ce6f3bc9b3bc981e12198717e191d947cb9f",
+      "count": 2,
+      "example": "\"6px 6px 0 #07030d, 10px 10px 0 var(--ov-accent, #ff72d2), inset 0 0 0 2px rgba(109,240,255,0.3)\""
+    },
+    {
+      "file": "lib/replayCombat.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "07cd5472629a052c80f1980b25aa80d4b650a09aa3bc3440dd7c767672498f0c",
+      "count": 1,
+      "example": "\"#fff1bf\""
+    },
+    {
+      "file": "lib/replayCombat.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "db02fcc75ec9df7e84c1bda32b8d83b70c1121248c3d773180468bf4a08012fd",
+      "count": 1,
+      "example": "\"#9de8ff\""
+    },
+    {
+      "file": "lib/replayCombat.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "f89d4e5b6f2b3c03fa6e717d7f26fd3f1d3fb058a7d5e8ea4834d44b2ae29738",
+      "count": 1,
+      "example": "\"#b2ea64\""
+    },
+    {
+      "file": "lib/replayCombat.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "fab8d616130c92db973bb239056c5efe8da11829387e564663eb9bc9ca6c1503",
+      "count": 1,
+      "example": "\"#ffdda1\""
+    },
+    {
+      "file": "lib/replayMarkers.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "052b65c255f3d2bafe7ed73f7c6dff0d73cce0ae944ab975eddfcbbf47e3a961",
+      "count": 2,
+      "example": "\"#070a0f\""
+    },
+    {
+      "file": "lib/replayMarkers.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "db5cfe422d8a34034264f061efd378d72ebc0551323f095c55b2164294627b6b",
+      "count": 1,
+      "example": "\"#3ee0d6\""
+    },
+    {
+      "file": "lib/replayMarkers.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "f1eb27e53baa3e45d30ace4f9882ba22751696535b782310e219bfc5a0b090fe",
+      "count": 3,
+      "example": "\"#f0c43c\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "0d4dffcfc210aaf01c01414fd7972a88b34a7fa13633d83cbab65e5e33831109",
+      "count": 1,
+      "example": "\"#ffd88a\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "0f0554a4e0a7afdd2f4ca1ce388ea62d9a01188b3028ee30373190b9feb7c807",
+      "count": 1,
+      "example": "\"#3ec0c7\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "515835923db4a39fa90025562bf2b472de42247725e08da0ee0cd61adfdd8ccc",
+      "count": 1,
+      "example": "\"#ff6fd0\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "55812e87dc40cb48bb716ff6a4e8e1c4a8e1dc99d83b1ad8d4af1de195bab535",
+      "count": 1,
+      "example": "\"#8a8cff\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "7dd2dd5db4e16d64a6f93134f011a558e712a25d5f3d3dfb053e24570279c9ec",
+      "count": 1,
+      "example": "\"#57c9b0\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "92d497d573799f5610485b8a38383ec050f2f55c3771056abbb630e8ed8ed359",
+      "count": 1,
+      "example": "\"#a874ff\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "98f23cee3465189bb7eb2bf2bcee35fe382e9e5f1c90f8941b4cd1c0af5757c9",
+      "count": 1,
+      "example": "\"#e05656\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "a37779246ccd026236fc3920699d54a878c3b2f32538a67d307cfa95dbfb2c1a",
+      "count": 1,
+      "example": "\"#ffeeb8\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "b1e9377d5b990a9bb5da151a2cbf5f823c3001095e637e21988a6540df07907d",
+      "count": 1,
+      "example": "\"#c3e63a\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "b3328fb5d16732ea893961273f8b9fdcb45260e406e23d08d487839e9a8f9f73",
+      "count": 1,
+      "example": "\"#79cf4a\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "d60ab0fb32f62df01d033abb075fb2f516045417d22f3d666e81d5d17f3b0109",
+      "count": 1,
+      "example": "\"#bbc6d6\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "d65845750bde9d15db8721dc30e230759b1623cd010350ee36b42562421b28ed",
+      "count": 1,
+      "example": "\"#bfe4ff\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "d6f5806eb4d50ed70cba75289f4e11e29c11d73c62cb8aca1a1c83061c7fee1f",
+      "count": 2,
+      "example": "\"#fff\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "dc12666e58bc1b95dd1b3058772c12750f0e74be92fd62a5d3e20c7aff300a78",
+      "count": 1,
+      "example": "\"#ff9b3d\""
+    },
+    {
+      "file": "lib/spellEffects.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "ddb4a8d5dc3802b8646de18925d94f17f4579a548e6fc55e360622d879369776",
+      "count": 1,
+      "example": "\"#7fe8ff\""
+    },
+    {
+      "file": "lib/strategyMatrix.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "592da3a1f24b31867e3495558162bfec47122384b0c796bf0def4a27d0898aab",
+      "count": 1,
+      "example": "\"#ffffff\""
+    },
+    {
+      "file": "lib/strategyMatrix.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "c8ae14440c76edc956aea0b90b17162b9d8dd096d00d007c8d1f700533674484",
+      "count": 2,
+      "example": "\"#0c0c0c\""
+    },
+    {
+      "file": "lib/streamBackgrounds.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "02b6f388792ef05323a57dab0f44a97b2170dbc432120a3f34c66b73f6571fca",
+      "count": 1,
+      "example": "\"#0d0920\""
+    },
+    {
+      "file": "lib/streamBackgrounds.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "0dc45a4e916821caf388f8f60aa827c1ca428caca90ee4b8e94ef8b5174b4708",
+      "count": 1,
+      "example": "\"#07131d\""
+    },
+    {
+      "file": "lib/streamBackgrounds.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "0f8448e8586211de3be49b9a692f89ab5928b28054ff611a4c4d47e10bf66944",
+      "count": 1,
+      "example": "\"#07121b\""
+    },
+    {
+      "file": "lib/streamBackgrounds.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "2124162de2717e20764693cbf7e6348ebb40e762e8c7a2c5b20833c1f986b3de",
+      "count": 1,
+      "example": "\"#110b09\""
+    },
+    {
+      "file": "lib/streamBackgrounds.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "777b2b73283dd1c3088e5f87ded170cd21e202118695ef940a9daf0b32b84583",
+      "count": 1,
+      "example": "\"#170806\""
+    },
+    {
+      "file": "lib/streamBackgrounds.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "ebc69743d7f0afede111492f7583989be5ab2f503fb0a25f3d964968e63a3001",
+      "count": 1,
+      "example": "\"#100d20\""
+    },
+    {
+      "file": "lib/streamBackgrounds.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "fb64fe05ee65f6626487bee9042caeae733a7c1f11f3577175d9a0600ad8e66a",
+      "count": 1,
+      "example": "\"#071019\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "133f5fb1066c9de4fcb3c817266bffde7262bfde75ce23d2609ab06b5e34a795",
+      "count": 1,
+      "example": "\"#e7edf0\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "1cac62d8195376c2c09483a35fce4175a86cbe657f311fcfc4d1f7075cd06adb",
+      "count": 1,
+      "example": "\"#1c9c56\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "23ecaff99e2a5a954492d730f312373ce2fc1966a00a20862281a5ef1d0cc2c3",
+      "count": 1,
+      "example": "\"#b07618\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "38d47f1a0609a754b4aef9d15a2f8a9a12ce0247c15fddea05216d75669ff942",
+      "count": 1,
+      "example": "\"#ff6b6b\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "41c4c6cc11e4c59486a9fad0deff988f82109832bf3c436b0fe688dbe3cc1cb7",
+      "count": 1,
+      "example": "\"#9fadb9\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "4f55c3160d3df51fb33da7bacfa118437b6490608f3a7db23bba1c0f896754dd",
+      "count": 1,
+      "example": "\"#111720\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "5137033336458ef44adf22c33f1e245e3dae334683028d1cc4c5fc349d8ebb03",
+      "count": 1,
+      "example": "\"#0e7d8c\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "592da3a1f24b31867e3495558162bfec47122384b0c796bf0def4a27d0898aab",
+      "count": 1,
+      "example": "\"#ffffff\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "798272b1abf3424e54b95912892ae39e2e02bd3c87858a5db5a5864ef3e3752b",
+      "count": 1,
+      "example": "\"#3ec884\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "8bcdff7d6ed37dc58826299b703b75d36703cb6fc6de0f19e6c4cd76744e3193",
+      "count": 1,
+      "example": "\"#0d121a\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "91e4d768f1b9918df4dce83c751fae81cedfbb71de5c57d264f152870b4dc340",
+      "count": 1,
+      "example": "\"#e89c38\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "95025d9e4fa2946afba2a06f31e0c4f02e6d4a4f82703fc73ae5fa16e077e54f",
+      "count": 1,
+      "example": "\"#d24449\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "ced70b0c59a26796a0c06f12c2f03ba92f07356d418693b4f999a05afa335dbc",
+      "count": 1,
+      "example": "\"#0c1017\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "e28af2ddb43d25a2f4a61debac19fbab9a1a4775ffd1c6405749ee5f82d5a37e",
+      "count": 1,
+      "example": "\"#157d8c\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "fcca4e9af640c0d82ae3798785b2e77b19c1df5e514684c976293d742addba5a",
+      "count": 1,
+      "example": "\"#3f4856\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "fe6960cd2a97cb751e09ccbd0fae1c8cdb890dabc23b73c14b7b0784989d8627",
+      "count": 1,
+      "example": "\"#f9fbfe\""
+    }
+  ]
+}

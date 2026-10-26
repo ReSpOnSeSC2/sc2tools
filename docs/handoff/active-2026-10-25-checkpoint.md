@@ -99,9 +99,9 @@ resolves to Vercel but is absent from the sc2tools project's Domains list.
    Preserve caches and two unrelated web .tmp files. The obsolete opponent
    section-order temporary script is wrong and must not run. Main9b/status
    integration and final remote gates remain. Coordinate UI-foundation tokens.
-4. **Requested Macro Breakdown build editor** is being implemented on new
-   branch codex/macro-build-selector in wave3-coaching-forms, fast-forwarded to
-   mainc7. Prior754 branch/cache are preserved. Native screenshot's Planned
+4. **Requested Macro Breakdown build editor** is committed as52687f69 and
+   937d28b7 on branch codex/macro-build-selector in wave3-coaching-forms, based
+   on mainc7. Prior754 branch/cache are preserved. Native screenshot's Planned
    badge was a confirmed manual check-in; owner acknowledged the misclick.
    Existing correction is game page Checked in→Edit→Change→Confirm, or No set
    build. Owner now explicitly requests the same controls in Macro Breakdown.
@@ -109,9 +109,24 @@ resolves to Vercel but is absent from the sc2tools project's Domains list.
    lazy editor using real BuildCheckInCard, visible through macro loading/error.
    Existing game/header/provider cache is reused. Overlay agent authors shared
    owner/game pending-write gate and JWT/body/deadline/ABA retirement, including
-   synchronous callback retirement; replay agent authors UI/tests/manual matrix.
-   Source is uncommitted; combined tests/types/lint/build/browser remain to run.
-   Do not use the unfinished new UI primitives for this urgent feature.
+   synchronous callback retirement. All178focused checks,242browser assertions,
+   77Help checks, full types and strict changed-file lint pass. Three final-font
+   captures were inspected. The editor uses existing primitives.
+   Both commits are integrated into urgent build-correction PR756 at7127d78d
+   on codex/fix-pvt-dark-templar-priority in wave3-private-scouting. Combined
+   production build and unchanged budgets pass; exact-head CI is running.
+   This PR is NOT yet claimed shipped.
+5. **PvT DT priority correction**, requested from an8:12Eternity'sEdge screenshot,
+   is committed as6b6face2 and integrated into PR756 above. Personal PvT had a
+   DT Drop rule but no ground DT Rush. New early real DT proof precedes later
+   Charge/Blink; early Shrine commitment excludes all Twilight-first Charge
+   variants and proven real-Prism Drop stays more specific. Existing late-tech
+   transitions and custom/global policy precedence remain. All519focused
+   Python/native checks,12web catalog checks and15shared realPyodide cases pass;
+   verified old bundle reproduced RED before rebuilt1.6.12fc21ebe5bf52a53c GREEN.
+   No production record was reanalyzed. Root later received the private link and
+   inspected the debug view read-only; private evidence is not copied into source
+   or public documentation. Regression fixtures remain explicitly synthetic.
 
 Latest Randomizer question was answered from source: native page is a silent
 shared-pool editor/saved-result display. Animation/sounds/speech live in widget.
