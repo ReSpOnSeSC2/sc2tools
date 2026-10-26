@@ -23,7 +23,7 @@ const article: HelpArticle = {
     "8 pool",
     "reclassify",
   ],
-  updated: "2026-10-25",
+  updated: "2026-10-26",
   body: [
     {
       type: "paragraph",
@@ -80,6 +80,7 @@ const article: HelpArticle = {
     { type: "paragraph", text: "A new build can show **No games matched this build yet** until matching finishes. Use **Re-match replays** to check your saved replays, **Edit rules** to review the definition, or **Review check-ins** when games await your input. Matching runs in the background; its completion refreshes the page." },
     { type: "paragraph", text: "With fewer than five games, percentages are early signals: **Low sample** on a card and the caution on the page mark that small sample. The games list shows the latest 50; every stat above still uses all matched games. Use the result and race filters, sortable table headings, the date disclosure for a build order, or **Open game** for its full analysis. Replay-resume tests stay in a separate optional group and never count in stats." },
     { type: "paragraph", text: "Click any strategy label to see the rule that produced it, or browse [Build definitions](/definitions). The catalog groups rules by race and matchup; search and filter links keep their selections, and a link to a specific rule reveals and focuses that entry." },
+    { type: "paragraph", text: "The link icon beside a definition copies that rule's address. If automatic copying is unavailable or takes too long, **Copy definition link manually** shows the selected address beneath the heading. Use Ctrl+C, ⌘C or your browser's Copy command. **Done** or Escape returns to the link icon without changing your catalog filters." },
     { type: "heading", text: "Make a variant with Duplicate", anchor: "duplicate" },
     { type: "paragraph", text: "Open a build's **⋯** menu and choose **Duplicate**. A new private draft keeps the original's rules, strategy notes, private notes and source replay. Its name ends in **(copy)**; change it before saving if you like. Saving creates a separate build with its own record. If that name already exists, choose another name and save again; the original is preserved." },
     { type: "heading", text: "Publish, update and unpublish a Community listing", anchor: "community-listing" },

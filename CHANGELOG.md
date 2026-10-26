@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Copy public build and definition links
+
+- Keep a selected link visible on the page when clipboard permission is denied or takes too long. Done or Escape returns to the copy control, and retry stays available.
+- Retire delayed copy results when the public build address changes or its definition leaves the catalog view.
+
 ### Public player pages
 
 - Choose an explicit public player page and optional recent form, MMR, channels, season and map sections in Settings → Profile. Turning the profile off hides it even when named Community builds remain published; replay sharing keeps its own switch.

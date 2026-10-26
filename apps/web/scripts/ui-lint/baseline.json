@@ -1240,13 +1240,6 @@
       "example": "<Link href={signUpHref(returnTo)} onClick={() => queuePendingIntent(\"save-build\", { slug: props.communitySlug }, returnTo)} className={SECONDARY_LINK_CLASS}>"
     },
     {
-      "file": "components/community/ShareLinkButton.tsx",
-      "rule": "native-confirm-prompt",
-      "signature": "493d90ac6d25ae27a445c22a7c35bb1543bb36669a06fa78670b01b6edfd44f3",
-      "count": 1,
-      "example": "window.prompt(\"Copy this link\", href)"
-    },
-    {
       "file": "components/dashboard/AgentUpgradeNotice.tsx",
       "rule": "handrolled-link-button",
       "signature": "db0821a9eee99015997401dd9fec653358a27b0edd6d71236c0589a277df38a0",
@@ -1259,13 +1252,6 @@
       "signature": "3bc9066f77a889e916e4a20fd0df2d1376ba9f3dc1bbe9858ebdfe6f8c380139",
       "count": 1,
       "example": "\"min-w-0 break-words pt-1.5 text-body font-semibold text-text focus:outline-none\""
-    },
-    {
-      "file": "components/definitions/DefinitionsCatalog.tsx",
-      "rule": "native-confirm-prompt",
-      "signature": "493d90ac6d25ae27a445c22a7c35bb1543bb36669a06fa78670b01b6edfd44f3",
-      "count": 1,
-      "example": "window.prompt(\"Copy this link\", href)"
     },
     {
       "file": "components/dock/DockChat.tsx",
