@@ -191,3 +191,15 @@ Root reviewed and preserved four synthetic captures under
 `docs/handoff/screenshots/build-execution-final-*`; copied bytes match the final
 cache artifacts. All historical captures and failure evidence remain intact.
 
+# Current browser-demo reconciliation
+
+Merged Try main `90c444d8` is normally integrated at `9e8d6128`; the owner setup
+conflict retains both private execution and home-page demo instructions. API,
+agent and engine source trees are byte-identical to fully green `9f59fa96`.
+All 106 combined UI checks across nine suites, whole web types, all 19 UI rules
+and the 1,693-file/655-occurrence ratchet pass. No new allowance or source repair
+was needed. The prior execution head passed 6,261 API tests, 8,774 web tests and
+371 responsive/browser checks; a fresh exact-head CI run is required after this
+independent main integration. Local production/browser proof is unchanged and
+predates only that integration.
+
