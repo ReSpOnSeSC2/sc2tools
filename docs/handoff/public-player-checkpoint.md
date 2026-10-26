@@ -1,5 +1,15 @@
 # Public player page checkpoint
 
+## Shared chart main integration
+
+Merged chart main `56e725ae` normally at `e5d32517`, retaining both changelog
+entries and combined UI debt reductions. All 25 author/profile consumer checks
+pass with the current `wrColor` helper; whole web types, all 18 UI-rule tests
+and the 1,663-source scan pass (656 inherited occurrences, no new/stale allowance).
+Logs are root `.cache/public-player-chart-integration-*`. The full local build
+and 26-case browser proof below precede this independent chart integration;
+exact-head remote CI must build and exercise the complete combined source.
+
 ## Final responsive repair verification
 
 Final checked source is preserved repair `3e976e68`, current-main merge
