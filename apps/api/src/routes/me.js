@@ -15,6 +15,7 @@ const { sanitizeRivals } = require("../util/rivalsPreferences");
 const { OPPONENT_SCOUTING_PREF_TYPE, sanitizeOpponentScouting } = require("../util/opponentScoutingPreferences");
 const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("../services/twitchAutomationPolicy");
 const { sanitizeChatCommands } = require("../services/chatCommands");
+const { activationTimestamp } = require("../services/activation");
 const {
   CHECKIN_PREF_TYPE,
   sanitizeCheckinPrefs,
@@ -50,7 +51,8 @@ const ME_MMR_MAX_TOONS = 8;
  *   POST   /me/backups/:id/restore  — restore from a snapshot
  *
  * @param {{
- *   users: import('../services/types').UsersService & Pick<import('../services/users').UsersService, 'getAnalyzerDefaultView'>,
+ *   users: import('../services/types').UsersService & Pick<import('../services/users').UsersService, 'getAnalyzerDefaultView'|'markFirstGameViewed'>,
+ *   activation?: import('../services/activation').ActivationService,
  *   announcements?: import('../services/announcements').AnnouncementsService,
  *   games: import('../services/types').GamesService,
  *   gdpr: import('../services/gdpr').GdprService,
@@ -98,6 +100,29 @@ function buildMeRouter(deps) {
       if (!req.auth) throw new Error("auth_required");
       res.set("Cache-Control", "private, no-store");
       res.json(await deps.gdpr.inventory(req.auth.userId));
+    } catch (error) { next(error); }
+  });
+
+  router.get("/me/activation", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      res.set("Cache-Control", "private, no-store");
+      if (!deps.activation) { res.sendStatus(503); return; }
+      res.json(await deps.activation.get(req.auth.userId));
+    } catch (error) { next(error); }
+  });
+
+  router.put("/me/activation/first-game", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      res.set("Cache-Control", "private, no-store");
+      const body = req.body;
+      if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length !== 1
+          || typeof body.gameId !== "string" || !body.gameId.trim() || body.gameId.length > 1024
+          || /[\u0000-\u001f\u007f]/.test(body.gameId)) {
+        res.status(400).json({ error: { code: "invalid_game_id" } }); return;
+      }
+      res.json(await deps.users.markFirstGameViewed(req.auth.userId, body.gameId));
     } catch (error) { next(error); }
   });
 
@@ -470,6 +495,13 @@ function buildMeRouter(deps) {
            req.body.goals.some((/** @type {unknown} */ goal) => goal !== "improve" && goal !== "stream"))) {
         res.status(400).json({ error: { code: "invalid_onboarding_goals" } });
         return;
+      }
+      if (type === "onboarding" && Object.hasOwn(req.body, "firstGameViewedAt")) {
+        res.status(400).json({ error: { code: "readonly_onboarding_field" } }); return;
+      }
+      if (type === "onboarding" && Object.hasOwn(req.body, "levelUpDismissedAt")
+          && req.body.levelUpDismissedAt !== null && activationTimestamp(req.body.levelUpDismissedAt) === null) {
+        res.status(400).json({ error: { code: "invalid_level_up_dismissed_at" } }); return;
       }
       const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body)
         : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(req.body)

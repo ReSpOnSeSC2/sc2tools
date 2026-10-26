@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Suggested next steps after setup
+
+- Add a Today checklist for your playing and streaming goals, with progress, direct feature links and Help for each suggestion. Keep it separate from the first-import setup checklist.
+- Record the first successfully opened private game once per account. Save suggestion dismissal independently, and show a compact What's new link when the selected steps are complete.
+
 ### Account activity writes
 
 - Avoid rewriting recent account activity on every page load. Keep the first week-two return recorded even when another visit occurred within five minutes.

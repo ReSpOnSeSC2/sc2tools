@@ -9,7 +9,7 @@ import { useFilters } from "@/lib/filterContext";
 import { viewFiltersQuery } from "@/lib/analyzerViews";
 import { AgentUpgradeNotice } from "@/components/dashboard/AgentUpgradeNotice";
 import { LiveScoutingBrief } from "@/components/scouting/LiveScoutingBrief";
-import { useDashboardMe } from "@/components/dashboard/AnalyzerFrame";
+import { onboardingView, useDashboardMe } from "@/components/dashboard/AnalyzerFrame";
 import { SectionBoundary } from "@/components/ui/SectionBoundary";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
 
@@ -17,6 +17,7 @@ const LadderPulse = dynamic(
   () => import("@/components/analyzer/LadderPulse").then((module) => module.LadderPulse),
   { loading: () => <LadderPulseFrame pending /> },
 );
+const LevelUpChecklist = dynamic(() => import("@/components/onboarding/LevelUpChecklist").then(module => module.LevelUpChecklist));
 
 /**
  * TodayView — the /app landing surface. Everything here is the
@@ -36,6 +37,7 @@ export function TodayView() {
 
   return (
     <div className="space-y-5">
+      {me.games.total > 0 && !onboardingView(me, browserImportEnabled).checklist ? <SectionBoundary label="your suggested next steps"><LevelUpChecklist /></SectionBoundary> : null}
       <AgentUpgradeNotice
         initialAgent={{
           paired: me.agentPaired,

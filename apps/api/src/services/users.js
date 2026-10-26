@@ -10,6 +10,7 @@ const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
 const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("./twitchAutomationPolicy");
 const { PLAYER_SLUG_RE, PLAYER_UUID_RE, createPlayerSlug } = require("../util/publicPlayerConfig");
+const { ACTIVATION_QUERY_MAX_TIME_MS, activationTimestamp, activationUnavailable } = require("./activation");
 
 const REPLAY_SHARE_ID_RE = /^[A-Za-z0-9_-]{32}$/;
 const REPLAY_SHARE_SLUG_MAX_LENGTH = 64;
@@ -851,6 +852,28 @@ class UsersService {
     const legacy = doc?.preferences?.misc?.defaultTab;
     const defaultTab = typeof legacy === "string" && legacy.length <= 64 && !/[\u0000-\u001f\u007f]/.test(legacy) ? legacy : null;
     return { defaultView: prefs.views.find((view) => view.id === prefs.defaultViewId) || null, defaultTab };
+  }
+
+  /** Record a successfully opened owned replay without replacing onboarding.
+   * The route's ordinary erasure lease covers both commands. The conditional
+   * pipeline also protects direct callers and concurrent browser attempts.
+   * @param {string} userId @param {string} gameId */
+  async markFirstGameViewed(userId, gameId) {
+    const game = await this.db.games.findOne({ userId, gameId, _deleted: { $ne: true },
+      _deletionPending: { $ne: true }, isResumedFromReplay: { $ne: true } }, {
+      projection: { _id: 1 }, maxTimeMS: ACTIVATION_QUERY_MAX_TIME_MS,
+    });
+    if (!game) throw Object.assign(new Error("game_not_found"), { status: 404, code: "game_not_found" });
+    const firstGameViewedAt = "preferences.onboarding.firstGameViewedAt";
+    const updated = await this.db.users.findOneAndUpdate({ userId, _gdprMutation: { $exists: false } }, [{ $set: {
+      [firstGameViewedAt]: { $cond: [
+        { $eq: [{ $ifNull: [`$${firstGameViewedAt}`, null] }, null] },
+        { $literal: new Date().toISOString() }, `$${firstGameViewedAt}`,
+      ] },
+    } }], { upsert: false, returnDocument: "after", projection: { _id: 0, [firstGameViewedAt]: 1 },
+      maxTimeMS: ACTIVATION_QUERY_MAX_TIME_MS });
+    if (!updated || !activationTimestamp(updated.preferences?.onboarding?.firstGameViewedAt)) throw activationUnavailable();
+    return { firstGameViewed: true };
   }
 
   /**
