@@ -58,6 +58,19 @@ describe("deferred Trends explorer", () => {
     expect(screen.getByRole("button", { name: "MMR difference" })).toBeTruthy();
   });
 
+  it("honours a section jump while retaining real viewport polling state", () => {
+    const observer = mockObserver();
+    const view = render(<DeferredTrendsExplorer />);
+    view.rerender(<DeferredTrendsExplorer activationRequest={1} />);
+    expect(screen.getByRole("button", { name: "MMR difference" })).toBeTruthy();
+    expect(renderExplorer).toHaveBeenLastCalledWith(false);
+    observer.notify(true);
+    fireEvent.click(screen.getByRole("button", { name: "MMR difference" }));
+    observer.notify(false);
+    expect(screen.getByRole("button", { name: "Compare periods" })).toBeTruthy();
+    expect(renderExplorer).toHaveBeenLastCalledWith(false);
+  });
+
   it("loads automatically when visibility observation is unavailable", () => {
     vi.stubGlobal("IntersectionObserver", undefined);
     render(<DeferredTrendsExplorer />);
