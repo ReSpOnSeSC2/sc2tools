@@ -27,6 +27,22 @@ function zergBreakdown(
 
 afterEach(cleanup);
 
+it("keeps mechanics terms and definitions in valid description-list groups", () => {
+  const { container } = render(<MechanicsPanel breakdown={zergBreakdown({ creep_tumors_total: 2, supply_blocked_seconds: 40, mineral_float_spikes: 2 })} />);
+  expect(screen.getByText("Macro score").tagName).toBe("DT");
+  expect(screen.getByText("SQ (Spending Quotient)").tagName).toBe("DT");
+  const items = container.querySelectorAll("dt, dd");
+  expect(items.length).toBeGreaterThanOrEqual(12);
+  for (const item of items) {
+    const group = item.parentElement!;
+    expect(group.tagName === "DL" || group.tagName === "DIV" && group.parentElement?.tagName === "DL").toBe(true);
+  }
+  for (const list of container.querySelectorAll("dl")) for (const child of list.children) {
+    if (child.tagName === "DIV") expect(Array.from(child.children).map(item => item.tagName)).toEqual(["DT", "DD"]);
+    else expect(["DT", "DD"]).toContain(child.tagName);
+  }
+});
+
 describe("MechanicsPanel public score bands", () => {
   it.each([[79, "text-warning"], [80, "text-success"]] as const)(
     "uses the public override at %s while preserving analyzer defaults",
