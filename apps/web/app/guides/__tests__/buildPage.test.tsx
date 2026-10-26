@@ -16,6 +16,7 @@ vi.mock("@/lib/guides/api", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
   usePathname: () => "/guides/pvz/stargate-into-glaives",
+  useSearchParams: () => new URLSearchParams(),
   notFound: () => {
     throw Object.assign(new Error("NEXT_NOT_FOUND"), { digest: "NEXT_NOT_FOUND" });
   },

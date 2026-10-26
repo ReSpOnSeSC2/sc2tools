@@ -189,6 +189,19 @@ up to30seconds old and disclose safety-limited cohorts. Chat and on-stream
 cooldowns run independently so each surface can answer the same viewer once.
 
 
+# Public auth return paths
+
+Auth return-to-context needs no new environment variable, secret, Clerk
+dashboard change, migration, index or paid service. Deploy the normal web
+change after Ghost's account-assignment API. Existing Clerk keys are reused.
+Public sign-in links carry a validated local destination; new accounts see it
+through setup. An explicit public Save/vote/Practice choice is remembered only
+in the originating browser tab for fifteen minutes. Blocked browser storage or
+an expired choice requires pressing the original action again. Practice uses
+the existing Ghost source URL and opens Settings → Overlay after confirmation.
+Validation uses local synthetic auth/API boundaries; it does not create an
+account, save production preferences or enable a provider.
+
 # Stream Dock Game desk
 
 Deploy API and web together, then refresh existing Dock and overlay Browser Sources once so their game-widget hiding and manual-result labels update. No environment variable, service, collection, index or migration is added. Game is the first Dock section; its sticky header keeps scene, active opponent, session and connection visible. Current desktop agents omit the live map, so that field correctly says unavailable.

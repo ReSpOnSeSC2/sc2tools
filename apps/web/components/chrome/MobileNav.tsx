@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
+import { AuthContextLink } from "@/components/auth/AuthContextLink";
 import { createPortal } from "react-dom";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { X } from "lucide-react";
@@ -177,20 +178,20 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
           </SignedIn>
           <SignedOut>
             <div className="mt-4 space-y-2 px-1">
-              <Link
-                href="/sign-in"
+              <AuthContextLink
+                kind="sign-in"
                 onClick={onClose}
                 className="hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-bg-surface px-3 font-display text-body font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 Sign in
-              </Link>
-              <Link
-                href="/sign-up"
+              </AuthContextLink>
+              <AuthContextLink
+                kind="sign-up"
                 onClick={onClose}
                 className="hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-accent px-3 font-display text-body font-bold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 Get started
-              </Link>
+              </AuthContextLink>
             </div>
           </SignedOut>
         </nav>

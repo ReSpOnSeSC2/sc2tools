@@ -23,7 +23,9 @@ bindings, other paths and unrelated rules remain checked.
 AST rules ignore comments and documentation strings that mention calls. Lexical
 bindings distinguish native `confirm()` from a local `useConfirm` result. Native
 member references and destructuring are checked too. Link classes resolve local
-constants in their lexical scope. Fragment/element IDs, URLs, CSS ID selectors
+constants in their lexical scope. `AuthContextLink` is an anchor too, including
+aliased and namespace imports from its canonical module: wrapping auth links
+does not retire their manual-button styling debt. Fragment/element IDs, URLs, CSS ID selectors
 and SVG filter references are not interpreted as color declarations. This is a source regression guard, not a full
 CSS interpreter: runtime-generated classes, imported class constants, and dynamic
 property names still need normal review and accessibility/browser checks.

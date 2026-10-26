@@ -24,10 +24,11 @@ const harness = vi.hoisted(() => ({
 vi.mock("@clerk/nextjs", () => ({
   SignedIn: ({ children }: { children: ReactNode }) => (harness.signedIn ? <>{children}</> : null),
   SignedOut: ({ children }: { children: ReactNode }) => (harness.signedIn ? null : <>{children}</>),
-  useAuth: () => ({ getToken: async () => "test-token" }),
+  useAuth: () => ({ isLoaded: true, isSignedIn: harness.signedIn, userId: harness.signedIn ? "reader" : null, getToken: async () => "test-token" }),
 }));
 
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@/lib/clientApi", async original => ({
+  ...await original<typeof import("@/lib/clientApi")>(),
   apiCall: harness.apiCall,
   useApi: (path: string | null) => {
     harness.lookupPaths.push(path);
@@ -73,6 +74,7 @@ function saves() {
 }
 
 beforeEach(() => {
+  sessionStorage.clear();
   harness.signedIn = true;
   harness.lookup = { items: [] };
   harness.lookupPaths.length = 0;
