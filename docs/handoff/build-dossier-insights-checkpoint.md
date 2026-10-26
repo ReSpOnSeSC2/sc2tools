@@ -176,3 +176,14 @@ push and final expected-head checks.
 No production or provider operations were performed. The f96/25b build results
 above are historical. Future asset reuse or builds must match the integrated
 current engine source; preserve historical bundles and pointer evidence.
+# Current combined delivery
+
+The Dossier is included in Execution PR 748. Root preserved the reviewed semantic
+repair, current fixtures, both checkpoints and four new synthetic captures at
+`48f90d5e`, then normally integrated actual More main `378a957d` at `bb543a15`.
+Owned Dossier/Execution sources are unchanged by that integration. All 77 combined
+AppChrome/card/Macro checks and whole web types pass. Existing production and
+full browser evidence predates only this independent navigation integration;
+exact-head remote gates remain pending. Close superseded PR 742 only after the
+combined delivery merges.
+

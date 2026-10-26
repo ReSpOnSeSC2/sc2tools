@@ -175,3 +175,19 @@ CI/Vercel and merge.
 No production/provider operations or environment/version/release changes.
 Any future required-engine build must coordinate the integrated current source;
 the bundle IDs in this historical section are evidence, not pins for reuse.
+# Current shared-navigation reconciliation
+
+Actual More main `378a957d` is normally integrated at `bb543a15`. Owned Execution,
+Dossier and semantic-card sources are byte-identical to the reviewed replacement
+artifact at `48f90d5e`; API, agent and engine trees remain identical to accepted
+`2e1ef567`. The independently changed navigation is additionally covered by
+77 checks across four AppChrome, BuildCard and real Macro-editing suites, plus
+whole web TypeScript. Both are green. The replacement local production/browser
+artifact above predates this independent navigation integration; fresh exact-head
+API/web/responsive CI is still required.
+
+Root reviewed and preserved four synthetic captures under
+`docs/handoff/screenshots/build-dossier-final-*` and
+`docs/handoff/screenshots/build-execution-final-*`; copied bytes match the final
+cache artifacts. All historical captures and failure evidence remain intact.
+
