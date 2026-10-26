@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Modal } from "@/components/ui/Modal";
+import { Sheet } from "@/components/ui/Sheet";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 import { ThemeChoice } from "@/components/ui/ThemeChoice";
 import type { ReportType } from "@/lib/feedback/reportContext";
@@ -14,7 +14,7 @@ function beginNavigation(href: string) {
   if (target.pathname + target.search !== window.location.pathname + window.location.search) startNavProgress();
 }
 export function MoreSheet({ entries, activeKey, onClose, onReport }: { entries: readonly NavEntry[]; activeKey: string | null; onClose: () => void; onReport: (type: ReportType) => void }) {
-  return <Modal open title="More sections" onClose={onClose} mobileLayout="sheet">
+  return <Sheet open side="bottom" title="More sections" onClose={onClose}>
     <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-border-strong" aria-hidden />
     {([['section', 'Analysis'], ['utility', 'Your setup']] as const).map(([group, label]) => <section key={group} aria-label={label}><h3 className={CAPTION}>{label}</h3>{entries.filter((entry) => entry.group === group).map((entry) => { const Icon = entry.icon; return <Link key={entry.key} href={entry.href} onNavigate={() => beginNavigation(entry.href)} onClick={onClose} aria-current={activeKey === entry.key ? "page" : undefined} className={`${ROW} ${activeKey === entry.key ? "bg-accent-cyan/10 text-accent-cyan" : ""}`}><Icon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />{entry.label}</Link>; })}</section>)}
     <section aria-label="Help & support"><h3 className={CAPTION}>Help &amp; support</h3>{helpMenuItems(true).map((item) => <HelpRow key={item.key} item={item} onClose={onClose} onReport={onReport} />)}
@@ -22,7 +22,7 @@ export function MoreSheet({ entries, activeKey, onClose, onReport }: { entries: 
       <Link href="/legal/privacy" onClick={onClose} className={ROW}>Privacy</Link><Link href="/legal/terms" onClick={onClose} className={ROW}>Terms</Link>
       <InstallAppButton className="w-full text-body" />
     </section><ThemeChoice className="mt-4 border-t border-border pt-3" />
-  </Modal>;
+  </Sheet>;
 }
 function HelpRow({ item, onClose, onReport }: { item: HelpMenuItem; onClose: () => void; onReport: (type: ReportType) => void }) {
   const Icon = item.icon;
