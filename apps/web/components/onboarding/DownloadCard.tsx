@@ -308,7 +308,8 @@ function DownloadCardNoArtifact({ os }: { os: DetectedOS }) {
           </p>
         </div>
       </header>
-      <pre className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption">
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The named command region must accept keyboard scrolling. */}
+      <pre role="region" aria-label="Source installation commands" tabIndex={0} className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption focus-visible:ring-2 focus-visible:ring-accent">
         {sourceInstallSnippet(os)}
       </pre>
     </article>
