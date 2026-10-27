@@ -1,10 +1,14 @@
-# Guided tours — source checkpoint
+# Guided tours — local validation checkpoint
 
 2026-10-26 · `codex/wave5-guided-tours` · isolated checkout
 `C:\Users\jay19\.codex\worktrees\wave5-guided-tours\SC2TOOLS`.
-Base: `aa03e6ccfb1d3311008e9b8e1eb954e1a925c8f0`;
-tree: `73a07ad70609fe3c4170ecc9c8e868d30de10f30`.
-Canonical Help generation is complete. Static validation evidence is recorded below.
+Validated product head: `17c229bb35e82f3b81749cbcc77cf0768f940626`;
+tree: `8562d8efc5aca07ef035f65cf058e6a38d62f56b`.
+Original source base: `aa03e6ccfb1d3311008e9b8e1eb954e1a925c8f0`.
+
+This checkpoint records local product proof, the own production artifact and
+root visual review. Fresh-main integration and exact-head CI had not run at this
+stage. The historical failures and narrower evidence limits remain below.
 
 ## Implemented source contract
 
@@ -154,7 +158,7 @@ Every stage retained all 100 pre/post inputs, 47 owned files, six seeds and thre
 generated absences. Independent DateKind String/Time6 closure retired 20 raw
 identity entries across 16 distinct PIDs, with zero owned listeners.
 
-## Real target fixture provider — validation pending
+## Real target fixture provider — first failure retained
 
 At `10530d28`, the selected web group completed 131 cases in 12 files:
 130 passed, one Today target-owner assertion failed, and none were pending.
@@ -162,9 +166,12 @@ The fixture mounted real DailyPulse without its required AnalysisGamesProvider;
 SectionBoundary therefore rendered its fallback instead of the real strip.
 The fixture now uses the actual provider inside its existing FiltersContext.
 The provider defaults to dormant (`enabled=false`); no target/context mock,
-selector weakening, test or assertion change was added. Its focused eight-case
-and strict checks remain UNRUN. Foundation's 24 real-Mongo cases never started.
-The new Tours build, browser cases and CI remain UNRUN.
+selector weakening, test or assertion change was added. That first group stopped
+before Foundation. At `17c229bb`, the one-file strict check had zero errors or
+warnings, all eight target-owner cases passed, then all 24 Foundation cases
+passed against pinned MongoDB 7.0.14 with runtime downloads disabled. The whole
+131-case group was not repeated; this is not a fresh 131/131 claim. The 130
+previously passing cases and their original source association stay recorded.
 
 Raw first failure is preserved under
 `.cache/guided-tours-units-10530d28/01-web-units/OUTCOME.json`.
@@ -172,3 +179,108 @@ All 100 pre/post inputs, 47 owned files, six seeds and three generated absences
 matched. Independent Time6 closure retired all 17 recorded identities with no
 owned listeners. PID 14696 had been reused by a later unrelated conhost, so the
 receipt preserves that match and does not claim all bare PIDs were absent.
+
+## Own build and focused proof at 17c229bb
+
+The focused repair receipt is
+`.cache/guided-tours-focused-17c229bb/COMBINED-RECEIPT.json`, SHA256
+`0d8044b4a28450f0f9fa0ffba4ed81c7d825758a9f2dcfbdf87a81ca5009cb37`.
+It records only the target file's strict check and eight cases, followed by
+24 Foundation cases. Earlier whole-web/API types at `2d72ee29` and inherited
+web42/API3 lint comparisons keep their original heads and raw nonzero exits.
+No inherited autofocus or function-length warning was suppressed or called a
+strict-clean result. No whole 131-case rerun was performed.
+
+A genuine own Next build at `17c229bb` generated 148 pages with BUILD_ID
+`l2_jI0nYOkCV55KImfv3S`, four CSS files and three local fonts. All 81 unchanged
+route budgets passed (18 listed, 63 default), and fresh post-build whole-web
+types exited 0 with no diagnostics. The nine established dummy/local flags
+were retained; inherited NODE_ENV/NODE_OPTIONS were removed, Next selected its
+build mode, and CIRCLE_NODE_TOTAL=2 selected one worker. No npm prebuild, engine
+or sample generation, install or download ran. All 40 canonical engine sources,
+seven active assets and four existing sample records matched; pre/post own asset
+proofs were byte-identical. The 196 raw Next warning lines remain preserved;
+no warning-free build or new full warning comparison is claimed.
+
+Build receipt: `.cache/guided-tours-own-build-17c229bb/COMBINED-RECEIPT.json`,
+SHA256 `16a546dac48881de4812de1d2a307fc996c17219d004b5f66c329beb14cbcc66`.
+All 172 source/runtime pins, 47 owned files and six protected seed rows stayed
+unchanged through the five build stages. Recorded processes and owned listeners
+closed, including independent retirement checks for the closure observers.
+
+## Browser run, first metadata RED and retained-data correction
+
+Actual discovery selected exactly 12 unique cases in one project. The original
+browser matrix ran once using full Chrome 1228, one worker, zero retries,
+maxFailures=1, CI=1 and actual removal of A11Y_COLLECT_ONLY. All 12 cases passed
+in 46.8 seconds, with zero failed, skipped or flaky cases. It retained 36 shared
+AA attachments/audits, 12 transport ledgers, 12 trace archives and 18 explicit
+PNG captures. Reported serious/critical issues for the existing WCAG tags were
+zero; 22 scans retained incomplete color-contrast observations. This is not full
+accessibility certification or a claim that every contrast node was resolved.
+
+Ledgers contain 64 synthetic reads and 42 exact writes: 30 responses were 200 and
+12 were intentional save-retry 503s. Errors, unknown/rejected/external/native
+attempts and aborted responses were zero. All 12 fixture servers/sockets closed.
+The 70 raw RUN identity records represent 69 distinct Time6 identities; all
+retired with no owned listeners. Earlier LIST PID 33084 reuse by an unrelated
+dllhost is retained honestly; its console identity had retired.
+
+The first browser metadata driver exited 1 despite the browser child exiting 0.
+Its expected CSS omitted two LF bytes between font-face definitions, and it
+incorrectly required a JavaScript body that ordinary non-live Playwright traces
+intentionally omit. The original RED receipt and all raw artifacts remain:
+`.cache/guided-tours-browser-17c229bb/02-run/COMBINED-RECEIPT.json`, SHA256
+`8bf93c49823440edbbc33309b627aa360e7b0379e626a57467e93ecabb71d2cd`.
+
+Root admitted a metadata-only interpretation correction. One PowerShell reader
+reinspection exited 0 with no validation errors, without rerunning Node, browser,
+tests or build. All 12 CSS bodies matched the exact own construction: 150228
+bytes, SHA256 `42af813a877446da27a00c6b578e4d624a4c2992dc9fe7e3801d33a9bc018bc7`.
+All 12 JavaScript GET responses had status 200, script type, JavaScript MIME and
+headers; body references were intentionally absent under pinned Playwright
+1.61.1 non-live trace policy. **No raw JavaScript response body/hash provenance
+is claimed.** Observed Hanken and Bricolage font responses matched their pins;
+three fonts were admitted, but only those two were observed fetched.
+
+Original case results, ordered attachments, AA/incomplete data, transport,
+audits and PNG records remained deep-equal. All 89 original-evidence/source pins,
+11 reader-proposal pins and the original 230/172 source/artifact guards passed
+before and after reinspection. Its host and closure observer retired with no
+owned listeners. Corrected-evidence receipt:
+`.cache/guided-tours-browser-reader-repair-17c229bb/execution/COMBINED-RECEIPT.json`,
+SHA256 `c83c538ae95c70937450b88d40d3743f5a836cf92a2de85a050e1acc021363d3`.
+
+## Visual scope and selected captures
+
+Root viewed and approved all 18 original captures for placement, readability,
+focus and error panels within the declared synthetic-frame scope. The browser
+uses real Tour/controller/Help/Modal/check-in controls, current source and the
+own production CSS/fonts, with synthetic target frames and owner transport.
+Actual consumer target ownership is separately covered by the eight passing
+unit cases. This is not full consumer-page, production API or native fullscreen
+transition proof. All 18 original captures and all traces remain in the cache;
+eight raw, unedited captures are selected for the repository:
+
+| Surface | View | Capture |
+|---|---|---|
+| Today | Light, 390px | [Open](../screenshots/guided-tours-today-light-390-open.png) |
+| Today | Dark, 1280px | [Open](../screenshots/guided-tours-today-dark-1280-open.png) |
+| Game | Light, 1280px | [Open](../screenshots/guided-tours-game-light-1280-open.png) |
+| Game | Dark, 390px | [Open](../screenshots/guided-tours-game-dark-390-open.png) |
+| Overlay | Light, 390px | [Open](../screenshots/guided-tours-overlay-light-390-open.png) |
+| Overlay | Dark, 1280px | [Open](../screenshots/guided-tours-overlay-dark-1280-open.png) |
+| Game | Light, 390px | [Save error](../screenshots/guided-tours-game-light-390-save-error.png) |
+| Overlay | Dark, 390px | [Save error](../screenshots/guided-tours-overlay-dark-390-save-error.png) |
+
+## Integration boundary
+
+This delivery adds documentation and raw captures to the validated product;
+component code, CSS, Help articles and the generated 95-article index are unchanged.
+The own `17c229bb` build and bounded proofs are not relabeled as results for a
+later documentation or integration commit. Fresh-main integration must preserve
+incoming Device pairing lifecycle fixtures alongside all 11 Tours cases in
+Foundation, and retain both engineering/changelog explanations. Integrated
+exact-head CI remains required. No local build/test repeat, release, deployment,
+agent tag/version bump, migration, provider activation or production write is
+claimed by this checkpoint.
