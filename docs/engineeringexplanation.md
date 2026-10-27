@@ -650,3 +650,21 @@ publish an older anchor after reset, including a write that commits then
 reports failure. Fresh natural membership and locators remain unchanged.
 The four actual application/Mongo reset regressions and the broader 243-test
 API run pass; earlier-head CI does not accept this later API correction.
+
+## Sessions preserve automatic date presets
+
+Generated Sessions links now carry the semantic global preset separately from
+versioned, frozen membership bounds. The initial provider reads a small,
+synchronous admission helper; the full report, refresh and continuation helpers
+remain behind existing lazy boundaries. Auto keeps tracking the season, reports
+retain their defined cohort, and normal edits still persist after returning to
+Today. Explicit Custom, numbered seasons and generic Saved Views retain their
+existing copied-view storage isolation. Invalid or duplicate transport fails
+before a request; only existing API query fields reach the server.
+
+Old unmarked Custom URLs may represent either deliberate dates or a previously
+generated Session link. A fresh bare Today tab reads the stored preference;
+the fix does not guess by resetting every Custom range. This changes no server
+membership rules, data schema, index, provider flag or desktop-agent version.
+See the [Auto-season checkpoint](handoff/sessions-auto-season-checkpoint.md)
+for exact source, browser and delivery boundaries.

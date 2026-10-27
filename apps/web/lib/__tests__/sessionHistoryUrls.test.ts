@@ -20,10 +20,11 @@ it("freezes membership bounds and explicit All/false facets through Frame hydrat
   expect(sessionScopeIsSynced(hydrated, query)).toBe(true);
 });
 
-it("retains the patch predicate when a relative patch preset is frozen to resolved dates", () => {
+it("retains relative patch identity while separately freezing its API predicate and dates", () => {
   const query = sessionScopeQuery({ preset: "after_5_0_17", since: filters.since, map_pool: "all", game_size: "all", exclude_too_short: false });
-  expect(query.get("preset")).toBe("custom");
-  expect(query.has("patch_era")).toBe(true);
+  expect(query.get("preset")).toBe("after_5_0_17");
+  expect(query.get("scopePatch")).toBe("after");
+  expect(query.get("scopeSince")).toBe(filters.since);
   expect(sessionListApi(query)).toContain("patch_era=");
 });
 
@@ -97,10 +98,13 @@ it("preserves duplicate output keys until validation instead of selecting an arb
   expect(sessionTransportError(query)).toBeTruthy();
 });
 
-it("freezes a version-only patch scope without introducing a default season or discarding its version predicate", () => {
+it("keeps a version-only API scope separate from the relative patch preset used in the shared UI", () => {
   const query = sessionScopeQuery({ preset: "patch_5_0_16", map_pool: "all", game_size: "all", exclude_too_short: false });
-  expect(query.get("preset")).toBe("custom"); expect(query.get("patch_era")).toBe("before");
+  expect(query.get("preset")).toBe("patch_5_0_16"); expect(query.get("scopePatch")).toBe("before");
+  const api = queryOf(sessionListApi(query));
+  expect(api.has("since")).toBe(false); expect(api.has("until")).toBe(false);
+  expect(api.get("patch_era")).toBe("before");
   const hydrated = filtersFromViewQuery({ preset: "current_season", since: "2026-09-01T00:00:00.000Z" }, viewFiltersFromQuery(query));
-  expect(hydrated.since).toBeUndefined(); expect(hydrated.until).toBeUndefined(); expect(hydrated.patch_era).toBe("before");
+  expect(hydrated.preset).toBe("patch_5_0_16");
   expect(sessionScopeIsSynced(hydrated, query)).toBe(true);
 });
