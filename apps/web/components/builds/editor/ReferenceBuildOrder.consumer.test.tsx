@@ -17,6 +17,33 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 function Editor() { const [value, setValue] = useState(order); return <><BuildOrderEditor value={value} onChange={setValue} sourceEvents={[]} sourceGameId="private" race="Protoss" /><output aria-label="Saved reference">{JSON.stringify(value)}</output></>; }
 
 describe("actual reference consumers", () => {
+  it("saves a source-filled composite replay after dismissing the advisory name check", async () => {
+    const gameId = "2026-10-25T22:51:33|Tester Ω|Eternity's Edge / LE|492";
+    h.call.mockImplementation(async (_token, path) => path === "/v1/custom-builds/preview-matches" ? { matches: [], almost_matches: [], scanned_games: 157 } : { saved: true, reclassify: null });
+    render(<BuildEditorModal open onClose={vi.fn()} gameId={gameId} events={[{ time: 66, name: "Gateway", is_building: true, supply: 16 }, { time: 118, name: "Stalker", supply: 20 }]} race="Protoss" vsRace="Protoss" defaultName="PvP — 8 gate Stalker Pressure" initialDraft={{ rules: [{ type: "count_min", name: "TrainStalker", time_lt: 205, count: 8 }] }} />);
+    expect(screen.getByText(/no rule checks Gateways/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save build" })).toHaveProperty("disabled", false);
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss this name check" }));
+    expect(screen.queryByText(/no rule checks Gateways/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save build" }));
+    await waitFor(() => expect(h.call.mock.calls.some(call => call[2]?.method === "PUT")).toBe(true));
+    const body = JSON.parse(h.call.mock.calls.find(call => call[2]?.method === "PUT")![2].body);
+    expect(body.buildOrder.sourceGameId).toBe(gameId);
+    expect(body.buildOrder.steps[0]).toEqual({ t: 66, supply: 16, action: "BuildGateway" });
+    expect(body.rules).toEqual([{ type: "count_min", name: "TrainStalker", time_lt: 205, count: 8 }]);
+  });
+  it("opens the reference tab from the footer and reports the exact invalid step", () => {
+    render(<BuildEditorModal open onClose={vi.fn()} events={[]} race="Protoss" vsRace="Any" defaultName="Reference plan" initialDraft={{ rules: [{ type: "before", name: "BuildGateway", time_lt: 120 }], buildOrder: { ...order, steps: [{ ...order.steps[0], t: -1 }] } }} />);
+    expect(screen.getByRole("tab", { name: "Match rules" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText(/^Build order: Step 1: use a valid m:ss/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save build" })).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByRole("button", { name: "Review build order" }));
+    expect(screen.getByRole("tab", { name: "Build order" }).getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(screen.getByRole("tab", { name: "Build order" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Step 1 time" }), { target: { value: "1:30" } });
+    expect(screen.getByRole("button", { name: "Save build" })).toHaveProperty("disabled", false);
+    expect(screen.queryByRole("button", { name: "Review build order" })).toBeNull();
+  });
   it("saves an untimed unknown reference without classifying it and blocks a malformed clock", async () => {
     render(<BuildEditorModal open onClose={vi.fn()} events={[]} race="Protoss" vsRace="Any" defaultName="Reference plan" initialDraft={{ buildOrder: order }} />);
     expect(screen.getByRole("tab", { name: "Build order" }).getAttribute("aria-selected")).toBe("true");
