@@ -4,7 +4,7 @@
 `C:\Users\jay19\.codex\worktrees\wave5-guided-tours\SC2TOOLS`.
 Base: `aa03e6ccfb1d3311008e9b8e1eb954e1a925c8f0`;
 tree: `73a07ad70609fe3c4170ecc9c8e868d30de10f30`.
-This is source-only work. Canonical Help generation is complete; all validation checks below remain UNRUN.
+Canonical Help generation is complete. Static validation evidence is recorded below.
 
 ## Implemented source contract
 
@@ -42,7 +42,7 @@ This is source-only work. Canonical Help generation is complete; all validation 
   explicit Game replay click resolves the latest owned replay; no private read on
   widget mount. New first-game Help content supplies the canonical final URL.
 
-## Prepared checks — all UNRUN
+## Prepared checks at source freeze
 
 - New web suites declare 70 cases: registry 14, Help widget 15, controller 25,
   actual target owners/variants 8 and Tour UI 8. API Foundation adds 11 cases.
@@ -101,3 +101,22 @@ C:\SC2TOOLS\.cache\guided-tours-root-reviewed-copy-aa03e6cc.
 No validation runtime, Git commit, native fullscreen timing, browser or visual
 success is established by this source-only review. The 70 web, 11 added API and
 12 browser case counts are declarations, not passing results.
+
+## Integrated static validation — fixture correction pending
+
+At `2d72ee29`, whole-web and whole-API typechecks exited 0 with no diagnostics.
+Strict lint of the 42 changed web paths exited 1 with zero errors and two
+warnings: the existing BuildCheckInCard autofocus and a new fixture useMemo
+dependency warning. The autofocus warning is a baseline candidate; comparison
+against main has not run. The fixture now derives its query from the subscribed
+pathname/search snapshot inside the existing memo. Its assertions are unchanged;
+validation of this correction remains UNRUN.
+
+Raw outcomes are in `.cache/guided-tours-validation-2d72ee29/stage1-outcome.json`.
+The first driver's console-host closure RED is preserved; root independently
+confirmed all four recorded PIDs absent, then reviewed the narrow console-host
+and JSON date-string wrapper repairs. Later probes confirmed retirement of all
+observed stage identities with no owned listeners. All 47 owned raw files, six
+protected seeds and three generated-input absences retained their guarded state.
+API strict lint, baseline comparison, 131 selected web cases, 24 Foundation cases,
+build, browser and CI remain UNRUN.

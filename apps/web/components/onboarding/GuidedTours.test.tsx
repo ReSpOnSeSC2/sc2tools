@@ -25,7 +25,7 @@ vi.mock("next/navigation", async () => {
   } };
   return { useRouter: () => router,
     usePathname: () => { useSyncExternalStore(subscribe, snapshot, snapshot); return nav.pathname; },
-    useSearchParams: () => { const key = useSyncExternalStore(subscribe, snapshot, snapshot); return useMemo(() => new URLSearchParams(nav.search), [key]); } };
+    useSearchParams: () => { const key = useSyncExternalStore(subscribe, snapshot, snapshot); return useMemo(() => new URLSearchParams(key.slice(key.indexOf("?") + 1)), [key]); } };
 });
 
 type Prefs = Record<string, unknown> & { toursDone?: unknown };
