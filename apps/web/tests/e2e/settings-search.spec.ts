@@ -123,7 +123,7 @@ for (const theme of ["light", "dark"] as const) {
       await choose(page, "Pulse ID"); await expect(page).toHaveURL(/\?tab=profile#pulse-ids$/);
       await targets(page, profileIds); await choices(page, profileIds);
       const name = page.getByRole("textbox", { name: "Display name", exact: true }); await name.fill("Unsaved synthetic draft");
-      await page.evaluate(() => { (window as SearchWindow).searchDraft = document.querySelector('[id="profile-details"] input'); });
+      await name.evaluate(element => { (window as SearchWindow).searchDraft = element; });
       const profileHref = page.url(); await choose(page, "Pulse ID"); await expect(confirm(page)).toHaveCount(0);
       await expect(name).toHaveValue("Unsaved synthetic draft");
       expect(await name.evaluate(element => element === (window as SearchWindow).searchDraft)).toBe(true);
