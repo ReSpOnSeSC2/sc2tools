@@ -862,6 +862,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const guides = new GuidesService(deps.db, { guideNotes, guideVideos, logger: deps.logger });
   const gdpr = new GdprService(deps.db, {
     userRevision,
+    beginDeviceMutation: (userId) => pairings.beginLivenessMutation(userId),
     siteStats,
     opponents,
     logger: deps.logger,

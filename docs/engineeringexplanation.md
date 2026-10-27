@@ -412,6 +412,52 @@ request carrying If-None-Match. Canonical weak ETags, private/no-cache condition
 responses, CORS exposure and owner-scoped browser body reconstruction are still
 pending. The existing client treats a raw 304 as an error and is unchanged.
 Identifier-free cache counters and byte/admission gauges use the existing private
-METRICS_TOKEN registry only. Maintained gameStats, latest-agent/token caches,
+METRICS_TOKEN registry only. Maintained gameStats, the 60-second device-auth lookup cache,
 admin-health presentation, broader dependencies and IndexedDB/corpus deltas also
 remain separate work. Source and test preparation is not measured speedup.
+
+## Device liveness
+
+Every device-auth request still performs one active-token lookup by the existing
+unique tokenHash index, projecting only _id, userId and lastSeenAt. Authentication
+never uses the metadata cache. Fresh REST reads add no activity write; at the
+exact minute boundary a best-effort conditional write is eligible. Its atomic
+predicate repeats owner, device, hash, active and stale conditions with no upsert.
+A delayed REST touch cannot overwrite a newer heartbeat or touch a revoked row.
+Four touch operations may run, one per hash; excess work is skipped without
+delaying or failing authentication. Failed and unknown ACKs create no success
+memo; a later authoritative read decides whether to retry.
+
+latestAgent may retain a complete cloned DTO for an absolute 30 seconds. At most
+1024 owner states, four cache-owned tasks and 16 coalesced subscribers per task
+are retained. Capacity or active mutation is never a new metadata error: the
+request performs exactly one ordinary projected query and returns its cloned
+honest DTO without retention/coalescing. Baseline HTTP queries may therefore
+exceed four; only cache-owned tasks use that admission limit. There is no added
+query, retry chain, waiter, timeout or timer on the bypass path.
+
+Retained UTF-8 owner-hash keys, touch-hash keys and DTOs share the same 512 KiB
+budget. Each owner key is charged at creation, including empty, unpaired, pending
+and active states. An evicted pending task keeps its key charged until IO and all
+subscribers settle. DTO bytes are charged separately, at most 16 KiB per entry.
+This does not claim to bound Mongo, all JS memory or baseline HTTP IO. Oversized
+legacy versions are returned whole and skip retention before large serialization.
+
+Issue, admitted REST touch, heartbeat, both revokes and actual account erasure
+retire cached reuse and publication before/after possible writes, including lost
+ACKs and exclusive-fence acquisition failure. A new caller cannot join a retired
+cache generation. An already-issued metadata query may still return its original
+DB snapshot to its existing callers, matching baseline concurrent-read semantics;
+it cannot refill after retirement. This is CACHE coherence, not strict delayed
+response rejection. It does not authorize any request: auth still reads an active
+token every time. A mutation/overflow bypass likewise returns only its one real
+query result, never a fabricated paired status or an unfenced cached DTO. Cache
+fencing is independent of the optional chart-cache flag. State/byte saturation
+retires or bypasses reuse while keeping all retained keys charged.
+
+Heartbeat always processes metadata, connection-event retry and onHeartbeat even
+after a recent REST touch. Literal pipeline fields preserve expression-like
+strings and the date expression prevents older heartbeat liveness from moving
+backward. Device labels do not affect this DTO; restore still excludes credentials.
+No dependency, index, migration, auth lookup cache, provider call, configuration
+flag or production activation is added. Prepared validation remains UNRUN.

@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Device liveness
+
+- Reduce background activity writes from desktop app requests while keeping agent heartbeats working.
+- Reuse agent status for up to 30 seconds so repeated dashboard loads do less database work. Pairing, new heartbeats and unpairing refresh the status.
+
 ### Suggested next steps after setup
 
 - Add a Today checklist for your playing and streaming goals, with progress, direct feature links and Help for each suggestion. Keep it separate from the first-import setup checklist.

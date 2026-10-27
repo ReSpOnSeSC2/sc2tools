@@ -5,6 +5,7 @@ const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { randomDigits, randomToken, sha256 } = require("../util/hash");
 const { stampVersion } = require("../db/schemaVersioning");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
+const { DeviceLiveness, DEVICE_TOUCH_MS } = require("./deviceLiveness");
 
 const PAIRING_TTL_MS = LIMITS.PAIRING_CODE_TTL_SEC * 1000;
 // One API instance serves the ten-minute code lifetime. A restart safely turns
@@ -39,7 +40,7 @@ class DevicePairingsService {
    *   users: import('mongodb').Collection,
    * }} db
    * @param {{ adminEvents?: import('./adminEvents').AdminEventsService,
-   *   logger?: import('pino').Logger, ipSalt?: string }} [opts]
+   *   logger?: import('pino').Logger, ipSalt?: string, liveness?: DeviceLiveness }} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
@@ -48,7 +49,12 @@ class DevicePairingsService {
     /** @type {((userId: string, metadata: any) => Promise<void>)|null} */
     this.onHeartbeat = null;
     this.ipSalt = opts.ipSalt || PROCESS_IP_SALT;
+    this.liveness = opts.liveness || new DeviceLiveness();
   }
+
+  /** Always active, including when the independent chart cache is disabled.
+   * @param {string} userId @returns {()=>void} */
+  beginLivenessMutation(userId) { return this.liveness.begin(userId); }
 
   /**
    * Step 1. Agent kicks off pairing.
@@ -178,6 +184,7 @@ class DevicePairingsService {
       { returnDocument: "after" },
     );
     if (!claimed) return /** @type {const} */ ({ status: "expired" });
+    const finishDevices = this.beginLivenessMutation(row.userId);
     try { await this.db.deviceTokens.insertOne(
       stampVersion(
         {
@@ -203,7 +210,7 @@ class DevicePairingsService {
       );
       if (!issued) await this.db.devicePairings.updateOne({ code, consumedAt: now }, { $set: { consumedAt: null } });
       throw err;
-    }
+    } finally { finishDevices(); }
     return {
       status: /** @type {'ready'} */ ("ready"),
       deviceToken: token,
@@ -220,15 +227,19 @@ class DevicePairingsService {
    * @returns {Promise<{userId: string, deviceId: string}|null>}
    */
   async findTokenByHash(tokenHash) {
-    const row = await this.db.deviceTokens.findOne({
-      tokenHash,
-      revokedAt: null,
-    });
+    const row = await this.db.deviceTokens.findOne({ tokenHash, revokedAt: null },
+      { projection: { _id: 1, userId: 1, lastSeenAt: 1 } });
     if (!row) return null;
-    // Best-effort lastSeenAt bump — failure is non-fatal.
-    this.db.deviceTokens
-      .updateOne({ tokenHash }, { $set: { lastSeenAt: new Date() } })
-      .catch(() => {});
+    const now = new Date(this.liveness.now()), cutoff = new Date(now.getTime() - DEVICE_TOUCH_MS);
+    if (!(row.lastSeenAt instanceof Date) || !Number.isFinite(row.lastSeenAt.getTime()) || row.lastSeenAt <= cutoff) {
+      // One authoritative lookup per request remains. The stale predicate is
+      // evaluated at the write, so an old REST touch cannot roll back heartbeat.
+      void this.liveness.touch(row.userId, tokenHash, () => this.db.deviceTokens.updateOne({
+        _id: row._id, userId: row.userId, tokenHash, revokedAt: null, $or: [
+          { lastSeenAt: { $lte: cutoff } }, { $expr: { $ne: [{ $type: "$lastSeenAt" }, "date"] } },
+        ],
+      }, { $set: { lastSeenAt: now } }, { upsert: false }));
+    }
     return { userId: row.userId, deviceId: String(row._id) };
   }
 
@@ -283,6 +294,11 @@ class DevicePairingsService {
    * @returns {Promise<{paired: boolean, version: string|null, lastSeenAt: Date|null}>}
    */
   async latestAgent(userId) {
+    return this.liveness.latest(userId, () => this.readLatestAgent(userId));
+  }
+
+  /** @param {string} userId */
+  async readLatestAgent(userId) {
     const row = await this.db.deviceTokens.findOne(
       { userId, revokedAt: null },
       {
@@ -295,9 +311,8 @@ class DevicePairingsService {
       typeof row.agentVersion === "string" && row.agentVersion.length > 0
         ? row.agentVersion
         : null;
-    // lastSeenAt is bumped by the agent's 60s heartbeat and on every
-    // device-token REST call, so "agent online" is derivable client-
-    // side as lastSeenAt within the last ~3 minutes.
+    // Heartbeat and minute-throttled REST liveness keep "agent online"
+    // derivable client-side as lastSeenAt within the last ~3 minutes.
     const lastSeenAt = row.lastSeenAt instanceof Date ? row.lastSeenAt : null;
     return { paired: true, version, lastSeenAt };
   }
@@ -309,10 +324,10 @@ class DevicePairingsService {
    * @param {string} tokenHash
    */
   async revoke(userId, tokenHash) {
-    await this.db.deviceTokens.updateOne(
+    await this.liveness.mutate(userId, () => this.db.deviceTokens.updateOne(
       { userId, tokenHash },
       { $set: { revokedAt: new Date() } },
-    );
+    ));
   }
 
   /**
@@ -335,10 +350,10 @@ class DevicePairingsService {
     } catch {
       return false;
     }
-    const res = await this.db.deviceTokens.updateOne(
+    const res = await this.liveness.mutate(userId, () => this.db.deviceTokens.updateOne(
       { _id, userId, revokedAt: null },
       { $set: { revokedAt: new Date() } },
-    );
+    ));
     return res.matchedCount > 0;
   }
 
@@ -368,9 +383,9 @@ class DevicePairingsService {
    * @param {{version?: string, os?: string, osRelease?: string, hostname?: string}} body
    */
   async recordHeartbeat(userId, tokenHash, body) {
-    const now = new Date();
+    const now = new Date(this.liveness.now());
     /** @type {Record<string, unknown>} */
-    const update = { lastSeenAt: now };
+    const update = {};
     if (body && typeof body.version === "string") {
       update.agentVersion = safeMetadata(body.version, 64);
     }
@@ -388,15 +403,18 @@ class DevicePairingsService {
       const trimmed = safeMetadata(body.hostname, 64);
       if (trimmed) update.hostname = trimmed;
     }
-    const device = await this.db.deviceTokens.findOneAndUpdate(
+    const fields = Object.fromEntries(Object.entries(update).map(([key, value]) => [key, { $literal: value }]));
+    const lastSeenAt = { $cond: [{ $eq: [{ $type: "$lastSeenAt" }, "date"] },
+      { $max: ["$lastSeenAt", { $literal: now }] }, { $literal: now }] };
+    const device = await this.liveness.mutate(userId, () => this.db.deviceTokens.findOneAndUpdate(
       { userId, tokenHash, revokedAt: null },
-      { $set: update },
+      [{ $set: { ...fields, lastSeenAt } }],
       {
         returnDocument: "after",
         projection: { _id: 1, userId: 1, createdAt: 1, agentVersion: 1,
           agentOs: 1, connectedEventRecordedAt: 1 },
       },
-    );
+    ));
     if (device && !device.connectedEventRecordedAt && this.adminEvents) {
       // A notification outage must not break the agent. Leave the marker
       // unset until the durable write succeeds; its next heartbeat retries.

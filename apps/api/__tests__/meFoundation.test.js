@@ -56,6 +56,7 @@ describe("Settings Foundation backing API", () => {
   let mongo;
   let db;
   let app;
+  let pairings;
 
   const config = {
     port: 0,
@@ -88,6 +89,7 @@ describe("Settings Foundation backing API", () => {
       config,
     });
     app = built.app;
+    pairings = built.services.pairings;
   });
 
   afterEach(() => {
@@ -125,14 +127,10 @@ describe("Settings Foundation backing API", () => {
 
   test("GET /v1/me reflects a paired agent without a heartbeat as paired+null", async () => {
     const userDoc = await db.users.findOne({ clerkUserId: TEST_CLERK_USER_ID });
-    const tokenHash = crypto.randomBytes(32).toString("hex");
-    await db.deviceTokens.insertOne({
-      tokenHash,
-      userId: userDoc.userId,
-      createdAt: new Date(),
-      lastSeenAt: new Date(),
-      revokedAt: null,
-    });
+    const { code } = await pairings.start();
+    await pairings.claim(userDoc.userId, code);
+    const issued = await pairings.poll(code);
+    const tokenHash = crypto.createHash("sha256").update(issued.deviceToken).digest("hex");
 
     const res = await withAuth(request(app).get("/v1/me"));
     expect(res.status).toBe(200);
@@ -140,18 +138,15 @@ describe("Settings Foundation backing API", () => {
     expect(res.body.agentVersion).toBeNull();
 
     // Now record a heartbeat — the latest agent's version should appear.
-    await db.deviceTokens.updateOne(
-      { tokenHash },
-      { $set: { agentVersion: "1.2.3" } },
-    );
+    await pairings.recordHeartbeat(userDoc.userId, tokenHash, { version: "1.2.3" });
     const after = await withAuth(request(app).get("/v1/me"));
     expect(after.body.agentVersion).toBe("1.2.3");
     expect(after.body.agentPaired).toBe(true);
     // The onboarding checklist derives "agent online" from this.
     expect(typeof after.body.agentLastSeenAt).toBe("string");
 
-    // Cleanup so the other tests start from a clean device-tokens slate.
-    await db.deviceTokens.deleteOne({ tokenHash });
+    // Revoke so later Foundation reads start with no active devices.
+    await pairings.revoke(userDoc.userId, tokenHash);
   });
 
   test("GET /v1/me carries onboarding prefs + the active import job", async () => {
