@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Build check-in shortcuts
+
+- Add your own build directly beside the replay's classified label in the check-in list. Keep a clearly named Add opponent build action beside the opponent's build.
+
 ### Build editor saving
 
 - Save reference build orders filled from replays whose IDs contain player names, map names or separators. Keep the source replay ID private when publishing.
