@@ -164,6 +164,6 @@ header list omitted the newly added ETag. The test now requires all four headers
 retaining Retry-After, X-Export-Truncated and Content-Disposition as well as ETag.
 The two actual-app CORS consumer suites pass all nine tests; strict changed-test
 lint passes. The test group retired all ten observed identities, and lint retired
-all three, with no owned listener. Original full-CI failure is retained. This
+all four, with no owned listener. Original full-CI failure is retained. This
 correction changes only the test contract and this checkpoint; production bytes
 remain identical. Final-head CI remains required before merge.
