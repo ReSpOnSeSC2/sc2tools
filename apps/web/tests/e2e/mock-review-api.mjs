@@ -168,6 +168,12 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({ error: { code: "unavailable" } }));
     return;
   }
+  // Browser guide metadata has one existing public version header. Keep this
+  // test-only preflight admission exact; every other unhandled API still drops.
+  if (req.method === "OPTIONS" && (path === "/v1/guides" || path === "/v1/guides/sitemap")) {
+    res.writeHead(204, { ...cors, "access-control-allow-headers": "x-sc2tools-guide-index-version" }).end();
+    return;
+  }
   if (req.method === "OPTIONS" && path.startsWith("/v1/reviews")) {
     res.writeHead(204, cors).end();
     return;

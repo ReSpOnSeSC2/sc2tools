@@ -40,6 +40,8 @@ import { settingsSectionsForTab } from "@/lib/settingsIndex";
 import { SettingsSectionNav } from "./SettingsSectionNav";
 import { OverlayManagerNav } from "./OverlayManagerNav";
 import { SettingsSearch } from "./SettingsSearch";
+import { useCommandSettings } from "@/components/chrome/CommandSearchContext";
+import { isCommandSearchHref } from "@/lib/commandSearchTarget";
 
 // Preserve existing imports while non-UI consumers can use the pure leaf.
 export {
@@ -61,7 +63,8 @@ const TABS = SETTINGS_TABS.map((tab) => ({ ...tab, Icon: TAB_ICONS[tab.id] }));
 type TabDef = (typeof TABS)[number];
 type PendingDestination =
   | { kind: "tab"; destination: SettingsDestination; fromUrl: boolean; previousHref: string; action: object; owner: object }
-  | { kind: "devices"; action: object; owner: object };
+  | { kind: "devices"; action: object; owner: object }
+  | { kind: "route"; href: string; action: object; owner: object };
 
 export interface SettingsShellProps {
   /**
@@ -145,8 +148,8 @@ function SettingsShellInner({
   }, []);
   const requestDestination = useCallback((next: SettingsDestination, fromUrl: boolean) => {
     if (!mounted.current || latestOwner.current !== owner) return;
-    const attempt = {}; action.current = attempt;
     if (!tabs.some(tab => tab.id === next.tab)) return;
+    const attempt = {}; action.current = attempt;
     if (next.tab === active && next.href === admittedHref.current) {
       setPending(null);
       // A player may scroll elsewhere while this anchor stays in the URL.
@@ -225,11 +228,24 @@ function SettingsShellInner({
     const [search, hash = ""] = href.replace(/^\/settings\?/, "").split("#");
     requestDestination(resolveSettingsDestination(search, hash ? `#${hash}` : "", active), false);
   };
+  const requestCommand = (href: string) => {
+    if (!mounted.current || latestOwner.current !== owner || !isCommandSearchHref(href)) return;
+    const target = new URL(href, window.location.origin);
+    if (target.pathname === "/settings") {
+      requestDestination(resolveSettingsDestination(target.search.slice(1), target.hash, active), false);
+    } else {
+      const attempt = {}; action.current = attempt;
+      if (ctx.hasAnyDirty()) setPending({ kind: "route", href, action: attempt, owner });
+      else router.push(href);
+    }
+  };
+  useCommandSettings({ ownerKey: owner.key ?? null, tabs: tabs.map(tab => tab.id), navigate: requestCommand });
 
   const confirmDiscard = () => {
     if (pending && mounted.current && pending.owner === latestOwner.current && pending.action === action.current) {
       setPending(null);
       if (pending.kind === "devices") router.push("/devices");
+      else if (pending.kind === "route") router.push(pending.href);
       else activate(pending.destination);
     }
   };
@@ -377,7 +393,7 @@ function MobileSettingsTabs({ tabs, active, isDirty, requestSwitch }: { tabs: re
     return () => observer?.disconnect();
   }, []);
   return <div className="relative min-w-0 lg:hidden">
-    <div ref={scroller} role="tablist" aria-label="Settings sections" aria-orientation="horizontal" onScroll={measure}
+    <div ref={scroller} role="tablist" tabIndex={-1} aria-label="Settings sections" aria-orientation="horizontal" onScroll={measure}
       className="-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
       onKeyDown={(event) => {
         const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));

@@ -15,6 +15,10 @@ const article: HelpArticle = {
     "tabs",
     "where is",
     "find a setting",
+    "keyboard shortcuts",
+    "Ctrl K",
+    "Cmd K",
+    "slash",
     "link",
     "deep link",
     "tab link",
@@ -32,7 +36,7 @@ const article: HelpArticle = {
     "privacy",
     "telemetry",
   ],
-  updated: "2026-10-26",
+  updated: "2026-10-27",
   body: [
     {
       type: "paragraph",
@@ -58,8 +62,9 @@ const article: HelpArticle = {
       ],
     },
     { type: "heading", text: "Find a setting" },
-    { type: "paragraph", text: "Use **Find a setting** above the tabs, or press **/** while you are not typing in another field. Search field names such as **TTS volume**, **Kick chatroom**, **Pulse ID**, **Delete account**, **Overlay theme** or **Reset overlay URLs**. Use Up and Down to choose a result, Enter to open it and Escape to close the results. Searching only uses setting labels; it does not read the contents of your account or open inactive tools." },
+    { type: "paragraph", text: "Use **Find a setting** above the tabs, or press **/** while you are not typing in another field. The page's visible search field takes priority, so **/** focuses Find a setting while you are in Settings. Search field names such as **TTS volume**, **Kick chatroom**, **Pulse ID**, **Delete account**, **Overlay theme** or **Reset overlay URLs**. Use Up and Down to choose a result, Enter to open it and Escape to close the results. Searching only uses setting labels; it does not read the contents of your account or open inactive tools." },
     { type: "paragraph", text: "A result opens the right tab and briefly outlines its section. It only takes you to the setting: searching for Delete account or Reset overlay URLs does not run that action. If you have unsaved changes in another tab, the same Stay or Discard choice appears before you leave. Browser import tools appear only when enabled for your account; search for Replay import to reach the always-available import settings." },
+    { type: "paragraph", text: "For pages, Help, guides and setting labels together, use the header's **Search** button, **More → Search** on a phone, or **Ctrl K** / **⌘ K** outside an editing field. Settings results use the same tab and section navigation, including its Stay or Discard choice for unsaved edits. See [Search and keyboard shortcuts](/help/keyboard-shortcuts) for the full key reference." },
     { type: "heading", text: "Open a tab from a link" },
     {
       type: "list",
@@ -93,7 +98,7 @@ const article: HelpArticle = {
     },
     { type: "settingsLink", label: "Open Settings", href: "/settings" },
   ],
-  related: ["getting-started", "setup-health", "importing-replay-history", "how-to-use-help", "obs-overlay-setup"],
+  related: ["keyboard-shortcuts", "getting-started", "setup-health", "importing-replay-history", "how-to-use-help", "obs-overlay-setup"],
 };
 
 export default article;

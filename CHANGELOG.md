@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Search and guide discovery
+
+- Open Search from the header, mobile More menu or Ctrl/Cmd K to find pages, settings, Help and public guides. Search respects unsaved settings and keeps recent destinations separate for each signed-in account.
+- Find public guides from the guide hub or matchup page, with clear availability and Retry when the guide list cannot load.
+
 ### Sessions and date filters
 
 - Keep Auto-track current season selected when opening Sessions, paging history or returning to Today. Explicit custom dates, pinned seasons and saved views keep their selected ranges.

@@ -18,6 +18,7 @@ import { isAppSurfacePath } from "@/components/chrome/appNav";
 import { SiteStats } from "@/components/chrome/SiteStats";
 import { SitePresence } from "@/components/chrome/SitePresence";
 import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
+import { CommandSearchProvider } from "@/components/chrome/CommandSearchProvider";
 
 const MAIN_CLASS =
   "mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8";
@@ -72,6 +73,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <ClerkProvider appearance={clerkAppearanceBase}>
         <RealtimeProvider>
         <ToastProvider>
+        <CommandSearchProvider>
           <a
             href="#main-content"
             className="sr-only z-[100] rounded-md bg-bg-surface px-4 py-3 font-semibold text-text shadow-hard focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:outline-none focus:ring-2 focus:ring-accent"
@@ -83,6 +85,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <CookieBanner />
           {analyticsAllowed ? <GoogleAnalytics /> : null}
           <ServiceWorkerRegister />
+        </CommandSearchProvider>
         </ToastProvider>
         </RealtimeProvider>
       </ClerkProvider>
@@ -93,6 +96,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <ClerkProvider appearance={clerkAppearanceBase}>
       <RealtimeProvider>
       <ToastProvider>
+      <CommandSearchProvider>
         <a
           href="#main-content"
           className="sr-only z-[100] rounded-md bg-bg-surface px-4 py-3 font-semibold text-text shadow-hard focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:outline-none focus:ring-2 focus:ring-accent"
@@ -109,6 +113,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <CookieBanner />
         {analyticsAllowed ? <GoogleAnalytics /> : null}
         <ServiceWorkerRegister />
+      </CommandSearchProvider>
       </ToastProvider>
       </RealtimeProvider>
     </ClerkProvider>

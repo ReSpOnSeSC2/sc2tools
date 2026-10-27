@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { MatchupSwitcher } from "../MatchupSwitcher";
+import { GuideSearch } from "../GuideSearch";
 import { GuideFilterPendingProvider, GuideFilterRegion } from "./GuideFilterPending";
 import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -150,6 +151,7 @@ export function MatchupGuide({ payload }: { payload: GuideMatchupPayload }) {
       <GuideJsonLd items={[breadcrumbJsonLd(crumbs)]} />
       <GuideBreadcrumbs crumbs={crumbs} />
       <MatchupSwitcher current={payload.matchup} era={payload.era} />
+      <GuideSearch matchup={payload.matchup} />
       {payload.published ? (
         <PublishedMatchup payload={payload} />
       ) : (

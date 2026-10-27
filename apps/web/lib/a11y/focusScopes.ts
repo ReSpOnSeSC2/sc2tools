@@ -7,6 +7,7 @@ export type FocusScope = {
 };
 const scopes: FocusScope[] = [];
 const topScope = (trappingOnly = false) => scopes.findLast(scope => scope.root.isConnected && (!trappingOnly || scope.trapFocus));
+export function hasActiveFocusScope(): boolean { return Boolean(topScope()); }
 const SELECTOR = ["a[href]", "button:not([disabled])", "input:not([disabled])", "select:not([disabled])", "textarea:not([disabled])", "summary", "[tabindex]:not([tabindex='-1'])"].join(",");
 
 function visibleInScope(element: HTMLElement, root: HTMLElement): boolean {

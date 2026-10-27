@@ -42,6 +42,8 @@ import { ChromeProvider, useChromeContext } from "./ChromeContext";
 import { NavProgress, startNavProgress } from "./NavProgress";
 import { LogoMark } from "./LogoMark";
 import { WhatsNewButton } from "@/components/announcements/WhatsNewButton";
+import { useCommandChrome, useCommandSearch } from "./CommandSearchContext";
+import { CommandSearchButton } from "./CommandSearchButton";
 import { SiteIncidentBanner } from "@/components/announcements/SiteIncidentBanner";
 const PracticeChip = dynamic(() => import("@/components/practice/PracticeChip").then(module => module.PracticeChip), { ssr: false });
 
@@ -178,6 +180,10 @@ function AppChromeShell({ children }: { children: ReactNode }) {
   const sections = entries.filter((e) => e.group === "section");
   const utilities = entries.filter((e) => e.group === "utility");
   const publicEntries = entries.filter((e) => e.publicRoute);
+  const commandSearch = useCommandSearch();
+  useCommandChrome({ ownerKey: commandSearch?.ownerKey ?? null,
+    navigation: commandSearch?.ownerKey ? entries : publicEntries,
+    defaultSettingsAvailable: Boolean(commandSearch?.ownerKey) });
   const mobileTabs = sections.filter((e) => MOBILE_TAB_KEYS.includes(e.key));
   const sheetEntries = entries.filter((e) => !MOBILE_TAB_KEYS.includes(e.key));
   const inTabBar = activeKey != null && MOBILE_TAB_KEYS.includes(activeKey);
@@ -290,6 +296,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             />}
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
+              <CommandSearchButton className="hidden md:inline-flex" />
               <SignedIn>
                 <BuildCheckInAlert compact />
                 <CoachingBookingAlert compact />
@@ -428,6 +435,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
           activeKey={activeKey}
           onClose={() => setSheetOpen(false)}
           onReport={reportFromSheet}
+          onSearch={() => { setSheetOpen(false); commandSearch?.open({ returnFocus: moreButtonRef.current }); }}
         />
       ) : null}
 

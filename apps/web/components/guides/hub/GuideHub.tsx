@@ -7,6 +7,7 @@ import { GuideJsonLd } from "@/components/guides/GuideJsonLd";
 import { GuideVideoRow } from "@/components/guides/GuideVideoRow";
 import { GuideVideoActions } from "@/components/guides/GuideVideoActions";
 import { MatchupGrid } from "@/components/guides/hub/MatchupGrid";
+import { GuideSearch } from "@/components/guides/GuideSearch";
 import { GuideMapCard } from "@/components/guides/map/GuideMapCard";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { breadcrumbJsonLd } from "@/components/guides/guideSeo";
@@ -60,6 +61,7 @@ export function GuideHub({ payload }: { payload: GuideIndexPayload }) {
           <p className="text-caption text-text-dim">Stats updated {fmtGuideDate(payload.computedAt)}</p>
         ) : null}
       </div>
+      <GuideSearch />
       <Section id="matchups" title="Matchups" description={`What's winning ${eraLabel(payload.era)}, from ranked 1v1 games uploaded to SC2 Tools.`}>
         <MatchupGrid matchups={payload.matchups} />
       </Section>

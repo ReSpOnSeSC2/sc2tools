@@ -5,13 +5,16 @@ import { cleanup, render, screen } from "@testing-library/react";
 const route = vi.hoisted(() => ({
   pathname: "/app" as string | null,
   clerkRenders: vi.fn(),
+  router: { push: vi.fn() },
 }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => route.pathname,
+  useRouter: () => route.router,
 }));
 
 vi.mock("@clerk/nextjs", () => ({
+  useAuth: () => ({ isLoaded: true, isSignedIn: false, userId: null }),
   ClerkProvider: ({ children }: { children: ReactNode }) => {
     route.clerkRenders();
     return <div data-testid="clerk-provider">{children}</div>;
