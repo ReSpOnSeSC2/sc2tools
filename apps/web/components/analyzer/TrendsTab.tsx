@@ -30,6 +30,7 @@ import { NetMmrByMatchupChart } from "./charts/NetMmrByMatchupChart";
 import { ActivityVolumeChart } from "./charts/ActivityVolumeChart";
 import { WinRateTrendCard } from "./charts/WinRateTrendCard";
 import { DeferredTrendsExplorer } from "./explorer/DeferredTrendsExplorer";
+import { DeferredSection } from "./DeferredSection";
 
 const LS_BUCKET = "analyzer.trends.bucket";
 type Bucket = "day" | "week" | "month";
@@ -38,8 +39,25 @@ const GROUPS = [
   ["time", "Time & activity"], ["explorer", "Explorer"], ["fingerprint", "Fingerprint"],
 ] as const;
 type Group = typeof GROUPS[number][0];
+// Explorer already owns trends-explorer-heading inside its real card.
+const groupHeadingId = (id: Group) => id === "explorer" ? "trends-explorer-section-heading" : `trends-${id}-heading`;
 const isBucket = (value: unknown): value is Bucket => value === "day" || value === "week" || value === "month";
 const isCollapsed = (value: unknown): value is Partial<Record<Group, boolean>> => Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.values(value).every((entry) => typeof entry === "boolean"));
+
+/** Window resize remains the fallback when observation cannot be installed. */
+function watchSize(element: Element | null, update: () => void) {
+  let observer: ResizeObserver | undefined;
+  const stop = () => {
+    try { observer?.disconnect(); } catch { /* An unusable observer cannot block cleanup. */ }
+  };
+  try {
+    if (element && typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(update);
+      observer.observe(element);
+    }
+  } catch { stop(); observer = undefined; }
+  return stop;
+}
 
 export function TrendsTab() {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -47,28 +65,66 @@ export function TrendsTab() {
   useEffect(() => {
     const update = () => rootRef.current?.style.setProperty("--trends-nav-height", `${navRef.current?.getBoundingClientRect().height || 144}px`);
     update();
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
-    if (navRef.current) observer?.observe(navRef.current);
+    const stop = watchSize(navRef.current, update);
     window.addEventListener("resize", update);
-    return () => { observer?.disconnect(); window.removeEventListener("resize", update); };
+    return () => { stop(); window.removeEventListener("resize", update); };
   }, []);
   const { isGlobal } = useTrendsDataScope();
   const { filters, dbRev } = useFilters();
   const [bucket, setBucket] = useLocalStorageState<Bucket>(LS_BUCKET, "week", isBucket);
   const [collapsed, setCollapsed] = useLocalStorageState<Partial<Record<Group, boolean>>>("analyzer.trends.collapsed", {}, isCollapsed);
   const [activeGroup, setActiveGroup] = useState<Group>("overview");
-  const [pendingJump, setPendingJump] = useState<Group | null>(null);
+  const [activationRequests, setActivationRequests] = useState<Partial<Record<Group, number>>>({});
+  const jumpSequence = useRef(0);
+  const [pendingJump, setPendingJump] = useState<{ group: Group; sequence: number } | null>(null);
   useEffect(() => {
-    if (!pendingJump) return;
-    const heading = document.getElementById(`trends-${pendingJump}-heading`);
+    if (!pendingJump || pendingJump.sequence !== jumpSequence.current) return;
+    const heading = rootRef.current?.querySelector<HTMLElement>(`#${groupHeadingId(pendingJump.group)}`);
     heading?.scrollIntoView({ behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
     heading?.focus({ preventScroll: true });
-    setPendingJump(null);
+    setPendingJump((current) => current?.sequence === pendingJump.sequence ? null : current);
   }, [pendingJump]);
+  // Reading the viewport only changes the nav highlight. Intentional jumps
+  // above own all focus/scroll work; passive callbacks never enqueue a jump.
+  useEffect(() => {
+    let frame: number | null = null;
+    let retired = false;
+    const update = () => {
+      frame = null;
+      if (retired || !rootRef.current) return;
+      const offset = (navRef.current?.getBoundingClientRect().bottom ?? 0) + 16;
+      const groups = GROUPS.filter(([id]) => !isGlobal || id !== "fingerprint");
+      let current: Group = "overview";
+      for (const [id] of groups) {
+        const heading = rootRef.current.querySelector<HTMLElement>(`#${groupHeadingId(id)}`);
+        if (heading && heading.getBoundingClientRect().top <= offset) current = id;
+      }
+      if (window.scrollY > 0 && rootRef.current.getBoundingClientRect().bottom <= window.innerHeight + 2) current = groups[groups.length - 1][0];
+      setActiveGroup(current);
+    };
+    const schedule = () => {
+      if (retired || frame !== null) return;
+      if (typeof window.requestAnimationFrame === "function") frame = window.requestAnimationFrame(update);
+      else update();
+    };
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    const stop = watchSize(rootRef.current, schedule);
+    schedule();
+    return () => {
+      retired = true;
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      stop();
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, [isGlobal]);
   const jump = (group: Group) => {
+    const sequence = ++jumpSequence.current;
     setCollapsed({ ...collapsed, [group]: false });
+    setActivationRequests((current) => ({ ...current, [group]: sequence }));
     setActiveGroup(group);
-    setPendingJump(group);
+    setPendingJump({ group, sequence });
   };
   const groupProps = (id: Group) => ({ id, collapsed: Boolean(collapsed[id]), toggle: () => setCollapsed({ ...collapsed, [id]: !collapsed[id] }) });
 
@@ -161,8 +217,10 @@ export function TrendsTab() {
           <WinRateTrendCard />
           {/* Matchup win rates read as a breakdown of the headline win rate. */}
           <div className="md:col-span-2">
+            <DeferredSection label="Matchup trends" minHeight={720} activationRequest={activationRequests.overview}>
             <MatchupOverTimeChart bucket={bucket as "day" | "week" | "month"} />
             <MatchupRatingCard />
+            </DeferredSection>
           </div>
       </div>
       </TrendsGroup>
@@ -170,12 +228,20 @@ export function TrendsTab() {
       <TrendsGroup {...groupProps("performance")} title="Performance & MMR" subtitle="Rating progress, matchup gains, opponent strength, and recent form.">
         <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
+            <DeferredSection label={isGlobal ? "Average MMR over time" : "MMR progression"} minHeight={440} activationRequest={activationRequests.performance}>
             <MmrProgressionChart bucket={bucket as "day" | "week" | "month"} />
+            </DeferredSection>
           </div>
+          <DeferredSection label="Net MMR by matchup" minHeight={400} activationRequest={activationRequests.performance}>
           <NetMmrByMatchupChart />
+          </DeferredSection>
+          <DeferredSection label="Win rate by opponent MMR" minHeight={400} activationRequest={activationRequests.performance}>
           <OppMmrBucketsChart />
+          </DeferredSection>
           <div className="md:col-span-2">
+            <DeferredSection label="Session patterns" minHeight={400} activationRequest={activationRequests.performance}>
             <MomentumChart />
+            </DeferredSection>
           </div>
         </div>
       </TrendsGroup>
@@ -183,23 +249,33 @@ export function TrendsTab() {
       <TrendsGroup {...groupProps("time")} title="Time & activity" subtitle={isGlobal ? "When players play, how long games run, and how activity changes over time." : "When you play, how long games run, and how activity changes over time."}>
         <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
+            <DeferredSection label="Time played by matchup" minHeight={400} activationRequest={activationRequests.time}>
             <MatchupGameLengthCard />
+            </DeferredSection>
           </div>
+          <DeferredSection label="Activity by time of day" minHeight={360} activationRequest={activationRequests.time}>
           <TimeOfDayHeatmap />
+          </DeferredSection>
+          <DeferredSection label="Win rate by game length" minHeight={360} activationRequest={activationRequests.time}>
           <GameLengthWrChart />
+          </DeferredSection>
           <div className="md:col-span-2">
+            <DeferredSection label="Activity calendar" minHeight={400} activationRequest={activationRequests.time}>
             <ActivityCalendarChart />
+            </DeferredSection>
           </div>
           <div className="md:col-span-2">
+            <DeferredSection label="Map performance over time" minHeight={440} activationRequest={activationRequests.time}>
             <MapTrendChart bucket={bucket as "day" | "week" | "month"} />
+            </DeferredSection>
           </div>
       </div>
       </TrendsGroup>
 
-      <TrendsGroup {...groupProps("explorer")} title="Explorer"><DeferredTrendsExplorer /></TrendsGroup>
+      <TrendsGroup {...groupProps("explorer")} title="Explorer"><DeferredTrendsExplorer activationRequest={activationRequests.explorer} /></TrendsGroup>
 
       {/* The identity artifact closes the personal tab after the explorer. */}
-      {!isGlobal && <TrendsGroup {...groupProps("fingerprint")} title="Fingerprint"><FingerprintCard /></TrendsGroup>}
+      {!isGlobal && <TrendsGroup {...groupProps("fingerprint")} title="Fingerprint"><DeferredSection label="Skill fingerprint" minHeight={400} activationRequest={activationRequests.fingerprint}><FingerprintCard /></DeferredSection></TrendsGroup>}
     </div>
   );
 }
@@ -224,9 +300,9 @@ function TrendsGroup({
   children: ReactNode;
 }) {
   return (
-    <section id={`trends-${id}`} aria-labelledby={`trends-${id}-heading`} className="space-y-4">
+    <section id={`trends-${id}`} aria-labelledby={groupHeadingId(id)} className="space-y-4">
       <div className="flex flex-wrap items-baseline gap-3 border-t border-border pt-4">
-        <h2 id={`trends-${id}-heading`} tabIndex={-1} style={{ scrollMarginTop: "calc(3rem + env(safe-area-inset-top) + var(--trends-nav-height, 9rem) + 1rem)" }} className="text-sm font-semibold uppercase tracking-wider text-text">
+        <h2 id={groupHeadingId(id)} tabIndex={-1} style={{ scrollMarginTop: "calc(3rem + env(safe-area-inset-top) + var(--trends-nav-height, 9rem) + 1rem)" }} className="text-sm font-semibold uppercase tracking-wider text-text">
           <button type="button" aria-expanded={!collapsed} aria-controls={`trends-${id}-content`} onClick={toggle} className="inline-flex min-h-11 items-center gap-2">{collapsed ? <ChevronRight aria-hidden className="h-4 w-4" /> : <ChevronDown aria-hidden className="h-4 w-4" />}{title}</button>
         </h2>
         {subtitle ? (

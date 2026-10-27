@@ -260,7 +260,7 @@ export function NetMmrByMatchupChart() {
         </div>
         <span className="text-micro text-text-dim">{metric === "avgDelta" ? "MMR per measured game" : "Total measured MMR"} · ← lost / gained →</span>
       </div>
-      <div style={{ height: Math.max(180, rows.length * 48 + 36) }} aria-label={perGame ? "Average MMR change per measured game by played matchup" : "Net MMR by played matchup"}>
+      <div role="group" style={{ height: Math.max(180, rows.length * 48 + 36) }} aria-label={perGame ? "Average MMR change per measured game by played matchup" : "Net MMR by played matchup"}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             accessibilityLayer
@@ -397,7 +397,7 @@ export function NetMmrByMatchupChart() {
                   Not measured: {coverageReasons.join(" · ")}
                 </div>
               ) : null}
-              {r.pairs ? <div className="mt-1.5 flex items-center justify-end gap-0.5 text-micro font-medium text-accent opacity-80 transition-opacity group-hover:opacity-100">
+              {r.pairs ? <div className="mt-1.5 flex items-center justify-end gap-0.5 text-micro font-medium text-accent transition-opacity group-hover:opacity-100">
                 View opponents
                 <ChevronRight aria-hidden className="h-3.5 w-3.5" />
               </div> : <div className="mt-1.5 text-micro text-text-muted">No measured MMR change yet</div>}

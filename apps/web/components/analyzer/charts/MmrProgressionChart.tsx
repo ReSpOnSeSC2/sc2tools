@@ -768,7 +768,7 @@ function MmrHeadline({
     items.push({
       label: isGlobal ? "Latest average" : "Last recorded",
       value: displayMmr(data.latest.mmr, isGlobal),
-      color: kit.tokens.accent,
+      color: "rgb(var(--accent-ink))",
     });
   }
   // Deltas describe LAST RECORDED relative to the card's value — a
