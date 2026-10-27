@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Stream Dock layout
+
+- Put Chat first in the section navigation and default panel order, retaining saved pins and collapsed sections.
+- Fit Series scores and correction buttons to narrow OBS docks. Keep long opponent names inside the scoreboard, separate action buttons, and explain the best-of controls with a direct Help link.
+
 ### Device liveness
 
 - Reduce background activity writes from desktop app requests while keeping agent heartbeats working.
