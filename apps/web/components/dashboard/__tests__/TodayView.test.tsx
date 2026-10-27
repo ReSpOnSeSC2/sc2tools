@@ -7,6 +7,8 @@ import type { PulseCard } from "@/lib/dailyPulse";
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   useApi: vi.fn(() => ({ data: { defaultTab: "battlefield" }, isLoading: false, error: null })),
+  firstRunVisible: false,
+  totalGames: 42,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -26,9 +28,12 @@ vi.mock("@/components/dashboard/AnalyzerFrame", () => ({
     agentPaired: true,
     agentVersion: "1.0.0",
     agentLastSeenAt: null,
-    games: { total: 42, latest: null },
+    get games() { return { total: mocks.totalGames, latest: null }; },
   }),
+  onboardingView: () => ({ checklist: mocks.firstRunVisible, noGamesYet: false }),
 }));
+
+vi.mock("@/components/onboarding/LevelUpChecklist", () => ({ LevelUpChecklist: () => <section data-testid="level-up-checklist" /> }));
 
 vi.mock("@/components/dashboard/AgentUpgradeNotice", () => ({
   AgentUpgradeNotice: () => <div data-testid="agent-upgrade" />,
@@ -55,6 +60,7 @@ beforeEach(() => {
   window.sessionStorage.clear();
   window.history.replaceState(null, "", "/app");
   mocks.useApi.mockClear();
+  mocks.firstRunVisible = false; mocks.totalGames = 42;
 });
 
 afterEach(() => {
@@ -63,6 +69,14 @@ afterEach(() => {
 });
 
 describe("TodayView", () => {
+  it("mounts one suggested feature card only after games and first-run admission", async () => {
+    const view = render(<TodayView />);
+    expect(await screen.findAllByTestId("level-up-checklist")).toHaveLength(1);
+    mocks.firstRunVisible = true; view.rerender(<TodayView />);
+    expect(screen.queryByTestId("level-up-checklist")).toBeNull();
+    mocks.firstRunVisible = false; mocks.totalGames = 0; view.rerender(<TodayView />);
+    expect(screen.queryByTestId("level-up-checklist")).toBeNull();
+  });
   it("passes contextual Pulse hrefs with the complete current global filter snapshot", () => {
     render(<FiltersContext.Provider value={{ filters: { race: "P", map: "Global map", accounts: "1-S2-1-42" }, setFilters: vi.fn(), dbRev: 0, bumpRev: vi.fn(), seasons: [] }}><TodayView /></FiltersContext.Provider>);
     const url = new URL(screen.getByRole("link", { name: "Rising build" }).getAttribute("href")!, "http://fixture.invalid");

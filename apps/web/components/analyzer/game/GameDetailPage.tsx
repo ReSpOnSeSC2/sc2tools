@@ -59,6 +59,7 @@ import {
 import { withoutNewBuildParam } from "@/lib/buildIntentLinks";
 import { BuildCheckInCard } from "@/components/build-checkin/BuildCheckInCard";
 import { useBuildCheckInRevision } from "@/components/build-checkin/BuildCheckInProvider";
+import { useFirstGameViewed } from "@/components/onboarding/useFirstGameViewed";
 
 /**
  * GameDetailPage — the per-replay deep dive ("I just lost a weird
@@ -114,6 +115,7 @@ function GameDetailContent({
   const gameReq = useApi<GameSummary>(gameId ? `/v1/games/${enc}` : null, {
     revalidateOnFocus: false,
   });
+  useFirstGameViewed(gameId, gameReq);
   const macroReq = useMacroRecompute(gameId || null);
   const recomputeDisabledReason = useRecomputeAvailability(gameId || null);
   const buildReq = useApi<GameBuildOrderResponse>(

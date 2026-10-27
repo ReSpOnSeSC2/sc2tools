@@ -16,6 +16,11 @@ corresponding GitHub Release.
 - Load charts below the first Trends row as they approach the viewport, with explicit Load buttons and usable fallbacks. Keep chart selections and unapplied Explorer controls while scrolling; collapsed groups retain their existing close-and-unmount behavior.
 - Highlight the current Trends section during scrolling. Explicit section jumps open and load their destination, while passive scrolling keeps focus, filters and the URL in place.
 
+### Suggested next steps after setup
+
+- Add a Today checklist for your playing and streaming goals, with progress, direct feature links and Help for each suggestion. Keep it separate from the first-import setup checklist.
+- Record the first successfully opened private game once per account. Save suggestion dismissal independently, and show a compact What's new link when the selected steps are complete.
+
 ### Find a setting
 
 - Search setting names and synonyms above the Settings tabs, with keyboard results and `/` focus outside editable fields. Results use the existing unsaved-changes guard and only navigate; they never run the named action.
