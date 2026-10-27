@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Opponents on phones
+
+- Keep long opponent names and ladder aliases inside the phone screen instead of widening the dossier or clipping the text.
+- Fit identity comparison statistics to narrow screens while keeping the dossier sections and table scrolling in place.
+
 ### Replay Review reliability
 
 - Keep unfinished reviews and pending actions tied to the signed-in account. Stop a delayed replay download after switching accounts, games or pages.
