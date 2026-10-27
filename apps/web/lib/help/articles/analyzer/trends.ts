@@ -27,10 +27,10 @@ const article: HelpArticle = {
     "fingerprint",
     "day week month",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-26",
   body: [
     { type: "heading", text: "Getting around", anchor: "getting-around" },
-    { type: "paragraph", text: "Use the section links to jump to Overview, Performance & MMR, Time & activity, Explorer or your Fingerprint. Collapse chart groups from their headings; that choice stays on this device and collapsed charts stop loading. Jumping to a collapsed group opens it. **Group charts by** sets day, week or month buckets for activity, matchup, MMR and map charts." },
+    { type: "paragraph", text: "Use the section links to jump to Overview, Performance & MMR, Time & activity, Explorer or your Fingerprint. The current section is highlighted as you scroll. The first chart row loads straight away; charts below it load as you approach them, or when you press their **Load** button. Jumping to a section loads its charts and moves focus to its heading. Scrolling keeps your chart choices, Inspect window selection and unapplied Explorer settings. Collapse chart groups from their headings; that choice stays on this device and collapsed charts stop loading. Jumping to a collapsed group opens it. Collapsing a group closes its current chart controls. **Group charts by** sets day, week or month buckets for activity, matchup, MMR and map charts." },
     {
       type: "paragraph",
       text: "[Trends](/app/trends) shows how your results move over time, for the games the filter bar lets through. It answers: am I improving, in which matchup, at what time of day do I play best, and do long games go my way.",

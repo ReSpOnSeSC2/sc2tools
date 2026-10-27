@@ -10,11 +10,22 @@ from those tags and attaches the `.exe` and `.sha256` to the
 corresponding GitHub Release.
 
 ## [Unreleased]
+
 ### Guided tours
 
 - Add short tours of Today, a game breakdown and Overlay settings, with keyboard controls and a phone sheet. Saved completion and skips follow the tour version; Help can replay a tour without resetting progress.
 - Wait for visible build check-in cards, open dialogs and fullscreen. Keep the game's sticky navigation and reading position in place, skip unavailable targets and retire interrupted tours safely.
 - Keep tour progress separate from setup and suggestion dismissal, and merge each saved tour without overwriting another tour or other onboarding preferences.
+
+### Device liveness
+
+- Reduce background activity writes from desktop app requests while keeping agent heartbeats working.
+- Reuse agent status for up to 30 seconds so repeated dashboard loads do less database work. Pairing, new heartbeats and unpairing refresh the status.
+
+### Trends charts on demand
+
+- Load charts below the first Trends row as they approach the viewport, with explicit Load buttons and usable fallbacks. Keep chart selections and unapplied Explorer controls while scrolling; collapsed groups retain their existing close-and-unmount behavior.
+- Highlight the current Trends section during scrolling. Explicit section jumps open and load their destination, while passive scrolling keeps focus, filters and the URL in place.
 
 ### Suggested next steps after setup
 
