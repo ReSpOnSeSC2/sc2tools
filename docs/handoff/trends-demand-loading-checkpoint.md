@@ -2,8 +2,8 @@
 
 Canonical item: `faster-dashboards` (Wave 5), web demand-loading portion.
 Worktree: `C:\SC2TOOLS\.worktrees\wave3-my-reviews`; branch:
-`codex/wave5-trends-demand-loading`. Authored scope is 14 text paths, including
-four product files. Six historical screenshot paths remain absent; the browser
+`codex/wave5-trends-demand-loading`. Authored scope is 15 text paths, including
+five product files. Six historical screenshot paths remain absent; the browser
 plan reserves six cache captures for review. No screenshot delivery is claimed.
 
 ## Behavior
@@ -113,23 +113,44 @@ briefly read Performance, then correctly returned to Overview. Focus stayed on
 the unrelated input. The diagnostic's 15 observed identities retired; raw samples,
 images and cleanup are in `C:\SC2TOOLS\.cache\trends-passive-geometry-diagnostic-40fa9098`.
 
-The proposed spec correction retains the first passive gesture and cold ledger,
+The committed spec correction retains the first passive gesture and cold ledger,
 waits for the admitted above-card PvZ rating UI/data and settled reads, then uses
 the same native passive gesture to continue reading Performance at its real
 position. All original nav/focus/URL/filter/retention assertions, the 5s highlight
 assertion and 120s case bound remain. This checks final navigation against the
-rendered viewport instead of a transient label during expansion. **Browser
-validation of this correction is UNRUN.** Product/fixture/configuration,
+rendered viewport instead of a transient label during expansion. **Full browser
+validation remains incomplete.** Product/fixture/configuration,
 assets, budgets and calculations remain unchanged by this test correction.
+
+At `42a00175`, the updated spec passed strict lint and discovery still listed
+18 main/two paired cases with unchanged titles. The browser run passed the
+mobile light personal and global cases, then stopped at dark Time AA:
+**2 passed, 1 failed, 15 did not run**, zero retries/flaky cases; paired work is
+unrun. Six AA scans found one serious contrast issue on the 4,150 MMR headline
+(#157d8c on #0f141c, 3.82 instead of 4.5), with incomplete findings retained in
+raw receipts. One early capture and the three case ledgers are preserved under
+`C:\SC2TOOLS\.cache\trends-browser-retry-host-42a00175`; their 15/18/13 API reads
+settled with zero page errors, unknown HTTP requests or rejected writes. All
+servers closed, source/asset postguards passed and all 37 observed identities
+including postguards retired with no owned listeners.
+
+Source review confirms a text-token mismatch: useChartTheme reads DOM tokens,
+so no missing ThemeProvider is involved. `--accent` is a filled-control color;
+`--accent-ink` is the existing label/text color in both themes. The MMR repair
+changes only the Last recorded/Latest average item's color to
+`rgb(var(--accent-ink))`. Series/marker colors, peak/success, trough/danger,
+values, calculations and handlers remain unchanged; no CSS class, import or hook
+is added. **Strict lint and actual browser AA for this MMR text correction
+are UNRUN.** No mirrored style unit is proposed.
 
 ## Remaining validation and delivery
 
 Root owns review, commits, runtime grants and delivery. Preserve the old 857,
-f713, 40fa and diagnostic packets. After accepting the spec/checkpoint proposal,
-refresh the explicit current-source → retained-857 bridge for the test-only
-change, retaining the one chart's attribute/class proof and fixture/checkpoint
-allowlist. Production source is not wholly unchanged; do not relabel the retained
-build as a new build. Admit complete CSS filename
+f713, 40fa, 42a and diagnostic packets. The next current-source → retained-857
+bridge must admit exactly the Net MMR attribute/class changes, MMR headline
+text-color value, fixture, spec and checkpoint: 15 owned paths, 379 selected
+pins and 374 unchanged selected rows. Production source is not wholly unchanged;
+do not relabel the retained build as a new build. Admit complete CSS filename
 sets/bytes, fonts, Chrome, current source and exact concrete output paths.
 LIST/RUN reporter JSONs must have separate filenames. Keep CI=1, truly remove
 A11Y_COLLECT_ONLY/TRENDS_LIST_ONLY, and retain one worker, zero retries and
