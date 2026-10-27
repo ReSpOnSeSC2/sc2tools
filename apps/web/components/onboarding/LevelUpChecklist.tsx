@@ -9,6 +9,7 @@ import { Button, LinkButton } from "@/components/ui/Button";
 import { RequestError } from "@/components/ui/RequestError";
 import { useToastOptional } from "@/components/ui/Toast";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+import { tourReplayHref } from "@/lib/tours";
 
 /** A fresh mounted lifetime for every account transition, including A→B→A. */
 export function LevelUpChecklist() {
@@ -68,10 +69,11 @@ function OwnerChecklist({ owner }: { owner: string }) {
   if (query.error) return <RequestError title="Get more out of SC2 Tools" error={query.error} onRetry={() => query.mutate()} />;
   if (query.data !== undefined && !validActivation(query.data)) return <RequestError title="Get more out of SC2 Tools" error={new Error("Your suggested steps could not be read. Please try again.")} onRetry={() => query.mutate()} />;
   if (!data || !progress) return <Card data-testid="level-up-checklist"><p role="status">Loading your suggested next steps…</p></Card>;
-  if (progress.complete) return <Card data-testid="level-up-checklist"><div className="flex flex-wrap items-center justify-between gap-3"><p className="font-semibold">You&apos;re all set — <LinkButton href="/changelog" variant="ghost" size="sm">see What&apos;s new</LinkButton></p><Button variant="ghost" size="sm" aria-busy={pending || undefined} aria-disabled={pending || undefined} onClick={() => void dismiss()}>{pending ? "Dismissing…" : "Dismiss suggestions"}</Button></div>{dismissError ? <div className="mt-3"><RequestError error={dismissError} onRetry={dismiss} /></div> : null}</Card>;
-  return <Card data-testid="level-up-checklist">
+  if (progress.complete) return <Card data-tour="today-next-steps" data-testid="level-up-checklist"><div className="flex flex-wrap items-center justify-between gap-3"><p className="font-semibold">You&apos;re all set — <LinkButton href="/changelog" variant="ghost" size="sm">see What&apos;s new</LinkButton></p><LinkButton href={tourReplayHref("today")} variant="ghost" size="sm">Take the Today tour</LinkButton><Button variant="ghost" size="sm" aria-busy={pending || undefined} aria-disabled={pending || undefined} onClick={() => void dismiss()}>{pending ? "Dismissing…" : "Dismiss suggestions"}</Button></div>{dismissError ? <div className="mt-3"><RequestError error={dismissError} onRetry={dismiss} /></div> : null}</Card>;
+  return <Card data-tour="today-next-steps" data-testid="level-up-checklist">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0 basis-48 flex-1"><h2 className="text-h3 font-bold">Get more out of SC2 Tools</h2><p className="mt-1 text-caption text-text-muted">{progress.done} of {progress.total} done · Try the features that fit your goals.</p><LazyHelpLink slug="your-first-week" className="mt-1 text-caption">Your first week</LazyHelpLink></div>
+      <LinkButton href={tourReplayHref("today")} variant="ghost" size="sm">Take the Today tour</LinkButton>
       <ProgressRing done={progress.done} total={progress.total} />
       <Button variant="ghost" size="sm" aria-busy={pending || undefined} aria-disabled={pending || undefined} onClick={() => void dismiss()}>{pending ? "Dismissing…" : "Dismiss suggestions"}</Button>
     </div>

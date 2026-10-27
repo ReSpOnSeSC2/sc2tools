@@ -136,6 +136,10 @@ export async function openSettingsSectionsFixture(page, theme, options = {}) {
     if (url.pathname === "/settings" && url.search === new URL(initialHref, origin).search && !url.hash) return { contentType: "text/html", body: `<!doctype html><html lang="en" data-theme="${theme}" data-theme-mode="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Settings sections proof</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>` };
     if (/^\/overlay\/owner-[ab]-(?:one|two)\/scene\/between-games$/.test(url.pathname) && url.search === "?demo=1") { iframes.push(url.pathname + url.search); return html("<main><h1>Local scene preview</h1><p>Static synthetic preview. No stream content or connection.</p></main>"); }
     const owner = authorization === "Bearer fixture-owner-a" ? "owner-a" : authorization === "Bearer fixture-owner-b" ? "owner-b" : null;
+    // Section navigation uses an account that has already completed the independent tours.
+    if (owner && url.pathname === "/v1/me/preferences/onboarding" && !url.search && !url.hash && body === "") {
+      reads.push({ owner, path: url.pathname }); return json({ toursDone: { overlay: 1 } });
+    }
     if (owner && !url.search && !url.hash) {
       const fixed = new Map([
         ["/v1/me", { isAdmin: false, agentPaired: true, agentLastSeenAt: null }],

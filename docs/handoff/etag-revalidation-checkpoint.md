@@ -1,11 +1,9 @@
 # Conditional personal-chart refresh checkpoint
 
-Implementation applied and locally exercised on the ETag continuation branch as of
-2026-10-27. The earlier source-only/UNRUN banner no longer describes this working
-branch. Final fresh web types, strict manual-file lint and post-browser asset proof
-now pass. Fresh-main integration and CI remain pending at this checkpoint. No production flag has been activated and no production saving is
-claimed. The local results below were supplied by the root runner; this cache-only
-documentation pass started no runtime.
+Implementation applied and locally validated on 2026-10-27. Final fresh web types,
+strict manual-file lint and post-browser asset proof pass. Current main is
+integrated; exact-head CI and delivery remain pending. The production cache flag
+is unchanged and no production saving is claimed.
 
 ## Scope and source history
 
@@ -140,10 +138,12 @@ Run 03 is the passing result above; earlier failures remain retained evidence.
    all four observed identities. Post-browser admission again matched all 40
    canonical inputs, seven assets and four strict samples; its three identities
    closed with no listener. Pre/post proofs bind the same build snapshot.
-2. Review and integrate fresh main `8fee…` after Tours merged. Preserve Device,
-   Dock and Tours wiring and documentation. Move this changelog entry below the
-   Device entry, preserving the pending Review `d32…` entry when it lands. Refresh
-   the exact main/head comparison rather than relying on the old packet base.
+2. Main `8fee4029` was integrated without conflicts. Device, Dock and Tours wiring
+   and documentation remain. None of the six validated ETag implementation files
+   changed during integration. This changelog entry sits below Device so the
+   pending Review entry can merge independently. The integrated website build
+   and budgets still require normal CI; the earlier local artifact is not
+   relabeled as an integrated-main build.
 3. Run the required exact-head CI and review its results before merge/delivery.
    Local validation does not establish CI or deployment success.
 

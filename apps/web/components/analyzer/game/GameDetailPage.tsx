@@ -60,6 +60,7 @@ import { withoutNewBuildParam } from "@/lib/buildIntentLinks";
 import { BuildCheckInCard } from "@/components/build-checkin/BuildCheckInCard";
 import { useBuildCheckInRevision } from "@/components/build-checkin/BuildCheckInProvider";
 import { useFirstGameViewed } from "@/components/onboarding/useFirstGameViewed";
+import { GuidedTours } from "@/components/onboarding/GuidedTours";
 
 /**
  * GameDetailPage — the per-replay deep dive ("I just lost a weird
@@ -257,7 +258,7 @@ function GameDetailContent({
   };
 
   return (
-    <GameDetailShell
+    <GuidedTours id="game" recordKey={gameId} ready={!gameReq.error && !gameReq.isLoading && !gameReq.isPreviousData && game.gameId === gameId}><GameDetailShell
       source={source}
       game={game}
       exportAction={<><GameExportMenu game={game} buildOrders={buildReq.data} macroBreakdown={breakdown} pending={buildStatus === "loading" || macroStatus === "loading"} /><GameDataMenu game={game} onComplete={async changes => { if (changes.some(change => change.deleted)) router.replace(source?.href || "/app/replays"); else await gameReq.mutate(); }} /></>}
@@ -295,7 +296,7 @@ function GameDetailContent({
           <LossAutopsyCard game={autopsyGame} personalMedians={contextReq.data?.personal} seekTarget="replay" recomputeAction={recomputeAction} onSeek={setScrubTime} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} />
         ) : undefined} /></SectionBoundary>
 
-      <section ref={clock.stageRef} tabIndex={-1} id="replay" className="space-y-3 scroll-mt-[var(--game-section-offset,8rem)]" aria-labelledby="game-replay-heading">
+      <section data-tour="game-replay" ref={clock.stageRef} tabIndex={-1} id="replay" className="space-y-3 scroll-mt-[var(--game-section-offset,8rem)]" aria-labelledby="game-replay-heading">
         <h2 id="game-replay-heading" className="font-display text-h3 font-bold">Map replay <LazyHelpLink slug="game-page" anchor="replay-controls">Help</LazyHelpLink></h2>
         <GameClockControls time={clock.t} duration={game.durationSec ?? breakdown?.game_length_sec} onSeek={(time) => clock.seek(time, { reveal: false })} getHref={clock.linkAtCurrentTime} />
       {/* Vespene-style map replay — directly under the timeline.
@@ -316,10 +317,10 @@ function GameDetailContent({
       /></SectionBoundary>
 
       </section>
-      <section id="macro" className="scroll-mt-[var(--game-section-offset,8rem)]" aria-label="Macro breakdown">
+      <section data-tour="game-macro" id="macro" className="scroll-mt-[var(--game-section-offset,8rem)]" aria-label="Macro breakdown">
         <SectionBoundary key={`macro:${game.gameId}`} label="the macro breakdown" title="The macro breakdown hit a problem"><GameMacroSection onBuildChanged={() => void gameReq.mutate()} inspectionTime={clock.t} onSeek={setScrubTime} onInspectTime={inspectMacroTime} gameId={game.gameId} data={breakdown} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} action={recomputeAction} onRecompute={() => void macroReq.recompute()} recomputing={macroReq.recomputing} headerMeta={{ playerName: myName, opponentName: oppName, myRace: ghostMyRace, opponentRace: ghostOpponentRace, dateIso: game.date, gameVersion: game.gameVersion, gameBuild: game.gameBuild }} /></SectionBoundary>
       </section>
-      <section id="builds" className="space-y-3 scroll-mt-[var(--game-section-offset,8rem)]" aria-labelledby="game-builds-heading">
+      <section data-tour="game-builds" id="builds" className="space-y-3 scroll-mt-[var(--game-section-offset,8rem)]" aria-labelledby="game-builds-heading">
         <h2 id="game-builds-heading" className="font-display text-h3 font-bold">Builds <LazyHelpLink slug="game-page" anchor="build-orders">Help</LazyHelpLink></h2>
       {/* Ghost Build loop closer — grades this game's executed build
           against the armed practice target. Renders nothing unless a
@@ -370,7 +371,7 @@ function GameDetailContent({
         }
       /></SectionBoundary>
       </section>
-    </GameDetailShell>
+    </GameDetailShell></GuidedTours>
   );
 }
 

@@ -15,6 +15,8 @@ const { ACTIVATION_QUERY_MAX_TIME_MS, activationTimestamp, activationUnavailable
 const REPLAY_SHARE_ID_RE = /^[A-Za-z0-9_-]{32}$/;
 const REPLAY_SHARE_SLUG_MAX_LENGTH = 64;
 const REPLAY_SHARE_SLUG_RE = PLAYER_SLUG_RE;
+const ONBOARDING_TOUR_IDS = new Set(["today", "game", "overlay"]);
+const ONBOARDING_TOUR_VERSION_MAX = 1000;
 
 /**
  * User service. The `users` collection maps Clerk user ids → our
@@ -895,15 +897,21 @@ class UsersService {
     }
     if (type === "chatCommands") prefs = sanitizeChatCommands(prefs, true);
     if (type === "onboarding") {
-      // Independent checklist, goals and What's New writes must not replace
-      // each other's fields. A literal merge is atomic and treats payload
-      // values as data, including any strings that resemble Mongo syntax.
-      await this.db.users.updateOne({ userId }, [{ $set: {
-        "preferences.onboarding": { $mergeObjects: [
-          { $ifNull: ["$preferences.onboarding", {}] }, { $literal: prefs },
-        ] },
-      } }]);
-      return this.getPreferences(userId, type);
+      const ordinary = { ...prefs };
+      const versions = Object.hasOwn(prefs, "toursDone") ? validateOnboardingToursDone(prefs.toursDone) : {};
+      delete ordinary.toursDone;
+      // Literal ordinary patches and nested versions share one atomic write.
+      // An empty tour patch preserves the stored map, including absence.
+      /** @type {import('mongodb').Document[]} */
+      const fragments = [{ $cond: [{ $eq: [{ $type: "$preferences.onboarding" }, "object"] },
+        "$preferences.onboarding", {}] }, { $literal: ordinary }];
+      if (Object.keys(versions).length) fragments.push({ toursDone: mergeOnboardingTourVersions(versions) });
+      const updated = await this.db.users.findOneAndUpdate({ userId, _gdprMutation: { $exists: false } }, [{ $set: {
+        "preferences.onboarding": { $mergeObjects: fragments },
+      } }], { upsert: false, returnDocument: "after", projection: { _id: 0, "preferences.onboarding": 1 },
+        maxTimeMS: ACTIVATION_QUERY_MAX_TIME_MS });
+      if (!updated) throw Object.assign(new Error("gdpr_operation_busy"), { status: 409, code: "gdpr_operation_busy" });
+      return updated.preferences.onboarding;
     }
     await this.db.users.updateOne(
       { userId },
@@ -1431,4 +1439,43 @@ function replaySharingUserNotFound() {
   return err;
 }
 
-module.exports = { UsersService };
+/** Only known tours and bounded integer versions are client-writable.
+ * Completing and skipping a tour record the same terminal version.
+ * @param {unknown} value @returns {Record<string, number>} */
+function validateOnboardingToursDone(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) {
+    throw Object.assign(new Error("invalid_onboarding_tours_done"), { status: 400, code: "invalid_onboarding_tours_done" });
+  }
+  const entries = Object.entries(value);
+  if (entries.length > ONBOARDING_TOUR_IDS.size || entries.some(([id, version]) => !ONBOARDING_TOUR_IDS.has(id)
+      || typeof version !== "number" || !Number.isSafeInteger(version) || version < 1 || version > ONBOARDING_TOUR_VERSION_MAX)) {
+    throw Object.assign(new Error("invalid_onboarding_tours_done"), { status: 400, code: "invalid_onboarding_tours_done" });
+  }
+  return Object.fromEntries(entries);
+}
+
+/** Mongo's condition guards numeric operators from malformed legacy values.
+ * @param {string} value @returns {import('mongodb').Document} */
+function validStoredTourVersion(value) {
+  return { $cond: [{ $isNumber: value }, { $and: [
+    { $gte: [value, 1] }, { $lte: [value, ONBOARDING_TOUR_VERSION_MAX] }, { $eq: [value, { $trunc: value }] },
+  ] }, false] };
+}
+
+/** Preserve independent tours and never roll back a newer saved version.
+ * @param {Record<string, number>} versions @returns {import('mongodb').Document} */
+function mergeOnboardingTourVersions(versions) {
+  const path = "$preferences.onboarding.toursDone";
+  const existing = { $arrayToObject: { $filter: {
+    input: { $objectToArray: { $cond: [{ $eq: [{ $type: path }, "object"] }, path, {}] } },
+    as: "entry", cond: { $and: [
+      { $in: ["$$entry.k", { $literal: [...ONBOARDING_TOUR_IDS] }] }, validStoredTourVersion("$$entry.v"),
+    ] },
+  } } };
+  const updates = Object.fromEntries(Object.entries(versions).map(([id, version]) => [id, { $max: [
+    { $cond: [validStoredTourVersion(`${path}.${id}`), `${path}.${id}`, 0] }, { $literal: version },
+  ] }]));
+  return { $mergeObjects: [existing, updates] };
+}
+module.exports = { UsersService, validateOnboardingToursDone };

@@ -103,7 +103,7 @@ export function OverlayScenesSection({
       : appendOverlayCreditToUrl(`${base}/overlay/${token}/scene/${preview}?demo=1`, showCredit);
 
   return (
-    <Section id="scenes" className="scroll-mt-28"
+    <Section id="scenes" data-tour="overlay-scenes" className="scroll-mt-28"
       title="Full-screen scenes"
       description="Animated broadcast scenes, a transparent Stream Dock cover, and seven static virtual sets you can place behind your camera."
     >
