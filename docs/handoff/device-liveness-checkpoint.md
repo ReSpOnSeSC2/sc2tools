@@ -1,4 +1,4 @@
-# Device liveness — first focused run RED; fixture follow-up unvalidated
+# Device liveness — focused checks complete; integration remains for CI
 
 Applied 2026-10-27 UTC in the NEW isolated checkout:
 C:\Users\jay19\.codex\worktrees\wave5-device-liveness\SC2TOOLS.
@@ -25,9 +25,10 @@ zero pending. All 27 failures were beforeEach fixture setup at the new Mongo
 file's line 22: two users without clerkUserId violated its real unique index
 with duplicate null. Those 27 test bodies did not execute. The follow-up gives
 the a/b and fifth-owner c/d/e seeds distinct deterministic synthetic Clerk IDs.
-Only those two insertMany seed expressions and this checkpoint change; no index,
-product/helper code, body assertion or test table changes. The corrected Mongo
-suite remains unvalidated; the first RED and its raw failure remain evidence.
+The fixture commit changed only those two insertMany seed expressions and this
+checkpoint; no index, product/helper code, body assertion or test table changed.
+The first RED and its raw failure remain evidence; the corrected Mongo file's
+separate passing result is recorded below.
 
 The ten applied paths are:
 
@@ -82,7 +83,8 @@ revokes the device for cleanup. There is no cache clear, lifecycle mock, asserti
 waiver or added wait. Tours' later 11 Foundation additions are separate and are
 not included in this branch's 105 declarations. The 65 existing cases, including
 all 13 Foundation cases, and the 13 pure-helper cases passed on ae0. Those 78
-passing cases remain tied to ae0; they do not validate the corrected Mongo seeds.
+passing cases remain tied to ae0. The corrected Mongo seeds and their 27 cases
+were validated separately at cd663, as recorded below.
 
 Validation receipts are preserved under
 C:\SC2TOOLS\.cache\device-liveness-validation-ae0a6858-v2:
@@ -94,12 +96,28 @@ Its independent normalized Time6 closure retired all 21 observed identities,
 including eight Mongo identities, with zero owned listeners and no PID reuse.
 No retry was run. The runtime slot was released for Tours.
 
-Root must review, copy and commit the fixture follow-up before any new runtime.
-The next local boundary is only changed-file strict lint and the 27 Mongo cases,
-with pinned/no-download Mongo, pre/post input receipts and independent process
-closure. This is a plan, not a runtime grant. The 78 passing cases stay tied to
-ae0; whole-API integration remains for CI. No full 105-case pass or measured
-speedup is claimed.
+The fixture correction was committed at cd663be4dff80837a33c2ae7502c1bc6f27c6678,
+tree 58218727299c29ae8cee2a72a402819eb6ef0595. Changed-file strict lint ran
+once: exit 0, zero errors and warnings. Only deviceLiveness.mongo.test.js then
+ran once: 27 passed, zero failed/pending, one file, exit 0. It used the same
+pinned system Mongo7.0.14, no downloads, runInBand and unchanged test timeout.
+There was no repeat of types, the seven-file lint, four baselines or 105 cases.
+
+Follow-up evidence is preserved in
+C:\SC2TOOLS\.cache\device-liveness-validation-cd663be4\receipt.json
+and results.json. Both pre/post 61-pin guards matched the clean cd663 source,
+protected own/primary seeds, tools/binaries, junction and absent generated paths.
+Both independent normalized Time6 host closures passed: lint's five identities
+and the focused run's seven identities, including one Mongo identity, were all
+retired with zero owned listeners and no observed PID reuse. Final closure was
+2026-10-27T01:52:11.4937733Z. No retry or source/Git edit occurred during checks;
+the runtime slot was released for Tours browser work.
+
+These results remain bound to their exact source commits: 78 passes, types exit 0
+and raw seven-file lint exit 1 with twelve admitted inherited warning owners at
+ae0; changed-file lint and 27 Mongo passes at cd663. No single 105-case green run
+or measured speedup is claimed. Integration with current main and the whole-API
+suite remain for CI; local runtime authorization does not extend to either.
 
 ETag/browser reconstruction, 60-second auth reuse, broader route caching,
 maintained gameStats and admin-health presentation remain separate. Corpus

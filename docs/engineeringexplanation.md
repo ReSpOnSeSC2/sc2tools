@@ -460,4 +460,10 @@ after a recent REST touch. Literal pipeline fields preserve expression-like
 strings and the date expression prevents older heartbeat liveness from moving
 backward. Device labels do not affect this DTO; restore still excludes credentials.
 No dependency, index, migration, auth lookup cache, provider call, configuration
-flag or production activation is added. Prepared validation remains UNRUN.
+flag or production activation is added. Source-bound validation history and raw
+receipt pointers are recorded in [the device liveness checkpoint](handoff/device-liveness-checkpoint.md):
+ae0 has types exit 0, raw strict lint exit 1 with twelve admitted inherited
+warning owners, and 78 passes plus 27 fixture-setup failures; cd663 has clean
+changed-file strict lint and 27 Mongo passes after correcting the unique Clerk
+seed IDs. Both runs retain their pin/process-closure receipts. This is not a
+single 105-case pass or measured speedup; whole-API integration remains for CI.
