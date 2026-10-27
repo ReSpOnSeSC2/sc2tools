@@ -69,3 +69,22 @@ CommonJS-style local run passes all four phone/desktop lifecycle cases in
 with no owned listener. Changed-file lint again reports zero errors and the
 same two inherited warnings. The original CI failure is preserved. Application,
 server, certificates, assertions and download trust pin are unchanged.
+
+## Consumer and tablet CI corrections
+
+The full d32 web suite passed 9,304 tests and failed two older replay-table
+assertions that expected the raw token callback. The replay-table fixture now
+invokes the scoped callback before resolving its POST and verifies its token,
+live AbortSignal and wrapper identity. Original game/question/row assertions
+remain. The three-file consumer group passes all 40 tests; fresh web types and
+strict lint of the changed table/fixture files pass.
+
+The same head's browser suite passed 559 cases, with 92 existing skips, and
+failed only the two tablet lifecycle cases at exactly eight pixels of overflow.
+The synthetic host used p-4 at every width while the actual AppChrome wrapper
+uses sm:px-6. Matching the real wrapper fixes this test boundary without hiding
+overflow or changing the <=1 assertion. The new local CJS run includes all six
+phone/tablet/desktop lifecycle cases: six passed in 16.292 seconds, no skips,
+retries or flaky cases. All 43 observed identities retired with no owned listener.
+Both original CI failures remain retained. These corrections change only tests
+and this checkpoint; production implementation bytes remain unchanged.

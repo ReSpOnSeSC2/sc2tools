@@ -69,7 +69,7 @@ function script() {
       const cache=new Map();const swr={dedupingInterval:0,shouldRetryOnError:false,revalidateOnFocus:false,provider:()=>cache};
       function Fixture(){const current=useSyncExternalStore(subscribe,()=>location.pathname);const auth=useAuth();
         return <SWRConfig value={swr}>
-          <main className="mx-auto max-w-7xl p-4"><aside aria-label="Synthetic fixture session" className="mb-4 flex flex-wrap gap-2">
+          <main className="mx-auto w-full max-w-[1680px] flex-1 px-4 pb-24 pt-5 sm:px-6 md:pb-10 lg:px-8"><aside aria-label="Synthetic fixture session" className="mb-4 flex flex-wrap gap-2">
             <p className="w-full text-caption text-text-muted">Synthetic local review lifecycle. No real accounts or public posts.</p>
             {["asker","reviewer","new-reviewer","signed-out"].map(id=><button type="button" key={id} className="min-h-11 rounded border border-border px-3" onClick={()=>window.reviewFixtureSession.set(id)}>Use {id}</button>)}
             <span data-testid="fixture-owner">{auth.userId??"signed-out"}</span>
