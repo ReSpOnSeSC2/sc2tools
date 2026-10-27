@@ -155,3 +155,15 @@ Sessions callback; reconcile that future overlap deliberately.
 No production flag activation, authentication-cache change, migration, agent tag,
 version bump or release has been performed as part of this ETag validation. No
 speedup or reduced authentication-read cost has been measured or claimed.
+
+## Upload CORS consumer contract
+
+The first integrated head's full web and responsive CI jobs passed. Its API run
+passed 6,469 tests and failed only the older upload-CORS test whose exact exposed
+header list omitted the newly added ETag. The test now requires all four headers,
+retaining Retry-After, X-Export-Truncated and Content-Disposition as well as ETag.
+The two actual-app CORS consumer suites pass all nine tests; strict changed-test
+lint passes. The test group retired all ten observed identities, and lint retired
+all three, with no owned listener. Original full-CI failure is retained. This
+correction changes only the test contract and this checkpoint; production bytes
+remain identical. Final-head CI remains required before merge.
