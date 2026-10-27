@@ -24,8 +24,9 @@ import { Download } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
+import { useStrategyMatrixRace } from "@/lib/useStrategyMatrixRace";
 import { csvFilename, downloadCsv, toCsv, type CsvColumn } from "@/lib/csvExport";
-import { defaultMatrixRace, matrixAxes as matrixAxesForExport, type MatrixRace } from "@/lib/strategyMatrix";
+import { defaultMatrixRace, matrixAxes as matrixAxesForExport } from "@/lib/strategyMatrix";
 import { StrategyMatrixHeatmap } from "./StrategyMatrixHeatmap";
 import { strategyDrillFilters } from "@/lib/strategyDrill";
 
@@ -84,13 +85,13 @@ export function BuildVsStrategyView({
 }: BuildVsStrategyViewProps) {
   const { filters, dbRev, seasons } = useFilters();
   const [search, setSearch] = useState("");
-  const [chosenRace, setChosenRace] = useState<{ scope: string; race: MatrixRace } | null>(null);
+  const [chosenRace, setChosenRace] = useStrategyMatrixRace();
   const [axisOrder, setAxisOrder] = useLocalStorageState<"games" | "az">("analyzer.bvs.sort", "games", (raw): raw is "games" | "az" => raw === "games" || raw === "az");
   const view = initialView, minGames = initialMinGames;
   const sort = usePersistentSort(LS_BVS_SORT, "total", "desc");
   const scopeKey = filtersToQuery(filters);
   const overall = useApi<BvsCell[]>(`/v1/build-vs-strategy${scopeKey}#${dbRev}`, { keepPreviousData: false });
-  const localRace = chosenRace?.scope === scopeKey ? chosenRace.race : defaultMatrixRace(overall.data);
+  const localRace = chosenRace ?? defaultMatrixRace(overall.data);
   const race = filters.opp_race || (localRace === "all" ? undefined : localRace);
   // One selected-cohort request, never a request per race. Preserve every global
   // filter, including strategy, when narrowing the local matrix.
@@ -118,7 +119,7 @@ export function BuildVsStrategyView({
       <Input type="search" aria-label="Search builds or strategies" placeholder="Search builds or strategies" value={search} onChange={event => setSearch(event.target.value)} />
       {renderMinGamesPicker(minGames, onMinGamesChange)}
       <SegmentedControl label="Build versus strategy view" value={view} options={[{ value: "table", label: "Table" }, { value: "heatmap", label: "Heatmap" }]} onChange={onViewChange} />
-      {!filters.opp_race && <SegmentedControl label="Matrix matchup" value={localRace} options={[{ value: "P", label: "vP", ariaLabel: "versus Protoss" }, { value: "T", label: "vT", ariaLabel: "versus Terran" }, { value: "Z", label: "vZ", ariaLabel: "versus Zerg" }, { value: "all", label: "All" }]} onChange={race => setChosenRace({ scope: scopeKey, race })} />}
+      {!filters.opp_race && <SegmentedControl label="Matrix matchup" value={localRace} options={[{ value: "P", label: "vP", ariaLabel: "versus Protoss" }, { value: "T", label: "vT", ariaLabel: "versus Terran" }, { value: "Z", label: "vZ", ariaLabel: "versus Zerg" }, { value: "all", label: "All" }]} onChange={setChosenRace} />}
       {view === "heatmap" ? <SegmentedControl label="Matrix axis order" value={axisOrder} options={[{ value: "games", label: "Most games" }, { value: "az", label: "A–Z" }]} onChange={setAxisOrder} /> : <><button type="button" className="min-h-11 rounded-lg border border-border px-3 text-caption" aria-pressed={sort.sortBy === "winsAboveExpected"} onClick={() => sort.setSortExplicit("winsAboveExpected", sort.sortBy === "winsAboveExpected" && sort.sortDir === "desc" ? "asc" : "desc")}>Vs expected</button><WinRateSortToggle dir={sort.sortBy === "winRate" ? sort.sortDir : "desc"} active={sort.sortBy === "winRate"} onChange={dir => sort.setSortExplicit("winRate", dir)} /></>}
       <Button variant="ghost" size="sm" aria-label="Export these rows as CSV" disabled={!filtered.length || !hasQueryData(cellsApi)} onClick={exportRows}><Download className="mr-1 h-4 w-4" />{filtered.length ? "Export CSV" : "Nothing to export"}</Button>
     </div>

@@ -25,7 +25,7 @@ export const REQUEST_PATH_MAX = 160;
 const BASE = "http://report.invalid";
 
 function cap(value: string, max: number): string {
-  return value.length > max ? value.slice(0, max) : value;
+  return value.slice(0, max);
 }
 
 /**
@@ -43,7 +43,10 @@ export function sanitiseRequestPath(raw: string): string {
   } catch {
     return "";
   }
-  const path = parsed.pathname.replace(CREDENTIAL_PATH_SEGMENT, (_match, route: string) => `/${route}/[redacted]`);
+  // Every parameter on this private endpoint is omitted, including rejected
+  // GETs and unknown keys. Reports keep its fixed operational route only.
+  if (/^\/v1\/search\/quick\/?$/iu.test(parsed.pathname)) return "/v1/search/quick";
+  const path = parsed.pathname.replace(CREDENTIAL_PATH_SEGMENT, "/$1/[redacted]");
   const isOauthCallback = OAUTH_CALLBACK_PATH.test(parsed.pathname);
   for (const key of new Set(parsed.searchParams.keys())) {
     if (SENSITIVE_QUERY_KEY.test(key) || (isOauthCallback && OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS.has(key.toLowerCase()))) {
@@ -63,7 +66,7 @@ export function sanitisePagePath(raw: string): string {
   const path = raw.trim().split(/[?#]/u)[0];
   if (!path.startsWith("/")) return "";
   const redacted = path
-    .replace(TOKEN_PAGE_SEGMENT, (_match, root: string) => `/${root}/[redacted]`)
-    .replace(CREDENTIAL_PATH_SEGMENT, (_match, route: string) => `/${route}/[redacted]`);
+    .replace(TOKEN_PAGE_SEGMENT, "/$1/[redacted]")
+    .replace(CREDENTIAL_PATH_SEGMENT, "/$1/[redacted]");
   return cap(redacted, PAGE_PATH_MAX);
 }

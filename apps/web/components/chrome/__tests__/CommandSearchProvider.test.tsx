@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { useLayoutEffect, useMemo, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CommandSearchItem } from "@/lib/commandSearch";
+import type { PrivateCommandSelectionDraft } from "@/lib/usePrivateCommandSearch";
 import { COMMAND_SEARCH_RECENT_KEY } from "@/lib/commandSearchRecent";
 import type { SettingsTabId } from "@/lib/settingsRegistry";
 import { SettingsShell } from "@/components/analyzer/settings/SettingsShell";
@@ -15,22 +16,31 @@ import {
 type RuntimeProps = {
   frame: CommandFrame; navigation: readonly CommandNavigation[]; settingsTabs?: readonly SettingsTabId[];
   onClose: () => void; onSelect: (item: CommandSearchItem) => void;
+  onQueryEdit: () => object | null; onPrivateSelect: (draft: PrivateCommandSelectionDraft, query: object) => boolean;
 };
 const fixture = vi.hoisted(() => ({
   path: "/app", viewer: "user_a", signedIn: true, loaded: true, push: vi.fn(),
   loads: 0, runtime: [] as RuntimeProps[], opens: [] as CommandSearchContextValue["open"][],
+  search: "", searchListeners: new Set<() => void>(),
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({
   userId: fixture.viewer, isSignedIn: fixture.signedIn, isLoaded: fixture.loaded,
 }) }));
-vi.mock("next/navigation", () => {
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
   const router = { push: fixture.push };
-  return { usePathname: () => fixture.path, useRouter: () => router };
+  return { usePathname: () => fixture.path, useRouter: () => router, useSearchParams: () => {
+    const search = useSyncExternalStore(callback => {
+      fixture.searchListeners.add(callback); return () => { fixture.searchListeners.delete(callback); };
+    }, () => fixture.search, () => fixture.search);
+    return new URLSearchParams(search);
+  } };
 });
 // Only the lazy heavy boundary is replaced; admission/registrations/shortcuts/recents stay real.
-vi.mock("../CommandSearchRuntime", () => {
+vi.mock("../CommandSearchRuntime", async () => {
   fixture.loads++;
-  return { default: function RuntimeBoundary(props: RuntimeProps) {
+  const { commandActivationPolicy } = await import("@/lib/commandSearchActivation");
+  return { commandActivationPolicy, default: function RuntimeBoundary(props: RuntimeProps) {
     fixture.runtime.push(props);
     return <section role="dialog" aria-label="Runtime boundary" data-frame={props.frame.id}
       data-mode={props.frame.mode} data-query={props.frame.query ?? ""}>
@@ -67,7 +77,11 @@ function tree(entries = navigation, guard: (href: string) => void = noGuard) {
 }
 
 function path(value: string) {
-  fixture.path = value; window.history.replaceState(null, "", value);
+  fixture.path = value.split("?", 1)[0]; window.history.replaceState(null, "", value); fixture.search = window.location.search;
+}
+function search(value: string) {
+  window.history.replaceState(null, "", `${fixture.path}${value}`); fixture.search = value;
+  fixture.searchListeners.forEach(listener => listener());
 }
 
 async function open(options?: CommandOpening): Promise<RuntimeProps> {
@@ -190,12 +204,78 @@ describe("handoff admission", () => {
     view.rerender(tree(navigation, current));
     act(() => old.onSelect(settingsItem));
     expect(before).not.toHaveBeenCalled();
-    expect(current).toHaveBeenCalledWith("/settings?tab=chat#tts");
+    expect(current).toHaveBeenCalledWith("/settings?tab=chat#tts", expect.any(Function));
     expect(fixture.push).not.toHaveBeenCalled();
     const next = await open();
     act(() => next.onSelect(opponentsItem));
-    expect(current).toHaveBeenLastCalledWith("/app/opponents");
+    expect(current).toHaveBeenLastCalledWith("/app/opponents", expect.any(Function));
     expect(fixture.push).not.toHaveBeenCalled();
+  });
+});
+
+describe("synchronous frame and transferred selection authority", () => {
+  function draft(): PrivateCommandSelectionDraft {
+    return { target: { kind: "opponent", pulseId: "own-id" }, href: "/app/opponents/own-id", isCurrent: () => true };
+  }
+  it("rejects dismiss then retained selection in the same event batch", async () => {
+    render(tree()); const old = await open();
+    act(() => { old.onClose(); old.onSelect(opponentsItem); });
+    expect(fixture.push).not.toHaveBeenCalled(); expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("retires an already queued handoff on a new opening before its effect", async () => {
+    render(tree()); const old = await open();
+    act(() => { old.onSelect(opponentsItem); fixture.opens.at(-1)!({ query: "new intent" }); old.onClose(); });
+    expect(fixture.push).not.toHaveBeenCalled();
+    expect(fixture.runtime.at(-1)!.frame.query).toBe("new intent");
+  });
+  it("transfers before close and does not recheck a leaf that intentionally unmounted", async () => {
+    render(tree()); const old = await open(); let sourceCurrent = true;
+    const value = { ...draft(), isCurrent: () => sourceCurrent };
+    act(() => {
+      expect(old.onPrivateSelect(value, old.frame)).toBe(true);
+      expect(old.onPrivateSelect(value, old.frame)).toBe(false);
+      sourceCurrent = false; old.onClose();
+    });
+    expect(fixture.push).toHaveBeenCalledOnce(); expect(fixture.push).toHaveBeenCalledWith("/app/opponents/own-id");
+  });
+  it("rejects a private old-query draft immediately before its leaf commit", async () => {
+    render(tree()); const old = await open();
+    act(() => { expect(old.onQueryEdit()).not.toBeNull(); expect(old.onPrivateSelect(draft(), old.frame)).toBe(false); });
+    expect(fixture.push).not.toHaveBeenCalled(); expectFrame(old.frame);
+  });
+  it("rejects mismatched/arbitrary private targets without closing a valid frame", async () => {
+    render(tree()); const old = await open();
+    act(() => expect(old.onPrivateSelect({ ...draft(), href: "/settings" }, old.frame)).toBe(false));
+    expectFrame(old.frame); expect(fixture.push).not.toHaveBeenCalled();
+  });
+  it("retires same-path query entries through a committed A→B→A router replacement", async () => {
+    render(tree()); const old = await open();
+    act(() => search("?view=B")); expect(screen.queryByRole("dialog")).toBeNull();
+    act(() => search(""));
+    act(() => expect(old.onPrivateSelect(draft(), old.frame)).toBe(false));
+    expect(fixture.push).not.toHaveBeenCalled();
+  });
+  it.each(["opening", "owner", "route", "query", "unmount"])("retires a transferred Settings lease on %s", async boundary => {
+    path("/settings"); const guard = vi.fn(), view = render(tree(navigation, guard)), old = await open();
+    act(() => old.onPrivateSelect(draft(), old.frame));
+    const admission = guard.mock.calls[0][1] as (() => boolean);
+    expect(admission()).toBe(true);
+    if (boundary === "opening") await open();
+    else if (boundary === "owner") { fixture.viewer = "user_b"; view.rerender(tree(navigation, guard)); fixture.viewer = "user_a"; view.rerender(tree(navigation, guard)); }
+    else if (boundary === "route") { path("/app"); view.rerender(tree(navigation, guard)); path("/settings"); view.rerender(tree(navigation, guard)); }
+    else if (boundary === "query") { act(() => search("?tab=chat")); act(() => search("")); }
+    else view.unmount();
+    expect(admission()).toBe(false); expect(fixture.push).not.toHaveBeenCalled();
+  });
+  it("keeps a dirty Settings draft when a newer opening retires its pending Discard", async () => {
+    path("/settings"); render(<CommandSearchProvider><ActualSettingsHost /></CommandSearchProvider>);
+    const input = screen.getByRole("textbox", { name: "profile draft" }) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "keep unsaved" } }); const before = window.location.href;
+    const old = await open(); act(() => old.onPrivateSelect(draft(), old.frame));
+    const discard = screen.getByRole("button", { name: "Discard & switch" });
+    const newer = await open({ query: "newer opening" }); fireEvent.click(discard);
+    expect(fixture.push).not.toHaveBeenCalled(); expect(window.location.href).toBe(before); expect(input.value).toBe("keep unsaved");
+    expectFrame(newer.frame); expect(screen.queryByRole("dialog", { name: "Discard unsaved changes?" })).toBeNull();
   });
 });
 

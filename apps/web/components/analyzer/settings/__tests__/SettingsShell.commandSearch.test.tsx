@@ -2,7 +2,7 @@ import { useState } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  CommandSearchContext, type CommandSearchContextValue, type CommandSettings,
+  CommandSearchContext, type CommandAdmission, type CommandSearchContextValue, type CommandSettings,
 } from "@/components/chrome/CommandSearchContext";
 import { SettingsShell, type SettingsTabId } from "../SettingsShell";
 import { usePublishDirty } from "../SettingsContext";
@@ -53,7 +53,7 @@ function draft(id = "preferences"): HTMLInputElement {
 function edit(value = "unsaved draft") {
   const input = draft(); fireEvent.change(input, { target: { value } }); return input;
 }
-function command(href: string) { act(() => current().navigate(href)); }
+function command(href: string, admission?: CommandAdmission) { act(() => current().navigate(href, admission)); }
 function guard() { return screen.getByRole("dialog", { name: "Discard unsaved changes?" }); }
 function stay() { fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" })); }
 function discard() { fireEvent.click(screen.getByRole("button", { name: "Discard & switch" })); }
@@ -63,6 +63,32 @@ function href() { return window.location.pathname + window.location.search + win
 beforeEach(() => {
   router.push.mockReset(); registerSettings.mockClear(); registration = null;
   window.history.replaceState(null, "", "/settings?tab=preferences&ref=command#notifications");
+});
+
+describe("transferred command admission survives only its pending action", () => {
+  function ticket() {
+    let active = true;
+    const admission: CommandAdmission = Object.assign(() => active, { retire: vi.fn(() => { active = false; }) });
+    return { admission, invalidate: () => { active = false; } };
+  }
+  it.each(["/app/opponents/owned", "/settings?tab=profile#pulse-ids"])("clears a retired Discard for %s without changing draft/URL/tab", target => {
+    render(tree()); const input = edit("preserve command draft"), before = window.location.href, value = ticket();
+    command(target, value.admission); expect(guard()).toBeTruthy(); value.invalidate(); discard();
+    expect(screen.queryByRole("dialog")).toBeNull(); expect(input.value).toBe("preserve command draft");
+    expect(panel()).toBe("preferences"); expect(window.location.href).toBe(before); expect(router.push).not.toHaveBeenCalled();
+    expect(value.admission.retire).toHaveBeenCalledOnce();
+  });
+  it("retires a pending selection on Stay and a clean selection after immediate commit", () => {
+    const view = render(tree()), value = ticket(); edit(); command("/app/maps?focus=Owned", value.admission); stay();
+    expect(value.admission()).toBe(false); expect(router.push).not.toHaveBeenCalled();
+    view.unmount(); render(tree()); const clean = ticket(); command("/builds/owned", clean.admission);
+    expect(router.push).toHaveBeenCalledWith("/builds/owned"); expect(clean.admission()).toBe(false);
+  });
+  it("rejects retired immediate navigation before mutating the pending destination", () => {
+    render(tree()); edit(); command("/help/sessions"); const pending = guard(), value = ticket(); value.invalidate();
+    command("/settings?tab=profile", value.admission);
+    expect(guard()).toBe(pending); expect(panel()).toBe("preferences"); expect(router.push).not.toHaveBeenCalled();
+  });
 });
 afterEach(() => { cleanup(); registration = null; window.history.replaceState(null, "", "/"); });
 

@@ -33,6 +33,7 @@ const UNTRACKED_PATHS: ReadonlyArray<RegExp> = [
 const DYNAMIC_ROUTES: ReadonlyArray<readonly [RegExp, string]> = [
   [/^\/app\/game\/[^/]+/, "/app/game/:gameId"],
   [/^\/app\/opponents\/[^/]+/, "/app/opponents/:pulseId"],
+  [/^\/builds\/[^/]+/, "/builds/:slug"],
   [/^\/community\/opponents\/[^/]+/, "/community/opponents/:pulseId"],
   [/^\/community\/authors\/[^/]+/, "/community/authors/:userId"],
 ];

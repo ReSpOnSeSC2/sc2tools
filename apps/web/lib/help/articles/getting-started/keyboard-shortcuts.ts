@@ -3,11 +3,11 @@ import type { HelpArticle } from "@/lib/help/types";
 const article: HelpArticle = {
   slug: "keyboard-shortcuts",
   title: "Search and keyboard shortcuts",
-  summary: "Find pages, settings, Help and public guides from one search box. Use keyboard shortcuts to move around SC2 Tools.",
+  summary: "Find pages, settings, Help, public guides and your saved builds or opponents. Use keyboard shortcuts to move around SC2 Tools.",
   category: "getting-started",
   audience: "all",
   order: 4,
-  keywords: ["search", "find", "keyboard", "shortcuts", "Ctrl K", "Cmd K", "command palette", "slash", "guides", "recent", "12 pool"],
+  keywords: ["search", "find", "keyboard", "shortcuts", "Ctrl K", "Cmd K", "command palette", "slash", "guides", "recent", "12 pool", "opponents", "saved builds", "library"],
   updated: "2026-10-27",
   body: [
     { type: "heading", text: "Open Search", anchor: "open-search" },
@@ -19,6 +19,14 @@ const article: HelpArticle = {
     ] },
     { type: "paragraph", text: "Results are grouped into **Pages**, **Settings**, **Help**, **Glossary**, **Build definitions**, **Stream widgets** and **Actions**. Public guide results have **Openers**, **How to beat** and **Maps** groups. The pages and settings offered depend on what is available to your account. Visitors can use public topics and guides without signing in." },
     { type: "paragraph", text: "Setting results open the matching tab or section. If a Settings draft needs attention, the usual **Stay** or **Discard** choice appears before you leave. **Change appearance** opens the appearance chooser; **Pair a device** opens Devices so you can continue there." },
+    { type: "heading", text: "Search your library", anchor: "your-library" },
+    { type: "paragraph", text: "When signed in, the main Search also has **Your opponents** and **Your builds** groups. Type at least two characters from the start of an opponent's name or a saved build's name. Letter case does not matter; accents, punctuation and spaces inside the name stay literal. These results belong to the account you are using." },
+    { type: "list", items: [
+      "Each group shows up to eight matches. Opponents appear by most recent meeting; saved builds appear by most recent update. Select **Open Opponents** or **Open Build library** for the full list.",
+      "A library that is too large for quick search, unavailable or changing shows a notice instead of a misleading empty result. Use **Retry your library search** or open the full library.",
+      "**Your maps** quick search is not available yet. Select **Open Maps** to view your map performance. Public map guides still appear in the separate **Maps** guide group.",
+      "Changing the search, closing it or switching accounts clears the private results. If a selection expires while an unsaved Settings confirmation is open, return to Search and choose it again.",
+    ] },
     { type: "heading", text: "Find a guide", anchor: "find-a-guide" },
     { type: "paragraph", text: "On [Guides](/guides) or a matchup guide, type in the visible **Find a guide** field, then select **Search** or press **Enter**. This opens Search with guide results. On a matchup page, the search starts with that matchup." },
     { type: "list", items: [
@@ -41,7 +49,7 @@ const article: HelpArticle = {
     ] },
     { type: "paragraph", text: "For a two-key shortcut, release **g**, then press the next key within a second. These shortcuts wait while you are typing or using another dialog or menu. Inside Search, a typed **?** stays part of your query; use the **Keyboard shortcuts** button to open the reference." },
     { type: "heading", text: "Recent pages and your search words", anchor: "recent-and-privacy" },
-    { type: "paragraph", text: "With an empty search box, **Recent** can show up to eight app pages visited by your signed-in account in this browser. Another account does not see your Recent list, and signing out clears it. Search words are not saved. Searching uses page names, setting labels and public reference information; it does not read the values in your Settings forms." },
+    { type: "paragraph", text: "With an empty search box, **Recent** can show up to eight app pages visited by your signed-in account in this browser. Another account does not see your Recent list, and signing out clears it. Search words and private opponent or build results are not added to Recent. Private results stay in memory for the current search; searching does not read the values in your Settings forms." },
     { type: "settingsLink", label: "Browse Guides", href: "/guides" },
   ],
   related: ["settings-overview", "how-to-use-help", "build-guides", "getting-started"],
