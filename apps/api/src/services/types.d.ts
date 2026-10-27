@@ -1282,3 +1282,7 @@ export interface AgentVersionService {
   publish(payload: object): Promise<{ channel: string; version: string }>;
   history(opts?: { channel?: string }): Promise<object[]>;
 }
+
+/** Private bounded history service. DTOs never expose policy publication leases. */
+export type SessionHistoryService = import("./sessionHistory").SessionHistoryService;
+export type { HistorySummary, HistoryList, HistoryCurrent, HistoryDetail, HistoryGame } from "./sessionHistoryTypes";

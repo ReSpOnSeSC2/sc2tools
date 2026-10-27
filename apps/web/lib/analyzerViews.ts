@@ -46,7 +46,7 @@ export function sanitizeViewFilters(raw: unknown): AnalyzerFilters {
   for (const [min, max] of [["mmr_min", "mmr_max"], ["macro_min", "macro_max"], ["min_minutes", "max_minutes"]]) {
     if (typeof out[min] === "number" && typeof out[max] === "number" && out[min] > out[max]) [out[min], out[max]] = [out[max], out[min]];
   }
-  if (out.preset && out.preset !== "custom") { delete out.since; delete out.until; }
+  if (out.preset && out.preset !== "custom") { delete out.since; delete out.until; delete out.patch_era; }
   else if (out.since || out.until) {
     out.preset = "custom";
     if (typeof out.since === "string" && typeof out.until === "string" && out.since > out.until) [out.since, out.until] = [out.until, out.since];
@@ -84,7 +84,7 @@ export function replaceViewQuery(current: string, filters: AnalyzerFilters): str
 }
 
 export function isAnalyzerViewPath(path: string): boolean {
-  return path === "/app" || rules.sections.some(section => section !== "today" && path === `/app/${section}`);
+  return path === "/app/sessions" || path.startsWith("/app/sessions/") || path === "/app" || rules.sections.some(section => section !== "today" && path === `/app/${section}`);
 }
 
 export function analyzerViewHref(view: Pick<AnalyzerView, "filters" | "section">): string {

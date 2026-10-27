@@ -19,6 +19,7 @@ import {
   type PresetId,
 } from "@/lib/datePresets";
 import { coerceRace } from "@/lib/race";
+import { eraShortLabel } from "@/lib/guides/guideCopy";
 import { accountFilter, accountHandles } from "./accountFilter";
 import type { LogicalSeason } from "@/lib/useSeasons";
 
@@ -26,6 +27,8 @@ import type { LogicalSeason } from "@/lib/useSeasons";
 export const TOO_SHORT_SECONDS = 45;
 
 export type AnalyzerFilters = {
+  /** Explicit replay version cohort retained by frozen session links. */
+  patch_era?: "before" | "after";
   since?: string;
   until?: string;
   race?: string;
@@ -258,6 +261,7 @@ export function filtersToQuery(p: Record<string, unknown>): string {
  */
 export const FILTER_LABELS: Readonly<Record<string, string>> = {
   preset: "Date range",
+  patch_era: "Game version",
   since: "From",
   until: "Until",
   race: "Your race",
@@ -377,6 +381,7 @@ export function withMyRace(
 /** Facets the chip row can show, in display order. */
 export type ActiveFilterKey =
   | "preset"
+  | "patch_era"
   | "regions"
   | "accounts"
   | "map_pool"
@@ -440,6 +445,10 @@ export function describeActiveFilters(
     });
   }
 
+  if (preset === "custom" && filters.patch_era) {
+    add("patch_era", eraShortLabel(filters.patch_era), { patch_era: undefined });
+  }
+
   if ((filters.regions || "").trim()) {
     const regions = activeRegionCodes(filters.regions);
     if (regions.length < ANALYZER_REGIONS.length) {
@@ -499,6 +508,7 @@ export function summarizeFilters(filters: AnalyzerFilters, seasons?: LogicalSeas
     regions.length === ANALYZER_REGIONS.length ? "All regions" : regions.join(", "),
     gameLengthLabel(filters.min_minutes, filters.max_minutes) || "Any length",
   ];
+  if (preset === "custom" && filters.patch_era) labels.push(eraShortLabel(filters.patch_era));
   if (filters.accounts) labels.push(`${accountHandles(filters.accounts).length} selected account${accountHandles(filters.accounts).length === 1 ? "" : "s"}`);
   const race = normalizeRaceCode(filters.race);
   const opponent = normalizeRaceCode(filters.opp_race);

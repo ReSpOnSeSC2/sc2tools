@@ -8,7 +8,7 @@ function deskError(status, code) { return Object.assign(new Error(code), { statu
 
 /** Token-authenticated controls; the enclosing route holds its owner's data lease. */
 class GameDeskService {
-  /** @param {{users:import('mongodb').Collection,studio:import('./multichatStudio').MultichatStudioService,engagement:import('./multichatEngagement').MultichatEngagementService,games:import('./games').GamesService,broker:import('./liveGameBroker').LiveGameBroker,channels:import('./opponentChannels').OpponentChannelsCache,tokens:import('./overlayTokens').OverlayTokensService,bot:import('./twitchChatBot').TwitchChatBotService,io?:import('socket.io').Server,now?:()=>number}} deps */
+  /** @param {{users:import('mongodb').Collection,studio:import('./multichatStudio').MultichatStudioService,engagement:import('./multichatEngagement').MultichatEngagementService,games:import('./games').GamesService,broker:import('./liveGameBroker').LiveGameBroker,channels:import('./opponentChannels').OpponentChannelsCache,tokens:import('./overlayTokens').OverlayTokensService,bot:import('./twitchChatBot').TwitchChatBotService,io?:import('socket.io').Server,onSessionReset?:(owner:string)=>void,now?:()=>number}} deps */
   constructor(deps) { this.deps = deps; this.now = deps.now || Date.now; }
 
   /** @param {string} userId @param {string} token @param {Record<string,any>} body */
@@ -74,13 +74,18 @@ class GameDeskService {
     const { games, users, studio, tokens, io } = this.deps;
     const at = this.now();
     games.invalidateSessionForReset(userId);
-    const written = await users.updateOne({ userId }, { $max: { sessionAnchorAt: new Date(at).toISOString() } });
+    this.deps.onSessionReset?.(userId);
+    let written;
+    try { written = await users.updateOne({ userId }, { $max: { sessionAnchorAt: new Date(at).toISOString() } }); }
+    finally { this.deps.onSessionReset?.(userId); }
     if (!written.matchedCount) throw deskError(404, "user_not_found");
     const committed = await users.findOne({ userId }, { projection: { sessionAnchorAt: 1 } });
     const anchor = typeof committed?.sessionAnchorAt === "string" ? Date.parse(committed.sessionAnchorAt) : NaN;
     if (!Number.isFinite(anchor)) throw new Error("session anchor unavailable");
     games.invalidateSessionForReset(userId);
     const state = await studio.advanceStreamStart(token, anchor);
+    // Owner invalidation only: no private session DTO or replay insertion.
+    io?.to(`user:${userId}`).emit("games:changed", { count: 0, inserted: 0, bulk: false, reason: "session-reset" });
     try {
       const assertSessionCurrent = captureSessionPublication(games.sessionPublicationGuard?.bind(games), userId);
       const session = await games.todaySession(userId, undefined, { reuseRecent: true });

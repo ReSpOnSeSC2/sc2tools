@@ -52,6 +52,15 @@ corresponding GitHub Release.
 - Prepare conditional refreshes for six personal chart routes when the optional per-user cache is enabled. Unchanged results can reuse their retained browser body after fresh authentication and revision checks.
 - Keep ordinary reads available while the optional browser helper loads or reaches its retention limit. The server cache remains disabled by default.
 
+### Session history and reports
+
+- Retire an older current-session response when you manually reset, including when the reset was saved but its response failed.
+
+- Browse complete sessions across midnight, open a session report, and see your current or last session on Today. Activity days filter the output without splitting session membership.
+- Review results, played-time/macro samples, build provenance and recorded MMR by account and queued race. Missing or incomparable rating evidence stays visible without an invented change.
+- Keep session views and custom Game version filters in Saved Views, with clear stale/context/size recovery and stable chart/game paging.
+- Use legible theme-aware race labels in replay tables while keeping unknown race labels distinct.
+
 ### One session definition
 
 - Choose when a session ends in Settings → Profile. Your live record, session quizzes and personal Trends share the setting. Auto keeps four hours for overlay accounts and uses 90 minutes otherwise; an exact gap and play across midnight stay connected.

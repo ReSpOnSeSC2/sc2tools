@@ -2,8 +2,8 @@ import type { HelpArticle } from "@/lib/help/types";
 
 const article: HelpArticle = {
   slug: "sessions",
-  title: "How sessions are grouped",
-  summary: "Choose when a play session ends and understand the same definition in your live session record, session quizzes and personal Trends.",
+  title: "Sessions: review a night of ladder",
+  summary: "Review complete sessions, recorded account ratings and games, and choose when your session ends.",
   category: "analyzer",
   audience: "player",
   signedInOnly: true,
@@ -12,6 +12,16 @@ const article: HelpArticle = {
   keywords: ["session", "sessions", "inactivity", "gap", "momentum", "first game", "comeback"],
   updated: "2026-10-27",
   body: [
+    { type: "heading", text: "Browse session history", anchor: "history" },
+    { type: "paragraph", text: "Open [Sessions](/app/sessions) from the desktop navigation or More on your phone. Your analysis filters define which games can belong to a session. An output day or window selects sessions with a recorded game end in that interval; a cross-midnight session stays complete. The selected timezone labels the dates and gives a day its actual length, including daylight-saving changes." },
+    { type: "paragraph", text: "Older sessions in this window continues through complete sessions. Previous output window browses an earlier interval with the same membership filters. Refresh advances a rolling view to include newly played games. A history link keeps its selected scope; changing filters starts a new view. If a replay import or edit changes a session, open a fresh view rather than continuing an old page." },
+    { type: "heading", text: "Read a session report", anchor: "report" },
+    { type: "paragraph", text: "Cards show recorded game-end times, played time from available replay durations, W/L/unknown results, matchup samples and effective build labels with their planned or detected provenance. Replay-end span is the time between the first and last recorded ends; it is separate from played time. Missing durations, macro scores and ratings stay unavailable, with their sample counts shown." },
+    { type: "paragraph", text: "Recorded MMR stays separate for each exact account, queued race and rating scope. Comparable changes require an identified ranked 1v1 track and compare its first and last observed values; one recorded value has no observed change. No rating before the first replay is inferred. If the rating track is not fully identified, its observations remain available without a connected ladder curve or change claim. A missing queued race stays unknown even when the replay shows the race played." },
+    { type: "paragraph", text: "Load the recorded MMR chart to inspect the full bounded session for one comparable track. Gaps preserve missing values; the point table pages separately in groups of 50. Games also load a bounded page at a time, and table sorting applies only to that page. Recorded end-to-end gaps include game time and do not measure idle breaks. Chart inspection stays on the report." },
+    { type: "heading", text: "Current, last and manual reset", anchor: "current" },
+    { type: "paragraph", text: "Today shows This session while its latest eligible game remains inside the gap, otherwise Last session. This fixed live view uses eligible, nonfuture games from the last 14 days after the latest inclusive manual reset. It ignores the global analysis filters. An empty reset view does not bring back games before that reset. Natural session history uses the selected membership filters and does not treat your latest manual reset as a historical event log." },
+    { type: "paragraph", text: "Your personal Activity calendar links a selected local day to its complete sessions. Global Activity has no private session-history link. If more context is needed, use Check with more context. A size-limit message means no partial session was presented as complete; even a smaller output window can contain an individual session beyond the supported limit." },
     { type: "heading", text: "What counts as one session", anchor: "definition" },
     { type: "paragraph", text: "A session ends after **more than** your selected number of minutes without another game. An exact gap stays connected. Midnight, timezones and daylight-saving changes label the same instants; they do not split a continuous session. Games without a decided result can connect the games on either side, while win rates still count only wins and losses." },
     { type: "paragraph", text: "Gaps compare the recorded replay end timestamps. Game length is not subtracted. Your own accounts can contribute to the same session; global charts keep separate player contexts." },

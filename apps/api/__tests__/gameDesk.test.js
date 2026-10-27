@@ -94,6 +94,9 @@ test("session reset preserves foreign owner, bounds subsequent games and stamps 
   expect(response.body.streamStartMs).toBeGreaterThanOrEqual(now);
   expect((await games.todaySession(OWNER, undefined, { reuseRecent: true }))).toMatchObject({ wins: 0, losses: 0, games: 0 });
   expect((await db.users.findOne({ userId: "foreign" })).sessionAnchorAt).toBe("2020-01-01T00:00:00.000Z");
+  expect(events.filter(event => event.event === "games:changed")).toEqual([
+    { room: `user:${OWNER}`, event: "games:changed", payload: { count: 0, inserted: 0, bulk: false, reason: "session-reset" } },
+  ]);
   expect(events.filter(e => e.event === "overlay:session").map(e => e.room)).toEqual([`overlay:${TOKEN}`]);
   await db.games.insertOne({ userId: OWNER, gameId: "after", date: new Date(), result: "loss", myMmr: 4990 });
   games.invalidateForUser(OWNER); expect((await games.todaySession(OWNER))).toMatchObject({ wins: 0, losses: 1, games: 1 });
@@ -250,6 +253,9 @@ test("a committed policy change during held token-list IO retires reset fanout w
     expect(state.streamStartMs).toBeGreaterThan(0);
     expect((await db.users.findOne({ userId: OWNER })).sessionAnchorAt).toBeDefined();
     expect(events.filter(event => event.event === "overlay:session")).toEqual([]);
+    expect(events.filter(event => event.event === "games:changed")).toEqual([
+      { room: `user:${OWNER}`, event: "games:changed", payload: { count: 0, inserted: 0, bulk: false, reason: "session-reset" } },
+    ]);
     await svc.resetSession(OWNER, TOKEN);
     const current = events.filter(event => event.event === "overlay:session");
     expect(current.map(event => event.room)).toEqual([`overlay:${TOKEN}`]);
@@ -288,6 +294,9 @@ test("a committed reset keeps its ACK when an actual held session query is retir
     expect((await db.users.findOne({ userId: OWNER })).sessionAnchorAt).toBeDefined();
     expect(listing).not.toHaveBeenCalled();
     expect(events.filter(event => event.event === "overlay:session")).toEqual([]);
+    expect(events.filter(event => event.event === "games:changed")).toEqual([
+      { room: `user:${OWNER}`, event: "games:changed", payload: { count: 0, inserted: 0, bulk: false, reason: "session-reset" } },
+    ]);
     await svc.resetSession(OWNER, TOKEN);
     const current = events.filter(event => event.event === "overlay:session");
     expect(current.map(event => event.room)).toEqual([`overlay:${TOKEN}`]);
@@ -314,10 +323,101 @@ test.each(["resolution", "token-list", "publication"])("a non-retirement %s fail
       });
   try {
     await expect(svc.resetSession(OWNER, TOKEN)).rejects.toBe(failure);
+    expect(events.filter(event => event.event === "games:changed")).toEqual([
+      { room: `user:${OWNER}`, event: "games:changed", payload: { count: 0, inserted: 0, bulk: false, reason: "session-reset" } },
+    ]);
     if (boundary === "publication") {
       expect(publicationEntered).toBe(true);
       expect(listing).toHaveBeenCalledTimes(1); expect(listing).toHaveBeenCalledWith(OWNER);
       expect(events.some(event => event.event === "overlay:multichat")).toBe(true);
     }
   } finally { spy.mockRestore(); listing?.mockRestore(); }
+});
+
+test("confirmed reset invalidates the owner before optional overlay session work finishes", async () => {
+  let entered, release;
+  const started = new Promise(resolve => { entered = resolve; });
+  const held = new Promise(resolve => { release = resolve; });
+  const original = games.todaySession.bind(games);
+  const query = jest.spyOn(games, "todaySession").mockImplementationOnce(async (...args) => {
+    entered(); await held; return original(...args);
+  });
+  const pending = svc.resetSession(OWNER, TOKEN);
+  try {
+    await started;
+    const owner = await db.users.findOne({ userId: OWNER });
+    expect((await studio.get(TOKEN)).streamStartMs).toBe(Date.parse(owner.sessionAnchorAt));
+    expect(events.filter(event => event.event === "games:changed")).toEqual([
+      { room: `user:${OWNER}`, event: "games:changed", payload: { count: 0, inserted: 0, bulk: false, reason: "session-reset" } },
+    ]);
+    expect(events.filter(event => event.event === "overlay:session")).toEqual([]);
+  } finally { release(); try { await pending; } finally { query.mockRestore(); } }
+});
+
+test.each(["before", "after"])("failed owner reset write %s durable commit emits no refresh", async boundary => {
+  const failure = new Error(`reset write failure ${boundary}`), original = db.users.updateOne.bind(db.users);
+  const write = jest.spyOn(db.users, "updateOne").mockImplementationOnce(async (...args) => {
+    if (boundary === "after") await original(...args);
+    throw failure;
+  });
+  const advance = jest.spyOn(studio, "advanceStreamStart");
+  try {
+    await expect(svc.resetSession(OWNER, TOKEN)).rejects.toBe(failure);
+    expect(events.filter(event => event.event === "games:changed")).toEqual([]);
+    expect(advance).not.toHaveBeenCalled();
+    expect(Boolean((await db.users.findOne({ userId: OWNER })).sessionAnchorAt)).toBe(boundary === "after");
+  } finally { write.mockRestore(); advance.mockRestore(); }
+});
+
+test("an unmatched owner reset cannot emit another owner's refresh or insert an owner", async () => {
+  const advance = jest.spyOn(studio, "advanceStreamStart");
+  try {
+    await expect(svc.resetSession("missing-owner", TOKEN)).rejects.toMatchObject({ status: 404, code: "user_not_found" });
+    expect(await db.users.countDocuments({ userId: "missing-owner" })).toBe(0);
+    expect((await db.users.findOne({ userId: OWNER })).sessionAnchorAt).toBeUndefined();
+    expect(events.filter(event => event.event === "games:changed")).toEqual([]);
+    expect(advance).not.toHaveBeenCalled();
+  } finally { advance.mockRestore(); }
+});
+
+test("an unavailable committed anchor read emits no unconfirmed refresh", async () => {
+  const read = jest.spyOn(db.users, "findOne").mockResolvedValueOnce(null);
+  const advance = jest.spyOn(studio, "advanceStreamStart");
+  try {
+    await expect(svc.resetSession(OWNER, TOKEN)).rejects.toThrow("session anchor unavailable");
+    expect(events.filter(event => event.event === "games:changed")).toEqual([]);
+    expect(advance).not.toHaveBeenCalled();
+  } finally { read.mockRestore(); advance.mockRestore(); }
+});
+
+test("a failed stream mark preserves its failure without announcing a completed reset", async () => {
+  const failure = new Error("stream mark failed");
+  const advance = jest.spyOn(studio, "advanceStreamStart").mockRejectedValueOnce(failure);
+  const query = jest.spyOn(games, "todaySession");
+  try {
+    await expect(svc.resetSession(OWNER, TOKEN)).rejects.toBe(failure);
+    expect((await db.users.findOne({ userId: OWNER })).sessionAnchorAt).toBeDefined();
+    expect(events.filter(event => event.event === "games:changed")).toEqual([]);
+    expect(query).not.toHaveBeenCalled();
+  } finally { advance.mockRestore(); query.mockRestore(); }
+});
+
+test("an unrelated owner refresh emission failure is not swallowed as overlay retirement", async () => {
+  const failure = new Error("owner signal failed"), original = svc.deps.io.to.bind(svc.deps.io);
+  let reached = false;
+  const emit = jest.spyOn(svc.deps.io, "to").mockImplementation(room => {
+    const emitter = original(room);
+    return { emit: (event, payload) => {
+      if (event === "games:changed") { reached = true; expect(room).toBe(`user:${OWNER}`); throw failure; }
+      return emitter.emit(event, payload);
+    } };
+  });
+  const query = jest.spyOn(games, "todaySession");
+  try {
+    await expect(svc.resetSession(OWNER, TOKEN)).rejects.toBe(failure);
+    expect(reached).toBe(true);
+    expect(events.some(event => event.event === "overlay:multichat")).toBe(true);
+    expect((await db.users.findOne({ userId: OWNER })).sessionAnchorAt).toBeDefined();
+    expect(query).not.toHaveBeenCalled();
+  } finally { emit.mockRestore(); query.mockRestore(); }
 });

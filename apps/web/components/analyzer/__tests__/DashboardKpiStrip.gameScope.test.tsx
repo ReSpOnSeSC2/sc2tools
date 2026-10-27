@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import {
   DEFAULT_ANALYZER_FILTERS,
   FiltersContext,
@@ -18,6 +18,12 @@ vi.mock("@/lib/clientApi", () => ({
   },
 }));
 
+vi.mock("@/components/sessions/useSessionRequest", () => ({
+  useSessionRequest: (url: string) => {
+    requestedUrls.push(url);
+    return { data: undefined, error: undefined, mutate: () => undefined, current: () => true, key: url };
+  },
+}));
 afterEach(() => {
   cleanup();
   requestedUrls.length = 0;
@@ -42,13 +48,17 @@ function renderStrip(filters: AnalyzerFilters) {
 }
 
 describe("DashboardKpiStrip game scope", () => {
-  it("keeps every game-derived KPI inside the default ladder 1v1 cohort", () => {
+  it("keeps the three filtered KPIs in ladder 1v1 while current uses its fixed live scope", async () => {
     renderStrip({ ...DEFAULT_ANALYZER_FILTERS });
 
     const gameQueries = requestedUrls.filter((url) =>
       url.startsWith("/v1/timeseries") || url.startsWith("/v1/streak"),
     );
-    expect(gameQueries).toHaveLength(4);
+    expect(gameQueries).toHaveLength(3);
+    await waitFor(() => expect(requestedUrls.some(url => url.startsWith("/v1/sessions/current"))).toBe(true));
+    const current = requestedUrls.find(url => url.startsWith("/v1/sessions/current"));
+    expect(current).toBeTruthy();
+    expect([...queryOf(current ?? "").keys()]).toEqual(["tz"]);
     for (const url of gameQueries) {
       const query = queryOf(url);
       expect(query.get("map_pool")).toBe("ladder");
