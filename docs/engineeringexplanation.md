@@ -396,7 +396,7 @@ permit lasts until findOne and isDeleted actually settle, including post-compute
 guards and aborted/closed HTTP responses. Saturation returns 503; fixed
 guard_active/guard_rejected gauges share the existing private metrics registry.
 
-Retention is limited to 64 MiB of UTF-8 body/key bytes, a 512 KiB body, 512 entries,
+Retention is limited to 64 MiB of UTF-8 body/key/validator bytes, a 512 KiB body, 512 entries,
 16 KiB keys and an absolute ten-minute TTL. Response-pinned retired buffers remain
 charged; reservations precede computation. This budget does not claim to bound
 all Node/Mongo working memory. Oversized responses retain their original schema
@@ -407,10 +407,56 @@ seconds; a slow response closes after 30 seconds. Cancellation releases its own
 waiter, never another subscriber's running permit. Capacity failures use 503 and
 Retry-After: 1 instead of launching unbounded fallback work.
 
-Enabled successful responses use ordinary 200 JSON and `private, no-store`, including a
-request carrying If-None-Match. Canonical weak ETags, private/no-cache conditional
-responses, CORS exposure and owner-scoped browser body reconstruction are still
-pending. The existing client treats a raw 304 as an error and is unchanged.
+Enabled stable retained responses include a process-salted weak ETag derived from
+the full typed key and exact serialized JSON. They use `private, no-cache` and
+`Vary: Authorization`; every subscriber independently receives 200 or an empty 304
+after the existing fresh identity/revision guards. A bounded If-None-Match parser
+accepts HTTP weak comparison and rejects malformed/oversized lists by sending 200.
+Validator bytes occupy the existing cache entry and reservation, not another
+cache. Dirty, active, invalid-revision and oversized bypass bodies stay 200 with
+`private, no-store`. OFF preserves the original Express JSON/freshness behavior.
+CORS exposes ETag without changing allowed origins or authentication.
+
+Only the six allowlisted useApi paths can discover the explicit enabled-cache
+capability and start a background dynamic import. Before that module is ready,
+after import failure, or outside the AppChrome conditional provider, useApi makes
+one ordinary request. No eager retained-body engine or import wait is added to
+other consumers. A cold ordinary capability response is not retained; the next
+eligible 200 may be retained, and later revalidations can send its tag.
+
+One lazy engine per browser document retains immutable JSON text, with a fresh
+JSON.parse for each 304. The central provider supplies account/provider epochs;
+A→B→A and real unmount retire old ledger authority, while StrictMode effect replay
+keeps it. This does not change initiating-hook cancellation, Retry, SWR keys or
+resource lifetimes. The exact captured origin/owner/provider/full path, including
+query and #rev, is the ledger identity. A held old-key operation may still complete
+only into that old key under the existing initiating-hook SWR baseline; changing
+one hook's path does not retire a sibling's old key.
+
+The logical retained-representation budget is 8 MiB across current and retired
+pins: raw UTF-8 body/key/tag bytes plus 256 bytes per entry. Limits are 64 entries
+(including retired pins and candidate reservations), 512 KiB bodies, 16 KiB keys,
+absolute ten-minute retention, and four active enhanced operations without a
+queue. Reservations precede API admission. Pressure chooses one ordinary fetch,
+not a new 503; oversized valid 200 JSON remains available without retention.
+Actual fetch/body finally releases reservations and pins, even when an outer
+timeout already rejected or an adapter ignored abort. This budget does not bound
+VM heap, decoder/text/DTO transients, SWR's existing cache, or browser HTTP cache.
+
+A 304 uses only its exact still-retained body/tag. If that body is absent,
+expired or mismatched, one unconditional recovery uses the ordinary baseline;
+a second raw 304 is an explicit missing-body error with a Retry message. HTTP
+errors keep baseline availability and
+reporting; admitted and ordinary reads share the same 401/403 retirement before
+error-body decoding, including capacity/pressure fallback and unconditional 304
+recovery. They clear capabilities, rotate a bounded retention token and retire
+that account epoch's pairs while keeping the retirement listener for later
+capability rediscovery. Older in-flight responses can return baseline data but
+cannot refill the ledger or reuse retired 304 bodies after rediscovery. An
+oversized successful 200 also retires its obsolete older pair. No mutation paths,
+authentication cache, wider route allowlist, gameStats maintenance or production
+flag activation are included. Route JavaScript budgets remain unchanged and must
+be measured before delivery; source preparation alone proves no savings.
 Identifier-free cache counters and byte/admission gauges use the existing private
 METRICS_TOKEN registry only. Maintained gameStats, the 60-second device-auth lookup cache,
 admin-health presentation, broader dependencies and IndexedDB/corpus deltas also

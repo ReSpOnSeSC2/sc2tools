@@ -15,6 +15,11 @@ import useSWR, {
 } from "swr";
 import { recordFailedRequest } from "@/lib/feedback/failedRequests";
 import { networkUnavailableError } from "./requestErrors";
+import {
+  conditionalRoute, createConditionalLoader, noteConditionalCapability, rejectConditionalAuth, useConditionalApiScope,
+} from "./conditionalApiScope";
+
+const conditionalResponses = createConditionalLoader(() => import("./conditionalApiResponses"));
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080";
@@ -56,6 +61,7 @@ export function useApi<T>(
   const { getToken, isLoaded, isSignedIn, userId } = useAuth();
   const owner = isLoaded && isSignedIn && userId ? userId : null;
   const runOwned = useOwnerRequestScope(owner, getToken);
+  const conditionalScope = useConditionalApiScope();
   // An authenticated response belongs to one Clerk account. Keeping userId in
   // the SWR identity prevents a late response or warm cache from account A
   // being read after the browser switches to account B. The request path sent
@@ -68,20 +74,43 @@ export function useApi<T>(
     async ([, requestOwner, requestPath]: readonly [string, string, string]) =>
       runOwned(requestOwner, async (scopedToken, signal, assertCurrent) => {
         const token = await scopedToken();
-        const res = await trackedFetch(requestPath, `${API_BASE}${requestPath}`, {
-          headers: token ? { authorization: `Bearer ${token}` } : undefined,
-          cache: "no-store",
-          signal,
+        const fetchResponse = (tag?: string) => trackedFetch(requestPath, `${API_BASE}${requestPath}`, {
+          headers: token || tag ? { ...(token ? { authorization: `Bearer ${token}` } : {}),
+            ...(tag ? { "If-None-Match": tag } : {}) } : undefined,
+          cache: "no-store", signal,
         });
-        assertCurrent();
-        if (!res.ok) {
-          const error = await buildApiError(res);
+        const fail = async (res: Response): Promise<never> => {
+          const error: ClientApiError = res.status === 304
+            ? { status: 304, code: "conditional_body_missing",
+              message: "Couldn't refresh this chart. Select Retry to request it again." }
+            : await buildApiError(res);
           assertCurrent();
           throw noteFailure(requestPath, error);
+        };
+        const ordinary = async (): Promise<T> => {
+          const res = await fetchResponse();
+          assertCurrent();
+          if (!res.ok) {
+            rejectConditionalAuth(conditionalScope, requestOwner, res.status);
+            return fail(res);
+          }
+          const data: T = await res.json();
+          assertCurrent();
+          if (noteConditionalCapability(conditionalScope, requestOwner, requestPath, res)) conditionalResponses.start();
+          return data;
+        };
+        // The full captured path (including #rev) stays the resource identity.
+        // Until the eligible-only lazy module is ready, perform one ordinary read.
+        const ready = conditionalResponses.get(), route = conditionalRoute(requestPath);
+        if (ready && conditionalScope?.active && !conditionalScope.retired
+          && conditionalScope.owner === requestOwner && route >= 0
+          && (conditionalScope.capabilities & (1 << route))) {
+          const data = await ready.readConditionalApi<T>({ scope: conditionalScope, owner: requestOwner,
+            origin: API_BASE, path: requestPath, assertCurrent, fetchResponse, ordinary, fail });
+          assertCurrent();
+          return data;
         }
-        const data: T = await res.json();
-        assertCurrent();
-        return data;
+        return ordinary();
       }, requestOptions?.timeoutMs),
     config,
   );
