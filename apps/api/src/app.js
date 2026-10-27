@@ -22,6 +22,11 @@ const {
 } = require("./middleware/replayIngestAdmission");
 const { captureSignedWebhookRawBody } = require("./middleware/jsonBody");
 const { sanitiseRequestForLog, sanitiseResponseForLog } = require("./middleware/requestLogging");
+const { privateSearchNoStore, buildPrivateSearchJsonParser,
+  privateSearchErrorBoundary, isPrivateSearchRequest } = require("./middleware/privateSearchBoundary");
+const { privateSearchRequestScope } = require("./util/sentry");
+const { PrivateSearchService } = require("./services/privateSearchService");
+const { buildPrivateSearchRouter } = require("./routes/privateSearchRoute");
 
 const { UsersService } = require("./services/users");
 const { ActivationService } = require("./services/activation");
@@ -321,7 +326,7 @@ function isCoachingStateJson(req) {
  * both REST and any caller sharing the set (the socket layer).
  *
  * @param {AppDeps} deps
- * @returns {{app: import('express').Express, services: object, adminClerkIds: Set<string>}}
+ * @returns {{app: import('express').Express, services: ReturnType<typeof makeServices>, adminClerkIds: Set<string>}}
  */
 function buildApp(deps) {
   // Register schema migrations BEFORE any service touches Mongo so
@@ -355,6 +360,7 @@ function buildApp(deps) {
   // REST ``isAdmin`` gate and the socket layer both read this live set;
   // the boot sequence also merges persisted DB admins into it.
   mountRoutes(app, deps, services, clerk, adminClerkIds, auth);
+  app.use(privateSearchErrorBoundary);
   app.use(buildErrorHandler(deps.logger));
   return { app, services, adminClerkIds };
 }
@@ -381,6 +387,9 @@ function makeServices(deps, clerk, adminClerkIds) {
   const supportMessages = new SupportMessagesService(deps.db, notifications, adminEvents);
   const announcements = new AnnouncementsService(deps.db, { notifications, io: deps.io, logger: deps.logger });
   const identityDeletions = new IdentityDeletionsService(deps.db, { clerk, secret: deps.config.serverPepper, logger: deps.logger });
+  const privateSearch = new PrivateSearchService(deps.db, {
+    identityKeyFor: id => identityDeletions.keyFor(id),
+  });
   const userRevision = new UserRevision(deps.db.users, { enabled: deps.config.userCacheEnabled,
     isDeleted: (id) => identityDeletions.isDeleted(id), logger: deps.logger });
   const userCache = new UserCache(userRevision, { enabled: deps.config.userCacheEnabled });
@@ -1013,6 +1022,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   } });
   return {
     userRevision, userCache, sessionPolicy, sessionHistory, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
+    privateSearch,
     users,
     activation,
     opponents,
@@ -1115,6 +1125,7 @@ function makeServices(deps, clerk, adminClerkIds) {
  * @param {import('./services/siteStats').SiteStatsService} siteStats
  */
 function applyBaseMiddleware(app, deps, auth, siteStats) {
+  app.use(privateSearchNoStore, privateSearchRequestScope);
   app.use(helmet());
   app.use(
     cors({
@@ -1209,7 +1220,9 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
     limit: DEFAULT_JSON_LIMIT,
     verify: captureSignedWebhookRawBody,
   });
+  app.use(buildPrivateSearchJsonParser());
   app.use((req, res, next) => {
+    if (isPrivateSearchRequest(req) && req.method !== "POST") { next(); return; }
     const parser = isLargeAuthenticatedJson(req)
       ? replayJson
       : isCoachingStateJson(req)
@@ -1230,6 +1243,9 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
 function registerRuntimeCapacityProviders(registry, services) {
   if (!registry) return;
   const providers = {
+    privateSearch: services.privateSearch?.capacity
+      ? () => services.privateSearch.capacity.capacitySnapshot()
+      : null,
     pulse: services.pulseMmr?.capacitySnapshot
       ? () => services.pulseMmr.capacitySnapshot()
       : null,
@@ -1269,6 +1285,7 @@ function registerRuntimeCapacityProviders(registry, services) {
  * @param {import('express').RequestHandler} auth
  */
 function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
+  app.use(SERVICE.ROUTE_PREFIX, buildPrivateSearchRouter({ privateSearch: services.privateSearch, auth }));
   app.use(SERVICE.ROUTE_PREFIX, buildAnnouncementsRouter({ announcements: services.announcements }));
 
   // Public routers (no `router.use(auth)` — public endpoints OR per-route

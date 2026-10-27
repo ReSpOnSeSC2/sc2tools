@@ -13,6 +13,7 @@
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const { connect, ensureIndexes } = require("../src/db/connect");
 const { BACKGROUND_GAMES_INDEXES, startBackgroundIndexBuilds } = require("../src/db/guideIndexes");
+const { PRIVATE_SEARCH_OPPONENT_INDEX } = require("../src/db/privateSearchIndexes");
 const { GuideStatsService, GAMES_INDEX_BUILDING } = require("../src/services/guideStats");
 const { GUIDE_GAMES_INDEX_NAME } = require("../src/services/guideStatsPipelines");
 const { NOW_MS, resetDb, cellGames } = require("./helpers/guideStatsSeed");
@@ -31,11 +32,11 @@ function fakeLogger() {
 }
 
 function deferred() {
-  let resolve;
-  const promise = new Promise((res) => {
-    resolve = res;
+  let resolve, reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res; reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 /** Calls of a logger method with message ``msg``. */
@@ -105,6 +106,27 @@ const open = (dbName, opts = {}, observability = {}) =>
   connect({ uri: mongo.getUri(), dbName, ...opts }, observability);
 const guideIndex = async (db) => (await db.games.indexes()).find((ix) => ix.name === GUIDE_GAMES_INDEX_NAME);
 
+/** Hold the actual ensureIndexes producer's independent optional builds. */
+function holdBackgroundBuilds(db) {
+  const guide = deferred(), search = deferred(), guideStarted = deferred(), searchStarted = deferred();
+  const guideFinished = deferred();
+  void guideFinished.promise.catch(() => {});
+  const realGames = db.games.createIndex.bind(db.games), realOpponents = db.opponents.createIndex.bind(db.opponents);
+  const games = jest.spyOn(db.games, "createIndex").mockImplementation(async (key, options) => {
+    if (options?.name !== GUIDE_GAMES_INDEX_NAME) return realGames(key, options);
+    guideStarted.resolve(); await guide.promise;
+    try { const name = await realGames(key, options); guideFinished.resolve(); return name; }
+    catch (error) { guideFinished.reject(error); throw error; }
+  });
+  const opponents = jest.spyOn(db.opponents, "createIndex").mockImplementation(async (key, options) => {
+    if (options?.name !== PRIVATE_SEARCH_OPPONENT_INDEX) return realOpponents(key, options);
+    searchStarted.resolve(); await search.promise; return realOpponents(key, options);
+  });
+  return { guide, search, guideFinished, started: Promise.all([guideStarted.promise, searchStarted.promise]),
+    release: () => { guide.resolve(); search.resolve(); },
+    restore: () => { games.mockRestore(); opponents.mockRestore(); } };
+}
+
 describe("background guide index: boot never waits for it", () => {
   test("ensureIndexes resolves while the guide build is still running", async () => {
     const db = await open("bg_index_nonblocking", { awaitBackgroundIndexes: true });
@@ -143,7 +165,66 @@ describe("background guide index: boot never waits for it", () => {
       await db.close();
     }
   });
+});
 
+describe("background indexes: guide readiness is independent", () => {
+  test("a real guide recompute proceeds when its build finishes while the opponent build remains held", async () => {
+    const db = await open("bg_index_independent_guide_wait", { awaitBackgroundIndexes: true });
+    let held, builds, run;
+    try {
+      await resetDb(db);
+      await db.games.insertMany(cellGames({ users: 6, perUser: 20, winsPerUser: 11 }));
+      await db.games.dropIndex(GUIDE_GAMES_INDEX_NAME);
+      held = holdBackgroundBuilds(db);
+      builds = await ensureIndexes(db);
+      expect(builds.status(GUIDE_GAMES_INDEX_NAME)).toBe("building");
+      const service = new GuideStatsService(db, { logger: null, now: () => NOW_MS, indexWaitMs: 500 });
+      // recompute enters the actual guide readiness wait before release. The
+      // unrelated search gate stays held until finally, including on failure.
+      run = service.recompute(); void run.catch(() => {});
+      held.guide.resolve();
+      await expect(run).resolves.toMatchObject({ counts: { builds: expect.any(Number) } });
+      expect((await run).counts.builds).toBeGreaterThan(0);
+      expect(await db.guideStats.countDocuments({ kind: "run" })).toBe(1);
+      expect(db.backgroundIndexes).toBe(builds);
+      expect(builds.status(PRIVATE_SEARCH_OPPONENT_INDEX)).toBeNull();
+      expect(db.privateSearchIndexes.status(PRIVATE_SEARCH_OPPONENT_INDEX)).toBe("building");
+    } finally {
+      held?.release();
+      await Promise.allSettled([run, builds?.settled, db.privateSearchIndexes?.settled]);
+      held?.restore(); await db.close();
+    }
+  });
+});
+
+describe("background indexes: explicit waiting includes both producers", () => {
+  test("explicit awaitBackground still waits for both independent producer builds", async () => {
+    const db = await open("bg_index_independent_explicit_wait", { awaitBackgroundIndexes: true });
+    let held, work, completed = false;
+    try {
+      held = holdBackgroundBuilds(db);
+      work = ensureIndexes(db, { awaitBackground: true }).then(value => { completed = true; return value; });
+      void work.catch(() => {});
+      await Promise.race([held.started, work.then(() => { throw new Error("optional builds were not held"); })]);
+      expect(completed).toBe(false);
+      held.guide.resolve();
+      await held.guideFinished.promise;
+      // Flush producer continuations without a wall-clock sleep. Returning
+      // after only the guide build would be observable before this checkpoint.
+      await new Promise(resolve => setImmediate(resolve));
+      expect(completed).toBe(false);
+      expect(db.backgroundIndexes.status(GUIDE_GAMES_INDEX_NAME)).toBe("ready");
+      expect(db.privateSearchIndexes.status(PRIVATE_SEARCH_OPPONENT_INDEX)).toBe("building");
+      held.search.resolve();
+      await expect(work).resolves.toBe(db.backgroundIndexes);
+      expect(completed).toBe(true);
+      expect(db.privateSearchIndexes.status(PRIVATE_SEARCH_OPPONENT_INDEX)).toBe("ready");
+    } finally {
+      held?.release();
+      await Promise.allSettled([work, db.backgroundIndexes?.settled, db.privateSearchIndexes?.settled]);
+      held?.restore(); await db.close();
+    }
+  });
 });
 
 describe("background guide index: outcome logging", () => {
@@ -151,9 +232,9 @@ describe("background guide index: outcome logging", () => {
     const logger = fakeLogger();
     const db = await open("bg_index_default", {}, { logger });
     try {
-      await db.backgroundIndexes.settled;
+      await Promise.all([db.backgroundIndexes.settled, db.privateSearchIndexes.settled]);
       expect(db.backgroundIndexes.status(GUIDE_GAMES_INDEX_NAME)).toBe("ready");
-      expect(logged(logger.info, "background_index_ready")).toEqual([
+      expect(logged(logger.info, "background_index_ready").filter(([fields]) => fields.index === GUIDE_GAMES_INDEX_NAME)).toEqual([
         [{ index: GUIDE_GAMES_INDEX_NAME, durationMs: expect.any(Number) }, "background_index_ready"],
       ]);
       expect(logged(logger.warn, "background_index_failed")).toEqual([]);

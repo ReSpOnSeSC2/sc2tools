@@ -3,12 +3,15 @@
 const { MongoClient } = require("mongodb");
 const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
 const { ensureGuideIndexes, startBackgroundIndexBuilds } = require("./guideIndexes");
+const { PRIVATE_SEARCH_COMMENT } = require("../services/privateSearchReader");
+const { startPrivateSearchIndex } = require("./privateSearchIndexes");
 
 /**
  * @typedef {{
  *   client: MongoClient,
  *   db: import('mongodb').Db,
  *   backgroundIndexes?: import('./guideIndexes').BackgroundIndexBuilds,
+ *   privateSearchIndexes?: import('./guideIndexes').BackgroundIndexBuilds,
  *   users: import('mongodb').Collection,
  *   profiles: import('mongodb').Collection,
  *   opponents: import('mongodb').Collection,
@@ -202,7 +205,7 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
     Number.isFinite(thresholdMs) && Number(thresholdMs) > 0
       ? Number(thresholdMs)
       : 100;
-  /** @type {Map<number, string>} */
+  /** @type {Map<number, {collection:string,private:boolean}>} */
   const targets = new Map();
   client.on("commandStarted", (ev) => {
     if (SLOW_QUERY_IGNORED_COMMANDS.has(ev.commandName)) return;
@@ -212,7 +215,8 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
     const target = ev.command ? ev.command[ev.commandName] : undefined;
     targets.set(
       ev.requestId,
-      typeof target === "string" ? target : "",
+      { collection: typeof target === "string" ? target : "",
+        private: ev.command?.comment === PRIVATE_SEARCH_COMMENT },
     );
     // Bound the map so a burst of long-running commands can't grow it
     // unchecked if a terminal event is ever missed.
@@ -224,29 +228,33 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
     }
   });
   client.on("commandSucceeded", (ev) => {
-    const collection = targets.get(ev.requestId);
+    const metadata = targets.get(ev.requestId);
     targets.delete(ev.requestId);
     if (SLOW_QUERY_IGNORED_COMMANDS.has(ev.commandName)) return;
     if (ev.duration < slowMs) return;
     logger.warn(
       {
         commandName: ev.commandName,
-        collection: collection || undefined,
+        collection: metadata?.collection || undefined,
         durationMs: Math.round(ev.duration),
       },
       "slow_query",
     );
   });
   client.on("commandFailed", (ev) => {
-    const collection = targets.get(ev.requestId);
+    const metadata = targets.get(ev.requestId);
     targets.delete(ev.requestId);
     if (SLOW_QUERY_IGNORED_COMMANDS.has(ev.commandName)) return;
     logger.warn(
       {
         commandName: ev.commandName,
-        collection: collection || undefined,
+        collection: metadata?.collection || undefined,
         durationMs: Math.round(ev.duration),
-        err: ev.failure ? String(ev.failure.message || ev.failure) : undefined,
+        // Unknown/evicted metadata is private until proven otherwise. Never
+        // forward a database error that may echo a private search pipeline.
+        ...(metadata && !metadata.private
+          ? { err: ev.failure ? String(ev.failure.message || ev.failure) : undefined }
+          : { code: "mongo_command_failed" }),
       },
       "mongo_command_failed",
     );
@@ -725,10 +733,14 @@ async function ensureIndexes(ctx, opts = {}) {
   await ensureReviewIndexes(ctx);
   // Last, so the ``games`` collection exists and the long build never
   // competes with the awaited ones above.
-  const builds = startBackgroundIndexBuilds(ctx, opts.logger || null);
-  ctx.backgroundIndexes = builds;
-  if (opts.awaitBackground) await builds.settled;
-  return builds;
+  const guides = startBackgroundIndexBuilds(ctx, opts.logger || null);
+  const search = startPrivateSearchIndex(ctx, opts.logger || null);
+  // GuideStats waits on this existing guide-only authority. The unrelated
+  // optional search build must not lengthen its bounded readiness wait.
+  ctx.backgroundIndexes = guides;
+  ctx.privateSearchIndexes = search;
+  if (opts.awaitBackground) await Promise.all([guides.settled, search.settled]);
+  return guides;
 }
 
 /**
