@@ -51,7 +51,7 @@ describe("session comparisons", () => {
     } });
     const { container } = render(<MomentumChart />);
     expect(screen.getByText("Session patterns")).toBeTruthy();
-    expect(screen.getByText(/Sessions split on a 90-min gap/)).toBeTruthy();
+    expect(screen.getByText(/Sessions split after more than 90 minutes without a game; an exact gap stays connected/)).toBeTruthy();
     const after = within(screen.getByRole("list", { name: "Win rate after the previous result" }));
     expect(after.getAllByText("Small sample")).toHaveLength(2);
     expect(after.getByText("5 games · 5W · 0L")).toBeTruthy();
