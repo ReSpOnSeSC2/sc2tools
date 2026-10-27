@@ -2,8 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ReviewPageData } from "@/lib/reviews";
 const h = vi.hoisted(() => ({ apiCall: vi.fn(), changed: vi.fn(), signedIn: true }));
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "token", isSignedIn: h.signedIn }) }));
-vi.mock("@/lib/clientApi", () => ({ apiCall: h.apiCall }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "token", isSignedIn: h.signedIn, isLoaded: true, userId: "viewer" }) }));
+vi.mock("@/lib/clientApi", async (original) => ({ ...await original<typeof import("@/lib/clientApi")>(), apiCall: h.apiCall }));
 vi.mock("@/components/maps/MapArtwork", () => ({ MapArtwork: () => null }));
 vi.mock("../ReviewReplayPanel", () => ({ ReviewReplayPanel: () => null }));
 vi.mock("../ReviewShareMenu", () => ({ ReviewShareMenu: () => <button>Share</button> }));
@@ -44,7 +44,7 @@ it("confirms closing with the irreversible effect, stays open while posting and 
   const dialog = screen.getByRole("dialog", { name: "Close this request?" });
   expect(dialog.textContent).toContain("New comments stop and the replay analysis is no longer shared. The thread stays readable. You can't reopen it.");
   fireEvent.click(within(dialog).getByRole("button", { name: "Close request" }));
-  expect(h.apiCall).toHaveBeenCalledWith(expect.any(Function), "/v1/reviews/request/close", { method: "POST", body: "{}" });
+  expect(h.apiCall).toHaveBeenCalledWith(expect.any(Function), "/v1/reviews/request/close", { method: "POST", body: "{}", signal: expect.any(AbortSignal) });
   expect((within(dialog).getByRole("button", { name: "Close request" }) as HTMLButtonElement).disabled).toBe(true);
   fireEvent.keyDown(dialog, { key: "Escape" }); expect(screen.getByRole("dialog")).toBeTruthy();
   await act(async () => finish({})); expect(screen.queryByRole("dialog")).toBeNull(); expect(h.changed).toHaveBeenCalledOnce(); expect(confirm).not.toHaveBeenCalled();
@@ -69,7 +69,7 @@ it.each([true, false])("reports a whole request and explains whether it was alre
   expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Spam" }));
   fireEvent.click(screen.getByRole("menuitem", { name: "Spam" }));
   await waitFor(() => expect(screen.getByRole("status").textContent).toBe(alreadyReported ? "You already reported this request." : "Thanks — a moderator will take a look."));
-  expect(h.apiCall).toHaveBeenCalledWith(expect.any(Function), "/v1/reviews/request/report", { method: "POST", body: JSON.stringify({ reason: "Spam" }) });
+  expect(h.apiCall).toHaveBeenCalledWith(expect.any(Function), "/v1/reviews/request/report", { method: "POST", body: JSON.stringify({ reason: "Spam" }), signal: expect.any(AbortSignal) });
 });
 
 it("hides request reporting for signed-out readers and recovers a report failure with readable feedback", async () => {

@@ -1,9 +1,11 @@
 export type ReviewDraft = { body: string; start: number; end: number | null; savedAt: number };
 
-const PREFIX = "sc2tools:review-draft:v1:";
+const PREFIX = "sc2tools:review-draft:v2:";
+const LEGACY_PREFIX = "sc2tools:review-draft:v1:";
 const MAX_AGE = 14 * 24 * 60 * 60 * 1000;
 const MAX_DRAFTS = 20;
-const keyFor = (requestId: string, parentId: string | null) => `${PREFIX}${requestId}:${parentId ?? "root"}`;
+const keyFor = (ownerId: string, requestId: string, parentId: string | null) =>
+  `${PREFIX}${encodeURIComponent(ownerId)}:${encodeURIComponent(requestId)}:${parentId === null ? "root" : `reply:${encodeURIComponent(parentId)}`}`;
 
 function read(storage: Storage, key: string): ReviewDraft | null | undefined {
   let raw: string | null;
@@ -26,7 +28,7 @@ export function pruneDrafts(now = Date.now()): void {
     const entries: Array<{ key: string; savedAt: number }> = [];
     for (let index = 0; index < storage.length; index += 1) {
       const key = storage.key(index);
-      if (!key?.startsWith(PREFIX)) continue;
+      if (!key || (!key.startsWith(PREFIX) && !key.startsWith(LEGACY_PREFIX))) continue;
       const draft = read(storage, key);
       if (draft === undefined) continue;
       entries.push({ key, savedAt: draft && now - draft.savedAt <= MAX_AGE ? draft.savedAt : -Infinity });
@@ -40,20 +42,23 @@ export function pruneDrafts(now = Date.now()): void {
   } catch { /* Storage is optional, including during server rendering. */ }
 }
 
-export function loadDraft(requestId: string, parentId: string | null = null): ReviewDraft | null {
+export function loadDraft(ownerId: string | null, requestId: string, parentId: string | null = null): ReviewDraft | null {
+  if (!ownerId) return null;
   pruneDrafts();
   try {
-    const draft = read(window.localStorage, keyFor(requestId, parentId));
+    const draft = read(window.localStorage, keyFor(ownerId, requestId, parentId));
     return draft && Date.now() - draft.savedAt <= MAX_AGE ? draft : null;
   } catch { return null; }
 }
 
-export function saveDraft(requestId: string, parentId: string | null, draft: Omit<ReviewDraft, "savedAt">): void {
-  if (!draft.body.trim()) { clearDraft(requestId, parentId); return; }
-  try { window.localStorage.setItem(keyFor(requestId, parentId), JSON.stringify({ ...draft, savedAt: Date.now() })); } catch { /* Quota/private mode cannot prevent writing a review. */ }
+export function saveDraft(ownerId: string | null, requestId: string, parentId: string | null, draft: Omit<ReviewDraft, "savedAt">): void {
+  if (!ownerId) return;
+  if (!draft.body.trim()) { clearDraft(ownerId, requestId, parentId); return; }
+  try { window.localStorage.setItem(keyFor(ownerId, requestId, parentId), JSON.stringify({ ...draft, savedAt: Date.now() })); } catch { /* Quota/private mode cannot prevent writing a review. */ }
   pruneDrafts();
 }
 
-export function clearDraft(requestId: string, parentId: string | null = null): void {
-  try { window.localStorage.removeItem(keyFor(requestId, parentId)); } catch { /* Continue without persistence. */ }
+export function clearDraft(ownerId: string | null, requestId: string, parentId: string | null = null): void {
+  if (!ownerId) return;
+  try { window.localStorage.removeItem(keyFor(ownerId, requestId, parentId)); } catch { /* Continue without persistence. */ }
 }

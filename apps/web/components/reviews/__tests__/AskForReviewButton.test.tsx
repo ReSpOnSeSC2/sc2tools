@@ -10,7 +10,7 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => harness.auth }));
-vi.mock("@/lib/clientApi", () => ({ apiCall: harness.apiCall, useApi: harness.useApi }));
+vi.mock("@/lib/clientApi", async (original) => ({ ...await original<typeof import("@/lib/clientApi")>(), apiCall: harness.apiCall, useApi: harness.useApi }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: harness.push }) }));
 

@@ -178,16 +178,22 @@ describe("AllGamesTable: Ask for a review", () => {
   it.each([0, 1])("posts the chosen game id from review action %i without expanding its row", async (index) => {
     vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
     useApiMock.mockReturnValue({ data: undefined, isLoading: false, error: null });
-    apiCallMock.mockImplementation((_getToken, path) => Promise.resolve(path === "/v1/reviews"
-      ? { id: "request1", url: "/reviews/request1" }
-      : { configuredPlatforms: [], linksByGameId: {} }));
+    apiCallMock.mockImplementation(async (scopedToken: () => Promise<string | null>, path: string, init?: RequestInit) => {
+      if (path !== "/v1/reviews") return { configuredPlatforms: [], linksByGameId: {} };
+      expect(scopedToken).not.toBe(getTokenMock);
+      expect(await scopedToken()).toBe("test-token");
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      expect(init?.signal?.aborted).toBe(false);
+      return { id: "request1", url: "/reviews/request1" };
+    });
     render(<AllGamesTable games={[{ ...GAME, matchFormat: "1v1", playerCount: 2 }]} />);
     fireEvent.click(screen.getAllByRole("button", { name: "Ask for a review of this game" })[index]);
     fireEvent.change(screen.getByRole("textbox", { name: /question/i }), { target: { value: "How could I have defended this roach timing better?" } });
     fireEvent.click(screen.getByRole("button", { name: "Post request" }));
-    await waitFor(() => expect(apiCallMock).toHaveBeenCalledWith(getTokenMock, "/v1/reviews", expect.objectContaining({
+    await waitFor(() => expect(apiCallMock).toHaveBeenCalledWith(expect.any(Function), "/v1/reviews", expect.objectContaining({
       method: "POST",
       body: expect.any(String),
+      signal: expect.any(AbortSignal),
     })));
     const request = apiCallMock.mock.calls.find((call) => call[1] === "/v1/reviews");
     expect(JSON.parse(request![2].body)).toMatchObject({ gameId: "game/77", question: "How could I have defended this roach timing better?" });

@@ -173,7 +173,7 @@ function buildReviewsRouter(deps) {
 
   // ── Public ───────────────────────────────────────────────────────
   router.get("/reviews", ...pub, handle(async (req, res) => {
-    publicCache(res, 60);
+    publicCache(res, 60, deps.rollout);
     res.json(await deps.reviews.board({
       sort: first(req.query.sort),
       matchup: first(req.query.matchup),
@@ -187,12 +187,12 @@ function buildReviewsRouter(deps) {
   }));
 
   router.get("/reviews/leaderboard", ...pub, handle(async (_req, res) => {
-    publicCache(res, 60);
+    publicCache(res, 60, deps.rollout);
     res.json(await deps.reputation.weeklyLeaderboard());
   }));
 
   router.get("/reviews/sitemap", ...pub, handle(async (_req, res) => {
-    publicCache(res, 300);
+    publicCache(res, 300, deps.rollout);
     res.json(await deps.reviews.sitemap());
   }));
 
@@ -205,29 +205,29 @@ function buildReviewsRouter(deps) {
     const viewer = viewerOf(req);
     const page = await deps.reviews.page(String(req.params.id), viewer);
     if (viewer.userId) privateNoStore(res);
-    else publicCache(res, 30);
+    else publicCache(res, 30, deps.rollout);
     res.json(page);
   }));
 
   router.get("/reviews/:id/og", ...pub, validId, handle(async (req, res) => {
-    publicCache(res, 300);
+    publicCache(res, 300, deps.rollout);
     res.json(await deps.reviews.ogSummary(String(req.params.id)));
   }));
 
   router.get("/reviews/:id/analysis", heavyLimiter, ...pub, validId, handle(async (req, res) => {
     // Short shared cache: closing the request revokes the grant, and a
     // revocation must not linger in caches for long.
-    res.set("Cache-Control", "public, max-age=60, s-maxage=60");
+    publicCache(res, 60, deps.rollout, 60);
     res.json(await deps.reviews.analysis(String(req.params.id)));
   }));
 
   router.get("/reviews/:id/analysis/map-playback", heavyLimiter, ...pub, validId, handle(async (req, res) => {
-    res.set("Cache-Control", "public, max-age=60, s-maxage=60");
+    publicCache(res, 60, deps.rollout, 60);
     res.json(await deps.reviews.playback(String(req.params.id)));
   }));
 
   router.get("/reviews/:id/analysis/map-playback/manifest", heavyLimiter, ...pub, validId, handle(async (req, res) => {
-    res.set("Cache-Control", "public, max-age=60, s-maxage=60");
+    publicCache(res, 60, deps.rollout, 60);
     res.json(await deps.reviews.playbackManifest(String(req.params.id)));
   }));
 
@@ -245,7 +245,8 @@ function buildReviewsRouter(deps) {
       const bytes = await deps.reviews.playbackSegment(String(req.params.id), artifactId, index);
       // Content-addressed and immutable, but browser-only: a closed
       // request must stop being served by shared caches.
-      res.set("Cache-Control", "private, max-age=3600");
+      if (deps.rollout === "on") res.set("Cache-Control", "private, max-age=3600");
+      else privateNoStore(res);
       res.type("application/json").send(bytes);
     }),
   );
@@ -412,10 +413,20 @@ function first(value) {
   return value;
 }
 
-/** @param {import('express').Response} res @param {number} seconds */
-function publicCache(res, seconds) {
-  res.set("Cache-Control", `public, max-age=0, s-maxage=${seconds}`);
-  res.set("Vary", "Authorization");
+/**
+ * @param {import('express').Response} res
+ * @param {number} seconds
+ * @param {"off" | "admins" | "on"} rollout
+ * @param {number} [browserSeconds]
+ */
+function publicCache(res, seconds, rollout, browserSeconds = 0) {
+  // Admin previews must not become reusable public/shared responses.
+  if (rollout !== "on") {
+    privateNoStore(res);
+    return;
+  }
+  res.set("Cache-Control", `public, max-age=${browserSeconds}, s-maxage=${seconds}`);
+  res.vary("Authorization");
 }
 
 /** @param {import('express').Response} res */

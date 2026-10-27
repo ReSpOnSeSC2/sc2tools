@@ -6,8 +6,8 @@ const harness = vi.hoisted(() => ({
   getToken: vi.fn(async () => "token"),
 }));
 
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: harness.getToken }) }));
-vi.mock("@/lib/clientApi", () => ({ apiCall: harness.apiCall }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "viewer", getToken: harness.getToken }) }));
+vi.mock("@/lib/clientApi", async (original) => ({ ...await original<typeof import("@/lib/clientApi")>(), apiCall: harness.apiCall }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: vi.fn() }));
 
 import { ReviewComposer } from "../ReviewComposer";

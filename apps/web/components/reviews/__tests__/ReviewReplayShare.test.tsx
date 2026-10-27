@@ -2,13 +2,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
-  auth: { isLoaded: true, isSignedIn: true, getToken: async (): Promise<string | null> => "token" },
+  auth: { isLoaded: true, isSignedIn: true, userId: "viewer", getToken: async (): Promise<string | null> => "token" },
   apiCall: vi.fn(),
   push: vi.fn(),
 }));
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => harness.auth }));
-vi.mock("@/lib/clientApi", () => ({ apiCall: harness.apiCall, useApi: () => ({ data: { isAdmin: true } }) }));
+vi.mock("@/lib/clientApi", async (original) => ({ ...await original<typeof import("@/lib/clientApi")>(), apiCall: harness.apiCall, useApi: () => ({ data: { isAdmin: true } }) }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: harness.push }) }));
 
@@ -19,14 +19,14 @@ const ID = "AAAAAAAAAAAAAAAA";
 
 afterEach(() => cleanup());
 beforeEach(() => {
-  harness.auth = { isLoaded: true, isSignedIn: true, getToken: async () => "token" };
+  harness.auth = { isLoaded: true, isSignedIn: true, userId: "viewer", getToken: async () => "token" };
   harness.apiCall.mockReset();
   harness.push.mockReset();
 });
 
 describe("replay file download", () => {
   it("asks signed-out visitors to sign in, returning to the review", () => {
-    harness.auth = { isLoaded: true, isSignedIn: false, getToken: async () => null };
+    harness.auth = { isLoaded: true, isSignedIn: false, userId: "viewer", getToken: async () => null };
     render(<ReviewReplayDownload requestId={ID} requestUrl={`/reviews/${ID}`} variant="page" />);
     const link = screen.getByRole("link", { name: "Sign in to download replay" });
     expect(link.getAttribute("href")).toBe(`/sign-in?redirect_url=${encodeURIComponent(`/reviews/${ID}`)}`);
@@ -39,7 +39,7 @@ describe("replay file download", () => {
     render(<ReviewReplayDownload requestId={ID} requestUrl={`/reviews/${ID}`} variant="page" />);
     fireEvent.click(screen.getByRole("button", { name: "Download replay" }));
     await waitFor(() => expect(clicks).toHaveLength(1));
-    expect(harness.apiCall).toHaveBeenCalledWith(expect.any(Function), `/v1/reviews/${ID}/replay`);
+    expect(harness.apiCall).toHaveBeenCalledWith(expect.any(Function), `/v1/reviews/${ID}/replay`, { signal: expect.any(AbortSignal) });
     expect(clicks[0].href).toBe("https://replays.example.com/signed");
     expect(clicks[0].download).toBe(`sc2tools-review-${ID}.SC2Replay`);
     spy.mockRestore();

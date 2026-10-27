@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { CheckCircle2, MapPin, MoreHorizontal, Star, ThumbsUp } from "lucide-react";
-import { apiCall } from "@/lib/clientApi";
+import { apiCall, useOwnerRequestScope } from "@/lib/clientApi";
 import { gaEvent } from "@/lib/analytics/gtag";
 import { ReviewMarkdown } from "@/lib/reviewMarkdown";
 import type { ReviewComment, ReviewPageData } from "@/lib/reviews";
@@ -104,7 +104,9 @@ export function ReviewThread(ctx: ThreadContext) {
 }
 
 function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComment; ctx: ThreadContext; isReply?: boolean }) {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
+  const owner = isLoaded && isSignedIn && userId ? userId : null;
+  const runOwned = useOwnerRequestScope(owner, getToken);
   const { data } = ctx;
   const requestId = data.request.id;
   const [replying, setReplying] = useState(false);
@@ -121,15 +123,17 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
 
   /** Keep the parsed response, including the report route's alreadyReported flag. */
   async function act(path: string, body: Record<string, unknown> = {}, method = "POST", event?: string): Promise<Record<string, unknown> | null> {
+    if (!owner) return null;
     setBusy(true);
     setNotice(null);
     setNoticeError(false);
     try {
-      const result = await apiCall<Record<string, unknown>>(getToken, `${base}${path}`, { method, body: method === "DELETE" ? undefined : JSON.stringify(body) });
+      const result = await runOwned(owner, (scopedToken, signal) => apiCall<Record<string, unknown>>(scopedToken, `${base}${path}`, { method, body: method === "DELETE" ? undefined : JSON.stringify(body), signal }));
       if (event) gaEvent(event);
       await ctx.onChanged();
       return result ?? {};
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return null;
       setNotice((err as { message?: string })?.message || "That didn't work.");
       setNoticeError(true);
       return null;
@@ -245,7 +249,7 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
         {notice ? <span role={noticeError ? "alert" : "status"} className={`basis-full text-micro ${noticeError ? "text-danger" : "text-text-muted"}`}>{notice}</span> : null}
       </footer>
 
-      {replying ? (
+      {replying && open && data.viewer.canComment ? (
         <ReviewComposer
           requestId={requestId}
           durationSec={ctx.durationSec}

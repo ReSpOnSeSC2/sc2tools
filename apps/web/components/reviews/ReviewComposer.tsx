@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { clearDraft, loadDraft, saveDraft } from "@/lib/reviewDrafts";
 import { useReviewShortcutLabel } from "./useReviewShortcutLabel";
-import { apiCall } from "@/lib/clientApi";
+import { apiCall, useOwnerRequestScope } from "@/lib/clientApi";
 import { gaEvent } from "@/lib/analytics/gtag";
 import {
   REVIEW_LIMITS,
@@ -26,21 +26,7 @@ export type DraftPin = { x: number; y: number; t: number };
  * from the replayer's ``onWorldClick`` while pin mode is on. Validation
  * mirrors the API so the rules are explained before a round trip.
  */
-export function ReviewComposer({
-  requestId,
-  durationSec,
-  currentTime,
-  initialTime,
-  parentId = null,
-  draftPin,
-  nextPinNumber = 1,
-  pinMode,
-  onTogglePinMode,
-  onClearPin,
-  onPosted,
-  onCancel,
-  canPin,
-}: {
+type Props = {
   requestId: string;
   durationSec: number | null;
   /** The replay clock right now (for "Use current time"). */
@@ -57,8 +43,23 @@ export function ReviewComposer({
   onCancel?: () => void;
   /** False when there is no map playback to pin on. */
   canPin: boolean;
-}) {
-  const { getToken } = useAuth();
+};
+
+export function ReviewComposer(props: Props) {
+  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
+  const ownerId = isLoaded && isSignedIn && userId ? userId : null;
+  if (!ownerId) return null;
+  return <OwnedReviewComposer key={JSON.stringify([ownerId, props.requestId, props.parentId ?? null])} {...props} ownerId={ownerId} getToken={getToken} />;
+}
+
+function OwnedReviewComposer({
+  requestId, durationSec, currentTime, initialTime, parentId = null, draftPin,
+  nextPinNumber = 1, pinMode, onTogglePinMode, onClearPin, onPosted, onCancel, canPin,
+  ownerId, getToken,
+}: Props & { ownerId: string; getToken: () => Promise<string | null> }) {
+  const runOwned = useOwnerRequestScope(ownerId, getToken);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const bodyId = useId();
   const [body, setBody] = useState("");
   const [start, setStart] = useState(() => roundTenth(initialTime));
@@ -73,24 +74,24 @@ export function ReviewComposer({
   const initial = useRef({ initialTime, durationSec });
 
   useEffect(() => {
-    const saved = loadDraft(requestId, parentId);
+    const saved = loadDraft(ownerId, requestId, parentId);
     if (!saved) return;
     setBody(saved.body);
     const fits = !validateComment({ body: "Restored review text.", gameTimeSec: saved.start, endTimeSec: saved.end }, initial.current.durationSec);
     if (fits) { setStart(saved.start); setEnd(saved.end); }
     setRestored(true);
-  }, [requestId, parentId]);
+  }, [ownerId, requestId, parentId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (body.trim()) saveDraft(requestId, parentId, { body, start, end });
-      else clearDraft(requestId, parentId);
+      if (body.trim()) saveDraft(ownerId, requestId, parentId, { body, start, end });
+      else clearDraft(ownerId, requestId, parentId);
     }, 500);
     return () => clearTimeout(timer);
-  }, [body, start, end, requestId, parentId]);
+  }, [body, start, end, ownerId, requestId, parentId]);
 
   function discard(cancel = false) {
-    clearDraft(requestId, parentId); setBody(""); setStart(roundTenth(initial.current.initialTime)); setEnd(null);
+    clearDraft(ownerId, requestId, parentId); setBody(""); setStart(roundTenth(initial.current.initialTime)); setEnd(null);
     setRestored(false); setError(null); setTouched(false); setConfirmDiscard(false); onClearPin();
     if (cancel) onCancel?.();
   }
@@ -109,8 +110,9 @@ export function ReviewComposer({
     submitting.current = true; setBusy(true);
     setError(null);
     try {
-      const res = await apiCall<{ id: string }>(getToken, `/v1/reviews/${encodeURIComponent(requestId)}/comments`, {
+      const res = await runOwned(ownerId, (scopedToken, signal) => apiCall<{ id: string }>(scopedToken, `/v1/reviews/${encodeURIComponent(requestId)}/comments`, {
         method: "POST",
+        signal,
         body: JSON.stringify({
           body: body.trim(),
           gameTimeSec: start,
@@ -118,18 +120,19 @@ export function ReviewComposer({
           mapPoint: draftPin ? { x: roundTenth(draftPin.x), y: roundTenth(draftPin.y) } : null,
           parentId,
         }),
-      });
+      }));
+      if (!mounted.current) return;
       gaEvent("review_comment_posted", { reply: Boolean(parentId), pinned: Boolean(draftPin), ranged: end !== null });
-      clearDraft(requestId, parentId); setRestored(false);
+      clearDraft(ownerId, requestId, parentId); setRestored(false);
       setBody("");
       setEnd(null);
       setTouched(false);
       onPosted(res.id);
     } catch (err) {
-      setError((err as { message?: string })?.message || "Couldn't post your comment.");
+      if (mounted.current) setError((err as { message?: string })?.message || "Couldn't post your comment.");
     } finally {
       submitting.current = false;
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   }
 

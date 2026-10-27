@@ -1090,7 +1090,7 @@ class ReviewsService {
     if (value) {
       if (previous === comment._id) return { best: true };
       const moved = await this.db.reviewRequests.updateOne(
-        { _id: doc._id, bestCommentId: previous },
+        { _id: doc._id, bestCommentId: previous, status: { $in: [...ACTIVE_STATUSES] } },
         { $set: { bestCommentId: comment._id, status: "answered", updatedAt: new Date(this.now()) } },
       );
       if (moved.matchedCount !== 1) throw reviewError(409, "conflict", "The best review changed in another tab. Reload and try again.");
@@ -1108,13 +1108,12 @@ class ReviewsService {
     } else {
       if (previous !== comment._id) return { best: false };
       const cleared = await this.db.reviewRequests.updateOne(
-        { _id: doc._id, bestCommentId: comment._id },
+        { _id: doc._id, bestCommentId: comment._id, status: { $in: [...ACTIVE_STATUSES] } },
         { $set: { bestCommentId: null, status: "open", updatedAt: new Date(this.now()) } },
       );
-      if (cleared.matchedCount === 1) {
-        await this._revoke(comment, "best", viewer.userId);
-        await this.db.reviewComments.updateOne({ _id: comment._id }, { $set: { best: false } });
-      }
+      if (cleared.matchedCount !== 1) throw reviewError(409, "conflict", "The best review changed in another tab. Reload and try again.");
+      await this._revoke(comment, "best", viewer.userId);
+      await this.db.reviewComments.updateOne({ _id: comment._id }, { $set: { best: false } });
     }
     await this._refresh(doc._id, { activity: value });
     return { best: value };
@@ -1240,7 +1239,14 @@ class ReviewsService {
     if (doc.bestCommentId === comment._id) {
       await this.db.reviewRequests.updateOne(
         { _id: doc._id, bestCommentId: comment._id },
-        { $set: { bestCommentId: null, status: doc.status === "answered" ? "open" : doc.status } },
+        [{
+          $set: {
+            bestCommentId: null,
+            // A close or moderator removal can win while karma is revoked.
+            // Only an answer that is still active returns to the open state.
+            status: { $cond: [{ $eq: ["$status", "answered"] }, "open", "$status"] },
+          },
+        }],
       );
     }
     await this.db.reviewComments.updateOne(
@@ -1311,8 +1317,10 @@ class ReviewsService {
     if (!doc) return;
     const now = new Date(this.now());
     const merged = { ...doc, ...counts, ...(opts.activity ? { lastActivityAt: now } : {}) };
+    // Closing, removal, hiding or restoration may win after the read above.
+    // Never publish ranking flags derived from an earlier visibility state.
     await this.db.reviewRequests.updateOne(
-      { _id: requestId },
+      { _id: requestId, status: doc.status, hidden: doc.hidden === true ? true : { $ne: true } },
       {
         $set: {
           ...counts,

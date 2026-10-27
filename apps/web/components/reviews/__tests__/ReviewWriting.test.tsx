@@ -4,15 +4,15 @@ import type { ReviewComment } from "@/lib/reviews";
 import { saveDraft } from "@/lib/reviewDrafts";
 
 const h = vi.hoisted(() => ({ apiCall: vi.fn(), posted: vi.fn(), cancel: vi.fn(), clearPin: vi.fn() }));
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "token" }) }));
-vi.mock("@/lib/clientApi", () => ({ apiCall: h.apiCall }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "viewer", getToken: async () => "token" }) }));
+vi.mock("@/lib/clientApi", async (original) => ({ ...await original<typeof import("@/lib/clientApi")>(), apiCall: h.apiCall }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: vi.fn() }));
 
 import { ReviewComposer } from "../ReviewComposer";
 import { CommentEditor } from "../CommentEditor";
 import { digitsToClock, parseClock } from "@/lib/reviews";
 
-const key = "sc2tools:review-draft:v1:request:root";
+const key = "sc2tools:review-draft:v2:viewer:request:root";
 const props = { requestId: "request", durationSec: 640, currentTime: 330, initialTime: 312, draftPin: null, pinMode: false,
   onTogglePinMode: () => {}, onClearPin: h.clearPin, onPosted: h.posted, onCancel: h.cancel, canPin: false };
 const comment = { id: "comment", body: "Scout before moving out.", gameTimeSec: 120, endTimeSec: null, createdAt: null } as ReviewComment;
@@ -35,7 +35,7 @@ it("debounces a ranged draft, restores it after remount and clears it after post
 });
 
 it("restores the text but resets a saved range that no longer fits the game", () => {
-  saveDraft("request", null, { body: "A useful draft from a longer replay.", start: 700, end: 730 });
+  saveDraft("viewer", "request", null, { body: "A useful draft from a longer replay.", start: 700, end: 730 });
   render(<ReviewComposer {...props} />);
   expect((screen.getByLabelText("Comment") as HTMLTextAreaElement).value).toContain("longer replay");
   expect(screen.getByTestId("composer-time").textContent).toBe("at 5:12");
@@ -47,7 +47,7 @@ it("restores the text but resets a saved range that no longer fits the game", ()
 });
 
 it("confirms cancellation with text, keeps editing, and removes the draft only on discard", () => {
-  saveDraft("request", null, { body: "This advice should survive cancellation.", start: 312, end: null });
+  saveDraft("viewer", "request", null, { body: "This advice should survive cancellation.", start: 312, end: null });
   render(<ReviewComposer {...props} />);
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(h.cancel).not.toHaveBeenCalled();
