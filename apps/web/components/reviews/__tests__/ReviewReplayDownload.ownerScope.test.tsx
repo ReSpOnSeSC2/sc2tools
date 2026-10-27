@@ -18,7 +18,7 @@ function deferred<T>() {
   const promise = new Promise<T>((done) => { resolve = done; });
   return { promise, resolve };
 }
-function start() { fireEvent.click(screen.getByRole("button", { name: "Download replay", exact: true })); }
+function start() { fireEvent.click(screen.getByRole("button", { name: "Download replay" })); }
 
 beforeEach(() => {
   clicked.length = 0;
@@ -37,7 +37,7 @@ it.each(["switch", "unmount"])("never fetches or clicks a replay download held a
   await waitFor(() => expect(h.auth.getToken).toHaveBeenCalledOnce());
   if (transition === "switch") {
     h.auth.userId = "B"; view.rerender(<ReviewReplayDownload {...props} />);
-    expect(screen.getByRole("button", { name: "Download replay", exact: true })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Download replay" })).toHaveProperty("disabled", false);
   } else view.unmount();
   await act(async () => token.resolve("B-token"));
   expect(fetcher).not.toHaveBeenCalled(); expect(clicked).toEqual([]);
@@ -52,7 +52,7 @@ it.each(["switch", "unmount"])("never clicks a replay download held in its respo
   if (transition === "switch") {
     h.auth.userId = "B"; view.rerender(<ReviewReplayDownload {...props} />);
     h.auth.userId = "A"; view.rerender(<ReviewReplayDownload {...props} />);
-    expect(screen.getByRole("button", { name: "Download replay", exact: true })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Download replay" })).toHaveProperty("disabled", false);
   } else view.unmount();
   await act(async () => body.resolve(payload));
   expect(fetcher).toHaveBeenCalledOnce(); expect(clicked).toEqual([]);
@@ -70,7 +70,7 @@ it("still fetches one signed link and clicks one neutral, protected download whi
   expect(init.signal).toBeInstanceOf(AbortSignal);
   expect(clicked[0]).toEqual({ href: payload.url, filename: payload.filename, rel: "noopener noreferrer", referrerPolicy: "no-referrer" });
   expect(document.querySelector(`a[download="${payload.filename}"]`)).toBeNull();
-  expect(screen.getByRole("button", { name: "Download replay", exact: true })).toHaveProperty("disabled", false);
+  expect(screen.getByRole("button", { name: "Download replay" })).toHaveProperty("disabled", false);
 });
 
 it("retains current download error feedback and rejects an unsafe signed URL without clicking", async () => {
@@ -78,5 +78,5 @@ it("retains current download error feedback and rejects an unsafe signed URL wit
   render(<ReviewReplayDownload {...props} />); start();
   expect(await screen.findByRole("status")).toHaveProperty("textContent", "The replay download link was invalid.");
   expect(clicked).toEqual([]);
-  expect(screen.getByRole("button", { name: "Download replay", exact: true })).toHaveProperty("disabled", false);
+  expect(screen.getByRole("button", { name: "Download replay" })).toHaveProperty("disabled", false);
 });

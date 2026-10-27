@@ -63,7 +63,7 @@ describe("review recovery", () => {
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", expect.stringContaining("Saved changes won't be submitted again"));
     expect(h.apiCall).toHaveBeenCalledOnce(); expect(screen.queryByRole("form", { name: kind === "root" ? "Write a review comment" : "Reply" })).toBeNull();
     h.page = { ...h.page!, comments: [...h.page!.comments, { ...h.page!.comments[0], id: "CCCCCCCCCCCCCCCC", parentId: kind === "root" ? null : "BBBBBBBBBBBBBBBB", body: "Saved advice should only be submitted once." }] };
-    fireEvent.click(screen.getByRole("button", { name: "Retry", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
     expect(screen.getByText("Saved advice should only be submitted once.")).toBeTruthy();
     expect(h.apiCall).toHaveBeenCalledOnce(); expect(h.mutate).toHaveBeenCalledTimes(2);
@@ -73,7 +73,7 @@ describe("review recovery", () => {
     h.page!.request.replay = { shared: true, available: true, optedIn: true };
     h.mutate.mockRejectedValueOnce(new Error("Synthetic close refresh failure"));
     render(<ReviewPage initial={h.page!} />);
-    expect(screen.getByRole("button", { name: "Download replay", exact: true })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Download replay" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Add a note at 0:00" }));
     fireEvent.click(within(screen.getByRole("article", { name: "Comment by Reviewer" })).getByRole("button", { name: "Reply" }));
     expect(screen.getAllByRole("textbox", { name: "Comment" })).toHaveLength(2);
@@ -83,10 +83,10 @@ describe("review recovery", () => {
     expect(screen.getByText("This request is closed, so its replay is no longer shared.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Place map pin" })).toBeNull();
     expect(screen.queryByRole("textbox", { name: "Comment" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Download replay", exact: true })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Retry", exact: true }));
+    expect(screen.queryByRole("button", { name: "Download replay" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
-    expect(screen.queryByRole("button", { name: "Download replay", exact: true })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Download replay" })).toBeNull();
     expect(h.apiCall).toHaveBeenCalledOnce(); expect(h.mutate).toHaveBeenCalledTimes(2);
   });
 
