@@ -18,8 +18,8 @@ const appendBounded = (ledger, value) => { if (ledger.length < 32) ledger.push(v
 async function startReviewDownloadServer() {
   if (downloadServer) return;
   const [cert, key] = await Promise.all([
-    readFile(new URL("./fixtures/review-tls/local-test-only-cert.pem", import.meta.url)),
-    readFile(new URL("./fixtures/review-tls/local-test-only-key.pem", import.meta.url)),
+    readFile(path.join(process.cwd(), "tests/e2e/fixtures/review-tls/local-test-only-cert.pem")),
+    readFile(path.join(process.cwd(), "tests/e2e/fixtures/review-tls/local-test-only-key.pem")),
   ]);
   const current = createServer({ cert, key, minVersion: "TLSv1.2", handshakeTimeout: 5_000, maxHeaderSize: 8_192 }, (request, response) => {
     const expectedHost = downloadOrigin ? new URL(downloadOrigin).host : "";

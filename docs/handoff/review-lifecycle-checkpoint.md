@@ -56,3 +56,16 @@ that source.
 CI, fresh-main merge review and deployment observation remain required before
 claiming this change shipped. No production migration, integration activation,
 native launch/release, version bump or release tag is included.
+
+## CI loader correction
+
+The first integrated CI build passed its unchanged budgets, then browser
+collection failed before any tests: the repository TypeScript config uses a
+CommonJS loader, unlike the earlier local ESM config. Certificate lookup now
+uses the fixture's existing web-working-directory convention instead of
+import.meta. The actual repository config discovers all six cases. A pinned
+CommonJS-style local run passes all four phone/desktop lifecycle cases in
+10.888 seconds, no skips/retries/flaky cases; all 28 observed identities retire
+with no owned listener. Changed-file lint again reports zero errors and the
+same two inherited warnings. The original CI failure is preserved. Application,
+server, certificates, assertions and download trust pin are unchanged.
