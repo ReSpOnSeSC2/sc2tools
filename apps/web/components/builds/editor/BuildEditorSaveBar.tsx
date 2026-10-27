@@ -20,6 +20,7 @@ export interface BuildEditorSaveBarProps {
   hasSignature?: boolean;
   hasReference?: boolean;
   ruleError?: string | null;
+  onReviewOrder?: () => void;
 }
 
 /**
@@ -40,6 +41,7 @@ export function BuildEditorSaveBar({
   hasSignature = false,
   hasReference = false,
   ruleError = null,
+  onReviewOrder,
 }: BuildEditorSaveBarProps) {
   if (demoMode) {
     return (
@@ -71,6 +73,7 @@ export function BuildEditorSaveBar({
   return (
     <div className="space-y-3">
       {ruleError ? <p role="status" className="text-caption text-danger">{ruleError}</p> : null}
+      {onReviewOrder ? <Button variant="ghost" onClick={onReviewOrder} disabled={saving}>Review build order</Button> : null}
       {saveError ? (
         <div
           role="alert"

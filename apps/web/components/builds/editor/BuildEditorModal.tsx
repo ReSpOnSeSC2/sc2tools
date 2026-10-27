@@ -2,6 +2,7 @@
 
 import { useId, useMemo, useRef, useState } from "react";
 import { readReferenceBuildOrder } from "@/lib/buildOrderReference";
+import { referenceBuildOrderError } from "@/lib/buildOrderReferenceErrors";
 import { referenceFromGame } from "@/lib/buildOrderReferenceEditing";
 import { BuildOrderEditor } from "./BuildOrderEditor";
 import {
@@ -241,6 +242,7 @@ export function BuildEditorModal({
   });
 
   const guard = useBuildEditorCloseGuard({ open, dirty: !demoMode && editor.isDirty, saving: editor.saving, name: editor.draft.name, onClose });
+  const referenceError = editor.draft.buildOrder ? referenceBuildOrderError(editor.draft.buildOrder) : null;
 
   return (
     <>
@@ -286,7 +288,8 @@ export function BuildEditorModal({
             hasSignature={!!sourceSignature?.length}
             hasReference={!!readReferenceBuildOrder(editor.draft.buildOrder)?.steps.length}
             demoMode={demoMode}
-            ruleError={firstBuildTokenError(editor.draft.rules, editor.draft.race) || (editor.draft.buildOrder && !readReferenceBuildOrder(editor.draft.buildOrder) ? "Check the reference build-order fields before saving." : null) || (!demoMode && !editor.requestReady ? "Sign in again before saving this build." : null)}
+            ruleError={firstBuildTokenError(editor.draft.rules, editor.draft.race) || (referenceError ? `Build order: ${referenceError}` : null) || (!demoMode && !editor.requestReady ? "Sign in again before saving this build." : null)}
+            onReviewOrder={referenceError ? () => { setTab("order"); document.getElementById(`${tabsId}-order`)?.focus(); } : undefined}
           />
         }
       >

@@ -5,7 +5,7 @@ const { createHarness } = require("./helpers/reviewsHarness");
 const { validateCustomBuild } = require("../src/validation/customBuild");
 const { CustomBuildsService } = require("../src/services/customBuilds");
 /** @type {Awaited<ReturnType<typeof createHarness>>} */ let h;
-const order = { v: 1, source: "game", sourceGameId: "private-replay-id", steps: [
+const order = { v: 1, source: "game", sourceGameId: "2026-10-25T22:51:33|ReSpOnSe / 상대|At Eternity's Edge LE|492", steps: [
   { t: null, supply: 14, action: "Unknown future action", note: "Shareable step note", supplyApprox: true },
   { t: 18, supply: 15, action: "BuildPylon" },
 ] };
@@ -22,7 +22,7 @@ test("validates the optional reference field, retaining no giant unknown childre
   expect(validateCustomBuild({ slug: "bad", name: "Bad", race: "Protoss", buildOrder: { ...order, steps: Array(121).fill(order.steps[0]) } }).valid).toBe(false);
 });
 
-test("full owner detail retains reference provenance; lists and classification omit it", async () => {
+test("saving a source-game reference retains its exact composite ID privately; lists and classification omit it", async () => {
   const saved = await request(h.app).put("/v1/custom-builds/reference").set("authorization", "Bearer u:ref-owner").send({ name: "Reference", race: "Protoss", buildOrder: order, rules: [], reclassify: false, createOnly: true });
   expect(saved.status).toBe(200);
   const own = await request(h.app).get("/v1/custom-builds/reference").set("authorization", "Bearer u:ref-owner");
@@ -41,6 +41,7 @@ test("community detail projects shareable reference steps but never nested priva
   expect(response.status).toBe(200);
   expect(response.body.build.buildOrder).toEqual({ v: 1, source: "game", steps: order.steps });
   expect(JSON.stringify(response.body)).not.toMatch(/private-replay|personal-secret|private-giant|sourceGameId/);
+  expect(JSON.stringify(response.body)).not.toContain(order.sourceGameId);
   const list = await request(h.app).get("/v1/community/builds");
   expect(list.status).toBe(200); expect(JSON.stringify(list.body)).not.toContain("buildOrder");
 });
@@ -51,5 +52,5 @@ test("publication stores only the public reference leaves from the private saved
   expect(response.status).toBe(201);
   const row = await h.db.communityBuilds.findOne({ ownerUserId: "u_ref-owner", sourceSlug: "reference" });
   expect(row?.build.buildOrder).toEqual({ v: 1, source: "game", steps: order.steps });
-  expect(JSON.stringify(row?.build)).not.toContain("private-replay-id");
+  expect(JSON.stringify(row?.build)).not.toContain(order.sourceGameId);
 });

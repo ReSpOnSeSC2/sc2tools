@@ -590,3 +590,14 @@ selected02 passed after the label change and independent audit05 is clear.
 Exact-head CI/delivery remain pending.
 See [ADR 0067](adr/0067-session-policy.md) and the
 [Sessions checkpoint](handoff/sessions-core-checkpoint.md).
+
+### Reference build save correction (2026-10-27)
+
+Reference source IDs use the same bounded opaque-string contract in web and
+API validation. Composite IDs retain their exact player/map punctuation and
+Unicode privately; public projections continue to omit the source ID. The
+rich editor identifies invalid fields and offers an explicit Review action
+that selects and visibly focuses its Build order tab. Diagnostic copy shares
+the reader's scalar predicates but stays outside shared display modules.
+The advisory name check still describes rules and never blocks Save. No data
+migration, new service, provider setup or agent release is required.

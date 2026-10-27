@@ -7,6 +7,23 @@ describe("bounded reference build order", () => {
     expect(validateReferenceBuildOrder({ ...base, steps: [{ t: 0, supply: null, action: "BuildPylon" }] }).valid).toBe(true);
   });
   test.each([
+    "2026-10-25T22:51:33|ReSpOnSe / 상대|At Eternity's Edge LE|492",
+    "💠".repeat(256),
+  ])("retains bounded opaque replay provenance exactly", sourceGameId => {
+    const value = { ...base, sourceGameId };
+    expect(validateReferenceBuildOrder(value)).toEqual({ valid: true, value });
+  });
+  test.each(["", " \t", " ", "bad\nidentity", "bad\u0000identity", "bad\u007fidentity", "bad\u0085identity", "bad\u2028identity", "bad\u2029identity", "x".repeat(257), "💠".repeat(257), 42])(
+    "rejects blank, multiline, control-character or oversized replay provenance", sourceGameId => {
+      expect(validateReferenceBuildOrder({ ...base, sourceGameId }).valid).toBe(false);
+    },
+  );
+  test.each(["\n", "\r", "\u2028", "\u2029"])("rejects a trailing line terminator in every single-line field", ending => {
+    expect(validateReferenceBuildOrder({ ...base, sourceGameId: `private-game${ending}` }).valid).toBe(false);
+    expect(validateReferenceBuildOrder({ ...base, steps: [{ ...base.steps[0], action: `BuildPylon${ending}` }] }).valid).toBe(false);
+    expect(validateReferenceBuildOrder({ ...base, steps: [{ ...base.steps[0], note: `Instruction${ending}` }] }).valid).toBe(false);
+  });
+  test.each([
     { ...base, v: 2 }, { ...base, source: "url" }, { ...base, steps: Array(121).fill(base.steps[0]) },
     { ...base, steps: [{ ...base.steps[0], t: -1 }] }, { ...base, steps: [{ ...base.steps[0], t: 86401 }] },
     { ...base, steps: [{ ...base.steps[0], supply: 1001 }] }, { ...base, steps: [{ ...base.steps[0], action: " " }] },
