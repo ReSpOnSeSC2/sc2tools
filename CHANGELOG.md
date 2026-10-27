@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Strategies preferences
+
+- Remember your vP, vT, vZ or All selection when you leave Strategies or reopen the site, separately for each signed-in account in the browser. Global opponent-race filters keep their priority without replacing this choice.
+
 ### Search and guide discovery
 
 - Open Search from the header, mobile More menu or Ctrl/Cmd K to find pages, settings, Help and public guides. Search respects unsaved settings and keeps recent destinations separate for each signed-in account.
