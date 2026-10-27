@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { HelpCircle, Minus, Plus, RefreshCw } from "lucide-react";
+import { HelpCircle, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -11,6 +11,7 @@ import type { LiveGameEnvelope } from "@/components/overlay/types";
 import { SeriesScoreboard } from "@/components/overlay/widgets/SeriesWidget";
 import { DockButton } from "./DockControls";
 import { useSeriesController } from "./useSeriesController";
+import styles from "./DockSeries.module.css";
 
 export function DockSeries({ token, rawEvent, live, lastOpponent, onInvalid, onSummary }: {
   token: string; rawEvent?: unknown; live: LiveGameEnvelope | null; lastOpponent?: string | null;
@@ -56,18 +57,20 @@ export function DockSeries({ token, rawEvent, live, lastOpponent, onInvalid, onS
   };
   const adjust = async (side: "you" | "opponent", delta: number) => { if (await state.act({ action: "adjust", side, delta }) && alive.current) setNotice("Series score saved"); };
   const disabled = !state.ready || state.busy, needed = series ? Math.ceil(series.format / 2) : 1;
-  return <div className="min-w-0 space-y-4 text-caption">
-    <p className="flex items-center gap-2 text-text-muted"><HelpCircle className="h-4 w-4 shrink-0" aria-hidden /><span title="Start explicitly. Matching replays with an exact start after this series began update the score; use ±1 to correct it.">Cup and showmatch scoreboard</span><LazyHelpLink slug="series-mode" /></p>
+  return <div className={`${styles.root} min-w-0 space-y-4 text-caption`}>
+    <div className="space-y-2 text-text-muted"><p className="flex items-start gap-2"><HelpCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /><span>Best-of scoreboard for cups and showmatches.</span></p><LazyHelpLink slug="series-mode">How Series works</LazyHelpLink></div>
     {series ? <><SeriesScoreboard series={series} />
-      <div className="grid grid-cols-2 gap-3">{(["you", "opponent"] as const).map(side => <div key={side} className="space-y-1"><p>{side === "you" ? "Your score" : "Opponent score"}</p><div className="flex gap-2">
-        <DockButton aria-label={`Remove a win for ${side === "you" ? "you" : "opponent"}`} disabled={disabled || series.status === "ended" || series.score[side] === 0} onClick={() => void adjust(side, -1)}><Minus className="h-4 w-4" aria-hidden />−1</DockButton>
-        <DockButton aria-label={`Add a win for ${side === "you" ? "you" : "opponent"}`} disabled={disabled || series.status === "ended" || series.score[side] >= needed || series.score[side === "you" ? "opponent" : "you"] === needed} onClick={() => void adjust(side, 1)}><Plus className="h-4 w-4" aria-hidden />+1</DockButton>
+      <div className={styles.scoreControls}>{(["you", "opponent"] as const).map(side => <div key={side} className="min-w-0 space-y-1"><p>{side === "you" ? "Your score" : "Opponent score"}</p><div className="grid grid-cols-2 gap-2">
+        <DockButton aria-label={`Remove a win for ${side === "you" ? "you" : "opponent"}`} disabled={disabled || series.status === "ended" || series.score[side] === 0} onClick={() => void adjust(side, -1)}>−1</DockButton>
+        <DockButton aria-label={`Add a win for ${side === "you" ? "you" : "opponent"}`} disabled={disabled || series.status === "ended" || series.score[side] >= needed || series.score[side === "you" ? "opponent" : "you"] === needed} onClick={() => void adjust(side, 1)}>+1</DockButton>
       </div></div>)}</div>
       {series.status === "paused" ? <p role="status" className="text-warning">80 replay receipts retained. Automatic scoring is paused; correct the score manually, then End or start a new series.</p> : null}
-      {series.status !== "ended" ? <DockButton disabled={disabled} onClick={() => setConfirm("end")}>End series</DockButton> : null}
     </> : <p className="text-text-muted">{state.ready ? "No series started. Normal ladder widgets keep their own session." : "Loading Series…"}</p>}
     {state.error ? <p role="alert" className="text-danger">{state.error}</p> : null}
-    <DockButton disabled={state.busy} onClick={() => void state.refresh()}><RefreshCw className="h-4 w-4" aria-hidden />Refresh series</DockButton>
+    <div className="flex flex-wrap gap-2">
+      {series && series.status !== "ended" ? <DockButton disabled={disabled} onClick={() => setConfirm("end")}>End series</DockButton> : null}
+      <DockButton disabled={state.busy} onClick={() => void state.refresh()}><RefreshCw className="h-4 w-4" aria-hidden />Refresh series</DockButton>
+    </div>
     <fieldset disabled={state.busy} className="min-w-0 space-y-3 border-t border-border pt-3">
       <legend className="font-semibold">{series ? "Start a new series" : "New series"}</legend>
       <label className="block" htmlFor={`${id}-opponent`}>Opponent<Input id={`${id}-opponent`} value={name} maxLength={80} onChange={event => { edited.current = true; setName(event.target.value); setToon(null); }} /></label>
