@@ -310,7 +310,7 @@ function TargetEvidenceSummary({
             evidence.
           </p>
         </div>
-        <dl className="grid flex-none grid-cols-3 gap-2 text-center">
+        <dl className="grid min-w-0 grid-cols-1 gap-2 text-center sm:grid-cols-3 lg:flex-none">
           <MiniStat label="Target games" value={target.games} />
           <MiniStat label="Profiles" value={scope.searchedOpponents} />
           <MiniStat label="Games scanned" value={scope.searchedGames} />
@@ -348,7 +348,7 @@ function TargetEvidenceSummary({
 
 function MiniStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="min-w-[4.5rem] rounded-lg border border-border bg-bg-surface/70 px-2 py-2">
+    <div className="min-w-0 rounded-lg border border-border bg-bg-surface/70 px-2 py-2 sm:min-w-[4.5rem]">
       <dt className="text-[0.625rem] uppercase tracking-wider text-text-dim">
         {label}
       </dt>

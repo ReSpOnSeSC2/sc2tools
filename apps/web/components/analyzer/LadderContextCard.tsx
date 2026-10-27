@@ -121,6 +121,7 @@ export function LadderContextCard({ pulseId, confirmedIdentity, children }: {
 
   return (
     <Card
+      className="min-w-0 max-w-full"
       title={
         <span className="inline-flex flex-wrap items-center gap-2">
           Ladder context
@@ -142,13 +143,13 @@ export function LadderContextCard({ pulseId, confirmedIdentity, children }: {
       }
     >
       {confirmedIdentity ? (
-        <p className="mb-3 text-caption text-text-muted">
+        <p className="mb-3 [overflow-wrap:anywhere] text-caption text-text-muted">
           SC2Pulse ladder data for {confirmedIdentity.displayName}&apos;s confirmed main profile
         </p>
       ) : null}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_minmax(200px,280px)]">
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,280px)]">
+        <div className="min-w-0 space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4">
             <Stat
               label="Latest MMR"
               value={intel.current ? intel.current.rating : "—"}
@@ -162,22 +163,22 @@ export function LadderContextCard({ pulseId, confirmedIdentity, children }: {
           </div>
 
           {intel.pro ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
-              <Radio className="h-4 w-4 text-warning" aria-hidden />
-              <span className="font-semibold text-text">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+              <Radio className="h-4 w-4 shrink-0 text-warning" aria-hidden />
+              <span className="min-w-0 [overflow-wrap:anywhere] font-semibold text-text">
                 Pro player: {intel.pro.nickname}
               </span>
               {intel.pro.name ? (
-                <span className="text-text-muted">({intel.pro.name})</span>
+                <span className="min-w-0 [overflow-wrap:anywhere] text-text-muted">({intel.pro.name})</span>
               ) : null}
               {intel.pro.team ? (
-                <span className="text-text-muted">· {intel.pro.team}</span>
+                <span className="min-w-0 [overflow-wrap:anywhere] text-text-muted">· {intel.pro.team}</span>
               ) : null}
             </div>
           ) : null}
 
           {intel.linkedCharacters.length > 0 ? (
-            <p className="text-caption text-text-muted">
+            <p className="min-w-0 [overflow-wrap:anywhere] text-caption text-text-muted">
               Also plays as{" "}
               {intel.linkedCharacters
                 .slice(0, 4)

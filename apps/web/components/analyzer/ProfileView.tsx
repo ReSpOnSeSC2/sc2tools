@@ -255,11 +255,11 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
 
   return (
     <div className="min-w-0 max-w-full space-y-5">
-      {!chromeBreadcrumb ? <nav aria-label="Breadcrumb" className="text-caption text-text-muted"><Link href={backHref} className="underline">Opponents</Link><span aria-hidden> / </span><span aria-current="page">{opponentName}</span></nav> : null}
+      {!chromeBreadcrumb ? <nav aria-label="Breadcrumb" className="min-w-0 max-w-full text-caption text-text-muted"><Link href={backHref} className="underline">Opponents</Link><span aria-hidden> / </span><span aria-current="page" className="[overflow-wrap:anywhere]">{opponentName}</span></nav> : null}
       <header aria-label="Opponent profile" className="flex flex-wrap items-end justify-between gap-4">
         <div className="w-full min-w-0 lg:w-auto lg:flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="break-words text-h2 font-semibold">{data.name || "unnamed"}</h1>
+            <h1 className="min-w-0 max-w-full [overflow-wrap:anywhere] text-h2 font-semibold">{data.name || "unnamed"}</h1>
             <DossierRivalStar pulseId={data.pulseId || pulseId} name={data.name || "unnamed opponent"} />
             <RevealedChip
               size="md"
