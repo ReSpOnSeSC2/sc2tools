@@ -17,6 +17,12 @@ corresponding GitHub Release.
 - Offer Retry when a saved comment's thread cannot refresh. Closing a request immediately removes playback, download and comment controls, and concurrent answer updates cannot reopen or relist a closed or hidden request.
 - Keep admin-only Review previews out of browser and shared caches, and preserve origin-dependent CORS headers on public reads.
 
+### Guided tours
+
+- Add short tours of Today, a game breakdown and Overlay settings, with keyboard controls and a phone sheet. Saved completion and skips follow the tour version; Help can replay a tour without resetting progress.
+- Wait for visible build check-in cards, open dialogs and fullscreen. Keep the game's sticky navigation and reading position in place, skip unavailable targets and retire interrupted tours safely.
+- Keep tour progress separate from setup and suggestion dismissal, and merge each saved tour without overwriting another tour or other onboarding preferences.
+
 ### Stream Dock layout
 
 - Put Chat first in the section navigation and default panel order, retaining saved pins and collapsed sections.

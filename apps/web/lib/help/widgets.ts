@@ -8,6 +8,7 @@ import type { HelpWidgetId } from "./types";
  * components themselves live in components/help/HelpWidget.tsx.
  */
 const WIDGET_TEXT: Record<HelpWidgetId, () => string> = {
+  "guided-tours": () => "Take a tour. Replay the Today, game breakdown and Overlay settings walkthroughs. Next, Back, Skip and saved tour progress.",
   glossary: () => GLOSSARY.flatMap(term => [term.term, term.short, term.long ?? "", term.formula ?? ""]).join(" "),
   "chat-commands": () =>
     COMMAND_GROUPS.flatMap((group) => [

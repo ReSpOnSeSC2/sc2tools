@@ -25,6 +25,7 @@ import { OverlayStarterPacks } from "./OverlayStarterPacks";
 import { OverlayHealthProvider } from "@/components/overlay/OverlayHealthContext";
 import { useSettingsStreamingToken } from "./SettingsStreamingTokenOwner";
 import { OverlayHealthBoard } from "./OverlayHealthBoard";
+import { GuidedTours } from "@/components/onboarding/GuidedTours";
 
 /**
  * Settings · Overlay tab.
@@ -34,7 +35,7 @@ import { OverlayHealthBoard } from "./OverlayHealthBoard";
  */
 
 export function SettingsOverlay({ origin }: { origin?: string }) {
-  const { ownerId: userId, token: activeToken, getToken: readToken, isCurrent, refresh: mutate, patchToken } = useSettingsStreamingToken();
+  const { ownerId: userId, token: activeToken, credential, getToken: readToken, isCurrent, refresh: mutate, patchToken } = useSettingsStreamingToken();
   const live = useRef(true);
   const request = useRef<AbortController | null>(null);
   useLayoutEffect(() => {
@@ -70,13 +71,13 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
     }
   }
   return (
-    <OverlayProfileEditor key={`${userId}:${activeToken.token}`} token={activeToken} onSaved={saved => { if (current()) patchToken(saved); }}>{({ profile, saving: profileSaving, setTheme, setDuration }) => <div className="space-y-6">
+    <OverlayProfileEditor key={`${userId}:${activeToken.token}`} token={activeToken} onSaved={saved => { if (current()) patchToken(saved); }}>{({ profile, saving: profileSaving, setTheme, setDuration }) => <GuidedTours id="overlay" recordKey={String(credential.key)} ready={current()} isCurrent={current} className="space-y-6">
       <header><h2 className="text-body-lg font-semibold text-text">Overlay</h2>
         <Link href="/stream-studio/learn" target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-11 items-center gap-2 text-caption text-accent underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Build your first stream setup<span className="sr-only"> (opens in a new tab)</span><ArrowUpRight className="h-4 w-4" aria-hidden /></Link>
       </header>
       {/* One visibility host covers only Setup/Widgets, never Theme or Scenes. */}
       <OverlayHealthProvider token={activeToken.token} enabledWidgets={activeToken.enabledWidgets} enabled><div className="space-y-6">
-      <Section id="setup" className="scroll-mt-28"
+      <Section id="setup" data-tour="overlay-setup" className="scroll-mt-28"
         title="OBS Browser Source URLs"
         description="Copy the URLs you want into OBS. Each widget is transparent and positioned independently. The URLs share the same socket connection so your overlay stays in sync."
       >
@@ -117,7 +118,7 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         <ConnectionCheck token={activeToken.token} lastSeenAt={activeToken.lastSeenAt} /><StuckWidgetHelp />
       </div>
       </Section>
-      <Section id="widgets" className="scroll-mt-28" title="Widgets" description="Choose, size and test individual OBS sources.">
+      <Section id="widgets" data-tour="overlay-widgets" className="scroll-mt-28" title="Widgets" description="Choose, size and test individual OBS sources.">
         <div className="space-y-6">
           <OverlayStarterPacks key={`${userId}:${activeToken.token}`} token={activeToken} onUpdated={() => mutate()} />
           <Card padded={false}><WidgetList
@@ -158,6 +159,6 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
 
       <OverlayLiveTestDialog pending={pendingLiveTest} busy={testingWidget !== null} origin={origin}
         onClose={() => setPendingLiveTest(null)} onSend={() => { if (pendingLiveTest) void testWidget(pendingLiveTest.token, pendingLiveTest.widget, true); }} />
-    </div>}</OverlayProfileEditor>
+    </GuidedTours>}</OverlayProfileEditor>
   );
 }

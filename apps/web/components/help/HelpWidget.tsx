@@ -6,6 +6,7 @@ import type { HelpWidgetId } from "@/lib/help/types";
 
 // Keep the searchable catalog with its widget, while retaining public SSR.
 const GlossaryBrowser = dynamic(() => import("./GlossaryBrowser").then(module => module.GlossaryBrowser), { ssr: true });
+const TakeATour = dynamic(() => import("./TakeATour").then(module => module.TakeATour), { ssr: true });
 
 /**
  * Interactive pieces an article can embed with `{ type: "widget" }`.
@@ -13,6 +14,8 @@ const GlossaryBrowser = dynamic(() => import("./GlossaryBrowser").then(module =>
  */
 export function HelpWidget({ widget, variant = "page" }: { widget: HelpWidgetId; variant?: "page" | "compact" }) {
   switch (widget) {
+    case "guided-tours":
+      return <TakeATour />;
     case "glossary":
       return <GlossaryBrowser variant={variant} />;
     case "chat-commands":

@@ -2,6 +2,9 @@
 const fs = require('node:fs'), esbuild = require('esbuild');
 const root = process.cwd(); fs.mkdirSync('.tmp', { recursive: true });
 const boundaries = {
+  // This widget fixture retains its scope; Tours has a real-controller fixture.
+  '@/components/onboarding/GuidedTours': `import React from'react';export function GuidedTours({children,className,id}){return <div className={className} data-tour-surface={id}>{children}</div>}`,
+
   '@sentry/nextjs': `export function captureException(){}export function captureMessage(){}export function addBreadcrumb(){}`,
   'next/navigation': `import{useSyncExternalStore}from'react';const subscribe=fn=>{addEventListener('fixture-navigation',fn);return()=>removeEventListener('fixture-navigation',fn)};const router={push(href){history.pushState({},'',href);dispatchEvent(new Event('fixture-navigation'))},replace(href){history.replaceState(history.state,'',href);dispatchEvent(new Event('fixture-navigation'))},prefetch(){},back(){history.back()}};export function useRouter(){return router}export function usePathname(){return useSyncExternalStore(subscribe,()=>location.pathname)}export function useSearchParams(){return new URLSearchParams(useSyncExternalStore(subscribe,()=>location.search))}`,
   'next/link': `import React from'react';import{useRouter}from'next/navigation';export default function Link({children,href,prefetch,scroll,replace,onClick,target,...props}){const router=useRouter();return <a href={href} target={target} {...props} onClick={event=>{onClick?.(event);if(!event.defaultPrevented&&event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey&&(!target||target==='_self')&&String(href).startsWith('/')){event.preventDefault();(replace?router.replace:router.push)(href)}}}>{children}</a>}`,

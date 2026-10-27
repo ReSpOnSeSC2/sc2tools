@@ -467,3 +467,47 @@ warning owners, and 78 passes plus 27 fixture-setup failures; cd663 has clean
 changed-file strict lint and 27 Mongo passes after correcting the unique Clerk
 seed IDs. Both runs retain their pin/process-closure receipts. This is not a
 single 105-case pass or measured speedup; whole-API integration remains for CI.
+
+## Versioned guided tours
+
+`lib/tours.ts` defines Today, Game and Overlay tours and their actual target
+owners. A small admitted surface lazily loads its controller; targets must be
+unique rendered nodes in that surface. Saved versions keep observers dormant
+until explicit Help replay. Missing targets can be skipped, but an unsupported
+layout reports unavailability rather than fabricating a target.
+
+Owner, route, record and selected-credential lifetimes retire stale work before
+and after held auth tokens or decoded response bodies, including ABA changes.
+The actual sticky game navigator owns its target. Visible check-in variants,
+external dialogs and fullscreen suppress admission; interruption does not save
+or restart automatically. Reveal policy preserves already-visible targets and
+rolls back an unsafe guarded scroll before paint. Phones use a bottom
+sheet, keyboard/Escape stay in the active focus scope, and reduced motion is
+respected without opening hidden panes.
+
+Completion and Skip save one known tour/version through the existing onboarding
+preferences. Mongo atomically merges siblings with a maximum version and returns
+the committed projection; missing/GDPR-fenced owners cannot be acknowledged or
+upserted. Other onboarding goals, dismissals and first-game markers remain
+independent. Help replay does not reset saved progress or read the latest game
+until an explicit Game replay action.
+
+Local proof belongs to product `17c229bb`: the selected group first had 130 passes
+and one provider-fixture failure, then the repaired target file passed eight cases
+and strict lint, followed by 24 real-Mongo Foundation cases. There was no fresh
+131/131 run. Inherited web/API lint debt retains raw nonzero exits and baseline
+comparisons. Its own Next artifact generated 148 pages, passed all 81 unchanged
+budgets and fresh post-build web types. The original browser matrix passed 12
+cases once and retained 36 serious/critical AA scans with zero reported issues
+and 22 incomplete color-contrast observations; this is not full certification.
+
+The first metadata reader RED remains recorded. A PowerShell-only reinspection
+corrected two missing expected CSS newline bytes and explicitly classified the
+installed non-live tracer's intentional script-body omission. It verified 12 CSS
+bodies and 12 script HTTP responses without claiming a captured raw-JavaScript
+body/hash or rerunning browser tests. Root approved the 18 captures within the
+synthetic target/owner-frame scope; eight raw PNGs are selected for delivery.
+This is not full consumer-page, native fullscreen or production API proof.
+See [the checkpoint](handoff/guided-tours-checkpoint.md) for exact heads, receipts,
+validation limits and the pending fresh-main/integrated-CI boundary. Help source
+and its canonical generated index are unchanged by the documentation delivery.
