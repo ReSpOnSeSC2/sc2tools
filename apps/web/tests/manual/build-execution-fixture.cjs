@@ -5,6 +5,9 @@ const root = process.cwd(); fs.mkdirSync('.tmp', { recursive: true });
 fs.writeFileSync('.tmp/build-execution-data.ts', `export {executionFixture} from '@/components/analyzer/game/__tests__/buildExecutionFixtures';export {intent,confirmedResponse,opponentState} from '@/components/build-checkin/__tests__/cardFixtures';`);
 esbuild.buildSync({ entryPoints: ['.tmp/build-execution-data.ts'], bundle: true, platform: 'node', format: 'cjs', outfile: '.tmp/build-execution-data.cjs', alias: { '@': root }, logLevel: 'warning' });
 const boundaries = {
+  // Tour persistence and focus are outside this report fixture; its own fixture uses the real controller.
+  '@/components/onboarding/GuidedTours': `import React from'react';export function GuidedTours({children,className,id}){return <div className={className} data-tour-surface={id}>{children}</div>}`,
+
   '@sentry/nextjs': `export function captureException(){}export function captureMessage(){}export function addBreadcrumb(){}`,
   'next/navigation': `const router={push(href){location.assign(href)},replace(href){history.replaceState(history.state,'',href)},prefetch(){}};export function useRouter(){return router}export function usePathname(){return location.pathname}export function useSearchParams(){return new URLSearchParams(location.search)}`,
   'next/link': `import React from'react';export default function Link({children,href,prefetch,scroll,replace,...props}){return <a href={href} {...props}>{children}</a>}`,

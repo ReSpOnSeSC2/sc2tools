@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { revealHorizontally } from "@/lib/a11y/revealHorizontally";
 
 export interface SectionNavItem { id: string; label: string }
-export interface SectionNavProps { items: readonly SectionNavItem[]; "aria-label"?: string; variant?: "rail" | "bar" }
+export interface SectionNavProps { items: readonly SectionNavItem[]; "aria-label"?: string; "data-tour"?: string; variant?: "rail" | "bar" }
 
 /** Scroll-spy links shared by long reading surfaces. Native hashes work without JS. */
-export function SectionNav({ items, "aria-label": label = "On this page", variant = "rail" }: SectionNavProps) {
+export function SectionNav({ items, "aria-label": label = "On this page", "data-tour": tourTarget, variant = "rail" }: SectionNavProps) {
   const [active, setActive] = useState(items[0]?.id ?? "");
   const [edges, setEdges] = useState({ left: false, right: false });
   const scroller = useRef<HTMLDivElement>(null);
@@ -45,7 +45,7 @@ export function SectionNav({ items, "aria-label": label = "On this page", varian
     // Scroll-spy updates may reveal a chip, never move the reading position.
     if (el && chip) revealHorizontally(el, chip);
   }, [active]);
-  return <nav aria-label={label} className={`sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 min-w-0 self-start border-y border-border bg-bg/95 py-0.5 supports-[backdrop-filter]:backdrop-blur-sm sm:top-[calc(4rem+env(safe-area-inset-top))] print:hidden ${variant === "rail" ? "lg:col-start-2 lg:row-start-1 lg:top-24 lg:border-0 lg:bg-transparent" : ""}`}>
+  return <nav aria-label={label} data-tour={tourTarget} className={`sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 min-w-0 self-start border-y border-border bg-bg/95 py-0.5 supports-[backdrop-filter]:backdrop-blur-sm sm:top-[calc(4rem+env(safe-area-inset-top))] print:hidden ${variant === "rail" ? "lg:col-start-2 lg:row-start-1 lg:top-24 lg:border-0 lg:bg-transparent" : ""}`}>
     <h2 className={`sr-only mb-2 text-caption font-semibold ${variant === "rail" ? "lg:not-sr-only" : ""}`}>{label}</h2>
     <div className="relative"><div ref={scroller} onScroll={measure} className={`flex gap-2 overflow-x-auto ${variant === "rail" ? "lg:block lg:space-y-1 lg:overflow-visible" : ""}`}>
       {items.map((item) => <a key={item.id} href={`#${item.id}`} aria-current={active === item.id ? variant === "bar" ? "true" : "location" : undefined} onClick={(event) => {

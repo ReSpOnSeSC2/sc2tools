@@ -124,3 +124,6 @@ describe("TodayView default tab", () => {
     expect(paths).not.toContain("/v1/me/preferences/misc");
   });
 });
+
+// These consumer assertions retain their original scope; tour owner/route/focus behavior is tested separately.
+vi.mock("@/components/onboarding/GuidedTours", () => ({ GuidedTours: ({ children, className, id }: { children: import("react").ReactNode; className?: string; id: string }) => <div className={className} data-tour-surface={id}>{children}</div> }));

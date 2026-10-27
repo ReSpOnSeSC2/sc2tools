@@ -16,6 +16,7 @@ const { OPPONENT_SCOUTING_PREF_TYPE, sanitizeOpponentScouting } = require("../ut
 const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("../services/twitchAutomationPolicy");
 const { sanitizeChatCommands } = require("../services/chatCommands");
 const { activationTimestamp } = require("../services/activation");
+const { validateOnboardingToursDone } = require("../services/users");
 const {
   CHECKIN_PREF_TYPE,
   sanitizeCheckinPrefs,
@@ -447,7 +448,7 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
-      if (type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE) res.set("Cache-Control", "private, no-store");
+      if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE) res.set("Cache-Control", "private, no-store");
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
         return;
@@ -475,7 +476,7 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
-      if (type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE) res.set("Cache-Control", "private, no-store");
+      if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE) res.set("Cache-Control", "private, no-store");
       if (type === TWITCH_PREF_TYPE && auth.source !== "clerk") { res.status(403).json({ error: { code: "clerk_required" } }); return; }
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
@@ -503,6 +504,7 @@ function buildMeRouter(deps) {
           && req.body.levelUpDismissedAt !== null && activationTimestamp(req.body.levelUpDismissedAt) === null) {
         res.status(400).json({ error: { code: "invalid_level_up_dismissed_at" } }); return;
       }
+      if (type === "onboarding" && Object.hasOwn(req.body, "toursDone")) validateOnboardingToursDone(req.body.toursDone);
       const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body)
         : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(req.body)
           : type === "analyzerViews" ? sanitizeAnalyzerViews(req.body, true)

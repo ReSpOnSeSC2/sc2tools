@@ -8,6 +8,9 @@ fs.mkdirSync('.tmp', { recursive: true });
 fs.writeFileSync('.tmp/battle-report-data.ts', `export {reportFixtures} from '@/lib/battleReport/__tests__/fixtures'; export {intent,confirmedResponse,opponentState} from '@/components/build-checkin/__tests__/cardFixtures'; export {makeSegmentFixture} from '@/lib/__tests__/segmentedPlayback.fixture';`);
 esbuild.buildSync({ entryPoints: ['.tmp/battle-report-data.ts'], bundle: true, platform: 'node', format: 'cjs', outfile: '.tmp/battle-report-data.cjs', alias: { '@': root }, logLevel: 'warning' });
 const boundaries = {
+  // Tour persistence and focus are outside this report fixture; its own fixture uses the real controller.
+  '@/components/onboarding/GuidedTours': `import React from'react';export function GuidedTours({children,className,id}){return <div className={className} data-tour-surface={id}>{children}</div>}`,
+
   '@sentry/nextjs': `export function captureException(){}export function captureMessage(){}export function addBreadcrumb(){}`,
   'next/navigation': `const router={push(href){location.assign(href)},replace(href){history.replaceState(history.state,'',href);dispatchEvent(new Event('fixture-navigation'))},prefetch(){}};export function useRouter(){return router}export function usePathname(){return location.pathname}export function useSearchParams(){return new URLSearchParams(location.search)}`,
   'next/link': `import React from'react';export default function Link({children,href,prefetch,scroll,replace,...props}){return <a href={href} {...props}>{children}</a>}`,

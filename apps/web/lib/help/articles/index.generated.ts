@@ -67,6 +67,7 @@ import gamePage_benchmarks from "./game-page/benchmarks";
 import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
 import gamePage_gamePageReplay from "./game-page/game-page-replay";
 import gamePage_gamePage from "./game-page/game-page";
+import gamePage_yourFirstGame from "./game-page/your-first-game";
 import gettingStarted_aPageAskedMeToSignIn from "./getting-started/a-page-asked-me-to-sign-in";
 import gettingStarted_browserImport from "./getting-started/browser-import";
 import gettingStarted_gettingStarted from "./getting-started/getting-started";
@@ -76,6 +77,7 @@ import gettingStarted_installAndPair from "./getting-started/install-and-pair";
 import gettingStarted_installApp from "./getting-started/install-app";
 import gettingStarted_instantAnalysis from "./getting-started/instant-analysis";
 import gettingStarted_settingsOverview from "./getting-started/settings-overview";
+import gettingStarted_takeATour from "./getting-started/take-a-tour";
 import gettingStarted_yourFirstWeek from "./getting-started/your-first-week";
 import opponents_opponentDossier from "./opponents/opponent-dossier";
 import reviewsCoaching_coaching from "./reviews-coaching/coaching";
@@ -162,6 +164,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gamePage_gamePageAccuratePlayback,
   gamePage_gamePageReplay,
   gamePage_gamePage,
+  gamePage_yourFirstGame,
   gettingStarted_aPageAskedMeToSignIn,
   gettingStarted_browserImport,
   gettingStarted_gettingStarted,
@@ -171,6 +174,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gettingStarted_installApp,
   gettingStarted_instantAnalysis,
   gettingStarted_settingsOverview,
+  gettingStarted_takeATour,
   gettingStarted_yourFirstWeek,
   opponents_opponentDossier,
   reviewsCoaching_coaching,
