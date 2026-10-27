@@ -120,3 +120,21 @@ observed stage identities with no owned listeners. All 47 owned raw files, six
 protected seeds and three generated-input absences retained their guarded state.
 API strict lint, baseline comparison, 131 selected web cases, 24 Foundation cases,
 build, browser and CI remain UNRUN.
+
+## API test grouping — validation pending
+
+At `0e74f1b0`, strict web42 reported zero errors and only the existing autofocus
+warning. The exact main `a0681fd` card produced the same rule, message, node and
+attribute; both raw exits remain 1. Root admitted that inherited debt without a
+strict-clean claim. API strict3 then exited 1 with zero errors and nine function-
+length warnings, including the new Tours describe block. Both groups retained
+all guarded inputs and completed independent process/listener closure.
+
+The Tours tests now register through three named functions inside the original
+Foundation scope, called within the unchanged Tours describe/hook scope. Their
+code lengths are 40, 34 and 39 lines. All test bodies, titles, tables, assertions
+and hook bytes are retained; the 11 Tours and 24 total Foundation cases are
+unchanged. This grouping correction and the three prepared main-version API
+stdin comparisons remain UNRUN. No function-length suppression or test removal
+was added. Raw API evidence is in
+`.cache/guided-tours-validation-0e74f1b0/03-api-lint/OUTCOME.json`.

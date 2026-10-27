@@ -275,20 +275,10 @@ describe("Settings Foundation backing API", () => {
     } finally { await db.games.deleteMany({ gameId: { $in: [gameId, `${gameId}-foreign`, `${gameId}-deleted`] } }); }
   });
 
-  describe("versioned guided-tour onboarding preferences", () => {
-    const at = "2026-10-26T12:00:00.000Z";
-    let tourOwner;
-    beforeEach(async () => {
-      tourOwner = `tour-${crypto.randomUUID()}`;
-      await db.users.insertOne({ userId: tourOwner, clerkUserId: `clerk-${tourOwner}`,
-        preferences: { misc: { keep: true }, onboarding: { goals: ["improve"], dismissedAt: null,
-          firstGameViewedAt: at, futureField: "$literal-data" } } });
-    });
-    afterEach(async () => {
-      jest.restoreAllMocks();
-      await db.users.deleteMany({ userId: { $in: [tourOwner, `${tourOwner}-other`] } });
-    });
+  const at = "2026-10-26T12:00:00.000Z";
+  let tourOwner;
 
+  function registerTourHttpValidationTests() {
     test("HTTP accepts bounded version patches, preserves siblings, and makes onboarding private", async () => {
       expect((await request(app).put("/v1/me/preferences/onboarding").send({ toursDone: { today: 1 } })).status).toBe(401);
       const first = await withAuth(request(app).put("/v1/me/preferences/onboarding").send({ toursDone: { today: 1 } }));
@@ -330,6 +320,9 @@ describe("Settings Foundation backing API", () => {
       expect((await withAuth(request(app).get("/v1/me/preferences/onboarding"))).body).toEqual(before);
     });
 
+  }
+
+  function registerTourAtomicVersionPersistenceTests() {
     test("real Mongo atomically retains concurrent tours, literal fields and independent onboarding patches", async () => {
       await db.users.insertOne({ userId: `${tourOwner}-other`, preferences: { onboarding: { toursDone: { today: 7 } } } });
       const answers = await Promise.all([
@@ -365,6 +358,9 @@ describe("Settings Foundation backing API", () => {
       }
     });
 
+  }
+
+  function registerTourOwnerFenceAckTests() {
     test("tour ACK is projected from the one guarded write with no later preferences read", async () => {
       const write = jest.spyOn(db.users, "findOneAndUpdate"), read = jest.spyOn(db.users, "findOne");
       const answer = await users.updatePreferences(tourOwner, "onboarding", { toursDone: { today: 1 } });
@@ -404,6 +400,23 @@ describe("Settings Foundation backing API", () => {
         else expect(row.preferences.onboarding).not.toHaveProperty("toursDone");
       } finally { release(); await pending.catch(() => {}); spy.mockRestore(); }
     });
+  }
+
+  describe("versioned guided-tour onboarding preferences", () => {
+    beforeEach(async () => {
+      tourOwner = `tour-${crypto.randomUUID()}`;
+      await db.users.insertOne({ userId: tourOwner, clerkUserId: `clerk-${tourOwner}`,
+        preferences: { misc: { keep: true }, onboarding: { goals: ["improve"], dismissedAt: null,
+          firstGameViewedAt: at, futureField: "$literal-data" } } });
+    });
+    afterEach(async () => {
+      jest.restoreAllMocks();
+      await db.users.deleteMany({ userId: { $in: [tourOwner, `${tourOwner}-other`] } });
+    });
+
+    registerTourHttpValidationTests();
+    registerTourAtomicVersionPersistenceTests();
+    registerTourOwnerFenceAckTests();
   });
   describe("POST /v1/webhooks/clerk", () => {
     test("rejects requests without svix headers", async () => {
