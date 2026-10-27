@@ -60,6 +60,12 @@ for (const theme of ["light", "dark"] as const) {
     await draft.focus();
     evidence.phase("passive-approach");
     await passiveSection(page, "performance");
+    // The first gesture admits the above Matchup card. Continue reading after its real height is rendered.
+    await expect(page.getByRole("combobox", { name: "PvZ rating window" })).toBeVisible();
+    await expect(page.getByText("16-game estimate", { exact: true })).toHaveCount(1);
+    await expect.poll(() => evidence.reads.every(row => row.settled)).toBe(true);
+    await settle(page);
+    await passiveSection(page, "performance");
     await expect(nav(page, "Performance & MMR")).toHaveAttribute("aria-current", "location");
     await expect(draft).toBeFocused(); expect(page.url()).toBe(href);
     expect(await page.getByLabel("Fixture filter state").textContent()).toBe(filterValue);

@@ -94,20 +94,42 @@ ledgers under `C:\SC2TOOLS\.cache\trends-browser-retry-host-f713e621` preserve t
 first AA RED; source/asset postguards passed and all 30 observed identities,
 including postguard drivers, retired with no owned listeners.
 
-The pending chart repair adds `role="group"` to that labeled wrapper while keeping
-Recharts' interactive accessibility layer, and removes only `opacity-80` from
-the caption. No new CSS utility, handler, data or calculation changes. **Focused
-chart validation and another browser retry are UNRUN.** Spec assertions,
-configuration, fixture, assets and budgets are unchanged by this repair.
+At `40fa9098`, chart strict lint exited 0 and all five existing render/drilldown
+checks across two files passed. The two attribute/class changes introduce no
+new CSS utility, handler, data or calculation change. The next main run stopped
+at the original passive Performance highlight assertion: **0 passed, 1 failed,
+17 did not run**, zero retries/flaky cases; paired work remains unrun. Initial
+AA reported no serious issues (contrast incomplete); Time AA was not reached,
+so the chart AA repair is not browser-proved. Eight GETs settled (two cold, two
+filter, four passive), with zero page errors/unknown HTTP/rejected writes and
+one early capture. Final source/asset guards passed; all 32 observed identities
+including postguards retired with no owned listeners.
+
+One separate read-only geometry diagnostic passed in 1,791ms, without replacing
+that RED or establishing a feature pass. The admitted Matchup trends card grew
+720→1,214.125px, pushing Performance down 494.125px at unchanged scrollY 2,329.
+Its heading moved 116.84→610.97px below the nav threshold 203.59px; the highlight
+briefly read Performance, then correctly returned to Overview. Focus stayed on
+the unrelated input. The diagnostic's 15 observed identities retired; raw samples,
+images and cleanup are in `C:\SC2TOOLS\.cache\trends-passive-geometry-diagnostic-40fa9098`.
+
+The proposed spec correction retains the first passive gesture and cold ledger,
+waits for the admitted above-card PvZ rating UI/data and settled reads, then uses
+the same native passive gesture to continue reading Performance at its real
+position. All original nav/focus/URL/filter/retention assertions, the 5s highlight
+assertion and 120s case bound remain. This checks final navigation against the
+rendered viewport instead of a transient label during expansion. **Browser
+validation of this correction is UNRUN.** Product/fixture/configuration,
+assets, budgets and calculations remain unchanged by this test correction.
 
 ## Remaining validation and delivery
 
 Root owns review, commits, runtime grants and delivery. Preserve the old 857,
-f713 and diagnostic packets. After committing the chart/checkpoint repair, expand
-the explicit current-source → retained-857 artifact bridge to allow this one
-chart's attribute/class-only changes, alongside the fixture/checkpoint. Production
-source is no longer wholly unchanged; do not label the retained build as a new
-build. Admit complete CSS filename
+f713, 40fa and diagnostic packets. After accepting the spec/checkpoint proposal,
+refresh the explicit current-source → retained-857 bridge for the test-only
+change, retaining the one chart's attribute/class proof and fixture/checkpoint
+allowlist. Production source is not wholly unchanged; do not relabel the retained
+build as a new build. Admit complete CSS filename
 sets/bytes, fonts, Chrome, current source and exact concrete output paths.
 LIST/RUN reporter JSONs must have separate filenames. Keep CI=1, truly remove
 A11Y_COLLECT_ONLY/TRENDS_LIST_ONLY, and retain one worker, zero retries and
