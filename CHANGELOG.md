@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Device liveness
+
+- Reduce background activity writes from desktop app requests while keeping agent heartbeats working.
+- Reuse agent status for up to 30 seconds so repeated dashboard loads do less database work. Pairing, new heartbeats and unpairing refresh the status.
+
 ### Trends charts on demand
 
 - Load charts below the first Trends row as they approach the viewport, with explicit Load buttons and usable fallbacks. Keep chart selections and unapplied Explorer controls while scrolling; collapsed groups retain their existing close-and-unmount behavior.

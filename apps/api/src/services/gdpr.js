@@ -127,6 +127,7 @@ class GdprService {
    *   siteStats?: import('./siteStats').SiteStatsService,
    *   onCommunityChanged?:(userId:string)=>void,
    *   onGamesChanged?:(userId:string)=>void,
+   *   beginDeviceMutation?:(userId:string)=>(()=>void),
    *   userRevision?: import("../util/userRevision").UserRevision,
    * }} [opts]
    *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
@@ -146,6 +147,7 @@ class GdprService {
     this.siteStats = opts.siteStats || null;
     this.onCommunityChanged = opts.onCommunityChanged || null;
     this.onGamesChanged = opts.onGamesChanged || null;
+    this.beginDeviceMutation = opts.beginDeviceMutation || null;
     this.opponents = (opts && opts.opponents) || null;
     this.logger = (opts && opts.logger) || null;
     // GameDetailsService — the store-aware deleter for the heavy
@@ -382,6 +384,8 @@ class GdprService {
       { projection: { _id: 0, clerkUserId: 1, "replaySharing.slug": 1 } },
     );
 
+    const finishDevices = this.beginDeviceMutation?.(userId) || (() => {});
+    try {
     const gdprFence = await this._acquireMutationFence(userId, "delete_all");
     try {
       await gdprFence.assert();
@@ -545,6 +549,7 @@ class GdprService {
       await this._releaseMutationFence(userId, gdprFence);
       throw err;
     }
+    } finally { finishDevices(); }
   }
   /** The provider webhook and API share the same cleanup. A completed identity
    * retains only its keyed guard, so a duplicate delivery cannot recreate it.
