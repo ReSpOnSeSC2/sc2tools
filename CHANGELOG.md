@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Sessions and date filters
+
+- Keep Auto-track current season selected when opening Sessions, paging history or returning to Today. Explicit custom dates, pinned seasons and saved views keep their selected ranges.
+- Give the current-filter summary a supported accessible label for screen readers.
+
 ### Build check-in shortcuts
 
 - Add your own build directly beside the replay's classified label in the check-in list. Keep a clearly named Add opponent build action beside the opponent's build.

@@ -47,7 +47,7 @@ export function FilterBar() {
   const extra = <><AccountFilterPicker /><MapPoolToggle /><GameSizeToggle /><GameLengthFilter /><ExcludeTooShortToggle /><LazyHelpLink slug="analyzer-filters">How filters work</LazyHelpLink></>;
   return <div className="space-y-3">
     <div className="flex items-center gap-3">
-      <p className="min-w-0 flex-1 text-caption text-text-muted" aria-label="Current filters">{summarizeFilters(filters, seasons)}</p>
+      <p className="min-w-0 flex-1 text-caption text-text-muted" role="note" aria-label="Current filters">{summarizeFilters(filters, seasons)}</p>
       <AnalyzerViewsButton />
       {desktop ? <MoreFiltersPopover count={describeActiveFilters(filters, { seasons }).length}>{extra}</MoreFiltersPopover> : <FilterSheet><DateFilter /><MatchupPicker /><RegionToggleRow />{extra}</FilterSheet>}
     </div>

@@ -1,0 +1,41 @@
+# Sessions Auto-season regression — checkpoint addendum
+
+2026-10-27. Urgent web fix on Dock branch codex/session-auto-season, based on main6b as reported by root. Six production files and three test surfaces are dirty. The separate 39-file B1 mobile candidate remains preserved; this work does not adopt or relabel it.
+
+## Problem and correction
+
+Sessions link serialization deliberately froze resolved dates but encoded the snapshot as global preset=custom. Shared Analyzer URL hydration then replaced current_season in memory, enabled copied-view no-persistence mode and re-exported Custom into Today URLs. The default constant was already correct. This path did not itself overwrite analyzer.filters storage; reload could perpetuate the accidental URL selection instead.
+
+The fix separates semantic presets from versioned frozen membership, adds strict transport validation and consumes refresh/recapture before API requests. Latest history advances actual Auto-season bounds; reports/output/continuations remain fixed until the defined refresh/cohort transition. Generated same-cohort admission applies only to Sessions and does not change generic copied/saved views. A paired SessionsPage comparison handles actual same-key Refresh and stale retry; the report refresh button stays exact-descriptor. Explicit Custom, numbered/patch presets and saved views are preserved. New transport fields never enter Saved Views, global persisted controls or API query fields.
+
+## Retained local evidence and pending gates
+
+Evidence root: C:/SC2TOOLS/.cache/sessions-auto-season-verification-20261027.
+
+- RED01 is a test adapter failure: an unstable getToken callback caused the disabled analysis-provider fixture to loop. Root stopped the exact owned worker after roughly 3.1 GB growth, retained the stop receipt and closed nine observed identities. No production change fixed that mock.
+- RED02 meaningfully ran the original production source: 19 tests, 16 expected behavior failures/three passing Custom controls, no unhandled errors; nine observed identities closed. Auto/pinned/rollover journeys actually reported Custom.
+- Integrated03 after the admission split and summary-role correction passes whole-web types, strict lint on nine changed files and all 300 tests/35 files in 41.35 s; 43 observed identities closed. Its 30 new cases are nine real-provider journeys and 21 pure URL/transport checks. They include ordinary edits persisting after Session navigation, explicit Custom/saved views, catalog rollover, current-report reload, non-Session copied-view behavior and same-key Refresh.
+- Root-owned own-build admission required: unchanged UI 19/actual uiLint allowances, fresh raw Git/web source snapshot and original immutable f99 authority, direct NODE_ENV=production Next build, all 83 original route caps and unchanged 40 canonical sources/seven active assets/four strict sample games. Cache-only helper preparation is not an executed result.
+- Final local browser/source/asset acceptance is recorded below; exact-source CI and resulting merge/production source/domain receipts remain pending. Do not infer these from unit green or a previous Sessions/B1 build.
+
+The source proposal and audit retain the precise chain and root-reviewed path narrowing. The final production helper includes the necessary fourth caller integration, not an API or descriptor change. Old URL tests that forced relative patch presets to become globally Custom must assert the preserved semantic preset plus exact prefixed API membership instead; version-only scopes still introduce no default date bound.
+
+## Recovery and limits
+
+Already-open old Custom URLs have no trustworthy origin marker: they may be an intentional choice or a previously generated Session link. Preserve that intent rather than resetting every Custom range. If an old URL is stuck after this fix, open a fresh bare Today URL (`/app`) in one new tab; it reads the stored preference rather than the poisoned URL. Choose Auto-track current season there if needed, while keeping intentionally saved Custom views. No account-data deletion or preference migration is required.
+
+This is a client navigation/persistence correction. Session membership/kernel, private API authorization, physical query limitations, native agent definitions, provider configuration and optional cache flags retain their existing contracts. It adds no migration/index/job/queue/socket and makes no production cost/speed guarantee. Final delivery remains root's separate gate.
+## Build and first browser evidence (final artifact pending)
+
+Own-build-01 compiled but failed the unchanged /app download cap at 241.5/240 kB. Extracting synchronous scope admission from the full report/refresh transport removed eager code without changing hydration timing. Own-build-02 passed all83 original caps (/app239.8/240), UI19 plus the existing lint baseline, and unchanged40canonical/seven active/four strict sample inputs. Its Build ID is 2z5ZCdAqSMHPK9epJfFEU;20 observed identities closed. No assets were generated, copied, downloaded or pruned.
+
+Browser01 on that exact build passed four390/1280 light/dark documents and32 behavioral/contrast captures. All2031 recorded input identities matched;1,778 measured labels had minimum contrast4.8342 and no visible contrast failures. Raw axe reports contain no violations,34 incomplete rule items/36 nodes:32 inherited Current-filters paragraph-label issues and four decorative map/sort nodes in two desktop reports. The paragraph issue is a real semantic-label concern, not manually cleared. FilterBar now gives its summary role=note; the final build/browser rerun is pending. Decorative aria-hidden map initials and sort arrows retain adjacent accessible map/header labels and require separate manual disposition. Browser01 source binding remains historical after this final role change; its own23 observed identities and all fixture/browser/socket resources closed.
+## Final local acceptance (2026-10-27)
+
+Own-build-03 is B0Rn6ki3TANyaid_0L917, with the final supported FilterBar note role. It passes all83 original route budgets (/app239.8/240 kB), UI19 and the unchanged allowance baseline. A fresh3122-raw-pin/3047-web-input snapshot matches before and after; all40canonical/seven active/four strict sample inputs remain unchanged.20 observed build identities closed. Integrated03 passed300 tests/35 files, whole-web types and strict9-file lint;43 identities closed.
+
+Browser02 uses that exact build and final source. All four390/1280 light/dark documents and32 captures pass, with zero automated violations, visible contrast failures, unmeasured labels, console/page errors, failed or external requests. Independent arithmetic agrees for all1,778 labels, minimum4.834229572931473. The only two raw incomplete rule items are four aria-hidden map initials/sort arrows across the desktop report captures; adjacent map text and the Date header/aria-sort preserve meaning. The32 former paragraph-label issues are absent. Root inspected the two phone Auto-return captures and desktop frozen report; the three committed screenshots contain synthetic data.
+
+All82 API reads are GET200 with no cookies.60 Session requests retain exact current/Auto/custom/pinned scopes; transport-only markers never reach the API. All2031 source/dependency/CSS/font/chunk identity observations and47 served assets match both browser-close and independent current rehash. Each provider unmount disconnected its synthetic socket with zero emits; browser, server, sockets and timers closed.22 observed browser identities and three final postbrowser-asset identities closed, with no owned listeners. No engine/sample generation, asset copy, install, download or pruning occurred during verification.
+
+Local acceptance is complete. Exact-head required CI, squash merge and the resulting production source/domain check are not inferred from these local results. Their later receipts belong to release acceptance, not a relabeling of the browser Build ID. The separate B1 quick-search candidate remains preserved and will be integrated after this urgent fix.

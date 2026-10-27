@@ -23,11 +23,12 @@ export function SessionsPage() {
   const problem = sessionTransportError(query);
   const q = useSessionRequest<SessionHistoryList>(problem || !sessionScopeIsSynced(filters, new URLSearchParams(writer.search)) ? null : `${sessionListApi(query)}#${dbRev}`);
   const restart = refreshSessionQuery(query), guard = writer.capture();
+  const restartSameRequest = sessionListApi(sessionListQuery(filters, restart, tz)) === sessionListApi(query);
   const navigate = (next: URLSearchParams) => { if (q.current()) writer.update(() => next, "push", guard); };
   return <div className="space-y-5">
     <PageHeader as="h2" size="section" title="Session history" description="Review complete sessions inside your selected filters. The output day or window selects sessions; it does not split their membership at midnight." />
-    <SessionViewControls query={query} navigate={navigate} refresh={() => restart.toString() === query.toString() ? q.mutate() : navigate(restart)} />
-    {problem ? <Card><p role="alert">{problem}</p></Card> : <SessionRequestState q={q} restartHref={sessionHref(restart)} restartSameRequest={sessionListApi(restart) === sessionListApi(query)}
+    <SessionViewControls query={query} navigate={navigate} refresh={() => restartSameRequest ? q.mutate() : navigate(restart)} />
+    {problem ? <Card><p role="alert">{problem}</p></Card> : <SessionRequestState q={q} restartHref={sessionHref(restart)} restartSameRequest={restartSameRequest}
       contextHref={days => sessionHref(changeSessionQuery(query, { contextDays: String(days) }))}
       isEmpty={() => false} emptyTitle="No sessions in this output window">{data => <>
         <SessionWindowNote data={data} />
