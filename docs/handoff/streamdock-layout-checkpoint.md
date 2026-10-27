@@ -31,3 +31,19 @@ node tests/manual/series-dock-layout.mjs
 Full CI, production build and unchanged route-budget checks remain delivery
 gates. No release, native launch, integration activation, dependency install,
 infrastructure change or provider publication is needed.
+
+## Standalone fixture compatibility repair
+
+The first full web CI passed 9,216 tests (963 files, one existing test/suite
+skip), and Vercel built successfully. Responsive CI exposed a separate bundler
+integration issue: the new reusable scoreboard CSS-module import was reached
+by Settings search/section fixtures that bundle JavaScript without an output
+path. Their repeated errors exhausted the existing 25-minute job limit; there
+is no final full-suite total for that cancelled run.
+
+Move those same scoreboard rules into the existing globals.css components
+layer, using static, uniquely scoped class names. The declarations, 22rem
+breakpoint, grid areas and full-name title remain identical. The Dock-only
+control module remains local. No fixture, assertion, timeout or budget is
+relaxed. The repair's focused local checks and full CI remain pending when
+this source checkpoint is written; retain the original cancelled-run evidence.
