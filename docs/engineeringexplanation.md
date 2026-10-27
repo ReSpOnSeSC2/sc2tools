@@ -642,3 +642,11 @@ product-wide AA certification. The executed source fingerprint,
 later documentation-only equivalence and exact-head CI/production acceptance
 remain distinct. See [ADR0068](adr/0068-private-session-history.md) and the
 [contract/evidence checkpoint](handoff/sessions-history-checkpoint.md).
+
+History also retains a private owner-reset revision independently of the
+shared policy/privacy lease. GameDesk retires it before an anchor write and
+in a synchronous finally directly after that write attempt. Held reads cannot
+publish an older anchor after reset, including a write that commits then
+reports failure. Fresh natural membership and locators remain unchanged.
+The four actual application/Mongo reset regressions and the broader 243-test
+API run pass; earlier-head CI does not accept this later API correction.

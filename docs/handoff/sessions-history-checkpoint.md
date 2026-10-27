@@ -189,3 +189,46 @@ production deployment/source/domain. No such final History PR/CI/production
 result is claimed in this checkpoint. Revert code to roll back; no derived
 history store/down-migration exists. Saved preferences can remain stored while
 older readers ignore the new destination/filter fields.
+
+## Manual-reset publication correction
+
+A final source review found that History used its own resolver gate while
+manual reset retired only the existing Games gate. A current/current-detail
+HTTP read that had captured the old profile anchor could therefore return
+pre-reset games after the anchor write completed. The original two-case
+regression reproduced HTTP 200 where 409 was required. A socket refresh did
+not provide the missing server publication fence.
+
+History now captures a bounded, private owner-reset revision alongside its
+existing policy/privacy lease. GameDesk's actual application wiring retires
+that revision before the anchor write and in a synchronous `finally` directly
+after the write attempt, including an error reported after durable commit.
+Checks during resolution and immediately before HTTP publication reject a
+retired revision. No shared Trends/policy cache is invalidated. Fresh natural
+membership and locators remain anchor-free; a held natural read may receive a
+transient 409 and restart. Other owners retain their own revision identity.
+
+The actual buildApp/Express/Mongo regression uses four cases: current and
+current-detail reads held across a successful reset, and both modes started
+during a held write that commits and then throws. GREEN02 passes all four,
+including foreign-owner delivery, unchanged fresh natural summaries/locators,
+fresh empty current state, exact inclusive-anchor membership and no success
+refresh for a failed reset. The fixture does not install the missing callback.
+Only unrelated legacy overlay-session fanout is substituted.
+
+GREEN01 already obtained the intended 409 responses in all four cases but
+failed its cleanup assertion: the installed Mongo cursor's `closed` getter
+also requires an empty local buffered batch. The test now observes the actual
+close event and fulfilled `close()` promise without draining buffered replay
+data or changing product cursor cleanup. API validation01 stopped on test-only
+type errors; explicit service/nullable/update-union narrowing corrects the
+fixture without type suppression. Both unsuccessful runs remain retained.
+
+API validation02 passes whole-API types, strict scoped lint, and 243 tests in
+15 suites (28.087 s). app.js retains exactly three inherited warnings, with
+zero new warnings/errors. All 20 observed identities retired with no owned
+listener. The earlier PR head's CI is superseded for acceptance: retain its
+results, then require fresh exact-head CI after this API correction. No frontend source changed;
+the retained Browser06/build03 evidence is not relabeled as execution of this
+new API revision. Final source/documentation equivalence and resulting
+production source/domain verification remain separate release gates.

@@ -1,6 +1,7 @@
 "use strict";
 
 const { SessionResolutionGate } = require("./sessionResolutionGate");
+const { OwnerRevisions } = require("../util/gameVisibility");
 const { MAX_DATE_MS } = require("./sessions");
 const { historyError, stale, invalid, integer, encode, parseSessionDescriptor, parsePageDescriptor, parseGamePageDescriptor } = require("./sessionHistoryDescriptor");
 const { DAY, timezone, membershipFilters, naturalSpan, makeSpan, scopeHash } = require("./sessionHistoryWindow");
@@ -14,10 +15,17 @@ class SessionHistoryService {
   constructor(db, opts) {
     this.db = db; this.policy = opts.sessionPolicy; this.now = opts.now ?? (() => Date.now());
     this.sequence = 0; this.gate = new SessionResolutionGate({ maxComputeWaiters: 0 });
+    this.resetRevisions = new OwnerRevisions();
   }
   /** Synchronous guard captured BEFORE policy/profile/games resolution.
    * @param {string} owner */
-  capturePublication(owner) { const lease = this.policy.lease(owner); return () => this.policy.assertCurrent(lease); }
+  capturePublication(owner) {
+    const lease = this.policy.lease(owner), reset = this.resetRevisions.get(owner);
+    return () => { this.policy.assertCurrent(lease); if (!this.resetRevisions.current(owner, reset)) stale(); };
+  }
+  /** Retire held reads without changing natural membership or shared caches.
+   * @param {string} owner */
+  invalidateForReset(owner) { this.resetRevisions.invalidate(owner); }
   /** @template T @param {string} owner @param {()=>Promise<T>} work @returns {Promise<T>} */
   admit(owner, work) {
     this.sequence += 1;

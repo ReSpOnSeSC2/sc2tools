@@ -689,7 +689,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   };
   const gameDesk = new GameDeskService({ users: deps.db.users, studio: multichatStudio,
     engagement: multichatEngagement, games, broker: liveGameBroker, channels: opponentChannels,
-    tokens: overlayTokens, bot: twitchChatBot, io: deps.io });
+    tokens: overlayTokens, bot: twitchChatBot, io: deps.io, onSessionReset: owner => sessionHistory.invalidateForReset(owner) });
   twitchChatBot.shoutoutLine = userId => gameDesk.shoutoutLine(userId);
   const streamSeries = new StreamSeriesService({ studio: multichatStudio, games: deps.db.games,
     tokens: overlayTokens, io: deps.io, onCompleted: async (token, series) => {

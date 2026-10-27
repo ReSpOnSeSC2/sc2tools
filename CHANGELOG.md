@@ -54,6 +54,8 @@ corresponding GitHub Release.
 
 ### Session history and reports
 
+- Retire an older current-session response when you manually reset, including when the reset was saved but its response failed.
+
 - Browse complete sessions across midnight, open a session report, and see your current or last session on Today. Activity days filter the output without splitting session membership.
 - Review results, played-time/macro samples, build provenance and recorded MMR by account and queued race. Missing or incomparable rating evidence stays visible without an invented change.
 - Keep session views and custom Game version filters in Saved Views, with clear stale/context/size recovery and stable chart/game paging.

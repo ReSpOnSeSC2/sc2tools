@@ -102,3 +102,27 @@ The [history checkpoint](../handoff/sessions-history-checkpoint.md) distinguishe
 old passes, the real manual contrast failure, its source correction, the fresh
 build03/Browser06 execution and the remaining review/release gates. Existing optional cache flags
 remain OFF. ADR 0067 and the shared-policy decision remain unchanged.
+
+### Manual-reset publication fence (2026-10-27)
+
+The policy/privacy lease alone does not retire a History request when GameDesk
+changes the manual anchor: Games and History use separate resolver gates.
+History therefore also captures a private owner-reset revision using the
+existing bounded `OwnerRevisions` implementation. Actual GameDesk wiring
+invalidates it before the anchor write and synchronously in `finally` after
+that write attempt, including an error after durable commit. Service checks
+and final HTTP publication assert both identities.
+
+This adds no persisted revision, descriptor field, shared-cache invalidation
+or natural-history membership rule. A held natural read can transiently
+restart with 409; fresh natural summaries and locators remain unchanged.
+Other owners retain independent revision identities.
+
+Two original actual-route regressions reproduced stale HTTP 200. Four final
+Express/Mongo cases pass current/current-detail reset races and the
+write-commits-then-throws boundary. Fixture cleanup observes Mongo's close
+event and fulfilled close promise; it does not drain buffered rows to force
+the driver's `closed` getter. Broader API validation02 passes whole-API types, strict scoped lint, the
+unchanged three-warning app baseline and 243 tests in 15 suites. New exact-head
+CI after the API correction remains pending; earlier-head results do not accept it. See the checkpoint for retained
+failed/superseded evidence and the separate browser/release boundaries.
