@@ -31,7 +31,9 @@ response or caller can register its own navigation policy.
 
 - 281 integrated tests across 15 files passed after the policy split.
 - All 23 feedback cases passed after four equivalent sanitizer reductions.
-- Final whole-web TypeScript and strict lint of all 28 changed web files pass.
+- All 41 app-shell route cases pass with the Next navigation boundary's
+  required search-parameters export. Existing assertions are unchanged.
+- Final whole-web TypeScript and strict lint of all 29 changed web files pass.
 - Production build `PJe4s15VV3tjLeDyFTb9q` passes all 83 original route caps:
   `/app` is 239.8/240 kB and `/community` is 190.0/190 kB.
 - Forty canonical engine inputs, seven active assets and the four-game sample
@@ -39,6 +41,10 @@ response or caller can register its own navigation policy.
 - Six browser consumer documents cover phone/light and desktop/dark ready,
   failure, Retry, native streaming abort/decline and real Settings handoff.
   All imported web product inputs match the successful build's raw snapshot.
+- Twelve unchanged public-search cases also pass against the actual compiled
+  Next artifact across phone, tablet and desktop. The artifact boundary
+  explicitly reconstructs the sole final-LF source difference; this is not a
+  claim of a rebuilt exact-current-head artifact or private authentication.
 - Ten accessibility reports contain zero violations. Independent contrast has
   zero failures or unmeasured labels. Three raw phone contrast incompletes for
   status text are preserved; manual review found no visible overlap, with

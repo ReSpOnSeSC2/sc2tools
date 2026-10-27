@@ -11,6 +11,7 @@ const route = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({
   usePathname: () => route.pathname,
   useRouter: () => route.router,
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock("@clerk/nextjs", () => ({
