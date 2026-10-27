@@ -27,6 +27,7 @@ import {
 import { useUserSocket } from "@/lib/useUserSocket";
 import { AnalysisGamesProvider } from "@/components/analyzer/arcade/hooks/useAnalysisGames";
 import { isAnalyzerViewPath, viewFiltersFromQuery } from "@/lib/analyzerViews";
+import { isSessionViewPath, sessionScopeTransportError, sessionViewIsAutomaticSameCohort } from "@/lib/sessionScopeAdmission";
 
 const AnalyzerFilterUrlSync = dynamic(() => import("./analyzer/AnalyzerFilterUrlSync").then(module => module.AnalyzerFilterUrlSync), { ssr: false });
 
@@ -302,8 +303,12 @@ export function AnalyzerProvider({
     const stored = readStored();
     let next = hydrateStoredFilters(stored, logicalSeasons);
     if (syncUrl && isAnalyzerViewPath(window.location.pathname)) {
-      const parsed = viewFiltersFromQuery(new URLSearchParams(window.location.search));
-      if (parsed.present) { next = filtersFromViewQuery(next, parsed, logicalSeasons); setUrlError(parsed.error ?? null); urlSession.current = true; }
+      const query = new URLSearchParams(window.location.search), parsed = viewFiltersFromQuery(query);
+      const scopeError = isSessionViewPath(window.location.pathname) ? sessionScopeTransportError(query) : null;
+      if (scopeError) setUrlError(scopeError);
+      else if (parsed.present && !sessionViewIsAutomaticSameCohort(window.location.pathname, query, next)) {
+        next = filtersFromViewQuery(next, parsed, logicalSeasons); setUrlError(parsed.error ?? null); urlSession.current = true;
+      }
     }
     setFiltersState(next);
     setFiltersReady(true);
