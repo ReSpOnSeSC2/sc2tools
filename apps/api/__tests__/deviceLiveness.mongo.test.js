@@ -19,7 +19,7 @@ afterAll(async () => { await db.close(); await mongo.stop(); });
 beforeEach(async () => {
   jest.restoreAllMocks();
   for (const name of ["users", "deviceTokens", "devicePairings", "games", "gameDetails", "opponents", "opponentNotes", "customBuilds", "macroJobs", "userBackups", "pendingIdentityDeletions"]) await db[name].deleteMany({});
-  await db.users.insertMany([{ userId: "a" }, { userId: "b" }]);
+  await db.users.insertMany([{ userId: "a", clerkUserId: "clerk_device_liveness_a" }, { userId: "b", clerkUserId: "clerk_device_liveness_b" }]);
   now = Date.now(); liveness = new DeviceLiveness({ now: () => now }); service = new DevicePairingsService(db, { liveness });
 });
 afterEach(() => jest.restoreAllMocks());
@@ -172,7 +172,7 @@ function httpApp() {
 
 test("actual HTTP /me admits a fifth distinct cold owner while all four cache loads remain held", async () => {
   const owners = ["a", "b", "c", "d", "e"], credentials = new Map();
-  await db.users.insertMany(owners.slice(2).map(userId => ({ userId })));
+  await db.users.insertMany(owners.slice(2).map(userId => ({ userId, clerkUserId: `clerk_device_liveness_${userId}` })));
   for (const userId of owners) {
     const raw = randomToken(32); credentials.set(userId, raw);
     await token({ userId, tokenHash: sha256(raw), agentVersion: `version-${userId}` });
