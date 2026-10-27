@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { AnalyzerFilters } from "@/lib/filterContext";
-import { isAnalyzerViewPath, replaceViewQuery, viewFiltersFromQuery } from "@/lib/analyzerViews";
+import { isAnalyzerViewPath, replaceViewQuery, viewFiltersFromQuery, viewFiltersQuery } from "@/lib/analyzerViews";
 import { useUrlQueryWriter } from "@/lib/useUrlQueryWriter";
 
 /** Query changes come from the router (including Back/Forward). Our own
@@ -35,7 +35,13 @@ export function AnalyzerFilterUrlSync({ ready, filters, onNavigate }: {
       // searchParams. Never replace that incoming cohort with this timer's
       // older filter state. The next router render schedules its own write.
       if (new URLSearchParams(window.location.search).toString() !== search) return;
-      update(params => new URLSearchParams(replaceViewQuery(params.toString(), filters)), "replace", guard);
+      update(params => {
+        const next = new URLSearchParams(replaceViewQuery(params.toString(), filters));
+        if (pathname.startsWith("/app/sessions") && viewFiltersQuery(viewFiltersFromQuery(params).filters).toString() !== viewFiltersQuery(filters).toString()) {
+          next.delete("before"); next.delete("gamesBefore");
+        }
+        return next;
+      }, "replace", guard);
     }, 250);
     return () => window.clearTimeout(timer);
   }, [ready, pathname, search, filters, capture, update, invalidView]);

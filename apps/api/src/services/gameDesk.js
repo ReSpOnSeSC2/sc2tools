@@ -81,6 +81,8 @@ class GameDeskService {
     if (!Number.isFinite(anchor)) throw new Error("session anchor unavailable");
     games.invalidateSessionForReset(userId);
     const state = await studio.advanceStreamStart(token, anchor);
+    // Owner invalidation only: no private session DTO or replay insertion.
+    io?.to(`user:${userId}`).emit("games:changed", { count: 0, inserted: 0, bulk: false, reason: "session-reset" });
     try {
       const assertSessionCurrent = captureSessionPublication(games.sessionPublicationGuard?.bind(games), userId);
       const session = await games.todaySession(userId, undefined, { reuseRecent: true });

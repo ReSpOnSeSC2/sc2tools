@@ -125,6 +125,7 @@ const UTILITY_ENTRIES: NavEntry[] = [
 export const NAV_ENTRIES: readonly NavEntry[] = [
   TODAY_ENTRY,
   ...SECTION_ENTRIES,
+  { key: "sessions", href: "/app/sessions", label: "Sessions", description: "Review complete sessions and recorded ratings", icon: CalendarClock, group: "section" },
   ...UTILITY_ENTRIES,
 ];
 

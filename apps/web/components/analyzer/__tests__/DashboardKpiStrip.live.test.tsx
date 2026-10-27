@@ -4,15 +4,17 @@
  * Today's session record, the phone grid and the MMR card's link.
  * useApi is a MOCK that records keys and serves canned responses.
  */
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_ANALYZER_FILTERS,
   FiltersContext,
   type FiltersValue,
 } from "@/lib/filterContext";
-import { clientTimezone, startOfTodayInTz, todayKeyIn } from "@/lib/timeseries";
+import { todayKeyIn } from "@/lib/timeseries";
 import { DashboardKpiStrip, computeTodayRecord } from "../DashboardKpiStrip";
+import { currentHistory } from "@/components/sessions/__tests__/sessionHistoryFixtures";
+import { sessionSummary } from "@/components/sessions/__tests__/sessionCardFixtures";
 
 interface Canned {
   data?: unknown;
@@ -40,6 +42,13 @@ vi.mock("@/lib/clientApi", () => ({
   },
 }));
 
+vi.mock("@/components/sessions/useSessionRequest", () => ({
+  useSessionRequest: (key: string) => {
+    harness.keys.push(key);
+    const canned = harness.respond(key);
+    return { data: canned.data, error: canned.error, mutate: () => harness.mutate(key), current: () => true, key };
+  },
+}));
 const TODAY_POINT = {
   bucket: new Date().toISOString(),
   wins: 4,
@@ -52,13 +61,13 @@ const SERVER_ERROR = Object.assign(new Error("Server error"), { status: 500 });
 
 /** Which card a key belongs to. */
 function cardOf(key: string): "session" | "range" | "winRate" | "streak" | "mmr" | "other" {
+  if (key.startsWith("/v1/sessions/current")) return "session";
   if (key.startsWith("/v1/streak")) return "streak";
   if (key.startsWith("/v1/me/mmr")) return "mmr";
   if (!key.startsWith("/v1/timeseries")) return "other";
   const query = new URLSearchParams(key.split("?")[1]?.split("#")[0] ?? "");
   if (query.get("interval") === "month") return "range";
-  // Today's session asks from the start of today; Win rate from its own preset.
-  return query.get("since") === startOfTodayInTz(clientTimezone()).toISOString() ? "session" : "winRate";
+  return "winRate";
 }
 
 function ready(overrides: Partial<Record<ReturnType<typeof cardOf>, Canned>> = {}) {
@@ -67,7 +76,7 @@ function ready(overrides: Partial<Record<ReturnType<typeof cardOf>, Canned>> = {
     if (overrides[card]) return overrides[card];
     switch (card) {
       case "session":
-        return { data: { interval: "day", points: [TODAY_POINT] } };
+        return { data: currentHistory() };
       case "range":
         return { data: { interval: "month", points: [TODAY_POINT] } };
       case "winRate":
@@ -92,13 +101,14 @@ function contextValue(dbRev: number): FiltersValue {
   };
 }
 
-function renderStrip(dbRev = 0) {
+async function renderStrip(dbRev = 0) {
   const ui = (rev: number) => (
     <FiltersContext.Provider value={contextValue(rev)}>
       <DashboardKpiStrip />
     </FiltersContext.Provider>
   );
   const result = render(ui(dbRev));
+  await waitFor(() => expect(harness.keys.some(key => key.startsWith("/v1/sessions/current"))).toBe(true));
   return { ...result, rerenderWith: (rev: number) => result.rerender(ui(rev)) };
 }
 
@@ -126,10 +136,10 @@ afterEach(() => {
 });
 
 describe("DashboardKpiStrip live refresh", () => {
-  it("keys every game card on dbRev and refetches when a game lands", () => {
-    const { rerenderWith } = renderStrip(0);
+  it("keys every game card on dbRev and refetches when a game lands", async () => {
+    const { rerenderWith } = await renderStrip(0);
     const gameKeys = () =>
-      harness.keys.filter((key) => key.startsWith("/v1/timeseries") || key.startsWith("/v1/streak"));
+      harness.keys.filter((key) => key.startsWith("/v1/timeseries") || key.startsWith("/v1/streak") || key.startsWith("/v1/sessions/current"));
 
     const first = new Set(gameKeys());
     expect(first.size).toBe(4);
@@ -143,45 +153,44 @@ describe("DashboardKpiStrip live refresh", () => {
     for (const key of second) expect(key.endsWith("#1")).toBe(true);
   });
 
-  it("leaves the MMR request unkeyed: it asks SC2Pulse once per Pulse ID", () => {
-    const { rerenderWith } = renderStrip(0);
+  it("leaves the MMR request unkeyed: it asks SC2Pulse once per Pulse ID", async () => {
+    const { rerenderWith } = await renderStrip(0);
     rerenderWith(5);
     const mmrKeys = new Set(harness.keys.filter((key) => key.startsWith("/v1/me/mmr")));
     expect([...mmrKeys]).toEqual(["/v1/me/mmr"]);
   });
 });
 
-describe("Today's session card", () => {
-  it("shows today's games and W-L record", () => {
-    renderStrip();
+describe("Current or last session card", () => {
+  it("shows the current live session games and neutral W-L record", async () => {
+    await renderStrip();
     const card = sessionCard();
-    expect(within(card).getByText("Today's session")).toBeTruthy();
-    expect(card.textContent).toContain("6 games");
-    expect(within(card).getByText("4W 2L")).toBeTruthy();
-    expect(within(card).getByText("4 wins, 2 losses")).toBeTruthy();
+    expect(within(card).getByText("This session")).toBeTruthy();
+    expect(card.textContent).toContain("3 games");
+    expect(within(card).getByText("1 W · 1 L · 1 unknown")).toBeTruthy();
     expect(card.textContent).not.toContain("Keep the streak alive");
   });
 
-  it("reads 0 games when nothing was played today", () => {
-    harness.respond = ready({ session: { data: { interval: "day", points: [] } } });
-    renderStrip();
+  it("shows an explicit empty current view after a reset", async () => {
+    harness.respond = ready({ session: { data: currentHistory({ session: null, activity: "empty" }) } });
+    await renderStrip();
     const card = sessionCard();
-    expect(card.textContent).toContain("0 games");
-    expect(within(card).getByText("No games yet today")).toBeTruthy();
+    expect(card.textContent).not.toContain("0 games");
+    expect(within(card).getByText("No session in the current view")).toBeTruthy();
   });
 
-  it("says 1 game, not 1 games", () => {
+  it("says 1 game, not 1 games", async () => {
     harness.respond = ready({
-      session: { data: { interval: "day", points: [{ ...TODAY_POINT, wins: 0, losses: 1, total: 1 }] } },
+      session: { data: currentHistory({ session: sessionSummary({ games: 1, wins: 0, losses: 1, unknown: 0, results: "L" }) }) },
     });
-    renderStrip();
+    await renderStrip();
     expect(sessionCard().textContent).toContain("1 game");
     expect(sessionCard().textContent).not.toContain("1 games");
-    expect(within(sessionCard()).getByText("0W 1L")).toBeTruthy();
+    expect(within(sessionCard()).getByText("0 W · 1 L · 0 unknown")).toBeTruthy();
   });
 
-  it("spans both columns on phones so five cards stack 1, 2, 2", () => {
-    renderStrip();
+  it("spans both columns on phones so five cards stack 1, 2, 2", async () => {
+    await renderStrip();
     expect(sessionCard().className).toContain("col-span-2");
     expect(sessionCard().className).toContain("lg:col-span-1");
     const grid = screen.getByTestId("dashboard-kpi-strip");
@@ -191,12 +200,12 @@ describe("Today's session card", () => {
 });
 
 describe("card states", () => {
-  it("shows a dash, not 0, while a card loads", () => {
+  it("shows a dash, not 0, while a card loads", async () => {
     harness.respond = ready({ session: { isLoading: true }, streak: { isLoading: true } });
-    renderStrip();
-    expect(sessionCard().textContent).toContain("—");
+    await renderStrip();
+    expect(sessionCard().textContent).toContain("Loading session view");
     expect(sessionCard().textContent).not.toContain("0 games");
-    expect(sessionCard().textContent).not.toContain("No games yet today");
+    expect(sessionCard().textContent).not.toContain("No session in the current view");
     expect(cardWithLabel("Active streak").textContent).not.toContain("Tied or no recent games");
     expect(screen.queryByRole("button", { name: /Retry/ })).toBeNull();
   });
@@ -209,7 +218,7 @@ describe("card states", () => {
         settle = resolve;
       }),
     );
-    renderStrip();
+    await renderStrip();
 
     const card = cardWithLabel("Active streak");
     expect(card.textContent).toContain("—");
@@ -229,14 +238,14 @@ describe("card states", () => {
     expect(retry.getAttribute("aria-busy")).toBeNull();
   });
 
-  it("gives each failed card its own Retry", () => {
+  it("gives each failed card its own Retry", async () => {
     harness.respond = ready({
       session: { error: SERVER_ERROR },
       winRate: { error: SERVER_ERROR },
       range: { error: SERVER_ERROR },
       mmr: { error: SERVER_ERROR },
     });
-    renderStrip();
+    await renderStrip();
     const retries = screen.getAllByRole("button", { name: /Retry/ });
     expect(retries).toHaveLength(4);
     fireEvent.click(within(sessionCard()).getByRole("button", { name: /Retry/ }));
@@ -247,9 +256,9 @@ describe("card states", () => {
     expect(screen.queryByRole("link", { name: "Add a Pulse ID in Settings" })).toBeNull();
   });
 
-  it("still shows a real zero", () => {
+  it("still shows a real zero", async () => {
     harness.respond = ready({ streak: { data: { kind: null, count: 0, lastGameAt: null } } });
-    renderStrip();
+    await renderStrip();
     const card = cardWithLabel("Active streak");
     expect(card.textContent).toContain("0");
     expect(card.textContent).toContain("Tied or no recent games");
@@ -257,9 +266,9 @@ describe("card states", () => {
 });
 
 describe("MMR card", () => {
-  it("links to the Pulse ID help when no Pulse ID is saved", () => {
+  it("links to the Pulse ID help when no Pulse ID is saved", async () => {
     harness.respond = ready({ mmr: { data: { entries: [], truncated: false } } });
-    renderStrip();
+    await renderStrip();
     const link = screen.getByRole("link", { name: "Add a Pulse ID in Settings" });
     expect(link.getAttribute("href")).toBe("/settings?tab=profile#pulse-id-help");
   });

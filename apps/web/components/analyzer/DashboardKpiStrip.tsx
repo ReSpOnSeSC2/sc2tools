@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Gamepad2, RefreshCw } from "lucide-react";
+import dynamic from "next/dynamic";
+import { RefreshCw } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import {
   describeActiveFilters,
@@ -10,7 +11,7 @@ import {
   useFilters,
 } from "@/lib/filterContext";
 import { WinRateLabel } from "@/components/analyzer/WinRateTimeframeMenu";
-import { GlowHalo } from "@/components/ui/GlowHalo";
+import { Card, Skeleton } from "@/components/ui/Card";
 import { hasQueryData, type QueryLike } from "@/components/ui/QueryState";
 import { SkeletonBar } from "@/components/ui/Skeleton";
 import { StatCard } from "@/components/ui/Stat";
@@ -18,7 +19,6 @@ import { fmtMmr, pct1, wrColor } from "@/lib/format";
 import {
   apiToPeriods,
   clientTimezone,
-  startOfTodayInTz,
   todayKeyIn,
   type ApiTimeseriesResponse,
   type Period,
@@ -30,6 +30,12 @@ import {
   shortLabelFor,
   type PresetId,
 } from "@/lib/datePresets";
+
+// Keep the live session in its first-render slot while its real request/UI module loads.
+const CurrentSessionCard = dynamic(
+  () => import("@/components/sessions/CurrentSessionCard").then(module => module.CurrentSessionCard),
+  { loading: () => <div data-testid="kpi-today-session" className="col-span-2 min-w-0 lg:col-span-1"><Card><p role="status">Loading session view…</p><Skeleton rows={4} /></Card></div> },
+);
 
 const LS_KEY = "analyzer.kpi.winRatePreset";
 
@@ -57,7 +63,7 @@ function writeStoredPreset(value: PresetId): void {
 }
 
 /**
- * Top-of-dashboard KPI strip — Today's session (games and W-L),
+ * Top-of-dashboard KPI strip — current or last live session,
  * customizable Win Rate, Active Streak, MMR, and the game count inside
  * the active global filters.
  *
@@ -122,48 +128,6 @@ export function DashboardKpiStrip() {
     filters.max_minutes,
   ]);
 
-  // Global series — used for Today's session. Streak is fetched from a
-  // dedicated /v1/streak endpoint that walks games one-by-one (the
-  // day-bucketed series can't represent streak correctly because a
-  // single mixed day collapses the count to 0).
-  //
-  // Scope the query to today's local-tz window via `since`. Without it,
-  // a user with a multi-year history matches the full lifetime range,
-  // which makes the server's `_fitInterval` widen `day` → `week` to
-  // stay under the bucket cap. Weekly buckets are keyed by start-of-week
-  // and never match `todayKeyIn(tz)`, so the session card silently flips
-  // to 0 once UTC rolls over even though games exist in the user's
-  // local today. Filtering to today keeps the matched span < 24h, which
-  // pins the interval at `day` and produces a single bucket that lines
-  // up with `todayKeyIn`.
-  const globalSeriesQuery = useMemo(() => {
-    const since = startOfTodayInTz(tz).toISOString();
-    return filtersToQuery({
-      interval: "day",
-      tz,
-      since,
-      exclude_too_short: filters.exclude_too_short,
-      map_pool: filters.map_pool,
-      game_size: filters.game_size,
-      min_minutes: filters.min_minutes,
-      max_minutes: filters.max_minutes,
-    });
-  }, [
-    tz,
-    filters.exclude_too_short,
-    filters.map_pool,
-    filters.game_size,
-    filters.min_minutes,
-    filters.max_minutes,
-  ]);
-  const globalSeries = useApi<ApiTimeseriesResponse>(
-    `/v1/timeseries${globalSeriesQuery}#${dbRev}`,
-  );
-  const todayRecord = useMemo(
-    () => computeTodayRecord(apiToPeriods(globalSeries.data, tz), tz),
-    [globalSeries.data, tz],
-  );
-
   // Count the exact cohort selected in the global FilterBar. The lifetime
   // synced-replay total already lives in the app header; repeating it here
   // made the largest dashboard number disagree with the date range directly
@@ -223,7 +187,6 @@ export function DashboardKpiStrip() {
     [wrSeries.data, tz],
   );
 
-  const sessionStatus = kpiStatus(globalSeries);
   const wrStatus = kpiStatus(wrSeries);
   const streakStatus = kpiStatus(streakResp);
   const rangeStatus = kpiStatus(selectedRangeSeries);
@@ -233,20 +196,7 @@ export function DashboardKpiStrip() {
       className="grid auto-rows-fr grid-cols-2 gap-3 lg:grid-cols-5"
       data-testid="dashboard-kpi-strip"
     >
-      <LeadStat
-        label="Today's session"
-        value={
-          sessionStatus === "ready" ? <SessionGames games={todayRecord.games} /> : "—"
-        }
-        icon={<Gamepad2 className="h-4 w-4" aria-hidden />}
-        hint={
-          sessionStatus === "ready" ? (
-            <SessionRecord record={todayRecord} />
-          ) : (
-            <KpiPendingHint status={sessionStatus} what="today's session" q={globalSeries} />
-          )
-        }
-      />
+      <CurrentSessionCard />
 
       <StatCard
         label={
@@ -437,69 +387,6 @@ function KpiRetry({ what, onRetry }: { what: string; onRetry: () => unknown }) {
         </span>
       </span>
     </button>
-  );
-}
-
-/** "6 games": the count at headline size, the unit a step smaller. */
-function SessionGames({ games }: { games: number }) {
-  return (
-    <>
-      <span className="tabular-nums">{games}</span>{" "}
-      <span className="text-h4">{games === 1 ? "game" : "games"}</span>
-    </>
-  );
-}
-
-/** "4W 2L" for today's games, spelled out for screen readers. */
-function SessionRecord({ record }: { record: TodayRecord }) {
-  if (record.games === 0) return <>No games yet today</>;
-  const { wins, losses } = record;
-  return (
-    <>
-      <span aria-hidden className="tabular-nums">{`${wins}W ${losses}L`}</span>
-      <span className="sr-only">
-        {`${wins} ${wins === 1 ? "win" : "wins"}, ${losses} ${losses === 1 ? "loss" : "losses"}`}
-      </span>
-    </>
-  );
-}
-
-/**
- * The lead card. It spans both columns on phones so five cards stack
- * as 1, 2, 2 instead of leaving an orphan; app/app/loading.tsx and the
- * layout skeleton use the same classes so nothing shifts on load.
- * The test id stays put for the planned "This session" card.
- */
-function LeadStat({
-  label,
-  value,
-  hint,
-  icon,
-}: {
-  label: string;
-  value: ReactNode;
-  hint?: ReactNode;
-  icon?: ReactNode;
-}) {
-  return (
-    <div
-      data-testid="kpi-today-session"
-      className="relative isolate col-span-2 flex h-full flex-col overflow-hidden rounded-lg shadow-halo-cyan lg:col-span-1"
-    >
-      <GlowHalo color="cyan" position="top-left" size={120} opacity={0.9} />
-      <StatCard
-        label={
-          <span className="inline-flex items-center gap-1.5">
-            {icon ? <span className="text-accent-cyan">{icon}</span> : null}
-            {label}
-          </span>
-        }
-        value={<span className="text-accent-cyan">{value}</span>}
-        hint={hint}
-        size="md"
-        className="h-full flex-1 border-accent-cyan/40 bg-bg-surface"
-      />
-    </div>
   );
 }
 

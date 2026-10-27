@@ -564,3 +564,23 @@ it("carries the exact report drill cohort through its real games modal", () => {
   expect(Object.fromEntries(new URL(ownerNeighborPath("drill-game", "all", source), "https://sc2tools.test").searchParams)).toEqual({ scope: "all", race: "P", opp_race: "T", leak: "Supply blocks", macro_max: "70" });
   window.history.replaceState(null, "", "/");
 });
+
+it("expands only the selected repeated session membership while retaining real game IDs and nullable rows", async () => {
+  const games = [{ id: "duplicate-real-id", date: "2026-10-27T04:00:00.000Z" }, { id: "duplicate-real-id", date: "2026-10-27T04:00:00.000Z" }, { id: null, date: "2026-10-27T04:00:00.000Z" }];
+  const view = render(<AllGamesTable games={games} rowKey={(_game, index) => `membership:${index}`} pageLocalSort />);
+  await act(async () => { await Promise.resolve(); });
+  const table = view.container.querySelector("table");
+  if (!table) throw new Error("Desktop games table is missing");
+  const rows = table.querySelectorAll("tbody > tr[data-game-row-id]");
+  expect(rows).toHaveLength(3);
+  fireEvent.click(rows[0]);
+  expect(table.tBodies[0].children).toHaveLength(4);
+  expect(rows[0].textContent).toContain("▾"); expect(rows[1].textContent).toContain("▸");
+  const analysisLinks = Array.from(view.container.querySelectorAll('a[href*="/app/game/"]'));
+  expect(analysisLinks.length).toBeGreaterThan(0);
+  expect(analysisLinks.every(link => link.getAttribute("href")?.includes("duplicate-real-id"))).toBe(true);
+  expect(rows[2].getAttribute("data-game-row-id")).toBe("");
+  fireEvent.click(rows[1]);
+  expect(table.tBodies[0].children).toHaveLength(4);
+  expect(rows[0].textContent).toContain("▸"); expect(rows[1].textContent).toContain("▾");
+});

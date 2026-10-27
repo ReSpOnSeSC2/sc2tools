@@ -601,3 +601,44 @@ that selects and visibly focuses its Build order tab. Diagnostic copy shares
 the reader's scalar predicates but stays outside shared display modules.
 The advisory name check still describes rules and never blocks Save. No data
 migration, new service, provider setup or agent release is required.
+
+## Private derived session history
+
+History separates membership from output day/window and reuses the shared
+replay-end kernel. Natural ignores the latest manual reset; current retains
+its fixed live universe/inclusive anchor. Exact account, queued race and rating
+scope separate recorded observations; only proved ranked 1v1 supports deltas
+and connected curves. Missing values break the complete bounded curve while
+point tables and game pages remain independent.
+
+One bounded owner/date aggregate uses a scalar-Date guard, complete edge
+certification, streaming/byte ceilings and owned cursor cleanup. Descriptors
+are untrusted locators with whole-view consistency checks, not auth or database
+snapshots. Private publication guards remain independent of optional cache
+activation. Three route-local auth handlers preserve unrelated public routes.
+Fresh private owner/path admission, chart-open intent and explicit one-time
+Next-games focus preserve continuity without retaining old payloads. Saved
+Views keep list/cohort and removable patch-era membership; a committed reset
+sends an owner-room zero-insert invalidation through the existing clock.
+
+Physical examined work is not bounded by returned-row/byte limits. Local scalar
+explain is 2 keys/2 documents/2 rows with both bounds; Date-array multikey remains
+1,008/1,008/3 with an upper-only winning bound. No new index/hint, migration,
+provider activation, production saving/speedup or cache-flag change is claimed.
+
+The retained 38-case browser matrix/60 AA scans had zero automated violations,
+but manual review found 103 real low-contrast Terran labels. The table RaceTag
+now uses existing theme tokens, keeping neutral unknown identity and global
+chart colors. H11 adds four all-race palette cases with actual opaque-background
+composition and raw ratios. Post-contrast unit/types/lint pass; own build03
+passes all 83 original route caps. Browser06 passes all 42 cases with zero
+skips/retries/flaky cases and retains 64 full AA reports, 214 incomplete nodes
+and 96 computed normal/hover label observations. Independent recomputation agrees
+exactly, minimum 4.7721:1; light/dark Terran are 5.2056:1/6.2910:1. Remaining
+incompletes are 206 aria-hidden map initials and eight aria-hidden sort arrows,
+with adjacent semantic text retained. Root reviewed normal/native layouts,
+palettes and recovery/paging captures. This is bounded local evidence, not
+product-wide AA certification. The executed source fingerprint,
+later documentation-only equivalence and exact-head CI/production acceptance
+remain distinct. See [ADR0068](adr/0068-private-session-history.md) and the
+[contract/evidence checkpoint](handoff/sessions-history-checkpoint.md).

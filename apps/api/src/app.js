@@ -103,6 +103,8 @@ const { GameDeskService } = require("./services/gameDesk");
 const { StreamSeriesService } = require("./services/streamSeries");
 const { AggregationsService } = require("./services/aggregations");
 const { SessionPolicyService } = require("./services/sessionPolicy");
+const { SessionHistoryService } = require("./services/sessionHistory");
+const { buildSessionsRouter } = require("./routes/sessions");
 const { MacroReportService } = require("./services/macroReport");
 const { StreakService } = require("./services/streak");
 const { BuildsService } = require("./services/builds");
@@ -701,6 +703,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const sessionPolicy = new SessionPolicyService(deps.db, { revisions: aggregations.trendsRequests.revisions });
   aggregations.sessionPolicy = sessionPolicy;
   games.sessionPolicy = sessionPolicy;
+  const sessionHistory = new SessionHistoryService(deps.db, { sessionPolicy });
   const macroReport = new MacroReportService(deps.db);
   const streak = new StreakService(deps.db);
   const builds = new BuildsService(deps.db, { mmrExpectation, gameDetails });
@@ -1009,7 +1012,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     deps.io?.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "game-control" });
   } });
   return {
-    userRevision, userCache, sessionPolicy, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
+    userRevision, userCache, sessionPolicy, sessionHistory, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
     users,
     activation,
     opponents,
@@ -1409,6 +1412,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(SERVICE.ROUTE_PREFIX, buildPlaybackArtifactsRouter({
     playbackArtifacts: services.playbackArtifacts, auth,
   }));
+  app.use(SERVICE.ROUTE_PREFIX, buildSessionsRouter({ sessionHistory: services.sessionHistory, auth }));
   // Email allowlist — the deterministic admin path. Lower-cased at load;
   // an empty set disables it. ``isAdminEmail`` is what the /v1/me route
   // consults to promote a matching user on sight; ``onAdminGranted``

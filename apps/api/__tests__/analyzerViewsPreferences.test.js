@@ -146,3 +146,115 @@ test("authentication is required and malformed legacy defaults cannot leak arbit
   await h.db.users.updateOne({ userId: "u_owner" }, { $set: { "preferences.misc": { defaultTab: { secret: "private" }, token: "private" } } });
   expect((await defaultView()).body).toEqual({ defaultView: null, defaultTab: null });
 });
+
+const PATCH_IDS = ["saved-patch-eight", "saved-patch-twelve", "saved-patch-outside", "saved-patch-foreign"];
+const PATCH_SINCE = "2026-10-01T00:00:00.000Z", PATCH_UNTIL = "2026-10-27T23:59:59.999Z";
+function patchView(era) { return view(`patch-${era}`, `Frozen patch ${era}`, { preset: "custom", since: PATCH_SINCE, until: PATCH_UNTIL, patch_era: era }); }
+async function seedPatchCohort(era) {
+  const own = { userId: h.userId("owner"), date: new Date("2026-10-25T12:00:00.000Z"), result: "Victory", myRace: "Protoss",
+    opponent: { race: "Zerg" }, isLadderGame: true, playerCount: 2, matchFormat: "1v1", durationSec: 600 };
+  const selectedVersion = era === "before" ? "5.0.16.97425" : "5.0.17.99999";
+  await h.db.games.insertMany([
+    { ...own, gameId: PATCH_IDS[0], gameVersion: "5.0.16.97425" },
+    { ...own, gameId: PATCH_IDS[1], gameVersion: "5.0.17.99999" },
+    { ...own, gameId: PATCH_IDS[2], gameVersion: selectedVersion, date: new Date("2026-09-01T12:00:00.000Z") },
+    { ...own, userId: h.userId("other"), gameId: PATCH_IDS[3], gameVersion: selectedVersion },
+  ]);
+}
+async function clearPatchCohort() { await h.db.games.deleteMany({ userId: { $in: [h.userId("owner"), h.userId("other")] }, gameId: { $in: PATCH_IDS } }); }
+const summaryFor = filters => request(h.app).get(`/v1/summary?${new URLSearchParams(Object.entries(filters).map(([key, value]) => [key, String(value)]))}`).set("authorization", h.bearer("owner"));
+
+test.each(["before", "after"])("custom %s date/version cohort survives save, storage, GET and selected default", async era => {
+  const selected = patchView(era), body = { views: [selected], defaultViewId: selected.id };
+  try {
+    await seedPatchCohort(era);
+    const saved = await put(body);
+    expect(saved.status).toBe(200); expect(saved.body).toEqual(body);
+    expect((await get()).body).toEqual(body);
+    const resolved = await defaultView();
+    expect(resolved.status).toBe(200); expect(resolved.body.defaultView).toEqual(selected);
+    const stored = await h.db.users.findOne({ userId: h.userId("owner") });
+    expect(stored.preferences.analyzerViews).toEqual(body);
+    expect((await get("other")).body).toEqual({ views: [], defaultViewId: null });
+    const scoped = await summaryFor(resolved.body.defaultView.filters);
+    expect(scoped.status).toBe(200); expect(scoped.body.totals.total).toBe(1);
+    expect(scoped.body.recent.map(row => row.gameId)).toEqual([era === "before" ? PATCH_IDS[0] : PATCH_IDS[1]]);
+    // The same persisted dates alone include both release strings. Losing the
+    // era is a real cohort expansion, not just a missing preference property.
+    const datesOnly = { ...resolved.body.defaultView.filters }; delete datesOnly.patch_era;
+    const broadened = await summaryFor(datesOnly);
+    expect(broadened.status).toBe(200); expect(broadened.body.totals.total).toBe(2);
+    expect(broadened.body.recent.map(row => row.gameId).sort()).toEqual(PATCH_IDS.slice(0, 2).sort());
+  } finally { await clearPatchCohort(); }
+});
+
+test.each(["future-era", ["before"], { $ne: "after" }, null])("invalid patch era is dropped without losing the valid custom dates: %j", async patch_era => {
+  const selected = patchView("before"), raw = { ...selected, filters: { ...selected.filters, patch_era } };
+  const expected = { ...selected, filters: { ...selected.filters } }; delete expected.filters.patch_era;
+  const saved = await put({ views: [raw], defaultViewId: selected.id });
+  expect(saved.status).toBe(200);
+  expect(saved.body).toEqual({ views: [expected], defaultViewId: selected.id });
+  expect((await get()).body).toEqual(saved.body);
+  expect((await defaultView()).body.defaultView).toEqual(expected);
+});
+
+test.each(["all", "current_season", "after_5_0_17"])("noncustom %s owns its era/date rule instead of saving an explicit stale override", async preset => {
+  const raw = view("preset-era", "Preset era", { preset, since: PATCH_SINCE, until: PATCH_UNTIL, patch_era: "before" });
+  const expected = view("preset-era", "Preset era", { preset });
+  const saved = await put({ views: [raw], defaultViewId: raw.id });
+  expect(saved.status).toBe(200);
+  expect(saved.body).toEqual({ views: [expected], defaultViewId: expected.id });
+  expect((await get()).body).toEqual(saved.body);
+  expect((await defaultView()).body.defaultView).toEqual(expected);
+});
+
+test("stored legacy era values sanitize on reads without rewriting preferences", async () => {
+  const valid = patchView("after"), invalid = view("invalid-era", "Invalid era", { preset: "custom", patch_era: "future-era" });
+  const irrelevant = view("preset-era", "Preset era", { preset: "all", patch_era: "before", since: PATCH_SINCE });
+  const raw = { views: [valid, invalid, irrelevant], defaultViewId: valid.id };
+  await h.db.users.updateOne({ userId: h.userId("owner") }, { $set: { "preferences.analyzerViews": raw } });
+  const response = await get();
+  expect(response.status).toBe(200); expect(response.body.views[0]).toEqual(valid);
+  expect(response.body.views[1].filters).not.toHaveProperty("patch_era");
+  expect(response.body.views[2].filters).not.toHaveProperty("patch_era");
+  expect(response.body.views[2].filters).not.toHaveProperty("since");
+  expect((await defaultView()).body.defaultView).toEqual(valid);
+  expect((await h.db.users.findOne({ userId: h.userId("owner") })).preferences.analyzerViews).toEqual(raw);
+});
+function savedSessionView() { return { ...patchView("before"), id: "session-cohort", name: "Session cohort", section: "sessions" }; }
+
+test("Sessions saved/default views preserve only their owner cohort and literal list destination", async () => {
+  const selected = savedSessionView();
+  const raw = { ...selected, sessionId: "private-session-report", pathname: "/app/sessions/private-session-report",
+    filters: { ...selected.filters, id: "private-session-report", sessionId: "private-session-report", before: "private-session-cursor", gamesBefore: "private-game-cursor",
+      day: "2026-10-25", windowFrom: PATCH_SINCE, windowTo: PATCH_UNTIL, contextDays: 30, token: "private-credential" } };
+  const saved = await put({ views: [raw], defaultViewId: selected.id });
+  expect(saved.status).toBe(200);
+  expect(saved.body).toEqual({ views: [selected], defaultViewId: selected.id });
+  const aggregate = jest.spyOn(h.db.games, "aggregate"), find = jest.spyOn(h.db.games, "find"), findOne = jest.spyOn(h.db.games, "findOne");
+  expect((await get()).body).toEqual(saved.body);
+  expect((await defaultView()).body.defaultView).toEqual(selected);
+  expect((await get("other")).body).toEqual({ views: [], defaultViewId: null });
+  expect((await defaultView("other")).body.defaultView).toBeNull();
+  const stored = await h.db.users.findOne({ userId: h.userId("owner") });
+  expect(stored.preferences.analyzerViews).toEqual(saved.body);
+  expect(JSON.stringify(saved.body)).not.toMatch(/private-session|private-game|private-credential|windowFrom|windowTo|contextDays|gamesBefore/);
+  expect(aggregate).not.toHaveBeenCalled(); expect(find).not.toHaveBeenCalled(); expect(findOne).not.toHaveBeenCalled();
+});
+
+test.each(["sessions/private-report", "sessions/:id"])("a saved view cannot turn the literal Sessions destination into %s", async section => {
+  const selected = savedSessionView(), body = { views: [selected], defaultViewId: selected.id };
+  expect((await put(body)).status).toBe(200);
+  const rejected = await put({ views: [{ ...selected, section }], defaultViewId: selected.id });
+  expect(rejected.status).toBe(400); expect(rejected.body.error.code).toBe("invalid_analyzer_views");
+  expect((await get()).body).toEqual(body);
+  expect((await defaultView()).body.defaultView).toEqual(selected);
+});
+
+test("legacy stored Sessions cohort resolves on read without inventing report authority or rewriting storage", async () => {
+  const selected = savedSessionView(), raw = { views: [selected], defaultViewId: selected.id };
+  await h.db.users.updateOne({ userId: h.userId("owner") }, { $set: { "preferences.analyzerViews": raw } });
+  expect((await get()).body).toEqual(raw);
+  expect((await defaultView()).body).toEqual({ defaultView: selected, defaultTab: null });
+  expect((await h.db.users.findOne({ userId: h.userId("owner") })).preferences.analyzerViews).toEqual(raw);
+});

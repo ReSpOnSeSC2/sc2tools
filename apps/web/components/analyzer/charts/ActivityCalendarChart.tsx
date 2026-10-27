@@ -7,6 +7,8 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
 import { formatTrendDate } from "@/lib/winRateTrend";
+import { LinkButton } from "@/components/ui/Button";
+import { sessionHistoryHref } from "@/lib/sessionHistoryUrls";
 
 type ActivityDay = { day: string; wins: number; losses: number; total: number; winRate: number };
 type ActivityResponse = { timezone: string; days: ActivityDay[] };
@@ -117,6 +119,7 @@ export function ActivityCalendarChart({ weeks = 26 }: { weeks?: number }) {
       {selected && <div role="status" aria-live="polite" aria-atomic="true" className="mt-3 rounded-lg border border-border bg-bg-elevated/50 p-3 text-caption">
         <div className="flex flex-wrap justify-between gap-2"><strong className="text-text">{formatTrendDate(selected.date, true)}</strong><span className="tabular-nums text-text-muted">{selected.total.toLocaleString()} {recordLabel}</span></div>
         <p className="mt-1 tabular-nums text-text-muted">{selected.total ? `${selected.wins}W · ${selected.losses}L${selected.total > selected.wins + selected.losses ? ` · ${selected.total - selected.wins - selected.losses} other` : ""}` : "No selected games on this day."}</p>
+        {!isGlobal ? <LinkButton className="mt-2" variant="ghost" href={sessionHistoryHref(filters, { day: selected.date, tz: data.timezone || tz })}>View sessions on this day</LinkButton> : null}
       </div>}
       <p className="mt-2 text-micro text-text-muted">Select a day for results. Scroll for older weeks; arrow keys explore days.{isGlobal ? " Activity combines the selected players." : ""}</p>
     </Card>

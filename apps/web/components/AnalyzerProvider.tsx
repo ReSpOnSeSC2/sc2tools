@@ -330,6 +330,7 @@ export function AnalyzerProvider({
 
   const setFilters = useCallback((next: AnalyzerFilters) => {
     next = { ...next, accounts: owner ? accountFilter(next.accounts) : undefined };
+    if (next.preset !== undefined && next.preset !== "custom") delete next.patch_era;
     if (next.map_exact_label !== undefined && next.map !== next.map_exact_label) next = { ...next, map_exact: undefined, map_exact_label: undefined };
     setFiltersState(next);
     if (!urlSession.current) writeStored(next);

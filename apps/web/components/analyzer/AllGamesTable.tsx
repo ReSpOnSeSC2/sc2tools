@@ -5,7 +5,7 @@ import { GameAnalysisLink } from "./GameAnalysisLink";
 import { OpponentLink } from "./OpponentLink";
 import { ArrowUpRight } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
-import { fmtDate, fmtMinutes, raceColour } from "@/lib/format";
+import { fmtDate, fmtMinutes } from "@/lib/format";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -88,10 +88,12 @@ export function AllGamesTable({
   targetGameId,
   targetGameSeq,
   myName,
-  opponentContext, pageLocalSort = false, onSortChange,
+  opponentContext, pageLocalSort = false, onSortChange, rowKey,
 }: {
   games: ProfileGame[];
   pageLocalSort?: boolean;
+  /** Stable membership position when public game IDs repeat or are absent. */
+  rowKey?: (game: ProfileGame, index: number) => string;
   onSortChange?: (column: string) => void;
   targetGameId?: string | null;
   targetGameSeq?: number;
@@ -136,10 +138,15 @@ export function AllGamesTable({
     );
   }, [games, sort]);
 
+  const targetExpansionKey = useMemo(() => {
+    if (!targetGameId || !rowKey) return targetGameId;
+    const index = games.findIndex(game => game.id === targetGameId);
+    return index < 0 ? targetGameId : rowKey(games[index], index);
+  }, [games, rowKey, targetGameId]);
   useEffect(() => {
     if (!targetGameId) return;
-    setExpandedId(targetGameId);
-    setHighlightId(targetGameId);
+    setExpandedId(targetExpansionKey ?? targetGameId);
+    setHighlightId(targetExpansionKey ?? targetGameId);
     const sel =
       (tableRef.current?.querySelector(
         `[data-game-row-id="${cssEscape(targetGameId)}"]`,
@@ -156,7 +163,7 @@ export function AllGamesTable({
     }
     const t = window.setTimeout(() => setHighlightId(null), 2000);
     return () => window.clearTimeout(t);
-  }, [targetGameId, targetGameSeq]);
+  }, [targetGameId, targetGameSeq, targetExpansionKey]);
 
   if (!games || games.length === 0) {
     return <EmptyState title="No games yet" />;
@@ -205,11 +212,11 @@ export function AllGamesTable({
           <tbody>
             {sortedGames.map((g, i) => (
               <GameRow
-                key={g.id || `_idx_${i}`}
+                key={rowKey?.(g, i) ?? (g.id || `_idx_${i}`)}
                 game={g}
-                expanded={!!g.id && expandedId === g.id}
-                highlighted={!!g.id && highlightId === g.id}
-                onToggle={() => toggle(g.id)}
+                expanded={!!g.id && expandedId === (rowKey?.(g, i) ?? g.id)}
+                highlighted={!!g.id && highlightId === (rowKey?.(g, i) ?? g.id)}
+                onToggle={() => toggle(g.id ? rowKey?.(g, i) ?? g.id : null)}
                 showPlayers={showPlayers}
                 showOppMmr={showOppMmr}
                 showStreams={showStreams}
@@ -226,11 +233,11 @@ export function AllGamesTable({
       <ul ref={mobileListRef} className="space-y-2 md:hidden">
         {sortedGames.map((g, i) => (
           <GameMobileCard
-            key={g.id || `_idx_${i}`}
+            key={rowKey?.(g, i) ?? (g.id || `_idx_${i}`)}
             game={g}
-            expanded={!!g.id && expandedId === g.id}
-            highlighted={!!g.id && highlightId === g.id}
-            onToggle={() => toggle(g.id)}
+            expanded={!!g.id && expandedId === (rowKey?.(g, i) ?? g.id)}
+            highlighted={!!g.id && highlightId === (rowKey?.(g, i) ?? g.id)}
+            onToggle={() => toggle(g.id ? rowKey?.(g, i) ?? g.id : null)}
             streamLinks={gameStreamLinks(linksByGameId, g.id)}
             myName={myName}
             opponentContext={opponentContext}
@@ -791,16 +798,16 @@ function RaceTag({
   if (!resolved.letter) {
     resolved = canonicalRace(raceFromStrategyName(strategy));
   }
-  const colour = raceColour(resolved.full || race);
+  const colourToken = resolved.full ? `--race-${resolved.full.toLowerCase()}` : "--text-muted";
   const letter = resolved.letter || "?";
   const hasRace = !!resolved.full;
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-micro font-medium"
       style={{
-        color: colour,
-        borderColor: `${colour}55`,
-        background: `${colour}14`,
+        color: `rgb(var(${colourToken}))`,
+        borderColor: `rgb(var(${colourToken}) / ${85 / 255})`,
+        background: `rgb(var(${colourToken}) / ${20 / 255})`,
       }}
       title={
         hasRace
