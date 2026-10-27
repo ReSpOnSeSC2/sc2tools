@@ -1,5 +1,7 @@
 "use strict";
 
+const { isPrivateSearchPath, privateSearchLogUrl } = require("./privateSearchBoundary");
+
 // Request logs are operational telemetry, not a copy of the incoming
 // request.  In particular, Clerk/device bearer tokens and overlay tokens are
 // credentials.  Keeping the whole headers object also makes every heartbeat
@@ -49,6 +51,7 @@ const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set([
 function sanitiseRequestUrl(value) {
   const raw = typeof value === "string" ? value : "";
   if (!raw) return "";
+  if (isPrivateSearchPath(raw)) return privateSearchLogUrl(raw);
   let redacted = raw.replace(
     CREDENTIAL_PATH_SEGMENT,
     (_match, route) => `/${route}/[redacted]`,

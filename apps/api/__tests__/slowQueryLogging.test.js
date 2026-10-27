@@ -120,4 +120,20 @@ describe("attachSlowQueryLogging", () => {
     expect(logger.warns).toHaveLength(1);
     expect(logger.warns[0].fields.collection).toBeUndefined();
   });
+
+  test.each(["known", "evicted", "unknown"])("private or %s metadata failures retain only a fixed code", mode => {
+    const client = new EventEmitter(), logger = makeLogger();
+    attachSlowQueryLogging(client, logger, 100);
+    if (mode !== "unknown") client.emit("commandStarted", { requestId: 1, commandName: "aggregate",
+      command: { aggregate: "opponents", comment: "sc2tools-private-search-v2", pipeline: ["private-name"] } });
+    if (mode === "evicted") for (let i = 2; i <= 1002; i++) client.emit("commandStarted", {
+      requestId: i, commandName: "find", command: { find: "games" },
+    });
+    client.emit("commandFailed", { requestId: 1, commandName: "aggregate", duration: 10,
+      failure: new Error("private-name private-query private-build") });
+    expect(logger.warns).toHaveLength(1);
+    expect(logger.warns[0].fields.code).toBe("mongo_command_failed");
+    expect(logger.warns[0].fields.err).toBeUndefined();
+    expect(JSON.stringify(logger.warns)).not.toContain("private-name");
+  });
 });

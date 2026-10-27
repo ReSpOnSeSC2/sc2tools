@@ -8,6 +8,9 @@ const {
 
 describe("request log sanitisation", () => {
   test.each([
+    ["/v1/search/quick?q=private-name&unknown=private-build#private-map", "/v1/search/quick"],
+    ["https://api.example.test/V1/SEARCH/QUICK/?other=private-name", "/v1/search/quick"],
+    ["/v1/search/quick/other?limit=5", "/v1/search/quick/other?limit=5"],
     [
       "/v1/multichat/overlay-secret/youtube/poll?token=query-secret&channel=abc",
       "/v1/multichat/[redacted]/youtube/poll?token=%5Bredacted%5D&channel=abc",

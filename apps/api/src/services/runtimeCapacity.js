@@ -17,6 +17,7 @@ const ALLOWED_SOURCE_NAMES = new Set([
   "opponentProfiles",
   "overlayEnrichment",
   "gameDetailsHeavyIo",
+  "privateSearch",
 ]);
 const SENSITIVE_FIELD =
   /user|token|secret|credential|authorization|auth|email|slug|identifier|(?:^|[_-])id(?:$|[_-])|Id$|(?:^|[_-])key(?:$|[_-])|Key$/i;

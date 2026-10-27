@@ -1,5 +1,10 @@
 "use strict";
 
+const { isPrivateSearchFailure } = require("../middleware/privateSearchBoundary");
+const {
+  privateSearchHttpOptions, privateSearchSentryCallbacks, runPrivateSearchScope,
+} = require("../middleware/privateSearchTelemetry");
+
 /**
  * Optional Sentry wiring for the Express API.
  *
@@ -42,6 +47,11 @@ function init() {
     dsn: process.env.SENTRY_DSN,
     tracesSampleRate: 0.1,
     environment: process.env.SC2TOOLS_ENV || "production",
+    integrations: defaults => [
+      ...defaults.filter(integration => integration.name !== "Http"),
+      s.httpIntegration(privateSearchHttpOptions()),
+    ],
+    ...privateSearchSentryCallbacks(),
   });
   return true;
 }
@@ -50,8 +60,17 @@ function init() {
  * @param {unknown} err
  */
 function captureException(err) {
+  if (isPrivateSearchFailure(err)) return;
   const s = tryRequireSentry();
   if (s) s.captureException(err);
+}
+
+/** Keep request-scoped tracing and body capture out of private search.
+ * Example: app.use(privateSearchRequestScope) before JSON parsing.
+ * @type {import('express').RequestHandler}
+ */
+function privateSearchRequestScope(req, _res, next) {
+  runPrivateSearchScope(req, next, tryRequireSentry());
 }
 
 /**
@@ -72,4 +91,4 @@ async function flush(timeoutMs = 2000) {
   }
 }
 
-module.exports = { init, captureException, flush };
+module.exports = { init, captureException, flush, privateSearchRequestScope };
