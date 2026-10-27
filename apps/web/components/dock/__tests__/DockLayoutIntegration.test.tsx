@@ -27,6 +27,8 @@ describe("Real Dock layout consumers", () => {
   it("keeps the real poll draft through collapse, pin, reset and browser-only persistence", async () => {
     render(<DockClient token="layout-private-token" />);
     const question = await screen.findByPlaceholderText(/Poll question/);
+    expect(document.querySelector("[data-dock-section]")?.id).toBe("dock-chat");
+    expect(within(screen.getByRole("navigation", { name: "Dock sections" })).getAllByRole("button")[0].textContent).toBe("Chat");
     fireEvent.change(question, { target: { value: "Next build?" } });
     fireEvent.click(screen.getByRole("button", { name: "Poll", expanded: true }));
     expect(screen.queryByPlaceholderText(/Poll question/)).toBeTruthy();

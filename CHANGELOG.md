@@ -17,6 +17,11 @@ corresponding GitHub Release.
 - Offer Retry when a saved comment's thread cannot refresh. Closing a request immediately removes playback, download and comment controls, and concurrent answer updates cannot reopen or relist a closed or hidden request.
 - Keep admin-only Review previews out of browser and shared caches, and preserve origin-dependent CORS headers on public reads.
 
+### Stream Dock layout
+
+- Put Chat first in the section navigation and default panel order, retaining saved pins and collapsed sections.
+- Fit Series scores and correction buttons to narrow OBS docks. Keep long opponent names inside the scoreboard, separate action buttons, and explain the best-of controls with a direct Help link.
+
 ### Device liveness
 
 - Reduce background activity writes from desktop app requests while keeping agent heartbeats working.
