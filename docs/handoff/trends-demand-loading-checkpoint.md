@@ -2,9 +2,10 @@
 
 Canonical item: `faster-dashboards` (Wave 5), web demand-loading portion.
 Worktree: `C:\SC2TOOLS\.worktrees\wave3-my-reviews`; branch:
-`codex/wave5-trends-demand-loading`. Authored scope is 15 text paths, including
-five product files. Six historical screenshot paths remain absent; the browser
-plan reserves six cache captures for review. No screenshot delivery is claimed.
+`codex/wave5-trends-demand-loading`. Authored scope is 15 text paths and six
+approved PNG captures, including five product files. Light/dark captures at
+360/768/1280 are delivered in `docs/handoff/screenshots/trends-demand-*.png`;
+their raw originals and proof packets remain preserved.
 
 ## Behavior
 
@@ -56,7 +57,7 @@ tracked source and no unknown untracked paths. Known Next/Browserslist/lint
 warnings and local API `::1:8080` refusal remain raw; backend availability and a
 warning-free build are not established. No historical 219-test run was repeated.
 
-## Browser results and pending chart repair
+## Browser history and verified result
 
 Actual discovery confirmed **18 main cases** and **two paired cases**. The first
 main mobile/light case timed out at the fixture's Trends-heading wait:
@@ -85,7 +86,7 @@ The retry loaded successfully, then the first mobile/light case failed after
 2,777ms at the Time AA gate: an aria-labeled chart div lacked a valid role, and
 the View opponents caption's 80% opacity yielded 4.26 contrast instead of 4.5.
 Main result remained **0 passed, 1 failed, 17 did not run**, zero retries/flaky
-cases; paired work remains unrun. Two AA scans completed (initial: no serious
+cases; paired work was unrun at that stage. Two AA scans completed (initial: no serious
 issues, contrast incomplete; Time: two serious issues, ARIA/contrast incomplete)
 and one early 360px light capture was retained. All 13 GETs settled: two cold,
 two filter, four passive, five Time; zero page errors, unknown HTTP requests or
@@ -98,9 +99,9 @@ At `40fa9098`, chart strict lint exited 0 and all five existing render/drilldown
 checks across two files passed. The two attribute/class changes introduce no
 new CSS utility, handler, data or calculation change. The next main run stopped
 at the original passive Performance highlight assertion: **0 passed, 1 failed,
-17 did not run**, zero retries/flaky cases; paired work remains unrun. Initial
+17 did not run**, zero retries/flaky cases; paired work was unrun at that stage. Initial
 AA reported no serious issues (contrast incomplete); Time AA was not reached,
-so the chart AA repair is not browser-proved. Eight GETs settled (two cold, two
+so the chart AA repair was not browser-proved at that stage. Eight GETs settled (two cold, two
 filter, four passive), with zero page errors/unknown HTTP/rejected writes and
 one early capture. Final source/asset guards passed; all 32 observed identities
 including postguards retired with no owned listeners.
@@ -118,15 +119,15 @@ waits for the admitted above-card PvZ rating UI/data and settled reads, then use
 the same native passive gesture to continue reading Performance at its real
 position. All original nav/focus/URL/filter/retention assertions, the 5s highlight
 assertion and 120s case bound remain. This checks final navigation against the
-rendered viewport instead of a transient label during expansion. **Full browser
-validation remains incomplete.** Product/fixture/configuration,
+rendered viewport instead of a transient label during expansion. The full 60f
+browser matrix below now validates this correction. Product/fixture/configuration,
 assets, budgets and calculations remain unchanged by this test correction.
 
 At `42a00175`, the updated spec passed strict lint and discovery still listed
 18 main/two paired cases with unchanged titles. The browser run passed the
 mobile light personal and global cases, then stopped at dark Time AA:
-**2 passed, 1 failed, 15 did not run**, zero retries/flaky cases; paired work is
-unrun. Six AA scans found one serious contrast issue on the 4,150 MMR headline
+**2 passed, 1 failed, 15 did not run**, zero retries/flaky cases; paired work was
+unrun at that stage. Six AA scans found one serious contrast issue on the 4,150 MMR headline
 (#157d8c on #0f141c, 3.82 instead of 4.5), with incomplete findings retained in
 raw receipts. One early capture and the three case ledgers are preserved under
 `C:\SC2TOOLS\.cache\trends-browser-retry-host-42a00175`; their 15/18/13 API reads
@@ -140,28 +141,49 @@ so no missing ThemeProvider is involved. `--accent` is a filled-control color;
 changes only the Last recorded/Latest average item's color to
 `rgb(var(--accent-ink))`. Series/marker colors, peak/success, trough/danger,
 values, calculations and handlers remain unchanged; no CSS class, import or hook
-is added. **Strict lint and actual browser AA for this MMR text correction
-are UNRUN.** No mirrored style unit is proposed.
+is added. At `60f7ede9`, this file passed strict lint with zero errors and
+warnings. No mirrored style unit was added or repeated.
 
-## Remaining validation and delivery
+At exact `60f7ede934578d09861154e1abaaf702116b71b4` (tree `affc0bbd`),
+all **18 main and two paired browser cases passed**, with zero skips, retries,
+flaky or unexpected results. All **30 shared AA scans reported zero issues**;
+incomplete checks remain recorded (`color-contrast` in 30 scans,
+`aria-prohibited-attr` in 24), so this is not universal accessibility proof.
+Root viewed and approved all six light/dark 360/768/1280 captures. Source and
+own-asset pre/postguards passed: 15 owned paths, 379 source/24 browser pins,
+374 selected rows unchanged from 857, complete CSS4/fonts3/Chrome, 40 engine
+inputs, five active assets, nine retained files and four sample payloads.
 
-Root owns review, commits, runtime grants and delivery. Preserve the old 857,
-f713, 40fa, 42a and diagnostic packets. The next current-source → retained-857
-bridge must admit exactly the Net MMR attribute/class changes, MMR headline
-text-color value, fixture, spec and checkpoint: 15 owned paths, 379 selected
-pins and 374 unchanged selected rows. Production source is not wholly unchanged;
-do not relabel the retained build as a new build. Admit complete CSS filename
-sets/bytes, fonts, Chrome, current source and exact concrete output paths.
-LIST/RUN reporter JSONs must have separate filenames. Keep CI=1, truly remove
-A11Y_COLLECT_ONLY/TRENDS_LIST_ONLY, and retain one worker, zero retries and
-maxFailures=1. Preserve first RED and positive owned identity/listener closure.
+Main ledgers recorded 360 API reads, including three intentionally aborted,
+unsettled old-owner held reads (one retirement case per viewport); the other
+357 settled. There were zero page errors, unknown HTTP requests or writes;
+96 static-resource GETs stay separate. All 18 main and two paired loopback
+servers closed. A final positive host probe retired all **118 observed
+identities**, including final postguard drivers, with no relevant process or
+owned listener. The exact receipt and raw ledgers are under
+`C:\SC2TOOLS\.cache\trends-browser-retry-host-60f7ede9` (`final-receipt.json`,
+`case-aa-http-ledgers.json`, `observed-results-summary.json`); the preserved
+summary correction only fixes empty-array counting, not raw AA findings.
 
-The main plan remains 18 cases, 30 shared serious/critical AA scans and six cache
-captures across 360/768/1280, light/dark, personal/global, navigation, retention,
-owner retirement and Retry. Paired work remains two cases/four fresh UTC contexts,
-personal/global dark desktop; only two raw-hashed legacy product files differ.
-Its cold → filter → Performance → Inspect sequence is not full traversal. Keep
-actual GET owner/path/query/phase/settlement and static-resource ledgers separate;
-no measured saving exists yet. Framework/auth and unrelated Help/report leaves
-are adapters. AA is not universal accessibility proof. Page/HTTP ledgers do not
-instrument native invocations, sockets, beacon or clipboard.
+Paired observations used four fresh UTC contexts, personal/global dark desktop,
+and changed only two raw-hashed legacy product files. For the bounded
+cold → filter → Performance → Inspect sequence, personal GETs were **24 → 10**
+(cold/filter 12 → 3 each); global GETs were **22 → 10** (11 → 3 each).
+All paired reads settled. This sequence is not full traversal or a universal
+speedup measurement.
+
+## Remaining delivery and proof limits
+
+Root owns commits, fresh-main integration, PR and CI. This delivery preparation
+changes only this checkpoint and raw copies of the six approved captures;
+product/test source remains exact 60f. The browser freshly rendered that source
+with retained OWN 857/tree655fde/BUILD_ID `1TVmStDDPgYRFGOqDzOSR` CSS/fonts;
+it does not establish a new 60f Next build. The admitted five-path bridge covers
+Net MMR attributes/class, MMR headline text-color value, fixture, spec and this
+checkpoint. Historical 219/19 static proof remains tied to 93a94950; earlier
+RED/diagnostic packets and build-warning/backend-availability limits remain.
+
+Future integrated-head guards must refresh documentation/screenshot ownership
+and changed upstream inputs; they must not relabel this source-bound proof.
+Framework/auth and unrelated Help/report leaves are adapters. Page/HTTP ledgers
+do not instrument native invocations, sockets, beacon or clipboard.
