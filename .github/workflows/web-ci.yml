@@ -62,7 +62,7 @@ jobs:
   e2e-responsive:
     name: Responsive e2e smoke (public pages)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: apps/web

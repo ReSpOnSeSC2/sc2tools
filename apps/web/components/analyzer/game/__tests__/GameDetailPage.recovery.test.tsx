@@ -13,7 +13,7 @@ vi.mock("@/components/build-checkin/BuildCheckInCard", () => ({ BuildCheckInCard
 vi.mock("../GhostGradeCard", () => ({ GhostGradeCard: () => null, ArmGhostFromLogButton: () => null }));
 vi.mock("../GameDetailShell", () => ({ GameDetailShell: ({ children }: { children: ReactNode }) => <><h1>My replay hero</h1>{children}</> }));
 vi.mock("../MapReplaySection", () => ({ MapReplaySection: () => { if (state.crash) throw new Error("player crash"); return <p>Replay player recovered</p>; } }));
-vi.mock("@/lib/clientApi", () => ({ useApi: (path: string) => {
+vi.mock("@/lib/clientApi", async original => ({ ...await original<typeof import("@/lib/clientApi")>(), useApi: (path: string) => {
   const macro = path?.endsWith("/macro-breakdown"); const build = path?.endsWith("/build-order");
   const game = path === "/v1/games/one";
   const error = macro ? state.macroError : build ? state.buildError : game ? state.gameError : null;

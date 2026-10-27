@@ -24,6 +24,7 @@ const { captureSignedWebhookRawBody } = require("./middleware/jsonBody");
 const { sanitiseRequestForLog, sanitiseResponseForLog } = require("./middleware/requestLogging");
 
 const { UsersService } = require("./services/users");
+const { ActivationService } = require("./services/activation");
 const { buildClerkClient, noopClerkClient } = require("./services/clerkClient");
 const { OpponentsService } = require("./services/opponents");
 const { ScoutingIdentitiesService } = require("./services/scoutingIdentities");
@@ -381,6 +382,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     isDeleted: (id) => identityDeletions.isDeleted(id), logger: deps.logger });
   const userCache = new UserCache(userRevision, { enabled: deps.config.userCacheEnabled });
   const users = new UsersService(deps.db, { adminEvents, identityDeletions });
+  const activation = new ActivationService(deps.db);
   // Pluggable backend for the per-game heavy blob. Defaults to
   // ``MongoDetailsStore`` (in-database); flips to ``R2DetailsStore``
   // when ``GAME_DETAILS_STORE=r2`` is set with the R2 connection
@@ -996,6 +998,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   return {
     userRevision, userCache, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
     users,
+    activation,
     opponents,
     opponentIdentityMatcher,
     rivals,
@@ -1434,6 +1437,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     buildMeRouter({
       announcements: services.announcements,
       users: services.users,
+      activation: services.activation,
       games: services.games,
       gdpr: services.gdpr,
       backupStatus: services.backupStatus,

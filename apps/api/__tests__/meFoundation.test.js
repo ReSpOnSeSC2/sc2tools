@@ -212,6 +212,67 @@ describe("Settings Foundation backing API", () => {
     expect((await withAuth(request(app).get("/v1/me/preferences/onboarding"))).body.goals).toEqual(["improve", "stream"]);
   });
 
+  test("activation is authenticated, private and exposes only flags and narrow onboarding metadata", async () => {
+    expect((await request(app).get("/v1/me/activation")).status).toBe(401);
+    const response = await withAuth(request(app).get("/v1/me/activation"));
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(Object.keys(response.body).sort()).toEqual(["identity", "firstGameViewed", "customBuild", "checkIn",
+      "overlayLive", "chatOn", "goals", "levelUpDismissedAt"].sort());
+    for (const flag of ["identity", "firstGameViewed", "customBuild", "checkIn", "overlayLive", "chatOn"]) {
+      expect(typeof response.body[flag]).toBe("boolean");
+    }
+  });
+
+  test("level-up dismissal merges independently and cannot forge the server-only view marker", async () => {
+    const dismissedAt = "2026-10-26T12:00:00.000Z";
+    await withAuth(request(app).put("/v1/me/preferences/onboarding").send({
+      goals: ["improve", "stream"], dismissedAt: null, futureField: "$literal-data",
+    }));
+    const saved = await withAuth(request(app).put("/v1/me/preferences/onboarding").send({ levelUpDismissedAt: dismissedAt }));
+    expect(saved.status).toBe(200);
+    expect(saved.body).toMatchObject({ goals: ["improve", "stream"], dismissedAt: null,
+      levelUpDismissedAt: dismissedAt, futureField: "$literal-data" });
+    for (const value of [false, 1, "junk", "2026-02-30T12:00:00.000Z"]) {
+      const invalid = await withAuth(request(app).put("/v1/me/preferences/onboarding").send({ levelUpDismissedAt: value }));
+      expect(invalid.status).toBe(400); expect(invalid.body.error.code).toBe("invalid_level_up_dismissed_at");
+    }
+    const forged = await withAuth(request(app).put("/v1/me/preferences/onboarding").send({ firstGameViewedAt: dismissedAt }));
+    expect(forged.status).toBe(400); expect(forged.body.error.code).toBe("readonly_onboarding_field");
+    expect((await withAuth(request(app).get("/v1/me/preferences/onboarding"))).body).toMatchObject({
+      levelUpDismissedAt: dismissedAt, dismissedAt: null, goals: ["improve", "stream"], futureField: "$literal-data",
+    });
+  });
+
+  test("first-game marker validates its body, ownership and live-game state before stamping once", async () => {
+    await withAuth(request(app).get("/v1/me/activation"));
+    const owner = await db.users.findOne({ clerkUserId: TEST_CLERK_USER_ID });
+    const gameId = `activation-${crypto.randomUUID()}`;
+    await db.games.insertMany([
+      { userId: owner.userId, gameId, date: new Date() },
+      { userId: "foreign", gameId: `${gameId}-foreign`, date: new Date() },
+      { userId: owner.userId, gameId: `${gameId}-deleted`, _deleted: true, date: new Date() },
+    ]);
+    try {
+      expect((await request(app).put("/v1/me/activation/first-game").send({ gameId })).status).toBe(401);
+      for (const body of [{}, { gameId: "" }, { gameId: "bad\nkey" }, { gameId: "x".repeat(1025) }, { gameId, extra: true }]) {
+        const invalid = await withAuth(request(app).put("/v1/me/activation/first-game").send(body));
+        expect(invalid.status).toBe(400); expect(invalid.body.error.code).toBe("invalid_game_id");
+      }
+      for (const unavailable of [`${gameId}-foreign`, `${gameId}-deleted`, `${gameId}-absent`]) {
+        expect((await withAuth(request(app).put("/v1/me/activation/first-game").send({ gameId: unavailable }))).status).toBe(404);
+      }
+      const first = await withAuth(request(app).put("/v1/me/activation/first-game").send({ gameId }));
+      expect(first.status).toBe(200); expect(first.body).toEqual({ firstGameViewed: true });
+      expect(first.headers["cache-control"]).toBe("private, no-store");
+      const stamp = (await db.users.findOne({ userId: owner.userId })).preferences.onboarding.firstGameViewedAt;
+      expect(Number.isFinite(new Date(stamp).getTime())).toBe(true);
+      expect((await withAuth(request(app).put("/v1/me/activation/first-game").send({ gameId }))).status).toBe(200);
+      expect((await db.users.findOne({ userId: owner.userId })).preferences.onboarding.firstGameViewedAt).toBe(stamp);
+      expect((await withAuth(request(app).get("/v1/me/activation"))).body.firstGameViewed).toBe(true);
+    } finally { await db.games.deleteMany({ gameId: { $in: [gameId, `${gameId}-foreign`, `${gameId}-deleted`] } }); }
+  });
+
   describe("POST /v1/webhooks/clerk", () => {
     test("rejects requests without svix headers", async () => {
       const res = await request(app)
