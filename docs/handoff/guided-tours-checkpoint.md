@@ -284,3 +284,29 @@ Foundation, and retain both engineering/changelog explanations. Integrated
 exact-head CI remains required. No local build/test repeat, release, deployment,
 agent tag/version bump, migration, provider activation or production write is
 claimed by this checkpoint.
+
+## Integrated CI fixture repair — 2026-10-27
+
+At integrated head `5d082445db5122856afd7ccf57dd74db7d7102a3`, web/API
+checks and Vercel passed, but responsive CI retained 34 failed, 521 passed and
+92 skipped cases (18.1 minutes). The failures came from two synthetic framework
+adapters missing the navigation hooks now reached through HelpWidget's dynamic
+TakeATour import. The InfoTip adapter now exposes `useRouter().push` through its
+existing local navigation; the Chat adapter exposes reactive `usePathname` through
+its existing subscription. Product code and every test assertion remain unchanged.
+
+The unchanged two specs selected 14 desktop cases: 10 passed, four existing
+viewport-specific skips, zero failures, retries or flakes (62.53 seconds). The
+fixtures bundled current TypeScript and used the original own production CSS/fonts
+from BUILD_ID `l2_jI0nYOkCV55KImfv3S` at product `17c229bb`; no rebuilt CSS or
+new whole-matrix result is claimed. Full responsive CI remains required.
+
+Evidence is retained under
+`.cache/review-verification-20261027/tours-fixtures-browser-01/` in the primary
+checkout. Playwright's direct child exited 0; the original metadata driver then
+exited 1 after attributing four pre-existing Windows processes to a reused parent
+PID. A metadata-only causal reinspection excluded those records, whose creation
+preceded the supposed parent, without killing them or rerunning tests. All 45
+actual owned identities positively retired with zero owned listeners. The original
+failure and `observer-reinspection.json` / `host-final-closure-reviewed.json` remain
+preserved alongside the raw browser output and existing warnings.
