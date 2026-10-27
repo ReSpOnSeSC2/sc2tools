@@ -17,6 +17,11 @@ corresponding GitHub Release.
 - Wait for visible build check-in cards, open dialogs and fullscreen. Keep the game's sticky navigation and reading position in place, skip unavailable targets and retire interrupted tours safely.
 - Keep tour progress separate from setup and suggestion dismissal, and merge each saved tour without overwriting another tour or other onboarding preferences.
 
+### Stream Dock layout
+
+- Put Chat first in the section navigation and default panel order, retaining saved pins and collapsed sections.
+- Fit Series scores and correction buttons to narrow OBS docks. Keep long opponent names inside the scoreboard, separate action buttons, and explain the best-of controls with a direct Help link.
+
 ### Device liveness
 
 - Reduce background activity writes from desktop app requests while keeping agent heartbeats working.
