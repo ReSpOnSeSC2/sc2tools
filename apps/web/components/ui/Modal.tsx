@@ -77,6 +77,8 @@ export interface ModalProps {
   disableScrimClose?: boolean;
   /** Focus a specific control when opening; otherwise use the first control. */
   initialFocusRef?: RefObject<HTMLElement | null>;
+  /** Preserve a persistent launcher across a lazy or nested dialog handoff. */
+  returnFocusRef?: RefObject<HTMLElement | null>;
   children: ReactNode;
   footer?: ReactNode;
 }
@@ -94,6 +96,7 @@ export function Modal({
   hideClose = false,
   disableScrimClose = false,
   initialFocusRef,
+  returnFocusRef,
   children,
   footer,
 }: ModalProps) {
@@ -101,7 +104,7 @@ export function Modal({
   const titleId = useId();
   const descId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap({ open, containerRef: dialogRef, onClose, initialFocusRef });
+  useFocusTrap({ open, containerRef: dialogRef, onClose, initialFocusRef, returnFocusRef });
 
   // Body scroll lock + Esc + focus management
   useEffect(() => {

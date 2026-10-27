@@ -19,6 +19,8 @@ import { guidesEnabled } from "@/lib/guides/flags";
 import { getInstantImportMode } from "@/lib/instant/flag";
 import { headerNavLinks } from "./headerNav";
 import { LogoMark } from "./LogoMark";
+import { useCommandChrome, useCommandSearch } from "./CommandSearchContext";
+import { CommandSearchButton } from "./CommandSearchButton";
 
 /**
  * Header — sticky site chrome shared by every authed and public page.
@@ -59,6 +61,12 @@ export function Header() {
     isAdmin: me?.isAdmin === true,
     tryPage: getInstantImportMode() === "all",
   });
+  const commandSearch = useCommandSearch(), signedIn = Boolean(commandSearch?.ownerKey);
+  useCommandChrome({ ownerKey: commandSearch?.ownerKey ?? null, navigation: navLinks.filter(link =>
+    link.auth === "any" || (link.auth === "in" && signedIn) || (link.auth === "out" && !signedIn)
+      || (link.auth === "admin" && signedIn && me?.isAdmin === true))
+    .map(link => ({ key: link.href.replace(/^\//, "").replace(/[^a-z0-9-]/g, "-"),
+      href: link.href, label: link.label })), defaultSettingsAvailable: signedIn });
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4);
@@ -103,6 +111,7 @@ export function Header() {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-2">
+            <CommandSearchButton iconOnly className="inline-flex" />
             <SignedIn>
               <CoachingBookingAlert />
               <NotificationBell />
