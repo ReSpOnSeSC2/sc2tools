@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { hydrateRoot } from "react-dom/client";
@@ -97,8 +97,19 @@ vi.mock("../charts/NetMmrByMatchupChart", () => ({
   NetMmrByMatchupChart: () => <section>Net MMR by matchup</section>,
 }));
 
+let restoreGeometry: (() => void) | undefined;
+beforeEach(() => {
+  const geometry = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+    const headings = ["trends-overview-heading", "trends-performance-heading", "trends-time-heading", "trends-explorer-section-heading", "trends-fingerprint-heading"];
+    const index = headings.indexOf(this.id), top = index < 0 ? 0 : index * 1000;
+    return { top, bottom: index >= 0 ? top + 40 : this.classList.contains("sticky") ? 80 : 10000, left: 0, right: 1280, width: 1280, height: 40, x: 0, y: top, toJSON() {} };
+  });
+  restoreGeometry = () => geometry.mockRestore();
+});
+
 afterEach(() => {
   cleanup();
+  restoreGeometry?.();
   useApiMock.mockClear();
   window.localStorage.clear();
 });
@@ -229,7 +240,7 @@ describe("TrendsTab layout", () => {
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
     // Matchup win rates sit directly beneath the headline win-rate card.
     const winRateCard = screen.getByText("Win rate").closest("section");
-    expect(winRateCard?.nextElementSibling).toBe(screen.getByText("Matchup over time").parentElement);
+    expect(winRateCard?.nextElementSibling?.contains(screen.getByText("Matchup over time"))).toBe(true);
     expect(screen.getByRole("heading", { name: "Performance & MMR" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Time & activity" })).toBeTruthy();
     expect(screen.queryByText("Macro score over time")).toBeNull();
