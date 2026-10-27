@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: async () => "token", isSignedIn: true, isLoaded: true, userId: "viewer" }),
 }));
-vi.mock("@/lib/clientApi", () => ({ apiCall: vi.fn(async () => ({})) }));
+vi.mock("@/lib/clientApi", async (original) => ({ ...await original<typeof import("@/lib/clientApi")>(), apiCall: vi.fn(async () => ({})) }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: vi.fn() }));
 
 import { ReviewThread } from "../ReviewThread";
@@ -98,7 +98,7 @@ it("explains a repeated comment report using the parsed API response", async () 
   fireEvent.click(within(root).getByRole("button", { name: "More actions" })); fireEvent.click(within(root).getByRole("menuitem", { name: "Report…" }));
   fireEvent.click(within(root).getByRole("menuitem", { name: "Spam" }));
   expect((await within(root).findByRole("status")).textContent).toBe("You already reported this comment.");
-  expect(apiCall).toHaveBeenLastCalledWith(expect.any(Function), `/v1/reviews/${ID}/comments/BBBBBBBBBBBBBBBB/report`, { method: "POST", body: JSON.stringify({ reason: "Spam" }) });
+  expect(apiCall).toHaveBeenLastCalledWith(expect.any(Function), `/v1/reviews/${ID}/comments/BBBBBBBBBBBBBBBB/report`, { method: "POST", body: JSON.stringify({ reason: "Spam" }), signal: expect.any(AbortSignal) });
 });
 
 it("uses explicit block and delete confirmations without native browser prompts", async () => {
@@ -113,7 +113,7 @@ it("uses explicit block and delete confirmations without native browser prompts"
   fireEvent.click(within(screen.getByRole("article", { name: "Comment by ReviewFox" })).getByRole("button", { name: "Delete" }));
   const remove = screen.getByRole("dialog", { name: "Delete this comment?" }); expect(remove.textContent).toContain("It's replaced by [deleted] for everyone. Replies stay.");
   fireEvent.click(within(remove).getByRole("button", { name: "Delete" }));
-  await waitFor(() => expect(apiCall).toHaveBeenLastCalledWith(expect.any(Function), `/v1/reviews/${ID}/comments/BBBBBBBBBBBBBBBB`, { method: "DELETE", body: undefined }));
+  await waitFor(() => expect(apiCall).toHaveBeenLastCalledWith(expect.any(Function), `/v1/reviews/${ID}/comments/BBBBBBBBBBBBBBBB`, { method: "DELETE", body: undefined, signal: expect.any(AbortSignal) }));
   expect(confirm).not.toHaveBeenCalled();
 });
 

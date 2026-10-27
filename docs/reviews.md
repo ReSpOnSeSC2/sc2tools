@@ -44,6 +44,8 @@ own synced games, and helpful reviewers earn karma.
 - Set both flags together. The web flag is inlined at build time, so a
   Vercel redeploy is needed after changing it.
 - The API flag is the security boundary.
+- Admin-only reads use `private, no-store`, including analysis and replay
+  playback. Public rollout keeps its existing short cache lifetimes.
 - The weekly digest job only runs when the API flag is `on`.
 - **Launch seeding:** ask a few high-league friends to answer the first real
   requests. Never post fabricated requests or reviews; every page is real
@@ -117,6 +119,10 @@ own synced games, and helpful reviewers earn karma.
 - **Closing revokes the grant.** Once the asker (or a moderator) closes the
   request, the analysis routes answer `410`. The question and comments stay
   readable. Closed requests are `noindex` and leave the sitemap.
+  - The page removes playback, download and comment controls immediately
+    after a successful close, even if its next thread refresh fails.
+  - Best-answer changes, comment removal and pending ranking refreshes cannot
+    undo a concurrent close, moderation removal or hidden-state transition.
 - **Deleting the game closes the request.** This covers a history wipe, a
   single-game removal and a resumed-replay quarantine, and is detected
   lazily on the next grant check too.
@@ -184,6 +190,17 @@ own synced games, and helpful reviewers earn karma.
     and the row stays. A deleted comment with replies shows a `[deleted]`
     placeholder; without replies it disappears from the thread.
   - Either way, the karma it earned is revoked.
+- **Private drafts.** Unposted comments stay in this browser for up to 14
+  days, with at most 20 saved drafts across accounts. A draft belongs to the
+  signed-in account, request and reply. Switching accounts hides the previous
+  editor and fences its late network completion. Older drafts saved without
+  an account identifier cannot safely be attributed and are never restored;
+  normal age/cap pruning still removes them. Storage failures do not prevent
+  posting.
+- **Refresh recovery.** If a comment is saved but refreshing the thread fails,
+  Retry only reloads the thread; it never submits the comment again. Closing
+  a request immediately removes its replay and comment composers, including
+  when the subsequent thread refresh fails.
 
 ### Blocks
 

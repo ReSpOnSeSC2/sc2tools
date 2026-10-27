@@ -35,6 +35,7 @@ type StatsEvents = NonNullable<Parameters<typeof InteractiveTimeline>[0]["statsE
 export function ReviewReplayPanel({
   requestId,
   hidden = false,
+  closed = false,
   analysis,
   analysisError,
   seekRequest,
@@ -49,6 +50,8 @@ export function ReviewReplayPanel({
   requestId: string;
   /** Hidden pending moderation: the grant is suspended, nothing to load. */
   hidden?: boolean;
+  /** Closing revokes the analysis grant, including already-loaded playback. */
+  closed?: boolean;
   analysis: ReviewAnalysis | undefined;
   analysisError: { status: number; message: string } | undefined;
   seekRequest: { t: number; seq: number } | null;
@@ -61,7 +64,7 @@ export function ReviewReplayPanel({
   onCommentMarker: (marker: CommentTimelineMarker) => void;
 }) {
   const enc = encodeURIComponent(requestId);
-  const mode = analysis?.playback.mode ?? "none";
+  const mode = hidden || closed ? "none" : analysis?.playback.mode ?? "none";
   // The admins-only stage 404s anonymous reads, so send the token then.
   const adminStage = reviewsRollout() === "admins";
   const inlineReq = usePublicApi<Record<string, unknown>>(
@@ -76,7 +79,7 @@ export function ReviewReplayPanel({
   );
   const playback = useMemo(() => (inlineReq.data ? sanitizeMapPlayback(inlineReq.data) : null), [inlineReq.data]);
   const manifest = useMemo(() => (manifestReq.data ? sanitizePlaybackManifest(manifestReq.data) : null), [manifestReq.data]);
-  const available = Boolean(playback || manifest);
+  const available = !hidden && !closed && Boolean(playback || manifest);
   useEffect(() => onPlaybackAvailable(available), [available, onPlaybackAvailable]);
 
   const segmentPath = useCallback(
@@ -84,6 +87,11 @@ export function ReviewReplayPanel({
     [enc],
   );
 
+  if (closed) {
+    return <div role="status" className="rounded-xl border-2 border-line bg-bg-surface p-4 text-body text-text-muted">
+      This request is closed, so its replay is no longer shared. The review thread is still available.
+    </div>;
+  }
   if (hidden) {
     return (
       <div role="status" className="rounded-xl border-2 border-line bg-bg-surface p-4 text-body text-text-muted">

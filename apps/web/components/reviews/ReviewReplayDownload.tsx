@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, type MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { Download, Loader2 } from "lucide-react";
-import { apiCall } from "@/lib/clientApi";
+import { apiCall, useOwnerRequestScope } from "@/lib/clientApi";
 import { gaEvent } from "@/lib/analytics/gtag";
 import { signInHref } from "@/lib/authLinks";
 
@@ -33,9 +33,13 @@ export function ReviewReplayDownload({
   /** Card only: what the icon belongs to, for its accessible name. */
   contextLabel?: string;
 }) {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
+  const owner = isLoaded && isSignedIn && userId ? userId : null;
+  const scopeId = owner ? JSON.stringify([owner, requestId]) : null;
+  const runOwned = useOwnerRequestScope(scopeId, getToken);
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
   const [message, setMessage] = useState("");
+  useEffect(() => { setState("idle"); setMessage(""); }, [scopeId]);
 
   const cls = variant === "card"
     ? "grid h-9 w-9 place-items-center rounded-full border-2 border-line bg-bg-surface text-text-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
@@ -43,7 +47,7 @@ export function ReviewReplayDownload({
   const suffix = variant === "card" && contextLabel ? `: ${contextLabel}` : "";
   const label = `Download replay${suffix}`;
 
-  if (!isSignedIn) {
+  if (!owner) {
     // The page variant's visible text is its accessible name (label in name).
     const signIn = `Sign in to download replay${suffix}`;
     return (
@@ -71,33 +75,42 @@ export function ReviewReplayDownload({
   async function download(event: MouseEvent) {
     event.preventDefault();
     event.stopPropagation();
-    if (state === "loading") return;
+    if (state === "loading" || !scopeId) return;
     setState("loading");
     setMessage("");
     try {
-      const res = await apiCall<DownloadResponse>(getToken, `/v1/reviews/${encodeURIComponent(requestId)}/replay`);
-      const href = safeSignedUrl(res.url);
-      if (!href) throw new Error("The replay download link was invalid.");
-      const anchor = document.createElement("a");
-      anchor.href = href;
-      anchor.download = safeFilename(res.filename, requestId);
-      anchor.rel = "noopener noreferrer";
-      anchor.referrerPolicy = "no-referrer";
-      anchor.style.display = "none";
-      document.body.appendChild(anchor);
-      try {
-        anchor.click();
-      } finally {
-        anchor.remove();
-      }
-      gaEvent("review_replay_download");
-      setState("idle");
-    } catch (err) {
-      setMessage((err as { message?: string })?.message || "Couldn't download the replay.");
-      setState("error");
+      await runOwned(scopeId, async (scopedToken, signal, assertCurrent) => {
+        try {
+          const res = await apiCall<DownloadResponse>(scopedToken, `/v1/reviews/${encodeURIComponent(requestId)}/replay`, { signal });
+          // A DOM download outlives React, so fence it inside the owned operation.
+          assertCurrent();
+          const href = safeSignedUrl(res.url);
+          if (!href) throw new Error("The replay download link was invalid.");
+          const anchor = document.createElement("a");
+          anchor.href = href;
+          anchor.download = safeFilename(res.filename, requestId);
+          anchor.rel = "noopener noreferrer";
+          anchor.referrerPolicy = "no-referrer";
+          anchor.style.display = "none";
+          document.body.appendChild(anchor);
+          try {
+            anchor.click();
+          } finally {
+            anchor.remove();
+          }
+          gaEvent("review_replay_download");
+          setState("idle");
+        } catch (err) {
+          // A late failure belongs to the retired account/replay as well.
+          assertCurrent();
+          setMessage((err as { message?: string })?.message || "Couldn't download the replay.");
+          setState("error");
+        }
+      });
+    } catch {
+      // The owned operation handles current failures; retirement is silent.
     }
   }
-
   return (
     <span className="inline-flex min-w-0 flex-col items-start gap-1">
       <button

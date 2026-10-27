@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Field } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Select";
 import { FocusRangeFields } from "./FocusRangeFields";
-import { apiCall, useApi } from "@/lib/clientApi";
+import { apiCall, useApi, useOwnerRequestScope } from "@/lib/clientApi";
 import { gaEvent } from "@/lib/analytics/gtag";
 import {
   DESIRED_LEVELS,
@@ -103,13 +103,16 @@ export const STOP_POINTER_EVENTS = {
 } as const;
 
 export function AskForReviewDialog(props: Props & { onClose: () => void }) {
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  const ownerId = isLoaded && isSignedIn && userId ? userId : null;
   // Hosts can reuse the same dialog while selecting a different replay. A
   // question and, especially, replay-sharing consent belong to one game.
-  return <AskForReviewForm key={props.gameId} {...props} />;
+  return ownerId ? <AskForReviewForm key={JSON.stringify([ownerId, props.gameId])} {...props} ownerId={ownerId} /> : null;
 }
 
-function AskForReviewForm({ gameId, durationSec, matchup, onClose }: Props & { onClose: () => void }) {
+function AskForReviewForm({ gameId, durationSec, matchup, onClose, ownerId }: Props & { onClose: () => void; ownerId: string }) {
   const { getToken } = useAuth();
+  const runOwned = useOwnerRequestScope(ownerId, getToken);
   const router = useRouter();
   const formId = useId();
   const [question, setQuestion] = useState("");
@@ -152,8 +155,9 @@ function AskForReviewForm({ gameId, durationSec, matchup, onClose }: Props & { o
     setError(null);
     setExisting(false);
     try {
-      const res = await apiCall<{ id: string; url: string }>(getToken, "/v1/reviews", {
+      const res = await runOwned(ownerId, (scopedToken, signal) => apiCall<{ id: string; url: string }>(scopedToken, "/v1/reviews", {
         method: "POST",
+        signal,
         body: JSON.stringify({
           gameId,
           question: question.trim(),
@@ -164,7 +168,7 @@ function AskForReviewForm({ gameId, durationSec, matchup, onClose }: Props & { o
           askerDisplay: named ? "named" : "anonymous",
           shareReplay,
         }),
-      });
+      }));
       // Closing the dialog or switching games must not let a late response
       // unexpectedly navigate away from the user's current screen.
       if (!mounted.current) return;

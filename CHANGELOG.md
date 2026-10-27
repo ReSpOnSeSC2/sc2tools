@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Replay Review reliability
+
+- Keep unfinished reviews and pending actions tied to the signed-in account. Stop a delayed replay download after switching accounts, games or pages.
+- Offer Retry when a saved comment's thread cannot refresh. Closing a request immediately removes playback, download and comment controls, and concurrent answer updates cannot reopen or relist a closed or hidden request.
+- Keep admin-only Review previews out of browser and shared caches.
+
 ### Device liveness
 
 - Reduce background activity writes from desktop app requests while keeping agent heartbeats working.

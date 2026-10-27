@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Toggle } from "@/components/ui/Toggle";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { MapArtwork } from "@/components/maps/MapArtwork";
-import { apiCall } from "@/lib/clientApi";
+import { apiCall, useOwnerRequestScope } from "@/lib/clientApi";
 import { signInHref } from "@/lib/authLinks";
 import { usePublicApi } from "@/lib/usePublicApi";
 import type { ReplayMapMarker } from "@/components/analyzer/game/MapReplayer";
@@ -44,6 +44,12 @@ import { ReviewThread } from "./ReviewThread";
  * the viewer's token for personal state (votes, capabilities).
  */
 export function ReviewPage({ initial }: { initial: ReviewPageData }) {
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  const owner = isLoaded && isSignedIn && userId ? userId : "anonymous";
+  return <ReviewPageContent key={JSON.stringify([initial.request.id, owner])} initial={initial} />;
+}
+
+function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
   const id = initial.request.id;
   const enc = encodeURIComponent(id);
   const { isSignedIn } = useAuth();
@@ -54,9 +60,16 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
     revalidateOnMount: true,
     revalidateOnFocus: true,
   }, { personalized: true });
-  const data = pageReq.data ?? initial;
+  const [locallyClosed, setLocallyClosed] = useState(false);
+  const loaded = pageReq.data ?? initial;
+  const data: ReviewPageData = locallyClosed ? {
+    ...loaded,
+    request: { ...loaded.request, status: "closed", closedReason: "asker" },
+    viewer: { ...loaded.viewer, canComment: false, canReview: false },
+  } : loaded;
+  const open = data.request.status === "open" || data.request.status === "answered";
   const analysisReq = usePublicApi<ReviewAnalysis>(
-    data.request.hidden ? null : `/v1/reviews/${enc}/analysis`,
+    data.request.hidden || !open ? null : `/v1/reviews/${enc}/analysis`,
     { revalidateOnFocus: false, shouldRetryOnError: false },
     // The admins-only stage 404s anonymous reads, so send the token then.
     { personalized: reviewsRollout() === "admins" },
@@ -138,9 +151,19 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
     scrollToComment(markerId);
   }, [data.comments, seek, scrollToComment]);
 
-  const refresh = useCallback(() => pageReq.mutate(), [pageReq]);
-  const request = data.request;
-  const open = request.status === "open" || request.status === "answered";
+  const [refreshError, setRefreshError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await pageReq.mutate();
+      setRefreshError(false);
+      return true;
+    } catch {
+      setRefreshError(true);
+      return false;
+    } finally { setRefreshing(false); }
+  }, [pageReq]);
 
   return (
     <article className="space-y-5" data-testid="review-page">
@@ -148,7 +171,13 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
         <ArrowLeft className="h-4 w-4" aria-hidden /> Review board
       </Link>
 
-      <RequestHeader data={data} onChanged={refresh} />
+      <RequestHeader data={data} onChanged={refresh} onClosed={() => setLocallyClosed(true)} />
+      {refreshError || pageReq.error ? (
+        <div role="alert" className="rounded-xl border-2 border-warning/50 bg-warning/10 p-3 text-caption text-text">
+          <p>The latest review thread couldn&apos;t be loaded. Saved changes won&apos;t be submitted again.</p>
+          <Button variant="ghost" size="sm" loading={refreshing} onClick={() => void refresh()}>Retry</Button>
+        </div>
+      ) : null}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(340px,440px)] xl:items-start">
         <div
@@ -158,6 +187,7 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
           <ReviewReplayPanel
             requestId={id}
             hidden={data.request.hidden}
+            closed={!open}
             analysis={analysisReq.data}
             analysisError={analysisReq.error}
             seekRequest={seekRequest}
@@ -193,7 +223,7 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
               <Lock className="h-4 w-4" aria-hidden /> This request is closed to new comments.
             </p>
           )}
-          {composing !== null && data.viewer.canComment ? (
+          {open && composing !== null && data.viewer.canComment ? (
             <ReviewComposer
               key={composing}
               requestId={id}
@@ -210,7 +240,7 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
               onPosted={(commentId) => {
                 setComposing(null);
                 clearPin("root");
-                void refresh().then(() => scrollToComment(commentId));
+                void refresh().then((refreshed) => { if (refreshed) scrollToComment(commentId); });
               }}
             />
           ) : null}
@@ -234,8 +264,10 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
   );
 }
 
-export function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: () => Promise<unknown> }) {
-  const { getToken, isSignedIn } = useAuth();
+export function RequestHeader({ data, onChanged, onClosed }: { data: ReviewPageData; onChanged: () => Promise<unknown>; onClosed?: () => void }) {
+  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
+  const owner = isLoaded && isSignedIn && userId ? userId : null;
+  const runOwned = useOwnerRequestScope(owner, getToken);
   const shareToggleId = useId();
   const [closing, setClosing] = useState(false);
   const closePending = useRef(false);
@@ -249,12 +281,14 @@ export function RequestHeader({ data, onChanged }: { data: ReviewPageData; onCha
   const r = data.request;
   const active = r.status === "open" || r.status === "answered";
   async function setReplaySharing(value: boolean) {
+    if (!owner) return;
     setSharing(true);
     setShareError(null);
     try {
-      await apiCall(getToken, `/v1/reviews/${encodeURIComponent(r.id)}/replay-sharing`, { method: "POST", body: JSON.stringify({ value }) });
+      await runOwned(owner, (scopedToken, signal) => apiCall(scopedToken, `/v1/reviews/${encodeURIComponent(r.id)}/replay-sharing`, { method: "POST", body: JSON.stringify({ value }), signal }));
       await onChanged();
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setShareError((err as { message?: string })?.message || "Couldn't change replay sharing.");
     } finally {
       setSharing(false);
@@ -262,14 +296,16 @@ export function RequestHeader({ data, onChanged }: { data: ReviewPageData; onCha
   }
   const headline = reviewHeadline(r.question, r.game.matchup);
   async function close() {
-    if (closePending.current) return;
+    if (!owner || closePending.current) return;
     closePending.current = true;
     setClosing(true);
     setCloseError(null);
     try {
-      await apiCall(getToken, `/v1/reviews/${encodeURIComponent(r.id)}/close`, { method: "POST", body: "{}" });
+      await runOwned(owner, (scopedToken, signal) => apiCall(scopedToken, `/v1/reviews/${encodeURIComponent(r.id)}/close`, { method: "POST", body: "{}", signal }));
+      onClosed?.();
       await onChanged();
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setCloseError((err as { message?: string })?.message || "Couldn't close this request. Check your connection and try again.");
     } finally {
       closePending.current = false; setConfirmClose(false);
@@ -277,11 +313,12 @@ export function RequestHeader({ data, onChanged }: { data: ReviewPageData; onCha
     }
   }
   async function report(reason: string) {
+    if (!owner) return;
     setReporting(true); setReportNotice(null); setReportError(null);
     try {
-      const result = await apiCall<{ alreadyReported?: boolean }>(getToken, `/v1/reviews/${encodeURIComponent(r.id)}/report`, { method: "POST", body: JSON.stringify({ reason }) });
+      const result = await runOwned(owner, (scopedToken, signal) => apiCall<{ alreadyReported?: boolean }>(scopedToken, `/v1/reviews/${encodeURIComponent(r.id)}/report`, { method: "POST", body: JSON.stringify({ reason }), signal }));
       setReportNotice(result?.alreadyReported ? "You already reported this request." : "Thanks — a moderator will take a look.");
-    } catch (error) { setReportError((error as { message?: string })?.message || "Couldn't report this request. Try again."); }
+    } catch (error) { if (!(error instanceof DOMException && error.name === "AbortError")) setReportError((error as { message?: string })?.message || "Couldn't report this request. Try again."); }
     finally { setReporting(false); }
   }
   return (
@@ -315,7 +352,7 @@ export function RequestHeader({ data, onChanged }: { data: ReviewPageData; onCha
           {r.game.myBuild ? <Badge variant="neutral" size="sm">{r.game.myBuild}</Badge> : null}
         </div>
         <div className="flex min-w-0 items-center gap-2 pt-1">
-          {r.replay?.shared ? (
+          {active && r.replay?.shared ? (
             <ReviewReplayDownload requestId={r.id} requestUrl={r.url} variant="page" available={r.replay.available} />
           ) : null}
           <ReviewShareMenu path={r.url} question={r.question} matchup={r.game.matchup} />

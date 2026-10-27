@@ -28,7 +28,7 @@ const article: HelpArticle = {
     "my reviews",
     "unverified",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-27",
   order: 10,
   body: [
     {
@@ -104,7 +104,11 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "Comment text and its time range are saved as a draft in this browser until you post or discard them. Reopen the comment box to restore it; **Use current time** moves its start, and **Discard** clears it. Drafts expire after 14 days, and this browser keeps the 20 most recent. Press **Ctrl+Enter** (**⌘+Enter** on Mac) to post. You can edit a comment for **15 minutes**; the editor shows how long remains and keeps your text visible if that window closes.",
+      text: "Comment text and its time range are saved as a draft for your signed-in account in this browser until you post or discard them. Reopen the comment box with the same account to restore it; **Use current time** moves its start, and **Discard** clears it. Drafts expire after 14 days, and this browser keeps the 20 most recent. Press **Ctrl+Enter** (**⌘+Enter** on Mac) to post. You can edit a comment for **15 minutes**; the editor shows how long remains and keeps your text visible if that window closes.",
+    },
+    {
+      type: "paragraph",
+      text: "If posting succeeds but the latest thread cannot load, press **Retry** in the message above the replay. This reloads the thread without posting your comment again. Closing a request immediately stops sharing its replay while keeping the discussion readable.",
     },
     { type: "heading", anchor: "who-can-review", text: "Who can review" },
     {
