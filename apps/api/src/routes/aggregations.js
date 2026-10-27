@@ -20,10 +20,11 @@ function buildAggregationsRouter(deps) {
   const router = express.Router();
   router.use(deps.auth);
   /** @param {any} req @param {any} res @param {string} owner @param {string} route
-   * @param {object} filters @param {object} options @param {()=>Promise<any>} work */
-  const send = (req, res, owner, route, filters, options, work) => deps.userCache
-    ? deps.userCache.send(req, res, owner, route, filters, options, work)
-    : work().then((value) => res.json(value));
+   * @param {object} filters @param {object} options @param {()=>Promise<any>} work
+   * @param {()=>void} [publishGuard] */
+  const send = (req, res, owner, route, filters, options, work, publishGuard = () => {}) => deps.userCache
+    ? deps.userCache.send(req, res, owner, route, filters, options, work, publishGuard)
+    : work().then((value) => { publishGuard(); return res.json(value); });
 
   router.get(["/trends/explorer/:view", "/trends/explorer/:view/games"], async (req, res, next) => {
     try {
@@ -225,8 +226,10 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      const sessionGapMinutes = parseFiniteInt(req.query.session_gap_minutes);
-      await send(req, res, userId, "momentum", filters, { sessionGapMinutes }, () => deps.aggregations.momentum(userId, filters, { sessionGapMinutes }));
+      const resolved = await deps.aggregations.resolveMomentumPolicy(userId, parseFiniteInt(req.query.session_gap_minutes));
+      const options = { sessionGapMinutes: resolved.sessionGapMinutes, sessionPolicyGeneration: resolved.sessionPolicyGeneration };
+      await send(req, res, userId, "momentum", filters, options,
+        () => deps.aggregations.momentum(userId, filters, options), () => deps.aggregations.assertSessionPolicy(resolved.lease));
     } catch (err) {
       next(err);
     }

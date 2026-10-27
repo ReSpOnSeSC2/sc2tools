@@ -74,7 +74,7 @@ class UserCache {
   beginResponse(req, res) {
     if (this.responses >= this.limits.responses) { res.set("Retry-After", "1"); throw this.busy(); }
     this.responses += 1;
-    const sub = { ifNoneMatch: req.headers?.["if-none-match"], active: true, entry: /** @type {any} */ (null), task: /** @type {any} */ (null),
+    const sub = { ifNoneMatch: req.headers?.["if-none-match"], active: true, publishGuard: /** @type {(()=>void)|undefined} */ (undefined), entry: /** @type {any} */ (null), task: /** @type {any} */ (null),
       queued: false, timer: /** @type {any} */ (null), responseTimer: /** @type {any} */ (null),
       reject: /** @type {null|((error:any)=>void)} */ (null) };
     const close = () => {
@@ -98,10 +98,14 @@ class UserCache {
     return { sub, close };
   }
   /** @param {any} req @param {any} res @param {string} owner @param {string} route
-   * @param {object} filters @param {object} options @param {()=>Promise<any>} work */
-  async send(req, res, owner, route, filters, options, work) {
-    if (!this.enabled || req.method !== "GET" || !ALLOWED_ROUTES.has(route)) return res.json(await work());
+   * @param {object} filters @param {object} options @param {()=>Promise<any>} work
+   * @param {()=>void} [publishGuard] synchronous subscriber-specific guard */
+  async send(req, res, owner, route, filters, options, work, publishGuard = () => {}) {
+    if (!this.enabled || req.method !== "GET" || !ALLOWED_ROUTES.has(route)) {
+      const value = await work(); publishGuard(); return res.json(value);
+    }
     const { sub, close } = this.beginResponse(req, res);
+    sub.publishGuard = publishGuard;
     try {
       const snapshot = await this.revisions.snapshot(owner);
       if (!sub.active || res.destroyed) return;
@@ -155,6 +159,9 @@ class UserCache {
       res.set("Cache-Control", "private, no-cache").set("ETag", packet.etag).vary("Authorization");
       if (matchesValidator(sub.ifNoneMatch, packet.etag)) {
         res.removeHeader("Content-Type"); res.removeHeader("Content-Length"); res.removeHeader("Transfer-Encoding");
+        // Each subscriber keeps its own policy lease, including retained hits.
+        // No asynchronous boundary may follow this assertion before publication.
+        sub.publishGuard?.();
         return res.status(304).end();
       }
     } else res.set("Cache-Control", "private, no-store");
@@ -162,6 +169,7 @@ class UserCache {
     res.set("Content-Length", String(Buffer.byteLength(packet.body)));
     // Explicit per-subscriber conditional delivery; all current generation and
     // deletion guards above still run, including on a retained hit.
+    sub.publishGuard?.();
     return res.end(packet.body);
   }
   drain() {

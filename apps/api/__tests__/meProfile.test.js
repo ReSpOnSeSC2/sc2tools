@@ -70,7 +70,7 @@ describe("/v1/me/profile", () => {
     return req.set("authorization", "Bearer user-a");
   }
 
-  test("GET returns an empty object before any save", async () => {
+  test("GET retains empty profile fields and adds the effective session definition before any save", async () => {
     // Touch /v1/me first so ensureFromClerk creates the user row.
     await withAuth(request(app).get("/v1/me"));
     const res = await withAuth(request(app).get("/v1/me/profile"));
@@ -78,7 +78,7 @@ describe("/v1/me/profile", () => {
     // ``detectedPulseIds`` is always emitted (empty when there are no
     // games yet), so the empty-profile shape is decorated even with
     // nothing saved.
-    expect(res.body).toEqual({ detectedPulseIds: [] });
+    expect(res.body).toEqual({ detectedPulseIds: [], sessionGapMinutes: null, sessionPolicy: { gapMinutes: 90, source: "auto-player", storedGapMinutes: null } });
   });
 
   test("requires auth", async () => {
@@ -101,7 +101,7 @@ describe("/v1/me/profile", () => {
     // PUT response is the persisted profile — legacy ``pulseId`` is
     // mirrored from ``pulseIds[0]`` so single-string callers see what
     // they sent. The array is decorated alongside.
-    expect(put.body).toEqual({ ...payload, pulseIds: ["9876543"] });
+    expect(put.body).toEqual({ ...payload, pulseIds: ["9876543"], sessionGapMinutes: null, sessionPolicy: { gapMinutes: 90, source: "auto-player", storedGapMinutes: null } });
 
     const got = await withAuth(request(app).get("/v1/me/profile"));
     expect(got.status).toBe(200);
@@ -109,6 +109,8 @@ describe("/v1/me/profile", () => {
       ...payload,
       pulseIds: ["9876543"],
       detectedPulseIds: [],
+      sessionGapMinutes: null,
+      sessionPolicy: { gapMinutes: 90, source: "auto-player", storedGapMinutes: null },
     });
   });
 
@@ -130,7 +132,7 @@ describe("/v1/me/profile", () => {
       })
       .set("content-type", "application/json");
     expect(put.status).toBe(200);
-    expect(put.body).toEqual({ battleTag: "Spaced#0001" });
+    expect(put.body).toEqual({ battleTag: "Spaced#0001", sessionGapMinutes: null, sessionPolicy: { gapMinutes: 90, source: "auto-player", storedGapMinutes: null } });
 
     // The cleared fields are also gone from the underlying doc, not
     // sitting around as empty strings.

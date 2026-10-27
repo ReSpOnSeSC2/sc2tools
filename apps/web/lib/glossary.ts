@@ -36,6 +36,15 @@ export interface GlossaryTerm {
 
 export const GLOSSARY: readonly GlossaryTerm[] = [
   {
+    id: "session",
+    term: "Session",
+    short: "A continuous run of games with no gap longer than your selected inactivity threshold.",
+    long: "An exact gap stays connected, and undecided games can bridge wins and losses. Auto is 240 minutes with an overlay token and 90 minutes otherwise; set 15–480 minutes in Profile. Each view keeps its existing game/filter scope.",
+    related: [],
+    category: "statistics",
+    help: { slug: "sessions", anchor: "definition" },
+  },
+  {
     id: "pulse-id",
     term: "Pulse ID",
     short: "A player's ID on SC2Pulse, the public ladder site. It stays the same when they change their name.",
@@ -391,7 +400,7 @@ export const GLOSSARY: readonly GlossaryTerm[] = [
     id: "overlay-session",
     term: "Session record",
     short: "Your recorded wins and losses in the latest stretch of play.",
-    long: "The overlay session splits at gaps over four hours and becomes empty if the latest game is over four hours old. It searches recent candidates within 14 days and respects a manual reset anchor. Decided results can span regions; tied or unknown results do not add wins or losses. Midnight does not reset it. Today's dashboard session instead uses local calendar today.",
+    long: "The recorded session splits at gaps greater than your selected inactivity threshold and becomes empty after that threshold since your latest game. Auto uses 240 minutes with any stored overlay token and 90 minutes otherwise; a saved 15–480 minute preference wins. It searches recent candidates within 14 days and respects a manual reset anchor. Decided results can span regions; tied or unknown results can bridge games without adding wins or losses. Midnight does not reset it.",
     related: ["title-token", "build-record"],
     category: "overlay",
     help: { slug: "desktop-stream-titles", anchor: "tokens" },

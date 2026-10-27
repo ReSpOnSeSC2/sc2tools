@@ -12,6 +12,7 @@ const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 const { opponentBuildOrderBusyError } = require("./opponentBuildOrderFence");
 const { PROXY_CLASSIFICATION_VERSION } = require("./proxyClassification");
 const { SessionResolutionGate } = require("./sessionResolutionGate");
+const { ordered } = require("./sessions");
 const {
   BUILD_INTENT_LABEL_PROJECTION,
   OPP_INTENT_LABEL_PROJECTION,
@@ -41,6 +42,7 @@ const ANALYSIS_GAME_PROJECTION = Object.freeze({
   myBuild: 1,
   macroScore: 1,
   "opponent.displayName": 1,
+  "opponent.toonHandle": 1,
   "opponent.mmr": 1,
   "opponent.race": 1,
   "opponent.pulseCharacterId": 1,
@@ -242,6 +244,7 @@ class GamesService {
     // OBS can reconnect many Browser Sources together; they all ask for the
     // same Mongo + SC2Pulse snapshot and must share that work.
     this._sessionResolutionGate = new SessionResolutionGate();
+    /** @type {import('./sessionPolicy').SessionPolicyService|null} */ this.sessionPolicy = null;
   }
 
   /** @param {string} userId */
@@ -252,6 +255,12 @@ class GamesService {
    */
   invalidateSessionForReset(userId) {
     this._sessionResolutionGate.invalidate(userId, { discardPending: true });
+  }
+
+  /** @param {string|null} owner */
+  invalidateSessionPolicy(owner) {
+    if (owner !== null) this.invalidateSessionForReset(owner);
+    else for (const key of this._sessionResolutionGate.lanes.keys()) this.invalidateSessionForReset(key);
   }
 
   /**
@@ -996,14 +1005,27 @@ class GamesService {
    *   streak?: { kind: 'win'|'loss', count: number },
    * }>}
    */
-  todaySession(userId, timezone, opts = {}) {
+  async todaySession(userId, timezone, opts = {}) {
     const tz = pickTimezone(timezone);
-    return this._sessionResolutionGate.resolve(
+    const lease = this.sessionPolicy?.lease(userId);
+    const result = await this._sessionResolutionGate.resolve(
       userId,
       tz,
       opts,
       () => this._computeTodaySession(userId, tz, opts),
     );
+    if (lease) this.sessionPolicy?.assertCurrent(lease);
+    return result;
+  }
+
+  /** Private process lease, captured before resolution and asserted by emitters.
+   * No lease or callback is attached to the public session DTO.
+   * @param {string} userId @returns {(()=>void)|null} */
+  sessionPublicationGuard(userId) {
+    const policy = this.sessionPolicy;
+    if (!policy) return null;
+    const lease = policy.lease(userId);
+    return () => policy.assertCurrent(lease);
   }
 
   /** Capacity-only view used by the process runtime monitor. */
@@ -1032,6 +1054,7 @@ class GamesService {
      *   lastKnownMmr?: number,
      *   lastKnownMmrRegion?: string,
      *   sessionAnchorAt?: string,
+     *   sessionGapMinutes?: number|null,
      * }}
      */
     let profile = {};
@@ -1044,6 +1067,10 @@ class GamesService {
         throw error;
       }
     }
+    const policy = this.sessionPolicy ? await this.sessionPolicy.resolve(userId, {
+      storedGapMinutes: profile.sessionGapMinutes,
+      ownerKnown: Object.prototype.hasOwnProperty.call(profile, "sessionGapMinutes"),
+    }) : null;
     // Use one clock snapshot for both the query and inactivity walk.
     // A future-dated replay must not keep a session alive or replace
     // the current play burst with games that have not happened yet.
@@ -1065,6 +1092,8 @@ class GamesService {
             _id: 0,
             result: 1,
             date: 1,
+            gameId: 1,
+            "opponent.race": 1,
             myMmr: 1,
             // Streamer's own toon handle. Lets the Tier-3 SC2Pulse
             // fallback resolve their CURRENT 1v1 ladder rating when no
@@ -1123,7 +1152,7 @@ class GamesService {
      * @type {Array<{ ts: Date, result: string, myMmr: number, region: string|null }>}
      */
     const sessionCandidates = [];
-    for (const row of rows) {
+    for (const { game: row } of ordered(rows)) {
       const date = row.date instanceof Date ? row.date : new Date(row.date);
       if (Number.isNaN(date.getTime())) continue;
       const my = Number(row.myMmr);
@@ -1170,7 +1199,7 @@ class GamesService {
     //
     // Midnight is not a break: include the previous day's games when
     // play continues, even before the first post-midnight replay arrives.
-    const INACTIVITY_THRESHOLD_MS = 4 * 60 * 60 * 1000;
+    const INACTIVITY_THRESHOLD_MS = (policy?.gapMinutes ?? 240) * 60_000;
     let activeStart = sessionCandidates.length;
     if (sessionCandidates.length > 0) {
       const lastTs = sessionCandidates[sessionCandidates.length - 1].ts.getTime();
@@ -1518,6 +1547,7 @@ class GamesService {
     if (mmrCurrent !== undefined) out.mmrCurrent = mmrCurrent;
     if (currentLeague !== undefined) out.league = currentLeague;
     if (sessionStartedAt !== undefined) out.sessionStartedAt = sessionStartedAt;
+    if (policy) Object.assign(out, { sessionGapMinutes: policy.gapMinutes, sessionPolicySource: policy.source, storedSessionGapMinutes: policy.storedGapMinutes });
     // Current run = consecutive same-result trail at the end of the session's
     // game list. Surfaces the SPA's "W4" / "L2" streak chip on the
     // session widget without requiring a second collection lookup.

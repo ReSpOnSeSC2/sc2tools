@@ -17,6 +17,11 @@
  */
 
 const { attachSocketAuth } = require("../src/socket/auth");
+const { GamesService } = require("../src/services/games");
+const { SessionPolicyService } = require("../src/services/sessionPolicy");
+const { OwnerRevisions } = require("../src/util/gameVisibility");
+
+function publicationDeferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 
 function setupIo() {
   /** @type {Function|null} */
@@ -95,6 +100,34 @@ const TOKEN_B_STUDIO = {
 function studioEvent(socket) {
   return socket.emitted.find((event) => event.event === "overlay:multichat");
 }
+
+test.each(["connect", "timezone", "resync"])("%s session publication rejects the epoch captured before a held resolver", async boundary => {
+  const io = setupIo(), revisions = new OwnerRevisions(), entered = publicationDeferred(), held = publicationDeferred();
+  const sessionPolicy = new SessionPolicyService({ users: { findOne: async () => ({ userId: "u1" }) }, overlayTokens: { findOne: async () => null } }, { revisions });
+  const games = { sessionPolicy, sessionPublicationGuard: GamesService.prototype.sessionPublicationGuard };
+  let gap = 90;
+  const resolveSession = jest.fn(async () => ({ wins: 1, losses: 0, games: 1, sessionGapMinutes: gap }));
+  attachSocketAuth(io, {
+    secretKey: "sk_test", resolveOverlayToken: async () => ({ userId: "u1", label: "test", enabledWidgets: [] }),
+    validateOverlayToken: async () => true, resolveSession,
+    sessionPublicationGuard: games.sessionPublicationGuard.bind(games),
+  });
+  const socket = await io.runHandshake({ auth: { overlayToken: "tok-1" } });
+  if (boundary !== "connect") { io.runConnect(socket); await new Promise(resolve => setImmediate(resolve)); socket.emitted.length = 0; }
+  resolveSession.mockImplementationOnce(async () => { entered.resolve(); return held.promise; });
+  if (boundary === "connect") io.runConnect(socket);
+  else socket.fire(boundary === "timezone" ? "overlay:set_timezone" : "overlay:resync", "UTC");
+  await entered.promise;
+  gap = 15; sessionPolicy.invalidate("u1"); revisions.invalidate("u1");
+  held.resolve({ wins: 1, losses: 0, games: 1, sessionGapMinutes: 90 });
+  await new Promise(resolve => setImmediate(resolve));
+  expect(socket.emitted.filter(event => event.event === "overlay:session")).toEqual([]);
+  socket.fire("overlay:set_timezone", "Europe/Berlin");
+  await new Promise(resolve => setImmediate(resolve));
+  const current = socket.emitted.filter(event => event.event === "overlay:session");
+  expect(current).toHaveLength(1); expect(current[0].payload.sessionGapMinutes).toBe(15);
+  expect(Object.keys(current[0].payload)).toEqual(["wins", "losses", "games", "sessionGapMinutes"]);
+});
 
 describe("attachSocketAuth (overlay)", () => {
   test("rejects when no resolveOverlayToken is wired", async () => {

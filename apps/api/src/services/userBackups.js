@@ -15,7 +15,7 @@ const RESTORABLE = [...USER_SCOPED_COLLECTIONS.filter(([key]) => !["deviceTokens
 const PREFERENCE_KEYS = ["misc", "voice", "arcade", "randomizer", "multichat", "buildCheckin"];
 // Public-profile and replay-sharing consent is live state, deliberately never
 // restored from an old snapshot. It is exported/erased with the full user row.
-const PROFILE_KEYS = ["battleTag", "pulseId", "pulseIds", "region", "preferredRace", "displayName"];
+const PROFILE_KEYS = ["battleTag", "pulseId", "pulseIds", "region", "preferredRace", "displayName", "sessionGapMinutes"];
 const STAGING = COLLECTIONS.BACKUP_RESTORE_STAGING;
 const RETENTION = { manual: 5, auto: 2, pre_action: 3 };
 const BATCH = 100;

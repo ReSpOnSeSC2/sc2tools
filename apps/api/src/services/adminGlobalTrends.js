@@ -101,6 +101,7 @@ class AdminGlobalTrendsService {
     const isRange = finalGroup?.first?.$min === "$date" && finalGroup?.last?.$max === "$date";
     const read = () => this.queries.execute(() =>
       collection.aggregate(pipeline, { allowDiskUse: true, maxTimeMS: QUERY_MAX_TIME_MS,
+        ...(options.collation?.locale === "simple" ? { collation: { locale: "simple" } } : {}),
         ...(Number.isInteger(options.batchSize) && options.batchSize > 0 ? { batchSize: options.batchSize } : {}),
       }).toArray());
     return { toArray: () => isRange ? this.queries.cached(queryKey(["range", pipeline]), read) : read() };
@@ -161,7 +162,8 @@ class AdminGlobalTrendsService {
         // explicit scope. No recursive rewrite touches nested lookup scopes.
         if (pipeline[0]?.$match?.userId !== ADMIN_SCOPE) throw new Error("Unscoped global trends pipeline");
         const stages = adaptPipeline(pipeline, method, cohort, options[EXPLORER_SEQUENCE_HISTORY] === true);
-        return this._query([...prefix, ...stages], this.history.collection);
+        return this._query([...prefix, ...stages], this.history.collection,
+          options.collation?.locale === "simple" ? { collation: { locale: "simple" } } : {});
       },
     };
     const gameDetails = {
@@ -214,7 +216,7 @@ function adaptPipeline(pipeline, method, cohort, sequenceHistory = false) {
       return [
         // $documentNumber accepts exactly one sort key. A composite value
         // keeps equal-timestamp replays ordered consistently in all windows.
-        ...(window.output._prevDate ? [{ $addFields: { _globalSequenceOrder: { date: "$date", game: "$gameId" } } }] : []),
+        ...(window.output._prevDate ? [{ $addFields: { _globalSequenceOrder: "$_sessionOrder" } }] : []),
         { $setWindowFields: { ...window, partitionBy: partition, sortBy: { _globalSequenceOrder: 1 } } },
       ];
     }

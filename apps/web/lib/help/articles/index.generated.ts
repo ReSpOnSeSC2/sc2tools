@@ -30,6 +30,7 @@ import analyzer_opponents from "./analyzer/opponents";
 import analyzer_readingTheCharts from "./analyzer/reading-the-charts";
 import analyzer_readingYourStats from "./analyzer/reading-your-stats";
 import analyzer_replays from "./analyzer/replays";
+import analyzer_sessions from "./analyzer/sessions";
 import analyzer_stockMarketLeaderboard from "./analyzer/stock-market-leaderboard";
 import analyzer_strategies from "./analyzer/strategies";
 import analyzer_today from "./analyzer/today";
@@ -127,6 +128,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_readingTheCharts,
   analyzer_readingYourStats,
   analyzer_replays,
+  analyzer_sessions,
   analyzer_stockMarketLeaderboard,
   analyzer_strategies,
   analyzer_today,

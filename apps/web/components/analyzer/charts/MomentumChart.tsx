@@ -44,7 +44,7 @@ export function MomentumChart() {
     <Card title="Session patterns">
       <p className="-mt-1 mb-3 text-caption leading-relaxed text-text-muted">
         {isGlobal ? "Sessions are measured separately for each player account and ladder race, then combined. " : ""}
-        Sessions split on a {data.sessionGapMinutes}-min gap · {isGlobal ? "the cohort's" : "your"} overall win rate is {Math.round(data.baseline.winRate * 100)}%.
+        Sessions split after more than {data.sessionGapMinutes} minutes without a game; an exact gap stays connected · {isGlobal ? "the cohort's" : "your"} overall win rate is {Math.round(data.baseline.winRate * 100)}%.
       </p>
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
         <section className="min-w-0 rounded-lg border border-border bg-bg-elevated/30 p-3">

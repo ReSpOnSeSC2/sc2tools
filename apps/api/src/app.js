@@ -102,6 +102,7 @@ const { GameMomentsService } = require("./services/gameMoments");
 const { GameDeskService } = require("./services/gameDesk");
 const { StreamSeriesService } = require("./services/streamSeries");
 const { AggregationsService } = require("./services/aggregations");
+const { SessionPolicyService } = require("./services/sessionPolicy");
 const { MacroReportService } = require("./services/macroReport");
 const { StreakService } = require("./services/streak");
 const { BuildsService } = require("./services/builds");
@@ -697,6 +698,9 @@ function makeServices(deps, clerk, adminClerkIds) {
   // Reconnect every enabled bot on boot — best-effort, non-blocking.
   void twitchChatBot.restoreAll();
   const aggregations = new AggregationsService(deps.db, { mmrExpectation });
+  const sessionPolicy = new SessionPolicyService(deps.db, { revisions: aggregations.trendsRequests.revisions });
+  aggregations.sessionPolicy = sessionPolicy;
+  games.sessionPolicy = sessionPolicy;
   const macroReport = new MacroReportService(deps.db);
   const streak = new StreakService(deps.db);
   const builds = new BuildsService(deps.db, { mmrExpectation, gameDetails });
@@ -861,8 +865,8 @@ function makeServices(deps, clerk, adminClerkIds) {
   const guideNotes = new GuideNotesService(deps.db);
   const guides = new GuidesService(deps.db, { guideNotes, guideVideos, logger: deps.logger });
   const gdpr = new GdprService(deps.db, {
-    userRevision,
     beginDeviceMutation: (userId) => pairings.beginLivenessMutation(userId),
+    userRevision,
     siteStats,
     opponents,
     logger: deps.logger,
@@ -984,9 +988,17 @@ function makeServices(deps, clerk, adminClerkIds) {
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
   };
   gdpr.onGamesChanged = invalidatePrivateGameCaches;
+  const retireSessionPolicy = (/** @type {string} */ owner) => {
+    sessionPolicy.invalidate(owner); games.invalidateSessionPolicy(owner);
+    aggregations.trendsRequests.invalidateForUser(owner);
+  };
+  users.userRevision = userRevision; users.onSessionPolicyChanged = retireSessionPolicy;
+  overlayTokens.userRevision = userRevision; overlayTokens.onSessionPolicyChanged = retireSessionPolicy;
+  gdpr.onSessionPolicyChanged = retireSessionPolicy;
   if (userRevision.enabled) userRevision.addInvalidator((owner) => {
-    if (owner !== null) aggregations.trendsRequests.invalidateForUser(owner);
+    if (owner !== null) retireSessionPolicy(owner);
     else {
+      sessionPolicy.invalidateAll(); games.invalidateSessionPolicy(null);
       // A missing owner in an enrichment row cannot leave an old inner join.
       aggregations.trendsRequests.pending.clear(); aggregations.trendsRequests.completed.clear();
       aggregations.trendsRequests.revisions.clear();
@@ -997,7 +1009,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     deps.io?.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "game-control" });
   } });
   return {
-    userRevision, userCache, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
+    userRevision, userCache, sessionPolicy, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
     users,
     activation,
     opponents,
@@ -1436,6 +1448,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMeRouter({
+      sessionPolicy: services.sessionPolicy,
       announcements: services.announcements,
       users: services.users,
       activation: services.activation,

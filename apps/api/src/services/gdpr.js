@@ -127,8 +127,8 @@ class GdprService {
    *   siteStats?: import('./siteStats').SiteStatsService,
    *   onCommunityChanged?:(userId:string)=>void,
    *   onGamesChanged?:(userId:string)=>void,
-   *   beginDeviceMutation?:(userId:string)=>(()=>void),
    *   userRevision?: import("../util/userRevision").UserRevision,
+   *   beginDeviceMutation?:(userId:string)=>(()=>void),
    * }} [opts]
    *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
    *   chain a pulse-character-id backfill so the admin "Rebuild
@@ -138,6 +138,7 @@ class GdprService {
    */
   constructor(db, opts = {}) {
     this.userRevision = opts.userRevision || null;
+    this.beginDeviceMutation = opts.beginDeviceMutation || null;
     this.db = db;
     /** @type {import("./userBackups").UserBackupsService|null} */
     this.backups = null;
@@ -147,7 +148,7 @@ class GdprService {
     this.siteStats = opts.siteStats || null;
     this.onCommunityChanged = opts.onCommunityChanged || null;
     this.onGamesChanged = opts.onGamesChanged || null;
-    this.beginDeviceMutation = opts.beginDeviceMutation || null;
+    /** @type {((userId:string)=>void)|null} */ this.onSessionPolicyChanged = null;
     this.opponents = (opts && opts.opponents) || null;
     this.logger = (opts && opts.logger) || null;
     // GameDetailsService — the store-aware deleter for the heavy
@@ -1264,6 +1265,16 @@ class GdprService {
 
   /** @param {string} userId @param {string} kind */
   async _acquireMutationFence(userId, kind) {
+    const policyMutation = ["delete_all", "wipe_games", "restore"].includes(kind);
+    if (policyMutation) this.onSessionPolicyChanged?.(userId);
+    try {
+      const fence = await this._acquireMutationFenceCore(userId, kind);
+      return { ...fence, policyMutation };
+    } finally { if (policyMutation) this.onSessionPolicyChanged?.(userId); }
+  }
+
+  /** @param {string} userId @param {string} kind */
+  async _acquireMutationFenceCore(userId, kind) {
     const id = randomUUID();
     const deadline = Date.now() + GDPR_COACHING_DRAIN_MS;
     for (;;) {
@@ -1360,14 +1371,15 @@ class GdprService {
     return { id, timer, assert };
   }
 
-  /** @param {string} userId @param {{id: string, timer: NodeJS.Timeout, assert: () => Promise<void>}} fence */
+  /** @param {string} userId @param {{id: string, timer: NodeJS.Timeout, assert: () => Promise<void>,policyMutation?:boolean}} fence */
   async _releaseMutationFence(userId, fence) {
     clearInterval(fence.timer);
-    if (!fence.id) return;
-    await this.db.users.updateOne(
-      { userId, "_gdprMutation.id": fence.id },
-      { $unset: { _gdprMutation: "" } },
-    );
+    try {
+      if (fence.id) await this.db.users.updateOne(
+        { userId, "_gdprMutation.id": fence.id },
+        { $unset: { _gdprMutation: "" } },
+      );
+    } finally { if (fence.policyMutation) this.onSessionPolicyChanged?.(userId); }
   }
 
   /** @param {string} userId @param {string} [gameId] */

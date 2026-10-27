@@ -36,6 +36,7 @@ describe("Settings section catalog", () => {
   it.each([
     ["TTS volume", "chat", "tts"], ["Kick chatroom", "chat", "platforms"],
     ["Pulse ID", "profile", "pulse-ids"], ["Delete account", "backups", "gdpr"],
+    ["Session inactivity gap", "profile", "profile-details"],
     ["Overlay theme", "overlay", "theme"], ["Reset overlay URLs", "overlay", "tokens"],
   ])("resolves canonical field query %s without a private lookup", (query, tab, section) => {
     const matches = SETTINGS_FIELDS.filter(field => [field.label, ...field.synonyms].some(label => label.toLowerCase().includes(query.toLowerCase())));

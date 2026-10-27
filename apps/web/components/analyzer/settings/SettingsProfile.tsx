@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ExternalLink,
   HelpCircle,
@@ -9,7 +9,10 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
-import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
+import { useSWRConfig } from "swr";
+import { apiCall, useApi, useOwnerRequestScope, type ClientApiError } from "@/lib/clientApi";
+import { readSessionPolicy, SESSION_POLICY_PATH, type SessionPolicy } from "@/lib/session-policy";
+import { validGap } from "@/lib/sessions";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
@@ -27,6 +30,8 @@ import { SettingsLoadError } from "./SettingsLoadError";
 import { SettingsSectionsReady } from "./SettingsSectionNav";
 
 type ProfileRead = {
+  sessionGapMinutes?: number | null;
+  sessionPolicy?: SessionPolicy;
   battleTag?: string;
   // All BattleTags the API resolved from SC2Pulse via the user's
   // Pulse IDs — one per Battle.net account, so multi-account users
@@ -48,12 +53,12 @@ type ProfileRead = {
 // API schema rejects unknown properties.
 type ProfileWrite = Omit<
   ProfileRead,
-  "detectedPulseIds" | "pulseId" | "battleTags"
+  "detectedPulseIds" | "pulseId" | "battleTags" | "sessionPolicy"
 >;
 
-type Draft = ProfileWrite & { pulseIds: string[] };
+type Draft = Omit<ProfileWrite, "sessionGapMinutes"> & { pulseIds: string[]; sessionGapInput: string };
 
-const DEFAULT_DRAFT: Draft = { pulseIds: [] };
+const DEFAULT_DRAFT: Draft = { pulseIds: [], sessionGapInput: "" };
 
 const REGIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "", label: "Auto-detect" },
@@ -99,14 +104,29 @@ function toDraft(read: ProfileRead | undefined): Draft {
     region: read.region,
     preferredRace: read.preferredRace,
     displayName: read.displayName,
+    sessionGapInput: read.sessionGapMinutes == null ? "" : String(read.sessionGapMinutes),
   };
 }
 
 export function SettingsProfile() {
+  const { userId, isLoaded, isSignedIn } = useAuth();
+  const owner = isLoaded && isSignedIn && userId ? userId : null;
+  // A->B->A creates distinct form/request lifetimes, even with the same JWT callback.
+  return <SettingsProfileForm key={owner ?? "signed-out"} owner={owner} />;
+}
+
+function SettingsProfileForm({ owner }: { owner: string | null }) {
   const { getToken } = useAuth();
+  const runOwned = useOwnerRequestScope(owner, getToken);
+  const { mutate: mutateCache } = useSWRConfig();
   const { data, error, isLoading, mutate } = useApi<ProfileRead>("/v1/me/profile");
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const form = useRef({ active: true, pending: false });
+  useLayoutEffect(() => {
+    const lifetime = form.current; lifetime.active = true;
+    return () => { lifetime.active = false; };
+  }, []);
   const [channelsDirty, setChannelsDirty] = useState(false);
 
   const serverDraft = useMemo(() => data ? toDraft(data) : undefined, [data]);
@@ -124,23 +144,25 @@ export function SettingsProfile() {
   // best-effort — on failure the field simply stays manual.
   const btagDetectAttempted = useRef(false);
   useEffect(() => {
-    if (btagDetectAttempted.current) return;
+    if (!owner || btagDetectAttempted.current) return;
     if (isLoading || !data) return;
     if (data.battleTag) return;
     if (!data.pulseIds || data.pulseIds.length === 0) return;
     if (dirty) return;
     btagDetectAttempted.current = true;
-    void (async () => {
+    void runOwned(owner, async (scopedToken, signal, assertCurrent) => {
       try {
-        await apiCall(getToken, "/v1/me/profile/battletag/detect", {
-          method: "POST",
+        await apiCall(scopedToken, "/v1/me/profile/battletag/detect", {
+          method: "POST", signal,
         });
+        assertCurrent();
         await mutate();
+        assertCurrent();
       } catch {
         // Best-effort; the user can still type their tag.
       }
-    })();
-  }, [data, isLoading, dirty, getToken, mutate]);
+    }, 15_000).catch(() => {});
+  }, [data, isLoading, dirty, owner, runOwned, mutate]);
 
   // Other BattleTags the API detected (multi-account users) that
   // aren't the one currently in the input — rendered as one-click
@@ -158,32 +180,46 @@ export function SettingsProfile() {
   }, [data?.detectedPulseIds, draft.pulseIds]);
 
   async function save() {
-    if (saving || !hydrated) return;
+    const lifetime = form.current;
+    if (lifetime.pending || saving || !hydrated || !owner) return;
+    const rawGap = draft.sessionGapInput;
+    if (rawGap !== "" && (!/^\d+$/.test(rawGap) || !validGap(Number(rawGap)))) {
+      toast.error("Use a whole number from 15 to 480 minutes, or clear it for Auto"); return;
+    }
+    lifetime.pending = true;
     setSaving(true);
-    const previous = data;
+    const body: ProfileWrite = {
+      battleTag: draft.battleTag, pulseIds: draft.pulseIds, region: draft.region,
+      preferredRace: draft.preferredRace, displayName: draft.displayName,
+      sessionGapMinutes: rawGap === "" ? null : Number(rawGap),
+    };
     try {
-      const body: ProfileWrite = {
-        battleTag: draft.battleTag,
-        pulseIds: draft.pulseIds,
-        region: draft.region,
-        preferredRace: draft.preferredRace,
-        displayName: draft.displayName,
-      };
-      await mutate({ ...(data ?? {}), ...body }, { revalidate: false });
-      await apiCall(getToken, "/v1/me/profile", {
-        method: "PUT",
-        body: JSON.stringify(body),
-      });
-      await mutate();
-      markSaved();
-      toast.success("Profile saved");
-    } catch (err) {
-      await mutate(previous, { revalidate: false });
-      const message =
-        (err as ClientApiError | undefined)?.message ?? "Please try again.";
+      const saved = await runOwned(owner, async (scopedToken, signal, assertCurrent) => {
+        assertCurrent();
+        const answer = await apiCall<ProfileRead>(scopedToken, "/v1/me/profile", {
+          method: "PUT", body: JSON.stringify(body), signal,
+        });
+        assertCurrent(); return answer;
+      }, 15_000);
+      if (!lifetime.active) return;
+      // The PUT is confirmed. A local cache problem cannot turn that commit
+      // into a failed save or trigger a second policy HTTP request.
+      try { await mutate(saved, { revalidate: false }); } catch { /* Advisory cache publication. */ }
+      if (!lifetime.active) return;
+      try {
+        await mutateCache((key: unknown) => Array.isArray(key) && key[0] === "authenticated-api"
+          && key[1] === owner && key[2] === SESSION_POLICY_PATH,
+        readSessionPolicy(saved.sessionPolicy), { revalidate: false });
+      } catch { /* The confirmed Profile save still stands. */ }
+      if (!lifetime.active) return;
+      markSaved(); toast.success("Profile saved");
+    } catch (error) {
+      if (!lifetime.active) return;
+      const message = (error as ClientApiError | undefined)?.message ?? "Please try again.";
       toast.error("Couldn't save profile", { description: message });
     } finally {
-      setSaving(false);
+      lifetime.pending = false;
+      if (lifetime.active) setSaving(false);
     }
   }
 
@@ -242,6 +278,13 @@ export function SettingsProfile() {
       >
         <Card>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="A session ends after N minutes without a game" hint={<>
+              <span className="mt-1 block text-text-muted">{data?.sessionPolicy ? `Currently ${data.sessionPolicy.gapMinutes} minutes${data.sessionPolicy.source === "preference" ? " from your preference" : " on Auto"}.` : "The effective definition will appear after these settings load."}</span>
+              <span className="mt-1.5 block">Clear for Auto: 240 minutes with an overlay token, including a revoked token; otherwise 90. An exact gap stays in the session.</span>
+            </>}>
+              <Input type="number" min={15} max={480} step={1} value={draft.sessionGapInput} placeholder="Auto" disabled={saving}
+                onChange={event => setDraft(value => ({ ...value, sessionGapInput: event.target.value }))} />
+            </Field>
             <Field
               label="Display name"
               hint="Shown in overlays and shareable build links"
@@ -254,11 +297,11 @@ export function SettingsProfile() {
                 }
               />
             </Field>
-            <Field
-              label="BattleTag"
-              hint="e.g. PlayerName#1234 — auto-filled from SC2Pulse when you have a Pulse ID"
-            >
-              <div className="space-y-2">
+            <div className="space-y-2">
+              <Field
+                label="BattleTag"
+                hint="e.g. PlayerName#1234 — auto-filled from SC2Pulse when you have a Pulse ID"
+              >
                 <Input
                   value={draft.battleTag ?? ""}
                   placeholder="Name#1234"
@@ -267,27 +310,27 @@ export function SettingsProfile() {
                     setDraft((d) => ({ ...d, battleTag: e.target.value }))
                   }
                 />
-                {altBattleTags.length > 0 ? (
-                  <div className="flex flex-wrap items-center gap-1.5 text-caption text-text-dim">
-                    <Sparkles className="h-3.5 w-3.5 text-accent" aria-hidden />
-                    <span>Detected:</span>
-                    {altBattleTags.map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() =>
-                          setDraft((d) => ({ ...d, battleTag: tag }))
-                        }
-                        className="rounded-full border border-accent/40 bg-bg-elevated px-2 py-0.5 font-mono text-micro text-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                        title={`Use ${tag}`}
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </Field>
+              </Field>
+              {altBattleTags.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-1.5 text-caption text-text-dim">
+                  <Sparkles className="h-3.5 w-3.5 text-accent" aria-hidden />
+                  <span>Detected:</span>
+                  {altBattleTags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() =>
+                        setDraft((d) => ({ ...d, battleTag: tag }))
+                      }
+                      className="rounded-full border border-accent/40 bg-bg-elevated px-2 py-0.5 font-mono text-micro text-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      title={`Use ${tag}`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <Field label="Region" hint="Battle.net region used for ladder lookups">
               <Select
                 value={draft.region ?? ""}
@@ -348,6 +391,8 @@ export function SettingsProfile() {
       <SettingsPublicProfile />
 
       <SaveBar
+        buttonClassName="min-h-11"
+        stackOnMobile
         visible={dirty}
         saving={saving}
         onSave={save}

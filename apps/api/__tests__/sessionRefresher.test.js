@@ -14,6 +14,9 @@ const {
   buildSessionRefresher,
   __internal,
 } = require("../src/services/sessionRefresher");
+const { GamesService } = require("../src/services/games");
+const { SessionPolicyService } = require("../src/services/sessionPolicy");
+const { OwnerRevisions } = require("../src/util/gameVisibility");
 
 function makeFakeIo(sockets) {
   return {
@@ -186,4 +189,37 @@ describe("services/sessionRefresher", () => {
     // Above the floor — passes through.
     expect(clampInterval(10 * 60 * 1000)).toBe(10 * 60 * 1000);
   });
+});
+
+test("a tick cannot reuse A's retired session after waiting for B; the next tick uses a fresh lease", async () => {
+  const rows = new Map([["a", { userId: "a" }], ["b", { userId: "b" }]]), revisions = new OwnerRevisions();
+  const policy = new SessionPolicyService({ users: { findOne: async ({ userId }) => rows.get(userId) }, overlayTokens: { findOne: async () => null } }, { revisions });
+  let entered, release, holdB = true;
+  const started = new Promise(resolve => { entered = resolve; });
+  const held = new Promise(resolve => { release = resolve; });
+  const firstA = makeFakeOverlaySocket("a", "UTC"), b = makeFakeOverlaySocket("b", "UTC"), finalA = makeFakeOverlaySocket("a", "UTC");
+  const games = {
+    sessionPolicy: policy,
+    sessionPublicationGuard: GamesService.prototype.sessionPublicationGuard,
+    todaySession: jest.fn(async userId => {
+      if (userId === "b" && holdB) { holdB = false; entered(); await held; }
+      const resolved = await policy.resolve(userId);
+      return { wins: 1, losses: 0, games: 1, sessionGapMinutes: resolved.gapMinutes, sessionPolicySource: resolved.source };
+    }),
+  };
+  const worker = buildSessionRefresher({ io: makeFakeIo([firstA, b, finalA]), games });
+  const oldTick = worker.tickNow(); await started;
+  try {
+    expect(firstA.emit).toHaveBeenCalledWith("overlay:session", expect.objectContaining({ sessionGapMinutes: 90 }));
+    rows.set("a", { userId: "a", sessionGapMinutes: 15 }); policy.invalidate("a"); revisions.invalidate("a");
+  } finally { release(); }
+  expect(await oldTick).toBe(2);
+  expect(b.emit).toHaveBeenCalledTimes(1); expect(finalA.emit).not.toHaveBeenCalled();
+  expect(games.todaySession).toHaveBeenCalledTimes(2);
+  firstA.emit.mockClear(); b.emit.mockClear();
+  expect(await worker.tickNow()).toBe(3);
+  expect(firstA.emit).toHaveBeenCalledWith("overlay:session", expect.objectContaining({ sessionGapMinutes: 15 }));
+  expect(finalA.emit).toHaveBeenCalledWith("overlay:session", expect.objectContaining({ sessionGapMinutes: 15 }));
+  expect(games.todaySession).toHaveBeenCalledTimes(4);
+  await worker.stop(); expect(worker.isRunning()).toBe(false);
 });

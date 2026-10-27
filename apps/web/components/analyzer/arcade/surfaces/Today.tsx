@@ -19,7 +19,8 @@ import { DailyEmptyState } from "./DailyEmptyState";
  * when no mode is eligible — never leaks a per-mode reason up here.
  */
 export function TodaySurface() {
-  const { data: dataset } = useArcadeData();
+  const dataSource = useArcadeData();
+  const dataset = dataSource.data;
   const picks = useEligibleDailyPicks(dataset);
   const { state } = useArcadeState();
 
@@ -44,7 +45,7 @@ export function TodaySurface() {
           Daily Drop · Quiz
         </h2>
         {picks.quiz ? (
-          <ModeRunner mode={picks.quiz} isDaily forceMode />
+          <ModeRunner mode={picks.quiz} isDaily forceMode dataSource={dataSource} />
         ) : picks.probing ? (
           <Card>
             <EmptyState title="Building round…" sub="Picking today's quiz from your data." />
@@ -59,7 +60,7 @@ export function TodaySurface() {
           Daily Run · Game
         </h2>
         {picks.game ? (
-          <ModeRunner mode={picks.game} isDaily forceMode />
+          <ModeRunner mode={picks.game} isDaily forceMode dataSource={dataSource} />
         ) : picks.probing ? (
           <Card>
             <EmptyState title="Building round…" sub="Picking today's game from your data." />

@@ -38,6 +38,10 @@ corresponding GitHub Release.
 - Prepare conditional refreshes for six personal chart routes when the optional per-user cache is enabled. Unchanged results can reuse their retained browser body after fresh authentication and revision checks.
 - Keep ordinary reads available while the optional browser helper loads or reaches its retention limit. The server cache remains disabled by default.
 
+### One session definition
+
+- Choose when a session ends in Settings → Profile. Your live record, session quizzes and personal Trends share the setting. Auto keeps four hours for overlay accounts and uses 90 minutes otherwise; an exact gap and play across midnight stay connected.
+
 ### Trends charts on demand
 
 - Load charts below the first Trends row as they approach the viewport, with explicit Load buttons and usable fallbacks. Keep chart selections and unapplied Explorer controls while scrolling; collapsed groups retain their existing close-and-unmount behavior.

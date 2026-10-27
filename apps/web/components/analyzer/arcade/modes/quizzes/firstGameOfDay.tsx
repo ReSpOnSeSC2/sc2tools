@@ -17,6 +17,7 @@ type Q = {
   firstGameWr: number;
   overallWr: number;
   sessionsCount: number;
+  gapMinutes: number;
   /** "higher" | "lower" | "within" — true relation. */
   truth: "higher" | "lower" | "within";
 };
@@ -27,13 +28,13 @@ const ID = "first-game-of-day";
 registerMode(ID, "conditional");
 
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
-  const chrono = [...input.data.games].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-  );
+  const policy = input.data.sessionPolicy;
+  if (!policy) return { ok: false, reason: input.data.sessionPolicyError || "Session settings are unavailable. Retry session settings." };
+  const sessions = sessionize(input.data.games, policy.gapMinutes);
+  const chrono = sessions.flatMap(session => session.games);
   if (chrono.length < 20) {
     return { ok: false, reason: "Need ≥20 games before this one is meaningful." };
   }
-  const sessions = sessionize(chrono);
   if (sessions.length < 5) {
     return {
       ok: false,
@@ -69,6 +70,7 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
       firstGameWr,
       overallWr,
       sessionsCount: sessions.length,
+      gapMinutes: policy.gapMinutes,
       truth,
     },
   };
@@ -93,7 +95,7 @@ const TRUTH_LABEL: Record<Q["truth"], string> = {
 function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
   return {
     question:
-      "A session is games separated by ≥4 hours. Is your first-game-of-session WR higher than, lower than, or within ±2% of your overall WR?",
+      `A session ends after more than ${q.gapMinutes ?? 240} minutes without a game. Is your first-game-of-session WR higher than, lower than, or within ±2% of your overall WR?`,
     answer: [
       `First-game WR ${TRUTH_LABEL[q.truth]}.`,
       `First-game WR · ${pct1(q.firstGameWr)}`,
@@ -157,7 +159,7 @@ function Render({
       onKeyAnswer={(i) => OPTIONS[i] && onPick(OPTIONS[i])}
       question={
         <span>
-          A &quot;session&quot; is games separated by ≥4 hours. Is your{" "}
+          A &quot;session&quot; ends after more than {ctx.question.gapMinutes ?? 240} minutes without a game. Is your{" "}
           <span className="font-semibold">first-game-of-session WR</span> higher than, lower than,
           or within ±2% of your overall WR?
         </span>

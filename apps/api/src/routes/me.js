@@ -56,6 +56,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   activation?: import('../services/activation').ActivationService,
  *   announcements?: import('../services/announcements').AnnouncementsService,
  *   games: import('../services/types').GamesService,
+ *   sessionPolicy?: import('../services/sessionPolicy').SessionPolicyService,
  *   gdpr: import('../services/gdpr').GdprService,
  *   backupStatus?: import('../services/backupStatus').BackupStatusService,
  *   dataRepairs?: import('../services/dataRepairs').DataRepairsService,
@@ -222,11 +223,29 @@ function buildMeRouter(deps) {
     }
   });
 
+  router.get("/me/session-policy", deps.auth, async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      res.set("Cache-Control", "private, no-store");
+      if (Object.keys(req.query).length) return res.status(400).json({ error: { code: "session_policy_query_invalid" } });
+      if (!deps.sessionPolicy) throw new Error("session_policy_unavailable");
+      const lease = deps.sessionPolicy.lease(auth.userId);
+      const policy = await deps.sessionPolicy.resolve(auth.userId);
+      deps.sessionPolicy.assertCurrent(lease); return res.json(policy);
+    } catch (error) { next(error); }
+  });
+
   router.get("/me/profile", deps.auth, async (req, res, next) => {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
+      const lease = deps.sessionPolicy?.lease(auth.userId);
       const profile = await deps.users.getProfile(auth.userId);
+      const policy = deps.sessionPolicy ? await deps.sessionPolicy.resolve(auth.userId, {
+        storedGapMinutes: profile.sessionGapMinutes,
+        ownerKnown: Object.prototype.hasOwnProperty.call(profile, "sessionGapMinutes"),
+      }) : null;
       // Decorate the response with auto-detected pulse IDs (the user's
       // own toon handles, derived from the games they've already
       // uploaded). The Settings UI renders these as one-click "add"
@@ -250,7 +269,8 @@ function buildMeRouter(deps) {
         Array.isArray(profile.pulseIds) ? profile.pulseIds : [],
       );
       const detectedNew = detectedPulseIds.filter((id) => !known.has(id));
-      res.json({ ...profile, detectedPulseIds: detectedNew });
+      if (lease) deps.sessionPolicy?.assertCurrent(lease);
+      res.json({ ...profile, detectedPulseIds: detectedNew, ...(policy ? { sessionPolicy: policy } : {}) });
     } catch (err) {
       next(err);
     }
@@ -359,7 +379,13 @@ function buildMeRouter(deps) {
         return;
       }
       const profile = await deps.users.updateProfile(auth.userId, result.value);
-      res.json(profile);
+      const lease = deps.sessionPolicy?.lease(auth.userId);
+      const policy = deps.sessionPolicy ? await deps.sessionPolicy.resolve(auth.userId, {
+        storedGapMinutes: profile.sessionGapMinutes,
+        ownerKnown: Object.prototype.hasOwnProperty.call(profile, "sessionGapMinutes"),
+      }) : null;
+      if (lease) deps.sessionPolicy?.assertCurrent(lease);
+      res.json({ ...profile, ...(policy ? { sessionPolicy: policy } : {}) });
     } catch (err) {
       next(err);
     }

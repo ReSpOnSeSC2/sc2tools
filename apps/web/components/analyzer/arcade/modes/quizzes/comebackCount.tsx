@@ -168,8 +168,8 @@ function leadingLossCount(games: ArcadeGame[]): number {
   return i;
 }
 
-export function analyzeComebacks(gamesAsc: ArcadeGame[]): ComebackAnalysis {
-  const sessions = sessionize(gamesAsc);
+export function analyzeComebacks(gamesAsc: ArcadeGame[], gapMinutes = 240): ComebackAnalysis {
+  const sessions = sessionize(gamesAsc, gapMinutes);
   const zeroTwoStarts: Session[] = [];
   const comebacks: ComebackSession[] = [];
   for (const s of sessions) {
@@ -347,6 +347,7 @@ export function variantOrderFor(input: {
 /* ──────────── question payload ──────────── */
 
 type Q = {
+  gapMinutes: number;
   variant: ComebackVariant;
   buckets: ReadonlyArray<string>;
   truth: string;
@@ -363,10 +364,9 @@ type A = string;
 /* ──────────── generate ──────────── */
 
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
-  const chrono = [...input.data.games].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-  );
-  const analysis = analyzeComebacks(chrono);
+  const policy = input.data.sessionPolicy;
+  if (!policy) return { ok: false, reason: input.data.sessionPolicyError || "Session settings are unavailable. Retry session settings." };
+  const analysis = analyzeComebacks(input.data.games, policy.gapMinutes);
   if (analysis.sessions.length < 5) {
     return { ok: false, reason: "Not enough distinct sessions yet." };
   }
@@ -384,6 +384,7 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
       ok: true,
       minDataMet: true,
       question: {
+        gapMinutes: policy.gapMinutes,
         variant: spec.variant,
         buckets: spec.buckets,
         truth: spec.truth,
@@ -459,7 +460,7 @@ function questionPlain(q: Q): string {
 function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
   const headline = `${VARIANT_LABEL[q.variant]}: ${q.truth}`;
   const detail = noteFor(q);
-  const answer: string[] = [headline, detail];
+  const answer: string[] = [headline, detail, `A session ends after more than ${q.gapMinutes ?? 240} minutes without a game.`];
   if (q.variant === "count") {
     for (const c of q.comebacks.slice(0, 6)) {
       answer.push(`${fmtDate(c.startDate)} · ${c.wins}W / ${c.losses}L`);
@@ -562,7 +563,7 @@ function Render({
     <QuizCard
       icon={IconFor(ID)}
       title={comebackCount.title}
-      depthLabel={VARIANT_DEPTH_LABEL[ctx.question.variant]}
+      depthLabel={`${VARIANT_DEPTH_LABEL[ctx.question.variant]} · gap >${ctx.question.gapMinutes ?? 240}min`}
       isDaily={ctx.isDaily}
       revealed={ctx.revealed}
       onKeyAnswer={(i) => {

@@ -87,6 +87,7 @@ export const SETTINGS_FIELDS = [
   { id: "account-summary", tab: "account", section: "account-summary", label: "Account summary", synonyms: ["cloud user ID", "email", "games synced", "agent version", "latest sync"] },
   { id: "account-links", tab: "account", section: "quick-links", label: "Account quick links", synonyms: ["devices", "download agent", "build library"] },
   { id: "profile-name", tab: "profile", section: "profile-details", label: "Display name & BattleTag", synonyms: ["profile", "player name", "race", "battletag"] },
+  { id: "profile-session-gap", tab: "profile", section: "profile-details", label: "Session inactivity gap", synonyms: ["session length", "session timeout", "90 minutes", "240 minutes", "overlay session"] },
   { id: "pulse-ids", tab: "profile", section: "pulse-ids", label: "Pulse IDs", synonyms: ["Pulse ID", "SC2Pulse", "identity", "regions"] },
   { id: "player-channels", tab: "profile", section: "player-channels", label: "Twitch & YouTube channels", synonyms: ["recording links", "player channels", "channel review"] },
   { id: "public-profile", tab: "profile", section: "public-profile", label: "Public player page", synonyms: ["profile privacy", "player link", "public profile", "slug"] },

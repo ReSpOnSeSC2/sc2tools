@@ -18,6 +18,8 @@ function fixture(enabled = true, legacy = false) {
   for (const method of [...ROUTES.map(([name]) => name), "summary", "matchupTimeseries", "mmrProgression", "oppMmrBuckets", "randomSummary", "explorer"]) {
     aggregations[method] = jest.fn(async (owner, ...input) => ({ owner, method, input, points: [{ date: new Date(0), missing: null }] }));
   }
+  aggregations.resolveMomentumPolicy = async (_owner, gap) => ({ sessionGapMinutes: gap ?? 90, sessionPolicyGeneration: 0, lease: null });
+  aggregations.assertSessionPolicy = () => {};
   const app = express();
   app.use(buildAggregationsRouter({ aggregations, userCache: legacy ? undefined : cache,
     auth: (req, res, next) => {

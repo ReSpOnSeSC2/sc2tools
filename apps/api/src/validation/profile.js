@@ -12,6 +12,7 @@ const PROFILE_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
+    sessionGapMinutes: { type: ["integer", "null"], minimum: 15, maximum: 480 },
     // BattleTag has the form Name#1234 with a unicode-friendly handle.
     // Empty string clears the field, so accept that too.
     battleTag: {
@@ -90,6 +91,10 @@ const validate = ajv.compile(PROFILE_SCHEMA);
 function validateProfile(raw) {
   if (!raw || typeof raw !== "object") {
     return { valid: false, errors: ["body must be an object"] };
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, "sessionGapMinutes")) {
+    const gap = /** @type {Record<string,unknown>} */ (raw).sessionGapMinutes;
+    if (gap !== null && !(typeof gap === "number" && Number.isInteger(gap) && gap >= 15 && gap <= 480)) return { valid: false, errors: ["/sessionGapMinutes must be an integer15..480 or null"] };
   }
   const value = JSON.parse(JSON.stringify(raw));
   if (!validate(value)) {

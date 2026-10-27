@@ -1,5 +1,6 @@
 "use strict";
 const { observeJob } = require("../util/jobLedger");
+const { captureSessionPublication } = require("./sessionPublication");
 
 // Session-refresher worker.
 //
@@ -37,7 +38,7 @@ const MIN_INTERVAL_MS = 60 * 1000;
  * @param {{
  *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   io: import('socket.io').Server | null | undefined,
- *   games: { todaySession: (userId: string, tz?: string) => Promise<any> } | null | undefined,
+ *   games: { todaySession: (userId: string, tz?: string) => Promise<any>, sessionPublicationGuard?: (userId:string)=>(()=>void)|null } | null | undefined,
  *   intervalMs?: number,
  *   logger?: import('pino').Logger,
  * }} opts
@@ -114,7 +115,7 @@ function buildSessionRefresher(opts) {
  * unit-testable in isolation.
  *
  * @param {import('socket.io').Server} io
- * @param {{ todaySession: (userId: string, tz?: string) => Promise<any> }} games
+ * @param {{ todaySession: (userId: string, tz?: string) => Promise<any>, sessionPublicationGuard?: (userId:string)=>(()=>void)|null }} games
  * @param {import('pino').Logger | null} logger
  * @returns {Promise<number>}
  */
@@ -126,7 +127,7 @@ async function runTick(io, games, logger) {
     // Per-tick (userId|tz) cache so multiple overlays for the same
     // streamer don't each round-trip Mongo. Cleared at the end of
     // the tick so a TZ change between ticks isn't masked.
-    /** @type {Map<string, any>} */
+    /** @type {Map<string, {session:any,assertCurrent:(session:unknown)=>void}|null>} */
     const cache = new Map();
     for (const socket of sockets) {
       const data = socket && socket.data;
@@ -135,12 +136,14 @@ async function runTick(io, games, logger) {
       if (!userId || typeof userId !== "string") continue;
       const tz = typeof data.timezone === "string" ? data.timezone : "";
       const key = `${userId}|${tz}`;
-      let session = cache.get(key);
-      if (session === undefined) {
+      let publication = cache.get(key);
+      if (publication === undefined) {
         try {
-          session = await games.todaySession(userId, tz || undefined);
+          const assertCurrent = captureSessionPublication(games.sessionPublicationGuard?.bind(games), userId);
+          const session = await games.todaySession(userId, tz || undefined);
+          publication = session ? { session, assertCurrent } : null;
         } catch (err) {
-          session = null;
+          publication = null;
           if (logger) {
             logger.warn(
               { err, userId },
@@ -148,11 +151,12 @@ async function runTick(io, games, logger) {
             );
           }
         }
-        cache.set(key, session);
+        cache.set(key, publication);
       }
-      if (session) {
+      if (publication) {
         try {
-          socket.emit("overlay:session", session);
+          publication.assertCurrent(publication.session);
+          socket.emit("overlay:session", publication.session);
           emitted += 1;
         } catch (err) {
           if (logger) {

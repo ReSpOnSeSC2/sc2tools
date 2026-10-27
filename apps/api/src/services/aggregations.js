@@ -42,6 +42,7 @@ class AggregationsService {
     this.db = db;
     this.mmrExpectation = opts.mmrExpectation;
     this.trendsRequests = new TrendsRequests();
+    /** @type {import('./sessionPolicy').SessionPolicyService|null} */ this.sessionPolicy = null;
   }
 
   /**
@@ -706,8 +707,23 @@ class AggregationsService {
   // implementation in ``./trendsInsights.js``.
   /** @param {string} userId @param {{interval?: 'day'|'week'|'month', tz?: string}} opts @param {object} filters */
   async mmrProgression(userId, opts, filters) { return this.trendsRequests.run(["mmrProgression", userId, filters, opts], () => trendsInsights.mmrProgression(this._trendsDeps(), userId, opts, filters)); }
-  /** @param {string} userId @param {object} filters @param {{sessionGapMinutes?: number}} [opts] */
-  async momentum(userId, filters, opts) { return this.trendsRequests.run(["momentum", userId, filters, opts], () => trendsInsights.momentum(this._trendsDeps(), userId, filters, opts)); }
+  /** @param {string} userId @param {unknown} override */
+  async resolveMomentumPolicy(userId, override) {
+    if (!this.sessionPolicy) return { sessionGapMinutes: typeof override === "number" ? override : 90, sessionPolicyGeneration: 0, lease: null };
+    return this.sessionPolicy.momentum(userId, override);
+  }
+  /** @param {ReturnType<import('./sessionPolicy').SessionPolicyService['lease']>|null} lease */
+  assertSessionPolicy(lease) { if (lease) this.sessionPolicy?.assertCurrent(lease); }
+  /** @param {string} userId @param {object} filters
+   * @param {{sessionGapMinutes?:number,sessionPolicyGeneration?:number}} [opts] */
+  async momentum(userId, filters, opts = {}) {
+    const resolved = opts.sessionPolicyGeneration === undefined ? await this.resolveMomentumPolicy(userId, opts.sessionGapMinutes) : null;
+    const lease = resolved?.lease ?? this.sessionPolicy?.lease(userId) ?? null;
+    const options = resolved ? { sessionGapMinutes: resolved.sessionGapMinutes, sessionPolicyGeneration: resolved.sessionPolicyGeneration } : opts;
+    if (lease && options.sessionPolicyGeneration !== lease.token.id) throw Object.assign(new Error("session_policy_changed"), { status: 409, code: "session_policy_changed" });
+    const value = await this.trendsRequests.run(["momentum", userId, filters, options], () => trendsInsights.momentum(this._trendsDeps(), userId, filters, options));
+    this.assertSessionPolicy(lease); return value;
+  }
   /** @param {string} userId @param {object} filters @param {{bucketWidth?: number | "auto"}} [opts] */
   async oppMmrBuckets(userId, filters, opts) { return this.trendsRequests.run(["oppMmrBuckets", userId, filters, opts], () => trendsInsights.oppMmrBuckets(this._trendsDeps(), userId, filters, opts)); }
   /** @param {string} userId @param {object} filters @param {{lo?: number, hi?: number}} [opts] */

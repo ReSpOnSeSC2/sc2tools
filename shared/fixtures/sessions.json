@@ -1,0 +1,72 @@
+[
+  { "name": "empty", "gapMinutes": 90, "games": [], "groups": [] },
+  { "name": "zero epoch is a valid instant", "gapMinutes": 15, "games": [{ "fixture": "zero", "date": 0, "gameId": "zero", "result": "Victory" }], "groups": [["zero"]] },
+  { "name": "strict equality and undecided bridge", "gapMinutes": 90, "games": [
+    { "fixture": "w2", "date": 10800000, "gameId": "c", "result": "Victory" },
+    { "fixture": "w1", "date": 0, "gameId": "a", "result": "Victory" },
+    { "fixture": "u", "date": 5400000, "gameId": "b", "result": "Tie" }
+  ], "groups": [["w1", "u", "w2"]] },
+  { "name": "one millisecond after threshold breaks", "gapMinutes": 90, "games": [
+    { "fixture": "b", "date": 5400001, "gameId": "b", "result": "Defeat" },
+    { "fixture": "a", "date": 0, "gameId": "a", "result": "Victory" }
+  ], "groups": [["a"], ["b"]] },
+  { "name": "supplementary IDs use code points", "gapMinutes": 90, "games": [
+    { "fixture": "supplementary", "date": 0, "gameId": "\ud83d\ude00", "result": "Victory" },
+    { "fixture": "bmp", "date": 0, "gameId": "\ue000", "result": "Victory" }
+  ], "groups": [["bmp", "supplementary"]] },
+  { "name": "simple binary collation remains case sensitive", "gapMinutes": 90, "games": [
+    { "fixture": "lower", "date": 0, "gameId": "a", "result": "Victory" },
+    { "fixture": "upper", "date": 0, "gameId": "A", "result": "Victory" }
+  ], "groups": [["upper", "lower"]] },
+  { "name": "opaque whitespace and embedded NUL IDs", "gapMinutes": 90, "games": [
+    { "fixture": "nul-suffix", "date": 0, "gameId": "a\u0000b", "result": "Victory" },
+    { "fixture": "prefix", "date": 0, "gameId": "a", "result": "Victory" },
+    { "fixture": "space", "date": 0, "gameId": " ", "result": "Victory" },
+    { "fixture": "nul", "date": 0, "gameId": "a\u0000", "result": "Victory" }
+  ], "groups": [["space", "prefix", "nul", "nul-suffix"]] },
+  { "name": "duplicate IDs resolve unknown loss win", "gapMinutes": 90, "games": [
+    { "fixture": "w", "date": 0, "gameId": "same", "result": "WIN" },
+    { "fixture": "u", "date": 0, "gameId": "same", "result": " Tie " },
+    { "fixture": "l", "date": 0, "gameId": "same", "result": "defeat" }
+  ], "groups": [["u", "l", "w"]] },
+  { "name": "missing IDs keep MMR and first-race distinctions", "gapMinutes": 90, "games": [
+    { "fixture": "z", "date": 0, "result": "Defeat", "myToonHandle": "1-S2-1-a", "opponent": { "toonHandle": "1-S2-1-b", "race": "Zerg" }, "myMmr": 2 },
+    { "fixture": "p2", "date": 0, "result": "Defeat", "myToonHandle": "1-S2-1-a", "opponent": { "toonHandle": "1-S2-1-b", "race": "Protoss" }, "myMmr": 2 },
+    { "fixture": "p1", "date": 0, "result": "Defeat", "myToonHandle": "1-S2-1-a", "opponent": { "toonHandle": "1-S2-1-b", "race": "Protoss" }, "myMmr": 1 }
+  ], "groups": [["p1", "p2", "z"]] },
+  { "name": "DST labels do not split one session", "gapMinutes": 90, "tz": "America/New_York", "games": [
+    { "fixture": "second", "date": "2026-11-01T01:30:00-05:00", "gameId": "b", "result": "Victory" },
+    { "fixture": "first", "date": "2026-11-01T01:30:00-04:00", "gameId": "a", "result": "Defeat" }
+  ], "groups": [["first", "second"]] },
+  { "name": "canonical duplicates retain multiplicity", "gapMinutes": 90, "games": [
+    { "fixture": "same", "date": 0, "gameId": "a", "result": "Victory", "map": "Unrelated A" },
+    { "fixture": "same", "date": 0, "gameId": "a", "result": "Victory", "map": "Unrelated B" }
+  ], "groups": [["same", "same"]] },
+  { "name": "equivalent epoch and offset scalar instants", "gapMinutes": 90, "games": [
+    { "fixture": "c", "date": "1970-01-01T00:00:00Z", "gameId": "c", "result": "Victory" },
+    { "fixture": "a", "date": 0, "gameId": "a", "result": "Victory" },
+    { "fixture": "b", "date": "1970-01-01T01:00:00+01:00", "gameId": "b", "result": "Victory" }
+  ], "groups": [["a", "b", "c"]] },
+  { "name": "spring DST labels do not split a continuous burst", "gapMinutes": 90, "tz": "America/New_York", "games": [
+    { "fixture": "after", "date": "2026-03-08T03:30:00-04:00", "gameId": "b", "result": "Victory" },
+    { "fixture": "before", "date": "2026-03-08T01:30:00-05:00", "gameId": "a", "result": "Defeat" }
+  ], "groups": [["before", "after"]] },
+  { "name": "midnight does not reset membership", "gapMinutes": 90, "tz": "UTC", "games": [
+    { "fixture": "next-day", "date": "2026-10-27T00:10:00Z", "gameId": "b", "result": "Victory" },
+    { "fixture": "prior-day", "date": "2026-10-26T23:50:00Z", "gameId": "a", "result": "Defeat" }
+  ], "groups": [["prior-day", "next-day"]] },
+  { "name": "one owner's multiple accounts remain in the same burst", "gapMinutes": 90, "games": [
+    { "fixture": "na-last", "date": 7200000, "gameId": "c", "result": "Victory", "myToonHandle": "1-S2-1-a" },
+    { "fixture": "eu-bridge", "date": 3600000, "gameId": "b", "result": "Tie", "myToonHandle": "2-S2-1-a" },
+    { "fixture": "na-first", "date": 0, "gameId": "a", "result": "Defeat", "myToonHandle": "1-S2-1-a" }
+  ], "groups": [["na-first", "eu-bridge", "na-last"]] },
+  { "name": "invalid and array instants cannot bridge or count", "gapMinutes": 90, "games": [
+    { "fixture": "last", "date": 3600000, "gameId": "b", "result": "Victory" },
+    { "fixture": "null", "date": null, "gameId": "null", "result": "Victory" },
+    { "fixture": "blank", "date": "", "gameId": "blank", "result": "Victory" },
+    { "fixture": "array", "date": [0], "gameId": "array", "result": "Victory" },
+    { "fixture": "boolean", "date": true, "gameId": "boolean", "result": "Victory" },
+    { "fixture": "outside", "date": 8640000000000001, "gameId": "outside", "result": "Victory" },
+    { "fixture": "first", "date": 0, "gameId": "a", "result": "Defeat" }
+  ], "groups": [["first", "last"]] }
+]

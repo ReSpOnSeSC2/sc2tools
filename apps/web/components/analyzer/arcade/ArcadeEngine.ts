@@ -6,13 +6,14 @@
 //   2. depth-tag registry — every mode is registered here so the
 //      depth-lint test can assert that no mode ships unset/unknown;
 //   3. session/streak helpers shared across temporal/conditional
-//      quizzes (4-hour gap → session boundary, active win streak,
+//      quizzes (selected inactivity gap → session boundary, active win streak,
 //      streak veto runs, etc).
 //
 // The engine deliberately knows nothing about React. Modes import these
 // helpers from generate(); render() composes the JSX shells separately.
 
 import { DEPTH_TAGS, type DepthTag, type ArcadeGame } from "./types";
+import { sessionize as groupSessions } from "@/lib/sessions";
 
 /* ──────────── seeded RNG ──────────── */
 
@@ -261,9 +262,7 @@ export function streakVetoRuns(
   return runs;
 }
 
-/* ──────────── session helpers (4 h gap) ──────────── */
-
-const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+/* ──────────── shared session helpers ──────────── */
 
 export interface Session {
   /** Index into the chronologically-sorted games array. */
@@ -276,39 +275,14 @@ export interface Session {
 
 /**
  * Walk a chronologically-sorted games list and split into sessions
- * separated by ≥ 4 h of inactivity.
+ * separated by strictly more than the selected inactivity gap.
  */
-export function sessionize(gamesAsc: ArcadeGame[]): Session[] {
-  if (!gamesAsc.length) return [];
-  const sessions: Session[] = [];
-  let bucket: ArcadeGame[] = [gamesAsc[0]];
-  let bucketStart = 0;
-  for (let i = 1; i < gamesAsc.length; i++) {
-    const prev = new Date(gamesAsc[i - 1].date).getTime();
-    const cur = new Date(gamesAsc[i].date).getTime();
-    if (cur - prev >= FOUR_HOURS_MS) {
-      sessions.push({
-        startIndex: bucketStart,
-        endIndex: i - 1,
-        startDate: bucket[0].date,
-        endDate: bucket[bucket.length - 1].date,
-        games: bucket,
-      });
-      bucket = [];
-      bucketStart = i;
-    }
-    bucket.push(gamesAsc[i]);
-  }
-  if (bucket.length) {
-    sessions.push({
-      startIndex: bucketStart,
-      endIndex: gamesAsc.length - 1,
-      startDate: bucket[0].date,
-      endDate: bucket[bucket.length - 1].date,
-      games: bucket,
-    });
-  }
-  return sessions;
+export function sessionize(gamesAsc: ArcadeGame[], gapMinutes = 240): Session[] {
+  let index = 0;
+  return groupSessions(gamesAsc, { gapMinutes }).map(session => {
+    const startIndex = index; index += session.games.length;
+    return { startIndex, endIndex: index - 1, startDate: new Date(session.start).toISOString(), endDate: new Date(session.end).toISOString(), games: session.games };
+  });
 }
 
 /* ──────────── shared predicates ──────────── */

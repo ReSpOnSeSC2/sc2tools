@@ -22,7 +22,7 @@ describe("glossary", () => {
     expect(helpArticleAnchors(article!)).toEqual(GLOSSARY.map(term => term.id));
   });
   it("seeds the opponent and MMR terms the info tips will use", () => {
-    expect(GLOSSARY).toHaveLength(40);
+    expect(GLOSSARY).toHaveLength(41);
     expect(GLOSSARY.map((term) => term.id)).toEqual(
       expect.arrayContaining(["pulse-id", "toon", "net-mmr", "verified-pairs", "mmr-impact", "group-same-player", "barcode"]),
     );
@@ -67,4 +67,12 @@ describe("glossary", () => {
     expect(glossaryHelpPath(glossaryTerm("net-mmr")!)).toBe("/help/opponents#net-mmr");
     expect(glossaryHelpPath({ ...glossaryTerm("barcode")!, help: { slug: "opponent-dossier" } })).toBe("/help/opponent-dossier");
   });
+});
+
+it("publishes the selected session definition at its real Help anchor", () => {
+  const term = glossaryTerm("session");
+  expect(term?.term).toBe("Session"); expect(term?.long).toContain("240 minutes"); expect(term?.long).toContain("90 minutes");
+  expect(term?.help).toEqual({ slug: "sessions", anchor: "definition" });
+  expect(glossaryHelpPath(term!)).toBe("/help/sessions#definition");
+  expect(helpArticleAnchors(getArticle("sessions")!)).toContain("definition");
 });

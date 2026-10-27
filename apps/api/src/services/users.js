@@ -44,6 +44,8 @@ class UsersService {
     this.db = db;
     this.adminEvents = opts.adminEvents || null;
     this.identityDeletions = opts.identityDeletions || null;
+    /** @type {import('../util/userRevision').UserRevision|null} */ this.userRevision = null;
+    /** @type {((userId:string)=>void)|null} */ this.onSessionPolicyChanged = null;
     /** @type {((userId:string)=>Promise<{displayName:string,profileHandle?:string}|null>)|null} */
     this.publicPlayerIdentity = null;
   }
@@ -669,6 +671,7 @@ class UsersService {
    *   lastKnownMmrAt?: string,
    *   lastKnownMmrRegion?: string,
    *   sessionAnchorAt?: string,
+   *   sessionGapMinutes?: number|null,
    * }>}
    */
   async getProfile(userId) {
@@ -688,12 +691,21 @@ class UsersService {
           lastKnownMmrAt: 1,
           lastKnownMmrRegion: 1,
           sessionAnchorAt: 1,
+          sessionGapMinutes: 1,
+          _gdprMutation: 1,
         },
       },
     );
     if (!doc) return {};
-    /** @type {Record<string, string|number|string[]>} */
+    if (doc._gdprMutation) throw Object.assign(new Error("gdpr_operation_busy"), { status: 503, code: "gdpr_operation_busy" });
+    /** @type {Record<string, string|number|string[]|null>} */
     const out = {};
+    const gap = doc.sessionGapMinutes;
+    if (gap !== null && gap !== undefined && !(typeof gap === "number" && Number.isInteger(gap) && gap >= 15 && gap <= 480)) {
+      throw Object.assign(new Error("session_policy_invalid"), { status: 503, code: "session_policy_invalid" });
+    }
+    // Presence distinguishes a known owner's Auto preference from missing owner.
+    out.sessionGapMinutes = gap ?? null;
     for (const k of [
       "battleTag",
       "region",
@@ -941,9 +953,14 @@ class UsersService {
    *   lastKnownMmr?: number|null,
    *   lastKnownMmrAt?: string|null,
    *   lastKnownMmrRegion?: string|null,
+   *   sessionGapMinutes?: number|null,
    * }} profile
    */
   async updateProfile(userId, profile) {
+    const policyWrite = !!profile && Object.prototype.hasOwnProperty.call(profile, "sessionGapMinutes");
+    if (policyWrite && profile.sessionGapMinutes !== null && !(typeof profile.sessionGapMinutes === "number" && Number.isInteger(profile.sessionGapMinutes) && profile.sessionGapMinutes >= 15 && profile.sessionGapMinutes <= 480)) {
+      throw Object.assign(new Error("session_gap_invalid"), { status: 400, code: "session_gap_invalid" });
+    }
     const STRING_FIELDS = [
       "battleTag",
       "region",
@@ -956,6 +973,9 @@ class UsersService {
     const set = {};
     /** @type {Record<string, "">} */
     const unset = {};
+    // This new preference alone has patch semantics: an omitted legacy PUT
+    // preserves it; null persists Auto. Other Profile fields retain their rules.
+    if (policyWrite) set.sessionGapMinutes = profile.sessionGapMinutes;
     for (const k of STRING_FIELDS) {
       const raw = profile ? profile[/** @type {keyof typeof profile} */ (k)] : undefined;
       if (typeof raw === "string" && raw.trim().length > 0) {
@@ -992,8 +1012,18 @@ class UsersService {
     /** @type {Record<string, any>} */
     const update = { $set: set };
     if (Object.keys(unset).length > 0) update.$unset = unset;
-    await this.db.users.updateOne({ userId }, update);
-    return this.getProfile(userId);
+    if (policyWrite) this.onSessionPolicyChanged?.(userId);
+    try {
+      const write = async () => {
+        const result = await this.db.users.updateOne(
+          policyWrite ? { userId, _gdprMutation: { $exists: false } } : { userId }, update, { upsert: false },
+        );
+        if (policyWrite && result.matchedCount !== 1) throw Object.assign(new Error("session_policy_owner_unavailable"), { status: 409, code: "session_policy_owner_unavailable" });
+      };
+      if (policyWrite && this.userRevision) await this.userRevision.run(userId, write);
+      else await write();
+      return await this.getProfile(userId);
+    } finally { if (policyWrite) this.onSessionPolicyChanged?.(userId); }
   }
 
   /**
