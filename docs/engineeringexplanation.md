@@ -557,3 +557,36 @@ This is not full consumer-page, native fullscreen or production API proof.
 See [the checkpoint](handoff/guided-tours-checkpoint.md) for exact heads, receipts,
 validation limits and the pending fresh-main/integrated-CI boundary. Help source
 and its canonical generated index are unchanged by the documentation delivery.
+
+
+## Shared session policy
+
+Profile stores an optional integer 15–480-minute gap; null means Auto and an
+omitted legacy PUT preserves it. Auto uses 240 minutes for any persisted overlay
+token record (including revoked/rotation-pending), otherwise 90. This preserves
+existing four-hour live grouping through credential rotation. Stored replay-end
+instants split only when the gap is strictly greater; equality, midnight and DST
+stay connected. Eligible unknown results bridge before decided statistics, with
+deterministic supported-scalar ordering and duplicate multiplicity retained.
+
+Live/overlay aggregates, personal momentum and both session quizzes share the
+policy while preserving their existing universes. Today keeps 14-day candidates,
+future exclusion and an inclusive manual anchor. Global momentum keeps its own
+partitions/gap. Mongo retains indexed bounds before a scalar BSON Date guard and
+ordering/arithmetic, without a legacy rescue scan.
+
+A tiny owner-scoped no-store read needs positive current-read admission. Profile
+drafts stay local until an admitted PUT ACK; cache publication is advisory and
+adds no confirmation GET. Bounded process-local gates/generations fence resolution
+and final HTTP 200/304/private emits. No migration, new index, unbounded cache,
+external service, public lease field or production flag activation is added.
+
+Local targeted groups, current build/budgets/assets, synthetic Mongo explains and
+the 24-case browser05 matrix passed. Root reviewed normal phone Profile and native
+desktop 200% widget captures in both actual palettes. AA extraction retained
+96 scans with 0 violations and 36 incomplete contrast observations; the SESSION
+label's static contrast bound does not certify the whole product. Final web
+selected02 passed after the label change and independent audit05 is clear.
+Exact-head CI/delivery remain pending.
+See [ADR 0067](adr/0067-session-policy.md) and the
+[Sessions checkpoint](handoff/sessions-core-checkpoint.md).

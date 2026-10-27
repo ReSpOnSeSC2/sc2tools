@@ -120,7 +120,8 @@ describe("HelpArticleBody", () => {
 
 it.each(["page", "compact"] as const)("renders the real lazy glossary widget with %s anchors and formula search", async variant => {
   const { container } = renderBody({ article: glossaryArticle, variant });
-  expect(await screen.findAllByRole("term")).toHaveLength(40);
+  expect(await screen.findAllByRole("term")).toHaveLength(41);
+  expect(screen.getByRole("link", { name: "Read Session in context" }).getAttribute("href")).toBe("/help/sessions#definition");
   expect(container.querySelectorAll('[id="net-mmr"]')).toHaveLength(variant === "page" ? 1 : 0);
   expect(container.querySelectorAll('[data-help-anchor="net-mmr"]')).toHaveLength(variant === "compact" ? 1 : 0);
   const search = screen.getByRole("textbox", { name: "Search glossary" });
@@ -129,5 +130,5 @@ it.each(["page", "compact"] as const)("renders the real lazy glossary widget wit
   expect(screen.getByText("Formula or rule:").parentElement?.textContent).toContain("0.00137");
   expect(screen.getByRole("link", { name: "Read Spending Quotient in context" }).getAttribute("href")).toBe("/help/macro#macro-score");
   fireEvent.keyDown(search, { key: "Escape" });
-  expect(screen.getAllByRole("term")).toHaveLength(40);
+  expect(screen.getAllByRole("term")).toHaveLength(41);
 });

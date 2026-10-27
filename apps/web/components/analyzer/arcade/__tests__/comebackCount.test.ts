@@ -13,9 +13,11 @@ import {
   type ComebackVariant,
 } from "../modes/quizzes/comebackCount";
 import { mulberry32 } from "../ArcadeEngine";
+import { firstGameOfDay } from "../modes/quizzes/firstGameOfDay";
 import type { ArcadeDataset, ArcadeGame } from "../types";
 
 const baseDataset: ArcadeDataset = {
+  sessionPolicy: { gapMinutes: 240, source: "auto-overlay", storedGapMinutes: null },
   games: [],
   opponents: [],
   builds: [],
@@ -349,6 +351,7 @@ describe("Comeback Count — generate", () => {
 
 describe("Comeback Count — score", () => {
   const sampleQ = {
+    gapMinutes: 240,
     variant: "count" as const,
     buckets: ["0", "1-2", "3-5", "6+"] as const,
     truth: "1-2",
@@ -389,5 +392,24 @@ describe("Comeback Count — dayOfYear", () => {
   test("empty / invalid seed → 0", () => {
     expect(dayOfYear("")).toBe(0);
     expect(dayOfYear("not-a-date")).toBe(0);
+  });
+});
+
+describe("session quizzes require and retain the resolved definition", () => {
+  test.each([firstGameOfDay, comebackCount])("$id does not guess a gap when policy is unavailable", async mode => {
+    const result = await mode.generate({ data: { ...baseDataset, sessionPolicy: null, sessionPolicyError: "Synthetic policy unavailable" },
+      daySeed: "2026-10-27", tz: "America/New_York", rng: mulberry32(1) });
+    expect(result).toEqual({ ok: false, reason: "Synthetic policy unavailable" });
+  });
+  test("both questions and their shared explanations retain the actual configured gap", async () => {
+    const games = Array.from({ length: 5 }, (_, index) => makeSession(new Date(index * FIVE_HOURS), ["W", "W", "W", "W"])).flat();
+    const input = { data: { ...baseDataset, games, sessionPolicy: { gapMinutes: 45, source: "preference" as const, storedGapMinutes: 45 } },
+      daySeed: "2026-10-27", tz: "UTC", rng: mulberry32(1) };
+    const first = await firstGameOfDay.generate(input), comeback = await comebackCount.generate(input);
+    expect(first.ok).toBe(true); expect(comeback.ok).toBe(true);
+    if (!first.ok || !comeback.ok) throw new Error("Expected meaningful session questions");
+    expect(first.question.gapMinutes).toBe(45); expect(comeback.question.gapMinutes).toBe(45);
+    expect(firstGameOfDay.share!(first.question, null, firstGameOfDay.score(first.question, first.question.truth)).question).toContain("45 minutes");
+    expect(comebackCount.share!(comeback.question, null, comebackCount.score(comeback.question, comeback.question.truth)).answer).toContain("A session ends after more than 45 minutes without a game.");
   });
 });

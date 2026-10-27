@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useApi } from "@/lib/clientApi";
+import { useSessionPolicy } from "@/lib/session-policy";
 import { useCustomBuildCatalog } from "@/components/builds/useCustomBuildCatalog";
 import {
   useAnalysisGames,
@@ -145,8 +146,11 @@ export function normaliseMap(row: ApiMap): ArcadeDataset["maps"][number] {
  */
 export function useArcadeData(): {
   data: ArcadeDataset | null;
+  /** Stable while only session policy metadata changes. */
+  baseData: ArcadeDataset | null;
   loading: boolean;
   error: string | null;
+  retrySessionPolicy: () => Promise<unknown>;
 } {
   // /v1/opponents returns { items, nextBefore }, not a bare array.
   const opp = useApi<ApiOppPage>("/v1/opponents?limit=500");
@@ -154,6 +158,7 @@ export function useArcadeData(): {
   // to the established 20k ceiling. The shared hook obtains it as narrowly
   // projected cursor pages instead of one enormous general-games response.
   const gamesA = useAnalysisGames();
+  const session = useSessionPolicy();
   // /v1/builds, /v1/matchups, /v1/maps return bare arrays.
   const builds = useApi<ArcadeBuild[]>("/v1/builds");
   // /v1/matchups returns rows of shape `{ name: "vs P", wins, losses,
@@ -207,7 +212,7 @@ export function useArcadeData(): {
     seasons.error?.message ||
     null;
 
-  const data = useMemo<ArcadeDataset | null>(() => {
+  const baseData = useMemo<ArcadeDataset | null>(() => {
     if (loading || error) return null;
     const oppRaw = Array.isArray(opp.data?.items) ? opp.data!.items : [];
     const opps: ArcadeOpponent[] = oppRaw.map((o) => {
@@ -326,5 +331,11 @@ export function useArcadeData(): {
     unitStats.data,
   ]);
 
-  return { data, loading, error };
+  // Keep unrelated rounds independent of policy arrival/retry. The base
+  // mapping is stable until actual corpus/aggregate input changes.
+  const data = useMemo<ArcadeDataset | null>(() => baseData ? {
+    ...baseData, sessionPolicy: session.policy,
+    sessionPolicyError: session.loading ? "Loading session settings. Try this quiz again shortly." : session.error,
+  } : null, [baseData, session.policy, session.error, session.loading]);
+  return { data, baseData, loading, error, retrySessionPolicy: () => session.retry() };
 }

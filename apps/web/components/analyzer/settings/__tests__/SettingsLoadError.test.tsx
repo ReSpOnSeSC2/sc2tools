@@ -6,8 +6,8 @@ import { SettingsVoice } from "../SettingsVoice";
 import { SettingsRandomizer } from "../SettingsRandomizer";
 import { SettingsMisc } from "../SettingsMisc";
 const mocks = vi.hoisted(() => ({ mutate: vi.fn(), call: vi.fn() }));
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "token" }) }));
-vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ error: { status: 503, code: "server_busy" }, data: undefined, isLoading: false, mutate: mocks.mutate }), apiCall: mocks.call }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "a", isLoaded: true, isSignedIn: true, getToken: async () => "token" }) }));
+vi.mock("@/lib/clientApi", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/clientApi")>(), useApi: () => ({ error: { status: 503, code: "server_busy" }, data: undefined, isLoading: false, mutate: mocks.mutate }), apiCall: mocks.call }));
 vi.mock("@/components/builds/useCustomBuildPage", () => ({ useCustomBuildPage: () => ({ data: undefined }) }));
 afterEach(() => { cleanup(); mocks.mutate.mockClear(); mocks.call.mockClear(); });
 it.each([["Profile", SettingsProfile], ["Voice", SettingsVoice], ["Randomizer", SettingsRandomizer], ["Misc", SettingsMisc]])("%s never shows an editable blank form after a failed read", (_name, Tab) => {

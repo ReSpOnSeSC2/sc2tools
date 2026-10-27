@@ -362,3 +362,34 @@ describe("XP curve", () => {
     expect(v).toEqual({ current: 0, needed: 150 });
   });
 });
+
+describe("resolved personal session definitions", () => {
+  test.each([90, 240])("keeps equality at gap %d and splits one millisecond above", gapMinutes => {
+    for (const delta of [-1, 0, 1]) {
+      const games = [g({ gameId: "first", date: new Date(0).toISOString() }),
+        g({ gameId: "second", date: new Date(gapMinutes * 60_000 + delta).toISOString() })];
+      expect(sessionize(games, gapMinutes)).toHaveLength(delta > 0 ? 2 : 1);
+    }
+  });
+  test("90-minute player and 240-minute overlay defaults produce their declared different membership", () => {
+    const games = [g({ gameId: "first", date: new Date(0).toISOString() }),
+      g({ gameId: "second", date: new Date(120 * 60_000).toISOString() })];
+    expect(sessionize(games, 90)).toHaveLength(2);
+    expect(sessionize(games, 240)).toHaveLength(1);
+  });
+  test("unknown outcomes and interleaved accounts bridge after deterministic ordering", () => {
+    const games = [g({ gameId: "last", date: new Date(120 * 60_000).toISOString(), result: "Defeat", myToonHandle: "1-S2-1-a" }),
+      g({ gameId: "first", date: new Date(0).toISOString(), result: "Victory", myToonHandle: "1-S2-1-a" }),
+      g({ gameId: "bridge", date: new Date(60 * 60_000).toISOString(), result: "Tie", myToonHandle: "2-S2-1-a" })];
+    const before = games.slice(), sessions = sessionize(games, 90);
+    expect(sessions).toHaveLength(1); expect(sessions[0]).toMatchObject({ startIndex: 0, endIndex: 2 });
+    expect(sessions[0].games).toEqual([games[1], games[2], games[0]]);
+    expect(sessions[0].games[0]).toBe(games[1]); expect(games).toEqual(before);
+  });
+  test("invalid dates cannot define sessions or consume ordered session indices", () => {
+    const first = g({ gameId: "valid-one", date: new Date(0).toISOString() });
+    const last = g({ gameId: "valid-two", date: new Date(91 * 60_000).toISOString() });
+    const sessions = sessionize([g({ gameId: "invalid", date: "" }), last, first], 90);
+    expect(sessions.map(row => [row.startIndex, row.endIndex, row.games[0].gameId])).toEqual([[0, 0, "valid-one"], [1, 1, "valid-two"]]);
+  });
+});

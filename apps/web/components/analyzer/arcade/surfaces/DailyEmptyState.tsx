@@ -29,12 +29,12 @@ export function DailyEmptyState({
     kind === "quiz" ? "Daily quiz unavailable" : "Daily game unavailable";
   return (
     <Card>
-      <section role="region" aria-label={ariaLabel} className="space-y-3">
+      <section aria-label={ariaLabel} className="space-y-3">
         <EmptyState title={title} sub={sub} />
         <div className="text-center">
           <a
             href={helperHref}
-            className="inline-flex min-h-[44px] items-center rounded-md bg-accent px-4 text-caption font-semibold uppercase tracking-wider text-bg hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="inline-flex min-h-[44px] items-center rounded-md bg-accent px-4 text-caption font-semibold uppercase tracking-wider text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             Open the analyzer →
           </a>

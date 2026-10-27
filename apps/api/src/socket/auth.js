@@ -5,6 +5,7 @@ const { sha256 } = require("../util/hash");
 const { updatePlaybackJob } = require("../services/replayPlaybackJobs");
 const { scoutingDeviceRoom } = require("../services/agentScouting");
 const { overlayHandshakeDescriptor } = require("../services/overlayPresence");
+const { captureSessionPublication } = require("../services/sessionPublication");
 
 /** Min interval (ms) between accepted ``overlay:resync`` requests on
  * one socket. Tighter than 2 s would let a misbehaving client trigger
@@ -87,6 +88,7 @@ const ROLL_REPORT_WINDOW_MS = 60_000;
  *     wins: number, losses: number, games: number,
  *     mmrStart?: number, mmrCurrent?: number,
  *   }>,
+ *   sessionPublicationGuard?: (userId: string) => (() => void) | null,
  *   resolveVoicePrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveRandomizerPrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveGhostPrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
@@ -287,10 +289,11 @@ function attachSocketAuth(io, opts) {
       // as the overlay socket connects so OBS isn't staring at a blank
       // panel waiting for the first ``overlay:live`` to arrive.
       if (u && opts.resolveSession) {
+        const assertSessionCurrent = captureSessionPublication(opts.sessionPublicationGuard, u);
         opts
           .resolveSession(u, socket.data.timezone)
           .then((session) => {
-            if (session) socket.emit("overlay:session", session);
+            if (session) { assertSessionCurrent(session); socket.emit("overlay:session", session); }
           })
           .catch(() => {});
       }
@@ -332,10 +335,11 @@ function attachSocketAuth(io, opts) {
             && socket.data.overlayUserId
           ) {
             socket.data.timezone = tz;
+            const assertSessionCurrent = captureSessionPublication(opts.sessionPublicationGuard, socket.data.overlayUserId);
             opts
               .resolveSession(socket.data.overlayUserId, tz)
               .then((session) => {
-                if (session) socket.emit("overlay:session", session);
+                if (session) { assertSessionCurrent(session); socket.emit("overlay:session", session); }
               })
               .catch(() => {});
           }
@@ -389,10 +393,11 @@ function attachSocketAuth(io, opts) {
           } catch { /* A later reconnect/resync can recover. */ }
         }
         if (opts.resolveSession) {
+          const assertSessionCurrent = captureSessionPublication(opts.sessionPublicationGuard, userId);
           opts
             .resolveSession(userId, socket.data.timezone)
             .then((session) => {
-              if (session) socket.emit("overlay:session", session);
+              if (session) { assertSessionCurrent(session); socket.emit("overlay:session", session); }
             })
             .catch(() => {});
         }

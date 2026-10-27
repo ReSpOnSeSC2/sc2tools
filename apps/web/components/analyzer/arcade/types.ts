@@ -143,6 +143,9 @@ export interface GenerateInput {
  * fetch data itself; all I/O routes through useArcadeData.
  */
 export interface ArcadeDataset {
+  /** Failure affects only the two session quizzes; unrelated corpus stays usable. */
+  sessionPolicy?: import("@/lib/session-policy").SessionPolicy | null;
+  sessionPolicyError?: string | null;
   games: ArcadeGame[];
   opponents: ArcadeOpponent[];
   builds: ArcadeBuild[];
@@ -206,6 +209,7 @@ export interface ArcadeGame {
   opp_strategy?: string | null;
   oppPulseId?: string;
   opponent?: {
+    toonHandle?: string | null;
     displayName?: string;
     mmr?: number;
     race?: string;

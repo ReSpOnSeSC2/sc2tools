@@ -7,8 +7,9 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "token" }) }));
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "a", isLoaded: true, isSignedIn: true, getToken: async () => "token" }) }));
+vi.mock("@/lib/clientApi", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/clientApi")>(),
   apiCall: vi.fn(),
   useApi: () => ({
     data: { battleTag: "Player#1234", pulseIds: [] },

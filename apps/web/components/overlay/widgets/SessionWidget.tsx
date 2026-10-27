@@ -13,6 +13,9 @@ export type SessionSummary = {
   region?: string;
   sessionStartedAt?: string;
   sessionAnchorAt?: string;
+  sessionGapMinutes?: number;
+  sessionPolicySource?: "preference" | "auto-overlay" | "auto-player";
+  storedSessionGapMinutes?: number | null;
   streak?: { kind: "win" | "loss"; count: number };
   /**
    * Set when the aggregate was emitted by the Test route. The
@@ -120,7 +123,7 @@ export function SessionWidget({
           >
             {s.losses}L
           </span>
-          {elapsedText ? (
+          {elapsedText || s.sessionGapMinutes ? (
             <span
               style={{
                 fontSize: 13,
@@ -130,7 +133,7 @@ export function SessionWidget({
                 letterSpacing: 1,
               }}
             >
-              {elapsedText}
+              {elapsedText}{s.sessionGapMinutes ? `${elapsedText ? " · " : ""}gap >${s.sessionGapMinutes}m` : ""}
             </span>
           ) : null}
         </div>
@@ -150,7 +153,7 @@ export function SessionWidget({
               fontSize: 11,
               fontWeight: 700,
               letterSpacing: 2,
-              opacity: 0.6,
+              opacity: 0.85,
               writingMode: "vertical-rl",
               transform: "rotate(180deg)",
               color: "#e6b450",

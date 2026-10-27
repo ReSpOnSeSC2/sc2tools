@@ -27,7 +27,16 @@ async function selectedReadonly(input: Locator, value: string) {
 
 async function dismissToasts(page: Page) {
   const dismiss = page.getByRole("region", { name: "Notifications", exact: true }).getByRole("button", { name: "Dismiss notification" });
-  while (await dismiss.count()) await dismiss.first().click();
+  while (await dismiss.count()) {
+    try { await dismiss.first().click({ timeout: 2000 }); }
+    catch (error) {
+      // A four-second toast may expire between count() and the native click.
+      // Only accept that timeout when the requested empty state is observed.
+      if (!(error instanceof Error) || error.name !== "TimeoutError" || await dismiss.count() !== 0) throw error;
+      test.info().annotations.push({ type: "toast-expired-before-dismiss", description: "Observed no notification buttons after their natural expiration." });
+    }
+  }
+  await expect(dismiss).toHaveCount(0);
 }
 
 async function screenshot(target: Locator | Page, info: TestInfo, label: string) {

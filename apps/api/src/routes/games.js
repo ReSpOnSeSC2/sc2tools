@@ -1,4 +1,5 @@
 "use strict";
+const { captureSessionPublication } = require("../services/sessionPublication");
 
 const express = require("express");
 const { validateGameRecord } = require("../validation/gameRecord");
@@ -1237,6 +1238,7 @@ async function emitSessionUpdate(io, games, userId, opts = {}) {
     /** @type {string|undefined} */
     const tz = socket.data.timezone;
     try {
+      const assertSessionCurrent = captureSessionPublication(games.sessionPublicationGuard?.bind(games), userId);
       const session = await games.todaySession(userId, tz, {
         refreshCurrentMmr,
         reuseRecent: true,
@@ -1245,7 +1247,7 @@ async function emitSessionUpdate(io, games, userId, opts = {}) {
       // process-wide Pulse cache. Remaining overlay sockets can reuse
       // that fresh value instead of issuing one network request each.
       refreshCurrentMmr = false;
-      if (session) socket.emit("overlay:session", session);
+      if (session) { assertSessionCurrent(session); socket.emit("overlay:session", session); }
     } catch {
       // Per-overlay failure is non-fatal — keep walking the list so
       // one bad socket doesn't starve the others of their update.

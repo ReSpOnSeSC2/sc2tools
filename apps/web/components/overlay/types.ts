@@ -182,6 +182,10 @@ export type LiveGamePayload = {
     sessionStartedAt?: string;
     /** Owner's monotonic manual-reset boundary. Used to fence old fanouts. */
     sessionAnchorAt?: string;
+    /** Effective inactivity definition supplied by the cloud aggregate. */
+    sessionGapMinutes?: number;
+    sessionPolicySource?: "preference" | "auto-overlay" | "auto-player";
+    storedSessionGapMinutes?: number | null;
     /** Current win/loss run, if 2+. Drives the streak chip. */
     streak?: { kind: "win" | "loss"; count: number };
   };

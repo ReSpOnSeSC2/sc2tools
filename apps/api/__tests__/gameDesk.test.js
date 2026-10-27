@@ -13,6 +13,8 @@ const { PlayerChannelsService } = require("../src/services/playerChannels");
 const { OpponentChannelsCache } = require("../src/services/opponentChannels");
 const { buildMultichatRouter } = require("../src/routes/multichat");
 const { OverlayTokensService } = require("../src/services/overlayTokens");
+const { SessionPolicyService } = require("../src/services/sessionPolicy");
+const { OwnerRevisions } = require("../src/util/gameVisibility");
 let mongo, db, svc, engagement, studio, games, live, verified, app, directory, channels, events, bot;
 const TOKEN = "desk-token", OWNER = "desk-owner";
 beforeAll(async () => { mongo = await MongoMemoryServer.create(); db = await connect({ uri: mongo.getUri(), dbName: "game_desk" }); });
@@ -225,4 +227,97 @@ test.each(["owner-write", "stream-mark"])("reversed reset completion at %s retai
   expect((await studio.get(TOKEN)).streamStartMs).toBe(newerAt);
   expect((await games.todaySession(OWNER))).toMatchObject({ wins: 0, games: 0 });
   jest.restoreAllMocks();
+});
+
+test("a committed policy change during held token-list IO retires reset fanout without undoing the reset", async () => {
+  const revisions = new OwnerRevisions();
+  games.sessionPolicy = new SessionPolicyService(db, { revisions });
+  games.users.onSessionPolicyChanged = userId => {
+    games.sessionPolicy.invalidate(userId); games.invalidateSessionPolicy(userId); revisions.invalidate(userId);
+  };
+  let entered, release;
+  const started = new Promise(resolve => { entered = resolve; });
+  const held = new Promise(resolve => { release = resolve; });
+  const original = svc.deps.tokens.list;
+  const listing = jest.spyOn(svc.deps.tokens, "list").mockImplementationOnce(async userId => {
+    entered(); await held; return original(userId);
+  });
+  try {
+    const old = svc.resetSession(OWNER, TOKEN); await started;
+    try { await games.users.updateProfile(OWNER, { sessionGapMinutes: 15 }); }
+    finally { release(); }
+    const state = await old;
+    expect(state.streamStartMs).toBeGreaterThan(0);
+    expect((await db.users.findOne({ userId: OWNER })).sessionAnchorAt).toBeDefined();
+    expect(events.filter(event => event.event === "overlay:session")).toEqual([]);
+    await svc.resetSession(OWNER, TOKEN);
+    const current = events.filter(event => event.event === "overlay:session");
+    expect(current.map(event => event.room)).toEqual([`overlay:${TOKEN}`]);
+    expect(current[0].payload).toMatchObject({ wins: 0, losses: 0, games: 0, sessionGapMinutes: 15, sessionPolicySource: "preference" });
+    expect(Object.values(current[0].payload).some(value => typeof value === "function")).toBe(false);
+    expect(JSON.stringify(current[0].payload)).not.toMatch(/lease|generation|assertCurrent/);
+  } finally { release(); listing.mockRestore(); }
+});
+
+test("a committed reset keeps its ACK when an actual held session query is retired by a Profile write", async () => {
+  const revisions = new OwnerRevisions();
+  games.sessionPolicy = new SessionPolicyService(db, { revisions });
+  games.users.onSessionPolicyChanged = userId => {
+    games.sessionPolicy.invalidate(userId); games.invalidateSessionPolicy(userId); revisions.invalidate(userId);
+  };
+  let entered, release, first = true;
+  const started = new Promise(resolve => { entered = resolve; });
+  const held = new Promise(resolve => { release = resolve; });
+  const original = db.games.find.bind(db.games);
+  const finding = jest.spyOn(db.games, "find").mockImplementation((...args) => {
+    const cursor = original(...args);
+    if (first) {
+      first = false;
+      const read = cursor.toArray.bind(cursor);
+      cursor.toArray = async () => { entered(); await held; return read(); };
+    }
+    return cursor;
+  });
+  const listing = jest.spyOn(svc.deps.tokens, "list");
+  try {
+    const old = svc.resetSession(OWNER, TOKEN); await started;
+    try { await games.users.updateProfile(OWNER, { sessionGapMinutes: 15 }); }
+    finally { release(); }
+    const state = await old;
+    expect(state.streamStartMs).toBeGreaterThan(0);
+    expect((await db.users.findOne({ userId: OWNER })).sessionAnchorAt).toBeDefined();
+    expect(listing).not.toHaveBeenCalled();
+    expect(events.filter(event => event.event === "overlay:session")).toEqual([]);
+    await svc.resetSession(OWNER, TOKEN);
+    const current = events.filter(event => event.event === "overlay:session");
+    expect(current.map(event => event.room)).toEqual([`overlay:${TOKEN}`]);
+    expect(current[0].payload).toMatchObject({ games: 0, sessionGapMinutes: 15, sessionPolicySource: "preference" });
+    expect(listing).toHaveBeenCalledTimes(1);
+  } finally { release(); finding.mockRestore(); listing.mockRestore(); }
+});
+
+test.each(["resolution", "token-list", "publication"])("a non-retirement %s failure still rejects the committed reset", async boundary => {
+  const failure = new Error(`unrelated ${boundary} failure`);
+  const originalTo = svc.deps.io.to.bind(svc.deps.io);
+  let publicationEntered = false;
+  const listing = boundary === "publication" ? jest.spyOn(svc.deps.tokens, "list") : null;
+  const spy = boundary === "resolution"
+    ? jest.spyOn(games, "todaySession").mockRejectedValueOnce(failure)
+    : boundary === "token-list"
+      ? jest.spyOn(svc.deps.tokens, "list").mockRejectedValueOnce(failure)
+      : jest.spyOn(svc.deps.io, "to").mockImplementation(room => {
+        const emitter = originalTo(room);
+        return { emit: (event, payload) => {
+          if (event === "overlay:session") { publicationEntered = true; throw failure; }
+          return emitter.emit(event, payload);
+        } };
+      });
+  try {
+    await expect(svc.resetSession(OWNER, TOKEN)).rejects.toBe(failure);
+    if (boundary === "publication") {
+      expect(publicationEntered).toBe(true);
+      expect(listing).toHaveBeenCalledTimes(1); expect(listing).toHaveBeenCalledWith(OWNER);
+      expect(events.some(event => event.event === "overlay:multichat")).toBe(true);
+    }
+  } finally { spy.mockRestore(); listing?.mockRestore(); }
 });

@@ -1,4 +1,5 @@
 "use strict";
+const { mongoOrder } = require("./sessions");
 
 /**
  * Trends-tab "Player Insight" aggregations.
@@ -597,9 +598,13 @@ function summarize(rows) {
  */
 async function momentum(deps, userId, filters, opts = {}) {
   const gap = sanitizeGapMinutes(opts.sessionGapMinutes);
-  const match = deps.gamesMatchStage(userId, filters);
+  // gamesMatchStage creates Mongo predicates; its date leaf is a bounds document.
+  const match = /** @type {Record<string,unknown> & {date?:Record<string,unknown>}} */ (deps.gamesMatchStage(userId, filters));
+  // Local sequence universe is BSON Date, including all-time requests. No
+  // TimeClip/legacy rescue filter is added to manufacture universal parity.
+  match.date = { $type: "date", ...(match.date || {}) };
   const pipeline = momentumPipeline(deps, match, gap);
-  const [doc] = await deps.games.aggregate(pipeline).toArray();
+  const [doc] = await deps.games.aggregate(pipeline, { collation: { locale: "simple" } }).toArray();
   const post = (doc && doc.post) || [];
   const positions = (doc && doc.positions) || [];
   const baseline = (doc && doc.baseline && doc.baseline[0]) || null;
@@ -611,9 +616,11 @@ function momentumPipeline(deps, match, gapMinutes) {
   const gapMs = gapMinutes * 60 * 1000;
   return [
     { $match: match },
-    { $addFields: { _bucket: deps.bucketSwitch() } },
-    { $match: { _bucket: { $in: ["win", "loss"] } } },
-    { $sort: { date: 1 } },
+    // Query $type also matches arrays containing a Date. Keep indexed bounds
+    // above, then require a scalar BSON Date before ordering/date arithmetic.
+    { $match: { $expr: { $eq: [{ $type: "$date" }, "date"] } } },
+    { $addFields: { _bucket: deps.bucketSwitch(), _sessionOrder: mongoOrder() } },
+    { $sort: { _sessionOrder: 1 } },
     ...sequentialContext(gapMs),
     { $facet: momentumFacet() },
   ];
@@ -630,10 +637,9 @@ function sequentialContext(gapMs) {
   return [
     {
       $setWindowFields: {
-        sortBy: { date: 1 },
+        sortBy: { _sessionOrder: 1 },
         output: {
           _prevDate: { $shift: { output: "$date", by: -1, default: null } },
-          _prevResult: { $shift: { output: "$_bucket", by: -1, default: null } },
         },
       },
     },
@@ -645,28 +651,27 @@ function sequentialContext(gapMs) {
     {
       $addFields: {
         _sessionBreak: { $cond: [{ $or: [{ $eq: ["$_gapMs", null] }, { $gt: ["$_gapMs", gapMs] }] }, 1, 0] },
-        _post: {
-          $cond: [
-            { $or: [{ $eq: ["$_prevDate", null] }, { $gt: ["$_gapMs", gapMs] }] },
-            null,
-            "$_prevResult",
-          ],
-        },
       },
     },
     {
       $setWindowFields: {
-        sortBy: { date: 1 },
+        sortBy: { _sessionOrder: 1 },
         output: {
           _sessionId: { $sum: "$_sessionBreak", window: { documents: ["unbounded", "current"] } },
         },
       },
     },
+    // Unknown/draw rows have already bridged membership. Only now number the
+    // decided games and carry the previous DECIDED result inside each session.
+    { $match: { _bucket: { $in: ["win", "loss"] } } },
     {
       $setWindowFields: {
         partitionBy: "$_sessionId",
-        sortBy: { date: 1 },
-        output: { _pos: { $documentNumber: {} } },
+        sortBy: { _sessionOrder: 1 },
+        output: {
+          _pos: { $documentNumber: {} },
+          _post: { $shift: { output: "$_bucket", by: -1, default: null } },
+        },
       },
     },
   ];

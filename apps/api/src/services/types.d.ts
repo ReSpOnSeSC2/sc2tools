@@ -2,6 +2,8 @@
 // declarations — no runtime exports.
 
 export interface UserProfile {
+  sessionGapMinutes?: number | null;
+  sessionPolicy?: { gapMinutes: number; source: "preference" | "auto-overlay" | "auto-player"; storedGapMinutes: number | null };
   battleTag?: string;
   pulseId?: string;
   // Canonical pulse-identity list; ``pulseId`` mirrors ``pulseIds[0]``
@@ -42,7 +44,7 @@ export interface UsersService {
   getProfile(userId: string): Promise<UserProfile>;
   updateProfile(
     userId: string,
-    profile: { [K in keyof UserProfile]?: string | null },
+    profile: Partial<Omit<UserProfile, "sessionPolicy">> | { [key: string]: unknown },
   ): Promise<UserProfile>;
   getSummary(userId: string): Promise<UserSummary>;
   getReplaySharing(userId: string): Promise<ReplaySharingState>;
@@ -346,6 +348,7 @@ export interface GamesService {
     sha256?: string;
     storedAt?: Date | string;
   }>>;
+  sessionPublicationGuard?(userId: string): (() => void) | null;
   todaySession(
     userId: string,
     timezone?: string,
@@ -359,6 +362,9 @@ export interface GamesService {
     league?: string;
     region?: string;
     sessionStartedAt?: string;
+    sessionGapMinutes?: number;
+    sessionPolicySource?: "preference" | "auto-overlay" | "auto-player";
+    storedSessionGapMinutes?: number | null;
     streak?: { kind: "win" | "loss"; count: number };
   }>;
   distinctMyToonHandles(userId: string, limit?: number): Promise<string[]>;
@@ -850,6 +856,11 @@ export interface OverlayTokensService {
 }
 
 export interface AggregationsService {
+  resolveMomentumPolicy(userId: string, override: unknown): Promise<{
+    sessionGapMinutes: number; sessionPolicyGeneration: number;
+    lease: ReturnType<import("./sessionPolicy").SessionPolicyService["lease"]> | null;
+  }>;
+  assertSessionPolicy(lease: ReturnType<import("./sessionPolicy").SessionPolicyService["lease"]> | null): void;
   explorer(userId: string, filters: Record<string, any>, opts: ReturnType<typeof import('./trendsExplorer').parseExplorerOptions>): Promise<any>;
   summary(userId: string, filters: object): Promise<object>;
   matchups(userId: string, filters: object): Promise<object>;

@@ -146,6 +146,7 @@ async function main() {
       /** @type {any} */ (services).users.ensureFromClerk(clerkUserId),
     resolveSession: (userId, timezone) =>
       services.games.todaySession(userId, timezone, { reuseRecent: true }),
+    sessionPublicationGuard: (userId) => services.games.sessionPublicationGuard?.(userId) ?? null,
     resolveVoicePrefs: (userId) =>
       /** @type {any} */ (services).users.getPreferences(userId, "voice"),
     resolveRandomizerPrefs: (userId) =>

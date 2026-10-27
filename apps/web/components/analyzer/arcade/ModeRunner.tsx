@@ -30,12 +30,8 @@ import { DailyEmptyState } from "./surfaces/DailyEmptyState";
  * RenderContext and a shared dataset. Quizzes get a one-shot reveal;
  * games get persistent state and may call onAnswer multiple times.
  */
-export function ModeRunner({
-  mode,
-  isDaily,
-  onPlayedFresh,
-  forceMode = false,
-}: {
+export type ModeRunnerDataSource = ReturnType<typeof useArcadeData>;
+type ModeRunnerProps = {
   mode: AnyMode;
   isDaily: boolean;
   /** Called the first time the user answers in this mount; surfaces use this to advance Today's Daily Drop. */
@@ -49,9 +45,27 @@ export function ModeRunner({
    * the existing per-mode "Not enough data yet" UI.
    */
   forceMode?: boolean;
-}) {
+  /** An existing parent can share its already admitted dataset/read lifetime. */
+  dataSource?: ModeRunnerDataSource;
+};
+
+export function ModeRunner({ dataSource, ...props }: ModeRunnerProps) {
+  return dataSource
+    ? <ModeRunnerView {...props} dataSource={dataSource} />
+    : <ModeRunnerResolver {...props} />;
+}
+
+function ModeRunnerResolver(props: Omit<ModeRunnerProps, "dataSource">) {
+  const dataSource = useArcadeData();
+  return <ModeRunnerView {...props} dataSource={dataSource} />;
+}
+
+function ModeRunnerView({ mode, isDaily, onPlayedFresh, forceMode = false, dataSource }:
+  Omit<ModeRunnerProps, "dataSource"> & { dataSource: ModeRunnerDataSource }) {
   const seed = useDailySeed();
-  const { data, loading, error } = useArcadeData();
+  const { data, baseData, loading, error, retrySessionPolicy } = dataSource;
+  const sessionMode = ["first-game-of-day", "comeback-count"].includes(mode.id);
+  const roundData = sessionMode ? data : baseData ?? data;
   const { recordPlay, earnBadge, state } = useArcadeState();
   const [round, setRound] = useState(0);
   const [question, setQuestion] = useState<GenerateResult<unknown> | null>(null);
@@ -71,7 +85,7 @@ export function ModeRunner({
   // depthTag.
 
   useEffect(() => {
-    if (!data) return;
+    if (!roundData || (sessionMode && !roundData.sessionPolicy)) return;
     let cancelled = false;
     const rng = isDaily
       ? seed.rng
@@ -80,7 +94,7 @@ export function ModeRunner({
       rng,
       daySeed: isDaily ? seed.day : "",
       tz: seed.tz,
-      data,
+      data: roundData,
     };
     setAnswered(null);
     setScoreResult(null);
@@ -96,7 +110,7 @@ export function ModeRunner({
     return () => {
       cancelled = true;
     };
-  }, [data, isDaily, mode, round, seed.day, seed.rng, seed.tz]);
+  }, [roundData, sessionMode, isDaily, mode, round, seed.day, seed.rng, seed.tz]);
 
   const handleAnswer = useCallback(
     (a: unknown) => {
@@ -195,6 +209,11 @@ export function ModeRunner({
         <EmptyState title="Couldn't load" sub={error || "No data available."} />
       </Card>
     );
+  }
+  if (sessionMode && !data.sessionPolicy) {
+    return <Card><EmptyState title="Session settings unavailable" sub={data.sessionPolicyError || "Load your session definition before this quiz."} />
+      <div className="text-center"><button type="button" className="min-h-11 rounded-lg px-4 py-2 text-accent focus-visible:outline focus-visible:outline-2" onClick={() => void retrySessionPolicy()}>Retry session settings</button></div>
+    </Card>;
   }
   if (!question) {
     return (

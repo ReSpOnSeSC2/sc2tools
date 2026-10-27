@@ -1,6 +1,7 @@
 "use strict";
 
 const { shoutoutText } = require("./opponentChannels");
+const { captureSessionPublication } = require("./sessionPublication");
 const ACTIONS = ["predictionCancel", "predictionResolve", "sessionReset", "gamePause", "shoutout"];
 /** @param {number} status @param {string} code */
 function deskError(status, code) { return Object.assign(new Error(code), { status, code }); }
@@ -80,9 +81,21 @@ class GameDeskService {
     if (!Number.isFinite(anchor)) throw new Error("session anchor unavailable");
     games.invalidateSessionForReset(userId);
     const state = await studio.advanceStreamStart(token, anchor);
-    const session = await games.todaySession(userId, undefined, { reuseRecent: true });
-    if (io) for (const active of await tokens.list(userId)) {
-      if (!active.revokedAt && !("rotationPending" in active && active.rotationPending)) io.to(`overlay:${active.token}`).emit("overlay:session", session);
+    try {
+      const assertSessionCurrent = captureSessionPublication(games.sessionPublicationGuard?.bind(games), userId);
+      const session = await games.todaySession(userId, undefined, { reuseRecent: true });
+      if (io) for (const active of await tokens.list(userId)) {
+        if (!active.revokedAt && !("rotationPending" in active && active.rotationPending)) {
+          assertSessionCurrent(session);
+          io.to(`overlay:${active.token}`).emit("overlay:session", session);
+        }
+      }
+    } catch (error) {
+      // The anchor and stream mark are committed. A retired resolution or
+      // publication only discards this optional fanout; other failures retain
+      // their original error result.
+      const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+      if (typeof code !== "string" || !["session_policy_changed", "session_policy_publication_unavailable", "SESSION_RESOLUTION_STALE"].includes(code)) throw error;
     }
     return state;
   }

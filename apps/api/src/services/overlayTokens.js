@@ -80,6 +80,8 @@ class OverlayTokensService {
    * @param {{onRotationStarted?:(token:string)=>void}} [opts] */
   constructor(db, opts = {}) {
     this.db = db;
+    /** @type {import('../util/userRevision').UserRevision|null} */ this.userRevision = null;
+    /** @type {((userId:string)=>void)|null} */ this.onSessionPolicyChanged = null;
     this.writes = new OverlayTokenWrites(token => this.resolve(token));
     this.rotation = new OverlayTokenRotation(/** @type {import('../db/connect').DbContext} */ (db), this, opts);
     /** @type {Map<string, {expiresAt: number, value: {userId: string, label: string, enabledWidgets: string[],profile:ReturnType<typeof overlayProfileForRead>,profileRevision:number}}>} */
@@ -117,7 +119,9 @@ class OverlayTokensService {
   async create(userId, label) {
     const token = randomToken(24);
     const now = new Date();
-    await this.db.overlayTokens.insertOne(
+    this.onSessionPolicyChanged?.(userId);
+    try {
+      const write = () => this.db.overlayTokens.insertOne(
       stampVersion(
         {
           token,
@@ -132,8 +136,11 @@ class OverlayTokensService {
         },
         COLLECTIONS.OVERLAY_TOKENS,
       ),
-    );
-    return { token, label, createdAt: now, enabledWidgets: [...DEFAULT_WIDGETS], profile: defaultOverlayProfile(), profileRevision: 0 };
+      );
+      if (this.userRevision) await this.userRevision.run(userId, write);
+      else await write();
+      return { token, label, createdAt: now, enabledWidgets: [...DEFAULT_WIDGETS], profile: defaultOverlayProfile(), profileRevision: 0 };
+    } finally { this.onSessionPolicyChanged?.(userId); }
   }
 
   /**

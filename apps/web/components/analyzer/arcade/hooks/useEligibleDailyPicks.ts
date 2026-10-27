@@ -43,51 +43,61 @@ const EMPTY: DailyPicks = {
 
 export function useEligibleDailyPicks(dataset: ArcadeDataset | null): DailyPicks {
   const seed = useDailySeed();
-  const [picks, setPicks] = useState<DailyPicks>(EMPTY);
+  const [snapshot, setSnapshot] = useState<{ corpusKey: string | null; picks: DailyPicks }>({ corpusKey: null, picks: EMPTY });
   const warnedRef = useRef<Set<string>>(new Set());
 
-  // Count-based memo key — useArcadeData replaces the dataset reference
-  // on each /v1/* response, so size deltas are a reliable reprobe signal
-  // without deep-equal cost. Mutating a game in place won't reprobe, but
-  // the daily seed + catalog don't depend on mutated game contents.
-  const memoKey = useMemo(() => {
-    if (!dataset) return `${seed.userId}::${seed.day}::null`;
-    return [
-      seed.userId,
-      seed.day,
-      dataset.games.length,
-      dataset.opponents.length,
-      dataset.builds.length,
-      dataset.matchups.length,
-      dataset.maps.length,
-    ].join("::");
-  }, [seed.userId, seed.day, dataset]);
+  // Keep the existing corpus-size trigger. Policy changes are a separate
+  // eligibility input and must not replace an eligible independent round.
+  const corpusKey = useMemo(() => {
+    if (!dataset) return `${seed.userId}::${seed.day}::${seed.tz}::null`;
+    return [seed.userId, seed.day, seed.tz, dataset.games.length,
+      dataset.opponents.length, dataset.builds.length, dataset.matchups.length,
+      dataset.maps.length].join("::");
+  }, [seed.userId, seed.day, seed.tz, dataset]);
+  const policy = dataset?.sessionPolicy;
+  const memoKey = [corpusKey, policy?.gapMinutes ?? "unavailable",
+    policy?.source ?? "", policy?.storedGapMinutes ?? ""].join("::");
 
   useEffect(() => {
     if (!dataset) {
-      setPicks(EMPTY);
+      setSnapshot({ corpusKey, picks: EMPTY });
       return;
     }
     let cancelled = false;
-    setPicks((prev) => (prev.probing ? prev : { ...prev, probing: true }));
+    setSnapshot(previous => previous.corpusKey !== corpusKey
+      ? { corpusKey, picks: EMPTY }
+      : previous.picks.probing ? previous
+        : { corpusKey, picks: { ...previous.picks, probing: true } });
     void runProbeAndPick({
       dataset,
       day: seed.day,
       tz: seed.tz,
       userId: seed.userId,
       warned: warnedRef.current,
-    }).then((next) => {
+    }).then(next => {
       if (cancelled) return;
-      setPicks(next);
+      setSnapshot(previous => ({ corpusKey, picks: retainIndependentPicks(
+        previous.corpusKey === corpusKey ? previous.picks : EMPTY, next,
+      ) }));
     });
-    return () => {
-      cancelled = true;
-    };
-    // memoKey collapses (userId, day, dataset shape) into one stable string.
+    return () => { cancelled = true; };
+    // memoKey covers the owner/day/tz, existing corpus shape and policy scalars.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memoKey]);
 
-  return picks;
+  // Owner/day/corpus transitions cannot expose the previous selection while
+  // the replacement probe is waiting for its effect or generators.
+  return snapshot.corpusKey === corpusKey ? snapshot.picks : EMPTY;
+}
+
+function retainIndependentPicks(previous: DailyPicks, next: DailyPicks): DailyPicks {
+  const keepQuiz = previous.quiz && !["first-game-of-day", "comeback-count"].includes(previous.quiz.id)
+    && next.eligibleQuizIds.includes(previous.quiz.id);
+  const keepGame = previous.game && next.eligibleGameIds.includes(previous.game.id);
+  return { ...next,
+    ...(keepQuiz ? { quiz: previous.quiz, quizSkips: previous.quizSkips } : {}),
+    ...(keepGame ? { game: previous.game, gameSkips: previous.gameSkips } : {}),
+  };
 }
 
 async function runProbeAndPick(args: {
@@ -141,7 +151,6 @@ async function probeMode(
   } catch (err) {
     if (!warned.has(mode.id)) {
       warned.add(mode.id);
-      // eslint-disable-next-line no-console
       console.warn(`[arcade] mode "${mode.id}" probe threw — marked ineligible.`, err);
     }
     return false;
