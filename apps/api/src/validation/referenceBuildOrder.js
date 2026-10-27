@@ -9,7 +9,9 @@ const REFERENCE_BUILD_ORDER_SCHEMA = Object.freeze({
   type: "object", additionalProperties: false, required: ["v", "steps", "source"],
   properties: {
     v: { const: config.version }, source: { enum: config.sources },
-    sourceGameId: { type: "string", minLength: 1, maxLength: limits.gameIdChars, pattern: "^[A-Za-z0-9._:-]+$" },
+    // Replay IDs are opaque: legacy IDs contain separators, player names and
+    // Unicode map names. Bound private provenance without rewriting its identity.
+    sourceGameId: { type: "string", minLength: 1, maxLength: limits.gameIdChars, allOf: [{ pattern: LINE }, { pattern: "\\S" }] },
     steps: { type: "array", maxItems: limits.steps, items: {
       type: "object", additionalProperties: false, required: ["t", "supply", "action"], properties: {
         t: { type: ["integer", "null"], minimum: 0, maximum: limits.seconds },

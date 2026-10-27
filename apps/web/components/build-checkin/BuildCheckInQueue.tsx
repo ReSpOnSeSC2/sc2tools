@@ -45,9 +45,9 @@ const NO_ITEMS: GameIntentState[] = [];
  * BuildCheckInQueue — the header chip's dialog (a bottom sheet on phones):
  * every game from the last 72 hours still waiting for a check-in, newest
  * first, each with Confirm / Change… / No set build and the opponent's
- * build, plus "Dismiss all". "Add new build…" (your side from the picker,
- * the opponent's from its line) opens one shared build editor; the saved
- * build is checked in for that game straight away.
+ * build, plus "Dismiss all". "Add new build…" beside the replay label opens
+ * your editor directly; "Add opponent build…" stays on the opponent's line.
+ * Both use the shared editor and check the saved build in for that game.
  */
 export function BuildCheckInQueue({
   open,
@@ -434,7 +434,23 @@ function QueueItem({
             No suggestion yet. Pick the build you went for.
           </p>
         )}
-        <DetectedLine detected={item.detected?.name} />
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <DetectedLine detected={item.detected?.name} />
+          <button
+            type="button"
+            disabled={busy || !item.matchup}
+            onClick={() => onCreate("you", "")}
+            className={[
+              "inline-flex min-h-11 items-center gap-1 rounded px-1 font-semibold text-accent hover:underline",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+            ].join(" ")}
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            Add new build…
+            <span className="sr-only"> for your plan</span>
+          </button>
+        </div>
         {opponent ? (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-muted">
             <span>
@@ -449,8 +465,8 @@ function QueueItem({
               className="inline-flex min-h-11 items-center gap-1 rounded px-1 font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden />
-              Add new build…
-              <span className="sr-only"> for the opponent</span>
+              Add opponent build…
+              <span className="sr-only"> from the opponent&apos;s replay</span>
             </button>
           </div>
         ) : null}
@@ -479,6 +495,7 @@ function QueueItem({
             suggestedKey={suggestion?.key ?? null}
             label={`Build you went for in ${item.matchup ?? "this game"}`}
             onAddNew={(query) => onCreate("you", query)}
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- User-opened picker; Cancel restores focus.
             autoFocus
             disabled={busy}
           />

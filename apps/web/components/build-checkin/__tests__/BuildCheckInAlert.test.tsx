@@ -497,6 +497,41 @@ describe("BuildCheckInQueue — opponent and Add new build", () => {
     expect(within(entry).queryByRole("button", { name: /Change the opponent/ })).toBeNull();
   });
 
+  it("adds your build directly from the replay label and checks it in for that game", async () => {
+    harness.apiCall.mockResolvedValue({
+      ...withOpponent(),
+      status: "confirmed",
+      applied: true,
+      build: { key: "custom:own-opening", name: "Own Opening", slug: "own-opening", source: "custom" },
+    });
+    const dialog = setup();
+    expect(within(dialog).queryByRole("combobox")).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add new build… for your plan" }));
+    await screen.findByRole("dialog", { name: "Build editor" });
+    expect(harness.editor).toMatchObject({
+      gameId: "g1",
+      perspective: "you",
+      race: "Protoss",
+      vsRace: "Zerg",
+      defaultName: "PvZ — New build",
+      events: [{ time: 30, name: "Gateway" }],
+      lockMatchup: true,
+      createOnly: true,
+    });
+    act(() => {
+      harness.editor?.onSaved?.("own-opening", { name: "Own Opening" } as never, {
+        reclassifyRequested: false,
+      });
+    });
+    await waitFor(() => expect(harness.toast.success).toHaveBeenCalledWith("Saved to your library and checked in"));
+    expect(harness.apiCall).toHaveBeenCalledTimes(1);
+    const [, path, init] = harness.apiCall.mock.calls[0];
+    expect(path).toBe("/v1/games/g1/build-intent");
+    expect(JSON.parse(init.body)).toEqual({ action: "confirm", buildKey: "custom:own-opening" });
+    expect(harness.paths).toContain(BUILD_ORDER_PATH);
+    expect(harness.paths).toContain(`${QUEUE_PATH}#checkin-1`);
+  });
+
   it("adds your build from the picker and checks it in", async () => {
     harness.apiCall.mockResolvedValue({
       ...withOpponent(),
@@ -538,22 +573,28 @@ describe("BuildCheckInQueue — opponent and Add new build", () => {
     harness.apiCall.mockResolvedValue(withOpponent());
     const dialog = setup();
     fireEvent.click(
-      within(dialog).getByRole("button", { name: "Add new build… for the opponent" }),
+      within(dialog).getByRole("button", { name: "Add opponent build… from the opponent's replay" }),
     );
     await screen.findByRole("dialog", { name: "Build editor" });
     expect(harness.editor).toMatchObject({
+      gameId: "g1",
       perspective: "opponent",
       race: "Zerg",
       vsRace: "Protoss",
       defaultName: "Zerg build vs Protoss",
       events: [{ time: 40, name: "SpawningPool" }],
+      lockMatchup: true,
+      createOnly: true,
     });
+    expect(harness.paths).toContain(BUILD_ORDER_PATH);
     act(() => {
       harness.editor?.onSaved?.("ling-flood-2", { name: "Ling Flood 2" } as never, {
         reclassifyRequested: false,
       });
     });
-    await waitFor(() => expect(harness.apiCall).toHaveBeenCalled());
+    await waitFor(() => expect(harness.toast.success).toHaveBeenCalledWith("Saved to your library and checked in"));
+    expect(harness.apiCall).toHaveBeenCalledTimes(1);
+    expect(harness.apiCall.mock.calls[0][1]).toBe("/v1/games/g1/build-intent");
     expect(JSON.parse(harness.apiCall.mock.calls[0][2].body)).toEqual({
       action: "opponent",
       opponentBuildKey: "custom:ling-flood-2",

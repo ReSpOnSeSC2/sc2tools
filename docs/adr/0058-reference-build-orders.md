@@ -28,3 +28,10 @@ unknown action and unknown timing warnings do not prevent saving. A maximum of
 Practice uses supplied valid timed steps only, and requires enough eligible
 checkpoints under the existing Ghost target contract. It must not infer times
 from supply or turn rule deadlines into recorded build times.
+
+Clarification, 2026-10-27: source replay IDs are opaque private strings, not
+classifier tokens. Web and API accept a nonblank single line of at most 256
+Unicode code points, rejecting controls while retaining exact punctuation,
+names and separators. Public projections still omit this provenance. Detailed
+field errors stay in the rich editor and share the compact reader's scalar
+validators, so public reference displays do not load the editor's error copy.
