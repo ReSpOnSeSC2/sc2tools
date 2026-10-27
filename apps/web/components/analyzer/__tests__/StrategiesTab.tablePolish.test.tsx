@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import type { AnalyzerFilters } from "@/lib/filterContext";
 const state = vi.hoisted(() => ({ filters: {} as AnalyzerFilters, paths: [] as (string | null)[], noGames: false, previous: false, options: [] as unknown[] }));
 const csv = vi.hoisted(() => ({ download: vi.fn() }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "owner" }) }));
 vi.mock("@/lib/csvExport", async original => ({ ...(await original<typeof import("@/lib/csvExport")>()), downloadCsv: csv.download }));
 const rows = [
   { my_build: "Z Build", opp_strat: "Z Strategy", wins: 8, losses: 2, total: 10, winRate: .8, myMatchups: { P: 8, T: 2 } },

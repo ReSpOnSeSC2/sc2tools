@@ -24,7 +24,7 @@ const article: HelpArticle = {
     "win rate by mmr",
     "cheese",
   ],
-  updated: "2026-10-25",
+  updated: "2026-10-27",
   body: [
     {
       type: "paragraph",
@@ -47,7 +47,7 @@ const article: HelpArticle = {
         "Use **My race**, **My build**, **Opp race** and **Opp strategy** at the top to narrow the whole analyzer to those games.",
       ],
     },
-    { type: "paragraph", text: "The build-versus-strategy matchup selector defaults to your most-played opponent race in the measured rows; ties use All. A global opponent-race filter takes priority and hides the local selector. The heatmap sorts both axes by games played; choose **A–Z** for alphabetical order, remembered on this device. Sample size changes only the cell background, while the label stays readable. View controls support arrow keys." },
+    { type: "paragraph", text: "Choose **vP**, **vT**, **vZ** or **All** in the build-versus-strategy matchup selector. Your choice is remembered for your signed-in account on this browser when you leave Strategies or reopen the site. Before your first choice, it uses your most-played opponent race in the measured rows; ties use All. A global opponent-race filter takes priority and hides the local selector without replacing your saved choice. The heatmap sorts both axes by games played; choose **A–Z** for alphabetical order, remembered on this device. Sample size changes only the cell background, while the label stays readable. View controls support arrow keys." },
     { type: "paragraph", text: "**Export CSV** saves exactly the rows on screen in the current table or heatmap, with your filters written in the first line. Heatmap cells export as one row per build/strategy pairing, with the selected matchup and raw numeric win rates. Empty views have Nothing to export." },
     {
       type: "callout",
