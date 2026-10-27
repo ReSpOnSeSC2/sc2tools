@@ -64,8 +64,8 @@ Canonical Help generation is complete. Static validation evidence is recorded be
 - The canonical Help generator completed once with exit 0 and 95 articles. Its
   exact two imports/two registry entries were reviewed; all 44 authored bytes stayed
   unchanged. Generated index SHA256 is b9cb04809ce622fa62f79251266b7a21e1ea7560fd3296d60fcfd574b7c90f35.
-- Syntax, types, strict lint, selected units/API, production build, all unchanged
-  budgets, browser discovery/run, AA, screenshots and remote CI remain UNRUN.
+- At source freeze, syntax, types, strict lint, selected units/API, production
+  build, unchanged budgets, browser discovery/run, AA, screenshots and CI were UNRUN.
   No completion, release, deployment or visual approval is claimed.
 
 Before bytes and authored drafts are preserved under `C:\SC2TOOLS\.cache` in the
@@ -73,7 +73,7 @@ Before bytes and authored drafts are preserved under `C:\SC2TOOLS\.cache` in the
 All isolated source copies were static host writes with immediate raw hash checks.
 The reviewed Activation/Settings checkouts and their old evidence were not edited
 by this feature; their earlier results are not relabeled as Tours proof.
-## Independent review corrections — validation pending
+## Independent review corrections at source freeze
 
 Root reviewed and statically copied eleven exact paths from the preserved cache
 proposal, including its stronger test-only revision. The authored scope is now
@@ -98,19 +98,19 @@ frozen paths and the generated index retained their raw bytes.
 Before bytes, full proposal and follow-up analysis are under
 C:\SC2TOOLS\.cache\guided-tours-checkin-reveal-fix-aa03e6cc and
 C:\SC2TOOLS\.cache\guided-tours-root-reviewed-copy-aa03e6cc.
-No validation runtime, Git commit, native fullscreen timing, browser or visual
-success is established by this source-only review. The 70 web, 11 added API and
-12 browser case counts are declarations, not passing results.
+That source-only review established no validation runtime, Git commit, native
+fullscreen timing, browser or visual success. Its 70 web, 11 added API and 12
+browser case counts were declarations, not passing results.
 
-## Integrated static validation — fixture correction pending
+## Integrated static validation at 2d72ee29
 
 At `2d72ee29`, whole-web and whole-API typechecks exited 0 with no diagnostics.
 Strict lint of the 42 changed web paths exited 1 with zero errors and two
 warnings: the existing BuildCheckInCard autofocus and a new fixture useMemo
-dependency warning. The autofocus warning is a baseline candidate; comparison
-against main has not run. The fixture now derives its query from the subscribed
-pathname/search snapshot inside the existing memo. Its assertions are unchanged;
-validation of this correction remains UNRUN.
+dependency warning. The autofocus warning was a baseline candidate; comparison
+against main had not run at that stage. The fixture correction derived its query
+from the subscribed pathname/search snapshot inside the existing memo. Its
+assertions were unchanged; validation of that correction was then UNRUN.
 
 Raw outcomes are in `.cache/guided-tours-validation-2d72ee29/stage1-outcome.json`.
 The first driver's console-host closure RED is preserved; root independently
@@ -118,10 +118,10 @@ confirmed all four recorded PIDs absent, then reviewed the narrow console-host
 and JSON date-string wrapper repairs. Later probes confirmed retirement of all
 observed stage identities with no owned listeners. All 47 owned raw files, six
 protected seeds and three generated-input absences retained their guarded state.
-API strict lint, baseline comparison, 131 selected web cases, 24 Foundation cases,
-build, browser and CI remain UNRUN.
+At that stage, API strict lint, baseline comparison, 131 selected web cases,
+24 Foundation cases, build, browser and CI were UNRUN.
 
-## API test grouping — validation pending
+## API test grouping at 0e74f1b0
 
 At `0e74f1b0`, strict web42 reported zero errors and only the existing autofocus
 warning. The exact main `a0681fd` card produced the same rule, message, node and
@@ -134,7 +134,41 @@ The Tours tests now register through three named functions inside the original
 Foundation scope, called within the unchanged Tours describe/hook scope. Their
 code lengths are 40, 34 and 39 lines. All test bodies, titles, tables, assertions
 and hook bytes are retained; the 11 Tours and 24 total Foundation cases are
-unchanged. This grouping correction and the three prepared main-version API
-stdin comparisons remain UNRUN. No function-length suppression or test removal
-was added. Raw API evidence is in
+unchanged. At that stage, the grouping correction and the three prepared main-
+version API stdin comparisons were UNRUN. No function-length suppression or test
+removal was added. Raw API evidence is in
 `.cache/guided-tours-validation-0e74f1b0/03-api-lint/OUTCOME.json`.
+
+## API static comparison at 10530d28
+
+Candidate API strict3 exited 1 with zero errors and eight existing warning owners;
+the new Tours describe warning was gone. Three exact main `a0681fd` stdin
+baselines also exited 1, with zero errors and 2/3/3 warnings. All eight owners,
+rules and node kinds matched: six messages were identical; existing container
+sizes were Foundation 390/258 and buildMeRouter 703/702 (candidate/baseline).
+Root admitted only that existing debt, without suppression or a strict-clean
+claim. Raw comparison is
+`.cache/guided-tours-validation-10530d28/api-warning-comparison.json`, SHA256
+`2865d89151f02d5872c1b93a880e6e82dc3788fa2c3342109e6203be27e2cac1`.
+Every stage retained all 100 pre/post inputs, 47 owned files, six seeds and three
+generated absences. Independent DateKind String/Time6 closure retired 20 raw
+identity entries across 16 distinct PIDs, with zero owned listeners.
+
+## Real target fixture provider — validation pending
+
+At `10530d28`, the selected web group completed 131 cases in 12 files:
+130 passed, one Today target-owner assertion failed, and none were pending.
+The fixture mounted real DailyPulse without its required AnalysisGamesProvider;
+SectionBoundary therefore rendered its fallback instead of the real strip.
+The fixture now uses the actual provider inside its existing FiltersContext.
+The provider defaults to dormant (`enabled=false`); no target/context mock,
+selector weakening, test or assertion change was added. Its focused eight-case
+and strict checks remain UNRUN. Foundation's 24 real-Mongo cases never started.
+The new Tours build, browser cases and CI remain UNRUN.
+
+Raw first failure is preserved under
+`.cache/guided-tours-units-10530d28/01-web-units/OUTCOME.json`.
+All 100 pre/post inputs, 47 owned files, six seeds and three generated absences
+matched. Independent Time6 closure retired all 17 recorded identities with no
+owned listeners. PID 14696 had been reused by a later unrelated conhost, so the
+receipt preserves that match and does not claim all bare PIDs were absent.

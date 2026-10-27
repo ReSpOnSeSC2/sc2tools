@@ -6,6 +6,7 @@ import { TOURS, type TourId } from "@/lib/tours";
 import { FiltersContext } from "@/lib/filterContext";
 import { ToastProvider } from "@/components/ui/Toast";
 import { TodayView } from "@/components/dashboard/TodayView";
+import { AnalysisGamesProvider } from "@/components/analyzer/arcade/hooks/useAnalysisGames";
 import { LevelUpChecklist } from "./LevelUpChecklist";
 import { GameDetailPage } from "@/components/analyzer/game/GameDetailPage";
 import { SettingsOverlay } from "@/components/analyzer/settings/SettingsOverlay";
@@ -57,7 +58,7 @@ beforeEach(() => {
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
-function mount(children: ReactNode) { return render(<SWRConfig value={{ provider: () => new Map() }}><ToastProvider><SettingsContextProvider><BuildCheckInProvider><FiltersContext.Provider value={{ filters: {}, setFilters: vi.fn(), dbRev: 0, bumpRev: vi.fn(), seasons: [] }}>{children}</FiltersContext.Provider></BuildCheckInProvider></SettingsContextProvider></ToastProvider></SWRConfig>); }
+function mount(children: ReactNode) { return render(<SWRConfig value={{ provider: () => new Map() }}><ToastProvider><SettingsContextProvider><BuildCheckInProvider><FiltersContext.Provider value={{ filters: {}, setFilters: vi.fn(), dbRev: 0, bumpRev: vi.fn(), seasons: [] }}><AnalysisGamesProvider>{children}</AnalysisGamesProvider></FiltersContext.Provider></BuildCheckInProvider></SettingsContextProvider></ToastProvider></SWRConfig>); }
 function targets(id: TourId) {
   for (const step of TOURS[id].steps) {
     const nodes = document.querySelectorAll('[data-tour="' + step.target + '"]'); expect(nodes).toHaveLength(1);
