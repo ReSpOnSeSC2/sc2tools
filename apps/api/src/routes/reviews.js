@@ -426,7 +426,7 @@ function publicCache(res, seconds, rollout, browserSeconds = 0) {
     return;
   }
   res.set("Cache-Control", `public, max-age=${browserSeconds}, s-maxage=${seconds}`);
-  res.set("Vary", "Authorization");
+  res.vary("Authorization");
 }
 
 /** @param {import('express').Response} res */

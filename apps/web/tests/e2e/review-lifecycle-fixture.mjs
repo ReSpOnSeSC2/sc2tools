@@ -1,5 +1,7 @@
 import { build } from "esbuild";
 import { readFile, readdir } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { createServer } from "node:https";
 import path from "node:path";
 
 const ORIGIN = "https://review-lifecycle-fixture.local";
@@ -7,6 +9,54 @@ const ID = "fixtureReview001";
 const NOW = "2026-10-27T12:00:00.000Z";
 const DOWNLOAD_NAME = `sc2tools-review-${ID}.SC2Replay`;
 const DOWNLOAD_BODY = "SC2TOOLS_SYNTHETIC_REVIEW_FIXTURE_NO_GAME_DATA\n";
+let downloadServer, downloadOrigin = "", activeDownload;
+const downloadSockets = new Set(), downloadServerRequests = [], downloadServerErrors = [], downloadServerRejected = [];
+const appendBounded = (ledger, value) => { if (ledger.length < 32) ledger.push(value); };
+
+// Chromium's anchor[download] requests can have no CDP networkId and bypass
+// both page/context routing. Serve only the synthetic attachment over real TLS.
+async function startReviewDownloadServer() {
+  if (downloadServer) return;
+  const [cert, key] = await Promise.all([
+    readFile(new URL("./fixtures/review-tls/local-test-only-cert.pem", import.meta.url)),
+    readFile(new URL("./fixtures/review-tls/local-test-only-key.pem", import.meta.url)),
+  ]);
+  const current = createServer({ cert, key, minVersion: "TLSv1.2", handshakeTimeout: 5_000, maxHeaderSize: 8_192 }, (request, response) => {
+    const expectedHost = downloadOrigin ? new URL(downloadOrigin).host : "";
+    const allowed = activeDownload && request.method === "GET" && request.headers.host === expectedHost &&
+      ["127.0.0.1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress ?? "") &&
+      request.url === activeDownload.path && !request.headers["transfer-encoding"] &&
+      (!request.headers["content-length"] || request.headers["content-length"] === "0") && activeDownload.allowed();
+    if (!allowed) {
+      appendBounded(downloadServerRejected, { method: request.method, path: request.url });
+      response.writeHead(403, { connection: "close", "content-length": "0" }); response.end(); request.resume(); return;
+    }
+    const entry = { method: request.method, path: request.url, filename: DOWNLOAD_NAME, bytes: Buffer.byteLength(DOWNLOAD_BODY), status: 200 };
+    appendBounded(downloadServerRequests, entry); activeDownload.record(entry);
+    response.writeHead(200, { "content-type": "application/octet-stream", "content-disposition": `attachment; filename="${DOWNLOAD_NAME}"`,
+      "content-length": Buffer.byteLength(DOWNLOAD_BODY), "cache-control": "no-store", "x-content-type-options": "nosniff", connection: "close" });
+    response.end(DOWNLOAD_BODY);
+  });
+  current.maxConnections = 4; current.maxRequestsPerSocket = 2;
+  current.headersTimeout = 5_000; current.requestTimeout = 5_000; current.keepAliveTimeout = 1_000;
+  current.on("connection", socket => { downloadSockets.add(socket); socket.setTimeout(5_000, () => socket.destroy()); socket.once("close", () => downloadSockets.delete(socket)); });
+  current.on("tlsClientError", error => appendBounded(downloadServerErrors, String(error)));
+  current.on("clientError", (error, socket) => { appendBounded(downloadServerErrors, String(error)); socket.destroy(); });
+  current.on("error", error => appendBounded(downloadServerErrors, String(error)));
+  await new Promise((resolve, reject) => {
+    current.once("error", reject);
+    current.listen(0, "127.0.0.1", () => { current.removeListener("error", reject); resolve(); });
+  }).catch(error => { current.close(); throw error; });
+  downloadServer = current; downloadOrigin = `https://127.0.0.1:${current.address().port}`; current.unref();
+}
+
+export async function closeReviewLifecycleDownloadServer() {
+  const current = downloadServer, origin = downloadOrigin; activeDownload = null; downloadServer = null;
+  if (current) await new Promise(resolve => { current.close(resolve); current.closeAllConnections(); for (const socket of downloadSockets) socket.destroy(); });
+  downloadOrigin = "";
+  return { closed: true, listening: current?.listening ?? false, openSockets: downloadSockets.size, origin,
+    requests: downloadServerRequests.splice(0), errors: downloadServerErrors.splice(0), rejected: downloadServerRejected.splice(0), activeDownload: Boolean(activeDownload) };
+}
 let bundled;
 function script() {
   return bundled ??= build({
@@ -61,12 +111,17 @@ function initialRequest(question = "How should I defend this attack at the third
  * @param {{failAfterComment?:boolean,failAfterClose?:boolean}} options
  */
 export async function openReviewLifecycleFixture(page, options = {}) {
+  await startReviewDownloadServer();
   const js = await script();
   const cssRoot = path.join(process.cwd(), ".next/static/css");
   const css = (await Promise.all((await readdir(cssRoot, { recursive: true })).filter(file => file.endsWith(".css")).map(file => readFile(path.join(cssRoot, file), "utf8")))).join("\n");
   const fonts = [...css.matchAll(/\.(__variable_[a-z0-9]+)\{/g)].map(match => match[1]).join(" ");
   const calls = [], downloads = [], external = [], unexpected = [];
   let request = null, comments = [], failRead = false, failedComment = false;
+  const downloadPath = `/fixture-download/${DOWNLOAD_NAME}?token=${randomBytes(16).toString("hex")}`;
+  const downloadUrl = `${downloadOrigin}${downloadPath}`, attachmentRequests = [];
+  activeDownload = { path: downloadPath, allowed: () => Boolean(request?.replay.shared && request.status !== "closed"),
+    record: entry => { attachmentRequests.push(entry); downloads.push({ filename: DOWNLOAD_NAME, body: DOWNLOAD_BODY }); } };
   const snapshot = (viewer = null) => {
     const r = request ?? initialRequest();
     const active = r.status === "open" || r.status === "answered";
@@ -82,15 +137,14 @@ export async function openReviewLifecycleFixture(page, options = {}) {
   };
   await page.route("**/*", async route => {
     const url = new URL(route.request().url());
+    if (url.origin === downloadOrigin) {
+      if (url.href === downloadUrl && route.request().method() === "GET") return route.continue();
+      unexpected.push({ path: url.pathname, method: route.request().method() }); return route.abort();
+    }
     if (url.origin !== ORIGIN) { external.push(route.request().url()); return route.abort(); }
     if (url.pathname === "/favicon.ico") return route.fulfill({ status: 204, body: "" });
     if (url.pathname === "/fixture.js") return route.fulfill({ contentType: "text/javascript; charset=utf-8", body: js });
     if (url.pathname === "/fixture.css") return route.fulfill({ contentType: "text/css; charset=utf-8", body: css });
-    if (url.pathname === `/fixture-download/${DOWNLOAD_NAME}` && url.searchParams.get("token") === "synthetic" && route.request().method() === "GET") {
-      if (!request?.replay.shared || request.status === "closed") return route.fulfill({ status: 410, body: "Synthetic replay sharing revoked." });
-      downloads.push({ filename: DOWNLOAD_NAME, body: DOWNLOAD_BODY });
-      return route.fulfill({ contentType: "application/octet-stream", headers: { "content-disposition": `attachment; filename="${DOWNLOAD_NAME}"` }, body: DOWNLOAD_BODY });
-    }
     if (url.pathname.startsWith("/_next/static/media/")) return route.fulfill({ contentType: "font/woff2", body: await readFile(path.join(process.cwd(), ".next/static/media", path.basename(url.pathname))) });
     const publicRoot = path.resolve(process.cwd(), "public"), asset = path.resolve(publicRoot, `.${url.pathname}`);
     if (asset.startsWith(publicRoot + path.sep) && /\.(png|webp|jpg|jpeg|svg)$/.test(asset)) {
@@ -120,7 +174,7 @@ export async function openReviewLifecycleFixture(page, options = {}) {
       if (url.pathname === `/v1/reviews/${ID}/replay` && method === "GET") {
         if (!viewer) return fail(401, "auth_required", "Sign in to download the replay.");
         if (!request?.replay.shared || request.status === "closed") return fail(410, "replay_unavailable", "Replay sharing is off or the request is closed.");
-        return route.fulfill({ json: { url: `${ORIGIN}/fixture-download/${DOWNLOAD_NAME}?token=synthetic`, filename: DOWNLOAD_NAME, expiresIn: 60 } });
+        return route.fulfill({ json: { url: downloadUrl, filename: DOWNLOAD_NAME, expiresIn: 60 } });
       }
       if (url.pathname === `/v1/reviews/${ID}/comments` && method === "POST") {
         if (!request || request.status === "closed") return fail(410, "review_closed", "Comments are closed.");
@@ -164,5 +218,5 @@ export async function openReviewLifecycleFixture(page, options = {}) {
     return route.fulfill({ contentType: "text/html; charset=utf-8", body: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/fixture.css"></head><body class="${fonts} font-sans"><div id="root"></div><script>window.reviewFixtureInitial=${initial}</script><script src="/fixture.js"></script></body></html>` });
   });
   await page.goto(`${ORIGIN}/fixture`);
-  return { calls, downloads, external, unexpected, state: () => snapshot("asker") };
+  return { calls, downloads, downloadUrl, attachmentRequests, external, unexpected, state: () => snapshot("asker") };
 }

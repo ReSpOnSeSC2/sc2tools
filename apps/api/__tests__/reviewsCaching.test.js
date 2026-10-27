@@ -2,10 +2,13 @@
 "use strict";
 
 const express = require("express");
+const cors = require("cors");
 const request = require("supertest");
 const { buildReviewsRouter } = require("../src/routes/reviews");
 
 const ID = "abcdefghijklmnop";
+const ORIGIN = "https://review-client.example";
+const varyFields = (response) => String(response.headers.vary || "").split(",").map((field) => field.trim().toLowerCase());
 const READ_ROUTES = [
   ["/reviews", "public, max-age=0, s-maxage=60"],
   ["/reviews/leaderboard", "public, max-age=0, s-maxage=60"],
@@ -31,6 +34,8 @@ function fixture(rollout) {
   };
   const reputation = { weeklyLeaderboard: jest.fn(async () => ({ items: [] })) };
   const app = express();
+  // Production's origin:true/allowlist callback reflects the allowed Origin.
+  app.use(cors({ origin: true, credentials: false }));
   app.use("/v1", buildReviewsRouter({
     reviews, reputation, rollout,
     auth: (req, _res, next) => {
@@ -50,27 +55,42 @@ function fixture(rollout) {
 describe("reviews: rollout cache policy", () => {
   test.each(READ_ROUTES)("admin-only %s is never stored in browsers or shared caches", async (path) => {
     const { app } = fixture("admins");
-    const response = await request(app).get(`/v1${path}`).set("authorization", "Bearer boss");
+    const response = await request(app).get(`/v1${path}`).set("origin", ORIGIN).set("authorization", "Bearer boss");
     expect(response.status).toBe(200);
     expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(response.headers["access-control-allow-origin"]).toBe(ORIGIN);
+    expect(varyFields(response)).toContain("origin");
   });
 
   test.each(READ_ROUTES)("admin-only %s still refuses anonymous and ordinary viewers", async (path) => {
     const { app, reviews, reputation } = fixture("admins");
     for (const token of [null, "Bearer regular"]) {
-      const probe = request(app).get(`/v1${path}`);
+      const probe = request(app).get(`/v1${path}`).set("origin", ORIGIN);
       if (token) probe.set("authorization", token);
       const response = await probe;
       expect(response.status).toBe(404);
       expect(response.headers["cache-control"]).toBe("no-store");
+      expect(varyFields(response)).toContain("origin");
     }
     for (const fn of [...Object.values(reviews), ...Object.values(reputation)]) expect(fn).not.toHaveBeenCalled();
   });
 
   test.each(READ_ROUTES)("public %s retains its intended cache policy", async (path, cacheControl) => {
     const { app } = fixture("on");
-    const response = await request(app).get(`/v1${path}`);
+    const response = await request(app).get(`/v1${path}`).set("origin", ORIGIN);
     expect(response.status).toBe(200);
     expect(response.headers["cache-control"]).toBe(cacheControl);
+    expect(response.headers["access-control-allow-origin"]).toBe(ORIGIN);
+    expect(varyFields(response)).toContain("origin");
+    if (cacheControl.startsWith("public")) expect(varyFields(response)).toContain("authorization");
+  });
+
+  test("a personalized public-stage page preserves Origin while keeping its private no-store policy", async () => {
+    const { app } = fixture("on");
+    const response = await request(app).get(`/v1/reviews/${ID}`).set("origin", ORIGIN).set("authorization", "Bearer boss");
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(response.headers["access-control-allow-origin"]).toBe(ORIGIN);
+    expect(varyFields(response)).toContain("origin");
   });
 });

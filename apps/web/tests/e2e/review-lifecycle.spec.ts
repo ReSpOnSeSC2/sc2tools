@@ -1,5 +1,21 @@
-import { expect, test, type Page } from "@playwright/test";
-import { openReviewLifecycleFixture } from "./review-lifecycle-fixture.mjs";
+import { expect, test as base, type Page } from "@playwright/test";
+import { closeReviewLifecycleDownloadServer, openReviewLifecycleFixture } from "./review-lifecycle-fixture.mjs";
+
+// Trust only the public local-test key before Chromium's first TLS probe.
+// Preserve the caller's pinned executable, proxy arguments and other options.
+const REVIEW_TLS_SPKI = "wJUMA7xGnryPZb2+HIZAP695jfsS0WzvSmbrkFM5TsU=";
+const test = base.extend({
+  launchOptions: async ({ launchOptions }, provideOptions) => {
+    await provideOptions({ ...launchOptions, args: [...(launchOptions.args ?? []), `--ignore-certificate-errors-spki-list=${REVIEW_TLS_SPKI}`] });
+  },
+});
+test.afterAll(async ({ browserName }, info) => {
+  const receipt = await closeReviewLifecycleDownloadServer();
+  await info.attach("review-loopback-download-cleanup", { contentType: "application/json", body: JSON.stringify({ browserName, ...receipt }) });
+  expect(receipt.closed).toBe(true); expect(receipt.listening).toBe(false); expect(receipt.openSockets).toBe(0);
+  expect(receipt.activeDownload).toBe(false); expect(receipt.errors).toEqual([]); expect(receipt.rejected).toEqual([]);
+  expect(receipt.requests.every(request => request.status === 200 && request.filename === "sc2tools-review-fixtureReview001.SC2Replay")).toBe(true);
+});
 
 const QUESTION = "How should I defend this attack at the third base?";
 async function createRequest(page: Page) {
@@ -66,11 +82,15 @@ test("authenticated Review lifecycle saves once, recovers refresh, edits/replies
     page.getByRole("button", { name: "Download replay", exact: true }).click(),
   ]);
   expect(download.suggestedFilename()).toBe("sc2tools-review-fixtureReview001.SC2Replay");
+  expect(download.url()).toBe(fixture.downloadUrl);
   expect(await download.failure()).toBeNull();
   const stream = await download.createReadStream(); expect(stream).not.toBeNull();
   let downloaded = ""; if (stream) for await (const chunk of stream) downloaded += chunk.toString();
   expect(downloaded).toBe("SC2TOOLS_SYNTHETIC_REVIEW_FIXTURE_NO_GAME_DATA\n");
   expect(fixture.downloads).toHaveLength(1);
+  expect(fixture.attachmentRequests).toHaveLength(1);
+  expect(fixture.attachmentRequests[0]).toMatchObject({ method: "GET", status: 200, filename: "sc2tools-review-fixtureReview001.SC2Replay" });
+  await expect(page).toHaveURL(/\/reviews\/fixtureReview001$/);
   expect(fixture.calls.filter(call => call.method === "GET" && call.path.endsWith("/replay"))).toHaveLength(1);
   await sharing.click(); await expect(sharing).toHaveAttribute("aria-checked", "false");
   await expect(page.getByRole("button", { name: "Download replay", exact: true })).toHaveCount(0);
