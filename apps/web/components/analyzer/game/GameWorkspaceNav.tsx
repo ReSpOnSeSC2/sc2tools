@@ -24,5 +24,5 @@ export function GameWorkspaceNav() {
     window.addEventListener("resize", measure);
     return () => { observer?.disconnect(); window.removeEventListener("resize", measure); };
   }, []);
-  return <div ref={root} className="contents"><SectionNav items={SECTIONS} aria-label="Game sections" variant="bar" /></div>;
+  return <div ref={root} className="contents"><SectionNav items={SECTIONS} aria-label="Game sections" variant="bar" data-tour="game-navigation" /></div>;
 }

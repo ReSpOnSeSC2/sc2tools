@@ -12,6 +12,7 @@ import { LiveScoutingBrief } from "@/components/scouting/LiveScoutingBrief";
 import { onboardingView, useDashboardMe } from "@/components/dashboard/AnalyzerFrame";
 import { SectionBoundary } from "@/components/ui/SectionBoundary";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
+import { GuidedTours } from "@/components/onboarding/GuidedTours";
 
 const LadderPulse = dynamic(
   () => import("@/components/analyzer/LadderPulse").then((module) => module.LadderPulse),
@@ -36,7 +37,7 @@ export function TodayView() {
   const { enabled: browserImportEnabled } = useInstantImport();
 
   return (
-    <div className="space-y-5">
+    <GuidedTours id="today" ready={me.games.total > 0 && !onboardingView(me, browserImportEnabled).checklist} className="space-y-5">
       {me.games.total > 0 && !onboardingView(me, browserImportEnabled).checklist ? <SectionBoundary label="your suggested next steps"><LevelUpChecklist /></SectionBoundary> : null}
       <AgentUpgradeNotice
         initialAgent={{
@@ -55,17 +56,17 @@ export function TodayView() {
         <LiveScoutingBrief />
       </SectionBoundary>
 
-      <DashboardKpiStrip />
+      <div data-tour="today-summary"><DashboardKpiStrip /></div>
 
-      <SectionBoundary label="the Daily Pulse strip">
+      <div data-tour="today-daily-pulse"><SectionBoundary label="the Daily Pulse strip">
         <DailyPulse
           hrefForCard={(card) => dailyPulseHref(card, viewFiltersQuery(filters).toString())}
         />
-      </SectionBoundary>
+      </SectionBoundary></div>
 
-      <SectionBoundary label="Ladder Pulse">
+      <div data-tour="today-ladder-pulse"><SectionBoundary label="Ladder Pulse">
         <LadderPulse />
-      </SectionBoundary>
-    </div>
+      </SectionBoundary></div>
+    </GuidedTours>
   );
 }

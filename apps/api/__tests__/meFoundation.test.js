@@ -56,6 +56,7 @@ describe("Settings Foundation backing API", () => {
   let mongo;
   let db;
   let app;
+  let users;
 
   const config = {
     port: 0,
@@ -88,6 +89,7 @@ describe("Settings Foundation backing API", () => {
       config,
     });
     app = built.app;
+    users = built.services.users;
   });
 
   afterEach(() => {
@@ -273,6 +275,136 @@ describe("Settings Foundation backing API", () => {
     } finally { await db.games.deleteMany({ gameId: { $in: [gameId, `${gameId}-foreign`, `${gameId}-deleted`] } }); }
   });
 
+  describe("versioned guided-tour onboarding preferences", () => {
+    const at = "2026-10-26T12:00:00.000Z";
+    let tourOwner;
+    beforeEach(async () => {
+      tourOwner = `tour-${crypto.randomUUID()}`;
+      await db.users.insertOne({ userId: tourOwner, clerkUserId: `clerk-${tourOwner}`,
+        preferences: { misc: { keep: true }, onboarding: { goals: ["improve"], dismissedAt: null,
+          firstGameViewedAt: at, futureField: "$literal-data" } } });
+    });
+    afterEach(async () => {
+      jest.restoreAllMocks();
+      await db.users.deleteMany({ userId: { $in: [tourOwner, `${tourOwner}-other`] } });
+    });
+
+    test("HTTP accepts bounded version patches, preserves siblings, and makes onboarding private", async () => {
+      expect((await request(app).put("/v1/me/preferences/onboarding").send({ toursDone: { today: 1 } })).status).toBe(401);
+      const first = await withAuth(request(app).put("/v1/me/preferences/onboarding").send({ toursDone: { today: 1 } }));
+      expect(first.status).toBe(200); expect(first.headers["cache-control"]).toBe("private, no-store");
+      const next = await withAuth(request(app).put("/v1/me/preferences/onboarding")
+        .send({ toursDone: { game: 1, overlay: 1000 }, futureObject: { $literal: "$still-data" } }));
+      expect(next.status).toBe(200);
+      expect(next.body.toursDone).toEqual({ today: 1, game: 1, overlay: 1000 });
+      expect(next.body.futureObject).toEqual({ $literal: "$still-data" });
+      const empty = await withAuth(request(app).put("/v1/me/preferences/onboarding").send({ toursDone: {} }));
+      expect(empty.status).toBe(200); expect(empty.body).toEqual(next.body);
+      const read = await withAuth(request(app).get("/v1/me/preferences/onboarding"));
+      expect(read.headers["cache-control"]).toBe("private, no-store"); expect(read.body).toEqual(empty.body);
+    });
+
+    test("HTTP rejects malformed tour maps without partially applying other onboarding fields", async () => {
+      const before = (await withAuth(request(app).get("/v1/me/preferences/onboarding"))).body;
+      const invalid = [null, [], false, "today", 1, { today: 0 }, { today: -1 }, { today: 1.5 },
+        { today: "1" }, { today: true }, { today: null }, { today: {} }, { today: 1001 },
+        { unknown: 1 }, { "today.nested": 1 }, { $where: 1 }, { constructor: 1 }, { prototype: 1 },
+        JSON.parse('{"__proto__":1}')];
+      for (const toursDone of invalid) {
+        const response = await withAuth(request(app).put("/v1/me/preferences/onboarding")
+          .send({ toursDone, futureField: "must-not-commit" }));
+        expect(response.status).toBe(400); expect(response.body.error.code).toBe("invalid_onboarding_tours_done");
+      }
+      expect((await withAuth(request(app).get("/v1/me/preferences/onboarding"))).body).toEqual(before);
+    });
+
+    test("tour patches retain existing readonly marker, goals and dismissal validation", async () => {
+      const before = (await withAuth(request(app).get("/v1/me/preferences/onboarding"))).body;
+      for (const [patch, code] of [[{ firstGameViewedAt: at }, "readonly_onboarding_field"],
+        [{ goals: ["unknown"] }, "invalid_onboarding_goals"],
+        [{ levelUpDismissedAt: "junk" }, "invalid_level_up_dismissed_at"]]) {
+        const response = await withAuth(request(app).put("/v1/me/preferences/onboarding")
+          .send({ toursDone: { today: 2 }, ...patch }));
+        expect(response.status).toBe(400); expect(response.body.error.code).toBe(code);
+      }
+      expect((await withAuth(request(app).get("/v1/me/preferences/onboarding"))).body).toEqual(before);
+    });
+
+    test("real Mongo atomically retains concurrent tours, literal fields and independent onboarding patches", async () => {
+      await db.users.insertOne({ userId: `${tourOwner}-other`, preferences: { onboarding: { toursDone: { today: 7 } } } });
+      const answers = await Promise.all([
+        users.updatePreferences(tourOwner, "onboarding", { toursDone: { today: 2 }, futureObject: { $literal: "$data" } }),
+        users.updatePreferences(tourOwner, "onboarding", { toursDone: { game: 1 } }),
+        users.updatePreferences(tourOwner, "onboarding", { toursDone: { overlay: 1 }, levelUpDismissedAt: at }),
+        users.updatePreferences(tourOwner, "onboarding", { goals: ["stream"], whatsNewSeenVersion: "$version-data" }),
+      ]);
+      expect(answers[0].toursDone.today).toBe(2); expect(answers[1].toursDone.game).toBe(1);
+      const row = await db.users.findOne({ userId: tourOwner });
+      expect(row.preferences).toEqual({ misc: { keep: true }, onboarding: { goals: ["stream"], dismissedAt: null,
+        firstGameViewedAt: at, futureField: "$literal-data", futureObject: { $literal: "$data" },
+        toursDone: { today: 2, game: 1, overlay: 1 }, levelUpDismissedAt: at, whatsNewSeenVersion: "$version-data" } });
+      expect((await db.users.findOne({ userId: `${tourOwner}-other` })).preferences.onboarding.toursDone).toEqual({ today: 7 });
+    });
+
+    test("older tour versions cannot roll back a concurrent newer version and empty patches do not reset", async () => {
+      const empty = await users.updatePreferences(tourOwner, "onboarding", { toursDone: {} });
+      expect(empty).not.toHaveProperty("toursDone");
+      await Promise.all([2, 1, 4, 3].map(version => users.updatePreferences(tourOwner, "onboarding", { toursDone: { today: version } })));
+      const older = await users.updatePreferences(tourOwner, "onboarding", { toursDone: { today: 1, game: 1 } });
+      expect(older.toursDone).toEqual({ today: 4, game: 1 });
+      expect((await users.updatePreferences(tourOwner, "onboarding", { toursDone: {} })).toursDone).toEqual(older.toursDone);
+    });
+
+    test("malformed stored maps and versions cannot break a valid tour patch or masquerade as completion", async () => {
+      for (const stored of [null, [], false, "legacy", { today: "2", game: 2, overlay: 1.5, unknown: 8 },
+        { today: { version: 3 } }, { today: 1001, game: -1 }]) {
+        await db.users.updateOne({ userId: tourOwner }, { $set: { "preferences.onboarding.toursDone": stored } });
+        const answer = await users.updatePreferences(tourOwner, "onboarding", { toursDone: { today: 1 } });
+        expect(answer.toursDone).toEqual(stored?.game === 2 ? { game: 2, today: 1 } : { today: 1 });
+        expect(answer.firstGameViewedAt).toBe(at); expect(answer.futureField).toBe("$literal-data");
+      }
+    });
+
+    test("tour ACK is projected from the one guarded write with no later preferences read", async () => {
+      const write = jest.spyOn(db.users, "findOneAndUpdate"), read = jest.spyOn(db.users, "findOne");
+      const answer = await users.updatePreferences(tourOwner, "onboarding", { toursDone: { today: 1 } });
+      expect(answer).toMatchObject({ toursDone: { today: 1 }, firstGameViewedAt: at, futureField: "$literal-data" });
+      expect(answer).not.toHaveProperty("userId"); expect(answer).not.toHaveProperty("_id");
+      expect(read).not.toHaveBeenCalled(); expect(write).toHaveBeenCalledTimes(1);
+      expect(write).toHaveBeenCalledWith({ userId: tourOwner, _gdprMutation: { $exists: false } },
+        expect.any(Array), expect.objectContaining({ upsert: false, returnDocument: "after",
+          projection: { _id: 0, "preferences.onboarding": 1 }, maxTimeMS: 1500 }));
+    });
+
+    test.each(["missing", "fenced"])("%s owners reject tour writes instead of acknowledging or recreating them", async state => {
+      if (state === "missing") await db.users.deleteOne({ userId: tourOwner });
+      else await db.users.updateOne({ userId: tourOwner }, { $set: { _gdprMutation: { operation: "erase" } } });
+      await expect(users.updatePreferences(tourOwner, "onboarding", { toursDone: { today: 1 } }))
+        .rejects.toMatchObject({ status: 409, code: "gdpr_operation_busy" });
+      const row = await db.users.findOne({ userId: tourOwner });
+      if (state === "missing") expect(row).toBeNull();
+      else { expect(row._gdprMutation).toEqual({ operation: "erase" }); expect(row.preferences.onboarding).not.toHaveProperty("toursDone"); }
+    });
+
+    test.each(["deleted", "fenced"])("a held tour write cannot survive an owner becoming %s", async state => {
+      let entered, release;
+      const waiting = new Promise(resolve => { entered = resolve; }), held = new Promise(resolve => { release = resolve; });
+      const original = db.users.findOneAndUpdate.bind(db.users);
+      const spy = jest.spyOn(db.users, "findOneAndUpdate").mockImplementationOnce(async (...args) => {
+        entered(); await held; return original(...args);
+      });
+      const pending = users.updatePreferences(tourOwner, "onboarding", { toursDone: { today: 1 } });
+      try {
+        await waiting;
+        if (state === "deleted") await db.users.deleteOne({ userId: tourOwner });
+        else await db.users.updateOne({ userId: tourOwner }, { $set: { _gdprMutation: { operation: "erase" } } });
+        release(); await expect(pending).rejects.toMatchObject({ status: 409, code: "gdpr_operation_busy" });
+        const row = await db.users.findOne({ userId: tourOwner });
+        if (state === "deleted") expect(row).toBeNull();
+        else expect(row.preferences.onboarding).not.toHaveProperty("toursDone");
+      } finally { release(); await pending.catch(() => {}); spy.mockRestore(); }
+    });
+  });
   describe("POST /v1/webhooks/clerk", () => {
     test("rejects requests without svix headers", async () => {
       const res = await request(app)

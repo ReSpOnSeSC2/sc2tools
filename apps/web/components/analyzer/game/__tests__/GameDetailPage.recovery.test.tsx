@@ -13,7 +13,7 @@ vi.mock("@/components/build-checkin/BuildCheckInCard", () => ({ BuildCheckInCard
 vi.mock("../GhostGradeCard", () => ({ GhostGradeCard: () => null, ArmGhostFromLogButton: () => null }));
 vi.mock("../GameDetailShell", () => ({ GameDetailShell: ({ children }: { children: ReactNode }) => <><h1>My replay hero</h1>{children}</> }));
 vi.mock("../MapReplaySection", () => ({ MapReplaySection: () => { if (state.crash) throw new Error("player crash"); return <p>Replay player recovered</p>; } }));
-vi.mock("@/lib/clientApi", () => ({ useApi: (path: string) => {
+vi.mock("@/lib/clientApi", async original => ({ ...await original<typeof import("@/lib/clientApi")>(), useApi: (path: string) => {
   const macro = path?.endsWith("/macro-breakdown"); const build = path?.endsWith("/build-order");
   const game = path === "/v1/games/one";
   const error = macro ? state.macroError : build ? state.buildError : game ? state.gameError : null;
@@ -63,3 +63,7 @@ it("isolates a replay crash and remounts it without losing the hero or build ord
   state.crash = false; fireEvent.click(screen.getByRole("button", { name: "Try again" }));
   expect(screen.getByText("Replay player recovered")).toBeTruthy();
 });
+
+
+// These consumer assertions retain their original scope; tour owner/route/focus behavior is tested separately.
+vi.mock("@/components/onboarding/GuidedTours", () => ({ GuidedTours: ({ children, className, id }: { children: import("react").ReactNode; className?: string; id: string }) => <div className={className} data-tour-surface={id}>{children}</div> }));

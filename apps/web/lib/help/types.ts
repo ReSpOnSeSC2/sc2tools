@@ -42,7 +42,7 @@ export type HelpCalloutTone = "info" | "warning" | "success";
  * in components/help/HelpWidget.tsx and to searchable text in
  * lib/help/widgets.ts.
  */
-export type HelpWidgetId = "chat-commands" | "glossary";
+export type HelpWidgetId = "chat-commands" | "glossary" | "guided-tours";
 
 export type HelpBlock =
   /** A paragraph of text. */

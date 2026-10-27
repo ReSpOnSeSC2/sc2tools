@@ -153,7 +153,7 @@ export async function openSettingsSearchFixture(page, theme, options = {}) {
       reads.push({ owner, path: url.pathname, query: url.search }); return json({ items: [], total: 0, nextCursor: null });
     }
     if (owner && url.pathname === "/v1/me/preferences/onboarding" && !url.search && !url.hash && body === "") {
-      reads.push({ owner, path: url.pathname }); return json({ dismissedAt: null });
+      reads.push({ owner, path: url.pathname }); return json({ dismissedAt: null, toursDone: { overlay: 1 } });
     }
     if (owner && !url.search && !url.hash) {
       const fixed = new Map([

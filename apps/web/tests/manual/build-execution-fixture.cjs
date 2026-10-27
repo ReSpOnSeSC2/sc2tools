@@ -5,6 +5,9 @@ const root = process.cwd(); fs.mkdirSync('.tmp', { recursive: true });
 fs.writeFileSync('.tmp/build-execution-data.ts', `export {executionFixture} from '@/components/analyzer/game/__tests__/buildExecutionFixtures';export {intent,confirmedResponse,opponentState} from '@/components/build-checkin/__tests__/cardFixtures';`);
 esbuild.buildSync({ entryPoints: ['.tmp/build-execution-data.ts'], bundle: true, platform: 'node', format: 'cjs', outfile: '.tmp/build-execution-data.cjs', alias: { '@': root }, logLevel: 'warning' });
 const boundaries = {
+  // Tour persistence and focus are outside this report fixture; its own fixture uses the real controller.
+  '@/components/onboarding/GuidedTours': `import React from'react';export function GuidedTours({children,className,id}){return <div className={className} data-tour-surface={id}>{children}</div>}`,
+
   '@sentry/nextjs': `export function captureException(){}export function captureMessage(){}export function addBreadcrumb(){}`,
   'next/navigation': `const router={push(href){location.assign(href)},replace(href){history.replaceState(history.state,'',href)},prefetch(){}};export function useRouter(){return router}export function usePathname(){return location.pathname}export function useSearchParams(){return new URLSearchParams(location.search)}`,
   'next/link': `import React from'react';export default function Link({children,href,prefetch,scroll,replace,...props}){return <a href={href} {...props}>{children}</a>}`,
@@ -12,6 +15,8 @@ const boundaries = {
   'next/dynamic': `import React from'react';export default function dynamic(loader,options){const Lazy=React.lazy(()=>Promise.resolve(loader()).then(mod=>typeof mod==='function'?{default:mod}:mod));return props=><React.Suspense fallback={options?.loading?.()||null}><Lazy {...props}/></React.Suspense>}`,
   '@clerk/nextjs': `import{useSyncExternalStore}from'react';let auth={isLoaded:true,isSignedIn:true,userId:'owner-a'};const subscribe=fn=>{addEventListener('fixture-auth',fn);return()=>removeEventListener('fixture-auth',fn)};const token=async()=>auth.userId;window.fixtureAuth=(userId,isLoaded=true)=>{auth={isLoaded,isSignedIn:!!userId,userId};dispatchEvent(new Event('fixture-auth'))};export function useAuth(){return{...useSyncExternalStore(subscribe,()=>auth),getToken:token}}export function useUser(){return{...useAuth(),user:{id:auth.userId,publicMetadata:{}}}}`,
   '@/lib/useUserSocket': `export function useUserSocket(){}`,
+  // First-view bookkeeping is covered by the separate activation fixture.
+  '@/components/onboarding/useFirstGameViewed': `export function useFirstGameViewed(){return 'idle'}`,
 };
 fs.writeFileSync('.tmp/build-execution-entry.tsx', `import React from'react';import{createRoot}from'react-dom/client';import{SWRConfig}from'swr';import{GameDetailPage}from'@/components/analyzer/game/GameDetailPage';import{BuildCheckInProvider}from'@/components/build-checkin/BuildCheckInProvider';const cache=new Map();function Preview(){return <SWRConfig value={{provider:()=>cache,shouldRetryOnError:false,revalidateOnFocus:false}}><header className='border-b-2 border-line bg-bg-surface px-4 py-3 text-caption'>SC2 Tools · synthetic private replay</header><main className='mx-auto max-w-7xl p-3 sm:p-7'><BuildCheckInProvider><GameDetailPage gameId={decodeURIComponent(location.pathname.split('/').pop())}/></BuildCheckInProvider></main></SWRConfig>}createRoot(document.getElementById('root')).render(<Preview/>);`);
 const plugin = { name: 'explicit-local-boundaries', setup(build) {

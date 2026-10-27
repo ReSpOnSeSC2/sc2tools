@@ -261,7 +261,7 @@ export function BuildCheckInCard({
   return (
     <>
       {content ? (
-        <div ref={rootRef} tabIndex={showRequestState ? -1 : undefined} className="scroll-mt-20">
+        <div ref={rootRef} data-tour-blocker="check-in" tabIndex={showRequestState ? -1 : undefined} className="scroll-mt-20">
           {content}
         </div>
       ) : null}

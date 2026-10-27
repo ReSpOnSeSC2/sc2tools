@@ -10,6 +10,11 @@ from those tags and attaches the `.exe` and `.sha256` to the
 corresponding GitHub Release.
 
 ## [Unreleased]
+### Guided tours
+
+- Add short tours of Today, a game breakdown and Overlay settings, with keyboard controls and a phone sheet. Saved completion and skips follow the tour version; Help can replay a tour without resetting progress.
+- Wait for visible build check-in cards and open dialogs. Skip unavailable targets, retire interrupted tours safely and explain when the current layout cannot support a tour.
+- Keep tour progress separate from setup and suggestion dismissal, and merge each saved tour without overwriting another tour or other onboarding preferences.
 
 ### Suggested next steps after setup
 
@@ -5167,7 +5172,12 @@ Released as `agent-v0.4.0` on GitHub. Installer:
   `(+N more)` when more than one folder is being watched. The watcher
   picks up new entries on its next sweep without a restart.
 
-## [Unreleased] - 2026-05-04
+## [Unreleased]
+### Guided tours
+
+- Add short tours of Today, a game breakdown and Overlay settings, with keyboard controls and a phone sheet. Saved completion and skips follow the tour version; Help can replay a tour without resetting progress.
+- Wait for visible build check-in cards and open dialogs. Skip unavailable targets, retire interrupted tours safely and explain when the current layout cannot support a tour.
+- Keep tour progress separate from setup and suggestion dismissal, and merge each saved tour without overwriting another tour or other onboarding preferences. - 2026-05-04
 
 ### Added
 
