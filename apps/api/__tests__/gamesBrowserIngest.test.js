@@ -167,6 +167,6 @@ describe("POST /v1/games - provenance validation and CORS", () => {
       .send({ games: [sampleGame(9)] });
     expect(res.status).toBe(202);
     expect(res.headers["access-control-allow-origin"]).toBe(WEB_ORIGIN);
-    expect(res.headers["access-control-expose-headers"].split(",")).toEqual(["Retry-After", "X-Export-Truncated", "Content-Disposition"]);
+    expect(res.headers["access-control-expose-headers"].split(",")).toEqual(["Retry-After", "X-Export-Truncated", "Content-Disposition", "ETag"]);
   });
 });

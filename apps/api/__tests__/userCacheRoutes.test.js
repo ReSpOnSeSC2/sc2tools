@@ -28,10 +28,15 @@ function fixture(enabled = true, legacy = false) {
   return { app, users, rows, cache, revisions, aggregations, setDeleted: () => { deleted = true; }, revoke: () => { revoked = true; } };
 }
 const get = (app, path, owner = "a") => request(app).get(path).set("authorization", `Bearer ${owner}`);
-test.each(ROUTES)("%s caches an unchanged DTO and always returns private 200", async (method, path) => {
-  const f = fixture(); const first = await get(f.app, path); const second = await get(f.app, path).set("If-None-Match", "*");
+test.each(ROUTES)("%s preserves200 DTOs and conditionally returns private empty304", async (method, path) => {
+  const f = fixture(); const first = await get(f.app, path); const second = await get(f.app, path);
   expect(second.status).toBe(200); expect(second.body).toEqual(first.body);
-  expect(second.headers["cache-control"]).toBe("private, no-store"); expect(second.headers.etag).toBeUndefined();
+  expect(second.headers["cache-control"]).toBe("private, no-cache"); expect(second.headers.etag).toMatch(/^W\/"uc1-[0-9a-f]{64}"$/);
+  const reads = f.users.findOne.mock.calls.length;
+  const same = await get(f.app, path).set("If-None-Match", second.headers.etag);
+  expect(same.status).toBe(304); expect(same.text).toBe(""); expect(same.headers.etag).toBe(second.headers.etag);
+  expect(same.headers["content-length"]).toBeUndefined(); expect(same.headers["content-type"]).toBeUndefined();
+  expect(same.headers.vary).toContain("Authorization"); expect(f.users.findOne.mock.calls.length).toBe(reads + 1);
   expect(f.aggregations[method]).toHaveBeenCalledTimes(1);
 });
 test("off is byte/header/status-identical to the old router and makes zero revision commands", async () => {
@@ -83,4 +88,39 @@ test("an owner erased during computation cannot receive the delayed answer", asy
   const response = get(f.app, "/timeseries").then((result) => result); await began;
   f.rows.delete("a"); f.revisions.forget("a"); finish({ private: "erased" });
   expect((await response).status).toBe(401); expect(f.cache.completed.size).toBe(0);
+});
+
+test("validators cannot substitute another owner, filter, committed revision or unknown write", async () => {
+  const f = fixture(); const first = await get(f.app, "/timeseries"), tag = first.headers.etag;
+  for (const [path, owner] of [["/timeseries", "b"], ["/timeseries?map=other", "a"]]) {
+    const other = await get(f.app, path, owner).set("If-None-Match", tag);
+    expect(other.status).toBe(200); expect(other.headers.etag).not.toBe(tag);
+  }
+  await f.revisions.run("a", async () => true);
+  const changed = await get(f.app, "/timeseries").set("If-None-Match", tag);
+  expect(changed.status).toBe(200); expect(changed.headers.etag).not.toBe(tag);
+  await expect(f.revisions.run("a", async () => { throw new Error("unknown ack"); })).rejects.toThrow("unknown ack");
+  const uncertain = await get(f.app, "/timeseries").set("If-None-Match", changed.headers.etag);
+  expect(uncertain.status).toBe(200);
+});
+
+test("conditional headers do not bypass revocation, deletion or GDPR fences", async () => {
+  for (const mode of ["revoked", "deleted", "fenced"]) {
+    const f = fixture(), first = await get(f.app, "/timeseries");
+    if (mode === "revoked") f.revoke();
+    if (mode === "deleted") f.setDeleted();
+    if (mode === "fenced") f.rows.get("a")._gdprMutation = { kind: "restore" };
+    const blocked = await get(f.app, "/timeseries").set("If-None-Match", first.headers.etag);
+    expect(blocked.status).toBe(mode === "fenced" ? 503 : 401); expect(blocked.status).not.toBe(304);
+  }
+});
+
+test("cache OFF preserves legacy conditional status/body/header behavior too", async () => {
+  const old = fixture(false, true), off = fixture(false);
+  const a = await get(old.app, "/timeseries"), b = await get(off.app, "/timeseries");
+  const ac = await get(old.app, "/timeseries").set("If-None-Match", a.headers.etag);
+  const bc = await get(off.app, "/timeseries").set("If-None-Match", b.headers.etag);
+  expect([bc.status, bc.text, bc.headers.etag, bc.headers["cache-control"]])
+    .toEqual([ac.status, ac.text, ac.headers.etag, ac.headers["cache-control"]]);
+  expect(off.users.findOne).not.toHaveBeenCalled();
 });

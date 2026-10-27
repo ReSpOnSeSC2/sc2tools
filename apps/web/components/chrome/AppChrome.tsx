@@ -17,6 +17,7 @@ import { ThemeDialog } from "@/components/ui/ThemeChoice";
 import { SyncStatus } from "@/components/SyncStatus";
 import { LazyReportIssueModal } from "@/components/feedback/LazyReportIssueModal";
 import { useApi } from "@/lib/clientApi";
+import { ConditionalApiProvider } from "@/lib/conditionalApiScope";
 import type { ReportType } from "@/lib/feedback/reportContext";
 import {
   MOBILE_TAB_KEYS,
@@ -92,12 +93,14 @@ type CoachingMeProbe = {
 };
 
 export function AppChrome({ children }: { children: ReactNode }) {
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  const owner = isLoaded && isSignedIn && userId ? userId : null;
   return (
-    <ConnectionStatusProvider>
+    <ConditionalApiProvider owner={owner}><ConnectionStatusProvider>
       <BuildCheckInProvider>
         <ChromeProvider><AppChromeShell>{children}</AppChromeShell></ChromeProvider>
       </BuildCheckInProvider>
-    </ConnectionStatusProvider>
+    </ConnectionStatusProvider></ConditionalApiProvider>
   );
 }
 

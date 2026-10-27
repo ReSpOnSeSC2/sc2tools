@@ -12,12 +12,14 @@ function setup(limits = {}, enabled = true) {
   const cache = new UserCache(revisions, { enabled, limits, now: () => now });
   return { cache, revisions, users, advance: (ms) => { now += ms; } };
 }
-function request(cache, { owner = "a", filters = {}, options = {}, work = async () => ({ ok: true }), finish = true } = {}) {
-  const req = new EventEmitter(); req.method = "GET"; req.app = { get: () => undefined };
+function request(cache, { owner = "a", filters = {}, options = {}, work = async () => ({ ok: true }), finish = true, headers = {} } = {}) {
+  const req = new EventEmitter(); req.method = "GET"; req.headers = headers; req.app = { get: () => undefined };
   const res = new EventEmitter(); res.headers = {}; res.destroyed = false;
   res.status = (code) => { res.statusCode = code; return res; };
   res.set = (key, value) => { res.headers[key] = value; return res; };
   res.type = () => res;
+  res.vary = (value) => { res.headers.Vary = [res.headers.Vary, value].filter(Boolean).join(", "); return res; };
+  res.removeHeader = (key) => { delete res.headers[key]; };
   res.json = (value) => { res.body = JSON.stringify(value); return res; };
   res.end = (body) => { res.body = body; if (finish) res.emit("finish"); return res; };
   res.destroy = () => { res.destroyed = true; res.emit("close"); };
@@ -44,7 +46,7 @@ test("absolute TTL and LRU reclaim exact UTF-8 bytes; 512KiB is a body bound", a
   const { cache, advance } = setup({ entries: 1, ttlMs: 20 });
   const value = { map: "界" }; await request(cache, { work: async () => value }).promise;
   const [key] = [...cache.completed][0];
-  expect(cache.bytes).toBe(Buffer.byteLength(key) + Buffer.byteLength(JSON.stringify(value)));
+  expect(cache.bytes).toBe(Buffer.byteLength(key) + Buffer.byteLength(JSON.stringify(value)) + Buffer.byteLength([...cache.completed.values()][0].etag));
   advance(21); await request(cache, { work: async () => value }).promise;
   expect(cache.stats.expiry).toBe(1);
   await request(cache, { filters: { map: "other" } }).promise; expect(cache.completed.size).toBe(1);
@@ -186,4 +188,77 @@ test("serialization failure, work rejection and oversized keys retain nothing", 
   await expect(request(cache, { work: async () => { throw new Error("compute"); } }).promise).rejects.toThrow("compute");
   await request(cache, { filters: { map: "x".repeat(80) } }).promise;
   expect(cache.completed.size).toBe(0); expect(cache.bytes + cache.reserved + cache.active + cache.responses).toBe(0);
+});
+
+test("retained validators include owner, full typed key, exact JSON and process identity", async () => {
+  const { cache } = setup(); const work = async () => ({ secret: "界" });
+  const first = request(cache, { work }); await first.promise;
+  const tag = first.res.headers.ETag; expect(tag).toMatch(/^W\/"uc1-[0-9a-f]{64}"$/);
+  const hit = request(cache, { work }); await hit.promise; expect(hit.res.headers.ETag).toBe(tag);
+  for (const change of [{ owner: "b" }, { options: { interval: "week" } }, { filters: { map: "other" } }]) {
+    const other = request(cache, { ...change, work }); await other.promise; expect(other.res.headers.ETag).not.toBe(tag);
+  }
+  const restarted = request(setup().cache, { work }); await restarted.promise; expect(restarted.res.headers.ETag).not.toBe(tag);
+  expect(first.res.headers["Cache-Control"]).toBe("private, no-cache"); expect(first.res.headers.Vary).toBe("Authorization");
+});
+
+test("conditional hits finish empty304 leases while unchanged and foreign tags return full200", async () => {
+  const { cache, users } = setup(); const work = jest.fn(async () => ({ value: 42 }));
+  const first = request(cache, { work }); await first.promise; const tag = first.res.headers.ETag;
+  const reads = users.findOne.mock.calls.length;
+  const hit = request(cache, { work, headers: { "if-none-match": tag } }); await hit.promise;
+  expect(hit.res.statusCode).toBe(304); expect(hit.res.body).toBeUndefined();
+  expect(hit.res.headers["Content-Length"]).toBeUndefined(); expect(hit.res.headers["Content-Type"]).toBeUndefined();
+  expect(hit.res.headers.ETag).toBe(tag); expect(work).toHaveBeenCalledTimes(1);
+  expect(users.findOne.mock.calls.length).toBe(reads + 1);
+  const other = request(cache, { work, headers: { "if-none-match": 'W/"foreign"' } }); await other.promise;
+  expect(other.res.statusCode).toBe(200); expect(other.res.body.toString()).toBe('{"value":42}');
+  expect(cache.responses + cache.reserved + cache.active).toBe(0);
+  expect([...cache.completed.values()][0].refs).toBe(0);
+});
+
+test.each([
+  ["weak", tag => tag, 304], ["strong", tag => tag.slice(2), 304],
+  ["list with quoted comma", tag => `"other,tag", ${tag}, W/"last"`, 304],
+  ["star", () => "*", 304], ["unknown", () => '"unknown"', 200],
+  ["HTTP OWS", tag => ` \t${tag}\t `, 304],
+  ["leading NBSP", tag => `\u00a0${tag}`, 200], ["trailing NBSP", tag => `${tag}\u00a0`, 200],
+  ["unquoted NEL", tag => `\u0085${tag}`, 200],
+  ["quoted obs text", tag => `"\u0085", ${tag}`, 304],
+  ["malformed trailing", tag => `${tag},`, 200], ["malformed mixed star", tag => `*, ${tag}`, 200],
+  ["invalid control", tag => `"bad\t", ${tag}`, 200],
+  ["overlong", tag => `"${"x".repeat(4096)}", ${tag}`, 200],
+  ["too many", tag => `${Array.from({ length: 32 }, () => '"x"').join(",")},${tag}`, 200],
+])("bounded If-None-Match %s", async (_name, header, status) => {
+  const { cache } = setup(); const first = request(cache); await first.promise;
+  const call = request(cache, { headers: { "if-none-match": header(first.res.headers.ETag) } }); await call.promise;
+  expect(call.res.statusCode).toBe(status); expect(cache.responses).toBe(0);
+});
+
+test("joined subscribers choose200 and304 independently from one unchanged computation", async () => {
+  const { cache, advance } = setup({ ttlMs: 10 }); const work = jest.fn(async () => ({ same: true }));
+  const first = request(cache, { work }); await first.promise; const tag = first.res.headers.ETag;
+  advance(11); const gate = deferred(); work.mockImplementationOnce(() => gate.promise);
+  const conditional = request(cache, { work, headers: { "if-none-match": tag } });
+  await until(() => work.mock.calls.length === 2);
+  const plain = request(cache, { work }); await until(() => cache.stats.join === 1);
+  gate.resolve({ same: true }); await Promise.all([conditional.promise, plain.promise]);
+  expect(conditional.res.statusCode).toBe(304); expect(plain.res.statusCode).toBe(200);
+  expect(plain.res.body.toString()).toBe('{"same":true}');
+  expect(cache.responses + cache.active + cache.waiting).toBe(0);
+});
+
+test("dirty, oversized and generation-retired requests cannot send a reused validator", async () => {
+  const { cache, revisions } = setup(); const first = request(cache); await first.promise;
+  const tag = first.res.headers.ETag;
+  revisions.state("a").dirty = true; cache.invalidateForUser("a");
+  const dirty = request(cache, { headers: { "if-none-match": "*" } }); await dirty.promise;
+  expect(dirty.res.statusCode).toBe(200); expect(dirty.res.headers.ETag).toBeUndefined();
+  expect(dirty.res.headers["Cache-Control"]).toBe("private, no-store");
+  revisions.state("a").dirty = false;
+  const huge = request(cache, { work: async () => "x".repeat(LIMITS.entryBytes), headers: { "if-none-match": "*" } });
+  await huge.promise; expect(huge.res.statusCode).toBe(200); expect(huge.res.headers.ETag).toBeUndefined();
+  revisions.retire("a");
+  const fresh = request(cache, { headers: { "if-none-match": tag } }); await fresh.promise;
+  expect(fresh.res.statusCode).toBe(200); expect(fresh.res.headers.ETag).not.toBe(tag);
 });

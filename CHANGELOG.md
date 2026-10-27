@@ -33,6 +33,11 @@ corresponding GitHub Release.
 - Reduce background activity writes from desktop app requests while keeping agent heartbeats working.
 - Reuse agent status for up to 30 seconds so repeated dashboard loads do less database work. Pairing, new heartbeats and unpairing refresh the status.
 
+### Smaller chart refresh responses
+
+- Prepare conditional refreshes for six personal chart routes when the optional per-user cache is enabled. Unchanged results can reuse their retained browser body after fresh authentication and revision checks.
+- Keep ordinary reads available while the optional browser helper loads or reaches its retention limit. The server cache remains disabled by default.
+
 ### Trends charts on demand
 
 - Load charts below the first Trends row as they approach the viewport, with explicit Load buttons and usable fallbacks. Keep chart selections and unapplied Explorer controls while scrolling; collapsed groups retain their existing close-and-unmount behavior.

@@ -1,6 +1,8 @@
 "use strict";
 
 const { requestKey } = require("../services/trendsRequests");
+const { createHmac, randomBytes } = require("node:crypto");
+const TAG_BYTES = 72;
 const ALLOWED_ROUTES = new Set(["timeseries", "dayHourHeatmap", "lengthBuckets", "activityCalendar", "momentum", "mapTrend"]);
 const LIMITS = Object.freeze({ bytes: 64 * 1024 * 1024, entryBytes: 512 * 1024,
   keyBytes: 16 * 1024, entries: 512, ttlMs: 600000, active: 4, ownerActive: 2,
@@ -23,6 +25,7 @@ class UserCache {
     this.bytes = 0; this.reserved = 0; this.active = 0; this.waiting = 0; this.responses = 0; this.serial = 0;
     /** @type {Record<string,number>} */
     this.stats = { hit: 0, miss: 0, join: 0, eviction: 0, expiry: 0, oversize: 0, bypass: 0, rejected: 0, late_fill: 0 };
+    this.tagSalt = this.enabled ? randomBytes(32) : null;
     if (this.enabled) revisions.addInvalidator((owner) => this.invalidateForUser(owner));
   }
   get counters() {
@@ -71,7 +74,7 @@ class UserCache {
   beginResponse(req, res) {
     if (this.responses >= this.limits.responses) { res.set("Retry-After", "1"); throw this.busy(); }
     this.responses += 1;
-    const sub = { active: true, entry: /** @type {any} */ (null), task: /** @type {any} */ (null),
+    const sub = { ifNoneMatch: req.headers?.["if-none-match"], active: true, entry: /** @type {any} */ (null), task: /** @type {any} */ (null),
       queued: false, timer: /** @type {any} */ (null), responseTimer: /** @type {any} */ (null),
       reject: /** @type {null|((error:any)=>void)} */ (null) };
     const close = () => {
@@ -111,7 +114,7 @@ class UserCache {
       if (entry && key) {
         this.stats.hit += 1; this.completed.delete(key); this.completed.set(key, entry);
         entry.refs += 1; sub.entry = entry;
-        return this.respond(res, entry.body, sub);
+        return this.respond(res, { body: entry.body, etag: entry.etag }, sub);
       }
       if (this.waiting >= this.limits.waiting) throw this.busy();
       let task = key ? this.pending.get(key) : null;
@@ -137,7 +140,7 @@ class UserCache {
         // Promise delivery is another scheduling boundary: a write may have
         // retired the task after it resolved but before this subscriber sends.
         if (!this.revisions.sameGeneration(task.snapshot)) throw this.retired();
-        return this.respond(res, /** @type {Buffer|string} */ (packet), sub);
+        return this.respond(res, /** @type {{body:Buffer|string,etag:string|null}} */ (packet), sub);
       }
     } catch (error) {
       close();
@@ -145,14 +148,21 @@ class UserCache {
       throw error;
     }
   }
-  /** @param {any} res @param {Buffer|string} body @param {any} sub */
-  respond(res, body, sub) {
+  /** @param {any} res @param {{body:Buffer|string,etag:string|null}} packet @param {any} sub */
+  respond(res, packet, sub) {
     sub.responseTimer = setTimeout(() => res.destroy(), this.limits.responseMs); sub.responseTimer.unref?.();
-    res.status(200).set("Cache-Control", "private, no-store").set("Content-Type", "application/json; charset=utf-8");
-    res.set("Content-Length", String(Buffer.byteLength(body)));
-    // res.end avoids Express's implicit freshness/304 branch. Conditional
-    // browser body caching is a separate, explicitly unfinished slice.
-    return res.end(body);
+    if (packet.etag) {
+      res.set("Cache-Control", "private, no-cache").set("ETag", packet.etag).vary("Authorization");
+      if (matchesValidator(sub.ifNoneMatch, packet.etag)) {
+        res.removeHeader("Content-Type"); res.removeHeader("Content-Length"); res.removeHeader("Transfer-Encoding");
+        return res.status(304).end();
+      }
+    } else res.set("Cache-Control", "private, no-store");
+    res.status(200).set("Content-Type", "application/json; charset=utf-8");
+    res.set("Content-Length", String(Buffer.byteLength(packet.body)));
+    // Explicit per-subscriber conditional delivery; all current generation and
+    // deletion guards above still run, including on a retained hit.
+    return res.end(packet.body);
   }
   drain() {
     while (this.active < this.limits.active) {
@@ -167,7 +177,7 @@ class UserCache {
   }
   /** @param {any} task */
   async perform(task) {
-    const allowance = this.limits.entryBytes + (task.cacheKey ? Buffer.byteLength(task.cacheKey) : 0);
+    const allowance = this.limits.entryBytes + (task.cacheKey ? Buffer.byteLength(task.cacheKey) + TAG_BYTES : 0);
     let reserved = false;
     try {
       this.reserve(allowance); reserved = true;
@@ -186,18 +196,20 @@ class UserCache {
         // An oversized baseline response is not retained; keep its compute
         // permit until every slow response has finished or closed.
         const done = new Promise((resolve) => { task.releaseResponse = () => resolve(undefined); });
-        for (const sub of task.subs) { this.deliver(sub, text); }
+        for (const sub of task.subs) { this.deliver(sub, { body: text, etag: null }); }
         await done;
       } else {
-        const body = Buffer.from(text), charge = body.length + (task.cacheKey ? Buffer.byteLength(task.cacheKey) : 0);
-        const entry = { owner: task.owner, body, charge, refs: task.subs.size, cached: keep,
+        const etag = keep && this.tagSalt ? `W/"uc1-${createHmac("sha256", this.tagSalt).update(task.cacheKey).update("\0").update(text).digest("hex")}"` : null;
+        const body = Buffer.from(text), charge = body.length + (task.cacheKey ? Buffer.byteLength(task.cacheKey) : 0)
+          + (etag ? Buffer.byteLength(etag) : 0);
+        const entry = { owner: task.owner, body, etag, charge, refs: task.subs.size, cached: keep,
           expiresAt: this.now() + this.limits.ttlMs, freed: false };
         this.bytes += charge;
         if (keep) {
           while (this.completed.size >= this.limits.entries) this.evict(this.completed.keys().next().value || "");
           this.completed.set(task.cacheKey, entry);
         } else this._retiredBytes = this.retiredPinnedBytes + charge;
-        for (const sub of task.subs) { sub.entry = entry; this.deliver(sub, body); }
+        for (const sub of task.subs) { sub.entry = entry; this.deliver(sub, { body, etag }); }
       }
     } catch (error) {
       for (const sub of task.subs) sub.reject?.(error);
@@ -210,11 +222,38 @@ class UserCache {
       this.drain();
     }
   }
-  /** @param {any} sub @param {Buffer|string} body */
-  deliver(sub, body) {
+  /** @param {any} sub @param {{body:Buffer|string,etag:string|null}} packet */
+  deliver(sub, packet) {
     if (sub.queued) { sub.queued = false; this.waiting -= 1; }
-    sub.reject = null; sub.resolve(body);
+    sub.reject = null; sub.resolve(packet);
   }
+}
+/** Bounded If-None-Match weak comparison. Malformed input receives ordinary200.
+ * Quoted commas belong to opaque tags, not separators.
+ * @param {unknown} header @param {string} tag */
+function matchesValidator(header, tag) {
+  if (typeof header !== "string" || header.length > 4096) return false;
+  const value = header.replace(/^[ \t]+|[ \t]+$/g, "");
+  if (value === "*") return true;
+  let index = 0, count = 0, matched = false;
+  while (index < value.length) {
+    if (++count > 32) return false;
+    if (value.startsWith("W/", index)) index += 2;
+    if (value[index++] !== '"') return false;
+    const start = index - 1;
+    while (index < value.length && value[index] !== '"') {
+      const code = value.charCodeAt(index++);
+      if (!(code === 0x21 || (code >= 0x23 && code <= 0x7e) || (code >= 0x80 && code <= 0xff))) return false;
+    }
+    if (value[index++] !== '"') return false;
+    matched ||= value.slice(start, index) === tag.slice(2);
+    while (value[index] === " " || value[index] === "\t") index += 1;
+    if (index === value.length) return matched;
+    if (value[index++] !== ",") return false;
+    while (value[index] === " " || value[index] === "\t") index += 1;
+    if (index === value.length) return false;
+  }
+  return false;
 }
 /** Match Express JSON defaults/options without sharing mutable DTOs.
  * @param {any} req @param {any} value @returns {string} */

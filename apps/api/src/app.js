@@ -1109,7 +1109,7 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
       // Cross-origin JS can only read CORS-safelisted response headers
       // unless they are exposed. The browser importer honours Retry-After
       // on 503 replay_ingest_busy / 408 / 429 instead of guessing a backoff.
-      exposedHeaders: ["Retry-After", "X-Export-Truncated", "Content-Disposition"],
+      exposedHeaders: ["Retry-After", "X-Export-Truncated", "Content-Disposition", "ETag"],
     }),
   );
   app.use(
