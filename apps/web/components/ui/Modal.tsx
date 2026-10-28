@@ -182,7 +182,7 @@ export function Modal({
           placement === "right" ? SIDE_SIZE_CLASSES[size] : SIZE_CLASSES[size],
         ].join(" ")}
       >
-        <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+        <header role="presentation" className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div className="min-w-0 flex-1 space-y-1">
             <h2 id={titleId} className="text-h4 font-semibold text-text">
               {title}
@@ -206,7 +206,7 @@ export function Modal({
         </header>
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer ? (
-          <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-bg-elevated/30 px-5 py-3">
+          <footer role="presentation" className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-bg-elevated/30 px-5 py-3">
             {footer}
           </footer>
         ) : null}

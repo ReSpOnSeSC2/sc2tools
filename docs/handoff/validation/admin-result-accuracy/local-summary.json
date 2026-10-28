@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "status": "ALL_LOCAL_GATES_PASSED_PRE_AUTH_MAIN_INTEGRATION_NOT_DELIVERED",
+  "head": "76285591a0a2d66b2bd3ece4af7d94c77859cb0a",
+  "workingTree": "Two contrast source/test paths are uncommitted atop762 and are exactly included in the6863-input snapshot. This is pre-integration evidence; newly merged Auth df5 is not adopted here.",
+  "BUILD_ID": "JjIaq_KqIlM3gJQXJ0JlF",
+  "focused": {
+    "cases": 45,
+    "files": 4,
+    "vitestSuiteGroups": 7,
+    "skips": 0,
+    "workers": 1,
+    "wholeWebTypes": "pass --noEmit --incrementalfalse",
+    "strictOwnedTsFiles": 6,
+    "lintWarnings": 0,
+    "lintErrors": 0,
+    "sourceUnchanged": true,
+    "sourceReceipt": {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/contrast-fix-verification-01/VERIFIED.json",
+      "sha256": "ae4244b5db6a029e1f6ae9880a3eab264241a7d0e8bf0b5dc41d4378a283a31f",
+      "bytes": 4736
+    },
+    "rawReport": {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/contrast-fix-verification-01/unit-01.json",
+      "sha256": "e7291cf2fe7bba9f85046c1c1c1e9e630f817210146f630ef315ae98c5e745b8",
+      "bytes": 13216
+    }
+  },
+  "build": {
+    "directProductionNext": true,
+    "staticWorkers": 1,
+    "heapGiB": 4,
+    "all83Caps": true,
+    "fullSourceInputs": 6863,
+    "assets": "40 canonical /7 active /4 strict sample; no generation/download/prune",
+    "sourceGuards": "prebuild/postbuild/postbrowser all exact, before evidence-only adoption"
+  },
+  "browser": {
+    "passed": 16,
+    "cases": 16,
+    "skipped": 0,
+    "flaky": 0,
+    "fullDefaultAxeScans": 80,
+    "violations": 0,
+    "exclusions": 0,
+    "geometryStates": 80,
+    "LOCALcaptures": 48,
+    "productInputs": 240,
+    "css": 5,
+    "fonts": 3,
+    "widths": [
+      320,
+      390,
+      768,
+      1280
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "consumers": [
+      "actual opponent list",
+      "actual global list"
+    ],
+    "allFourActualDetailLabels": true,
+    "nativeKeyboardRowAndMobileBack": true,
+    "globalSharedGameIdOwnerScoped": true,
+    "queryPreserved": [
+      "before",
+      "debug",
+      "owner when applicable"
+    ],
+    "accountWriteAttempts": 0,
+    "browserWorkers": 1,
+    "retries": 0,
+    "serverStarted": false,
+    "report": {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-05.json",
+      "bytes": 11858698,
+      "sha256": "1d14404b4340c72539c3764c8efe0832c27580734a796b1d8d8a49184705fb39"
+    },
+    "binding": {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/input-binding-05.json",
+      "bytes": 54153,
+      "sha256": "b256a600645f76a22c7c90ebdab98a5703d3da26b6c0be31a589bf431fa6db5b"
+    },
+    "receipt": {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/VERIFIED-05.json",
+      "sha256": "b38927737bcf74fa85c7cebb57eaad2e35b600089a67d07324e787dbb77c8498",
+      "bytes": 64933
+    },
+    "boundaries": "Actual global/opponent admin pages, ResultBadge/canonical resultLabel/Badge, AdminSelectedGame/AdminGameDetail, useAdminQueryState/useAdminCursor, useApi/SWR, diagnostics, tables and empty build/macro detail branches. Explicit synthetic Clerk identity, GET-only HTTP data and local Next link/image/navigation primitives. Native history bridge exercises the actual query-state hook but is not an actual Next router/admin session/HTTP authorization proof. No chart data, account writes, provider or live acceptance."
+  },
+  "contrast": {
+    "failedBuild": "_LTnMT2Y5EdbL-MGpcS_7",
+    "failedRun": "04",
+    "oldRatio": 4.43,
+    "oldBackground": "#ddeceb",
+    "foreground": "#157a43",
+    "currentActualChecks": [
+      {
+        "case": "Admin results opponent 1280px light",
+        "target": [
+          ".justify-between.gap-2.items-center > .bg-bg-surface.inline-flex.rounded-full > .bg-success\\/5.text-success.border-success\\/30"
+        ],
+        "checks": [
+          {
+            "fgColor": "#157a43",
+            "bgColor": "#f3f8f6",
+            "contrastRatio": 5.02,
+            "fontSize": "9.8pt (13px)",
+            "fontWeight": "bold",
+            "expectedContrastRatio": "4.5:1"
+          }
+        ]
+      },
+      {
+        "case": "Admin results opponent 1280px light",
+        "target": [
+          ".gap-x-3 > .bg-bg-surface.inline-flex.rounded-full > .bg-success\\/5.text-success.border-success\\/30"
+        ],
+        "checks": [
+          {
+            "fgColor": "#157a43",
+            "bgColor": "#f3f8f6",
+            "contrastRatio": 5.02,
+            "fontSize": "9.8pt (13px)",
+            "fontWeight": "bold",
+            "expectedContrastRatio": "4.5:1"
+          }
+        ]
+      },
+      {
+        "case": "Admin results global 1280px light",
+        "target": [
+          ".justify-between.gap-2.items-center > .inline-flex.rounded-full.bg-bg-surface > .bg-success\\/5.text-success.border-success\\/30"
+        ],
+        "checks": [
+          {
+            "fgColor": "#157a43",
+            "bgColor": "#f3f8f6",
+            "contrastRatio": 5.02,
+            "fontSize": "9.8pt (13px)",
+            "fontWeight": "bold",
+            "expectedContrastRatio": "4.5:1"
+          }
+        ]
+      },
+      {
+        "case": "Admin results global 1280px light",
+        "target": [
+          ".gap-x-3 > .inline-flex.rounded-full.bg-bg-surface > .bg-success\\/5.text-success.border-success\\/30"
+        ],
+        "checks": [
+          {
+            "fgColor": "#157a43",
+            "bgColor": "#f3f8f6",
+            "contrastRatio": 5.02,
+            "fontSize": "9.8pt (13px)",
+            "fontWeight": "bold",
+            "expectedContrastRatio": "4.5:1"
+          }
+        ]
+      }
+    ],
+    "qualification": "Full default Axe in the passing fresh build checks both selected list and actual detail Win badges at5.02:1. No shared token, assertion, threshold or fixture CSS override."
+  },
+  "inspectedLOCAL": {
+    "method": "view_image of the three passing LOCAL captures after completed run",
+    "files": [
+      {
+        "file": "C:\\SC2TOOLS\\.cache\\admin-result-accuracy-20261028\\ui-browser\\browser-05\\admin-results-Admin-results-opponent-320px-light\\local-tie-opponent-320-light.png",
+        "bytes": 81119,
+        "sha256": "b64ec5def1b9a4cfef5f4c0652f9b1a563a080ade6809d8f051de36a78a1a0bc",
+        "width": 320,
+        "height": 1273
+      },
+      {
+        "file": "C:\\SC2TOOLS\\.cache\\admin-result-accuracy-20261028\\ui-browser\\browser-05\\admin-results-Admin-results-global-390px-dark\\local-unknown-global-390-dark.png",
+        "bytes": 103202,
+        "sha256": "3f741e949baaf1e3fbdf99cc45d6eaea6b5fbd85215c777be5df2472deda6f14",
+        "width": 390,
+        "height": 1653
+      },
+      {
+        "file": "C:\\SC2TOOLS\\.cache\\admin-result-accuracy-20261028\\ui-browser\\browser-05\\admin-results-Admin-results-global-1280px-light\\local-tie-global-1280-light.png",
+        "bytes": 133538,
+        "sha256": "3a19656c654aadfc5f75cd9adead61373948d2176eb2d5263374b15fad51f8fe",
+        "width": 1280,
+        "height": 1200
+      }
+    ],
+    "observed": "320px light Tie detail,390px dark Unknown detail and1280px light global selected Tie remain readable, contained, unselected except the intended game, with no clipped labels. No private or blank production photo is used."
+  },
+  "limits": [
+    "Explicit synthetic Clerk identity, GET-only local HTTP and Next primitive/history adapters; not a real admin account, HTTP authorization, actual Next router, provider or live production proof.",
+    "Actual pages, result helper/badge/detail/query state/useApi/SWR and missing-detail branches are real product source. Populated chart-data behavior is outside this correction.",
+    "No application listener, account edit, diagnostics Retry, Save, rule mutation, download/install or engine generation/pruning ran.",
+    "All source/asset guards describe the frozen762+2 tree before later evidence-only docs/adoption or Auth-main integration. New dependencies must be qualified before reusing evidence.",
+    "Admin-polish5 remains partial. Exact new-head CI, actual deployment and applicable signed-in acceptance remain parent release steps."
+  ],
+  "next": "Auth807 df5cf875 merged after these checks. Parent must qualify actual dependencies/overlaps before deciding additional local verification. New exact final-head required CI, deployment and relevant signed-in acceptance remain. Admin-polish5 stays partial."
+}

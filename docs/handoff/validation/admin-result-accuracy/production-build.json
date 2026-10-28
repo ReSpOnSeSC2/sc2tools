@@ -1,0 +1,14 @@
+{
+  "label": "production-build-01",
+  "args": [
+    "C:/SC2TOOLS/.worktrees/dashboard-cache-health/apps/web/node_modules/next/dist/bin/next",
+    "build"
+  ],
+  "cwd": "C:/SC2TOOLS/.worktrees/dashboard-cache-health/apps/web",
+  "pid": 43732,
+  "startedAtUtc": "2026-10-28T16:24:41.077Z",
+  "endedAtUtc": "2026-10-28T16:26:13.161Z",
+  "exitCode": 0,
+  "processAliveAfterExit": false,
+  "log": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-f213-build-02/production-build-01.log"
+}
