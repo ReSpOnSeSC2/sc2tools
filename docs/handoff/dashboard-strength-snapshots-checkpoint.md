@@ -1,6 +1,7 @@
 # Dashboard strength snapshots — candidate
 
-Base: deployed main `df5cf875d588fafba5456695a1c3550fc42ba587`.
+Original source baseline: deployed main `df5cf875d588fafba5456695a1c3550fc42ba587`.
+Current local head `6715b0ba` integrates passed/deployed Reader810 `b8ef1b94`.
 The program remains active and incomplete. This candidate covers only four
 direct responses: Matchups, Maps, Maps by matchup and Build versus strategy.
 `USER_CACHE_ENABLED` stays off. No provider, production database, observer,
@@ -44,7 +45,7 @@ All 47 source preimages matched fresh main before editing. The previously
 suggested retirement checkout had an unrelated dirty UI baseline and was
 preserved; implementation uses a separate new checkout/branch.
 
-Local verification passes 235 API cases in 14 files, including real Mongo/HTTP
+Historical pre-integration verification passes 235 API cases in 14 files, including real Mongo/HTTP
 aggregates, owner writes and lost acknowledgements, metadata-only changes,
 held curve/game reads, all-race snapshot coupling, 304/expiry and aborted capture
 admission. Whole API types and owned lint pass with the same six inherited
@@ -71,6 +72,36 @@ and listeners: none remain and no process was killed.
 
 Raw local evidence and preimages are retained in
 `C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028`.
-Independent implementation binding, exact-head CI, production build/all unchanged
-budgets and deployment acceptance remain pending. No build, browser, delivery,
-activation, savings or roadmap completion is claimed by this checkpoint.
+Independent source02/local bindings cleared the implementation. Current integrated
+verification passes 469 API cases in 21 files, whole API types, nine owned lint
+files with six inherited warnings/no added warnings, and the fresh 94-case
+Help/client set in seven files. The prior receipts remain historical.
+
+Direct production build `DOJx8sH90GXvnejpkSqtM` passes all 83 unchanged
+route caps and 40 canonical / 7 active / 4 strict sample guards. It uses one
+static worker and a 4 GiB heap; no generator, download or pruning ran. The
+original 6,938 source pre/post guards precede root adoption of four Reader
+delivery documents. Later transport guards cover all 6,939 current files with
+only those three reviewed metadata replacements and one new receipt. This
+checkpoint/compact evidence adoption is subsequent documentation-only work.
+
+The small real-client transport check passes two cases at 390 dark and
+1280 light, using actual useApi/SWR/conditional logic, six exact product
+inputs and the fresh build CSS/fonts. Synthetic Clerk identity and GET-only
+local responses are explicit seams. Each of the four paths demonstrates
+200/200/304 body reuse, exact query preservation and account-specific tags.
+Account B starts without A data or its validator; both held A requests show
+a confirmed browser abort. No stale response delivery through abort, server
+aggregation/authentication, actual Next routing, product visual/accessibility
+or production cache behavior is claimed. The initial run's historical backup
+discovery failure is preserved; only backup discovery was corrected and all
+current assertions remain. Exact process/creation identities across both
+browser runs show 31 exited identities, zero listeners and no kills. API,
+build and postbrowser asset cleanup are also clear.
+
+[Compact current evidence](validation/dashboard-strength-snapshots/README.md)
+retains exact raw cache paths and hashes without duplicating large reports,
+source lists or screenshots. Exact final-head CI, deployment and relevant
+acceptance remain pending. USER_CACHE_ENABLED stays off; common activation
+gates and excluded mixed dependencies remain. The parent stays partial; no
+savings, activation or roadmap completion is claimed.

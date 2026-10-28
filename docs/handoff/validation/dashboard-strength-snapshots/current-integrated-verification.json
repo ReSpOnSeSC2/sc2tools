@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "status": "LOCAL_INTEGRATED_STRENGTH_PREPARATION_PASSED_PENDING_FINAL_HEAD_CI_AND_DEPLOYMENT",
+  "head": "6715b0babda4eebc6b2ef69c2c278b839e61d82b",
+  "acceptedMain": "b8ef1b945effef54d9f7bad13e5ee27f1525a3db",
+  "preservedStrengthCommit": "c6a09bdf739e1418d5527074eba935373c3e4435",
+  "BUILD_ID": "DOJx8sH90GXvnejpkSqtM",
+  "scope": {
+    "routes": [
+      "/v1/matchups",
+      "/v1/maps",
+      "/v1/maps/matchups",
+      "/v1/build-vs-strategy"
+    ],
+    "existingCapabilityPositionsPreserved": 11,
+    "appendedPositions": [
+      11,
+      12,
+      13,
+      14
+    ],
+    "flag": "USER_CACHE_ENABLED remains off",
+    "parentRoadmap": "faster-dashboards remains partial; no ledger closure or remaining-count change from this cache preparation."
+  },
+  "product": "Optional private responses bind the exact immutable curve envelope/key/anchors/emitted metadata to Mongo expectations and JavaScript finish/inverse/DTO math. Every subgroup uses the captured snapshot. Origin/publication epochs retire stale load proofs without changing original baseline memo freshness/query/fallback; fresh computations may return no-store after curve retirement, retained hits/joins and304 require final current proof. Dependency capture is admitted and stays charged until actual settlement after abort.",
+  "checks": {
+    "api": {
+      "passed": 469,
+      "files": 21,
+      "failed": 0,
+      "skipped": 0,
+      "workers": 1,
+      "localMongo": "Cached7.0.14; downloads disabled; one member at a time. Includes realMongo/HTTP aggregates, owner mutations, held curve/game reads, lost ACKs and default-Off parity.",
+      "wholeApiTypes": true,
+      "ownedJavaScriptLintFiles": 9,
+      "inheritedWarnings": 6,
+      "addedWarnings": 0
+    },
+    "web": {
+      "passed": 94,
+      "files": 7,
+      "failed": 0,
+      "skipped": 0,
+      "unitWorkers": 1,
+      "qualification": "Current Help/client set rerun after Reader810 integration; historical235API/94web source02 receipts remain historical."
+    },
+    "build": {
+      "unchangedRouteCaps": 83,
+      "explicit": 18,
+      "default": 65,
+      "sourceInputsBeforeReaderDocs": 6938,
+      "staticWorkers": 1,
+      "heapGiB": 4,
+      "canonicalInputs": 40,
+      "activeAssets": 7,
+      "strictSampleGames": 4,
+      "generation": false,
+      "downloads": false,
+      "pruning": false
+    },
+    "transport": {
+      "cases": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "flaky": 0,
+      "browserWorkers": 1,
+      "retries": 0,
+      "actualProductInputs": 6,
+      "css": 5,
+      "fonts": 3,
+      "requests": 34,
+      "actual200": 22,
+      "actual304": 10,
+      "confirmedLateAAborts": 2,
+      "unexpectedNetwork": 0,
+      "pageErrors": 0
+    }
+  },
+  "transportDetails": {
+    "paths": [
+      "Exact four appended routes map to positions11–14; original excluded matchup time series stays−1.",
+      "Each eligible resource initial200/ordinary warmup200/conditional304 reconstructs exact retainedJSON. Original race/map/debug query and browser URL remain unchanged.",
+      "A changed filter makes a distinct resource without prior validator.",
+      "AccountB displays Loading instead of A data, starts without A validator, keeps own JSON/tag; held A is genuinely aborted and cannot overwrite B."
+    ],
+    "lateAOutcomes": [
+      {
+        "specimen": {
+          "width": 390,
+          "theme": "dark"
+        },
+        "outcome": "confirmed-net::ERR_ABORTED"
+      },
+      {
+        "specimen": {
+          "width": 1280,
+          "theme": "light"
+        },
+        "outcome": "confirmed-net::ERR_ABORTED"
+      }
+    ],
+    "requestFailureQualification": "Chromium emits net::ERR_ABORTED for five bodyless304 request objects per case after their actual304 response event; actual useApi reconstructs the retained JSON successfully. These raw signals remain in attachments. The held late-A request is separately correlated by request object and has no response; its confirmed abort is the account-transition proof. This run does not claim delivery of a stale late body through Chromium abort.",
+    "seams": [
+      "Actual current useApi/useOwnerRequestScope, SWR, ConditionalApiProvider and conditional response implementation; explicit synthetic Clerk identity/GET-only local HTTP.",
+      "No actual server aggregation/MMR/authentication/database, Next routing/SSR/chunk, signed-in production, cache activation, latency/savings or visual/accessibility proof. Artificial controls are transport specimens only.",
+      "USER_CACHE_ENABLED stays off. Source17 local implementation and separate realMongo/HTTP/Off gates remain in current combined receipt.",
+      "6938 original source guards preceded four root-adopted Reader docs. Current6939 pre/post transport hashes differ only in those four exact metadata files; no application drift."
+    ]
+  },
+  "sourceBoundary": {
+    "source97Rechecked": 97,
+    "exactRuntimeOrOriginalBytes": 94,
+    "qualifiedRootReaderMetadataReplacements": 3,
+    "oneNewReaderReceipt": true,
+    "originalBuildInputs": 6938,
+    "prePostTransportInputs": 6939,
+    "explanation": "Root adopted exactly four independently reviewed Reader delivery documents after original build/API/web guards. Current transport source guards cover6939 files with only those three metadata replacements and one new receipt. Proposed documentation below is another later metadata-only delta, outside those guards."
+  },
+  "exclusions": [
+    "Matchup time series remains excluded because its inner request key lacks the curve proof. Opponents/private notes/shared identities, saved-build definitions/stats, final Doctor warnings/device/archive data and Explorer remain uncached.",
+    "Advisory owner revision is not a durable/fleet change feed. Common cache activation/dependency/cutover qualification remains separate; no flag/provider/production database or credential activation occurred.",
+    "No live cache, server latency/savings, actual Clerk/API auth/Next routing, product visual/accessibility or signed-in production acceptance claim.",
+    "The maintained /me Reader810 delivery is independently recorded; it does not close the parent or activate caches."
+  ],
+  "cleanup": {
+    "api": "4current commands,8sequential native starts/stops; zero remaining owned process/descendant/listener and no kills.",
+    "build": "Recorded build/static-worker/guard identities exited; no remaining owned process/descendant/listener and no kills.",
+    "transport": {
+      "recordedIdentities": 31,
+      "remainingOwnedProcesses": 0,
+      "remainingOwnedListeners": 0,
+      "kills": 0,
+      "serverStarted": false
+    }
+  },
+  "retainedEvidence": [
+    "All original unit/type/lint/complexity and fixture failures remain cache-pinned. Final source02 and current integrated checks supersede rather than relabel them.",
+    "Transport run01 mixed overall failure is preserved: two current cases passed, two recursively discovered historical copies failed their exact-input binding. Config02 excludes only the preserved evidence directory; current assertions/fixture unchanged.",
+    "Both current held A requests genuinely abort. No delivery of a stale late response through browser abort is claimed."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/CURRENT-COMBINED-READY-01.json",
+      "bytes": 22708,
+      "sha256": "2e58778470231710b99ba41b63046f130d5db62eac1ffb3706844dbae94daeb1"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/source-ready-02.json",
+      "bytes": 22842,
+      "sha256": "da2dc7151ca15cce6eff5d7ef310d5933cbe61f6ddfe5c761939f6cc574dfcb1"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/independent-source-review-02.json",
+      "bytes": 20047,
+      "sha256": "da4ea4f0c6931a703c7b22db506a29d9383ba8fcd0ca3cd29e0ea6b9650c646f"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/independent-local-ready-binding-02.json",
+      "bytes": 2836,
+      "sha256": "c01f0bc415c0f32d8c43af69b0a3b0f291f67cb34b5c3036badef93aed3f2a98"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/integrated-reader-build-01/VERIFIED.json",
+      "bytes": 27549,
+      "sha256": "6d490743cec32953368de88584f36abfacee85da2768504428162786d6306317"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/integrated-reader-build-01/all-budgets-01.json",
+      "bytes": 9257,
+      "sha256": "4f1bb957a325f7196f3614b10199cf10bd5ec801b4822a68e0f04eb92cb12d5f"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/integrated-reader-build-01/assets-01/asset-admission-history-postbrowser.json",
+      "bytes": 9448,
+      "sha256": "38172dbf193684d1572462cb2975bd90253f589d5cd90a5d44c191a925997098"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/integrated-b8-api-01/cleanup-final-02.json",
+      "bytes": 1140,
+      "sha256": "00c5c8628943bc313dadd431f302e761788ca54bcfdf9cb53ca2c7cfb0d43e94"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/transport/VERIFIED-02.json",
+      "bytes": 10004,
+      "sha256": "61109bf370485c2959e3f8a932b92e675394a3de1dd8f06c9f6ad352cecac39b"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/transport/browser-01.json",
+      "bytes": 59734,
+      "sha256": "d015822ce97b09a003fa1a6184890efc7cbc40e8004d901951075449c0ab6d6b"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/transport/browser-02.json",
+      "bytes": 32030,
+      "sha256": "1d0f266d3025632da360e58a4c6af943b4450d5b0a5bb8b31efebbdad4200969"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/transport/cleanup-final.json",
+      "bytes": 409,
+      "sha256": "196d0bc809874428060ee3a2cdf95ffb1d96d93c365be38d803108b316c84d21"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/transport/source-prebrowser.json",
+      "bytes": 1315400,
+      "sha256": "80c9a0801a1e926c8f44dda9cb1d8fbe1f5422b751bf9f9a764e9b0fb1df67c8"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/transport/source-postbrowser.json",
+      "bytes": 1315401,
+      "sha256": "d6f8a68f8aba209240c84db04fc05646933ed2d7ab891a49e8ac79325dd67713"
+    }
+  ]
+}
