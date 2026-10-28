@@ -24,7 +24,9 @@ test("creator goes from Mine to a filtered picker, retries publishing and consum
   await publish.click(); await expect(page.getByText("Published successfully.", { exact: true })).toBeVisible();
   expect(calls.filter((call) => call.method === "POST" && call.pathname === "/v1/community/builds")).toHaveLength(2);
   expect(calls.filter((call) => call.method === "POST").at(-1)?.body).toMatchObject({ slug: "private-build-beta", publishAnonymously: true });
-  await page.getByRole("dialog").getByRole("contentinfo").getByRole("button", { name: "Close", exact: true }).click(); await expect(page.getByRole("dialog")).toHaveCount(0);
+  const dialog = page.getByRole("dialog"); const footer = dialog.locator(":scope > footer");
+  await expect(footer).toHaveAttribute("role", "presentation"); await expect(dialog.getByRole("contentinfo")).toHaveCount(0);
+  await footer.getByRole("button", { name: "Close", exact: true }).click(); await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.reload(); await expect(page.getByRole("dialog")).toHaveCount(0); expect(errors).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
 });
