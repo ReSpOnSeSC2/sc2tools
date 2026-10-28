@@ -33,7 +33,10 @@ response or caller can register its own navigation policy.
 - All 23 feedback cases passed after four equivalent sanitizer reductions.
 - All 41 app-shell route cases pass with the Next navigation boundary's
   required search-parameters export. Existing assertions are unchanged.
-- Final whole-web TypeScript and strict lint of all 29 changed web files pass.
+- All 37 streaming-token and related Settings guard cases pass. The dirty
+  fixture awaits real state publication and completed rename/refresh while
+  retaining every original lockout and body-preservation assertion.
+- Final whole-web TypeScript and strict lint of all 30 changed web files pass.
 - Production build `PJe4s15VV3tjLeDyFTb9q` passes all 83 original route caps:
   `/app` is 239.8/240 kB and `/community` is 190.0/190 kB.
 - Forty canonical engine inputs, seven active assets and the four-game sample
