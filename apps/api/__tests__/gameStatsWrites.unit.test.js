@@ -1,16 +1,19 @@
 // @ts-nocheck
 "use strict";
-const { GameStatsWrites, MAX_ACTIVE, assertGameStatsContext } = require("../src/services/gameStatsWrites");
+const { GameStatsWrites, MAX_ACTIVE, assertGameStatsContext, PROTOCOL_VERSION } = require("../src/services/gameStatsWrites");
 
 const originalEnvironment = process.env.NODE_ENV;
 afterEach(() => { process.env.NODE_ENV = originalEnvironment; jest.restoreAllMocks(); });
 const owner = { userId: "owner", id: "original-instance", compatibility: false };
+const selected = { selection: { ids: [] } };
 
 function harness() {
   const events = [];
   const session = { withTransaction: jest.fn(async callback => callback(session)), endSession: jest.fn(async () => {}) };
-  const users = { findOne: jest.fn(async () => ({ _id: owner.id })), updateOne: jest.fn(async () => { events.push("owner"); return { matchedCount: 1 }; }) };
-  const db = { users, gameStatsTransactions: true, client: { startSession: jest.fn(() => session) } };
+  const users = { findOne: jest.fn(async () => ({ _id: owner.id })), findOneAndUpdate: jest.fn(async () => { events.push("owner"); return { _id: owner.id }; }), updateOne: jest.fn(async () => ({ matchedCount: 1 })) };
+  const cursor = { sort: jest.fn().mockReturnThis(), limit: jest.fn().mockReturnThis(), toArray: jest.fn(async () => []) };
+  const games = { countDocuments: jest.fn(async () => 0), find: jest.fn(() => cursor) };
+  const db = { users, games, gameStatsTransactions: true, client: { startSession: jest.fn(() => session) } };
   return { events, session, users, db, writer: new GameStatsWrites(db) };
 }
 
@@ -48,35 +51,37 @@ test.each([null, [], {}, "not-a-uuid"])("malformed epoch %p is never normalized 
 
 test("owner invalidation precedes work in the same session and pins exact owner and fence", async () => {
   const h = harness();
-  const result = await h.writer.write(owner, async session => { h.events.push("games"); expect(session).toBe(h.session); return "committed"; }, { fenceId: "exclusive-operation" });
+  const result = await h.writer.write(owner, async session => { h.events.push("games"); expect(session).toBe(h.session); return "committed"; }, { ...selected, fenceId: "exclusive-operation" });
   expect(result).toBe("committed"); expect(h.events).toEqual(["owner", "games"]);
-  expect(h.users.updateOne).toHaveBeenCalledWith({ userId: "owner", _id: "original-instance", gameStatsMutationEpoch: { $exists: false }, "_gdprMutation.id": "exclusive-operation" },
-    expect.objectContaining({ $set: expect.objectContaining({ gameStatsProtocolVersion: 1, gameStatsRevision: expect.any(String), gameStatsWriterStatus: "transactional" }), $unset: { gameStats: "" } }), { session: h.session, upsert: false });
+  expect(h.users.findOneAndUpdate).toHaveBeenCalledWith({ userId: "owner", _id: "original-instance", gameStatsMutationEpoch: { $exists: false }, "_gdprMutation.id": "exclusive-operation" },
+    expect.objectContaining({ $set: expect.objectContaining({ gameStatsProtocolVersion: PROTOCOL_VERSION, gameStatsRevision: expect.any(String), gameStatsWriterStatus: "transactional" }), $unset: { gameStats: "", gameStatsMaintenance: "" } }), expect.objectContaining({ session: h.session, upsert: false, returnDocument: "before", includeResultMetadata: false }));
+  expect(h.users.updateOne).toHaveBeenCalledWith(expect.objectContaining({ gameStatsProtocolVersion: PROTOCOL_VERSION, gameStatsRevision: expect.any(String) }),
+    expect.objectContaining({ $set: expect.objectContaining({ gameStats: { total: 0, latest: null }, gameStatsMaintenance: expect.objectContaining({ version: 1, status: "ready" }) }) }), { session: h.session, upsert: false });
   expect(h.session.withTransaction.mock.calls[0][1]).toMatchObject({ timeoutMS: 10000, maxCommitTimeMS: 5000, readConcern: { level: "snapshot" }, writeConcern: { w: "majority", j: true } });
   expect(h.session.endSession).toHaveBeenCalledTimes(1);
 });
 
 test.each(["reject", "no-match"])("failed initial owner write (%s) never dispatches games", async mode => {
   const h = harness(), work = jest.fn();
-  if (mode === "reject") h.users.updateOne.mockRejectedValue(new Error("unknown owner command"));
-  else h.users.updateOne.mockResolvedValue({ matchedCount: 0 });
-  await expect(h.writer.write(owner, work)).rejects.toThrow(mode === "reject" ? "unknown owner command" : "game_stats_authority_changed");
+  if (mode === "reject") h.users.findOneAndUpdate.mockRejectedValue(new Error("unknown owner command"));
+  else h.users.findOneAndUpdate.mockResolvedValue(null);
+  await expect(h.writer.write(owner, work, selected)).rejects.toThrow(mode === "reject" ? "unknown owner command" : "game_stats_authority_changed");
   expect(work).not.toHaveBeenCalled(); expect(h.session.endSession).toHaveBeenCalledTimes(1);
 });
 
 test("session cleanup cannot replace the original games error", async () => {
   const h = harness(); h.session.endSession.mockRejectedValue(new Error("cleanup failed"));
   const original = new Error("original games outcome");
-  await expect(h.writer.write(owner, async () => { throw original; })).rejects.toBe(original);
+  await expect(h.writer.write(owner, async () => { throw original; }, selected)).rejects.toBe(original);
 });
 
 test("bounded actual promises own admission until settlement, including after stop", async () => {
   const h = harness(); let release;
   const held = new Promise(resolve => { release = resolve; });
   h.session.withTransaction.mockImplementation(() => held);
-  const active = Array.from({ length: MAX_ACTIVE }, () => h.writer.write(owner, jest.fn()));
+  const active = Array.from({ length: MAX_ACTIVE }, () => h.writer.write(owner, jest.fn(), selected));
   expect(h.writer.pending.size).toBe(MAX_ACTIVE);
-  await expect(h.writer.write(owner, jest.fn())).rejects.toThrow("game_stats_writer_busy");
+  await expect(h.writer.write(owner, jest.fn(), selected)).rejects.toThrow("game_stats_writer_busy");
   expect(h.db.client.startSession).toHaveBeenCalledTimes(MAX_ACTIVE);
   let drained = false;
   const drain = h.writer.stopAndDrain().then(() => { drained = true; });
@@ -93,7 +98,7 @@ test("standalone compatibility invalidates but never creates a qualifying snapsh
   const handle = await h.writer.capture("owner"), work = jest.fn(async session => { expect(session).toBeUndefined(); return "legacy"; });
   expect(await h.writer.write(handle, work)).toBe("legacy");
   expect(h.users.updateOne).toHaveBeenCalledWith({ userId: "owner", _id: "original-instance", gameStatsMutationEpoch: { $exists: false }, _gdprMutation: { $exists: false } },
-    { $set: { gameStatsWriterStatus: "unsupported" }, $unset: { gameStats: "", gameStatsRevision: "", gameStatsProtocolVersion: "" } }, { upsert: false });
+    { $set: { gameStatsWriterStatus: "unsupported" }, $unset: { gameStats: "", gameStatsRevision: "", gameStatsProtocolVersion: "", gameStatsMaintenance: "" } }, { upsert: false });
   expect(h.db.client.startSession).not.toHaveBeenCalled(); expect(work).toHaveBeenCalledTimes(1);
 });
 

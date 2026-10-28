@@ -1,0 +1,56 @@
+{
+  "sourceRoot": "C:\\SC2TOOLS\\.worktrees\\dashboard-cache-health",
+  "base": "7b9a30a288ca1adae7b90ac14ea360947cc26049",
+  "frozenAtUtc": "2026-10-28T06:58:19.0962067Z",
+  "pins": [
+    {
+      "path": "apps/api/src/db/connect.js",
+      "sha256": "d84200918419e659e841782253eda750032c39e09ed9dfc61a4e501c4fd5a668"
+    },
+    {
+      "path": "apps/api/src/server.js",
+      "sha256": "6adbbae4d62a8e6631ebd27661a3209f36fc94654515184b2d8999b296efd5ac"
+    },
+    {
+      "path": "apps/api/src/services/gameStatsMaintenance.js",
+      "sha256": "a4cdf5c58452c835e0c216af373a09be82457f851e7e33770c1048a798de4a1c"
+    },
+    {
+      "path": "apps/api/src/services/gameStatsWrites.js",
+      "sha256": "b3f5c264dd202b5fd5a3e2cb79c7b6bb998d15b712376aa61e19ed542789f78d"
+    },
+    {
+      "path": "apps/api/src/services/games.js",
+      "sha256": "c36a682c701298117e74c9ef5b5bb2640f923981b0c4147a916c77b56e274bc6"
+    },
+    {
+      "path": "apps/api/src/services/gameControls.js",
+      "sha256": "de0cbd2d731f1e37da55b2557abe587b39f4023170d7c118c865b71ede6ad9fc"
+    },
+    {
+      "path": "apps/api/src/services/gdpr.js",
+      "sha256": "6a73646ee13ba50b77e954e1ee1ae818ff5405d39d746798824e70fddc9cd879"
+    },
+    {
+      "path": "apps/api/src/services/userBackups.js",
+      "sha256": "6313b97b0ae1c1ac22ddaed2d5aba1441ac42d9b77e248a5cc0fd5d9e9c901ce"
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsMaintenance.unit.test.js",
+      "sha256": "23daed01865e9a26ef5b205b4acef7aa2d96edfef08b0740b707342fe74d4fa7"
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsWrites.unit.test.js",
+      "sha256": "52fd1ce73a59854c070cbfe2c4c685dd936c7ec99529ae3042576aa3ebb2b99f"
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsWrites.replset.test.js",
+      "sha256": "449a9cea8653bf06a9d3cb6711117e21b0bd1689d8f00076aae529e74cf8319d"
+    }
+  ],
+  "focused": "eager-focused-final-04.log:93cases/3suites",
+  "services": "eager-services-02.log:129cases/15suites",
+  "types": "api-types-02.log:exit0",
+  "strictNewLint": "api-lint-new-final-02.log:exit0",
+  "ownedLint": "api-lint-owned-01.log:exit0/14same baseline sites"
+}

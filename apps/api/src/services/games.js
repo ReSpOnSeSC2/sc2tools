@@ -502,7 +502,7 @@ class GamesService {
             return { result: inserted, excluded: false };
           }
           return null;
-        });
+        }, { selection: { gameIds: [game.gameId] } });
         if (attempt) { res = attempt.result; excluded = attempt.excluded; break; }
         if (Date.now() >= leaseDeadline) throw opponentBuildOrderBusyError();
         await wait(50);
@@ -643,7 +643,7 @@ class GamesService {
         newlyFlaggedExisting: Number(marked.matchedCount || 0),
         gameIds,
       };
-      });
+      }, { selection: { gameIds } });
       this._sessionResolutionGate.invalidate(userId);
       return result;
     });

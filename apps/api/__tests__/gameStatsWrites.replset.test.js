@@ -1,18 +1,20 @@
 // @ts-nocheck
 "use strict";
 const { MongoMemoryReplSet } = require("mongodb-memory-server");
-const { MongoServerError, MongoNetworkError } = require("mongodb");
+const { MongoServerError, MongoNetworkError, Long } = require("mongodb");
 const pino = require("pino");
 const request = require("supertest");
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
 const { GamesService } = require("../src/services/games");
-const { GameStatsWrites } = require("../src/services/gameStatsWrites");
+const { GameStatsWrites, PROTOCOL_VERSION } = require("../src/services/gameStatsWrites");
+const { statsMatch, MAX_STATS_BYTES } = require("../src/services/gameStatsMaintenance");
 const { createBackupStore } = require("./helpers/userBackupsStore");
 const { insertDeviceToken, sampleGame } = require("./helpers/browserIngestHarness");
 
 let mongo, db, app, services, store, ownedMongo;
 const gameCommands = [];
+const queryCommands = [];
 const userId = "stats-owner", other = "stats-other";
 const logger = pino({ level: "silent" });
 const original = { total: 77, latest: "old snapshot" };
@@ -23,9 +25,10 @@ const game = (gameId, extra = {}) => ({ userId, gameId, date: played, ...extra }
 const readOwner = () => db.users.findOne({ userId });
 async function expectRetired(before) {
   const row = await readOwner();
-  expect(row.gameStats).toBeUndefined(); expect(row.gameStatsProtocolVersion).toBe(1);
+  expect(row.gameStats).toEqual(await services.games.stats(userId)); expect(row.gameStatsProtocolVersion).toBe(PROTOCOL_VERSION);
   expect(row.gameStatsWriterStatus).toBe("transactional");
   expect(row.gameStatsRevision).toEqual(expect.any(String)); expect(row.gameStatsRevision).not.toBe(before);
+  expect(row.gameStatsMaintenance).toMatchObject({ version: 1, ownerId: row._id, revision: row.gameStatsRevision });
   return row.gameStatsRevision;
 }
 
@@ -38,6 +41,7 @@ beforeAll(async () => {
   db = await connect({ uri: mongo.getUri(), dbName: "game_stats_transactions", awaitBackgroundIndexes: true }, { logger });
   db.client.on("commandStarted", event => {
     if (["insert", "update", "delete"].some(name => event.command[name] === "games")) gameCommands.push(event.command);
+    if (event.command.find === "games" || event.command.aggregate === "games" || event.command.findAndModify === "users") queryCommands.push(event.command);
   });
   store = createBackupStore(); ({ app, services } = buildApp({ db, userBackupsStore: store, logger, config }));
   expect(db.gameStatsTransactions).toBe(true);
@@ -58,12 +62,13 @@ beforeEach(async () => {
   }
   await db.users.insertMany([{ userId, clerkUserId: "stats-clerk", gameStats: original, gameStatsRevision: "before", gameStatsProtocolVersion: 1 }, { userId: other, gameStats: original, gameStatsRevision: "other-before" }]);
   gameCommands.length = 0;
+  queryCommands.length = 0;
 });
 
 test("real transaction abort rolls back both partial ordered insertion and owner invalidation", async () => {
   await db.games.insertOne(game("duplicate"));
   const writer = new GameStatsWrites(db), owner = await writer.capture(userId);
-  await expect(writer.write(owner, session => db.games.insertMany([game("partial"), game("duplicate")], { session }))).rejects.toMatchObject({ code: 11000 });
+  await expect(writer.write(owner, session => db.games.insertMany([game("partial"), game("duplicate")], { session }), { selection: { gameIds: ["partial", "duplicate"] } })).rejects.toMatchObject({ code: 11000 });
   expect(await db.games.findOne({ gameId: "partial" })).toBeNull();
   expect(await readOwner()).toMatchObject({ gameStats: original, gameStatsRevision: "before" });
 });
@@ -92,7 +97,7 @@ test("lost commit acknowledgement retries commit, without replaying the game cal
     session.commitTransaction = async () => { await commit(); if (++commits === 1) { const error = new MongoNetworkError("synthetic lost commit ACK"); error.addErrorLabel("UnknownTransactionCommitResult"); throw error; } };
     return session;
   });
-  await writer.write(owner, work);
+  await writer.write(owner, work, { selection: { gameIds: ["ack-retry"] } });
   expect(commits).toBe(2); expect(work).toHaveBeenCalledTimes(1);
   expect(await db.games.countDocuments({ gameId: "ack-retry" })).toBe(1); await expectRetired("before");
 });
@@ -104,14 +109,14 @@ test("an unclassified error after a real commit preserves the error and atomic d
     const session = start(), commit = session.commitTransaction.bind(session);
     session.commitTransaction = async () => { await commit(); throw unknown; }; return session;
   });
-  await expect(writer.write(owner, session => db.games.insertOne(game("unknown"), { session }))).rejects.toBe(unknown);
+  await expect(writer.write(owner, session => db.games.insertOne(game("unknown"), { session }), { selection: { gameIds: ["unknown"] } })).rejects.toBe(unknown);
   expect(await db.games.countDocuments({ gameId: "unknown" })).toBe(1); await expectRetired("before");
 });
 
 test.each(["deleted", "replacement"])("captured owner cannot write after owner %s", async state => {
   const writer = new GameStatsWrites(db), owner = await writer.capture(userId), work = jest.fn(session => db.games.insertOne(game("late"), { session }));
   await db.users.deleteOne({ userId }); if (state === "replacement") await db.users.insertOne({ userId, clerkUserId: "replacement-clerk", marker: "new instance" });
-  await expect(writer.write(owner, work)).rejects.toThrow("game_stats_authority_changed");
+  await expect(writer.write(owner, work, { selection: { gameIds: ["late"] } })).rejects.toThrow("game_stats_authority_changed");
   expect(work).not.toHaveBeenCalled(); expect(await db.games.countDocuments({ userId })).toBe(0);
   expect(await db.users.countDocuments({ userId })).toBe(state === "replacement" ? 1 : 0);
 });
@@ -121,7 +126,7 @@ test.each(["released", "replaced"])("stale exact GDPR fence rejects after it is 
   try {
     await db.users.updateOne({ userId }, state === "released" ? { $unset: { _gdprMutation: "" } } : { $set: { "_gdprMutation.id": "new-fence" } });
     const work = jest.fn(session => db.games.insertOne(game("late"), { session }));
-    await expect(services.gameStatsWrites.write(fence.owner, work, { fenceId: fence.id })).rejects.toThrow("game_stats_authority_changed");
+    await expect(services.gameStatsWrites.write(fence.owner, work, { fenceId: fence.id, selection: { gameIds: ["late"] } })).rejects.toThrow("game_stats_authority_changed");
     expect(work).not.toHaveBeenCalled(); expect(await db.games.countDocuments({ userId })).toBe(0);
   } finally { await services.gdpr._releaseMutationFence(userId, fence); }
 });
@@ -185,6 +190,8 @@ test("concurrent newly admitted ingests share the current epoch without retiring
   const epoch = (await readOwner()).gameStatsMutationEpoch;
   expect(await Promise.all([services.games.upsert(userId, game("parallel-a")), services.games.upsert(userId, game("parallel-b"))])).toEqual([true, true]);
   expect(await db.games.countDocuments({ userId })).toBe(2); expect((await readOwner()).gameStatsMutationEpoch).toBe(epoch);
+  expect((await readOwner()).gameStats).toEqual({ total: 2, latest: played });
+  expect((await readOwner()).gameStats).toEqual(await services.games.stats(userId));
 });
 
 test("ordinary admission cannot inherit an active exclusive epoch and wait until release", async () => {
@@ -259,7 +266,7 @@ test("restoring 205 games uses immutable <=100 batches and never restores author
   expect(batches).toEqual([100, 100, 5]); expect(await db.games.countDocuments({ userId })).toBe(205); await expectRetired("current");
   expect(await db.db.collection("backup_restore_staging").countDocuments()).toBe(0);
   const exported = await services.gdpr.export(userId);
-  for (const key of ["gameStats", "gameStatsRevision", "gameStatsProtocolVersion", "gameStatsWriterStatus", "gameStatsMutationEpoch"]) expect(exported.user).not.toHaveProperty(key);
+  for (const key of ["gameStats", "gameStatsRevision", "gameStatsProtocolVersion", "gameStatsWriterStatus", "gameStatsMutationEpoch", "gameStatsMaintenance"]) expect(exported.user).not.toHaveProperty(key);
 });
 
 test.each(["fence", "owner"])("restore cannot insert a later batch after %s replacement", async replace => {
@@ -268,7 +275,9 @@ test.each(["fence", "owner"])("restore cannot insert a later batch after %s repl
   const write = services.gameStatsWrites.write.bind(services.gameStatsWrites); let writes = 0;
   jest.spyOn(services.gameStatsWrites, "write").mockImplementation(async (...args) => {
     const result = await write(...args);
-    if (++writes === 1) {
+    // Empty delete now eagerly maintains stats too. Preserve this original
+    // fault boundary: replace authority AFTER first committed insert batch.
+    if (result?.insertedCount > 0 && ++writes === 1) {
       if (replace === "fence") await db.users.updateOne({ userId }, { $set: { "_gdprMutation.id": "replacement-fence" } });
       else { await db.users.deleteOne({ userId }); await db.users.insertOne({ userId, clerkUserId: "replacement-clerk", marker: "replacement-owner" }); }
     }
@@ -290,10 +299,152 @@ test("a failed later restore batch aborts that entire ordered batch and keeps pr
   await expect(services.gdpr.restoreSnapshot(userId, saved.id)).rejects.toMatchObject({ code: 11000 });
   expect(batches).toBe(2); expect(await db.games.countDocuments({ userId })).toBe(100);
   expect((await readOwner()).gameStatsRevision).toBe(firstRevision);
+  expect((await readOwner()).gameStats).toEqual(await services.games.stats(userId));
+  expect((await readOwner()).gameStats).toEqual({ total: 100, latest: played });
+  expect((await readOwner()).gameStatsMaintenance.revision).toBe(firstRevision);
 });
 
 test("already-missing owner erasure deletes orphan games without owner or authority upsert", async () => {
   await db.users.deleteOne({ userId }); await db.games.insertOne(game("orphan"));
   expect((await services.gdpr.deleteAll(userId)).users).toBe(0);
   expect(await db.games.countDocuments({ userId })).toBe(0); expect(await db.users.findOne({ userId })).toBeNull();
+});
+
+async function maintainNoChange() {
+  const owner = await services.gameStatsWrites.capture(userId);
+  return services.gameStatsWrites.write(owner, async () => "unchanged", { selection: { ids: [] } });
+}
+const countCommands = () => queryCommands.filter(command => command.aggregate === "games" && command.pipeline?.some(stage => stage.$group));
+
+test("qualified ingest uses only two bounded subset counts; bootstrap uses one original whole-owner count", async () => {
+  await services.games.upsert(userId, game("latest", { date: new Date("2030-01-01") }));
+  expect(countCommands()).toHaveLength(1); expect(countCommands()[0].pipeline[0].$match).toEqual(statsMatch(userId));
+  const bootstrapWholeOwnerCounts = countCommands().length;
+  queryCommands.length = 0;
+  // Replacing the current latest with an earlier date must move latest back.
+  await services.games.upsert(userId, game("latest", { date: new Date("2020-01-01") }));
+  expect((await readOwner()).gameStats).toEqual({ total: 1, latest: new Date("2020-01-01") });
+  expect(countCommands()).toHaveLength(2);
+  for (const command of countCommands()) {
+    expect(command.pipeline[0].$match).toEqual({ $and: [statsMatch(userId), { gameId: { $in: ["latest"] } }] });
+    expect(command.autocommit).toBe(false); expect(command.txnNumber).toBeDefined();
+  }
+  const latestCommands = queryCommands.filter(command => command.find === "games" && command.projection?.date === 1);
+  expect(latestCommands).toHaveLength(1); expect(latestCommands[0]).toMatchObject({ filter: statsMatch(userId), projection: { date: 1, _id: 0 }, limit: 1, autocommit: false });
+  const sort = latestCommands[0].sort instanceof Map ? Object.fromEntries(latestCommands[0].sort) : latestCommands[0].sort;
+  expect(sort).toEqual({ date: -1 }); expect(Object.keys(sort)).toEqual(["date"]);
+  const atomic = queryCommands.find(command => command.findAndModify === "users");
+  expect(atomic).toMatchObject({ new: false, upsert: false, autocommit: false });
+  for (const command of [...countCommands(), ...latestCommands]) expect(command.lsid).toEqual(atomic.lsid);
+  process.stdout.write(`game_stats_eager_query_cost ${JSON.stringify({ syntheticLocalMongo: true, bootstrapWholeOwnerCounts, qualifiedSubsetCounts: countCommands().length, qualifiedWholeOwnerCounts: countCommands().filter(command => !command.pipeline[0].$match.$and).length, originalLatestQueries: latestCommands.length, subsetMatches: countCommands().map(command => command.pipeline[0].$match), sort })}\n`);
+});
+
+test("eager Mongo eligibility preserves array-valued legacy flags", async () => {
+  await db.games.insertMany([
+    game("included", { excluded: [false], date: new Date("2027-01-01") }),
+    game("hidden", { excluded: [true] }), game("deleted", { _deleted: [false, true] }),
+    game("pending", { _deletionPending: [true] }), game("resumed", { isResumedFromReplay: [true] }),
+    game("string-flag", { excluded: "true" }), game("empty-flag", { excluded: [] }),
+  ]);
+  await maintainNoChange();
+  expect((await readOwner()).gameStats).toEqual(await services.games.stats(userId));
+  expect((await readOwner()).gameStats.total).toBe(3);
+  await services.games.upsert(userId, game("another"));
+  expect((await readOwner()).gameStats.total).toBe(4);
+});
+
+test.each([
+  ["empty", [], 0, null, "ready"],
+  ["missing", [{ gameId: "missing" }], 1, null, "ready"],
+  ["null", [{ gameId: "null", date: null }], 1, null, "ready"],
+  ["falsy", [{ gameId: "falsy", date: false }], 1, null, "ready"],
+  ["zero", [{ gameId: "zero", date: 0 }], 1, null, "ready"],
+  ["string", [{ gameId: "string", date: "legacy-date" }], 1, "legacy-date", "unsupported_latest"],
+  ["object", [{ gameId: "object", date: { legacy: "value" } }], 1, { legacy: "value" }, "unsupported_latest"],
+  ["array", [{ gameId: "array", date: [new Date("2020-01-01"), new Date("2040-01-01")] }, { gameId: "scalar", date: new Date("2030-01-01") }], 2, [new Date("2020-01-01"), new Date("2040-01-01")], "unsupported_latest"],
+])("raw sorted latest/no-data contract remains exact for %s", async (_label, rows, total, latest, status) => {
+  if (rows.length) await db.games.insertMany(rows.map(row => ({ userId, ...row })));
+  await maintainNoChange();
+  const owner = await readOwner();
+  expect(owner.gameStats).toEqual({ total, latest }); expect(owner.gameStats).toEqual(await services.games.stats(userId));
+  expect(owner.gameStatsMaintenance.status).toBe(status);
+});
+
+test("oversize legacy latest remains exact in authoritative reads and cannot be retained", async () => {
+  const raw = "legacy-".repeat(MAX_STATS_BYTES);
+  await db.games.insertOne({ userId, gameId: "oversize", date: raw }); await maintainNoChange();
+  expect((await readOwner()).gameStats).toBeUndefined(); expect((await readOwner()).gameStatsMaintenance.status).toBe("unretained");
+  expect(await services.games.stats(userId)).toEqual({ total: 1, latest: raw });
+});
+
+test("out-of-range BSON Date stays an exact Invalid Date uncached rather than normalizing to epoch zero", async () => {
+  // The real serializer writes this 64-bit BSON date. The real driver decodes
+  // it outside the JS Date range; no product date/driver path is patched.
+  const raw = new Date(0); raw.getTime = () => 9_000_000_000_000_000;
+  await db.games.insertOne({ userId, gameId: "out-of-range", date: raw });
+  const originalValue = await services.games.stats(userId);
+  expect(originalValue.total).toBe(1); expect(originalValue.latest).toBeInstanceOf(Date); expect(originalValue.latest.getTime()).toBeNaN();
+  await maintainNoChange();
+  expect((await readOwner()).gameStats).toBeUndefined(); expect((await readOwner()).gameStatsMaintenance.status).toBe("unretained");
+  const after = await services.games.stats(userId); expect(after.total).toBe(1); expect(after.latest.getTime()).toBeNaN();
+  process.stdout.write(`game_stats_eager_bson_boundary ${JSON.stringify({ syntheticLocalMongo: true, actualBsonDateMillis: 9_000_000_000_000_000, originalInvalidDate: Number.isNaN(originalValue.latest.getTime()), unretained: (await readOwner()).gameStats === undefined, afterInvalidDate: Number.isNaN(after.latest.getTime()) })}\n`);
+});
+
+test("server-created Long.MAX_VALUE BSON Date remains Invalid Date through authoritative fallback", async () => {
+  await db.games.insertOne(game("server-date"));
+  await db.games.updateOne({ userId, gameId: "server-date" }, [{ $set: { date: { $toDate: { $literal: Long.MAX_VALUE } } } }]);
+  const before = await services.games.stats(userId); expect(before.total).toBe(1); expect(before.latest.getTime()).toBeNaN();
+  await maintainNoChange();
+  const row = await readOwner(), after = await services.games.stats(userId);
+  expect(row.gameStats).toBeUndefined(); expect(row.gameStatsMaintenance.status).toBe("unretained");
+  expect(after.total).toBe(1); expect(after.latest.getTime()).toBeNaN();
+  process.stdout.write(`game_stats_eager_server_bson_boundary ${JSON.stringify({ syntheticLocalMongo: true, operator: "$toDate", exactSigned64BitInput: Long.MAX_VALUE.toString(), originalInvalidDate: Number.isNaN(before.latest.getTime()), unretained: row.gameStats === undefined, afterInvalidDate: Number.isNaN(after.latest.getTime()) })}\n`);
+});
+
+test.each(["old-protocol", "revision", "owner", "epoch", "shape", "negative", "status"])("unqualified %s state bootstraps exact eager values", async corrupt => {
+  await db.games.insertOne(game("old")); await maintainNoChange();
+  const fields = corrupt === "old-protocol" ? {} : { "gameStats.total": 999 };
+  if (corrupt === "old-protocol") { fields.gameStatsProtocolVersion = 1; fields.gameStatsRevision = "legacy-new-revision"; }
+  if (corrupt === "revision") fields["gameStatsMaintenance.revision"] = "different";
+  if (corrupt === "owner") fields["gameStatsMaintenance.ownerId"] = "different-owner";
+  if (corrupt === "epoch") fields["gameStatsMaintenance.epoch"] = null;
+  if (corrupt === "shape") fields["gameStats.latest"] = "a ready snapshot cannot contain this";
+  if (corrupt === "negative") fields["gameStats.total"] = -1;
+  if (corrupt === "status") fields["gameStatsMaintenance.status"] = "unretained";
+  await db.users.updateOne({ userId }, { $set: fields, ...(corrupt === "old-protocol" ? { $unset: { gameStats: "" } } : {}) });
+  queryCommands.length = 0;
+  await services.games.upsert(userId, game("new"));
+  expect((await readOwner()).gameStats).toEqual(await services.games.stats(userId)); expect((await readOwner()).gameStats.total).toBe(2);
+  // Exclude the explicit assertion's authoritative read from this cost check.
+  expect(countCommands().filter(command => command.autocommit === false)).toHaveLength(1);
+  expect(countCommands()[0].pipeline[0].$match).toEqual(statsMatch(userId));
+});
+
+test("empty full wipe and zero-range-match wipe eagerly maintain the exact remaining history", async () => {
+  await services.gdpr.wipeGames(userId); expect((await readOwner()).gameStats).toEqual({ total: 0, latest: null });
+  await services.games.upsert(userId, game("outside"));
+  await services.gdpr.wipeGames(userId, { since: new Date("2040-01-01") });
+  expect((await readOwner()).gameStats).toEqual({ total: 1, latest: played });
+});
+
+test("overflow after a bounded delta recovers with the original full count", async () => {
+  await db.games.insertOne(game("old")); await maintainNoChange();
+  await db.users.updateOne({ userId }, { $set: { "gameStats.total": Number.MAX_SAFE_INTEGER } });
+  queryCommands.length = 0;
+  await services.games.upsert(userId, game("new"));
+  expect((await readOwner()).gameStats).toEqual({ total: 2, latest: played });
+  expect(countCommands()).toHaveLength(3);
+  expect(countCommands()[2].pipeline[0].$match).toEqual(statsMatch(userId));
+});
+
+test("failed final eager publication aborts games and initial revision together", async () => {
+  const update = db.users.updateOne.bind(db.users), originalError = new Error("synthetic stats publication failure");
+  jest.spyOn(db.users, "updateOne").mockImplementation(async (filter, change, options) => {
+    const result = await update(filter, change, options);
+    if (options?.session && change.$set?.gameStatsMaintenance) throw originalError;
+    return result;
+  });
+  await expect(services.games.upsert(userId, game("aborted"))).rejects.toBe(originalError);
+  expect(await db.games.findOne({ userId, gameId: "aborted" })).toBeNull();
+  expect(await readOwner()).toMatchObject({ gameStats: original, gameStatsRevision: "before" });
 });

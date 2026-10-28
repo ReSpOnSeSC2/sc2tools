@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "scope": "Byte-exact synthetic local verification logs, compressed to retain original EOF whitespace and failures without changing evidence.",
+  "files": [
+    {
+      "name": "eager-focused-final-04.log",
+      "sha256": "45d601c4542b93acf7892994d13ecbca44bd36c7c41e5625cc04819dc3f157f5",
+      "bytes": 2787,
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAACtVW247bNhB9X2D/YUAEWBuwLpZ8WSttgmSzRRfIJtv1AnnIpgItjW2mFKlwqOwajr+hj/2/fklBybe9NGmB9KGEDFicmTPnDIcUZ7zAlCy3lBosJaFN9Y3CPC2NzpAIlqwUOUviYRwPOqzUxrJkEPUGg9XhwWwXjHyGJv1UoVmkmSYLS0YLZedoRfZaZ1yeazXTLLGmwg6baG3JGl6+m2uJb28UmhNdKUss6XbYp4pLMRWYj6sJod1Yoj3Lw7iww7QRM6G4fM0tkv2lQiOwQaQa6JzbbO5m3i/ZE67y+k9FaM5ylrBah+fEG9ZhaY4SLeYsWbInChviq8280OoCVS7U7L4dbzNZ5Q/jBF0iVQXmPxldXGIp+eKuy6qzZK6eZ02oUCx5z2SthH1YrT44+/+P9IcOo7plliznFlnidVePNc6EtEonulI5N4uv9w7PbMXlS9LqFbd4LqQUxJJReHfsuuFMfeZS5K/q9A1EpQxaLpRTvAadWjQPPB9jSmg+/zvCukTDrTYsYU+srtFdyXlmx2KmMB/0Xgp7psrKsoSNoiiOh1EYD477veGwfxwO2ffScvFiPIY0datDaRo4aWOn7J0RFslf73/f2f2PBK1u5He7x0DtwwOAP//4HU60Ii3x8MBNAGTNq3/DjWpmAE6N0SYBgzyH05O3b95cno5PrzZWN7iFq5MLX6uxNciLS+fZUjrHRCiLRnEZUG1JJ5wwzXRRaEVJ1B0kUdiG5Q4LjVE6Aa8XDoed3XTmsOBol/1oz0gLyriUCRw5ikcbw2qjCaA3gi9Q1/CFlC1OC5VBqw0/Ptul7ofwxSm54cKCawiRIT337xeUrC5fqPyV4UK12k/X/vnkuZ9JTdhqP20An0G/uwdYuOZ5XkdvXerhXH7dcojq9yCAutnOsdBm4fboGG0d26ARuF99pDfAOWxOdrwV1t/CxTWcmEKrdq5B96rd79V2ALwtMbOtpiJrKP83IeVenF+KvANhu+1bfTU3+qbVRPl68hEze6KV61ihZq3lerXY6fjy5GcGq7ZTvEnKLfh+0DxzrnI9nXqZ8AyWXJiAlyUFvBSBa5600HklkYJG5MQr6oJ4zXb1Mm0wIJMFlRUyqEmeKbJcZehbSnqDURLFe2n3ajquEZqStr43nYd5LCX9UZz02/f2TNOIF0YXgtDnUkJLqBxvIWw/zvtOL/yXxDeJHPPeIInjfUJv6xX3f+BKq0WhK3oGrX98BCX9buLQ7hzDj15TUqeyxPyr15VvnH+VEtvMf+98zt0xperOuRtxeHCFZGFcObQEYig5EeYdiMFqy2Vjp2S9pqOdw2jrMVa8pLluvMJtnChwEwbdyI9joA4gWVFwizl0Y6DDg0uuwPWFIwRUs4DCXXmEmkGwlXJ9/U0tXx5zfqRKX/O7t5SB8Nf1MUiVtAQ3RliLCqxOwPevd0/GsznWeF5zvSl2NL3PaMRUZNzdZrwojAbdMDq+rj/N3lRnFWHuTd2n0gt7/kfS6vDgL6hhHNPjCgAA"
+    },
+    {
+      "name": "eager-services-02.log",
+      "sha256": "5d1b66fef0be7d8bd86501ab30cc0e75980c58b7e55b9be4b1cf1694efb1c017",
+      "bytes": 1443,
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAACo2UTWvjMBCG74H8Bx27sDhNP2jdW9KFJbCh2bill0IYrMFRa0tiZpQl0B+/OCatk/gjPgnrmdE7M3q1mCSJWq0EWXi1GmVQ4KOzQi7nqPwZvbO6uIvuL+8U/xgOFoc4oc9hO7MZskx0YZiNs/u4Ezow0hTSj+BruW+j67g5NYcC9XJ3wt8ABFaMxdbkpXKulPwBrZHm4BOBwndHzLfzghIXKG1PXepe4saUxf1CFgqpmA2+khEkbg1z3juLVqbB5PqJNNIZeqbk/jFSVcg5xS5CzvjiMwJ9XgW/oeiVnmlP8yAgxtn+uZb0q/E4Cdr0aN61e2YFMzKy7cz4COkaZ3YDudE7Id/0cPCMLCoJRpAf1PhWeWBG/bNcihPIK4IfVPWNr+Jv5CreM4kFz2tXcZdfkabAfaC6jqPxTax4OFiCVZDnqlSheHe0KkDStbGZGn1pf3vrbN5nHWwwW32/wS/17R6HfB5Jau3nMXgyymNNHTepDW23zXFDmh1wQjVfpGbs0N4nTNej0QI3ma6O9lj/cIodT+jIRMPBf9OUH0mjBQAA"
+    },
+    {
+      "name": "api-types-01.log",
+      "sha256": "3b96d1a8423899cb4c9abcc5188716bb83a796b0b6460a82182a2ecfa6be1b1d",
+      "bytes": 132,
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAACh3ETQrCMBAG0L3gHWYXBWnFuqhFBF0rCNUDDPFriT9JnZmKub3gWzwVXyrkEzy07PmF1tj0xCEaIkeP4q6zarlY1/OGIJKELu2qqjYNnSUNEMvk8B75qY5uCUoxGeEb1ChFsjyA3DVEq/cinLf/D2PXQY7hgZ0rppMfG8JDQIQAAAA="
+    },
+    {
+      "name": "api-types-02.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAACgMAAAAAAAAAAAA="
+    },
+    {
+      "name": "api-lint-new-final-02.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAACgMAAAAAAAAAAAA="
+    },
+    {
+      "name": "api-lint-owned-01.log",
+      "sha256": "9a40be02f3eb9db2a4b471c76658bf8d9c2dc1947662bf77a8627a365356f4a7",
+      "bytes": 2235,
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAACsWUy4rbQBBF9wP+h9p5BmKjh23J3s04TAhkMNgD2QhCuVWxOpa6e/rhRz4kq3xdviQ4sQdC3C3nRbQUJdW5t25V52o6KRbT5HE2e7Mo+lup11YTmaJEUy0l6rLHkFXUqwhrWxWolClQ8cJoVpTLgkkhiNn+B9O5AoBxNokBtqgFFyuAW7MXDN47wSyXArrH6i5UaMBKCQ2KPdRckIHrcXTThwfc8cY1gHUtt1QCNzCK4PQ0uOt9q+4p0r3Tfw+d0zQPdiZhnKbXoqQdmfP9k3zkB/B17vyJf4b0hvTRu0HYuga58HHn/4GbMzLFChsyp9kn42yS/qSgIVvJErpOGdL2LbfVnDbccOlREw8HLTHwhwCG6TCA8ORQo7Bc0JyMa6ick6px7+GIAnH0I8TRKA8gvGOyUc7SoyxxvyDj9yFN46APfoQkytMfonT/HCKDglv+kRYKLcf6fOe8bQBt2/iXslUq/RytaBwwlXZKat9RyS4U035iIM1CFCXVZOm29rgap4Hr8isUw3EUCth3jKlEVnGxeokWz/OM0nacAEWehrzYckWvDrfB40V8QfMLKOI4TtqWjSy3fEMzpaQgYe8cW5P1cGXJb618Ep4IsifHNT04i4dP7kkwmkpNnsAGt+/frpwzpO+QrZ06HfUkSQPSNBnrFZIFhPhlfPn8CeIBKC2XNTUGriMgraU2Lw6vjxzm5lD6Fdo6TFK7CAAA"
+    },
+    {
+      "name": "api-lint-baseline-01.log",
+      "sha256": "daf315a79098bd823766fc563c808ba605baaf99e6e29e12325f9affdd109ade",
+      "bytes": 2401,
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAACrWVTW7bMBCF9wF8h9k5AWpDP7Yse5e4SFGggQE7QDcCijE1tVhLJENS/ulBuurpepLCdRS0qEm5Sao1pfne43ujzsV0ki2m0f1s9mGR9bdSr60mMlmOplhK1HmPISuoVxCWtshQKZOh4pnRLMuXGZNCELP9L6ZzAQDjZBICbFELLlYA12YvGHyuBbNcCug+nu5CgQaslFCh2EPJBRm4HAdXfbjDHa/qCrAs5ZZy4AaSAJqnwl3v1+meIt1rvnuYHMcj72QSptb0XuS0I3N6fpQmbgDX5M7Fj+/fIAKl5bKkysBlAKS11OYNRA2OuToc7LzEakN6Q/rR5oHf5Qq5cElMnysxbCT+rjBsIF5HIGdkshVWZJo8RePRJP5LakW2kDl0a2VI24/cFnPacMOlQ3Y4HLREyx0sGMZDD8JDjRqF5YLmZOqK8jmpEvcOjsATcTdCGCSpB+ETk5WqLd3LHPcLMm4f4jj0+uBGiII0/iNzt09pMyi45V9podByLE9PTtsuoK3hxxAOTvZs8Mo9O8YwV/ophcHY4z/tlNSunTY6U3f7hoN45KPIqSRL16XjAsLYs9z+hWI4DnxZPGJMJbKCi9VbtHiaJ4nbcTwUaezzYssVvTusEYcX4RnDz6AIwzBq6yVZbvmGZkpJQcLe1GxN1sE1ip61HSL/jSB7qLmmu9ri4ZVbEoymUpMjsN6i+tuZnGxn8j/aWRvSN8jWtWp+FVEUe1zQZKxT88ij+cU/xZ95l+odYQkAAA=="
+    }
+  ]
+}
