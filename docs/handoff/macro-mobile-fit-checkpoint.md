@@ -54,7 +54,7 @@ all 83 unchanged budgets/source/asset guards, and real production-CSS
 responsive/target/focus/AA checks remain required before delivery. No
 release, production acceptance or roadmap closure is claimed.
 
-## Nested-dialog semantics repair — fresh browser verification pending
+## Nested-dialog semantics repair — retained earlier verification
 
 After integrating passed main at `39ea4843`, the first four-case browser run
 reached unit details and failed the full default Axe duplicate-banner/unique-
@@ -84,7 +84,7 @@ No browser rule, exclusion, expectation or budget was relaxed. Fresh build,
 all 83 unchanged caps/source/asset guards and the same real responsive/focus/
 target/full-Axe browser verification remain required before delivery.
 
-## Page position on close — fresh build/browser verification pending
+## Page position on close — retained earlier verification
 
 The second browser run passed both desktop cases and all 16 full-default Axe
 scans. Both phone cases reached the final close assertion but retained a page
@@ -112,3 +112,36 @@ a proven unrelated Chrome PID reuse is excluded, with no kills. This is local
 synthetic-router evidence, not actual Next navigation or production acceptance.
 Fresh build, unchanged budgets/assets and the original responsive browser
 matrix remain required.
+
+## Current local gate — CI and production acceptance pending
+
+This section supersedes earlier pending local build/browser wording.
+The preserved clean source is `cd25ed68f222c48cc80c0a8bcb6d174fe1064cfc`,
+based on passed main `e84cd77397033a5c46c5fcb2bfd936b42f499950`.
+Direct production build `EE76oB0LZMFMkqAEyZDxe` passed all 83 unchanged
+route caps and the 6,965-source / 40 canonical / 7 active / 4 strict sample
+pre/post guards, using one static worker and a 4 GiB heap.
+
+The original four-case browser matrix now passes at 320 light, 390 dark and
+1280 in both themes. All 16 full default Axe scans have zero violations;
+233 physical target observations pass. Both original exact phone close-position
+assertions and repeat-open steps are reached and pass. Touch scrubbing, keyboard
+pan/auto-reveal, local Fit/zoom, late data, game reset, desktop baseline and
+nested modal focus/Escape pass without changing the original spec assertions.
+The run binds 311 actual product inputs, fresh production CSS and three fonts.
+Postbrowser source/asset guards remain exact; cleanup records 21 observed
+identities and zero owned/unknown processes/listeners, with no kills.
+
+The compact summary and two byte-exact, independently viewed LOCAL PNGs are in
+[validation/macro-mobile-fit](validation/macro-mobile-fit/README.md).
+All raw reports, traces, earlier failures and original process observations
+remain in cache by hash. The fixture uses synthetic Clerk, GET game data and
+Next primitives; actual Next router/transport, account behavior and mobile
+hardware are not proved by it. No product assertions, Axe rules, budgets or
+asset allowances were weakened. Later documentation/capture adoption is a
+metadata-only boundary after the 6,965-source guards.
+
+Exact final-head CI, deployed-revision verification and actual signed-in Macro
+acceptance remain required. This owner correction changes no roadmap status:
+197 original items remain reconciled as 124 completed, 53 partial and 20 open,
+with 73 unfinished. No cache activation, provider or cost change is claimed.

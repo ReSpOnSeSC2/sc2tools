@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "status": "LOCAL_GATES_PASSED_CI_AND_PRODUCTION_ACCEPTANCE_PENDING",
+  "recordedAtUtc": "2026-10-28T21:59:13.701Z",
+  "sourceHead": "cd25ed68f222c48cc80c0a8bcb6d174fe1064cfc",
+  "acceptedMain": "e84cd77397033a5c46c5fcb2bfd936b42f499950",
+  "sourceQualification": "Build/browser guards bind then-clean cd25 product source and6965 inputs. Later adoption of these five documentation/capture files is a metadata-only boundary; it is not silently relabeled as that guarded source tree.",
+  "behavior": [
+    "Phone/coarse-pointer Macro overview fits timeline and both armies with panel-local Fit/zoom and scroll; controls and detail modal remain unscaled.",
+    "Scale floor24/44 preserves24px physical targets; dense/short content scrolls locally; desktop and other consumers retain baseline behavior.",
+    "Ordinary same-page close/unmount restores captured page coordinates and connected-opener focus. Navigation intent/changed href suppress restoration; passive data/game changes do not restore or recapture.",
+    "Macro and nested Modal header/footer are presentation groups; descendant headings/actions and page landmarks stay exposed."
+  ],
+  "localChecks": {
+    "earlierFit": {
+      "passed": 277,
+      "files": 19,
+      "qualification": "Before fallback refinement; historical, not rerun at current head"
+    },
+    "fitRefinement": {
+      "passed": 59,
+      "files": 8,
+      "qualification": "Separate run covering changed fallback and consumers"
+    },
+    "dialogSemantics": {
+      "passed": 27,
+      "files": 7,
+      "qualification": "After new oracle scoping correction; earlier257pass+1new-oracle failure retained"
+    },
+    "closeInitial": {
+      "passed": 31,
+      "files": 6
+    },
+    "closeCurrent": {
+      "passed": 10,
+      "files": 1,
+      "unchangedConsumersCarried": 21,
+      "qualification": "Only explicit href/children changed in new synthetic Link test seam; separate runs, no combined current31-run claim"
+    },
+    "currentTypes": "Whole web pass",
+    "currentOwnedLint": "16 TypeScript files pass,0warnings/errors",
+    "currentCommandInputs": 3535
+  },
+  "build": {
+    "BUILD_ID": "EE76oB0LZMFMkqAEyZDxe",
+    "sourceInputs": 6965,
+    "budgets": 83,
+    "capsChanged": false,
+    "canonicalInputs": 40,
+    "activeAssets": 7,
+    "strictSampleGames": 4,
+    "heapMiB": 4096,
+    "staticWorkers": 1,
+    "directNext": true,
+    "sourceAndAssetsPrePostEqual": true,
+    "generationDownloadsPruning": false
+  },
+  "browser": {
+    "cases": [
+      {
+        "title": "Macro fit 320 light",
+        "width": 320,
+        "height": 900,
+        "theme": "light",
+        "touch": true,
+        "status": "passed",
+        "retry": 0
+      },
+      {
+        "title": "Macro fit 390 dark",
+        "width": 390,
+        "height": 900,
+        "theme": "dark",
+        "touch": true,
+        "status": "passed",
+        "retry": 0
+      },
+      {
+        "title": "Macro fit 1280 light",
+        "width": 1280,
+        "height": 900,
+        "theme": "light",
+        "touch": false,
+        "status": "passed",
+        "retry": 0
+      },
+      {
+        "title": "Macro fit 1280 dark",
+        "width": 1280,
+        "height": 900,
+        "theme": "dark",
+        "touch": false,
+        "status": "passed",
+        "retry": 0
+      }
+    ],
+    "workers": 1,
+    "retries": 0,
+    "fullDefaultAxeScans": 16,
+    "violations": 0,
+    "exclusions": 0,
+    "physicalTargetObservations": 233,
+    "productInputsPerCase": 311,
+    "productionCssFiles": 5,
+    "fonts": 3,
+    "originalSpecAssertionsByteExact": true,
+    "strictPhoneCloseAndRepeatOpenPassed": true,
+    "touchKeyboardZoomGameChangeNestedFocusPassed": true,
+    "unexpectedRequests": 0,
+    "scope": "Actual components/hooks/native Chromium input; synthetic Clerk, GET game data and Next primitives. No real account or provider calls."
+  },
+  "cleanup": {
+    "observedBrowserIdentities": 21,
+    "owned": 0,
+    "unknown": 0,
+    "listeners": 0,
+    "kills": 0,
+    "actualChildSpawnExitClose0": true
+  },
+  "captures": [
+    {
+      "file": "screenshots/local-320-light-initial.png",
+      "sha256": "84f6a3927f0aff38b047b54e89a1c9f8ba616cba7a14a4bbbc2714beb07457b2"
+    },
+    {
+      "file": "screenshots/local-390-dark-initial.png",
+      "sha256": "93cb92d2d97704d3baa9fd46a9e6eecc3d5ce6bb361f96e3649c2c245605d513"
+    }
+  ],
+  "currentEvidence": [
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/close-position-repair-01/source-ready-clean-01.json",
+      "bytes": 24188,
+      "sha256": "78d292e817350184305fc41225a290f05e16c4a832384af36afd67ed875de954"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/close-position-repair-01/LOCAL-READY-02.json",
+      "bytes": 8412,
+      "sha256": "ab23ac4773be598facb67c82afbc8fb7ca7091ef62f9b002a859b78f6c6e2c01"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/close-position-repair-01/independent-local-ready-review-04.json",
+      "bytes": 3231,
+      "sha256": "ae1d084c8eba08a53a0181361866782b27700e456fa5b9dbcd70bfec16c77d09"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/production-build-03/VERIFIED.json",
+      "bytes": 15059,
+      "sha256": "097794f8d5f35e7d2241a74a7add13c7541661cb3af1fb6c9cda4871640b1f1d"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/ui-browser-03/VERIFIED-03.json",
+      "bytes": 14665,
+      "sha256": "b5c37f3c12ab91e17b7aa98c139f94398b3d59db7a5050199b12b3fa53457322"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/ui-browser-03/independent-final-evidence-review-03.json",
+      "bytes": 1954,
+      "sha256": "a433fa8dcf85f956dc8ad65cd60970a20d4454cff8def315dc02dbd519a3ee06"
+    }
+  ],
+  "retainedFailures": [
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/ui-browser/browser-failure-01.json",
+      "bytes": 8513,
+      "sha256": "526b16dbfe7232c6fd4553a286d30b6417815f4d105dd6cbb0385c40726aaa8e"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/semantic-repair-01/LOCAL-READY-01.json",
+      "bytes": 9200,
+      "sha256": "90b3449609e11dd9252b43fb5d9269ee1d4e6da325e973d55e793ba1485be0a0"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/ui-browser-02/browser-02.json",
+      "bytes": 13338603,
+      "sha256": "97c989d4b4ed5aa7c06ebf4427d3f43ced2dcdfe7a414e69d76e6aa9522ed604"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/ui-browser-02/paired-orientation-control-03.json",
+      "bytes": 73042,
+      "sha256": "858aa62e1d59a8d078332f478da303b0b3304c57626e42a52bfa0e584df50d7c"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/close-lint-01.log",
+      "bytes": 952,
+      "sha256": "c4936616e07c7c633f4be5062724fd4b5fbdbb72e618c753cc2af70066c2c271"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/close-position-repair-01/qualified-cleanup-01.json",
+      "bytes": 4383,
+      "sha256": "c38394b39fe8cc700e6acbb292c64bd15ba0e857af50fa481f5eaa7baa3d08e9"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/production-build-03/PRIOR-EVIDENCE-CLASSIFICATION.json",
+      "bytes": 5990,
+      "sha256": "c7e8fa2f872f6cea3bf0afb6f65fc5239ebcd3bd0dbf8e331ebe1664ba8fb7b2"
+    }
+  ],
+  "failureQualification": "Nested-landmark product failure, scoped-oracle failure, exact phone close drift and diagnostic/lint failures remain preserved. Earlier build-wrapper settling/PID-reuse failures retain their original receipts and exit statuses.",
+  "remainingGates": [
+    "Exact final published-head CI and required checks",
+    "Actual deployed revision/readiness",
+    "Actual signed-in Macro acceptance including ordinary close and Full game navigation"
+  ],
+  "limits": [
+    "No actual Next router/SSR/authorization or physical mobile-device proof from the local fixture.",
+    "No production release, cache activation, account behavior or savings claim.",
+    "No roadmap closure/count change:197 original items and73 unfinished remain unchanged."
+  ]
+}
