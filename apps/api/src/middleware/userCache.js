@@ -3,7 +3,10 @@
 const { requestKey } = require("../services/trendsRequests");
 const { createHmac, randomBytes } = require("node:crypto");
 const TAG_BYTES = 72;
-const ALLOWED_ROUTES = new Set(["timeseries", "dayHourHeatmap", "lengthBuckets", "activityCalendar", "momentum", "mapTrend"]);
+// Only owner-game inputs belong here. Strength-adjusted responses also read a
+// global MMR curve; doctor/opponent/build responses have other dependencies.
+const ALLOWED_ROUTES = new Set(["timeseries", "dayHourHeatmap", "lengthBuckets", "activityCalendar", "momentum", "mapTrend",
+  "summary", "macroSummary", "mmrProgression", "myBuildMixOverTime", "oppStrategyMixOverTime"]);
 const LIMITS = Object.freeze({ bytes: 64 * 1024 * 1024, entryBytes: 512 * 1024,
   keyBytes: 16 * 1024, entries: 512, ttlMs: 600000, active: 4, ownerActive: 2,
   waiting: 32, subscribers: 16, responses: 64, queueMs: 5000, responseMs: 30000 });

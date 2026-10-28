@@ -1,7 +1,8 @@
 # Handoff: SC2 Tools upgrade program (Wave 1 in progress)
 
-Latest active state: read [the October 27 delivery checkpoint](active-2026-10-27-delivery-checkpoint.md)
-and [the qualified 197-item ledger](roadmap-progress-2026-10-27.json) first.
+Latest active state: read [the dashboard continuation checkpoint](dashboard-cache-coverage-checkpoint.md),
+[the qualified 197-item ledger](roadmap-progress-2026-10-28.json) and
+[the October 27 delivery checkpoint](active-2026-10-27-delivery-checkpoint.md) first.
 They supersede the historical pause, pending-release and Wave 1 status below.
 
 Written 2026-10-23 so another assistant can continue the work. Everything

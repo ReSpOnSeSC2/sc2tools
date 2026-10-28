@@ -1,0 +1,18 @@
+{
+  "sourceRevision": "477298dd7c397af2baaa79d19736ae43d1a4510d",
+  "canonicalUnchanged": true,
+  "sourcePins": 512,
+  "normalization": "Raw mismatches individually proved CRLF-only against pinned tree-identical audit checkout; no semantic preimage overwritten. Owned admin-console coverage addition separately checked against exact committed preimage.",
+  "normalizedPaths": [
+    "docs/handoff/roadmap-progress-2026-10-27.json"
+  ],
+  "ownedChanges": [
+    "docs/admin-console.md"
+  ],
+  "counts": {
+    "completed": 116,
+    "partial": 61,
+    "open": 20,
+    "unknown": 0
+  }
+}

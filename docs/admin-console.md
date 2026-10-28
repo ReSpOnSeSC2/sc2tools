@@ -181,6 +181,12 @@ it must not be read as Off or zero activity. Refresh now uses the existing healt
 checks. Changing the cache setting still requires the normal reviewed operator
 configuration process; the card changes no setting or provider connection.
 
+Optional coverage includes the overview summary, macro summary, MMR progression,
+build/strategy mix and the original six personal charts. It does not cover every
+dashboard request. Strength-adjusted charts also depend on global calibration;
+doctor, opponent and build-stat responses have additional dependencies. The
+cache remains off, with no measured performance or cost saving claimed.
+
 ## Web analytics (GA4) setup
 
 Set `GA4_PROPERTY_ID` on the API to the numeric GA4 property ID. Provide a Google

@@ -339,7 +339,7 @@ The shared chart clock trails ordinary game events by two seconds with a ten-sec
 
 `USER_CACHE_ENABLED` enables the first chart-cache slice only when its value is
 the literal string `true`. The default and `.env.example` are false. While off,
-the six routes call their original services and `res.json` directly; revision
+the eleven routes call their original services and `res.json` directly; revision
 hooks add no database command, owner lookup, retained body, admission limit or
 new busy response. The flag is not changed by source preparation.
 
@@ -352,7 +352,11 @@ index, warmer or new infrastructure is part of this slice.
 
 The allowlist is `/v1/timeseries`, `/v1/timeseries/day-hour`,
 `/v1/length-buckets`, `/v1/activity-calendar`, `/v1/momentum` and
-`/v1/timeseries/maps`. Existing parsing, filters, calculations and history bounds
+`/v1/timeseries/maps`, plus `/v1/summary`, `/v1/macro/summary`,
+`/v1/timeseries/mmr`, `/v1/timeseries/my-builds` and
+`/v1/timeseries/opp-strategies`. The same eleven paths participate in optional
+browser capability discovery and retained-body revalidation. Existing parsing,
+filters, calculations and history bounds
 stay in their original aggregation methods. All global filters are dependencies:
 even a time chart's membership can change after an opponent MMR or region stamp.
 Doctor/health, opponents and notes, build stats, Explorer, global calibration,
@@ -417,7 +421,7 @@ cache. Dirty, active, invalid-revision and oversized bypass bodies stay 200 with
 `private, no-store`. OFF preserves the original Express JSON/freshness behavior.
 CORS exposes ETag without changing allowed origins or authentication.
 
-Only the six allowlisted useApi paths can discover the explicit enabled-cache
+Only the eleven allowlisted useApi paths can discover the explicit enabled-cache
 capability and start a background dynamic import. Before that module is ready,
 after import failure, or outside the AppChrome conditional provider, useApi makes
 one ordinary request. No eager retained-body engine or import wait is added to

@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Dashboard cache coverage
+
+- Extend optional private revalidation to the dashboard summary, macro summary, MMR progression and build/strategy mix charts. The cache remains off; these routes keep their normal behavior while it is off.
+
 ### Personal chart cache monitoring
 
 - Show whether the personal chart cache is off or enabled in Admin → Infrastructure. Enabled snapshots show process-lifetime observations and cache-accounting bytes; missing reporting stays distinct from Off. The card changes no setting.

@@ -7,7 +7,10 @@ const { UserCache } = require("../src/middleware/userCache");
 const { buildAggregationsRouter } = require("../src/routes/aggregations");
 const ROUTES = [["timeseries", "/timeseries"], ["dayHourHeatmap", "/timeseries/day-hour"],
   ["lengthBuckets", "/length-buckets"], ["activityCalendar", "/activity-calendar"],
-  ["momentum", "/momentum"], ["mapTrend", "/timeseries/maps"]];
+  ["momentum", "/momentum"], ["mapTrend", "/timeseries/maps"],
+  ["summary", "/summary"], ["macroSummary", "/macro/summary"],
+  ["mmrProgression", "/timeseries/mmr"], ["myBuildMixOverTime", "/timeseries/my-builds"],
+  ["oppStrategyMixOverTime", "/timeseries/opp-strategies"]];
 function fixture(enabled = true, legacy = false) {
   const rows = new Map([ ["a", { userId: "a", clerkUserId: "clerk-a", dataRev: 0 }], ["b", { userId: "b", dataRev: 0 }] ]);
   let deleted = false, revoked = false;
@@ -15,7 +18,7 @@ function fixture(enabled = true, legacy = false) {
     findOneAndUpdate: jest.fn(async ({ userId }) => { const row = rows.get(userId); if (!row) return null; row.dataRev += 1; return row; }) };
   const revisions = new UserRevision(users, { enabled, isDeleted: async () => deleted });
   const cache = new UserCache(revisions, { enabled }); const aggregations = {};
-  for (const method of [...ROUTES.map(([name]) => name), "summary", "matchupTimeseries", "mmrProgression", "oppMmrBuckets", "randomSummary", "explorer"]) {
+  for (const method of [...ROUTES.map(([name]) => name), "matchups", "maps", "mapMatchups", "buildVsStrategy", "matchupTimeseries", "oppMmrBuckets", "randomSummary", "explorer"]) {
     aggregations[method] = jest.fn(async (owner, ...input) => ({ owner, method, input, points: [{ date: new Date(0), missing: null }] }));
   }
   aggregations.resolveMomentumPolicy = async (_owner, gap) => ({ sessionGapMinutes: gap ?? 90, sessionPolicyGeneration: 0, lease: null });
@@ -79,9 +82,33 @@ test("a committed or unknown mutation forces new aggregation without socket emis
   await expect(f.revisions.run("a", async () => { throw error; })).rejects.toBe(error);
   await get(f.app, "/timeseries"); expect(f.aggregations.timeseries).toHaveBeenCalledTimes(3);
 });
-test.each(["/summary", "/timeseries/matchups", "/timeseries/mmr", "/opp-mmr-buckets", "/random-summary", "/trends/explorer/periods"])("%s never enters the cache allowlist", async (path) => {
+test.each(["/matchups", "/maps", "/maps/matchups", "/build-vs-strategy", "/timeseries/matchups", "/opp-mmr-buckets", "/random-summary", "/trends/explorer/periods"])("%s never enters the cache allowlist", async (path) => {
   const f = fixture(); await get(f.app, path); await get(f.app, path);
   expect(f.users.findOne).not.toHaveBeenCalled(); expect(f.cache.completed.size).toBe(0);
+});
+
+test.each(ROUTES.slice(6))("%s isolates filters and owners and retires committed/unknown results", async (method, path) => {
+  const f = fixture();
+  const first = await get(f.app, path), tag = first.headers.etag;
+  for (const [query, owner] of [["?race=Z", "a"], ["", "b"]]) {
+    const other = await get(f.app, path + query, owner).set("If-None-Match", tag);
+    expect(other.status).toBe(200); expect(other.headers.etag).not.toBe(tag);
+  }
+  await f.revisions.run("a", async () => true);
+  const changed = await get(f.app, path).set("If-None-Match", tag);
+  expect(changed.status).toBe(200); expect(changed.headers.etag).not.toBe(tag);
+  await expect(f.revisions.run("a", async () => { throw new Error("unknown write"); })).rejects.toThrow("unknown write");
+  expect((await get(f.app, path).set("If-None-Match", changed.headers.etag)).status).toBe(200);
+  expect(f.aggregations[method]).toHaveBeenCalledTimes(5);
+});
+
+test.each(ROUTES.slice(8))("%s keys every chart option after route normalization", async (method, path) => {
+  const f = fixture();
+  for (const query of ["?interval=day", "?interval=month", "?interval=month&tz=Europe%2FBerlin"]) {
+    expect((await get(f.app, path + query)).status).toBe(200);
+    expect((await get(f.app, path + query)).status).toBe(200);
+  }
+  expect(f.aggregations[method]).toHaveBeenCalledTimes(3);
 });
 test("an owner erased during computation cannot receive the delayed answer", async () => {
   const f = fixture(); let finish; let started;
