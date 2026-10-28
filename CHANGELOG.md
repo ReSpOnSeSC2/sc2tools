@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Today on phones
+
+- Keep Win rate, Active streak, MMR and Games in range cards compact on phones, without stretching them to match the taller session card.
+
 ### Strategies preferences
 
 - Remember your vP, vT, vZ or All selection when you leave Strategies or reopen the site, separately for each signed-in account in the browser. Global opponent-race filters keep their priority without replacing this choice.

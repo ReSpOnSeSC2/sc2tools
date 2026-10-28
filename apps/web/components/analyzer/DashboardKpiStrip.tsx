@@ -191,9 +191,10 @@ export function DashboardKpiStrip() {
   const streakStatus = kpiStatus(streakResp);
   const rangeStatus = kpiStatus(selectedRangeSeries);
 
+  // The full-width session must not set the height of both mobile stat rows.
   return (
     <div
-      className="grid auto-rows-fr grid-cols-2 gap-3 lg:grid-cols-5"
+      className="grid auto-rows-auto grid-cols-2 gap-3 lg:auto-rows-fr lg:grid-cols-5"
       data-testid="dashboard-kpi-strip"
     >
       <CurrentSessionCard />

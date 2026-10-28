@@ -1,0 +1,118 @@
+[
+  {
+    "project": "mobile-360",
+    "status": "passed",
+    "aa": 6,
+    "specimens": 6,
+    "errors": [],
+    "unexpectedRequests": [],
+    "mobileSizes": [
+      {
+        "state": "populated",
+        "heights": [
+          457,
+          214,
+          214,
+          132,
+          132
+        ]
+      },
+      {
+        "state": "empty",
+        "heights": [
+          349,
+          214,
+          214,
+          132,
+          132
+        ]
+      },
+      {
+        "state": "loading",
+        "heights": [
+          259,
+          190,
+          190,
+          132,
+          132
+        ]
+      }
+    ]
+  },
+  {
+    "project": "mobile-360",
+    "status": "passed",
+    "aa": 6,
+    "specimens": 6,
+    "errors": [],
+    "unexpectedRequests": [],
+    "mobileSizes": [
+      {
+        "state": "populated",
+        "heights": [
+          457,
+          214,
+          214,
+          132,
+          132
+        ]
+      },
+      {
+        "state": "empty",
+        "heights": [
+          349,
+          214,
+          214,
+          132,
+          132
+        ]
+      },
+      {
+        "state": "loading",
+        "heights": [
+          259,
+          190,
+          190,
+          132,
+          132
+        ]
+      }
+    ]
+  },
+  {
+    "project": "tablet-768",
+    "status": "passed",
+    "aa": 3,
+    "specimens": 3,
+    "errors": [],
+    "unexpectedRequests": [],
+    "mobileSizes": []
+  },
+  {
+    "project": "tablet-768",
+    "status": "passed",
+    "aa": 3,
+    "specimens": 3,
+    "errors": [],
+    "unexpectedRequests": [],
+    "mobileSizes": []
+  },
+  {
+    "project": "desktop-1280",
+    "status": "passed",
+    "aa": 3,
+    "specimens": 3,
+    "errors": [],
+    "unexpectedRequests": [],
+    "mobileSizes": []
+  },
+  {
+    "project": "desktop-1280",
+    "status": "passed",
+    "aa": 3,
+    "specimens": 3,
+    "errors": [],
+    "unexpectedRequests": [],
+    "mobileSizes": []
+  }
+]

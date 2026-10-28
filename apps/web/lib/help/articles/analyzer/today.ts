@@ -4,7 +4,7 @@ const article: HelpArticle = {
   slug: "today",
   title: "Today: your between-games view",
   summary:
-    "What Today shows: the game you're playing, today's games, your streak and MMR, the Daily Pulse insights and the Ladder Pulse briefing on your latest replay.",
+    "What Today shows: the game you're playing, your current or last session, your streak and MMR, the Daily Pulse insights and the Ladder Pulse briefing on your latest replay.",
   category: "analyzer",
   audience: "player",
   signedInOnly: true,
@@ -28,7 +28,7 @@ const article: HelpArticle = {
     "session",
     "retry",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-27",
   body: [
     {
       type: "paragraph",
@@ -44,7 +44,7 @@ const article: HelpArticle = {
       type: "table",
       head: ["Card", "What it counts"],
       rows: [
-        ["Today's session", "Today's games and win-loss record, by your own clock, for example **6 games · 4W 2L**."],
+        ["Current or last session", "Your current or most recent session in the live 14-day view, since the latest manual reset. It ignores global analysis filters; open the session or natural session history for details."],
         ["Win rate", "Your win rate over the timeframe picked in the menu next to its title. It has its own timeframe and ignores the date range in the filter bar."],
         ["Active streak", "Your current run of wins or losses, from your latest games."],
         ["Games in range", "Every game the filter bar lets through. Its note says which filters apply."],
@@ -54,6 +54,10 @@ const article: HelpArticle = {
     {
       type: "paragraph",
       text: "Exactly which filters each card follows is in [Filters: date, matchup, region and more](/help/analyzer-filters).",
+    },
+    {
+      type: "paragraph",
+      text: "On phones, the session appears first, with compact statistic cards below. The smaller cards grow with their own text instead of matching the taller session card.",
     },
     {
       type: "paragraph",
