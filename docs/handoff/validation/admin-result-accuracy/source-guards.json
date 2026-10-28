@@ -1,0 +1,34 @@
+{
+  "snapshot": {
+    "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-f213-build-02/source-snapshots/build-inputs-01.json",
+    "sha256": "ea34a92df38bb7d8a058875d88e706fae685a3037a8c001c91cdfd0366196313",
+    "head": "76285591a0a2d66b2bd3ece4af7d94c77859cb0a"
+  },
+  "guards": [
+    {
+      "phase": "prebuild",
+      "checkedAtUtc": "2026-10-28T16:24:40.710Z",
+      "sourceInputs": 6863,
+      "sourceSnapshotSha256": "ea34a92df38bb7d8a058875d88e706fae685a3037a8c001c91cdfd0366196313",
+      "allMatch": true,
+      "filesAddedOrRemoved": false
+    },
+    {
+      "phase": "postbuild",
+      "checkedAtUtc": "2026-10-28T16:26:16.176Z",
+      "sourceInputs": 6863,
+      "sourceSnapshotSha256": "ea34a92df38bb7d8a058875d88e706fae685a3037a8c001c91cdfd0366196313",
+      "allMatch": true,
+      "filesAddedOrRemoved": false
+    },
+    {
+      "phase": "postbrowser",
+      "checkedAtUtc": "2026-10-28T16:28:28.162Z",
+      "sourceInputs": 6863,
+      "sourceSnapshotSha256": "ea34a92df38bb7d8a058875d88e706fae685a3037a8c001c91cdfd0366196313",
+      "allMatch": true,
+      "filesAddedOrRemoved": false
+    }
+  ],
+  "qualification": "Exact frozen762+2contrast tree; full6863 source list stays cache. Subsequent docs-only evidence adoption and Auth-main integration are outside these historical guards."
+}

@@ -17,8 +17,8 @@ it.each([
 ] as const)("uses the canonical recorded result for %s", (result, label) => {
   const { container } = render(<ResultBadge result={result} />);
   expect(screen.getByText(label)).toBeTruthy();
-  expect(container.firstElementChild?.classList.contains(label === "Win" ? "text-success" : label === "Loss" ? "text-danger" : "text-text-muted")).toBe(true);
-  if (label !== "Loss") expect(container.firstElementChild?.classList.contains("text-danger")).toBe(false);
+  expect(container.firstElementChild?.firstElementChild?.classList.contains(label === "Win" ? "text-success" : label === "Loss" ? "text-danger" : "text-text-muted")).toBe(true);
+  if (label !== "Loss") expect(container.firstElementChild?.firstElementChild?.classList.contains("text-danger")).toBe(false);
 });
 
 it.each([null, undefined, "", "Undecided", "unrecognized"])("shows an accessible unrecorded result for %s", (result) => {
@@ -26,7 +26,7 @@ it.each([null, undefined, "", "Undecided", "unrecognized"])("shows an accessible
   expect(screen.getByText("—").getAttribute("aria-hidden")).toBe("true");
   expect(screen.getByText("Result not recorded").classList.contains("sr-only")).toBe(true);
   expect(screen.queryByText("Loss")).toBeNull();
-  expect(container.firstElementChild?.classList.contains("text-text-muted")).toBe(true);
+  expect(container.firstElementChild?.firstElementChild?.classList.contains("text-text-muted")).toBe(true);
 });
 
 const game: AdminGameDetailGame = {

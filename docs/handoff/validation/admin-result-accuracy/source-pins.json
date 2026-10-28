@@ -1,0 +1,79 @@
+{
+  "sourceHead": "76285591a0a2d66b2bd3ece4af7d94c77859cb0a",
+  "sourcePins": [
+    {
+      "file": "apps/web/app/admin/components/AdminGameDetail.tsx",
+      "bytes": 9130,
+      "sha256": "5388fc8f7d0656b6a0889a51b162a0c8ee1c1df63d87685056622e4784e0d6e2"
+    },
+    {
+      "file": "apps/web/app/admin/global/players/[pulseId]/page.tsx",
+      "bytes": 11784,
+      "sha256": "baf534c756e59d25b630184c0231c44c424f71a331086d7a5c646b8cec38c5dc"
+    },
+    {
+      "file": "apps/web/app/admin/users/[userId]/opponents/[pulseId]/page.tsx",
+      "bytes": 7151,
+      "sha256": "a70c10541764c8e9f1eb1dacc8115ccbd81579ff8e0132cb0abdb52123165d6a"
+    },
+    {
+      "file": "apps/web/app/admin/components/__tests__/adminGameSelection.test.tsx",
+      "bytes": 5313,
+      "sha256": "aac566679d70445b298e0316a7e23ff4f7ddd951d8a699287d41d899b69bef18"
+    },
+    {
+      "file": "docs/admin-console.md",
+      "bytes": 19684,
+      "sha256": "a605c7a20b1ca38d175ef3234dafee1b3f0f1ff5b56181a9463a701848ccc990"
+    },
+    {
+      "file": "CHANGELOG.md",
+      "bytes": 375230,
+      "sha256": "fd87c5430dcd99d2bda9e5997d599dd5b1355adfad6fc02acf081fb837cd8631"
+    },
+    {
+      "file": "apps/web/app/admin/components/ResultBadge.tsx",
+      "bytes": 682,
+      "sha256": "385bab9659194dbb7b68145a326338cbac8885d06966fd312eaa8de55990158f"
+    },
+    {
+      "file": "apps/web/app/admin/components/__tests__/AdminResultBadge.test.tsx",
+      "bytes": 2603,
+      "sha256": "b330f48b9204b6659a57b61098bfd967fc552f6e094adfc5786bc3a5471f12b6"
+    },
+    {
+      "file": "docs/handoff/admin-result-accuracy-checkpoint.md",
+      "bytes": 2850,
+      "sha256": "d29c0e442fb9121ef231b792cb99dead1f970154be1029282d2d46000d8fb732"
+    }
+  ],
+  "protected": [
+    {
+      "file": "apps/web/components/analyzer/game/types.ts",
+      "sha256": "57316ebeea317682049d55c8769e0134bb08d03183c02ef8b21697dc86ce0c8c"
+    },
+    {
+      "file": "apps/web/components/ui/Badge.tsx",
+      "sha256": "ddf30f121d9eadb39e079bb19153346012ba4703ffefb16a034de76bdbe055fc"
+    },
+    {
+      "file": "apps/web/perf-budget.json",
+      "sha256": "969d5bf40ce6e278aa004c27937193a50694e3474a42a121bb32360e24e0581d"
+    },
+    {
+      "file": "apps/replay-engine/scripts/preview_replay_cli.py",
+      "sha256": "65644e63637c2960e1c1d1551903c740e610eb5efb72dc57ba9a0f8981173499"
+    }
+  ],
+  "changedPaths": [
+    "apps/web/app/admin/components/ResultBadge.tsx",
+    "apps/web/app/admin/components/__tests__/AdminResultBadge.test.tsx"
+  ],
+  "exactInverseProof": {
+    "originalBadgeRecoveredAfterRemovingOnlyOpaqueBacking": true,
+    "originalTestRecoveredAfterRemovingOnlyAddedWrapperTraversal": true,
+    "noAssertionAddedRemovedOrRelaxed": true,
+    "sharedBadgeAndTokensUnchanged": true
+  },
+  "qualification": "Product/test pins are exact to all local gates; candidate docs/CHANGELOG adoption follows the6863 guards and is metadata-only."
+}

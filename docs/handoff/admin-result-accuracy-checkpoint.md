@@ -22,27 +22,56 @@ The parent roadmap item remains partial.
 
 ## Verification
 
-Source preparation includes canonical alias/unknown/variant regressions,
-actual AdminGameDetail result rendering, and both actual list components with
-URL/owner selection assertions. Existing off-page selection and missing-game
-assertions are retained. The chart/data boundaries in the new component tests
-are explicit mocks; no real replay or API behavior is inferred.
+The initial source-only slice passed45 tests/four files, whole-web types and
+all six owned TS/TSX lint files. That early two-worker batch is historical.
+The accepted main was later integrated locally at `76285591` with runtime
+inputs unchanged apart from additive changelog text.
 
-The serialized local run passed 45 tests in four files with no skips, including
-all three original off-page/missing-game selection cases. Whole-web types passed
-with `--noEmit --incremental false`; all six owned TS/TSX files have zero lint
-errors or warnings, with zero warnings in their original preimages too. New
-files also passed strict lint. Unit workers were capped at two. The nine owned
-source/documentation inputs and four protected inputs matched before/after
-these checks. This paragraph was updated afterward; runtime source is unchanged.
-Owned process/listener cleanup found zero candidates and stopped nothing. No
-browser, Mongo or production build was started.
+Actual-component browser QA then exposed a real selected desktop Win badge
+contrast failure:4.43:1 against the accent row. A narrow opaque surface backing
+wraps the existing Badge, retaining its tint, canonical label and shared tokens.
+Three existing color assertions traverse that noninteractive wrapper to the
+same Badge; no assertion/value/threshold was added, removed or weakened.
+The current serialized rerun passes45 cases/four files with one unit worker,
+whole-web `--noEmit --incremental false` and strict lint across all six owned
+TS/TSX paths with zero errors/warnings. Inputs remain exact before/after.
 
-Local receipts and preimages are retained in
-`.cache/admin-result-accuracy-20261028`. Production build, all 83 unchanged route
-budgets, responsive/accessibility checks, independent source review, exact-head
-CI and actual delivery remain pending. No completion or production acceptance
-is claimed here.
+Direct Next production build `JjIaq_KqIlM3gJQXJ0JlF` passes all83 unchanged
+route caps and6863 source inputs before build, after build and after browser
+QA. All40 canonical engine inputs, seven active assets and the strict four-game
+sample match. Static generation uses one worker and a4GiB heap. No generator,
+download, engine/native edit, provider/flag change or asset pruning ran.
+
+The full local matrix passes16 cases: actual opponent/global-player pages at
+320/390/768/1280 in both themes. It covers all Win/Loss/Tie/Unknown list and
+actual detail badges, native Tab/Enter selection, mobile Back, URL parameter
+preservation and global same-game/different-owner selection. All80 full default
+Axe scans have zero violations/exclusions;80 geometry states and48 LOCAL
+captures pass. The selected Win badge now measures5.02:1 in the actual fresh
+compiled styles. All240 product inputs, five CSS files and three fonts are
+bound to the completed build. Three LOCAL captures were independently viewed.
+
+Actual pages/detail/query hooks/useApi/SWR are product source. Synthetic Clerk
+identity, GET-only data and local Next primitives/history bridge are explicit
+seams. This does not prove actual admin authentication/routing, populated chart
+data, a provider or live production behavior. No account mutation, diagnostics
+Retry or Save is activated. No private production image is copied.
+
+Failed sandbox launch, synthetic Tie fixture metadata, strict binding EEXIST on
+worker restart, actual contrast failure and static preparation errors remain
+retained. Exact proof equality now permits a repeated binding after a worker
+restart, with all mismatches rejected. Final UTC cleanup verifies no owned
+process/listener; a PID reused by unrelated installed Chrome was excluded by
+its differing executable/creation identity without stopping it. The initial
+conservative cleanup record is retained. No assertion, skip or cap was relaxed.
+
+Compact receipts are in
+[validation/admin-result-accuracy](validation/admin-result-accuracy/README.md).
+All build/browser receipts describe the frozen `76285591` plus two contrast
+paths, before evidence-only documentation adoption. Auth807 `df5cf875` merged
+afterward; parent must requalify actual overlaps and dependencies before the
+next release. Exact final-head CI, deployment and signed-in acceptance remain
+pending. No parent-roadmap completion or ledger edit is claimed.
 
 ## Remaining original scope
 

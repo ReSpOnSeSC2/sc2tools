@@ -6,8 +6,10 @@ export function ResultBadge({ result }: { result?: string | null }) {
   const label = resultLabel(result);
   const variant = label === "Win" ? "success" : label === "Loss" ? "danger" : "neutral";
   return (
-    <Badge variant={variant}>
-      {label === "Unknown" ? <><span aria-hidden="true">—</span><span className="sr-only">Result not recorded</span></> : label}
-    </Badge>
+    <span className="inline-flex rounded-full bg-bg-surface">
+      <Badge variant={variant}>
+        {label === "Unknown" ? <><span aria-hidden="true">—</span><span className="sr-only">Result not recorded</span></> : label}
+      </Badge>
+    </span>
   );
 }
