@@ -1,0 +1,279 @@
+{
+  "schemaVersion": 1,
+  "preparedAtUtc": "2026-10-28T06:07:49.382Z",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/dashboard-cache-coverage",
+  "branch": "codex/dashboard-game-stats-writers",
+  "base": "9d6525e54a81dc23768232881f063d7864d24055",
+  "status": "source-ready-locally-verified-writer-stage-only-not-committed",
+  "scope": "Seven active membership/date writer groups use exact owner+durable mutation epoch+GDPR fence and atomic Mongo invalidation; one server-captured handle per HTTP ingest batch. No maintained counts or new statistics reader.",
+  "source": [
+    {
+      "path": "CHANGELOG.md",
+      "gitStatus": " M",
+      "sha256": "4157674c8f9648f105674aeebc7a84ee50d53fa988a941936431ba3a79406883",
+      "bytes": 373405,
+      "basePreimageSha256": "72e2cc5d6ec2dada0908f49c9f744c23e977281ed5b5eec604c3c5ac3302202e",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": null
+    },
+    {
+      "path": "apps/api/__tests__/gdprMutationAdmission.test.js",
+      "gitStatus": " M",
+      "sha256": "a95867361332cc4ea44fbcce0bdea6e39c4c72ec20aeb91bbf0deab3ca093c01",
+      "bytes": 5089,
+      "basePreimageSha256": "6760c22b0d70e91261f2aa2ac0b1a0407dd0381357e26963514d788e4769108e",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/app.js",
+      "gitStatus": " M",
+      "sha256": "a33b9a319bf14c2947127da48f71fa2050ac5494d8e0fbe00a118c606295e162",
+      "bytes": 86353,
+      "basePreimageSha256": "1541d377dc14405e2a8239e5f5965cc3e49feb6dfdb1e11c212a8e8fa62df4b5",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/db/connect.js",
+      "gitStatus": " M",
+      "sha256": "2a8008c3558e8b4ef0f68a6bfed54440ea79d1090402a52a13e2f78adf17c24c",
+      "bytes": 39781,
+      "basePreimageSha256": "27151a5610d71d2a8b7ccc9d5b141e426d645c1c6ca918e4782b482addaf1437",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/routes/games.js",
+      "gitStatus": " M",
+      "sha256": "ad1b9d5d479a701acdcd23a65150b87eb9b8a4bc06d1dfe3e67ade3551440975",
+      "bytes": 71958,
+      "basePreimageSha256": "615998dfad560ff9964e3163c518cda7d61df02fd37b82e4fb28ec7704f63370",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/server.js",
+      "gitStatus": " M",
+      "sha256": "dd50e6fcaa0c64ece9dbe0ae74449f5bdeea17c8474bbe255af5e9c63f49b4aa",
+      "bytes": 21488,
+      "basePreimageSha256": "a360df0cc8ce20c3e3666cf5e3aa97547103b90e1a394997f7d16f54594381bd",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/services/gameControls.js",
+      "gitStatus": " M",
+      "sha256": "f6adf09c2b32ecb11ccc3ceaf76a3040bafefedfbbc57bcb847d59344c9ca538",
+      "bytes": 11463,
+      "basePreimageSha256": "ea134fbf0e4d247614bd12c6e24332b10ef68be30189895624cc0c1dd64eae8d",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/services/games.js",
+      "gitStatus": " M",
+      "sha256": "cd51d7c52c63d20cd4f0040e12d7a98ea501656328c9c623286f9c226f61b0bd",
+      "bytes": 92707,
+      "basePreimageSha256": "fccd0253eadbef7050e199e25f283eb87fb91c9ba573fd8e45c3fabdc9ab7ab7",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/services/gdpr.js",
+      "gitStatus": " M",
+      "sha256": "7d14144ed0513f2bc002e80893bacfed018c289dd186f2b4a626e8ff1e0d7410",
+      "bytes": 70542,
+      "basePreimageSha256": "f258896ced595b15c8d525810e8f41dabeb1154be3493ccd6e87a518788f28bc",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/services/types.d.ts",
+      "gitStatus": " M",
+      "sha256": "e09b6698aa3d6efb7039e52b2680774d6c8956d44f18eb1bcae3767dd55404d1",
+      "bytes": 40120,
+      "basePreimageSha256": "1fd23c788b01a1143cacf52d95b3c08faaba3b34a509ee6e52a21ae51dc7cbff",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/services/userBackups.js",
+      "gitStatus": " M",
+      "sha256": "5cfaf389b782ac71cfb568a3e9e8f176b2a218966570c5978b7a542f034e1d11",
+      "bytes": 23650,
+      "basePreimageSha256": "e80e1afc5255bd49528d7d94c3bc7782a22ddee85b181fbe85e56aef48372a8b",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/web/lib/help/articles/account-data/backups-and-export.ts",
+      "gitStatus": " M",
+      "sha256": "597b8c5b329aad95b47b485e5a63a287df9c4498ba4f3d90bc5d49ef02010767",
+      "bytes": 6148,
+      "basePreimageSha256": "ef4f7d08dd55dc50026229953fe5f7d6000a6f2fa331c08bfa70b5b2b3ccebc8",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": null
+    },
+    {
+      "path": "docs/handoff/HANDOFF.md",
+      "gitStatus": " M",
+      "sha256": "675cc9a3db07e6cdfd175cbafa6473801f59a52812e03afc2d007ec6f167585e",
+      "bytes": 11350,
+      "basePreimageSha256": "f3ee75bb5a1d80457e3117790c41a77be36dbfe0efb351f70c4dcd97dc04f735",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": null
+    },
+    {
+      "path": "docs/runbooks/restore-database.md",
+      "gitStatus": " M",
+      "sha256": "909b1dd2032741b86be651ef65c25a5e59e9b060ee852b33fa53b626606e32ed",
+      "bytes": 10828,
+      "basePreimageSha256": "f4ce469fdffbfe9b29ebe1f09f0c417e39c48781b7a3165aac46ebe1d8773b52",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": null
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsWrites.replset.test.js",
+      "gitStatus": "??",
+      "sha256": "e51cdc22743d193158b9dd4899de9d104409677ae69ba17c171e77883e8edfed",
+      "bytes": 21464,
+      "basePreimageSha256": null,
+      "newTargetAbsentAtBase": true,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsWrites.unit.test.js",
+      "gitStatus": "??",
+      "sha256": "5e76b1f70998807f0ace0420bbbc43512bcdc8339d7ea27ead0b31a70b85afd6",
+      "bytes": 7433,
+      "basePreimageSha256": null,
+      "newTargetAbsentAtBase": true,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/services/gameStatsWrites.js",
+      "gitStatus": "??",
+      "sha256": "9cfae366f680ec60b6c47d0d013dbc2287a07a9b2481253db7e3dac8d789130c",
+      "bytes": 9168,
+      "basePreimageSha256": null,
+      "newTargetAbsentAtBase": true,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "docs/handoff/game-stats-writer-stage-checkpoint.md",
+      "gitStatus": "??",
+      "sha256": "fae59874a807d408ec1d84ffb843a556e344ec15b011d72f0d7f61ae0be84513",
+      "bytes": 9469,
+      "basePreimageSha256": null,
+      "newTargetAbsentAtBase": true,
+      "finalApiFreezeMatch": null
+    }
+  ],
+  "apiFreeze": {
+    "path": "C:\\SC2TOOLS\\.cache\\game-stats-writer-verification-20261028\\api-source-freeze.json",
+    "sha256": "eff1803aa613c0af83b75baadf0409fcf5d8301c5da288bc175c2fd81a9f825a",
+    "all13Match": true
+  },
+  "independentReview": {
+    "path": "C:/SC2TOOLS/.cache/game-stats-writer-owner-fence-independent-review-20261028.json",
+    "sha256": "bee3f0b48fe8ff672600e1ad52bb32a26c60302a2943f64808e82597940e6a18"
+  },
+  "evidence": [
+    {
+      "name": "writer-batch-services-09.log",
+      "sha256": "8da33c9e5ab2fdc5a290f0e6530351df9f1f75ddf7cd6a096e0520e0c345bf14",
+      "bytes": 2908
+    },
+    {
+      "name": "api-types-final-03.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "name": "api-lint-new-final-03.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "name": "api-lint-owned-final-02.log",
+      "sha256": "e8073c17534976701190bf621a48f730d7f209bfc09c8e54cbc44f60ed09eaee",
+      "bytes": 3294
+    },
+    {
+      "name": "api-lint-baseline-01.log",
+      "sha256": "3e5c6529b3ba5f7c2e3d5d45144e3ab5379c0b529825af090f1daab41c485392",
+      "bytes": 2887
+    },
+    {
+      "name": "api-lint-baseline-route-02.log",
+      "sha256": "fab8780fe24829208c6b15811a577d97e39e58c8baa8ac2e1a2d942b15bedc23",
+      "bytes": 655
+    },
+    {
+      "name": "owned-cleanup-final.json",
+      "sha256": "dc4e4568625b333132c995bd55aded2333ede7e2a34a852d982dda94183bc966",
+      "bytes": 936
+    },
+    {
+      "name": "pre-epoch-source-retention.json",
+      "sha256": "9423fe2109542706e6cbd9bf70123663aa2ad971198cf99fbe24b03684d78285",
+      "bytes": 1141
+    },
+    {
+      "name": "independent-writer-enumeration.json",
+      "sha256": "9f0353b629efaf7e2105ac4e6a78d4a6e8873b7b26db4e50cf07c30cf86feb54",
+      "bytes": 12915
+    },
+    {
+      "name": "independent-admission-stats-source-check.json",
+      "sha256": "32d9cc1cb27343b88f3ebc54f000ca5505f7de9a0071399a4ffda0858810cbb2",
+      "bytes": 1308
+    }
+  ],
+  "verification": {
+    "finalApiTests": {
+      "suites": 17,
+      "cases": 168,
+      "log": "writer-batch-services-09.log",
+      "workers": 1,
+      "binary": "cached Mongo7.0.14",
+      "downloads": false
+    },
+    "wholeApiTypes": {
+      "exitCode": 0,
+      "log": "api-types-final-03.log",
+      "emptySuccessfulLog": true
+    },
+    "strictNewLint": {
+      "exitCode": 0,
+      "warnings": 0,
+      "log": "api-lint-new-final-03.log"
+    },
+    "ownedExistingLint": {
+      "exitCode": 0,
+      "warnings": 21,
+      "qualification": "Same baseline sites:17 prior edited files+4 existing games-route size warnings; line counts changed.",
+      "log": "api-lint-owned-final-02.log"
+    },
+    "diffCheck": "pass",
+    "cleanup": "Five recorded mongod PIDs gone, five owned loopback ports closed; final tests assert ESRCH. No unrelated process killed.",
+    "failedAttempts": "All initial sandbox, fixture, typing, lint, CIM and metadata-scan evidence preserved; no unexecuted red epoch baseline invented."
+  },
+  "remaining": [
+    "Parent-run Help article regression for copy-only Help edit",
+    "Release-wide CI/build and exact deployed writer verification",
+    "All legacy serving/script writers stopped and ambiguous transactions authoritatively settled before a future retained reader",
+    "Post-raw-restore authority retirement/rebuild and cutover procedure before retained statistics",
+    "Implement maintained/lazy users.gameStats and lighter /me separately, preserving unsupported raw BSON result exactly",
+    "Other cache dependency contracts and revocation-coherent device auth",
+    "USER_CACHE_ENABLED remains off; faster-dashboards and full197-item program remain incomplete"
+  ],
+  "qualifications": [
+    "Transaction guarantees only in supported replica/sharded contexts; production fails before service work if topology/session capability omitted or unsupported.",
+    "Standalone development/test compatibility retires qualification, never creates retained-stat authority, and is not a transaction guarantee.",
+    "Slim games membership retirement does not make held heavy/R2 external effects atomic with erasure.",
+    "Missing-owner destructive orphan cleanup does not prove atomic absence across hypothetical reused internal userId.",
+    "No commit/push/PR/provider/production/native/agent action by this child agent."
+  ]
+}

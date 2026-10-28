@@ -450,6 +450,11 @@ function buildGamesRouter(deps) {
         });
         return;
       }
+      // One server-owned identity/epoch covers the entire admitted batch,
+      // including quota/pool waits. Never recapture after a wipe between games.
+      const statsOwner = await deps.games.gameStatsWrites?.capture(userId);
+      /** @type {[]|[import('../services/gameStatsWrites').GameStatsOwner]} */
+      const statsArgs = statsOwner ? [statsOwner] : [];
       // Browser (Clerk-session) uploads are capped per user per UTC day. A
       // refused batch gets its 429 here; ``finally`` releases the ingest slot.
       const browserAdmission = await admitBrowserBatch(
@@ -569,6 +574,7 @@ function buildGamesRouter(deps) {
             const marked = await deps.games.quarantineResumedReplay(
               userId,
               game,
+              ...statsArgs,
             );
             deps.gameExecution?.invalidateForUser(userId);
             const outcome = {
@@ -580,6 +586,7 @@ function buildGamesRouter(deps) {
             quarantinedAccepted.push(outcome);
           } catch (err) {
             const e = /** @type {{ message?: unknown, code?: unknown }} */ (err);
+            if (e.code === "game_stats_authority_changed") throw err;
             if (req.log) {
               req.log.warn(
                 { err, gameId: game.gameId, userId },
@@ -631,18 +638,19 @@ function buildGamesRouter(deps) {
         let storedSpatial = game.spatial;
         try {
           if (typeof deps.games.upsertWithRevision === "function") {
-            const stored = await deps.games.upsertWithRevision(userId, game);
+            const stored = await deps.games.upsertWithRevision(userId, game, ...statsArgs);
             deps.gameExecution?.invalidateForUser(userId);
             if (stored.excluded) { accepted.push({ gameId: game.gameId, created: false, excluded: true }); continue; }
             created = stored.created;
             customBuildRevision = stored.customBuildRevision;
             storedSpatial = stored.spatial;
           } else {
-            created = await deps.games.upsert(userId, game);
+            created = await deps.games.upsert(userId, game, ...statsArgs);
             deps.gameExecution?.invalidateForUser(userId);
           }
         } catch (err) {
           const e = /** @type {{ message?: unknown, code?: string }} */ (err);
+          if (e.code === "game_stats_authority_changed") throw err;
           if (e.code === "game_deleted") {
             rejected.push({ gameId: game.gameId, retryable: false, errors: ["game_deleted"] });
             continue;

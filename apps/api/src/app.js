@@ -41,6 +41,7 @@ const {
   OpponentIdentityMatcherService,
 } = require("./services/opponentIdentityMatcher");
 const { GamesService } = require("./services/games");
+const { assertGameStatsContext } = require("./services/gameStatsWrites");
 const { BrowserIngestQuotaService } = require("./services/browserIngestQuota");
 const { ReplayLibraryService } = require("./services/replayLibrary");
 const { GameVodsService } = require("./services/gameVods");
@@ -371,6 +372,7 @@ function buildApp(deps) {
  * @param {Set<string>} adminClerkIds
  */
 function makeServices(deps, clerk, adminClerkIds) {
+  assertGameStatsContext(deps.db, deps.config.nodeEnv);
   // Admin notification stream — wired BEFORE UsersService so the
   // user-creation paths (ensureFromClerk first-touch, webhook upsert)
   // can fire signup events without a forward reference.
@@ -1021,6 +1023,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     deps.io?.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "game-control" });
   } });
   return {
+    gameStatsWrites: games.gameStatsWrites,
     userRevision, userCache, sessionPolicy, sessionHistory, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
     privateSearch,
     users,

@@ -1,5 +1,6 @@
 "use strict";
 const { gameWrite } = require("../util/userRevision");
+const { gameStatsWritesFor } = require("./gameStatsWrites");
 
 const { createHash, randomUUID } = require("crypto");
 const { BSON } = require("mongodb");
@@ -31,15 +32,18 @@ function cleanGame(row) {
   return stampVersion(game, COLLECTIONS.GAMES);
 }
 /** Restore only approved literal fields, retaining account/security/setup data.
- * @param {import('mongodb').Collection} users @param {string} userId @param {string} key @param {Record<string,any>|null} saved */
-async function restoreUserSettings(users, userId, key, saved) {
+ * @param {import('mongodb').Collection} users @param {string} userId @param {string} key @param {Record<string,any>|null} saved
+ * @param {Record<string,any>} [authority] */
+async function restoreUserSettings(users, userId, key, saved, authority = {}) {
   if (!saved) return;
   if (key === "accountProfile") {
     const fields = Object.fromEntries(PROFILE_KEYS.map((name) => [name, Object.hasOwn(saved.data, name) ? { $literal: saved.data[name] } : "$$REMOVE"]));
-    await users.updateOne({ userId }, [{ $set: { ...fields, profileUpdatedAt: new Date() } }]);
+    const result = await users.updateOne({ userId, ...authority }, [{ $set: { ...fields, profileUpdatedAt: new Date() } }]);
+    if (Object.keys(authority).length && result.matchedCount !== 1) throw failure("gdpr_operation_lease_lost", 409);
   } else {
     const fields = Object.fromEntries(PREFERENCE_KEYS.map((name) => [`preferences.${name}`, Object.hasOwn(saved.data.preferences || {}, name) ? { $literal: saved.data.preferences[name] } : "$$REMOVE"]));
-    await users.updateOne({ userId }, [{ $set: fields }]);
+    const result = await users.updateOne({ userId, ...authority }, [{ $set: fields }]);
+    if (Object.keys(authority).length && result.matchedCount !== 1) throw failure("gdpr_operation_lease_lost", 409);
   }
 }
 
@@ -47,6 +51,7 @@ class UserBackupsService {
   /** @param {import('../db/connect').DbContext} db @param {{store: import('./userBackupsStore').UserBackupsStore|null, gdpr: import('./gdpr').GdprService, userRevision?: import('../util/userRevision').UserRevision, logger?: import('pino').Logger}} opts */
   constructor(db, opts) {
     this.userRevision = opts.userRevision || null;
+    this.gameStatsWrites = gameStatsWritesFor(db, opts.logger);
     this.db = db; this.store = opts.store; this.gdpr = opts.gdpr; this.logger = opts.logger;
     this.metadata = db.userBackups || db.db.collection("user_backups");
     this.staging = db.db.collection(STAGING);
@@ -214,8 +219,9 @@ class UserBackupsService {
       return { games: { kept, removed, added: staged.counts.games - kept }, customBuilds: staged.counts.customBuilds, opponentNotes: staged.counts.opponentNotes, overlayTokens: 0, currentRevision: await this.membershipRevision(userId) };
     } finally { if (fence) await this.gdpr._releaseMutationFence(userId, fence); await this.staging.deleteMany({ operationId: staged.operationId }); }
   }
-  /** @param {string} userId @param {string} id @param {{assert:()=>Promise<void>}} fence @param {string|undefined} [expectedRevision] */
+  /** @param {string} userId @param {string} id @param {{assert:()=>Promise<void>,id?:string,owner?:import('./gameStatsWrites').GameStatsOwner|null}} fence @param {string|undefined} [expectedRevision] */
   async restore(userId, id, fence, expectedRevision) {
+    const statsOwner = await this.gameStatsWrites.forFence(userId, fence);
     const staged = await this.stage(userId, id);
     let contributionChanged = false;
     try {
@@ -259,19 +265,30 @@ class UserBackupsService {
         // older row must never revive a rotated leaked URL or erase its target.
         if (dbKey === "overlayTokens") continue;
         if (dbKey === "users") {
-          await restoreUserSettings(this.db.users, userId, key, await this.staging.findOne({ operationId: staged.operationId, key }));
+          await restoreUserSettings(this.db.users, userId, key, await this.staging.findOne({ operationId: staged.operationId, key }),
+            this.gameStatsWrites.authority(statsOwner, { fenceId: fence.id }));
           continue;
         }
         if (dbKey === "games") contributionChanged = true;
         await gameWrite(dbKey === "games" ? this.userRevision : null, userId, async () => {
-          await collection.deleteMany(dbKey === "games" ? liveBackupGamesMatch(userId) : { userId });
+          if (dbKey === "games") await this.gameStatsWrites.deleteMany(statsOwner, liveBackupGamesMatch(userId), { fenceId: fence.id, assert: fence.assert });
+          else await collection.deleteMany({ userId });
           if (dbKey === "games") this.gdpr.notifyGamesChanged?.(userId);
           /** @type {any[]} */ let rows = []; let bytes = 0;
+          const flush = async () => {
+            const batch = rows; rows = []; bytes = 0;
+            await fence.assert();
+            // The immutable staged batch can be retried by Mongo. No cursor,
+            // notification, storage request or fence renewal is in callback.
+            if (dbKey === "games") await this.gameStatsWrites.write(statsOwner,
+              session => collection.insertMany(batch, session ? { session } : {}), { fenceId: fence.id });
+            else await collection.insertMany(batch);
+          };
           for await (const row of this.staging.find({ operationId: staged.operationId, key }).sort({ ordinal: 1 }).batchSize(BATCH)) {
             const data = { ...row.data, userId }; delete data._id; rows.push(data); bytes += BSON.calculateObjectSize(data);
-            if (rows.length >= BATCH || bytes >= 4 * 1024 * 1024) { await fence.assert(); await collection.insertMany(rows); rows = []; bytes = 0; }
+            if (rows.length >= BATCH || bytes >= 4 * 1024 * 1024) await flush();
           }
-          if (rows.length) { await fence.assert(); await collection.insertMany(rows); }
+          if (rows.length) await flush();
         });
       }
       if (this.gdpr.guideSamples) await this.gdpr.guideSamples.deleteForUser(userId);
