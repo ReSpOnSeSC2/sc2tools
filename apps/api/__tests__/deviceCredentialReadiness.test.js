@@ -2,6 +2,8 @@
 
 const { DeviceCredentialReadiness, prepareDeviceCredentialsForServing, READINESS_MS, READINESS_WAITERS } = require("../src/services/deviceCredentialReadiness");
 const { deferred, until } = require("./helpers/deviceAuthFixture");
+const { activeAuthority } = require("./helpers/deviceAuthFixture");
+const { sha256 } = require("../src/util/hash");
 
 afterEach(() => jest.useRealTimers());
 
@@ -66,4 +68,40 @@ test("an undeclared capability cannot invoke even an injected preparation transp
   const readiness = new DeviceCredentialReadiness(null, { prepare });
   await expect(readiness.ensure()).rejects.toThrow("readiness_unavailable");
   expect(prepare).not.toHaveBeenCalled();
+});
+
+test("startup success records only safe validated fields and the observer-compatible incarnation digest", async () => {
+  const row = { ...activeAuthority(), mode: "prepared" }, ensure = jest.fn(async () => row);
+  const logger = { info: jest.fn(), warn: jest.fn() }, original = process.env.RENDER_GIT_COMMIT;
+  try {
+    process.env.RENDER_GIT_COMMIT = "a".repeat(40);
+    expect(await prepareDeviceCredentialsForServing({ readiness: { ensure, capability: "causal" } }, logger)).toBe(true);
+    expect(ensure).toHaveBeenCalledTimes(1);
+    expect(logger.info).toHaveBeenCalledWith({ sourceRevision: "a".repeat(40), protocolVersion: 1,
+      mode: "prepared", capability: "causal", incarnationDigest: sha256(`credential-cutover-incarnation:v1\0${row.incarnation}`),
+    }, "device_credential_readiness_validated");
+    const output = JSON.stringify(logger.info.mock.calls);
+    for (const raw of [row.incarnation, row.generation, "pending", "ownerHash", "tokenHash"]) expect(output).not.toContain(raw);
+    expect(logger.warn).not.toHaveBeenCalled();
+  } finally { if (original === undefined) delete process.env.RENDER_GIT_COMMIT; else process.env.RENDER_GIT_COMMIT = original; }
+});
+
+test("invalid source becomes null and a throwing success logger leaves readiness true", async () => {
+  const row = { ...activeAuthority(), mode: "prepared" }, ensure = jest.fn(async () => row);
+  const logger = { info: jest.fn(), warn: jest.fn() }, original = process.env.RENDER_GIT_COMMIT;
+  try {
+    process.env.RENDER_GIT_COMMIT = "not-a-source-revision";
+    expect(await prepareDeviceCredentialsForServing({ readiness: { ensure, capability: "causal" } }, logger)).toBe(true);
+    expect(logger.info.mock.calls[0][0].sourceRevision).toBeNull();
+    logger.info.mockImplementationOnce(() => { throw new Error("log unavailable"); });
+    expect(await prepareDeviceCredentialsForServing({ readiness: { ensure, capability: "causal" } }, logger)).toBe(true);
+    expect(logger.warn).not.toHaveBeenCalled(); expect(ensure).toHaveBeenCalledTimes(2);
+  } finally { if (original === undefined) delete process.env.RENDER_GIT_COMMIT; else process.env.RENDER_GIT_COMMIT = original; }
+});
+
+test("failed startup readiness remains false and emits no success record", async () => {
+  const ensure = jest.fn(async () => { throw new Error("metadata unavailable"); });
+  const logger = { info: jest.fn(), warn: jest.fn() };
+  expect(await prepareDeviceCredentialsForServing({ readiness: { ensure, capability: "causal" } }, logger)).toBe(false);
+  expect(logger.info).not.toHaveBeenCalled(); expect(logger.warn).toHaveBeenCalledTimes(1);
 });

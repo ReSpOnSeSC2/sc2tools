@@ -4,14 +4,20 @@
 
 The isolated `codex/device-auth-rest-reuse` candidate starts at local merge
 `2e4a6949`, combining preserved helper `c3d7a592` with passed main/Reader PR810
-`b8ef1b94`. The helper branch remains unchanged. This candidate is not committed,
-published, deployed or activated; local verification is recorded separately.
+`b8ef1b94`. The helper branch remains unchanged. The verified implementation is
+preserved locally at `db99e5ce`; its narrow startup-log follow-up is a local
+candidate. Nothing is published, deployed or activated by these local checks.
 
 Production factory writers share bounded prepared-authority readiness. Startup
 failure leaves original uncached REST/socket authentication usable. Credential
 callbacks still await valid readiness and their original durable gate/drain.
 Actual preparation/session work remains charged after timeout and drains on
 stop; readiness binds the same incarnation before begin's CAS.
+
+One bounded startup success record uses the already-validated source/protocol,
+mode/capability and observer-compatible incarnation digest. It adds no query or
+raw UUID/owner/token data; a logger failure never changes successful readiness.
+This proves that attempt's ordering, not later continuity or activation.
 
 The existing hello distinguishes strict causal readiness, positive writer-only
 standalone and unsupported/unknown state. There is no new flag or NODE_ENV

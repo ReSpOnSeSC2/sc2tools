@@ -3,6 +3,7 @@
 const { performance } = require("perf_hooks");
 const { beforeDeviceAuthDeadline } = require("./deviceAuthDeadline");
 const { prepareCredentialAuthority } = require("./deviceCredentialPreparation");
+const { sha256 } = require("../util/hash");
 
 const READINESS_MS = 5000;
 const READINESS_WAITERS = 8;
@@ -80,12 +81,30 @@ function canPrepare(readiness, start) {
 /** Startup availability is independent of retention metadata readiness.
  * @param {any} service @param {any} logger */
 async function prepareDeviceCredentialsForServing(service, logger) {
-  try { await service.readiness.ensure(); return true; }
+  try {
+    const row = await service.readiness.ensure();
+    reportValidatedReadiness(row, service.readiness.capability, logger);
+    return true;
+  }
   catch {
     try { logger?.warn?.({ code: "device_credential_readiness_unavailable" }, "device_credential_readiness_unavailable"); }
     catch { /* Reporting cannot turn retention metadata into a boot outage. */ }
     return false;
   }
+}
+
+/** One bounded startup record from the already-validated row. Matching the
+ * observer's domain permits later same-incarnation binding without raw UUIDs.
+ * Reporting is never another readiness or availability gate.
+ * @param {any} row @param {string} capability @param {any} logger */
+function reportValidatedReadiness(row, capability, logger) {
+  try {
+    const source = process.env.RENDER_GIT_COMMIT || "";
+    logger?.info?.({ sourceRevision: /^[a-f\d]{40}$/i.test(source) ? source : null,
+      protocolVersion: row.protocolVersion, mode: row.mode, capability,
+      incarnationDigest: sha256(`credential-cutover-incarnation:v1\0${row.incarnation}`),
+    }, "device_credential_readiness_validated");
+  } catch { /* Diagnostics cannot change successful preparation. */ }
 }
 
 function unavailable() { return Object.assign(new Error("device_credential_readiness_unavailable"), { status: 503, code: "device_credential_readiness_unavailable" }); }
