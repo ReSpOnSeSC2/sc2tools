@@ -38,3 +38,9 @@ The 6,965-source guards ran before later documentation/capture adoption; those
 later metadata-only files must be qualified separately. The canonical ledger
 is unchanged: 197 original items, 124 completed, 53 partial, 20 open and 73
 unfinished. Costs, providers and cache activation remain unchanged.
+
+The initial PR812 responsive run failed three Community footer-locator cases
+(588 passed/92 existing skips). A test-only native-footer selector correction
+preserves every original assertion and adds semantic guards. All 12 existing
+Community cases now pass across three projects; new exact-head CI is pending.
+See `ciIntegrationCorrection` in the compact summary for hashes and boundaries.

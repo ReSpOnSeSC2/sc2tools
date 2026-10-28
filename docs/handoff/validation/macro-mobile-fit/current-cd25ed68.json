@@ -206,5 +206,40 @@
     "No actual Next router/SSR/authorization or physical mobile-device proof from the local fixture.",
     "No production release, cache activation, account behavior or savings claim.",
     "No roadmap closure/count change:197 original items and73 unfinished remain unchanged."
-  ]
+  ],
+  "ciIntegrationCorrection": {
+    "failedHead": "27f6ef96714160890231d61bba8e1dd762f03a0c",
+    "failedRun": 40776956929,
+    "failedResponsive": {
+      "passed": 588,
+      "failed": 3,
+      "existingSkipped": 92
+    },
+    "cause": "Community dialog Close locator used a document contentinfo landmark after the intentional presentation-role repair.",
+    "scope": "Only the existing E2E native-footer locator plus two semantic guards; every original assertion retained. No product or Modal-role change.",
+    "local": {
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "retries": 0,
+      "projects": 3,
+      "browserWorkers": 1,
+      "strictLintWarnings": 0,
+      "sourceInputs": 6970,
+      "buildId": "EE76oB0LZMFMkqAEyZDxe",
+      "runtimeUnchanged": true,
+      "assetGuard": "40/7/4",
+      "ownedCleanupClear": true
+    },
+    "evidence": {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/community-creator-selector-repair-01/VERIFIED-01.json",
+      "sha256": "448bca4e6f9e1170b86709cde6bd8aa6f8c68ba4b4df7f53ea0a14c35953ecae"
+    },
+    "failedDiagnostics": {
+      "file": "C:/SC2TOOLS/.cache/macro-mobile-fit-20261028/ci-27f-responsive-codex-tail.json",
+      "sha256": "08cbf4aad1a9cfef5555b4c562aa469a8063c90dc90d1a88175275bce99ab81c",
+      "logTruncated": true
+    },
+    "boundary": "This summary/checkpoint/README change follows the 6970-input local run. Fresh exact-head CI, merged deployment and actual signed-in acceptance remain pending."
+  }
 }

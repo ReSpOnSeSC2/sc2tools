@@ -145,3 +145,18 @@ Exact final-head CI, deployed-revision verification and actual signed-in Macro
 acceptance remain required. This owner correction changes no roadmap status:
 197 original items remain reconciled as 124 completed, 53 partial and 20 open,
 with 73 unfinished. No cache activation, provider or cost change is claimed.
+
+## Community CI selector compatibility
+
+Initial PR812 head `27f6ef96` passed web checks; responsive CI recorded 588 passes,
+three failures and 92 existing skips. All three failures used a document-footer
+landmark to locate the Community dialog Close button. The corrected test keeps
+that exact button scoped to the native dialog footer and adds semantic guards.
+All original assertions remain intact; product code and Modal roles are unchanged.
+
+All 12 existing cases across the three original projects pass locally with no
+skips or retries. Strict spec lint, 6,970 current-source guards, unchanged EE76
+runtime and 40/7/4 asset guards pass; owned servers/listeners are closed. The
+[compact summary](validation/macro-mobile-fit/current-cd25ed68.json) pins the
+retained Codex failure and current receipt. These documentation edits follow
+that frozen run; new exact-head CI and live acceptance remain pending.
