@@ -1,0 +1,29 @@
+{
+  "sourceReceipt": {
+    "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-types-01.json",
+    "bytes": 7961,
+    "sha256": "c56127a020b34382bf659e5d170f53e98f8eff10dbfebb7c6e1472f64f9c40a4"
+  },
+  "label": "combined-unit-types-01",
+  "args": [
+    "--noEmit",
+    "--incremental",
+    "false",
+    "--pretty",
+    "false"
+  ],
+  "cwd": "C:\\SC2TOOLS\\.worktrees\\guide-randomizer-completion\\apps\\api",
+  "pid": 46724,
+  "nodeVersion": "v22.12.0",
+  "startedAt": "2026-10-28T15:19:55.443Z",
+  "endedAt": "2026-10-28T15:20:09.008Z",
+  "exitCode": 0,
+  "signal": null,
+  "processAliveAfterExit": null,
+  "log": {
+    "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\combined-unit-types-01.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "qualification": "Compact digest of exact retained command receipt; source receipt and raw log remain in cache."
+}

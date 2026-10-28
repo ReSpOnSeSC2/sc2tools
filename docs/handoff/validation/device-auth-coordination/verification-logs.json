@@ -1,0 +1,29 @@
+{
+  "scope": "Byte-exact current synthetic local command logs; earlier failures remain in the qualified historical cache receipts.",
+  "files": [
+    {
+      "name": "integrated-api-01.log",
+      "sha256": "93a20b9646426d2ce9948d950a76898832d37a70ff705cab382734a68e7dfef6",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAACu1Y227bNhi+91MQRIHamC1L8lldWrhJhgVo1iwO0Is2M2jyt81EIjWSamq4foZd7v32JAMpH+RjO2C72DrBBmTy+4/8+f2kJySBoTbE6KGCNNZghvJJABumSlLQGs1xyhmOmu1es1nFqVQGR612s91elCYbWSATUMNfM1CzIZXaoDnWM2GmYDh9IymJr6WYSBwZlUEVj6Q02iiSvpvKGN4+CVDnMhNG4yio4l8zEvMxBzbIRhrMaiYszOzL+VUsFZ9wQeI3xIA2P2egOOQatVN0TQyd2pH3c/yMCOZeMg3qiuEIuzhqNnaFq3jIIAYDDEdz/ExA7vhiNc6luAHBuJjszsMnGmdsX47rW9BZAuwHJZNbSGMy24YsqnNs83mVi3KBo/c4dpHg+8Xi3s7/+5y+r2LtKmaOGTGAo1qwOFA3Iy3FcCQzwYianS4dQk1G4tdaigti4JrHMdc46vnbz6YYrsRHEnN24aznKjKhwBAubMBLpWMDag95wFEN6uNf81emoIiRCkf4mZFOuU04oWbAJwJYu/mamyuRZgZHuBeGjUYn9BvtbqvZ6bS6fgf/TaHc9AcDNBzapdHDYd1GNrCBvVPcgPaWe9+z896DRuWg6bW7PaQrJYT++P03dC6FljGUSgghRPMf3hNRwg0gdKmUVBFSQBi6PH/700+3l4PLu+WkfYhBd+c3nhQDo4AktxZYFpJBxIUBJUhc125mOCIahlQmiRQ6CoN2FPoVNF+rAqWEjFCt6Xc61fUotZrQ843p55s5PdOUxHGEnlv3ni/HF6XlS7OHPiOXt34cl4meCYrKFXT2cm205aPPNoQnwg2yNcAp6FfebhK1kWlfsAtFuChXXizxbPTKo7HUUK68cPpeolZQ0JfYcnnlhFcI91jELysHQvezXkeuuK4hkWpmd+QAjJPMdWlkv46/c7UMrWgcPnHjrbQ1nDY+RmWHdTo3KW413TRC8CkFasp5LpaKvEcexwUxL+WsivxKxTPybqrkUzmX8uToAag5l8LWJxeT8ny5RvhycHv+I0aLSuXFagmIQZ5Xzz9TIpgcj2uU1xSkhKs6SVNdJymv23IZJpJlMeh6HuColrhk1PKtWaNSQV0rWs8Mj+vOxSuhDREUPKNtG4vCxsZqIZ0DpyDPZvnv9mbfjtFRq9eIWpXtPZKX342SCdfgkThGZS4YfEJ+5aDXW0XwT7q9MmT9brajRqPgz1u31t73REgxS2SmX6LyV3NN1AqiRqVUJNuDJ5GhDTEFdupE8gWWywRfmz2KvSaWkISrmFMCDCwNvOEfQdh94TK54c+w43U7LcufO2KEUntkuVi25IJE22t0egckckM3hCsuJrpA0R0v6IYHBBL4wfWmbf1dz+80DqDtYeI1oY9ZWtDd8nqN9lFfzhUwEIaTeJlYm7GJ2jL43+8bQc/xJJVxDNSGjs4QG3ls5G2GyvhBjt5I+qjxmttD200W62YQBkfbz7qDrBvIcsRuEE7Jqmmsta0bx1c+q/4S2v4ygrFUcEno9GATDPOu8WCXV4E2UkE/jq9tbJu+Fea9YywVKtvVNkiQBJAco/fu1KpxFeG8iO7kI4jC71WB4/vKOu73Vvrey8+110TMyvPF/13jm+gaX880URhEzbBS2uUqJbNj3LTL/SxV73gK/Ywd53sqk5QILsWF86xP3XHoZHPY8/7b4cZO4YS7oUOPKiAGrmxtluf2gMkV6L6JUIAWVbQa6Vs2HACVgukI+QV6C7pb3BkcP7qvbMcchPmn+HOLQ/2v4NDgFIfup2uH+JCQT+gM+S+KtI2QkzrLtY7F0nCi8zRYke/OUKLzKP+nzm+WOld0GfSiZnufLi0JXmfGEWWfJVzrE4y5c/g9gtKSPoLpZ2b6DkZfBr0dHdVknTsndArLvza26bx0B9qgQWbDjCxHpERrYFX7aqQhsQPoaLnqjdBfI+x7DhkIkuqpzGGrwTuewEoMBUHotbpNpEu3RCBbKtYBpJ1dlNi/F7mYoPra7Q8fTi/F5y8jD3Svfandu8E+YnelTiC2LjJF3JGbSxFysoZ2gUfXcxe415qLgAPXl+L0wRI8DCiUXxFwsu8XgYeuXcX54+eRrYC/dA89CD5wwT2F27mC17mXbyEFOouNRk+KGwMCGRkhz/uw+VC7ZsuKqZHMTGtUSsW4cPHUQj9sB37Y/bAKEliNpLzmB7WH3JQUpT8B7qIzWnMYAAA="
+    },
+    {
+      "name": "integrated-api-types-01.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAACgMAAAAAAAAAAAA="
+    },
+    {
+      "name": "integrated-api-strict-lint-01.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAACgMAAAAAAAAAAAA="
+    },
+    {
+      "name": "integrated-api-owned-lint-01.log",
+      "sha256": "1363da027ac12997d7dca96e7d84f83631048301975e4124d155867702bd4e14",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAACp3PsQ7CMAwE0J3P8ByRsnTIyg8gFgbEYNKjMopCZDcsVf8dlQ2pWZh8uuGePFNMYKUwaYWjhyQYhev8TRSISzHPRbxp9AZ9Q/dPI0d3NiTJuLBmyaNRODiKVRV5+ukkRwUbhnNNOL5qnlbgtri2IRHmB6z3xKLrVAvtNtDuf3QcSvO/foPq29Rt2X0AbQDzl10BAAA="
+    }
+  ]
+}

@@ -74,7 +74,7 @@ function buildBackupHealthJob(deps) {
     async stop() {
       for (const timer of timers) clearTimeout(timer);
       timers = [];
-      await tick.settled();
+      await check.settled();
     },
     runOnce: tick,
   };

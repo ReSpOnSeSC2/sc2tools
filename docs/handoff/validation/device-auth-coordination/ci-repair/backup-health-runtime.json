@@ -1,0 +1,73 @@
+{
+  "results": [
+    {
+      "label": "baseline-observed-stop-02",
+      "args": [
+        "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/reproduce-observed-stop.cjs"
+      ],
+      "pid": 44616,
+      "startedAtUtc": "2026-10-28T13:49:28.759Z",
+      "endedAtUtc": "2026-10-28T13:49:28.801Z",
+      "exitCode": 1,
+      "expectedExitCode": 1,
+      "scope": "Original source loaded from immutable preimage; no tracked source swap or database/provider work."
+    },
+    {
+      "label": "focused-api-02",
+      "args": [
+        "node_modules/jest/bin/jest.js",
+        "--runInBand",
+        "--runTestsByPath",
+        "__tests__/backupStatus.test.js",
+        "__tests__/opsConsole.test.js",
+        "--json",
+        "--outputFile=C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/focused-api-02.json"
+      ],
+      "pid": 38800,
+      "startedAtUtc": "2026-10-28T13:49:28.803Z",
+      "endedAtUtc": "2026-10-28T13:49:38.017Z",
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "scope": "Current source focused verification, serialized."
+    },
+    {
+      "label": "api-types-02",
+      "args": [
+        "node_modules/typescript/bin/tsc",
+        "--noEmit",
+        "--incremental",
+        "false",
+        "--pretty",
+        "false"
+      ],
+      "pid": 12800,
+      "startedAtUtc": "2026-10-28T13:49:38.018Z",
+      "endedAtUtc": "2026-10-28T13:49:47.192Z",
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "scope": "Current source focused verification, serialized."
+    },
+    {
+      "label": "strict-owned-lint-02",
+      "args": [
+        "node_modules/eslint/bin/eslint.js",
+        "src/jobs/backupHealthJob.js",
+        "__tests__/backupStatus.test.js",
+        "--max-warnings",
+        "0"
+      ],
+      "pid": 29484,
+      "startedAtUtc": "2026-10-28T13:49:47.194Z",
+      "endedAtUtc": "2026-10-28T13:49:47.597Z",
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "scope": "Current source focused verification, serialized."
+    }
+  ],
+  "cachedMongo": {
+    "binary": "C:/Users/jay19/.cache/mongodb-binaries/mongod-x64-win32-7.0.14.exe",
+    "bytes": 63694848,
+    "version": "7.0.14",
+    "downloads": false
+  }
+}

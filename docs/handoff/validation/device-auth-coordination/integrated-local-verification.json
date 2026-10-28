@@ -1,0 +1,585 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-28T12:14:12.536Z",
+  "decision": "combined-integrated-local-verification-pass",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/guide-randomizer-completion",
+  "sourceHead": "354a2fa343d5d3dccc38d4965a71b20b08ceccfa",
+  "sourceTree": "419794bc6f2123a549dcaee42649864925e4cb91",
+  "incomingMain": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+  "cleanCheckout": true,
+  "sourceReady": {
+    "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\integration-354a-source-ready.json",
+    "sha256": "4c06234db323105f85241fff3fae13607ba126316d2fc5db30428e44af5e8743"
+  },
+  "sourcePins": [
+    {
+      "file": "apps/api/src/services/deviceCredentialWrites.js",
+      "sha256": "8da8919a976e94734bcfe86e3c9f7dd0e1c624938835b7fb7a76d254fb89bfeb"
+    },
+    {
+      "file": "apps/api/src/services/devicePairings.js",
+      "sha256": "3b8efccc0c3f442d5546b13533c488b313b958505bdb327a19ce7caddfc716f0"
+    },
+    {
+      "file": "apps/api/src/services/gdpr.js",
+      "sha256": "65d47e6b15a58b5173d105bb2d621830415fac3807edf138410a493a222f8fce"
+    },
+    {
+      "file": "apps/api/src/server.js",
+      "sha256": "a2a7c83e9d8ce7acec1fa263d3735fe38944b0efba6ae7b0bbbc17606def6e28"
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.test.js",
+      "sha256": "5a141b027a89dfdfdc2521e85a6258548519eb490230a2ce1979655d293c9c57"
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.integration.test.js",
+      "sha256": "f4cf91e4b1c214725a02a49e6b82cef97ff039232b37551a895f727441874c88"
+    },
+    {
+      "file": "apps/web/lib/help/articles/getting-started/install-and-pair.ts",
+      "sha256": "85e7185f78db80e5e0863754d5bdadc2636794a0293f1cac2f55491ef34a6361"
+    },
+    {
+      "file": "CHANGELOG.md",
+      "sha256": "e602710147ddd717300e55ce03837feafe25b40ca5e2af404bd828a21b1bba48"
+    },
+    {
+      "file": "docs/engineeringexplanation.md",
+      "sha256": "d9e3394cbda0446cd3e384c0e0fd645ebcc04a0804be6b78eaa49564c2c53df6"
+    },
+    {
+      "file": "docs/handoff/device-auth-reuse-checkpoint.md",
+      "sha256": "5caf90bf062dfefa9a8cddb9e2ddca557dd30c4d2af0653829d9c6fe8ae53aa6"
+    },
+    {
+      "file": "apps/api/src/middleware/auth.js",
+      "sha256": "04f11fd11e46b3f767070603727669d47778a2b53a0f6bf06fdabbf8960fd5c2"
+    },
+    {
+      "file": "apps/api/src/socket/auth.js",
+      "sha256": "a847122a8e3e46a012d3ed171d2101ca318b3e69b0c5f1e54cbb740e5b221ab5"
+    },
+    {
+      "file": "apps/api/src/services/deviceLiveness.js",
+      "sha256": "df4ce0f6b9df458228459db6988608b0bfaae9cd8112577e04036bdef1ffcbcf"
+    },
+    {
+      "file": "apps/api/src/app.js",
+      "sha256": "a33b9a319bf14c2947127da48f71fa2050ac5494d8e0fbe00a118c606295e162"
+    },
+    {
+      "file": "apps/api/src/middleware/userDataWriteFence.js",
+      "sha256": "df8f402ec6f29c1b5ee610265a743f1a39f7d969f1c15a7d5f1ea572adaa886e"
+    },
+    {
+      "file": "apps/api/src/config/loader.js",
+      "sha256": "bf31686466fb38a3657d0150cff555802c07e170631ca694594855ad00b09718"
+    },
+    {
+      "file": "apps/api/src/config/constants.js",
+      "sha256": "8784ba8f5ac4e7091143c7579231264e51a1655606d5ba6c1a27556e7d373b49"
+    },
+    {
+      "file": "apps/api/src/services/gameStatsWrites.js",
+      "sha256": "b3f5c264dd202b5fd5a3e2cb79c7b6bb998d15b712376aa61e19ed542789f78d"
+    },
+    {
+      "file": "apps/api/src/services/gameStatsMaintenance.js",
+      "sha256": "19061d786ebae914a25045f54e22161847c9aeb324f4ae433933c79b7d60f2b6"
+    },
+    {
+      "file": "apps/api/src/services/games.js",
+      "sha256": "c36a682c701298117e74c9ef5b5bb2640f923981b0c4147a916c77b56e274bc6"
+    },
+    {
+      "file": "apps/api/src/services/userBackups.js",
+      "sha256": "6313b97b0ae1c1ac22ddaed2d5aba1441ac42d9b77e248a5cc0fd5d9e9c901ce"
+    },
+    {
+      "file": "apps/api/src/services/users.js",
+      "sha256": "f28929583b57af643e407461ce8153669681222c856e7f8072d1dc2f09b3bd67"
+    },
+    {
+      "file": "apps/api/src/services/doctor.js",
+      "sha256": "9a924e703dc08250e50b376bde6128545dee72752b91a24db40774cfd0aa29d4"
+    },
+    {
+      "file": "apps/api/src/util/gameVisibility.js",
+      "sha256": "19c27606d695bd3dad83c39dd28d6ed38a0497feafdcf76e0dbf35c277e5ac0b"
+    },
+    {
+      "file": "apps/api/src/routes/me.js",
+      "sha256": "0247d490ecee2dcb3be0807d33dc2cc615b1de88ee0c9f299ad59de0ac66c57c"
+    },
+    {
+      "file": "apps/api/src/db/connect.js",
+      "sha256": "d84200918419e659e841782253eda750032c39e09ed9dfc61a4e501c4fd5a668"
+    },
+    {
+      "file": "apps/api/src/services/types.d.ts",
+      "sha256": "e09b6698aa3d6efb7039e52b2680774d6c8956d44f18eb1bcae3767dd55404d1"
+    },
+    {
+      "file": "apps/api/package.json",
+      "sha256": "e28fb9223b5258d5ff06398c4cf21451671c754deaaf28eb174733cb2c571a6e"
+    },
+    {
+      "file": "apps/api/package-lock.json",
+      "sha256": "5b127ffac70fc054f3ae550f3187cb847dd7512e972fba85e96b6a431ff5a796"
+    },
+    {
+      "file": "apps/api/jest.config.js",
+      "sha256": "ed59e7198bb2f2cab684d05b11e8cd1fd3c3dcd64000103b30a20d2d82879e4a"
+    },
+    {
+      "file": "apps/api/eslint.config.js",
+      "sha256": "56e504a14df657e575619a53baa0636a47606e39d2d5a63da2e21a3aec6f9cf0"
+    },
+    {
+      "file": "apps/api/__tests__/devicePairings.test.js",
+      "sha256": "dd90a18b30297c41ea4998a97e6b5e519295aa293bfd979e151173ffcf830e1e"
+    },
+    {
+      "file": "apps/api/__tests__/deviceLiveness.test.js",
+      "sha256": "92fb370c3d77557ebf8133cc2463b8515fd9a6b63a8d4e05a1b3d03695b1717e"
+    },
+    {
+      "file": "apps/api/__tests__/deviceLiveness.mongo.test.js",
+      "sha256": "4ebec50fe20b338dd13f4fb13b8d2056988a6931c9bbbf19bf961449e9216081"
+    },
+    {
+      "file": "apps/api/__tests__/accountDeletion.test.js",
+      "sha256": "018b5c1192932a7b8414d2c26ee94b6bc04df1d01ba997460b9a77755e101a36"
+    },
+    {
+      "file": "apps/api/__tests__/gdprMutationAdmission.test.js",
+      "sha256": "a95867361332cc4ea44fbcce0bdea6e39c4c72ec20aeb91bbf0deab3ca093c01"
+    },
+    {
+      "file": "apps/api/__tests__/gdprCacheInvalidation.test.js",
+      "sha256": "1eff313961135a54ff9235be15d117c571c2b12a43f173a0df901e1df7d3779a"
+    },
+    {
+      "file": "apps/api/__tests__/gdprWipeAudit.test.js",
+      "sha256": "d8288c794726eeb0bfd0820cc08285b97d5565ecee95137fc24d107f446f9faa"
+    },
+    {
+      "file": "apps/api/__tests__/userBackups.test.js",
+      "sha256": "741112cb8b0bd7fdc7dacab667a463ec7b52beeb67eb6c1df7cdc6e7684b9e1e"
+    },
+    {
+      "file": "apps/api/__tests__/socketAuthWeb.test.js",
+      "sha256": "a0accf6c687b2b65b78be88c8895e049642e02c0e3247dd734502343605f29ac"
+    },
+    {
+      "file": "apps/api/__tests__/socketAuthObs.test.js",
+      "sha256": "720170def8280ee14f9536fa7cfe0c8e2d30be4ed328ceb0c02e2f8530199988"
+    },
+    {
+      "file": "apps/api/__tests__/companionDeviceAccess.test.js",
+      "sha256": "5c7eee8f4dc668ad23aaea52182ecc540d23e684daa4758cf25243563dcd26a6"
+    },
+    {
+      "file": "apps/api/__tests__/meFoundation.test.js",
+      "sha256": "1a2b4a61ef634b17e190996a87f9100abe7348a4b3d6ddebe62a1d491a2e432d"
+    },
+    {
+      "file": "apps/api/__tests__/routes.integration.test.js",
+      "sha256": "d9375937cdf83259ecad013f76b10ec18b054ce5db65055e783521779056203d"
+    },
+    {
+      "file": "apps/api/__tests__/gameStatsMaintenance.unit.test.js",
+      "sha256": "6958c8370438968ddd8dbcc3f8e370a77ef9fa0ca547d392805fed32bd4f1c2c"
+    },
+    {
+      "file": "apps/api/__tests__/gameStatsWrites.unit.test.js",
+      "sha256": "52fd1ce73a59854c070cbfe2c4c685dd936c7ec99529ae3042576aa3ebb2b99f"
+    },
+    {
+      "file": "apps/api/__tests__/gameStatsWrites.replset.test.js",
+      "sha256": "449a9cea8653bf06a9d3cb6711117e21b0bd1689d8f00076aae529e74cf8319d"
+    }
+  ],
+  "protectedMainPins": [
+    {
+      "file": "apps/api/src/middleware/auth.js",
+      "sha256": "04f11fd11e46b3f767070603727669d47778a2b53a0f6bf06fdabbf8960fd5c2",
+      "mainGitBlobSha256": "895c3e85147be8c9640d7e94c05da9bc6e68068f61e4ee9edf25621866db03ed",
+      "normalizedEqual": true
+    },
+    {
+      "file": "apps/api/src/socket/auth.js",
+      "sha256": "a847122a8e3e46a012d3ed171d2101ca318b3e69b0c5f1e54cbb740e5b221ab5",
+      "mainGitBlobSha256": "699cf5f7cfe9a76845548ec14ffe43ac7bcf9af6918db745d199848ebeda8221",
+      "normalizedEqual": true
+    },
+    {
+      "file": "apps/api/src/services/deviceLiveness.js",
+      "sha256": "df4ce0f6b9df458228459db6988608b0bfaae9cd8112577e04036bdef1ffcbcf",
+      "mainGitBlobSha256": "f4bd183a2e0661aaf4410d3925d5120c1833fac38acccc75d6c7ffd27e4334c9",
+      "normalizedEqual": true
+    },
+    {
+      "file": "apps/api/src/app.js",
+      "sha256": "a33b9a319bf14c2947127da48f71fa2050ac5494d8e0fbe00a118c606295e162",
+      "mainGitBlobSha256": "41cbee41cf6f1348661109d155df5f1720bc5f63e6e0d2fa58096ffe8bfb9ff1",
+      "normalizedEqual": true
+    },
+    {
+      "file": "apps/api/src/middleware/userDataWriteFence.js",
+      "sha256": "df8f402ec6f29c1b5ee610265a743f1a39f7d969f1c15a7d5f1ea572adaa886e",
+      "mainGitBlobSha256": "9232a3f11fdb5bffdbc3e1fac1260b41e582ba71cab781fef4176b5fe069c30b",
+      "normalizedEqual": true
+    },
+    {
+      "file": "apps/api/src/config/loader.js",
+      "sha256": "bf31686466fb38a3657d0150cff555802c07e170631ca694594855ad00b09718",
+      "mainGitBlobSha256": "564e7316f4224b1b48854909b941ee272d9780e4b1278f6df7cf347f69cf9362",
+      "normalizedEqual": true
+    },
+    {
+      "file": "apps/api/src/config/constants.js",
+      "sha256": "8784ba8f5ac4e7091143c7579231264e51a1655606d5ba6c1a27556e7d373b49",
+      "mainGitBlobSha256": "f38eb276511f7d44de5adbed6ed95db1a5a6e3c104fd231b64a72d07cd2ceb2a",
+      "normalizedEqual": true
+    }
+  ],
+  "helperSha256": "8da8919a976e94734bcfe86e3c9f7dd0e1c624938835b7fb7a76d254fb89bfeb",
+  "tests": {
+    "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\integrated-api-01-jest.json",
+    "sha256": "42cb11e2ef186aad53d37eba18ee1d8a06586131ee11818bb7e2e511a8b9268b",
+    "tests": 320,
+    "passed": 320,
+    "failed": 0,
+    "skipped": 0,
+    "files": 18,
+    "currentAuthAndExistingCases": 227,
+    "currentMaintainedStatsCases": 93,
+    "perFile": [
+      {
+        "file": "gameStatsWrites.replset.test.js",
+        "status": "passed",
+        "passed": 47,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "gameStatsWrites.unit.test.js",
+        "status": "passed",
+        "passed": 15,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "gameStatsMaintenance.unit.test.js",
+        "status": "passed",
+        "passed": 31,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "deviceLiveness.mongo.test.js",
+        "status": "passed",
+        "passed": 27,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "accountDeletion.test.js",
+        "status": "passed",
+        "passed": 13,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "devicePairings.test.js",
+        "status": "passed",
+        "passed": 18,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "meFoundation.test.js",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "userBackups.test.js",
+        "status": "passed",
+        "passed": 15,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "deviceCredentialWrites.integration.test.js",
+        "status": "passed",
+        "passed": 17,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "routes.integration.test.js",
+        "status": "passed",
+        "passed": 49,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "gdprWipeAudit.test.js",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "companionDeviceAccess.test.js",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "deviceCredentialWrites.test.js",
+        "status": "passed",
+        "passed": 25,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "gdprMutationAdmission.test.js",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "deviceLiveness.test.js",
+        "status": "passed",
+        "passed": 13,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "socketAuthWeb.test.js",
+        "status": "passed",
+        "passed": 7,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "socketAuthObs.test.js",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "gdprCacheInvalidation.test.js",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "pending": 0
+      }
+    ]
+  },
+  "types": {
+    "wholeApi": true
+  },
+  "lint": {
+    "strictOwnedZeroWarnings": true,
+    "comparison": {
+      "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\integrated-owned-lint-comparison.json",
+      "sha256": "34d3dbdf0ace114a163e5b55db627bfe42e9ef0f7a14c7b50fc88fba4b1231fc",
+      "base": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+      "files": [
+        {
+          "file": "apps/api/src/server.js",
+          "before": 1,
+          "after": 1,
+          "addedRuleCounts": []
+        },
+        {
+          "file": "apps/api/src/services/devicePairings.js",
+          "before": 0,
+          "after": 0,
+          "addedRuleCounts": []
+        },
+        {
+          "file": "apps/api/src/services/gdpr.js",
+          "before": 6,
+          "after": 6,
+          "addedRuleCounts": []
+        }
+      ]
+    },
+    "explicitDoD": {
+      "reusedNotRerun": true,
+      "helperSourceEqual": true,
+      "commandReceipt": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\dod-lint-01.json",
+      "commandReceiptSha256": "5b47fad55fb8270fcf4b59595b8b384dfbf00c676b5649b0a2d19c40e30a8f9b",
+      "result": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\dod-verification.json",
+      "resultSha256": "da1c12ad7c37c35c4195010129c525d6ec702172312098ff3034ade7b755acf5",
+      "publicMethods": 7,
+      "classLines": 166,
+      "maxFunctionLines": 60,
+      "maxComplexity": 10
+    }
+  },
+  "commands": [
+    {
+      "label": "integrated-api-01",
+      "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\integrated-api-01.json",
+      "sha256": "f7af4d09d8421d11b4a21a49fc0836e1b798040241a21a7dfca78d88f8ecca3a",
+      "log": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\integrated-api-01.log",
+      "logSha256": "93a20b9646426d2ce9948d950a76898832d37a70ff705cab382734a68e7dfef6",
+      "pid": 45232,
+      "exitCode": 0,
+      "elapsedMs": 113351.857,
+      "exactSourcePins": 47,
+      "script": "node_modules/jest/bin/jest.js",
+      "args": [
+        "--runInBand",
+        "--no-coverage",
+        "--cacheDirectory=C:/SC2TOOLS/.cache/device-auth-coordination-20261028/jest-cache",
+        "--json",
+        "--outputFile=C:/SC2TOOLS/.cache/device-auth-coordination-20261028/integrated-api-01-jest.json",
+        "__tests__/deviceCredentialWrites.test.js",
+        "__tests__/deviceCredentialWrites.integration.test.js",
+        "__tests__/devicePairings.test.js",
+        "__tests__/deviceLiveness.test.js",
+        "__tests__/deviceLiveness.mongo.test.js",
+        "__tests__/accountDeletion.test.js",
+        "__tests__/gdprMutationAdmission.test.js",
+        "__tests__/gdprCacheInvalidation.test.js",
+        "__tests__/gdprWipeAudit.test.js",
+        "__tests__/userBackups.test.js",
+        "__tests__/socketAuthWeb.test.js",
+        "__tests__/socketAuthObs.test.js",
+        "__tests__/companionDeviceAccess.test.js",
+        "__tests__/meFoundation.test.js",
+        "__tests__/routes.integration.test.js",
+        "__tests__/gameStatsMaintenance.unit.test.js",
+        "__tests__/gameStatsWrites.unit.test.js",
+        "__tests__/gameStatsWrites.replset.test.js"
+      ],
+      "nodeVersion": "v22.12.0",
+      "mongo": {
+        "binary": "C:/Users/jay19/.cache/mongodb-binaries/mongod-x64-win32-7.0.14.exe",
+        "sha256": "919ce2ee9893ffcac72e95610f543beacce721a7c226867568856ca0754d49d8",
+        "version": "7.0.14",
+        "runtimeDownload": false
+      }
+    },
+    {
+      "label": "integrated-api-types-01",
+      "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\integrated-api-types-01.json",
+      "sha256": "5d4e51468e7c02f380f09dc945bfe91702132f62897dc322b09474eb06c61dfb",
+      "log": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\integrated-api-types-01.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "pid": 35528,
+      "exitCode": 0,
+      "elapsedMs": 12078.8931,
+      "exactSourcePins": 47,
+      "script": "node_modules/typescript/bin/tsc",
+      "args": [
+        "--noEmit"
+      ],
+      "nodeVersion": "v22.12.0",
+      "mongo": {
+        "binary": "C:/Users/jay19/.cache/mongodb-binaries/mongod-x64-win32-7.0.14.exe",
+        "sha256": "919ce2ee9893ffcac72e95610f543beacce721a7c226867568856ca0754d49d8",
+        "version": "7.0.14",
+        "runtimeDownload": false
+      }
+    },
+    {
+      "label": "integrated-api-strict-lint-01",
+      "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\integrated-api-strict-lint-01.json",
+      "sha256": "7f583c5b7a001aaf2a11f264df3f5c4fc119ae381d39c368448e1c353b02b603",
+      "log": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\integrated-api-strict-lint-01.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "pid": 49604,
+      "exitCode": 0,
+      "elapsedMs": 917.2847999999999,
+      "exactSourcePins": 47,
+      "script": "node_modules/eslint/bin/eslint.js",
+      "args": [
+        "--max-warnings=0",
+        "src/services/deviceCredentialWrites.js",
+        "src/services/devicePairings.js",
+        "__tests__/deviceCredentialWrites.test.js",
+        "__tests__/deviceCredentialWrites.integration.test.js"
+      ],
+      "nodeVersion": "v22.12.0",
+      "mongo": {
+        "binary": "C:/Users/jay19/.cache/mongodb-binaries/mongod-x64-win32-7.0.14.exe",
+        "sha256": "919ce2ee9893ffcac72e95610f543beacce721a7c226867568856ca0754d49d8",
+        "version": "7.0.14",
+        "runtimeDownload": false
+      }
+    },
+    {
+      "label": "integrated-api-owned-lint-01",
+      "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\integrated-api-owned-lint-01.json",
+      "sha256": "3b93479a545d57abc7734a76b1c6b77986d00a33e79099d5fe195737396822fe",
+      "log": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\integrated-api-owned-lint-01.log",
+      "logSha256": "1363da027ac12997d7dca96e7d84f83631048301975e4124d155867702bd4e14",
+      "pid": 26288,
+      "exitCode": 0,
+      "elapsedMs": 1371.7154,
+      "exactSourcePins": 47,
+      "script": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/lint-integrated-owned.mjs",
+      "args": [],
+      "nodeVersion": "v22.12.0",
+      "mongo": {
+        "binary": "C:/Users/jay19/.cache/mongodb-binaries/mongod-x64-win32-7.0.14.exe",
+        "sha256": "919ce2ee9893ffcac72e95610f543beacce721a7c226867568856ca0754d49d8",
+        "version": "7.0.14",
+        "runtimeDownload": false
+      }
+    }
+  ],
+  "cleanup": {
+    "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\integrated-cleanup-01.json",
+    "sha256": "e2d3d12fb5bbde1945b6e698ee13eb6efa6657b1677cb631f74e65e1af6d2032",
+    "remainingOwnedDescendants": 0,
+    "remainingOwnedListeners": 0,
+    "remainingPinnedMongo": 0,
+    "recordedReplica": {
+      "pid": 46944,
+      "stopAssertedByTest": true,
+      "port": 56466
+    },
+    "killedProcesses": 0
+  },
+  "serialLimits": {
+    "jestRunInBand": true,
+    "unitWorkers": 1,
+    "databaseMembersAtATime": 1,
+    "binary": "C:/Users/jay19/.cache/mongodb-binaries/mongod-x64-win32-7.0.14.exe",
+    "binarySha256": "919ce2ee9893ffcac72e95610f543beacce721a7c226867568856ca0754d49d8",
+    "runtimeDownloads": false
+  },
+  "warnings": {
+    "mongoLibraryShutdownResetRetained": true,
+    "qualification": "Existing shutdown-command socket-reset warning remains in evidence; actual member/runner cleanup independently verified, no assertion/log suppression."
+  },
+  "historicalEvidence": {
+    "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\runtime-verification-02.json",
+    "sha256": "83790cf48d7c65dae4b5bf0079b7cf233fb2f7a69668de2fa5a9fbc212fbb5a8",
+    "qualification": "Earlier isolated227/42/88 results remain historical. Current320 is an actual fresh combined run at354a, not transferred from old passes."
+  },
+  "scope": "Writer coordination stage1 plus incoming protocol2 maintenance integration. No retained-auth/statistics reader/grant activation, provider setting, native launch, production build or browser run.",
+  "limits": [
+    "Local single-member replica-set/standalone fixtures and coordinator instances, not production failover/cutover/clock-bound acceptance.",
+    "Server main not launched; actual coordinator/poll release lifetime tested and current server dependency order source/type-reviewed.",
+    "Receipt applies only to exact354a source/tree. Further retirement/main integration needs actual required CI on its resulting head; no silent pass transfer.",
+    "Production deployment, signed-in acceptance and all-writers retirement/unknown-outcome cutover remain separate."
+  ],
+  "noSourceRepairs": true,
+  "noGitCommitPushOrProviderChanges": true,
+  "heavySlotReleased": true
+}

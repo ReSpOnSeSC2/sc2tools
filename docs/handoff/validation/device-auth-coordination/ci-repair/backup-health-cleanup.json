@@ -1,0 +1,16 @@
+{
+  "scope": "Exact backup packet marker, recorded command descendants and cached Mongo test processes started during the sole granted task slot. No broad termination.",
+  "ownedListeners": [],
+  "recordedPids": [
+    41268,
+    23488,
+    48656,
+    44616,
+    38800,
+    12800,
+    29484
+  ],
+  "stoppedProcesses": [],
+  "ownedProcessCandidates": [],
+  "checkedAtUtc": "2026-10-28T13:50:47.3271026Z"
+}

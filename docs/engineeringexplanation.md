@@ -337,6 +337,19 @@ The shared chart clock trails ordinary game events by two seconds with a ten-sec
 
 ## Per-user revision cache (opt-in source)
 
+Device credentials have a separate writer protocol. Pairing issuance, device
+revocation and full erasure enroll in one durable `jobLocks` authority record
+before credential work; revision/chart cache flags cannot bypass it. Each gate
+advances a UUID generation under majority write concern, waits the old reader
+lease bound and retains uncertain outcomes without TTL expiry. The record has
+bounded pending scopes and sticky global retention denial on overflow. Current
+REST and socket authentication still perform their original token lookup; no
+credential cache or reader activation ships in this writer stage. A future
+60-second cache needs the reviewed short-lease admission protocol and an actual
+all-writers-upgraded cutover, including a compatible rollback. See the
+[credential checkpoint](handoff/device-auth-reuse-checkpoint.md) for exact scope
+and verification limits.
+
 `USER_CACHE_ENABLED` enables the first chart-cache slice only when its value is
 the literal string `true`. The default and `.env.example` are false. While off,
 the eleven routes call their original services and `res.json` directly; revision

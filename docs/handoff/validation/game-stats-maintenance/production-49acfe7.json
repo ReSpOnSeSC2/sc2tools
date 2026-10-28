@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-28T12:20:04.846Z",
+  "pr": 805,
+  "testedHead": "c1a4b32b3a07cb5e37981af1d784ea4f5c4de017",
+  "mergedRevision": "49acfe7c71d1c1f231cde9851781c4f363f9525e",
+  "testedAndMergedTree": "0c9cc4a9ca300ceadd8a14cc5946f6875e491db8",
+  "checks": [
+    {
+      "id": 122775772432,
+      "name": "Vercel Preview Comments",
+      "head": "c1a4b32b3a07cb5e37981af1d784ea4f5c4de017",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 122770822005,
+      "name": "Lint + typecheck + test (apps/api)",
+      "head": "c1a4b32b3a07cb5e37981af1d784ea4f5c4de017",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "vercelCheck": "success",
+  "ciLogQualification": "Actual exact-head required API and Vercel success verified through Codex diagnostics. Later bounded success-log reads returned502; no case count invented or alternate log source substituted.",
+  "webBudgetQualification": "Web/build/workflow inputs exactly identical to tested804 main before merge; all83 caps unchanged. PR806 subsequently ran actual combined web/browser CI.",
+  "actualProduction": {
+    "web": {
+      "id": "99M8q7B6K8WKspMLtshZ5w35u36E",
+      "state": "Ready/Production/Current/sc2tools.com",
+      "sourceCommitObserved": true
+    },
+    "api": {
+      "id": "dep-dbgtd7i9lscs7393c650",
+      "state": "Live",
+      "sourceCommitObserved": true,
+      "startup": {
+        "msg": "game_stats_transaction_capability",
+        "gameStatsTransactions": true,
+        "protocolVersion": 2,
+        "timestamp": 1793185487640
+      }
+    }
+  },
+  "scope": "Eager writer source deployed. Existing signed-in app/Settings and public browser fixture intake continued working; authoritative /me/Doctor readers remain unchanged.",
+  "limits": [
+    "No live account erase/wipe/import or credential mutation submitted.",
+    "No maintained owner snapshot, old-writer/unknown-command settlement or production savings proved by startup evidence.",
+    "USER_CACHE_ENABLED remains off; faster-dashboards and reader activation remain unfinished."
+  ],
+  "cleanup": "All owned acceptance tabs/worker closed; no native agent/StarCraft launch."
+}

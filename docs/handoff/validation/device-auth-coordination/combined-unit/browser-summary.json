@@ -1,0 +1,232 @@
+{
+  "sourceReceipt": {
+    "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/VERIFIED-04.json",
+    "bytes": 25050,
+    "sha256": "1aa38efee51dc28ca34153a76cfc7a5dffb3660f3bde0c72a687be8e2db341e4"
+  },
+  "status": "LOCAL_ACTUAL_COMPONENT_RESPONSIVE_FULL_AXE_MATRIX_PASSED_NOT_LIVE_ACCEPTANCE",
+  "sourceHead": "e0c47b9c4a07da30c2a9222ee6c8d0042000de12",
+  "BUILD_ID": "QMJKSmPlv5oh8_4wduapJ",
+  "results": {
+    "browserCases": 8,
+    "passed": 8,
+    "skipped": 0,
+    "flaky": 0,
+    "durationMs": 18003.147,
+    "widths": [
+      320,
+      390,
+      768,
+      1280
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "statesPerCase": [
+      "loading",
+      "error",
+      "ready",
+      "successful24gameInsufficient",
+      "unrelatedWithPendingUnitRead"
+    ],
+    "geometrySpecimens": 40,
+    "fullDefaultAxeScans": 40,
+    "axeViolations": 0,
+    "exclusions": 0,
+    "captures": 24,
+    "nativeKeyboardRetry": true,
+    "quizAnswers": 0,
+    "accountWrites": 0,
+    "unexpectedRequests": 0
+  },
+  "commandReceipt": {
+    "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/browser-command-02.json",
+    "bytes": 744,
+    "sha256": "e0389abc08022fef80892a31e6e104c506a8859693461b6366186867f863fdfb"
+  },
+  "browserReport": {
+    "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/browser-02.json",
+    "bytes": 3059828,
+    "sha256": "68ac630314e546d644635c5178e3b0dff0cbd0bac28143b4f4234d339599f811"
+  },
+  "binding": {
+    "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/input-binding-02.json",
+    "bytes": 41531,
+    "sha256": "6d6ede3c9f2385551beecb415a38600943dde381db2a982b96ecd318d811039c"
+  },
+  "actualCases": [
+    {
+      "width": 320,
+      "theme": "light",
+      "states": [
+        "loading",
+        "error",
+        "ready",
+        "successful24gameControl",
+        "unrelated"
+      ],
+      "geometrySpecimens": 5,
+      "quizAnswers": 0,
+      "accountWrites": 0
+    },
+    {
+      "width": 320,
+      "theme": "dark",
+      "states": [
+        "loading",
+        "error",
+        "ready",
+        "successful24gameControl",
+        "unrelated"
+      ],
+      "geometrySpecimens": 5,
+      "quizAnswers": 0,
+      "accountWrites": 0
+    },
+    {
+      "width": 390,
+      "theme": "light",
+      "states": [
+        "loading",
+        "error",
+        "ready",
+        "successful24gameControl",
+        "unrelated"
+      ],
+      "geometrySpecimens": 5,
+      "quizAnswers": 0,
+      "accountWrites": 0
+    },
+    {
+      "width": 390,
+      "theme": "dark",
+      "states": [
+        "loading",
+        "error",
+        "ready",
+        "successful24gameControl",
+        "unrelated"
+      ],
+      "geometrySpecimens": 5,
+      "quizAnswers": 0,
+      "accountWrites": 0
+    },
+    {
+      "width": 768,
+      "theme": "light",
+      "states": [
+        "loading",
+        "error",
+        "ready",
+        "successful24gameControl",
+        "unrelated"
+      ],
+      "geometrySpecimens": 5,
+      "quizAnswers": 0,
+      "accountWrites": 0
+    },
+    {
+      "width": 768,
+      "theme": "dark",
+      "states": [
+        "loading",
+        "error",
+        "ready",
+        "successful24gameControl",
+        "unrelated"
+      ],
+      "geometrySpecimens": 5,
+      "quizAnswers": 0,
+      "accountWrites": 0
+    },
+    {
+      "width": 1280,
+      "theme": "light",
+      "states": [
+        "loading",
+        "error",
+        "ready",
+        "successful24gameControl",
+        "unrelated"
+      ],
+      "geometrySpecimens": 5,
+      "quizAnswers": 0,
+      "accountWrites": 0
+    },
+    {
+      "width": 1280,
+      "theme": "dark",
+      "states": [
+        "loading",
+        "error",
+        "ready",
+        "successful24gameControl",
+        "unrelated"
+      ],
+      "geometrySpecimens": 5,
+      "quizAnswers": 0,
+      "accountWrites": 0
+    }
+  ],
+  "boundaries": "Actual ModeRunner, useArcadeData, useApi/SWR, corpus pagination, custom catalog, session-policy hook, unit generator/renderer/shell and completed productionCSS/localWOFF2. Explicit synthetic auth/dailyseed/account-write/HTTP and local Next primitives only. Observed generator wrapper counts invocations; unrelated mode is an explicit simple specimen. No provider, actual account, real routing or live acceptance proof.",
+  "limits": [
+    "Synthetic13,000-game corpus and unit counts exercise actual hooks/rendering; no real account, network provider, actual Next router or live acceptance is claimed.",
+    "ProductionCSS and localWOFF2 are exact completed-build inputs. The fixture compiles source components; it is not the shipped Next route or a network-latency benchmark.",
+    "Account-write sinks throw and all transport is GET-only local fulfillment. Native Tab/Enter operates only Retry, never an answer.",
+    "Original prechange production error/eventual question remain separate diagnosis evidence; no speedup, cache activation or deployed fix is inferred.",
+    "Combined Auth build postbrowser guards pass6901 source inputs and40/7/4 assets/sample. Exact-head CI/deploy and applicable live Auth acceptance remain parent release steps; original Unit production acceptance is separate."
+  ],
+  "retainedFailures": {
+    "launch": "All8 sandbox run01 failures occurred at browser launch before product test bodies; cached Chromium exited0xC0000022. Host run02 uses identical spec/fixture and fresh outputs.",
+    "files": [
+      {
+        "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/browser-01.json",
+        "bytes": 125664,
+        "sha256": "444d785aed6b62fe81f1af754d1e6a61f632c4af097e8131c75c47f55e095a9d"
+      },
+      {
+        "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/browser-01.log",
+        "bytes": 46678,
+        "sha256": "40c58a59e297dbaec025ee40fe7afd4941c1c460421f9b3bef4945b41b9e742b"
+      },
+      {
+        "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/browser-command-01.json",
+        "bytes": 744,
+        "sha256": "cf7601daa433ea80d9f0997c2a4cad51e5b8ff44fba627bf2478f97ae77e299a"
+      },
+      {
+        "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/cleanup-01.json",
+        "bytes": 517,
+        "sha256": "4a71b9e91c96576ca2bcb16fb9d9f8a2fce4d3a7bec7713fec16a301ca60d9d5"
+      },
+      {
+        "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/sandbox-cim-failure-01.json",
+        "bytes": 557,
+        "sha256": "36b406249064f00310f5b2c98810935ba092b2e8731926a4badf4d1dc81407bc"
+      },
+      {
+        "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/postbrowser-admission-failure-01.json",
+        "bytes": 697,
+        "sha256": "009d7bdf71d2bcc9e1a929623dc60ccd6c046799156fe16108d9845cf8a9546b"
+      }
+    ],
+    "assertionsChanged": false,
+    "skipsAdded": false,
+    "metadataCorrection": {
+      "files": [
+        {
+          "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/cleanup-02.json",
+          "bytes": 758,
+          "sha256": "fd73ae32af7e42237764e80bee9325623e0b22ffeac73f1ae9b0ffc4dded1b43"
+        },
+        {
+          "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/cleanup-03-final.json",
+          "bytes": 2164,
+          "sha256": "43514a8db26a2fef1a61df35210d4684add827a887fab1cbbb751546d2b8c1f5"
+        }
+      ],
+      "reason": "Final cleanup03 parsed the Z timestamp as local DateTime before comparison with UTC and conservatively flagged unrelated installed Chrome. Exact IDs were inspected, all were outside the cached Chromium executable/actual run interval, and none were stopped. Cleanup04 uses explicit UTC bounds and confirms no owned process/listener remains."
+    }
+  }
+}
