@@ -1,113 +1,27 @@
-# Maintained statistics reader: October 28 UTC
+# Maintained account statistics: current candidate
 
-This slice is in preparation on `codex/dashboard-maintained-read-prep`, based on
-main `2242d112d9124bca8cfae92d00bc852ccab2f85b`. Nothing in this checkout is
-released. `/me` and Doctor now have candidate wiring after the floor gate;
-`GamesService.stats` is unchanged. `USER_CACHE_ENABLED` remains off. This work does not close
-the wider `faster-dashboards` item.
+Current locally integrated head: `55be35e56b42090dbf91331dcc40c5476551c30e`, on accepted main `df5cf875d588fafba5456695a1c3550fc42ba587`. The reader remains unpublished. Auth PR 807's writer prerequisite is actually Ready/Live with read-only Devices and primary Help acceptance; that is separate from credential cutover and cached-auth activation. `USER_CACHE_ENABLED` stays off. This slice does not complete `faster-dashboards` or the 197-item program.
 
-## Fresh authority and bounded bootstrap
+## Request-local behavior
 
-Maintenance version 2 is a new source-version boundary; the transaction protocol
-stays version 2. Version 1 cannot supply a new writer's delta base. Its first
-mutation recounts using the original Mongo eligibility and sorted-date query
-inside the existing transaction. Later qualified writes retain bounded subset
-deltas. An old maintenance-1 writer will publish version 1, which the strict new
-reader rejects. No bulk metadata write, environment flag or read repair is added.
+`/me` combines the existing summary and onboarding preferences with statistics proof in one fresh primary owner query. Doctor combines its original normalized profile and replay-archive preferences in one owner query, including the existing authorized support caller. Public DTOs, email backfill, touch, agent/import fields and existing errors/HTTP cache behavior remain unchanged. Proof fields never enter responses.
 
-Before a process can mint version 2, one client-scoped readiness promise obtains
-the current primary's `operationTime`, advances an explicit causal session, and
-acknowledges a real `users` collection read with majority concern. It verifies
-primary continuity. It does not infer a barrier from `$clusterTime`, a ping or a
-wall-clock delay. Each new transaction uses an explicit causal session advanced
-to the acknowledged floor before its first owner write. MongoDB's driver sends
-this as first-statement `afterClusterTime`, including when that statement writes.
+Only transactional protocol 2 / maintenance 2 ready tuples qualify: exact BSON owner identity, matching dedicated UUID revision, exact mutation-epoch presence/value, no GDPR field at all, safe nonnegative total and finite Date or null latest. Positive total with null latest is valid. Missing, malformed, oversized or unsupported legacy state invokes the unchanged original statistics service once: its exact Mongo count plus original sorted-date/limit query. There is no response retention across requests, lazy repair, additional owner read or normalization of unsupported BSON.
 
-The floor is copied per caller, held only for its connected client and coalesced
-under existing eight-task writer admission. Failed setup publishes no readiness,
-starts no games transaction and returns a 503; later demand may retry after a
-one-second cooldown. There is no background retry. Existing authoritative reads
-remain available. Shutdown owns actual setup/work/session promises and checks
-`stopped` again after setup so a held barrier cannot start late writes.
+## Eager maintenance and causal bootstrap
 
-This runtime floor is paired with the parent's actual qualified approved-writer
-cutover receipt in
-`C:/SC2TOOLS/.cache/game-stats-cutover-qualified-receipt-20261028.json`.
-That receipt uses an attributed old-instance SIGTERM and Render's conservative
-published 300-second bound, plus an actual later own-operation/causal-majority
-observation. It does not invent `shutdown_complete` or assume the default
-30 seconds. Only inventoried approved writers are covered. Raw restore and
-manual collection replacement still require the existing authority-retirement
-and rebuild procedure; arbitrary out-of-band writes are outside the contract.
+Maintenance 1 cannot provide a version 2 delta base. Its next transaction bootstraps with the original Mongo predicates/count/sort; later qualified mutations keep bounded subset deltas. Ingest, visibility changes, wipes and bounded restore batches remain eager and preserve exact owner/epoch/fence authority. Compatibility/standalone contexts never qualify.
 
-## Request-local reads
+Before a connected client mints maintenance 2, a coalesced majority read after the current primary's actual operationTime establishes a causal floor. Each new explicit transaction session advances to that floor before its first owner write. Pending work stays inside bounded writer admission and shutdown ownership; a failed floor issues no game transaction and cannot mint ready authority. It does not block authoritative reads.
 
-The strict proof accepts only a fresh primary owner row, maintenance 2 in
-`ready` status, transactional protocol 2, exact BSON owner identity, matching
-dedicated UUID revision and exact epoch presence/value. Any GDPR-field presence
-rejects reuse, including expired or falsy residue. A safe nonnegative total and
-finite scalar Date or null are required. Positive total with null latest is
-valid. Unsupported raw BSON, malformed or oversized projected candidates miss;
-the unchanged authoritative query must supply their exact answer. The bound
-applies to projected candidate data, not the entire stored user document.
+The separate qualified game-writer cutover receipt is a release prerequisite. The floor orders snapshots; it does not retire old actors. Auth credential cutover is different and remains unqualified here. Raw restore/collection replacement requires retired derived authority, fresh epochs and a fresh maintenance/reader version before serving; follow ADR 0070 and the restore runbook.
 
-`getMeSnapshot` and `getDoctorSnapshot` are internal envelopes used by `/me`
-and Doctor, including the existing authorized support caller. They combine the existing summary/profile read with only onboarding/archive
-preferences and proof fields. Public summary/profile DTOs and their queries
-remain unchanged. Doctor's original busy/session-policy errors precede proof
-validation. Missing owners never fabricate zero. No proof is exposed publicly
-or reused across requests. A valid tuple skips both original game queries;
-a miss calls the original service once, performing its unchanged count and
-sorted-latest queries. Narrow older injected services retain their original
-summary/profile, preferences and stats path. No speculative game query or
-additional owner read is added.
+## Current local evidence
 
-## Verification status
+The [validation packet](validation/game-stats-reader/README.md) binds one actual current 390-case run in 16 suites, zero failures/skips, whole API types and strict new/owned lint with no added warnings. All 56 current input pins match. Build `Ymz0AGEMdraLvQtvmKtlr` passed all 83 original budgets (18 listed / 65 default), full6921-source pre/post equality and 40 canonical engine inputs / 7 served assets / 4 strict sample games. It used one static worker and 4 GiB heap with direct Next, synthetic build keys and no real dotenv, prebuild, generation, download or pruning. Actual recorded test/build PIDs, listeners and scoped child checks are clear; no processes were killed.
 
-The initial proof/envelope preparation passed 94 tests in two files and API
-types. Strict new-file size/complexity checks pass with existing Users warning
-counts unchanged. Its first complexity failure is retained and was corrected
-without weakening the rule. Those runs predate the causal-floor/version change
-and are historical.
+Current independent source/evidence review is clear. The prior c313 311-case/build and earlier208/96 preparation runs remain historical with their own exact inputs. Initial fixture/complexity failures and Mongo teardown warnings remain preserved; no assertion, skip, rule or cap was weakened.
 
-The current floor gate passed 208 tests in six files with one Jest worker and
-one cached MongoDB 7.0.14 member, downloads disabled. Whole API types and strict
-new-file/owned-file lint passed with no added baseline warnings. Its cache
-receipt is `maintained-read-preparation-verification-20261028/floor-gate-02.json`.
-Actual owned child, listener and descendant inventories are clear. The first
-denied CIM cleanup query and original Mongo shutdown warning are preserved;
-the successful scoped second inventory supersedes the unqualified first one.
+## Guard boundary and release work
 
-Floor tests cover actual promise ownership, cooldown, primary changes,
-unknown outcomes, client isolation, shutdown and per-transaction causal
-advancement. A real replica-set command-monitor case passed, asserting the
-majority read and first owner command carry the acknowledged causal floor and
-that a plausible maintenance-1 count is fully recounted. Existing writer fault
-assertions remain; their unit harness explicitly isolates the separately tested
-floor and their maintenance-version expectations follow the current version.
-
-The new real-handler/service route suite passed all 26 cases with a single cached
-replica-set member. It checks zero stats queries for ready proof, one original
-stats call/two Mongo queries on misses, one owner/preferences read, literal
-DTOs, original archive warnings, BSON array eligibility, account/owner/fence
-transitions, profile error precedence and failure propagation. The same
-serialized run passed 70 existing Foundation/profile/replay-archive/support
-cases: 96 tests in five files, zero failures or skips. Whole API types and
-strict new-file/owned-file lint passed after wiring, with no added warnings.
-Thirty owned/protected pre/post pins matched during those runs. Exact recorded
-test/type/lint/native member PIDs, listeners and scoped Jest-child inventories
-are clear; no processes were killed.
-
-Three original route attempts are retained. The new fixture initially omitted
-unique Clerk IDs, used Jest row arrays without the argument wrapper, expected
-a plain sort object where command monitoring reports a Map, and incorrectly
-expected a cache header that the unchanged Doctor router does not set. These
-were corrected at the fixture/driver/HTTP boundary. All original assertions
-remain, and no product change was needed to make those attempts pass. The
-final run is `route-tests-04` in the same verification packet; the original
-Mongo library shutdown warning is also retained.
-
-Root owns final source review, fresh-main integration, full build/budget and
-asset checks, exact-head CI and deployment. No production activation, measured
-savings, provider, engine or native change is claimed here. ADR 0070 and the raw
-restore runbook state the external cutover and authority-retirement boundaries.
+These gates cover the captured clean 55be tree. Later checkpoint/ledger/evidence adoption is docs-only, after the build guards. Preserve the runtime/asset pins and never claim the 6,921-file full-source snapshot covers that later metadata tree. Required exact-head CI, actual reader deployments and relevant signed-in acceptance remain root-owned publication gates. No production reader, credential metadata observer, cached-auth activation, savings, provider, infrastructure, engine or native release claim is made by these local receipts.

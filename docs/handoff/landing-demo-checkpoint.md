@@ -1,5 +1,49 @@
 # Home-page browser replay demo
 
+## Delivered retirement and current production acceptance — 2026-10-28
+
+PR808 retired the legacy server preview at `76fbc441`. The compatibility
+window had already served the observed all-mode path at263 and the subsequent
+803/ccb598 release. Accepted Unit PR809 later served the same retirement code
+at `f2138684`; its exact tested head/tree and Ready/Live identities are bound
+in the [sanitized production receipt](validation/demo-server-retirement/production-f213868.json).
+
+Actual signed-in desktop sc2tools.com accepted the committed public warpgate
+fixture, displayed both player choices and opened both real editors: Protoss
+102 reference steps /75 source events and Zerg120 /182. Both editors closed
+with their header Close controls and retained both choices. No Save, rule edit,
+settings change, quiz answer or personal replay upload was performed. Actual
+viewport was1905 by945. Production FAQ navigation also reaches the home-demo
+entry from How this works, with browser-only copy intact; no rollout flag changed.
+
+This is DOM/pixel production acceptance, without live network instrumentation,
+negative404, parse-speed or phone-production proof. The separate retained local
+actual-Next/worker tests establish the no-API-origin/replay-write boundary and
+keep their existing small same-site presence allowance. Phone/editor, off/admins,
+unsupported recovery, all83 caps and40/7/4 guards retain their scoped local proof.
+Two ready editor photographs were independently inspected by the releasing
+parent and remain in cache. The earlier loading-only second-player image,
+failed hidden picker and ambiguous Close locator are preserved and excluded
+from positive proof; no private production image is tracked. Normal background
+account/network behavior was not instrumented, so universal absence of writes
+is not claimed.
+
+The original optional editor-boundary requirement uses the already accepted
+shared `LazyBuildEditorModal` React.lazy/import() recovery boundary rather than
+a duplicate next/dynamic wrapper. Closed pages request no editor; successful
+parse gates opening, and real Next chunk failure/Retry tests prove its behavior.
+The unused standalone CLI source remains unchanged; only its API route/health/
+spawn wiring and obsolete tests were required to retire and are now absent.
+
+All original spec, empty augments and how-to criteria for
+`landing-demo-in-browser` are reconciled. The ledger candidate closes only that
+item:124 completed,53 partial,20 open (73 remaining), subject to parent adoption.
+The original477/all197 source-audit boundary, requirement hashes and previous
+release receipts remain historical evidence. The wider program remains active
+and incomplete. The local candidate/compatibility records below are historical;
+their pending-retirement wording is superseded by this delivery section.
+
+
 ## Retirement implementation and local verification — 2026-10-28
 
 The source slice removes only the legacy singular `/v1/public/preview-replay` router, its `/health`, Python spawn wiring, and obsolete route tests. The historical standalone `preview_replay_cli.py` remains unchanged. The plural public replay/archive API, global health, `/try` mode behavior, canonical40 browser engine inputs, seven active assets, strict four-game sample, native/agent code, versions, flags, providers and infrastructure remain unchanged.
@@ -14,7 +58,7 @@ The manual landing matrix passed220 checks with36 captures across320/390/768/144
 
 Owned process/listener checks after verification found0 owned build/test/server/browser/esbuild/Mongo candidates,0 recent Playwright Chrome candidates and0 owned/recorded listeners; no processes were killed. Heavy slot was released before final metadata work. Source/evidence packet: `.cache/demo-server-retirement-20261028/source-ready-04-runtime.json`; receipt `runtime-verification-01.json`; all204 build/browser evidence files pinned by `build-browser-evidence-index-01.json`. These are local-only receipts. Required exact-head CI, production deployment, relevant acceptance and ledger closure remain pending.
 
-Compact tracked local receipts and representative passing-run captures are in [validation/demo-server-retirement](validation/demo-server-retirement/README.md). The independent retained-evidence and visual review is [independent-final-review.json](validation/demo-server-retirement/independent-final-review.json), SHA256 `80ba64bf954f96c5c429866fdec0f1f1fa3f6ebd2539af0d69a21d35d1032262`. The source under test was the working tree at `4cc3811334e06e8c721d05664d863d52b8eaeba0`, with Tiny806 main `2242d112` adopted. Documentation/evidence adoption below is subsequent to the local build; it changes no runtime source. The roadmap item remains **partial** while required exact-head CI and actual retirement deployment/acceptance are pending.
+Compact tracked local receipts and representative passing-run captures are in [validation/demo-server-retirement](validation/demo-server-retirement/README.md). The independent retained-evidence and visual review is [independent-final-review.json](validation/demo-server-retirement/independent-final-review.json), LF-normalized SHA256 `80ba64bf954f96c5c429866fdec0f1f1fa3f6ebd2539af0d69a21d35d1032262` (10,984 bytes); the current CRLF file is 11,213 bytes with raw SHA256 `316394ed67285f7279815cbef0837540b3639458e75102fcf6ce5220faa1c7da`. The source under test was the working tree at `4cc3811334e06e8c721d05664d863d52b8eaeba0`, with Tiny806 main `2242d112` adopted. Documentation/evidence adoption below is subsequent to the local build; it changes no runtime source. The roadmap item remains **partial** while required exact-head CI and actual retirement deployment/acceptance are pending.
 
 ## Historical initial delivery and compatibility window
 
