@@ -31,7 +31,7 @@ const article: HelpArticle = {
     "bingo",
     "buildle",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-27",
   body: [
     {
       type: "paragraph",
@@ -61,6 +61,16 @@ const article: HelpArticle = {
         "Playing every day keeps your streak going. Badges reward runs of correct answers and perfect days.",
         "Your Arcade progress is saved to your account, so it follows you to every device.",
       ],
+    },
+    { type: "heading", text: "Bingo: Ladder Edition", anchor: "bingo" },
+    {
+      type: "paragraph",
+      text: "Bingo gives you a five-by-five card of objectives for the next seven days. Matching games check off the squares automatically. Each tile shows its full objective; on smaller screens or with larger text, rows grow and long unit names wrap inside their boxes. You can reroll once per week for 25 minerals.",
+    },
+    { type: "heading", text: "Opponent Bracket Pick", anchor: "opponent-bracket" },
+    {
+      type: "paragraph",
+      text: "Read the question above the four opponents, then choose an answer or press its number key. The result explains the comparison. Next round starts a fresh question with no answer selected, even if you see the same opponents again.",
     },
     { type: "heading", text: "Stock Market", anchor: "stock-market" },
     {

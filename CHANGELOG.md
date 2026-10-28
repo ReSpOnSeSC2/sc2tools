@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep the full Bingo: Ladder Edition objectives inside their tiles on phones and with larger text. Rows grow to fit longer goals, and long unit names wrap without overlapping neighboring boxes.
+- Clear the previous Opponent Bracket Pick highlight when the next round starts, including rounds with the same opponents or answer position.
+
 ### Strategies preferences
 
 - Remember your vP, vT, vZ or All selection when you leave Strategies or reopen the site, separately for each signed-in account in the browser. Global opponent-race filters keep their priority without replacing this choice.
