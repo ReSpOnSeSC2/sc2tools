@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import { pct1, wrColor } from "@/lib/format";
 import { isBarcodeName } from "@/lib/sc2pulse";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
@@ -467,10 +467,11 @@ function OpponentBracketRender({
 }: {
   ctx: Parameters<Mode<Q, A>["render"]>[0];
 }) {
-  const [picked, setPicked] = useState<number | null>(null);
+  // The runner owns the answer lifetime and clears it for every new round,
+  // including consecutive rounds with the same candidates or correct slot.
+  const picked = ctx.answer;
   const onPick = (i: number) => {
     if (ctx.revealed) return;
-    setPicked(i);
     ctx.onAnswer(i);
   };
 

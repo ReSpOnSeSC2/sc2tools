@@ -645,6 +645,8 @@ describe("/v1/admin", () => {
   test("health reports mongo ping success and the configured store kind", async () => {
     const res = await asAdmin(request(app).get("/v1/admin/health"));
     expect(res.status).toBe(200);
+    expect(res.headers["cache-control"]).toBe("private, no-store");
+    expect(res.body.personalChartCache).toEqual({ enabled: false, counters: null });
     expect(res.body.mongo.ok).toBe(true);
     expect(typeof res.body.mongo.latencyMs).toBe("number");
     expect(res.body.runtime.gameDetailsStore).toBe("mongo");

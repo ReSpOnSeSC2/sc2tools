@@ -11,9 +11,14 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
-### Today on phones
+### Personal chart cache monitoring
 
-- Keep Win rate, Active streak, MMR and Games in range cards compact on phones, without stretching them to match the taller session card.
+- Show whether the personal chart cache is off or enabled in Admin → Infrastructure. Enabled snapshots show process-lifetime observations and cache-accounting bytes; missing reporting stays distinct from Off. The card changes no setting.
+
+### Fixed
+
+- Keep the full Bingo: Ladder Edition objectives inside their tiles on phones and with larger text. Rows grow to fit longer goals, and long unit names wrap without overlapping neighboring boxes.
+- Clear the previous Opponent Bracket Pick highlight when the next round starts, including rounds with the same opponents or answer position.
 
 ### Strategies preferences
 
@@ -25,6 +30,10 @@ corresponding GitHub Release.
 - Find public guides from the guide hub or matchup page, with clear availability and Retry when the guide list cannot load.
 - Find your opponents and saved builds by the start of their names in Search. Private results clear when the search or account changes, with full-library links when quick search is unavailable.
 - Keep private Search selections subject to unsaved Settings confirmation, and discard expired selections when another search or route opens.
+
+### Today on phones
+
+- Keep Win rate, Active streak, MMR and Games in range cards compact on phones, without stretching them to match the taller session card.
 
 ### Sessions and date filters
 

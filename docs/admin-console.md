@@ -162,6 +162,25 @@ failures can require rotating an expired service-account secret. For recovery,
 follow [Restore database](runbooks/restore-database.md), preserving logged wipe
 date ranges after a restore.
 
+### Personal chart cache
+
+Under Operational health, Personal chart cache reports the setting of the API
+process answering the request. **Off** means personal chart requests use their
+normal API path; it does not mean there has been no traffic. Activity figures
+are hidden while it is off. This card has no activation control.
+
+When enabled, hits and misses are observations since that API process started.
+Misses count newly started cache work, so do not turn these numbers into a request
+hit rate. Stored entries can include entries awaiting expiry cleanup. Accounted
+bytes include cache buffers, keys and tags, including retired entries still in
+use; reserved bytes are a separate allowance for work in progress. These are not
+total Node or MongoDB memory figures, a performance test or a cost-saving estimate.
+
+**Not reported** means this API response lacks a complete valid cache snapshot;
+it must not be read as Off or zero activity. Refresh now uses the existing health
+checks. Changing the cache setting still requires the normal reviewed operator
+configuration process; the card changes no setting or provider connection.
+
 ## Web analytics (GA4) setup
 
 Set `GA4_PROPERTY_ID` on the API to the numeric GA4 property ID. Provide a Google
