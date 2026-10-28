@@ -76,7 +76,7 @@ export function SlotMachineReveal({
           />
         ))}
       </div>
-      <WinnerCard winner={winner} rarity={rarity} show={settled} />
+      <WinnerCard winner={winner} rarity={rarity} show={settled} reducedMotion={reducedMotion} />
     </RevealFrame>
   );
 }

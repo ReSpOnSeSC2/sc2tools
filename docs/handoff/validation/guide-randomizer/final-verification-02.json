@@ -1,0 +1,240 @@
+{
+  "initial": [
+    {
+      "path": "apps/web/components/guides/__tests__/GuideLikelyRangeTerm.test.tsx",
+      "sha256": "89bb52ba40ef84b63cf368e5d09786c28a6df3351a0ec250fe51af7ada770050"
+    },
+    {
+      "path": "apps/web/components/guides/__tests__/statsPresentation.test.tsx",
+      "sha256": "d4988233f044c6b9b2a3ac304d7cbf889a713b3c80bac43574ceaeea79f996d9"
+    },
+    {
+      "path": "apps/web/components/guides/GuideLikelyRangeTerm.tsx",
+      "sha256": "bb0ceaf8d5a677e2775a8be54dd0482b2324be987d0ef04fa04f06eb003bbf43"
+    },
+    {
+      "path": "apps/web/components/guides/GuideStatsLegend.tsx",
+      "sha256": "c52f1aed6f235cd1c73d75f449ed7514c30372234057bcb1fd325cf2c2466619"
+    },
+    {
+      "path": "apps/web/components/guides/loadGuideLegendTerm.ts",
+      "sha256": "74d6af2b09524476e73d92ddf95f143e1ef365da5483c8fd3d3ae2ba7b8e4966"
+    },
+    {
+      "path": "apps/web/components/help/__tests__/HelpArticleBody.test.tsx",
+      "sha256": "d0c92fb0e16d11e6a046a18dc8d12502c293777f3cc9da2822b3f2bffe78e4fc"
+    },
+    {
+      "path": "apps/web/components/randomizer/__tests__/RandomizerStage.accessibility.test.tsx",
+      "sha256": "4cfb75036905648c9f28bd93cdfb695717b3fd5f14ede80b02fc2f6d62d854fc"
+    },
+    {
+      "path": "apps/web/components/randomizer/__tests__/RandomizerStage.performance.test.tsx",
+      "sha256": "23c8ffa761643343b8245b04baf46c63d0958c12d57acc9061001b4aeffe8d48"
+    },
+    {
+      "path": "apps/web/components/randomizer/RandomizerStage.tsx",
+      "sha256": "3470d5303fcc40a7a02358896c56ac040950396aefb0c6ba756d3b0f652e2cf1"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/__tests__/revealAccessibility.test.tsx",
+      "sha256": "bcb9be7ddd9c6a45504044091a9a5eb66302530f212f5969200f48764ae56f3c"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/__tests__/SpriteLegend.accessibility.test.tsx",
+      "sha256": "1f5b5cced38ec5fff8a6f94d09ac54870549b0c4381fd9106aa43be36c671110"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/AsteroidLockReveal.tsx",
+      "sha256": "20d089084740423c577bcd7ed902a92be19d45d6f931fa1726af2e04e710eee8"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/BattleRoyaleReveal.tsx",
+      "sha256": "12c6ad50e97cafdfe1ed691334b4badf9fd0be05d753295bbcfe1c718268115d"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/CaseUnboxingReveal.tsx",
+      "sha256": "cf7c4b2c076fade27819292d2aa6c7629175c4339e667abdf8de36ab75ad62ef"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/ClawMachineReveal.tsx",
+      "sha256": "c29267d90ab5fec8b2925c5f16eb77f8d23f213017186d68b1ef0e0830019e37"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/FighterBrawlReveal.tsx",
+      "sha256": "223b528df4672bf7e97cc2414afa3ded0fba007ef218cae51a1c82ea9c75c9f1"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/GachaSummonReveal.tsx",
+      "sha256": "ccf784cd4fc021bcddd3aea8c10737814514ce44339653c3051ea2f64a207815"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/HorseRaceReveal.tsx",
+      "sha256": "5d3e2da009a13a0264f693a7bf48e918761f5bbf02baf385ae5c8ccaad4c038b"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/HungrySwarmReveal.tsx",
+      "sha256": "986720fa64e4535960dcc08bf65e221cda09026d79ec91619749939fa96b9920"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/revealShared.tsx",
+      "sha256": "c2863fbf112a6e2fa8578d6a9f37b016a2595d758aa1fc32f174a4e99534df00"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/SlotMachineReveal.tsx",
+      "sha256": "ffe57f877b3f498514c65d4a6f4b27da6c0ae4a6d4c1261027b51eb9514bf6a7"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/spriteShared.tsx",
+      "sha256": "8b1c2b52f4aa80ba1127fcfc2bd564e58bdf7f390d08dad53094f24abd9f3756"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/SumoShoveReveal.tsx",
+      "sha256": "2cb3988cc17636e498a46dff995f6fcf355969d49d19857b5745bb5f8fd890bf"
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/WheelSpinReveal.tsx",
+      "sha256": "61b0deab5a15778c051d0e5e2170d4a7079457057d5b05f4d89c0c61c9af72b0"
+    },
+    {
+      "path": "apps/web/lib/__tests__/glossary.test.ts",
+      "sha256": "8cb3da558c7ba4e75ac85e945dbf0a3f6016996cabad246f6c06012c071548b9"
+    },
+    {
+      "path": "apps/web/lib/glossary.ts",
+      "sha256": "a64e737042ee0b806845da644f2a8b837afe09d5a54db98f0f536ac5c9a0d091"
+    },
+    {
+      "path": "apps/web/lib/guides/guideCopy.ts",
+      "sha256": "f920598b1605b4fa52d4312c885cc75f7745b97c109d59e0430d97d97c37f01e"
+    },
+    {
+      "path": "apps/web/lib/help/__tests__/guideRandomizerAccessibility.test.ts",
+      "sha256": "4bbf566f176074881ea59c2818170ac7600cc9d638572d7511cd4aebe708b51a"
+    },
+    {
+      "path": "apps/web/lib/help/articles/builds/randomizer.ts",
+      "sha256": "c82465057870e2a823067cddabfb3d3b5a1a895d5af83026c788d6edcaaad9c0"
+    },
+    {
+      "path": "apps/web/lib/help/articles/builds/reading-guide-stats.ts",
+      "sha256": "131c2a948adfe40b88a5c30f4f66716156c8ad1ef92cb0f753fd096980830e9e"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "963f054f5cad65fdf7a86f5040cc0155f9cb630d51b2e6c5597d871674a70c12"
+    },
+    {
+      "path": "docs/handoff/guide-randomizer-completion-checkpoint.md",
+      "sha256": "673b34132b8e5d22f6958e4d574895304af668281710d33ba68e1df55214ab22"
+    }
+  ],
+  "runs": [
+    {
+      "label": "unit-final-02",
+      "args": [
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--maxWorkers=2",
+        "--minWorkers=1",
+        "components/guides/__tests__/GuideLikelyRangeTerm.test.tsx",
+        "components/guides/__tests__/statsPresentation.test.tsx",
+        "components/ui/__tests__/InfoTip.test.tsx",
+        "lib/__tests__/glossary.test.ts"
+      ],
+      "started": "2026-10-28T05:34:43.245Z",
+      "ended": "2026-10-28T05:34:52.705Z",
+      "exit": 0,
+      "log": "C:/SC2TOOLS/.cache/guide-term-budget-fix-20261028/unit-final-02.log"
+    },
+    {
+      "label": "types-final-02",
+      "args": [
+        "node_modules/typescript/bin/tsc",
+        "--noEmit",
+        "--incremental",
+        "false",
+        "--pretty",
+        "false"
+      ],
+      "started": "2026-10-28T05:34:52.707Z",
+      "ended": "2026-10-28T05:35:49.338Z",
+      "exit": 0,
+      "log": "C:/SC2TOOLS/.cache/guide-term-budget-fix-20261028/types-final-02.log"
+    },
+    {
+      "label": "lint-final-02",
+      "args": [
+        "node_modules/next/dist/bin/next",
+        "lint",
+        "--max-warnings",
+        "0",
+        "--file",
+        "components/guides/__tests__/GuideLikelyRangeTerm.test.tsx",
+        "--file",
+        "components/guides/__tests__/statsPresentation.test.tsx",
+        "--file",
+        "components/guides/GuideLikelyRangeTerm.tsx",
+        "--file",
+        "components/guides/GuideStatsLegend.tsx",
+        "--file",
+        "components/guides/loadGuideLegendTerm.ts",
+        "--file",
+        "components/help/__tests__/HelpArticleBody.test.tsx",
+        "--file",
+        "components/randomizer/__tests__/RandomizerStage.accessibility.test.tsx",
+        "--file",
+        "components/randomizer/__tests__/RandomizerStage.performance.test.tsx",
+        "--file",
+        "components/randomizer/RandomizerStage.tsx",
+        "--file",
+        "components/randomizer/reveals/__tests__/revealAccessibility.test.tsx",
+        "--file",
+        "components/randomizer/reveals/__tests__/SpriteLegend.accessibility.test.tsx",
+        "--file",
+        "components/randomizer/reveals/AsteroidLockReveal.tsx",
+        "--file",
+        "components/randomizer/reveals/BattleRoyaleReveal.tsx",
+        "--file",
+        "components/randomizer/reveals/CaseUnboxingReveal.tsx",
+        "--file",
+        "components/randomizer/reveals/ClawMachineReveal.tsx",
+        "--file",
+        "components/randomizer/reveals/FighterBrawlReveal.tsx",
+        "--file",
+        "components/randomizer/reveals/GachaSummonReveal.tsx",
+        "--file",
+        "components/randomizer/reveals/HorseRaceReveal.tsx",
+        "--file",
+        "components/randomizer/reveals/HungrySwarmReveal.tsx",
+        "--file",
+        "components/randomizer/reveals/revealShared.tsx",
+        "--file",
+        "components/randomizer/reveals/SlotMachineReveal.tsx",
+        "--file",
+        "components/randomizer/reveals/spriteShared.tsx",
+        "--file",
+        "components/randomizer/reveals/SumoShoveReveal.tsx",
+        "--file",
+        "components/randomizer/reveals/WheelSpinReveal.tsx",
+        "--file",
+        "lib/__tests__/glossary.test.ts",
+        "--file",
+        "lib/glossary.ts",
+        "--file",
+        "lib/guides/guideCopy.ts",
+        "--file",
+        "lib/help/__tests__/guideRandomizerAccessibility.test.ts",
+        "--file",
+        "lib/help/articles/builds/randomizer.ts",
+        "--file",
+        "lib/help/articles/builds/reading-guide-stats.ts"
+      ],
+      "started": "2026-10-28T05:35:49.339Z",
+      "ended": "2026-10-28T05:35:53.383Z",
+      "exit": 0,
+      "log": "C:/SC2TOOLS/.cache/guide-term-budget-fix-20261028/lint-final-02.log"
+    }
+  ],
+  "changed": []
+}

@@ -25,7 +25,7 @@ const article: HelpArticle = {
     "live preview",
     "roll now",
   ],
-  updated: "2026-10-25",
+  updated: "2026-10-28",
   body: [
     { type: "callout", tone: "info", title: "Agent 0.24.1 and later", text: "Update the [Windows agent](/download) for the check-in Randomize control. The separate widget handles animated reveals and audio. See [Desktop Companion](/help/desktop-companion)." },
     {
@@ -54,6 +54,7 @@ const article: HelpArticle = {
       text: "The Randomizer widget can follow a 1 Gate or 2 Gate build reveal with one opening unit (1 Gate) or two (2 Gate). Each build keeps its own unit odds. Companion only shows the saved build pick; the animated opening-unit sequence belongs to the widget and website preview.",
     },
     { type: "heading", text: "Try it before you go live", anchor: "preview" },
+    { type: "paragraph", text: "Reveals respect your device's Reduce motion setting and announce the chosen build to screen readers." },
     {
       type: "list",
       items: [

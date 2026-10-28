@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-28T06:06:42.295Z",
+  "reviewer": "independent bingo_browser_regression agent",
+  "mode": "source-only-one-line-ratchet-repair",
+  "beforeRevision": "cfce71a3b2a1005f320010835022fc468d93a71d",
+  "decision": "clear",
+  "blockers": [],
+  "file": "apps/web/components/randomizer/reveals/spriteShared.tsx",
+  "beforeGitBlobSha256": "82df4c34a89da636f3be99b5b4bd845b4007f223d3a849e055e6834093b6747a",
+  "currentRawSha256": "da5aae05121b46d8f9ed59352be17df90ddeb0f4710aab1f49871c700510f6ee",
+  "comparison": "Exactly the proposed color conditional becomes the existing #f0f2f6 value; compared with CRLF normalization explicitly.",
+  "findings": [
+    "Full label opacity remains1. Existing #f0f2f6 is brighter than the prior eliminated #aab2c3 on the same dark/highlight backgrounds, so label contrast increases rather than regressing. Actual browser AA remains required.",
+    "Elimination remains visually distinguishable through unchanged line-through plus icon-only0.55 opacity; active labels/icons retain their original styling. State does not rely on a subtle color difference.",
+    "Weight700,13px size,line-height1.15,padding,wrapping,truncation,borders,highlight fill,shadow,selection/odds,timers,layout,motion and announcements are byte-identical outside this color line.",
+    "No new color token, HEX_ALLOWLIST entry, ratchet allowance, skip or budget change is needed. #f0f2f6 already exists on the exact original line."
+  ],
+  "unchangedRatchet": {
+    "file": "apps/web/scripts/ui-lint/rules.mjs",
+    "rawSha256": "6761b1c1ecd5867c3f7444ac90f7c563e4f5045b179e0ad38c46cee0fe344402",
+    "gitBlobEquivalentIgnoringCrlf": true
+  },
+  "existingContrastTest": {
+    "file": "apps/web/components/randomizer/reveals/__tests__/SpriteLegend.accessibility.test.tsx",
+    "sha256": "1f5b5cced38ec5fff8a6f94d09ac54870549b0c4381fd9106aa43be36c671110",
+    "scope": "Four active/eliminated × highlighted/unhighlighted cases read actual product ink/fill/alpha and retain strike-through/icon-only fade checks; parent reruns."
+  },
+  "guideReuse": {
+    "receipt": "C:/SC2TOOLS/.cache/guide-term-budget-fix-20261028/independent-browser-review.json",
+    "sha256": "dbc75acf0279c8893e4dabd06b2112933bf140f949e1af5cb1e0f6a211d34f5d",
+    "consumerInputs": [
+      {
+        "file": "apps/web/components/guides/GuideLikelyRangeTerm.tsx",
+        "beforeSha256": "bb0ceaf8d5a677e2775a8be54dd0482b2324be987d0ef04fa04f06eb003bbf43",
+        "currentSha256": "bb0ceaf8d5a677e2775a8be54dd0482b2324be987d0ef04fa04f06eb003bbf43"
+      },
+      {
+        "file": "apps/web/components/guides/GuideStatsLegend.tsx",
+        "beforeSha256": "c52f1aed6f235cd1c73d75f449ed7514c30372234057bcb1fd325cf2c2466619",
+        "currentSha256": "c52f1aed6f235cd1c73d75f449ed7514c30372234057bcb1fd325cf2c2466619"
+      },
+      {
+        "file": "apps/web/components/guides/guideUi.ts",
+        "beforeSha256": "dca948f0795610c6f31014dc8f752e385e6bd18ce59d61d0427876ca01d061fc",
+        "currentSha256": "dca948f0795610c6f31014dc8f752e385e6bd18ce59d61d0427876ca01d061fc"
+      },
+      {
+        "file": "apps/web/components/guides/loadGuideLegendTerm.ts",
+        "beforeSha256": "74d6af2b09524476e73d92ddf95f143e1ef365da5483c8fd3d3ae2ba7b8e4966",
+        "currentSha256": "74d6af2b09524476e73d92ddf95f143e1ef365da5483c8fd3d3ae2ba7b8e4966"
+      },
+      {
+        "file": "apps/web/components/ui/Button.tsx",
+        "beforeSha256": "f7a30265f5487e91bd5c98da64271247deba554b7ed2ddb17b49e5b9cb9b71db",
+        "currentSha256": "f7a30265f5487e91bd5c98da64271247deba554b7ed2ddb17b49e5b9cb9b71db"
+      },
+      {
+        "file": "apps/web/components/ui/IconButton.tsx",
+        "beforeSha256": "0b4f137acbf7901d3e4c468fc9bec18110025996ec43c5ba6689c94b4a06e9f2",
+        "currentSha256": "0b4f137acbf7901d3e4c468fc9bec18110025996ec43c5ba6689c94b4a06e9f2"
+      },
+      {
+        "file": "apps/web/components/ui/InfoTip.tsx",
+        "beforeSha256": "0471ef686a08647acd6fbd4343c286f0da8a7e8e6c14df16a48044c348268905",
+        "currentSha256": "0471ef686a08647acd6fbd4343c286f0da8a7e8e6c14df16a48044c348268905"
+      },
+      {
+        "file": "apps/web/components/ui/Modal.tsx",
+        "beforeSha256": "31bba856ca70fa500b8fb0a4dcd726cebfcf3b849c5fbbff0f37027b55a4bc11",
+        "currentSha256": "31bba856ca70fa500b8fb0a4dcd726cebfcf3b849c5fbbff0f37027b55a4bc11"
+      },
+      {
+        "file": "apps/web/components/ui/OverlayLayer.tsx",
+        "beforeSha256": "0c6b10f8fb01e5f7c44105c88f2c472ad80907580965875f5278efb027d5cc0d",
+        "currentSha256": "0c6b10f8fb01e5f7c44105c88f2c472ad80907580965875f5278efb027d5cc0d"
+      },
+      {
+        "file": "apps/web/components/ui/Popover.tsx",
+        "beforeSha256": "08abbe1d3ab506899bac8ab37efb6a660cd359e0855e75927ac99381e55cb070",
+        "currentSha256": "08abbe1d3ab506899bac8ab37efb6a660cd359e0855e75927ac99381e55cb070"
+      },
+      {
+        "file": "apps/web/components/ui/Term.tsx",
+        "beforeSha256": "228f6edf31694258f456fa70d49e16ce28dce07788e6baa82175b82d4ea59f24",
+        "currentSha256": "228f6edf31694258f456fa70d49e16ce28dce07788e6baa82175b82d4ea59f24"
+      },
+      {
+        "file": "apps/web/components/ui/buttonStyles.ts",
+        "beforeSha256": "e6ce882b432ef6ee15cb125356d22d8c9da4fdcca2ddd506c6d222c350a3af13",
+        "currentSha256": "e6ce882b432ef6ee15cb125356d22d8c9da4fdcca2ddd506c6d222c350a3af13"
+      },
+      {
+        "file": "apps/web/lib/a11y/focusScopes.ts",
+        "beforeSha256": "85747b9204c268cdc76657e0a4a80ede6f6be24d72fbbfd61a84d418b3b69789",
+        "currentSha256": "85747b9204c268cdc76657e0a4a80ede6f6be24d72fbbfd61a84d418b3b69789"
+      },
+      {
+        "file": "apps/web/lib/a11y/popoverPlacement.ts",
+        "beforeSha256": "be0d3d644bdb2122ec33cd8b702d9e548d51d741d36ce3be857ed79a172fe27a",
+        "currentSha256": "be0d3d644bdb2122ec33cd8b702d9e548d51d741d36ce3be857ed79a172fe27a"
+      },
+      {
+        "file": "apps/web/lib/a11y/useFocusTrap.ts",
+        "beforeSha256": "c95712fdaa6f2f87ab0762cd0ae1dcca733e75de4c789a214f0883b75a4e155d",
+        "currentSha256": "c95712fdaa6f2f87ab0762cd0ae1dcca733e75de4c789a214f0883b75a4e155d"
+      },
+      {
+        "file": "apps/web/lib/bodyScrollLock.ts",
+        "beforeSha256": "e54775096c9a43fe35310a4e0e88ea0f1138612c499ae894c93d0ae985a87326",
+        "currentSha256": "e54775096c9a43fe35310a4e0e88ea0f1138612c499ae894c93d0ae985a87326"
+      },
+      {
+        "file": "apps/web/lib/format.ts",
+        "beforeSha256": "097d8155a906e805fe6eff7cea2780d82f649b4348bc6f147c466f5f065f57be",
+        "currentSha256": "097d8155a906e805fe6eff7cea2780d82f649b4348bc6f147c466f5f065f57be"
+      },
+      {
+        "file": "apps/web/lib/glossary.ts",
+        "beforeSha256": "a64e737042ee0b806845da644f2a8b837afe09d5a54db98f0f536ac5c9a0d091",
+        "currentSha256": "a64e737042ee0b806845da644f2a8b837afe09d5a54db98f0f536ac5c9a0d091"
+      },
+      {
+        "file": "apps/web/lib/guides/format.ts",
+        "beforeSha256": "a8aaee024e0e7f3cfb50aafc8800175857fb04f370a31d1d79d744df2bbadbdf",
+        "currentSha256": "a8aaee024e0e7f3cfb50aafc8800175857fb04f370a31d1d79d744df2bbadbdf"
+      },
+      {
+        "file": "apps/web/lib/guides/guideCopy.ts",
+        "beforeSha256": "f920598b1605b4fa52d4312c885cc75f7745b97c109d59e0430d97d97c37f01e",
+        "currentSha256": "f920598b1605b4fa52d4312c885cc75f7745b97c109d59e0430d97d97c37f01e"
+      },
+      {
+        "file": "apps/web/lib/meta.ts",
+        "beforeSha256": "1182951da643e57fe895a709ad28feb4a08d45ba32ce2d869bc194f5943ff260",
+        "currentSha256": "1182951da643e57fe895a709ad28feb4a08d45ba32ce2d869bc194f5943ff260"
+      }
+    ],
+    "styleFontInputs": [
+      {
+        "file": "apps/web/app/fonts/bricolage-grotesque-latin.woff2",
+        "beforeSha256": "4fd48b2c1ab27220e71f15f990550261b35245c3bdfd8d8025b4bdac0459ee2d",
+        "currentSha256": "4fd48b2c1ab27220e71f15f990550261b35245c3bdfd8d8025b4bdac0459ee2d"
+      },
+      {
+        "file": "apps/web/app/fonts/fraunces-latin-normal.woff2",
+        "beforeSha256": "88e17be075f1be50ab67b057b99e3701b828f44ed28f9452df6c02645bb0cba9",
+        "currentSha256": "88e17be075f1be50ab67b057b99e3701b828f44ed28f9452df6c02645bb0cba9"
+      },
+      {
+        "file": "apps/web/app/fonts/hanken-grotesk-latin.woff2",
+        "beforeSha256": "1f21c6eaa0000f3329cfcfac966b43d5bebf5aa610303e33294ac31bc6f4bb59",
+        "currentSha256": "1f21c6eaa0000f3329cfcfac966b43d5bebf5aa610303e33294ac31bc6f4bb59"
+      },
+      {
+        "file": "apps/web/app/globals.css",
+        "beforeSha256": "16bd173d8071c7d682d929c4983e4766aae774bf91d251928f84d704480ef971",
+        "currentSha256": "16bd173d8071c7d682d929c4983e4766aae774bf91d251928f84d704480ef971"
+      },
+      {
+        "file": "apps/web/tailwind.config.ts",
+        "beforeSha256": "e2738f087fd02ef0dbd606ce03dc9d0ad017960cfe0cbba3d6aa6d4b04d11bc5",
+        "currentSha256": "e2738f087fd02ef0dbd606ce03dc9d0ad017960cfe0cbba3d6aa6d4b04d11bc5"
+      }
+    ],
+    "qualifiedCases": 24,
+    "qualifiedAaScans": 54,
+    "notRerun": true,
+    "qualification": "All21 actual guide consumer inputs and5 style/font inputs remain exact. Older full32-file source-pin collection includes the changed SpriteLegend pin, so do not describe all32 as current unchanged; the isolated guide dependency subset remains valid."
+  },
+  "randomizerEvidence": {
+    "priorReceipt": "C:/SC2TOOLS/.cache/guide-randomizer-verification-20261028/independent-browser-review.json",
+    "status": "prior SpriteLegend raw pin changed; old Randomizer evidence cannot alone qualify this color repair",
+    "requiredFreshCases": 12,
+    "requiredFreshAaScans": 72,
+    "requiredFreshStyleSpecimens": 132,
+    "otherAssertions": "Keep all original selection/odds/layout/motion/announcement/retirement/AA/network gates; no exclusions."
+  },
+  "execution": "No source edit, tests, browser, type/lint or build executed by this reviewer. Parent owns serialization and will grant fresh browser slot after its checks."
+}
