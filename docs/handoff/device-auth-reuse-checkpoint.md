@@ -2,11 +2,15 @@
 
 ## Prepared readiness and optional REST seam — local candidate
 
-The isolated `codex/device-auth-rest-reuse` candidate starts at local merge
-`2e4a6949`, combining preserved helper `c3d7a592` with passed main/Reader PR810
-`b8ef1b94`. The helper branch remains unchanged. The verified implementation is
-preserved locally at `db99e5ce`; its narrow startup-log follow-up is a local
-candidate. Nothing is published, deployed or activated by these local checks.
+The implementation was preserved at `db99e5ce` and its startup-log follow-up
+at `87fe1c1b`, then integrated with passed main `dfe4d623` at `98b9cfff`. The
+original helper-only slice remains separately preserved at `c3d7a592`.
+
+The 239-case pre-log run and 12-case logging follow-up are separate historical
+runs. Current integrated whole-API types and owned lint pass. These local
+checks do not establish publication, deployment, a prepared serving cohort or
+retained-reader activation; final published-head CI and deployment/acceptance
+gates remain pending.
 
 Production factory writers share bounded prepared-authority readiness. Startup
 failure leaves original uncached REST/socket authentication usable. Credential

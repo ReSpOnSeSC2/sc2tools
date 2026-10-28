@@ -1,10 +1,16 @@
 # Device REST reuse helpers — unwired preparation
 
-Candidate: `codex/device-auth-rest-reuse-helpers`, based on tested Auth
-`e0c47b9c4a07da30c2a9222ee6c8d0042000de12`. This draft is not a released or
-activated authentication cache. No existing production module imports the new
-helpers; REST, sockets, `findTokenByHash`, liveness, writer draining and all
-configuration remain unchanged. The broader faster-dashboards item is partial.
+The original `codex/device-auth-rest-reuse-helpers` slice, preserved at
+`c3d7a592`, was based on tested Auth `e0c47b9c`. It left existing production
+modules untouched and had no production imports. The helper behavior and
+59-case verification below are historical evidence for that slice.
+
+The current prepared-readiness candidate was integrated with passed main
+`dfe4d623` at `98b9cfff`. Readiness now imports the deadline helper and Pairings
+shares the authoritative lookup/touch core. The optional retained REST adapter
+is still not created or injected by the serving app; REST and sockets use
+authoritative lookups. No cache activation or flag change is included, and the
+broader faster-dashboards item remains partial.
 
 The standalone lease helper performs demand-only actual majority nonce writes
 against the existing authority record. It cannot create, prepare, repair or
