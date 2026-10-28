@@ -434,7 +434,7 @@ describe("authenticated shared replay detail route", () => {
     mocks.apiFetch.mockResolvedValue({ ok: true, data: PUBLIC_DETAIL, status: 200 });
     render(await SharedReplayAnalysisPage({ params: Promise.resolve({ player: PLAYER_SLUG, gameId: "game/42" }), searchParams: Promise.resolve({ from: "matchup=PvZ&result=loss&map=Alcyone&build=Blink&search=rival&cursor=old&page=3&ignored=secret" }) }));
     const url = new URL(mocks.apiFetch.mock.calls[0][0], "https://example.test"); expect(Object.fromEntries(url.searchParams)).toEqual({ search: "rival", result: "loss", matchup: "PvZ", map: "Alcyone", build: "Blink" });
-    const back = screen.getByRole("link", { name: /Back to PvZ · Losses/ }); expect(back.getAttribute("href")).toContain("cursor=old&page=3"); expect(back.getAttribute("href")).not.toContain("ignored");
+    const back = await screen.findByRole("link", { name: /Back to PvZ · Losses/ }); expect(back.getAttribute("href")).toContain("cursor=old&page=3"); expect(back.getAttribute("href")).not.toContain("ignored");
   });
   it("uses the same busy recovery for a rate-limited shared analysis", async () => {
     mocks.apiFetch.mockResolvedValue({ ok: false, status: 429, error: "busy" });
@@ -456,7 +456,7 @@ describe("authenticated shared replay detail route", () => {
     expect(mocks.apiFetch).toHaveBeenCalledWith(
       `/v1/public/replays/${PLAYER_SLUG}/game%2F42`,
     );
-    expect(screen.getByRole("heading", { name: "Reaver vs Rival" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Reaver vs Rival" })).toBeTruthy();
     expect(screen.getByRole("link", { name: /Back to Reaver's replays/i }).getAttribute("href")).toBe(
       `/players/${PLAYER_SLUG}/replays`,
     );
@@ -500,7 +500,7 @@ describe("authenticated shared replay detail route", () => {
     render(ui);
 
     expect(
-      screen.getByRole("heading", { name: "Reaver's team replay · 4 players" }),
+      await screen.findByRole("heading", { name: "Reaver's team replay · 4 players" }),
     ).toBeTruthy();
     expect(screen.getByText("Primary opponent: Rival")).toBeTruthy();
     expect(mocks.timeline).toHaveBeenCalledWith(

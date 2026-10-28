@@ -1,0 +1,58 @@
+{
+  "qualification": "Derived actual Codex PR-check diagnostics; original failed check and old-source results are retained, not overwritten.",
+  "pr": 802,
+  "head": "7b57d86e1de7121bdc4eeac1a96a723d371b2d3d",
+  "run": 40630331297,
+  "checkRun": 122625162330,
+  "conclusion": "failure",
+  "annotations": [
+    {
+      "path": ".github",
+      "start_line": 2,
+      "end_line": 2,
+      "annotation_level": "warning",
+      "message": "Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/",
+      "title": "",
+      "raw_details": ""
+    },
+    {
+      "path": ".github",
+      "start_line": 4012,
+      "end_line": 4012,
+      "annotation_level": "failure",
+      "message": "Process completed with exit code 1.",
+      "title": "",
+      "raw_details": ""
+    },
+    {
+      "path": "apps/web/components/public-profile/__tests__/publicStatusBoundaries.test.ts",
+      "start_line": 9,
+      "end_line": 9,
+      "annotation_level": "failure",
+      "message": "AssertionError: players/[player]/replays/[gameId]: expected true to be false // Object.is equality\n\n- Expected\n+ Received\n\n- false\n+ true\n\n ❯ components/public-profile/__tests__/publicStatusBoundaries.test.ts:9:90\n\n",
+      "title": "components/public-profile/__tests__/publicStatusBoundaries.test.ts > keeps loading boundaries from flushing a public 200 before authoritative status is known",
+      "raw_details": ""
+    },
+    {
+      "path": ".github",
+      "start_line": 1,
+      "end_line": 1,
+      "annotation_level": "notice",
+      "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748\"",
+      "title": "",
+      "raw_details": ""
+    }
+  ],
+  "executed": {
+    "passed": 9981,
+    "failed": 1,
+    "existingSkipped": 1
+  },
+  "cause": "Added route loading.tsx violated unchanged public-status boundary protection. Fixed by moving identical UI to a default-SSR dynamic boundary after authority; the old assertion is unchanged.",
+  "repairEvidence": {
+    "focusedCases": 79,
+    "wholeWebTypes": "pass after explicit fixture discriminant type correction",
+    "repairLint": "zero warnings/errors",
+    "buildBrowserHttpCi": "pending at this receipt"
+  }
+}

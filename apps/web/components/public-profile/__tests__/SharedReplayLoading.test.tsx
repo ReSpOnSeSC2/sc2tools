@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
-import SharedReplayAnalysisLoading from "@/app/players/[player]/replays/[gameId]/loading";
+import SharedReplayAnalysisLoading from "../SharedReplayAnalysisLoading";
 
 afterEach(cleanup);
 

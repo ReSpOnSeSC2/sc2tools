@@ -1,6 +1,6 @@
 import { SkeletonBar, SkeletonCard, SkeletonPageHeader, SkeletonRegion } from "@/components/ui/Skeleton";
 
-/** The canonical replay detail route loads an analysis-shaped surface. */
+/** Render only inside the replay page after its authoritative access/status gate. */
 export default function SharedReplayAnalysisLoading() {
   return <SkeletonRegion label="Loading shared replay analysis" className="space-y-6">
     <SkeletonPageHeader />

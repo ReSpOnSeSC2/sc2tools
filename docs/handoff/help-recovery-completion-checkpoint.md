@@ -20,11 +20,23 @@ changed. CI, push/merge and production acceptance remain separate release gates.
   include `section=setup`, preserving new-tab behavior and token-free URLs.
   This follows the delivered Settings section registry rather than changing any
   Dock socket, retry, studio or provider behavior.
-- `profiles-replays-polish-1` requires the analysis-shaped loading boundary at
-  the canonical `/players/[player]/replays/[gameId]` route. The missing boundary
-  now uses shared accessible skeleton primitives, matching hero, five statistics,
-  navigation, timeline, mechanics and build-order shapes. Legacy redirect routes
-  and all fetch/cache/status/privacy behavior are untouched.
+- `profiles-replays-polish-1` requires an analysis-shaped loading surface for
+  `/players/[player]/replays/[gameId]`. The complete skeleton uses shared
+  accessible primitives for the hero, five statistics, navigation, timeline,
+  mechanics and build orders. Its final placement is an SSR-enabled dynamic
+  analysis island returned only after the existing authenticated API result,
+  404 and canonical redirect decisions. No extra API request is added.
+
+  The original named `app/.../loading.tsx` artifact conflicts with the later
+  ADR 0065/status contract: a route fallback can flush 200 before sharing or
+  replay existence is known. CI caught the unsafe first placement. The same
+  skeleton now lives in `SharedReplayAnalysisLoading.tsx`, used by the real
+  `next/dynamic` loading boundary in `SharedReplayAnalysisContent.tsx` after
+  authority has resolved. The forbidden route artifact is absent. This
+  implementation-path substitution preserves the full loading UI, existing SSR
+  and all status/privacy assertions; it does not claim the literal old filename
+  was delivered. Legacy redirects, metadata, query sanitization and the single
+  request-cached API loader are unchanged.
 - `landing-try-polish-1` requires the selected filename/size while parsing and
   **Choose another replay** after error. `landing-demo-in-browser` explicitly
   retains those earlier affordances. The private session and optional-island
@@ -102,3 +114,24 @@ rerun was substituted for live proof.
 No application listener, native process, provider setting, infrastructure or
 database change is required. Exact-head CI, merge, production source/deployment
 and relevant real signed-in links remain to verify before delivery is claimed.
+
+## CI-discovered authority correction
+
+At head `7b57d86e1de7121bdc4eeac1a96a723d371b2d3d`, web CI run
+`40630331297` failed the existing `publicStatusBoundaries.test.ts` assertion.
+The other 9,981 executed tests passed, with one existing skip. The failed check,
+annotation and bounded-log summary are preserved; the unsafe route fallback was
+not merged. The existing status-boundary test remains byte-identical.
+
+The corrected page keeps all authority branches before the dynamic island,
+with default SSR enabled and no artificial delay or data refetch. Seven new gate
+tests cover held authority, page/metadata 404, API failures and canonical redirect.
+The first standalone type run caught a widened boolean in the new test fixture;
+its result type is now explicit, and whole-web types pass. Three old replay
+consumer assertions now await the genuine lazy component before checking the
+same content/navigation/download behavior; no assertion was removed. The
+original synchronous failures are retained. The combined gate, existing detail,
+fetch-cache, skeleton and middleware suites pass 79 cases; strict repair-file
+lint passes. New production-build, real held-chunk/HTTP and exact-head CI proof
+remain separate pending gates. Earlier build/browser receipts qualify the prior
+source, not this authority correction.
