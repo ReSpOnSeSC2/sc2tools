@@ -125,6 +125,56 @@ Raw CI logs and failed local runs remain in the cache. No web runtime input,
 budget, engine asset or credential read path changed in this correction.
 Required checks on the new head and actual deployment remain pending.
 
+## Combined adoption with delivered Unit Profile — local gates
+
+The local merge `e0c47b9c4a07da30c2a9222ee6c8d0042000de12` includes accepted
+Unit PR809 and the retired server-preview path. The actual combined API run
+passes 176 cases in eight suites, including coordination/replay-storage, backup
+and job ledger, retirement/routes and Unit readiness. Whole API types pass.
+The command receipt retains a 47-file historical pin inventory; the raw Jest
+report establishes the actual eight-suite set and counts. This is a distinct
+run, not a repeat of the earlier 320-case affected batch.
+
+Direct production Next build `QMJKSmPlv5oh8_4wduapJ` passes all 83 unchanged
+route budgets. Prebuild/postbuild/postbrowser guards match 6,901 source inputs
+and 40 canonical engine inputs / seven active assets / the strict four-game
+sample. No generation, download or pruning ran. These full-source guards
+precede the later two Unit delivery-document edits and new sanitized production
+receipt. Independent rehash finds every other admitted source byte unchanged.
+This new evidence/checkpoint adoption is an additional documentation-only delta;
+it does not relabel the historical 6,901-file guard as a post-adoption check.
+
+The identical actual-component Unit matrix reruns against the combined build
+and passes eight cases, 40 full default Axe scans with zero violations or
+exclusions, and 40 geometry specimens at 320/390/768/1280 in both themes.
+Its 177 product inputs and fresh CSS/fonts are bound to the build. Auth, seed,
+GET-only HTTP, account-write sinks and Next primitives are explicit adapters;
+only keyboard Retry is exercised. This is local component QA, not a live
+provider/account, actual routing, network timing or production phone proof.
+
+The first browser attempt failed at the sandbox Chromium launch before product
+test bodies. The host rerun uses the byte-identical spec and fresh outputs.
+An initial postbrowser admission/CIM failure and later cleanup timezone metadata
+error remain retained; explicit-UTC final checks exclude inspected unrelated
+installed Chrome without stopping it and show no owned process/listener remains.
+No assertion, skip, worker cap or budget changed to pass these checks.
+
+The adopted Unit delivery docs separately record exact PR809 CI/tree equality,
+Vercel Ready and Render Live at `f2138684`. Actual signed-in acceptance observed
+the new loading state then a real 1,000-game Unit Profile question. That was
+measured desktop 1905 by 889; the attempted phone override was ineffective and
+reset. No answer/XP attempt, settings Save or personal upload was performed;
+normal background account/network activity was not instrumented. No private
+production image is copied. Unit delivery does not establish Auth delivery.
+
+Compact combined receipts are in
+[validation/device-auth-coordination/combined-unit](validation/device-auth-coordination/combined-unit/README.md).
+Raw reports, 24 LOCAL captures, source snapshot and original failures remain in
+cache. CI at `55cd362c` is historical only; exact new final-head required checks,
+Auth deployment/live behavior and separately qualified credential-writer cutover
+remain pending. Cached reuse and activation remain unimplemented.
+The canonical count remains qualified at 123 completed / 74 remaining, unchanged.
+
 ## Historical prerequisite audit
 
 The requested 60-second credential reuse remains unfinished. Existing minute

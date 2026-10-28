@@ -1,8 +1,9 @@
 # Unit Profile history readiness — 2026-10-28
 
 Candidate: `codex/unit-profile-history`, starting at main `2242d112`.
-This is an owner-reported Arcade correction; the wider197-item program remains
-active and incomplete. No delivery or roadmap closure is claimed here.
+This owner-reported Arcade correction was delivered by PR809 at main
+f2138684da9a57981d3c980efb8f5482b228d2e4. The wider197-item program remains
+active and incomplete; this delivery does not close a canonical roadmap item.
 
 The owner saw "Not enough data yet" and "Play more games" despite13,471 saved
 games. The separate `/v1/arcade/unit-stats` request was excluded from the shared
@@ -90,6 +91,38 @@ owned processes/listeners; no unrelated process was stopped.
 Compact receipts and three reviewed local images are in
 [validation/unit-profile-history](validation/unit-profile-history/README.md).
 The raw 3 MB report, traces, all 24 captures and complete source snapshot remain
-in the cache packet. Exact-current-head required CI, actual deployment and
-signed-in production acceptance still remain. The roadmap ledger is unchanged;
-no release or whole-program completion is claimed.
+in the cache packet. These historical local receipts remain unchanged. The
+production delivery below establishes acceptance of this Unit Profile correction;
+the roadmap ledger remains unchanged and the wider program remains incomplete.
+
+## Production delivery — 2026-10-28
+
+PR809 passed all required checks at exact head
+`aa2dafd264f267302053903567f30a80af0047dd`. Its freshly merged tree
+`dc6f3fc56074fe6961a0bd2b47bb97b5f51ed5bc` matched the tested tree before
+squash merge `f2138684da9a57981d3c980efb8f5482b228d2e4`. The releasing parent
+verified Vercel `4cJ8x7xHwJoTgcqjs33854NrPiCP` as Ready / Production / Latest
+and Render `dep-dbh131tg1s2s73eipu8g` as Live at that exact revision.
+
+Actual signed-in sc2tools.com showed the new loading status and then a real
+Unit Profile question from 1,000 games with macro data, without the false
+insufficiency message. No answer/XP attempt, settings Save or personal replay
+upload was performed. Normal background activity was not network-instrumented;
+no universal absence of network requests or account writes is claimed.
+
+The measured production viewport was 1905 by 889. A requested 390 by 844
+override did not take effect and was reset; this is desktop production evidence.
+The historical local eight-case matrix separately proves the four stated widths
+in both themes. No live error injection, measured speed improvement, all-history
+unit aggregate or new phone production acceptance is claimed.
+
+The [sanitized production receipt](validation/unit-profile-history/production-f213868.json)
+retains deployment/source identity and the observed product states. The original
+receipt, exact owner history count, question/answer details and all private
+production photographs remain in cache. No private production image is tracked.
+
+This update is delivery documentation only. It does not certify the later
+combined Auth build or transfer the historical 6,843-input guards to that tree.
+Those combined-tree post-browser guards remain a separate release prerequisite.
+The canonical ledger count remains qualified at 123 completed / 74 remaining;
+no ledger edit or wider roadmap completion is part of this update.

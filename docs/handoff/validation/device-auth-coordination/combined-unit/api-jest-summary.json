@@ -1,0 +1,62 @@
+{
+  "rawReport": {
+    "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-api-01-jest.json",
+    "bytes": 65503,
+    "sha256": "d228d6611c947afb1d5167f64d2493d9a66c6ba77f28f12e51cbc7511feb17f2"
+  },
+  "success": true,
+  "numPassedTests": 176,
+  "numPassedTestSuites": 8,
+  "numPendingTests": 0,
+  "numFailedTests": 0,
+  "actualSuites": [
+    {
+      "file": "apps/api/__tests__/arcadeUnitStatsReadiness.test.js",
+      "status": "passed",
+      "passed": 3,
+      "skipped": 0
+    },
+    {
+      "file": "apps/api/__tests__/opsConsole.test.js",
+      "status": "passed",
+      "passed": 18,
+      "skipped": 0
+    },
+    {
+      "file": "apps/api/__tests__/routes.integration.test.js",
+      "status": "passed",
+      "passed": 49,
+      "skipped": 0
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.integration.test.js",
+      "status": "passed",
+      "passed": 17,
+      "skipped": 0
+    },
+    {
+      "file": "apps/api/__tests__/publicReplayRetirement.test.js",
+      "status": "passed",
+      "passed": 4,
+      "skipped": 0
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.test.js",
+      "status": "passed",
+      "passed": 25,
+      "skipped": 0
+    },
+    {
+      "file": "apps/api/__tests__/replayFiles.test.js",
+      "status": "passed",
+      "passed": 23,
+      "skipped": 0
+    },
+    {
+      "file": "apps/api/__tests__/backupStatus.test.js",
+      "status": "passed",
+      "passed": 37,
+      "skipped": 0
+    }
+  ]
+}
