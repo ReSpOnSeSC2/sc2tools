@@ -16,6 +16,7 @@ export interface BrowserDemoProps {
   onSuccess: (request: DemoRequest, dossier: PreviewDossier) => void;
   onBusy: (request: DemoRequest, busy: boolean) => void;
   onClose: () => void;
+  onChooseAnother: () => void;
 }
 export const DEMO_SESSION_OPTIONS = { maxFiles: 1, onlyOneVsOne: true, initialDateWindow: { kind: "all" as const }, refreshPolicy: false };
 const supported = () => typeof Worker !== "undefined" && typeof WebAssembly !== "undefined" && !!globalThis.crypto?.subtle;
@@ -28,7 +29,13 @@ export function ReplayDemoBrowserSession(props: BrowserDemoProps) {
   const callbacks = useRef(props); callbacks.current = props;
   const active = useRef<{ request: DemoRequest; current: boolean; started: boolean; complete: boolean } | null>(null);
   const roster = useRef<MeCandidate[]>([]);
+  const errorHeading = useRef<HTMLHeadingElement>(null);
   const [failure, setFailure] = useState<ErrorKind | "unsupported" | null>(null), [retry, setRetry] = useState(0);
+  useEffect(() => {
+    if (!failure || !props.request) return;
+    const timer = setTimeout(() => errorHeading.current?.focus(), 0);
+    return () => clearTimeout(timer);
+  }, [failure, props.request]);
   // The component itself is intent-gated; this never runs on page view.
   useEffect(() => { if (supported()) prewarm(); }, [prewarm]);
   useEffect(() => {
@@ -56,13 +63,15 @@ export function ReplayDemoBrowserSession(props: BrowserDemoProps) {
     run.complete = true; setFailure(session.error ?? session.failed[0]?.errorKind ?? "analysis_failed"); callbacks.current.onBusy(run.request, false);
   }, [props.request, session.phase, session.candidates, session.parsed, session.error, session.failed]);
   const copy = failure && failure !== "unsupported" ? errorCopy(failure) : null;
+  const fileLabel = props.request ? `${props.request.file.name} · ${(props.request.file.size / 1024 / 1024).toFixed(2)} MB` : "";
   return <Modal open={!!props.request} onClose={props.onClose} title={failure ? "Couldn't analyze that replay" : session.phase === "choosing" ? "Choose your player" : "Analyzing in your browser…"}
     description="Runs in your browser — the replay never leaves your device."
-    footer={<><Button variant="secondary" onClick={props.onClose}>Cancel</Button>{failure && failure !== "unsupported" ? <Button onClick={() => setRetry(value => value + 1)}>Try again</Button> : null}</>}>
-    {failure ? <div role="alert" className="space-y-3"><p className="font-semibold">{failure === "unsupported" ? "This browser cannot run the replay analyzer." : copy?.title}</p>
+    footer={<><Button variant="secondary" onClick={props.onClose}>Cancel</Button>{failure && failure !== "unsupported" ? <Button variant="secondary" onClick={() => setRetry(value => value + 1)}>Try again</Button> : null}{failure ? <Button onClick={props.onChooseAnother}>Choose another replay</Button> : null}</>}>
+    <p className="mb-3 text-caption text-text-muted [overflow-wrap:anywhere]">{fileLabel}</p>
+    {failure ? <div role="alert" className="space-y-3"><h3 ref={errorHeading} tabIndex={-1} className="font-semibold">{failure === "unsupported" ? "This browser cannot run the replay analyzer." : copy?.title}</h3>
       <p>{failure === "unsupported" ? "Your replay has not been uploaded." : copy?.hint}</p>
       {(failure === "unsupported" || failure === "engine_boot_failed" || failure === "engine_unavailable") ? <p>Try a current Chrome or Edge browser, or <Link href="/download" className="min-h-11 font-semibold text-accent underline">use the desktop app</Link>.</p> : null}
     </div> : session.phase === "choosing" ? <PlayerChooser candidates={session.candidates} onChoose={toon => { roster.current = session.candidates; void session.choose(toon); }} onCancel={props.onClose} />
-      : <p role="status" className="py-8 text-caption text-text-muted">{props.request?.file.name} · {session.phase === "booting" || session.phase === "idle" ? "Starting the private analyzer…" : session.phase === "scanning" ? "Reading the replay's players…" : "Reading both build orders…"}</p>}
+      : <p role="status" className="py-8 text-caption text-text-muted">{session.phase === "booting" || session.phase === "idle" ? "Starting the private analyzer…" : session.phase === "scanning" ? "Reading the replay's players…" : "Reading both build orders…"}</p>}
   </Modal>;
 }

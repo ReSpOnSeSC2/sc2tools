@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReplayDemo } from "../ReplayDemo";
 import type { BuildEditorModalProps } from "@/components/builds/editor/BuildEditorModal";
@@ -51,6 +51,35 @@ describe("landing browser session with real controller", () => {
   it("uses shared engine error copy and never falls through to the server", async () => {
     h.boot.mockRejectedValue(new EngineError("integrity_failed", "fixture")); render(<ReplayDemo />); drop();
     await screen.findByText("Download check failed"); expect(screen.getByText(/didn't match its checksum/)).toBeTruthy(); expect(h.fetch).not.toHaveBeenCalled();
+  });
+  it("shows the selected filename and size while the private scan is pending", async () => {
+    let finish!: (rows: PlayersResult[]) => void;
+    h.scan.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    render(<ReplayDemo />);
+    drop(new File([new Uint8Array(2 * 1024 * 1024)], "selected.SC2Replay", { lastModified: 1 }));
+    await screen.findByText("selected.SC2Replay · 2.00 MB");
+    await waitFor(() => expect(h.scan).toHaveBeenCalledOnce());
+    expect(within(screen.getByRole("dialog", { name: "Analyzing in your browser…" })).getByRole("status").textContent).toContain("Reading the replay's players");
+    fireEvent.click(screen.getByRole("button", { name: /^Cancel$/ }));
+    await act(async () => finish([players]));
+    expect(screen.queryByRole("dialog")).toBeNull(); expect(h.fetch).not.toHaveBeenCalled();
+  });
+  it("focuses a parse error and picks a different replay without an upload or stale result", async () => {
+    h.scan.mockResolvedValueOnce([{ ...players, isAiGame: true }]).mockResolvedValue([players]);
+    const { container } = render(<ReplayDemo />);
+    drop();
+    const heading = await screen.findByRole("heading", { name: "Games vs the AI" });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const picker = vi.spyOn(input, "click");
+    fireEvent.click(screen.getByRole("button", { name: "Choose another replay" }));
+    expect(picker).toHaveBeenCalledOnce(); expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.change(input, { target: { files: [file("replacement.SC2Replay")] } });
+    expect(input.value).toBe("");
+    await screen.findByRole("heading", { name: "Which player are you?" });
+    fireEvent.click(screen.getByRole("button", { name: /Alpha · Protoss/ }));
+    await screen.findByRole("region", { name: "Parsed editor" });
+    expect(h.scan).toHaveBeenCalledTimes(2); expect(h.fetch).not.toHaveBeenCalled();
   });
   it("reports AI skips instead of opening an invented dossier or calling the server", async () => {
     h.scan.mockResolvedValue([{ ...players, isAiGame: true }]); render(<ReplayDemo />); drop();

@@ -141,6 +141,7 @@ export function ReplayDemo() {
     sequence.current++; legacyRequest.current?.abort(); activeBrowser.current = null;
     setBrowserRequest(null); inFlight.current = false; setBusy(false); setStatusOpen(false); dropRef.current?.focus();
   }, []);
+  const chooseAnother = () => { closeStatus(); inputRef.current?.click(); };
   const browserBusy = useCallback((request: DemoRequest, value: boolean) => { if (live.current && activeBrowser.current === request) { inFlight.current = value; setBusy(value); } }, []);
   const browserSuccess = useCallback((request: DemoRequest, value: PreviewDossier) => {
     if (!live.current || activeBrowser.current !== request) return;
@@ -343,7 +344,7 @@ export function ReplayDemo() {
         )}
       </Modal>
 
-      {browserMode && browserIntent ? <ReplayDemoBrowserIsland request={browserRequest} onSuccess={browserSuccess} onBusy={browserBusy} onClose={closeStatus} /> : null}
+      {browserMode && browserIntent ? <ReplayDemoBrowserIsland request={browserRequest} onSuccess={browserSuccess} onBusy={browserBusy} onClose={closeStatus} onChooseAnother={chooseAnother} /> : null}
 
       <BuildEditorModal
         key={`${dossier?.game_id ?? "empty"}:${perspective}`}
