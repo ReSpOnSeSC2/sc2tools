@@ -488,6 +488,7 @@ describe("AppChrome help & support", () => {
       ["Search help", "/help"],
       ["Stream Studio crash course", "/stream-studio/learn"],
       ["Download / update the desktop app", "/download"],
+      ["What's new", "/changelog"],
       ["How reports work", "/help/report-a-problem"],
       ["Support SC2 Tools", "/donate"],
     ]) {

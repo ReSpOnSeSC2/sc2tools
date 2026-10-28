@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { startInstallCapture } from "@/lib/pwa/install";
 import { RefreshCw } from "lucide-react";
 
@@ -185,7 +186,10 @@ export function ServiceWorkerRegister() {
           Reload to get the latest version.
         </span>
       </p>
-      <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+      <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
+        <Link href="/changelog" prefetch={false} className="inline-flex min-h-[36px] items-center rounded-lg px-2 text-caption font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          What changed
+        </Link>
         <button
           type="button"
           disabled={applying}

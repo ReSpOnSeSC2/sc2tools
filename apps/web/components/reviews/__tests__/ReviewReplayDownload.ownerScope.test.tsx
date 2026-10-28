@@ -62,7 +62,12 @@ it.each(["switch", "unmount"])("never clicks a replay download held in its respo
 it("still fetches one signed link and clicks one neutral, protected download while its owner remains current", async () => {
   const fetcher = vi.fn(async () => new Response(JSON.stringify(payload))); vi.stubGlobal("fetch", fetcher);
   render(<ReviewReplayDownload {...props} />); start();
-  await waitFor(() => expect(clicked).toHaveLength(1));
+  // The DOM download is an external side effect before React commits idle.
+  // Observe both completion signals instead of racing that following commit.
+  await waitFor(() => {
+    expect(clicked).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Download replay" })).toHaveProperty("disabled", false);
+  });
   expect(fetcher).toHaveBeenCalledOnce();
   const [url, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
   expect(url).toMatch(/\/v1\/reviews\/AAAAAAAAAAAAAAAA\/replay$/);
@@ -71,6 +76,26 @@ it("still fetches one signed link and clicks one neutral, protected download whi
   expect(clicked[0]).toEqual({ href: payload.url, filename: payload.filename, rel: "noopener noreferrer", referrerPolicy: "no-referrer" });
   expect(document.querySelector(`a[download="${payload.filename}"]`)).toBeNull();
   expect(screen.getByRole("button", { name: "Download replay" })).toHaveProperty("disabled", false);
+});
+
+it("keeps the current owner busy through the held body and download side effect before completing in the DOM", async () => {
+  const body = deferred<typeof payload>(), json = vi.fn(() => body.promise);
+  const fetcher = vi.fn(async () => ({ ok: true, status: 200, json })); vi.stubGlobal("fetch", fetcher);
+  const disabledAtClick: boolean[] = [];
+  const recordClick = vi.mocked(HTMLAnchorElement.prototype.click).getMockImplementation();
+  vi.mocked(HTMLAnchorElement.prototype.click).mockImplementation(function (this: HTMLAnchorElement) {
+    disabledAtClick.push((screen.getByRole("button", { name: "Download replay" }) as HTMLButtonElement).disabled);
+    recordClick?.call(this);
+  });
+  render(<ReviewReplayDownload {...props} />); start();
+  await waitFor(() => expect(json).toHaveBeenCalledOnce());
+  expect(screen.getByRole("button", { name: "Download replay" })).toHaveProperty("disabled", true);
+  expect(clicked).toEqual([]);
+  await act(async () => body.resolve(payload));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Download replay" })).toHaveProperty("disabled", false));
+  expect(disabledAtClick).toEqual([true]);
+  expect(clicked).toHaveLength(1); expect(fetcher).toHaveBeenCalledOnce();
+  expect(document.querySelector(`a[download="${payload.filename}"]`)).toBeNull();
 });
 
 it("retains current download error feedback and rejects an unsafe signed URL without clicking", async () => {

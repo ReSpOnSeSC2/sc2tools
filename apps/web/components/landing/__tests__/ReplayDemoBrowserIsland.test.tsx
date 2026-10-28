@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ReplayDemoBrowserIsland } from "../ReplayDemoBrowserIsland";
 import type { BrowserDemoProps } from "../ReplayDemoBrowserSession";
 const request = { file: new File(["x"], "local.SC2Replay"), id: 1 };
-const props: BrowserDemoProps = { request, onClose: vi.fn(), onBusy: vi.fn(), onSuccess: vi.fn() };
+const props: BrowserDemoProps = { request, onClose: vi.fn(), onBusy: vi.fn(), onSuccess: vi.fn(), onChooseAnother: vi.fn() };
 const Ready = () => <p>Ready browser fixture</p>;
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 describe("optional browser analyzer chunk", () => {
@@ -12,6 +12,14 @@ describe("optional browser analyzer chunk", () => {
     render(<ReplayDemoBrowserIsland {...props} loader={loader} />);
     await screen.findByText("The browser analyzer could not load"); fireEvent.click(screen.getByRole("button", { name: "Retry analyzer" }));
     await screen.findByText("Ready browser fixture"); expect(loader).toHaveBeenCalledTimes(2);
+  });
+  it("keeps the selected file visible and offers the picker after a chunk failure", async () => {
+    const onChooseAnother = vi.fn(), loader = vi.fn().mockRejectedValue(new Error("chunk failed"));
+    render(<ReplayDemoBrowserIsland {...props} onChooseAnother={onChooseAnother} loader={loader} />);
+    await screen.findByText("The browser analyzer could not load");
+    expect(screen.getByText("local.SC2Replay · 0.00 MB")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Choose another replay" }));
+    expect(onChooseAnother).toHaveBeenCalledOnce(); expect(loader).toHaveBeenCalledTimes(1);
   });
   it("retries a thrown component without rendering that stale component into the new attempt", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});

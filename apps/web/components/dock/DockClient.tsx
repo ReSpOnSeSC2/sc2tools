@@ -94,7 +94,7 @@ export function DockClient({ token }: { token: string }) {
     <div role="alert" className="max-w-md space-y-3 rounded-lg border border-warning/40 bg-bg-surface p-5">
       <h1 className="text-h3 font-semibold">{replaced ? "This Dock URL was replaced" : "This Dock link no longer works"}</h1>
       <p>{replaced ? "Update this Dock in OBS using its replacement URL from Settings → Overlay." : "It was revoked or mistyped. Copy a fresh Dock URL from Settings → Overlay."}</p>
-      <a href="/settings?tab=overlay" target="_blank" rel="noreferrer" className="text-accent-cyan underline">Open Overlay settings<span className="sr-only"> (opens in new tab)</span></a>
+      <a href="/settings?tab=overlay&section=setup" target="_blank" rel="noreferrer" className="text-accent-cyan underline">Open Overlay settings<span className="sr-only"> (opens in new tab)</span></a>
     </div>
   </div>;
   // Unmounting the active Dock stops every socket, platform request and retry
@@ -510,7 +510,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
                 </p>
                 <div className="border-t border-border pt-3">
                   <a
-                    href="/settings?tab=overlay"
+                    href="/settings?tab=overlay&section=setup"
                     target="_blank"
                     rel="noreferrer"
                     className="text-caption text-accent-cyan underline-offset-2 hover:underline"

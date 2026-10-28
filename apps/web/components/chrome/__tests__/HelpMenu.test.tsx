@@ -20,6 +20,7 @@ describe("helpMenuItems", () => {
       "Search help",
       "Stream Studio crash course",
       "Download / update the desktop app",
+      "What's new",
       "Accessibility & appearance",
       "Accessibility statement",
       "Report a problem",
@@ -44,6 +45,7 @@ describe("HelpMenu", () => {
     expect(button().getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByRole("menu", { name: "Help & support" })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: "Search help" }).getAttribute("href")).toBe("/help");
+    expect(screen.getByRole("menuitem", { name: "What's new" }).getAttribute("href")).toBe("/changelog");
     expect(screen.getByRole("menuitem", { name: "Support SC2 Tools" }).getAttribute("href")).toBe("/donate");
     expect(screen.getAllByRole("separator")).toHaveLength(2);
 
@@ -95,5 +97,6 @@ describe("HelpMenu", () => {
     fireEvent.click(button());
     expect(screen.queryByRole("menuitem", { name: "Report a problem" })).toBeNull();
     expect(screen.getByRole("menuitem", { name: "Email support" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "What's new" }).getAttribute("href")).toBe("/changelog");
   });
 });
