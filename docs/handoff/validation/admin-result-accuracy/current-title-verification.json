@@ -1,0 +1,298 @@
+{
+  "schemaVersion": 1,
+  "status": "LOCAL_TITLE_COMPATIBILITY_FIX_VERIFIED_PENDING_EXACT_FINAL_HEAD_CI_DEPLOYMENT",
+  "baseHead": "c0e2b7701a1263545cad624215ed522ee2f17f5f",
+  "acceptedMain": "b8ef1b945effef54d9f7bad13e5ee27f1525a3db",
+  "workingTreeQualification": "Only one title attribute in ResultBadge differs from base c0e2. Full6954-file guards bind those exact bytes before later commit/docs adoption.",
+  "BUILD_ID": "Mkid_r_EOo_i_c5Y9IfzW",
+  "changedRuntimeInput": {
+    "file": "apps/web/app/admin/components/ResultBadge.tsx",
+    "previousSha256": "385bab9659194dbb7b68145a326338cbac8885d06966fd312eaa8de55990158f",
+    "currentSha256": "6df72cf16e5ceb86247f9b87157711900a3465e4ce00b8b17c93a19ebc3244b0",
+    "exactInverse": true,
+    "delta": "Only title=\"Result not recorded\" on existing aria-hidden dash. SR-only sibling, em dash textContent, canonical labels, backing and variants unchanged."
+  },
+  "unchangedExistingConsumer": {
+    "file": "C:/SC2TOOLS/.worktrees/dashboard-cache-health/apps/web/components/__tests__/AdminGameDetail.test.tsx",
+    "sha256": "aaa6517d6cf02c3e7db1d28a325e6b6b10007427eb9a5e84dc0e52a8e2134796",
+    "changed": false,
+    "assertion": "expect(screen.getByTitle(\"Result not recorded\").textContent).toBe(\"—\")"
+  },
+  "checks": {
+    "passed": 52,
+    "files": 5,
+    "vitestNestedSuiteCount": 9,
+    "failed": 0,
+    "skipped": 0,
+    "unitWorkers": 1,
+    "webTypes": true,
+    "strictOwnedLintFiles": 6
+  },
+  "build": {
+    "routes": 83,
+    "listed": 18,
+    "default": 65,
+    "allUnchangedCapsPass": true,
+    "sourceInputs": 6954,
+    "prebuildPostbuildPostbrowserEqual": true,
+    "canonicalInputs": 40,
+    "activeAssets": 7,
+    "strictSampleGames": 4,
+    "staticWorkers": 1,
+    "heapGiB": 4,
+    "generation": false,
+    "downloads": false,
+    "pruning": false
+  },
+  "browser": {
+    "passed": 16,
+    "cases": 16,
+    "skipped": 0,
+    "flaky": 0,
+    "fullDefaultAxeScans": 80,
+    "violations": 0,
+    "exclusions": 0,
+    "geometryStates": 80,
+    "LOCALcaptures": 48,
+    "productInputs": 240,
+    "css": 5,
+    "fonts": 3,
+    "widths": [
+      320,
+      390,
+      768,
+      1280
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "consumers": [
+      "actual opponent list",
+      "actual global list"
+    ],
+    "allFourActualDetailLabels": true,
+    "nativeKeyboardRowAndMobileBack": true,
+    "globalSharedGameIdOwnerScoped": true,
+    "queryPreserved": [
+      "before",
+      "debug",
+      "owner when applicable"
+    ],
+    "accountWriteAttempts": 0,
+    "browserWorkers": 1,
+    "retries": 0,
+    "serverStarted": false
+  },
+  "compatibility": {
+    "originalDetailConsumerCases": 7,
+    "originalAssertionsUnchanged": true,
+    "screenReaderSiblingPreserved": true,
+    "ariaHiddenDashTitleRestored": true,
+    "dashTextContent": "—",
+    "addedActualBrowserTitleCheckAll16Cases": true,
+    "originalBrowserAssertionsRetained": true
+  },
+  "contrast": {
+    "failedRatio": 4.43,
+    "oldBackground": "#ddeceb",
+    "foreground": "#157a43",
+    "currentRatio": 5.02,
+    "currentBackground": "#f3f8f6",
+    "actualCurrentChecks": 4,
+    "sharedTokensOrThresholdsChanged": false,
+    "qualification": "Three older assertions traverse the added opaque backing to the same Badge; expectations and thresholds unchanged. The title fix changes no styling."
+  },
+  "runtimePins": [
+    {
+      "file": "apps/web/app/admin/components/AdminGameDetail.tsx",
+      "bytes": 9130,
+      "sha256": "5388fc8f7d0656b6a0889a51b162a0c8ee1c1df63d87685056622e4784e0d6e2"
+    },
+    {
+      "file": "apps/web/app/admin/global/players/[pulseId]/page.tsx",
+      "bytes": 11784,
+      "sha256": "baf534c756e59d25b630184c0231c44c424f71a331086d7a5c646b8cec38c5dc"
+    },
+    {
+      "file": "apps/web/app/admin/users/[userId]/opponents/[pulseId]/page.tsx",
+      "bytes": 7151,
+      "sha256": "a70c10541764c8e9f1eb1dacc8115ccbd81579ff8e0132cb0abdb52123165d6a"
+    },
+    {
+      "file": "apps/web/app/admin/components/__tests__/adminGameSelection.test.tsx",
+      "bytes": 5313,
+      "sha256": "aac566679d70445b298e0316a7e23ff4f7ddd951d8a699287d41d899b69bef18"
+    },
+    {
+      "file": "apps/web/app/admin/components/ResultBadge.tsx",
+      "bytes": 710,
+      "sha256": "6df72cf16e5ceb86247f9b87157711900a3465e4ce00b8b17c93a19ebc3244b0"
+    },
+    {
+      "file": "apps/web/app/admin/components/__tests__/AdminResultBadge.test.tsx",
+      "bytes": 2603,
+      "sha256": "b330f48b9204b6659a57b61098bfd967fc552f6e094adfc5786bc3a5471f12b6"
+    },
+    {
+      "file": "apps/web/components/analyzer/game/types.ts",
+      "bytes": 3979,
+      "sha256": "57316ebeea317682049d55c8769e0134bb08d03183c02ef8b21697dc86ce0c8c"
+    },
+    {
+      "file": "apps/web/components/ui/Badge.tsx",
+      "bytes": 1899,
+      "sha256": "ddf30f121d9eadb39e079bb19153346012ba4703ffefb16a034de76bdbe055fc"
+    },
+    {
+      "file": "apps/web/perf-budget.json",
+      "bytes": 871,
+      "sha256": "969d5bf40ce6e278aa004c27937193a50694e3474a42a121bb32360e24e0581d"
+    },
+    {
+      "file": "apps/replay-engine/scripts/preview_replay_cli.py",
+      "bytes": 19088,
+      "sha256": "65644e63637c2960e1c1d1551903c740e610eb5efb72dc57ba9a0f8981173499"
+    }
+  ],
+  "dependencyPins": [
+    {
+      "file": "package.json",
+      "sha256": "b635c05492c0c473a3b5bafd90df991248d7efd6e077303673044cb4a1e15014"
+    },
+    {
+      "file": "package-lock.json",
+      "sha256": "27311b12b287d7e089d107c9f9742ae884cf1cab7de4a03fdfcea2176e38cbff"
+    },
+    {
+      "file": "apps/api/package.json",
+      "sha256": "e28fb9223b5258d5ff06398c4cf21451671c754deaaf28eb174733cb2c571a6e"
+    },
+    {
+      "file": "apps/api/package-lock.json",
+      "sha256": "5b127ffac70fc054f3ae550f3187cb847dd7512e972fba85e96b6a431ff5a796"
+    },
+    {
+      "file": "apps/web/package.json",
+      "sha256": "f3747c470882ec1d84858c912797842f6b1df409924e6aa328e4ba833e5bc9cf"
+    },
+    {
+      "file": "apps/web/package-lock.json",
+      "sha256": "e9aabbfbfebb4c91f81f60d2b7e8ae875424d504baef560a7b03f54c0557169b"
+    }
+  ],
+  "cleanup": {
+    "observedBrowserEsbuildIdentities": 11,
+    "ownedProcesses": 0,
+    "ownedDescendants": 0,
+    "ownedListeners": 0,
+    "killCount": 0,
+    "unrelatedProcessesTouched": false,
+    "excludedPidReuse": [
+      {
+        "pid": 28264,
+        "name": "git.exe",
+        "createdAt": "2026-10-28T14:57:39.024114-04:00",
+        "qualification": "Different newer process identity; untouched."
+      }
+    ]
+  },
+  "visual": {
+    "LOCALcaptures": 48,
+    "threeRepresentativeCaptures": "Fresh08 PNG hashes equal the three passing07 LOCAL PNGs directly viewed with view_image. No duplicate image payload or private production photo copied.",
+    "binding": {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/unknown-title-fix-01/visual-binding.json",
+      "bytes": 963,
+      "sha256": "a8e1aac8224a42b356e69c0acc2c8ffe227070ee4cb7a81724f60d754ec27dad"
+    }
+  },
+  "retainedFailures": [
+    "Historical9d67 CI found existing AdminGameDetail getByTitle textContent-em-dash assertion missing from the first45-case batch. Production title restored; original test untouched and expanded52-case batch passes. Codex diagnostic includes full annotation and two502 log attempts; raw hash pointer below.",
+    "Prior real4.43AA failure, sandbox Chrome denial, synthetic row typo, strict binding metadata fault, PID-reuse false-positive and build04 sandbox EPERM remain cached with their existing receipts. No assertion, skip, cap or worker limit relaxed.",
+    "Prior9d67 CI and c0e2-before-title build/matrix/candidates remain historical and unadopted. Exact new final-head checks cannot transfer from them."
+  ],
+  "rawArtifacts": [
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/VERIFIED-08.json",
+      "bytes": 73058,
+      "sha256": "7bd011855703dc87fa0bc42a9ffea51dd493c30f155ad33064b7ef5eeb847b8a"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-08.json",
+      "bytes": 11866533,
+      "sha256": "3cfd169a5301299d125cca534e990900c60717fbc13a38fa09f50dd959bded3d"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/input-binding-08.json",
+      "bytes": 54155,
+      "sha256": "ceb7e0bf006b22f2997f96e4cd1f3a6a57f6699cd2bbb4d5423b47d882e87dab"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/cleanup-current-08.json",
+      "bytes": 1101,
+      "sha256": "64840d28d9204c17df4592080ed4372d34436167cdb57ba5555c7df4a3224aed"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/unknown-title-checks-01/VERIFIED.json",
+      "bytes": 4773,
+      "sha256": "0b6c8b677188c0167d7cb8e5abfc05d4c61c285ac2c281b59b4030c4ba183742"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/unknown-title-checks-01/unit-01.json",
+      "bytes": 15823,
+      "sha256": "0a3500e163622766e4cb4cda2d660e2fd4e24706169c2f2512025d1514c8ed74"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/unknown-title-fix-01/delta.json",
+      "bytes": 1707,
+      "sha256": "a4d8d45e67cf541ad5f9761e8fb85545210404381fe3dba1dfb754bb745c0cfa"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/unknown-title-fix-01/visual-binding.json",
+      "bytes": 963,
+      "sha256": "a8e1aac8224a42b356e69c0acc2c8ffe227070ee4cb7a81724f60d754ec27dad"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ci-9d67-failure.json",
+      "bytes": 7056,
+      "sha256": "b73c86bd574b3816667993ca6d5fcc4f148e0ebc846b8fc818a3d247de722849"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-reader-build-06/all-budgets-01.json",
+      "bytes": 9261,
+      "sha256": "28ac3fb4e602bb7919861111709554534f4c16bb2f229ec349a1c9c45a4b38ce"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-reader-build-06/full-source-prebuild.json",
+      "bytes": 242,
+      "sha256": "a76ccca2be580c09af005ceceb4d007d90f54cf86a04472c7f84244cf19c6273"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-reader-build-06/full-source-postbuild.json",
+      "bytes": 243,
+      "sha256": "584f2c53eeac784d0a04b453afdd2df5753a3deb994a206c4e57ba37407fb35b"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-reader-build-06/full-source-postbrowser.json",
+      "bytes": 245,
+      "sha256": "9e3139a4ee3f429f651cc3d1f16bd32bd572834c938880322716fda6cbe43552"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-reader-build-06/assets-01/asset-admission-history-postbrowser.json",
+      "bytes": 9442,
+      "sha256": "a2cead26c4f04548103a33286d61ecff998abbf65c6dc1f0c2306749e6ba3111"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-reader-build-06/cleanup-after-build.json",
+      "bytes": 342,
+      "sha256": "95b58f4eef4afa0eeca65ac8b5a71cada4e8c2b3f57923fa498cf2c9fe354f5a"
+    }
+  ],
+  "boundaries": [
+    "Actual global/opponent admin pages, ResultBadge/canonical resultLabel/Badge, AdminSelectedGame/AdminGameDetail, useAdminQueryState/useAdminCursor, useApi/SWR, diagnostics, tables and empty build/macro detail branches. Explicit synthetic Clerk identity, GET-only HTTP data and local Next link/image/navigation primitives. Native history bridge exercises the actual query-state hook but is not an actual Next router/admin session/HTTP authorization proof. No chart data, account writes, provider or live acceptance.",
+    "Synthetic Clerk identity, GET-only local data and Next primitives/history are explicit seams. This is not actual admin authorization/Next routing/provider or signed-in production acceptance.",
+    "No account edit, diagnostics Retry, Save, native-agent launch, asset generation/download/pruning, provider/flag change or cache activation.",
+    "Raw11MB report, source list, traces and all48 captures stay in cache; no duplicated large historical report or screenshot copy.",
+    "Current6954-source guards precede later documentation-only adoption/commit. Admin-polish-5 remains partial; no ledger/count closure."
+  ]
+}

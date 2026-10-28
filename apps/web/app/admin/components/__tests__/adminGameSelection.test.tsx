@@ -4,19 +4,19 @@ import OpponentGamesPage from "../../users/[userId]/opponents/[pulseId]/page";
 import GlobalPlayerPage from "../../global/players/[pulseId]/page";
 import { navigation } from "./navigationFixture";
 vi.mock("next/navigation", () => import("./navigationFixture"));
-const state = vi.hoisted(() => ({ missing: false, paths: [] as (string | null)[] }));
+const state = vi.hoisted(() => ({ missing: false, paths: [] as (string | null)[], items: [] as Array<Record<string, unknown>> }));
 vi.mock("@/lib/clientApi", () => ({ useApi: (path: string | null) => {
   state.paths.push(path);
   const common = { error: null, isLoading: false, isValidating: false, mutate: vi.fn() };
   if (path?.endsWith("/build-order")) return { ...common, data: state.missing ? undefined : { my_race: "P", opp_race: "Z" }, error: state.missing ? { status: 404, code: "game_not_found", message: "Game not found" } : null };
-  if (path?.includes("/games?")) return { ...common, data: { items: [], nextBefore: null } };
+  if (path?.includes("/games?")) return { ...common, data: { items: state.items, nextBefore: null } };
   if (path?.includes("/global/players/")) return { ...common, data: { displayNameSample: "Opponent", race: "Z", gameCount: 5, wins: 3, losses: 2, winRate: .6, trackedByUsers: 1, mmr: null, lastSeen: null, perUser: [], strategies: [], maps: [] } };
   return { ...common, data: undefined };
 } }));
 // The chart renderer has its own tests; this boundary exposes the actual selected owner/game contract.
-vi.mock("../AdminGameDetail", () => ({ AdminGameDetail: ({ userId, game }: { userId: string; game: { gameId: string } }) => <section aria-label="Selected detail">{userId}:{game.gameId}</section>, fmtDate: () => "date", fmtDuration: () => "duration", isWin: () => false }));
+vi.mock("../AdminGameDetail", () => ({ AdminGameDetail: ({ userId, game }: { userId: string; game: { gameId: string } }) => <section aria-label="Selected detail">{userId}:{game.gameId}</section>, fmtDate: () => "date", fmtDuration: () => "duration" }));
 vi.mock("@/components/analyzer/OpponentDiagnosticsPanel", () => ({ OpponentDiagnosticsPanel: () => null }));
-beforeEach(() => { state.missing = false; state.paths = []; });
+beforeEach(() => { state.missing = false; state.paths = []; state.items = []; });
 afterEach(cleanup);
 it("opens an off-page opponent game from the URL through its owner-scoped endpoint", async () => {
   navigation.url = "/admin/users/owner/opponents/pulse?game=off-page&before=shared";
@@ -35,4 +35,28 @@ it("an unknown selected game shows Game not found and clears only that selection
   await act(async () => { render(<OpponentGamesPage params={Promise.resolve({ userId: "owner", pulseId: "pulse" })} />); });
   expect(screen.getByRole("heading", { name: "Game not found" })).toBeTruthy(); fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
   expect(navigation.url).toBe("/admin/users/owner/opponents/pulse?debug=1"); expect(screen.queryByRole("region", { name: "Selected detail" })).toBeNull();
+});
+
+it.each(["opponent", "global"])("the %s list keeps tie/unknown results and owner-scoped URL selection", async (kind) => {
+  state.items = ["Tie", "Undecided", null].map((result, index) => ({
+    gameId: `game-${index}`, userId: "other-owner", userEmail: "fixture@example.test",
+    result, date: "2026-10-28T12:00:00Z", myRace: "Protoss", map: `Map ${index}`,
+    durationSec: 600, opponent: { race: "Zerg" },
+  }));
+  navigation.url = kind === "opponent" ? "/admin/users/owner/opponents/pulse?before=cursor&debug=1" : "/admin/global/players/pulse?before=cursor&debug=1";
+  const before = navigation.url;
+  await act(async () => {
+    render(kind === "opponent" ? <OpponentGamesPage params={Promise.resolve({ userId: "owner", pulseId: "pulse" })} /> : <GlobalPlayerPage params={Promise.resolve({ pulseId: "pulse" })} />);
+  });
+  expect(screen.getByText("Tie")).toBeTruthy();
+  expect(screen.getAllByText("Result not recorded")).toHaveLength(2);
+  expect(screen.queryByText("Loss")).toBeNull();
+  expect(navigation.url).toBe(before);
+  fireEvent.click(screen.getByRole("button", { name: /Tie.*Map 0/ }));
+  const url = new URL(navigation.url, "https://fixture.invalid");
+  expect(url.searchParams.get("game")).toBe("game-0");
+  expect(url.searchParams.get("before")).toBe("cursor");
+  expect(url.searchParams.get("debug")).toBe("1");
+  if (kind === "global") expect(url.searchParams.get("owner")).toBe("other-owner");
+  expect(screen.getByRole("region", { name: "Selected detail" }).textContent).toBe(kind === "global" ? "other-owner:game-0" : "owner:game-0");
 });

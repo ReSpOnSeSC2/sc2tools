@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "status": "CURRENT_POST_AUTH_LOCAL_GATES_PASSED_NOT_DEPLOYED",
+  "head": "36c7fc11d8560a9f0d9c3a5a9f7e9a208418a04b",
+  "BUILD_ID": "M4nwPYsjZEE9j7FnvivmK",
+  "results": {
+    "passed": 16,
+    "cases": 16,
+    "skipped": 0,
+    "flaky": 0,
+    "fullDefaultAxeScans": 80,
+    "violations": 0,
+    "exclusions": 0,
+    "geometryStates": 80,
+    "LOCALcaptures": 48,
+    "productInputs": 240,
+    "css": 5,
+    "fonts": 3,
+    "widths": [
+      320,
+      390,
+      768,
+      1280
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "consumers": [
+      "actual opponent list",
+      "actual global list"
+    ],
+    "allFourActualDetailLabels": true,
+    "nativeKeyboardRowAndMobileBack": true,
+    "globalSharedGameIdOwnerScoped": true,
+    "queryPreserved": [
+      "before",
+      "debug",
+      "owner when applicable"
+    ],
+    "accountWriteAttempts": 0,
+    "browserWorkers": 1,
+    "retries": 0,
+    "serverStarted": false
+  },
+  "currentReceipt": {
+    "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/VERIFIED-06.json",
+    "sha256": "b153fb8fe61e5a910eb142c6e851257157d08e3263b47a9bc139d1f52a0ff581",
+    "bytes": 64768
+  },
+  "sourceSnapshot": {
+    "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-f213-build-03/source-snapshots/build-inputs-01.json",
+    "sha256": "fc4b2c256d4f22af523e2a67a64ce637207144e90ed34aa9da4b36f078c4239a",
+    "head": "36c7fc11d8560a9f0d9c3a5a9f7e9a208418a04b"
+  },
+  "guards": [
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-f213-build-03/full-source-prebuild.json",
+      "bytes": 242,
+      "sha256": "bbcc90676a7a07cc6356fe41743d6b7c8f168c3d7433177e0f77161d765748cd"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-f213-build-03/full-source-postbuild.json",
+      "bytes": 243,
+      "sha256": "3a65e9b2f0a1e53feab2de9ba89ded4a5946006fa4d64640eca0a8ccd76b23bb"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-f213-build-03/full-source-postbrowser.json",
+      "bytes": 245,
+      "sha256": "3483cc371fa48a3a9bd0d0d7d6591c662cfa0e1b0bdbd14a6e0f33f056867ca4"
+    }
+  ],
+  "budgets": {
+    "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-f213-build-03/all-budgets-01.json",
+    "bytes": 9261,
+    "sha256": "bcba0824de6d097f707cdd6d36fbdf1d51c1f5b8b407e0b11814514fed22b23e"
+  },
+  "assets": {
+    "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/integration-f213-build-03/assets-01/asset-admission-history-postbrowser.json",
+    "bytes": 9440,
+    "sha256": "4090126b2542725c169f9fb7c4095072526087d0d6514b67043685cc2e7798c1"
+  },
+  "browserReport": {
+    "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-06.json",
+    "bytes": 11858689,
+    "sha256": "6ccb5132b96e6026d33e12a525d5c9d677927e6744279a6fab7e720a513b120c"
+  },
+  "inputBinding": {
+    "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/input-binding-06.json",
+    "bytes": 54153,
+    "sha256": "a7be68f8845d60315969ff1f861b2486a32a508b9d9096da2da8b02f34d4dfe4"
+  },
+  "contrast": {
+    "failedBuild": "_LTnMT2Y5EdbL-MGpcS_7",
+    "failedRun": "04",
+    "oldRatio": 4.43,
+    "oldBackground": "#ddeceb",
+    "foreground": "#157a43",
+    "currentActualChecks": [
+      {
+        "case": "Admin results opponent 1280px light",
+        "target": [
+          ".justify-between.gap-2.items-center > .bg-bg-surface.inline-flex.rounded-full > .bg-success\\/5.text-success.border-success\\/30"
+        ],
+        "checks": [
+          {
+            "fgColor": "#157a43",
+            "bgColor": "#f3f8f6",
+            "contrastRatio": 5.02,
+            "fontSize": "9.8pt (13px)",
+            "fontWeight": "bold",
+            "expectedContrastRatio": "4.5:1"
+          }
+        ]
+      },
+      {
+        "case": "Admin results opponent 1280px light",
+        "target": [
+          ".gap-x-3 > .bg-bg-surface.inline-flex.rounded-full > .bg-success\\/5.text-success.border-success\\/30"
+        ],
+        "checks": [
+          {
+            "fgColor": "#157a43",
+            "bgColor": "#f3f8f6",
+            "contrastRatio": 5.02,
+            "fontSize": "9.8pt (13px)",
+            "fontWeight": "bold",
+            "expectedContrastRatio": "4.5:1"
+          }
+        ]
+      },
+      {
+        "case": "Admin results global 1280px light",
+        "target": [
+          ".justify-between.gap-2.items-center > .inline-flex.rounded-full.bg-bg-surface > .bg-success\\/5.text-success.border-success\\/30"
+        ],
+        "checks": [
+          {
+            "fgColor": "#157a43",
+            "bgColor": "#f3f8f6",
+            "contrastRatio": 5.02,
+            "fontSize": "9.8pt (13px)",
+            "fontWeight": "bold",
+            "expectedContrastRatio": "4.5:1"
+          }
+        ]
+      },
+      {
+        "case": "Admin results global 1280px light",
+        "target": [
+          ".gap-x-3 > .inline-flex.rounded-full.bg-bg-surface > .bg-success\\/5.text-success.border-success\\/30"
+        ],
+        "checks": [
+          {
+            "fgColor": "#157a43",
+            "bgColor": "#f3f8f6",
+            "contrastRatio": 5.02,
+            "fontSize": "9.8pt (13px)",
+            "fontWeight": "bold",
+            "expectedContrastRatio": "4.5:1"
+          }
+        ]
+      }
+    ],
+    "qualification": "Full default Axe in the passing fresh build checks both selected list and actual detail Win badges at5.02:1. No shared token, assertion, threshold or fixture CSS override."
+  },
+  "cleanup": {
+    "checkedAtUtc": "2026-10-28T17:26:19.2683191+00:00",
+    "actualBrowserStartUtc": "2026-10-28T17:22:00.5850000Z",
+    "actualBrowserEndUtc": "2026-10-28T17:23:02.3490000Z",
+    "recordedOwnedPids": [
+      18272,
+      33336,
+      9484,
+      40848,
+      18572,
+      45948,
+      40336,
+      936,
+      49676,
+      52932,
+      50808,
+      53644,
+      51540,
+      49492
+    ],
+    "ownedProcessesRemaining": [],
+    "qualifiedCachedRuntimeCandidates": [],
+    "scopedLiveChildren": [],
+    "ownedListenersRemaining": [],
+    "excludedReusedPids": [
+      {
+        "pid": 9484,
+        "reason": "Reused PID: executable or exact UTC creation identity differs",
+        "expectedExecutable": "C:\\Program Files\\nodejs\\node.exe",
+        "expectedCreated": "2026-10-28T17:18:16.275673Z",
+        "actualExecutable": "C:\\Windows\\System32\\smartscreen.exe",
+        "actualCreated": "2026-10-28T17:22:15.5748760Z"
+      }
+    ],
+    "stoppedProcesses": [],
+    "unrelatedProcessesTouched": false,
+    "serverStarted": false,
+    "browserAfterAllClosedMarkerVerified": true,
+    "qualification": "Recorded build/browser/guard roots and observed exact executable/UTC creation identities; cached Chromium/esbuild and retained-parent child candidates bounded to the exclusive browser interval. The during-browser inventory ran after completion and returned no rows; no historical worker/child PID is invented."
+  },
+  "dependencyQualification": {
+    "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/post-auth-input-qualification-01.json",
+    "sha256": "93f3a7834b6ec7eb147b0199f15a70917696cd126bbe731f612fc8f1cc146e3c",
+    "bytes": 669
+  },
+  "memoryAdmission": {
+    "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/post-auth-memory-admission-03.json",
+    "sha256": "e549e203778e26b8097a085d44014c7cba83eaefe35c8bb0b1ace81f66417de3",
+    "bytes": 310
+  },
+  "fixtureChange": "Expected head metadata only; prior fixture retained and exact inverse verified. Browser assertions remain byte-identical to the original prepared spec.",
+  "historicalFocusedTests": "45 cases in four files, whole-web types and strict six-file lint passed before Auth integration. The six runtime/test inputs and four protected inputs remain exact; these are historical unit commands, not an invented rerun at36c7. Current production build types and full browser matrix are fresh.",
+  "historicalEvidence": "The original pre-Auth build02 had6863 inputs and remains historical. Current clean36c7 build03 has6931 inputs. All previous failed and successful runs remain in cache.",
+  "boundaries": "Actual global/opponent admin pages, ResultBadge/canonical resultLabel/Badge, AdminSelectedGame/AdminGameDetail, useAdminQueryState/useAdminCursor, useApi/SWR, diagnostics, tables and empty build/macro detail branches. Explicit synthetic Clerk identity, GET-only HTTP data and local Next link/image/navigation primitives. Native history bridge exercises the actual query-state hook but is not an actual Next router/admin session/HTTP authorization proof. No chart data, account writes, provider or live acceptance.",
+  "limits": [
+    "Explicit synthetic Clerk identity, GET-only local HTTP and Next primitive/history adapters; not a real admin account, HTTP authorization, actual Next router, provider or live production proof.",
+    "Actual pages, result helper/badge/detail/query state/useApi/SWR and missing-detail branches are real product source. Populated chart-data behavior is outside this correction.",
+    "No application listener, account edit, diagnostics Retry, Save, rule mutation, download/install or engine generation/pruning ran.",
+    "All source/asset guards bind clean36c7 after Auth integration and before later metadata-only corrections. The original45-case unit run remains historical; its six runtime/test inputs and four protected inputs remain byte-exact. Current build/type/browser proof is fresh.",
+    "Admin-polish5 remains partial. Exact new-head CI, actual deployment and applicable signed-in acceptance remain parent release steps."
+  ],
+  "visualInspection": {
+    "method": "view_image of the three passing LOCAL captures after completed run",
+    "files": [
+      {
+        "file": "C:\\SC2TOOLS\\.cache\\admin-result-accuracy-20261028\\ui-browser\\browser-06\\admin-results-Admin-results-opponent-320px-light\\local-tie-opponent-320-light.png",
+        "bytes": 81119,
+        "sha256": "b64ec5def1b9a4cfef5f4c0652f9b1a563a080ade6809d8f051de36a78a1a0bc",
+        "width": 320,
+        "height": 1273
+      },
+      {
+        "file": "C:\\SC2TOOLS\\.cache\\admin-result-accuracy-20261028\\ui-browser\\browser-06\\admin-results-Admin-results-global-390px-dark\\local-unknown-global-390-dark.png",
+        "bytes": 103264,
+        "sha256": "054fa14620fb5d02c05107f53ff07e2c420d518419fb461dcd0de6e1dabd116e",
+        "width": 390,
+        "height": 1653
+      },
+      {
+        "file": "C:\\SC2TOOLS\\.cache\\admin-result-accuracy-20261028\\ui-browser\\browser-06\\admin-results-Admin-results-global-1280px-light\\local-tie-global-1280-light.png",
+        "bytes": 133587,
+        "sha256": "f29f5138b76650fd7db53c7263ec401b721642bf7227ab575002da01f6f68952",
+        "width": 1280,
+        "height": 1200
+      }
+    ],
+    "observed": "320px light Tie detail,390px dark Unknown detail and1280px light global selected Tie remain readable, contained, unselected except the intended game, with no clipped labels. No private or blank production photo is used."
+  },
+  "documentationArtifactCorrection": "Historical admin02 candidate references incorrectly pointed into01 because of path-separator rebinding. Those artifacts are retained. This new manifest constructs every path from its own root and asserts containment; no historical candidate is modified."
+}

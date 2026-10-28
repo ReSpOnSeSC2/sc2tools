@@ -1,0 +1,91 @@
+{
+  "files": [
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-01.json",
+      "bytes": 248954,
+      "sha256": "e025b2a21c5a417e7899cb3097b5afbfd614ddd9c5b8938ea669e86ab88b678f"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-01.log",
+      "bytes": 92631,
+      "sha256": "4019b01310a7cbd6fce5dde9f3ca4ff3b713bf4f61eb745dfed6717e8a373f2d"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-command-01.json",
+      "bytes": 737,
+      "sha256": "3e701c839da981c46cdf1428c22a779baef1b88fda2655d3aa058702021044c3"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-02.json",
+      "bytes": 127806,
+      "sha256": "3a792123cae003ab76ea5474d440783dddd65eb6f1fbc0cf571b8aca9b0e8bd4"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-02.log",
+      "bytes": 70042,
+      "sha256": "4d59f3a05c9ad3e2d386efbfe57ba436ef45e94e466b04251ae3107fd7219878"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-command-02.json",
+      "bytes": 736,
+      "sha256": "9db6b1e3b2cf5ff31cbeca5ffb6e8dac3ef1e48d932ac4f2723f29178288676d"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-03.json",
+      "bytes": 127806,
+      "sha256": "15bfd350c25834807a40e76b38df69d8ff333be6810a58e8e2a5a60d1555fb99"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-03.log",
+      "bytes": 70042,
+      "sha256": "5628a1a6244ce00325c3410024b0c71031ccf8bfc3edb41d56fcc71a3601a2a2"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-command-03.json",
+      "bytes": 736,
+      "sha256": "a49a6762022a0a0fca5a7caa4440562b99f95e696f237d119068f0f0e59a8ad5"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-04.json",
+      "bytes": 3916262,
+      "sha256": "5f79ea61646eeff258932108760555c6235047f5e38e19c14a0fcc07bcb54917"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-04.log",
+      "bytes": 48988,
+      "sha256": "9a277737ecd1a70c5988c59a60e81b2a829e57456fbb05714135d5a66696ad91"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/browser-command-04.json",
+      "bytes": 736,
+      "sha256": "32b3a6c65aa5a9c7e6653a1208a1af6cb33873f72034992c00130d2400fedede"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/cleanup-before-source-fix.json",
+      "bytes": 1125,
+      "sha256": "8a50e58ea095daa0d22bb16b77c66f155816e14838920eee41a2eb34d0096b2b"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/cleanup-final-05.json",
+      "bytes": 1879,
+      "sha256": "2b79da4ed25bc52e8cd3e9d7090a612f07d33aadffd9ab62c46fb43837779332"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/retained-before-row-fixture-fix/fixture.mjs",
+      "bytes": 10824,
+      "sha256": "e5a5d0ef809e0bb59fec18a9bbf292849d6bb4bf060d8291efb9d0580e32f3f7"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/retained-before-binding-restart-fix/fixture.mjs",
+      "bytes": 10834,
+      "sha256": "e325dce762d8c570ea297ec33a2bf49648dafb3e2c5aa02ef146f4edfea50ac5"
+    }
+  ],
+  "qualifications": [
+    "Run01 cached Chromium sandbox launch denied before product bodies.",
+    "Run02 malformed synthetic Tie label/map metadata; attempted PowerShell correction parsed unsuccessfully and run03 repeated unchanged fixture.",
+    "Run04 preserves real1280light selected Win4.43AA failure plus subsequent worker-restart EEXIST binding failures. Fixes only the synthetic row and exact-proof equality-on-EEXIST; browser spec bytes unchanged.",
+    "First final cleanup05 flagged an actual PID reused by unrelated installed user Chrome. Cleanup06 compares exact observed executable and UTC creation identity, excludes it with recorded proof, and stops nothing.",
+    "Original build01/pre-fix source/asset guards and earlier static preparation/receipt errors remain unchanged. No failures erased."
+  ]
+}
