@@ -11,12 +11,17 @@ const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
 const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("./twitchAutomationPolicy");
 const { PLAYER_SLUG_RE, PLAYER_UUID_RE, createPlayerSlug } = require("../util/publicPlayerConfig");
 const { ACTIVATION_QUERY_MAX_TIME_MS, activationTimestamp, activationUnavailable } = require("./activation");
+const { readyStatsFromOwnerRow, OWNER_STATS_PROJECTION } = require("./maintainedGameStatsRead");
 
 const REPLAY_SHARE_ID_RE = /^[A-Za-z0-9_-]{32}$/;
 const REPLAY_SHARE_SLUG_MAX_LENGTH = 64;
 const REPLAY_SHARE_SLUG_RE = PLAYER_SLUG_RE;
 const ONBOARDING_TOUR_IDS = new Set(["today", "game", "overlay"]);
 const ONBOARDING_TOUR_VERSION_MAX = 1000;
+const SUMMARY_PROJECTION = Object.freeze({ _id: 0, userId: 1, clerkUserId: 1, email: 1 });
+const PROFILE_PROJECTION = Object.freeze({ _id: 0, battleTag: 1, battleTags: 1, pulseId: 1, pulseIds: 1,
+  region: 1, preferredRace: 1, displayName: 1, lastKnownMmr: 1, lastKnownMmrAt: 1,
+  lastKnownMmrRegion: 1, sessionAnchorAt: 1, sessionGapMinutes: 1, _gdprMutation: 1 });
 
 /**
  * User service. The `users` collection maps Clerk user ids → our
@@ -28,6 +33,7 @@ class UsersService {
    * @param {{
    *   users: import('mongodb').Collection,
    *   games: import('mongodb').Collection,
+   *   gameStatsTransactions?: boolean,
    * }} db
    * @param {{
    *   adminEvents?: {
@@ -250,16 +256,31 @@ class UsersService {
   async getSummary(userId) {
     const doc = await this.db.users.findOne(
       { userId },
-      { projection: { _id: 0, userId: 1, clerkUserId: 1, email: 1 } },
+      { projection: SUMMARY_PROJECTION },
     );
-    if (!doc) return { userId, clerkUserId: null, email: null };
-    return {
-      userId: doc.userId,
-      clerkUserId: typeof doc.clerkUserId === "string" ? doc.clerkUserId : null,
-      email: typeof doc.email === "string" && doc.email.length > 0
-        ? doc.email
-        : null,
-    };
+    return summaryDto(doc, userId);
+  }
+
+  /** Internal /me envelope after the qualified writer cutover.
+   * One existing-owner read can replace summary+onboarding reads, never auth.
+   * @param {string} userId */
+  async getMeSnapshot(userId) {
+    const doc = await this.db.users.findOne({ userId }, { readPreference: "primary",
+      projection: { ...SUMMARY_PROJECTION, ...OWNER_STATS_PROJECTION, "preferences.onboarding": 1 } });
+    return { summary: summaryDto(doc, userId),
+      statsCandidate: readyStatsFromOwnerRow(doc, userId, this.db.gameStatsTransactions),
+      onboarding: (doc && doc.preferences && doc.preferences.onboarding) || {} };
+  }
+
+  /** Internal Doctor envelope; the public profile getter retains its DTO.
+   * Keep the original profile errors before attempting candidate validation.
+   * @param {string} userId */
+  async getDoctorSnapshot(userId) {
+    const doc = await this.db.users.findOne({ userId }, { readPreference: "primary",
+      projection: { ...PROFILE_PROJECTION, ...OWNER_STATS_PROJECTION, "preferences.replayArchive": 1 } });
+    return { profile: profileDto(doc),
+      statsCandidate: readyStatsFromOwnerRow(doc, userId, this.db.gameStatsTransactions),
+      replayArchivePrefs: (doc && doc.preferences && doc.preferences.replayArchive) || {} };
   }
 
   /**
@@ -677,74 +698,9 @@ class UsersService {
   async getProfile(userId) {
     const doc = await this.db.users.findOne(
       { userId },
-      {
-        projection: {
-          _id: 0,
-          battleTag: 1,
-          battleTags: 1,
-          pulseId: 1,
-          pulseIds: 1,
-          region: 1,
-          preferredRace: 1,
-          displayName: 1,
-          lastKnownMmr: 1,
-          lastKnownMmrAt: 1,
-          lastKnownMmrRegion: 1,
-          sessionAnchorAt: 1,
-          sessionGapMinutes: 1,
-          _gdprMutation: 1,
-        },
-      },
+      { projection: PROFILE_PROJECTION },
     );
-    if (!doc) return {};
-    if (doc._gdprMutation) throw Object.assign(new Error("gdpr_operation_busy"), { status: 503, code: "gdpr_operation_busy" });
-    /** @type {Record<string, string|number|string[]|null>} */
-    const out = {};
-    const gap = doc.sessionGapMinutes;
-    if (gap !== null && gap !== undefined && !(typeof gap === "number" && Number.isInteger(gap) && gap >= 15 && gap <= 480)) {
-      throw Object.assign(new Error("session_policy_invalid"), { status: 503, code: "session_policy_invalid" });
-    }
-    // Presence distinguishes a known owner's Auto preference from missing owner.
-    out.sessionGapMinutes = gap ?? null;
-    for (const k of [
-      "battleTag",
-      "region",
-      "preferredRace",
-      "displayName",
-      "lastKnownMmrAt",
-      "lastKnownMmrRegion",
-      "sessionAnchorAt",
-    ]) {
-      const v = doc[k];
-      if (typeof v === "string" && v.length > 0) out[k] = v;
-    }
-    // Pulse IDs: prefer the array; fall back to the legacy single
-    // field. We always emit ``pulseId`` (the first entry) so callers
-    // that were written against the pre-migration shape still see a
-    // value.
-    const ids = normalisePulseIdList(
-      Array.isArray(doc.pulseIds)
-        ? doc.pulseIds
-        : typeof doc.pulseId === "string"
-          ? [doc.pulseId]
-          : [],
-    );
-    if (ids.length > 0) {
-      out.pulseIds = ids;
-      out.pulseId = ids[0];
-    }
-    // BattleTags resolved from SC2Pulse (one per Battle.net account
-    // behind the user's pulse ids — multi-account users have several).
-    // ``battleTag`` (singular, above) stays the primary/manual value.
-    const tags = normaliseBattleTagList(doc.battleTags);
-    if (tags.length > 0) out.battleTags = tags;
-    // ``lastKnownMmr`` is the only numeric field — surface it as a
-    // number so the session widget's tier-comparison code can use it
-    // without parsing.
-    if (typeof doc.lastKnownMmr === "number" && Number.isFinite(doc.lastKnownMmr)) {
-      out.lastKnownMmr = doc.lastKnownMmr;
-    }
-    return out;
+    return profileDto(doc);
   }
 
   /**
@@ -1379,6 +1335,52 @@ function applyPulseIdsUpdate(profile, set, unset) {
     set.pulseIds = nextPulseIds;
     set.pulseId = nextPulseIds[0];
   }
+}
+
+/** Existing public summary mapping, also used by the unwired envelope.
+ * @param {any} doc @param {string} userId */
+function summaryDto(doc, userId) {
+  if (!doc) return { userId, clerkUserId: null, email: null };
+  return { userId: doc.userId,
+    clerkUserId: typeof doc.clerkUserId === "string" ? doc.clerkUserId : null,
+    email: typeof doc.email === "string" && doc.email.length > 0 ? doc.email : null };
+}
+
+/** Presence distinguishes known-owner Auto from a missing profile.
+ * @param {any} gap @returns {number|null} */
+function profileGap(gap) {
+  if (gap !== null && gap !== undefined && !(typeof gap === "number" && Number.isInteger(gap) && gap >= 15 && gap <= 480)) {
+    throw Object.assign(new Error("session_policy_invalid"), { status: 503, code: "session_policy_invalid" });
+  }
+  return gap ?? null;
+}
+/** @param {any} doc @param {Record<string,string|number|string[]|null>} out */
+function copyProfileText(doc, out) {
+  for (const key of ["battleTag", "region", "preferredRace", "displayName", "lastKnownMmrAt", "lastKnownMmrRegion", "sessionAnchorAt"]) {
+    const value = doc[key];
+    if (typeof value === "string" && value.length > 0) out[key] = value;
+  }
+}
+/** Prefer the array, including an explicitly empty array, to legacy pulseId.
+ * @param {any} doc */
+function profilePulseIds(doc) {
+  return normalisePulseIdList(Array.isArray(doc.pulseIds) ? doc.pulseIds
+    : typeof doc.pulseId === "string" ? [doc.pulseId] : []);
+}
+/** The original profile DTO/errors; proof fields never enter the result.
+ * @param {any} doc @returns {Record<string,string|number|string[]|null>} */
+function profileDto(doc) {
+  if (!doc) return {};
+  if (doc._gdprMutation) throw Object.assign(new Error("gdpr_operation_busy"), { status: 503, code: "gdpr_operation_busy" });
+  /** @type {Record<string,string|number|string[]|null>} */
+  const out = { sessionGapMinutes: profileGap(doc.sessionGapMinutes) };
+  copyProfileText(doc, out);
+  const ids = profilePulseIds(doc);
+  if (ids.length > 0) { out.pulseIds = ids; out.pulseId = ids[0]; }
+  const tags = normaliseBattleTagList(doc.battleTags);
+  if (tags.length > 0) out.battleTags = tags;
+  if (typeof doc.lastKnownMmr === "number" && Number.isFinite(doc.lastKnownMmr)) out.lastKnownMmr = doc.lastKnownMmr;
+  return out;
 }
 
 /**

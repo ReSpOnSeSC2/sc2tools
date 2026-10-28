@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "provenance": {
+    "observationBy": "Parent root, actual production UI; this is an allowlisted sanitized excerpt",
+    "originalReceiptSha256": "837fa88966cfdd3c0ec1b62b49ce01d721eb3ec360e0bd5e6eeffa0cd887e8c0"
+  },
+  "observedAtUtc": "2026-10-28T16:46:09.182Z",
+  "revision": "df5cf875d588fafba5456695a1c3550fc42ba587",
+  "testedHead": "bd82c3bf3a4940b91b98fadabdaaeae674462bb3",
+  "testedAndFreshMergedTree": "443f4004ecb7537437a787a472e88e33e82254bf",
+  "requiredChecks": "Actual API/web/responsive/Vercel success on the exact head before merge; Codex diagnostics receipt retained separately.",
+  "web": {
+    "deployment": "5ExPkkxGsNmFbieu2V71GNuGYNfz",
+    "state": "Ready / Production / Latest",
+    "sourceConfirmedInActualUi": true,
+    "publicHelpNewCopyVerified": true
+  },
+  "api": {
+    "deployment": "dep-dbh26o2vcj2c73e2kg3g",
+    "state": "Deploy succeeded / Live",
+    "sourceConfirmedInActualUi": true
+  },
+  "acceptance": {
+    "devicesHeading": true,
+    "devicesReadLoaded": true,
+    "credentialMutationPerformed": false
+  },
+  "scope": {
+    "writerPreparationDelivered": true,
+    "backupShutdownCorrectionDeployed": true,
+    "cachedAuthenticationActivated": false,
+    "credentialCutoverQualified": false,
+    "wholeProgramComplete": false
+  },
+  "privacy": "No screenshot, private photo, account/device row, hostname, owner identifier or owner-device/count data copied.",
+  "limits": "Read-only Devices and primary-domain new Help acceptance. No production credential metadata observer, issue/revoke/erase, cached authentication activation or reader deployment proof. Credential cutover remains a separate pending gate."
+}

@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "head": "55be35e56b42090dbf91331dcc40c5476551c30e",
+  "canonicalInputs": 40,
+  "servedFiles": 7,
+  "strictSampleGames": 4,
+  "prePostIdentical": true,
+  "sourceHash": "18a2e1b56111045cdb441d9d8868eee0b36d0b158b34ea0a79e3b9a22a69e2b2",
+  "versions": {
+    "engineVersion": "1.6.12",
+    "pyodideVersion": "314.0.7",
+    "protocol": 1,
+    "agentVersion": "0.24.7",
+    "lockInfo": {
+      "abi_version": "2026_0",
+      "arch": "wasm32",
+      "platform": "emscripten_5_0_3",
+      "python": "3.14.2"
+    },
+    "schemaVersion": 3
+  },
+  "files": [
+    {
+      "path": "engine/current.json",
+      "bytes": 112,
+      "sha256": "104a361605dec3ea91c93c9abc4739adc139020b570a4027d449a45bdfe2edab"
+    },
+    {
+      "path": "engine/1.6.12/d27b37abb9997712/manifest.json",
+      "bytes": 1798,
+      "sha256": "2614686e8910b90ca26511d90091f0eddecdc1671ce6b76a36ffd9246d5c65f9"
+    },
+    {
+      "path": "pyodide/314.0.7/pyodide.mjs",
+      "bytes": 17931,
+      "sha256": "6f1d60f7bf529beb300f0f47983c921d3982363640ba20af0e38efdddbc66109"
+    },
+    {
+      "path": "pyodide/314.0.7/pyodide.asm.mjs",
+      "bytes": 1250344,
+      "sha256": "f7cdc8ece80678ceb712f8e65ebe6d3a83203a180c399865f49612a051693635"
+    },
+    {
+      "path": "pyodide/314.0.7/pyodide.asm.wasm",
+      "bytes": 9598218,
+      "sha256": "cc36e3cab04fdfc9a63ff13eb52eae2b911bf46c025cc7b281f394bd3de1d5e6"
+    },
+    {
+      "path": "pyodide/314.0.7/python_stdlib.zip",
+      "bytes": 2545637,
+      "sha256": "fa1957e5777068fc4f7437f96d860ae2fbe9c19732ba06c84e004ec16dd7dd7a"
+    },
+    {
+      "path": "engine/1.6.12/d27b37abb9997712/engine.zip",
+      "bytes": 1252988,
+      "sha256": "ba357c54c2f3d69b923adc391230dc4382693eabb697b23bf287a665ad1f0858"
+    }
+  ],
+  "sample": {
+    "games": 4,
+    "sha256": "05e874e4792b9e054021efbe0008a935a4cd1c4e4395b1f3e061508b476f0c40",
+    "strictSchemaAdmitted": true
+  },
+  "generation": false,
+  "downloads": false,
+  "pruning": false,
+  "originalPreSha256": "6041a072f58d2c716e22f27bee06cef3c829de102ceebce7f1f65fe2f52601b5",
+  "originalPostSha256": "6041a072f58d2c716e22f27bee06cef3c829de102ceebce7f1f65fe2f52601b5"
+}

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "head": "55be35e56b42090dbf91331dcc40c5476551c30e",
+  "api": {
+    "checkedAtUtc": "2026-10-28T16:41:31.7410137Z",
+    "ownedKnownPids": [
+      9292,
+      17892,
+      18440,
+      38552,
+      45576,
+      47852,
+      50088
+    ],
+    "remainingKnownProcesses": [],
+    "remainingKnownListeners": [],
+    "remainingRecordedChildren": [],
+    "cimSucceeded": true,
+    "newMemberStopAssertions": "Stats and route suites passed actual native ESRCH assertions; existing credential and other suites await owned Mongo.stop",
+    "scope": "Exact recorded test/type/lint/native/helper PIDs and scoped child inventory",
+    "killCount": 0,
+    "unrelatedProcessesTouched": false,
+    "buildOrBrowserLaunched": false
+  },
+  "build": {
+    "checkedAtUtc": "2026-10-28T16:48:13.7151671Z",
+    "ownedPids": [
+      852,
+      12248,
+      12752,
+      35576,
+      42056,
+      43036,
+      46220
+    ],
+    "ownedProcessesRemaining": [],
+    "ownedListenersRemaining": [],
+    "ownedChildrenRemaining": [],
+    "cimSucceeded": true,
+    "scope": "Recorded exact current reader build/guard/worker PIDs and final scoped child inventories",
+    "unrelatedProcessesTouched": false,
+    "killCount": 0,
+    "serverOrBrowserLaunched": false
+  },
+  "qualification": "Actual recorded local test/build parents, native members/helpers, listeners and scoped children at their timestamps. No broad termination, unrelated-process mutation or production account/device data."
+}
