@@ -1,0 +1,322 @@
+{
+  "sourceHead": "1e1a736ff8d43fef7e91abaf2db8fd4a21073e07",
+  "versions": {
+    "engineVersion": "1.6.12",
+    "pyodideVersion": "314.0.7",
+    "protocol": 1,
+    "agentVersion": "0.24.7",
+    "lockInfo": {
+      "abi_version": "2026_0",
+      "arch": "wasm32",
+      "platform": "emscripten_5_0_3",
+      "python": "3.14.2"
+    },
+    "schemaVersion": 3
+  },
+  "canonicalSourceHash": "18a2e1b56111045cdb441d9d8868eee0b36d0b158b34ea0a79e3b9a22a69e2b2",
+  "canonicalInputs": [
+    {
+      "path": "apps/agent/sc2tools_agent/__init__.py",
+      "bytes": 953,
+      "sha256": "72097f176e1a2ba6d5b1febf09a78df96fb871138e98a77d7047511e785f6d8c"
+    },
+    {
+      "path": "apps/agent/sc2tools_agent/camera_signature.py",
+      "bytes": 9185,
+      "sha256": "eadd41fe7df756613459caeea07d061f77d5f082ff3781f306b3276c1d09c3d1"
+    },
+    {
+      "path": "apps/agent/sc2tools_agent/group_signature.py",
+      "bytes": 17095,
+      "sha256": "696b64385b08234d9c3943c237e4a8536396409dbeff6660fa14c29436262ca4"
+    },
+    {
+      "path": "apps/agent/sc2tools_agent/instant_analysis.py",
+      "bytes": 25582,
+      "sha256": "2c47862e96525b768999540e84420957006f93606b1662497fbfba1914748e8b"
+    },
+    {
+      "path": "apps/agent/sc2tools_agent/instant_intake.py",
+      "bytes": 11605,
+      "sha256": "486b9203f1df8d9e77ca1a2e8450d11fe31793c540a8daee538d6ceb43e26c15"
+    },
+    {
+      "path": "apps/agent/sc2tools_agent/play_signature.py",
+      "bytes": 15805,
+      "sha256": "cfb08d58771cc01e02db519992326b355eb0ab879001fc7c66dd68fb85cfa3c9"
+    },
+    {
+      "path": "apps/agent/sc2tools_agent/player_handle.py",
+      "bytes": 10444,
+      "sha256": "ac4c38703879f38ff8c47a351f9d2f971252c9a66e00afb280023e3320806460"
+    },
+    {
+      "path": "apps/agent/sc2tools_agent/replay_pipeline.py",
+      "bytes": 175700,
+      "sha256": "fef42ad5836a46307692feeb8b0d82820e745d62235a5c0e9a2f451ceda98244"
+    },
+    {
+      "path": "apps/agent/sc2tools_agent/upload_json.py",
+      "bytes": 1031,
+      "sha256": "b7605ea08d662d823222eeaf949fa7b207a2e1b498156e8e13085100dcbddb39"
+    },
+    {
+      "path": "apps/replay-engine/core/__init__.py",
+      "bytes": 346,
+      "sha256": "dedf2a626e47048301df0843dddc5da4546df762a760b8ea69435f1781221aa9"
+    },
+    {
+      "path": "apps/replay-engine/core/ability_casts.py",
+      "bytes": 26290,
+      "sha256": "db4e0364e3f3e1a88e0862ce94487d6d18708c94d5071bedb233e08c92457a10"
+    },
+    {
+      "path": "apps/replay-engine/core/atomic_io.py",
+      "bytes": 17848,
+      "sha256": "872cf7e30279839cd42f0a4ff593274d343e07447d8fba5fffa40dd8987b61ea"
+    },
+    {
+      "path": "apps/replay-engine/core/build_definitions.py",
+      "bytes": 61871,
+      "sha256": "eca0dc2876d757d3398da35173cd72369f1b5f927a33f6d5748c734278b9c634"
+    },
+    {
+      "path": "apps/replay-engine/core/build_durations.py",
+      "bytes": 11540,
+      "sha256": "7a7a92708dfd1bbc87ff0d76586ce0d011929c11554f897679ad156fc4acbe2c"
+    },
+    {
+      "path": "apps/replay-engine/core/custom_builds.py",
+      "bytes": 15197,
+      "sha256": "a6f91fa68c0b6010e5cb1e9239b059bd0c1d056ac51ffc13961e549f565c77e0"
+    },
+    {
+      "path": "apps/replay-engine/core/event_extractor.py",
+      "bytes": 111537,
+      "sha256": "9085c986ba9cd83d24e27111d2773246fca7a070030d1984ec30fba1829cf664"
+    },
+    {
+      "path": "apps/replay-engine/core/file_lock.py",
+      "bytes": 13972,
+      "sha256": "d572ffb04a70ba3e6bbc95ad6ddafeb91d566f856fb14684409e71d836355f32"
+    },
+    {
+      "path": "apps/replay-engine/core/map_playback_data.py",
+      "bytes": 20615,
+      "sha256": "6c77b6592eedeae8e1d9d7e6321289757b03d3747f4d1f9a13c7b3212221e7d1"
+    },
+    {
+      "path": "apps/replay-engine/core/paths.py",
+      "bytes": 1738,
+      "sha256": "6491c8b3ffeb17bd1be8b2198f02fe35c4798e4f789846972143e2f20d7cee3d"
+    },
+    {
+      "path": "apps/replay-engine/core/replay_errors.py",
+      "bytes": 4707,
+      "sha256": "ca0743046f16e7d1498a1668800c8d11c6ec39d8d07e31fd7d574f07442614bb"
+    },
+    {
+      "path": "apps/replay-engine/core/replay_loader.py",
+      "bytes": 13160,
+      "sha256": "dc637c0923876ea503089d9a734651b7026fe529375a5bbc9fd7fc36a2976ee9"
+    },
+    {
+      "path": "apps/replay-engine/core/sc2_catalog.py",
+      "bytes": 30217,
+      "sha256": "cff4ae08f7fc1bc06bb90427653b3267a64f2012a2becafd927f5594499e608b"
+    },
+    {
+      "path": "apps/replay-engine/core/sc2_observation_export.py",
+      "bytes": 50755,
+      "sha256": "22a4a39541c7a750a92a99c768b3f2b69e5e977030ad9e103c220c35cfa67353"
+    },
+    {
+      "path": "apps/replay-engine/core/sc2_replay_parser.py",
+      "bytes": 21518,
+      "sha256": "b0fa1fbd04d9b786a823f9bb94fe4a5cc6d3b50418677e50e35b5c6e1f83cd4c"
+    },
+    {
+      "path": "apps/replay-engine/core/strategy_detector.py",
+      "bytes": 1527,
+      "sha256": "e83120d17398ede074e6d9d189dd170ef3d6169ce3bd78d7344e794e2a741fa2"
+    },
+    {
+      "path": "apps/replay-engine/core/strategy_detector_base.py",
+      "bytes": 18052,
+      "sha256": "ecec52cbcfd9e5019f1d9b56119394fc811cb68ecd647fab67b3ebe8f4dabfbd"
+    },
+    {
+      "path": "apps/replay-engine/core/strategy_detector_helpers.py",
+      "bytes": 21085,
+      "sha256": "505215e1afe0a4a14ca1fc1f39c559a16e6323e702e2619f066a852bb2683e76"
+    },
+    {
+      "path": "apps/replay-engine/core/strategy_detector_matchups.py",
+      "bytes": 27139,
+      "sha256": "6a42149e1c0c20342563c7341ed7a91c168dc76a379ffd95c030c2b5e7a7e75c"
+    },
+    {
+      "path": "apps/replay-engine/core/strategy_detector_opponent.py",
+      "bytes": 4369,
+      "sha256": "cb4afb5ead11938d20a2faa2bddf4a120a72452820cbd8a8b8a161dc34d40ff7"
+    },
+    {
+      "path": "apps/replay-engine/core/strategy_detector_pvp.py",
+      "bytes": 14688,
+      "sha256": "0deb78f5054df854d3d48a96bbacc6ea4060b1238677d485ee17852b90216494"
+    },
+    {
+      "path": "apps/replay-engine/core/strategy_detector_pvt.py",
+      "bytes": 25701,
+      "sha256": "722a4e5fce2933da982ff49fe6ddd477a7bf950cd6d3a33106aaad5778cc462b"
+    },
+    {
+      "path": "apps/replay-engine/core/strategy_detector_pvz.py",
+      "bytes": 20741,
+      "sha256": "f55cbed332424509c19ca2fb47531091e7f0ef2f23718e7de76fdbb77c65f089"
+    },
+    {
+      "path": "apps/replay-engine/core/strategy_detector_race.py",
+      "bytes": 22194,
+      "sha256": "254905690538b53827c2997f9156045ed19b94eaf8f342f2d59ea5b2e5ad9419"
+    },
+    {
+      "path": "apps/replay-engine/core/strategy_detector_user.py",
+      "bytes": 5619,
+      "sha256": "7911ab0fc4f3300920bcc4360dee060aabb6fcb4e426bf57b6a60f215d3ff782"
+    },
+    {
+      "path": "apps/replay-engine/core/preset_policy.py",
+      "bytes": 15345,
+      "sha256": "cbd5ee0c2b43945f20ab6c686d83f68fd1503ea349618513f4905687fe57b68c"
+    },
+    {
+      "path": "apps/replay-engine/core/preset_defaults.py",
+      "bytes": 1975,
+      "sha256": "688d103213808785e7ea5d4c3c109a9fc5843afcafd3961f4340fdb735037839"
+    },
+    {
+      "path": "apps/replay-engine/core/timebase.py",
+      "bytes": 4405,
+      "sha256": "a1ff73471daaa02aece12425a289057c39f6349fc52318cd691cca224a24fd87"
+    },
+    {
+      "path": "apps/replay-engine/analytics/__init__.py",
+      "bytes": 260,
+      "sha256": "9ef050e01ed6a212f0e6d6532c60bbd795e78621ae35bbccd69f7be64e7639fb"
+    },
+    {
+      "path": "apps/replay-engine/analytics/macro_score.py",
+      "bytes": 33556,
+      "sha256": "600317d5688aeabb5ee24193ebdba8aa58e5805712a106799fcab3fff1d80c74"
+    },
+    {
+      "path": "apps/replay-engine/data/custom_builds.schema.json",
+      "bytes": 12344,
+      "sha256": "60dc433cdba178058cec08ea55e0eb76e992eb9292d9a60ceeac2ae7a28d10fd"
+    }
+  ],
+  "activeFiles": [
+    {
+      "path": "engine/current.json",
+      "bytes": 112,
+      "sha256": "104a361605dec3ea91c93c9abc4739adc139020b570a4027d449a45bdfe2edab"
+    },
+    {
+      "path": "engine/1.6.12/d27b37abb9997712/manifest.json",
+      "bytes": 1798,
+      "sha256": "2614686e8910b90ca26511d90091f0eddecdc1671ce6b76a36ffd9246d5c65f9"
+    },
+    {
+      "path": "pyodide/314.0.7/pyodide.mjs",
+      "bytes": 17931,
+      "sha256": "6f1d60f7bf529beb300f0f47983c921d3982363640ba20af0e38efdddbc66109"
+    },
+    {
+      "path": "pyodide/314.0.7/pyodide.asm.mjs",
+      "bytes": 1250344,
+      "sha256": "f7cdc8ece80678ceb712f8e65ebe6d3a83203a180c399865f49612a051693635"
+    },
+    {
+      "path": "pyodide/314.0.7/pyodide.asm.wasm",
+      "bytes": 9598218,
+      "sha256": "cc36e3cab04fdfc9a63ff13eb52eae2b911bf46c025cc7b281f394bd3de1d5e6"
+    },
+    {
+      "path": "pyodide/314.0.7/python_stdlib.zip",
+      "bytes": 2545637,
+      "sha256": "fa1957e5777068fc4f7437f96d860ae2fbe9c19732ba06c84e004ec16dd7dd7a"
+    },
+    {
+      "path": "engine/1.6.12/d27b37abb9997712/engine.zip",
+      "bytes": 1252988,
+      "sha256": "ba357c54c2f3d69b923adc391230dc4382693eabb697b23bf287a665ad1f0858"
+    }
+  ],
+  "phases": [
+    {
+      "phase": "prebuild",
+      "evidence": {
+        "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/build-01/assets-01/asset-admission-history-prebuild.json",
+        "bytes": 9426,
+        "sha256": "319c933bb4df08deb44bbf552dbd403874e9e84a23b1b51cec07db5830f31f58"
+      },
+      "sourceHash": "18a2e1b56111045cdb441d9d8868eee0b36d0b158b34ea0a79e3b9a22a69e2b2",
+      "sample": {
+        "bytes": 163356,
+        "sha256": "05e874e4792b9e054021efbe0008a935a4cd1c4e4395b1f3e061508b476f0c40",
+        "games": 4,
+        "strictSchemaAdmitted": true,
+        "availabilitySha256": "1a64d23c04b3e9eae44d45b34a52a57c92ec53a5298bde62a092ffb8a175a601"
+      },
+      "canonicalInputs": 40,
+      "activeFiles": 7,
+      "generation": false,
+      "downloads": false,
+      "pruning": false
+    },
+    {
+      "phase": "postbuild",
+      "evidence": {
+        "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/build-01/assets-01/asset-admission-history-postbuild.json",
+        "bytes": 9426,
+        "sha256": "319c933bb4df08deb44bbf552dbd403874e9e84a23b1b51cec07db5830f31f58"
+      },
+      "sourceHash": "18a2e1b56111045cdb441d9d8868eee0b36d0b158b34ea0a79e3b9a22a69e2b2",
+      "sample": {
+        "bytes": 163356,
+        "sha256": "05e874e4792b9e054021efbe0008a935a4cd1c4e4395b1f3e061508b476f0c40",
+        "games": 4,
+        "strictSchemaAdmitted": true,
+        "availabilitySha256": "1a64d23c04b3e9eae44d45b34a52a57c92ec53a5298bde62a092ffb8a175a601"
+      },
+      "canonicalInputs": 40,
+      "activeFiles": 7,
+      "generation": false,
+      "downloads": false,
+      "pruning": false
+    },
+    {
+      "phase": "postbrowser",
+      "evidence": {
+        "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/build-01/assets-01/asset-admission-history-postbrowser.json",
+        "bytes": 9426,
+        "sha256": "319c933bb4df08deb44bbf552dbd403874e9e84a23b1b51cec07db5830f31f58"
+      },
+      "sourceHash": "18a2e1b56111045cdb441d9d8868eee0b36d0b158b34ea0a79e3b9a22a69e2b2",
+      "sample": {
+        "bytes": 163356,
+        "sha256": "05e874e4792b9e054021efbe0008a935a4cd1c4e4395b1f3e061508b476f0c40",
+        "games": 4,
+        "strictSchemaAdmitted": true,
+        "availabilitySha256": "1a64d23c04b3e9eae44d45b34a52a57c92ec53a5298bde62a092ffb8a175a601"
+      },
+      "canonicalInputs": 40,
+      "activeFiles": 7,
+      "generation": false,
+      "downloads": false,
+      "pruning": false
+    }
+  ],
+  "qualification": "Metadata and hashes only; no engine/native asset copied, generated, downloaded or pruned by this adoption."
+}

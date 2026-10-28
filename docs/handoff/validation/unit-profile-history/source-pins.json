@@ -1,0 +1,140 @@
+{
+  "capturedAtUtc": "2026-10-28T14:49:11.055Z",
+  "sourceHead": "1e1a736ff8d43fef7e91abaf2db8fd4a21073e07",
+  "currentOwned": [
+    {
+      "relative": "CHANGELOG.md",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/CHANGELOG.md",
+      "bytes": 375106,
+      "sha256": "dc1ed9041a469e8bebc4d45c9b0d1cc0c1e13608e582376f9949b810931ea816"
+    },
+    {
+      "relative": "apps/api/__tests__/arcadeMlMemorySafety.test.js",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/__tests__/arcadeMlMemorySafety.test.js",
+      "bytes": 5210,
+      "sha256": "bc49bc17df344dc37ef4fe1c3b1133a9887c64926ff7d586584b2059ac4f048c"
+    },
+    {
+      "relative": "apps/api/__tests__/services/arcade.test.js",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/__tests__/services/arcade.test.js",
+      "bytes": 15138,
+      "sha256": "640271a4bc48e7a41e00d2b4f512375c3adaa6c5aedf8be8c25467be18d5d04a"
+    },
+    {
+      "relative": "apps/api/src/services/arcade.js",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/src/services/arcade.js",
+      "bytes": 23844,
+      "sha256": "9c4dbc9ec0e9d08c9160f2e5275b086bd8ba0ba015d00c02d89bd4e6b93522cb"
+    },
+    {
+      "relative": "apps/web/components/analyzer/arcade/ModeRunner.tsx",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/components/analyzer/arcade/ModeRunner.tsx",
+      "bytes": 14158,
+      "sha256": "8d8d443718aa7a1116942ba75b1302309816610b18f5084d54725e4abea6bb85"
+    },
+    {
+      "relative": "apps/web/components/analyzer/arcade/hooks/useArcadeData.ts",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/components/analyzer/arcade/hooks/useArcadeData.ts",
+      "bytes": 12566,
+      "sha256": "d1728fb94bbb6799bfeabe1ca3b5564ce6984fe04c80c4eb18f33461bbb68cbc"
+    },
+    {
+      "relative": "apps/web/components/analyzer/arcade/types.ts",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/components/analyzer/arcade/types.ts",
+      "bytes": 15798,
+      "sha256": "0c7aa3e943e4fc9f0a1f00d183ce3beb4da8dbfc6d404f6090e013f0d7b46e2d"
+    },
+    {
+      "relative": "apps/web/lib/help/articles/analyzer/arcade.ts",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/lib/help/articles/analyzer/arcade.ts",
+      "bytes": 4901,
+      "sha256": "d0c00c3fbe976cc1f824fa4d5e8e64af1b6a77d15456024fa98600d1a0195d57"
+    },
+    {
+      "relative": "apps/api/__tests__/arcadeUnitStatsReadiness.test.js",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/__tests__/arcadeUnitStatsReadiness.test.js",
+      "bytes": 3410,
+      "sha256": "059616d9bcad33ecdea4865199a1f601c80526d94839941daf4a5b067d509adb"
+    },
+    {
+      "relative": "apps/web/components/analyzer/arcade/__tests__/UnitProfile.historyReadiness.test.tsx",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/components/analyzer/arcade/__tests__/UnitProfile.historyReadiness.test.tsx",
+      "bytes": 8341,
+      "sha256": "fe61285d2d0feef5b41a0cbf29e1fbc437414654740e2cbc1007a1a26454b3c1"
+    },
+    {
+      "relative": "docs/handoff/unit-profile-history-checkpoint.md",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/docs/handoff/unit-profile-history-checkpoint.md",
+      "bytes": 6312,
+      "sha256": "c5972240e4c7dc322b1e9cc40c2ffdc25bad8d51333621ab103ce97fcea2d8eb"
+    }
+  ],
+  "protected": [
+    {
+      "relative": "apps/web/components/analyzer/arcade/modes/quizzes/unitProfile.tsx",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/components/analyzer/arcade/modes/quizzes/unitProfile.tsx",
+      "bytes": 18007,
+      "sha256": "ce686fd605a82ead6709a3c57c0f1a21fca9ecf8751130dc7fb5ceedb510c082",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/web/lib/clientApi.ts",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/lib/clientApi.ts",
+      "bytes": 20362,
+      "sha256": "5e143c65dc8d2d93ad1643a7a74dd4aad31f6dc6b4ea8619f01d4ea9c19ca0c2",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/web/components/analyzer/arcade/hooks/useAnalysisGames.ts",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/components/analyzer/arcade/hooks/useAnalysisGames.ts",
+      "bytes": 9629,
+      "sha256": "813b3d2853d53d332319acb4f20c8f3d68b438f4e39cb7a226c17427f2804bd6",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/api/src/services/gameDetails.js",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/src/services/gameDetails.js",
+      "bytes": 8699,
+      "sha256": "00c97c7e72cd762a5ae4022a6d09a041df22b6ece14c153e7901719abe6d831b",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/api/src/services/gameDetailsStore.js",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/src/services/gameDetailsStore.js",
+      "bytes": 40890,
+      "sha256": "f4abf61fbad7913fbccb1ba4bf46ea211b694b406b989fbb088e3249c7c4d7c6",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/api/src/services/arcadePredicates.js",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/src/services/arcadePredicates.js",
+      "bytes": 23784,
+      "sha256": "6980dd9e2938a0a10564f053332a10e8ec6426275203771a410032d9f196c2d6",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/api/src/routes/arcade.js",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/src/routes/arcade.js",
+      "bytes": 3001,
+      "sha256": "588267a9856d86759b536ae2bc279c1e3aea0ce7d369478390f3ab1978b0ead0",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/web/perf-budget.json",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/perf-budget.json",
+      "bytes": 871,
+      "sha256": "969d5bf40ce6e278aa004c27937193a50694e3474a42a121bb32360e24e0581d",
+      "normalizedUnchanged": true
+    }
+  ],
+  "docOnlyAfterLocalGuards": [
+    "docs/handoff/unit-profile-history-checkpoint.md",
+    "docs/handoff/validation/unit-profile-history/**"
+  ],
+  "qualifiedFocusedSourceManifest": {
+    "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/source-ready-01.json",
+    "bytes": 7190,
+    "sha256": "5289740f4ff5d3613b5cc56f3c2d67bd5c479290b8ee3496c01b7d895a137828"
+  },
+  "qualification": "Runtime/test/Help inputs remain exact after documentation adoption. CHANGELOG integration from2242 was separately reviewed before build; only checkpoint/evidence changes occur now."
+}

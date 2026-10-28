@@ -1,0 +1,21 @@
+{
+  "retainedFailure": {
+    "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/verification-01/api-lint-01.log",
+    "bytes": 780,
+    "sha256": "bb0b8a5a1129d828fb4bb4399a19068b8d87367c84224516fd847e514b02a71e",
+    "qualification": "Initial file-wide0-warning command exposed four inherited service-test warnings plus new61-line method. One-line wiring guard removes new debt; original service-test warning counts/sizes are independently baseline-qualified, no rule change."
+  },
+  "qualification": "Initial file-wide0-warning command exposed four inherited service-test warnings plus new61-line method. One-line wiring guard removes new debt; original service-test warning counts/sizes are independently baseline-qualified, no rule change.",
+  "retainedLogsInCache": true,
+  "unchangedSourceLimits": "No rule, assertion, skip or cap relaxed; stale type/lint passes are not transferred across changed actual inputs. The web-only lint global metadata included an unrelated earlier API formatting hash, as qualified in independent-source-review.json.",
+  "reviewOnlyCanonicalCheck": {
+    "failedLog": {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/release-adoption-01.log",
+      "bytes": 680,
+      "sha256": "83aa71cc44baad845e95e9c268527c5005edce0309569502eb359cc8a6e08f82"
+    },
+    "cause": "Reviewer raw CRLF Python bytes were compared with normalized canonical bundle hashes. The check stopped before tracked edits; original6843-file source equality had passed.",
+    "resolution": "Existing readBundleFiles read-only canonical algorithm independently matches all40 source inputs. No source/asset was rewritten or generator invoked.",
+    "failedAttemptPreimagesRetained": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/release-adoption-01/preimages.json"
+  }
+}

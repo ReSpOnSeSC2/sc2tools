@@ -1,0 +1,42 @@
+{
+  "reviewedAtUtc": "2026-10-28T14:49:11.015Z",
+  "reviewer": "/root/roadmap_audit",
+  "mode": "source-and-retained-evidence-binding-review-no-runtime",
+  "status": "all-local-gates-bound-clear-for-doc-adoption-and-required-exact-head-ci",
+  "sourceHead": "1e1a736ff8d43fef7e91abaf2db8fd4a21073e07",
+  "BUILD_ID": "bYQf505RuQP3HOsucpPUj",
+  "sourceInputs": 6843,
+  "allSourceRehashedBeforeDocAdoption": true,
+  "canonicalInputs": 40,
+  "activeAssets": 7,
+  "strictSampleGames": 4,
+  "unchangedBudgetRoutes": 83,
+  "browserCases": 8,
+  "fullDefaultAxeScans": 40,
+  "axeViolations": 0,
+  "geometrySpecimens": 40,
+  "capturesVerified": 24,
+  "productInputsBound": 177,
+  "sourceSnapshot": {
+    "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/build-01/source-snapshots/build-inputs-01.json",
+    "bytes": 2113818,
+    "sha256": "29fa15c82d3e83a357b3430ce16d6b18fff9425b0389bcdbb3dbd114dfcbbcd6"
+  },
+  "browserEvidence": {
+    "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/ui-browser/VERIFIED-01.json",
+    "bytes": 14377,
+    "sha256": "3e7ea688fc30dffe6144bdba0f64d495dce31829639b6e98f1bba99fd2d91692"
+  },
+  "unitEvidence": {
+    "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/verification-01/VERIFIED.json",
+    "bytes": 28455,
+    "sha256": "73886bbf16c7aa2e474b3fc5ae3d1cfc0c556ff9c27f4ea10849f12deb4fcbd4"
+  },
+  "limits": [
+    "Synthetic13,000-game corpus and unit counts exercise actual hooks/rendering; no real account, network provider, actual Next router or live acceptance is claimed.",
+    "ProductionCSS and localWOFF2 are exact completed-build inputs. The fixture compiles source components; it is not the shipped Next route or a network-latency benchmark.",
+    "Account-write sinks throw and all transport is GET-only local fulfillment. Native Tab/Enter operates only Retry, never an answer.",
+    "Original prechange production error/eventual question remain separate diagnosis evidence; no speedup, cache activation or deployed fix is inferred.",
+    "Source/asset postbrowser guards and required exact-head CI/deploy/live acceptance remain parent release steps."
+  ]
+}
