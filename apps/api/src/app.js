@@ -1605,6 +1605,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       protectedAdminEmails: deps.config.adminEmails || [],
       onAdminRevoked: (clerkId) => { adminClerkIds.delete(clerkId); },
       pairings: services.pairings,
+      userCache: services.userCache,
       replayArchiveEnabled: deps.config.replayFilesStore === "r2",
       admin: services.admin,
       adminGlobal: services.adminGlobal,

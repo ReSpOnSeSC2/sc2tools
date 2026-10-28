@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Personal chart cache monitoring
+
+- Show whether the personal chart cache is off or enabled in Admin → Infrastructure. Enabled snapshots show process-lifetime observations and cache-accounting bytes; missing reporting stays distinct from Off. The card changes no setting.
+
 ### Fixed
 
 - Keep the full Bingo: Ladder Edition objectives inside their tiles on phones and with larger text. Rows grow to fit longer goals, and long unit names wrap without overlapping neighboring boxes.

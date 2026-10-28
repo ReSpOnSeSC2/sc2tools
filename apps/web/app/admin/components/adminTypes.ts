@@ -186,7 +186,13 @@ export type WipeResp = {
   range: { since: string | null; until: string | null };
 };
 
+export type PersonalChartCacheHealth =
+  | { enabled: false; counters: null }
+  | { enabled: true; counters: { hit: number; miss: number; entries: number; bytes: number; reserved_bytes: number } };
+
 export type HealthResp = {
+  /** Optional during API/web deployment skew; null means not reported. */
+  personalChartCache?: PersonalChartCacheHealth | null;
   mongo: {
     ok: boolean;
     latencyMs: number | null;
