@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-28T16:17:44.065Z",
+  "reviewer": "/root/cache_review_adopt",
+  "decision": "SOURCE_DELTA_CLEAR_RUNTIME_AND_ACTUAL_AA_PENDING",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/dashboard-cache-health",
+  "head": "76285591a0a2d66b2bd3ece4af7d94c77859cb0a",
+  "pins": [
+    {
+      "file": "apps/web/app/admin/components/ResultBadge.tsx",
+      "sha256": "385bab9659194dbb7b68145a326338cbac8885d06966fd312eaa8de55990158f",
+      "expected": "385bab9659194dbb7b68145a326338cbac8885d06966fd312eaa8de55990158f"
+    },
+    {
+      "file": "apps/web/app/admin/components/__tests__/AdminResultBadge.test.tsx",
+      "sha256": "b330f48b9204b6659a57b61098bfd967fc552f6e094adfc5786bc3a5471f12b6",
+      "expected": "b330f48b9204b6659a57b61098bfd967fc552f6e094adfc5786bc3a5471f12b6"
+    }
+  ],
+  "sharedBadge": {
+    "file": "apps/web/components/ui/Badge.tsx",
+    "sha256": "ddf30f121d9eadb39e079bb19153346012ba4703ffefb16a034de76bdbe055fc",
+    "unchanged": true
+  },
+  "findings": [
+    "Only an opaque inline-flex rounded-full bg-bg-surface outer span was added. Inner canonical resultLabel, Badge variant, tint, text and unknown-result accessibility stay exact.",
+    "No role/tabIndex/handler/overflow clipping, shared token or global CSS change. Keyboard/event bubbling remains with existing controls.",
+    "Three existing test color traversals now select the same inner Badge one level deeper; their expected values/conditions and all other assertions remain.",
+    "The wrapper gives the existing translucent variant a stable local backing under selected row tint. Actual contrast must be measured in the fresh compiled browser matrix."
+  ],
+  "runtime": "No runtime, build, tests, browser, Git mutation or provider call by this reviewer. Existing4.43 finding and author test/build/browser receipts remain separate evidence."
+}

@@ -1,0 +1,93 @@
+{
+  "unit": {
+    "checkedAtUtc": "2026-10-28T16:16:22.8035316+00:00",
+    "actualRunStartUtc": "2026-10-28T16:14:08.4950000Z",
+    "recordedOwnedPids": [
+      49284,
+      43632,
+      10792,
+      35424
+    ],
+    "ownedProcessesRemaining": [],
+    "ownedListenersRemaining": [],
+    "stoppedProcesses": [],
+    "unrelatedProcessesTouched": false,
+    "serverStarted": false,
+    "scope": "Recorded one-worker unit wrapper/Vitest/tsc/eslint roots plus transitive live children after explicit UTC start. No Mongo/browser/build/HTTP service started in this check batch."
+  },
+  "build": {
+    "checkedAtUtc": "2026-10-28T16:27:06.0289277+00:00",
+    "actualRunStartUtc": "2026-10-28T16:24:35.1730000Z",
+    "recordedOwnedPids": [
+      28292,
+      7872,
+      43732,
+      47764,
+      48532,
+      37176,
+      11476,
+      4632,
+      16640
+    ],
+    "ownedProcessesRemaining": [],
+    "ownedListenersRemaining": [],
+    "stoppedProcesses": [],
+    "unrelatedProcessesTouched": false,
+    "scope": "Recorded build/capture/guard roots and observed or live transitive children with explicit UTC start; no broad kills."
+  },
+  "browser": {
+    "checkedAtUtc": "2026-10-28T16:29:56.1018797+00:00",
+    "actualBuildStartUtc": "2026-10-28T16:24:35.173Z",
+    "actualBrowserStartUtc": "2026-10-28T16:27:21.163Z",
+    "recordedOwnedPids": [
+      40580,
+      39784,
+      29964,
+      5140,
+      37480,
+      32704,
+      4192,
+      14996,
+      39552,
+      22928,
+      29624,
+      14560,
+      18268,
+      28292,
+      7872,
+      43732,
+      47764,
+      51996,
+      39300,
+      48532,
+      37176,
+      11476,
+      28836,
+      4632,
+      16640
+    ],
+    "ownedProcessesRemaining": [],
+    "ownedListenersRemaining": [],
+    "excludedReusedPids": [
+      {
+        "pid": 18268,
+        "expectedExecutable": "C:\\Users\\jay19\\AppData\\Local\\ms-playwright\\chromium-1228\\chrome-win64\\chrome.exe",
+        "expectedCreatedAtUtc": "2026-10-28T16:27:59.712814Z",
+        "actualExecutable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "actualCreatedAtUtc": "2026-10-28T16:28:09.9936560Z",
+        "reason": "PID was reused after the recorded owned process exited. Current executable/creation identity differs; installed user Chrome is unrelated and was not stopped."
+      }
+    ],
+    "stoppedProcesses": [],
+    "unrelatedProcessesTouched": false,
+    "serverStarted": false,
+    "browserAfterAllAssertedClosed": true,
+    "priorRetainedCheck": "cleanup-final-05.json",
+    "qualification": "Final identity-aware check compares exact observed executable and UTC creation identity for recorded live observations, not PID alone. Prior check conservatively flagged a PID reused by installed user Chrome; inspected identity proves unrelated. No process stopped."
+  },
+  "priorRetainedCleanup": {
+    "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ui-browser/cleanup-final-05.json",
+    "sha256": "2b79da4ed25bc52e8cd3e9d7090a612f07d33aadffd9ab62c46fb43837779332",
+    "bytes": 1879
+  }
+}

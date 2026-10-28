@@ -1,0 +1,79 @@
+{
+  "rawReport": {
+    "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/contrast-fix-verification-01/unit-01.json",
+    "sha256": "e7291cf2fe7bba9f85046c1c1c1e9e630f817210146f630ef315ae98c5e745b8",
+    "bytes": 13216
+  },
+  "cases": 45,
+  "files": 4,
+  "skips": 0,
+  "commands": [
+    {
+      "label": "unit-01",
+      "args": [
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "app/admin/components/__tests__/AdminResultBadge.test.tsx",
+        "app/admin/components/__tests__/adminGameSelection.test.tsx",
+        "app/admin/components/AdminUsersPolish.test.tsx",
+        "components/builds/BuildGamesTable.test.tsx",
+        "--maxWorkers=1",
+        "--minWorkers=1",
+        "--reporter=json",
+        "--outputFile=C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/contrast-fix-verification-01/unit-01.json"
+      ],
+      "runnerPid": 49284,
+      "pid": 43632,
+      "startedAtUtc": "2026-10-28T16:14:08.495Z",
+      "endedAtUtc": "2026-10-28T16:14:22.555Z",
+      "exitCode": 0,
+      "log": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/contrast-fix-verification-01/unit-01.log",
+      "logSha256": "4598de496991927d156325bbc0e015cd4713395eec9acfa874e697376265cd16"
+    },
+    {
+      "label": "types-01",
+      "args": [
+        "node_modules/typescript/bin/tsc",
+        "--noEmit",
+        "--incremental",
+        "false",
+        "--pretty",
+        "false"
+      ],
+      "runnerPid": 49284,
+      "pid": 10792,
+      "startedAtUtc": "2026-10-28T16:14:22.558Z",
+      "endedAtUtc": "2026-10-28T16:15:36.919Z",
+      "exitCode": 0,
+      "log": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/contrast-fix-verification-01/types-01.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "lint-01",
+      "args": [
+        "node_modules/eslint/bin/eslint.js",
+        "app/admin/components/AdminGameDetail.tsx",
+        "app/admin/global/players/[pulseId]/page.tsx",
+        "app/admin/users/[userId]/opponents/[pulseId]/page.tsx",
+        "app/admin/components/__tests__/adminGameSelection.test.tsx",
+        "app/admin/components/ResultBadge.tsx",
+        "app/admin/components/__tests__/AdminResultBadge.test.tsx",
+        "--max-warnings",
+        "0"
+      ],
+      "runnerPid": 49284,
+      "pid": 35424,
+      "startedAtUtc": "2026-10-28T16:15:36.921Z",
+      "endedAtUtc": "2026-10-28T16:15:42.546Z",
+      "exitCode": 0,
+      "log": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/contrast-fix-verification-01/lint-01.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "sourceUnchanged": true,
+  "cleanup": {
+    "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/contrast-fix-verification-01/cleanup.json",
+    "sha256": "a1d382425530924846b696fdc7394c2589cd97afe6e2b4a56e7914b02cf9c972",
+    "bytes": 550
+  }
+}

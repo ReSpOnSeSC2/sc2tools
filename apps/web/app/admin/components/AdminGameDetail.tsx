@@ -17,6 +17,7 @@ import { patchEraForGame } from "@/lib/ladderPulse";
 import type { PatchEra } from "@/lib/meta";
 import { coerceRace, type Race } from "@/lib/race";
 import type { BuildOrderEvent } from "@/lib/build-events";
+import { ResultBadge } from "./ResultBadge";
 
 /**
  * Shared admin per-game detail renderer — build order and macro
@@ -74,10 +75,6 @@ export function fmtDate(iso: string | null): string {
   return d.toLocaleString();
 }
 
-export function isWin(result: string | null): boolean {
-  return ["win", "victory"].includes((result || "").toLowerCase());
-}
-
 export function AdminGameDetail({
   userId,
   game,
@@ -115,17 +112,7 @@ export function AdminGameDetail({
 
       <Card padded>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-text-muted">
-          <span
-            title={!game.result ? "Result not recorded" : undefined}
-            className={[
-              "rounded-full px-2 py-0.5 font-semibold",
-              !game.result ? "bg-bg-elevated text-text-muted" : isWin(game.result)
-                ? "bg-success/15 text-success"
-                : "bg-danger/15 text-danger",
-            ].join(" ")}
-          >
-            {!game.result ? "—" : isWin(game.result) ? "Win" : "Loss"}
-          </span>
+          <ResultBadge result={game.result} />
           <span className="font-mono text-text-dim">{fmtDate(game.date)}</span>
           <span>{game.map || "—"}</span>
           <span>{fmtDuration(game.durationSec)}</span>

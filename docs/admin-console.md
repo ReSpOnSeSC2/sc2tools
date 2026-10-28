@@ -111,6 +111,13 @@ user-filtered feed. Anonymized events are never relinked to a deleted identity.
 The feed's unread total remains global, and Mark all read is disabled while a
 user filter is active.
 
+### Game results
+
+The opponent and global-player game lists and selected-game detail use the same
+result labels: Win, Loss and Tie. A neutral dash means the result was not
+recorded, including an undecided replay; assistive technology reads it as
+"Result not recorded". These are the stored game's result labels.
+
 ### Repairing a user's data
 
 Use the 300 ms debounced email/ID lookup in Tools, or open the user's detail page.
