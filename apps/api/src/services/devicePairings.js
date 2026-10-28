@@ -6,6 +6,7 @@ const { randomDigits, randomToken, sha256 } = require("../util/hash");
 const { stampVersion } = require("../db/schemaVersioning");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { DeviceLiveness, DEVICE_TOUCH_MS } = require("./deviceLiveness");
+const { deviceCredentialWritesFor } = require("./deviceCredentialWrites");
 
 const PAIRING_TTL_MS = LIMITS.PAIRING_CODE_TTL_SEC * 1000;
 // One API instance serves the ten-minute code lifetime. A restart safely turns
@@ -40,7 +41,8 @@ class DevicePairingsService {
    *   users: import('mongodb').Collection,
    * }} db
    * @param {{ adminEvents?: import('./adminEvents').AdminEventsService,
-   *   logger?: import('pino').Logger, ipSalt?: string, liveness?: DeviceLiveness }} [opts]
+   *   logger?: import('pino').Logger, ipSalt?: string, liveness?: DeviceLiveness,
+   *   credentialWrites?: import('./deviceCredentialWrites').DeviceCredentialWrites }} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
@@ -50,6 +52,7 @@ class DevicePairingsService {
     this.onHeartbeat = null;
     this.ipSalt = opts.ipSalt || PROCESS_IP_SALT;
     this.liveness = opts.liveness || new DeviceLiveness();
+    this.credentialWrites = opts.credentialWrites || deviceCredentialWritesFor(db, opts.logger);
   }
 
   /** Always active, including when the independent chart cache is disabled.
@@ -165,9 +168,10 @@ class DevicePairingsService {
       // Token was already issued; subsequent polls don't re-issue.
       return /** @type {const} */ ({ status: "expired" });
     }
-    // Poll is intentionally public: the generic authenticated-write fence
-    // cannot cover token issuance. Admit it before consuming a claimed code
-    // so a late poll cannot recreate a device after account erasure.
+    // Poll is public, so acquire ordinary account admission after coordination
+    // waits, before fresh atomic consumption. Its finally stays inside the
+    // coordinated work: shutdown must also own the final lease-release command.
+    return this.credentialWrites.run(row.userId, "issue", async () => {
     let lease;
     try { lease = await claimUserDataLease(this.db.users, row.userId); }
     catch (error) {
@@ -184,8 +188,22 @@ class DevicePairingsService {
       { returnDocument: "after" },
     );
     if (!claimed) return /** @type {const} */ ({ status: "expired" });
+    await this.#insertIssuedToken(row, code, now, tokenHash);
+    return {
+      status: /** @type {'ready'} */ ("ready"),
+      deviceToken: token,
+      userId: String(row.userId),
+    };
+    } finally { await lease.release(); }
+    });
+  }
+
+  /** Only called after coordinated fresh lease/atomic code consumption. Keep
+   * insert uncertainty separate from coordination completion failures.
+   * @param {any} row @param {string} code @param {Date} now @param {string} tokenHash */
+  async #insertIssuedToken(row, code, now, tokenHash) {
     const finishDevices = this.beginLivenessMutation(row.userId);
-    try { await this.db.deviceTokens.insertOne(
+    try { const inserted = await this.db.deviceTokens.insertOne(
       stampVersion(
         {
           tokenHash,
@@ -201,7 +219,9 @@ class DevicePairingsService {
         },
         COLLECTIONS.DEVICE_TOKENS,
       ),
-    ); } catch (err) {
+    );
+      if (inserted.acknowledged === false) throw httpErr(503, "device_credential_write_unacknowledged");
+    } catch (err) {
       // A lost write acknowledgement can throw after Mongo inserted the row.
       // Never reopen a code that already issued a token; its reserved id also
       // prevents duplicate device rows. Retry only a confirmed failed insert.
@@ -211,12 +231,6 @@ class DevicePairingsService {
       if (!issued) await this.db.devicePairings.updateOne({ code, consumedAt: now }, { $set: { consumedAt: null } });
       throw err;
     } finally { finishDevices(); }
-    return {
-      status: /** @type {'ready'} */ ("ready"),
-      deviceToken: token,
-      userId: String(row.userId),
-    };
-    } finally { await lease.release(); }
   }
 
   /**
@@ -324,10 +338,10 @@ class DevicePairingsService {
    * @param {string} tokenHash
    */
   async revoke(userId, tokenHash) {
-    await this.liveness.mutate(userId, () => this.db.deviceTokens.updateOne(
+    await this.credentialWrites.run(userId, "revoke-hash", () => this.liveness.mutate(userId, () => this.db.deviceTokens.updateOne(
       { userId, tokenHash },
       { $set: { revokedAt: new Date() } },
-    ));
+    )));
   }
 
   /**
@@ -350,10 +364,10 @@ class DevicePairingsService {
     } catch {
       return false;
     }
-    const res = await this.liveness.mutate(userId, () => this.db.deviceTokens.updateOne(
+    const res = await this.credentialWrites.run(userId, "revoke-id", () => this.liveness.mutate(userId, () => this.db.deviceTokens.updateOne(
       { _id, userId, revokedAt: null },
       { $set: { revokedAt: new Date() } },
-    ));
+    )));
     return res.matchedCount > 0;
   }
 

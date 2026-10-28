@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Device credential write coordination
+
+- Coordinate device pairing, revocation and account erasure through durable database gates. These controls can take a few seconds to finish; uncertain writes keep their reuse scope blocked. Device authentication still reads the database on every request, and the proposed 60-second credential cache remains off.
+
 ### History write consistency
 
 - Keep replay membership changes and statistics invalidation in the same database transaction. History wipes and restores retire older in-flight upload batches, including after their request lease expires. This prepares future dashboard work; statistics caching remains off and dashboard reads are unchanged.

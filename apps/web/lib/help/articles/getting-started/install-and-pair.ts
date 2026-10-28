@@ -86,7 +86,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Unpair a PC", anchor: "unpair" },
     {
       type: "paragraph",
-      text: "On [Devices](/devices), press **Unpair** next to the PC, read the dialog and confirm. It stops syncing; your games already synced stay in your account. To use it again, open the app on that PC and pair it with a new code.",
+      text: "On [Devices](/devices), press **Unpair** next to the PC, read the dialog and confirm. Allow a few seconds for confirmation. It stops syncing; your games already synced stay in your account. To use it again, open the app on that PC and pair it with a new code.",
     },
     {
       type: "callout",
