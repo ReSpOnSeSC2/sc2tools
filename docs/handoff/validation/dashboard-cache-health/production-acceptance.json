@@ -1,0 +1,66 @@
+{
+  "pr": 798,
+  "testedHead": "6f4ccd3a59c97d43af821cac4dff53676ab98766",
+  "squash": "fabe478cea64b1835e6659b36ce213d1c7a3328c",
+  "testedMergeTree": "c0437b4a9f1736aba8b40ec1272621575306a621",
+  "ci": {
+    "webAndResponsiveRun": 40618429181,
+    "apiRun": 40618429171,
+    "requiredChecks": "all success on exact head",
+    "originalFailure": "ci-f8c5de7f-web-failure.json retained; duplicate receipt width fixed; no assertions removed"
+  },
+  "web": {
+    "provider": "Vercel",
+    "deployment": "EuBb4YeGUh2BwWxyVeP3TgF1xf4X",
+    "status": "Ready",
+    "environment": "Production",
+    "source": "fabe478cea64b1835e6659b36ce213d1c7a3328c",
+    "domain": "sc2tools.com"
+  },
+  "api": {
+    "provider": "Render",
+    "service": "sc2tools-api",
+    "deployment": "dep-dbgls6q9lscs738rhd90",
+    "status": "Live",
+    "source": "fabe478cea64b1835e6659b36ce213d1c7a3328c"
+  },
+  "acceptance": {
+    "actualSignedIn": true,
+    "explicitlyMeasuredViewport": 390,
+    "cardWidth": 343,
+    "status": "Off",
+    "activityFigures": 0,
+    "activationControls": 0,
+    "textEscapes": false,
+    "existingRefreshCompleted": true,
+    "statusAfterRefresh": "Off",
+    "figuresAfterRefresh": 0
+  },
+  "scope": "Actual existing health response/card and refresh; other provider, backup and job sections are not claimed healthy by this receipt. Enabled/malformed projections and Off getter avoidance are separately covered by107 API/28 UI tests and48 synthetic browser/AA specimens.",
+  "changes": {
+    "flags": false,
+    "providerSettings": false,
+    "infrastructure": false,
+    "cacheActivation": false,
+    "newEndpoint": false,
+    "newPolling": false,
+    "newDatabaseOrProviderRequests": false,
+    "agentRelease": false
+  },
+  "fasterDashboards": "Still partial; maintained gameStats/lighter me, dependency-safe coverage and revocation-coherent authentication reuse remain",
+  "privateTokensOrResponsesRetained": false,
+  "cleanup": {
+    "ownedTabsClosed": 6,
+    "verificationPortListeners": 0,
+    "viewportReset": true,
+    "mongodProcesses": 0,
+    "userTabsAndProcessesUntouched": true,
+    "ownedVerificationNodeProcesses": 0
+  },
+  "apiSuccessor": {
+    "source": "161449b4f28b74b4d74b80333a5c1e1993c69d4b",
+    "deployment": "dep-dbglvq2vcj2c73dj466g",
+    "apiBytesUnchanged": true,
+    "status": "Live"
+  }
+}

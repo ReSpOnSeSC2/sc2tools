@@ -1,0 +1,60 @@
+{
+  "pr": 799,
+  "testedHead": "0e53b7477ce95d894a4ff0802047e825a0835e86",
+  "squash": "161449b4f28b74b4d74b80333a5c1e1993c69d4b",
+  "testedMergeTree": "4fe8bd1994aab306fb5e4622e588c392d539ddb3",
+  "ci": {
+    "run": 40619859556,
+    "requiredChecks": "all success on exact head"
+  },
+  "deployment": {
+    "provider": "Vercel",
+    "id": "DM6HcDa3Tv4KG4zC1Aof8kaBHwno",
+    "status": "Ready",
+    "environment": "Production",
+    "source": "161449b4f28b74b4d74b80333a5c1e1993c69d4b",
+    "domain": "sc2tools.com"
+  },
+  "acceptance": {
+    "actualSignedIn": true,
+    "explicitlyMeasuredViewport": 390,
+    "beforeCardHeights": [
+      459,
+      459,
+      459,
+      459,
+      459
+    ],
+    "afterCardHeights": [
+      459,
+      214,
+      214,
+      132,
+      132
+    ],
+    "beforeGridAutoRows": "minmax(0px, 1fr)",
+    "afterGridAutoRows": "auto",
+    "horizontalOverflow": false,
+    "preferenceActionsSubmitted": false
+  },
+  "qualification": "Session remains content-sized at459px; the two statistic pairs fit their own214px/132px content. Populated, empty, loading, desktop alignment and request/filter semantics also pass separate19 unit checks and24 synthetic browser/AA specimens.",
+  "macro": "Owner explicitly chose Leave Macro as it is. Optional compact-header source is not in this release.",
+  "changes": {
+    "api": false,
+    "flags": false,
+    "providerSettings": false,
+    "infrastructure": false,
+    "agentRelease": false,
+    "routeBudgetCaps": false,
+    "engineGenerationDownloadsPruning": false
+  },
+  "privateIdentifiersTokensOrResponsesRetained": false,
+  "cleanup": {
+    "ownedTabsClosed": 6,
+    "verificationPortListeners": 0,
+    "viewportReset": true,
+    "mongodProcesses": 0,
+    "userTabsAndProcessesUntouched": true,
+    "ownedVerificationNodeProcesses": 0
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "items": 197,
+  "counts": {
+    "completed": 74,
+    "partial": 51,
+    "open": 12,
+    "unknown": 60
+  },
+  "receiptFiles": 3,
+  "errors": [],
+  "scope": "Documentation integrity; product types/build/budgets/CI and actual acceptance are separate linked proofs"
+}
