@@ -8,7 +8,7 @@ export function ResultBadge({ result }: { result?: string | null }) {
   return (
     <span className="inline-flex rounded-full bg-bg-surface">
       <Badge variant={variant}>
-        {label === "Unknown" ? <><span aria-hidden="true">—</span><span className="sr-only">Result not recorded</span></> : label}
+        {label === "Unknown" ? <><span aria-hidden="true" title="Result not recorded">—</span><span className="sr-only">Result not recorded</span></> : label}
       </Badge>
     </span>
   );

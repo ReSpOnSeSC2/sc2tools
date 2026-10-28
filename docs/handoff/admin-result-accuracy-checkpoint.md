@@ -113,3 +113,13 @@ decided-only win-rate reconciliation, small-sample hint, shared master/detail
 keyboard navigation and polite announcements, URL result/map filters and the
 global user filter, plus their API/UI regressions. This narrow accuracy slice
 does not satisfy those requirements.
+
+## Current Unknown-title compatibility verification
+
+Base `c0e2b770` integrates passed/deployed Reader810 `b8ef1b94`. Only `ResultBadge.tsx` differs: the existing aria-hidden Unknown em dash regains `title="Result not recorded"`, preserving its exact text content and the screen-reader sibling. Historical `9d67` CI exposed an existing seven-case detail suite omitted from the first 45-case focused batch. No original assertion was changed. The expanded current batch passes 52 cases in five actual files, whole-web types and strict six-file lint with one unit worker.
+
+Fresh direct build `Mkid_r_EOo_i_c5Y9IfzW` passes all 83 unchanged route caps, 6,954 exact prebuild/postbuild/postbrowser source inputs and 40 canonical / 7 active / 4 strict sample asset guards, with one static worker and a 4 GiB limit. The full matrix passes 16 cases, 80 full default Axe scans with zero violations/exclusions, 80 geometry states and 48 LOCAL captures. It includes an added actual title/dash assertion while retaining every previous browser assertion. Four selected desktop Win checks remain 5.02:1. All 240 product inputs and fresh CSS/fonts are bound.
+
+Actual lists/detail/query hooks run with explicit synthetic Clerk/GET/Next primitives. This is local component QA, not actual admin authentication/routing or live acceptance. No account mutation or diagnostics Retry was performed. The three representative fresh images equal the already inspected LOCAL pixels; no repeated image payload or private photo is copied. Exact observed browser/esbuild/build/guard identities, UTC scopes and listeners are clear; a newer git.exe PID reuse was excluded without touching it. No process was killed.
+
+The [single current compact summary](validation/admin-result-accuracy/current-title-verification.json) retains raw artifact/hash pointers, including the Codex CI annotation/two 502 log attempts, original contrast/sandbox/binding/cleanup failures and all earlier candidates. Large reports, traces, all captures and the full source list stay in cache. Source guards bind base c0e2 plus the one title attribute before later commit/documentation adoption. Previous CI and local gates remain historical. Exact new-head CI, deployment and relevant signed-in acceptance are pending. `admin-polish-5` remains partial; no ledger count/status change.

@@ -1,4 +1,12 @@
-# Admin result accuracy — current post-Auth local evidence
+# Admin result accuracy — current local compatibility verification
+
+The [current compact summary](current-title-verification.json) binds base `c0e2b770` (passed Reader810 integrated) plus only the restored Unknown-dash title. The original screen-reader sibling, em dash text content, canonical labels and opaque contrast backing remain. Historical `9d67` CI caught an existing detail-consumer assertion omitted from the first focused batch; all its original assertions remain untouched. The expanded current batch passes 52 cases across five actual files, whole-web types and strict six-file lint.
+
+Fresh build `Mkid_r_EOo_i_c5Y9IfzW` passes all 83 unchanged caps, all 6,954 source inputs before/after build and after browser, and 40 canonical / 7 active / 4 strict sample guards. The full 16-case matrix includes the actual Unknown-title regression and retains every previous assertion: 80 full default Axe scans with zero violations/exclusions, 80 geometry states, 48 LOCAL captures and 240 product inputs with fresh CSS/fonts. Four selected desktop Win checks measure 5.02:1. Scoped UTC cleanup is clear; one PID reused by a newer git.exe was excluded and untouched.
+
+Actual pages/detail/query/useApi/SWR are product source; Clerk identity, GET-only data and Next primitives/history are explicit synthetic seams. No actual admin authorization/routing or production acceptance is claimed. The three representative fresh PNGs are byte-identical to already inspected local captures; raw reports, all images, budgets and source list remain cache-only with hashes in the summary. Earlier receipts and failed evidence below remain historical. These documentation-only changes follow the full-source guard boundary. Exact final-head CI/deployment remain pending and the parent item stays partial.
+
+## Historical post-Auth local evidence
 
 Clean head `36c7fc11` integrates accepted Auth main. The [current receipt](current-36c7.json) binds build `M4nwPYsjZEE9j7FnvivmK`, all 83 unchanged route caps, 6,931 exact prebuild/postbuild/postbrowser source inputs and 40 canonical / 7 active / 4 strict sample guards. The fresh matrix passes 16 cases, 80 full default Axe scans with zero violations/exclusions, 80 geometry states and 48 LOCAL captures, using 240 exact product inputs and the new build CSS/fonts. Owned processes/listeners and bounded cached-runtime candidates are zero; nothing was stopped.
 
