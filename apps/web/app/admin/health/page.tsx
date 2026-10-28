@@ -11,6 +11,7 @@ import { ForbiddenCard } from "../components/AdminFragments";
 import { InfrastructureOverview } from "../components/InfrastructureOverview";
 import { BackgroundJobs } from "../components/BackgroundJobs";
 import { DatabaseBackupsCard } from "../components/DatabaseBackupsCard";
+import { PersonalChartCacheTile } from "../components/PersonalChartCacheTile";
 import type {
   AdminInfrastructureResp,
   HealthResp,
@@ -72,6 +73,7 @@ export default function AdminHealthPage() {
               <BrowserBackupTile runtime={data.runtime} />
               <StatusTile label="Game-details store" tone="ok" primary={backendLabel(data.runtime.gameDetailsStore)} secondary={data.runtime.gameDetailsStore === "r2" ? "Cloudflare R2 / S3-compatible" : "MongoDB game_details collection"} />
               <StatusTile label="Uptime" tone="ok" primary={formatDuration(data.uptime.uptimeSeconds)} secondary={"since " + new Date(data.uptime.startedAt).toLocaleString()} />
+              <PersonalChartCacheTile snapshot={data.personalChartCache} />
             </div>}
       </section>
       {data ? <p className="text-caption text-text-dim">Runtime · Node {data.runtime.nodeVersion}</p> : null}

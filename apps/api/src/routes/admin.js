@@ -34,6 +34,7 @@
 
 const express = require("express");
 const { buildAdminUsersRouter } = require("./adminUsers");
+const { readPersonalChartCache } = require("../util/adminCacheHealth");
 const { buildAdminOpsRouter, requireKnownUser } = require("./adminOps");
 const { analyticsRange } = require("../services/analytics");
 const { buildAdminGlobalTrendsRouter } = require("./adminGlobalTrends");
@@ -50,6 +51,7 @@ const {
  *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   adminAudit?: import("../services/adminAudit").AdminAuditService,
  *   pairings?: import("../services/devicePairings").DevicePairingsService,
+ *   userCache?: import("../middleware/userCache").UserCache,
  *   replayArchiveEnabled?: boolean,
  *   protectedAdminIds?: string[],
  *   protectedAdminEmails?: string[],
@@ -492,17 +494,17 @@ function buildAdminRouter(deps) {
   });
 
   router.get("/admin/health", async (_req, res, next) => {
+    res.set("Cache-Control", "private, no-store");
     try {
-      res.json(
-        await deps.admin.health({
-          gameDetailsStoreKind: deps.gameDetailsStoreKind,
-          replayFilesStoreKind: deps.replayFilesStoreKind,
-          replayFilesBrowserUpload: browserUploadStatusOf(
-            deps.browserUploadCors,
-            { maxAgeMs: ADMIN_STATUS_MAX_AGE_MS },
-          ),
-        }),
-      );
+      const health = await deps.admin.health({
+        gameDetailsStoreKind: deps.gameDetailsStoreKind,
+        replayFilesStoreKind: deps.replayFilesStoreKind,
+        replayFilesBrowserUpload: browserUploadStatusOf(
+          deps.browserUploadCors,
+          { maxAgeMs: ADMIN_STATUS_MAX_AGE_MS },
+        ),
+      });
+      res.json({ ...health, personalChartCache: readPersonalChartCache(deps.userCache) });
     } catch (err) {
       next(err);
     }

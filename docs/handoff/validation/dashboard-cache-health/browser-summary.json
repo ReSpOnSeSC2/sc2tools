@@ -1,0 +1,50 @@
+[
+  {
+    "project": "mobile-360",
+    "status": "passed",
+    "aa": 12,
+    "specimens": 12,
+    "errors": [],
+    "unexpectedRequests": []
+  },
+  {
+    "project": "mobile-360",
+    "status": "passed",
+    "aa": 12,
+    "specimens": 12,
+    "errors": [],
+    "unexpectedRequests": []
+  },
+  {
+    "project": "tablet-768",
+    "status": "passed",
+    "aa": 6,
+    "specimens": 6,
+    "errors": [],
+    "unexpectedRequests": []
+  },
+  {
+    "project": "tablet-768",
+    "status": "passed",
+    "aa": 6,
+    "specimens": 6,
+    "errors": [],
+    "unexpectedRequests": []
+  },
+  {
+    "project": "desktop-1280",
+    "status": "passed",
+    "aa": 6,
+    "specimens": 6,
+    "errors": [],
+    "unexpectedRequests": []
+  },
+  {
+    "project": "desktop-1280",
+    "status": "passed",
+    "aa": 6,
+    "specimens": 6,
+    "errors": [],
+    "unexpectedRequests": []
+  }
+]
