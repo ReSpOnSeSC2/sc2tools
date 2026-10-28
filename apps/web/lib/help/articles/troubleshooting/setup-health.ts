@@ -2,7 +2,7 @@ import type { HelpArticle } from "@/lib/help/types";
 
 const article: HelpArticle = {
   slug: "setup-health", title: "Check your setup", summary: "Understand the checks on your Account tab and recover one source at a time.", category: "troubleshooting", audience: "player", signedInOnly: true,
-  keywords: ["setup", "health", "profile", "online", "offline", "update", "diagnostics", "archive", "checklist"], updated: "2026-10-23",
+  keywords: ["setup", "health", "profile", "online", "offline", "update", "diagnostics", "archive", "checklist"], updated: "2026-10-28",
   body: [
     { type: "paragraph", text: "Open [Settings → Foundation](/settings?tab=foundation) for Setup health. Green checks mean that source reports a working setup. Amber rows need attention; grey rows are optional or still waiting for information. A failed check offers Retry without hiding the other checks." },
     { type: "steps", items: [
@@ -13,6 +13,7 @@ const article: HelpArticle = {
       "**Overlay:** A previously seen, active overlay counts as configured. Streaming is optional; this row is hidden when your setup goals exclude it.",
       "**Replay archive:** Follow the warning's action if older games are missing their original replay files. A new check may appear as the service learns to diagnose more problems.",
     ] },
+    { type: "paragraph", text: "Games synced and diagnostics use this account's saved history. History wipes and restores update the count. A positive count can have no latest-game time when the saved games have no game dates; that does not mean the account has no games." },
     { type: "paragraph", text: "Use **Copy user ID** to copy your complete cloud identifier. **Copy diagnostics** includes that ID, app version and status, browser/OS, viewport, game count, warning IDs, site version and check time. It leaves out emails, overlay URLs and tokens. If clipboard access is blocked, select and copy the displayed text yourself." },
     { type: "paragraph", text: "The dashboard checklist shows your setup progress and lets you pair inline. Dismiss offers Undo for five seconds. To bring it back later, open [Settings → Misc](/settings?tab=misc) and choose **Show the setup checklist again**. A completed setup may already have no checklist to show." },
   ], related: ["getting-started", "pairing-troubleshooting", "importing-replay-history", "report-a-problem"],

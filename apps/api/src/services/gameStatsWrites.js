@@ -1,6 +1,7 @@
 "use strict";
 
 const { maintainGameStats, immutableSelection, PROTOCOL_VERSION } = require("./gameStatsMaintenance");
+const { statsReadFloorFor } = require("./gameStatsReadFloor");
 
 const MAX_ACTIVE = 8;
 const DELETE_BATCH = 100;
@@ -9,7 +10,7 @@ const DELETE_BATCH = 100;
 /** @type {WeakMap<object,GameStatsWrites>} */
 const instances = new WeakMap();
 
-/** Eager writer maintenance only: no response cache or /me read activation.
+/** Eager writer maintenance; request-local readers use separate strict proof.
  * A real owner write conflicts with fence acquisition/erasure on that row.
  * Every games command in work must receive the supplied session. */
 class GameStatsWrites {
@@ -105,7 +106,13 @@ class GameStatsWrites {
       return work(undefined);
     }
     if (!this.db.client || owner.id === null) throw failure("game_stats_transactions_required");
-    const session = this.db.client.startSession();
+    const prepared = statsReadFloorFor(this.db, this.logger)();
+    const floor = prepared instanceof Promise ? await prepared : prepared;
+    // The barrier may outlive HTTP closure or shutdown. Never dispatch new
+    // transaction work after stop; the charged task owns the barrier lifetime.
+    if (this.stopped) throw failure("game_stats_writer_stopping");
+    const session = this.db.client.startSession({ causalConsistency: true });
+    session.advanceOperationTime(floor);
     try {
       return /** @type {T} */ (await session.withTransaction(() => maintainGameStats(this.db, owner,
         this.authority(owner, options), /** @type {Readonly<Record<string,any>>} */ (selection), work, session),

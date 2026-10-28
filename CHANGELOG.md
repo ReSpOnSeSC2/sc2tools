@@ -13,6 +13,7 @@ corresponding GitHub Release.
 
 ### History write consistency
 
+- Reuse verified, maintained game totals and latest-game values in account setup and diagnostics. Older or unsupported records keep the existing history queries, and account preferences share the same account read.
 - Maintain game totals and the exact latest-game value during replay ingest, visibility changes, history wipes and restores. Dashboard readers retain their existing behavior while the writer rollout is verified.
 - Keep replay membership changes and statistics invalidation in the same database transaction. History wipes and restores retire older in-flight upload batches, including after their request lease expires. This prepares future dashboard work; statistics caching remains off and dashboard reads are unchanged.
 

@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use strict";
 const { ObjectId } = require("mongodb");
-const { immutableSelection, qualifiedTotal, PROTOCOL_VERSION, MAX_STATS_BYTES } = require("../src/services/gameStatsMaintenance");
+const { immutableSelection, qualifiedTotal, PROTOCOL_VERSION, MAINTENANCE_VERSION, MAX_STATS_BYTES } = require("../src/services/gameStatsMaintenance");
 const revision = "11111111-2222-4333-8444-555555555555";
 const epoch = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const owner = { userId: "owner", id: new ObjectId(), epoch, compatibility: false };
@@ -9,7 +9,7 @@ function before() {
   return { _id: owner.id, gameStatsMutationEpoch: epoch, gameStatsProtocolVersion: PROTOCOL_VERSION,
     gameStatsWriterStatus: "transactional", gameStatsRevision: revision,
     gameStats: { total: 1, latest: null },
-    gameStatsMaintenance: { version: 1, ownerId: owner.id, revision, epoch, status: "ready" } };
+    gameStatsMaintenance: { version: MAINTENANCE_VERSION, ownerId: owner.id, revision, epoch, status: "ready" } };
 }
 
 test("selection is copied, BSON-safe, bounded and not a caller-controlled query", () => {

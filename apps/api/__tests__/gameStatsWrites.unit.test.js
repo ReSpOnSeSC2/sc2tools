@@ -1,6 +1,13 @@
 // @ts-nocheck
 "use strict";
+const { Timestamp } = require("mongodb");
+// These existing transaction/owner fault cases isolate the new read-only
+// readiness prerequisite. Its real lifecycle and Mongo path have separate tests.
+jest.mock("../src/services/gameStatsReadFloor", () => ({
+  statsReadFloorFor: () => () => new (require("mongodb").Timestamp)({ t: 10, i: 7 }),
+}));
 const { GameStatsWrites, MAX_ACTIVE, assertGameStatsContext, PROTOCOL_VERSION } = require("../src/services/gameStatsWrites");
+const { MAINTENANCE_VERSION } = require("../src/services/gameStatsMaintenance");
 
 const originalEnvironment = process.env.NODE_ENV;
 afterEach(() => { process.env.NODE_ENV = originalEnvironment; jest.restoreAllMocks(); });
@@ -9,7 +16,7 @@ const selected = { selection: { ids: [] } };
 
 function harness() {
   const events = [];
-  const session = { withTransaction: jest.fn(async callback => callback(session)), endSession: jest.fn(async () => {}) };
+  const session = { advanceOperationTime: jest.fn(), withTransaction: jest.fn(async callback => callback(session)), endSession: jest.fn(async () => {}) };
   const users = { findOne: jest.fn(async () => ({ _id: owner.id })), findOneAndUpdate: jest.fn(async () => { events.push("owner"); return { _id: owner.id }; }), updateOne: jest.fn(async () => ({ matchedCount: 1 })) };
   const cursor = { sort: jest.fn().mockReturnThis(), limit: jest.fn().mockReturnThis(), toArray: jest.fn(async () => []) };
   const games = { countDocuments: jest.fn(async () => 0), find: jest.fn(() => cursor) };
@@ -56,7 +63,8 @@ test("owner invalidation precedes work in the same session and pins exact owner 
   expect(h.users.findOneAndUpdate).toHaveBeenCalledWith({ userId: "owner", _id: "original-instance", gameStatsMutationEpoch: { $exists: false }, "_gdprMutation.id": "exclusive-operation" },
     expect.objectContaining({ $set: expect.objectContaining({ gameStatsProtocolVersion: PROTOCOL_VERSION, gameStatsRevision: expect.any(String), gameStatsWriterStatus: "transactional" }), $unset: { gameStats: "", gameStatsMaintenance: "" } }), expect.objectContaining({ session: h.session, upsert: false, returnDocument: "before", includeResultMetadata: false }));
   expect(h.users.updateOne).toHaveBeenCalledWith(expect.objectContaining({ gameStatsProtocolVersion: PROTOCOL_VERSION, gameStatsRevision: expect.any(String) }),
-    expect.objectContaining({ $set: expect.objectContaining({ gameStats: { total: 0, latest: null }, gameStatsMaintenance: expect.objectContaining({ version: 1, status: "ready" }) }) }), { session: h.session, upsert: false });
+    expect.objectContaining({ $set: expect.objectContaining({ gameStats: { total: 0, latest: null }, gameStatsMaintenance: expect.objectContaining({ version: MAINTENANCE_VERSION, status: "ready" }) }) }), { session: h.session, upsert: false });
+  expect(h.session.advanceOperationTime).toHaveBeenCalledWith(new Timestamp({ t: 10, i: 7 }));
   expect(h.session.withTransaction.mock.calls[0][1]).toMatchObject({ timeoutMS: 10000, maxCommitTimeMS: 5000, readConcern: { level: "snapshot" }, writeConcern: { w: "majority", j: true } });
   expect(h.session.endSession).toHaveBeenCalledTimes(1);
 });
