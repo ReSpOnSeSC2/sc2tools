@@ -1,0 +1,357 @@
+{
+  "head": "e0c47b9c4a07da30c2a9222ee6c8d0042000de12",
+  "BUILD_ID": "QMJKSmPlv5oh8_4wduapJ",
+  "fullSource": {
+    "files": 6901,
+    "snapshot": {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-build-01/source-snapshots/build-inputs-01.json",
+      "bytes": 2182968,
+      "sha256": "56d814170ddbfca1aa9248245e1fd92dd895e0b8a47af4a1e7f257f75be9b9fb"
+    },
+    "guards": [
+      {
+        "phase": "prebuild",
+        "checkedAtUtc": "2026-10-28T15:21:16.436Z",
+        "sourceInputs": 6901,
+        "sourceSnapshotSha256": "56d814170ddbfca1aa9248245e1fd92dd895e0b8a47af4a1e7f257f75be9b9fb",
+        "allMatch": true,
+        "filesAddedOrRemoved": false
+      },
+      {
+        "phase": "postbuild",
+        "checkedAtUtc": "2026-10-28T15:23:02.979Z",
+        "sourceInputs": 6901,
+        "sourceSnapshotSha256": "56d814170ddbfca1aa9248245e1fd92dd895e0b8a47af4a1e7f257f75be9b9fb",
+        "allMatch": true,
+        "filesAddedOrRemoved": false
+      },
+      {
+        "phase": "postbrowser",
+        "checkedAtUtc": "2026-10-28T15:39:40.730Z",
+        "sourceInputs": 6901,
+        "sourceSnapshotSha256": "56d814170ddbfca1aa9248245e1fd92dd895e0b8a47af4a1e7f257f75be9b9fb",
+        "allMatch": true,
+        "filesAddedOrRemoved": false
+      }
+    ],
+    "qualification": "All three historical 6901-input guards passed before the later Unit delivery-document adoption. Fresh review finds exactly two changed existing documentation paths plus the new sanitized production receipt; every other build-admitted input remains byte-exact.",
+    "currentExistingDeltas": [
+      {
+        "file": "docs/handoff/unit-profile-history-checkpoint.md",
+        "buildSha256": "9b6d822744d1b74412e0f27765bc0df767d99c3c70de7bedc546c8e02338e570",
+        "currentSha256": "aacd6ecb9b0ad524bf7d1980194655d3ef30205f7bd1a2a61d349b964eddc217"
+      },
+      {
+        "file": "docs/handoff/validation/unit-profile-history/README.md",
+        "buildSha256": "1eb229b932490ff6cf7cc79f3c65f4c785cca338e8f565394aa7549a670d248f",
+        "currentSha256": "80bc6cd2e9e7e3067c1a2ccb70f238f3af6c300d997e9fa02c149aee216ed429"
+      }
+    ],
+    "currentNewDoc": {
+      "file": "docs/handoff/validation/unit-profile-history/production-f213868.json",
+      "sha256": "b441947feb1efacbc7c828245d6f00cb2d04752c815b0632cce63369adb464ee",
+      "bytes": 3210,
+      "buildAdmission": "new documentation-only receipt"
+    }
+  },
+  "api": {
+    "tests": 176,
+    "suites": 8,
+    "skips": 0,
+    "command": {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-api-01.json",
+      "bytes": 8398,
+      "sha256": "d21f5281a22098dd95bdeb708cce26ccdcd9e611043c85d66725cda0788d2479"
+    },
+    "rawReport": {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-api-01-jest.json",
+      "bytes": 65503,
+      "sha256": "d228d6611c947afb1d5167f64d2493d9a66c6ba77f28f12e51cbc7511feb17f2"
+    },
+    "actualSuites": [
+      {
+        "file": "apps/api/__tests__/arcadeUnitStatsReadiness.test.js",
+        "status": "passed",
+        "passed": 3,
+        "skipped": 0
+      },
+      {
+        "file": "apps/api/__tests__/opsConsole.test.js",
+        "status": "passed",
+        "passed": 18,
+        "skipped": 0
+      },
+      {
+        "file": "apps/api/__tests__/routes.integration.test.js",
+        "status": "passed",
+        "passed": 49,
+        "skipped": 0
+      },
+      {
+        "file": "apps/api/__tests__/deviceCredentialWrites.integration.test.js",
+        "status": "passed",
+        "passed": 17,
+        "skipped": 0
+      },
+      {
+        "file": "apps/api/__tests__/publicReplayRetirement.test.js",
+        "status": "passed",
+        "passed": 4,
+        "skipped": 0
+      },
+      {
+        "file": "apps/api/__tests__/deviceCredentialWrites.test.js",
+        "status": "passed",
+        "passed": 25,
+        "skipped": 0
+      },
+      {
+        "file": "apps/api/__tests__/replayFiles.test.js",
+        "status": "passed",
+        "passed": 23,
+        "skipped": 0
+      },
+      {
+        "file": "apps/api/__tests__/backupStatus.test.js",
+        "status": "passed",
+        "passed": 37,
+        "skipped": 0
+      }
+    ],
+    "commandPinInventory": 47,
+    "allRecordedPinsCurrentlyMatch": true,
+    "scope": "Actual eight-suite run includes coordination, replay-storage, backup/job, retirement/routes and Unit readiness; not a claim to repeat the earlier full affected320-case run at this head."
+  },
+  "assets": {
+    "canonicalInputs": 40,
+    "canonicalNormalization": "Read-only existing readBundleFiles normalization; raw CRLF is not compared to normalized bundle hashes.",
+    "activeAssets": 7,
+    "strictSampleGames": 4,
+    "generation": false,
+    "downloads": false,
+    "pruning": false,
+    "currentPinsMatch": true
+  },
+  "browser": {
+    "cases": 8,
+    "fullDefaultAxeScans": 40,
+    "violations": 0,
+    "exclusions": 0,
+    "geometrySpecimens": 40,
+    "LOCALcaptures": 24,
+    "actualProductInputs": 177,
+    "prodCssFiles": 5,
+    "fonts": 3,
+    "buildID": "QMJKSmPlv5oh8_4wduapJ",
+    "rawReport": {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/browser-02.json",
+      "bytes": 3059828,
+      "sha256": "68ac630314e546d644635c5178e3b0dff0cbd0bac28143b4f4234d339599f811"
+    },
+    "binding": {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/input-binding-02.json",
+      "bytes": 41531,
+      "sha256": "6d6ede3c9f2385551beecb415a38600943dde381db2a982b96ecd318d811039c"
+    },
+    "casesSummary": [
+      {
+        "width": 320,
+        "theme": "light",
+        "states": [
+          "loading",
+          "error",
+          "ready",
+          "successful24gameControl",
+          "unrelated"
+        ],
+        "geometrySpecimens": 5,
+        "quizAnswers": 0,
+        "accountWrites": 0
+      },
+      {
+        "width": 320,
+        "theme": "dark",
+        "states": [
+          "loading",
+          "error",
+          "ready",
+          "successful24gameControl",
+          "unrelated"
+        ],
+        "geometrySpecimens": 5,
+        "quizAnswers": 0,
+        "accountWrites": 0
+      },
+      {
+        "width": 390,
+        "theme": "light",
+        "states": [
+          "loading",
+          "error",
+          "ready",
+          "successful24gameControl",
+          "unrelated"
+        ],
+        "geometrySpecimens": 5,
+        "quizAnswers": 0,
+        "accountWrites": 0
+      },
+      {
+        "width": 390,
+        "theme": "dark",
+        "states": [
+          "loading",
+          "error",
+          "ready",
+          "successful24gameControl",
+          "unrelated"
+        ],
+        "geometrySpecimens": 5,
+        "quizAnswers": 0,
+        "accountWrites": 0
+      },
+      {
+        "width": 768,
+        "theme": "light",
+        "states": [
+          "loading",
+          "error",
+          "ready",
+          "successful24gameControl",
+          "unrelated"
+        ],
+        "geometrySpecimens": 5,
+        "quizAnswers": 0,
+        "accountWrites": 0
+      },
+      {
+        "width": 768,
+        "theme": "dark",
+        "states": [
+          "loading",
+          "error",
+          "ready",
+          "successful24gameControl",
+          "unrelated"
+        ],
+        "geometrySpecimens": 5,
+        "quizAnswers": 0,
+        "accountWrites": 0
+      },
+      {
+        "width": 1280,
+        "theme": "light",
+        "states": [
+          "loading",
+          "error",
+          "ready",
+          "successful24gameControl",
+          "unrelated"
+        ],
+        "geometrySpecimens": 5,
+        "quizAnswers": 0,
+        "accountWrites": 0
+      },
+      {
+        "width": 1280,
+        "theme": "dark",
+        "states": [
+          "loading",
+          "error",
+          "ready",
+          "successful24gameControl",
+          "unrelated"
+        ],
+        "geometrySpecimens": 5,
+        "quizAnswers": 0,
+        "accountWrites": 0
+      }
+    ],
+    "boundaries": "Actual ModeRunner, useArcadeData, useApi/SWR, corpus pagination, custom catalog, session-policy hook, unit generator/renderer/shell and completed productionCSS/localWOFF2. Explicit synthetic auth/dailyseed/account-write/HTTP and local Next primitives only. Observed generator wrapper counts invocations; unrelated mode is an explicit simple specimen. No provider, actual account, real routing or live acceptance proof.",
+    "priorSpecByteIdentical": true,
+    "cleanupOwned": 0,
+    "limits": [
+      "Synthetic13,000-game corpus and unit counts exercise actual hooks/rendering; no real account, network provider, actual Next router or live acceptance is claimed.",
+      "ProductionCSS and localWOFF2 are exact completed-build inputs. The fixture compiles source components; it is not the shipped Next route or a network-latency benchmark.",
+      "Account-write sinks throw and all transport is GET-only local fulfillment. Native Tab/Enter operates only Retry, never an answer.",
+      "Original prechange production error/eventual question remain separate diagnosis evidence; no speedup, cache activation or deployed fix is inferred.",
+      "Combined Auth build postbrowser guards pass6901 source inputs and40/7/4 assets/sample. Exact-head CI/deploy and applicable live Auth acceptance remain parent release steps; original Unit production acceptance is separate."
+    ]
+  },
+  "unitDelivery": {
+    "sourceReceipt": {
+      "file": "C:\\SC2TOOLS\\.worktrees\\guide-randomizer-completion\\docs\\handoff\\validation\\unit-profile-history\\production-f213868.json",
+      "bytes": 3210,
+      "sha256": "b441947feb1efacbc7c828245d6f00cb2d04752c815b0632cce63369adb464ee"
+    },
+    "source": "f2138684da9a57981d3c980efb8f5482b228d2e4",
+    "qualification": "Signed-in desktop production acceptance belongs to delivered Unit PR809. It is separate from local combined Auth acceptance; ineffective phone override and absence of live network instrumentation remain explicit."
+  },
+  "ci": {
+    "historicalOnly": {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-55cd362-exact-success.json",
+      "bytes": 2643,
+      "sha256": "b64ca9acb1f3a6037e7180f348c9df43de64c7530133d1f3649b02fa4fa3e247"
+    },
+    "qualification": "CI55 source success predates e0 plus these documentation updates. New exact final-head required checks, actual Auth deployment, relevant live credential behavior and separately qualified credential-writer cutover remain pending."
+  },
+  "failures": {
+    "browserLaunch": "All8 sandbox run01 failures occurred at browser launch before product test bodies; cached Chromium exited0xC0000022. Host run02 uses identical spec/fixture and fresh outputs.",
+    "files": [
+      {
+        "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/browser-01.json",
+        "bytes": 125664,
+        "sha256": "444d785aed6b62fe81f1af754d1e6a61f632c4af097e8131c75c47f55e095a9d"
+      },
+      {
+        "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/browser-01.log",
+        "bytes": 46678,
+        "sha256": "40c58a59e297dbaec025ee40fe7afd4941c1c460421f9b3bef4945b41b9e742b"
+      },
+      {
+        "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/browser-command-01.json",
+        "bytes": 744,
+        "sha256": "cf7601daa433ea80d9f0997c2a4cad51e5b8ff44fba627bf2478f97ae77e299a"
+      },
+      {
+        "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/cleanup-01.json",
+        "bytes": 517,
+        "sha256": "4a71b9e91c96576ca2bcb16fb9d9f8a2fce4d3a7bec7713fec16a301ca60d9d5"
+      },
+      {
+        "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/sandbox-cim-failure-01.json",
+        "bytes": 557,
+        "sha256": "36b406249064f00310f5b2c98810935ba092b2e8731926a4badf4d1dc81407bc"
+      },
+      {
+        "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/postbrowser-admission-failure-01.json",
+        "bytes": 697,
+        "sha256": "009d7bdf71d2bcc9e1a929623dc60ccd6c046799156fe16108d9845cf8a9546b"
+      }
+    ],
+    "cleanupUtcCorrection": {
+      "files": [
+        {
+          "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/cleanup-02.json",
+          "bytes": 758,
+          "sha256": "fd73ae32af7e42237764e80bee9325623e0b22ffeac73f1ae9b0ffc4dded1b43"
+        },
+        {
+          "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/cleanup-03-final.json",
+          "bytes": 2164,
+          "sha256": "43514a8db26a2fef1a61df35210d4684add827a887fab1cbbb751546d2b8c1f5"
+        }
+      ],
+      "reason": "Final cleanup03 parsed the Z timestamp as local DateTime before comparison with UTC and conservatively flagged unrelated installed Chrome. Exact IDs were inspected, all were outside the cached Chromium executable/actual run interval, and none were stopped. Cleanup04 uses explicit UTC bounds and confirms no owned process/listener remains."
+    },
+    "priorFinalization": {
+      "file": {
+        "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-browser-01/VERIFIED-02.json",
+        "bytes": 20289,
+        "sha256": "e4c577a218b09ad6ffbaf0b1ca3d70bfb848eb712b2df9ab432f5d78be5d6151"
+      },
+      "qualification": "Historical browser/report/source binding remains valid. This final receipt supersedes its cleanup qualification with the later explicit-UTC/all-guard final check."
+    },
+    "qualification": "Original sandbox launch, initial asset/CIM guard failures, wrong-timezone cleanup metadata, historical CI timeout/fake collection repair, type/lint failures and Mongo shutdown warnings remain unchanged in cache. No assertion, skip or cap was weakened."
+  }
+}

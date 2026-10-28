@@ -462,6 +462,10 @@ async function main() {
     await /** @type {any} */ (services).dataRepairs.drain();
     await guideVideosJob.stop();
     await /** @type {any} */ (services).customBuilds.stopReclassifications();
+    // Erasure may still need membership writes after HTTP close. Drain its
+    // admitted credential lifetime before retiring the dependent game writer.
+    await /** @type {import('./services/devicePairings').DevicePairingsService} */ (services.pairings).credentialWrites.stopAndDrain();
+    logger.info({ protocolVersion: 1 }, "device_credential_writers_drained");
     // Closed HTTP sockets do not prove their handlers stopped. Retire future
     // game dispatch and drain actual admitted membership transactions before
     // closing Mongo; a held payload write cannot start a late games command.

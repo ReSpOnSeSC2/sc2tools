@@ -1,0 +1,105 @@
+{
+  "buildAndApi": {
+    "checkedAt": "2026-10-28T15:37:08.9892223Z",
+    "trackedPids": [
+      34404,
+      46724,
+      34188,
+      10796,
+      50840,
+      55096,
+      29572
+    ],
+    "remainingOwned": [],
+    "stoppedProcesses": [],
+    "scope": "Recorded roots/direct children, project Node and Mongo candidates in bounded verification interval; no broad kills."
+  },
+  "browser": {
+    "checkedAtUtc": "2026-10-28T15:43:50.5347311Z",
+    "actualRunStartUtc": "2026-10-28T15:37:05.0000000Z",
+    "recordedOwnedPids": [
+      39108,
+      34668,
+      19228,
+      19228,
+      38628,
+      38628,
+      39916,
+      39916,
+      38160,
+      38160,
+      14468,
+      14468,
+      4872,
+      4872,
+      54232,
+      54232,
+      14560,
+      14560,
+      49372,
+      38004,
+      41324
+    ],
+    "ownedProcessesRemaining": [],
+    "ownedListenersRemaining": [],
+    "browserCloseAssertedByActualAfterAll": true,
+    "browserExitCode": 0,
+    "assetGuardExitCode": 0,
+    "qualification": "Final check uses explicit DateTimeOffset.UtcDateTime bounds, recorded failed-launch/host/asset PIDs, exact packet markers and only qualified cached Chromium or esbuild candidates. No unobserved historical descendant PID is invented.",
+    "previousMetadataFailure": "cleanup-03-final.json retained; all flagged installed-Chrome candidates inspected and excluded, not killed",
+    "excludedUnrelatedCandidates": [
+      {
+        "pid": 11348,
+        "qualifiedAsOwned": false,
+        "reason": "Prior check parsed UTC string into local DateTime before comparing with UTC. Inspected installed Program Files Chrome, outside the qualified cached executable and created before the actual QA interval. No process stopped.",
+        "actualCreatedAtUtc": "2026-10-28T12:07:27.1641720Z"
+      },
+      {
+        "pid": 45920,
+        "qualifiedAsOwned": false,
+        "reason": "Prior check parsed UTC string into local DateTime before comparing with UTC. Inspected installed Program Files Chrome, outside the qualified cached executable and created before the actual QA interval. No process stopped.",
+        "actualCreatedAtUtc": "2026-10-28T12:07:29.4885520Z"
+      },
+      {
+        "pid": 31012,
+        "qualifiedAsOwned": false,
+        "reason": "Prior check parsed UTC string into local DateTime before comparing with UTC. Inspected installed Program Files Chrome, outside the qualified cached executable and created before the actual QA interval. No process stopped.",
+        "actualCreatedAtUtc": "2026-10-28T14:21:28.2764570Z"
+      },
+      {
+        "pid": 36072,
+        "qualifiedAsOwned": false,
+        "reason": "Prior check parsed UTC string into local DateTime before comparing with UTC. Inspected installed Program Files Chrome, outside the qualified cached executable and created before the actual QA interval. No process stopped.",
+        "actualCreatedAtUtc": "2026-10-28T14:26:39.9950290Z"
+      },
+      {
+        "pid": 37912,
+        "qualifiedAsOwned": false,
+        "reason": "Prior check parsed UTC string into local DateTime before comparing with UTC. Inspected installed Program Files Chrome, outside the qualified cached executable and created before the actual QA interval. No process stopped.",
+        "actualCreatedAtUtc": "2026-10-28T15:21:54.8853520Z"
+      },
+      {
+        "pid": 26748,
+        "qualifiedAsOwned": false,
+        "reason": "Prior check parsed UTC string into local DateTime before comparing with UTC. Inspected installed Program Files Chrome, outside the qualified cached executable and created before the actual QA interval. No process stopped.",
+        "actualCreatedAtUtc": "2026-10-28T15:21:55.4726280Z"
+      },
+      {
+        "pid": 45360,
+        "qualifiedAsOwned": false,
+        "reason": "Prior check parsed UTC string into local DateTime before comparing with UTC. Inspected installed Program Files Chrome, outside the qualified cached executable and created before the actual QA interval. No process stopped.",
+        "actualCreatedAtUtc": "2026-10-28T15:36:25.9846410Z"
+      },
+      {
+        "pid": 54368,
+        "qualifiedAsOwned": false,
+        "reason": "Prior check parsed UTC string into local DateTime before comparing with UTC. Inspected installed Program Files Chrome, outside the qualified cached executable and created before the actual QA interval. No process stopped.",
+        "actualCreatedAtUtc": "2026-10-28T15:40:37.6708170Z"
+      }
+    ],
+    "stoppedProcesses": [],
+    "unrelatedProcessesTouched": false,
+    "serverStarted": false
+  },
+  "qualification": "Recorded owned PIDs/listeners and cached executable/time-bound candidates; no unrelated processes stopped. Prior timezone metadata failure retained, corrected using explicit UTC."
+}

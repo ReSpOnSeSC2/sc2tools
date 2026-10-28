@@ -1,6 +1,7 @@
 "use strict";
 const { gameWrite } = require("../util/userRevision");
 const { gameStatsWritesFor } = require("./gameStatsWrites");
+const { deviceCredentialWritesFor } = require("./deviceCredentialWrites");
 
 const { randomUUID } = require("crypto");
 const { stampVersion } = require("../db/schemaVersioning");
@@ -130,6 +131,7 @@ class GdprService {
    *   onGamesChanged?:(userId:string)=>void,
    *   userRevision?: import("../util/userRevision").UserRevision,
    *   beginDeviceMutation?:(userId:string)=>(()=>void),
+   *   credentialWrites?: import('./deviceCredentialWrites').DeviceCredentialWrites,
    * }} [opts]
    *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
    *   chain a pulse-character-id backfill so the admin "Rebuild
@@ -141,6 +143,7 @@ class GdprService {
     this.userRevision = opts.userRevision || null;
     this.gameStatsWrites = gameStatsWritesFor(db, opts.logger);
     this.beginDeviceMutation = opts.beginDeviceMutation || null;
+    this.credentialWrites = opts.credentialWrites || (db.deviceTokens ? deviceCredentialWritesFor(db, opts.logger) : null);
     this.db = db;
     /** @type {import("./userBackups").UserBackupsService|null} */
     this.backups = null;
@@ -377,6 +380,17 @@ class GdprService {
    * @returns {Promise<Record<string, number>>}
    */
   async deleteAll(userId, opts = {}) {
+    return this.credentialWrites
+      ? this.credentialWrites.run(userId, "erase", () => this._deleteAll(userId, opts))
+      : this._deleteAll(userId, opts);
+  }
+
+  /** Credential coordination encloses the entire original erasure, including
+   * unknown fence acquisition/purge/owner removal outcomes.
+   * @param {string} userId
+   * @param {{clerkUserId?:string, identityAlreadyDeleted?:boolean}} opts
+   * @returns {Promise<Record<string, number>>} */
+  async _deleteAll(userId, opts) {
     /** @type {Record<string, number>} */
     const counts = {};
 
@@ -432,6 +446,7 @@ class GdprService {
         }
         return this.gameStatsWrites.deleteMany(gdprFence.owner, { userId }, { fenceId: gdprFence.id, assert: gdprFence.assert });
       }, () => true, true) : await coll.deleteMany({ userId });
+      if (key === "deviceTokens" && res.acknowledged === false) throw new Error("device_credential_write_unacknowledged");
       counts[key] = res.deletedCount || 0;
     }
 
@@ -548,6 +563,7 @@ class GdprService {
     try {
       userRes = await this.db.users.deleteOne({ userId, ...(gdprFence.owner ? { _id: gdprFence.owner.id } : {}), "_gdprMutation.id": gdprFence.id });
     } finally { this.userRevision?.forget(userId); }
+    if (userRes.acknowledged === false) throw new Error("device_credential_write_unacknowledged");
     if (!userRes.deletedCount && await this.db.users.findOne({ userId }, { projection: { _id: 1 } })) throw new Error("gdpr_operation_lease_lost");
     counts.users = userRes.deletedCount || 0;
     this.io?.in(`user:${userId}`).disconnectSockets(true);

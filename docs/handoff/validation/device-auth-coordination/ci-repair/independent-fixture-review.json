@@ -1,0 +1,30 @@
+{
+  "reviewedAtUtc": "2026-10-28T13:52:35.624Z",
+  "reviewer": "/root/roadmap_audit",
+  "mode": "independent-source-only-no-runtime",
+  "baseHead": "df88f0ce29901276fe2f9fa1a8df1810b317bc3f",
+  "status": "clear-for-root-combined-repair-commit-and-required-ci",
+  "pins": [
+    {
+      "file": "apps/api/__tests__/replayFiles.test.js",
+      "sha256": "aa6edf98acb7b18a59d95c10aaa102598e4feb1d2c7227e8b1fc507b7843abc3"
+    },
+    {
+      "file": ".github/workflows/api-ci.yml",
+      "sha256": "d37def230229563a31ed14f27d3a4e2a22a5bd2d7eb4d99857a4b901a59c9464"
+    }
+  ],
+  "originalExpectCallExpressions": 220,
+  "currentExpectCallExpressions": 226,
+  "missingOriginalExpectExpressions": [],
+  "checks": [
+    "Default shared deviceCredentialWritesFor factory executes actual Mongo jobLocks authority. R2/game/user fixtures remain existing fakes; only monotonic wait is virtual.",
+    "Every original complete expect-call expression remains, including range deletion, fail-closed R2 unavailable, double prefix purge and validated restore. New assertions cover uncertain erase, both writing phases and cleared pending state.",
+    "Actual Mongo7.0.14 setup/collection cleanup/client/server teardown are bounded fixture lifecycle; no coordinator bypass, production auth/cache/provider change or new skip.",
+    "Workflow semantics differ only in total API job capacity15→25minutes; case deadlines, assertions, in-band command, retries, dependency/cache/install settings and path triggers unchanged."
+  ],
+  "limits": [
+    "This source review does not itself rerun65cases or independently fetch CI timing; parent owns the retained active-progress diagnosis and author runtime receipt.",
+    "No production cutover, cache reuse activation or actual shutdown_complete claim."
+  ]
+}

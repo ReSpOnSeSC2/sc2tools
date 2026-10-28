@@ -1,0 +1,32 @@
+{
+  "checkedAt": "2026-10-28T11:36:18.472Z",
+  "file": "C:\\SC2TOOLS\\.worktrees\\guide-randomizer-completion\\apps\\api\\src\\services\\deviceCredentialWrites.js",
+  "publicMethods": [
+    "prepare",
+    "ownerHash",
+    "begin",
+    "complete",
+    "uncertain",
+    "run",
+    "stopAndDrain"
+  ],
+  "publicMethodCount": 7,
+  "classLines": 166,
+  "fileLines": 237,
+  "limits": {
+    "publicMethods": 7,
+    "classLines": 200,
+    "fileLines": 800,
+    "complexity": 10,
+    "functionLines": 60
+  },
+  "lint": [
+    {
+      "filePath": "C:\\SC2TOOLS\\.worktrees\\guide-randomizer-completion\\apps\\api\\src\\services\\deviceCredentialWrites.js",
+      "errorCount": 0,
+      "warningCount": 0,
+      "messages": []
+    }
+  ],
+  "clear": true
+}

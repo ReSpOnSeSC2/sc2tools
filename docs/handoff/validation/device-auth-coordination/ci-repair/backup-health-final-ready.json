@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 1,
+  "preparedAtUtc": "2026-10-28T13:51:40.966Z",
+  "sourceRoot": "C:\\SC2TOOLS\\.worktrees\\guide-randomizer-completion",
+  "sourceHead": "df88f0ce29901276fe2f9fa1a8df1810b317bc3f",
+  "status": "locally-verified-ready-for-root-checkpoint-and-exact-head-ci",
+  "ownedSource": [
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\guide-randomizer-completion/apps/api/src/jobs/backupHealthJob.js",
+      "bytes": 4250,
+      "sha256": "da865fbcef7c4dd4d0a71c8ff2ad1d0a8f22e9a72b63e46ea5e333477961d379",
+      "relative": "apps/api/src/jobs/backupHealthJob.js"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\guide-randomizer-completion/apps/api/__tests__/backupStatus.test.js",
+      "bytes": 16719,
+      "sha256": "78792039389b6e705429db60b96bcc260b255b4950b08799fe14552723454689",
+      "relative": "apps/api/__tests__/backupStatus.test.js"
+    }
+  ],
+  "sourcePinQualification": "Post-run exact readback; final test-registration refactor preceded focused02/types02/lint02. No product source changed since the one-line receiver fix. Initial source-ready01 belongs to prior test layout and is retained.",
+  "preimages": [
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/backupHealthJob.before.js",
+      "bytes": 4249,
+      "sha256": "2934486d0062eff583cd9cd57d194ac37c99c10ba9cc28e186d6a1ac9249908f"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/backupStatus.test.before.js",
+      "bytes": 14335,
+      "sha256": "9df69b38968f5d5c3db0b4996e8a324d7d2956f5db6d3eef56248fdb96c16eaf"
+    }
+  ],
+  "results": {
+    "cases": 55,
+    "suites": 2,
+    "failed": 0,
+    "skipped": 0,
+    "workers": 1,
+    "typesExitCode": 0,
+    "strictLintExitCode": 0,
+    "strictLintWarnings": 0,
+    "baselineReproduction": {
+      "exitCode": 1,
+      "expected": true,
+      "error": "TypeError: tick.settled is not a function",
+      "mode": "Immutable preimage compiled with original module resolution, no source swap; no timers, database or Atlas work."
+    },
+    "cachedMongo": {
+      "binary": "C:/Users/jay19/.cache/mongodb-binaries/mongod-x64-win32-7.0.14.exe",
+      "bytes": 63694848,
+      "version": "7.0.14",
+      "downloads": false
+    },
+    "cleanup": {
+      "scope": "Exact backup packet marker, recorded command descendants and cached Mongo test processes started during the sole granted task slot. No broad termination.",
+      "ownedListeners": [],
+      "recordedPids": [
+        41268,
+        23488,
+        48656,
+        44616,
+        38800,
+        12800,
+        29484
+      ],
+      "stoppedProcesses": [],
+      "ownedProcessCandidates": [],
+      "checkedAtUtc": "2026-10-28T13:50:47.3271026Z"
+    }
+  },
+  "newRegressions": [
+    "Observed idle stop without wrapper settlement member",
+    "Observed held success and failure remain pending until one coalesced underlying check finishes; correct actual JobLedger outcome and future timer cancellation"
+  ],
+  "sourceScope": "Only backupHealthJob.js receiver and backupStatus.test.js regressions. No server, generic ledger, auth, fixture, flag/provider or other job change.",
+  "contractLimit": "Stop drains the backup check, preserving existing observed runOnce/failed plumbing. No new global ledger-write barrier or actual production shutdown_complete is claimed.",
+  "retainedFailures": [
+    "Original-source observed stop baseline01/02 reproduce exact TypeError",
+    "Strict lint01: parent describe111lines; resolved by extracting only new test registration with all assertions retained",
+    "Focused01 opsConsole library teardown ECONNRESET warning retained; all55cases passed and final focused02 has no such warning"
+  ],
+  "evidence": [
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/api-types-01-result.json",
+      "bytes": 375,
+      "sha256": "bba693b329e54f4facff439008bd5ce91e1c50fb05d66d34abdade915af72b80"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/api-types-01.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/api-types-02-result.json",
+      "bytes": 375,
+      "sha256": "559203522f40bbfd77167bc0598cfe2dc2e3f5e374020a5250e5b635f1179bc2"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/api-types-02.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/baseline-observed-stop-01-result.json",
+      "bytes": 409,
+      "sha256": "516c282a431617b0cf61aeb87e058532470068d340d2643e25884a8f6211984c"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/baseline-observed-stop-01.log",
+      "bytes": 795,
+      "sha256": "85f075e207c3854a3eed8cb80f5a5752b60e64b690f8201e0490704405edc52f"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/baseline-observed-stop-02-result.json",
+      "bytes": 409,
+      "sha256": "5b9543c3181f2fb0606d2b88b6cf8d207418dc858d2945354ee77378058ec695"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/baseline-observed-stop-02.log",
+      "bytes": 795,
+      "sha256": "85f075e207c3854a3eed8cb80f5a5752b60e64b690f8201e0490704405edc52f"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/focused-api-01-result.json",
+      "bytes": 522,
+      "sha256": "2e008e23f3058d801925810bde15cf93da77e3c58851ce37c5c69f95894837b6"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/focused-api-01.json",
+      "bytes": 20398,
+      "sha256": "bda2689a7546d604f427ea25c5d6db197db9696ad95d6bb714b888dc366dad90"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/focused-api-01.log",
+      "bytes": 1665,
+      "sha256": "3f55d0a8a1a30f35be10b692de804591c66d9ee9a4b8a1b9a579535528b70d88"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/focused-api-02-result.json",
+      "bytes": 522,
+      "sha256": "850830583c2f16686875cf1fdf24d5aebd9caadfaedca2c34fbd94a146d6dab5"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/focused-api-02.json",
+      "bytes": 20398,
+      "sha256": "de7d65dffcaee26f0d24911ba502ee34127caa446b1a65249db85a4afa07fb76"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/focused-api-02.log",
+      "bytes": 1679,
+      "sha256": "3db66a5dd25e9dc2fa34d645023ea2f89afa3f7a23f035013365d397cd640b4c"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/focused-verification-results-02.json",
+      "bytes": 2173,
+      "sha256": "88f39ff98afeb1e85ec2890a01328e575909996e7a3bd7e76765d2e074d0382a"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/owned-cleanup-01.json",
+      "bytes": 420,
+      "sha256": "5e5fb165a54de32020b854664053a3d33a79dd1a53bdd11118a70197a7428089"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/reproduce-observed-stop.cjs",
+      "bytes": 1329,
+      "sha256": "6e3048e5a872de7f813f343d6716d6a5809cb810beb7ab974b848a38559f3d4f"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/run-focused-02.mjs",
+      "bytes": 2556,
+      "sha256": "6ac98e3120f92aaeb4b13781a8d59c7c90c0f90ceb1aa72c9338585959e43913"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/run-focused.mjs",
+      "bytes": 2554,
+      "sha256": "d6848c5afd15caecfebd522427ce9077837b66fe42d6992734c1c557626736ad"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/runner-01-result.json",
+      "bytes": 157,
+      "sha256": "bdc8d703b81568ca1182f5a60576bddba198d55deefc9a714af647ee668566a2"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/runner-01.log",
+      "bytes": 1958,
+      "sha256": "c918596b28a0ff326a2210f9b4e24c7267fbeb765f2ac723dc2ddd395637de05"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/runner-02-result.json",
+      "bytes": 157,
+      "sha256": "cfc38cc3bd614fdb101796f6518d817f48d53f818e93e9a479eaaf7574df5dc8"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/runner-02.log",
+      "bytes": 1481,
+      "sha256": "5ab6b1bc16d8e6c47bb321bafdf55e54e7c86e66f867674760952f65d4ed2a0d"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/source-ready-01.json",
+      "bytes": 1742,
+      "sha256": "ec1e0ad49a7b8fe459a7147174a73c62a2559c4991b2a57911234fbea6538f30"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/strict-owned-lint-01-result.json",
+      "bytes": 410,
+      "sha256": "963d29d95fb36e2ce313b46a051ffc0451ab8d0227c238e1660642c10af8e248"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/strict-owned-lint-01.log",
+      "bytes": 281,
+      "sha256": "d648fd134bb3982d59773ff22c00b99c2cb7b34fdf189f7151c569ca1fe14e45"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/strict-owned-lint-02-result.json",
+      "bytes": 410,
+      "sha256": "acbb8bc28b990ffb0c7c20dd65bf186b0202bfd487282ff17a6466489a5022ea"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/backup-health-shutdown-fix-20261028/strict-owned-lint-02.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "noGitMutations": true,
+  "noRuntimeAfterSlotRelease": true
+}

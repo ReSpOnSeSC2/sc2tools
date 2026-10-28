@@ -13,6 +13,7 @@ const {
   _internals,
 } = require("../src/services/backupStatus");
 const { buildBackupHealthJob } = require("../src/jobs/backupHealthJob");
+const { JobLedger } = require("../src/util/jobLedger");
 
 const HOUR = 60 * 60 * 1000;
 const T0 = new Date("2026-08-11T17:30:00.000Z");
@@ -359,12 +360,73 @@ describe("BackupStatusService.checkAndAlert quiet cases", () => {
   });
 });
 
+function registerObservedShutdownTests(logger) {
+  function observedJob(checkAndAlert) {
+    const insertOne = jest.fn(async () => ({}));
+    const jobLedger = new JobLedger({ db: { jobRuns: { insertOne } } });
+    const job = buildBackupHealthJob({
+      backupStatus: { isConfigured: () => true, checkAndAlert },
+      logger: logger(),
+      jobLedger,
+      firstCheckDelayMs: 1000,
+    });
+    return { job, insertOne };
+  }
+
+  test("observed idle stop does not require a settlement method on the ledger wrapper", async () => {
+    const check = jest.fn(async () => ({ alerted: false, reason: "fresh" }));
+    const { job, insertOne } = observedJob(check);
+    await expect(job.stop()).resolves.toBeUndefined();
+    expect(check).not.toHaveBeenCalled();
+    expect(insertOne).not.toHaveBeenCalled();
+  });
+
+  test.each([false, true])("observed stop drains the single active check and cancels timers (failed=%s)", async (failed) => {
+    jest.useFakeTimers();
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const check = jest.fn(async () => {
+      await gate;
+      if (failed) throw Object.assign(new Error("Atlas unavailable"), { code: "atlas_backup_unavailable" });
+      return { alerted: false, reason: "fresh" };
+    });
+    const { job, insertOne } = observedJob(check);
+    let stopped = false;
+    try {
+      job.start();
+      const running = job.runOnce(), joined = job.runOnce();
+      const stopping = job.stop().then(() => { stopped = true; });
+      await Promise.resolve();
+      expect(stopped).toBe(false);
+      expect(check).toHaveBeenCalledTimes(1);
+      expect(insertOne).not.toHaveBeenCalled();
+      release();
+      await Promise.all([running, joined, stopping]);
+      expect(stopped).toBe(true);
+      expect(insertOne).toHaveBeenCalledTimes(1);
+      expect(insertOne).toHaveBeenCalledWith(expect.objectContaining({
+        job: "backup-health", status: failed ? "error" : "ok",
+        errorCode: failed ? "atlas_backup_unavailable" : null,
+      }));
+      await jest.advanceTimersByTimeAsync(2 * HOUR);
+      expect(check).toHaveBeenCalledTimes(1);
+    } finally {
+      release();
+      await job.stop();
+      jest.useRealTimers();
+    }
+  });
+
+}
+
 describe("buildBackupHealthJob", () => {
   function logger() {
     const log = { info: jest.fn(), warn: jest.fn() };
     log.child = () => log;
     return log;
   }
+
+  registerObservedShutdownTests(logger);
 
   test("does not start without the Atlas service account", () => {
     jest.useFakeTimers();

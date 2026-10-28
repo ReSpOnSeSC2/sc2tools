@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "status": "independent-backup-work-drain-source-review-clear",
+  "createdAtUtc": "2026-10-28T13:51:04.820Z",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/guide-randomizer-completion",
+  "sourcePins": [
+    {
+      "file": "apps/api/src/jobs/backupHealthJob.js",
+      "sha256": "da865fbcef7c4dd4d0a71c8ff2ad1d0a8f22e9a72b63e46ea5e333477961d379"
+    },
+    {
+      "file": "apps/api/__tests__/backupStatus.test.js",
+      "sha256": "78792039389b6e705429db60b96bcc260b255b4950b08799fe14552723454689"
+    }
+  ],
+  "blockers": [],
+  "assessment": "stop awaits the actual singleFlightCheck.settled promise rather than JobLedger wrapper tick, removing the production TypeError and retaining timer cleanup/work drain. Three new observed cases use actual JobLedger and cover idle stop plus held success/error and coalesced runOnce calls. No assertion weakening found.",
+  "scope": "Actual backup check work drain; not a guarantee that best-effort asynchronous JobLedger persistence has itself drained.",
+  "runtimeByReviewer": false
+}

@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 2,
+  "createdAt": "2026-10-28T11:39:35.804Z",
+  "decision": "final-focused-local-pass-no-reader-activation-or-release",
+  "sourceReady": {
+    "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\final-source-ready-02.json",
+    "sha256": "f905f919c18ffed131e9885674f0b6bc2aac92facdd63fc110035447bf0671dc"
+  },
+  "sourcePins": [
+    {
+      "file": "apps/api/src/services/deviceCredentialWrites.js",
+      "sha256": "8da8919a976e94734bcfe86e3c9f7dd0e1c624938835b7fb7a76d254fb89bfeb"
+    },
+    {
+      "file": "apps/api/src/services/devicePairings.js",
+      "sha256": "3b8efccc0c3f442d5546b13533c488b313b958505bdb327a19ce7caddfc716f0"
+    },
+    {
+      "file": "apps/api/src/services/gdpr.js",
+      "sha256": "daef3b45190b78f26f714ebe416571fd16ed2d10ec600662510b87c2e417f101"
+    },
+    {
+      "file": "apps/api/src/server.js",
+      "sha256": "edad76171bf02233d983726f9bb65c4687447b946ef66567e771a1e39ddc5db2"
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.test.js",
+      "sha256": "5a141b027a89dfdfdc2521e85a6258548519eb490230a2ce1979655d293c9c57"
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.integration.test.js",
+      "sha256": "f4cf91e4b1c214725a02a49e6b82cef97ff039232b37551a895f727441874c88"
+    },
+    {
+      "file": "apps/web/lib/help/articles/getting-started/install-and-pair.ts",
+      "sha256": "85e7185f78db80e5e0863754d5bdadc2636794a0293f1cac2f55491ef34a6361"
+    },
+    {
+      "file": "CHANGELOG.md",
+      "sha256": "5b1c58c1508064ec9ddc20e41c7b581e45fbbdaad66e54e2511e4ac8a49d9d14"
+    },
+    {
+      "file": "docs/engineeringexplanation.md",
+      "sha256": "878ce0120f6d08ccf9835f1083abf3792022e0e56af9bdb3bb47e5c615ccdb34"
+    },
+    {
+      "file": "docs/handoff/device-auth-reuse-checkpoint.md",
+      "sha256": "5caf90bf062dfefa9a8cddb9e2ddca557dd30c4d2af0653829d9c6fe8ae53aa6"
+    }
+  ],
+  "freshVerification": {
+    "tests": 42,
+    "files": 2,
+    "failed": 0,
+    "skipped": 0,
+    "wholeApiTypes": true,
+    "strictCoordinatorPairingTestsLint": true,
+    "explicitDoD": {
+      "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\dod-verification.json",
+      "sha256": "da1c12ad7c37c35c4195010129c525d6ec702172312098ff3034ade7b755acf5",
+      "publicMethods": 7,
+      "classLines": 166,
+      "fileLines": 237,
+      "maxComplexity": 10,
+      "maxFunctionLines": 60,
+      "errors": 0,
+      "warnings": 0
+    },
+    "results": [
+      {
+        "label": "new-suites-04",
+        "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\new-suites-04.json",
+        "sha256": "a633459e34baaeed69c61fac3a6c761bac6135a87da4cdb8d92a957b18f52c68",
+        "pid": 35200,
+        "exitCode": 0,
+        "elapsedMs": 6110.1707,
+        "exactAppTestInputs": 7
+      },
+      {
+        "label": "api-types-04",
+        "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\api-types-04.json",
+        "sha256": "4125fbd4c32d2634e1355bad3601acb8be3650ac83ea6268a3bf91de6977a9ae",
+        "pid": 26880,
+        "exitCode": 0,
+        "elapsedMs": 10249.421900000001,
+        "exactAppTestInputs": 7
+      },
+      {
+        "label": "api-new-lint-03",
+        "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\api-new-lint-03.json",
+        "sha256": "1482f10a09bdaabb44038c111ed96f872311a261ee108ceb06c15f29cf0fa6d8",
+        "pid": 54924,
+        "exitCode": 0,
+        "elapsedMs": 527.1462,
+        "exactAppTestInputs": 7
+      },
+      {
+        "label": "dod-lint-01",
+        "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\dod-lint-01.json",
+        "sha256": "5b47fad55fb8270fcf4b59595b8b384dfbf00c676b5649b0a2d19c40e30a8f9b",
+        "pid": 43940,
+        "exitCode": 0,
+        "elapsedMs": 422.5752,
+        "exactAppTestInputs": 7
+      }
+    ]
+  },
+  "historicalVerification": {
+    "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\runtime-verification.json",
+    "sha256": "ed652299358b1941685518306db882328f55ef8baa7d38132d09920af744a727",
+    "apiTests": 227,
+    "apiFiles": 15,
+    "helpTests": 88,
+    "helpFiles": 13,
+    "wholeWebTypes": true,
+    "helpLint": true,
+    "qualification": "Full227/88 were not rerun after the internal helper cleanup. Other8owned paths are exact; checkpoint changed only verification prose. The independent delta reconstructs the earlier tested helper byte-exact."
+  },
+  "independentDelta": {
+    "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\final-independent-review-02-dod-delta.json",
+    "sha256": "51f2221a9db773ce207b3f3adfd79bb0f1e8f9e1f25e49e1806b65be9a2d84d9",
+    "qualification": "Source-only reversible reconstruction proof, not execution or branch coverage."
+  },
+  "cachedMongo": {
+    "file": "C:/Users/jay19/.cache/mongodb-binaries/mongod-x64-win32-7.0.14.exe",
+    "sha256": "919ce2ee9893ffcac72e95610f543beacce721a7c226867568856ca0754d49d8",
+    "bytes": 63694848,
+    "version": "7.0.14",
+    "runtimeDownload": false
+  },
+  "serialLimits": {
+    "workers": 1,
+    "databaseMembersAtATime": 1,
+    "runtimeDownloads": false
+  },
+  "cleanup": [
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\cleanup-03-final-focused.json",
+      "sha256": "3934d8f5a401b4ae1e89847a50e1a47e6b9a9c1a6c6e01be4645d89da4800fa7",
+      "remainingOwnedDescendants": 0,
+      "remainingOwnedListeners": 0,
+      "remainingPinnedMongo": 0
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\cleanup-04-final-all-runners.json",
+      "sha256": "99b8f2955e6f85a22b70f36f3698ebccf476725f3af9bc6c9fe6a534dc24e0f8",
+      "remainingOwnedDescendants": 0,
+      "remainingOwnedListeners": 0
+    }
+  ],
+  "earlierFailureEvidence": {
+    "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\runtime-verification.json",
+    "sha256": "ed652299358b1941685518306db882328f55ef8baa7d38132d09920af744a727",
+    "preservedUnchanged": true
+  },
+  "warnings": {
+    "mongoLibraryShutdownSocketReset": true,
+    "qualification": "Retained third-party shutdown-command warning, followed by actual runner/member exit and separately verified cleanup; no warning/assertion suppression."
+  },
+  "limits": [
+    "No full227/88 rerun after final internal helper cleanup; use fresh42 plus source-only inverse reconstruction proof, not a combined269case claim.",
+    "Server main not launched. Actual coordinator drain and held poll lease-release are exercised; server shutdown order is source/type-reviewed.",
+    "Seven exact app/test byte pins establish source identity, not branch coverage of every listed file.",
+    "Final checkpoint prose updated after runs. No real failover, clock-bound, independent serving-process, production or60s credential-cache acceptance claimed."
+  ],
+  "heavySlotReleased": true,
+  "noCommitPushProvidersOrActivation": true
+}

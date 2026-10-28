@@ -1,0 +1,515 @@
+{
+  "schemaVersion": 1,
+  "status": "LOCAL_INTEGRATED_PRODUCTION_BUILD_AND_UNCHANGED_BUDGET_ASSET_SOURCE_GUARDS_PASSED",
+  "createdAtUtc": "2026-10-28T12:49:56.325Z",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/guide-randomizer-completion",
+  "sourceHead": "354a2fa343d5d3dccc38d4965a71b20b08ceccfa",
+  "buildId": "CDnUXnOR-blF4HPk_dKBd",
+  "sourceInputs": 6847,
+  "sourcePins": [
+    {
+      "file": "apps/api/src/services/deviceCredentialWrites.js",
+      "sha256": "8da8919a976e94734bcfe86e3c9f7dd0e1c624938835b7fb7a76d254fb89bfeb",
+      "currentSha256": "8da8919a976e94734bcfe86e3c9f7dd0e1c624938835b7fb7a76d254fb89bfeb"
+    },
+    {
+      "file": "apps/api/src/services/devicePairings.js",
+      "sha256": "3b8efccc0c3f442d5546b13533c488b313b958505bdb327a19ce7caddfc716f0",
+      "currentSha256": "3b8efccc0c3f442d5546b13533c488b313b958505bdb327a19ce7caddfc716f0"
+    },
+    {
+      "file": "apps/api/src/services/gdpr.js",
+      "sha256": "65d47e6b15a58b5173d105bb2d621830415fac3807edf138410a493a222f8fce",
+      "currentSha256": "65d47e6b15a58b5173d105bb2d621830415fac3807edf138410a493a222f8fce"
+    },
+    {
+      "file": "apps/api/src/server.js",
+      "sha256": "a2a7c83e9d8ce7acec1fa263d3735fe38944b0efba6ae7b0bbbc17606def6e28",
+      "currentSha256": "a2a7c83e9d8ce7acec1fa263d3735fe38944b0efba6ae7b0bbbc17606def6e28"
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.test.js",
+      "sha256": "5a141b027a89dfdfdc2521e85a6258548519eb490230a2ce1979655d293c9c57",
+      "currentSha256": "5a141b027a89dfdfdc2521e85a6258548519eb490230a2ce1979655d293c9c57"
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.integration.test.js",
+      "sha256": "f4cf91e4b1c214725a02a49e6b82cef97ff039232b37551a895f727441874c88",
+      "currentSha256": "f4cf91e4b1c214725a02a49e6b82cef97ff039232b37551a895f727441874c88"
+    },
+    {
+      "file": "apps/web/lib/help/articles/getting-started/install-and-pair.ts",
+      "sha256": "85e7185f78db80e5e0863754d5bdadc2636794a0293f1cac2f55491ef34a6361",
+      "currentSha256": "85e7185f78db80e5e0863754d5bdadc2636794a0293f1cac2f55491ef34a6361"
+    },
+    {
+      "file": "CHANGELOG.md",
+      "sha256": "e602710147ddd717300e55ce03837feafe25b40ca5e2af404bd828a21b1bba48",
+      "currentSha256": "e602710147ddd717300e55ce03837feafe25b40ca5e2af404bd828a21b1bba48"
+    },
+    {
+      "file": "docs/engineeringexplanation.md",
+      "sha256": "d9e3394cbda0446cd3e384c0e0fd645ebcc04a0804be6b78eaa49564c2c53df6",
+      "currentSha256": "d9e3394cbda0446cd3e384c0e0fd645ebcc04a0804be6b78eaa49564c2c53df6"
+    },
+    {
+      "file": "docs/handoff/device-auth-reuse-checkpoint.md",
+      "sha256": "5caf90bf062dfefa9a8cddb9e2ddca557dd30c4d2af0653829d9c6fe8ae53aa6",
+      "currentSha256": "5caf90bf062dfefa9a8cddb9e2ddca557dd30c4d2af0653829d9c6fe8ae53aa6"
+    },
+    {
+      "file": "apps/api/src/middleware/auth.js",
+      "sha256": "04f11fd11e46b3f767070603727669d47778a2b53a0f6bf06fdabbf8960fd5c2",
+      "currentSha256": "04f11fd11e46b3f767070603727669d47778a2b53a0f6bf06fdabbf8960fd5c2"
+    },
+    {
+      "file": "apps/api/src/socket/auth.js",
+      "sha256": "a847122a8e3e46a012d3ed171d2101ca318b3e69b0c5f1e54cbb740e5b221ab5",
+      "currentSha256": "a847122a8e3e46a012d3ed171d2101ca318b3e69b0c5f1e54cbb740e5b221ab5"
+    },
+    {
+      "file": "apps/api/src/services/deviceLiveness.js",
+      "sha256": "df4ce0f6b9df458228459db6988608b0bfaae9cd8112577e04036bdef1ffcbcf",
+      "currentSha256": "df4ce0f6b9df458228459db6988608b0bfaae9cd8112577e04036bdef1ffcbcf"
+    },
+    {
+      "file": "apps/api/src/app.js",
+      "sha256": "a33b9a319bf14c2947127da48f71fa2050ac5494d8e0fbe00a118c606295e162",
+      "currentSha256": "a33b9a319bf14c2947127da48f71fa2050ac5494d8e0fbe00a118c606295e162"
+    },
+    {
+      "file": "apps/api/src/middleware/userDataWriteFence.js",
+      "sha256": "df8f402ec6f29c1b5ee610265a743f1a39f7d969f1c15a7d5f1ea572adaa886e",
+      "currentSha256": "df8f402ec6f29c1b5ee610265a743f1a39f7d969f1c15a7d5f1ea572adaa886e"
+    },
+    {
+      "file": "apps/api/src/config/loader.js",
+      "sha256": "bf31686466fb38a3657d0150cff555802c07e170631ca694594855ad00b09718",
+      "currentSha256": "bf31686466fb38a3657d0150cff555802c07e170631ca694594855ad00b09718"
+    },
+    {
+      "file": "apps/api/src/config/constants.js",
+      "sha256": "8784ba8f5ac4e7091143c7579231264e51a1655606d5ba6c1a27556e7d373b49",
+      "currentSha256": "8784ba8f5ac4e7091143c7579231264e51a1655606d5ba6c1a27556e7d373b49"
+    },
+    {
+      "file": "apps/api/src/services/gameStatsWrites.js",
+      "sha256": "b3f5c264dd202b5fd5a3e2cb79c7b6bb998d15b712376aa61e19ed542789f78d",
+      "currentSha256": "b3f5c264dd202b5fd5a3e2cb79c7b6bb998d15b712376aa61e19ed542789f78d"
+    },
+    {
+      "file": "apps/api/src/services/gameStatsMaintenance.js",
+      "sha256": "19061d786ebae914a25045f54e22161847c9aeb324f4ae433933c79b7d60f2b6",
+      "currentSha256": "19061d786ebae914a25045f54e22161847c9aeb324f4ae433933c79b7d60f2b6"
+    },
+    {
+      "file": "apps/api/src/services/games.js",
+      "sha256": "c36a682c701298117e74c9ef5b5bb2640f923981b0c4147a916c77b56e274bc6",
+      "currentSha256": "c36a682c701298117e74c9ef5b5bb2640f923981b0c4147a916c77b56e274bc6"
+    },
+    {
+      "file": "apps/api/src/services/userBackups.js",
+      "sha256": "6313b97b0ae1c1ac22ddaed2d5aba1441ac42d9b77e248a5cc0fd5d9e9c901ce",
+      "currentSha256": "6313b97b0ae1c1ac22ddaed2d5aba1441ac42d9b77e248a5cc0fd5d9e9c901ce"
+    },
+    {
+      "file": "apps/api/src/services/users.js",
+      "sha256": "f28929583b57af643e407461ce8153669681222c856e7f8072d1dc2f09b3bd67",
+      "currentSha256": "f28929583b57af643e407461ce8153669681222c856e7f8072d1dc2f09b3bd67"
+    },
+    {
+      "file": "apps/api/src/services/doctor.js",
+      "sha256": "9a924e703dc08250e50b376bde6128545dee72752b91a24db40774cfd0aa29d4",
+      "currentSha256": "9a924e703dc08250e50b376bde6128545dee72752b91a24db40774cfd0aa29d4"
+    },
+    {
+      "file": "apps/api/src/util/gameVisibility.js",
+      "sha256": "19c27606d695bd3dad83c39dd28d6ed38a0497feafdcf76e0dbf35c277e5ac0b",
+      "currentSha256": "19c27606d695bd3dad83c39dd28d6ed38a0497feafdcf76e0dbf35c277e5ac0b"
+    },
+    {
+      "file": "apps/api/src/routes/me.js",
+      "sha256": "0247d490ecee2dcb3be0807d33dc2cc615b1de88ee0c9f299ad59de0ac66c57c",
+      "currentSha256": "0247d490ecee2dcb3be0807d33dc2cc615b1de88ee0c9f299ad59de0ac66c57c"
+    },
+    {
+      "file": "apps/api/src/db/connect.js",
+      "sha256": "d84200918419e659e841782253eda750032c39e09ed9dfc61a4e501c4fd5a668",
+      "currentSha256": "d84200918419e659e841782253eda750032c39e09ed9dfc61a4e501c4fd5a668"
+    },
+    {
+      "file": "apps/api/src/services/types.d.ts",
+      "sha256": "e09b6698aa3d6efb7039e52b2680774d6c8956d44f18eb1bcae3767dd55404d1",
+      "currentSha256": "e09b6698aa3d6efb7039e52b2680774d6c8956d44f18eb1bcae3767dd55404d1"
+    },
+    {
+      "file": "apps/api/package.json",
+      "sha256": "e28fb9223b5258d5ff06398c4cf21451671c754deaaf28eb174733cb2c571a6e",
+      "currentSha256": "e28fb9223b5258d5ff06398c4cf21451671c754deaaf28eb174733cb2c571a6e"
+    },
+    {
+      "file": "apps/api/package-lock.json",
+      "sha256": "5b127ffac70fc054f3ae550f3187cb847dd7512e972fba85e96b6a431ff5a796",
+      "currentSha256": "5b127ffac70fc054f3ae550f3187cb847dd7512e972fba85e96b6a431ff5a796"
+    },
+    {
+      "file": "apps/api/jest.config.js",
+      "sha256": "ed59e7198bb2f2cab684d05b11e8cd1fd3c3dcd64000103b30a20d2d82879e4a",
+      "currentSha256": "ed59e7198bb2f2cab684d05b11e8cd1fd3c3dcd64000103b30a20d2d82879e4a"
+    },
+    {
+      "file": "apps/api/eslint.config.js",
+      "sha256": "56e504a14df657e575619a53baa0636a47606e39d2d5a63da2e21a3aec6f9cf0",
+      "currentSha256": "56e504a14df657e575619a53baa0636a47606e39d2d5a63da2e21a3aec6f9cf0"
+    },
+    {
+      "file": "apps/api/__tests__/devicePairings.test.js",
+      "sha256": "dd90a18b30297c41ea4998a97e6b5e519295aa293bfd979e151173ffcf830e1e",
+      "currentSha256": "dd90a18b30297c41ea4998a97e6b5e519295aa293bfd979e151173ffcf830e1e"
+    },
+    {
+      "file": "apps/api/__tests__/deviceLiveness.test.js",
+      "sha256": "92fb370c3d77557ebf8133cc2463b8515fd9a6b63a8d4e05a1b3d03695b1717e",
+      "currentSha256": "92fb370c3d77557ebf8133cc2463b8515fd9a6b63a8d4e05a1b3d03695b1717e"
+    },
+    {
+      "file": "apps/api/__tests__/deviceLiveness.mongo.test.js",
+      "sha256": "4ebec50fe20b338dd13f4fb13b8d2056988a6931c9bbbf19bf961449e9216081",
+      "currentSha256": "4ebec50fe20b338dd13f4fb13b8d2056988a6931c9bbbf19bf961449e9216081"
+    },
+    {
+      "file": "apps/api/__tests__/accountDeletion.test.js",
+      "sha256": "018b5c1192932a7b8414d2c26ee94b6bc04df1d01ba997460b9a77755e101a36",
+      "currentSha256": "018b5c1192932a7b8414d2c26ee94b6bc04df1d01ba997460b9a77755e101a36"
+    },
+    {
+      "file": "apps/api/__tests__/gdprMutationAdmission.test.js",
+      "sha256": "a95867361332cc4ea44fbcce0bdea6e39c4c72ec20aeb91bbf0deab3ca093c01",
+      "currentSha256": "a95867361332cc4ea44fbcce0bdea6e39c4c72ec20aeb91bbf0deab3ca093c01"
+    },
+    {
+      "file": "apps/api/__tests__/gdprCacheInvalidation.test.js",
+      "sha256": "1eff313961135a54ff9235be15d117c571c2b12a43f173a0df901e1df7d3779a",
+      "currentSha256": "1eff313961135a54ff9235be15d117c571c2b12a43f173a0df901e1df7d3779a"
+    },
+    {
+      "file": "apps/api/__tests__/gdprWipeAudit.test.js",
+      "sha256": "d8288c794726eeb0bfd0820cc08285b97d5565ecee95137fc24d107f446f9faa",
+      "currentSha256": "d8288c794726eeb0bfd0820cc08285b97d5565ecee95137fc24d107f446f9faa"
+    },
+    {
+      "file": "apps/api/__tests__/userBackups.test.js",
+      "sha256": "741112cb8b0bd7fdc7dacab667a463ec7b52beeb67eb6c1df7cdc6e7684b9e1e",
+      "currentSha256": "741112cb8b0bd7fdc7dacab667a463ec7b52beeb67eb6c1df7cdc6e7684b9e1e"
+    },
+    {
+      "file": "apps/api/__tests__/socketAuthWeb.test.js",
+      "sha256": "a0accf6c687b2b65b78be88c8895e049642e02c0e3247dd734502343605f29ac",
+      "currentSha256": "a0accf6c687b2b65b78be88c8895e049642e02c0e3247dd734502343605f29ac"
+    },
+    {
+      "file": "apps/api/__tests__/socketAuthObs.test.js",
+      "sha256": "720170def8280ee14f9536fa7cfe0c8e2d30be4ed328ceb0c02e2f8530199988",
+      "currentSha256": "720170def8280ee14f9536fa7cfe0c8e2d30be4ed328ceb0c02e2f8530199988"
+    },
+    {
+      "file": "apps/api/__tests__/companionDeviceAccess.test.js",
+      "sha256": "5c7eee8f4dc668ad23aaea52182ecc540d23e684daa4758cf25243563dcd26a6",
+      "currentSha256": "5c7eee8f4dc668ad23aaea52182ecc540d23e684daa4758cf25243563dcd26a6"
+    },
+    {
+      "file": "apps/api/__tests__/meFoundation.test.js",
+      "sha256": "1a2b4a61ef634b17e190996a87f9100abe7348a4b3d6ddebe62a1d491a2e432d",
+      "currentSha256": "1a2b4a61ef634b17e190996a87f9100abe7348a4b3d6ddebe62a1d491a2e432d"
+    },
+    {
+      "file": "apps/api/__tests__/routes.integration.test.js",
+      "sha256": "d9375937cdf83259ecad013f76b10ec18b054ce5db65055e783521779056203d",
+      "currentSha256": "d9375937cdf83259ecad013f76b10ec18b054ce5db65055e783521779056203d"
+    },
+    {
+      "file": "apps/api/__tests__/gameStatsMaintenance.unit.test.js",
+      "sha256": "6958c8370438968ddd8dbcc3f8e370a77ef9fa0ca547d392805fed32bd4f1c2c",
+      "currentSha256": "6958c8370438968ddd8dbcc3f8e370a77ef9fa0ca547d392805fed32bd4f1c2c"
+    },
+    {
+      "file": "apps/api/__tests__/gameStatsWrites.unit.test.js",
+      "sha256": "52fd1ce73a59854c070cbfe2c4c685dd936c7ec99529ae3042576aa3ebb2b99f",
+      "currentSha256": "52fd1ce73a59854c070cbfe2c4c685dd936c7ec99529ae3042576aa3ebb2b99f"
+    },
+    {
+      "file": "apps/api/__tests__/gameStatsWrites.replset.test.js",
+      "sha256": "449a9cea8653bf06a9d3cb6711117e21b0bd1689d8f00076aae529e74cf8319d",
+      "currentSha256": "449a9cea8653bf06a9d3cb6711117e21b0bd1689d8f00076aae529e74cf8319d"
+    }
+  ],
+  "commands": [
+    {
+      "label": "source-prebuild",
+      "args": [
+        "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/check-full-source.mjs",
+        "prebuild"
+      ],
+      "cwd": "C:/SC2TOOLS/.worktrees/guide-randomizer-completion/apps/web",
+      "pid": 39448,
+      "startedAtUtc": "2026-10-28T12:48:01.844Z",
+      "endedAtUtc": "2026-10-28T12:48:05.300Z",
+      "exitCode": 0,
+      "processAliveAfterExit": false,
+      "log": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/source-prebuild.log",
+      "receipt": {
+        "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/source-prebuild-command.json",
+        "bytes": 511,
+        "sha256": "6fe9d5c76c040c0d812896c84009962f77af2ef6574fc1e567b9461639c24bee"
+      },
+      "logPin": {
+        "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/source-prebuild.log",
+        "bytes": 217,
+        "sha256": "d1329a011487b8d0efceeb695fc9592647785d316aee1b30ee296052a981f0b9"
+      }
+    },
+    {
+      "label": "assets-prebuild",
+      "args": [
+        "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/admit-assets-01.mjs",
+        "prebuild",
+        "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/source-snapshots/build-inputs-01.json"
+      ],
+      "cwd": "C:/SC2TOOLS/.worktrees/guide-randomizer-completion/apps/web",
+      "pid": 10468,
+      "startedAtUtc": "2026-10-28T12:48:05.302Z",
+      "endedAtUtc": "2026-10-28T12:48:05.551Z",
+      "exitCode": 0,
+      "processAliveAfterExit": false,
+      "log": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/assets-prebuild.log",
+      "receipt": {
+        "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/assets-prebuild-command.json",
+        "bytes": 632,
+        "sha256": "3bc11ee40a3188d4ad783a9ba54b8021a756acbd58cb5d426310b6d2f51d5f81"
+      },
+      "logPin": {
+        "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/assets-prebuild.log",
+        "bytes": 147,
+        "sha256": "d81e4409a07605e98da75d663d60d7058d837ea0332ccef148ac42687682146f"
+      }
+    },
+    {
+      "label": "production-build-01",
+      "args": [
+        "C:/SC2TOOLS/.worktrees/guide-randomizer-completion/apps/web/node_modules/next/dist/bin/next",
+        "build"
+      ],
+      "cwd": "C:/SC2TOOLS/.worktrees/guide-randomizer-completion/apps/web",
+      "pid": 28876,
+      "startedAtUtc": "2026-10-28T12:48:05.552Z",
+      "endedAtUtc": "2026-10-28T12:49:36.730Z",
+      "exitCode": 0,
+      "processAliveAfterExit": false,
+      "log": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/production-build-01.log",
+      "receipt": {
+        "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/production-build-01-command.json",
+        "bytes": 508,
+        "sha256": "ef35f156fe91299f55f805adb0731a84a43f86760dc10e44abe77dd4ddddd00b"
+      },
+      "logPin": {
+        "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/production-build-01.log",
+        "bytes": 42163,
+        "sha256": "53ce329737f8dd9224082ba00e03eb993165b16c07ef0041e419bdca4fcf678b"
+      }
+    },
+    {
+      "label": "source-postbuild",
+      "args": [
+        "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/check-full-source.mjs",
+        "postbuild"
+      ],
+      "cwd": "C:/SC2TOOLS/.worktrees/guide-randomizer-completion/apps/web",
+      "pid": 924,
+      "startedAtUtc": "2026-10-28T12:49:36.854Z",
+      "endedAtUtc": "2026-10-28T12:49:40.950Z",
+      "exitCode": 0,
+      "processAliveAfterExit": false,
+      "log": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/source-postbuild.log",
+      "receipt": {
+        "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/source-postbuild-command.json",
+        "bytes": 512,
+        "sha256": "c8b2af7d35a29cebf45f555f4d2860ad1a4f0e8ee5c6dc6c228ee86686aa11ee"
+      },
+      "logPin": {
+        "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/source-postbuild.log",
+        "bytes": 218,
+        "sha256": "44478de353afbc53ad408ec4c1ef825cc27363c2e643ec56e80b724739bd8d98"
+      }
+    },
+    {
+      "label": "assets-postbuild",
+      "args": [
+        "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/admit-assets-01.mjs",
+        "postbuild",
+        "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/source-snapshots/build-inputs-01.json"
+      ],
+      "cwd": "C:/SC2TOOLS/.worktrees/guide-randomizer-completion/apps/web",
+      "pid": 8048,
+      "startedAtUtc": "2026-10-28T12:49:40.950Z",
+      "endedAtUtc": "2026-10-28T12:49:41.405Z",
+      "exitCode": 0,
+      "processAliveAfterExit": false,
+      "log": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/assets-postbuild.log",
+      "receipt": {
+        "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/assets-postbuild-command.json",
+        "bytes": 634,
+        "sha256": "589f886e277e34a753b6109e8acce684c60f8278dfdc09ddc4567eeb9a407d76"
+      },
+      "logPin": {
+        "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/assets-postbuild.log",
+        "bytes": 148,
+        "sha256": "4b709ead8dedc045be2e659b1c1b30c7c50bebb2eb81b4a5bcad908713184cba"
+      }
+    }
+  ],
+  "boundedBuild": {
+    "heapMiB": 4096,
+    "staticWorkers": 1,
+    "memoryBasedWorkersCount": false,
+    "directNext": true,
+    "prebuild": false,
+    "serverStarted": false,
+    "browserStarted": false
+  },
+  "budgets": {
+    "passed": 83,
+    "listed": 18,
+    "default": 65,
+    "budgetCapsChanged": false,
+    "report": {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/all-budgets-01.json",
+      "bytes": 9261,
+      "sha256": "0aaa0e0611433b549c8a29e625cb23dec46cdd51c28edbf8b84f38e1d1ba64b0"
+    }
+  },
+  "assets": {
+    "canonicalSourceInputs": 40,
+    "servedFiles": 7,
+    "strictSampleGames": 4,
+    "prePostIdentical": true,
+    "generation": false,
+    "downloads": false,
+    "pruning": false
+  },
+  "source": {
+    "prePostIdentical": true,
+    "fullSnapshot": {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/source-snapshots/build-inputs-01.json",
+      "bytes": 2163266,
+      "sha256": "a9e9df79ebb51c379188583ac591e29db82df8be0cd86efd2793806ab85b0e84"
+    },
+    "includesThenCurrentRootDirtyMetadata": true,
+    "laterMetadataQualification": "Root may update metadata after release. This proof applies to the captured snapshot and unchanged application inputs; it does not assert changed product input equivalence."
+  },
+  "cleanup": {
+    "checkedAtUtc": "2026-10-28T12:49:56.0298418Z",
+    "ownedPids": [
+      924,
+      8048,
+      9636,
+      10468,
+      28876,
+      31940,
+      39448
+    ],
+    "ownedProcessesRemaining": [],
+    "ownedListenersRemaining": [],
+    "terminatedProcesses": [],
+    "unrelatedProcessesTouched": false,
+    "nextServerStarted": false,
+    "browserStarted": false
+  },
+  "evidence": [
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/preparation.json",
+      "bytes": 14020,
+      "sha256": "a938de9c4e3458436859e88447c5488bdd2a1c0c5cd5c8fd63ed8b8d5adc4852"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/source-snapshots/build-inputs-01.json",
+      "bytes": 2163266,
+      "sha256": "a9e9df79ebb51c379188583ac591e29db82df8be0cd86efd2793806ab85b0e84"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/full-source-prebuild.json",
+      "bytes": 242,
+      "sha256": "ea2596fcb6e45d6428bfeb58b259362075c66c10404a405622d96925caeb6d71"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/full-source-postbuild.json",
+      "bytes": 243,
+      "sha256": "82503e5e50c4ae5e833026b980c04810598ea9d400c3c9a738d10f590c335766"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/assets-01/asset-admission-history-prebuild.json",
+      "bytes": 9442,
+      "sha256": "3e75745bcb7a2fe4b989779197c8cf85689d22da073b75038cf2a8d72c8a1b56"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/assets-01/asset-admission-history-postbuild.json",
+      "bytes": 9442,
+      "sha256": "3e75745bcb7a2fe4b989779197c8cf85689d22da073b75038cf2a8d72c8a1b56"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/all-budgets-01.json",
+      "bytes": 9261,
+      "sha256": "0aaa0e0611433b549c8a29e625cb23dec46cdd51c28edbf8b84f38e1d1ba64b0"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/budgets-01.log",
+      "bytes": 1245,
+      "sha256": "f2aa399e34ece372b0609c133074d13e6735c20eee2639b38aa02a8ce86d16fc"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/owned-processes-during-build.json",
+      "bytes": 946,
+      "sha256": "81ee3f92ceae9fac1823c704f502d6c2549ccb8e00fff7236479d7c1702048e8"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/cleanup.json",
+      "bytes": 355,
+      "sha256": "10690d43185a2c3fcc7827f4756d5bbe0734d71f44557d89a717bddd9d3033ed"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/capture-source.mjs",
+      "bytes": 1841,
+      "sha256": "f39b8946bba0bbfe573801b1807bb7b47ae27bb99a9a73bc3f839b5bef15686e"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/check-full-source.mjs",
+      "bytes": 1419,
+      "sha256": "89c09974059d2e0be175df25f034ec7336ba26f4d4edb77c7dc4c845358b8632"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/admit-assets-01.mjs",
+      "bytes": 8321,
+      "sha256": "a3bdd4753822ed430caef76954e50a4aea219fa206bd4c437ead720d16c08cdb"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/run-build.mjs",
+      "bytes": 3956,
+      "sha256": "71f4c5a7112b24fa7a8e0392cf8f1f8f72d0aa4b4993a9ba347c1ccc86e800d2"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/prepare-build.mjs",
+      "bytes": 4083,
+      "sha256": "75c2acb2c375d5bf5fc828ef19793f38ff799d0c3a067f5a8c9db40f1435205d"
+    },
+    {
+      "path": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/production-build-354a-01/finalize.mjs",
+      "bytes": 4794,
+      "sha256": "dabe9237aa52e6fb4af7a8c088e1b99946b6c743d51fff428107fefdf9698c30"
+    }
+  ],
+  "limitations": [
+    "Synthetic build-only Clerk keys and local compile-time conditional coverage flags; no production flags changed.",
+    "No server, browser, provider acceptance, deployment or CI proof from this build.",
+    "Credential cache remains inactive; all-writers cutover and coherent cached readers remain separate unfinished work.",
+    "Existing compiler/lint warnings remain visible in the retained build log; no rules or budgets were relaxed."
+  ]
+}

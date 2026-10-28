@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-28T12:20:04.846Z",
+  "pr": 806,
+  "testedHead": "22830012333abedbd3df44687f2552b336c0e88a",
+  "mergedRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+  "testedAndMergedTree": "d76e8267b56e1e5f4acb222e7d38ee7a147284a0",
+  "checks": [
+    {
+      "id": 122784858098,
+      "name": "Vercel Preview Comments",
+      "head": "22830012333abedbd3df44687f2552b336c0e88a",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 122782579021,
+      "name": "Responsive e2e smoke (public pages)",
+      "head": "22830012333abedbd3df44687f2552b336c0e88a",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 122782578551,
+      "name": "Lint + typecheck + test (apps/web)",
+      "head": "22830012333abedbd3df44687f2552b336c0e88a",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "vercelCheck": "success",
+  "actualProduction": {
+    "web": {
+      "id": "Fjjx69hgBkAJg4nAeAvD5UnzHBKM",
+      "state": "Ready/Production/Current/sc2tools.com",
+      "sourceCommitObserved": true
+    },
+    "api": {
+      "id": "dep-dbgtsgavcj2c73dreh70",
+      "state": "Live",
+      "sourceCommitObserved": true
+    }
+  },
+  "actualSignedInBrowser": {
+    "file": "sc2tools-synthetic-invalid.SC2Replay",
+    "fixtureBytes": 1024,
+    "before": "0.00 MB at production263",
+    "after": "1.00 KB",
+    "privateBrowserCopy": true,
+    "error": "Not a replay",
+    "focusedErrorHeading": "Not a replay",
+    "controls": [
+      "Cancel",
+      "Try again",
+      "Choose another replay"
+    ],
+    "escape": {
+      "dialogsRemaining": 0,
+      "returnedFocus": "Choose a replay"
+    },
+    "saveOrAccountGameImport": false
+  },
+  "screenshot": {
+    "file": "one-kb-error-full.jpg",
+    "repositoryPath": "docs/handoff/validation/demo-readable-file-sizes/screenshots/production-one-kb-error.jpg",
+    "sha256": "749431d75f9218ba2f158745cccbb74de8c1c6d02c39709e64a5ca18a9541885",
+    "mimeType": "image/jpeg",
+    "method": "Full viewport with fullPage:false; no crop",
+    "pixelReview": "Actual error modal,1.00KB,Not a replay and recovery controls visibly present."
+  },
+  "qualifications": [
+    "Owned invalid synthetic file only; actual live file selection, private parse error, displayed size, focus and Escape were observed.",
+    "No live network instrumentation; no fabricated no-request/upload assertion. Local component/controller and browser guards remain separately qualified.",
+    "Picker task was caught and inspected after a pending logical bound; the first call reported260584.3ms tool wall time. This is not a parser timing claim.",
+    "All83 unchanged budgets and local48component/Help cases plus8responsive/48AA scans are in the separately committed receipts; actual exact-head CI also passed.",
+    "No additional bracket answer, provider/flag setting, real replay upload or native launch.",
+    "Independent pixel review rejected the earlier clipped home image. Its original bytes/hash are preserved and it is not presented as modal proof. A fresh full viewport JPEG was directly inspected.",
+    "The corrective picker call reported501651.8ms tool wall time; this is browser-control/file-selection timing, not parser performance."
+  ],
+  "cleanup": {
+    "pickerEventuallyResolved": true,
+    "ownedTabsAndWorkerClosed": true,
+    "userTabsUntouched": true,
+    "viewportOverride": false
+  },
+  "program": "Only landing-try-polish-1 is now eligible for its own ledger closure. Server retirement, dashboard readers/cutover and all other partial/open requirements remain separate.",
+  "failedCapture": {
+    "file": "one-kb-error.png",
+    "sha256": "8791330af984d5804839cf3fadab4c24d91c6c893bf0475bd92b6d1644150e38",
+    "mimeType": "image/jpeg",
+    "actualContent": "Unrelated home crop; does not show the modal or size. Retained only as failed capture evidence in local cache."
+  },
+  "captureCorrectionAtUtc": "2026-10-28T13:06:28.729Z"
+}
