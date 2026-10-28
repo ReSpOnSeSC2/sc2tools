@@ -1,6 +1,43 @@
 # Device authentication reuse: writer preparation
 
-## 2026-10-28 delivered writer prerequisite
+## Prepared readiness and optional REST seam — local candidate
+
+The isolated `codex/device-auth-rest-reuse` candidate starts at local merge
+`2e4a6949`, combining preserved helper `c3d7a592` with passed main/Reader PR810
+`b8ef1b94`. The helper branch remains unchanged. This candidate is not committed,
+published, deployed or activated; local verification is recorded separately.
+
+Production factory writers share bounded prepared-authority readiness. Startup
+failure leaves original uncached REST/socket authentication usable. Credential
+callbacks still await valid readiness and their original durable gate/drain.
+Actual preparation/session work remains charged after timeout and drains on
+stop; readiness binds the same incarnation before begin's CAS.
+
+The existing hello distinguishes strict causal readiness, positive writer-only
+standalone and unsupported/unknown state. There is no new flag or NODE_ENV
+bypass. Standalone cannot construct a retained adapter; a missing replica
+operationTime never selects compatibility. Schema, pending/denyAll and original
+majority/journal writer behavior remain.
+
+The public Pairings lookup shares its exact query/projection/touch body with a
+private cache-only closure. Optional REST middleware consumes a ticket once at
+its final synchronous boundary and uses a new independent original fallback.
+The app leaves this adapter uninjected; sockets retain the original method.
+No reader prepares authority, writes active mode or clears uncertainty.
+
+The approved production observation covers only legacy retirement inference,
+one own-principal quiet snapshot and a causal majority barrier. Authority was
+absent: current df5 paused/unknown lifetimes and incarnation continuity remain
+unqualified. Deploy a prepared cohort, retire every prior pre-readiness writer
+(including later df5-derived releases), bind the same
+incarnation and complete independent runtime/release/clock/election gates before
+activation. See [ADR 0071](../adr/0071-device-credential-readiness.md).
+
+Existing Help already explains confirmation can take a few seconds and remains
+unchanged; this prerequisite adds no public control. Chart caching stays off
+and the parent performance item remains partial. No native release is needed.
+
+## 2026-10-28 delivered writer prerequisite — prior chronology
 
 PR 807 merged as `df5cf875d588fafba5456695a1c3550fc42ba587` after its exact tested head and fresh-main tree checks. Actual Vercel Ready and Render Live source were observed at `2026-10-28T16:46:09.182Z`; primary-domain new Help and read-only Devices loading were verified. [Sanitized production receipt](validation/device-auth-coordination/production-df5cf875.json) preserves that scope without account/device rows, counts or private photos. No production credential mutation, credential metadata observer or activation was performed.
 

@@ -20,6 +20,7 @@ const BEARER_PREFIX = "Bearer ";
  *   issuer?: string,
  *   audience?: string,
  *   getDeviceToken: (tokenHash: string) => Promise<{userId: string}|null>,
+ *   deviceTokenReuse?: {prepare:(hash:string)=>Promise<object|null>,consume:(hash:string,ticket:object|null)=>{userId:string}|null},
  *   ensureUser: (clerkUserId: string) => Promise<{userId: string}>,
  * }} deps
  * @returns {import('express').RequestHandler}
@@ -35,27 +36,11 @@ function buildAuth(deps) {
       // Clerk JWTs are short and look like xxx.yyy.zzz; device tokens
       // are random base64url. Try device token first when length suggests
       // it (cheaper — DB hit only, no signature verify).
-      if (looksLikeDeviceToken(raw)) {
-        const tokenHash = sha256(raw);
-        const hit = await deps.getDeviceToken(tokenHash);
-        if (hit) {
-          req.auth = {
-            userId: hit.userId,
-            source: "device",
-            tokenHash,
-          };
-          next();
-          return;
-        }
-      }
+      if (looksLikeDeviceToken(raw) && await tryDeviceAuth(deps, raw, req, next)) return;
       // Fall through to Clerk verify for everything else.
       const claims = await verifyToken(
         raw,
-        /** @type {any} */ ({
-          secretKey: deps.secretKey,
-          ...((deps.issuer ? { issuer: deps.issuer } : {})),
-          ...((deps.audience ? { audience: deps.audience } : {})),
-        }),
+        /** @type {any} */ (clerkOptions(deps)),
       );
       if (!claims || !claims.sub) {
         next(httpError(401, "invalid_token"));
@@ -73,6 +58,40 @@ function buildAuth(deps) {
       next(httpError(401, "auth_failed", err instanceof Error ? err : undefined));
     }
   };
+}
+
+/** @param {any} deps */
+function clerkOptions(deps) {
+  return { secretKey: deps.secretKey,
+    ...(deps.issuer ? { issuer: deps.issuer } : {}),
+    ...(deps.audience ? { audience: deps.audience } : {}),
+  };
+}
+
+/** This helper performs its final consume, auth assignment and next without
+ * an await between them. A rejected cache result is never the fallback.
+ * @param {any} deps @param {string} raw @param {any} req @param {any} next */
+async function tryDeviceAuth(deps, raw, req, next) {
+  const tokenHash = sha256(raw);
+  const ticket = deps.deviceTokenReuse ? await prepareDeviceAdmission(deps.deviceTokenReuse, tokenHash) : null;
+  const retained = ticket ? consumeDeviceAdmission(deps.deviceTokenReuse, tokenHash, ticket) : null;
+  if (retained) { req.auth = { userId: retained.userId, source: "device", tokenHash }; next(); return true; }
+  // New independent original query with original options and error behavior.
+  const original = await deps.getDeviceToken(tokenHash);
+  if (!original) return false;
+  req.auth = { userId: original.userId, source: "device", tokenHash }; next(); return true;
+}
+
+/** Cache failures affect reuse only. @param {any} reuse @param {string} hash */
+async function prepareDeviceAdmission(reuse, hash) {
+  if (!reuse) return null;
+  try { return await reuse.prepare(hash); } catch { return null; }
+}
+
+/** No await, clock IO or fallback occurs after this final admission check.
+ * @param {any} reuse @param {string} hash @param {object} ticket */
+function consumeDeviceAdmission(reuse, hash, ticket) {
+  try { return reuse?.consume(hash, ticket) || null; } catch { return null; }
 }
 
 /**

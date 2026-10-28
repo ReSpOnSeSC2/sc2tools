@@ -32,6 +32,8 @@ class DeviceCredentialWrites {
     this.now = options.now || (() => performance.now());
     this.wait = options.wait || (ms => new Promise(resolve => setTimeout(resolve, ms)));
     this.stopped = false;
+    /** @type {import('./deviceCredentialReadiness').DeviceCredentialReadiness|null} */
+    this.readiness = null;
     /** @type {Set<Promise<any>>} */ this.pending = new Set();
     /** @type {Promise<void>|null} */ this.preparation = null;
   }
@@ -86,11 +88,12 @@ class DeviceCredentialWrites {
    * capacity sets sticky denyAll, allowing original writes without inventing
    * unbounded per-owner state. @param {unknown} owner @param {string} kind */
   async begin(owner, kind) {
-    await this.prepare();
+    const ready = await prepareWriterAuthority(this);
     const operationId = randomUUID(), ownerHash = this.ownerHash(owner);
     const room = { $and: [{ $eq: ["$denyAll", false] }, ownerHash !== null,
       { $lt: [{ $size: "$pending" }, PENDING_LIMIT] }] };
-    const row = await this.collection.findOneAndUpdate(this.#authority(), [{ $set: {
+    const row = await this.collection.findOneAndUpdate({ ...this.#authority(),
+      ...(ready ? { incarnation: ready.incarnation } : {}) }, [{ $set: {
       generation: { $literal: randomUUID() },
       denyAll: { $or: ["$denyAll", ownerHash === null, { $gte: [{ $size: "$pending" }, PENDING_LIMIT] }] },
       pending: { $cond: [room, { $concatArrays: ["$pending", { $literal: [{ operationId, ownerHash, kind, phase: "draining" }] }] }, "$pending"] },
@@ -100,6 +103,7 @@ class DeviceCredentialWrites {
     // Prepared mode or an absent predecessor cannot prove no old grant exists.
     // A future optimized bootstrap needs its own durable draining protocol.
     await this.#drainLeaseBound();
+    assertWriterRunning(this);
     if (tracked) {
       const writing = await this.collection.findOneAndUpdate({ ...this.#authority(), incarnation: row.incarnation,
         pending: { $elemMatch: { operationId, ownerHash, phase: "draining" } } }, {
@@ -172,6 +176,7 @@ class DeviceCredentialWrites {
    * @param {()=>Promise<T>} work @returns {Promise<T>} */
   async #perform(owner, kind, work) {
     const operation = await this.begin(owner, kind);
+    assertWriterRunning(this);
     let result;
     try { result = await work(); }
     catch (error) { await this.uncertain(operation); throw error; }
@@ -186,8 +191,21 @@ class DeviceCredentialWrites {
    * Stop new enrollment, then drain actual work before Mongo closes. */
   async stopAndDrain() {
     this.stopped = true;
-    await Promise.allSettled([...this.pending]);
+    const readiness = this.readiness?.stopAndDrain();
+    await Promise.allSettled([readiness, ...this.pending]);
   }
+}
+
+/** @param {DeviceCredentialWrites} service */
+async function prepareWriterAuthority(service) {
+  const ready = service.readiness ? await service.readiness.ensure() : (await service.prepare(), null);
+  assertWriterRunning(service);
+  return ready;
+}
+
+/** @param {DeviceCredentialWrites} service */
+function assertWriterRunning(service) {
+  if (service.stopped) throw failure("device_credential_writer_stopping");
 }
 
 /** @param {any} row */
@@ -227,10 +245,12 @@ function deviceCredentialWritesFor(db, logger) {
   let service = instances.get(db);
   if (!service) {
     service = new DeviceCredentialWrites(db.db?.collection("jobLocks"), { logger });
+    const { DeviceCredentialReadiness } = require("./deviceCredentialReadiness");
+    service.readiness = new DeviceCredentialReadiness(service.collection, { capability: db.deviceCredentialReadiness || "unavailable" });
     instances.set(db, service);
   }
   return service;
 }
 
-module.exports = { DeviceCredentialWrites, deviceCredentialWritesFor, AUTHORITY_KEY, OWNER_NAMESPACE,
+module.exports = { DeviceCredentialWrites, deviceCredentialWritesFor, validAuthority, AUTHORITY_KEY, OWNER_NAMESPACE,
   PROTOCOL_VERSION, PENDING_LIMIT, ACTIVE_LIMIT, WRITER_DRAIN_MS };
