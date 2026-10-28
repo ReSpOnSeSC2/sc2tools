@@ -362,22 +362,26 @@ function Render({
         <div
           role="grid"
           aria-label="Bingo card"
-          className="grid grid-cols-5 gap-1.5 text-center text-micro"
+          className="grid auto-rows-fr grid-cols-5 gap-1.5 text-center text-micro"
         >
-          {card.cells.map((c, i) => (
-            <div
-              role="gridcell"
-              key={c.id}
-              aria-label={c.label}
-              className={[
-                "flex aspect-square min-h-[48px] flex-col items-center justify-center rounded border px-1 py-1.5",
-                c.ticked
-                  ? "border-success bg-success/15 text-text"
-                  : "border-border bg-bg-surface text-text-muted",
-                i === 12 ? "border-accent/60 bg-accent/10" : "",
-              ].join(" ")}
-            >
-              <span className="leading-tight">{c.label}</span>
+          {Array.from({ length: Math.ceil(card.cells.length / 5) }, (_, row) => (
+            <div role="row" className="contents" key={row}>
+              {card.cells.slice(row * 5, row * 5 + 5).map((c, column) => (
+                <div
+                  role="gridcell"
+                  key={c.id}
+                  aria-label={c.label}
+                  className={[
+                    "flex min-h-[72px] min-w-0 flex-col items-center justify-center rounded border px-1 py-1.5",
+                    c.ticked
+                      ? "border-success bg-success/15 text-text"
+                      : "border-border bg-bg-surface text-text-muted",
+                    row === 2 && column === 2 ? "border-accent/60 bg-accent/10" : "",
+                  ].join(" ")}
+                >
+                  <span className="w-full min-w-0 leading-tight [overflow-wrap:anywhere]">{c.label}</span>
+                </div>
+                  ))}
             </div>
           ))}
         </div>
