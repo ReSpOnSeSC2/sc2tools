@@ -1,0 +1,299 @@
+{
+  "schemaVersion": 1,
+  "reviewedAtUtc": "2026-10-28T14:32:49.767Z",
+  "reviewer": "/root/roadmap_audit",
+  "mode": "independent-source-and-retained-evidence-review-no-runtime",
+  "status": "clear-for-parent-integrated-build-browser-required-ci-delivery",
+  "blockers": [],
+  "currentHead": "1e1a736ff8d43fef7e91abaf2db8fd4a21073e07",
+  "unitCommit": "dc7eacf6",
+  "integratedParent": "76fbc441cadcf92b1d4452d5ae8feeac4fa1433f",
+  "sourceManifest": {
+    "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/source-ready-01.json",
+    "sha256": "5289740f4ff5d3613b5cc56f3c2d67bd5c479290b8ee3496c01b7d895a137828"
+  },
+  "runtimeReceipt": {
+    "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/verification-01/VERIFIED.json",
+    "sha256": "73886bbf16c7aa2e474b3fc5ae3d1cfc0c556ff9c27f4ea10849f12deb4fcbd4"
+  },
+  "currentOwnedPins": [
+    {
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/CHANGELOG.md",
+      "bytes": 374866,
+      "sha256": "dc1ed9041a469e8bebc4d45c9b0d1cc0c1e13608e582376f9949b810931ea816",
+      "relative": "CHANGELOG.md"
+    },
+    {
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/__tests__/arcadeMlMemorySafety.test.js",
+      "bytes": 5210,
+      "sha256": "bc49bc17df344dc37ef4fe1c3b1133a9887c64926ff7d586584b2059ac4f048c",
+      "relative": "apps/api/__tests__/arcadeMlMemorySafety.test.js"
+    },
+    {
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/__tests__/services/arcade.test.js",
+      "bytes": 15138,
+      "sha256": "640271a4bc48e7a41e00d2b4f512375c3adaa6c5aedf8be8c25467be18d5d04a",
+      "relative": "apps/api/__tests__/services/arcade.test.js"
+    },
+    {
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/src/services/arcade.js",
+      "bytes": 23844,
+      "sha256": "9c4dbc9ec0e9d08c9160f2e5275b086bd8ba0ba015d00c02d89bd4e6b93522cb",
+      "relative": "apps/api/src/services/arcade.js"
+    },
+    {
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/components/analyzer/arcade/ModeRunner.tsx",
+      "bytes": 14158,
+      "sha256": "8d8d443718aa7a1116942ba75b1302309816610b18f5084d54725e4abea6bb85",
+      "relative": "apps/web/components/analyzer/arcade/ModeRunner.tsx"
+    },
+    {
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/components/analyzer/arcade/hooks/useArcadeData.ts",
+      "bytes": 12566,
+      "sha256": "d1728fb94bbb6799bfeabe1ca3b5564ce6984fe04c80c4eb18f33461bbb68cbc",
+      "relative": "apps/web/components/analyzer/arcade/hooks/useArcadeData.ts"
+    },
+    {
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/components/analyzer/arcade/types.ts",
+      "bytes": 15798,
+      "sha256": "0c7aa3e943e4fc9f0a1f00d183ce3beb4da8dbfc6d404f6090e013f0d7b46e2d",
+      "relative": "apps/web/components/analyzer/arcade/types.ts"
+    },
+    {
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/lib/help/articles/analyzer/arcade.ts",
+      "bytes": 4901,
+      "sha256": "d0c00c3fbe976cc1f824fa4d5e8e64af1b6a77d15456024fa98600d1a0195d57",
+      "relative": "apps/web/lib/help/articles/analyzer/arcade.ts"
+    },
+    {
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/__tests__/arcadeUnitStatsReadiness.test.js",
+      "bytes": 3410,
+      "sha256": "059616d9bcad33ecdea4865199a1f601c80526d94839941daf4a5b067d509adb",
+      "relative": "apps/api/__tests__/arcadeUnitStatsReadiness.test.js"
+    },
+    {
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/components/analyzer/arcade/__tests__/UnitProfile.historyReadiness.test.tsx",
+      "bytes": 8341,
+      "sha256": "fe61285d2d0feef5b41a0cbf29e1fbc437414654740e2cbc1007a1a26454b3c1",
+      "relative": "apps/web/components/analyzer/arcade/__tests__/UnitProfile.historyReadiness.test.tsx"
+    },
+    {
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/docs/handoff/unit-profile-history-checkpoint.md",
+      "bytes": 3633,
+      "sha256": "52cf3edfb611f65eea4cd3409f19f40aa2d5ef94b71a136285fd0d66387529d7",
+      "relative": "docs/handoff/unit-profile-history-checkpoint.md"
+    }
+  ],
+  "protectedPins": [
+    {
+      "relative": "apps/web/components/analyzer/arcade/modes/quizzes/unitProfile.tsx",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/components/analyzer/arcade/modes/quizzes/unitProfile.tsx",
+      "bytes": 18007,
+      "sha256": "ce686fd605a82ead6709a3c57c0f1a21fca9ecf8751130dc7fb5ceedb510c082",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/web/lib/clientApi.ts",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/lib/clientApi.ts",
+      "bytes": 20362,
+      "sha256": "5e143c65dc8d2d93ad1643a7a74dd4aad31f6dc6b4ea8619f01d4ea9c19ca0c2",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/web/components/analyzer/arcade/hooks/useAnalysisGames.ts",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/components/analyzer/arcade/hooks/useAnalysisGames.ts",
+      "bytes": 9629,
+      "sha256": "813b3d2853d53d332319acb4f20c8f3d68b438f4e39cb7a226c17427f2804bd6",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/api/src/services/gameDetails.js",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/src/services/gameDetails.js",
+      "bytes": 8699,
+      "sha256": "00c97c7e72cd762a5ae4022a6d09a041df22b6ece14c153e7901719abe6d831b",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/api/src/services/gameDetailsStore.js",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/src/services/gameDetailsStore.js",
+      "bytes": 40890,
+      "sha256": "f4abf61fbad7913fbccb1ba4bf46ea211b694b406b989fbb088e3249c7c4d7c6",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/api/src/services/arcadePredicates.js",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/src/services/arcadePredicates.js",
+      "bytes": 23784,
+      "sha256": "6980dd9e2938a0a10564f053332a10e8ec6426275203771a410032d9f196c2d6",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/api/src/routes/arcade.js",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/api/src/routes/arcade.js",
+      "bytes": 3001,
+      "sha256": "588267a9856d86759b536ae2bc279c1e3aea0ce7d369478390f3ab1978b0ead0",
+      "normalizedUnchanged": true
+    },
+    {
+      "relative": "apps/web/perf-budget.json",
+      "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/perf-budget.json",
+      "bytes": 871,
+      "sha256": "969d5bf40ce6e278aa004c27937193a50694e3474a42a121bb32360e24e0581d",
+      "normalizedUnchanged": true
+    }
+  ],
+  "parentAdoption": {
+    "unchangedNonChangelogOwned": 10,
+    "unchangedProtected": 8,
+    "changed": [
+      {
+        "file": "C:/SC2TOOLS/.worktrees/unit-profile-history/CHANGELOG.md",
+        "bytes": 374866,
+        "sha256": "dc1ed9041a469e8bebc4d45c9b0d1cc0c1e13608e582376f9949b810931ea816",
+        "relative": "CHANGELOG.md"
+      }
+    ],
+    "qualification": "Only CHANGELOG differs from frozen11paths after parent normal integration; same Unit entry retained alongside inherited retirement entry. Focused local tests/types/lint are not a new combined-tree run."
+  },
+  "checks": [
+    "Unit-specific readiness prevents pending initial aggregate/error from entering real insufficiency gate; runner existing effect cancellation protects late generation, retry catches rejection and unrelated corpus modes remain usable.",
+    "Original mode/scoring/minimum25/10/6 gates, corpus pagination, owner transport and unit1000/singleton cap are protected unchanged; no scan-speed or R2-byte-savings claim.",
+    "API retains original owner/visibility/resumed predicate and latest-game sort; nested player_stats projection preserves needed facts. Real missing/legacy objects stay absent; strict provider/missing-service failures return503 instead of fabricated zero.",
+    "Two old error-path empty-success expectations intentionally replaced by unavailable503 assertions; genuine empty/count and all live-blob/cap assertions remain. New store/service/SDK tests have explicit synthetic S3 seam.",
+    "Raw89API/4 and82web/9 pass0skip/fail;5 real SWR/useApi/seven-page13000-row corpus/dataset/ModeRunner/quiz graph cases cover pending,503held retry, genuine0/24 insufficiency and unrelated-mode use. Auth/transport/account-write seams explicit and no answer/account write submitted.",
+    "Both type commands and all scoped strict lints exit0; inherited service-test warning count4→4 is independently baseline-qualified and initial61line failure retained. Relevant frozen command source inputs match; unrelated global metadata difference qualified below.",
+    "Help/changelog/checkpoint honestly separate historical production diagnosis from candidate delivery and preserve all pending gates."
+  ],
+  "results": {
+    "api": {
+      "passed": 89,
+      "files": 4,
+      "skipped": 0
+    },
+    "web": {
+      "passed": 82,
+      "files": 9,
+      "skipped": 0,
+      "actualReadinessGraphCases": 5
+    },
+    "wholeApiTypes": true,
+    "wholeWebTypes": true,
+    "strictWebWarnings": 0,
+    "strictApiProductionNewMemoryWarnings": 0,
+    "existingApiTestWarnings": [
+      4,
+      4
+    ],
+    "noAddedOrIncreasedLintDebt": true
+  },
+  "verifiedEvidencePins": [
+    {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/verification-01/api-focused-02.json",
+      "bytes": 2750,
+      "sha256": "10f69edcd1555da33be087c0e2e09a10a1dcce1a9f70b3e155638e97552b0ae3"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\verification-01\\api-focused-02.log",
+      "bytes": 607,
+      "sha256": "f327c7e067b779645e5f89da1abda67a54e8f3e1a83537a6562414f9bed55862"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/verification-01/web-focused-02.json",
+      "bytes": 3081,
+      "sha256": "47dc16126d19c6cb854e3ce5585005c3188b304d57ceac09db499eaec8f2c89f"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\verification-01\\web-focused-02.log",
+      "bytes": 1432,
+      "sha256": "e576af3b383ff5b19e092887faa64c557f83f7b8cfefaace2d8c8f7c1c84f773"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/verification-01/api-types-02.json",
+      "bytes": 2286,
+      "sha256": "e8873d536f787f491092ead273354a31b07e45b8c2c9371bd949f77942e82c5d"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\verification-01\\api-types-02.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/verification-01/web-types-02.json",
+      "bytes": 2286,
+      "sha256": "365471a0f7fc797998da174a4534ff1da91841bd07797f9d39924db7311b0822"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\verification-01\\web-types-02.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/verification-01/web-lint-01.json",
+      "bytes": 2576,
+      "sha256": "4da2777a205a89b4739cbde0c6349924daa51b099259861428bb6f7cafbc9d5b"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\verification-01\\web-lint-01.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/verification-01/api-new-strict-lint-02.json",
+      "bytes": 2448,
+      "sha256": "da4d4dc4ed0d8833aed46e5fe4dd32aeaecd15929673e371d012f485f89ee857"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\verification-01\\api-new-strict-lint-02.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/verification-01/api-test-lint-baseline.json",
+      "bytes": 3661,
+      "sha256": "12ffeeccfc29fa5ec535bcf52072ab1a171494a7a850907b6964587849199eaa"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/verification-01/api-lint-01.log",
+      "bytes": 780,
+      "sha256": "bb0b8a5a1129d828fb4bb4399a19068b8d87367c84224516fd847e514b02a71e",
+      "qualification": "Initial file-wide0-warning command exposed four inherited service-test warnings plus new61-line method. One-line wiring guard removes new debt; original service-test warning counts/sizes are independently baseline-qualified, no rule change."
+    }
+  ],
+  "nonInputMetadataQualification": [
+    {
+      "command": "web-lint-01",
+      "file": "apps/api/src/services/arcade.js",
+      "recordedSha256": "6af50dd2ef9d69202cbdb201530276a2e90e5d6d5d9efff39505c0e0730dca38",
+      "finalSha256": "9c4dbc9ec0e9d08c9160f2e5275b086bd8ba0ba015d00c02d89bd4e6b93522cb",
+      "qualification": "Global metadata captured an unrelated API source before its one-line lint-only guard fold; the web-only lint inputs are exact and API focused/types/lint02 use final bytes. No pass transferred across a changed command input."
+    }
+  ],
+  "retainedCleanup": {
+    "checkedAtUtc": "2026-10-28T14:26:17.4214668Z",
+    "recordedTestTypeLintPids": [
+      5952,
+      33476,
+      45260,
+      4148,
+      6932,
+      54832,
+      864,
+      44280,
+      50528,
+      26484,
+      54912
+    ],
+    "ownedProcessesRemaining": [],
+    "ownedListenersRemaining": [],
+    "qualifiedCachedMongoCandidatesSinceStart": 0,
+    "stoppedProcesses": [],
+    "unrelatedProcessesTouched": false,
+    "serverStarted": false,
+    "browserStarted": false
+  },
+  "reviewHarnessQualification": "An initial reviewer validator compared every global metadata input even for web-only lint and rejected the unrelated API formatting preimage; narrowed to actual command scope. No test/source/evidence was edited or rerun by reviewer.",
+  "limits": [
+    "Source-only review, no runtime/process/provider/Git actions. Parent integrated build/all83 caps/assets, responsiveAA, exact-head required CI/deployment and actual postchange acceptance remain pending.",
+    "No fresh combined-tree test pass, current production acceptance, latency improvement, cache/flag activation, native release or roadmap closure claimed."
+  ]
+}

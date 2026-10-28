@@ -1,0 +1,319 @@
+{
+  "schemaVersion": 1,
+  "status": "LOCAL_ACTUAL_COMPONENT_RESPONSIVE_FULL_AXE_MATRIX_PASSED_NOT_LIVE_ACCEPTANCE",
+  "verifiedAtUtc": "2026-10-28T14:41:29.975Z",
+  "sourceHead": "1e1a736ff8d43fef7e91abaf2db8fd4a21073e07",
+  "BUILD_ID": "bYQf505RuQP3HOsucpPUj",
+  "commands": {
+    "argv": [
+      "node",
+      "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config",
+      "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/ui-browser/playwright.config-01.mjs",
+      "--workers=1"
+    ],
+    "exitCode": 0,
+    "execSession": 54424,
+    "browserWorkers": 1,
+    "retries": 0,
+    "serverStarted": false,
+    "browserExecutable": "C:/Users/jay19/AppData/Local/ms-playwright/chromium-1228/chrome-win64/chrome.exe",
+    "downloads": false
+  },
+  "results": {
+    "browserCases": 8,
+    "passed": 8,
+    "skipped": 0,
+    "flaky": 0,
+    "durationMs": 23456.585000000003,
+    "widths": [
+      320,
+      390,
+      768,
+      1280
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "statesPerCase": [
+      "loading",
+      "error",
+      "ready",
+      "successful24gameInsufficient",
+      "unrelatedWithPendingUnitRead"
+    ],
+    "geometrySpecimens": 40,
+    "fullDefaultAxeScans": 40,
+    "axeViolations": 0,
+    "exclusions": 0,
+    "captures": 24,
+    "nativeKeyboardRetry": true,
+    "quizAnswers": 0,
+    "accountWrites": 0,
+    "unexpectedRequests": 0
+  },
+  "binding": {
+    "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/ui-browser/input-binding-01.json",
+    "bytes": 40278,
+    "sha256": "72853601b2a8a51302a99aa637d2406e7c323b2f1e5e1edfa8a1e4a246fe9b14"
+  },
+  "browserReport": {
+    "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/ui-browser/browser-01.json",
+    "bytes": 3059746,
+    "sha256": "ae94b6c5ac60af158fab74b3f9dd193775d7b210fe8205e110fef8a2d7af31a2"
+  },
+  "sourceFiles": [
+    {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/ui-browser/fixture.mjs",
+      "bytes": 11265,
+      "sha256": "13a5b531b305bec94a990d8cbefb5d840a13291f20170b6df134f8d8e5c41cf0"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/ui-browser/unit-profile.spec.mjs",
+      "bytes": 6221,
+      "sha256": "54956c6f2f2271f89cc797df90861911113d26eddf5ea3d1996d695fe48a9a4c"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/ui-browser/playwright.config-01.mjs",
+      "bytes": 798,
+      "sha256": "d84d411f3e3d0b80d1cd9b50026b7a34dae25ba181d2c95fc54661e76bea3842"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/ui-browser/cleanup-01.json",
+      "bytes": 670,
+      "sha256": "119df6aea433ddc300a491f8b2bbf5bb783016eefa1b967f0b0ca97a844d7b7d"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/ui-browser/finalize.mjs",
+      "bytes": 5637,
+      "sha256": "7888db3902ad9fae46a66244f9a359438ea2b379319e33a78a6d60b8b46a3c9d"
+    }
+  ],
+  "captures": [
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-768px-light/local-error-768-light.png",
+      "bytes": 26920,
+      "sha256": "653173e7ddef8412c1d1f3d9fedf97baf8a613965cde137ce662cff0592c7f7e",
+      "width": 768,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-768px-light/local-loading-768-light.png",
+      "bytes": 23202,
+      "sha256": "c849b42a1381f94fbb27d6f0039d735929b23385e700cb89dfe00bab9c095688",
+      "width": 768,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-768px-light/local-ready-768-light.png",
+      "bytes": 38272,
+      "sha256": "9a00eb52d8ed07f63738a401a1119d6cd4f7fb0db5c05f374d20fa36cdf1143f",
+      "width": 768,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-768px-dark/local-error-768-dark.png",
+      "bytes": 27387,
+      "sha256": "668098dadf865f03cdd29e07f6c48e1c056fd87ec5528337282157d3faa37b0c",
+      "width": 768,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-768px-dark/local-loading-768-dark.png",
+      "bytes": 23714,
+      "sha256": "49c06f67ff11c9357e72ce9a72c588252893ca9a3c76467bbb47d0a201c5998b",
+      "width": 768,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-768px-dark/local-ready-768-dark.png",
+      "bytes": 38720,
+      "sha256": "9b817a31397f3fc3f9cebb26a979d9fad8c9324e0fdf36d0771a4cb72c29ab1d",
+      "width": 768,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-390px-light/local-error-390-light.png",
+      "bytes": 24644,
+      "sha256": "9dc210b7f90fdea0e7922319bec86d311b2d041dec40698eab2c438b824c555e",
+      "width": 390,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-390px-light/local-loading-390-light.png",
+      "bytes": 20826,
+      "sha256": "2fa4ea211e7b127d5693fcb3c2c967438ed7f3dad4a49abdb9d24eb2521e1b61",
+      "width": 390,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-390px-light/local-ready-390-light.png",
+      "bytes": 35806,
+      "sha256": "cc816a123ddf11b7bef503498859113929bb859c828ab12791920c96086398c5",
+      "width": 390,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-390px-dark/local-error-390-dark.png",
+      "bytes": 25118,
+      "sha256": "6da826299cd7efa57abe3ec6281c2f594fc13591baec3fb11a22b3a676f72ac3",
+      "width": 390,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-390px-dark/local-loading-390-dark.png",
+      "bytes": 21230,
+      "sha256": "f03fe4e7b9b414be241f951cd8350822d4aa62e011572f753c11b30ff341ceee",
+      "width": 390,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-390px-dark/local-ready-390-dark.png",
+      "bytes": 36563,
+      "sha256": "6f2177579b835ecde3d60f773b65a003c3f4f8100b4f38da48f8acb91bb0b5bf",
+      "width": 390,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-320px-light/local-error-320-light.png",
+      "bytes": 24049,
+      "sha256": "c9b0e27fcd14e238c3bf1a3efa6ebd8bcfca44daaff74c1925be0f1afae91940",
+      "width": 320,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-320px-light/local-loading-320-light.png",
+      "bytes": 20283,
+      "sha256": "ea1ef99ff48902f47e7f70475e31154a83fa8e12c4f9e2b2baf888ad3929df2d",
+      "width": 320,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-320px-light/local-ready-320-light.png",
+      "bytes": 34946,
+      "sha256": "a090bdd1aa848581845f86c6d13ce9c5c86dcb183ac120f058a15c6571580a5b",
+      "width": 320,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-320px-dark/local-error-320-dark.png",
+      "bytes": 24449,
+      "sha256": "dc14ddc0e6e3ad0d03329644a2b31a90c8e4b31d78f832f6f7ca276136cd09b4",
+      "width": 320,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-320px-dark/local-loading-320-dark.png",
+      "bytes": 20625,
+      "sha256": "dd65136ca3fe55deb46a1d67906a72c5dc37796a52ba7d8d3ee535673ecb4578",
+      "width": 320,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-320px-dark/local-ready-320-dark.png",
+      "bytes": 35505,
+      "sha256": "bbce73a860c8d27453fef2d62c55ddf9429b61310f0ef685943585df305ef3a1",
+      "width": 320,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-1280px-light/local-error-1280-light.png",
+      "bytes": 28847,
+      "sha256": "87559e92c68c900d5e3df5f73569e7010bb346850f1f1e8b318267fcfbb21b85",
+      "width": 1280,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-1280px-light/local-loading-1280-light.png",
+      "bytes": 25144,
+      "sha256": "b399550b31bdb8590489610ce9004584d8b456a07a77b172de1dc7cbffb86647",
+      "width": 1280,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-1280px-light/local-ready-1280-light.png",
+      "bytes": 39792,
+      "sha256": "91dd72b4d8bbd6b5bbe9e63b86828d1644c0b834936924bd02100d02bcac0667",
+      "width": 1280,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-1280px-dark/local-error-1280-dark.png",
+      "bytes": 29353,
+      "sha256": "889da7c4766a61bbcce736f624533712f197413e2f054fdd53a533a021349ff3",
+      "width": 1280,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-1280px-dark/local-loading-1280-dark.png",
+      "bytes": 25632,
+      "sha256": "545517589b9fbcfc807304259dc07d956c8c50c558c3a8d7f32daa10929630af",
+      "width": 1280,
+      "height": 1100
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-1280px-dark/local-ready-1280-dark.png",
+      "bytes": 40151,
+      "sha256": "e0f711941ae5971f6cbb416969c9860db28d2910a6c603edd5b819695053fbfe",
+      "width": 1280,
+      "height": 1100
+    }
+  ],
+  "visualInspection": {
+    "method": "Static view_image inspection of4 passing LOCAL captures after run, not production screenshots.",
+    "files": [
+      {
+        "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-320px-light/local-loading-320-light.png",
+        "bytes": 20283,
+        "sha256": "ea1ef99ff48902f47e7f70475e31154a83fa8e12c4f9e2b2baf888ad3929df2d",
+        "width": 320,
+        "height": 1100
+      },
+      {
+        "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-320px-light/local-error-320-light.png",
+        "bytes": 24049,
+        "sha256": "c9b0e27fcd14e238c3bf1a3efa6ebd8bcfca44daaff74c1925be0f1afae91940",
+        "width": 320,
+        "height": 1100
+      },
+      {
+        "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-390px-light/local-ready-390-light.png",
+        "bytes": 35806,
+        "sha256": "cc816a123ddf11b7bef503498859113929bb859c828ab12791920c96086398c5",
+        "width": 390,
+        "height": 1100
+      },
+      {
+        "file": "C:\\SC2TOOLS\\.cache\\unit-profile-history-fix-20261028\\ui-browser\\browser-01\\unit-profile-Unit-Profile-1280px-dark/local-ready-1280-dark.png",
+        "bytes": 40151,
+        "sha256": "e0f711941ae5971f6cbb416969c9860db28d2910a6c603edd5b819695053fbfe",
+        "width": 1280,
+        "height": 1100
+      }
+    ],
+    "observed": "320px loading and error/retry copy fit;390px light and1280px dark actual unit question/answer buttons are readable, inside their cards and unselected. No clipped or blank-capture proof used."
+  },
+  "cleanup": {
+    "checkedAtUtc": "2026-10-28T14:38:58.9147474Z",
+    "testStartedAt": "2026-10-28T14:37:42.351Z",
+    "testDurationMs": 23456.585000000003,
+    "ownedProcessesRemaining": [],
+    "ownedListenersRemaining": [],
+    "browserCloseAssertedByActualAfterAll": true,
+    "cliCompletedExitCode": 0,
+    "duringSnapshotQualification": "During-tree query completed after23.5s run had already exited, so no historical browserPIDs are claimed. Explicit browser.close/isConnected assertion, completed CLI, exact packet markers and recent PlaywrightChrome/esbuild creation window checked.",
+    "stoppedProcesses": [],
+    "unrelatedProcessesTouched": false,
+    "serverStarted": false
+  },
+  "boundaries": "Actual ModeRunner, useArcadeData, useApi/SWR, corpus pagination, custom catalog, session-policy hook, unit generator/renderer/shell and completed productionCSS/localWOFF2. Explicit synthetic auth/dailyseed/account-write/HTTP and local Next primitives only. Observed generator wrapper counts invocations; unrelated mode is an explicit simple specimen. No provider, actual account, real routing or live acceptance proof.",
+  "limits": [
+    "Synthetic13,000-game corpus and unit counts exercise actual hooks/rendering; no real account, network provider, actual Next router or live acceptance is claimed.",
+    "ProductionCSS and localWOFF2 are exact completed-build inputs. The fixture compiles source components; it is not the shipped Next route or a network-latency benchmark.",
+    "Account-write sinks throw and all transport is GET-only local fulfillment. Native Tab/Enter operates only Retry, never an answer.",
+    "Original prechange production error/eventual question remain separate diagnosis evidence; no speedup, cache activation or deployed fix is inferred.",
+    "Source/asset postbrowser guards and required exact-head CI/deploy/live acceptance remain parent release steps."
+  ]
+}

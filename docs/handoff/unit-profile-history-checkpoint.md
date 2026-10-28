@@ -44,10 +44,52 @@ with no added or increased debt. An initial lint attempt found the old warnings
 and a new61-line unitStats method; folding its one-line wiring guard removes
 that new warning without changing behavior. Both focused suites were repeated
 after the narrow source repairs, with all failures/logs retained. No quiz answers
-or account writes are submitted. Independent source review, production
-build/all83 unchanged budgets/assets, exact-head CI, deployment and actual
-signed-in acceptance are still required before delivery.
+or account writes are submitted. The independent source review is clear at
+parent-integrated `1e1a736ff8d43fef7e91abaf2db8fd4a21073e07`: the ten non-changelog
+Unit pins and eight protected files remain exact after the normal merge of
+main `76fbc441`; its inherited changelog change is explicitly qualified.
 
 No new endpoint, polling, cache activation, flag/provider/security change,
 infrastructure, engine/native source or asset regeneration is part of this slice.
 Keep `USER_CACHE_ENABLED` off. Preserve all original route caps and shared assets.
+
+## Completed local release gates
+
+Historical production diagnosis used DOM/screenshots, without network tracing.
+No quiz answer/XP attempt, settings Save or personal upload was performed.
+Normal activity/touch/autosave behavior was not measured; universal absence of
+account writes is not claimed. The local GET-only/write-guard proof below uses
+explicit synthetic account and transport seams.
+
+Direct production Next build `bYQf505RuQP3HOsucpPUj` passed all 83 unchanged
+route budgets. The 40 canonical engine inputs, seven active assets and strict
+four-game sample matched before/after build and after browser QA. No generator,
+download or asset pruning ran. All 6,843 source inputs matched at prebuild,
+postbuild and postbrowser; the independent reviewer rehashed them before this
+documentation adoption. These are historical build guards: this checkpoint
+update and the new compact evidence files are subsequent documentation-only
+deltas, while every runtime Unit source and protected input remains unchanged.
+
+The local responsive matrix passed eight cases at 320/390/768/1280 in both
+themes, with 40 full default Axe scans, zero violations/exclusions, 40 geometry
+specimens and 24 retained LOCAL captures. Actual hooks/SWR, seven-page corpus,
+catalog/session providers, ModeRunner and the Unit Profile generator/renderer
+consume 177 exact build-admitted product inputs, fresh production CSS and local
+fonts. Auth, seed, account-write sinks, GET-only HTTP and Next primitives are
+explicit fixture adapters. Native Tab/Enter exercises only Retry; no answer or
+account write is submitted. This is component QA, not an actual Next route,
+provider, account, scan-speed measurement or live acceptance.
+
+The loading, error/Retry, ready question, successful 24-game insufficiency and
+unrelated-mode states passed. Representative 320px light loading, 390px dark
+error and 390px light ready images were independently viewed and are legible
+and contained. No private production image is copied or used as postchange
+acceptance. Build, test/type/lint and browser cleanup receipts show no remaining
+owned processes/listeners; no unrelated process was stopped.
+
+Compact receipts and three reviewed local images are in
+[validation/unit-profile-history](validation/unit-profile-history/README.md).
+The raw 3 MB report, traces, all 24 captures and complete source snapshot remain
+in the cache packet. Exact-current-head required CI, actual deployment and
+signed-in production acceptance still remain. The roadmap ledger is unchanged;
+no release or whole-program completion is claimed.

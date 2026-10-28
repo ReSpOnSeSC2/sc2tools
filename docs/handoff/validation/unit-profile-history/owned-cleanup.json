@@ -1,0 +1,55 @@
+{
+  "build": {
+    "checkedAtUtc": "2026-10-28T14:33:16.2624861Z",
+    "trackedPids": [
+      41116,
+      40580,
+      18472,
+      42708,
+      44652
+    ],
+    "remainingOwnedProcesses": [],
+    "stoppedProcesses": [],
+    "sourceHead": "1e1a736ff8d43fef7e91abaf2db8fd4a21073e07",
+    "buildId": "bYQf505RuQP3HOsucpPUj",
+    "scope": "Recorded helpers/Next PID, direct children, and project-scoped Node processes in the bounded build interval; no unrelated process stopped."
+  },
+  "unitAndTypeLint": {
+    "checkedAtUtc": "2026-10-28T14:26:17.4214668Z",
+    "recordedTestTypeLintPids": [
+      5952,
+      33476,
+      45260,
+      4148,
+      6932,
+      54832,
+      864,
+      44280,
+      50528,
+      26484,
+      54912
+    ],
+    "ownedProcessesRemaining": [],
+    "ownedListenersRemaining": [],
+    "qualifiedCachedMongoCandidatesSinceStart": 0,
+    "stoppedProcesses": [],
+    "unrelatedProcessesTouched": false,
+    "serverStarted": false,
+    "browserStarted": false
+  },
+  "browser": {
+    "checkedAtUtc": "2026-10-28T14:38:58.9147474Z",
+    "testStartedAt": "2026-10-28T14:37:42.351Z",
+    "testDurationMs": 23456.585000000003,
+    "ownedProcessesRemaining": [],
+    "ownedListenersRemaining": [],
+    "browserCloseAssertedByActualAfterAll": true,
+    "cliCompletedExitCode": 0,
+    "duringSnapshotQualification": "During-tree query completed after23.5s run had already exited, so no historical browserPIDs are claimed. Explicit browser.close/isConnected assertion, completed CLI, exact packet markers and recent PlaywrightChrome/esbuild creation window checked.",
+    "stoppedProcesses": [],
+    "unrelatedProcessesTouched": false,
+    "serverStarted": false
+  },
+  "reviewerProcessInspection": false,
+  "qualification": "Retained actual owner cleanup receipts. Reviewer did not launch or inspect live processes and stops nothing."
+}
