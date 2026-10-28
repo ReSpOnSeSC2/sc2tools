@@ -1,0 +1,525 @@
+{
+  "stats": {
+    "startTime": "2026-10-28T12:39:38.630Z",
+    "duration": 21044.081,
+    "expected": 16,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "originalResult": {
+    "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/ui-browser/browser-03.json",
+    "bytes": 2181094,
+    "sha256": "e1aabd6d6116d6a5ce75b04941f095ebec6aaf1e3c6e67e603ddab1e90ca07b5"
+  },
+  "inputBinding": {
+    "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/ui-browser/input-binding-03.json",
+    "bytes": 6067,
+    "sha256": "a5dfb1c90a6176e6c16e0f462ebdcd9deef62f82d0288d52215480cd1b91ce7a"
+  },
+  "workerCount": 1,
+  "retries": 0,
+  "axeScans": 32,
+  "exclusions": 0,
+  "boundary": "Disabled AA fixture compiles actual ReplayDemo/flag/Card/LinkButton with admitted production CSS/fonts; Next anchors/destination documents and throwing unexercised analyzer/editor/API seams are explicit. It does not prove real Next navigation, worker, replay parse, provider or live flags.",
+  "cases": [
+    {
+      "title": "disabled-demo.spec.mjs > disabled off card at 320px light",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1740
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled admins card at 320px light",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1086
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled off card at 320px dark",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1101
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled admins card at 320px dark",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1250
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled off card at 390px light",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1221
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled admins card at 390px light",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1189
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled off card at 390px dark",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1271
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled admins card at 390px dark",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1217
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled off card at 768px light",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1256
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled admins card at 768px light",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1193
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled off card at 768px dark",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1101
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled admins card at 768px dark",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1275
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled off card at 1280px light",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1235
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled admins card at 1280px light",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1224
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled off card at 1280px dark",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1226
+    },
+    {
+      "title": "disabled-demo.spec.mjs > disabled admins card at 1280px dark",
+      "project": "",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1290
+    }
+  ],
+  "scans": [
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 320px light",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 320px light",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 320px light",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 320px light",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 320px dark",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 320px dark",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 320px dark",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 320px dark",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 390px light",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 390px light",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 390px light",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 390px light",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 390px dark",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 390px dark",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 390px dark",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 390px dark",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 768px light",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 768px light",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 768px light",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 768px light",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 768px dark",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 768px dark",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 768px dark",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 768px dark",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 1280px light",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 1280px light",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 1280px light",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 1280px light",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 1280px dark",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled off card at 1280px dark",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 1280px dark",
+      "label": "axe-default",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    },
+    {
+      "case": "disabled-demo.spec.mjs > disabled admins card at 1280px dark",
+      "label": "axe-keyboard-focus",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0,
+      "testEngine": {
+        "name": "axe-core",
+        "version": "4.11.4"
+      }
+    }
+  ]
+}

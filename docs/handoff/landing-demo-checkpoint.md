@@ -1,42 +1,28 @@
 # Home-page browser replay demo
 
-## 2026-10-28 server-retirement candidate — source only
+## Retirement implementation and local verification — 2026-10-28
 
-The `all` branch was observed in actual production at main263a0805, and root
-reports the subsequent803ccb598 release Ready/Live with home browser-mode copy.
-The retained263 receipt proves copy and an owned invalid-file recovery, not a
-successful real landing parse or live network tracing. Root is verifying an
-owned public fixture separately. Local real-browser traffic assertions remain
-the no-API proof; live CUA has no network-trace API here.
+The source slice removes only the legacy singular `/v1/public/preview-replay` router, its `/health`, Python spawn wiring, and obsolete route tests. The historical standalone `preview_replay_cli.py` remains unchanged. The plural public replay/archive API, global health, `/try` mode behavior, canonical40 browser engine inputs, seven active assets, strict four-game sample, native/agent code, versions, flags, providers and infrastructure remain unchanged.
 
-Candidate `codex/demo-server-retirement`, based on main910a1e4, removes the
-singular preview API router, its health route and both CLI spawn paths. The
-unused historical CLI source is retained byte-for-byte; no shared engine,
-native agent, versions, bundle allowlist or generated asset is changed. Global
-API health, other Python analysis and plural public replay archives remain.
-`all` keeps the existing intent-loaded local session, complete logs, both
-perspectives and editor recovery. `off`/`admins` now show explicit unavailable
-and desktop recovery without landing file intake, warm-up or upload. `/try`
-keeps its original `all`/`admins`/`off` behavior. Switching off does not restore
-the retired server parser.
+The landing browser demo keeps its existing all-mode real worker/controller/editor flow. Public `off` and `admins` modes expose an explicit unavailable message with desktop and free-account recovery, with no intake, Worker, analyzer, editor, legacy API or replay upload. Existing Tiny806 readable B/KB/MB formatting/private-error/focus assertions remain adopted from main2242. Three legacy busy-only tests retired with their deleted handler; browser drag, empty-error and same-file selection assertions replace the relevant active behavior.
 
-The16 obsolete parser-route tests are replaced with actual-app404/no-Python
-and unchanged global-health regressions. Landing tests migrate legacy-only
-cases to disabled-mode recovery while preserving browser drag/intake/focus,
-same-file reselection and canceled late-result assertions. Editor browser and
-manual consumers use the actual local replay instead of a synthetic server
-success; all private-notes, rules, signup, overflow, close and chunk-Retry
-assertions remain. No skip or assertion weakening is introduced.
+Local evidence, not delivery: 58 API cases/three files and127 web/Help cases/19files passed without skips; whole API/web types and strict owned lint passed. Official removal-only UI prune removed0/added0 and retained all473 semantic entries. Existing API warnings3→3; existing component debt reduced247→201lines/complexity34→28 and is not represented as newly meeting every size threshold. Direct production Next build `jazSofhZfqsc8J13rzgI5` passed all83 unchanged route caps, and the canonical40/active7/strict4 asset admissions matched before/after build and after browser checks. No generator, download or asset pruning ran.
 
-No tests, types, lint, production build or browser checks have run for this
-candidate yet. Auth owns the serialized heavy slot. All83 original budgets,
-asset checks, required exact-head CI and real deployment acceptance remain
-pending. The roadmap item remains partial until delivery is verified. No
-provider configuration, flag change or native release is included.
+The original actual Next landing privacy test passed twice (mobile360 and desktop1280) with the real engine/replay and both build-order editors. The original phone editor case passed with its notes, rule, signup, overflow and close assertions. The context guard observed API-origin requests=[], replay/payload/other outbound writes=[] and retains its existing small same-site `/api/site/presence` allowance; it is not a claim of zero network requests. An actual Next lazy editor failure/retry passed with one intentional failure of the unique editor-factory chunk and two requests total, API requests=[] and uploads=[]. The initial manual-driver failure was preserved: it had mistaken normally shared loader prerequisites for the editor's own factory chunk. Only that CJS driver's instrumentation changed after build, preserving its assertions. The original strict post-browser full-source guard failed and is retained; a separate comparison proves exactly that one driver delta and all other6822 source inputs unchanged, with no file additions/removals or compiled application/build input change.
+
+The manual landing matrix passed220 checks with36 captures across320/390/768/1440 and both themes, using the real worker/replay with explicit local framework/URL adapters. A separate disabled-mode matrix passed16 cases/32 full default Axe scans, no exclusions/skips/retries, at320/390/768/1280 and both themes. That fixture uses actual ReplayDemo, flag parsing, Card/LinkButton, admitted completed production CSS and local fonts; Next anchors/destination documents and throwing unexercised analyzer/editor/API seams are explicit. It does not claim real Next navigation, a replay parse, provider behavior, or changed live flags. The separate actual Next tests provide the real-framework/worker/privacy proof. Initial missing-browser and restricted-sandbox Chromium startup failures were preserved; the same cached Chromium1228 ran successfully outside the restricted process sandbox, without downloads.
+
+Owned process/listener checks after verification found0 owned build/test/server/browser/esbuild/Mongo candidates,0 recent Playwright Chrome candidates and0 owned/recorded listeners; no processes were killed. Heavy slot was released before final metadata work. Source/evidence packet: `.cache/demo-server-retirement-20261028/source-ready-04-runtime.json`; receipt `runtime-verification-01.json`; all204 build/browser evidence files pinned by `build-browser-evidence-index-01.json`. These are local-only receipts. Required exact-head CI, production deployment, relevant acceptance and ledger closure remain pending.
+
+Compact tracked local receipts and representative passing-run captures are in [validation/demo-server-retirement](validation/demo-server-retirement/README.md). The independent retained-evidence and visual review is [independent-final-review.json](validation/demo-server-retirement/independent-final-review.json), SHA256 `80ba64bf954f96c5c429866fdec0f1f1fa3f6ebd2539af0d69a21d35d1032262`. The source under test was the working tree at `4cc3811334e06e8c721d05664d863d52b8eaeba0`, with Tiny806 main `2242d112` adopted. Documentation/evidence adoption below is subsequent to the local build; it changes no runtime source. The roadmap item remains **partial** while required exact-head CI and actual retirement deployment/acceptance are pending.
+
+## Historical initial delivery and compatibility window
+
+The following records describe the earlier browser-demo implementation and its one-release server compatibility window. They do not describe the current retirement candidate; the legacy fallback described here is removed by the candidate above. Earlier screenshots are retained history, not new retirement acceptance proof.
 
 Branch: `codex/wave5-landing-demo-browser` in `.worktrees/wave3-private-scouting`. Initial source is preserved at `af1fce42`; the prior Twitch branch/head remains preserved. Local caches and engine assets are retained.
 
-## Contract and current implementation
+## Historical implementation contract
 
 - Existing build flag `all` selects an intent-loaded one-file, 1v1, all-time session with policy refresh disabled. Page view does not create/download the worker. There is no API upload, API fallback, account write or local report persistence.
 - The shared worker/session supplies bounded parsing, player selection, cancellation and shared errors. A pure mapper retains both complete build logs and recorded metadata. Successful parsing opens the chosen side in the existing demo editor; after closing, accessible player buttons reopen either side without parsing again.
@@ -45,7 +31,7 @@ Branch: `codex/wave5-landing-demo-browser` in `.worktrees/wave3-private-scouting
 - `off` and `admins` retain the existing rate-limited server route/health/CLI for the plan's one-release compatibility window. The old upload disclosure remains explicit. That request now has close/unmount cancellation and a whole-operation deadline. Retirement is a later explicit change after an actual release, not silently claimed by this implementation.
 - `/try#home-replay-demo` answers the required FAQ. ADR0059 and `docs/instant-analysis.md` rollout step 3 describe the architecture and compatibility/rollback contract.
 
-## Current proof
+## Historical proof
 
 Approved frozen generic editor/private-request dependency `1b56cbf6` is integrated at `8299edd3`, preserving its lazy editor import and owner fences. This includes the real root-StrictMode correction: capability invalidation is synchronous, while physical abort is deferred one microtask only when the same scope has not reactivated. Actual PR743 squash `bef4054c` is reconciled at `e56bbfcb`; its fresh-main merge tree equals the preserved reviewed tree `f5ec60e59a7334849aeebb2a11bbbefa175c85ec`. The feature-only PR therefore includes no generic helper changes.
 
@@ -65,7 +51,7 @@ PR745's initial web check passed. Responsive CI passed 205 cases but exposed one
 
 No engine source changed. The expected engine remains `25b300818c31d41b`; coordinate any required prebuild with the other worktrees. No old `f96` prebuild is allowed. No rollout/environment, provider, migration, installer, version or release action was performed.
 
-## Reproduction
+## Historical reproduction
 
 Released Reference editor and passive-scroll main `9f9e6439` are integrated at
 `6ed37753`. The only conflict was additive owner-setup documentation; both

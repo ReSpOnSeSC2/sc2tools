@@ -12,6 +12,13 @@ async function port(){const server=http.createServer();await new Promise(resolve
   const loader=code.match(/Promise\.all\(\[([^\]]+)\]\)\.then\([^;]{0,100}\.BuildEditorModal\)/);
   if(!loader)throw new Error('Could not locate actual editor chunk loader');
   const ids=[...loader[1].matchAll(/\.e\((\d+)\)/g)].map(match=>match[1]),seen=[],failed=[];
+  const editorModule=loader[0].match(/\.bind\(\w+,(\d+)\)/)?.[1];
+  if(!editorModule)throw new Error('Could not locate actual editor module id');
+  const chunks=fs.readdirSync('.next/static/chunks'),factory=new RegExp(`(?:\\{|,)${editorModule}\\s*:`);
+  const editorChunks=ids.flatMap(id=>chunks.filter(file=>new RegExp(`^${id}[.-].*\\.js$`).test(file)))
+    .filter(file=>factory.test(fs.readFileSync(path.join('.next/static/chunks',file),'utf8')));
+  if(editorChunks.length!==1)throw new Error(`Expected one editor factory chunk, found ${editorChunks.length}`);
+  const editorPath=`/_next/static/chunks/${editorChunks[0]}`;
   child=spawn(process.execPath,['node_modules/next/dist/bin/next','start','-p',String(number),'-H','localhost'],{cwd:root,windowsHide:true,env:{...process.env,SC2TOOLS_API_BASE:apiOrigin,CLERK_SECRET_KEY:'sk_live_dummy',NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:'pk_live_Y2xlcmsuZXhhbXBsZS5jb20k'},stdio:['ignore','pipe','pipe']});
   child.stdout.on('data',chunk=>{logs+=chunk});child.stderr.on('data',chunk=>{logs+=chunk});
   await new Promise((resolve,reject)=>{const deadline=setTimeout(()=>reject(new Error('Next startup timeout: '+logs.slice(-1000))),30000);const check=()=>{if(logs.includes('Ready in')){clearTimeout(deadline);resolve()}else if(child.exitCode!==null){clearTimeout(deadline);reject(new Error('Next exited: '+logs.slice(-1000)))}else setTimeout(check,100)};check()});
@@ -21,7 +28,7 @@ async function port(){const server=http.createServer();await new Promise(resolve
     const url=new URL(route.request().url());
     if(url.pathname==='/v1/public/preview-replay'){previewReads++;return route.abort()}
     if(url.origin===origin){
-      const candidate=ids.some(id=>new RegExp(`/chunks/${id}[.-]`).test(url.pathname));
+      const candidate=url.pathname===editorPath;
       if(candidate){seen.push(url.pathname);if(failChunk){failChunk=false;failed.push(url.pathname);return route.abort('failed')}}
       return route.continue();
     }
@@ -42,9 +49,9 @@ async function port(){const server=http.createServer();await new Promise(resolve
   await expect(page.getByText(/Demo: rules and preview are local/)).toBeVisible();expect(seen.filter(file=>file===failed[0])).toHaveLength(2);expect(previewReads).toBe(0);
   await expect(page.getByRole('button',{name:/Add rule:/}).first()).toBeVisible();
   expect(apiRequests).toEqual([]);expect(uploads).toEqual([]);
-  console.log(JSON.stringify({result:'PASS',checks:{realLandingParse:true,editorRetry:true,ruleControls:true,noPreviewRequests:true,noApiRequests:true,noReplayUploads:true},failedChunk:failed[0],editorChunkRequests:seen.length,previewReads,apiRequests,uploads,boundary:'Actual local Next/worker/replay/editor; only dummy auth/API and one intentional editor chunk failure. No server-preview fixture.'}));await context.close();
+  console.log(JSON.stringify({result:'PASS',checks:{realLandingParse:true,editorRetry:true,ruleControls:true,noPreviewRequests:true,noApiRequests:true,noReplayUploads:true},nextPid:child.pid,nextPort:number,apiPort:api.address().port,editorModule,editorPath,failedChunk:failed[0],editorChunkRequests:seen.length,previewReads,apiRequests,uploads,boundary:'Actual local Next/worker/replay/editor; only dummy auth/API and one intentional factory-owning editor chunk failure. Shared loader dependencies are not mistaken for an eager editor import. No server-preview fixture.'}));await context.close();
 })().catch(error=>{console.error(error);console.error(logs.slice(-2000));process.exitCode=1}).finally(async()=>{
   await browser?.close();
-  if(child&&child.exitCode===null){const closed=new Promise(resolve=>child.once('exit',resolve));child.kill();await closed}
+  if(child&&child.exitCode===null&&child.signalCode===null){const closed=new Promise(resolve=>child.once('exit',resolve));child.kill();await closed}
   if(api){api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}
 });
