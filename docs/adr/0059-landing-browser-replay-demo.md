@@ -1,6 +1,6 @@
 # ADR 0059: Intent-loaded browser replay demo
 
-Status: accepted; implementation and local verification complete
+Status: accepted; browser implementation delivered, server-retirement candidate unverified
 
 The Wave 5 `landing-demo-in-browser` pack moves the home-page one-replay build editor demo onto the existing Instant Analysis runtime when `NEXT_PUBLIC_INSTANT_IMPORT=all`. This changes source behavior behind the existing build-time flag; it changes no environment, rollout setting, release or production data.
 
@@ -11,6 +11,14 @@ A narrow pure projection converts the selected player's payload into the existin
 The optional browser chunk has a finite load deadline, local Retry and render isolation. Closing or replacing a run invalidates old completions; cancellation clears session files/results while retaining only the bounded warm engine. Unsupported browser capabilities get Chrome/Edge or desktop recovery and never cause an upload. The legacy server request is also cancellable and has a whole-operation deadline during the compatibility period.
 
 ## Compatibility and retirement
+
+The paragraphs below describe the historical one-release window. The
+2026-10-28 retirement candidate removes its singular API router, parser-health
+route and CLI spawn wiring. `off`/`admins` now offer desktop recovery without
+landing intake; `/try` keeps its original rollout gates. The historical CLI
+source, shared classifier and all generated engine assets remain unchanged.
+No server parser is restored by switching the browser flag off. Verification
+and release limits are recorded in the dated landing checkpoint.
 
 The roadmap explicitly keeps the server parser for one release. During that window, `off` and `admins` retain the existing anonymous, rate-limited server demo and its honest upload copy. `all` uses the local browser path exclusively, including on failure. No new API flag or infrastructure is added.
 

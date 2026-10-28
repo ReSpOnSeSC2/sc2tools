@@ -1,0 +1,60 @@
+{
+  "scope": "Original build/browser-time guards; subsequent release documentation/evidence adoption is separately pinned and changes no runtime source.",
+  "prebuild": {
+    "phase": "prebuild",
+    "checkedAtUtc": "2026-10-28T12:17:38.253Z",
+    "sourceInputs": 6823,
+    "sourceSnapshotSha256": "33b2ca58be5778497e9ac3f4b82e4ecd80dc20f04b39abb9a84e5bf60eb3997f",
+    "allMatch": true,
+    "filesAddedOrRemoved": false
+  },
+  "postbuild": {
+    "phase": "postbuild",
+    "checkedAtUtc": "2026-10-28T12:19:46.723Z",
+    "sourceInputs": 6823,
+    "sourceSnapshotSha256": "33b2ca58be5778497e9ac3f4b82e4ecd80dc20f04b39abb9a84e5bf60eb3997f",
+    "allMatch": true,
+    "filesAddedOrRemoved": false
+  },
+  "strictPostbrowser": {
+    "result": {
+      "command": "node check-full-source.mjs postbrowser",
+      "expectedFailure": "Single manual driver instrumentation correction after build; full source guard unmodified.",
+      "exitCode": 1,
+      "checkedAtUtc": "2026-10-28T12:40:23.3499138Z"
+    },
+    "failureLog": {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-01/source-postbrowser-strict-01.log",
+      "bytes": 425,
+      "sha256": "9a190dcb785932062328842b62b7f38a3b1eec43e7acbe0b7a01898025052de5"
+    }
+  },
+  "qualification": {
+    "checkedAtUtc": "2026-10-28T12:40:27.223Z",
+    "head": "4cc3811334e06e8c721d05664d863d52b8eaeba0",
+    "originalSnapshot": {
+      "path": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-01/source-snapshots/build-inputs-01.json",
+      "sha256": "33b2ca58be5778497e9ac3f4b82e4ecd80dc20f04b39abb9a84e5bf60eb3997f"
+    },
+    "strictPostbrowserSourceGuard": "Expected failure preserved separately; original all-file snapshot was not rewritten or relaxed.",
+    "sourceInputs": 6823,
+    "unchangedFiles": 6822,
+    "filesAddedOrRemoved": false,
+    "changes": [
+      {
+        "relative": "apps/web/tests/manual/unified-build-editor-next.cjs",
+        "beforeSha256": "2bbb3f830cb99b316a8af8d63c76717612f21350b81661ecdb1140bef9d2e695",
+        "afterSha256": "b7ea1a61284d1d1f7229cb536723f2d995471d5b6fbcbaee9899c68caa9170d3",
+        "beforeBytes": 5522,
+        "afterBytes": 6288
+      }
+    ],
+    "qualification": "Only the manual browser-driver instrumentation changed after build; no compiled application, route, dependency, configuration, font, or canonical engine source changed. Driver now faults the unique lazy editor factory-owning chunk rather than shared loader prerequisites. App build/source identity remains qualified by exact equality of every other input, not claimed as all-files equality.",
+    "buildId": "jazSofhZfqsc8J13rzgI5"
+  },
+  "evidenceIndex": {
+    "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-browser-evidence-index-01.json",
+    "bytes": 51471,
+    "sha256": "d4456882767982d3474ec65d19f12da265c66bc0356836063e822c8aeb021582"
+  }
+}

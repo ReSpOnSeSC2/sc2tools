@@ -15,6 +15,10 @@ corresponding GitHub Release.
 
 - Coordinate device pairing, revocation and account erasure through durable database gates. These controls can take a few seconds to finish; uncertain writes keep their reuse scope blocked. Device authentication still reads the database on every request, and the proposed 60-second credential cache remains off.
 
+### Private home-page replay demo
+
+- Retire the old anonymous server replay parser. The home-page demo keeps replay analysis in your browser; unavailable or unsupported configurations offer desktop recovery without an upload fallback.
+
 ### History write consistency
 
 - Maintain game totals and the exact latest-game value during replay ingest, visibility changes, history wipes and restores. Dashboard readers retain their existing behavior while the writer rollout is verified.
