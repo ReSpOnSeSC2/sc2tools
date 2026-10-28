@@ -165,3 +165,29 @@ and browser reviews, budget rows and six current guide screenshots are in
 `validation/guide-randomizer/`. All owned browser/build commands exited;
 no application listener, native process or provider mutation was introduced.
 The two roadmap items remain partial until actual CI and delivery pass.
+
+## Final UI-ratchet repair
+
+CI atcfce71a3 caught one new hardcoded muted label color in SpriteLegend.
+The final label uses its existing light arena color. Strike-through and
+icon-only fading retain elimination distinction while increasing contrast;
+layout, motion, odds and selection are unchanged. The official prune command
+removed only the now-retired old `#7d8595` debt allowance (one occurrence,
+seven baseline lines). No UI rule, HEX allowlist, assertion or allowance was
+added or relaxed. The original CI failure and intermediate stale-allowance
+failure remain in the local packet.
+
+All19 UI-rule checks pass. The complete ratchet passes1,768 source files and
+638 existing occurrences with no new or stale allowance. Four actual-color
+contrast cases, strict SpriteLegend lint and fresh whole-web types pass.
+Production build04 and all83 unchanged budgets pass again, with40 canonical
+inputs/seven assets/four sample games admitted before and after build/browser.
+
+Fresh Randomizer run06 passes12 cases/72 full AA scans and132 all-style
+OS/page-motion specimens. Its current33 source pins and27 runtime/style inputs
+are in `validation/guide-randomizer/randomizer-final-white-independent-review.json`.
+The guide's24 cases/54 scans are retained separately through21 consumer and
+five CSS/font exact matches; they were not rerun after this color-only repair.
+The previous whole32-file snapshot is not described as wholly unchanged.
+Current screenshots carry the `final-` prefix. CI, merge and actual production
+acceptance remain required before completion.

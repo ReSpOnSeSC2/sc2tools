@@ -196,7 +196,7 @@ export function SpriteLegend({
               fontSize: 13,
               fontWeight: 700,
               lineHeight: 1.15,
-              color: out ? "#aab2c3" : "#f0f2f6",
+              color: "#f0f2f6",
               background: on ? "rgba(230,180,80,0.22)" : "rgba(16,19,27,0.92)",
               border: `1px solid ${on ? "#e6b450" : "rgba(255,255,255,0.14)"}`,
               boxShadow: on
