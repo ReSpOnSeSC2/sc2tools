@@ -5,12 +5,12 @@
  * and renders it. Every style shares `RevealProps`, so swapping between
  * them is just a switch.
  */
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SpinOutcome } from "@/lib/randomizer/types";
 import { BattleRoyaleReveal } from "./reveals/BattleRoyaleReveal";
 import { CaseUnboxingReveal } from "./reveals/CaseUnboxingReveal";
 import { GachaSummonReveal } from "./reveals/GachaSummonReveal";
-import { RevealKeyframes } from "./reveals/revealShared";
+import { rarityFor, RevealAnnouncementContext, RevealKeyframes } from "./reveals/revealShared";
 import { SlotMachineReveal } from "./reveals/SlotMachineReveal";
 import { WheelSpinReveal } from "./reveals/WheelSpinReveal";
 import { FighterBrawlReveal } from "./reveals/FighterBrawlReveal";
@@ -32,11 +32,30 @@ export interface RandomizerStageProps {
   onComplete?: () => void;
 }
 
-export function RandomizerStage({
+export function RandomizerStage(props: RandomizerStageProps) {
+  // Clear the live region before a new spin paints, including callers that
+  // update spinId without remounting. Old reveal timers cannot resolve it.
+  return <RandomizerStageRun key={props.spinId} {...props} />;
+}
+
+function RandomizerStageRun({
   outcome,
   spinId,
   onComplete,
 }: RandomizerStageProps) {
+  const [resolved, setResolved] = useState(false);
+  const active = useRef(true), completed = useRef(false), onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
+  const handleComplete = useCallback(() => {
+    if (!active.current || completed.current) return;
+    completed.current = true;
+    setResolved(true);
+    onCompleteRef.current?.();
+  }, []);
   const winnerIndex = Math.max(
     0,
     outcome.pool.findIndex((b) => b.id === outcome.winner.id),
@@ -56,7 +75,7 @@ export function RandomizerStage({
     winnerProbability,
     spinId,
     matchupLabel: outcome.matchup,
-    onComplete,
+    onComplete: handleComplete,
   } as const;
 
   return (
@@ -67,7 +86,11 @@ export function RandomizerStage({
           {visualPool.length} of {outcome.pool.length} contenders shown · Winner drawn from the full eligible pool
         </div>
       ) : null}
-      {renderReveal(outcome.style, common)}
+      <RevealAnnouncementContext.Provider value={resolved
+        ? `Build chosen: ${outcome.winner.name}, ${rarityFor(winnerProbability).label}, ${Number((winnerProbability * 100).toFixed(1))}% chance`
+        : ""}>
+        {renderReveal(outcome.style, common)}
+      </RevealAnnouncementContext.Provider>
     </>
   );
 }

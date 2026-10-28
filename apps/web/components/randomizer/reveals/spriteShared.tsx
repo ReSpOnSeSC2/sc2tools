@@ -196,14 +196,13 @@ export function SpriteLegend({
               fontSize: 13,
               fontWeight: 700,
               lineHeight: 1.15,
-              color: out ? "#7d8595" : "#f0f2f6",
+              color: "#f0f2f6",
               background: on ? "rgba(230,180,80,0.22)" : "rgba(16,19,27,0.92)",
               border: `1px solid ${on ? "#e6b450" : "rgba(255,255,255,0.14)"}`,
               boxShadow: on
                 ? "0 0 12px rgba(230,180,80,0.4)"
                 : "0 1px 4px rgba(0,0,0,0.4)",
               textDecoration: out ? "line-through" : "none",
-              opacity: out ? 0.55 : 1,
             }}
           >
             <span
@@ -216,6 +215,7 @@ export function SpriteLegend({
                 borderRadius: "50%",
                 background: SPRITE_TOKEN_BG,
                 flexShrink: 0,
+                opacity: out ? 0.55 : 1,
               }}
             >
               <BuildSprite build={b} src={sprites.get(b.id) ?? null} size={20} />

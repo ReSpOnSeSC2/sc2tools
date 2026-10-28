@@ -50,6 +50,9 @@ const GUIDE_LEGEND_REFERENCE_PERCENT = 50;
 export const GUIDE_STATS_LEGEND = {
   title: "How to read these numbers",
   rangeLabel: "Likely range",
+  rangeLoading: "Loading definition…",
+  rangeUnavailable: "This definition could not be loaded.",
+  rangeRetry: "Retry definition",
   verdict: {
     win: `Green: the whole likely range is above ${GUIDE_LEGEND_REFERENCE_PERCENT}%`,
     even: "Too close to call",

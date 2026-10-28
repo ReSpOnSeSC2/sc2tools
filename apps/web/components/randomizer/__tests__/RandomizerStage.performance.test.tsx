@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SpinOutcome } from "@/lib/randomizer/types";
 import type { RevealProps } from "../reveals/revealShared";
@@ -35,7 +35,9 @@ describe("bounded motion rendering with the original full draw", () => {
     expect(first.probabilities).toBe(spin.probabilities);
     expect(first.winner).toBe(spin.winner);
     expect(first.winnerProbability).toBe(spin.probabilities[71]);
-    expect(first.onComplete).toBe(complete);
+    expect(first.onComplete).toEqual(expect.any(Function));
+    act(() => first.onComplete?.());
+    expect(complete).toHaveBeenCalledTimes(1);
     expect(first.visualPool).toHaveLength(12);
     expect(first.visualPool).toContain(spin.winner);
     expect(screen.getByRole("note").textContent).toContain("12 of 80 contenders shown");

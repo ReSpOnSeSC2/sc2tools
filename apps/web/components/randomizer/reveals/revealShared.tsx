@@ -9,7 +9,7 @@
  * the winner is decided up front by the engine and every animation just
  * dramatises landing on it.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { RaceIcon } from "@/components/overlay/WidgetShell";
 import type { RandomizerBuild } from "@/lib/randomizer/types";
 import { spriteFor } from "./spriteShared";
@@ -53,16 +53,23 @@ export function rarityFor(probability: number): Rarity {
   return RARITY_TABLE[4];
 }
 
-/** Tracks the OS "reduce motion" setting so reveals can short-circuit. */
+/** Tracks both device motion reduction and the page's appearance preference. */
 export function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener?.("change", handler);
-    return () => mq.removeEventListener?.("change", handler);
+    const root = document.documentElement;
+    const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    const refresh = () => setReduced(Boolean(mq?.matches) || root.dataset.motion === "reduce");
+    refresh();
+    const observer = new MutationObserver(refresh);
+    observer.observe(root, { attributes: true, attributeFilter: ["data-motion"] });
+    if (mq?.addEventListener) mq.addEventListener("change", refresh);
+    else mq?.addListener?.(refresh);
+    return () => {
+      observer.disconnect();
+      if (mq?.removeEventListener) mq.removeEventListener("change", refresh);
+      else mq?.removeListener?.(refresh);
+    };
   }, []);
   return reduced;
 }
@@ -140,10 +147,15 @@ export interface RevealProps {
   onComplete?: () => void;
 }
 
+/** The stage publishes text only after the current spin's completion. */
+export const RevealAnnouncementContext = createContext("");
+
 /** Centering frame shared by every reveal. */
 export function RevealFrame({ children }: { children: ReactNode }) {
+  const announcement = useContext(RevealAnnouncementContext);
   return (
     <div
+      className="rdz-frame"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -158,6 +170,7 @@ export function RevealFrame({ children }: { children: ReactNode }) {
         overflow: "hidden",
       }}
     >
+      <p role="status" aria-atomic="true" className="sr-only">{announcement}</p>
       {children}
     </div>
   );
@@ -193,15 +206,18 @@ export function WinnerCard({
   rarity,
   show,
   src,
+  reducedMotion,
 }: {
   winner: RandomizerBuild;
   rarity: Rarity;
   show: boolean;
   src?: string | null;
+  reducedMotion: boolean;
 }) {
   const resolvedSrc = src === undefined ? spriteFor(winner) : src;
   return (
     <div
+      className="rdz-winner"
       style={{
         position: "absolute",
         left: "50%",
@@ -218,8 +234,8 @@ export function WinnerCard({
         border: `2px solid ${rarity.color}`,
         boxShadow: `0 12px 46px rgba(0,0,0,0.62), 0 0 44px ${rarity.glow}`,
         opacity: show ? 1 : 0,
-        transform: `translate(-50%, -50%) scale(${show ? 1 : 0.7})`,
-        transition: "opacity 280ms ease, transform 360ms cubic-bezier(.34,1.8,.5,1)",
+        transform: reducedMotion ? "translate(-50%, -50%)" : `translate(-50%, -50%) scale(${show ? 1 : 0.7})`,
+        transition: reducedMotion ? "opacity 200ms ease" : "opacity 280ms ease, transform 360ms cubic-bezier(.34,1.8,.5,1)",
         pointerEvents: "none",
       }}
     >
@@ -250,6 +266,7 @@ export function WinnerCard({
         {show ? (
           <span
             key="winzoom"
+            className="rdz-winzoom"
             style={{
               position: "relative",
               display: "inline-flex",
@@ -259,18 +276,19 @@ export function WinnerCard({
               height: 96,
               borderRadius: "50%",
               background: `radial-gradient(circle, ${rarity.color}33 0%, transparent 70%)`,
-              animation: "rdz-winzoom 560ms cubic-bezier(.2,1.4,.4,1) both",
+              animation: reducedMotion ? "none" : "rdz-winzoom 560ms cubic-bezier(.2,1.4,.4,1) both",
             }}
           >
             <span
               aria-hidden
+              className="rdz-pulse"
               style={{
                 position: "absolute",
                 inset: 0,
                 borderRadius: "50%",
                 border: `2px solid ${rarity.color}`,
                 boxShadow: `0 0 26px ${rarity.glow}`,
-                animation: "rdz-pulse 1600ms ease-in-out infinite",
+                animation: reducedMotion ? "none" : "rdz-pulse 1600ms ease-in-out infinite",
               }}
             />
             <SpriteOrRace build={winner} src={resolvedSrc} size={72} />
@@ -287,7 +305,7 @@ export function WinnerCard({
       >
         {winner.name}
       </div>
-      {show ? <Confetti color={rarity.color} /> : null}
+      {show && !reducedMotion ? <Confetti color={rarity.color} /> : null}
     </div>
   );
 }
@@ -410,8 +428,17 @@ export function RevealKeyframes() {
         100% { transform: scale(1); opacity: 1; }
       }
       @media (prefers-reduced-motion: reduce) {
+        .rdz-frame * { transition: none !important; }
+        .rdz-pulse, .rdz-winzoom, .rdz-charge { animation: none !important; }
         .rdz-confetti { animation: none !important; opacity: 0 !important; }
+        .rdz-winner { transform: translate(-50%, -50%) !important; transition: opacity 200ms ease !important; }
       }
+      [data-motion="reduce"] .rdz-frame * { transition: none !important; }
+      [data-motion="reduce"] .rdz-pulse,
+      [data-motion="reduce"] .rdz-winzoom,
+      [data-motion="reduce"] .rdz-charge { animation: none !important; }
+      [data-motion="reduce"] .rdz-confetti { animation: none !important; opacity: 0 !important; }
+      [data-motion="reduce"] .rdz-winner { transform: translate(-50%, -50%) !important; transition: opacity 200ms ease !important; }
     `}</style>
   );
 }

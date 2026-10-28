@@ -1887,13 +1887,6 @@
     {
       "file": "components/randomizer/reveals/spriteShared.tsx",
       "rule": "hex-outside-visualization",
-      "signature": "74c15a41c7165b6a7792dcbe82de3676927cd077ae4e8f0c60a7cf47ccc60c69",
-      "count": 1,
-      "example": "\"#7d8595\""
-    },
-    {
-      "file": "components/randomizer/reveals/spriteShared.tsx",
-      "rule": "hex-outside-visualization",
       "signature": "878242612310c3d111550ef8ee1f13e00697d813c8a6c7333d73bb00e84f6132",
       "count": 1,
       "example": "\"#e6b450\""

@@ -22,7 +22,7 @@ describe("glossary", () => {
     expect(helpArticleAnchors(article!)).toEqual(GLOSSARY.map(term => term.id));
   });
   it("seeds the opponent and MMR terms the info tips will use", () => {
-    expect(GLOSSARY).toHaveLength(41);
+    expect(GLOSSARY).toHaveLength(44);
     expect(GLOSSARY.map((term) => term.id)).toEqual(
       expect.arrayContaining(["pulse-id", "toon", "net-mmr", "verified-pairs", "mmr-impact", "group-same-player", "barcode"]),
     );
@@ -40,6 +40,18 @@ describe("glossary", () => {
     }
     expect(getArticle("reading-your-stats")).toBeDefined();
     expect(helpArticleAnchors(getArticle("reading-your-stats")!)).toEqual(["today", "opponents", "macro", "builds"]);
+  });
+
+  it("publishes guide range, floor and trend definitions at their real Help anchors", () => {
+    for (const [id, anchor] of [["likely-range", "likely-range"], ["publishing-floor", "publishing-floors"], ["trend-arrow", "trends"]]) {
+      const term = glossaryTerm(id);
+      expect(term, id).toBeDefined(); expect(term?.category).toBe("statistics");
+      expect(term?.help).toEqual({ slug: "reading-guide-stats", anchor });
+      expect(glossaryHelpPath(term!)).toBe(`/help/reading-guide-stats#${anchor}`);
+      expect(helpArticleAnchors(getArticle("reading-guide-stats")!), id).toContain(anchor);
+    }
+    expect(glossaryTerm("publishing-floor")?.long).toContain("does not mean a zero win rate");
+    expect(glossaryTerm("trend-arrow")?.long).toContain("percentage points");
   });
 
   it("has unique, well-formed ids and related terms that exist", () => {
