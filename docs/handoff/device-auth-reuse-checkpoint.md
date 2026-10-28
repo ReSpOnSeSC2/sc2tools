@@ -98,6 +98,33 @@ credential edits or raw database restores need the same explicit barrier; no
 process-local cache can observe them automatically. No cached reuse, failover,
 clock-bound or universal post-ACK authorization proof is claimed at this stage.
 
+## CI and shutdown corrections — October 28
+
+The first PR807 head, `df88f0ce29901276fe2f9fa1a8df1810b317bc3f`, passed
+web, responsive and Vercel checks. Its API run found two replay-storage test
+fixtures routing the new coordination collection to an incomplete fake. The
+suite continued making progress until the total 15-minute job deadline; it
+did not finish, and no successful full-API result is claimed for that head.
+
+The fixtures now use the real Mongo coordination collection and the default
+shared production coordinator. Only their test clock advances virtually.
+All original R2 assertions remain, with additional uncertain/writing/completed
+gate assertions. The focused 65 cases pass. The total CI job budget is now
+25 minutes; serial execution, individual deadlines and assertions are unchanged.
+
+Actual filtered production shutdown logs also exposed `tick.settled is not a
+function` in the backup-health task. Its stop method now awaits the existing
+single-flight check. Three regressions cover idle stop and held successful or
+failed work with real job-ledger instrumentation. All 55 backup/job cases,
+whole API types and strict owned lint pass; the original source reproduces
+the error. This does not establish that every recent shutdown reached that
+stage, or claim that best-effort diagnostic writes are a new drain contract.
+
+Compact repair evidence is in `validation/device-auth-coordination/ci-repair/`.
+Raw CI logs and failed local runs remain in the cache. No web runtime input,
+budget, engine asset or credential read path changed in this correction.
+Required checks on the new head and actual deployment remain pending.
+
 ## Historical prerequisite audit
 
 The requested 60-second credential reuse remains unfinished. Existing minute

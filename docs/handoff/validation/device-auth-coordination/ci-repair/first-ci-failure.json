@@ -1,0 +1,17 @@
+{
+  "head": "df88f0ce29901276fe2f9fa1a8df1810b317bc3f",
+  "job": {
+    "id": 122841332137,
+    "head_sha": "df88f0ce29901276fe2f9fa1a8df1810b317bc3f",
+    "name": "Lint + typecheck + test (apps/api)",
+    "status": "completed",
+    "conclusion": "cancelled"
+  },
+  "logTruncated": true,
+  "source": "Codex PR-check diagnostics",
+  "failures": [
+    "GDPR replay integration fake collection lacks findOneAndUpdate, two cases",
+    "Job exceeded15minute totalbudget with suite stillrunning; no aggregate count or successfulfullsuiteclaimed"
+  ],
+  "unchangedRules": "Preserve all assertions and productiondrain; fixfixture and determine bounded totaljobruntime."
+}
