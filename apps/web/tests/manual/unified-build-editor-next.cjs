@@ -1,5 +1,5 @@
-/* Actual Next/webpack public landing consumer. Intercept the synthetic replay
- * preview and one editor chunk; all other external requests are blocked. */
+/* Actual Next/webpack public landing consumer. The real browser engine parses
+ * the committed replay; one editor chunk fails, then recovers without upload. */
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {spawn}=require('node:child_process'),{chromium,expect}=require('@playwright/test');
 const root=process.cwd();let child,browser,api,logs='';
@@ -12,15 +12,23 @@ async function port(){const server=http.createServer();await new Promise(resolve
   const loader=code.match(/Promise\.all\(\[([^\]]+)\]\)\.then\([^;]{0,100}\.BuildEditorModal\)/);
   if(!loader)throw new Error('Could not locate actual editor chunk loader');
   const ids=[...loader[1].matchAll(/\.e\((\d+)\)/g)].map(match=>match[1]),seen=[],failed=[];
+  const editorModule=loader[0].match(/\.bind\(\w+,(\d+)\)/)?.[1];
+  if(!editorModule)throw new Error('Could not locate actual editor module id');
+  const chunks=fs.readdirSync('.next/static/chunks'),factory=new RegExp(`(?:\\{|,)${editorModule}\\s*:`);
+  const editorChunks=ids.flatMap(id=>chunks.filter(file=>new RegExp(`^${id}[.-].*\\.js$`).test(file)))
+    .filter(file=>factory.test(fs.readFileSync(path.join('.next/static/chunks',file),'utf8')));
+  if(editorChunks.length!==1)throw new Error(`Expected one editor factory chunk, found ${editorChunks.length}`);
+  const editorPath=`/_next/static/chunks/${editorChunks[0]}`;
   child=spawn(process.execPath,['node_modules/next/dist/bin/next','start','-p',String(number),'-H','localhost'],{cwd:root,windowsHide:true,env:{...process.env,SC2TOOLS_API_BASE:apiOrigin,CLERK_SECRET_KEY:'sk_live_dummy',NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:'pk_live_Y2xlcmsuZXhhbXBsZS5jb20k'},stdio:['ignore','pipe','pipe']});
   child.stdout.on('data',chunk=>{logs+=chunk});child.stderr.on('data',chunk=>{logs+=chunk});
   await new Promise((resolve,reject)=>{const deadline=setTimeout(()=>reject(new Error('Next startup timeout: '+logs.slice(-1000))),30000);const check=()=>{if(logs.includes('Ready in')){clearTimeout(deadline);resolve()}else if(child.exitCode!==null){clearTimeout(deadline);reject(new Error('Next exited: '+logs.slice(-1000)))}else setTimeout(check,100)};check()});
-  browser=await chromium.launch({headless:true});const context=await browser.newContext({viewport:{width:390,height:960}}),page=await context.newPage();let failChunk=true,previewReads=0;
+  browser=await chromium.launch({headless:true});const context=await browser.newContext({viewport:{width:390,height:960}}),page=await context.newPage();let failChunk=false,previewReads=0;const apiRequests=[],uploads=[];
+  page.on('request',request=>{const url=new URL(request.url());if(url.origin===apiOrigin||url.pathname.startsWith('/v1/'))apiRequests.push({method:request.method(),path:url.pathname});if((request.postDataBuffer()?.byteLength??0)>32000)uploads.push(request.url())});
   await context.route('**/*',route=>{
     const url=new URL(route.request().url());
-    if(url.pathname==='/v1/public/preview-replay'){previewReads++;return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,game_id:'synthetic-next-game',map:'Synthetic map',duration_sec:600,date:'2026-10-25T15:00:00Z',players:[{name:'Synthetic owner',race:'Protoss',result:'win',handle:null,build_log:['[1:00] Gateway','[2:30] Stargate']},{name:'Synthetic opponent',race:'Zerg',result:'loss',handle:null,build_log:[]}]})})}
+    if(url.pathname==='/v1/public/preview-replay'){previewReads++;return route.abort()}
     if(url.origin===origin){
-      const candidate=ids.some(id=>new RegExp(`/chunks/${id}[.-]`).test(url.pathname));
+      const candidate=url.pathname===editorPath;
       if(candidate){seen.push(url.pathname);if(failChunk){failChunk=false;failed.push(url.pathname);return route.abort('failed')}}
       return route.continue();
     }
@@ -28,10 +36,22 @@ async function port(){const server=http.createServer();await new Promise(resolve
   });
   await page.goto(origin,{waitUntil:'domcontentloaded'});const demo=page.getByRole('heading',{name:'Turn a replay into a custom build'}).locator('..').locator('..');
   await expect(demo).toBeVisible();expect(seen).toEqual([]);
-  await demo.locator('input[type=file]').setInputFiles({name:'synthetic.SC2Replay',mimeType:'application/octet-stream',buffer:Buffer.from('synthetic-local-preview-only')});
-  await expect(page.getByRole('dialog',{name:'Build editor could not load'})).toBeVisible();expect(failed).toHaveLength(1);expect(previewReads).toBe(1);
+  await expect(demo.getByText('Runs in your browser — the replay never leaves your device.')).toBeVisible();
+  const reject=page.getByRole('button',{name:'Reject',exact:true});if(await reject.isVisible())await reject.click();
+  await demo.locator('input[type=file]').setInputFiles(path.resolve('../replay-engine/tests/fixtures/replays/warpgate_adept_tracking.SC2Replay'));
+  await expect(page.getByRole('heading',{name:'Which player are you?'})).toBeVisible({timeout:120000});
+  // Shared chunks may also serve the analyzer. Only fail after that real
+  // analyzer is ready, so this remains an editor-import recovery specimen.
+  failChunk=true;
+  await page.getByRole('button',{name:/ReSpOnSe.*Protoss/}).click();
+  await expect(page.getByRole('dialog',{name:'Build editor could not load'})).toBeVisible({timeout:120000});expect(failed).toHaveLength(1);expect(previewReads).toBe(0);
   await page.getByRole('button',{name:'Retry editor'}).click();await expect(page.getByRole('textbox',{name:/^Name/})).toBeVisible();
-  await expect(page.getByText(/Demo: rules and preview are local/)).toBeVisible();expect(seen.filter(file=>file===failed[0])).toHaveLength(2);expect(previewReads).toBe(1);
+  await expect(page.getByText(/Demo: rules and preview are local/)).toBeVisible();expect(seen.filter(file=>file===failed[0])).toHaveLength(2);expect(previewReads).toBe(0);
   await expect(page.getByRole('button',{name:/Add rule:/}).first()).toBeVisible();
-  console.log(JSON.stringify({result:'PASS',checks:9,failedChunk:failed[0],editorChunkRequests:seen.length,previewReads}));await context.close();
-})().catch(error=>{console.error(error);console.error(logs.slice(-2000));process.exitCode=1}).finally(async()=>{await browser?.close();child?.kill();api?.closeAllConnections();api?.close()});
+  expect(apiRequests).toEqual([]);expect(uploads).toEqual([]);
+  console.log(JSON.stringify({result:'PASS',checks:{realLandingParse:true,editorRetry:true,ruleControls:true,noPreviewRequests:true,noApiRequests:true,noReplayUploads:true},nextPid:child.pid,nextPort:number,apiPort:api.address().port,editorModule,editorPath,failedChunk:failed[0],editorChunkRequests:seen.length,previewReads,apiRequests,uploads,boundary:'Actual local Next/worker/replay/editor; only dummy auth/API and one intentional factory-owning editor chunk failure. Shared loader dependencies are not mistaken for an eager editor import. No server-preview fixture.'}));await context.close();
+})().catch(error=>{console.error(error);console.error(logs.slice(-2000));process.exitCode=1}).finally(async()=>{
+  await browser?.close();
+  if(child&&child.exitCode===null&&child.signalCode===null){const closed=new Promise(resolve=>child.once('exit',resolve));child.kill();await closed}
+  if(api){api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}
+});

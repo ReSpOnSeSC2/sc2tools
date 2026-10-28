@@ -1,0 +1,18 @@
+{
+  "recentPlaywrightChromeCandidates": [],
+  "checkedAtUtc": "2026-10-28T12:41:15.3077772Z",
+  "ownedCandidates": [],
+  "recordedPids": [
+    7116,
+    38748,
+    30080,
+    51288,
+    22188,
+    37720,
+    53212
+  ],
+  "listeners": [],
+  "limitations": "Historical PID equality alone is not ownership; PIDs may be reused. Candidate test windows and command markers checked; actual UI browser afterAll close and manual driver finally exit also retained.",
+  "stoppedProcesses": [],
+  "scope": "Owned build/browser/test PID descendants or exact checkout/packet command markers since build start; additionally playwright Chrome created in same ownership window. No unrelated processes stopped."
+}

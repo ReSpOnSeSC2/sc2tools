@@ -1,0 +1,25 @@
+{
+  "checks": 220,
+  "captures": 36,
+  "widths": [
+    320,
+    390,
+    768,
+    1440
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "productionCss": [
+    "085eec6ea1a84fdf.css",
+    "9e93c7f0ce562f59.css",
+    "a49a1a968352c402.css",
+    "c8183fd076b4bf97.css",
+    "e73fc7fc7e03df69.css"
+  ],
+  "browserApiRequests": 0,
+  "disabledModeApiRequests": 0,
+  "externalRequests": 0,
+  "boundary": "Real demo/editor/session and real worker/fixture replay; local Next/Clerk/analytics/Worker URL adapter. Retired preview path has no synthetic success; off/admins expose desktop recovery without intake/worker/API."
+}

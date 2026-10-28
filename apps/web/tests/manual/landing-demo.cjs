@@ -13,12 +13,6 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, origin || 'http://127.0.0.1'), p = url.pathname;
   if (p.startsWith('/v1/')) {
     api.push({ method: req.method, path: p });
-    if (p === '/v1/public/preview-replay') {
-      for await (const _chunk of req) { /* Local legacy compatibility fixture only. */ }
-      res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ ok: true, game_id: 'legacy-local', map: 'Synthetic map', duration_sec: 600, date: '2020-01-01', players: [
-        { name: 'Synthetic Alpha', race: 'Protoss', result: 'Win', handle: '1-S2-1-1', build_log: ['[0:18] Pylon'] }, { name: 'Synthetic Beta', race: 'Zerg', result: 'Loss', handle: '1-S2-1-2', build_log: ['[0:20] Hatchery'] },
-      ] }));
-    }
     res.statusCode = 404; return res.end('{}');
   }
   if (p === '/fixture.js' || p === '/fixture-worker.js') { res.setHeader('Content-Type', 'text/javascript'); return res.end(fs.readFileSync(p === '/fixture.js' ? '.tmp/landing-demo-fixture.js' : '.tmp/landing-demo-worker.js')); }
@@ -76,13 +70,20 @@ async function main() {
       }
     }
     for (const mode of ['off', 'admins']) {
-      const page = await browser.newPage({ viewport: { width: 390, height: 1000 } }); await page.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+      const page = await browser.newPage({ viewport: { width: 390, height: 1000 } }); const engine = [];
+      page.on('request', request => { if (/\/(engine|pyodide)\//.test(new URL(request.url()).pathname)) engine.push(request.url()); });
+      await page.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
       await page.goto(`${origin}/fixture?mode=${mode}`); const before = api.length;
-      await page.getByLabel('Replay for the build editor demo').setInputFiles(replay); await expect(page.getByRole('dialog', { name: /Save as new build/ })).toBeVisible(); checks++;
-      expect(api.length - before).toBe(1); checks++; await expect(page.getByText('Uploaded once to our server, parsed, then deleted.')).toBeAttached(); checks++; await page.close();
+      const unavailable = page.getByRole('region', { name: 'Turn a replay into a custom build' });
+      await expect(unavailable.getByText(/The replay demo is currently unavailable/)).toBeVisible(); checks++;
+      await expect(unavailable.getByRole('link', { name: 'Get the desktop app' })).toHaveAttribute('href', '/download'); checks++;
+      await expect(unavailable.locator('input[type=file]')).toHaveCount(0); checks++;
+      await expect(unavailable.locator('a[href^="/try"]')).toHaveCount(0); checks++;
+      await unavailable.hover(); await unavailable.getByRole('link', { name: 'Get the desktop app' }).focus();
+      await noOverflow(page); expect(engine).toEqual([]); expect(api.length - before).toBe(0); checks += 2; await page.close();
     }
     expect(pageErrors).toEqual([]); expect(external).toEqual([]); checks += 2;
-    console.log(JSON.stringify({ checks, captures, widths: [320, 390, 768, 1440], themes: ['light', 'dark'], productionCss: cssNames, browserApiRequests: 0, compatibilityApiRequests: api.length, externalRequests: external.length, boundary: 'Real demo/editor/session and real worker/fixture replay; local Next/Clerk/analytics/Worker URL adapter. API synthetic only for explicit off/admins compatibility.' }, null, 2));
+    console.log(JSON.stringify({ checks, captures, widths: [320, 390, 768, 1440], themes: ['light', 'dark'], productionCss: cssNames, browserApiRequests: api.length, disabledModeApiRequests: 0, externalRequests: external.length, boundary: 'Real demo/editor/session and real worker/fixture replay; local Next/Clerk/analytics/Worker URL adapter. Retired preview path has no synthetic success; off/admins expose desktop recovery without intake/worker/API.' }, null, 2));
   } finally { await browser?.close(); server.close(); }
 }
 main().catch(error => { console.error(error); server.close(); process.exitCode = 1; });
