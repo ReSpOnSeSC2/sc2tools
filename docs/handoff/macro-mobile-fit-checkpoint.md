@@ -32,13 +32,15 @@ preserved. Its unmerged changes were not adopted. Root's header draft
 preimage and the design are retained under
 `.cache/macro-mobile-fit-20261028/`.
 
+## Earlier local verification
+
 Local verification passed on the initial base: 277 cases across 19 files
-before the no-observer fallback, followed by 59 current cases across 8
+before the no-observer fallback, followed by 59 cases across 8
 files covering that delta and the real panel/section/composition
 consumers. These are separate runs. Whole-web types, strict lint on all
 13 owned TypeScript files, the four new product modules' complexity/
 function/file limits, and the unchanged official UI-lint baseline pass.
-All 3,531 web input hashes stayed unchanged during each current command.
+All 3,531 web input hashes stayed unchanged during each of those commands.
 The original tests remain unchanged. Two failed lint attempts are
 retained; supply-label association was made explicit, and the extra
 scroll-region tab stop was removed. Real roster buttons provide
@@ -51,3 +53,33 @@ or accessibility evidence. Integrating passed main, a production build,
 all 83 unchanged budgets/source/asset guards, and real production-CSS
 responsive/target/focus/AA checks remain required before delivery. No
 release, production acceptance or roadmap closure is claimed.
+
+## Nested-dialog semantics repair — fresh browser verification pending
+
+After integrating passed main at `39ea4843`, the first four-case browser run
+reached unit details and failed the full default Axe duplicate-banner/unique-
+landmark rules. Eight initial/selected scans had passed; four nested scans
+failed. Later lifecycle steps were unverified. The failed report, traces,
+6,963-source/asset guards and owned cleanup remain preserved in cache.
+
+Only the header/footer containers in MacroBreakdownPanel and shared Modal now
+have `role="presentation"`. Their tags, refs, layout, headings, buttons and
+handlers remain unchanged; application page landmarks are untouched.
+[ARIA in HTML](https://www.w3.org/TR/html-aria/) permits this role on these
+containers. The [APG presentation guidance](https://www.w3.org/WAI/ARIA/apg/practices/hiding-semantics/)
+keeps independent descendant headings and controls exposed.
+
+The broad semantic regression run passed 257 cases and failed one new oracle
+across 21 files: the installed unit role mapper treats section-scoped headers
+as document banners. Only that new helper was corrected to the normative
+native-header/footer scoping rule. Explicit landmark roles and unscoped
+dialog headers remain detectable, with negative controls proving this.
+Original Macro and Modal tests remain unchanged. The fresh targeted run
+passes 27 cases across seven files, whole-web types, strict lint on all 15
+owned TypeScript files and the unchanged UI-lint baseline. All 3,534 inputs
+remain exact during each current command. Owned processes/listeners are
+closed; no process was killed.
+
+No browser rule, exclusion, expectation or budget was relaxed. Fresh build,
+all 83 unchanged caps/source/asset guards and the same real responsive/focus/
+target/full-Axe browser verification remain required before delivery.

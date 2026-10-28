@@ -232,6 +232,7 @@ function PanelHeader({
   const dateLine = formatHeaderDate(meta?.dateIso);
   return (
     <header
+      role="presentation"
       ref={headerRef}
       className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border bg-bg-elevated/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85 sm:rounded-t-xl sm:px-6 sm:py-3 lg:px-8"
     >
@@ -327,6 +328,7 @@ function PanelFooter({
 }) {
   return (
     <footer
+      role="presentation"
       className={[
         // In flow at the end of the panel on every screen. On phones the
         // top of the screen holds the pinned chart, so a fixed action
