@@ -1,0 +1,507 @@
+{
+  "rows": [
+    {
+      "route": "/",
+      "kb": 182.8,
+      "budgetKb": 215,
+      "over": false
+    },
+    {
+      "route": "/_not-found",
+      "kb": 106.8,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin",
+      "kb": 188.4,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/analytics",
+      "kb": 271.9,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/announcements",
+      "kb": 163.4,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/audit",
+      "kb": 160.9,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/build-studio",
+      "kb": 171.2,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/design",
+      "kb": 182.3,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/ghost-examples",
+      "kb": 159.5,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/global",
+      "kb": 168.7,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/global-trends",
+      "kb": 502.6,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/global/players/[pulseId]",
+      "kb": 220.7,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/guides",
+      "kb": 188.6,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/health",
+      "kb": 173.6,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/moderation",
+      "kb": 166.7,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/notifications",
+      "kb": 189.4,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/player-channels",
+      "kb": 168.5,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/player-identities",
+      "kb": 171.2,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/tools",
+      "kb": 165.2,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/users",
+      "kb": 170.1,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/users/[userId]",
+      "kb": 181.7,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/users/[userId]/opponents",
+      "kb": 167.6,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/admin/users/[userId]/opponents/[pulseId]",
+      "kb": 217.2,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/app",
+      "kb": 239,
+      "budgetKb": 240,
+      "over": false
+    },
+    {
+      "route": "/app/[section]",
+      "kb": 119.8,
+      "budgetKb": 260,
+      "over": false
+    },
+    {
+      "route": "/app/game/[gameId]",
+      "kb": 317.9,
+      "budgetKb": 440,
+      "over": false
+    },
+    {
+      "route": "/app/live",
+      "kb": 171.2,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/app/opponents",
+      "kb": 137.8,
+      "budgetKb": 180,
+      "over": false
+    },
+    {
+      "route": "/app/opponents/[pulseId]",
+      "kb": 462.3,
+      "budgetKb": 500,
+      "over": false
+    },
+    {
+      "route": "/app/sessions",
+      "kb": 178.2,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/app/sessions/[id]",
+      "kb": 321.9,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/bot-lab",
+      "kb": 149,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/builds",
+      "kb": 203.3,
+      "budgetKb": 270,
+      "over": false
+    },
+    {
+      "route": "/builds/[slug]",
+      "kb": 411.5,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/changelog",
+      "kb": 116.9,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/coaching",
+      "kb": 201.8,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/community",
+      "kb": 189.7,
+      "budgetKb": 190,
+      "over": false
+    },
+    {
+      "route": "/community/authors/[userId]",
+      "kb": 106.8,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/community/builds/[slug]",
+      "kb": 232,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/community/leaderboard",
+      "kb": 196.4,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/community/opponents/[pulseId]",
+      "kb": 127.6,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/definitions",
+      "kb": 183,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/devices",
+      "kb": 178.9,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/dock/[token]",
+      "kb": 217.5,
+      "budgetKb": 225,
+      "over": false
+    },
+    {
+      "route": "/donate",
+      "kb": 176.1,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/download",
+      "kb": 176.5,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/goodbye",
+      "kb": 150,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/guides",
+      "kb": 164.9,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/guides/[matchup]",
+      "kb": 171.7,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/guides/[matchup]/[build]",
+      "kb": 174.3,
+      "budgetKb": 175,
+      "over": false
+    },
+    {
+      "route": "/guides/[matchup]/counter",
+      "kb": 124.7,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/guides/[matchup]/counter/[strategy]",
+      "kb": 161.4,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/guides/maps",
+      "kb": 166.8,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/guides/maps/[map]",
+      "kb": 168.4,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/guides/videos",
+      "kb": 163.2,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/help",
+      "kb": 154.6,
+      "budgetKb": 185,
+      "over": false
+    },
+    {
+      "route": "/help/[slug]",
+      "kb": 193.5,
+      "budgetKb": 200,
+      "over": false
+    },
+    {
+      "route": "/legal/accessibility",
+      "kb": 110.2,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/legal/privacy",
+      "kb": 150.9,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/legal/terms",
+      "kb": 110.2,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/notifications",
+      "kb": 175.2,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/overlay/[token]",
+      "kb": 235.3,
+      "budgetKb": 240,
+      "over": false
+    },
+    {
+      "route": "/overlay/[token]/scene/[name]",
+      "kb": 187.7,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/overlay/[token]/widget/[name]",
+      "kb": 319.5,
+      "budgetKb": 325,
+      "over": false
+    },
+    {
+      "route": "/p/[handle]",
+      "kb": 106.8,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/p/[handle]/replays",
+      "kb": 106.8,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/p/[handle]/replays/[gameId]",
+      "kb": 106.8,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/players/[player]",
+      "kb": 192.4,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/players/[player]/replays",
+      "kb": 213.6,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/players/[player]/replays/[gameId]",
+      "kb": 114.7,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/reviews",
+      "kb": 215.3,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/reviews/[id]",
+      "kb": 402.2,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/reviews/mine",
+      "kb": 191.1,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/settings",
+      "kb": 193.1,
+      "budgetKb": 260,
+      "over": false
+    },
+    {
+      "route": "/sign-in/[[...rest]]",
+      "kb": 193.6,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/sign-up/[[...rest]]",
+      "kb": 192.9,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/status",
+      "kb": 118.9,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/stream-studio",
+      "kb": 119.3,
+      "budgetKb": 130,
+      "over": false
+    },
+    {
+      "route": "/stream-studio/learn",
+      "kb": 154.2,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/stream-studio/playground",
+      "kb": 114,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/streaming",
+      "kb": 106.8,
+      "budgetKb": 520,
+      "over": false
+    },
+    {
+      "route": "/try",
+      "kb": 218.7,
+      "budgetKb": 240,
+      "over": false
+    },
+    {
+      "route": "/welcome",
+      "kb": 175.5,
+      "budgetKb": 245,
+      "over": false
+    }
+  ],
+  "missing": [],
+  "ok": true,
+  "measuredRoutes": 83,
+  "listedRoutes": 18,
+  "defaultRoutes": 65
+}
