@@ -1,5 +1,39 @@
 # Home-page browser replay demo
 
+## 2026-10-28 server-retirement candidate — source only
+
+The `all` branch was observed in actual production at main263a0805, and root
+reports the subsequent803ccb598 release Ready/Live with home browser-mode copy.
+The retained263 receipt proves copy and an owned invalid-file recovery, not a
+successful real landing parse or live network tracing. Root is verifying an
+owned public fixture separately. Local real-browser traffic assertions remain
+the no-API proof; live CUA has no network-trace API here.
+
+Candidate `codex/demo-server-retirement`, based on main910a1e4, removes the
+singular preview API router, its health route and both CLI spawn paths. The
+unused historical CLI source is retained byte-for-byte; no shared engine,
+native agent, versions, bundle allowlist or generated asset is changed. Global
+API health, other Python analysis and plural public replay archives remain.
+`all` keeps the existing intent-loaded local session, complete logs, both
+perspectives and editor recovery. `off`/`admins` now show explicit unavailable
+and desktop recovery without landing file intake, warm-up or upload. `/try`
+keeps its original `all`/`admins`/`off` behavior. Switching off does not restore
+the retired server parser.
+
+The16 obsolete parser-route tests are replaced with actual-app404/no-Python
+and unchanged global-health regressions. Landing tests migrate legacy-only
+cases to disabled-mode recovery while preserving browser drag/intake/focus,
+same-file reselection and canceled late-result assertions. Editor browser and
+manual consumers use the actual local replay instead of a synthetic server
+success; all private-notes, rules, signup, overflow, close and chunk-Retry
+assertions remain. No skip or assertion weakening is introduced.
+
+No tests, types, lint, production build or browser checks have run for this
+candidate yet. Auth owns the serialized heavy slot. All83 original budgets,
+asset checks, required exact-head CI and real deployment acceptance remain
+pending. The roadmap item remains partial until delivery is verified. No
+provider configuration, flag change or native release is included.
+
 Branch: `codex/wave5-landing-demo-browser` in `.worktrees/wave3-private-scouting`. Initial source is preserved at `af1fce42`; the prior Twitch branch/head remains preserved. Local caches and engine assets are retained.
 
 ## Contract and current implementation

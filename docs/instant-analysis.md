@@ -775,16 +775,23 @@ read it trimmed and case-insensitively, so `All` also requires the engine.
    `/try#home-replay-demo`. Browser failure/unsupported capability never
    falls back to uploading. No local report is persisted by this demo.
 
-**One-release compatibility window:** `off`/`admins` still use the old
-rate-limited landing server demo and its explicit upload copy. Keep
-`/v1/public/preview-replay`, its health route and `preview_replay_cli.py`
-wiring until the browser path has completed a release. Then remove those
-routes/wiring and their obsolete tests in an explicit retirement change.
-No release or rollout flag was changed while implementing this migration.
+**Server preview retirement:** after the one-release compatibility period,
+the landing demo accepts files only in `all` mode and only in the browser.
+`off` and `admins` show an unavailable message with desktop-app recovery;
+they do not expose a landing file picker, start a worker or upload a replay.
+The separate `/try` rollout rules above are unchanged. Unsupported browsers
+still receive Chrome/Edge or desktop recovery without an upload fallback.
 
-The API needs no flag; the daily cap is its safety valve. **Rollback:** set
-the flag to `off` and redeploy; during the compatibility window the landing
-demo returns to its server parser. Browser-uploaded games stay valid and are
+The old `/v1/public/preview-replay` route, its parser-health route and the API
+CLI spawn wiring are removed. The unused historical `preview_replay_cli.py`
+source remains; it is not a browser bundle input or a supported API path.
+Shared Python analysis, global API health and engine assets are unchanged.
+See the dated [landing checkpoint](handoff/landing-demo-checkpoint.md) for
+the source and release evidence; this change does not alter a rollout flag.
+
+The API needs no new flag. **Rollback:** set the existing flag to `off` and
+redeploy to hide browser intake, leaving desktop recovery. This no longer
+restores a server preview parser. Browser-uploaded games stay valid and are
 identifiable by `ingestSource: "browser"` and `engineVersion`.
 
 ## Budgets

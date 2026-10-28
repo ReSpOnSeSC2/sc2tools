@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Private home-page replay demo
+
+- Retire the old anonymous server replay parser. The home-page demo keeps replay analysis in your browser; unavailable or unsupported configurations offer desktop recovery without an upload fallback.
+
 ### History write consistency
 
 - Keep replay membership changes and statistics invalidation in the same database transaction. History wipes and restores retire older in-flight upload batches, including after their request lease expires. This prepares future dashboard work; statistics caching remains off and dashboard reads are unchanged.

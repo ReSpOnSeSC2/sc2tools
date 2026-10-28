@@ -30,6 +30,37 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 describe("landing browser session with real controller", () => {
+  it("keeps file drag highlighting across children and rejects text without analysis", () => {
+    render(<ReplayDemo />);
+    const dataTransfer = { types: ["Files"], files: [new File(["text"], "readme.txt")] };
+    fireEvent.dragEnter(card(), { dataTransfer }); fireEvent.dragEnter(screen.getByText("Build editor demo"), { dataTransfer });
+    fireEvent.dragLeave(screen.getByText("Build editor demo"), { dataTransfer });
+    expect(screen.getByText("Drop to analyze")).toBeTruthy();
+    fireEvent.drop(card(), { dataTransfer });
+    expect(screen.getByRole("alert").textContent).toContain("isn't a .SC2Replay");
+    expect(fireEvent.dragOver(card(), { dataTransfer: { types: ["text/plain"] } })).toBe(true);
+    expect(h.scan).not.toHaveBeenCalled(); expect(h.parse).not.toHaveBeenCalled(); expect(h.fetch).not.toHaveBeenCalled();
+  });
+  it("resets the picker so the same replay can be selected after closing its chooser", async () => {
+    const { container } = render(<ReplayDemo />);
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!, replay = file();
+    expect(input.accept).toBe(".SC2Replay");
+    fireEvent.change(input, { target: { files: [replay] } });
+    await screen.findByRole("heading", { name: "Which player are you?" });
+    expect(input.value).toBe("");
+    fireEvent.click(screen.getAllByRole("button", { name: /^Cancel$/ }).at(-1)!);
+    fireEvent.change(input, { target: { files: [replay] } });
+    await screen.findByRole("heading", { name: "Which player are you?" });
+    expect(input.value).toBe(""); expect(h.scan).toHaveBeenCalledTimes(2); expect(h.fetch).not.toHaveBeenCalled();
+  });
+  it("focuses a local empty-file error and returns to the picker without starting analysis", async () => {
+    render(<ReplayDemo />); drop(new File([], "empty.SC2Replay"));
+    const heading = await screen.findByText("Couldn't parse that replay");
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+    expect(screen.getByText("That file looked empty — pick another replay?")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Choose another replay" })).toBeTruthy();
+    expect(h.scan).not.toHaveBeenCalled(); expect(h.parse).not.toHaveBeenCalled(); expect(h.fetch).not.toHaveBeenCalled();
+  });
   it("does not boot on page view, prewarms on intent, then preserves both perspectives without API traffic", async () => {
     render(<ReplayDemo />); expect(h.factory).not.toHaveBeenCalled(); expect(h.boot).not.toHaveBeenCalled();
     fireEvent.pointerEnter(card()); await waitFor(() => expect(h.boot).toHaveBeenCalled());
