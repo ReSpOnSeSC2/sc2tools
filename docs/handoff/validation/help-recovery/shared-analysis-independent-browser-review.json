@@ -1,0 +1,686 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-28T04:37:50.323Z",
+  "reviewer": "independent bingo_browser_regression agent",
+  "sourceRoot": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion",
+  "baseRevision": "97eca05ce89aae9d31ef7bbb41f5866803d5da2a",
+  "decision": "clear",
+  "blockers": [],
+  "sourcePins": [
+    {
+      "file": "apps/web/app/players/[player]/replays/[gameId]/page.tsx",
+      "sha256": "7c843a3c5c7663403e9f251f023b60b06cee7a3d7578a56b0d5da013407d2f50"
+    },
+    {
+      "file": "apps/web/components/public-profile/SharedReplayAnalysisContent.tsx",
+      "sha256": "2f0c067a5c306a927fdc6d853d4de7f6b13f75fbb13bdf7ff0490f58f4edeccc"
+    },
+    {
+      "file": "apps/web/components/public-profile/SharedReplayAnalysisLoading.tsx",
+      "sha256": "2b1d78d96ac6543c69201223dde5ac529ab7d42e55120dc461dfbc2e4ec61f0e"
+    },
+    {
+      "file": "apps/web/components/public-profile/__tests__/SharedReplayAnalysisGate.test.tsx",
+      "sha256": "56eb279b82eafe93e0f188d2944394b678e1b362d588bf648a1b3bb37024e62d"
+    },
+    {
+      "file": "apps/web/components/public-profile/__tests__/SharedReplayLoading.test.tsx",
+      "sha256": "a008f80b8d2ea13c2354df11c0530b33be02dd92db425bf68ffb487bce2e66e4"
+    },
+    {
+      "file": "apps/web/components/public-profile/__tests__/publicStatusBoundaries.test.ts",
+      "sha256": "027933ccda7bbc1122822a4a96d567b5b7baa124ba57ed9424bc9ca6948b1248"
+    },
+    {
+      "file": "apps/web/app/globals.css",
+      "sha256": "16bd173d8071c7d682d929c4983e4766aae774bf91d251928f84d704480ef971"
+    },
+    {
+      "file": "apps/web/tailwind.config.ts",
+      "sha256": "e2738f087fd02ef0dbd606ce03dc9d0ad017960cfe0cbba3d6aa6d4b04d11bc5"
+    }
+  ],
+  "consumerPins": [
+    {
+      "file": "apps/web/components/analyzer/GameStreamLinks.tsx",
+      "sha256": "9e89584138bab14aead97f86904a5ba82e26dfb6a044b1fbdec3e2bb9a953f57"
+    },
+    {
+      "file": "apps/web/components/analyzer/GameVodToolbar.tsx",
+      "sha256": "3c1757459713348b0ddf31c0190a96a98a94b15a8d23c4619a0edc47fcac72f3"
+    },
+    {
+      "file": "apps/web/components/analyzer/game/BuildOrderColumns.tsx",
+      "sha256": "b4dd99b73b9e3bca5b726a7c79bd136fa94230a3d63398a486077e21c52de71f"
+    },
+    {
+      "file": "apps/web/components/analyzer/game/InteractiveTimeline.tsx",
+      "sha256": "00731fafc1bc30821c9d72f61b101fb0f7e6cb393973186fc27d40cea8233c6e"
+    },
+    {
+      "file": "apps/web/components/analyzer/game/MechanicsPanel.tsx",
+      "sha256": "5b63b04dfe0dfcc608b65b0467be0bb999b3bfc9730f143bde7955ac062628a9"
+    },
+    {
+      "file": "apps/web/components/builds/BuildExportMenu.tsx",
+      "sha256": "ff3404ba642d96671e77724456b014009491b7043b18b0eb27767f7b872fdd94"
+    },
+    {
+      "file": "apps/web/components/maps/MapArtwork.tsx",
+      "sha256": "cbecf8846b2800f66cc40ab0adebf4899f0724153c2ee458fe1683de9bdddb86"
+    },
+    {
+      "file": "apps/web/components/public-profile/PlayerCopyButton.tsx",
+      "sha256": "41a36e1f8665cc1d862d3289f9eb58aa6462d172b3f1d245955c5a210207ba38"
+    },
+    {
+      "file": "apps/web/components/public-profile/PublicMacroLeakCard.tsx",
+      "sha256": "a39bf0b6ebb04e2f726bfed5250af6ab2d595e5ee2f186bd0945e257f64a6c7d"
+    },
+    {
+      "file": "apps/web/components/public-profile/PublicReplayAnalysis.tsx",
+      "sha256": "229eb975e9a3c81ffdbc903cbfae39bf2161648bd9f42ec74c05efb4fa8c399e"
+    },
+    {
+      "file": "apps/web/components/public-profile/PublicReplayDownloadButton.tsx",
+      "sha256": "b1880c79e3f10a775880f0a044f280f2907f81ad5237109280dbda6c9d7f8007"
+    },
+    {
+      "file": "apps/web/components/public-profile/ReplayNeighborNav.tsx",
+      "sha256": "dfbc07ea448250e16b894ddbe28fed918a291501ce0d8b487ff43fb907159628"
+    },
+    {
+      "file": "apps/web/components/public-profile/SharedReplayAnalysisContent.tsx",
+      "sha256": "2f0c067a5c306a927fdc6d853d4de7f6b13f75fbb13bdf7ff0490f58f4edeccc"
+    },
+    {
+      "file": "apps/web/components/public-profile/SharedReplayAnalysisLoading.tsx",
+      "sha256": "2b1d78d96ac6543c69201223dde5ac529ab7d42e55120dc461dfbc2e4ec61f0e"
+    },
+    {
+      "file": "apps/web/components/public-profile/archiveQuery.ts",
+      "sha256": "bc20877afb01c1bba8304910215c500ec7034b864195c0f06faf65ee06c1d7bf"
+    },
+    {
+      "file": "apps/web/components/ui/Badge.tsx",
+      "sha256": "ddf30f121d9eadb39e079bb19153346012ba4703ffefb16a034de76bdbe055fc"
+    },
+    {
+      "file": "apps/web/components/ui/Button.tsx",
+      "sha256": "f7a30265f5487e91bd5c98da64271247deba554b7ed2ddb17b49e5b9cb9b71db"
+    },
+    {
+      "file": "apps/web/components/ui/Card.tsx",
+      "sha256": "2eaa757fa8fb32cd7e4da358d55c12d44e752e5289330afd9bd03075a59161c1"
+    },
+    {
+      "file": "apps/web/components/ui/CopyButton.tsx",
+      "sha256": "50880ec71927a3d53e41a1e6932d77f94a537fd546e66b30e58f708d6579ebbd"
+    },
+    {
+      "file": "apps/web/components/ui/EmptyState.tsx",
+      "sha256": "b7e03f291344845148f536b15970435b9ce5c8a8c5ef2e0b92e6d354719f3e89"
+    },
+    {
+      "file": "apps/web/components/ui/Icon.tsx",
+      "sha256": "054537d3f79b42da1e40e29f4a90a1533ff0beda485aedef50db709ac6cc1cb9"
+    },
+    {
+      "file": "apps/web/components/ui/Input.tsx",
+      "sha256": "e3c1ef0aad082e9ad2c73ead8af18e9df54cbd77c41087c2034e566bf2dcd657"
+    },
+    {
+      "file": "apps/web/components/ui/PageHeader.tsx",
+      "sha256": "8c834b83b86de674d80ce9486d134090f4ae4e261075f9799c7ac915c7cde34a"
+    },
+    {
+      "file": "apps/web/components/ui/RequestError.tsx",
+      "sha256": "66c5c056a85e8df2cad197684bd4afe6a2dfa60ad0b9b0d9d6a756ed5aa10ee8"
+    },
+    {
+      "file": "apps/web/components/ui/SectionNav.tsx",
+      "sha256": "54921e0a93d56af92fbc02ce1ccafec11520fea00bde862aaa9eb2ac7be661d5"
+    },
+    {
+      "file": "apps/web/components/ui/Skeleton.tsx",
+      "sha256": "66b279a7b56a8ffb61d7b3135a54e1c86324abbc3a5dc3325d52de75f9b43911"
+    },
+    {
+      "file": "apps/web/components/ui/Stat.tsx",
+      "sha256": "7a66e461f73b9f111721ee21df3ac06bef835956de389c45da1e3769d66ad2e9"
+    },
+    {
+      "file": "apps/web/components/ui/Toast.tsx",
+      "sha256": "cdbb48681955daa498e17c3c3cd3d666fdfba4d135dd89b40b54469451b003a0"
+    },
+    {
+      "file": "apps/web/components/ui/buttonStyles.ts",
+      "sha256": "e6ce882b432ef6ee15cb125356d22d8c9da4fdcca2ddd506c6d222c350a3af13"
+    },
+    {
+      "file": "apps/web/lib/a11y/revealHorizontally.ts",
+      "sha256": "ca6b4b3822c7b2cfc14009b2a8fb48c69e12b5466c3e7b01c77bce394b37300f"
+    },
+    {
+      "file": "apps/web/lib/analysisRecompute.ts",
+      "sha256": "0aaa6964569e177c28f7c7f9292fc191c3f2bf2c64224351bce2f72c4b06fc14"
+    },
+    {
+      "file": "apps/web/lib/apm.ts",
+      "sha256": "f411f42cb1ab94d7c0aa10fb5134227458c588b069246a49e518e16fff9a6b3c"
+    },
+    {
+      "file": "apps/web/lib/build-events.ts",
+      "sha256": "967c79e39852c0fad4aabac9c078b7f50afc0740bd827d619750fe4278ba3482"
+    },
+    {
+      "file": "apps/web/lib/build-rule-entity.ts",
+      "sha256": "79c88de9ac631395f4ecffd3d6e68d6902822d9e1d0dde3a97f0aeb390646935"
+    },
+    {
+      "file": "apps/web/lib/build-rules-copy.ts",
+      "sha256": "eac1139c8fddfe905b7e764facba20a3d135212de76057cd4538e98f9d97f4c5"
+    },
+    {
+      "file": "apps/web/lib/build-rules-quantity.ts",
+      "sha256": "ec78f2c77151be50af83deaef45516f129cb91592370d552fc537cb9768f19d2"
+    },
+    {
+      "file": "apps/web/lib/build-rules.ts",
+      "sha256": "e8e69bc110bc9dbe26e8a03a401944e80882f1fc8eccfc721d627d627fdabe3c"
+    },
+    {
+      "file": "apps/web/lib/buildExecution.ts",
+      "sha256": "406f565c0dbae9f8e6ca170e32459c946af042fee102d7bb5941ddb86a29bf67"
+    },
+    {
+      "file": "apps/web/lib/buildOrderReference.ts",
+      "sha256": "0201b801d68c8220874538d842d7d1cf1f58a84f8715b6e1bf361a99667a670a"
+    },
+    {
+      "file": "apps/web/lib/buildTimingComparison.ts",
+      "sha256": "c3c141cb0ba66963c3d28ca99b0c46546bd9ce5aedb59521906dfbb9cbeeb316"
+    },
+    {
+      "file": "apps/web/lib/dossierTimings.ts",
+      "sha256": "0217dc56fc46b12b078f1dbfd48407042a510442ccc147a024d06fcae3250a81"
+    },
+    {
+      "file": "apps/web/lib/format.ts",
+      "sha256": "097d8155a906e805fe6eff7cea2780d82f649b4348bc6f147c466f5f065f57be"
+    },
+    {
+      "file": "apps/web/lib/gameExport.ts",
+      "sha256": "834554280cd531ba9500d7c2b830a7028e735952dd92589636f253b64e882905"
+    },
+    {
+      "file": "apps/web/lib/gameTimeline.ts",
+      "sha256": "a2d10e65c0d53261becbc8ca590d70c0aa36eb6970c3f1aa6ab4dd1d487de0ea"
+    },
+    {
+      "file": "apps/web/lib/macro.ts",
+      "sha256": "4b70c33262043e4bc051679bc3db7283b862bc177c05b9cb66e2feceee11b06c"
+    },
+    {
+      "file": "apps/web/lib/map-images.generated.json",
+      "sha256": "34b5991bdb88fdbf36cb6644d1c0d2f36f214392ebd21d80e90f43ba0ec091b7"
+    },
+    {
+      "file": "apps/web/lib/map-images.ts",
+      "sha256": "437309b41019524709aeee33c3b8e608787f62695e80128de89a8244582b52d4"
+    },
+    {
+      "file": "apps/web/lib/race.ts",
+      "sha256": "0f79955f81e05547fb84d65248daf588ba26c678fc83c7d234559d4b99d07873"
+    },
+    {
+      "file": "apps/web/lib/requestErrors.ts",
+      "sha256": "c900bdc70250c4ac9dd32a9278ddd7f8d985fef675b45d894c1e08f7c4255a0a"
+    },
+    {
+      "file": "apps/web/lib/salt.ts",
+      "sha256": "925bee522d61b79665ff9cdf2fff725bcd634de128f0010486349b3042d43adb"
+    },
+    {
+      "file": "apps/web/lib/sc2-icons.ts",
+      "sha256": "13d3205fc639693b7af890ba79836b839314438173a774a8d528df8fd6884c83"
+    },
+    {
+      "file": "apps/web/lib/useCopy.ts",
+      "sha256": "4033cad00ee62310a910ad09aa5932f4c1293c3875c039871f63183013851b1d"
+    },
+    {
+      "file": "apps/web/lib/vodLinks.ts",
+      "sha256": "73ab0cd0e6f6c15ae7fea42c324af3d3869a846c7150c805675237e99bcc843d"
+    }
+  ],
+  "nextRuntime": {
+    "version": "15.5.15",
+    "pins": [
+      {
+        "file": "C:\\SC2TOOLS\\.worktrees\\handoff-ci-repair\\apps\\web\\node_modules\\next\\dist\\shared\\lib\\app-dynamic.js",
+        "sha256": "4821bde9c85a5290d17fbab4430ae749da204cc103088aa122bce235ed5920f8"
+      },
+      {
+        "file": "C:\\SC2TOOLS\\.worktrees\\handoff-ci-repair\\apps\\web\\node_modules\\next\\dist\\shared\\lib\\lazy-dynamic\\loadable.js",
+        "sha256": "75d311a9cc5a62863e877ab5b922a3e8b10c2e3126ee6f122fc4babe91ab1d71"
+      },
+      {
+        "file": "C:\\SC2TOOLS\\.worktrees\\handoff-ci-repair\\apps\\web\\node_modules\\next\\dist\\build\\create-compiler-aliases.js",
+        "sha256": "7fb26367795512c69ffa8651e762d9d32a096d753731d159642e57aafd2995c3"
+      },
+      {
+        "file": "C:\\SC2TOOLS\\.worktrees\\handoff-ci-repair\\apps\\web\\node_modules\\next\\package.json",
+        "sha256": "7081bb3659c70ddd75fc089d0e4f34850736d825e9eec26990ab5be0ecf9d3f0"
+      }
+    ],
+    "implementation": "Real installed Next App Router app-dynamic/lazy-dynamic/loadable; exact compiler alias mirrored, no dynamic adapter.",
+    "ssrQualification": "Source retains defaultSSR; installed loadable defaults ssr:true. This browser library proof is not HTTP/streaming SSR integration."
+  },
+  "fixturePins": [
+    {
+      "file": "fixture-05-original.mjs",
+      "sha256": "e5fd40903c9864a4b8978778fdedec59f5438e6bf17873866f35f87ad44f6eb5"
+    },
+    {
+      "file": "fixture.mjs",
+      "sha256": "339c0718240f88104502389859b7166c584564e9d0adb912167ba56ab57ed73c"
+    },
+    {
+      "file": "help-recovery.spec.ts",
+      "sha256": "c2c18e3184a5c32a4e68f0a441a190541fe0b543627662b97098349b3aa62241"
+    },
+    {
+      "file": "shared-analysis-fixture.mjs",
+      "sha256": "79c88d60d0920e44105ca39fe5cf6c6439ff2f8e67fab078efa28c4d5627d65f"
+    },
+    {
+      "file": "shared-analysis.spec.ts",
+      "sha256": "1ed88688e344da40201b82390b87455484d11738cd80a7c459881b37fcd07246"
+    },
+    {
+      "file": "playwright-06.config.ts",
+      "sha256": "8be43882112a235f758deefb345f84f44dc4d3c642adc0fbd4a26c6d31763a78"
+    },
+    {
+      "file": "playwright-07.config.ts",
+      "sha256": "0e9ca7cce4dbc6b908919bb87140a9b97a9104f58e5fbf68a8b720014fa80128"
+    },
+    {
+      "file": "SHARED_ANALYSIS_REPAIR.md",
+      "sha256": "2209041c7848e8c5b17edd0ab79ff4fb416e2f5de904f35cd3bc1f873446ad7d"
+    }
+  ],
+  "browser": {
+    "report": "browser-07.json",
+    "sha256": "c2ee317d5599c3c6bec92bf4b6e56b121f82f8dc26d7c8ff41c8c48e54545a6f",
+    "stats": {
+      "startTime": "2026-10-28T04:34:39.064Z",
+      "duration": 60869.863,
+      "expected": 12,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "workers": 1,
+    "widths": [
+      320,
+      390,
+      1280
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "originalSkeletonCases": 6,
+    "realHeldChunkCases": 6,
+    "aaScans": 18,
+    "aaViolations": 0,
+    "ruleExclusions": [],
+    "aa": [
+      {
+        "project": "phone-320",
+        "name": "canonical-loading-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-320",
+        "name": "canonical-loading-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-390",
+        "name": "canonical-loading-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-390",
+        "name": "canonical-loading-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "desktop-1280",
+        "name": "canonical-loading-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "desktop-1280",
+        "name": "canonical-loading-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-320",
+        "name": "held-analysis-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-320",
+        "name": "resolved-analysis-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "held-analysis-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-320",
+        "name": "resolved-analysis-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "held-analysis-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-390",
+        "name": "resolved-analysis-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "held-analysis-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-390",
+        "name": "resolved-analysis-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "held-analysis-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "desktop-1280",
+        "name": "resolved-analysis-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "held-analysis-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "desktop-1280",
+        "name": "resolved-analysis-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      }
+    ],
+    "chunkProofs": [
+      {
+        "project": "phone-320",
+        "title": "light: held Next App Router chunk loads the actual replay analysis",
+        "nextInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/next/dist/shared/lib/lazy-dynamic/loadable.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/next/dist/shared/lib/app-dynamic.js"
+        ],
+        "chunkEvents": [
+          {
+            "type": "held",
+            "path": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+          },
+          {
+            "type": "released",
+            "path": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+          }
+        ],
+        "heldPath": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+      },
+      {
+        "project": "phone-320",
+        "title": "dark: held Next App Router chunk loads the actual replay analysis",
+        "nextInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/next/dist/shared/lib/lazy-dynamic/loadable.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/next/dist/shared/lib/app-dynamic.js"
+        ],
+        "chunkEvents": [
+          {
+            "type": "held",
+            "path": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+          },
+          {
+            "type": "released",
+            "path": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+          }
+        ],
+        "heldPath": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+      },
+      {
+        "project": "phone-390",
+        "title": "light: held Next App Router chunk loads the actual replay analysis",
+        "nextInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/next/dist/shared/lib/lazy-dynamic/loadable.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/next/dist/shared/lib/app-dynamic.js"
+        ],
+        "chunkEvents": [
+          {
+            "type": "held",
+            "path": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+          },
+          {
+            "type": "released",
+            "path": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+          }
+        ],
+        "heldPath": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+      },
+      {
+        "project": "phone-390",
+        "title": "dark: held Next App Router chunk loads the actual replay analysis",
+        "nextInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/next/dist/shared/lib/lazy-dynamic/loadable.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/next/dist/shared/lib/app-dynamic.js"
+        ],
+        "chunkEvents": [
+          {
+            "type": "held",
+            "path": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+          },
+          {
+            "type": "released",
+            "path": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+          }
+        ],
+        "heldPath": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+      },
+      {
+        "project": "desktop-1280",
+        "title": "light: held Next App Router chunk loads the actual replay analysis",
+        "nextInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/next/dist/shared/lib/lazy-dynamic/loadable.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/next/dist/shared/lib/app-dynamic.js"
+        ],
+        "chunkEvents": [
+          {
+            "type": "held",
+            "path": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+          },
+          {
+            "type": "released",
+            "path": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+          }
+        ],
+        "heldPath": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+      },
+      {
+        "project": "desktop-1280",
+        "title": "dark: held Next App Router chunk loads the actual replay analysis",
+        "nextInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/next/dist/shared/lib/lazy-dynamic/loadable.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/next/dist/shared/lib/app-dynamic.js"
+        ],
+        "chunkEvents": [
+          {
+            "type": "held",
+            "path": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+          },
+          {
+            "type": "released",
+            "path": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+          }
+        ],
+        "heldPath": "/chunks/PublicReplayAnalysis-ZJHZGOSF.js"
+      }
+    ],
+    "screenshots": [
+      {
+        "file": "screenshots-07/phone-320-canonical-loading-light.png",
+        "sha256": "6ee0c00467fb652d83411843351cc97761837fe66755657aaa2103e9e56d01be"
+      },
+      {
+        "file": "screenshots-07/phone-320-canonical-loading-dark.png",
+        "sha256": "68237d0b2fddbd0d734101891d77e5ad1a5fb88067ae8c1ae30c3b61d8ab0acf"
+      },
+      {
+        "file": "screenshots-07/phone-390-canonical-loading-light.png",
+        "sha256": "4171a7fbb7bb12dbeaa6c74af4471a5af149134d99fb99f6d5adc5e9f3139e48"
+      },
+      {
+        "file": "screenshots-07/phone-390-canonical-loading-dark.png",
+        "sha256": "dce676adfca20060872133b9aac7436033cdeed67aff7c9dba415c43032a3f72"
+      },
+      {
+        "file": "screenshots-07/desktop-1280-canonical-loading-light.png",
+        "sha256": "f9fb35d9a864ee4040a33da36fe3e337fcc454d093d284e7ed6b3cb13900c7aa"
+      },
+      {
+        "file": "screenshots-07/desktop-1280-canonical-loading-dark.png",
+        "sha256": "e620659a8143def4cf3cc1725fe11320ef50d2544d935471aa499e99b39a75b6"
+      },
+      {
+        "file": "screenshots-07/phone-320-held-analysis-light.png",
+        "sha256": "87147b58fd2f7f7b7b6dddbbefc8f1f1d852e91081bfbf729e4e798be23a8867"
+      },
+      {
+        "file": "screenshots-07/phone-320-resolved-analysis-light.png",
+        "sha256": "76f6bf151ae0b4f5d69faad8b434f839f7110daec61d4ea7b8c9ce252cc72e0e"
+      },
+      {
+        "file": "screenshots-07/phone-320-held-analysis-dark.png",
+        "sha256": "4639b1f0fdc9ceec7d96d37d07490f99e85ca75a922b3ffdd451be91b10804b6"
+      },
+      {
+        "file": "screenshots-07/phone-320-resolved-analysis-dark.png",
+        "sha256": "65afe45d3ddd1abc3c58e6e7bbb4f3abfbdb3ff8c1c5edd38e7fbcd80f7c71fc"
+      },
+      {
+        "file": "screenshots-07/phone-390-held-analysis-light.png",
+        "sha256": "67d7f8d2aa884a62b74db0d8186910c6c57d824d8436fa218dc29336a9617f7c"
+      },
+      {
+        "file": "screenshots-07/phone-390-resolved-analysis-light.png",
+        "sha256": "65b14d8d5974a10ce1cc01d54cb411af7e4f8d5ecac8f9da7ee2d9201c94b04d"
+      },
+      {
+        "file": "screenshots-07/phone-390-held-analysis-dark.png",
+        "sha256": "e05f52363e49db77ff5adf30a2407b29bf16b8e1044b6116cffd65f8402bf35d"
+      },
+      {
+        "file": "screenshots-07/phone-390-resolved-analysis-dark.png",
+        "sha256": "2084bc64c3a0244ab15fa6bd877d41d925a5353f95b4ecf5224c61802222e851"
+      },
+      {
+        "file": "screenshots-07/desktop-1280-held-analysis-light.png",
+        "sha256": "38fc9a329a9e53a0bc4a10b9fe91780a9f18b200589a0fd95c74a231f56e5f12"
+      },
+      {
+        "file": "screenshots-07/desktop-1280-resolved-analysis-light.png",
+        "sha256": "205abf9e2087fcc4777126d265c7de8ba12079fd1c755f8a90ab33c3c49c566d"
+      },
+      {
+        "file": "screenshots-07/desktop-1280-held-analysis-dark.png",
+        "sha256": "fb7e19f31f7be0ab7369b739e2427293c143162f409498884676418f47c54556"
+      },
+      {
+        "file": "screenshots-07/desktop-1280-resolved-analysis-dark.png",
+        "sha256": "8d3d1a88e711523630620d1e934f2a97692af5ad07272f630e56a84be3c422de"
+      }
+    ]
+  },
+  "visualInspection": {
+    "reviewed": [
+      "screenshots-07/phone-320-held-analysis-light.png",
+      "screenshots-07/phone-320-resolved-analysis-light.png",
+      "screenshots-07/desktop-1280-resolved-analysis-dark.png"
+    ],
+    "result": "Held skeleton navigation wraps within320px. Actual resolved hero/statistics/navigation/mechanics/build-order sections are contained and readable at320px and desktop. Focus remains on the local reading control and no passive vertical scroll occurs."
+  },
+  "sourceContracts": {
+    "movedBodyEquivalentIgnoringCommentAndCrlf": true,
+    "routeLevelLoadingAbsent": true,
+    "protectedStatusTestUnchangedIgnoringCrlf": true,
+    "protectedStatusTestSha256": "027933ccda7bbc1122822a4a96d567b5b7baa124ba57ed9424bc9ca6948b1248",
+    "defaultSsrRetained": true,
+    "canonicalApiNotFoundRedirectOrder": "Reviewed page keeps authoritative API result/404/unavailable/canonical redirect decisions before returning client island; no server gate mocked as browser evidence."
+  },
+  "limits": [
+    "Synthetic already-authorized public replay data mounts the actual content/loading/analysis components. Next Link/Image/navigation, inert unused LazyHelpLink and auth/API seams are explicit. No actual authorization, HTTP status, metadata, redirect or SSR request is exercised here.",
+    "Real ESM chunk is selected by actual PublicReplayAnalysis entrypoint and held at intercepted GET, not an invented loader promise. Real Next runtime input paths are recorded in the esbuild metadata. No ssr:false, next/dynamic substitute, replay/analysis component substitute or skeleton substitute is used.",
+    "Original30-case report05 and original fixture bytes remain historical. The earlier skeleton proof did not cover early HTTP200 flushing; preserved PR802 CI failure at7b57d86 drove the source repair. Root owns new79 focused tests/types/lint, actual Next build/all83 budgets, separate offline HTTP/SSR proof and final signed-in acceptance."
+  ],
+  "failedEvidence": {
+    "run": "browser-06.json",
+    "cause": "Fixture expected4,321; actual established fmtMmr intentionally renders4321. Corrected that display string while retaining numeric/content assertions and all motion/geometry/AA/focus/scroll/network gates. Report/screenshot/context retained."
+  },
+  "cleanup": {
+    "runnerSession": 82744,
+    "runnerExitCode": 0,
+    "startedHttpListeners": 0,
+    "actualWorkersNativeOrProviders": 0,
+    "retainedOwnedBackgroundProcesses": 0,
+    "evidence": "Playwright runner completed normally. No local server was started; every fixture asset is intercepted. No broad process kill or OS-wide inventory claimed."
+  }
+}

@@ -1,0 +1,333 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-28T04:47:53.6995927Z",
+  "qualification": "Actual local Next production HTTP/SSR; real unmodified middleware/Clerk SDK; only RSA/JWT/JWKS and API DTOs are synthetic. No production-account acceptance claimed.",
+  "candidateSourceHead": "97eca05ce89aae9d31ef7bbb41f5866803d5da2a",
+  "baselineCheckout": "C:\\SC2TOOLS\\.worktrees\\dashboard-cache-coverage\\apps\\web",
+  "candidateCheckout": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web",
+  "baselineBuildId": "T6ppaKrhUUxTyJRMM8Uei",
+  "candidateBuildId": "BYnF4WIuksJTv8rh0w6di",
+  "runnerSyntax": "node --check passed before runtime",
+  "sdkFinding": "CLERK_JWT_KEY env is not wired by installed Next Clerk6.9.5. Supported CLERK_API_URL was set only in owned child environment to loopback, real SDK fetched generated matching public JWK, verified Bearer, and actual apiFetch forwarded that same token. No internal auth-header fabrication, product/SDK/Next source patch, provider request, real account token or cookie was used.",
+  "sourceReview": "Independent roadmap_audit SDK review clear; sid/issuer/azp/RS256/kid/numeric times/JWKS path and default getToken forwarding checked without runtime.",
+  "results": {
+    "allStatusSemanticsUnchanged": true,
+    "noAddedAuthorityCalls": true,
+    "canonicalLocationsAndContextVerified": true,
+    "baselineStrictPassed": false,
+    "candidateStrictPassed": false,
+    "strictCasesPassedEach": 7,
+    "strictCasesTotalEach": 9,
+    "strictFailuresPreserved": "Canonical owner redirect and legacy detail redirect each make2 authority reads on both baseline and candidate, failing existing one-read expectation. No assertion was deleted or relaxed. Cause is not inferred or fixed here.",
+    "heldAuthority": "Both actual authenticated API holds entered before observation, held about250ms with no response headers, then produced real404 without analysis identity or skeleton output.",
+    "ssr": "Both completed200 documents contain actual analysis heading/timeline/mechanics/build Pylon markup after all script/style tags are stripped; no CSR bailout marker. Actual rendered SSR content, not only serialized RSC DTO.",
+    "busyAndOutage": "Existing authenticated detail busy/outage UI returns200 on both builds; no new status expectation was substituted."
+  },
+  "cases": [
+    {
+      "name": "invalid-signature-rejected",
+      "baselineStatus": 307,
+      "candidateStatus": 307,
+      "statusUnchanged": true,
+      "baselineAuthorityCalls": 0,
+      "candidateAuthorityCalls": 0,
+      "noAddedAuthorityCalls": true,
+      "baselineStrictOutcome": "passed",
+      "candidateStrictOutcome": "passed",
+      "baselineLocation": "https://accounts.example.com/sign-in?redirect_url=http%3A%2F%2Flocalhost%3A3326%2Fplayers%2Ffixture-owner%2Freplays%2Ffixture-replay",
+      "candidateLocation": "https://accounts.example.com/sign-in?redirect_url=http%3A%2F%2Flocalhost%3A3327%2Fplayers%2Ffixture-owner%2Freplays%2Ffixture-replay",
+      "baselineHoldMs": null,
+      "candidateHoldMs": null,
+      "baselineHeadersBeforeAuthority": null,
+      "candidateHeadersBeforeAuthority": null
+    },
+    {
+      "name": "signed-out-protected",
+      "baselineStatus": 307,
+      "candidateStatus": 307,
+      "statusUnchanged": true,
+      "baselineAuthorityCalls": 0,
+      "candidateAuthorityCalls": 0,
+      "noAddedAuthorityCalls": true,
+      "baselineStrictOutcome": "passed",
+      "candidateStrictOutcome": "passed",
+      "baselineLocation": "https://accounts.example.com/sign-in?redirect_url=http%3A%2F%2Flocalhost%3A3326%2Fplayers%2Ffixture-owner%2Freplays%2Ffixture-replay",
+      "candidateLocation": "https://accounts.example.com/sign-in?redirect_url=http%3A%2F%2Flocalhost%3A3327%2Fplayers%2Ffixture-owner%2Freplays%2Ffixture-replay",
+      "baselineHoldMs": null,
+      "candidateHoldMs": null,
+      "baselineHeadersBeforeAuthority": null,
+      "candidateHeadersBeforeAuthority": null
+    },
+    {
+      "name": "held-missing-real404",
+      "baselineStatus": 404,
+      "candidateStatus": 404,
+      "statusUnchanged": true,
+      "baselineAuthorityCalls": 1,
+      "candidateAuthorityCalls": 1,
+      "noAddedAuthorityCalls": true,
+      "baselineStrictOutcome": "passed",
+      "candidateStrictOutcome": "passed",
+      "baselineLocation": null,
+      "candidateLocation": null,
+      "baselineHoldMs": 254,
+      "candidateHoldMs": 261,
+      "baselineHeadersBeforeAuthority": false,
+      "candidateHeadersBeforeAuthority": false
+    },
+    {
+      "name": "dotted-id-missing-real404",
+      "baselineStatus": 404,
+      "candidateStatus": 404,
+      "statusUnchanged": true,
+      "baselineAuthorityCalls": 1,
+      "candidateAuthorityCalls": 1,
+      "noAddedAuthorityCalls": true,
+      "baselineStrictOutcome": "passed",
+      "candidateStrictOutcome": "passed",
+      "baselineLocation": null,
+      "candidateLocation": null,
+      "baselineHoldMs": null,
+      "candidateHoldMs": null,
+      "baselineHeadersBeforeAuthority": null,
+      "candidateHeadersBeforeAuthority": null
+    },
+    {
+      "name": "canonical-owner-redirect",
+      "baselineStatus": 307,
+      "candidateStatus": 307,
+      "statusUnchanged": true,
+      "baselineAuthorityCalls": 2,
+      "candidateAuthorityCalls": 2,
+      "noAddedAuthorityCalls": true,
+      "baselineStrictOutcome": "failed",
+      "candidateStrictOutcome": "failed",
+      "baselineLocation": "/players/fixture-owner/replays/canonical-replay?from=matchup%3DPvZ%26cursor%3Dold%26page%3D2",
+      "candidateLocation": "/players/fixture-owner/replays/canonical-replay?from=matchup%3DPvZ%26cursor%3Dold%26page%3D2",
+      "baselineHoldMs": null,
+      "candidateHoldMs": null,
+      "baselineHeadersBeforeAuthority": null,
+      "candidateHeadersBeforeAuthority": null
+    },
+    {
+      "name": "busy-keeps-existing-detail-ui",
+      "baselineStatus": 200,
+      "candidateStatus": 200,
+      "statusUnchanged": true,
+      "baselineAuthorityCalls": 1,
+      "candidateAuthorityCalls": 1,
+      "noAddedAuthorityCalls": true,
+      "baselineStrictOutcome": "passed",
+      "candidateStrictOutcome": "passed",
+      "baselineLocation": null,
+      "candidateLocation": null,
+      "baselineHoldMs": null,
+      "candidateHoldMs": null,
+      "baselineHeadersBeforeAuthority": null,
+      "candidateHeadersBeforeAuthority": null
+    },
+    {
+      "name": "outage-keeps-existing-detail-ui",
+      "baselineStatus": 200,
+      "candidateStatus": 200,
+      "statusUnchanged": true,
+      "baselineAuthorityCalls": 1,
+      "candidateAuthorityCalls": 1,
+      "noAddedAuthorityCalls": true,
+      "baselineStrictOutcome": "passed",
+      "candidateStrictOutcome": "passed",
+      "baselineLocation": null,
+      "candidateLocation": null,
+      "baselineHoldMs": null,
+      "candidateHoldMs": null,
+      "baselineHeadersBeforeAuthority": null,
+      "candidateHeadersBeforeAuthority": null
+    },
+    {
+      "name": "admitted-complete-analysis-ssr",
+      "baselineStatus": 200,
+      "candidateStatus": 200,
+      "statusUnchanged": true,
+      "baselineAuthorityCalls": 1,
+      "candidateAuthorityCalls": 1,
+      "noAddedAuthorityCalls": true,
+      "baselineStrictOutcome": "passed",
+      "candidateStrictOutcome": "passed",
+      "baselineLocation": null,
+      "candidateLocation": null,
+      "baselineHoldMs": null,
+      "candidateHoldMs": null,
+      "baselineHeadersBeforeAuthority": null,
+      "candidateHeadersBeforeAuthority": null
+    },
+    {
+      "name": "legacy-detail-direct-redirect",
+      "baselineStatus": 308,
+      "candidateStatus": 308,
+      "statusUnchanged": true,
+      "baselineAuthorityCalls": 2,
+      "candidateAuthorityCalls": 2,
+      "noAddedAuthorityCalls": true,
+      "baselineStrictOutcome": "failed",
+      "candidateStrictOutcome": "failed",
+      "baselineLocation": "/players/fixture-owner/replays/fixture-replay?from=matchup%3DPvZ%26cursor%3Dold%26page%3D2",
+      "candidateLocation": "/players/fixture-owner/replays/fixture-replay?from=matchup%3DPvZ%26cursor%3Dold%26page%3D2",
+      "baselineHoldMs": null,
+      "candidateHoldMs": null,
+      "baselineHeadersBeforeAuthority": null,
+      "candidateHeadersBeforeAuthority": null
+    }
+  ],
+  "redirectLocationProofFromRetainedResponses": [
+    {
+      "label": "baseline",
+      "name": "canonical-owner-redirect",
+      "path": "/players/fixture-owner/replays/canonical-replay",
+      "from": "matchup=PvZ&cursor=old&page=2",
+      "pathCorrect": true,
+      "fromCorrect": true
+    },
+    {
+      "label": "baseline",
+      "name": "legacy-detail-direct-redirect",
+      "path": "/players/fixture-owner/replays/fixture-replay",
+      "from": "matchup=PvZ&cursor=old&page=2",
+      "pathCorrect": true,
+      "fromCorrect": true
+    },
+    {
+      "label": "candidate",
+      "name": "canonical-owner-redirect",
+      "path": "/players/fixture-owner/replays/canonical-replay",
+      "from": "matchup=PvZ&cursor=old&page=2",
+      "pathCorrect": true,
+      "fromCorrect": true
+    },
+    {
+      "label": "candidate",
+      "name": "legacy-detail-direct-redirect",
+      "path": "/players/fixture-owner/replays/fixture-replay",
+      "from": "matchup=PvZ&cursor=old&page=2",
+      "pathCorrect": true,
+      "fromCorrect": true
+    }
+  ],
+  "baselineReceipt": {
+    "path": "C:\\SC2TOOLS\\.cache\\help-recovery-completion-verification-20261028\\http-baseline-2026-10-28T04-45-17-056Z\\receipt.json",
+    "sha256": "b8226e21801976285e1311d8cc6c430b340e949533ca29b298ee2e209191f2e6",
+    "ownedPid": 42436,
+    "cleanup": {
+      "nextChildExited": true,
+      "listenersClosed": [
+        {
+          "port": 8080,
+          "host": "127.0.0.1",
+          "closed": true
+        },
+        {
+          "port": 8080,
+          "host": "::1",
+          "closed": true
+        },
+        {
+          "port": 3326,
+          "host": "127.0.0.1",
+          "closed": true
+        },
+        {
+          "port": 3326,
+          "host": "::1",
+          "closed": true
+        }
+      ]
+    }
+  },
+  "candidateReceipt": {
+    "path": "C:\\SC2TOOLS\\.cache\\help-recovery-completion-verification-20261028\\http-candidate-2026-10-28T04-45-58-146Z\\receipt.json",
+    "sha256": "57f9d98e32c6c88484744c70ab3d4007dd61ab712b5099faf8612064270c93e0",
+    "ownedPid": 47100,
+    "cleanup": {
+      "nextChildExited": true,
+      "listenersClosed": [
+        {
+          "port": 8080,
+          "host": "127.0.0.1",
+          "closed": true
+        },
+        {
+          "port": 8080,
+          "host": "::1",
+          "closed": true
+        },
+        {
+          "port": 3327,
+          "host": "127.0.0.1",
+          "closed": true
+        },
+        {
+          "port": 3327,
+          "host": "::1",
+          "closed": true
+        }
+      ]
+    }
+  },
+  "earlierFailures": [
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\help-recovery-completion-verification-20261028\\http-baseline-2026-10-28T04-42-25-780Z",
+      "reason": "Sandbox loopback EACCES; Next reachedReady but no cases ran. PID exited; API listeners closed; subsequent preflight proved Next port vacant."
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\help-recovery-completion-verification-20261028\\http-baseline-2026-10-28T04-44-04-116Z",
+      "reason": "Real SDK/JWKS auth controls passed, but127-only Next listener could not accept Clerk/Next localhost rewrite resolved to::1. Kept all500responses. Fixed only fixture binding to localhost on proven loopback DNS for both later runs."
+    }
+  ],
+  "fixturePins": [
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\help-recovery-completion-verification-20261028\\shared-analysis-http-runner.mjs",
+      "sha256": "a3fc93cfd785b895471e4d3c499fe90a68d2f01877a02686b66741a91a456a0d"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\help-recovery-completion-verification-20261028\\shared-analysis-http-prepared.json",
+      "sha256": "e0ebb2a1f23863155042c2db9d9931f88bda2492fc5eeafc084795f94990cb4c"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\help-recovery-completion-verification-20261028\\shared-analysis-http-data.mjs",
+      "sha256": "ea87a454431a9029fc148cfac06e70e4046e894ce5c320ee0c652756bdae8456"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\help-recovery-completion-verification-20261028\\shared-analysis-fixture.mjs",
+      "sha256": "79c88d60d0920e44105ca39fe5cf6c6439ff2f8e67fab078efa28c4d5627d65f"
+    }
+  ],
+  "sdkPins": [
+    {
+      "path": "apps/web/node_modules/@clerk/nextjs/dist/cjs/server/constants.js",
+      "sha256": "50a082c4f1ab6f30f52b00652eff264051b3599a364e1c72435d7e577ff44bc5"
+    },
+    {
+      "path": "apps/web/node_modules/@clerk/nextjs/dist/cjs/server/createClerkClient.js",
+      "sha256": "028decf0ee0d4410acb8b8d458cd27fb2852ca885db678e03834f83292dfcb65"
+    },
+    {
+      "path": "apps/web/node_modules/@clerk/nextjs/dist/cjs/server/clerkMiddleware.js",
+      "sha256": "13e168ff081b321695ce904ae2eb4b434fa8367f5625cc6ddf9a9a4abb256699"
+    },
+    {
+      "path": "apps/web/node_modules/@clerk/nextjs/dist/cjs/server/data/getAuthDataFromRequest.js",
+      "sha256": "f506e85660425c4724655bcfc6addb9f1b459206d6dd869d6bdc3b91c3d01e3d"
+    },
+    {
+      "path": "apps/web/node_modules/@clerk/backend/dist/index.js",
+      "sha256": "a1501ae0a900a7e8cf657037270031b3f80e5c25c98302c9c6b0ea862335e949"
+    },
+    {
+      "path": "apps/web/node_modules/next/dist/server/web/sandbox/context.js",
+      "sha256": "21a4546515b2a23b0130ba13a421928b7b7b3f9882771a7a50e536c6f19aca53"
+    }
+  ],
+  "processOwnership": "Only exact spawned Next PIDs and owned API sockets were stopped. Final baseline/candidate receipts check8080 plus3326/3327 onIPv4 andIPv6 closed. No owned process/listener remains; heavy slot released to root.",
+  "remaining": "Root owns build/budget receipt linkage, exact-head CI, deployment/signed-in acceptance and ledger. Existing redirect double-read observation remains explicitly open; do not report these strict runs as9/9passed.",
+  "summaryCorrection": "Comparison01 omitted six SDK hashes because its pin list missed the apps/web prefix. Preserved that initial summary and corrected only SDK paths here; all original HTTP responses, strict failures, receipts, source and runner are unchanged.",
+  "priorSummarySha256": "3c1048b7b243a75799d06b24f60664e5e52f0822264cd90bfcda796c3a8e068f"
+}
