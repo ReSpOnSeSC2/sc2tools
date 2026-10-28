@@ -6,6 +6,7 @@ import type { MapReplayController } from "@/lib/useMapReplay";
 import { computeEffectiveRace, computePenaltyRows, computeWins, formatGameClock, getRaceDetail, isMissingChartSamples, scoreToneTextClass, selectLeaks } from "@/lib/macro";
 import { MapReplaySection } from "@/components/analyzer/game/MapReplaySection";
 import { MacroChartSection } from "./MacroChartSection";
+import { useMacroOverviewMode } from "./useMacroOverviewMode";
 import { MacroLeaksList } from "./MacroLeaksList";
 import { MacroPenaltyBars } from "./MacroPenaltyBars";
 import { MacroKpiRow } from "./MacroKpiRow";
@@ -26,6 +27,7 @@ export function MacroBreakdownBody({
   includeReplay = true,
   inspectionTime,
   onSeek,
+  fitOverview = false,
 }: {
   data: MacroBreakdownData;
   gameId: string;
@@ -39,8 +41,11 @@ export function MacroBreakdownBody({
   includeReplay?: boolean;
   inspectionTime?: number | null;
   onSeek?: (time: number) => void;
+  /** Local modal overview; full game/review layouts retain their normal sizing. */
+  fitOverview?: boolean;
 }) {
   const headingId = useId();
+  const fittedOverview = useMacroOverviewMode(fitOverview);
   const score =
     typeof data.macro_score === "number"
       ? data.macro_score
@@ -85,6 +90,7 @@ export function MacroBreakdownBody({
           </div>
         ) : (
           <MacroChartSection
+            fitOverview={fittedOverview}
             inspectionTime={inspectionTime}
             onSeek={onSeek}
             samples={data.stats_events || []}

@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useState,
 } from "react";
@@ -31,6 +32,8 @@ import {
   timelineMetricsFor,
 } from "./timelineMetrics";
 import { useTimelineBankView, useTimelineMetrics } from "./useTimelineMetrics";
+import { BankViewSwitch, MetricSwitch } from "./TimelineControls";
+import { MacroOverviewFit } from "./MacroOverviewFit";
 import {
   INITIAL_HOVER,
   nextHover,
@@ -41,6 +44,8 @@ import { gamePace, withApm, type GameApm } from "@/lib/apm";
 import type { PatchEra } from "@/lib/meta";
 
 export interface MacroChartSectionProps {
+  /** Fit only the modal's chart and both rosters, with unscaled controls. */
+  fitOverview?: boolean;
   inspectionTime?: number | null;
   onSeek?: (time: number) => void;
   samples: StatsEvent[];
@@ -134,9 +139,11 @@ export function MacroChartSection({
   gameId,
   apm = null,
   patchEra,
+  fitOverview = false,
 }: MacroChartSectionProps) {
   const [hover, setHover] = useState<HoverState>(INITIAL_HOVER);
   const [showBlocks, setShowBlocks] = useState(true);
+  const supplyToggleId = useId();
   const [chosenMetrics, setChosenMetrics] = useTimelineMetrics();
   const [bankView, setBankView] = useTimelineBankView();
   const hasBlocks =
@@ -202,34 +209,7 @@ export function MacroChartSection({
     [onSeek],
   );
 
-  return (
-    // This wrapper is the sticky chart's containing block: on phones the
-    // chart stays pinned under the panel header while the roster scrolls
-    // beneath it, then leaves with the roster (sc2replaystats layout).
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3 px-4 sm:px-0">
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
-            Match timeline
-          </h3>
-          <p className="text-micro text-text-muted">
-            Hover, tap or drag across the chart to inspect a moment
-          </p>
-        </div>
-        {hasBlocks ? (
-          <label
-            {...{ [TIMELINE_CONTROL_ATTR]: "" }}
-            className="flex flex-shrink-0 items-center gap-2 text-micro font-semibold text-text-muted"
-          >
-            <span className="whitespace-nowrap">Supply blocks</span>
-            <Toggle
-              checked={showBlocks}
-              onChange={setShowBlocks}
-              label="Show supply blocks"
-            />
-          </label>
-        ) : null}
-      </div>
+  const overview = <>
       <ActiveArmyChart
         mySeries={mySeries}
         oppSeries={oppSeries}
@@ -253,10 +233,12 @@ export function MacroChartSection({
         apmAverages={apmAverages}
         showSupplyBlocks={showBlocks}
         showTitle={false}
-        className="sticky top-[var(--macro-header-h,0px)] z-[5] bg-bg-surface px-3 pt-2 shadow-[0_8px_12px_-12px_rgb(0_0_0/0.5)] sm:static sm:z-auto sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none"
+        showControls={!fitOverview}
+        className={fitOverview ? "static" : "sticky top-[var(--macro-header-h,0px)] z-[5] bg-bg-surface px-3 pt-2 shadow-[0_8px_12px_-12px_rgb(0_0_0/0.5)] sm:static sm:z-auto sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none"}
       />
-      <div className="px-4 sm:px-0">
+      <div className={fitOverview ? undefined : "px-4 sm:px-0"}>
         <CompositionSnapshot
+          fitOverview={fitOverview}
           mySeries={mySeries}
           oppSeries={oppSeries}
           unitTimeline={unitTimeline}
@@ -274,6 +256,45 @@ export function MacroChartSection({
           patchEra={patchEra}
         />
       </div>
+    </>;
+
+  return (
+    // This wrapper is the sticky chart's containing block: on phones the
+    // chart stays pinned under the panel header while the roster scrolls
+    // beneath it, then leaves with the roster (sc2replaystats layout).
+    <div className="space-y-3">
+      <div className={`flex items-center justify-between gap-3 px-4 sm:px-0 ${fitOverview ? "flex-wrap" : ""}`}>
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
+            Match timeline
+          </h3>
+          <p className="text-micro text-text-muted">
+            Hover, tap or drag across the chart to inspect a moment
+          </p>
+        </div>
+        {hasBlocks ? (
+          <label
+            htmlFor={supplyToggleId}
+            {...{ [TIMELINE_CONTROL_ATTR]: "" }}
+            className="flex flex-shrink-0 items-center gap-2 text-micro font-semibold text-text-muted"
+          >
+            <span className="whitespace-nowrap">Supply blocks</span>
+            <Toggle
+              id={supplyToggleId}
+              checked={showBlocks}
+              onChange={setShowBlocks}
+              label="Show supply blocks"
+            />
+          </label>
+        ) : null}
+      </div>
+      {fitOverview ? <>
+        <div data-timeline-control="" className="space-y-2 px-3 sm:px-0">
+          <MetricSwitch selected={shownMetrics.map((metric) => metric.key)} onChange={setChosenMetrics} race={myRace} metrics={metrics} />
+          {shownMetrics.some((metric) => metric.key === "bank") ? <BankViewSwitch view={bankView} onChange={setBankView} /> : null}
+        </div>
+        <MacroOverviewFit gameId={gameId}>{overview}</MacroOverviewFit>
+      </> : overview}
       <div hidden={!hasArmy && !hasWorkers} className="px-4 sm:px-0">
         <CasualtySnapshot
           events={casualtyEvents}
