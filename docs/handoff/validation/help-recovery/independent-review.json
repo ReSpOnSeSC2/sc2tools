@@ -1,0 +1,851 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-28T03:56:57.794Z",
+  "reviewer": "independent bingo_browser_regression agent",
+  "sourceRoot": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion",
+  "reviewedCommit": "203a212ffc8d0dfd9ceec8e2db21dece306c938d",
+  "sourceBaseRevision": "f5d19cae623388779190b383bb8ff8512bc1edff",
+  "scope": "Five original Help/recovery roadmap gaps; source/tests/Help/changelog/checkpoint reviewed, actual current-component browser acceptance.",
+  "decision": "clear",
+  "blockers": [],
+  "sourcePins": [
+    {
+      "file": "CHANGELOG.md",
+      "sha256": "554f92530c41392a5eab8a18eee820acfb19daa8ad22de689ddcb4585b1d6501"
+    },
+    {
+      "file": "apps/web/app/players/[player]/replays/[gameId]/loading.tsx",
+      "sha256": "fa31e62569dba0c4b1368d2f054e7612eb64c46ef87faad6820f81775fd12b12"
+    },
+    {
+      "file": "apps/web/components/chrome/__tests__/AppChrome.test.tsx",
+      "sha256": "6c7ffd8a6e723f389890822dc6b5dd55bf9d5628fd9a57ebbec7470df82ef64a"
+    },
+    {
+      "file": "apps/web/components/chrome/__tests__/HelpMenu.test.tsx",
+      "sha256": "d0110a83ccf3fe61e690f14e9da90d7d1f716bbbe2a784d4f4c6f18be0e1f520"
+    },
+    {
+      "file": "apps/web/components/chrome/helpMenuItems.ts",
+      "sha256": "6ae093479d917fbd1eb72954c862378ffaf13f834930518d1472e5cbe5006c33"
+    },
+    {
+      "file": "apps/web/components/dock/DockClient.tsx",
+      "sha256": "f9d5952546c43fb4bc3ce63db02632c2326a4cb56a96507dac88254199696823"
+    },
+    {
+      "file": "apps/web/components/dock/__tests__/DockClient.test.tsx",
+      "sha256": "b9805e4f5f0a5b667d70cfd2942906bae8247a03b6688882250dfc88fc6152c6"
+    },
+    {
+      "file": "apps/web/components/landing/ReplayDemo.tsx",
+      "sha256": "492c2f032d434a43feda4635240b08dcc48dd9cb590098f614c11f3ce6bf7470"
+    },
+    {
+      "file": "apps/web/components/landing/ReplayDemoBrowserIsland.tsx",
+      "sha256": "36219157e9eb32b291788f9768ccd261c686a65592b986e0ad776e75fe08c421"
+    },
+    {
+      "file": "apps/web/components/landing/ReplayDemoBrowserSession.tsx",
+      "sha256": "a1953aea6780d8692b250e1281f79e3131787b0afa4ab0a6436e7a78bcf2da39"
+    },
+    {
+      "file": "apps/web/components/landing/__tests__/ReplayDemo.browser.test.tsx",
+      "sha256": "ce4eec70ad787019acfc016d91387057b5353771eec5d1ede389ffb0d6833dd8"
+    },
+    {
+      "file": "apps/web/components/landing/__tests__/ReplayDemoBrowserIsland.test.tsx",
+      "sha256": "887f4518fc1f60aca87324bf7bb76135bc80b76b8477d24e51d939449f9a1bea"
+    },
+    {
+      "file": "apps/web/components/public-profile/__tests__/SharedReplayLoading.test.tsx",
+      "sha256": "cccc5609b442dd58a6a16f7bf512f1b434e9d3026fb3ef39d2bc757041e0a69e"
+    },
+    {
+      "file": "apps/web/components/pwa/ServiceWorkerRegister.tsx",
+      "sha256": "71d07721f2799a2a0590c15fd1291933cd15680e787a80586f6cc986028a110a"
+    },
+    {
+      "file": "apps/web/components/pwa/__tests__/ServiceWorkerRegister.test.tsx",
+      "sha256": "aea4f45fce508b0129e62831211444ac2d41835f36c736745458f9dc3e62d75c"
+    },
+    {
+      "file": "apps/web/lib/help/articles/account-data/stay-up-to-date.ts",
+      "sha256": "3ca50660818b98998a73a075d6eb1d203e011eb62dfec354eb9bd2f155a21f2c"
+    },
+    {
+      "file": "apps/web/lib/help/articles/getting-started/install-app.ts",
+      "sha256": "001d70e840929492a5ab23e985230e06a46664c9b2b61d07650858d585038f44"
+    },
+    {
+      "file": "apps/web/lib/help/articles/getting-started/instant-analysis.ts",
+      "sha256": "cb255af56eda377743f5832a12adba4265694036760d6cdf4925aa72df67b194"
+    },
+    {
+      "file": "apps/web/lib/help/articles/stream-studio/stream-dock.ts",
+      "sha256": "eb4e10aff5c684bbef0457cf53a8065b952e31c5a987232cf817f8c3b7f0ad44"
+    },
+    {
+      "file": "docs/handoff/help-recovery-completion-checkpoint.md",
+      "sha256": "e9e4afd9e49aeb1cd356e12f52be64d7eef87bcbc3492c7cf8e842d93e45f355"
+    }
+  ],
+  "dependencyPins": [
+    {
+      "file": "apps/web/components/chrome/HelpMenu.tsx",
+      "sha256": "278b863a570fb285f69b813b82c619b73394344342676977f8010e985a95c30f"
+    },
+    {
+      "file": "apps/web/components/ui/Modal.tsx",
+      "sha256": "31bba856ca70fa500b8fb0a4dcd726cebfcf3b849c5fbbff0f37027b55a4bc11"
+    },
+    {
+      "file": "apps/web/components/ui/Skeleton.tsx",
+      "sha256": "66b279a7b56a8ffb61d7b3135a54e1c86324abbc3a5dc3325d52de75f9b43911"
+    },
+    {
+      "file": "apps/web/lib/a11y/useFocusTrap.ts",
+      "sha256": "c95712fdaa6f2f87ab0762cd0ae1dcca733e75de4c789a214f0883b75a4e155d"
+    },
+    {
+      "file": "apps/web/lib/instant/useInstantSession.ts",
+      "sha256": "75e20a3547cbd4b26bb7b751d0f239918431ea21160e0681a97a89911445aa0e"
+    },
+    {
+      "file": "apps/web/lib/instant/sessionController.ts",
+      "sha256": "bd99d6d053f726cd1f2d37e4f6cf969191a7afd019053dd2261dc31b480c52fe"
+    },
+    {
+      "file": "apps/web/lib/instant/sessionEngine.ts",
+      "sha256": "7f6692bf53166698b92e18f81b14b7dce89bb61251020e4d4dbbf9d2f6e35096"
+    },
+    {
+      "file": "apps/web/lib/instant/sessionRun.ts",
+      "sha256": "d138ee10a5e1eacf24a186c66fa7db3b223aa5578c91b0296ec7c76177f28d28"
+    },
+    {
+      "file": "apps/web/lib/instant/sessionPipeline.ts",
+      "sha256": "c7654ca3750bcc85cd764472a1cbe2c97c9dbd77a8b91c0da103fed23510c177"
+    },
+    {
+      "file": "apps/web/lib/instant/sessionState.ts",
+      "sha256": "782e304a2b633dea9d0c9520a449d8632d819b67ab20f2cff96c1e8700c0490f"
+    },
+    {
+      "file": "apps/web/app/globals.css",
+      "sha256": "16bd173d8071c7d682d929c4983e4766aae774bf91d251928f84d704480ef971"
+    },
+    {
+      "file": "apps/web/tailwind.config.ts",
+      "sha256": "e2738f087fd02ef0dbd606ce03dc9d0ad017960cfe0cbba3d6aa6d4b04d11bc5"
+    },
+    {
+      "file": "apps/web/app/fonts/hanken-grotesk-latin.woff2",
+      "sha256": "1f21c6eaa0000f3329cfcfac966b43d5bebf5aa610303e33294ac31bc6f4bb59"
+    },
+    {
+      "file": "apps/web/app/fonts/bricolage-grotesque-latin.woff2",
+      "sha256": "4fd48b2c1ab27220e71f15f990550261b35245c3bdfd8d8025b4bdac0459ee2d"
+    },
+    {
+      "file": "apps/web/app/fonts/fraunces-latin-normal.woff2",
+      "sha256": "88e17be075f1be50ab67b057b99e3701b828f44ed28f9452df6c02645bb0cba9"
+    }
+  ],
+  "fixturePins": [
+    {
+      "file": "fixture.mjs",
+      "sha256": "e5fd40903c9864a4b8978778fdedec59f5438e6bf17873866f35f87ad44f6eb5"
+    },
+    {
+      "file": "help-recovery.spec.ts",
+      "sha256": "c2c18e3184a5c32a4e68f0a441a190541fe0b543627662b97098349b3aa62241"
+    },
+    {
+      "file": "playwright.config.ts",
+      "sha256": "9cbebb58dd00411d1607a9fc32e6f44809d778f1a9f1da4510fd2672548cc59f"
+    },
+    {
+      "file": "playwright-05.config.ts",
+      "sha256": "77bb17d665d4ab5d1f55e11247c4fa9ed6b5ef91797254d2109027e202c54c06"
+    },
+    {
+      "file": "README.md",
+      "sha256": "1cfad50e3de2887e8d701a2ec93e4e768697731dacec5e3b6163e13ed830b2fe"
+    }
+  ],
+  "rebaseQualification": {
+    "beforeRevision": "1ac92f2ffd725c62d056675c1baece457202a85c",
+    "afterRevision": "203a212ffc8d0dfd9ceec8e2db21dece306c938d",
+    "sourceComparisons": [
+      {
+        "file": "apps/web/app/players/[player]/replays/[gameId]/loading.tsx",
+        "beforeBlob": "7a311fa8a1c841fb108573614312123e9b55c86d",
+        "afterBlob": "7a311fa8a1c841fb108573614312123e9b55c86d"
+      },
+      {
+        "file": "apps/web/components/chrome/__tests__/AppChrome.test.tsx",
+        "beforeBlob": "d081d583339fa1ba977762d1d6f01a02312af142",
+        "afterBlob": "d081d583339fa1ba977762d1d6f01a02312af142"
+      },
+      {
+        "file": "apps/web/components/chrome/__tests__/HelpMenu.test.tsx",
+        "beforeBlob": "30cbc979bf090fd5d94f3019cccbbc2c21623ee0",
+        "afterBlob": "30cbc979bf090fd5d94f3019cccbbc2c21623ee0"
+      },
+      {
+        "file": "apps/web/components/chrome/helpMenuItems.ts",
+        "beforeBlob": "f1e997f8c413d8f39239f19bbcb597ded63ad722",
+        "afterBlob": "f1e997f8c413d8f39239f19bbcb597ded63ad722"
+      },
+      {
+        "file": "apps/web/components/dock/DockClient.tsx",
+        "beforeBlob": "cbbe914b730d4d5f250d0f895da7b3000a1cd67a",
+        "afterBlob": "cbbe914b730d4d5f250d0f895da7b3000a1cd67a"
+      },
+      {
+        "file": "apps/web/components/dock/__tests__/DockClient.test.tsx",
+        "beforeBlob": "7fddd746d23397dce03bb01c7c1e1254e7e74fe1",
+        "afterBlob": "7fddd746d23397dce03bb01c7c1e1254e7e74fe1"
+      },
+      {
+        "file": "apps/web/components/landing/ReplayDemo.tsx",
+        "beforeBlob": "6bc774efb7af40d124e030bc53ea60e72cdcab43",
+        "afterBlob": "6bc774efb7af40d124e030bc53ea60e72cdcab43"
+      },
+      {
+        "file": "apps/web/components/landing/ReplayDemoBrowserIsland.tsx",
+        "beforeBlob": "189defa1d61f14ee65882bbda711c33b3a08bbf0",
+        "afterBlob": "189defa1d61f14ee65882bbda711c33b3a08bbf0"
+      },
+      {
+        "file": "apps/web/components/landing/ReplayDemoBrowserSession.tsx",
+        "beforeBlob": "454f93a14896975026281f109f2e4aac30c45011",
+        "afterBlob": "454f93a14896975026281f109f2e4aac30c45011"
+      },
+      {
+        "file": "apps/web/components/landing/__tests__/ReplayDemo.browser.test.tsx",
+        "beforeBlob": "f711867095e88ae162da80b5e332992118fb21e9",
+        "afterBlob": "f711867095e88ae162da80b5e332992118fb21e9"
+      },
+      {
+        "file": "apps/web/components/landing/__tests__/ReplayDemoBrowserIsland.test.tsx",
+        "beforeBlob": "d24124bea9e624f33cf8a31bb5850144c547590b",
+        "afterBlob": "d24124bea9e624f33cf8a31bb5850144c547590b"
+      },
+      {
+        "file": "apps/web/components/public-profile/__tests__/SharedReplayLoading.test.tsx",
+        "beforeBlob": "f07faa4576dec015a8ab21ca7e28229b2ef1b0f7",
+        "afterBlob": "f07faa4576dec015a8ab21ca7e28229b2ef1b0f7"
+      },
+      {
+        "file": "apps/web/components/pwa/ServiceWorkerRegister.tsx",
+        "beforeBlob": "2a6208f94e035896a8696f5ada96a5bccedcaf46",
+        "afterBlob": "2a6208f94e035896a8696f5ada96a5bccedcaf46"
+      },
+      {
+        "file": "apps/web/components/pwa/__tests__/ServiceWorkerRegister.test.tsx",
+        "beforeBlob": "147eb8e6a1d241cdde3d6d341479fa5edc5bea82",
+        "afterBlob": "147eb8e6a1d241cdde3d6d341479fa5edc5bea82"
+      },
+      {
+        "file": "apps/web/lib/help/articles/account-data/stay-up-to-date.ts",
+        "beforeBlob": "8332d7d6bb6b6433aded7734322a56f469b9e9c2",
+        "afterBlob": "8332d7d6bb6b6433aded7734322a56f469b9e9c2"
+      },
+      {
+        "file": "apps/web/lib/help/articles/getting-started/install-app.ts",
+        "beforeBlob": "2423ede32f92fb640c8a5a9b51a04857fd1982fc",
+        "afterBlob": "2423ede32f92fb640c8a5a9b51a04857fd1982fc"
+      },
+      {
+        "file": "apps/web/lib/help/articles/getting-started/instant-analysis.ts",
+        "beforeBlob": "5802a1a1fa9dcd2ea5d2e6323569a2d5e33fa4bd",
+        "afterBlob": "5802a1a1fa9dcd2ea5d2e6323569a2d5e33fa4bd"
+      },
+      {
+        "file": "apps/web/lib/help/articles/stream-studio/stream-dock.ts",
+        "beforeBlob": "70c163a06fe6f7e7252bad220cbadec36dff1e1d",
+        "afterBlob": "70c163a06fe6f7e7252bad220cbadec36dff1e1d"
+      },
+      {
+        "file": "docs/handoff/help-recovery-completion-checkpoint.md",
+        "beforeBlob": "fc7dcd257de9da8be35e2e019e987eedb1492db7",
+        "afterBlob": "fc7dcd257de9da8be35e2e019e987eedb1492db7"
+      }
+    ],
+    "dependencyComparisons": [
+      {
+        "file": "apps/web/components/chrome/HelpMenu.tsx",
+        "beforeBlob": "96223117b80eeaa5f5e71d2a72111c6e107059e5",
+        "afterBlob": "96223117b80eeaa5f5e71d2a72111c6e107059e5"
+      },
+      {
+        "file": "apps/web/components/ui/Modal.tsx",
+        "beforeBlob": "b107c9c27e639098d7f086567ddfe37dccb7878e",
+        "afterBlob": "b107c9c27e639098d7f086567ddfe37dccb7878e"
+      },
+      {
+        "file": "apps/web/components/ui/Skeleton.tsx",
+        "beforeBlob": "c2a2cf6495087af7781ec70a8b3b696b214139d4",
+        "afterBlob": "c2a2cf6495087af7781ec70a8b3b696b214139d4"
+      },
+      {
+        "file": "apps/web/lib/a11y/useFocusTrap.ts",
+        "beforeBlob": "9d5f40f3f502ea8a14b276b5a76f1f1ecdff7857",
+        "afterBlob": "9d5f40f3f502ea8a14b276b5a76f1f1ecdff7857"
+      },
+      {
+        "file": "apps/web/lib/instant/useInstantSession.ts",
+        "beforeBlob": "ebcb346911d2566f46cf8c63b3d3d2c6e56ec530",
+        "afterBlob": "ebcb346911d2566f46cf8c63b3d3d2c6e56ec530"
+      },
+      {
+        "file": "apps/web/lib/instant/sessionController.ts",
+        "beforeBlob": "fe9e15ff14eb98adf9a7bdaf0f7693b2051fb623",
+        "afterBlob": "fe9e15ff14eb98adf9a7bdaf0f7693b2051fb623"
+      },
+      {
+        "file": "apps/web/lib/instant/sessionEngine.ts",
+        "beforeBlob": "ccd2fc88050c1245633f13d50966106826134e8d",
+        "afterBlob": "ccd2fc88050c1245633f13d50966106826134e8d"
+      },
+      {
+        "file": "apps/web/lib/instant/sessionRun.ts",
+        "beforeBlob": "557c8d179047a075501fef8046c5402ff34913e9",
+        "afterBlob": "557c8d179047a075501fef8046c5402ff34913e9"
+      },
+      {
+        "file": "apps/web/lib/instant/sessionPipeline.ts",
+        "beforeBlob": "3c36142f30395d3ce3e00737255245c0a00a7bde",
+        "afterBlob": "3c36142f30395d3ce3e00737255245c0a00a7bde"
+      },
+      {
+        "file": "apps/web/lib/instant/sessionState.ts",
+        "beforeBlob": "5415f1c392f7618f4222155cc698a409382082ce",
+        "afterBlob": "5415f1c392f7618f4222155cc698a409382082ce"
+      },
+      {
+        "file": "apps/web/app/globals.css",
+        "beforeBlob": "f880a6b0831517a46ee92301399d4cdc063b1925",
+        "afterBlob": "f880a6b0831517a46ee92301399d4cdc063b1925"
+      },
+      {
+        "file": "apps/web/tailwind.config.ts",
+        "beforeBlob": "eab9cc97f159810e6365d228a1d95e0e82a7bb8b",
+        "afterBlob": "eab9cc97f159810e6365d228a1d95e0e82a7bb8b"
+      },
+      {
+        "file": "apps/web/app/fonts/hanken-grotesk-latin.woff2",
+        "beforeBlob": "e71775f99dc5483d710cb0650a8d61188c16b968",
+        "afterBlob": "e71775f99dc5483d710cb0650a8d61188c16b968"
+      },
+      {
+        "file": "apps/web/app/fonts/bricolage-grotesque-latin.woff2",
+        "beforeBlob": "86d4f45d11720f42d0ad039a5a4635d1b98b408f",
+        "afterBlob": "86d4f45d11720f42d0ad039a5a4635d1b98b408f"
+      },
+      {
+        "file": "apps/web/app/fonts/fraunces-latin-normal.woff2",
+        "beforeBlob": "23683ffa633d94cb2f1214c9b3c183e102a41d44",
+        "afterBlob": "23683ffa633d94cb2f1214c9b3c183e102a41d44"
+      }
+    ],
+    "cssTrees": [
+      {
+        "file": "apps/web/app",
+        "beforeTree": "295e92169d893c2185971a23747a6bc2a0e4c318",
+        "afterTree": "295e92169d893c2185971a23747a6bc2a0e4c318"
+      },
+      {
+        "file": "apps/web/components",
+        "beforeTree": "231e5c7df8bbee90c92a68482b5ba88358d8bbd7",
+        "afterTree": "231e5c7df8bbee90c92a68482b5ba88358d8bbd7"
+      }
+    ],
+    "changedPaths": [
+      "CHANGELOG.md",
+      "apps/api/__tests__/userCacheCoverage.mongo.test.js",
+      "apps/api/__tests__/userCacheRoutes.test.js",
+      "apps/api/src/middleware/userCache.js",
+      "apps/api/src/routes/aggregations.js",
+      "apps/web/lib/__tests__/clientApi.conditional.test.tsx",
+      "apps/web/lib/conditionalApiScope.tsx",
+      "docs/admin-console.md",
+      "docs/engineeringexplanation.md",
+      "docs/handoff/HANDOFF.md",
+      "docs/handoff/dashboard-cache-coverage-checkpoint.md",
+      "docs/handoff/roadmap-progress-2026-10-28.json",
+      "docs/handoff/validation/dashboard-cache-coverage/independent-source-review.json",
+      "docs/handoff/validation/roadmap-audit/adoption.json",
+      "docs/handoff/validation/roadmap-audit/independent-adoption-review.json",
+      "docs/handoff/validation/roadmap-audit/unknown-a.json",
+      "docs/handoff/validation/roadmap-audit/unknown-b.json"
+    ],
+    "result": "All 19 non-changelog slice files and all 15 pinned dependencies have identical Git blobs before/after stacking. Complete app/components CSS scan trees are identical. Changelog difference is additive dashboard entry. The only other web changes are conditionalApiScope and its test; fixture replaces clientApi at the boundary, so they are not consumer inputs. No browser rerun required for rebase; existing API/conditional tests/build remain root-owned."
+  },
+  "browser": {
+    "report": "browser-05.json",
+    "sha256": "0c307b34125c06d38afaf2f4a2f0e20f58c749289135df0fc6f34b3e70714c57",
+    "stats": {
+      "startTime": "2026-10-28T03:52:13.624Z",
+      "duration": 53068.369999999995,
+      "expected": 30,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "workers": 1,
+    "widths": [
+      320,
+      390,
+      1280
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "fullAaScans": 48,
+    "aaViolations": 0,
+    "ruleExclusions": [],
+    "aa": [
+      {
+        "project": "phone-320",
+        "name": "demo-ai-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "unsupported-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "chunk-loading-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-320",
+        "name": "chunk-error-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-320",
+        "name": "sw-prompt-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-320",
+        "name": "help-signed-out-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "help-signed-in-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "canonical-loading-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-320",
+        "name": "demo-ai-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "unsupported-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "chunk-loading-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-320",
+        "name": "chunk-error-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-320",
+        "name": "sw-prompt-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-320",
+        "name": "help-signed-out-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "help-signed-in-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "canonical-loading-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-390",
+        "name": "demo-ai-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "unsupported-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "chunk-loading-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-390",
+        "name": "chunk-error-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-390",
+        "name": "sw-prompt-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-390",
+        "name": "help-signed-out-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "help-signed-in-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "canonical-loading-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-390",
+        "name": "demo-ai-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "unsupported-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "chunk-loading-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-390",
+        "name": "chunk-error-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-390",
+        "name": "sw-prompt-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "phone-390",
+        "name": "help-signed-out-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "help-signed-in-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "canonical-loading-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "desktop-1280",
+        "name": "demo-ai-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "unsupported-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "chunk-loading-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "desktop-1280",
+        "name": "chunk-error-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "desktop-1280",
+        "name": "sw-prompt-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "desktop-1280",
+        "name": "help-signed-out-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "help-signed-in-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "canonical-loading-light-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "desktop-1280",
+        "name": "demo-ai-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "unsupported-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "chunk-loading-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "desktop-1280",
+        "name": "chunk-error-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "desktop-1280",
+        "name": "sw-prompt-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      },
+      {
+        "project": "desktop-1280",
+        "name": "help-signed-out-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "help-signed-in-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "canonical-loading-dark-aa",
+        "violations": 0,
+        "incomplete": []
+      }
+    ],
+    "screenshots": [
+      {
+        "file": "screenshots/phone-320-demo-ai-light.png",
+        "sha256": "9cacb5ba9f4a33cc521a44e9c12d122376d1af403df358adde8b9566523ebc63"
+      },
+      {
+        "file": "screenshots/phone-320-canonical-loading-light.png",
+        "sha256": "6ee0c00467fb652d83411843351cc97761837fe66755657aaa2103e9e56d01be"
+      },
+      {
+        "file": "screenshots/phone-320-demo-ai-dark.png",
+        "sha256": "66501898c256199e870fddb7c842c95c475bb11f680581fadf64bb73f23584bd"
+      },
+      {
+        "file": "screenshots/phone-320-canonical-loading-dark.png",
+        "sha256": "68237d0b2fddbd0d734101891d77e5ad1a5fb88067ae8c1ae30c3b61d8ab0acf"
+      },
+      {
+        "file": "screenshots/phone-390-demo-ai-light.png",
+        "sha256": "f8090c20a6f35041d46ce003ba1084036ad437633e900a2eaa4a17d07bfe87a4"
+      },
+      {
+        "file": "screenshots/phone-390-canonical-loading-light.png",
+        "sha256": "4171a7fbb7bb12dbeaa6c74af4471a5af149134d99fb99f6d5adc5e9f3139e48"
+      },
+      {
+        "file": "screenshots/phone-390-demo-ai-dark.png",
+        "sha256": "41125dd3d15605975b3c21d70a7fba4e147901703b3fa70e34f38ed4218623dc"
+      },
+      {
+        "file": "screenshots/phone-390-canonical-loading-dark.png",
+        "sha256": "dce676adfca20060872133b9aac7436033cdeed67aff7c9dba415c43032a3f72"
+      },
+      {
+        "file": "screenshots/desktop-1280-demo-ai-light.png",
+        "sha256": "68720b595b118192c855bd4f7b7d5cead19ae9e803e3751f1cb5bbf001ce331e"
+      },
+      {
+        "file": "screenshots/desktop-1280-canonical-loading-light.png",
+        "sha256": "f9fb35d9a864ee4040a33da36fe3e337fcc454d093d284e7ed6b3cb13900c7aa"
+      },
+      {
+        "file": "screenshots/desktop-1280-demo-ai-dark.png",
+        "sha256": "249ac23a8981d9954fec5844ab557582720a6fa9a67a82a2a2fca6bedf7ad638"
+      },
+      {
+        "file": "screenshots/desktop-1280-canonical-loading-dark.png",
+        "sha256": "e620659a8143def4cf3cc1725fe11320ef50d2544d935471aa499e99b39a75b6"
+      }
+    ]
+  },
+  "verifiedContracts": [
+    "SW What changed links to /changelog with prefetch false; Later defers without activation and returns editing focus; explicit Reload posts one SKIP_WAITING then real intercepted-document reload. Unchanged overlay/unsolicited controller guards inspected and unit covered.",
+    "Shared Help menu exposes public What's new for signed-in/out with unchanged report guard, keyboard open/Escape/focus, no write. Actual AppChrome More integration covered by source/unit; standalone browser mounts actual HelpMenu.",
+    "Both Dock Overlay settings links target tab=overlay&section=setup with target/noreferrer unchanged and no token. Actual Dock component unit tests cover normal/terminal state; no browser socket/provider used.",
+    "Canonical shared replay loading mounts real Skeleton primitives: one busy announcement, no fake values/actions, every placeholder within 320/390/1280 px; wrapped tab placeholders preserve 320 px containment.",
+    "Real ReplayDemo, Island, Session, useInstantSession/controller and Modal: full long filename/2 MB geometry, focused parse/unsupported errors, native Choose another file chooser, old parent request retired before picker, replacement produces second scan/chooser, Escape restores launcher; unsupported never creates engine. Held optional chunk displays filename; rejected import retry loads actual session on bounded second attempt. No API/upload fallback or unexpected requests."
+  ],
+  "visualInspection": {
+    "reviewed": [
+      "screenshots/phone-320-demo-ai-light.png",
+      "screenshots/desktop-1280-demo-ai-dark.png",
+      "screenshots/phone-320-canonical-loading-light.png"
+    ],
+    "result": "Full unbroken filenames wrap without clipping, error heading focus is visible, all footer actions remain within the mobile sheet, desktop layout is contained; canonical 320 px placeholders including navigation wrap within content."
+  },
+  "limits": [
+    "This is intercepted component acceptance using current production Tailwind config/globals and committed local fonts, not a deployed signed-in session or full Next runtime. Next Link/Image/pathname and synthetic engine/service-worker/API/editor/sample/lazy Help boundaries are explicit in fixture and README.",
+    "Engine assets, worker download, actual replay parsing and installed native update are not exercised. Existing 148 unit tests/types/lint are author-owned verification, not rerun here. Production build/83 budgets/CI/deployment remain root-owned.",
+    "Owner Macro source remains untouched; no roadmap item is declared complete from this slice."
+  ],
+  "failedEvidence": [
+    {
+      "run": "browser-01",
+      "cause": "Playwright sandbox-default cache pointed at absent headless executable; no browser launched. Reused installed browser cache via PLAYWRIGHT_BROWSERS_PATH; no downloads."
+    },
+    {
+      "run": "browser-02",
+      "cause": "Standalone fixture traversed unexercised lazy Help into Next server gzip-size. Fixture compilation failed before any document."
+    },
+    {
+      "run": "browser-03",
+      "cause": "Mocking next/image alone did not retire lazy Help import. Added explicit inert unexercised LazyHelpLink boundary; changed no product source."
+    },
+    {
+      "run": "browser-04",
+      "cause": "Focused 320 px light error acceptance passed; retained as focused proof."
+    }
+  ],
+  "receiptRepair": {
+    "cause": "Root committed the reviewed slice after the browser run, so re-export using git diff/status produced empty sourcePins. Corrected exporter to require exactly 20 files from the explicit reviewed commit versus its parent. No browser assertions or results changed."
+  },
+  "cleanup": {
+    "runnerSession": 9484,
+    "runnerExitCode": 0,
+    "startedHttpListeners": 0,
+    "actualServiceWorkerRegistrations": 0,
+    "actualEngineWorkers": 0,
+    "ownedBackgroundProcessesRetained": 0,
+    "osProcessInventory": "Get-CimInstance Win32_Process denied by sandbox; no independent OS inventory claim",
+    "statement": "Playwright managed browser lifecycle; terminal runner completed. Fixture starts no local listener and replaces ServiceWorkerContainer/engine factory. No broad process kill or user service change."
+  }
+}

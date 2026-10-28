@@ -3,8 +3,9 @@
 Prepared on `codex/help-recovery-completion` at verified base
 `477298dd7c397af2baaa79d19736ae43d1a4510d` in the isolated worktree of the same
 name. Focused unit tests, whole-web types and scoped lint pass as recorded below.
-Build, browser, CI, commits, pushes, deployment and production acceptance remain
-with the root release run.
+The root subsequently stacked the exact source patch onto the reviewed dashboard
+candidate for combined build verification; only additive changelog placement
+changed. CI, push/merge and production acceptance remain separate release gates.
 
 ## Scope and original requirements
 
@@ -78,10 +79,26 @@ files. No alternate receipt packet exists. `receipt-audit.json` records the exac
 prior invocation and exit-0 transcript references, explicitly as a retrospective
 audit; it is not regenerated tool output. No checks were rerun for this repair.
 
-Root owns production build/all 83 unchanged route budgets, responsive/AA
-inspection and exact-head release gates. In particular check the three update
-actions and demo error footer at 320/390, browser file-chooser recovery, and the
-canonical loading route including tab containment at 320. A cache-only fixture
-is under independent preparation; it has not run here. No owned application
-server, browser or native process was started. No infrastructure, provider,
-database or configuration change is required.
+The root's combined all-features production build passes all 83 unchanged route
+caps (18 explicit/65 default), with 40 canonical engine inputs, seven retained
+assets and the strict four-game sample unchanged. Post-build standalone whole-web
+types pass, as does strict lint of all 18 changed TypeScript files. The first
+root lint command accidentally selected zero files because its Git pathspec was
+relative to apps/web; it ran the whole application and failed on inherited
+warnings. The corrected invocation asserts exactly 18 files and passes. Both
+logs remain retained; no lint gate was relaxed.
+
+Independent component browser acceptance passes 30 cases at 320/390/1280 in both
+themes, including 48 complete AA scans with zero violations. It exercises the
+real replacement file chooser/controller, error/unsupported and chunk-failure
+recovery, long filename containment, Later/Reload/link/focus behavior, shared Help
+and canonical skeleton. Engine/API/SW boundaries are explicitly intercepted;
+this is not deployed account acceptance. Initial fixture setup failures remain
+alongside run05, original screenshots and the independent source-pin receipt.
+The source rebase preserves all consumer trees/dependencies; the extra conditional
+API allowlist is outside the fixture's explicit clientApi boundary. No browser
+rerun was substituted for live proof.
+
+No application listener, native process, provider setting, infrastructure or
+database change is required. Exact-head CI, merge, production source/deployment
+and relevant real signed-in links remain to verify before delivery is claimed.

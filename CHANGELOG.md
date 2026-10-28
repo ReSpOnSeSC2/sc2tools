@@ -15,12 +15,6 @@ corresponding GitHub Release.
 
 - Extend optional private revalidation to the dashboard summary, macro summary, MMR progression and build/strategy mix charts. The cache remains off; these routes keep their normal behavior while it is off.
 
-### Help and recovery shortcuts
-
-- Read the changelog from What changed in the website update prompt or What's new in desktop and mobile Help & support.
-- Open Overlay settings directly at Setup from the Stream Dock, including an invalid or replaced link.
-- Show a replay-analysis loading layout on shared game pages, and keep the private home-page demo's selected filename, size and Choose another replay recovery visible.
-
 ### Personal chart cache monitoring
 
 - Show whether the personal chart cache is off or enabled in Admin → Infrastructure. Enabled snapshots show process-lifetime observations and cache-accounting bytes; missing reporting stays distinct from Off. The card changes no setting.
@@ -49,6 +43,12 @@ corresponding GitHub Release.
 
 - Keep Auto-track current season selected when opening Sessions, paging history or returning to Today. Explicit custom dates, pinned seasons and saved views keep their selected ranges.
 - Give the current-filter summary a supported accessible label for screen readers.
+
+### Help and recovery shortcuts
+
+- Read the changelog from What changed in the website update prompt or What's new in desktop and mobile Help & support.
+- Open Overlay settings directly at Setup from the Stream Dock, including an invalid or replaced link.
+- Show a replay-analysis loading layout on shared game pages, and keep the private home-page demo's selected filename, size and Choose another replay recovery visible.
 
 ### Build check-in shortcuts
 

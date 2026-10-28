@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-28T03:48:57.3350700Z",
+  "kind": "retrospective-transcript-receipt-audit",
+  "worktree": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion",
+  "base": "477298dd7c397af2baaa79d19736ae43d1a4510d",
+  "reranChecks": false,
+  "note": "Quiet successful tool invocations produced no output pipeline items, so Tee-Object did not create stdout logs. The command results below were observed in this agent transcript. This audit is retrospective metadata, not reconstructed tool stdout.",
+  "retainedFiles": [
+    "unit-01.log",
+    "unit-02.log",
+    "help-unit-01.log"
+  ],
+  "absentAttemptedLogFiles": [
+    "web-types-01.log",
+    "web-lint-01.log",
+    "web-lint-new-01.log"
+  ],
+  "invocations": [
+    {
+      "kind": "whole-web-types",
+      "command": "node node_modules/typescript/bin/tsc --noEmit --incremental false",
+      "cwd": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web",
+      "execSessionId": 74794,
+      "launchChunkId": "778a2d",
+      "completionChunkId": "a68784",
+      "exitCode": 0,
+      "stdoutAndStderr": "",
+      "evidenceSource": "functions.exec -> tools.exec_command and tools.write_stdin transcript"
+    },
+    {
+      "kind": "modified-web-ts-lint",
+      "command": "$lintPaths = @(git diff --name-only -- '*.ts' '*.tsx'); $lintPaths += @(git ls-files --others --exclude-standard -- '*.ts' '*.tsx'); $webLintPaths = @($lintPaths | Where-Object { $_.StartsWith('apps/web/') } | ForEach-Object { $_.Substring(9) }); node node_modules/eslint/bin/eslint.js --max-warnings=0 @webLintPaths",
+      "cwd": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web",
+      "completionChunkId": "e05603",
+      "exitCode": 0,
+      "stdoutAndStderr": "",
+      "fileCount": 16,
+      "evidenceSource": "functions.exec -> tools.exec_command transcript",
+      "scopeNote": "New untracked paths were cwd-relative and therefore excluded by prefix filter; the next separate invocation explicitly linted both."
+    },
+    {
+      "kind": "new-web-ts-lint",
+      "command": "node node_modules/eslint/bin/eslint.js --max-warnings=0 'app/players/[player]/replays/[gameId]/loading.tsx' 'components/public-profile/__tests__/SharedReplayLoading.test.tsx'",
+      "cwd": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web",
+      "completionChunkId": "f8e422",
+      "exitCode": 0,
+      "stdoutAndStderr": "",
+      "fileCount": 2,
+      "evidenceSource": "functions.exec -> tools.exec_command transcript"
+    }
+  ]
+}
