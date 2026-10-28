@@ -1,0 +1,2339 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-28T05:48:01.035Z",
+  "reviewer": "independent bingo_browser_regression agent",
+  "sourceRoot": "C:\\SC2TOOLS\\.worktrees\\guide-randomizer-completion",
+  "currentHead": "d4ee182d75806b3f642c1bf9607915df501f2292",
+  "sourceReady": {
+    "file": "source-ready.json",
+    "sha256": "35970abce57519db4aff8915b9b5070ed0cca1b97e6491d7b8bac38ab31c2560"
+  },
+  "decision": "clear",
+  "blockers": [],
+  "sourcePins": [
+    {
+      "file": "apps/web/components/guides/__tests__/GuideLikelyRangeTerm.test.tsx",
+      "sha256": "89bb52ba40ef84b63cf368e5d09786c28a6df3351a0ec250fe51af7ada770050",
+      "manifestSha256": "89bb52ba40ef84b63cf368e5d09786c28a6df3351a0ec250fe51af7ada770050"
+    },
+    {
+      "file": "apps/web/components/guides/__tests__/statsPresentation.test.tsx",
+      "sha256": "d4988233f044c6b9b2a3ac304d7cbf889a713b3c80bac43574ceaeea79f996d9",
+      "manifestSha256": "d4988233f044c6b9b2a3ac304d7cbf889a713b3c80bac43574ceaeea79f996d9"
+    },
+    {
+      "file": "apps/web/components/guides/GuideLikelyRangeTerm.tsx",
+      "sha256": "bb0ceaf8d5a677e2775a8be54dd0482b2324be987d0ef04fa04f06eb003bbf43",
+      "manifestSha256": "bb0ceaf8d5a677e2775a8be54dd0482b2324be987d0ef04fa04f06eb003bbf43"
+    },
+    {
+      "file": "apps/web/components/guides/GuideStatsLegend.tsx",
+      "sha256": "c52f1aed6f235cd1c73d75f449ed7514c30372234057bcb1fd325cf2c2466619",
+      "manifestSha256": "c52f1aed6f235cd1c73d75f449ed7514c30372234057bcb1fd325cf2c2466619"
+    },
+    {
+      "file": "apps/web/components/guides/loadGuideLegendTerm.ts",
+      "sha256": "74d6af2b09524476e73d92ddf95f143e1ef365da5483c8fd3d3ae2ba7b8e4966",
+      "manifestSha256": "74d6af2b09524476e73d92ddf95f143e1ef365da5483c8fd3d3ae2ba7b8e4966"
+    },
+    {
+      "file": "apps/web/components/help/__tests__/HelpArticleBody.test.tsx",
+      "sha256": "d0c92fb0e16d11e6a046a18dc8d12502c293777f3cc9da2822b3f2bffe78e4fc",
+      "manifestSha256": "d0c92fb0e16d11e6a046a18dc8d12502c293777f3cc9da2822b3f2bffe78e4fc"
+    },
+    {
+      "file": "apps/web/components/randomizer/__tests__/RandomizerStage.accessibility.test.tsx",
+      "sha256": "4cfb75036905648c9f28bd93cdfb695717b3fd5f14ede80b02fc2f6d62d854fc",
+      "manifestSha256": "4cfb75036905648c9f28bd93cdfb695717b3fd5f14ede80b02fc2f6d62d854fc"
+    },
+    {
+      "file": "apps/web/components/randomizer/__tests__/RandomizerStage.performance.test.tsx",
+      "sha256": "23c8ffa761643343b8245b04baf46c63d0958c12d57acc9061001b4aeffe8d48",
+      "manifestSha256": "23c8ffa761643343b8245b04baf46c63d0958c12d57acc9061001b4aeffe8d48"
+    },
+    {
+      "file": "apps/web/components/randomizer/RandomizerStage.tsx",
+      "sha256": "3470d5303fcc40a7a02358896c56ac040950396aefb0c6ba756d3b0f652e2cf1",
+      "manifestSha256": "3470d5303fcc40a7a02358896c56ac040950396aefb0c6ba756d3b0f652e2cf1"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/__tests__/revealAccessibility.test.tsx",
+      "sha256": "bcb9be7ddd9c6a45504044091a9a5eb66302530f212f5969200f48764ae56f3c",
+      "manifestSha256": "bcb9be7ddd9c6a45504044091a9a5eb66302530f212f5969200f48764ae56f3c"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/__tests__/SpriteLegend.accessibility.test.tsx",
+      "sha256": "1f5b5cced38ec5fff8a6f94d09ac54870549b0c4381fd9106aa43be36c671110",
+      "manifestSha256": "1f5b5cced38ec5fff8a6f94d09ac54870549b0c4381fd9106aa43be36c671110"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/AsteroidLockReveal.tsx",
+      "sha256": "20d089084740423c577bcd7ed902a92be19d45d6f931fa1726af2e04e710eee8",
+      "manifestSha256": "20d089084740423c577bcd7ed902a92be19d45d6f931fa1726af2e04e710eee8"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/BattleRoyaleReveal.tsx",
+      "sha256": "12c6ad50e97cafdfe1ed691334b4badf9fd0be05d753295bbcfe1c718268115d",
+      "manifestSha256": "12c6ad50e97cafdfe1ed691334b4badf9fd0be05d753295bbcfe1c718268115d"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/CaseUnboxingReveal.tsx",
+      "sha256": "cf7c4b2c076fade27819292d2aa6c7629175c4339e667abdf8de36ab75ad62ef",
+      "manifestSha256": "cf7c4b2c076fade27819292d2aa6c7629175c4339e667abdf8de36ab75ad62ef"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/ClawMachineReveal.tsx",
+      "sha256": "c29267d90ab5fec8b2925c5f16eb77f8d23f213017186d68b1ef0e0830019e37",
+      "manifestSha256": "c29267d90ab5fec8b2925c5f16eb77f8d23f213017186d68b1ef0e0830019e37"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/FighterBrawlReveal.tsx",
+      "sha256": "223b528df4672bf7e97cc2414afa3ded0fba007ef218cae51a1c82ea9c75c9f1",
+      "manifestSha256": "223b528df4672bf7e97cc2414afa3ded0fba007ef218cae51a1c82ea9c75c9f1"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/GachaSummonReveal.tsx",
+      "sha256": "ccf784cd4fc021bcddd3aea8c10737814514ce44339653c3051ea2f64a207815",
+      "manifestSha256": "ccf784cd4fc021bcddd3aea8c10737814514ce44339653c3051ea2f64a207815"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/HorseRaceReveal.tsx",
+      "sha256": "5d3e2da009a13a0264f693a7bf48e918761f5bbf02baf385ae5c8ccaad4c038b",
+      "manifestSha256": "5d3e2da009a13a0264f693a7bf48e918761f5bbf02baf385ae5c8ccaad4c038b"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/HungrySwarmReveal.tsx",
+      "sha256": "986720fa64e4535960dcc08bf65e221cda09026d79ec91619749939fa96b9920",
+      "manifestSha256": "986720fa64e4535960dcc08bf65e221cda09026d79ec91619749939fa96b9920"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/revealShared.tsx",
+      "sha256": "c2863fbf112a6e2fa8578d6a9f37b016a2595d758aa1fc32f174a4e99534df00",
+      "manifestSha256": "c2863fbf112a6e2fa8578d6a9f37b016a2595d758aa1fc32f174a4e99534df00"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/SlotMachineReveal.tsx",
+      "sha256": "ffe57f877b3f498514c65d4a6f4b27da6c0ae4a6d4c1261027b51eb9514bf6a7",
+      "manifestSha256": "ffe57f877b3f498514c65d4a6f4b27da6c0ae4a6d4c1261027b51eb9514bf6a7"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/spriteShared.tsx",
+      "sha256": "8b1c2b52f4aa80ba1127fcfc2bd564e58bdf7f390d08dad53094f24abd9f3756",
+      "manifestSha256": "8b1c2b52f4aa80ba1127fcfc2bd564e58bdf7f390d08dad53094f24abd9f3756"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/SumoShoveReveal.tsx",
+      "sha256": "2cb3988cc17636e498a46dff995f6fcf355969d49d19857b5745bb5f8fd890bf",
+      "manifestSha256": "2cb3988cc17636e498a46dff995f6fcf355969d49d19857b5745bb5f8fd890bf"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/WheelSpinReveal.tsx",
+      "sha256": "61b0deab5a15778c051d0e5e2170d4a7079457057d5b05f4d89c0c61c9af72b0",
+      "manifestSha256": "61b0deab5a15778c051d0e5e2170d4a7079457057d5b05f4d89c0c61c9af72b0"
+    },
+    {
+      "file": "apps/web/lib/__tests__/glossary.test.ts",
+      "sha256": "8cb3da558c7ba4e75ac85e945dbf0a3f6016996cabad246f6c06012c071548b9",
+      "manifestSha256": "8cb3da558c7ba4e75ac85e945dbf0a3f6016996cabad246f6c06012c071548b9"
+    },
+    {
+      "file": "apps/web/lib/glossary.ts",
+      "sha256": "a64e737042ee0b806845da644f2a8b837afe09d5a54db98f0f536ac5c9a0d091",
+      "manifestSha256": "a64e737042ee0b806845da644f2a8b837afe09d5a54db98f0f536ac5c9a0d091"
+    },
+    {
+      "file": "apps/web/lib/guides/guideCopy.ts",
+      "sha256": "f920598b1605b4fa52d4312c885cc75f7745b97c109d59e0430d97d97c37f01e",
+      "manifestSha256": "f920598b1605b4fa52d4312c885cc75f7745b97c109d59e0430d97d97c37f01e"
+    },
+    {
+      "file": "apps/web/lib/help/__tests__/guideRandomizerAccessibility.test.ts",
+      "sha256": "4bbf566f176074881ea59c2818170ac7600cc9d638572d7511cd4aebe708b51a",
+      "manifestSha256": "4bbf566f176074881ea59c2818170ac7600cc9d638572d7511cd4aebe708b51a"
+    },
+    {
+      "file": "apps/web/lib/help/articles/builds/randomizer.ts",
+      "sha256": "c82465057870e2a823067cddabfb3d3b5a1a895d5af83026c788d6edcaaad9c0",
+      "manifestSha256": "c82465057870e2a823067cddabfb3d3b5a1a895d5af83026c788d6edcaaad9c0"
+    },
+    {
+      "file": "apps/web/lib/help/articles/builds/reading-guide-stats.ts",
+      "sha256": "131c2a948adfe40b88a5c30f4f66716156c8ad1ef92cb0f753fd096980830e9e",
+      "manifestSha256": "131c2a948adfe40b88a5c30f4f66716156c8ad1ef92cb0f753fd096980830e9e"
+    },
+    {
+      "file": "CHANGELOG.md",
+      "sha256": "963f054f5cad65fdf7a86f5040cc0155f9cb630d51b2e6c5597d871674a70c12",
+      "manifestSha256": "963f054f5cad65fdf7a86f5040cc0155f9cb630d51b2e6c5597d871674a70c12"
+    },
+    {
+      "file": "docs/handoff/guide-randomizer-completion-checkpoint.md",
+      "sha256": "673b34132b8e5d22f6958e4d574895304af668281710d33ba68e1df55214ab22",
+      "manifestSha256": "673b34132b8e5d22f6958e4d574895304af668281710d33ba68e1df55214ab22"
+    }
+  ],
+  "consumerPins": [
+    {
+      "file": "apps/web/components/guides/GuideLikelyRangeTerm.tsx",
+      "sha256": "bb0ceaf8d5a677e2775a8be54dd0482b2324be987d0ef04fa04f06eb003bbf43"
+    },
+    {
+      "file": "apps/web/components/guides/GuideStatsLegend.tsx",
+      "sha256": "c52f1aed6f235cd1c73d75f449ed7514c30372234057bcb1fd325cf2c2466619"
+    },
+    {
+      "file": "apps/web/components/guides/guideUi.ts",
+      "sha256": "dca948f0795610c6f31014dc8f752e385e6bd18ce59d61d0427876ca01d061fc"
+    },
+    {
+      "file": "apps/web/components/guides/loadGuideLegendTerm.ts",
+      "sha256": "74d6af2b09524476e73d92ddf95f143e1ef365da5483c8fd3d3ae2ba7b8e4966"
+    },
+    {
+      "file": "apps/web/components/ui/Button.tsx",
+      "sha256": "f7a30265f5487e91bd5c98da64271247deba554b7ed2ddb17b49e5b9cb9b71db"
+    },
+    {
+      "file": "apps/web/components/ui/IconButton.tsx",
+      "sha256": "0b4f137acbf7901d3e4c468fc9bec18110025996ec43c5ba6689c94b4a06e9f2"
+    },
+    {
+      "file": "apps/web/components/ui/InfoTip.tsx",
+      "sha256": "0471ef686a08647acd6fbd4343c286f0da8a7e8e6c14df16a48044c348268905"
+    },
+    {
+      "file": "apps/web/components/ui/Modal.tsx",
+      "sha256": "31bba856ca70fa500b8fb0a4dcd726cebfcf3b849c5fbbff0f37027b55a4bc11"
+    },
+    {
+      "file": "apps/web/components/ui/OverlayLayer.tsx",
+      "sha256": "0c6b10f8fb01e5f7c44105c88f2c472ad80907580965875f5278efb027d5cc0d"
+    },
+    {
+      "file": "apps/web/components/ui/Popover.tsx",
+      "sha256": "08abbe1d3ab506899bac8ab37efb6a660cd359e0855e75927ac99381e55cb070"
+    },
+    {
+      "file": "apps/web/components/ui/Term.tsx",
+      "sha256": "228f6edf31694258f456fa70d49e16ce28dce07788e6baa82175b82d4ea59f24"
+    },
+    {
+      "file": "apps/web/components/ui/buttonStyles.ts",
+      "sha256": "e6ce882b432ef6ee15cb125356d22d8c9da4fdcca2ddd506c6d222c350a3af13"
+    },
+    {
+      "file": "apps/web/lib/a11y/focusScopes.ts",
+      "sha256": "85747b9204c268cdc76657e0a4a80ede6f6be24d72fbbfd61a84d418b3b69789"
+    },
+    {
+      "file": "apps/web/lib/a11y/popoverPlacement.ts",
+      "sha256": "be0d3d644bdb2122ec33cd8b702d9e548d51d741d36ce3be857ed79a172fe27a"
+    },
+    {
+      "file": "apps/web/lib/a11y/useFocusTrap.ts",
+      "sha256": "c95712fdaa6f2f87ab0762cd0ae1dcca733e75de4c789a214f0883b75a4e155d"
+    },
+    {
+      "file": "apps/web/lib/bodyScrollLock.ts",
+      "sha256": "e54775096c9a43fe35310a4e0e88ea0f1138612c499ae894c93d0ae985a87326"
+    },
+    {
+      "file": "apps/web/lib/format.ts",
+      "sha256": "097d8155a906e805fe6eff7cea2780d82f649b4348bc6f147c466f5f065f57be"
+    },
+    {
+      "file": "apps/web/lib/glossary.ts",
+      "sha256": "a64e737042ee0b806845da644f2a8b837afe09d5a54db98f0f536ac5c9a0d091"
+    },
+    {
+      "file": "apps/web/lib/guides/format.ts",
+      "sha256": "a8aaee024e0e7f3cfb50aafc8800175857fb04f370a31d1d79d744df2bbadbdf"
+    },
+    {
+      "file": "apps/web/lib/guides/guideCopy.ts",
+      "sha256": "f920598b1605b4fa52d4312c885cc75f7745b97c109d59e0430d97d97c37f01e"
+    },
+    {
+      "file": "apps/web/lib/meta.ts",
+      "sha256": "1182951da643e57fe895a709ad28feb4a08d45ba32ce2d869bc194f5943ff260"
+    }
+  ],
+  "fixturePins": [
+    {
+      "file": "browser-fixture.mjs",
+      "sha256": "0b83224d977eb241dd28745665f0ba91e6ca09cecf303d24c2cb1ac2573dcaf0"
+    },
+    {
+      "file": "browser.spec.ts",
+      "sha256": "75e02a7b6431be856e2ca4a671245505ae27d0049ad227f3639db6868691c6c0"
+    },
+    {
+      "file": "playwright.config.ts",
+      "sha256": "37577deab7db09037b2ef58912bde4657f58e99057c2b591afcabfc4b2701bd0"
+    },
+    {
+      "file": "playwright-03.config.ts",
+      "sha256": "86dbd2adeb9114c6d9f063b74b8c4b24a5bd3b6832d0caacb17793ff74de9d0b"
+    },
+    {
+      "file": "BROWSER_README.md",
+      "sha256": "a87c28134e608b6b42c46b845c13acc3651c217e76f4a280382287c9469100d7"
+    },
+    {
+      "file": "independent-source-review.json",
+      "sha256": "8352b627ddf7f2bdd8d09f55b88f538dc7c26d7c2177a0c9beb476c849c9153d"
+    },
+    {
+      "file": "randomizer-reuse-review.json",
+      "sha256": "c84b5da4078b7a661572b71f0f79d675a3c1fb3c0e6d502410d22ee13e2e3b8e"
+    }
+  ],
+  "browser": {
+    "report": "browser-03.json",
+    "sha256": "7dc690447119b26768d55fc36d2d69efbe09528ea20c2600a00daf1f442956ea",
+    "stats": {
+      "startTime": "2026-10-28T05:43:08.159Z",
+      "duration": 65082.85400000001,
+      "expected": 24,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "workerLimit": 1,
+    "widths": [
+      320,
+      390,
+      1280
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "aaScans": 54,
+    "aaViolations": 0,
+    "ruleExclusions": [],
+    "ssrDocumentSpecimens": 30,
+    "realLoaderSpecimens": 12,
+    "controlledTransportSpecimens": 18,
+    "aa": [
+      {
+        "project": "phone-320",
+        "name": "pre-hydration-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "held-real-term-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "real-tip-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value",
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "real-deadline-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "real-retry-ready-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "rejected-retry-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "retry-deadline-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "controlled-ready-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "newer-modal-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "pre-hydration-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "held-real-term-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "real-tip-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value",
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "real-deadline-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "real-retry-ready-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "rejected-retry-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "retry-deadline-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "controlled-ready-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "name": "newer-modal-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "pre-hydration-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "held-real-term-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "real-tip-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value",
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "real-deadline-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "real-retry-ready-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "rejected-retry-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "retry-deadline-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "controlled-ready-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "newer-modal-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "pre-hydration-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "held-real-term-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "real-tip-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value",
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "real-deadline-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "real-retry-ready-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "rejected-retry-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "retry-deadline-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "controlled-ready-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "name": "newer-modal-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "pre-hydration-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "held-real-term-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "real-tip-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value",
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "real-deadline-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "real-retry-ready-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "rejected-retry-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "retry-deadline-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "controlled-ready-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "newer-modal-light-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "pre-hydration-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "held-real-term-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "real-tip-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "aria-valid-attr-value",
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "real-deadline-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "real-retry-ready-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "rejected-retry-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "retry-deadline-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "controlled-ready-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "name": "newer-modal-dark-aa",
+        "violations": 0,
+        "incomplete": [
+          "color-contrast"
+        ]
+      }
+    ],
+    "proofs": [
+      {
+        "project": "phone-320",
+        "title": "light: real SSR disclosure works before hydration and gates the real Term chunk",
+        "mode": "real",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "components/guides/loadGuideLegendTerm.ts",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "title": "light: real held chunk deadline retires old attempt and explicit retry restores ready focus",
+        "mode": "real",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "components/guides/loadGuideLegendTerm.ts",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "title": "light: labelled rejected-transport seam preserves repeated retry failure deadline and success focus",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "title": "light: labelled transport seam cannot steal retry focus from closed disclosure or newer modal",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "title": "light: labelled transport seam cannot steal retry focus from closed disclosure or newer modal",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "title": "dark: real SSR disclosure works before hydration and gates the real Term chunk",
+        "mode": "real",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "components/guides/loadGuideLegendTerm.ts",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "title": "dark: real held chunk deadline retires old attempt and explicit retry restores ready focus",
+        "mode": "real",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "components/guides/loadGuideLegendTerm.ts",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "title": "dark: labelled rejected-transport seam preserves repeated retry failure deadline and success focus",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "title": "dark: labelled transport seam cannot steal retry focus from closed disclosure or newer modal",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-320",
+        "title": "dark: labelled transport seam cannot steal retry focus from closed disclosure or newer modal",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "title": "light: real SSR disclosure works before hydration and gates the real Term chunk",
+        "mode": "real",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "components/guides/loadGuideLegendTerm.ts",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "title": "light: real held chunk deadline retires old attempt and explicit retry restores ready focus",
+        "mode": "real",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "components/guides/loadGuideLegendTerm.ts",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "title": "light: labelled rejected-transport seam preserves repeated retry failure deadline and success focus",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "title": "light: labelled transport seam cannot steal retry focus from closed disclosure or newer modal",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "title": "light: labelled transport seam cannot steal retry focus from closed disclosure or newer modal",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "title": "dark: real SSR disclosure works before hydration and gates the real Term chunk",
+        "mode": "real",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "components/guides/loadGuideLegendTerm.ts",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "title": "dark: real held chunk deadline retires old attempt and explicit retry restores ready focus",
+        "mode": "real",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "components/guides/loadGuideLegendTerm.ts",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "title": "dark: labelled rejected-transport seam preserves repeated retry failure deadline and success focus",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "title": "dark: labelled transport seam cannot steal retry focus from closed disclosure or newer modal",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "phone-390",
+        "title": "dark: labelled transport seam cannot steal retry focus from closed disclosure or newer modal",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "title": "light: real SSR disclosure works before hydration and gates the real Term chunk",
+        "mode": "real",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "components/guides/loadGuideLegendTerm.ts",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "title": "light: real held chunk deadline retires old attempt and explicit retry restores ready focus",
+        "mode": "real",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "components/guides/loadGuideLegendTerm.ts",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "title": "light: labelled rejected-transport seam preserves repeated retry failure deadline and success focus",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "title": "light: labelled transport seam cannot steal retry focus from closed disclosure or newer modal",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "title": "light: labelled transport seam cannot steal retry focus from closed disclosure or newer modal",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "title": "dark: real SSR disclosure works before hydration and gates the real Term chunk",
+        "mode": "real",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "components/guides/loadGuideLegendTerm.ts",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "title": "dark: real held chunk deadline retires old attempt and explicit retry restores ready focus",
+        "mode": "real",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "components/guides/loadGuideLegendTerm.ts",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "title": "dark: labelled rejected-transport seam preserves repeated retry failure deadline and success focus",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "title": "dark: labelled transport seam cannot steal retry focus from closed disclosure or newer modal",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      },
+      {
+        "project": "desktop-1280",
+        "title": "dark: labelled transport seam cannot steal retry focus from closed disclosure or newer modal",
+        "mode": "controlled",
+        "events": [
+          "entry-held",
+          "entry-released",
+          "term-held",
+          "term-released"
+        ],
+        "termPath": "/chunks/Term-WN6BCUXW.js",
+        "initialInputs": [
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/cjs/scheduler.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/scheduler/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom-client.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/client.js",
+          "<stdin>",
+          "components/guides/GuideStatsLegend.tsx",
+          "components/guides/guideUi.ts",
+          "lib/guides/guideCopy.ts",
+          "lib/guides/format.ts",
+          "lib/format.ts",
+          "lib/meta.ts",
+          "components/guides/GuideLikelyRangeTerm.tsx",
+          "fixture-adapter:controlled",
+          "components/ui/Modal.tsx",
+          "lib/bodyScrollLock.ts",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/index.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/cjs/react-jsx-runtime.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react/jsx-runtime.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/cjs/react-dom.production.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/react-dom/index.js",
+          "fixture-adapter:link",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/circle-help.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/createLucideIcon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/shared/src/utils.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/Icon.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/defaultAttributes.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/x.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/lucide-react.js",
+          "../../../handoff-ci-repair/apps/web/node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+          "lib/a11y/focusScopes.ts",
+          "lib/a11y/useFocusTrap.ts",
+          "components/ui/OverlayLayer.tsx",
+          "components/ui/Button.tsx",
+          "components/ui/buttonStyles.ts",
+          "<define:process.env>"
+        ]
+      }
+    ],
+    "screenshots": [
+      {
+        "file": "screenshots-03/phone-320-real-tip-light.png",
+        "sha256": "2f68e77743ad1ede8393a54da8b7fe51fec2b1d26e10f7045ff86b12c971f44e"
+      },
+      {
+        "file": "screenshots-03/phone-320-real-tip-dark.png",
+        "sha256": "f4aed762fd164f3db7430549dc77a166b29315e2bd080a777aaed6bec1bb8a8d"
+      },
+      {
+        "file": "screenshots-03/phone-390-real-tip-light.png",
+        "sha256": "7eda7331fa1bd0b1c8c0faff13f863842e9273b9f0ccb28b1b6bc2acda6307a8"
+      },
+      {
+        "file": "screenshots-03/phone-390-real-tip-dark.png",
+        "sha256": "c8872c31ed4aa455cddca065b64d32a5a31fd8d341799bdce268907e73bd9ea8"
+      },
+      {
+        "file": "screenshots-03/desktop-1280-real-tip-light.png",
+        "sha256": "b9e63902439e947e1dccb6acc1cb8b33c67aa278adb29788eb9f1384d51181c4"
+      },
+      {
+        "file": "screenshots-03/desktop-1280-real-tip-dark.png",
+        "sha256": "d49e4ffd49edc0c0177bd0b51c30caa2633081c208fcd3333e2c7cd1d9dc33eb"
+      }
+    ]
+  },
+  "verifiedContracts": [
+    "Actual GuideStatsLegend SSR emits readable copy, native summary and Help before hydration. A held hydration entry permits opening the disclosure before JS; actual mount effect admits the already-open disclosure. Real Term/InfoTip/Popover are absent from every initial static client ESM closure.",
+    "Unmodified real loadGuideLegendTerm imports the actual split Term chunk only after native opening. Held loading, closing before settlement, reopening, actual definition/Help/Escape and stable focus pass. Real held deadline retires the old attempt; explicit retry sharing the pending ESM fetch admits only current completion and restores the ready trigger.",
+    "Explicitly labelled controlled transport promises exercise repeated rejection, retry rejection focus, retry deadline focus, late timed-out resolution retirement and later success. The actual GuideLikelyRangeTerm, timers, Term, InfoTip, Popover and Modal are unchanged; only loader transport settlement is injected in these cases.",
+    "Closed disclosure and newer actual Modal retain focus when retry resolves; no tip auto-opens. Loading/failure/full help text remains intact. Parent source review found and author fixed retry-failure focus with two focused regressions before runtime verification.",
+    "Every browser request is intercepted and unexpected origins/methods fail. No account/API/provider/persistence/native operation is used."
+  ],
+  "randomizerReuse": {
+    "review": "randomizer-reuse-review.json",
+    "sha256": "c84b5da4078b7a661572b71f0f79d675a3c1fb3c0e6d502410d22ee13e2e3b8e",
+    "comparisonInputs": 27,
+    "exactOlderRecordedRawPins": 26,
+    "otherInput": "apps/web/lib/race.ts matches prior base Git blob after explicitly recorded CRLF-only normalization",
+    "reusedCases": 12,
+    "reusedAaScans": 72,
+    "reusedStyleSpecimens": 132,
+    "notRerun": true,
+    "supersededOldGuideCases": 6,
+    "supersededOldGuideAaScans": 24,
+    "qualification": "Only unchanged Randomizer runtime/style/CSS/font dependencies qualify prior evidence. The old guide IIFE proof does not qualify the new lazy boundary; current guide evidence is this24-case/54-AA ESM matrix."
+  },
+  "failedEvidence": [
+    {
+      "run": "browser-01.json",
+      "cause": "Reviewer incorrectly used Testing Library hidden:true in a Playwright role query; Playwright expects includeHidden:true. Unknown option was ignored, so a correctly rendered control inside closed details was excluded."
+    },
+    {
+      "run": "browser-02.json",
+      "cause": "Focused diagnostic preserved actual hidden DOM with exact aria-label/haspopup/expanded and zero page/request errors. Corrected fixture to physical exact aria-label/count while closed, retaining real accessible role/name checks after reopening. No product source or failing assertion removed."
+    }
+  ],
+  "limits": [
+    "Actual React SSR/component hydration proof is isolated, not Next RSC/HTTP streaming/status/authentication proof. The standalone client compiles the actual server legend for hydration, including server copy helpers; this is not evidence of Next route bundle bytes or its RSC data split. Root actual Next build/all83 caps is the authority for those.",
+    "Native ESM caches rejected module loads differently from Next webpack runtime. Repeated rejected-load→success cases are explicitly labelled transport seams and do not claim native ESM network rejection recovery. Real loader success/held/deadline cases have no loader adapter.",
+    "Playwright clock advancement exercises the actual8-second component deadline; it does not replace completion or focus logic. Full AA scans do not claim actual screen-reader speech. No Randomizer rerun or audio/native proof is claimed.",
+    "Root owns build03/budgets/postasset receipts, unit/types/lint, source delivery/CI/deployment and roadmap ledger. Source-ready is the preserved preverification snapshot despite its pending-state wording."
+  ],
+  "cleanup": {
+    "runnerSession": 93361,
+    "runnerExitCode": 0,
+    "startedHttpListeners": 0,
+    "actualNativeProviderOrAccountProcesses": 0,
+    "retainedOwnedBackgroundProcesses": 0,
+    "evidence": "Playwright runner completed normally. No local server exists in this fixture; all assets intercepted. No OS-wide inventory or broad process kill claimed."
+  },
+  "visualInspection": {
+    "reviewed": [
+      "screenshots-03/phone-320-real-tip-light.png",
+      "screenshots-03/desktop-1280-real-tip-dark.png"
+    ],
+    "result": "Real tooltip and Learn more link are readable and contained at320px and desktop; native legend copy, summary and Help stay readable around the nonmodal popover. No clipped controls or horizontal overflow observed."
+  }
+}

@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-28T05:45:00.881Z",
+  "priorReceipt": "C:/SC2TOOLS/.cache/guide-randomizer-verification-20261028/independent-browser-review.json",
+  "priorReceiptSha256": "caf9f9a5ee71d6cc97195965f8c562f344935c7323131b2aabda05edca6dbd7f",
+  "priorBaseRevision": "477298dd7c397af2baaa79d19736ae43d1a4510d",
+  "currentHead": "d4ee182d75806b3f642c1bf9607915df501f2292",
+  "roots": [
+    "RandomizerStage",
+    "actual weighted spinResult engine"
+  ],
+  "comparisons": [
+    {
+      "file": "apps/web/app/fonts/bricolage-grotesque-latin.woff2",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "4fd48b2c1ab27220e71f15f990550261b35245c3bdfd8d8025b4bdac0459ee2d",
+      "currentSha256": "4fd48b2c1ab27220e71f15f990550261b35245c3bdfd8d8025b4bdac0459ee2d",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/app/fonts/fraunces-latin-normal.woff2",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "88e17be075f1be50ab67b057b99e3701b828f44ed28f9452df6c02645bb0cba9",
+      "currentSha256": "88e17be075f1be50ab67b057b99e3701b828f44ed28f9452df6c02645bb0cba9",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/app/fonts/hanken-grotesk-latin.woff2",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "1f21c6eaa0000f3329cfcfac966b43d5bebf5aa610303e33294ac31bc6f4bb59",
+      "currentSha256": "1f21c6eaa0000f3329cfcfac966b43d5bebf5aa610303e33294ac31bc6f4bb59",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/app/globals.css",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "16bd173d8071c7d682d929c4983e4766aae774bf91d251928f84d704480ef971",
+      "currentSha256": "16bd173d8071c7d682d929c4983e4766aae774bf91d251928f84d704480ef971",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/overlay/WidgetShell.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "5b1783d70d534144999526732ba6684b96604cea97e18117c8ffb4ad1e50dcd1",
+      "currentSha256": "5b1783d70d534144999526732ba6684b96604cea97e18117c8ffb4ad1e50dcd1",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/RandomizerStage.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "3470d5303fcc40a7a02358896c56ac040950396aefb0c6ba756d3b0f652e2cf1",
+      "currentSha256": "3470d5303fcc40a7a02358896c56ac040950396aefb0c6ba756d3b0f652e2cf1",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/AsteroidLockReveal.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "20d089084740423c577bcd7ed902a92be19d45d6f931fa1726af2e04e710eee8",
+      "currentSha256": "20d089084740423c577bcd7ed902a92be19d45d6f931fa1726af2e04e710eee8",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/BattleRoyaleReveal.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "12c6ad50e97cafdfe1ed691334b4badf9fd0be05d753295bbcfe1c718268115d",
+      "currentSha256": "12c6ad50e97cafdfe1ed691334b4badf9fd0be05d753295bbcfe1c718268115d",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/CaseUnboxingReveal.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "cf7c4b2c076fade27819292d2aa6c7629175c4339e667abdf8de36ab75ad62ef",
+      "currentSha256": "cf7c4b2c076fade27819292d2aa6c7629175c4339e667abdf8de36ab75ad62ef",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/ClawMachineReveal.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "c29267d90ab5fec8b2925c5f16eb77f8d23f213017186d68b1ef0e0830019e37",
+      "currentSha256": "c29267d90ab5fec8b2925c5f16eb77f8d23f213017186d68b1ef0e0830019e37",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/FighterBrawlReveal.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "223b528df4672bf7e97cc2414afa3ded0fba007ef218cae51a1c82ea9c75c9f1",
+      "currentSha256": "223b528df4672bf7e97cc2414afa3ded0fba007ef218cae51a1c82ea9c75c9f1",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/GachaSummonReveal.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "ccf784cd4fc021bcddd3aea8c10737814514ce44339653c3051ea2f64a207815",
+      "currentSha256": "ccf784cd4fc021bcddd3aea8c10737814514ce44339653c3051ea2f64a207815",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/HorseRaceReveal.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "5d3e2da009a13a0264f693a7bf48e918761f5bbf02baf385ae5c8ccaad4c038b",
+      "currentSha256": "5d3e2da009a13a0264f693a7bf48e918761f5bbf02baf385ae5c8ccaad4c038b",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/HungrySwarmReveal.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "986720fa64e4535960dcc08bf65e221cda09026d79ec91619749939fa96b9920",
+      "currentSha256": "986720fa64e4535960dcc08bf65e221cda09026d79ec91619749939fa96b9920",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/SlotMachineReveal.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "ffe57f877b3f498514c65d4a6f4b27da6c0ae4a6d4c1261027b51eb9514bf6a7",
+      "currentSha256": "ffe57f877b3f498514c65d4a6f4b27da6c0ae4a6d4c1261027b51eb9514bf6a7",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/SumoShoveReveal.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "2cb3988cc17636e498a46dff995f6fcf355969d49d19857b5745bb5f8fd890bf",
+      "currentSha256": "2cb3988cc17636e498a46dff995f6fcf355969d49d19857b5745bb5f8fd890bf",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/WheelSpinReveal.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "61b0deab5a15778c051d0e5e2170d4a7079457057d5b05f4d89c0c61c9af72b0",
+      "currentSha256": "61b0deab5a15778c051d0e5e2170d4a7079457057d5b05f4d89c0c61c9af72b0",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/revealShared.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "c2863fbf112a6e2fa8578d6a9f37b016a2595d758aa1fc32f174a4e99534df00",
+      "currentSha256": "c2863fbf112a6e2fa8578d6a9f37b016a2595d758aa1fc32f174a4e99534df00",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/revealSound.ts",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "b06640b3eac1b8c1e40cfadfc3f30905dbc7dcaff7067d84cece47992bfc82d8",
+      "currentSha256": "b06640b3eac1b8c1e40cfadfc3f30905dbc7dcaff7067d84cece47992bfc82d8",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/spriteShared.tsx",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "8b1c2b52f4aa80ba1127fcfc2bd564e58bdf7f390d08dad53094f24abd9f3756",
+      "currentSha256": "8b1c2b52f4aa80ba1127fcfc2bd564e58bdf7f390d08dad53094f24abd9f3756",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/visualField.ts",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "fcf26527747f41c1cab39043aa62a2e42ad24e23c8f07abd8ca67e80989ee52d",
+      "currentSha256": "fcf26527747f41c1cab39043aa62a2e42ad24e23c8f07abd8ca67e80989ee52d",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/lib/race.ts",
+      "kind": "prior-base-git-blob",
+      "beforeSha256": "530dcb424ca5ce8e4edd1f085d694cf0f7105c34053e7b5844d7fb3b323ce1df",
+      "currentSha256": "0f79955f81e05547fb84d65248daf588ba26c678fc83c7d234559d4b99d07873",
+      "comparison": "CRLF-only",
+      "normalizedSha256": "530dcb424ca5ce8e4edd1f085d694cf0f7105c34053e7b5844d7fb3b323ce1df"
+    },
+    {
+      "file": "apps/web/lib/randomizer/engine.ts",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "02a98410d8305a1e803e751ded8e400ca72622a88cb20650ce20044bad4c50d9",
+      "currentSha256": "02a98410d8305a1e803e751ded8e400ca72622a88cb20650ce20044bad4c50d9",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/lib/randomizer/gatewayUnits.ts",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "04b6cfecfac32e90b218e0236d524717b6dcfa7b4559536352fedbc97752833e",
+      "currentSha256": "04b6cfecfac32e90b218e0236d524717b6dcfa7b4559536352fedbc97752833e",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/lib/randomizer/types.ts",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "7e919b5391934a12aa0851ea92ba4587d633a0f21eda19b166a7c894582de37e",
+      "currentSha256": "7e919b5391934a12aa0851ea92ba4587d633a0f21eda19b166a7c894582de37e",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/lib/sc2-icons.ts",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "13d3205fc639693b7af890ba79836b839314438173a774a8d528df8fd6884c83",
+      "currentSha256": "13d3205fc639693b7af890ba79836b839314438173a774a8d528df8fd6884c83",
+      "comparison": "raw-exact"
+    },
+    {
+      "file": "apps/web/tailwind.config.ts",
+      "kind": "prior-receipt-raw-sha256",
+      "beforeSha256": "e2738f087fd02ef0dbd606ce03dc9d0ad017960cfe0cbba3d6aa6d4b04d11bc5",
+      "currentSha256": "e2738f087fd02ef0dbd606ce03dc9d0ad017960cfe0cbba3d6aa6d4b04d11bc5",
+      "comparison": "raw-exact"
+    }
+  ],
+  "externalImports": [
+    "react"
+  ],
+  "decision": "reuse-randomizer-only",
+  "reused": {
+    "cases": 12,
+    "aaScans": 72,
+    "allStyleSpecimens": 132,
+    "widths": [
+      320,
+      390,
+      1280
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "preferenceModes": [
+      "OS reduce",
+      "root page reduce",
+      "live combination"
+    ],
+    "source": "Existing run05 from guide-randomizer-verification-20261028; not rerun."
+  },
+  "notReused": {
+    "guideCases": 6,
+    "guideAaScans": 24,
+    "reason": "GuideStatsLegend now has a new lazy Term boundary. Its current first-open/retry/retirement/focus coverage is supplied by the new dedicated ESM matrix, not the old IIFE guide cases."
+  },
+  "qualifications": [
+    "All runtime imports reachable from RandomizerStage plus the selection engine were walked source-only; type-only imports are excluded. Recorded raw hashes match exactly. Any transitive input absent from the older receipt is explicitly compared against that receipt base Git tree with line-ending normalization recorded, not silently treated as a recorded runtime pin.",
+    "Randomizer inline reveal/style/keyframe sources, global CSS, Tailwind config and committed fonts are unchanged. Generated route chunk layout and guide-only added utilities may differ after the budget repair; this reuse does not claim byte-identical generated bundles. The Randomizer-specific inline motion styles and sr-only utility inputs remain unchanged.",
+    "Existing normal sound configuration is source unchanged, but prior fixture disabled audio locally; no audio or real assistive speech verification claimed. No product/native/provider/account changes or heavy execution in this comparison."
+  ]
+}

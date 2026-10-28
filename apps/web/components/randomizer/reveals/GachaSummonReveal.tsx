@@ -54,12 +54,12 @@ export function GachaSummonReveal({
         }}
       >
         {/* Beams fan out behind the winner card when settled. */}
-        {settled ? <Beams color={rarity.color} /> : null}
+        {settled ? <Beams color={rarity.color} reducedMotion={reducedMotion} /> : null}
         {/* Charging orb during the wind-up. */}
-        {!settled ? <ChargeOrb color={accent} rarityColor={rarity.color} /> : null}
+        {!settled ? <ChargeOrb color={accent} rarityColor={rarity.color} reducedMotion={reducedMotion} /> : null}
         {/* Reveal flash. */}
         <Flash on={flashOn && !reducedMotion} color={rarity.color} />
-        <WinnerCard winner={winner} rarity={rarity} show={settled} />
+        <WinnerCard winner={winner} rarity={rarity} show={settled} reducedMotion={reducedMotion} />
       </div>
     </RevealFrame>
   );
@@ -68,13 +68,16 @@ export function GachaSummonReveal({
 function ChargeOrb({
   color,
   rarityColor,
+  reducedMotion,
 }: {
   color: string;
   rarityColor: string;
+  reducedMotion: boolean;
 }) {
   return (
     <div
       aria-hidden
+      className="rdz-charge"
       style={{
         position: "absolute",
         width: 110,
@@ -82,7 +85,7 @@ function ChargeOrb({
         borderRadius: "50%",
         background: `radial-gradient(circle, ${color} 0%, ${rarityColor} 60%, transparent 100%)`,
         boxShadow: `0 0 60px ${rarityColor}, inset 0 0 24px ${color}`,
-        animation: "rdz-charge 1500ms ease-out forwards, rdz-pulse 700ms ease-in-out 1500ms infinite",
+        animation: reducedMotion ? "none" : "rdz-charge 1500ms ease-out forwards, rdz-pulse 700ms ease-in-out 1500ms infinite",
       }}
     />
   );
@@ -105,7 +108,7 @@ function Flash({ on, color }: { on: boolean; color: string }) {
   );
 }
 
-function Beams({ color }: { color: string }) {
+function Beams({ color, reducedMotion }: { color: string; reducedMotion: boolean }) {
   return (
     <div
       aria-hidden
@@ -130,7 +133,7 @@ function Beams({ color }: { color: string }) {
               background: `linear-gradient(180deg, ${color} 0%, transparent 100%)`,
               transformOrigin: "50% 0%",
               transform: `rotate(${angle}deg)`,
-              animation: `rdz-beam 700ms ease-out ${i * 40}ms both`,
+              animation: reducedMotion ? "none" : `rdz-beam 700ms ease-out ${i * 40}ms both`,
               filter: `drop-shadow(0 0 6px ${color})`,
             }}
           />

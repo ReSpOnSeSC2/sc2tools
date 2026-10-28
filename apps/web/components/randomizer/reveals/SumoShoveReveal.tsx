@@ -203,6 +203,7 @@ export function SumoShoveReveal({
         winner={winner}
         rarity={rarity}
         show={settled}
+        reducedMotion={reducedMotion}
         src={sprites.get(winner.id) ?? null}
       />
     </RevealFrame>
