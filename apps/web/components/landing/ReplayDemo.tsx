@@ -25,6 +25,7 @@ import { SampleReportButton } from "@/components/instant/SampleReportButton";
 import { ReplayDemoBrowserIsland } from "./ReplayDemoBrowserIsland";
 import type { DemoRequest } from "./ReplayDemoBrowserSession";
 import type { PreviewDossier, PreviewPlayer } from "./replayDemoPreview";
+import { replayDemoFileSize } from "./replayDemoFileSize";
 
 /**
  * ReplayDemo — landing-page "drop a replay, see the real dossier" CTA.
@@ -270,7 +271,7 @@ function BrowserReplayDemo() {
         }
       >
         {busy ? (
-          <div><p className="text-caption text-text-muted">{filename} · {(fileSize / 1024 / 1024).toFixed(2)} MB</p><DossierLoading /></div>
+          <div><p className="text-caption text-text-muted">{filename} · {replayDemoFileSize(fileSize)}</p><DossierLoading /></div>
         ) : error ? (
           <DossierError error={error} headingRef={errorRef} />
         ) : (

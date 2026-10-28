@@ -1,0 +1,8 @@
+{
+  "phase": "postbuild",
+  "checkedAtUtc": "2026-10-28T10:47:10.613Z",
+  "sourceInputs": 6786,
+  "sourceSnapshotSha256": "9a3451af813b6f30a9b97b058fc5c84faf1b15532ba94cbc92cc3b0fb50bf1ea",
+  "allMatch": true,
+  "filesAddedOrRemoved": false
+}

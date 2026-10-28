@@ -281,7 +281,7 @@ class UserBackupsService {
             // The immutable staged batch can be retried by Mongo. No cursor,
             // notification, storage request or fence renewal is in callback.
             if (dbKey === "games") await this.gameStatsWrites.write(statsOwner,
-              session => collection.insertMany(batch, session ? { session } : {}), { fenceId: fence.id });
+              session => collection.insertMany(batch, session ? { session } : {}), { fenceId: fence.id, selection: { gameIds: batch.map(row => row.gameId) } });
             else await collection.insertMany(batch);
           };
           for await (const row of this.staging.find({ operationId: staged.operationId, key }).sort({ ordinal: 1 }).batchSize(BATCH)) {

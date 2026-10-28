@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "reviewedAtUtc": "2026-10-28T11:12:47.544Z",
+  "ledgerSha256": "1b821427f76e5eff914c961f38ddbcde267792c7845b89cea8f7e9dc3713b7a0",
+  "canonicalSha256": "7736aa72eada3a1b6d71ac1570accdbb24dbc6634138e5445c0fd3ce7fc58b60",
+  "decision": "clear-for-two803closures-and122counts",
+  "counts": {
+    "completed": 122,
+    "partial": 55,
+    "open": 20,
+    "unknown": 0
+  },
+  "remainingOriginalItems": 75,
+  "all197IdentitiesOrdinalsAndAuditedRequirementPinsPreserved": true,
+  "reviewedClosures": [
+    {
+      "id": "builds-polish-7",
+      "previousStatus": "partial",
+      "newStatus": "completed",
+      "requirementSha256": "f69807f9ecdf094ad2f95bd22da06d16b5544ebab6964b9168b3197cc9003ed5",
+      "proof": {
+        "pr": 803,
+        "mergedRevision": "ccb5987e145968059097ecf440204c3972279ded",
+        "testedHead": "da264541cc24303deabb3f42e47c5e575b0543c1",
+        "productionReceipt": "docs/handoff/validation/guide-randomizer/production-ccb598.json",
+        "receiptSha256": "f20b75d86ccaee6beea906c5e0b9c1c1857bae0ad36f9603ddaf5b1a1450be48",
+        "qualification": "Live normal preview DOM status verified; no live OS/page override or speech claim. Stage matrix and separate Sequence timing review retain their stated boundaries."
+      },
+      "assessment": "Source+retained all-style OS/page/AA and once-only resolved Stage tests cover motion/status requirements; actual normal preview DOM result and exact Ready/Live deployment supplement them. Sequence timing source review is separate; no live OS/page override or AT speech claimed."
+    },
+    {
+      "id": "guides-polish-4",
+      "previousStatus": "partial",
+      "newStatus": "completed",
+      "requirementSha256": "5ce66736718556291ad3f1ab95ec9d4daee80dedba8c933317f3c34baac91685",
+      "proof": {
+        "pr": 803,
+        "mergedRevision": "ccb5987e145968059097ecf440204c3972279ded",
+        "testedHead": "da264541cc24303deabb3f42e47c5e575b0543c1",
+        "productionReceipt": "docs/handoff/validation/guide-randomizer/production-ccb598.json",
+        "receiptSha256": "f20b75d86ccaee6beea906c5e0b9c1c1857bae0ad36f9603ddaf5b1a1450be48",
+        "qualification": "Actual loaded glossary/Help/focus verified; held chunk/transport failure and full AA/responsive cases are separately recorded local proofs."
+      },
+      "assessment": "Original glyph/verdict/roving-chart/constant legend/Help foundations remain. Actual new glossary Term loads, Escape restores focus, and correct Help heading were observed; source+retained tests cover lazy failure/focus and full responsive/AA scope."
+    }
+  ],
+  "servedSourceNormalizedChecks": [
+    {
+      "path": "apps/web/components/randomizer/RandomizerStage.tsx",
+      "currentSha256": "3470d5303fcc40a7a02358896c56ac040950396aefb0c6ba756d3b0f652e2cf1",
+      "normalizedEqualToServed803": true
+    },
+    {
+      "path": "apps/web/components/randomizer/RandomizerSequence.tsx",
+      "currentSha256": "014e924c0e152a13553b69f3b18aec232c2e180b54110d912575550135a81118",
+      "normalizedEqualToServed803": true
+    },
+    {
+      "path": "apps/web/components/randomizer/reveals/revealShared.tsx",
+      "currentSha256": "c2863fbf112a6e2fa8578d6a9f37b016a2595d758aa1fc32f174a4e99534df00",
+      "normalizedEqualToServed803": true
+    },
+    {
+      "path": "apps/web/components/analyzer/settings/randomizer/RandomizerPreview.tsx",
+      "currentSha256": "0f206838f2c4b1150404dedb92661fbd76062d68e249db49936c158209e2cc1a",
+      "normalizedEqualToServed803": true
+    },
+    {
+      "path": "apps/web/components/randomizer/__tests__/RandomizerStage.accessibility.test.tsx",
+      "currentSha256": "4cfb75036905648c9f28bd93cdfb695717b3fd5f14ede80b02fc2f6d62d854fc",
+      "normalizedEqualToServed803": true
+    },
+    {
+      "path": "apps/web/components/randomizer/__tests__/RandomizerSequence.test.tsx",
+      "currentSha256": "e05b2bc83fbc5d376a01facbb266d987718ed0f52e666ece4ffdc9bcd1389e23",
+      "normalizedEqualToServed803": true
+    }
+  ],
+  "evidence": {
+    "productionReceipt": {
+      "path": "docs/handoff/validation/guide-randomizer/production-ccb598.json",
+      "sha256": "f20b75d86ccaee6beea906c5e0b9c1c1857bae0ad36f9603ddaf5b1a1450be48"
+    },
+    "sequenceSourceReview": {
+      "path": "docs/handoff/validation/guide-randomizer/sequence-announcement-source-review.json",
+      "sha256": "6f68084e9de238897d03e2328baaca6f04387ec964992c6cde6d971dc7c4e81e"
+    }
+  },
+  "qualification": "Read-only current source, original specs, retained local proof and actual root803receipt reconciliation. Reviewer ran no build/browser/unit/provider or production-account acceptance for this audit. All197 historical requirements were not freshly rerun.",
+  "unfinishedPreserved": [
+    "landing-try-polish-1",
+    "landing-demo-in-browser",
+    "faster-dashboards",
+    "analysis-corpus-local-cache"
+  ],
+  "nonblockingBookkeeping": [
+    {
+      "area": "faster-dashboards",
+      "observation": "Its baseline implemented/remaining prose still says six charts, while current source allowlist has11 response kinds and dashboard checkpoint already records that delivered expansion. Refresh this description in the next canonical performance reconciliation without closing the parent.",
+      "routes": [
+        "timeseries",
+        "dayHourHeatmap",
+        "lengthBuckets",
+        "activityCalendar",
+        "momentum",
+        "mapTrend",
+        "summary",
+        "macroSummary",
+        "mmrProgression",
+        "myBuildMixOverTime",
+        "oppStrategyMixOverTime"
+      ],
+      "sourceSha256": "7764fc5f40b2bd6edb55221e8231081de38ffcd90cc74da1cee40a1944f81564"
+    }
+  ],
+  "applicationSourceEdited": false,
+  "ledgerEdited": false,
+  "gitReadOnly": true,
+  "gitMutated": false
+}
