@@ -1,0 +1,182 @@
+{
+  "capturedAtUtc": "2026-10-28T13:31:12.878Z",
+  "sourceHead": "4cc3811334e06e8c721d05664d863d52b8eaeba0",
+  "adoptedMain": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+  "sourceScope": "Original15 owned paths at documentation adoption; includes deleted router/tests. Checkpoint documentation now differs from tested candidate, no runtime file changed by adoption.",
+  "sourcePins": [
+    {
+      "file": "CHANGELOG.md",
+      "exists": true,
+      "sha256": "8585b8ff18ce91016f5d602ab172ba5031a32ce19333a8ba657ab648693f0fa0",
+      "bytes": 374932
+    },
+    {
+      "file": "apps/api/__tests__/publicReplay.test.js",
+      "exists": false,
+      "sha256": null,
+      "bytes": null
+    },
+    {
+      "file": "apps/api/__tests__/publicReplayRetirement.test.js",
+      "exists": true,
+      "sha256": "fa3d6c9aeda0f37fa423fa9c7739213699c8ef17810362217d1daf9c21497093",
+      "bytes": 3145
+    },
+    {
+      "file": "apps/api/src/app.js",
+      "exists": true,
+      "sha256": "b0ba87bd887b109576607d0fc02db1b66f96d6760c65d7a15c9fc754f2adc38e",
+      "bytes": 85977
+    },
+    {
+      "file": "apps/api/src/routes/publicReplay.js",
+      "exists": false,
+      "sha256": null,
+      "bytes": null
+    },
+    {
+      "file": "apps/web/components/landing/ReplayDemo.tsx",
+      "exists": true,
+      "sha256": "1188ffd11a18738ad421e66223d247eadcd488c32d47a11f6e5bf22cbec8bd73",
+      "bytes": 18223
+    },
+    {
+      "file": "apps/web/components/landing/__tests__/ReplayDemo.browser.test.tsx",
+      "exists": true,
+      "sha256": "20c3ff49aa6b294cfbff14dacdd158fd32b5805a6cba6fb990c6b5bc1151fb41",
+      "bytes": 13235
+    },
+    {
+      "file": "apps/web/components/landing/__tests__/ReplayDemo.test.tsx",
+      "exists": true,
+      "sha256": "7b2c57ecbbf4dfcacc138ac3b65e36582b3293cbfbcabb3f7701c5c4bf0a08a1",
+      "bytes": 2820
+    },
+    {
+      "file": "apps/web/lib/help/articles/getting-started/instant-analysis.ts",
+      "exists": true,
+      "sha256": "b24b46b69f2da0ccba828e9a713b291cf07293675adc3a5b793f195a3c09317a",
+      "bytes": 4227
+    },
+    {
+      "file": "apps/web/tests/e2e/build-editor.spec.ts",
+      "exists": true,
+      "sha256": "26f71a0fec2061737bb83c9acffc36acdff92a0c913a3ea8e14578ccbe24ecb9",
+      "bytes": 2739
+    },
+    {
+      "file": "apps/web/tests/manual/landing-demo.cjs",
+      "exists": true,
+      "sha256": "523adce9e45b5c14a7317d52bc326eb79b2d16a0f2aa48e0079f7a412d5b2db0",
+      "bytes": 10633
+    },
+    {
+      "file": "apps/web/tests/manual/unified-build-editor-next.cjs",
+      "exists": true,
+      "sha256": "b7ea1a61284d1d1f7229cb536723f2d995471d5b6fbcbaee9899c68caa9170d3",
+      "bytes": 6288
+    },
+    {
+      "file": "docs/adr/0059-landing-browser-replay-demo.md",
+      "exists": true,
+      "sha256": "9d3d828a28a9d6e830e51ee96894412e8ca35db7566a7f2739a0b3aa5debcef5",
+      "bytes": 4348
+    },
+    {
+      "file": "docs/handoff/landing-demo-checkpoint.md",
+      "exists": true,
+      "sha256": "6e5bf63c6147cfa121d4b3b4ab636f8109a7bcc92d562e80d099e676b42d82b5",
+      "bytes": 13819
+    },
+    {
+      "file": "docs/instant-analysis.md",
+      "exists": true,
+      "sha256": "27ad69596d3ecd1820c88ac68c2f0d1c62a348e1d02921c66501017def9775d9",
+      "bytes": 59604
+    }
+  ],
+  "protectedPins": [
+    {
+      "file": "apps/replay-engine/scripts/preview_replay_cli.py",
+      "sha256": "65644e63637c2960e1c1d1551903c740e610eb5efb72dc57ba9a0f8981173499",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/replay-engine/core/replay_errors.py",
+      "sha256": "8c88d8e6d5ff2f53425da765063da4639ab501918993dca322c22eca37defadd",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/scripts/browser-engine/files.mjs",
+      "sha256": "dde756973c1c4d720a5121fdaf90b57255e9a71ae91e5b8be4e37de11ac8a739",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/lib/instant/flag.ts",
+      "sha256": "a9aafcb9e3a8de91f83a806c4d6bc2ddd07074c109e27f813394c086468914a3",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/app/try/page.tsx",
+      "sha256": "6baf49a24412cfc5087a7e07e0fa45c8862b58c04f31f2a04003783c8aeb24fa",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/components/landing/ReplayDemoBrowserIsland.tsx",
+      "sha256": "8f23050a6bb390135a55db8150cf9ffa4ea9bcddba41a608f3b9bd05b13dcc3f",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/components/landing/ReplayDemoBrowserSession.tsx",
+      "sha256": "1da6c4f1811d9df25e12e06e7a0686a2e244fa71446175e707bc7bff310ae2c1",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/components/landing/replayDemoPreview.ts",
+      "sha256": "e71959749d09f0919648ff50cd5c7f6032d46161cc9c3c3c42815d405dbb0a1a",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/perf-budget.json",
+      "sha256": "969d5bf40ce6e278aa004c27937193a50694e3474a42a121bb32360e24e0581d",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/api/src/util/pythonRunner.js",
+      "sha256": "ad49d3ee87d56af4e2cae7012aef63bc12eddedae8a29afa6b389c4f54cbe0e0",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/api/Dockerfile",
+      "sha256": "97e100f08d4669c3174dcb73af7bd55e2af92b7712fe6bfe6bd3916ba5c6620f",
+      "normalizedSourceEqualToAdoptedMain": true
+    }
+  ],
+  "pendingWipPreserved": [
+    {
+      "file": "apps/api/__tests__/publicReplayRetirement.test.js",
+      "sha256": "fa3d6c9aeda0f37fa423fa9c7739213699c8ef17810362217d1daf9c21497093",
+      "bytes": 3145
+    },
+    {
+      "file": "apps/web/scripts/ui-lint/baseline.json",
+      "sha256": "76a2cc1159df8e0ec4338cba75baff3c33ce3dfa2a8f63e49bc4931bd604ce3b",
+      "bytes": 131303
+    },
+    {
+      "file": "apps/web/tests/manual/unified-build-editor-next.cjs",
+      "sha256": "b7ea1a61284d1d1f7229cb536723f2d995471d5b6fbcbaee9899c68caa9170d3",
+      "bytes": 6288
+    }
+  ],
+  "historicalTestManifest": {
+    "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/source-ready-04-runtime.json",
+    "bytes": 8806,
+    "sha256": "31b30d9fc86e53fe1a5cea0edfb5ece993da9ad106c1d6abbc75f417e23fd0c4"
+  },
+  "independentReview": {
+    "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/independent-final-review-05-with-visual.json",
+    "bytes": 10984,
+    "sha256": "80ba64bf954f96c5c429866fdec0f1f1fa3f6ebd2539af0d69a21d35d1032262"
+  }
+}

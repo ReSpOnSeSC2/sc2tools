@@ -1,53 +1,41 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ReplayDemo } from "../ReplayDemo";
-const mock = vi.hoisted(() => ({ mode: "off", fetch: vi.fn(), editor: vi.fn() }));
+
+const mock = vi.hoisted(() => ({ mode: "off", fetch: vi.fn(), browser: vi.fn(), editor: vi.fn() }));
 vi.mock("@/lib/instant/flag", () => ({ getInstantImportMode: () => mock.mode }));
+vi.mock("../ReplayDemoBrowserIsland", () => ({ ReplayDemoBrowserIsland: (props: unknown) => { mock.browser(props); return null; } }));
 vi.mock("@/components/builds/editor/LazyBuildEditorModal", () => ({ LazyBuildEditorModal: (props: unknown) => { mock.editor(props); return null; } }));
-beforeEach(() => { mock.fetch.mockReset(); mock.editor.mockClear(); mock.mode = "off"; vi.stubGlobal("fetch", mock.fetch); mock.fetch.mockResolvedValue({ ok: false, status: 504, headers: new Headers(), json: async () => ({ error: { code: "preview_timeout" } }) }); });
+
+beforeEach(() => { mock.fetch.mockReset(); mock.browser.mockClear(); mock.editor.mockClear(); mock.mode = "off"; vi.stubGlobal("fetch", mock.fetch); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
-function replay() { const file = new File(["replay"], "game.SC2Replay"); Object.defineProperty(file, "arrayBuffer", { value: async () => new ArrayBuffer(6) }); return file; }
-function card() { return screen.getByRole("heading", { name: "Turn a replay into a custom build" }).closest("section")!; }
-it("accepts a real drop, keeps the highlight over children and offers recovery", async () => {
-  render(<ReplayDemo />); const file = replay(); const dataTransfer = { types: ["Files"], files: [file] };
-  fireEvent.dragEnter(card(), { dataTransfer }); fireEvent.dragEnter(screen.getByText("Build editor demo"), { dataTransfer });
-  fireEvent.dragLeave(screen.getByText("Build editor demo"), { dataTransfer }); expect(screen.getByText("Drop to analyze")).toBeTruthy();
-  fireEvent.drop(card(), { dataTransfer });
-  const heading = await screen.findByText("Couldn't parse that replay");
-  await waitFor(() => expect(document.activeElement).toBe(heading)); expect(mock.fetch).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole("button", { name: "Choose another replay" })).toBeTruthy(); expect(screen.queryByRole("link", { name: "Analyze it in your browser" })).toBeNull();
+
+it.each(["off", "admins"])("%s replaces the retired parser with desktop recovery and no intake or transport", (mode) => {
+  mock.mode = mode;
+  const { container } = render(<ReplayDemo />);
+  const section = screen.getByRole("region", { name: "Turn a replay into a custom build" });
+  expect(screen.getByText(/The replay demo is currently unavailable/)).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Get the desktop app" }).getAttribute("href")).toBe("/download");
+  expect(screen.getByRole("link", { name: "Create a free account" }).getAttribute("href")).toBe("/sign-up");
+  expect(container.querySelector('input[type="file"]')).toBeNull();
+  expect(screen.queryByRole("button", { name: "Choose a replay" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "How this works" })).toBeNull();
+  expect(container.querySelector('a[href^="/try"]')).toBeNull();
+  expect(screen.queryByText(/Uploaded once to our server/)).toBeNull();
+  fireEvent.pointerEnter(section); fireEvent.focus(section);
+  fireEvent.drop(section, { dataTransfer: { types: ["Files"], files: [new File(["replay"], "game.SC2Replay")] } });
+  expect(mock.browser).not.toHaveBeenCalled();
+  expect(mock.editor).not.toHaveBeenCalled();
+  expect(mock.fetch).not.toHaveBeenCalled();
 });
-it("rejects non-replays without a request and ignores text drags", () => {
-  render(<ReplayDemo />); fireEvent.drop(card(), { dataTransfer: { types: ["Files"], files: [new File(["text"], "readme.txt")] } });
-  expect(screen.getByRole("alert").textContent).toContain("isn't a .SC2Replay"); expect(mock.fetch).not.toHaveBeenCalled();
-  expect(fireEvent.dragOver(card(), { dataTransfer: { types: ["text/plain"] } })).toBe(true);
-});
-it("resets the picker so the same replay can be selected again", async () => {
-  mock.mode = "off"; const { container } = render(<ReplayDemo />); const input = container.querySelector<HTMLInputElement>('input[type="file"]')!; const file = replay();
-  expect(input.accept).toBe(".SC2Replay");
-  fireEvent.change(input, { target: { files: [file] } }); await screen.findByRole("button", { name: "Choose another replay" }); expect(input.value).toBe("");
-  fireEvent.change(input, { target: { files: [file] } }); await waitFor(() => expect(mock.fetch).toHaveBeenCalledTimes(2));
-  expect(screen.queryByRole("link", { name: "Analyze it in your browser" })).toBeNull();
-});
-it("aborts compatibility parsing on close and never opens an editor from its late response", async () => {
-  let finish!: (value: unknown) => void; mock.fetch.mockReturnValue(new Promise(resolve => { finish = resolve; }));
-  mock.mode = "admins"; const view = render(<ReplayDemo />); const input = view.container.querySelector<HTMLInputElement>('input[type="file"]')!;
-  fireEvent.change(input, { target: { files: [replay()] } }); await waitFor(() => expect(mock.fetch).toHaveBeenCalledOnce());
-  const signal = mock.fetch.mock.calls[0][1].signal as AbortSignal;
-  fireEvent.click(screen.getByRole("button", { name: "Close" })); expect(signal.aborted).toBe(true);
-  finish({ ok: true, status: 200, headers: new Headers(), json: async () => ({ ok: true, game_id: "late", map: "Map", duration_sec: 60, date: "2020-01-01", players: [] }) });
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  expect(mock.editor.mock.calls.every(([props]) => props.open === false)).toBe(true);
-});
-it.each([[1, "1 B"], [1024, "1.00 KB"], [2 * 1024 * 1024, "2.00 MB"]] as const)("shows a readable %i-byte legacy busy label without changing request/cancel ownership", async (bytes, label) => {
-  let finish!: (value: unknown) => void; mock.fetch.mockReturnValue(new Promise(resolve => { finish = resolve; }));
-  const file = new File([new Uint8Array(bytes)], "legacy.SC2Replay");
-  Object.defineProperty(file, "arrayBuffer", { value: async () => new ArrayBuffer(bytes) });
-  render(<ReplayDemo />); fireEvent.drop(card(), { dataTransfer: { types: ["Files"], files: [file] } });
-  await screen.findByText(`legacy.SC2Replay · ${label}`); await waitFor(() => expect(mock.fetch).toHaveBeenCalledOnce());
-  const signal = mock.fetch.mock.calls[0][1].signal as AbortSignal;
-  expect(screen.getByRole("dialog").textContent).not.toContain("0.00 MB");
-  fireEvent.click(screen.getByRole("button", { name: "Close" })); expect(signal.aborted).toBe(true);
-  await act(async () => finish({ ok: false, status: 504, headers: new Headers(), json: async () => ({ error: { code: "preview_timeout" } }) }));
-  expect(screen.queryByRole("dialog")).toBeNull(); expect(mock.editor.mock.calls.every(([props]) => props.open === false)).toBe(true);
+
+it("all retains the private browser entry and only mounts its analyzer after intent", () => {
+  mock.mode = "all";
+  render(<ReplayDemo />);
+  expect(screen.getByText("Runs in your browser — the replay never leaves your device.")).toBeTruthy();
+  expect(screen.getByRole("link", { name: "How this works" }).getAttribute("href")).toBe("/try#home-replay-demo");
+  expect(mock.browser).not.toHaveBeenCalled();
+  fireEvent.pointerEnter(screen.getByRole("heading", { name: "Turn a replay into a custom build" }).closest("section")!);
+  expect(mock.browser).toHaveBeenCalled();
+  expect(mock.fetch).not.toHaveBeenCalled();
 });

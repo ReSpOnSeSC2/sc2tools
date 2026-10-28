@@ -1,0 +1,14 @@
+{
+  "label": "production-build-01",
+  "args": [
+    "C:/SC2TOOLS/.worktrees/dashboard-cache-coverage/apps/web/node_modules/next/dist/bin/next",
+    "build"
+  ],
+  "cwd": "C:/SC2TOOLS/.worktrees/dashboard-cache-coverage/apps/web",
+  "pid": 7116,
+  "startedAtUtc": "2026-10-28T12:17:38.606Z",
+  "endedAtUtc": "2026-10-28T12:19:43.366Z",
+  "exitCode": 0,
+  "processAliveAfterExit": false,
+  "log": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-01/production-build-01.log"
+}

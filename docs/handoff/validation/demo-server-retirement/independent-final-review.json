@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 1,
+  "reviewedAtUtc": "2026-10-28T13:20:17.616Z",
+  "reviewer": "/root/bingo_browser_regression",
+  "mode": "independent-source-and-retained-evidence-review-no-test-or-browser-runtime",
+  "status": "clear-for-root-document-adoption-commit-and-exact-head-ci",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/dashboard-cache-coverage",
+  "sourceHead": "4cc3811334e06e8c721d05664d863d52b8eaeba0",
+  "adoptedMain": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+  "blockers": [],
+  "checks": [
+    "15 owned existence/deletion/hash pins and11 protected raw/normalized-main pins independently match.",
+    "All204 build/browser index files and all prior unit/type/lint evidence/log pins independently rehashed.",
+    "Raw58API/3files and127web/19files pass with0fail/pending; type/lint commands exit0; all473UI baseline entries/allowlist identical,0removed/added; appwarnings3→3.",
+    "Actual retained jazSofh build and83 unchanged budgets pass; exact40/7/strict4 admissions match all3 phases. No generators/downloads/pruning.",
+    "RawrealNext2joint+1phone and16disabled cases pass with0skip/retry/flaky;32decoded full-default Axe scans have0violations;220manualchecks/36captures and actualNexteditorfault→retry pass.",
+    "Current fullsource has EXACT1manualdriver delta/6822unchanged, no additions/removals; original strictfailure retained. Every old driverexpect-line preserved. Actual failedchunk9172 owns module19172; shared loader chunks no longer misidentified.",
+    "Unchanged realengine/privacy guard retains explicit small same-sitepresence allowance; disabled adapter limits and cleanup0/nomutation boundaries accurately documented."
+  ],
+  "sourceReady": {
+    "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/source-ready-04-runtime.json",
+    "sha256": "31b30d9fc86e53fe1a5cea0edfb5ece993da9ad106c1d6abbc75f417e23fd0c4"
+  },
+  "runtimeReceipt": {
+    "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/runtime-verification-01.json",
+    "sha256": "849f00ac28c263d97947c21bb8b3c3103324d88c021ac9818958fb84f89ae430"
+  },
+  "evidenceIndex": {
+    "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-browser-evidence-index-01.json",
+    "bytes": 51471,
+    "sha256": "d4456882767982d3474ec65d19f12da265c66bc0356836063e822c8aeb021582"
+  },
+  "sourcePins": [
+    {
+      "file": "CHANGELOG.md",
+      "exists": true,
+      "sha256": "8585b8ff18ce91016f5d602ab172ba5031a32ce19333a8ba657ab648693f0fa0"
+    },
+    {
+      "file": "apps/api/__tests__/publicReplay.test.js",
+      "exists": false,
+      "sha256": null
+    },
+    {
+      "file": "apps/api/__tests__/publicReplayRetirement.test.js",
+      "exists": true,
+      "sha256": "fa3d6c9aeda0f37fa423fa9c7739213699c8ef17810362217d1daf9c21497093"
+    },
+    {
+      "file": "apps/api/src/app.js",
+      "exists": true,
+      "sha256": "b0ba87bd887b109576607d0fc02db1b66f96d6760c65d7a15c9fc754f2adc38e"
+    },
+    {
+      "file": "apps/api/src/routes/publicReplay.js",
+      "exists": false,
+      "sha256": null
+    },
+    {
+      "file": "apps/web/components/landing/ReplayDemo.tsx",
+      "exists": true,
+      "sha256": "1188ffd11a18738ad421e66223d247eadcd488c32d47a11f6e5bf22cbec8bd73"
+    },
+    {
+      "file": "apps/web/components/landing/__tests__/ReplayDemo.browser.test.tsx",
+      "exists": true,
+      "sha256": "20c3ff49aa6b294cfbff14dacdd158fd32b5805a6cba6fb990c6b5bc1151fb41"
+    },
+    {
+      "file": "apps/web/components/landing/__tests__/ReplayDemo.test.tsx",
+      "exists": true,
+      "sha256": "7b2c57ecbbf4dfcacc138ac3b65e36582b3293cbfbcabb3f7701c5c4bf0a08a1"
+    },
+    {
+      "file": "apps/web/lib/help/articles/getting-started/instant-analysis.ts",
+      "exists": true,
+      "sha256": "b24b46b69f2da0ccba828e9a713b291cf07293675adc3a5b793f195a3c09317a"
+    },
+    {
+      "file": "apps/web/tests/e2e/build-editor.spec.ts",
+      "exists": true,
+      "sha256": "26f71a0fec2061737bb83c9acffc36acdff92a0c913a3ea8e14578ccbe24ecb9"
+    },
+    {
+      "file": "apps/web/tests/manual/landing-demo.cjs",
+      "exists": true,
+      "sha256": "523adce9e45b5c14a7317d52bc326eb79b2d16a0f2aa48e0079f7a412d5b2db0"
+    },
+    {
+      "file": "apps/web/tests/manual/unified-build-editor-next.cjs",
+      "exists": true,
+      "sha256": "b7ea1a61284d1d1f7229cb536723f2d995471d5b6fbcbaee9899c68caa9170d3"
+    },
+    {
+      "file": "docs/adr/0059-landing-browser-replay-demo.md",
+      "exists": true,
+      "sha256": "9d3d828a28a9d6e830e51ee96894412e8ca35db7566a7f2739a0b3aa5debcef5"
+    },
+    {
+      "file": "docs/handoff/landing-demo-checkpoint.md",
+      "exists": true,
+      "sha256": "d6c05084c95a61f3bf5b3dbb86e0146a7359701f8dc1ac33e634d23fd6e67347"
+    },
+    {
+      "file": "docs/instant-analysis.md",
+      "exists": true,
+      "sha256": "27ad69596d3ecd1820c88ac68c2f0d1c62a348e1d02921c66501017def9775d9"
+    }
+  ],
+  "protectedPins": [
+    {
+      "file": "apps/replay-engine/scripts/preview_replay_cli.py",
+      "sha256": "65644e63637c2960e1c1d1551903c740e610eb5efb72dc57ba9a0f8981173499",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/replay-engine/core/replay_errors.py",
+      "sha256": "8c88d8e6d5ff2f53425da765063da4639ab501918993dca322c22eca37defadd",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/scripts/browser-engine/files.mjs",
+      "sha256": "dde756973c1c4d720a5121fdaf90b57255e9a71ae91e5b8be4e37de11ac8a739",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/lib/instant/flag.ts",
+      "sha256": "a9aafcb9e3a8de91f83a806c4d6bc2ddd07074c109e27f813394c086468914a3",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/app/try/page.tsx",
+      "sha256": "6baf49a24412cfc5087a7e07e0fa45c8862b58c04f31f2a04003783c8aeb24fa",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/components/landing/ReplayDemoBrowserIsland.tsx",
+      "sha256": "8f23050a6bb390135a55db8150cf9ffa4ea9bcddba41a608f3b9bd05b13dcc3f",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/components/landing/ReplayDemoBrowserSession.tsx",
+      "sha256": "1da6c4f1811d9df25e12e06e7a0686a2e244fa71446175e707bc7bff310ae2c1",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/components/landing/replayDemoPreview.ts",
+      "sha256": "e71959749d09f0919648ff50cd5c7f6032d46161cc9c3c3c42815d405dbb0a1a",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/web/perf-budget.json",
+      "sha256": "969d5bf40ce6e278aa004c27937193a50694e3474a42a121bb32360e24e0581d",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/api/src/util/pythonRunner.js",
+      "sha256": "ad49d3ee87d56af4e2cae7012aef63bc12eddedae8a29afa6b389c4f54cbe0e0",
+      "normalizedSourceEqualToAdoptedMain": true
+    },
+    {
+      "file": "apps/api/Dockerfile",
+      "sha256": "97e100f08d4669c3174dcb73af7bd55e2af92b7712fe6bfe6bd3916ba5c6620f",
+      "normalizedSourceEqualToAdoptedMain": true
+    }
+  ],
+  "independentlyParsed": {
+    "apiTests": 58,
+    "apiFiles": 3,
+    "webTests": 127,
+    "webFiles": 19,
+    "jointRealWorkerPrivacyCases": 2,
+    "phoneEditorCases": 1,
+    "disabledCases": 16,
+    "fullDefaultAxeScans": 32,
+    "axeViolations": 0,
+    "manualChecks": 220,
+    "manualCaptures": 36,
+    "budgetRoutes": 83,
+    "assetAdmission": "40/7/4",
+    "allSourceFiles": 6823,
+    "unchangedSourceFiles": 6822,
+    "changedFiles": [
+      {
+        "relative": "apps/web/tests/manual/unified-build-editor-next.cjs",
+        "beforeSha256": "2bbb3f830cb99b316a8af8d63c76717612f21350b81661ecdb1140bef9d2e695",
+        "afterSha256": "b7ea1a61284d1d1f7229cb536723f2d995471d5b6fbcbaee9899c68caa9170d3",
+        "beforeBytes": 5522,
+        "afterBytes": 6288
+      }
+    ]
+  },
+  "checkpointCandidate": {
+    "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/checkpoint-update-after-runtime.md",
+    "sha256": "e3206ddc0591261d1006d2b60cd5292267baad7c7b38bcb452fbeaf4698b73d4",
+    "assessment": "Accurate local-only results and source/adapters/unchanged-cap qualifications; root must still adopt updated tracked documentation and refresh documentation pins."
+  },
+  "limitations": [
+    "No tests, build, browser, remote, Git mutation, provider action or current-process inspection executed by this review.",
+    "Local source/test/build evidence only; exact-head required CI, production deployment and relevant retirement acceptance remain outstanding.",
+    "Earlier clipped production screenshots are explicitly excluded from this visual review and are not accepted as proof. Root erratum/correct full-JPEG belongs to separate Auth documentation adoption.",
+    "All6823-files-equal is false after the one test-driver instrumentation repair. The qualified application build identity depends on exact6822other-input equality, not a waived guard.",
+    "Live public rollout flags are unchanged; no conditional local fixture is represented as a live provider or flag proof."
+  ],
+  "reviewAddendumAtUtc": "2026-10-28T13:20:53.384Z",
+  "priorSourceReview": {
+    "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/independent-final-review-04.json",
+    "sha256": "e6c12d6eb2c23f517fec6a4da7711e4065b85ae2a04a527b7b9761c9f984514b"
+  },
+  "visualReview": {
+    "method": "view_image on two retained LOCAL passing-run captures; no UI/browser/runtime started",
+    "images": [
+      {
+        "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-01/browser-editor-01/build-editor-phone-build-e-2dbe7-e-controls-inside-its-modal-desktop-1280/build-editor-phone.png",
+        "sha256": "34ca2d62de722d254fde082a040b8876eb905dd0dcf004a14d8f08132fa8a71b"
+      },
+      {
+        "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/ui-browser/browser-03/disabled-demo-disabled-admins-card-at-320px-light/disabled-admins-320-light.png",
+        "sha256": "43fa26707f9d7402d3fa30465f48884bbbfa900a48b1a9f8e743a91101eef1de"
+      }
+    ],
+    "observed": "Phone actualNext editor header/Close, notes, scrolled content and signup footer remain within375px modal;320px disabled card recovery text/buttons wrap and focus outline is visible. Only these local passing-run images were inspected. Earlier clipped production captures excluded."
+  },
+  "reviewHarnessCorrection": {
+    "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/independent-review-first-baseline-assumption-failure.json",
+    "sha256": "c58ce3e7954b277d77c610e6645c6c7bb57001629caa75367aae9b83e2977f65",
+    "qualification": "An initial reviewer assumption used HEAD as byte-exact prebuild test-driver. The pinned prebuild working driver already had the child.signalCode cleanup guard. Adding exactly that guard plus CRLF reconstructs5522bytes/SHA2bbb exactly; all old expect-lines remain byte-equal after newline normalization. No product or test assertions changed."
+  }
+}

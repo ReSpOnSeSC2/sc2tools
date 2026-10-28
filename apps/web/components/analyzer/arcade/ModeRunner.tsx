@@ -63,8 +63,11 @@ function ModeRunnerResolver(props: Omit<ModeRunnerProps, "dataSource">) {
 function ModeRunnerView({ mode, isDaily, onPlayedFresh, forceMode = false, dataSource }:
   Omit<ModeRunnerProps, "dataSource"> & { dataSource: ModeRunnerDataSource }) {
   const seed = useDailySeed();
-  const { data, baseData, loading, error, retrySessionPolicy } = dataSource;
+  const { data, baseData, loading, error, retrySessionPolicy, unitStatsRead } = dataSource;
   const sessionMode = ["first-game-of-day", "comeback-count"].includes(mode.id);
+  const unitMode = mode.id === "unit-profile";
+  const unitLoading = unitMode && Boolean(unitStatsRead?.loading);
+  const unitError = unitMode ? unitStatsRead?.error : null;
   const roundData = sessionMode ? data : baseData ?? data;
   const { recordPlay, earnBadge, state } = useArcadeState();
   const [round, setRound] = useState(0);
@@ -85,6 +88,7 @@ function ModeRunnerView({ mode, isDaily, onPlayedFresh, forceMode = false, dataS
   // depthTag.
 
   useEffect(() => {
+    if (unitLoading || unitError) { setQuestion(null); return; }
     if (!roundData || (sessionMode && !roundData.sessionPolicy)) return;
     let cancelled = false;
     const rng = isDaily
@@ -110,7 +114,7 @@ function ModeRunnerView({ mode, isDaily, onPlayedFresh, forceMode = false, dataS
     return () => {
       cancelled = true;
     };
-  }, [roundData, sessionMode, isDaily, mode, round, seed.day, seed.rng, seed.tz]);
+  }, [roundData, sessionMode, unitLoading, unitError, isDaily, mode, round, seed.day, seed.rng, seed.tz]);
 
   const handleAnswer = useCallback(
     (a: unknown) => {
@@ -209,6 +213,18 @@ function ModeRunnerView({ mode, isDaily, onPlayedFresh, forceMode = false, dataS
         <EmptyState title="Couldn't load" sub={error || "No data available."} />
       </Card>
     );
+  }
+  if (unitLoading) {
+    return <Card><SkeletonRegion label="Loading your unit history for this round" className="space-y-4">
+      <SkeletonBar className="h-5 w-2/3" /><SkeletonBar className="h-4 w-1/2" />
+      <p className="text-caption text-text-muted">Reading your recent replay details…</p>
+    </SkeletonRegion></Card>;
+  }
+  if (unitError) {
+    return <Card><EmptyState title="Couldn't load unit history" sub={unitError} />
+      <div className="text-center"><button type="button" className="min-h-11 rounded-lg px-4 py-2 text-accent focus-visible:outline focus-visible:outline-2"
+        onClick={() => void unitStatsRead?.retry()}>Retry unit history</button></div>
+    </Card>;
   }
   if (sessionMode && !data.sessionPolicy) {
     return <Card><EmptyState title="Session settings unavailable" sub={data.sessionPolicyError || "Load your session definition before this quiz."} />

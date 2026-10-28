@@ -59,7 +59,7 @@ const ARCADE_QUEST_DETAIL_FIELDS = Object.freeze([
 
 const ARCADE_UNIT_DETAIL_FIELDS = Object.freeze([
   "buildLog",
-  "macroBreakdown",
+  "macroBreakdown.player_stats",
 ]);
 
 const RESOLVE_GAME_PROJECTION = Object.freeze({
@@ -308,9 +308,7 @@ class ArcadeService {
       .limit(UNIT_STATS_SCAN_CAP)
       .toArray();
     if (!games.length) return empty;
-    if (!this.gameDetails) {
-      return { ...empty, scannedGames: games.length };
-    }
+    if (!this.gameDetails) throw unitStatsUnavailable();
     /** @type {Record<string, number>} */
     const builtByUnit = {};
     let totalUnitsLost = 0;
@@ -322,6 +320,7 @@ class ArcadeService {
         const detail = await this.gameDetails.findMany(userId, [id], {
           fields: [...ARCADE_UNIT_DETAIL_FIELDS],
           concurrency: 1,
+          strict: true,
         });
         const blob = detail.get(id);
         if (!blob) continue;
@@ -343,7 +342,9 @@ class ArcadeService {
         }
       }
     } catch {
-      return { ...empty, scannedGames: games.length };
+      // A provider failure is not evidence that this user has no unit data.
+      // A genuine missing object remains an empty Map in either store.
+      throw unitStatsUnavailable();
     }
     return {
       scannedGames: games.length,
@@ -408,6 +409,12 @@ class ArcadeService {
     }
     return { weekKey, items, participants, settledCount, you };
   }
+}
+
+/** Unit trivia must distinguish an unavailable read from an empty history. */
+function unitStatsUnavailable() {
+  return Object.assign(new Error("Your unit history couldn't load. Try again."),
+    { status: 503, code: "arcade_unit_stats_unavailable" });
 }
 
 /**

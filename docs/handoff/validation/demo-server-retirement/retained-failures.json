@@ -1,0 +1,80 @@
+{
+  "location": "Original failed evidence remains immutable in cache; no failure trace or assertion was deleted to produce this tracked compact record.",
+  "failures": [
+    "api-focused-01:54pass/2new-fail due mistaken anonymous404 fixture assumption; preserve authentic404 and add baseline anonymous401 parity",
+    "ui-prune-preparation-01:missing baseline backup path; official command did not execute",
+    "cleanup01:self control-shell marker matched, preserved and explicitly qualified in cleanup02",
+    "manual-next-editor-01: initial driver mistaken shared loader prerequisites for factory-owning editor chunk; unique-module instrumentation correction, all assertions retained",
+    "ui-browser01: missing sandbox browser executable before test bodies",
+    "ui-browser02: qualified Chromium process blocked by restricted sandbox before test bodies",
+    "source-postbrowser-strict01: expected full-source mismatch from single manual CJS driver edit after build; original guard/snapshot preserved and exact6822other inputs equality separately proved"
+  ],
+  "evidence": [
+    {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/api-focused-01.stderr.log",
+      "bytes": 2119,
+      "sha256": "c900cd76095cf9e5a93e64fea95062c3f49967157cfaacec4e94d17456af962d"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/api-focused-01-result.json",
+      "bytes": 119,
+      "sha256": "6afdf3f313c2df2f32ab994bc4b2e354fd3f97cb10f86b7b20fbb1a9391481ac"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/ui-prune-preparation-01.json",
+      "bytes": 241,
+      "sha256": "e50d611d50a9f9fa8a1601dbdcb8b788f609ee6d1085a0c4a6ab5f2bb9392781"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/owned-cleanup-01.json",
+      "bytes": 729,
+      "sha256": "cde2e6a949a104ffdc52a07725481292e53ff8f7fa7b18275b4732548b5a6df5"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-01/manual-next-editor-01.log",
+      "bytes": 2108,
+      "sha256": "bb4143cb8683695f541cce7f91663f7de5602fc9653e6ab29c2d364637f34feb"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-01/manual-next-editor-01-result.json",
+      "bytes": 164,
+      "sha256": "a580b1bb0dc46ef35edf08cb11b6b710c03a10527773f0850bb4b15243e2aa2e"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/ui-browser/browser-result-01.json",
+      "bytes": 89,
+      "sha256": "55914723506f630cbc63190428c7d3306e9768818faec8eeffb2d86efd9777f9"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/ui-browser/browser-run-01.stdout.log",
+      "bytes": 41699,
+      "sha256": "e64a453d4879dd57d156324f2f738eb19953a2dd11b9e8a2f0c1e95479ea78df"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/ui-browser/browser-result-02.json",
+      "bytes": 89,
+      "sha256": "329d3fdffc956709221f27a565f9680c977e6b5d4bddcde4966f732d9f8c47e0"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/ui-browser/browser-run-02.stdout.log",
+      "bytes": 93041,
+      "sha256": "a5c65bf6c52a0a4551c14f6722ebe5efc6f38a2699c9fdd4671185e3ab1e98c6"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-01/source-postbrowser-strict-01.log",
+      "bytes": 425,
+      "sha256": "9a190dcb785932062328842b62b7f38a3b1eec43e7acbe0b7a01898025052de5"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-01/source-postbrowser-strict-01-result.json",
+      "bytes": 246,
+      "sha256": "944018a07670102118a97a9b7a9edb7c397e278b542f15b6a157a072ed35f168"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/independent-review-first-baseline-assumption-failure.json",
+      "bytes": 484,
+      "sha256": "c58ce3e7954b277d77c610e6645c6c7bb57001629caa75367aae9b83e2977f65"
+    }
+  ],
+  "reviewerCorrection": "Prebuild working driver already had the signalCode cleanup guard absent from HEAD; exact5522byte prebuild reconstruction independently verified. That guard was preserved through unique-module instrumentation correction."
+}
