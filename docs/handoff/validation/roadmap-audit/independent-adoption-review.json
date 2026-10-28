@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "status": "STATIC_CLEAR_ADOPTED_LEDGER_VERIFIED",
+  "root": "C:\\SC2TOOLS\\.worktrees\\dashboard-cache-coverage",
+  "sourceRevision": "477298dd7c397af2baaa79d19736ae43d1a4510d",
+  "items": 197,
+  "counts": {
+    "completed": 116,
+    "partial": 61,
+    "open": 20,
+    "unknown": 0
+  },
+  "qualifiedRemaining": 81,
+  "canonicalItemHashesChecked": 197,
+  "updatesVerified": 60,
+  "coverageSourcePinsStillMatch": 28,
+  "originalAuditSourcePinsValidated": 512,
+  "errors": [],
+  "qualification": "Counts are scoped source/merged-history reconciliation, not new runtime or universal production/native acceptance. Prior27ledger retained historically. Canonical roadmap unchanged. Ledger CRLF-only difference and exact owned admin-console addition separately proved. No unshipped help-recovery or declined Macro candidate promoted to completed.",
+  "remainingContracts": [
+    "faster-dashboards remains partial: durable gameStats/writer rollout, device revocation coherence, dependency-specific additional coverage",
+    "analysis-corpus-local-cache remains partial with delta/version/removal, IndexedDB and account clearing/history controls",
+    "Native and operational gates remain qualified; final SETUP_GUIDE remains required"
+  ],
+  "reviewedFiles": [
+    {
+      "path": "docs/handoff/roadmap-progress-2026-10-28.json",
+      "sha256": "6a60fa0684aa66f06aaa39b34806b80f85179e96665272d0dc07472911badd9c"
+    },
+    {
+      "path": "docs/handoff/roadmap-progress-2026-10-27.json",
+      "sha256": "9ee0bc2ae28d1d8c274b9f5769c1222b635b3ae9fbe47a8c52e47de9a05c1530"
+    },
+    {
+      "path": "docs/handoff/validation/roadmap-audit/adoption.json",
+      "sha256": "cce9beb970c2d97d4fe7fdcc33825092714b5da8ada49d5e04effedeb91bcb45"
+    },
+    {
+      "path": "docs/handoff/validation/roadmap-audit/unknown-a.json",
+      "sha256": "d10c64664ba43fea1904f6aa3289002e49d21e1a428735d94cf2128692c69d28"
+    },
+    {
+      "path": "docs/handoff/validation/roadmap-audit/unknown-b.json",
+      "sha256": "4697ce1f9ba8e5643137881468f1b7bb0169698d112802b52cf07fb90a64c146"
+    },
+    {
+      "path": "docs/handoff/dashboard-cache-coverage-checkpoint.md",
+      "sha256": "a25036409168c341d6becb34346c38356a4be4572c1db320429b180c316063e0"
+    }
+  ],
+  "preparationDiagnostics": "First verification command stopped before writing because PowerShell rejected a compressed Depth parameter; corrected explicit parameter spacing and completed this read-only verification.",
+  "runtimeExecuted": false,
+  "applicationSourceEdited": false,
+  "gitMutations": false
+}

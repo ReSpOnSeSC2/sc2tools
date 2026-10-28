@@ -1,0 +1,2294 @@
+{
+  "schemaVersion": 1,
+  "audit": "first30_unknown_in_ordinal_order",
+  "generatedAtUtc": "2026-10-28T03:34:19.9659975Z",
+  "sourceRevision": "477298dd7c397af2baaa79d19736ae43d1a4510d",
+  "sourceTree": "178d6921ea4911439c2b85d266a6b76c34c40725",
+  "checkoutHead": "51e0c9474a0337b94af97feaf7de15a99db6d31b",
+  "checkoutQualification": "Read-only git diff is empty and both revision tree IDs match; shipping checkout/source unmodified.",
+  "baseLedgerPath": "C:\\SC2TOOLS\\.worktrees\\program-ledger-delivery\\docs\\handoff\\roadmap-progress-2026-10-27.json",
+  "baseLedgerSha256": "f1f2767e79b0004789e69a50e9f486f2be40074341902d5599727f8b669bbf25",
+  "canonicalRoadmap": "docs/handoff/plan/final-plan.json",
+  "canonicalRoadmapSha256": "7736aa72eada3a1b6d71ac1570accdbb24dbc6634138e5445c0fd3ce7fc58b60",
+  "scope": "Exactly first30 of60 existing unknown entries; every original spec/augments/how-to considered. Only this cache artifact written. Read-only source/checkpoint/first-parent history inspection; no Git mutation/runtime/providers.",
+  "counts": {
+    "completed": 24,
+    "partial": 6,
+    "open": 0,
+    "unknown": 0
+  },
+  "projectedLedgerCountsIfAppliedAlone": {
+    "completed": 98,
+    "partial": 57,
+    "open": 12,
+    "unknown": 30
+  },
+  "qualifiedRemainingIfAppliedAlone": 99,
+  "remainingCountQualification": "Includes partial/open/unknown; not the final program count until other30 audit is reconciled. Completed means scoped source reconciliation, not fresh live acceptance of every ancestor.",
+  "items": [
+    {
+      "ordinal": 13,
+      "id": "pairing-web-and-devices",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "50f6649bbd0219d9358db70600a5e0e2d6f8d2e1210034ec9baacfb176c45b42",
+      "reason": "Shared normalized explicit-confirm pairing, network/metadata preview+200 claim, bounded 3s/60s heartbeat confirmation, URL cleanup, readable errors, labels, status/update badges and typed unpair are implemented. Download/checklist/Settings/Help use the same location contract; compatible native pairing URL and regression are present.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/onboarding/PairDeviceForm.tsx",
+        "apps/web/components/onboarding/PairDeviceForm.test.tsx",
+        "apps/web/components/onboarding/pairingTypes.ts",
+        "apps/web/components/DevicesPanel.tsx",
+        "apps/web/components/onboarding/DownloadCard.tsx",
+        "apps/web/lib/clientApi.ts",
+        "apps/api/src/routes/devicePairings.js",
+        "apps/api/src/services/devicePairings.js",
+        "apps/agent/sc2tools_agent/runner.py",
+        "apps/agent/tests/test_gui_pairing_recovery.py"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/getting-started/install-and-pair.ts",
+        "apps/web/lib/help/articles/desktop-app/pairing-troubleshooting.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/agent/sc2tools_agent/runner.py",
+          "sha256": "bbcaefed072a7fbdee98a964393687ccf94ff1a623957ed99b4da9eb0bdddd4f"
+        },
+        {
+          "path": "apps/agent/tests/test_gui_pairing_recovery.py",
+          "sha256": "67649e128df25c70224bb1427f9c63770d09ce98b49c58184890558a90e2c5f0"
+        },
+        {
+          "path": "apps/api/src/routes/devicePairings.js",
+          "sha256": "985036d2b283a25895493ebf376b0b509f55481aa383b55b90a8a92e0f892784"
+        },
+        {
+          "path": "apps/api/src/services/devicePairings.js",
+          "sha256": "9b1fcbb91d3adea3e74a65eb62a64e7b11b59d51f0c142451e8b5c202c00e9c3"
+        },
+        {
+          "path": "apps/web/components/DevicesPanel.tsx",
+          "sha256": "e91da1d84f3061f7af29e00716f78c135f09db41c221266cb7b46324bd214ba8"
+        },
+        {
+          "path": "apps/web/components/onboarding/DownloadCard.tsx",
+          "sha256": "8e3da334a77b136a2cb12a9c0c3f50b7f413890c842def6cd1bc905d1e9129a1"
+        },
+        {
+          "path": "apps/web/components/onboarding/PairDeviceForm.test.tsx",
+          "sha256": "44265d475d987fd2a2aa661ca043c4e3e0b2875649973c5221a26fb860ac89ea"
+        },
+        {
+          "path": "apps/web/components/onboarding/PairDeviceForm.tsx",
+          "sha256": "fb1b451494c5396da30e5e576a38cb001f165eebd569a9652970ef92ed7c48af"
+        },
+        {
+          "path": "apps/web/components/onboarding/pairingTypes.ts",
+          "sha256": "ce779562bca8226320652da42dba9bb55390117e7790447f4d6980de1d4b46ec"
+        },
+        {
+          "path": "apps/web/lib/clientApi.ts",
+          "sha256": "5e143c65dc8d2d93ad1643a7a74dd4aad31f6dc6b4ea8619f01d4ea9c19ca0c2"
+        },
+        {
+          "path": "apps/web/lib/help/articles/desktop-app/pairing-troubleshooting.ts",
+          "sha256": "c643e210a8a7aa46c38fee03825d6414832ebbf83bdc408a277e4a23e59c986d"
+        },
+        {
+          "path": "apps/web/lib/help/articles/getting-started/install-and-pair.ts",
+          "sha256": "05bbcba99c6c6de502309449ce1ce2062a6b87e10f9adf82876e6cb505b62322"
+        }
+      ],
+      "mergedPrs": [
+        659
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 19,
+      "id": "welcome-wizard-resumable",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "ee54512c73ce0b1e21ed7092ae7d677cffaea7308748ec36ed9a908f321f73d4",
+      "reason": "URL-controlled resume, goal cards/atomic onboarding merge, paired-step completion/skip, browser Import Back to Download, revisitable completed chips, live connected/import Done and goal-specific next actions are present. Current auth-return lifetime fences retain these contracts.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/app/welcome/page.tsx",
+        "apps/web/components/onboarding/welcomeState.ts",
+        "apps/web/components/onboarding/welcomeState.test.ts",
+        "apps/web/components/onboarding/OnboardingShell.tsx",
+        "apps/web/components/onboarding/OnboardingWelcome.tsx",
+        "apps/web/components/onboarding/OnboardingDownload.tsx",
+        "apps/web/components/onboarding/OnboardingPair.tsx",
+        "apps/web/components/onboarding/OnboardingDone.tsx",
+        "apps/api/src/services/users.js",
+        "apps/api/src/routes/me.js"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/getting-started/getting-started.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/src/routes/me.js",
+          "sha256": "0247d490ecee2dcb3be0807d33dc2cc615b1de88ee0c9f299ad59de0ac66c57c"
+        },
+        {
+          "path": "apps/api/src/services/users.js",
+          "sha256": "f28929583b57af643e407461ce8153669681222c856e7f8072d1dc2f09b3bd67"
+        },
+        {
+          "path": "apps/web/app/welcome/page.tsx",
+          "sha256": "08c81267f3509b7dfaa2ab16c2f4209799be6db5cf975e979932b3cc9c60ca69"
+        },
+        {
+          "path": "apps/web/components/onboarding/OnboardingDone.tsx",
+          "sha256": "26a203c1e841895b9703bde6ca25a03d4f55b0178ab7f0d8bdbe3ce42976b481"
+        },
+        {
+          "path": "apps/web/components/onboarding/OnboardingDownload.tsx",
+          "sha256": "5a1588b7a2212ae9e84805c9f5aee8eb180ac66973c7b22264c289f8ee50becd"
+        },
+        {
+          "path": "apps/web/components/onboarding/OnboardingPair.tsx",
+          "sha256": "2a673e4556350e4cc2f21e9c2f3294d46dbffe91e74f1787975a837413be1bc4"
+        },
+        {
+          "path": "apps/web/components/onboarding/OnboardingShell.tsx",
+          "sha256": "8b60f8ff42261d6f5a6b65ca9bdfee7e9329571c707c1549e2c0d88b42fd39b4"
+        },
+        {
+          "path": "apps/web/components/onboarding/OnboardingWelcome.tsx",
+          "sha256": "930802d9c223adacb1d328e91bc8881ed56603d053267df2bea8807ac516da6a"
+        },
+        {
+          "path": "apps/web/components/onboarding/welcomeState.test.ts",
+          "sha256": "148e8357566fa197a8d6cae69cd82522b1aa24094c044133e7449e517b05b1b9"
+        },
+        {
+          "path": "apps/web/components/onboarding/welcomeState.ts",
+          "sha256": "32178e140c364320440d06a849137bb743dcf796ada00f3f6b58e9163c7e82f6"
+        },
+        {
+          "path": "apps/web/lib/help/articles/getting-started/getting-started.ts",
+          "sha256": "35ca4ee079cfbea1a1dc219b35d5ce06d6d5f5882cc8ffbed8431b42cb518ac5"
+        }
+      ],
+      "mergedPrs": [
+        663
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 20,
+      "id": "notification-center",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "706c419c0d4fb2cc0f0acca01b434b415363bb353868d6b97b35d0566662cca6",
+      "reason": "Always-mounted signed-in inbox, durable delivery/group identities for import/update/community/coaching/support producers, support status/reply/My reports, strict preferences/muting, category filters/paging, visible errors/New tint/read ACK/focus return and compact queues are implemented with source regression coverage. Bell is mounted only in account chrome.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/api/src/app.js",
+        "apps/api/src/services/notifications.js",
+        "apps/api/src/services/supportMessages.js",
+        "apps/api/src/services/notificationPrefs.js",
+        "apps/api/__tests__/notificationProducers.test.js",
+        "apps/web/components/notifications/NotificationBell.tsx",
+        "apps/web/components/notifications/NotificationPanel.tsx",
+        "apps/web/components/notifications/NotificationPreferences.tsx",
+        "apps/web/components/notifications/MyReports.tsx",
+        "apps/web/app/notifications/page.tsx",
+        "apps/web/components/notifications/__tests__/NotificationBell.test.tsx",
+        "docs/handoff/notification-popover-checkpoint.md",
+        "apps/api/src/db/connect.js"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/account-data/notifications.ts",
+        "apps/web/lib/help/articles/troubleshooting/report-a-problem.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/__tests__/notificationProducers.test.js",
+          "sha256": "693abd6a3112f473d30027bd05e224aa6e57f48e45e759f26d0898b96cef4499"
+        },
+        {
+          "path": "apps/api/src/app.js",
+          "sha256": "b26f5e96577e84329ce0f50aa9fc02d3c2a641458afba316f8ef886233871d69"
+        },
+        {
+          "path": "apps/api/src/db/connect.js",
+          "sha256": "260081069bf79e7aae57bd94ec6cd03b192ca68719ca302273ae560b2984e4bf"
+        },
+        {
+          "path": "apps/api/src/services/notificationPrefs.js",
+          "sha256": "5e8fd08f878a49ec10ad095bbf988d939bc0d18f8a053bd39375a5c0d68ecf14"
+        },
+        {
+          "path": "apps/api/src/services/notifications.js",
+          "sha256": "26f0174582033bcb216902b8656adfe66b43243360e8a2315ac32c9d4b86f637"
+        },
+        {
+          "path": "apps/api/src/services/supportMessages.js",
+          "sha256": "0dffc68eaeef1cfc52a28673dcdc479430e4fc1a649776aff7bcb91991524f5c"
+        },
+        {
+          "path": "apps/web/app/notifications/page.tsx",
+          "sha256": "488fc1a49f89d7a3ca74733a1f0ae9defbf15bb1d85e6794a71418b0521a7e58"
+        },
+        {
+          "path": "apps/web/components/notifications/__tests__/NotificationBell.test.tsx",
+          "sha256": "88e0a89479a1398d9f59681e3db28b29ff43bfce23aae4fdbab5ea2a1401fd3e"
+        },
+        {
+          "path": "apps/web/components/notifications/MyReports.tsx",
+          "sha256": "d0a6bc5a8297bc8de58b8cee97653d87ac883d1709c041d4d1fe401ce8420cee"
+        },
+        {
+          "path": "apps/web/components/notifications/NotificationBell.tsx",
+          "sha256": "4ccd61ab8d4ec5f34ad337c7dcba93c5dccb93b3a6dc107aa9022dac3c42b619"
+        },
+        {
+          "path": "apps/web/components/notifications/NotificationPanel.tsx",
+          "sha256": "a4434058b3e482600b38d13ba475f9f39120ac1145725f7f47a4bd6959272c51"
+        },
+        {
+          "path": "apps/web/components/notifications/NotificationPreferences.tsx",
+          "sha256": "74ff89c28535119479bbe9296579e2c2a690bdb1c91b96429a873fcbbd5a2b12"
+        },
+        {
+          "path": "apps/web/lib/help/articles/account-data/notifications.ts",
+          "sha256": "ccb12f08a651fb4fbb02f1906101ae767535275c6995d1fcd1307414cbf8ceab"
+        },
+        {
+          "path": "apps/web/lib/help/articles/troubleshooting/report-a-problem.ts",
+          "sha256": "450ffaf8c7282866aa589dba254ba681376ae51e0284fcd7113208f996a6f2ec"
+        },
+        {
+          "path": "docs/handoff/notification-popover-checkpoint.md",
+          "sha256": "e8121c1785e2489949364ce214e295217f77344dd60beaf57ace487ecfb95629"
+        }
+      ],
+      "mergedPrs": [
+        687,
+        766
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 21,
+      "id": "whats-new-and-status",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "12c7a645f98df860f17f9d4cfe1e0bc714b12667e1c8536c1d3d8c1e937431dc",
+      "reason": "Curated shared entries/goal-filtered seen sheet, idempotent major notifications, public anchored changelog/RSS/sitemap, safe release Markdown and bounded revision/expiry/audience-aware incident authoring/public ETag/socket/banner/native notice paths are implemented. Opening/saving failures have existing recovery.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/api/src/data/whatsNew.json",
+        "apps/api/src/services/announcements.js",
+        "apps/api/src/routes/announcements.js",
+        "apps/api/src/routes/agentVersion.js",
+        "apps/api/__tests__/announcements.test.js",
+        "apps/web/lib/whatsNew.ts",
+        "apps/web/components/announcements/WhatsNewButton.tsx",
+        "apps/web/components/announcements/WhatsNewSheet.tsx",
+        "apps/web/components/announcements/SiteIncidentBanner.tsx",
+        "apps/web/components/ui/MiniMarkdown.tsx",
+        "apps/web/app/changelog/rss.xml/route.ts",
+        "apps/web/app/admin/announcements/page.tsx",
+        "apps/agent/sc2tools_agent/updater.py",
+        "apps/agent/sc2tools_agent/ui/service_notice.py",
+        "apps/agent/sc2tools_agent/ui/tray_notices.py"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/account-data/stay-up-to-date.ts",
+        "docs/runbooks/admin-operations.md"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/agent/sc2tools_agent/ui/service_notice.py",
+          "sha256": "e7397f2dbf0c99f96c193503781439aa575c98e0502fa3f850cb37d68d5e3117"
+        },
+        {
+          "path": "apps/agent/sc2tools_agent/ui/tray_notices.py",
+          "sha256": "668d6bcdf1cf5b6f960b2eb6e1846fc01a07c5b7de3861287b6641a4dd4fa2dd"
+        },
+        {
+          "path": "apps/agent/sc2tools_agent/updater.py",
+          "sha256": "28c62f61300ba1f3d00750c09a790f095eb681a585cb65c425be323ae8439045"
+        },
+        {
+          "path": "apps/api/__tests__/announcements.test.js",
+          "sha256": "6f6d6bf35c926159b93e3cca8edcbd5f13eefd72755f118a4b09351a7318501b"
+        },
+        {
+          "path": "apps/api/src/data/whatsNew.json",
+          "sha256": "b5d58782a6ad519fd79e4689f27201712ee1058f4c2ea918a79720fe032b24d1"
+        },
+        {
+          "path": "apps/api/src/routes/agentVersion.js",
+          "sha256": "210403d1bf0fa34f908d73bbf111d1d5e22a99185997fbf9233e28d432fe4c70"
+        },
+        {
+          "path": "apps/api/src/routes/announcements.js",
+          "sha256": "646d6a91d1c874c531cd3879299878b2b130bd45bb4bda2b058b354dfa1a5e78"
+        },
+        {
+          "path": "apps/api/src/services/announcements.js",
+          "sha256": "e2395331b029914508e03d9cc51aeadad17ecf60f3e78867507e793e806563bc"
+        },
+        {
+          "path": "apps/web/app/admin/announcements/page.tsx",
+          "sha256": "a95d8788e91cc39d7247d6e00185e273962b865790a13eecf6b24442965b99d9"
+        },
+        {
+          "path": "apps/web/app/changelog/rss.xml/route.ts",
+          "sha256": "1484cb1f5adc2a83a2ba0f9fa60c800c102a427ebbb73edb3d06e651356b942c"
+        },
+        {
+          "path": "apps/web/components/announcements/SiteIncidentBanner.tsx",
+          "sha256": "c38f119630223fdd12cef1d4bdec553a70598d8b4b05f5b43a6aae5e0e36437b"
+        },
+        {
+          "path": "apps/web/components/announcements/WhatsNewButton.tsx",
+          "sha256": "a905fe9a9fc66e484a22388f88ea2f296484aa7e6f64bced05911857a943f32c"
+        },
+        {
+          "path": "apps/web/components/announcements/WhatsNewSheet.tsx",
+          "sha256": "c5ec2bccda36258caa4b1f5121d096ae0985da388de23883f128ebc77230f09f"
+        },
+        {
+          "path": "apps/web/components/ui/MiniMarkdown.tsx",
+          "sha256": "f36c3dfea893a5edb200beb60a425af853c2b9ab0c63d2206be37ba73d1d24ac"
+        },
+        {
+          "path": "apps/web/lib/help/articles/account-data/stay-up-to-date.ts",
+          "sha256": "e0b31f38d4f41d9fa55f5e4a40a9c0aa4163997d5c18f402360679a3242f5fa7"
+        },
+        {
+          "path": "apps/web/lib/whatsNew.ts",
+          "sha256": "d2d9b0790a487ade3157dc4be3637e74f7206a3ce886d73c8c46bbb4774fc469"
+        },
+        {
+          "path": "docs/runbooks/admin-operations.md",
+          "sha256": "d4b6043bdb56b77725110debca59a787a5c1125eeec33ee40ec220a17f9fc1d5"
+        }
+      ],
+      "mergedPrs": [
+        687
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 22,
+      "id": "snapshots-safe-restore",
+      "oldStatus": "unknown",
+      "newStatus": "partial",
+      "canonicalRequirementSha256": "e18fbf3b07e83781becc18f89ec8053eff1c1c1487ab5cea5bf1902f61b91112",
+      "reason": "R2 gzip NDJSON streaming/checksum/staging, metadata/retention/weekly/pre-action snapshots, label/delete/download/preview, kept-game file verification, synchronous restore and fenced/rate-limited repairs are implemented. Compatible security corrections preserve live credentials/consent. Migration script exists; runbook explicitly records no production migration execution.",
+      "remainingRequirements": [
+        "Reconcile production embedded user_backups payload rows with a read-only migration count receipt; migrate remaining legacy rows through the existing guarded script if any, preserving failure evidence and without a production restore as verification. Legacy rows otherwise still return backup_migration_required."
+      ],
+      "sourceEvidence": [
+        "apps/api/src/services/userBackups.js",
+        "apps/api/src/services/userBackupsStore.js",
+        "apps/api/src/services/dataRepairs.js",
+        "apps/api/src/services/gdpr.js",
+        "apps/api/scripts/migrate-user-backups.js",
+        "apps/api/__tests__/userBackups.test.js",
+        "apps/api/__tests__/userBackupsStore.test.js",
+        "apps/web/components/analyzer/settings/SnapshotManager.tsx",
+        "apps/web/components/analyzer/settings/DataRepairCard.tsx"
+      ],
+      "howtoEvidence": [
+        "docs/runbooks/user-snapshots.md",
+        "apps/web/lib/help/articles/account-data/backups-and-export.ts",
+        "apps/web/lib/help/articles/account-data/repair-my-data.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/__tests__/userBackups.test.js",
+          "sha256": "741112cb8b0bd7fdc7dacab667a463ec7b52beeb67eb6c1df7cdc6e7684b9e1e"
+        },
+        {
+          "path": "apps/api/__tests__/userBackupsStore.test.js",
+          "sha256": "d806677b2a00f2386b52884d89c7934138f16280668ef551b0186ab072e6030d"
+        },
+        {
+          "path": "apps/api/scripts/migrate-user-backups.js",
+          "sha256": "cc725139e0379434c7e5401f3f20216b867cb7ce20ba52d13af72341a489415b"
+        },
+        {
+          "path": "apps/api/src/services/dataRepairs.js",
+          "sha256": "d08a1e14bef0cdea9949c2998a27ba67be02105d735c30a076fd69c6b9e1fba4"
+        },
+        {
+          "path": "apps/api/src/services/gdpr.js",
+          "sha256": "4440f06cd3b75445884cded72adad53952fcdf95a738480a417f4872b61ca3c1"
+        },
+        {
+          "path": "apps/api/src/services/userBackups.js",
+          "sha256": "fb05de91b13d278792eda47bdf0fa866876be81748a7cc64ef63c207117f58d7"
+        },
+        {
+          "path": "apps/api/src/services/userBackupsStore.js",
+          "sha256": "13f13739998114958f2925273951388c3fc8d06c0f8a060539338d2b488429c7"
+        },
+        {
+          "path": "apps/web/components/analyzer/settings/DataRepairCard.tsx",
+          "sha256": "2f0a9d115a236bb7a478223fba41a0332fde0f7a3784b0caafa6a0062e0f3974"
+        },
+        {
+          "path": "apps/web/components/analyzer/settings/SnapshotManager.tsx",
+          "sha256": "e598d5e44d5d239e4e6adf7765e226cb918b219a71df5107e448274c06bb6459"
+        },
+        {
+          "path": "apps/web/lib/help/articles/account-data/backups-and-export.ts",
+          "sha256": "b65f44294cfff0a1c6e479e8deb18f4c77503a21f0d97211673f65222c591ae9"
+        },
+        {
+          "path": "apps/web/lib/help/articles/account-data/repair-my-data.ts",
+          "sha256": "3016108bd9b758804c8bbcacc887759b0c53b471539af925e837fd52fece673b"
+        },
+        {
+          "path": "docs/runbooks/user-snapshots.md",
+          "sha256": "4781740d93301d252eabffefaa76d16a459f7648f21c842bb02192530f646761"
+        }
+      ],
+      "mergedPrs": [
+        687
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 23,
+      "id": "account-deletion-complete",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "e6911f2bec762de2c53e81e91087a7aa9021777fb1efc81fc06e06d951950550",
+      "reason": "Explicit collection classification and coverage test, token-scoped/sound purge+metadata export, durable Clerk purge-before-identity retries/deletion guard, idempotent signed webhook/API paths, inventory and three-step typed DELETE/sign-out recovery/goodbye retention are implemented. Existing writer leases and cache retirement reinforce the scoped deletion contract; original native unlinked recovery is present.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/api/src/services/gdpr.js",
+        "apps/api/src/services/gdprOwnedData.js",
+        "apps/api/src/services/dataInventory.js",
+        "apps/api/src/services/clerkClient.js",
+        "apps/api/src/services/identityDeletions.js",
+        "apps/api/src/jobs/identityDeletionJob.js",
+        "apps/api/src/routes/clerkWebhook.js",
+        "apps/api/src/routes/me.js",
+        "apps/api/__tests__/accountDeletion.test.js",
+        "apps/web/components/analyzer/settings/AccountDeleteDialog.tsx",
+        "apps/web/app/goodbye/page.tsx",
+        "apps/web/app/legal/privacy/page.tsx",
+        "apps/agent/sc2tools_agent/status_model.py",
+        "apps/agent/sc2tools_agent/ui/pairing_card.py"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/account-data/delete-account.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/agent/sc2tools_agent/status_model.py",
+          "sha256": "9b570f936ce651d7efa658c738c64c4f2c6dee528696d60b6b9ec43c80b432ec"
+        },
+        {
+          "path": "apps/agent/sc2tools_agent/ui/pairing_card.py",
+          "sha256": "4ee6494c9d2b2eb60649f62f5e0d3c27475204484f194e938fce7ceca8c570e7"
+        },
+        {
+          "path": "apps/api/__tests__/accountDeletion.test.js",
+          "sha256": "018b5c1192932a7b8414d2c26ee94b6bc04df1d01ba997460b9a77755e101a36"
+        },
+        {
+          "path": "apps/api/src/jobs/identityDeletionJob.js",
+          "sha256": "9b19ed8e2bb1c62f5df5d8c6716cde0484788e7cfac8f8e16e27fcf9bf802b10"
+        },
+        {
+          "path": "apps/api/src/routes/clerkWebhook.js",
+          "sha256": "134355f18ca1091def885b51eaee312d6c14ce349a1c0abcbf85a39071c14b48"
+        },
+        {
+          "path": "apps/api/src/routes/me.js",
+          "sha256": "0247d490ecee2dcb3be0807d33dc2cc615b1de88ee0c9f299ad59de0ac66c57c"
+        },
+        {
+          "path": "apps/api/src/services/clerkClient.js",
+          "sha256": "4029e3f9e729089d6d0f1aead214916581a21c7cc7859193796d6a8d6281deb1"
+        },
+        {
+          "path": "apps/api/src/services/dataInventory.js",
+          "sha256": "f3c08856a461f4bd7b50385935cb5e8faca9f29bb21c01d677402ac6dacb9b46"
+        },
+        {
+          "path": "apps/api/src/services/gdpr.js",
+          "sha256": "4440f06cd3b75445884cded72adad53952fcdf95a738480a417f4872b61ca3c1"
+        },
+        {
+          "path": "apps/api/src/services/gdprOwnedData.js",
+          "sha256": "062f4df88b9f3dbcffc704e02572baec146f691fff636c50c6552c15eae5ccbc"
+        },
+        {
+          "path": "apps/api/src/services/identityDeletions.js",
+          "sha256": "12a32f8f0d3d3170e6c9affc400e3face8e71458771abdb0e7d12cbd249d97e3"
+        },
+        {
+          "path": "apps/web/app/goodbye/page.tsx",
+          "sha256": "854372409a557f688bc0eb78a80cf4374bc2fcd48ef2cbbfb376f75fb1895c95"
+        },
+        {
+          "path": "apps/web/app/legal/privacy/page.tsx",
+          "sha256": "218c7f38c7c417581a60d25905d42c650456feba9bb82436f7d311a40406be02"
+        },
+        {
+          "path": "apps/web/components/analyzer/settings/AccountDeleteDialog.tsx",
+          "sha256": "1aa27578cfaaa15d914e7c30e0b38f55b21b9dd9c11a833830b4540652e06fcd"
+        },
+        {
+          "path": "apps/web/lib/help/articles/account-data/delete-account.ts",
+          "sha256": "9060d10b90d9a3eccddb716b6cbc8b8b3f5944ece4e8af00fd1faad5936edc52"
+        }
+      ],
+      "mergedPrs": [
+        687,
+        730
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 27,
+      "id": "ops-console",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "b9768f982f543b15e360af5eca0cd0017741919d13df83a7027afcce8f483e62",
+      "reason": "Best-effort capped job ledger/single flight/overdue alerts, audit middleware+400day TTL/filtered UI, safe admin revoke, bounded support snapshot, observed/cohort-capped1h activation, typed count-checked repair confirmations and shared lookup/action/result components are implemented with fixture regressions and procedures.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/api/src/util/jobLedger.js",
+        "apps/api/src/services/adminAudit.js",
+        "apps/api/src/services/adminRoles.js",
+        "apps/api/src/services/adminActivation.js",
+        "apps/api/src/routes/adminOps.js",
+        "apps/api/src/routes/admin.js",
+        "apps/api/__tests__/opsConsole.test.js",
+        "apps/web/app/admin/components/BackgroundJobs.tsx",
+        "apps/web/app/admin/components/ActivationPanel.tsx",
+        "apps/web/app/admin/components/UserLookupField.tsx",
+        "apps/web/app/admin/components/AdminActionCard.tsx",
+        "apps/web/app/admin/components/useAdminAction.ts",
+        "apps/web/app/admin/audit/page.tsx"
+      ],
+      "howtoEvidence": [
+        "docs/runbooks/admin-operations.md",
+        "docs/admin-console.md"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/__tests__/opsConsole.test.js",
+          "sha256": "a13f2b315b32f78f396c6955a00954ffa1f057fe1e09e0f2a8e760ee1717399a"
+        },
+        {
+          "path": "apps/api/src/routes/admin.js",
+          "sha256": "b77cb4404829fbee98799a618dafefd2a986bb78da219e22780defa23a2be905"
+        },
+        {
+          "path": "apps/api/src/routes/adminOps.js",
+          "sha256": "6cf948f0161a0dfa6838c0056a19535192af0c4dd7a988f4f196dab554af4391"
+        },
+        {
+          "path": "apps/api/src/services/adminActivation.js",
+          "sha256": "f5e0c23f72b2093e82446adaee99c9b2da7904c648d2cc33a88aa220d2caf63a"
+        },
+        {
+          "path": "apps/api/src/services/adminAudit.js",
+          "sha256": "144e4b6da26dab543456aafa4f34807d58127f916365de533afe1666ca18f398"
+        },
+        {
+          "path": "apps/api/src/services/adminRoles.js",
+          "sha256": "710fb9396213a0bdead092825146694262bdf7a4c0b3c3300145087e1c0b0301"
+        },
+        {
+          "path": "apps/api/src/util/jobLedger.js",
+          "sha256": "b791c9d23851ce48fffcbb9ed935ed5776938ee924d7554edb45a4fb29bd2bf7"
+        },
+        {
+          "path": "apps/web/app/admin/audit/page.tsx",
+          "sha256": "a0dc50ec40817309a9e2d8e5860f2fa487414c2affdd927497a5faad74c6edb8"
+        },
+        {
+          "path": "apps/web/app/admin/components/ActivationPanel.tsx",
+          "sha256": "bc625c7723bb10f534e4a4f0eb5cbb5f238ce30080fb797da4c11aa4482d81fe"
+        },
+        {
+          "path": "apps/web/app/admin/components/AdminActionCard.tsx",
+          "sha256": "e1aa54e6f7be06757094481a9a754dc5cb2caa2032ab18638c41e9cf6e4c8d54"
+        },
+        {
+          "path": "apps/web/app/admin/components/BackgroundJobs.tsx",
+          "sha256": "d70a6356e2953192986a6f07e3bebe0ab3d96f7efb5c3b5cbd3694d97385b626"
+        },
+        {
+          "path": "apps/web/app/admin/components/useAdminAction.ts",
+          "sha256": "a27968ecff6b8f775a6e984161af5b6f90f335d09ece31f57c62c7a1bb80e1bc"
+        },
+        {
+          "path": "apps/web/app/admin/components/UserLookupField.tsx",
+          "sha256": "179fe6be47fdc984d4771ef7de98877f959f68aba9c906188257055338eb5537"
+        },
+        {
+          "path": "docs/admin-console.md",
+          "sha256": "74b9a385a431a98a3e929aa606d2dbe97ce7d2d455cc8f997f71879df00ffe11"
+        },
+        {
+          "path": "docs/runbooks/admin-operations.md",
+          "sha256": "d4b6043bdb56b77725110debca59a787a5c1125eeec33ee40ec220a17f9fc1d5"
+        }
+      ],
+      "mergedPrs": [
+        687,
+        689,
+        728,
+        730
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 28,
+      "id": "game-page-macro-workspace",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "00740665f0e4599d68d38210fab7a93f95a7ebd8d5c06fbe1dfe89bff85002a7",
+      "reason": "Shared bounded/generation-guarded recompute/body, owner chart workspace, penalties/leaks/seeking, anchored sticky section navigation, lazy Macro/Builds, 404-only not-computed recovery and agent availability, Bank/resource and remembered metric mix are present. Later graph inspection explicitly preserves passive scroll and owner-approved build placement.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/analyzer/macro/useMacroRecompute.ts",
+        "apps/web/components/analyzer/macro/MacroBreakdownBody.tsx",
+        "apps/web/components/analyzer/macro/MacroBreakdownPanel.tsx",
+        "apps/web/components/analyzer/macro/MacroChartSection.tsx",
+        "apps/web/components/analyzer/macro/timelineMetrics.ts",
+        "apps/web/components/analyzer/game/GameDetailPage.tsx",
+        "apps/web/components/analyzer/game/GameMacroSection.tsx",
+        "apps/web/components/analyzer/game/RecomputeAnalysisAction.tsx",
+        "apps/web/components/ui/SectionNav.tsx",
+        "docs/handoff/game-navigation-checkpoint.md",
+        "docs/handoff/macro-graph-inspection-checkpoint.md"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/game-page/game-page.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/web/components/analyzer/game/GameDetailPage.tsx",
+          "sha256": "c047885ec7c10b085d4045a195c5b01d276d9cecf41bda471f3d9f7451193576"
+        },
+        {
+          "path": "apps/web/components/analyzer/game/GameMacroSection.tsx",
+          "sha256": "ffaffc5c13a66bcbf2648c7fbc273ae5e9a2e8f1048661960288029f8fd3ac61"
+        },
+        {
+          "path": "apps/web/components/analyzer/game/RecomputeAnalysisAction.tsx",
+          "sha256": "a1160d2c1e511e732e8153bcd9b4a2d3a4179267385552860418135cd9efab5f"
+        },
+        {
+          "path": "apps/web/components/analyzer/macro/MacroBreakdownBody.tsx",
+          "sha256": "deb75fc74cd5e8f7b53b2620943c89d1a11ecee3087e2b460ed9c072f07d9cd1"
+        },
+        {
+          "path": "apps/web/components/analyzer/macro/MacroBreakdownPanel.tsx",
+          "sha256": "ad43f8467fc5ff19e7ea734ebf9f06b8f253fdd4f37103d871397f3f6ebc0001"
+        },
+        {
+          "path": "apps/web/components/analyzer/macro/MacroChartSection.tsx",
+          "sha256": "04b4bdbaf34d96015efe889fea322185cb2a69b6efeea9f4d11b18f4aa0c0b8b"
+        },
+        {
+          "path": "apps/web/components/analyzer/macro/timelineMetrics.ts",
+          "sha256": "c6aeba0c9bc65b8af577d8dec42ea79e0f6325d928fc736aecc0a786669e89e5"
+        },
+        {
+          "path": "apps/web/components/analyzer/macro/useMacroRecompute.ts",
+          "sha256": "8683b5825d1335ba5f2192f972b520e42680a0b9e2aab4648700368e292c4a11"
+        },
+        {
+          "path": "apps/web/components/ui/SectionNav.tsx",
+          "sha256": "54921e0a93d56af92fbc02ce1ccafec11520fea00bde862aaa9eb2ac7be661d5"
+        },
+        {
+          "path": "apps/web/lib/help/articles/game-page/game-page.ts",
+          "sha256": "984f49a36983f666519c4938e5c899378d7aa35c62bd16ef23aa5eff3419c0f7"
+        },
+        {
+          "path": "docs/handoff/game-navigation-checkpoint.md",
+          "sha256": "3f33a6610b5fcc49b7cb55972742017831185b7e70b78ddccc292bbec5bc5d7e"
+        },
+        {
+          "path": "docs/handoff/macro-graph-inspection-checkpoint.md",
+          "sha256": "7c4ef0f2d25f2b58251aa13667b02f9cab5f1cf2de38e7bf3e2a682c0849bff7"
+        }
+      ],
+      "mergedPrs": [
+        693,
+        761,
+        774
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 35,
+      "id": "live-scouting-brief",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "a56e7fff4b54e2b5f182b60ce04f8793f1bf8a699350a17344099af48e7cb8ec",
+      "reason": "Owner card, loading/start Today placement/in-game bar, large second screen/wake lock, 30s retirement, exact-toon dossier/note action, metadata/opening counts/recent linked meetings and separate Dock explicit safe projection are implemented without an added provider/read fanout. First-meeting identity fields and phone compaction are retained.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/scouting/ScoutingBriefCard.tsx",
+        "apps/web/components/scouting/ScoutingFacts.tsx",
+        "apps/web/components/scouting/ScoutingNotePopover.tsx",
+        "apps/web/components/scouting/LiveScoutingScreen.tsx",
+        "apps/web/components/scouting/useLiveScouting.ts",
+        "apps/web/lib/liveScouting.ts",
+        "apps/web/components/dock/DockScout.tsx",
+        "apps/api/src/services/overlayLiveEnrichment.js",
+        "docs/handoff/live-scouting-brief-checkpoint.md"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/analyzer/live-scouting.ts",
+        "apps/web/lib/help/articles/analyzer/today.ts",
+        "apps/web/lib/streamStudioLearn.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/src/services/overlayLiveEnrichment.js",
+          "sha256": "343e890932b453c505e5073b76db327b9f64be55739739167b3fb32a4600028b"
+        },
+        {
+          "path": "apps/web/components/dock/DockScout.tsx",
+          "sha256": "58c72e5541a68aadb9d73ba85b91f7d7a9a35d732b06e9d298ec60148c333873"
+        },
+        {
+          "path": "apps/web/components/scouting/LiveScoutingScreen.tsx",
+          "sha256": "ea4324c7fca2b44401d4ca9e4ef961c8518930f4a3fe3bce642e07695d7b3857"
+        },
+        {
+          "path": "apps/web/components/scouting/ScoutingBriefCard.tsx",
+          "sha256": "a06a6c58da12e2505056e67c92047ecfdfbc30933e04423c656a057bcaa2d703"
+        },
+        {
+          "path": "apps/web/components/scouting/ScoutingFacts.tsx",
+          "sha256": "cb9e71acc91f9db9334df64d04bcc7ed74ac8ac8d20644645fda5ebf170c4119"
+        },
+        {
+          "path": "apps/web/components/scouting/ScoutingNotePopover.tsx",
+          "sha256": "97fa76159abab05fe13ddaf0bad33e0d80717a618e4c647d521fc9080113aaa9"
+        },
+        {
+          "path": "apps/web/components/scouting/useLiveScouting.ts",
+          "sha256": "006cc23a87f30760cfcdc070ab161b8ee7ba3431fa92c45522538f88abb9b708"
+        },
+        {
+          "path": "apps/web/lib/help/articles/analyzer/live-scouting.ts",
+          "sha256": "68fcb2ed10644fbb0e6f5161a84d97e7b5505646e9c22467e555d6d5ecccc814"
+        },
+        {
+          "path": "apps/web/lib/help/articles/analyzer/today.ts",
+          "sha256": "d4795a4f06ede7f050b1c4473aae0038be1814a56d959bd3e5d48e501ab9892b"
+        },
+        {
+          "path": "apps/web/lib/liveScouting.ts",
+          "sha256": "4c227e886dd8d2a174ca4e5ca3bca596e6aab68221dda9bc432bca0e4f98455c"
+        },
+        {
+          "path": "apps/web/lib/streamStudioLearn.ts",
+          "sha256": "21e6fce6d182513bf0f5258dc4bae92f9397f5368b9d8f6bd5f6e6a91a5abd0f"
+        },
+        {
+          "path": "docs/handoff/live-scouting-brief-checkpoint.md",
+          "sha256": "4db8a59fadb36cd0e42c950d2ea834e1b44f69498b36c130b3b83c6525b4bff3"
+        }
+      ],
+      "mergedPrs": [
+        725,
+        747
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 36,
+      "id": "live-scouting-v2",
+      "oldStatus": "unknown",
+      "newStatus": "partial",
+      "canonicalRequirementSha256": "900573b30001bc3247c39f1eafb5de93cff0ee2899793db8b5c279ee734a5ed5",
+      "reason": "Approved/cache-only identity grouping<=20 and owner-saved preference feed a shared bounded50-row deterministic posterior, recency8/map1.5/prior3, count explanations and explicit incomplete-source withholding. Dossier/live/web/overlay source and golden/identity/preference tests are present. Owner setup explicitly says installed desktop retains old compatible brief until a future ordinary update includes new confidence copy.",
+      "remainingRequirements": [
+        "Complete or reconcile the native delivery of updated forecast/confidence/also-account display: owner setup explicitly retains old installed brief pending a future ordinary desktop update. Verify the actual released agent before claiming all surfaces agree; do not create an unnecessary release if that later release already contains it."
+      ],
+      "sourceEvidence": [
+        "apps/api/src/services/scoutingIdentities.js",
+        "apps/api/src/services/openingForecast.js",
+        "apps/api/src/services/scoutingForecast.js",
+        "apps/api/src/util/opponentScoutingPreferences.js",
+        "apps/web/lib/openingForecast.ts",
+        "apps/web/lib/liveScouting.ts",
+        "apps/web/lib/streamStudioLearn.ts",
+        "docs/handoff/live-scouting-v2-checkpoint.md",
+        "docs/handoff/plan/owner-setup.md"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/stream-studio/opponent-scouting.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/src/services/openingForecast.js",
+          "sha256": "34ed1c6b3613c4d8e8a64b656b3be87bb41ca710ffacfe5f26f11b2eb3f30719"
+        },
+        {
+          "path": "apps/api/src/services/scoutingForecast.js",
+          "sha256": "60ec031172a75c9f98198ab365dbf0f67b235c89608844576704eaa1db43438e"
+        },
+        {
+          "path": "apps/api/src/services/scoutingIdentities.js",
+          "sha256": "ac60b10b42d11e104237600f4ccb4cf2322359013f99fe7c784bb383aa62a78e"
+        },
+        {
+          "path": "apps/api/src/util/opponentScoutingPreferences.js",
+          "sha256": "63b90a2db736a14e4a9b6bb13a8bfe1f0e6b9b0f1edfa97d5ad630f6216bbe34"
+        },
+        {
+          "path": "apps/web/lib/help/articles/stream-studio/opponent-scouting.ts",
+          "sha256": "88c78b1ce85ffa97488d59fe566026024c06e2611aebafe30de6e11879015bf1"
+        },
+        {
+          "path": "apps/web/lib/liveScouting.ts",
+          "sha256": "4c227e886dd8d2a174ca4e5ca3bca596e6aab68221dda9bc432bca0e4f98455c"
+        },
+        {
+          "path": "apps/web/lib/openingForecast.ts",
+          "sha256": "e863c3de6a2d0c321593c1a01a2bf7bdc563134f3dcab9458006969d762f6ac1"
+        },
+        {
+          "path": "apps/web/lib/streamStudioLearn.ts",
+          "sha256": "21e6fce6d182513bf0f5258dc4bae92f9397f5368b9d8f6bd5f6e6a91a5abd0f"
+        },
+        {
+          "path": "docs/handoff/live-scouting-v2-checkpoint.md",
+          "sha256": "92dccacfafbd12b23d88d3510f970b0cd80364fda7e017c4005011411a33a57d"
+        },
+        {
+          "path": "docs/handoff/plan/owner-setup.md",
+          "sha256": "5ca11dbbb2d7d9b2717fee0060ee790b8a691fe6369a09cc97dbd7c4d3be9e47"
+        }
+      ],
+      "mergedPrs": [
+        731
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 47,
+      "id": "dock-game-desk",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "daf79cef7d3d373ea590c01ffc8f555ae8b786a5ad3b10eba62e8b2f74b7e79e",
+      "reason": "300px game facts/sticky status/session/connection/presence, tally/lock/cancel/confirmed gated manual result, non-scoring manual/cancelled rounds, monotonic session reset, strict widget pause and approved exact-current-opponent shoutout/bot/copy paths are implemented. Later owner Chat-first layout correction supersedes original first-Game placement; missing live map is honestly labelled.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/dock/DockGame.tsx",
+        "apps/web/components/dock/DockStatusHeader.tsx",
+        "apps/web/components/dock/DockClient.tsx",
+        "apps/web/lib/multichat/useStudioUpdates.ts",
+        "apps/api/src/services/gameDesk.js",
+        "apps/api/src/services/multichatEngagement.js",
+        "apps/api/src/services/opponentChannels.js",
+        "docs/handoff/game-desk-checkpoint.md",
+        "docs/handoff/streamdock-layout-checkpoint.md"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/stream-studio/stream-dock.ts",
+        "apps/web/lib/help/articles/stream-studio/viewer-engagement.ts",
+        "apps/web/lib/streamStudioLearn.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/src/services/gameDesk.js",
+          "sha256": "f19f15e79b1a77fe99d0789b6aea4d26818d7a1690e68ba04d8c1c4c29985741"
+        },
+        {
+          "path": "apps/api/src/services/multichatEngagement.js",
+          "sha256": "383ea81658c7a841627dd3a1dd053b17d0c094b6a62431f39578903ec8defbad"
+        },
+        {
+          "path": "apps/api/src/services/opponentChannels.js",
+          "sha256": "1b37bdbf3cd3f8b5068a571a21f12bc602399fb9e568c121fe043c04a5e797be"
+        },
+        {
+          "path": "apps/web/components/dock/DockClient.tsx",
+          "sha256": "498a0126aa3f9a36b3dd19b21c1c71455954ac1fbb806abd302ccf6888c0f8e0"
+        },
+        {
+          "path": "apps/web/components/dock/DockGame.tsx",
+          "sha256": "0c9a733a2d354b3cd191ae45903af3b311a2e88a1679635ea616a3f06cccaad1"
+        },
+        {
+          "path": "apps/web/components/dock/DockStatusHeader.tsx",
+          "sha256": "e9f48edeae36e44c2658ad087d5cbc5c622e4e1585ff63419ea4e7cca494aaa7"
+        },
+        {
+          "path": "apps/web/lib/help/articles/stream-studio/stream-dock.ts",
+          "sha256": "aec1a08144382a92314c2316f9c25b1d794443aa7609c23c6d9fe10d7c620601"
+        },
+        {
+          "path": "apps/web/lib/help/articles/stream-studio/viewer-engagement.ts",
+          "sha256": "e7c85e2ab274166947985c2ad9c3a01964e2a62f90b115ddc9281e207a3cb310"
+        },
+        {
+          "path": "apps/web/lib/multichat/useStudioUpdates.ts",
+          "sha256": "fdcb7c4c9b0e15a423a021d8820054053fef1ec992e4b8b4fab916e67c4ffdc6"
+        },
+        {
+          "path": "apps/web/lib/streamStudioLearn.ts",
+          "sha256": "21e6fce6d182513bf0f5258dc4bae92f9397f5368b9d8f6bd5f6e6a91a5abd0f"
+        },
+        {
+          "path": "docs/handoff/game-desk-checkpoint.md",
+          "sha256": "14d9865b47af48b062babd4b8c2b12e6fc06e82ce5a51cffc6d7bc64442bda4e"
+        },
+        {
+          "path": "docs/handoff/streamdock-layout-checkpoint.md",
+          "sha256": "2b73b7b48a25c4329f5fb1eb8c769adac70fde4bc9f5382e6825fa1df583718f"
+        }
+      ],
+      "mergedPrs": [
+        732,
+        785
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 52,
+      "id": "chat-commands-v2",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "751bd1b164529404fbd96754bceb2d077fe64eb0f35b2ee2c68ff1984f05781a",
+      "reason": "Single generated registry drives deterministic built-ins across bot/Nightbot/on-stream paths; strict25-command plain-text variable/platform settings, aliases/cooldowns, owner saved preview/table and safe snippet copy exist with transport parity/lifecycle tests. No bot enablement/post is inferred from implementation.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/api/src/services/chatCommands.js",
+        "apps/api/src/services/chatbot.js",
+        "apps/api/src/routes/chatbot.js",
+        "apps/api/src/routes/chatCommandsOwner.js",
+        "apps/api/src/services/twitchChatBot.js",
+        "apps/api/__tests__/chatCommands.transports.test.js",
+        "apps/web/components/analyzer/settings/ChatCommandsEditor.tsx",
+        "apps/web/components/analyzer/settings/ChatCommandsCard.tsx",
+        "docs/handoff/chat-commands-checkpoint.md"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/stream-studio/custom-chat-commands.ts",
+        "apps/web/lib/help/articles/stream-studio/viewer-engagement.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/__tests__/chatCommands.transports.test.js",
+          "sha256": "ee9192f1e9baf7d6d49a76290998e1f9020bd949177af2aa4fdec0a91c63bc08"
+        },
+        {
+          "path": "apps/api/src/routes/chatbot.js",
+          "sha256": "36a11abe597f1f9986f0be1631f81301f611bcfc2e86a0aec8b189064b3d2d05"
+        },
+        {
+          "path": "apps/api/src/routes/chatCommandsOwner.js",
+          "sha256": "1a1fb4dcbbc318080d09b7ff6cd35a51ab12450cc1f8f848ad30541ccee3c9cc"
+        },
+        {
+          "path": "apps/api/src/services/chatbot.js",
+          "sha256": "8c2cc3ab4104b430f7bfe5b2972a9500b0eaf8197004e3e9b7fba6b8c903ae82"
+        },
+        {
+          "path": "apps/api/src/services/chatCommands.js",
+          "sha256": "1ea8f34d0ce6a18359454062d67db9dedf01ee6103b31a4d1976917f18d678e1"
+        },
+        {
+          "path": "apps/api/src/services/twitchChatBot.js",
+          "sha256": "181912d5261b5c17ef92a1002fae5df3a0bf3dd5b581067b797fdbc83800c8a5"
+        },
+        {
+          "path": "apps/web/components/analyzer/settings/ChatCommandsCard.tsx",
+          "sha256": "bbb454b1ccb32dccb5cd4f94b223ebbb721b4015738e1d9239ecb25aef4d05c2"
+        },
+        {
+          "path": "apps/web/components/analyzer/settings/ChatCommandsEditor.tsx",
+          "sha256": "99cbd5c143a30787c407fa09f38a5159027179528d3e21572bc858797dad2388"
+        },
+        {
+          "path": "apps/web/lib/help/articles/stream-studio/custom-chat-commands.ts",
+          "sha256": "cd11744c8900a497c29a9770804156b0273026c10a3b84b209a1353431a2c345"
+        },
+        {
+          "path": "apps/web/lib/help/articles/stream-studio/viewer-engagement.ts",
+          "sha256": "e7c85e2ab274166947985c2ad9c3a01964e2a62f90b115ddc9281e207a3cb310"
+        },
+        {
+          "path": "docs/handoff/chat-commands-checkpoint.md",
+          "sha256": "11a869d0e7e2146cd27bfb97473201d89b79b81cd0787a24e1b1b1a2be0e2b84"
+        }
+      ],
+      "mergedPrs": [
+        687,
+        737
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 68,
+      "id": "contrast-tokens-and-a11y-gate",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "7e64ba456471594159e21edc03797b6b7f70a491a054c3ac56a84071851d2288",
+      "reason": "Split ink/fill and retuned semantic/race tokens, actual contrast matrix/generated guide, System persistence/bootstrap/OS subscription/meta updates, contextual compact theme controls, warning a11y lint, empty-allowlist public AA/keyboard CI gate and public statement/Help are implemented. Historical126 axe scans are scoped fixtures, not universal WCAG conformance.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/app/globals.css",
+        "apps/web/tailwind.config.ts",
+        "apps/web/lib/theme.ts",
+        "apps/web/lib/__tests__/contrastTokens.test.ts",
+        "apps/web/app/layout.tsx",
+        "apps/web/tests/e2e/public-pages.spec.ts",
+        "apps/web/tests/e2e/accessibility-check.ts",
+        "apps/web/app/legal/accessibility/page.tsx",
+        "docs/handoff/contrast-accessibility-checkpoint.md"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/account-data/appearance.ts",
+        "docs/design-system.md"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/web/app/globals.css",
+          "sha256": "16bd173d8071c7d682d929c4983e4766aae774bf91d251928f84d704480ef971"
+        },
+        {
+          "path": "apps/web/app/layout.tsx",
+          "sha256": "3d6fcf1c5619ff39eb99879497e7815fdbbf93a971d47228729ba4ad31bda4c5"
+        },
+        {
+          "path": "apps/web/app/legal/accessibility/page.tsx",
+          "sha256": "e8b00f849987c03bffc8f34cb3f17e831fd9aac47696bf6850fe1a451ab09ff1"
+        },
+        {
+          "path": "apps/web/lib/__tests__/contrastTokens.test.ts",
+          "sha256": "a9a09d2e690df72548ff2c8376888d9395eeab80365e6477314b2983704d9552"
+        },
+        {
+          "path": "apps/web/lib/help/articles/account-data/appearance.ts",
+          "sha256": "d025a463d96882744ae227632a5ff27b0d51b1b47c4c6545e129054967a19568"
+        },
+        {
+          "path": "apps/web/lib/theme.ts",
+          "sha256": "b0ac307cf7338c678faa21611b334d206f4782958666cab9e2b83e54c691392a"
+        },
+        {
+          "path": "apps/web/tailwind.config.ts",
+          "sha256": "e2738f087fd02ef0dbd606ce03dc9d0ad017960cfe0cbba3d6aa6d4b04d11bc5"
+        },
+        {
+          "path": "apps/web/tests/e2e/accessibility-check.ts",
+          "sha256": "9282570cdbe035255af23d0bb477891a5838ca7d7ecf278b16cdb4271bda50fb"
+        },
+        {
+          "path": "apps/web/tests/e2e/public-pages.spec.ts",
+          "sha256": "8cce36415ff61d7088e4809d9f4a1d8d8262e5f290ada3640b8ea8f5a162d8cc"
+        },
+        {
+          "path": "docs/design-system.md",
+          "sha256": "d594a2a056bfcecfeb403ff6a5ad23a7a09e29ec19184607b2b1523312af5833"
+        },
+        {
+          "path": "docs/handoff/contrast-accessibility-checkpoint.md",
+          "sha256": "9017cd04c207cc6333e7d86b1c449be10dc00a140889b9c5d6e37dd8ed91c127"
+        }
+      ],
+      "mergedPrs": [
+        752
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 102,
+      "id": "analyzer-home-polish-1",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "23c7e7bf516fc155126a7bd811a132c3c4834d2eea40deea0f67a46e8527b671",
+      "reason": "Revision-keyed KPI reads/honest error Retry, accessible win-rate menu/Pulse link and lead-first phone grid plus skeletons are present. Server cookie-scoped initial default-view redirect supersedes the old client bounce; later Sessions replaces calendar Today card and currentPR799 preserves compact independent rows. Help documents current session/default behavior.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/analyzer/DashboardKpiStrip.tsx",
+        "apps/web/components/analyzer/__tests__/DashboardKpiStrip.live.test.tsx",
+        "apps/web/components/dashboard/AnalyzerFrame.tsx",
+        "apps/web/components/dashboard/TodayView.tsx",
+        "apps/web/app/app/page.tsx",
+        "apps/web/app/app/loading.tsx",
+        "apps/web/app/app/layout.tsx",
+        "apps/web/lib/appSession.ts",
+        "apps/web/components/sessions/CurrentSessionCard.tsx",
+        "docs/handoff/rating-window-macro-placement-checkpoint.md"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/analyzer/today.ts",
+        "apps/web/lib/help/articles/getting-started/settings-overview.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/web/app/app/layout.tsx",
+          "sha256": "a74f7d8e00cb4e5d6b8ea53776b596d12a65c748dcca8d48700f22a4bc1b7894"
+        },
+        {
+          "path": "apps/web/app/app/loading.tsx",
+          "sha256": "3b65e40b3a8b731401c515dbc85c678afe07824d91330fd6237e5a230f12fe5e"
+        },
+        {
+          "path": "apps/web/app/app/page.tsx",
+          "sha256": "01a7cc9c3bbf0c63fc76c88fe1f05042e520ca7cc06f0dab72e2d4bb7285fbed"
+        },
+        {
+          "path": "apps/web/components/analyzer/__tests__/DashboardKpiStrip.live.test.tsx",
+          "sha256": "3eaae5b83893a1d7d1ae05dbef6bed8827f77ed90651ff9c1a6c5055f518ff82"
+        },
+        {
+          "path": "apps/web/components/analyzer/DashboardKpiStrip.tsx",
+          "sha256": "593cc58e052992f2b29eb5b690fea41e716f7a70a0263f8f69a34d8b257888ed"
+        },
+        {
+          "path": "apps/web/components/dashboard/AnalyzerFrame.tsx",
+          "sha256": "df64ee7347268bb3e6a556002062b0dc7c398da65b6e5d70a41b9fac9a59ecbf"
+        },
+        {
+          "path": "apps/web/components/dashboard/TodayView.tsx",
+          "sha256": "a89a8d2c44e7d8c68172052ac9326ef56636e09a842630ad907a76f42c518b85"
+        },
+        {
+          "path": "apps/web/components/sessions/CurrentSessionCard.tsx",
+          "sha256": "7e71eef2d2cb0532bec6bce96507cc496bfb79f6d00f0fc23d41d329b853730a"
+        },
+        {
+          "path": "apps/web/lib/appSession.ts",
+          "sha256": "71990a55d355d90436164831ea44018a3470579b438a6aa1acab1808f20700ba"
+        },
+        {
+          "path": "apps/web/lib/help/articles/analyzer/today.ts",
+          "sha256": "d4795a4f06ede7f050b1c4473aae0038be1814a56d959bd3e5d48e501ab9892b"
+        },
+        {
+          "path": "apps/web/lib/help/articles/getting-started/settings-overview.ts",
+          "sha256": "45b676a2ffb3073604589e81963d138c8933886e3aa706030906473110ba204e"
+        },
+        {
+          "path": "docs/handoff/rating-window-macro-placement-checkpoint.md",
+          "sha256": "bcacfb83f2a87c274bce8b8f8b0abdd9888140a1b33adfef5a0a1090b775d154"
+        }
+      ],
+      "mergedPrs": [
+        669,
+        759,
+        782
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 103,
+      "id": "analyzer-home-polish-2",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "f059d4efecd0fbd97b8b7e89096a108f4d3397526e52d6c23f81ec82c03de5a5",
+      "reason": "Compact ordered summary/active-count, desktop inline facets+More and phone all-facet sheet,44px/coarse targets/plain legends/45s constant, shared popup focus, Today remembered slim disclosure and Arcade exclusion are present. Copy/Daily naming and filters Help reflect wire-compatible behavior; later shared Popover/Sheet migration is preserved.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/analyzer/FilterBar.tsx",
+        "apps/web/components/analyzer/FilterSheet.tsx",
+        "apps/web/components/analyzer/MoreFiltersPopover.tsx",
+        "apps/web/components/analyzer/GameLengthFilter.tsx",
+        "apps/web/components/analyzer/FilterPill.tsx",
+        "apps/web/components/dashboard/AnalyzerFrame.tsx",
+        "apps/web/lib/filterContext.ts",
+        "apps/web/lib/a11y/useFocusTrap.ts",
+        "docs/handoff/filter-overlays-checkpoint.md",
+        "docs/handoff/plan/owner-setup.md"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/analyzer/analyzer-filters.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/web/components/analyzer/FilterBar.tsx",
+          "sha256": "facac4dff68b24271dfe12620a337c4cd01301654543e6b1a2aa8ed5f18ad764"
+        },
+        {
+          "path": "apps/web/components/analyzer/FilterPill.tsx",
+          "sha256": "0f0b1626f0f1e8e358ca5edaf2ff62c6e0d6f757621ef6145cdb39042f41bf80"
+        },
+        {
+          "path": "apps/web/components/analyzer/FilterSheet.tsx",
+          "sha256": "9efe8123328d3e7d9bd453307b518b3704177419cf8bae058bfce743e8d137d0"
+        },
+        {
+          "path": "apps/web/components/analyzer/GameLengthFilter.tsx",
+          "sha256": "53218b742321075379f21f1f1d211fb3c26dc6086ab7a14f1aca5c45cd75dcac"
+        },
+        {
+          "path": "apps/web/components/analyzer/MoreFiltersPopover.tsx",
+          "sha256": "376c55c75b993f023a167c70c40b895fe6739109b91c67a597b57bb55f84e7d2"
+        },
+        {
+          "path": "apps/web/components/dashboard/AnalyzerFrame.tsx",
+          "sha256": "df64ee7347268bb3e6a556002062b0dc7c398da65b6e5d70a41b9fac9a59ecbf"
+        },
+        {
+          "path": "apps/web/lib/a11y/useFocusTrap.ts",
+          "sha256": "c95712fdaa6f2f87ab0762cd0ae1dcca733e75de4c789a214f0883b75a4e155d"
+        },
+        {
+          "path": "apps/web/lib/filterContext.ts",
+          "sha256": "ebb100ed3b38bfee9459a9b7331d4792ec4c7ba36ab6ddb1babd3932b54d76de"
+        },
+        {
+          "path": "apps/web/lib/help/articles/analyzer/analyzer-filters.ts",
+          "sha256": "65e196f5bb5ed04c0a772b73fa472eebd5160fbc941e8bedbc888d4410b7c929"
+        },
+        {
+          "path": "docs/handoff/filter-overlays-checkpoint.md",
+          "sha256": "5074c4cc2020ded6d018f31433a550b7e144c0ad442106cb1dfa9c8fce0d6187"
+        },
+        {
+          "path": "docs/handoff/plan/owner-setup.md",
+          "sha256": "5ca11dbbb2d7d9b2717fee0060ee790b8a691fe6369a09cc97dbd7c4d3be9e47"
+        }
+      ],
+      "mergedPrs": [
+        669,
+        759,
+        782
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 104,
+      "id": "analyzer-home-polish-3",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "243c5a3242d39ee6d64d2d70c1d4f6aaf568b3b6b7ebaeb24c4007cef4eede9f",
+      "reason": "Validated post-mount bucket/collapse preferences, shared over-time buckets, sticky jump links/heading focus/reduced motion, unmounted collapsed groups and stable summary skeleton/error are present. Later demand-loading reuses this nav, loads on intent/approach and keeps passive callbacks from scrolling; Help matches current behavior.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/analyzer/TrendsTab.tsx",
+        "apps/web/components/analyzer/DeferredSection.tsx",
+        "apps/web/lib/useLocalStorageState.ts",
+        "docs/handoff/trends-demand-loading-checkpoint.md"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/analyzer/trends.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/web/components/analyzer/DeferredSection.tsx",
+          "sha256": "c5608ad0389671e05a301fec7e46935e844ff3b9680548c7a98eb4fd3cc4f7c1"
+        },
+        {
+          "path": "apps/web/components/analyzer/TrendsTab.tsx",
+          "sha256": "59113de672ed230cbeebb2bb8d29816b07962d15cdc9244991350908a6707d9e"
+        },
+        {
+          "path": "apps/web/lib/help/articles/analyzer/trends.ts",
+          "sha256": "99f39a8f4375da7cc7c04f91ae7426c05c0ebe427fef7a182782d3eb7e0561c3"
+        },
+        {
+          "path": "apps/web/lib/useLocalStorageState.ts",
+          "sha256": "bcb562b3c72ab349f0fc9bc2cf2320996997d220eba1c87e8729e68980258561"
+        },
+        {
+          "path": "docs/handoff/trends-demand-loading-checkpoint.md",
+          "sha256": "e5b9059b88b07102ea42eb9b37a96e8a6d42527969a780e6076521dd8cdd8cdc"
+        }
+      ],
+      "mergedPrs": [
+        669,
+        759,
+        782
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 110,
+      "id": "game-page-expansion-1",
+      "oldStatus": "unknown",
+      "newStatus": "partial",
+      "canonicalRequirementSha256": "b659583f6fcd6f4092a456105e7331738cc986e924b05a51fd244d7a28436d42",
+      "reason": "Existing battle-card image ShareGameButton and separate shared-clock moment-link helpers are delivered. Header still imports the image-only ShareGameButton; no unified ShareMenu or useReplaySharing abstraction is present.",
+      "remainingRequirements": [
+        "Implement the specified keyboard/viewport-safe ShareMenuItem array: owner game link, current shared-clock moment link, consent-aware public link or enable-sharing confirmation and battle-card image.",
+        "Extract/reuse replay-sharing state with library controls, preserve resumed-game exclusion and failure/401 hiding, clipboard recovery and in-flight state.",
+        "Add source tests for menu/consent/keyboard/image/moment contracts and game-page#sharing Help with the current public-analysis sign-in/notes privacy wording."
+      ],
+      "sourceEvidence": [
+        "apps/web/components/analyzer/game/ShareGameButton.tsx",
+        "apps/web/components/analyzer/game/GameDetailShell.tsx",
+        "apps/web/components/analyzer/replays/ReplayLibrary.tsx",
+        "apps/web/components/analyzer/game/GameDetailPage.tsx"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/game-page/game-page.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/web/components/analyzer/game/GameDetailPage.tsx",
+          "sha256": "c047885ec7c10b085d4045a195c5b01d276d9cecf41bda471f3d9f7451193576"
+        },
+        {
+          "path": "apps/web/components/analyzer/game/GameDetailShell.tsx",
+          "sha256": "9fc8ecefaa68df76496f80bd6054ffb14d51e4ef110487899fc64ad4ed977ced"
+        },
+        {
+          "path": "apps/web/components/analyzer/game/ShareGameButton.tsx",
+          "sha256": "475e7436a3fc8d5f72fe83ffa9296c499cc3f5af6877eda476712711e3425f7a"
+        },
+        {
+          "path": "apps/web/components/analyzer/replays/ReplayLibrary.tsx",
+          "sha256": "59b9772335be42b48615ef530722cfd5284f352a7571500a6cf9a2990775f3ae"
+        },
+        {
+          "path": "apps/web/lib/help/articles/game-page/game-page.ts",
+          "sha256": "984f49a36983f666519c4938e5c899378d7aa35c62bd16ef23aa5eff3419c0f7"
+        }
+      ],
+      "mergedPrs": [
+        690,
+        693,
+        704
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 116,
+      "id": "builds-polish-2",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "56a45f62b2e6dadd5d39112c41f8f45b09b340f43f9894ba1f8b55e2bf02e202",
+      "reason": "Shared dirty-close guard/beforeunload/save-clean path, wrapping SaveBar errors, global-toast-with-fallback, seeded bounded private notes/initial focus, signature-preserving rich launcher and definition/strategy card are present with API metadata-only preservation tests. Later unified editor supersedes retired Sheet create path.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/builds/editor/BuildEditorModal.tsx",
+        "apps/web/components/builds/editor/useBuildEditorCloseGuard.tsx",
+        "apps/web/components/builds/editor/BuildEditorBasics.tsx",
+        "apps/web/components/builds/editor/BuildEditorSaveBar.tsx",
+        "apps/web/components/builds/editor/useBuildEditorState.ts",
+        "apps/web/components/builds/EditCustomBuildLauncher.tsx",
+        "apps/web/components/builds/BuildDefinitionCard.tsx",
+        "apps/api/__tests__/customBuildsCreateOnly.test.js",
+        "docs/handoff/unified-build-editor-checkpoint.md",
+        "docs/handoff/build-dialogs-checkpoint.md"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/builds/custom-builds.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/__tests__/customBuildsCreateOnly.test.js",
+          "sha256": "5c60d0177de0c3724526bd8d31ab217bbaa71757bd26e3ba97c1676352b9b821"
+        },
+        {
+          "path": "apps/web/components/builds/BuildDefinitionCard.tsx",
+          "sha256": "f07003dc6db5bf1b711a500504a8bfdc052cbbe8ba44a54c7ae1983b5a79b3e4"
+        },
+        {
+          "path": "apps/web/components/builds/EditCustomBuildLauncher.tsx",
+          "sha256": "e6c7db44be9d44da2e6a9408ce815693444837b2dc321956b5ef530b3a1884b7"
+        },
+        {
+          "path": "apps/web/components/builds/editor/BuildEditorBasics.tsx",
+          "sha256": "f1e1cb33fc0c7663d725cf66fea1c1cf3f6efccb21b9cb942996000f73aec6eb"
+        },
+        {
+          "path": "apps/web/components/builds/editor/BuildEditorModal.tsx",
+          "sha256": "b56f89676be7ada5ba4c7eaf1af0816b65282294d4535338678e032be7931524"
+        },
+        {
+          "path": "apps/web/components/builds/editor/BuildEditorSaveBar.tsx",
+          "sha256": "efe32806e5bf4f30e61d5e3a627ae4620e5cd530be4e0d2e46977040a83d1686"
+        },
+        {
+          "path": "apps/web/components/builds/editor/useBuildEditorCloseGuard.tsx",
+          "sha256": "3ece6b86e55b02027ec84cd8f547020cda8f134bce2246d08495a0badb52d197"
+        },
+        {
+          "path": "apps/web/components/builds/editor/useBuildEditorState.ts",
+          "sha256": "6431883333610b77885290ac47fc5df539e34d1ad892995f25c8524ef7f10860"
+        },
+        {
+          "path": "apps/web/lib/help/articles/builds/custom-builds.ts",
+          "sha256": "2583ab71e81faedb507ea4c44a8cb9ea7ce3633c68c303cf466afeb42e1339ed"
+        },
+        {
+          "path": "docs/handoff/build-dialogs-checkpoint.md",
+          "sha256": "15d0362606edc492448b17da381350118fc5483cc421685bd65ba858d8abe119"
+        },
+        {
+          "path": "docs/handoff/unified-build-editor-checkpoint.md",
+          "sha256": "76e10fe381dece496becde073dc1065284a9ccd08846a9176337b0c921bc40b9"
+        }
+      ],
+      "mergedPrs": [
+        664,
+        687,
+        699,
+        746,
+        764,
+        790
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 117,
+      "id": "builds-polish-3",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "2510a3347b06c5c5904dbc961774cd592a637b63f4c3629cf89f0a8b4da233c7",
+      "reason": "Header-preserving single zero state/rematch/edit/pending-checkin actions, low-sample caution, actual recent20 results/rolling10 trend, full-page-only observer nav and keyboard disclosures/open links/result helper/local sort/filter/capped-list/retry implement the original. Later timing/plan sections are hidden in zero state and registered in nav.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/builds/BuildDossier.tsx",
+        "apps/web/components/builds/BuildDossierEmpty.tsx",
+        "apps/web/components/builds/BuildDossierNav.tsx",
+        "apps/web/components/builds/BuildGamesTable.tsx",
+        "apps/web/components/builds/BuildDetailView.tsx",
+        "apps/web/components/analyzer/game/types.ts",
+        "apps/web/components/builds/BuildDossierEmpty.test.tsx",
+        "apps/web/components/builds/BuildGamesTable.test.tsx"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/builds/custom-builds.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/web/components/analyzer/game/types.ts",
+          "sha256": "57316ebeea317682049d55c8769e0134bb08d03183c02ef8b21697dc86ce0c8c"
+        },
+        {
+          "path": "apps/web/components/builds/BuildDetailView.tsx",
+          "sha256": "e7c878fb6da49b1df16af3dc76c6121d546df50a0bfbe9d79bf96e51f6d6a571"
+        },
+        {
+          "path": "apps/web/components/builds/BuildDossier.tsx",
+          "sha256": "612468f62033811d4454115715b6316d803a9d61de955dfb0c05fc3d3786742d"
+        },
+        {
+          "path": "apps/web/components/builds/BuildDossierEmpty.test.tsx",
+          "sha256": "9cc57a0b7ac7344be7f0ff3e86ff927d29b500b862545f8df124a877a63a928c"
+        },
+        {
+          "path": "apps/web/components/builds/BuildDossierEmpty.tsx",
+          "sha256": "22dcaf9bde98809dcbf9d6ef43398051c471d1100d391cbe02d39945ff57295f"
+        },
+        {
+          "path": "apps/web/components/builds/BuildDossierNav.tsx",
+          "sha256": "90ec560254a62e1333aeae4521599cc5aa0948fe746bfe34d1deb50c15a94708"
+        },
+        {
+          "path": "apps/web/components/builds/BuildGamesTable.test.tsx",
+          "sha256": "3d257bef68fca5d98e74e3142173c365fbfbccad001032e1620cc6a4ca44361e"
+        },
+        {
+          "path": "apps/web/components/builds/BuildGamesTable.tsx",
+          "sha256": "ceb0640e69d021b9c0df9c24d33e20064d551e86bfe167f88eaa4faedcb4b8ea"
+        },
+        {
+          "path": "apps/web/lib/help/articles/builds/custom-builds.ts",
+          "sha256": "2583ab71e81faedb507ea4c44a8cb9ea7ce3633c68c303cf466afeb42e1339ed"
+        }
+      ],
+      "mergedPrs": [
+        664,
+        687,
+        699,
+        746,
+        764,
+        790
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 118,
+      "id": "builds-polish-4",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "001f44776035d4a5a43fdbbf08d6b935d6134fb0852bfe52cc0d0ac22902c82f",
+      "reason": "Shared lazy authoritative publication actions, safe private duplicate(createOnly/unlocked/preserved notes+source), consistent publish/update/unpublish/copy/delete disclosure, single played-or-edited age/low-sample/skeleton stats and API lastPlayed cursor ordering implement scoped library polish; later dialog fixes retain draft/owner fences.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/builds/BuildPublicationActions.tsx",
+        "apps/web/components/builds/EditCustomBuildLauncher.tsx",
+        "apps/web/components/builds/BuildCard.tsx",
+        "apps/web/components/builds/BuildDetailView.tsx",
+        "apps/web/components/builds/BuildDossierModal.tsx",
+        "apps/web/components/builds/BuildPublishModal.tsx",
+        "apps/web/components/builds/BuildFilterBar.tsx",
+        "apps/api/src/services/customBuildPages.js"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/builds/custom-builds.ts",
+        "apps/web/lib/help/articles/builds/publish-community-builds.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/src/services/customBuildPages.js",
+          "sha256": "fa035896569ed1d837259607f7a256b3966a74b60cf1dc93f9c8086dd98b1d5e"
+        },
+        {
+          "path": "apps/web/components/builds/BuildCard.tsx",
+          "sha256": "f146c6b6675ba4fc165e22dfa0f10a7a71be0d9ce32e15739c3f04a5b9ebe790"
+        },
+        {
+          "path": "apps/web/components/builds/BuildDetailView.tsx",
+          "sha256": "e7c878fb6da49b1df16af3dc76c6121d546df50a0bfbe9d79bf96e51f6d6a571"
+        },
+        {
+          "path": "apps/web/components/builds/BuildDossierModal.tsx",
+          "sha256": "9dd95ee01a819e08bae82b2f1f5c3d57d947e704af2a1164511ea2eaf4766de8"
+        },
+        {
+          "path": "apps/web/components/builds/BuildFilterBar.tsx",
+          "sha256": "b81aee82254b432c4f673df1cc868739d1cc19623b51c0a153dcb37282e92642"
+        },
+        {
+          "path": "apps/web/components/builds/BuildPublicationActions.tsx",
+          "sha256": "cd05bcb83a764e4f95b68d2e849f3d5ebe1cec282eb75f95d305bd6ff4cc0004"
+        },
+        {
+          "path": "apps/web/components/builds/BuildPublishModal.tsx",
+          "sha256": "9e669c760cc92ff1db05f0a05620e84b3606ee852a056ae8dec3afecbcbea80b"
+        },
+        {
+          "path": "apps/web/components/builds/EditCustomBuildLauncher.tsx",
+          "sha256": "e6c7db44be9d44da2e6a9408ce815693444837b2dc321956b5ef530b3a1884b7"
+        },
+        {
+          "path": "apps/web/lib/help/articles/builds/custom-builds.ts",
+          "sha256": "2583ab71e81faedb507ea4c44a8cb9ea7ce3633c68c303cf466afeb42e1339ed"
+        },
+        {
+          "path": "apps/web/lib/help/articles/builds/publish-community-builds.ts",
+          "sha256": "73bd16f1731f3ac467c1a58f6dd80f641df4e0649a6afce41a29738ab454cd6b"
+        }
+      ],
+      "mergedPrs": [
+        664,
+        687,
+        699,
+        746,
+        764,
+        790
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 119,
+      "id": "builds-polish-5",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "1e6f2397e9425125be8a7719b6e57e9401b828df5d06cd07e41a881dfc6991ec",
+      "reason": "Honest Definitions header/auth-aware return, normalized generated definition links, reveal/focus/highlight of hash targets, local URL roundtrip preserving hash, race/matchup grouping/all9/shared pills and StrategyLabel links in breakdown/table/check-in implement original intent. Current history.replaceState avoids stale RSC filter replay; it intentionally replaces router writes for entirely local filtering.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/app/definitions/page.tsx",
+        "apps/web/components/definitions/DefinitionsCatalog.tsx",
+        "apps/web/components/definitions/DefinitionsBackLink.tsx",
+        "apps/web/components/definitions/StrategyLabel.tsx",
+        "apps/web/lib/definition-links.ts",
+        "apps/web/components/ui/FilterPill.tsx",
+        "apps/web/components/builds/BuildBreakdownCards.tsx",
+        "apps/web/components/builds/BuildGamesTable.tsx",
+        "apps/web/components/build-checkin/CheckInParts.tsx"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/builds/custom-builds.ts",
+        "apps/web/lib/help/articles/analyzer/strategies.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/web/app/definitions/page.tsx",
+          "sha256": "fde0238815aceb0e2138f7990d39b1199a94d382a77a815e9668d5b48e4cae73"
+        },
+        {
+          "path": "apps/web/components/build-checkin/CheckInParts.tsx",
+          "sha256": "c2c8e730d26fb238eb2b1a2ef0866d26faae0e4cd2488d4e3cd50c6a1c33a8f4"
+        },
+        {
+          "path": "apps/web/components/builds/BuildBreakdownCards.tsx",
+          "sha256": "3dcf35d4c3c8e741e84fe8bae764e3116e5bade5cdaae6cd77f2c641729e1019"
+        },
+        {
+          "path": "apps/web/components/builds/BuildGamesTable.tsx",
+          "sha256": "ceb0640e69d021b9c0df9c24d33e20064d551e86bfe167f88eaa4faedcb4b8ea"
+        },
+        {
+          "path": "apps/web/components/definitions/DefinitionsBackLink.tsx",
+          "sha256": "c91a2c84a7a49840d7d9ada34a633759ef864e8f57a692eac314848802260309"
+        },
+        {
+          "path": "apps/web/components/definitions/DefinitionsCatalog.tsx",
+          "sha256": "4f4318ab9ecb1146844063243e026729868533c3e71a9f6f899b8848afcf3b25"
+        },
+        {
+          "path": "apps/web/components/definitions/StrategyLabel.tsx",
+          "sha256": "fa1c83b33418d0dadd8d263331f5aaa210467255ed7d317eb0fdfff5004483d1"
+        },
+        {
+          "path": "apps/web/components/ui/FilterPill.tsx",
+          "sha256": "27b3c050007eddc85c0f0455a9645d20ccbe53d56561bb9e3942164c8d0712be"
+        },
+        {
+          "path": "apps/web/lib/definition-links.ts",
+          "sha256": "8fb7fed841e417dbc3a2127457a3c0e5e245a666e140260112db68d160238ff8"
+        },
+        {
+          "path": "apps/web/lib/help/articles/analyzer/strategies.ts",
+          "sha256": "2a8326af64a6c07965ae77416ff76572cf7b60eac21cf4d0f6bd45bda348012f"
+        },
+        {
+          "path": "apps/web/lib/help/articles/builds/custom-builds.ts",
+          "sha256": "2583ab71e81faedb507ea4c44a8cb9ea7ce3633c68c303cf466afeb42e1339ed"
+        }
+      ],
+      "mergedPrs": [
+        664,
+        687,
+        699,
+        746,
+        764,
+        790
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 120,
+      "id": "builds-polish-6",
+      "oldStatus": "unknown",
+      "newStatus": "partial",
+      "canonicalRequirementSha256": "de8c7fdd80345c6734672e4e8d353562a659e6537bde513e54bee4d9a0c20911",
+      "reason": "Existing queue provides individual confirm/change/skip, opponent readout/add-new and definition-linked detected names. Full requested queue batch/undo/picker pack is absent in current source.",
+      "remainingRequirements": [
+        "Add sequential Confirm all suggested with per-item results, stop on401/429, remaining retry/summary and close-after-in-flight behavior.",
+        "Use Pick build… without a suggestion and Confirm <name> with one; normalize raw queue result through resultLabel.",
+        "Extract/embed opponent build picker in queue while retaining Add new build beside Replay classified as and owner placement corrections.",
+        "Implement reopen validation/service action with pending/reset override+kept notes, Undo for own/opponent decisions and not_reopenable guards.",
+        "Add buildOptionHref and linked planned/suggested names across queue/card; retain close-on-navigation.",
+        "Raise header chip's actual32px hit area to44px without shifting compact layout; add the original regression tests and build-check-in Help."
+      ],
+      "sourceEvidence": [
+        "apps/web/components/build-checkin/BuildCheckInQueue.tsx",
+        "apps/web/components/build-checkin/BuildCheckInCard.tsx",
+        "apps/web/components/build-checkin/OpponentBuildRow.tsx",
+        "apps/web/components/build-checkin/BuildCheckInAlert.tsx",
+        "apps/web/components/build-checkin/CheckInParts.tsx",
+        "apps/web/lib/buildIntent.ts",
+        "apps/api/src/validation/buildIntent.js",
+        "apps/api/src/services/buildIntentGameState.js"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/builds/build-check-in.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/src/services/buildIntentGameState.js",
+          "sha256": "9ab05ddaef59bd3cb3f11dd06534b0668fafd2b372aa59d17187e6bce7a4c708"
+        },
+        {
+          "path": "apps/api/src/validation/buildIntent.js",
+          "sha256": "d0b9cb4c356fb30bd6c9c8e9b625233082d66cfd1ee6a2dc6f300fd327f3c88f"
+        },
+        {
+          "path": "apps/web/components/build-checkin/BuildCheckInAlert.tsx",
+          "sha256": "7c865c2dcf025fb96d020068a5da43efd492c7b21e57ea7fa7defb37e19ee027"
+        },
+        {
+          "path": "apps/web/components/build-checkin/BuildCheckInCard.tsx",
+          "sha256": "1a6ce31aea9ededec42c18366fa643de5df7e00b134ddd82c60ffd6347193eaa"
+        },
+        {
+          "path": "apps/web/components/build-checkin/BuildCheckInQueue.tsx",
+          "sha256": "aad4896faf37055d38a64c225c8095b19ab1e0b742b5d2b73526c5bf63a7357a"
+        },
+        {
+          "path": "apps/web/components/build-checkin/CheckInParts.tsx",
+          "sha256": "c2c8e730d26fb238eb2b1a2ef0866d26faae0e4cd2488d4e3cd50c6a1c33a8f4"
+        },
+        {
+          "path": "apps/web/components/build-checkin/OpponentBuildRow.tsx",
+          "sha256": "c9192ec81b2de4af7d5392ce9cc7b67442cacb7fa5e63650ac51c0c7e2344d93"
+        },
+        {
+          "path": "apps/web/lib/buildIntent.ts",
+          "sha256": "8e4e5856d2963b5a303e2c9786b917dafccc1e16d03fd2054868fb841db4093d"
+        },
+        {
+          "path": "apps/web/lib/help/articles/builds/build-check-in.ts",
+          "sha256": "c78e444fdb992bdd4a9b982cc6487a9525a41dd564f68ce21fbd3a6d60a7d92b"
+        }
+      ],
+      "mergedPrs": [
+        664,
+        687,
+        699,
+        746,
+        764,
+        790
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 121,
+      "id": "builds-polish-7",
+      "oldStatus": "unknown",
+      "newStatus": "partial",
+      "canonicalRequirementSha256": "f69807f9ecdf094ad2f95bd22da06d16b5544ebab6964b9168b3197cc9003ed5",
+      "reason": "Existing OS hook short-circuits reveal timers and unit reveals announce outcomes. Build WinnerCard still unconditionally pulses/zooms/springs; Gacha pulse and build resolved-status/Help requirements remain.",
+      "remainingRequirements": [
+        "Propagate reducedMotion into WinnerCard/Gacha and use opacity200ms only for resolved winners without pulse/winzoom/overshoot.",
+        "Extend reveal CSS for rdz-pulse/rdz-winzoom/rdz-charge plus confetti under OS reduction and data-motion=reduce; use shared override-aware hook once available.",
+        "Add a resolved-only Build chosen: name, rarity, pct status region; it must stay empty during spin.",
+        "Add original motion/status tests and randomizer Help statement about Reduce motion and screen-reader announcements."
+      ],
+      "sourceEvidence": [
+        "apps/web/components/randomizer/reveals/revealShared.tsx",
+        "apps/web/components/randomizer/reveals/GachaSummonReveal.tsx",
+        "apps/web/components/randomizer/RandomizerStage.tsx",
+        "apps/web/components/randomizer/RandomizerSequence.tsx",
+        "apps/web/components/randomizer/unit-reveals/unitRevealShared.tsx"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/builds/randomizer.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/web/components/randomizer/RandomizerSequence.tsx",
+          "sha256": "014e924c0e152a13553b69f3b18aec232c2e180b54110d912575550135a81118"
+        },
+        {
+          "path": "apps/web/components/randomizer/RandomizerStage.tsx",
+          "sha256": "c658ab305cc8de178bd56979d259b98fb307ebbabee83f8e6390bfa77ab386da"
+        },
+        {
+          "path": "apps/web/components/randomizer/reveals/GachaSummonReveal.tsx",
+          "sha256": "90d6ba090c7d3866cd58eaecb61ebb916234d09173c9b4b75a8ec506a02729f7"
+        },
+        {
+          "path": "apps/web/components/randomizer/reveals/revealShared.tsx",
+          "sha256": "6f6274a3e5311a5be8d68e6b79b4af4fab759c4516b8246cb96d9c36b3582316"
+        },
+        {
+          "path": "apps/web/components/randomizer/unit-reveals/unitRevealShared.tsx",
+          "sha256": "e23b2ecba593d675489d4228380bfb505ae553b3609becb08a38ce7bc9f0019d"
+        },
+        {
+          "path": "apps/web/lib/help/articles/builds/randomizer.ts",
+          "sha256": "20fc1f100a50422843d4cb96b586a504c925e40269a92f92a6d7a89567f1ac7b"
+        }
+      ],
+      "mergedPrs": [],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 124,
+      "id": "community-polish-3",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "e03bab9ef7ab0ab0a468cd30988881cd4b741dcc264a715dc79a2b757c9dacf3",
+      "reason": "Race/vs/skill/search/update filters and allowlisted legacy query mapping, focus-retaining history sync/pending results, segmented controls, active chips/count/clear-sort behavior and honest bounded paging/outage-vs-empty are present in UI/API/index source and tests.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/community/CommunityFilterBar.tsx",
+        "apps/web/components/community/CommunityFilterContext.tsx",
+        "apps/web/components/community/CommunityActiveFilters.tsx",
+        "apps/web/lib/communityQuery.ts",
+        "apps/web/app/community/(directory)/page.tsx",
+        "apps/api/src/services/community.js",
+        "apps/api/src/routes/community.js",
+        "apps/api/src/db/connect.js"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/builds/community-builds.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/src/db/connect.js",
+          "sha256": "260081069bf79e7aae57bd94ec6cd03b192ca68719ca302273ae560b2984e4bf"
+        },
+        {
+          "path": "apps/api/src/routes/community.js",
+          "sha256": "42bdd2693485aca4ac76c733625b86b028c75b2c91d96e3250f9a2c1e1f53ca5"
+        },
+        {
+          "path": "apps/api/src/services/community.js",
+          "sha256": "f148445048944b212f90429d21694c2fd518fc91942e46c5d1e2bc55bb586baf"
+        },
+        {
+          "path": "apps/web/app/community/(directory)/page.tsx",
+          "sha256": "6d81dd8668e37b637574849736f215db50a1d9501d6f56dc5c76cb5af388fb90"
+        },
+        {
+          "path": "apps/web/components/community/CommunityActiveFilters.tsx",
+          "sha256": "0a4cda1299fec8900c4cc5f34f0876e7f322834bd630ec0590621a9c2ee50a8d"
+        },
+        {
+          "path": "apps/web/components/community/CommunityFilterBar.tsx",
+          "sha256": "25b0b6bf9a37a1ccf4b5b12f3af63bad1b8c0cb39432855caeeca06b88878af4"
+        },
+        {
+          "path": "apps/web/components/community/CommunityFilterContext.tsx",
+          "sha256": "dd86aa25670709fbe3be209b68928cd743eacd27021e9a0808a20624c31dc066"
+        },
+        {
+          "path": "apps/web/lib/communityQuery.ts",
+          "sha256": "3893a3b73bf680d9f0c849d180f9156031f2ac4dcf3418078064e7fca37e7f24"
+        },
+        {
+          "path": "apps/web/lib/help/articles/builds/community-builds.ts",
+          "sha256": "b34c286512cc308fc340e9c3b33c86a6285879c8954fa20596fc808112edfd8e"
+        }
+      ],
+      "mergedPrs": [
+        657,
+        687,
+        749
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 125,
+      "id": "community-polish-4",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "67551014eab804629ea00e1421ff3435d1923b416f386c99370e092ed58bc261",
+      "reason": "Shared signed vote score, normal-flow stretched build cards/key deadlines/author truncation/owner menu, phone primary actions with shared vote state, all-width report/meta/about and canonical author/public-player list sorting/search/count/month-year/average/hideAuthor implement original layout/copy scope.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/community/VoteScore.tsx",
+        "apps/web/components/community/CommunityBuildCard.tsx",
+        "apps/web/components/community/KeySteps.tsx",
+        "apps/web/components/community/AuthorChip.tsx",
+        "apps/web/components/community/CommunityBuildOwnerControls.tsx",
+        "apps/web/components/community/CommunityBuildActionsBar.tsx",
+        "apps/web/components/community/CommunityBuildMeta.tsx",
+        "apps/web/components/community/AuthorBuildsList.tsx",
+        "apps/web/components/community/AuthorStatsStrip.tsx",
+        "apps/web/lib/seo/publicDate.ts",
+        "apps/web/app/community/builds/[slug]/page.tsx"
+      ],
+      "howtoEvidence": [],
+      "sourcePins": [
+        {
+          "path": "apps/web/app/community/builds/[slug]/page.tsx",
+          "sha256": "137f6e46b88771cd3891cd0bff2615c503460bf103b1aacaedbc13d088a51368"
+        },
+        {
+          "path": "apps/web/components/community/AuthorBuildsList.tsx",
+          "sha256": "242bf4b57bb746f377869f268ebb5b1d9cfe80751b146746f1908eac1932e19a"
+        },
+        {
+          "path": "apps/web/components/community/AuthorChip.tsx",
+          "sha256": "2b34f3bc6efaf29363447bf923b689826f64b87f83ff5518065d500100606e8d"
+        },
+        {
+          "path": "apps/web/components/community/AuthorStatsStrip.tsx",
+          "sha256": "5372b07940d5edb593cf18eff871d895fd19702db7cba2a7379907b66122b1f2"
+        },
+        {
+          "path": "apps/web/components/community/CommunityBuildActionsBar.tsx",
+          "sha256": "3d453e8a4a6eac764ca0f05b3d37fbc78df20343e2cc4cbd8f167a140f58dec3"
+        },
+        {
+          "path": "apps/web/components/community/CommunityBuildCard.tsx",
+          "sha256": "490d68f59bcb0e5539ff7249ac162c6b6d03614da5b09973a1f86cf43d249df5"
+        },
+        {
+          "path": "apps/web/components/community/CommunityBuildMeta.tsx",
+          "sha256": "f4bb1fc62963314ff63b91e60be040936e0e92b5e79251bb72782100e8e86266"
+        },
+        {
+          "path": "apps/web/components/community/CommunityBuildOwnerControls.tsx",
+          "sha256": "3c3db5db1121a64792d097abcdbdd98c3786270ba67637eae6b10fa1271c7119"
+        },
+        {
+          "path": "apps/web/components/community/KeySteps.tsx",
+          "sha256": "da3e65362729efcf5c7f8deddae493eaca9bb2ee0af4a0f6e796c47ef4b512b4"
+        },
+        {
+          "path": "apps/web/components/community/VoteScore.tsx",
+          "sha256": "30ed5c5872fcfa756ee9023647df2ed93c3eec22d26c255d1a83c116f4111e8a"
+        },
+        {
+          "path": "apps/web/lib/seo/publicDate.ts",
+          "sha256": "f74975fea47130f6f2296c3018fca8f6b54a3a1ae659e24b4e8fdf60950a8320"
+        }
+      ],
+      "mergedPrs": [
+        657,
+        687,
+        749
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 126,
+      "id": "community-polish-5",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "93538c3b8aa0b33824d96c976a5a2a5676ee6de2cc0550e70bdc29f11ebac078",
+      "reason": "Publish disclosure/picker/direct-slug URL cleanup, strict private200-row publication records/stat allowlist, ownership-aware record skeleton/adaptive empty polling and Mine/noindex/auth/error actions are present. Later hardened auth returns through /community?publish=1 and explicitly resumes to /builds?publish=1, preserving publishing intent without widening private return allowlist.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/community/PublishCta.tsx",
+        "apps/web/components/builds/PublishPickerModal.tsx",
+        "apps/web/components/builds/BuildsLibrary.tsx",
+        "apps/web/components/community/MyPublishedBuilds.tsx",
+        "apps/web/components/community/useOwnerBuilds.ts",
+        "apps/web/components/community/CommunityOwnerReplayCount.tsx",
+        "apps/web/components/community/CommunityBuildOwnerControls.tsx",
+        "apps/api/src/services/communityOwnerBuilds.js",
+        "apps/api/src/routes/community.js",
+        "apps/web/app/community/(directory)/page.tsx"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/builds/publish-community-builds.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/src/routes/community.js",
+          "sha256": "42bdd2693485aca4ac76c733625b86b028c75b2c91d96e3250f9a2c1e1f53ca5"
+        },
+        {
+          "path": "apps/api/src/services/communityOwnerBuilds.js",
+          "sha256": "9215ddd717fe9a54b1fe85be6a53da0d4afd1415af80a83807c7984693ddfcf4"
+        },
+        {
+          "path": "apps/web/app/community/(directory)/page.tsx",
+          "sha256": "6d81dd8668e37b637574849736f215db50a1d9501d6f56dc5c76cb5af388fb90"
+        },
+        {
+          "path": "apps/web/components/builds/BuildsLibrary.tsx",
+          "sha256": "77e5d8eea5332f9ebc4dfda614a2b80d2caadd5a863d806682679f44136cc8bd"
+        },
+        {
+          "path": "apps/web/components/builds/PublishPickerModal.tsx",
+          "sha256": "5c4bc0e498be37bf12690f2ada2e198ed1e791f5dc9a83a110fd95f2222fcb25"
+        },
+        {
+          "path": "apps/web/components/community/CommunityBuildOwnerControls.tsx",
+          "sha256": "3c3db5db1121a64792d097abcdbdd98c3786270ba67637eae6b10fa1271c7119"
+        },
+        {
+          "path": "apps/web/components/community/CommunityOwnerReplayCount.tsx",
+          "sha256": "aa0e5a88ca167e63121c47227b8f84d169c9c305e9fb567a0951b155219f5f95"
+        },
+        {
+          "path": "apps/web/components/community/MyPublishedBuilds.tsx",
+          "sha256": "353f0ad2a11a75f7e2060cfa52b81223b47a94c4ff04fc9485eed8b12c507c7c"
+        },
+        {
+          "path": "apps/web/components/community/PublishCta.tsx",
+          "sha256": "ac71ce5047fb89b878fa80b3941666b1b8bdf8f876a7e31da4c777282682d207"
+        },
+        {
+          "path": "apps/web/components/community/useOwnerBuilds.ts",
+          "sha256": "47417ef802bee36b78f3f915d72f334583f418e43a966cfe8b340ae67c96263a"
+        },
+        {
+          "path": "apps/web/lib/help/articles/builds/publish-community-builds.ts",
+          "sha256": "73bd16f1731f3ac467c1a58f6dd80f641df4e0649a6afce41a29738ab454cd6b"
+        }
+      ],
+      "mergedPrs": [
+        657,
+        687,
+        749
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 129,
+      "id": "guides-polish-3",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "41bf635c8fa86d24b8f2c2c7afb02eed63cc575a9623cb9c6cd1beac1ebd1677",
+      "reason": "Generic observer SectionNav/hash replace/reduced-motion focus/active reveal, conditional guide section plan/rail/chip wrapper, common anchor margins/copy fallback and union-ordered desktop army matrix/mobile tabs/missing checkpoints/caption are implemented. Nav/copy/army source tests and historic guide proof cover scoped requirements.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/ui/SectionNav.tsx",
+        "apps/web/components/guides/GuideSectionNav.tsx",
+        "apps/web/components/guides/GuideSection.tsx",
+        "apps/web/components/guides/GuideSectionCopy.tsx",
+        "apps/web/components/guides/build/buildGuideSections.ts",
+        "apps/web/components/guides/build/BuildArmySection.tsx",
+        "apps/web/components/guides/build/ArmyMobileTabs.tsx",
+        "apps/web/components/guides/build/BuildGuide.tsx",
+        "apps/web/components/ui/__tests__/SectionNav.test.tsx"
+      ],
+      "howtoEvidence": [],
+      "sourcePins": [
+        {
+          "path": "apps/web/components/guides/build/ArmyMobileTabs.tsx",
+          "sha256": "384052e09bd294b50c7e651fd469edc9ee9ad386888d247a4b183ab2ae52b5cb"
+        },
+        {
+          "path": "apps/web/components/guides/build/BuildArmySection.tsx",
+          "sha256": "739c4e78d22a1f1f53a582d69b12cc7f41c8679a06d8a0240740eb7fd291727f"
+        },
+        {
+          "path": "apps/web/components/guides/build/BuildGuide.tsx",
+          "sha256": "ce359b97a8a0d7be0e3a55ed17f6846dfab127a7111400cb1b5a4f08aff0ecc4"
+        },
+        {
+          "path": "apps/web/components/guides/build/buildGuideSections.ts",
+          "sha256": "6746b35306f9b2b44987efae8b7bdd2881b5aeab685fc15ee83e81984f1396c9"
+        },
+        {
+          "path": "apps/web/components/guides/GuideSection.tsx",
+          "sha256": "f0ed2a4a55f5f9f50919df1daf8b8783f3b97c7c36cf4522fc275c03fe852134"
+        },
+        {
+          "path": "apps/web/components/guides/GuideSectionCopy.tsx",
+          "sha256": "faec7a54de650554c227c707abd9ac4c1b23b7becf00f802a46ae68de626c932"
+        },
+        {
+          "path": "apps/web/components/guides/GuideSectionNav.tsx",
+          "sha256": "8dbbed1656d43c978e6883a52382124a5553ba39d8fd3ba1afce91f5b86cd4d6"
+        },
+        {
+          "path": "apps/web/components/ui/__tests__/SectionNav.test.tsx",
+          "sha256": "cd48da456943b9c232f01b4af6f46d441abed294ec654bbc9fda3c3bb6ca9f4f"
+        },
+        {
+          "path": "apps/web/components/ui/SectionNav.tsx",
+          "sha256": "54921e0a93d56af92fbc02ce1ccafec11520fea00bde862aaa9eb2ac7be661d5"
+        }
+      ],
+      "mergedPrs": [
+        662,
+        695,
+        720
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 130,
+      "id": "guides-polish-4",
+      "oldStatus": "unknown",
+      "newStatus": "partial",
+      "canonicalRequirementSha256": "5ce66736718556291ad3f1ab95ec9d4daee80dedba8c933317f3c34baac91685",
+      "reason": "Shared verdict glyph/phrase, compact cells/whiskers, hatched even bars/roving+pin tooltips, constant-driven single legend and reading-guide-stats Help are implemented. The explicit follow-on glossary integration is still a TODO after glossary delivery.",
+      "remainingRequirements": [
+        "Wrap likely range in the existing Term primitive in GuideStatsLegend and register likely-range, publishing-floor and trend-arrow glossary IDs; remove the fulfilled dependency TODO and add regression coverage."
+      ],
+      "sourceEvidence": [
+        "apps/web/components/guides/GuideStatsLegend.tsx",
+        "apps/web/components/guides/WinRateCell.tsx",
+        "apps/web/components/guides/CiBarChart.tsx",
+        "apps/web/components/guides/CiWhisker.tsx",
+        "apps/web/components/guides/guideUi.ts",
+        "apps/web/lib/guides/guideCopy.ts",
+        "apps/web/lib/glossary.ts",
+        "apps/web/components/ui/Term.tsx"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/builds/reading-guide-stats.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/web/components/guides/CiBarChart.tsx",
+          "sha256": "a504771d89c36ffa8ed3b12eff45bcd077e47424cf96354eb591cf0c5ea19431"
+        },
+        {
+          "path": "apps/web/components/guides/CiWhisker.tsx",
+          "sha256": "4163d3dda3bb04bca528b19f5eddbd642d5dab4f25933504ca652fabf25c635a"
+        },
+        {
+          "path": "apps/web/components/guides/GuideStatsLegend.tsx",
+          "sha256": "37892e87ce8335a4500a426608144c35be69303e9bf33885c0754ece3a3b60c1"
+        },
+        {
+          "path": "apps/web/components/guides/guideUi.ts",
+          "sha256": "dca948f0795610c6f31014dc8f752e385e6bd18ce59d61d0427876ca01d061fc"
+        },
+        {
+          "path": "apps/web/components/guides/WinRateCell.tsx",
+          "sha256": "8e53c4102b38ccdcf3c7b81eb3c569f5f216b0d6b577fe2d0ba9f71623a035a2"
+        },
+        {
+          "path": "apps/web/components/ui/Term.tsx",
+          "sha256": "228f6edf31694258f456fa70d49e16ce28dce07788e6baa82175b82d4ea59f24"
+        },
+        {
+          "path": "apps/web/lib/glossary.ts",
+          "sha256": "b3ab66eaeb411e613ab843ce5ffc6b8228f3b0945ef9f557152022b4241b13c3"
+        },
+        {
+          "path": "apps/web/lib/guides/guideCopy.ts",
+          "sha256": "8faf46c8f29eec35899943b91baea9f8d7e6dbae8c479597ba43f45051f8c566"
+        },
+        {
+          "path": "apps/web/lib/help/articles/builds/reading-guide-stats.ts",
+          "sha256": "327ae6b311b4ea709e5d7b43a8bb977fd9a22487790e22d125330f5c6d9598e3"
+        }
+      ],
+      "mergedPrs": [
+        662,
+        695,
+        720
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 131,
+      "id": "guides-polish-5",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "2c9e9162bd376bfd27ef2e861252f3c01e1f0b3174ecb8aa5aa0e20e28e05b14",
+      "reason": "Hub race/icons/ink-safe matchup stretched tiles and inner links/footer counts, map6 gallery/full gallery, Badge New/same-tab videos, floor-aware3x3 row-vs-column matrix with neutral mirrors, enlarge map dialog, optional other-map strip/order and personal slot are implemented with guide page tests/fixture evidence.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/guides/hub/MatchupGrid.tsx",
+        "apps/web/components/guides/hub/GuideHub.tsx",
+        "apps/web/components/guides/map/MapsList.tsx",
+        "apps/web/components/guides/TrendBadge.tsx",
+        "apps/web/components/guides/GuideVideoActions.tsx",
+        "apps/web/components/guides/map/MapRaceMatrix.tsx",
+        "apps/web/components/guides/map/MapHeroEnlarge.tsx",
+        "apps/web/components/guides/map/MapGuide.tsx",
+        "apps/web/components/guides/map/OtherMaps.tsx",
+        "apps/web/app/guides/maps/[map]/page.tsx"
+      ],
+      "howtoEvidence": [],
+      "sourcePins": [
+        {
+          "path": "apps/web/app/guides/maps/[map]/page.tsx",
+          "sha256": "8e2a485c5c7ddb3ec1ae2b51cddd30e4799bb1b750a0ac3f7005db24ab75557a"
+        },
+        {
+          "path": "apps/web/components/guides/GuideVideoActions.tsx",
+          "sha256": "42efca77143e0b0d02689938931e36f612bec98359a1d530fdedab288ba80136"
+        },
+        {
+          "path": "apps/web/components/guides/hub/GuideHub.tsx",
+          "sha256": "fc738c1d19ee8bc047e2613ff318e8abe21aa8c354240438bf8900d5be1b4a55"
+        },
+        {
+          "path": "apps/web/components/guides/hub/MatchupGrid.tsx",
+          "sha256": "a438f56d7ca29ff043b637e5985991f322c1a0ecfa623a0dcb4463ffdaa7544a"
+        },
+        {
+          "path": "apps/web/components/guides/map/MapGuide.tsx",
+          "sha256": "cb76777fe06a4f6e99a14ab7eb182139716349b2eaf727b9e1a9fc2b63261ba5"
+        },
+        {
+          "path": "apps/web/components/guides/map/MapHeroEnlarge.tsx",
+          "sha256": "804b89d89a41ccdfa4747f204e8024b72c36f7b48b69efb7d3687a6ee352d4f4"
+        },
+        {
+          "path": "apps/web/components/guides/map/MapRaceMatrix.tsx",
+          "sha256": "e400afb1a18f2332334f7be0dc85e0198c2067435aa20e6ceccaa780b4fd5b46"
+        },
+        {
+          "path": "apps/web/components/guides/map/MapsList.tsx",
+          "sha256": "5685428cfd0d3f6abbd8ec06823b2e71379f913972274a1271373ab79c746d7d"
+        },
+        {
+          "path": "apps/web/components/guides/map/OtherMaps.tsx",
+          "sha256": "96b8aa3bb2c781b4992b05b177625608a65ec4ccc4baea20ead239f3f03732ea"
+        },
+        {
+          "path": "apps/web/components/guides/TrendBadge.tsx",
+          "sha256": "169ed51f36f266a5601e9bd43719fe91d92bcc52bc6438a33c0a397ed4415915"
+        }
+      ],
+      "mergedPrs": [
+        662,
+        695,
+        720
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    },
+    {
+      "ordinal": 138,
+      "id": "profiles-replays-polish-2",
+      "oldStatus": "unknown",
+      "newStatus": "completed",
+      "canonicalRequirementSha256": "2651f2266c325e1d2c367ceebcf0a8208f2c6a1446f7b442844641e49c0a39c5",
+      "reason": "Bounded common archive query, exact filtered summary/no-cursor aggregation, stable10min500-owner facets, rolling date forwarding, native GET/no-JS enhancement and400ms search, removable chips/current select options and direction-aware page/hash focus implement original. Public-profile Help explains combined filters/record/rolling shared URLs; later consent/public-player isolation retained.",
+      "remainingRequirements": [],
+      "sourceEvidence": [
+        "apps/web/components/public-profile/archiveQuery.ts",
+        "apps/web/components/public-profile/archiveRequest.ts",
+        "apps/web/components/public-profile/ArchiveFilterEnhancer.tsx",
+        "apps/web/components/public-profile/ArchiveSummary.tsx",
+        "apps/web/components/public-profile/PublicReplayLibrary.tsx",
+        "apps/api/src/services/replayLibrary.js",
+        "apps/api/src/services/replayArchiveSummary.js",
+        "apps/api/src/routes/publicReplays.js",
+        "apps/web/components/public-profile/__tests__/PublicReplays.test.tsx",
+        "apps/api/__tests__/replayLibraryService.test.js"
+      ],
+      "howtoEvidence": [
+        "apps/web/lib/help/articles/account-data/public-profile.ts"
+      ],
+      "sourcePins": [
+        {
+          "path": "apps/api/__tests__/replayLibraryService.test.js",
+          "sha256": "1f2d1096950cd2d5a623c541faf49b13ff2a47ef69aad496df35717da16182fa"
+        },
+        {
+          "path": "apps/api/src/routes/publicReplays.js",
+          "sha256": "bb76fb99794dede012a6b07644914eb4afe38b22b078e71031d8e4584a240c9a"
+        },
+        {
+          "path": "apps/api/src/services/replayArchiveSummary.js",
+          "sha256": "f1028dd73625bff69e43aa948282d44a9106b9ebd4b7c8fb1f81a434830a3a33"
+        },
+        {
+          "path": "apps/api/src/services/replayLibrary.js",
+          "sha256": "f1b08ff002bb7fa313a5b2a982439e49d77b64ae1f5f081f458f0d6a7dd32cfd"
+        },
+        {
+          "path": "apps/web/components/public-profile/__tests__/PublicReplays.test.tsx",
+          "sha256": "d1ed51efb7f09f5c382a901da176eb816cc7d415c61f5dd22c2e79ca08fab1fd"
+        },
+        {
+          "path": "apps/web/components/public-profile/ArchiveFilterEnhancer.tsx",
+          "sha256": "68f8f618c69569fbbfb60daa9c3a273608f21065eccf28794b40cbe9a9dbefdb"
+        },
+        {
+          "path": "apps/web/components/public-profile/archiveQuery.ts",
+          "sha256": "bc20877afb01c1bba8304910215c500ec7034b864195c0f06faf65ee06c1d7bf"
+        },
+        {
+          "path": "apps/web/components/public-profile/archiveRequest.ts",
+          "sha256": "a893b08ba87fab7f7cdc71abc8e7bb9e759b78b9876b03a3116974ea67342177"
+        },
+        {
+          "path": "apps/web/components/public-profile/ArchiveSummary.tsx",
+          "sha256": "bd39556d50ad5255b3c46f3ded7bb40339711d7211ddb9ffc8d4efa4e253e229"
+        },
+        {
+          "path": "apps/web/components/public-profile/PublicReplayLibrary.tsx",
+          "sha256": "fb7a60127ccdb31040634d57f61277c08cecbc356c7e74168d4b57d5c361854e"
+        },
+        {
+          "path": "apps/web/lib/help/articles/account-data/public-profile.ts",
+          "sha256": "ef148fb903cf37631f25348dd477b1b1a1da652a29f08d0cbae7336f86e6ea59"
+        }
+      ],
+      "mergedPrs": [
+        688,
+        758,
+        765
+      ],
+      "proofQualification": "Current source and test-source/merged-history reconciliation; no tests/build/browser/deployment/native installer run by this audit."
+    }
+  ]
+}

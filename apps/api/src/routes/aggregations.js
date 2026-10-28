@@ -40,7 +40,7 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.aggregations.summary(userId, filters));
+      await send(req, res, userId, "summary", filters, {}, () => deps.aggregations.summary(userId, filters));
     } catch (err) {
       next(err);
     }
@@ -208,13 +208,11 @@ function buildAggregationsRouter(deps) {
           ? intervalRaw
           : "day";
       const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
-      res.json(
-        await deps.aggregations.mmrProgression(
+      await send(req, res, userId, "mmrProgression", filters, { interval, tz }, () => deps.aggregations.mmrProgression(
           userId,
           { interval, tz },
           filters,
-        ),
-      );
+        ));
     } catch (err) {
       next(err);
     }
@@ -283,13 +281,11 @@ function buildAggregationsRouter(deps) {
           ? intervalRaw
           : "week";
       const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
-      res.json(
-        await deps.aggregations.myBuildMixOverTime(
+      await send(req, res, userId, "myBuildMixOverTime", filters, { interval, tz }, () => deps.aggregations.myBuildMixOverTime(
           userId,
           { interval, tz },
           filters,
-        ),
-      );
+        ));
     } catch (err) {
       next(err);
     }
@@ -306,13 +302,11 @@ function buildAggregationsRouter(deps) {
           ? intervalRaw
           : "week";
       const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
-      res.json(
-        await deps.aggregations.oppStrategyMixOverTime(
+      await send(req, res, userId, "oppStrategyMixOverTime", filters, { interval, tz }, () => deps.aggregations.oppStrategyMixOverTime(
           userId,
           { interval, tz },
           filters,
-        ),
-      );
+        ));
     } catch (err) {
       next(err);
     }
@@ -394,7 +388,7 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.aggregations.macroSummary(userId, filters));
+      await send(req, res, userId, "macroSummary", filters, {}, () => deps.aggregations.macroSummary(userId, filters));
     } catch (err) {
       next(err);
     }

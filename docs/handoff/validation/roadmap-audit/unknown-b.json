@@ -1,0 +1,1575 @@
+{
+  "schemaVersion": 1,
+  "audit": "B: last 30 unknown entries by ordinal",
+  "date": "2026-10-28",
+  "checkout": "C:/SC2TOOLS/.worktrees/program-ledger-delivery",
+  "sourceRevision": "51e0c9474a0337b94af97feaf7de15a99db6d31b",
+  "mainRevision": "477298dd7c397af2baaa79d19736ae43d1a4510d",
+  "method": "Read-only original spec, augments, how-to, current source, test source, feature checkpoints and merged first-parent history reconciliation. Completed means this scoped roadmap requirement is reconciled to merged implementation; no new runtime, CI, provider or live acceptance was executed. All 30 original entries have empty augments and no folded_audit field value; their full specs/how-tos remain canonical.",
+  "programStatus": "active_incomplete",
+  "updates": [
+    {
+      "ordinal": 139,
+      "id": "profiles-replays-polish-3",
+      "status": "completed",
+      "implemented": "Replay table is xl-only with 1040px safety scroll; laptop cards use two columns. Public rows share one Download-then-Analysis action group with loaded-auth lock/free-account wording; owner actions remain. Streams sit in matchup cells; Tie and compact/full tooltip dates are normalized. Archive and Help use the required visitor/privacy copy.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/components/analyzer/replays/ReplayList.tsx",
+        "apps/web/components/public-profile/PublicReplayLibrary.tsx",
+        "apps/web/components/public-profile/PublicReplayAnalysis.tsx",
+        "apps/web/components/public-profile/PublicProfile.tsx",
+        "apps/web/lib/format.ts",
+        "apps/web/components/analyzer/__tests__/ReplayList.test.tsx",
+        "apps/web/lib/help/articles/account-data/public-profile.ts"
+      ],
+      "mergedPrs": [
+        687,
+        688,
+        758
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "0790b152369cc494657c27622e8150bce16dc7f6399a4bf865eef26594573a2c",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 140,
+      "id": "profiles-replays-expansion-1",
+      "status": "completed",
+      "implemented": "Validated archive query return context, filtered older/newer game neighbors with date/ID ordering, disabled ends and keyboard exclusions are wired. One hero POV chip links to the full Watch group; shared SectionNav scroll-spy and section IDs remain. Macro leaks sort/cap, expand, total costs and explicitly seek the timeline, while score tone thresholds and Help describe the behavior.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/components/public-profile/archiveQuery.ts",
+        "apps/web/components/public-profile/ReplayNeighborNav.tsx",
+        "apps/web/components/public-profile/PublicReplayAnalysis.tsx",
+        "apps/web/components/public-profile/PublicMacroLeakCard.tsx",
+        "apps/web/components/ui/SectionNav.tsx",
+        "apps/api/src/services/replayLibrary.js",
+        "apps/api/src/routes/publicReplays.js",
+        "apps/web/components/public-profile/__tests__/PublicReplays.test.tsx",
+        "apps/web/lib/help/articles/account-data/public-profile.ts"
+      ],
+      "mergedPrs": [
+        688
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "fd3097a963284b3052ae19f3a932075aad4985d4f04e5d024958b2770888b3f3",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 141,
+      "id": "profiles-replays-expansion-2",
+      "status": "partial",
+      "implemented": "Consent-controlled canonical player Overview, optional replay archive and section privacy are merged. Existing archive Share and analysis copy controls provide related foundations.",
+      "remainingRequirements": [
+        "Replace repeated hero record/main-race KPI with identity/month-year and sample-qualified Best matchup/Most played; mirror the loading skeleton.",
+        "Add eligible full-row matchup/signature-build replay drilldowns, count-scope hint and accessible featured-build vote icons.",
+        "Create the shared ShareButton with native/copy/manual fallback; migrate profile/archive/analysis/community consumers, archive buttons and GlowHalo, and pill download appearance. PublicReplayShareButton still exists and PublicReplayAnalysis uses PlayerCopyButton.",
+        "Implement the privacy-allowlisted public per-game card endpoint, signed-out analysis teaser, auth-appropriate metadata and 1200x630 per-replay OG route with sharing eligibility/no-opponent checks. Current detail route remains protected rather than serving the proposed teaser.",
+        "Deliver the corresponding public-profile sharing/drilldown/teaser Help and privacy/preview regressions."
+      ],
+      "evidence": [
+        "apps/web/components/public-profile/PublicProfile.tsx",
+        "apps/web/components/public-profile/PublicPlayerPage.tsx",
+        "apps/web/components/public-profile/PublicReplayLibrary.tsx",
+        "apps/web/components/public-profile/PublicReplayAnalysis.tsx",
+        "apps/web/components/public-profile/PublicReplayShareButton.tsx",
+        "apps/web/middleware.ts",
+        "apps/api/src/routes/publicReplays.js",
+        "docs/handoff/public-player-checkpoint.md"
+      ],
+      "mergedPrs": [
+        758
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "8f71ffcaff42d25299d4d99025356555fbf3c8627271a272fdce756eacd560fd",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 144,
+      "id": "reviews-coaching-polish-2",
+      "status": "completed",
+      "implemented": "Race/exact-matchup precedence round-trips through board URL and anchored API filter. Shared Fields/Selects, removable chips, filtered empties, Newest/Older pages and admin loader are present. Compact personalized help cards retain error/verified-race links and mobile disclosure preference. The account-gated Ask picker searches eligible games and opens the existing request form; My reviews reuses it. Help covers request discovery and picking a game.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/components/reviews/ReviewBoardFilters.tsx",
+        "apps/web/components/reviews/ActiveFilterChips.tsx",
+        "apps/web/components/reviews/ReviewBoardPagination.tsx",
+        "apps/web/components/reviews/ReviewBoardSidebar.tsx",
+        "apps/web/components/reviews/AskGamePicker.tsx",
+        "apps/web/components/reviews/ReviewBoardLoader.tsx",
+        "apps/web/components/reviews/__tests__/ReviewBoard.test.tsx",
+        "apps/web/components/reviews/__tests__/ReviewBoardInteractions.test.tsx",
+        "apps/api/src/services/reviews.js",
+        "apps/api/src/routes/reviews.js",
+        "apps/web/lib/help/articles/reviews-coaching/replay-reviews.ts"
+      ],
+      "mergedPrs": [
+        687,
+        786
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "30a85b5e9c399624e6ea389c479be958c8e0b96d5ac03e47306e73ef5643b175",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 145,
+      "id": "reviews-coaching-polish-3",
+      "status": "completed",
+      "implemented": "Bounded 14-day/20-entry drafts, restore/discard and storage failure handling are implemented with stronger account isolation. Composer and real CommentEditor keep validation, IME-safe Ctrl/Cmd+Enter, busy state and edit deadline. Dirty request scrim/Escape guards and text-keypad focus-range echo/suggestions/chips remain. Fields/Selects and Help explain scope, privacy, drafts and 15-minute editing.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/lib/reviewDrafts.ts",
+        "apps/web/components/reviews/ReviewComposer.tsx",
+        "apps/web/components/reviews/CommentEditor.tsx",
+        "apps/web/components/reviews/AskForReviewButton.tsx",
+        "apps/web/components/reviews/FocusRangeFields.tsx",
+        "apps/web/components/reviews/__tests__/ReviewWriting.test.tsx",
+        "apps/web/components/reviews/__tests__/ReviewComposer.ownerScope.test.tsx",
+        "apps/web/lib/help/articles/reviews-coaching/replay-reviews.ts",
+        "docs/handoff/review-lifecycle-checkpoint.md"
+      ],
+      "mergedPrs": [
+        687,
+        786
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "9376197145fdd328c1d1d39e6bf8ef074a74949996342e7cb01918716bc3e7d7",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 146,
+      "id": "reviews-coaching-polish-4",
+      "status": "completed",
+      "implemented": "Accessible stepped ReviewMenu, native/share-menu fallbacks and selected text copy recovery are present. Header download/share/request actions, private collapsed Asker tools and explicit close confirmation remain. Comment age/edited annotation, parsed duplicate-report responses and ConfirmDialogs for block/delete replace native confirms. Help explains file privacy, closing and whole-request reporting.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/components/reviews/ReviewMenu.tsx",
+        "apps/web/components/reviews/ReviewShareMenu.tsx",
+        "apps/web/components/reviews/ReviewPage.tsx",
+        "apps/web/components/reviews/ReviewThread.tsx",
+        "apps/web/components/reviews/__tests__/ReviewMenu.test.tsx",
+        "apps/web/components/reviews/__tests__/ReviewHeaderActions.test.tsx",
+        "apps/web/components/reviews/__tests__/ReviewThread.test.tsx",
+        "apps/web/lib/help/articles/reviews-coaching/replay-reviews.ts"
+      ],
+      "mergedPrs": [
+        687,
+        786
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "6ffa45645b9da4cea6ea01e6520b5787f67cb6b531a71a9b244d2e2a18a5165f",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 147,
+      "id": "reviews-coaching-polish-5",
+      "status": "completed",
+      "implemented": "Visible role/header uses the shared practice-sharing data; loading skeleton and accessible Tabs are present. Locker/Sessions remain mounted after activation, badges include requests/alerts/dirty availability, and SaveBar publishes or resets the retained schedule. Real booking times use the saved zone. Locker loading/error/retry and the described Help remain.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/app/coaching/CoachingWorkspace.tsx",
+        "apps/web/app/coaching/useCoachingBadges.ts",
+        "apps/web/app/coaching/CoachSchedule.tsx",
+        "apps/web/app/coaching/LockerHost.tsx",
+        "apps/web/app/coaching/CoachingWorkspace.test.tsx",
+        "apps/web/app/coaching/CoachSchedule.test.tsx",
+        "apps/web/app/coaching/LockerHost.test.tsx",
+        "apps/web/lib/help/articles/reviews-coaching/coaching.ts"
+      ],
+      "mergedPrs": [
+        687,
+        721
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "ab9561ac004e3c8481aa8e36fb77dd954a7f1149d174e9dfec5a2d90da01d563",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 148,
+      "id": "reviews-coaching-expansion-1",
+      "status": "open",
+      "implemented": "Existing ReviewPage click-to-comment seeking and timed comments are prerequisites; the proposed deep-link/navigation expansion is absent.",
+      "remainingRequirements": [
+        "Admit #comment-ID and ?t= on load/hashchange, await playback readiness, clamp time and report missing/deleted IDs without a spurious scroll.",
+        "Replace the current unconditional smooth scrollToComment with reduced-motion-aware behavior.",
+        "Add explicit comment/moment/current-time copy actions without rewriting URLs during inspection.",
+        "Build the timed-comment stepper, polite position announcements, AND-combined focus-range/pins/replies filters and persisted Top/Timeline order.",
+        "Add the exported N/P/C/? shortcut descriptors with field/modifier/replay/dialog exclusions and the sharing/keyboard Help sections plus regressions."
+      ],
+      "evidence": [
+        "apps/web/components/reviews/ReviewPage.tsx",
+        "apps/web/components/reviews/ReviewThread.tsx",
+        "apps/web/components/reviews/ReviewComposer.tsx",
+        "apps/web/components/reviews/ReviewShareMenu.tsx",
+        "apps/web/lib/reviews.ts",
+        "apps/web/lib/help/articles/reviews-coaching/replay-reviews.ts"
+      ],
+      "mergedPrs": [],
+      "previousStatus": "unknown",
+      "requirementSha256": "95cc779d7cf2e4de451f5607412eb4017a174851e1e0acf55fc16151c3d83bea",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 153,
+      "id": "streamer-polish-1",
+      "status": "completed",
+      "implemented": "Shared overlay socket retries nonterminal handshakes with capped jitter/online recovery and terminal invalid/replaced states. Setup/check status cards and typo suggestions avoid token output. Dock terminal failures stop loading loops; snapshot readiness gates controls and full-list writes. Panel actions retain input on null/failure, show confirmations and register current-action Retry. Help explains reconnection, invalid links and check=1.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/components/overlay/overlayResilience.ts",
+        "apps/web/components/overlay/OverlaySetupCard.tsx",
+        "apps/web/components/overlay/scenes/OverlaySceneClient.tsx",
+        "apps/web/components/dock/DockClient.tsx",
+        "apps/web/components/dock/useDockPanelActions.tsx",
+        "apps/web/components/dock/DockPoll.tsx",
+        "apps/web/components/dock/DockGoals.tsx",
+        "apps/web/components/dock/DockClips.tsx",
+        "apps/web/components/overlay/__tests__/overlayResilience.test.ts",
+        "apps/web/components/dock/__tests__/DockClient.test.tsx",
+        "apps/web/lib/help/articles/stream-studio/obs-overlay-setup.ts"
+      ],
+      "mergedPrs": [
+        647,
+        687
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "29dd602e2f012d96189e499deaa37f3c37000d187b8167fb3543c064d6918e69",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 154,
+      "id": "streamer-polish-2",
+      "status": "completed",
+      "implemented": "Mounted Custom/Build poll modes retain readiness/open-poll locks, matchup filters, accessible picks and winner/build links. Four scene modes propagate through API/client/renderers with safe start-mark precedence, shared quick times and bounded message presets. Current-snapshot Block/Undo/Unblock/cap/read-only Settings entries and case-insensitive vote exclusions are implemented and documented.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/components/dock/DockPollCard.tsx",
+        "apps/web/components/dock/DockBuildVote.tsx",
+        "apps/web/components/dock/DockScenes.tsx",
+        "apps/web/components/dock/DockBlockedUsers.tsx",
+        "apps/web/components/dock/useSceneMessages.ts",
+        "apps/web/components/overlay/widgets/ChatPollWidget.tsx",
+        "apps/api/src/services/multichatStudio.js",
+        "apps/web/lib/multichat/useStudioState.ts",
+        "docs/handoff/streamer-polish-checkpoint.md",
+        "apps/web/lib/help/articles/stream-studio/stream-dock.ts"
+      ],
+      "mergedPrs": [
+        687
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "a6fc9014d58ca8e25feecace3d1d944a3ec8dbadfc147e8c1e3fc15604b6d97d",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 155,
+      "id": "streamer-polish-3",
+      "status": "completed",
+      "implemented": "Studio uses shipped Streams-version copy, guide-linked features and loaded-auth CTA island without losing signed-out HTML. Learning gallery opens on desktop, course Reset has Undo, navigation scroll-spy and reduced-motion offsets are shared, and CTA buttons use shared recipes. Later playground/OBS instructions preserve the interim finish guidance.",
+      "remainingRequirements": [],
+      "evidence": [
+        "docs/handoff/streamer-polish-checkpoint.md",
+        "apps/web/components/stream-studio/CrashCourse.tsx",
+        "apps/web/components/stream-studio/CrashCourse.test.tsx",
+        "apps/web/components/stream-studio/WidgetExplorer.tsx",
+        "apps/web/components/stream-studio/LearnPage.tsx",
+        "apps/web/lib/streamStudioLearn.ts",
+        "apps/web/lib/agentNotice.ts"
+      ],
+      "mergedPrs": [
+        687,
+        718,
+        724
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "e3487f42fc2f65e8b8486b6338fe4bec56ed6609a26eb1fef82a718f6dac8755",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 156,
+      "id": "streamer-polish-4",
+      "status": "completed",
+      "implemented": "Shared Dock controls, labels/icons/focus and coarse-pointer sizing are implemented. SectionCard disclosure/pinning/reset, bounded denied-storage fallback, lazy b-roll, scroll-spy expansion and loading summaries retain drafts. Copy controls offer selected manual fallbacks. The later DockScout uses the same SectionCard loop, closing the predecessor caveat in the old checkpoint. Help has the requested collapse/pin instruction.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/components/dock/SectionCard.tsx",
+        "apps/web/components/dock/DockControls.tsx",
+        "apps/web/components/dock/DockClient.tsx",
+        "apps/web/components/dock/DockScout.tsx",
+        "apps/web/components/dock/DockCopyText.tsx",
+        "apps/web/components/dock/useDockScrollSpy.ts",
+        "apps/web/lib/dockLayout.ts",
+        "apps/web/components/dock/__tests__/DockLayoutIntegration.test.tsx",
+        "docs/handoff/dock-polish-checkpoint.md",
+        "apps/web/lib/help/articles/stream-studio/stream-dock.ts"
+      ],
+      "mergedPrs": [
+        723,
+        725,
+        732,
+        785
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "e9c450f5135e79c500d7c3f9f159d8d0ad076240b0d21377e098bcedfea48ae4",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 157,
+      "id": "streamer-expansion-1",
+      "status": "open",
+      "implemented": "Existing untimed poll/build-vote and copyable clip log are predecessors. The planned duration/export/manual-flag expansion is absent.",
+      "remainingRequirements": [
+        "Implement server-stamped allowlisted 30/60/120/300-second poll deadlines, authoritative read expiry and idempotent close, widget/Dock countdown and skew handling.",
+        "Add bounded per-token Run again form persistence, presets and one parser-tested POLL_VOTE_HINT across Dock/widget/guide surfaces.",
+        "Add pure chapter generation with start/10-second/three-entry rules, formula-safe CSV, consistent offset-or-wall-clock copy, kind filters and 100-item paging.",
+        "Add token-authenticated 5-second-cooldown manual moment endpoint/kind, optional bounded note and Undo for clearing/overwriting stream-start marks.",
+        "Deliver API/UI/helpers/widget tests and the specified Stream Dock/learn documentation."
+      ],
+      "evidence": [
+        "apps/web/components/dock/DockPoll.tsx",
+        "apps/web/components/dock/DockClips.tsx",
+        "apps/web/lib/multichat/poll.ts",
+        "apps/web/lib/vodLinks.ts",
+        "apps/api/src/services/multichatStudio.js",
+        "apps/api/src/services/multichatEngagement.js",
+        "apps/api/src/routes/multichat.js",
+        "apps/web/lib/help/articles/stream-studio/stream-dock.ts"
+      ],
+      "mergedPrs": [],
+      "previousStatus": "unknown",
+      "requirementSha256": "a016df853ebad4553634f3aeb4587289637958bb78d2ff26f36a910f826de084",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 158,
+      "id": "streamer-polish-5",
+      "status": "open",
+      "implemented": "WidgetShell already has scale/frame rendering, but the proposed shared OverlayPanel and canonical overlay race-color module are absent.",
+      "remainingRequirements": [
+        "Extract OverlayPanel from WidgetShell and migrate every listed color/font-only card; explicitly apply scale/frame exclusions for full-canvas, strips and MultiChat.",
+        "Create one overlay race palette used by WidgetShell/raceToAccent/RaceIcon/backdrops, preserving intentional dark overlay colors and the design-system note.",
+        "Add global-token parity and themed large/frame consumer tests; document recommended dimensions at Normal scale and the expanded size coverage in troubleshooting."
+      ],
+      "evidence": [
+        "apps/web/components/overlay/WidgetShell.tsx",
+        "apps/web/components/overlay/widgets/ChatPollWidget.tsx",
+        "apps/web/components/overlay/widgets/StreamGoalsWidget.tsx",
+        "apps/web/components/overlay/scenes/SC2BackdropScene.tsx",
+        "apps/web/components/stream-studio/LearnTroubleshooting.tsx",
+        "docs/design-system.md"
+      ],
+      "mergedPrs": [],
+      "previousStatus": "unknown",
+      "requirementSha256": "2920fc899d43709bb84d1b2069d424e54c407e409a0b81c351d5538b7893712a",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 159,
+      "id": "streamer-expansion-2",
+      "status": "open",
+      "implemented": "Crash course still uses local self-reported checkboxes and the interim nice-work link. Presence/Settings health and playground are available prerequisites.",
+      "remainingRequirements": [
+        "Build the shared readiness function and signed-in-only Your setup island with independent truthful error/Retry rows for paired device, source presence, chat configuration and Dock presence.",
+        "Poll only while visible; add account-safe additive automatic lesson ticks without undoing manual progress.",
+        "Replace interim completion text with actual completed-lesson/starter-widget status and next-step links; keep signed-out summary free of account statuses.",
+        "Add parity/visibility/error/automatic-progress regressions and the promised course/getting-started copy."
+      ],
+      "evidence": [
+        "apps/web/components/stream-studio/CrashCourse.tsx",
+        "apps/web/components/stream-studio/CrashCourse.test.tsx",
+        "apps/web/components/stream-studio/LearnPage.tsx",
+        "apps/web/components/stream-studio/LearnTroubleshooting.tsx",
+        "docs/handoff/widget-playground-checkpoint.md"
+      ],
+      "mergedPrs": [],
+      "previousStatus": "unknown",
+      "requirementSha256": "fb5c38b01d9b13d0af02b46676675418748766b45d40b9b5918abe766d20f4f0",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 161,
+      "id": "settings-onboarding-polish-2",
+      "status": "completed",
+      "implemented": "SetupHealth combines independent me/doctor/release/optional-overlay rows, unknown warnings and per-source Retry, shared doctor hook and sanitized copy diagnostics. Import always includes desktop controls with gated browser import. Checklist embeds compact pairing, progress and deferred-dismiss Undo; Preferences can restore it without replacing onboarding fields. Required setup/import/troubleshooting Help is present.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/components/analyzer/settings/SetupHealthCard.tsx",
+        "apps/web/components/analyzer/settings/setupHealth.ts",
+        "apps/web/components/analyzer/settings/SettingsImport.tsx",
+        "apps/web/components/analyzer/settings/SettingsImportPanel.tsx",
+        "apps/web/components/onboarding/OnboardingChecklist.tsx",
+        "apps/web/components/analyzer/settings/__tests__/SetupHealthCard.test.tsx",
+        "apps/web/lib/help/articles/troubleshooting/setup-health.ts",
+        "apps/web/lib/help/articles/getting-started/importing-replay-history.ts"
+      ],
+      "mergedPrs": [
+        666,
+        777,
+        780
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "55067a53a3e1d651ec476888d71b8143323269cebd3367601182cae165ed1e29",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 162,
+      "id": "settings-onboarding-polish-3",
+      "status": "completed",
+      "implemented": "Download distinguishes release error from successful empty output, shares unsigned-install copy, uses OS-specific commands, conditions resync/version lines on account state, avoids invented artifact size and renders accessible Markdown release notes. Donation uses measured provider totals/bar/collapsed details and manual email copy fallback; install Help documents Retry/GitHub.",
+      "remainingRequirements": [],
+      "evidence": [
+        "docs/handoff/download-donate-checkpoint.md",
+        "apps/web/components/onboarding/DownloadCard.tsx",
+        "apps/web/lib/agentInstallerCopy.ts",
+        "apps/web/app/donate/page.tsx",
+        "apps/web/components/donate/CostBar.tsx",
+        "apps/web/lib/help/articles/getting-started/install-and-pair.ts"
+      ],
+      "mergedPrs": [
+        687
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "230c56f047e50776e01922966ce0a794aea8f8f03f302aa8e483e68fc8ebc94b",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 163,
+      "id": "settings-onboarding-polish-4",
+      "status": "partial",
+      "implemented": "Per-source dirty state, guarded Chat token lifetime, named Settings sections and some source-local SaveBars are merged.",
+      "remainingRequirements": [
+        "Implement the per-tab save/reset registry and one shell-owned SaveBar that serializes all dirty sources, reports partial failures and retains failed drafts.",
+        "Register Profile plus channels together and remove the still-present Save channels button; register MultiChat, ChatBot and theme without stacked bars.",
+        "Audit save-on-change controls and add the promised Instant markers/header explanation.",
+        "Persist boolean credit/ghostVoice in the validated token profile, admit old local cache only for one-time migration and preserve existing URL overrides; add migration/type rejection tests and corresponding Help."
+      ],
+      "evidence": [
+        "apps/web/components/analyzer/settings/SettingsContext.tsx",
+        "apps/web/components/analyzer/settings/SettingsShell.tsx",
+        "apps/web/components/analyzer/settings/SettingsPlayerChannels.tsx",
+        "apps/web/components/analyzer/settings/OverlayCreditToggle.tsx",
+        "apps/web/components/analyzer/settings/SettingsOverlay.tsx",
+        "docs/handoff/settings-chat-checkpoint.md",
+        "apps/web/lib/help/articles/getting-started/settings-overview.ts"
+      ],
+      "mergedPrs": [
+        777,
+        780
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "2b23fe85cacdd8daf48a69bdcc8631a7c0d82522986f51c32535a963dc09b70c",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 167,
+      "id": "landing-try-polish-4",
+      "status": "completed",
+      "implemented": "AuthShell DOM/focus order is lead-form-marketing with a phone disclosure. TrySavePanel accepts safe resume redirects and truthful local counts/failures. Optional all-audience Latest, source-token-matched Clerk colors, signed-in landing CTAs and mode-gated browser hint are implemented and tested; this item requires no new Help article.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/components/auth/AuthShell.tsx",
+        "apps/web/components/auth/TrySavePanel.tsx",
+        "apps/web/lib/instant/authRedirect.ts",
+        "apps/web/lib/theme/tokens.ts",
+        "apps/web/lib/clerk-appearance.ts",
+        "apps/web/components/landing/LandingPageContent.tsx",
+        "docs/handoff/landing-try-checkpoint.md",
+        "docs/handoff/site-cta-checkpoint.md"
+      ],
+      "mergedPrs": [
+        687,
+        751,
+        772
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "d106d25511e2964c1d231bb2415e56f5fcd9592c682039f64f9ab2973856303f",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 168,
+      "id": "landing-try-polish-5",
+      "status": "completed",
+      "implemented": "Both opener cards independently disclose all rows with decided-game bars and retained focus. Last loss uses shared report dates. Date-window selection is inside intake before file choices, isolated from dropzone activation, with applies-to-next-run/cap copy and busy disabling. Report filtering is explicitly left to its separate expansion.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/components/instant/report/OpenersCard.tsx",
+        "apps/web/components/instant/report/LastLossCard.tsx",
+        "apps/web/components/instant/ReplayIntake.tsx",
+        "apps/web/components/instant/DateWindowSelect.tsx",
+        "docs/handoff/landing-try-checkpoint.md"
+      ],
+      "mergedPrs": [
+        687,
+        751
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "755a8364f1f3873f3b8a19d6eebeda4b170e012ac5fb5b509c104ea9c18e1274",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 169,
+      "id": "landing-try-expand-1",
+      "status": "open",
+      "implemented": "Current /try report has totals/matchups/openers/MMR/macro/game views and privacy-filtered PNG/text sharing; the proposed local report slicing/export expansion is absent.",
+      "remainingRequirements": [
+        "Map existing recap highlights with sample floors; add record-by-map with Unknown last/disclosure and exact game-length boundary buckets plus missing-duration count.",
+        "Add one local matchup/result/newest10/newest25/90day filter pipeline, sessionStorage preference, filtered totals/game list/status/empty/Clear and matchup-row drilldowns, without reparsing files.",
+        "Add filtered RFC4180/formula-safe/BOM CSV downloads and one opponent-free reportSummaryText reused by sharing; ensure share images exclude opponent-named highlights.",
+        "Deliver boundary/filter/export/interaction/browser regressions and TryExplainer/instant-analysis Help/changelog coverage."
+      ],
+      "evidence": [
+        "apps/web/lib/instant/report.ts",
+        "apps/web/components/instant/InstantReport.tsx",
+        "apps/web/components/instant/TryPage.tsx",
+        "apps/web/components/instant/report/RecordByMatchupCard.tsx",
+        "apps/web/lib/help/articles/getting-started/instant-analysis.ts",
+        "docs/handoff/try-conversion-checkpoint.md"
+      ],
+      "mergedPrs": [],
+      "previousStatus": "unknown",
+      "requirementSha256": "812fde785630e0fe5d948920e93f202205c233f4532470b2682ad469f06aa472",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 171,
+      "id": "chrome-nav-polish-2",
+      "status": "completed",
+      "implemented": "Pinned rail prepaint/storage/device defaults, groups/descriptive tooltips, Build stats/library naming and phone short label are implemented. Later shared Sheet/Popover changes preserve More focus/body locks, help/legal/status/install/theme ordering, signed-out login icon and fuller avatar menu. Getting around Help reflects the final navigation.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/components/chrome/AppChrome.tsx",
+        "apps/web/components/chrome/ChromeRail.tsx",
+        "apps/web/components/chrome/railPreference.ts",
+        "apps/web/components/chrome/appNav.ts",
+        "apps/web/components/chrome/MoreSheet.tsx",
+        "apps/web/components/chrome/__tests__/AppChrome.test.tsx",
+        "apps/web/lib/help/articles/analyzer/dashboard-and-analyzer.ts",
+        "docs/handoff/chrome-navigation-checkpoint.md",
+        "docs/handoff/more-sheet-checkpoint.md"
+      ],
+      "mergedPrs": [
+        687,
+        762,
+        767
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "d1c69c1a7891d67034b7cc9c0467b48433bb8b35592e4feaffc732ac617d7d7b",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 172,
+      "id": "chrome-nav-polish-3",
+      "status": "completed",
+      "implemented": "AgentSyncPill uses authoritative /me/SWR, shared socket and inserted-only/coalesced updates without useLiveGame. Presence/30-second relative times, nonmodal focus-return details and Devices links remain. Compact app activity hides phone utility counts and keeps xl community disclosure preference. The source-backed correction says latest game rather than falsely treating played date as upload time; Help and Devices preserve that distinction.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/components/SyncStatus.tsx",
+        "apps/web/lib/agentPresence.ts",
+        "apps/web/components/chrome/SiteStats.tsx",
+        "apps/web/components/chrome/__tests__/SiteStats.test.tsx",
+        "apps/web/lib/help/articles/troubleshooting/my-game-didnt-show-up.ts",
+        "docs/handoff/chrome-navigation-checkpoint.md"
+      ],
+      "mergedPrs": [
+        660,
+        687,
+        752
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "69f77a2a901d6ace7be1d6549242839b275011e53382a396e140e4513aaedea6",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 173,
+      "id": "chrome-nav-pwa-1",
+      "status": "completed",
+      "implemented": "Page-lifetime install store captures early native prompts and installed state; More/Settings/landing share native or platform instruction behavior. Service worker caches only self-contained offline HTML, excludes Overlay/Dock and private/API/chunk data, and keeps consented updates. Platform/store/offline tests and install Help cover entry points, shortcuts and reconnection.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/lib/pwa/install.ts",
+        "apps/web/lib/pwa/__tests__/install.test.ts",
+        "apps/web/lib/pwa/__tests__/offlineWorker.test.ts",
+        "apps/web/components/pwa/ServiceWorkerRegister.tsx",
+        "apps/web/components/pwa/InstallAppButton.tsx",
+        "apps/web/public/sw.js",
+        "apps/web/public/offline.html",
+        "apps/web/lib/help/articles/getting-started/install-app.ts",
+        "docs/handoff/chrome-navigation-checkpoint.md"
+      ],
+      "mergedPrs": [
+        687
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "13b463d1b129b907b4d6828e7d250d3ecf55dd86229c7d5cdd9fe2f4728a30c6",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 177,
+      "id": "admin-polish-4",
+      "status": "completed",
+      "implemented": "Typed/allowed URL coercion, unknown-param retention, replace-vs-push paging, guarded debounce and cursor stack are present across lists/detail selections. Retained rows/updating/error behavior, clear/refocus search, shared responsive sortable AdminTable/BreakdownList and off-page/missing selected-game states are implemented. Sharing views documentation explains the exact URL/Back semantics.",
+      "remainingRequirements": [],
+      "evidence": [
+        "apps/web/app/admin/components/useAdminQueryState.ts",
+        "apps/web/app/admin/components/useAdminCursor.ts",
+        "apps/web/app/admin/components/AdminTable.tsx",
+        "apps/web/app/admin/components/AdminSearchField.tsx",
+        "apps/web/app/admin/components/AdminSelectedGame.tsx",
+        "apps/web/app/admin/components/BreakdownList.tsx",
+        "apps/web/app/admin/users/page.tsx",
+        "apps/web/app/admin/components/__tests__/adminLists.test.tsx",
+        "docs/admin-console.md"
+      ],
+      "mergedPrs": [
+        692,
+        728,
+        730
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "7417948dea6dfd03ded9f6d5640c92a39aed28a3f740cb230966e32d173b61bf",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 178,
+      "id": "admin-polish-5",
+      "status": "partial",
+      "implemented": "Prior URL-state work retains game/owner/cursor selection and off-page detail access; unrelated newer user detail uses a correct ResultBadge.",
+      "remainingRequirements": [
+        "Replace AdminGameDetail.isWin and both scoped game-list ternaries with explicit win/loss/tie/unknown classification. Currently tie and Undecided truthy strings still render Loss.",
+        "Extract shared AdminGamesMasterDetail with current selection, guarded j/k/arrow/Enter navigation and polite selection announcements.",
+        "Add the complete opponent-cohort summary aggregate (W/L/T/unknown, decided-only rate, average length, top maps and last10) with small-sample copy.",
+        "Add URL result/map filters to both game pages and user filter to global player games; retain cursor reset and existing selection semantics. Add API/UI regressions for ties/unknowns and cohort summary/filter correctness."
+      ],
+      "evidence": [
+        "apps/web/app/admin/components/AdminGameDetail.tsx",
+        "apps/web/app/admin/global/players/[pulseId]/page.tsx",
+        "apps/web/app/admin/users/[userId]/opponents/[pulseId]/page.tsx",
+        "apps/web/app/admin/components/AdminSelectedGame.tsx",
+        "apps/api/src/routes/admin.js"
+      ],
+      "mergedPrs": [
+        692
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "56099e154cb1d236e3d4bd86299b88bad6534ee7957757d67bec592580dbb483",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 179,
+      "id": "admin-polish-6",
+      "status": "partial",
+      "implemented": "Notification URL filters/retained rows, empty and debug states, support Reply/status and linked account detail destinations exist. Opening detail deliberately does not mark an event read.",
+      "remainingRequirements": [
+        "Implement authenticated idempotent per-event read/unread routes with ID validation/404 and typed mark-all; compute unreadByType in one aggregate.",
+        "Add accessible per-row optimistic read/unread controls with rollback, Retry and shared count revalidation; expose Open user directly when eligible.",
+        "Add per-type unread counts/pressed state and scoped mark-all labels; catch mark-all failure and show an alert/Retry instead of the current try/finally-only flow.",
+        "Extend API/UI regressions and Notifications/support documentation to distinguish per-item, per-type and all-event read operations."
+      ],
+      "evidence": [
+        "apps/api/src/routes/admin.js",
+        "apps/api/src/services/adminEvents.js",
+        "apps/web/app/admin/notifications/page.tsx",
+        "apps/web/app/admin/components/AdminEventRow.tsx",
+        "docs/admin-console.md",
+        "docs/handoff/admin-inbox-tap-checkpoint.md"
+      ],
+      "mergedPrs": [
+        692,
+        730
+      ],
+      "previousStatus": "unknown",
+      "requirementSha256": "d05dc8f959c8edb919259e5315d5f5666b0b8f58c163da99cf0500d402aef583",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 180,
+      "id": "admin-polish-7",
+      "status": "open",
+      "implemented": "Existing dashboard counts/recent activity/storage and durable backup/job alerts are prerequisites; the proposed attention/daily triage expansion is absent.",
+      "remainingRequirements": [
+        "Add cheap indexed attention counts and cached-advisory read without provider refresh, plus zero-filled 7..90-day event aggregation.",
+        "Share a 60-second/socket-invalidated attention hook between shell badges and Needs attention rows, with bounded labels, all-clear/loading/error and exact queue deep links.",
+        "Wire identity/channel filter deep links, clickable defined KPI counters and valid week-over-week deltas; build the themed daily chart with table alternative.",
+        "Move collection storage from Dashboard into collapsed sortable Infrastructure storage and leave only the dashboard destination summary.",
+        "Add exact counts/missing-type/index/delta/queue/chart/storage regressions and the daily-triage/counter-definition documentation."
+      ],
+      "evidence": [
+        "apps/api/src/routes/admin.js",
+        "apps/api/src/services/admin.js",
+        "apps/api/src/services/adminEvents.js",
+        "apps/web/app/admin/page.tsx",
+        "apps/web/app/admin/components/AdminFragments.tsx",
+        "apps/web/app/admin/health/page.tsx",
+        "docs/admin-console.md"
+      ],
+      "mergedPrs": [],
+      "previousStatus": "unknown",
+      "requirementSha256": "e09a0ce8e51c3840de05a548c4c3451037dcca9ff3c6f4bb70a24a4f0d492852",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 182,
+      "id": "admin-polish-9",
+      "status": "open",
+      "implemented": "Global Trends has local game/population state and existing expensive-request boundaries. The proposed unified URL/saved/apply model is absent; /v1/me access probe still exists.",
+      "remainingRequirements": [
+        "Serialize/validate game plus bounded population filters, honor URL precedence and report invalid/too-large shared cohorts.",
+        "Add bounded adminTrendViews preference validation, protected built-in presets and create/apply/rename/delete with duplicate-name errors.",
+        "Use one pending draft context and Apply/Reset/Enter model across all controls; chips remove/apply immediately and Reset all clears both contexts.",
+        "Remove the /v1/me probe in favor of authoritative resource403, use shared Cards and move explanatory text into About these numbers.",
+        "Add URL/prefs/apply/privacy/access regressions and Global Trends documentation explaining population versus game scope."
+      ],
+      "evidence": [
+        "apps/web/app/admin/global-trends/page.tsx",
+        "apps/web/app/admin/global-trends/globalTrendsState.ts",
+        "apps/web/app/admin/global-trends/GlobalTrends.test.tsx",
+        "docs/admin-console.md"
+      ],
+      "mergedPrs": [],
+      "previousStatus": "unknown",
+      "requirementSha256": "988eff21d680394b7e1ef3cdf4fd8a5e01fc4a9522615fefeeae5669c1fe322d",
+      "howtoReviewed": true
+    },
+    {
+      "ordinal": 183,
+      "id": "admin-polish-10",
+      "status": "open",
+      "implemented": "Guide notes/videos/stats currently render in one long page with state-only selection and editor-local drafts. Existing note discard and video maintenance are prerequisites, not the requested protection expansion.",
+      "remainingRequirements": [
+        "Add dirty-only beforeunload/same-origin navigation confirmation and account-safe bounded session draft restore/clear behavior; show restored-note notice.",
+        "Add one Save all/Discard all bar with ordered per-note failures/Retry, confirmed discard and Ctrl/Cmd+S for the selected note.",
+        "Move Notes/Videos/Stats to accessible URL-backed tabs and persist selected matchup/build; add expandable coverage/updated/unsaved status navigation.",
+        "Add title search and counted All/Matched/Unmatched/Hidden/8-worker/Shorts video filters with50-at-a-time and clearable empties.",
+        "Add navigation/storage/partial-save/shortcut/coverage/filter regressions and the specified admin workflow section in guides documentation."
+      ],
+      "evidence": [
+        "apps/web/app/admin/guides/page.tsx",
+        "apps/web/app/admin/guides/components/GuideNotesEditor.tsx",
+        "apps/web/app/admin/guides/components/GuideVideosPanel.tsx",
+        "apps/web/app/admin/guides/components/useGuidesAdmin.ts",
+        "docs/guides.md",
+        "docs/admin-console.md"
+      ],
+      "mergedPrs": [],
+      "previousStatus": "unknown",
+      "requirementSha256": "471d8450ba10989aaefc5dae9e2f1370d554ed185c15c863eddc45c58cf8ef7e",
+      "howtoReviewed": true
+    }
+  ],
+  "sourceTree": "178d6921ea4911439c2b85d266a6b76c34c40725",
+  "mainTreeMatches": true,
+  "canonicalSha256": "7736aa72eada3a1b6d71ac1570accdbb24dbc6634138e5445c0fd3ce7fc58b60",
+  "ledgerSha256": "f1f2767e79b0004789e69a50e9f486f2be40074341902d5599727f8b669bbf25",
+  "sourcePins": [
+    {
+      "path": "apps/api/src/routes/admin.js",
+      "sha256": "b77cb4404829fbee98799a618dafefd2a986bb78da219e22780defa23a2be905"
+    },
+    {
+      "path": "apps/api/src/routes/multichat.js",
+      "sha256": "efb391b56b09bdeca961e6303b691cbda13df6343f877777a6b7af61bec56c1b"
+    },
+    {
+      "path": "apps/api/src/routes/publicReplays.js",
+      "sha256": "bb76fb99794dede012a6b07644914eb4afe38b22b078e71031d8e4584a240c9a"
+    },
+    {
+      "path": "apps/api/src/routes/reviews.js",
+      "sha256": "2fe56951770628124799241474ca374b4745471295bb4999b41f70c205757f21"
+    },
+    {
+      "path": "apps/api/src/services/admin.js",
+      "sha256": "a4dbc4b359c36761fe7b299ff4ee671913cd24767d13d85ddf4eff9321b5e3d7"
+    },
+    {
+      "path": "apps/api/src/services/adminEvents.js",
+      "sha256": "43586acc730291e916db095e649d0103f1b908d0d8524c757a34cb279305237e"
+    },
+    {
+      "path": "apps/api/src/services/multichatEngagement.js",
+      "sha256": "383ea81658c7a841627dd3a1dd053b17d0c094b6a62431f39578903ec8defbad"
+    },
+    {
+      "path": "apps/api/src/services/multichatStudio.js",
+      "sha256": "fc7cf7f7112fe9c59afaf69b78bc59ca83dae074cd92376f25b5d6b6488d7d12"
+    },
+    {
+      "path": "apps/api/src/services/replayLibrary.js",
+      "sha256": "f1b08ff002bb7fa313a5b2a982439e49d77b64ae1f5f081f458f0d6a7dd32cfd"
+    },
+    {
+      "path": "apps/api/src/services/reviews.js",
+      "sha256": "0237da6dc07633bfc9681e64796d58e1cb5c7457f26c1c582e9bca046970b8a4"
+    },
+    {
+      "path": "apps/web/app/admin/components/__tests__/adminLists.test.tsx",
+      "sha256": "9434cc93eaa59c313675513e02afb7163d1c01c6ed60ff548a6617a993da4676"
+    },
+    {
+      "path": "apps/web/app/admin/components/AdminEventRow.tsx",
+      "sha256": "0baebeeba3e890865bef820f485effc7e690a8131196641cebf469f4032953a7"
+    },
+    {
+      "path": "apps/web/app/admin/components/AdminFragments.tsx",
+      "sha256": "d9050249f9eb592ee432741cf875a88c1b5954f749bb94993cce0d0ccb031db1"
+    },
+    {
+      "path": "apps/web/app/admin/components/AdminGameDetail.tsx",
+      "sha256": "0d47152dd1b5c5e0d686296a2095dc1c6d2c203526daa036c29edc74c85d302a"
+    },
+    {
+      "path": "apps/web/app/admin/components/AdminSearchField.tsx",
+      "sha256": "31af2f0a64ae3f7f378cb3db8025ee75500c8b1f995202ef0f2197a1eb17be4e"
+    },
+    {
+      "path": "apps/web/app/admin/components/AdminSelectedGame.tsx",
+      "sha256": "8fda4a785df41c2c7d004513b0282deb07e0b41a7d4fa817dcf34fec8cd4ba4b"
+    },
+    {
+      "path": "apps/web/app/admin/components/AdminTable.tsx",
+      "sha256": "cc10da14d6c673d82a904f4503e350e5ca445121682d2d756499440c2a8d2f6c"
+    },
+    {
+      "path": "apps/web/app/admin/components/BreakdownList.tsx",
+      "sha256": "c4aaa9621178ca060714302ffaf411b70213d5d0dff06e7197e74ac0e1def223"
+    },
+    {
+      "path": "apps/web/app/admin/components/useAdminCursor.ts",
+      "sha256": "cd842d5f6e8e87e8465f4c700cc23f557d888b4ed1266a31669d09f68334caf7"
+    },
+    {
+      "path": "apps/web/app/admin/components/useAdminQueryState.ts",
+      "sha256": "ae64e249cbbc74ef6b1c68b459d0518d1c9ec2b858b45dc0c92486868802694f"
+    },
+    {
+      "path": "apps/web/app/admin/global-trends/GlobalTrends.test.tsx",
+      "sha256": "60922568f6a8a13b2e48bc03369aa12d104275c07abf0b7330c32caa3f5579e1"
+    },
+    {
+      "path": "apps/web/app/admin/global-trends/globalTrendsState.ts",
+      "sha256": "f92945563b07750c62c6dcfad8eb0b0ce14a4239757920da34786c3c51c98276"
+    },
+    {
+      "path": "apps/web/app/admin/global-trends/page.tsx",
+      "sha256": "8b6f1536af1b5d51ca23ddc86f85785d40f2bbabff5064da4cc5831b76c51215"
+    },
+    {
+      "path": "apps/web/app/admin/global/players/[pulseId]/page.tsx",
+      "sha256": "61c40a2b698c310410feea777f6f4ca3546821169f1bc0b99dc36fad28be6906"
+    },
+    {
+      "path": "apps/web/app/admin/guides/components/GuideNotesEditor.tsx",
+      "sha256": "e4778a74cc739609b0564d2cb44475a6ddc6d402f6441e14c3c92d20db28e8a5"
+    },
+    {
+      "path": "apps/web/app/admin/guides/components/GuideVideosPanel.tsx",
+      "sha256": "08ff960ab775ec4105102371fad91df302830854b5db0b367df1e0e6427d5e25"
+    },
+    {
+      "path": "apps/web/app/admin/guides/components/useGuidesAdmin.ts",
+      "sha256": "b89e7bbe7a994daab4f69ae30fc459cd6b2bbe1169a9e1ead6c9b48a505481a9"
+    },
+    {
+      "path": "apps/web/app/admin/guides/page.tsx",
+      "sha256": "b041c82ca8ff610060a534eeb75142d936a044680bd91cef42a86176d4d74775"
+    },
+    {
+      "path": "apps/web/app/admin/health/page.tsx",
+      "sha256": "cae58838746e3f935e55219568e2105ee647904e71ad1dc53433bef6446bdb06"
+    },
+    {
+      "path": "apps/web/app/admin/notifications/page.tsx",
+      "sha256": "81e0a731c5fe8b5933fd72cd98a366c1df7343bc95a439e72755f59a0a902360"
+    },
+    {
+      "path": "apps/web/app/admin/page.tsx",
+      "sha256": "ead64d35b0e07f7229bf41b6505b54a5463f1d66eba871a595e230159d8614c0"
+    },
+    {
+      "path": "apps/web/app/admin/users/[userId]/opponents/[pulseId]/page.tsx",
+      "sha256": "d6b9a8d061fffd0f562515da64a1e737b4a8266aa99a659109d48b8fccdb652f"
+    },
+    {
+      "path": "apps/web/app/admin/users/page.tsx",
+      "sha256": "0c27639928b346495a142185a2f6c59af3ac881a10bb20c94cc721ecace13c03"
+    },
+    {
+      "path": "apps/web/app/coaching/CoachingWorkspace.test.tsx",
+      "sha256": "8ef2a40abe08bff19ede9d9c0c110478b655b60c9b652bc902cf790a87baa975"
+    },
+    {
+      "path": "apps/web/app/coaching/CoachingWorkspace.tsx",
+      "sha256": "8d69210ee3f317df2b03ae03b914b84f0b665d0c5e2d8d793606b17fdbea6aa1"
+    },
+    {
+      "path": "apps/web/app/coaching/CoachSchedule.test.tsx",
+      "sha256": "6148bb94840e615c241f5424c1c6668ef73ab8e21754e97f772796b022620ed0"
+    },
+    {
+      "path": "apps/web/app/coaching/CoachSchedule.tsx",
+      "sha256": "c8e757c3f8e6402fa9026045d9a88020b31e3c89167b04c626ea14b12cbe38a5"
+    },
+    {
+      "path": "apps/web/app/coaching/LockerHost.test.tsx",
+      "sha256": "5c24fbc0926dd981eb95e288856f7a214adb8a1499c5e045e639a27800ec9cb6"
+    },
+    {
+      "path": "apps/web/app/coaching/LockerHost.tsx",
+      "sha256": "aa658d8b67851c908f6b66ab16b9c2ddcfdf4882e5a03d08193844fdba301eb6"
+    },
+    {
+      "path": "apps/web/app/coaching/useCoachingBadges.ts",
+      "sha256": "6598c4d9c85acd0e7a816b6d8343ec656121606208113c1ffbc27ed3ae8029ad"
+    },
+    {
+      "path": "apps/web/app/donate/page.tsx",
+      "sha256": "37cd5f498de031155617d5a5b81e569d0dad7a33859c78510b4278d3754db583"
+    },
+    {
+      "path": "apps/web/components/analyzer/__tests__/ReplayList.test.tsx",
+      "sha256": "366d05b9518ddbc101e180287380119425522f037cc22a3b612f7dcad9f55783"
+    },
+    {
+      "path": "apps/web/components/analyzer/replays/ReplayList.tsx",
+      "sha256": "6425bae0c11c36674c049035983731fcf612afefce84ffeff1565310e9f7e3e6"
+    },
+    {
+      "path": "apps/web/components/analyzer/settings/__tests__/SetupHealthCard.test.tsx",
+      "sha256": "edf8cd36fd375cb50d18890317ce30c1ba404f0a2439f044688219c4d2b40fc2"
+    },
+    {
+      "path": "apps/web/components/analyzer/settings/OverlayCreditToggle.tsx",
+      "sha256": "6e197325f10a0b22dd2888b2e28bce1a1dabdafd1f646a673115e792f5265526"
+    },
+    {
+      "path": "apps/web/components/analyzer/settings/SettingsContext.tsx",
+      "sha256": "1d2454ead5eb6f4f0d87ec7452be9015fd8a018c22dffe56cd1c8feec5f05837"
+    },
+    {
+      "path": "apps/web/components/analyzer/settings/SettingsImport.tsx",
+      "sha256": "605188fd5f517b97f119d61ba58bde8ebf8e2779af7af31b0dba35658d8a4bde"
+    },
+    {
+      "path": "apps/web/components/analyzer/settings/SettingsImportPanel.tsx",
+      "sha256": "eac53f05f0763079f5ca765693a50e18ac790fbd3409f43e459136ab6f7887cd"
+    },
+    {
+      "path": "apps/web/components/analyzer/settings/SettingsOverlay.tsx",
+      "sha256": "413c0628f862deeb4f1ad7ddd5ec99acc677e2e4c3c25d93e74d6eae65adcfe4"
+    },
+    {
+      "path": "apps/web/components/analyzer/settings/SettingsPlayerChannels.tsx",
+      "sha256": "b7d782523f2f61835f496c9c0bb8db1947b7853c67fae52216ed85d83dfd7729"
+    },
+    {
+      "path": "apps/web/components/analyzer/settings/SettingsShell.tsx",
+      "sha256": "c24657b5e4220df55ad827339fec86d27543c671f04276d5c69ff1fc130d42eb"
+    },
+    {
+      "path": "apps/web/components/analyzer/settings/setupHealth.ts",
+      "sha256": "71f85b23fb7bc34cb87a70d724061465a2eedc7e2c9851fac821e3c12c43f6e2"
+    },
+    {
+      "path": "apps/web/components/analyzer/settings/SetupHealthCard.tsx",
+      "sha256": "ab1ae142f5a9a7caa56f5421d939ed2c987e593af187d3a7bda6ee1b5b238499"
+    },
+    {
+      "path": "apps/web/components/auth/AuthShell.tsx",
+      "sha256": "ed66b489250ccdd6880bd680feab2b3e5bc0de7d0a9e2ec7c2c60559f02bb736"
+    },
+    {
+      "path": "apps/web/components/auth/TrySavePanel.tsx",
+      "sha256": "d0df1e9727464238db764ee5e04be6b49a281d4d6665a62cfc08e056030d2834"
+    },
+    {
+      "path": "apps/web/components/chrome/__tests__/AppChrome.test.tsx",
+      "sha256": "208220c14442160efab8a99d791d9a69b704fe04c8de5bd2fbe00442caa79b6a"
+    },
+    {
+      "path": "apps/web/components/chrome/__tests__/SiteStats.test.tsx",
+      "sha256": "147e09efc65455a97cc730f1d180f8af9aebd5473113040f8a62adf9831cd922"
+    },
+    {
+      "path": "apps/web/components/chrome/AppChrome.tsx",
+      "sha256": "3febaae4d173a1dffd4fee99bd9d347b45db009814f5ecb5e152044091675400"
+    },
+    {
+      "path": "apps/web/components/chrome/appNav.ts",
+      "sha256": "f5c3031229000e0403a0a1acbe0afc8fdf6e561aebb381f683e26157dc77b53f"
+    },
+    {
+      "path": "apps/web/components/chrome/ChromeRail.tsx",
+      "sha256": "5a1d1ba8daca80d8dfc15fe858539dee41c23848767f709c13e70985756b6559"
+    },
+    {
+      "path": "apps/web/components/chrome/MoreSheet.tsx",
+      "sha256": "2becfd511e1e348f072b403dfd2240d7490ce903b92658e0fc15b8009e9461cd"
+    },
+    {
+      "path": "apps/web/components/chrome/railPreference.ts",
+      "sha256": "92409ce3eff980fa1883123a76585f8522d7830824e7b333c1730b09a9e6743f"
+    },
+    {
+      "path": "apps/web/components/chrome/SiteStats.tsx",
+      "sha256": "36a8f1e4eb1104cfd254df0dce8b835d4e30c1a3892655784bbf078b6c0b150b"
+    },
+    {
+      "path": "apps/web/components/dock/__tests__/DockClient.test.tsx",
+      "sha256": "5344bbda5b78daa4d43576b2d09fa2b427d317f48e2c58bb07c30723be066613"
+    },
+    {
+      "path": "apps/web/components/dock/__tests__/DockLayoutIntegration.test.tsx",
+      "sha256": "0be16282f0c6a0c991e42c55338452146fccebc19811ef993f63f6c35a816228"
+    },
+    {
+      "path": "apps/web/components/dock/DockBlockedUsers.tsx",
+      "sha256": "fdc3701516c9813026e5b2d17251276137bf13996c6610ee81a906a9b5ad9fea"
+    },
+    {
+      "path": "apps/web/components/dock/DockBuildVote.tsx",
+      "sha256": "3a0f6cf0b2a28726ca27859b84f268fe77dfd87657d0427fe5671ba926a49a08"
+    },
+    {
+      "path": "apps/web/components/dock/DockClient.tsx",
+      "sha256": "498a0126aa3f9a36b3dd19b21c1c71455954ac1fbb806abd302ccf6888c0f8e0"
+    },
+    {
+      "path": "apps/web/components/dock/DockClips.tsx",
+      "sha256": "5336a5b817690a4ee254e34b1a9adc2dd1dce4e6294ef4b93b18ce06d2b2b79a"
+    },
+    {
+      "path": "apps/web/components/dock/DockControls.tsx",
+      "sha256": "86e1731aa58fb309f768fe7dc26e4543f042f189ec6a28455e785928745ea6f4"
+    },
+    {
+      "path": "apps/web/components/dock/DockCopyText.tsx",
+      "sha256": "69f8561df6647ecf59c1669b17015dd1dd62a208c6761b12fb0006f4249559ce"
+    },
+    {
+      "path": "apps/web/components/dock/DockGoals.tsx",
+      "sha256": "6eef311f118d28c1c7924cab63b393dc61ef6fe0847001e954c6af941923e49f"
+    },
+    {
+      "path": "apps/web/components/dock/DockPoll.tsx",
+      "sha256": "a0b6df3a347de952fa33756ecb8101e6e83d763b034e01223e2cb4848b9bd20b"
+    },
+    {
+      "path": "apps/web/components/dock/DockPollCard.tsx",
+      "sha256": "98851b351d395878d6c97a78fdc196d9ef8aaa95dfc4e93f6cef477e8f6405f9"
+    },
+    {
+      "path": "apps/web/components/dock/DockScenes.tsx",
+      "sha256": "d65048ebb6f79c36fe2cfe94c06bf7868ce8bc6d1e276223572053fecab02ace"
+    },
+    {
+      "path": "apps/web/components/dock/DockScout.tsx",
+      "sha256": "58c72e5541a68aadb9d73ba85b91f7d7a9a35d732b06e9d298ec60148c333873"
+    },
+    {
+      "path": "apps/web/components/dock/SectionCard.tsx",
+      "sha256": "8fea549bffbcd0da3a9f3ec89da677ff8a120102b72994a70dcc140d56d7f1bf"
+    },
+    {
+      "path": "apps/web/components/dock/useDockPanelActions.tsx",
+      "sha256": "a2cdd2b783a3c828cf7375688343c8f65d7636d5cbff6cba8b7958e228196f24"
+    },
+    {
+      "path": "apps/web/components/dock/useDockScrollSpy.ts",
+      "sha256": "37a46f93afba7473996ba426f17c7cc5afeb5da5b8aca61a5e3f83135045142d"
+    },
+    {
+      "path": "apps/web/components/dock/useSceneMessages.ts",
+      "sha256": "70b2669702a250c83a825f57095dccad43e8b7dfd4840f2174af8cf33158b1ed"
+    },
+    {
+      "path": "apps/web/components/donate/CostBar.tsx",
+      "sha256": "d6163cd5733c0b4619ea8ae199c5bd12dd7d04649fc475461bb738a30b5e42ea"
+    },
+    {
+      "path": "apps/web/components/instant/DateWindowSelect.tsx",
+      "sha256": "da83551c6d8f880720367a48050da6b33ff00621e8b8a71fc6ae78083fa80793"
+    },
+    {
+      "path": "apps/web/components/instant/InstantReport.tsx",
+      "sha256": "4420b5ac8503f93b24f24eaa572a5ba6e8d0fc74053906e32572dd5c47a0d042"
+    },
+    {
+      "path": "apps/web/components/instant/ReplayIntake.tsx",
+      "sha256": "9914c0e5a94222536c4890064bb35533984cd0c91ab0cd76a52817796b4a307e"
+    },
+    {
+      "path": "apps/web/components/instant/report/LastLossCard.tsx",
+      "sha256": "8ccba756bff7e8917c49c85ed03281c5fb34f0e63f1cbefadbc863d77b99bd66"
+    },
+    {
+      "path": "apps/web/components/instant/report/OpenersCard.tsx",
+      "sha256": "2f93eaf27891ffcca485ef0bfc108e33c26cb5ab90228156275654c78f21ba5b"
+    },
+    {
+      "path": "apps/web/components/instant/report/RecordByMatchupCard.tsx",
+      "sha256": "243eeb16e60b86c0d9d02a12637b45efbe188183f85625ece215ca6686fd3f80"
+    },
+    {
+      "path": "apps/web/components/instant/TryPage.tsx",
+      "sha256": "0987ac9aafca92dc811a105f8d8e0d866a7a1be4b39097874d03d4cca9493cfb"
+    },
+    {
+      "path": "apps/web/components/landing/LandingPageContent.tsx",
+      "sha256": "48674494918d7f1ff205e315fb032f01be27fd65aaa7385d3968525b5cdab1bb"
+    },
+    {
+      "path": "apps/web/components/onboarding/DownloadCard.tsx",
+      "sha256": "8e3da334a77b136a2cb12a9c0c3f50b7f413890c842def6cd1bc905d1e9129a1"
+    },
+    {
+      "path": "apps/web/components/onboarding/OnboardingChecklist.tsx",
+      "sha256": "8a3df0c841a0a62cee7efcea7e4a5ea8130366a59e6882fb15207700677d452d"
+    },
+    {
+      "path": "apps/web/components/overlay/__tests__/overlayResilience.test.ts",
+      "sha256": "17f4b68f475d9e22008bc122f50adec3f98ea7f527a977c195a955f4d020deda"
+    },
+    {
+      "path": "apps/web/components/overlay/overlayResilience.ts",
+      "sha256": "e4fc9840c2e24a252e0e9edddc06be54882f392b25815fb828ae9e5f43a2c7d5"
+    },
+    {
+      "path": "apps/web/components/overlay/OverlaySetupCard.tsx",
+      "sha256": "5d105108abcc9cecd358a4a3e901c79107dff16878b2d5535eb97c1cba99e6b1"
+    },
+    {
+      "path": "apps/web/components/overlay/scenes/OverlaySceneClient.tsx",
+      "sha256": "d7c15a9a8e9eac379d31c779b7a86d7644d67c079676745315ed8fc2ce4b73f2"
+    },
+    {
+      "path": "apps/web/components/overlay/scenes/SC2BackdropScene.tsx",
+      "sha256": "e1065adf7c256eeeca772c924f5e14fc20da12fdb52c43108e8de49b4ad0a071"
+    },
+    {
+      "path": "apps/web/components/overlay/widgets/ChatPollWidget.tsx",
+      "sha256": "bb592af73fe1f964f14a444b5e9429af4795f880e3bd94141ad234b99f82bf96"
+    },
+    {
+      "path": "apps/web/components/overlay/widgets/StreamGoalsWidget.tsx",
+      "sha256": "de851956e32b44e72f16046a917502682dae3ba46a812a262b0d5eac52f35360"
+    },
+    {
+      "path": "apps/web/components/overlay/WidgetShell.tsx",
+      "sha256": "5b1783d70d534144999526732ba6684b96604cea97e18117c8ffb4ad1e50dcd1"
+    },
+    {
+      "path": "apps/web/components/public-profile/__tests__/PublicReplays.test.tsx",
+      "sha256": "d1ed51efb7f09f5c382a901da176eb816cc7d415c61f5dd22c2e79ca08fab1fd"
+    },
+    {
+      "path": "apps/web/components/public-profile/archiveQuery.ts",
+      "sha256": "bc20877afb01c1bba8304910215c500ec7034b864195c0f06faf65ee06c1d7bf"
+    },
+    {
+      "path": "apps/web/components/public-profile/PublicMacroLeakCard.tsx",
+      "sha256": "a39bf0b6ebb04e2f726bfed5250af6ab2d595e5ee2f186bd0945e257f64a6c7d"
+    },
+    {
+      "path": "apps/web/components/public-profile/PublicPlayerPage.tsx",
+      "sha256": "3d4de9abfff59f2c8ee6533a7e914b6d477001647de3fbaa49fc746ed405238c"
+    },
+    {
+      "path": "apps/web/components/public-profile/PublicProfile.tsx",
+      "sha256": "48b753b24f472ec0961d06c00664cb67817c3c60d6628deedbda5350dd0ffd08"
+    },
+    {
+      "path": "apps/web/components/public-profile/PublicReplayAnalysis.tsx",
+      "sha256": "229eb975e9a3c81ffdbc903cbfae39bf2161648bd9f42ec74c05efb4fa8c399e"
+    },
+    {
+      "path": "apps/web/components/public-profile/PublicReplayLibrary.tsx",
+      "sha256": "fb7a60127ccdb31040634d57f61277c08cecbc356c7e74168d4b57d5c361854e"
+    },
+    {
+      "path": "apps/web/components/public-profile/PublicReplayShareButton.tsx",
+      "sha256": "2f53202717eb5391dbd944ce2e4a490c3483a02e3bb1a24047bbd85725694d82"
+    },
+    {
+      "path": "apps/web/components/public-profile/ReplayNeighborNav.tsx",
+      "sha256": "dfbc07ea448250e16b894ddbe28fed918a291501ce0d8b487ff43fb907159628"
+    },
+    {
+      "path": "apps/web/components/pwa/InstallAppButton.tsx",
+      "sha256": "cea537c94864a83572fe11f005cbed11ac7b8ed4862dac376af6572f4f46aec0"
+    },
+    {
+      "path": "apps/web/components/pwa/ServiceWorkerRegister.tsx",
+      "sha256": "7baa52e097bfb423d7d282d9c50771a0291cbc481c443054746ef8c694a03980"
+    },
+    {
+      "path": "apps/web/components/reviews/__tests__/ReviewBoard.test.tsx",
+      "sha256": "782c3b1b63584a25dc40115d28a401d4e14b239c004af8228054729e0f16156d"
+    },
+    {
+      "path": "apps/web/components/reviews/__tests__/ReviewBoardInteractions.test.tsx",
+      "sha256": "727a1f395e88ce3685cfcb515ca2b43d482e1d0cd835d7b98aec6b60d8d67f98"
+    },
+    {
+      "path": "apps/web/components/reviews/__tests__/ReviewComposer.ownerScope.test.tsx",
+      "sha256": "5d0ee277e670cde129d53b51131ab091b14558fac33166bd885f906f7f99bf81"
+    },
+    {
+      "path": "apps/web/components/reviews/__tests__/ReviewHeaderActions.test.tsx",
+      "sha256": "7b3f00650ece8cc97ad133a9d4ac5e2a48382926b82b63cb6fc9ddeef5ebf51a"
+    },
+    {
+      "path": "apps/web/components/reviews/__tests__/ReviewMenu.test.tsx",
+      "sha256": "a6e4a46c1b2d71f358a3a1c0394174e78ab129752df901aaa9ebfe37e497212d"
+    },
+    {
+      "path": "apps/web/components/reviews/__tests__/ReviewThread.test.tsx",
+      "sha256": "dc0543effe172112ce05570d6563f011aaed8c1908aeafaddcfa7968e78d031c"
+    },
+    {
+      "path": "apps/web/components/reviews/__tests__/ReviewWriting.test.tsx",
+      "sha256": "b6c440eabd1841a998d963171ba69da3ba98f6b435baf11b7c12c5f07d5d59d9"
+    },
+    {
+      "path": "apps/web/components/reviews/ActiveFilterChips.tsx",
+      "sha256": "ba7387d3a795f1c7a8f3dd60478bcba41f4708140966f2fd9680c2693d26d953"
+    },
+    {
+      "path": "apps/web/components/reviews/AskForReviewButton.tsx",
+      "sha256": "8915598b9f8207edfa29dde530c908ab32d10289a8542e5f0d4af05c247fbe2d"
+    },
+    {
+      "path": "apps/web/components/reviews/AskGamePicker.tsx",
+      "sha256": "908ef16e2b983e6563008de617e909694bac04459ea14460d971156e8ab750da"
+    },
+    {
+      "path": "apps/web/components/reviews/CommentEditor.tsx",
+      "sha256": "ffac5c0e612e6a76ab40a68786c288b5a5587adc7b7d1fa3a36a1e3504a22ae2"
+    },
+    {
+      "path": "apps/web/components/reviews/FocusRangeFields.tsx",
+      "sha256": "2f0b0eed52f19b02d3dcb08903c59818e4b548dede3ff2a00c2410233a2afe49"
+    },
+    {
+      "path": "apps/web/components/reviews/ReviewBoardFilters.tsx",
+      "sha256": "8ff44010721f933ac6be8167177f8acb698f1598c7311bd4d54b9c3efe0c4773"
+    },
+    {
+      "path": "apps/web/components/reviews/ReviewBoardLoader.tsx",
+      "sha256": "d380f871ab94e6a364ce27c817d5101e124e4b10f344908b77fec31a6b7b0182"
+    },
+    {
+      "path": "apps/web/components/reviews/ReviewBoardPagination.tsx",
+      "sha256": "e82a1b1a94c2a714344574dee7020bc69b47f7426958302781ae6b89a6ae37f4"
+    },
+    {
+      "path": "apps/web/components/reviews/ReviewBoardSidebar.tsx",
+      "sha256": "3aeef1bda7e5f9981afe99c9be1614668904eacac0cbd921cefadeb9115189c8"
+    },
+    {
+      "path": "apps/web/components/reviews/ReviewComposer.tsx",
+      "sha256": "14a3dca9adcbbebb188708dd9b755ba14c3c4876bc917be55b6f95a0d486aa30"
+    },
+    {
+      "path": "apps/web/components/reviews/ReviewMenu.tsx",
+      "sha256": "56db58a16b878fe6f2ed109d7182905a47682070002a3771d610aa77298c5794"
+    },
+    {
+      "path": "apps/web/components/reviews/ReviewPage.tsx",
+      "sha256": "d17ac7757b5a0d9e30d660b18d67452c484ad05d3bf2d1cd28739a69cfc56cc1"
+    },
+    {
+      "path": "apps/web/components/reviews/ReviewShareMenu.tsx",
+      "sha256": "4851dc0311e2e680c254d7310366ad52602094c6d2ddf04ea45d490e74be8e53"
+    },
+    {
+      "path": "apps/web/components/reviews/ReviewThread.tsx",
+      "sha256": "662db14ab43064559fc895c1f9908fb503aad96c5e4d3b0b56bbdbd2286e81fd"
+    },
+    {
+      "path": "apps/web/components/stream-studio/CrashCourse.test.tsx",
+      "sha256": "c49c21ccc4830b01e1a038556cf623f5f1b04118e867dd1ba600455b5f14f0d4"
+    },
+    {
+      "path": "apps/web/components/stream-studio/CrashCourse.tsx",
+      "sha256": "fe835fe99044ca1d4eccc58388392ed2a59278017c9eba647902c3c75f67da27"
+    },
+    {
+      "path": "apps/web/components/stream-studio/LearnPage.tsx",
+      "sha256": "ace4b97dd385e014b6f043b46728c470680bedb45b65e5ce373fd08eb4419031"
+    },
+    {
+      "path": "apps/web/components/stream-studio/LearnTroubleshooting.tsx",
+      "sha256": "3be20ef3377ef7c172bb55230016c66bc4e09dfae32e2fcbba07d3b513b83da3"
+    },
+    {
+      "path": "apps/web/components/stream-studio/WidgetExplorer.tsx",
+      "sha256": "9cca3d44de01b9365aeefe7aadff456627bc73f90f70e385681ca7ae3dec768e"
+    },
+    {
+      "path": "apps/web/components/SyncStatus.tsx",
+      "sha256": "743d4d8f40d6eb517eb33fd3ec48cddad1760d6e1e67daf27788ba43ab8851bb"
+    },
+    {
+      "path": "apps/web/components/ui/SectionNav.tsx",
+      "sha256": "54921e0a93d56af92fbc02ce1ccafec11520fea00bde862aaa9eb2ac7be661d5"
+    },
+    {
+      "path": "apps/web/lib/agentInstallerCopy.ts",
+      "sha256": "5586253a11b45f01be97ca97fab6d232a6cf384cb4652e803bf33c6ad510a29d"
+    },
+    {
+      "path": "apps/web/lib/agentNotice.ts",
+      "sha256": "6830ad3ad6ad38392b371e7cd0c6d22cb5c1ed3970de3925ef9dc2e5a9d84221"
+    },
+    {
+      "path": "apps/web/lib/agentPresence.ts",
+      "sha256": "d8059d399cdc0404068703441084174fdff01023e2e9c7069edc2cc7aa252e7c"
+    },
+    {
+      "path": "apps/web/lib/clerk-appearance.ts",
+      "sha256": "7832e33c595fe6fab5cfbb13ad13a5f795372ecdb1ba729a0e8027b02dfeffbd"
+    },
+    {
+      "path": "apps/web/lib/dockLayout.ts",
+      "sha256": "dad1dcf5d6c087b132523747109ba6ffaaca5a67a916ef6f91acf13c2e0f5a6a"
+    },
+    {
+      "path": "apps/web/lib/format.ts",
+      "sha256": "097d8155a906e805fe6eff7cea2780d82f649b4348bc6f147c466f5f065f57be"
+    },
+    {
+      "path": "apps/web/lib/help/articles/account-data/public-profile.ts",
+      "sha256": "ef148fb903cf37631f25348dd477b1b1a1da652a29f08d0cbae7336f86e6ea59"
+    },
+    {
+      "path": "apps/web/lib/help/articles/analyzer/dashboard-and-analyzer.ts",
+      "sha256": "a15979b995711fbbe23d20a8340b6aed115c31d7d4ce1783b203b1376bc6f93e"
+    },
+    {
+      "path": "apps/web/lib/help/articles/getting-started/importing-replay-history.ts",
+      "sha256": "39269f2a6fd707e24f0b94788690677d9b44f07ad5e0df51c2824bb665b658fb"
+    },
+    {
+      "path": "apps/web/lib/help/articles/getting-started/install-and-pair.ts",
+      "sha256": "05bbcba99c6c6de502309449ce1ce2062a6b87e10f9adf82876e6cb505b62322"
+    },
+    {
+      "path": "apps/web/lib/help/articles/getting-started/install-app.ts",
+      "sha256": "19cc8ef354aac647cd4384024d962d4ddc1715c1e46729c13fb1efca6dd61a76"
+    },
+    {
+      "path": "apps/web/lib/help/articles/getting-started/instant-analysis.ts",
+      "sha256": "3ff81244444783f4b1b5a5e528e26aca6c01fe3004cfd7967c8ab58b6a66dd77"
+    },
+    {
+      "path": "apps/web/lib/help/articles/getting-started/settings-overview.ts",
+      "sha256": "45b676a2ffb3073604589e81963d138c8933886e3aa706030906473110ba204e"
+    },
+    {
+      "path": "apps/web/lib/help/articles/reviews-coaching/coaching.ts",
+      "sha256": "6ded4707e6a1b2630c2e072e4738a05f1afd094f830c42cb77c6176911bd18c5"
+    },
+    {
+      "path": "apps/web/lib/help/articles/reviews-coaching/replay-reviews.ts",
+      "sha256": "b539f954604f9a6504949eeded48e3e94e8ad5dff9a6273bafab281dd5649065"
+    },
+    {
+      "path": "apps/web/lib/help/articles/stream-studio/obs-overlay-setup.ts",
+      "sha256": "0be4249f961554465a61e443e2d1d422c38580b74d4d7070893d85147d40806c"
+    },
+    {
+      "path": "apps/web/lib/help/articles/stream-studio/stream-dock.ts",
+      "sha256": "aec1a08144382a92314c2316f9c25b1d794443aa7609c23c6d9fe10d7c620601"
+    },
+    {
+      "path": "apps/web/lib/help/articles/troubleshooting/my-game-didnt-show-up.ts",
+      "sha256": "0d30a747c2932f0ff4a51705c6fc34406764825a70a1d3301f1b94e3d9280000"
+    },
+    {
+      "path": "apps/web/lib/help/articles/troubleshooting/setup-health.ts",
+      "sha256": "1d8c10619e3f62834aec8dee487893312f3be00207a2701f2ccd9fb51451a474"
+    },
+    {
+      "path": "apps/web/lib/instant/authRedirect.ts",
+      "sha256": "a1ff284befd82c051f82a4de1a8405e7b4e145ba329be8cd2dcaaac884345d28"
+    },
+    {
+      "path": "apps/web/lib/instant/report.ts",
+      "sha256": "ef4d7aa269e2becb5eabf7a04431172a73372b0f726a396cce3afc832839f2a2"
+    },
+    {
+      "path": "apps/web/lib/multichat/poll.ts",
+      "sha256": "f123f6a423b69e0f5a33e3349115b53500dddd08976cf1df4234009ffd6d869f"
+    },
+    {
+      "path": "apps/web/lib/multichat/useStudioState.ts",
+      "sha256": "e0d4e5617ece6091aa6cc9c2c642050aabdd5f38f0724942bd6be1edd032bf77"
+    },
+    {
+      "path": "apps/web/lib/pwa/__tests__/install.test.ts",
+      "sha256": "d5f2e2e13fece0a4c957ed8ea213b86969263246b1af5cc8571234eb4444e361"
+    },
+    {
+      "path": "apps/web/lib/pwa/__tests__/offlineWorker.test.ts",
+      "sha256": "3795195ceedd17f1c937a4140008441384dd97285dbbc2f1a7f2cb7030468f5e"
+    },
+    {
+      "path": "apps/web/lib/pwa/install.ts",
+      "sha256": "5cddb538339b785dddd31819b8e8f0d55184ad0f26f620aebabe849e69bbc120"
+    },
+    {
+      "path": "apps/web/lib/reviewDrafts.ts",
+      "sha256": "73a27b3d07bb0bc9f219a834482883d075a04d272d479e43a1817c42ecb1c542"
+    },
+    {
+      "path": "apps/web/lib/reviews.ts",
+      "sha256": "2944fcf15600e31ef9ecd57d8d26c7fbb7329da21ea04acdce0a1d888c44350e"
+    },
+    {
+      "path": "apps/web/lib/streamStudioLearn.ts",
+      "sha256": "21e6fce6d182513bf0f5258dc4bae92f9397f5368b9d8f6bd5f6e6a91a5abd0f"
+    },
+    {
+      "path": "apps/web/lib/theme/tokens.ts",
+      "sha256": "3f5b5e66d26ddae07c51ddbead2b47bcb89c97640e4c2708830ecf115d85d722"
+    },
+    {
+      "path": "apps/web/lib/vodLinks.ts",
+      "sha256": "73ab0cd0e6f6c15ae7fea42c324af3d3869a846c7150c805675237e99bcc843d"
+    },
+    {
+      "path": "apps/web/middleware.ts",
+      "sha256": "f591a75e695ff8ce26b1adc53def7addb904a58ef5e724a00f7dd8e845366934"
+    },
+    {
+      "path": "apps/web/public/offline.html",
+      "sha256": "28decbd415a473158d55587ec36ce6e9bd9f95488ae2a30606236762548c1259"
+    },
+    {
+      "path": "apps/web/public/sw.js",
+      "sha256": "17f970f0ca00a8c3da5eaa7f6c7bc18d3d3b4ef12db3fc3ded67de9d0c223cf9"
+    },
+    {
+      "path": "docs/admin-console.md",
+      "sha256": "74b9a385a431a98a3e929aa606d2dbe97ce7d2d455cc8f997f71879df00ffe11"
+    },
+    {
+      "path": "docs/design-system.md",
+      "sha256": "d594a2a056bfcecfeb403ff6a5ad23a7a09e29ec19184607b2b1523312af5833"
+    },
+    {
+      "path": "docs/guides.md",
+      "sha256": "c5d4b1c15d1158796afedb980a7808caa579190637daf92fce4f31f37cdbc735"
+    },
+    {
+      "path": "docs/handoff/admin-inbox-tap-checkpoint.md",
+      "sha256": "30209d8b0bab2ab3b918958c2f186e755bdec10d1b7529d258c504748fb4f450"
+    },
+    {
+      "path": "docs/handoff/chrome-navigation-checkpoint.md",
+      "sha256": "f7cdefbbcee167be0d07b33de58f1e83544158ffbc120e587fe68b8a159b0fe7"
+    },
+    {
+      "path": "docs/handoff/dock-polish-checkpoint.md",
+      "sha256": "20c3d8ce904d4668e5ae82c148f7799b124714a6941b3fc2ab2e42c5d24022b3"
+    },
+    {
+      "path": "docs/handoff/download-donate-checkpoint.md",
+      "sha256": "11ccaaf263898938ac61e6897c860db174f055151ec5dd3f80821d06f3a2c150"
+    },
+    {
+      "path": "docs/handoff/landing-try-checkpoint.md",
+      "sha256": "08cb2640cafd8d6718c2f197f9f8f1846c7f40b28b9bd6a3d7b79613608546df"
+    },
+    {
+      "path": "docs/handoff/more-sheet-checkpoint.md",
+      "sha256": "773c626c6982bb021999ae86e0855d09a6a05adba5f062c77f51fe8ff92e219b"
+    },
+    {
+      "path": "docs/handoff/public-player-checkpoint.md",
+      "sha256": "20c353d9831574da3827b211c46d6ef01fc8993ca7c2c27ab4c8b08dfadcf10f"
+    },
+    {
+      "path": "docs/handoff/review-lifecycle-checkpoint.md",
+      "sha256": "c506c5ef10690afe64cf58b979a63cc8b28837cf3106f38e1ccca8bc7069b9a9"
+    },
+    {
+      "path": "docs/handoff/settings-chat-checkpoint.md",
+      "sha256": "7e1e02feafdb4c46c0aa9af488f2ae128ab5b3bfbbf87370acfdadde37550f9d"
+    },
+    {
+      "path": "docs/handoff/site-cta-checkpoint.md",
+      "sha256": "d878e0b9f62d9af6addd3586fc0be70034f5856bc719c6209f90ccf86f28e5bc"
+    },
+    {
+      "path": "docs/handoff/streamer-polish-checkpoint.md",
+      "sha256": "1b2a0698a5cbe260120063b6d7309cf58df165034479ccd333956ab26550652c"
+    },
+    {
+      "path": "docs/handoff/try-conversion-checkpoint.md",
+      "sha256": "309f86a2120aac51ed752d3e580fd6d9fc583794d4689bad44b5b6b5fda0b71c"
+    },
+    {
+      "path": "docs/handoff/widget-playground-checkpoint.md",
+      "sha256": "78d7076f683681b7f4bb2bfe94c34dd0bdd34d1283043624bb74c3ffbd2f5b07"
+    }
+  ],
+  "counts": {
+    "reviewed": 30,
+    "completed": 18,
+    "partial": 4,
+    "open": 8,
+    "unknown": 0
+  },
+  "absentProposedTargets": [
+    {
+      "path": "apps/web/components/ui/ShareButton.tsx",
+      "absent": true
+    },
+    {
+      "path": "apps/web/components/overlay/OverlayPanel.tsx",
+      "absent": true
+    },
+    {
+      "path": "apps/web/lib/overlayRaceColors.ts",
+      "absent": true
+    },
+    {
+      "path": "apps/web/lib/streamReadiness.ts",
+      "absent": true
+    },
+    {
+      "path": "apps/web/components/stream-studio/SetupStatus.tsx",
+      "absent": true
+    },
+    {
+      "path": "apps/web/lib/instant/reportFilters.ts",
+      "absent": true
+    },
+    {
+      "path": "apps/web/lib/instant/reportExport.ts",
+      "absent": true
+    },
+    {
+      "path": "apps/web/components/instant/report/HighlightsStrip.tsx",
+      "absent": true
+    },
+    {
+      "path": "apps/web/components/instant/report/RecordByMapCard.tsx",
+      "absent": true
+    },
+    {
+      "path": "apps/web/components/ui/InstantBadge.tsx",
+      "absent": true
+    },
+    {
+      "path": "apps/web/app/admin/components/AdminGamesMasterDetail.tsx",
+      "absent": true
+    },
+    {
+      "path": "apps/web/app/admin/components/useAdminAttention.ts",
+      "absent": true
+    }
+  ]
+}

@@ -1,0 +1,234 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-28",
+  "status": "STATIC_CLEAR_NO_CONCRETE_BLOCKER",
+  "checkout": "C:\\SC2TOOLS\\.worktrees\\dashboard-cache-coverage",
+  "applicationSourceEdited": false,
+  "gitMutations": false,
+  "runtimeExecuted": false,
+  "providersAccessed": false,
+  "blockers": [],
+  "routes": [
+    {
+      "method": "summary",
+      "path": "/v1/summary",
+      "dependency": "Owner slim games only: totals, race/map facets, last20 including stored opponent display name/strategy, myBuild/date/result; applyRaceGrouping is a parsed-filter dependency"
+    },
+    {
+      "method": "macroSummary",
+      "path": "/v1/macro/summary",
+      "dependency": "Owner slim macroScore and top3Leaks plus all parsed filters; no detail store read"
+    },
+    {
+      "method": "mmrProgression",
+      "path": "/v1/timeseries/mmr",
+      "dependency": "Owner game MMR/provenance, own account/ladder race/region, ranked1v1 fields, date/result and matching owner-game dateRange probe; no global MMR expectation call"
+    },
+    {
+      "method": "myBuildMixOverTime",
+      "path": "/v1/timeseries/my-builds",
+      "dependency": "Owner game myBuild/result/date plus parsed filters and interval/tz"
+    },
+    {
+      "method": "oppStrategyMixOverTime",
+      "path": "/v1/timeseries/opp-strategies",
+      "dependency": "Owner game opponent.strategy/result/date plus parsed filters and interval/tz"
+    }
+  ],
+  "apiReview": [
+    "All five outputs read only owner games. No new global curve, provider, profile, notes, opponent-collection or heavy-detail dependency was found.",
+    "Cache keys retain owner, route, every parsed filter, interval/tz where used, and existing revision/epoch/token.",
+    "Existing gameWrite coverage includes ingest/quarantine, controls and GDPR/restore, macro recompute, build check-in/reclassification, and stored opponent identity/MMR updates.",
+    "App composition also detaches inner TrendsRequests/dateRange joins via retireSessionPolicy on UserRevision invalidation.",
+    "Strength-adjusted/global-calibration responses remain outside the new allowlist.",
+    "USER_CACHE_ENABLED off still bypasses all retained-body/revision guards and calls the original service/res.json path. No activation or new endpoint is part of this candidate."
+  ],
+  "webReview": [
+    "The same five exact API paths append to the six existing capability paths, keeping old bit positions unchanged; eleven indices fit the existing capability bitmap.",
+    "conditionalRoute still matches the exact path before query/hash, never a prefix. Owner/epoch lifetime and explicit uc1 private/no-cache capability checks are unchanged.",
+    "No new eager import or automatic extra request was introduced. API-off, outside-provider and nonallowlisted paths preserve ordinary transport.",
+    "Real useApi/SWR test now exercises ordinary discovery, retained200 and reconstructed304 for each new path. Nonallowlisted control moves to /v1/matchups, which remains excluded on both API and web."
+  ],
+  "testsReviewed": [
+    "API route matrix covers owner/filter isolation, chart options, committed/unknown mutation retirement, off parity and exclusions.",
+    "Real Mongo/actual aggregation test covers output changes, hits and304 after ingest, reupload, quarantine and an acknowledged-then-rejected write. This receipt does not claim those tests were run.",
+    "Web integration retains existing owner/auth/error/race assertions and extends the actual enhancement capability test to all five additions."
+  ],
+  "docsReview": "Admin and engineering docs state eleven optional routes, retained exclusions, off state and no measured performance/cost claim. Changelog describes optional coverage.",
+  "limitations": [
+    "Source-only independent review; no tests, types, lint, build, budget or browser execution in this review.",
+    "This remains the existing process-local/advisory UserRevision cache contract, not a durable gameStats or change-feed guarantee.",
+    "Exact tested-head CI and actual deployment/release verification remain root responsibilities.",
+    "Use this receipt only while every listed source hash matches; later edits need review refresh."
+  ],
+  "members": [
+    {
+      "path": "apps/api/src/middleware/userCache.js",
+      "kind": "changed_product",
+      "bytes": 16040,
+      "sha256": "7764fc5f40b2bd6edb55221e8231081de38ffcd90cc74da1cee40a1944f81564"
+    },
+    {
+      "path": "apps/api/src/routes/aggregations.js",
+      "kind": "changed_product",
+      "bytes": 19175,
+      "sha256": "ffaa12145fc7a601d0e5f0bae6d0831cbfa352b5b884090f6b8b021b4b4a71a8"
+    },
+    {
+      "path": "apps/web/lib/conditionalApiScope.tsx",
+      "kind": "changed_product",
+      "bytes": 3672,
+      "sha256": "cb729d1b7f0bab272098cd31dcb0330f298543efe2e6488fa1cf9b66c0073f0c"
+    },
+    {
+      "path": "apps/api/src/services/aggregations.js",
+      "kind": "reviewed_dependency",
+      "bytes": 37681,
+      "sha256": "b64a910f7c5445c8e02660b9f77d3e5188cc5619469ac7d40d71648250446e8f"
+    },
+    {
+      "path": "apps/api/src/services/trendsInsights.js",
+      "kind": "reviewed_dependency",
+      "bytes": 29842,
+      "sha256": "48371d67df8a956ced8e3d5813ccd5bd64d106e758d4f9c2468f8e065c16ec84"
+    },
+    {
+      "path": "apps/api/src/services/trendsRequests.js",
+      "kind": "reviewed_dependency",
+      "bytes": 5860,
+      "sha256": "f9dc2d5568afb7478c431ff87223431b98d108959fb364889bba3d3f19eb75df"
+    },
+    {
+      "path": "apps/api/src/util/parseQuery.js",
+      "kind": "reviewed_dependency",
+      "bytes": 20517,
+      "sha256": "feed3c99d8e8bc3fc05ab34a30e2ae393efb39f79e7305174f7bf408c9e30156"
+    },
+    {
+      "path": "apps/api/src/util/userRevision.js",
+      "kind": "reviewed_dependency",
+      "bytes": 9010,
+      "sha256": "3ae7c2e90d84c10018d8ed000f25174fb4981cd86807cb1d0ddbea30b45c8837"
+    },
+    {
+      "path": "apps/api/src/util/gameVisibility.js",
+      "kind": "reviewed_dependency",
+      "bytes": 1526,
+      "sha256": "19c27606d695bd3dad83c39dd28d6ed38a0497feafdcf76e0dbf35c277e5ac0b"
+    },
+    {
+      "path": "apps/api/src/app.js",
+      "kind": "reviewed_dependency",
+      "bytes": 86176,
+      "sha256": "b26f5e96577e84329ce0f50aa9fc02d3c2a641458afba316f8ef886233871d69"
+    },
+    {
+      "path": "apps/api/src/services/games.js",
+      "kind": "reviewed_dependency",
+      "bytes": 90510,
+      "sha256": "1969a7c784c4eac2a76a07b90059a32dadbd09019392e2804944b8b5c69e52a8"
+    },
+    {
+      "path": "apps/api/src/services/gameControls.js",
+      "kind": "reviewed_dependency",
+      "bytes": 10888,
+      "sha256": "fac2706fbc26d7e4106727888503da430bf5628e8c95d5942c735435c57cb298"
+    },
+    {
+      "path": "apps/api/src/services/gdpr.js",
+      "kind": "reviewed_dependency",
+      "bytes": 69002,
+      "sha256": "4440f06cd3b75445884cded72adad53952fcdf95a738480a417f4872b61ca3c1"
+    },
+    {
+      "path": "apps/api/src/services/userBackups.js",
+      "kind": "reviewed_dependency",
+      "bytes": 22403,
+      "sha256": "fb05de91b13d278792eda47bdf0fa866876be81748a7cc64ef63c207117f58d7"
+    },
+    {
+      "path": "apps/api/src/services/perGameCompute.js",
+      "kind": "reviewed_dependency",
+      "bytes": 71222,
+      "sha256": "0751003453895444c000f619b8491bf529563bee7d3c8062306546b053649f8f"
+    },
+    {
+      "path": "apps/api/src/services/buildIntentBind.js",
+      "kind": "reviewed_dependency",
+      "bytes": 20325,
+      "sha256": "7c88a9d1f6ccae2b380c77a582bc5e0662682542c535ab69bc05a39ce06c0749"
+    },
+    {
+      "path": "apps/api/src/services/buildIntentGameState.js",
+      "kind": "reviewed_dependency",
+      "bytes": 32833,
+      "sha256": "9ab05ddaef59bd3cb3f11dd06534b0668fafd2b372aa59d17187e6bce7a4c708"
+    },
+    {
+      "path": "apps/api/src/services/buildIntentAttribution.js",
+      "kind": "reviewed_dependency",
+      "bytes": 11300,
+      "sha256": "29e8cfe4b4b2016f891bb3e6eb5fc3fea0b16379fb0841b1b1ff3d8fc13191ab"
+    },
+    {
+      "path": "apps/api/src/services/customBuilds.js",
+      "kind": "reviewed_dependency",
+      "bytes": 132466,
+      "sha256": "eceece874558336cb4840604fee36be20203201fcce62ded8032a2b01ed31ba8"
+    },
+    {
+      "path": "apps/api/src/services/opponents.js",
+      "kind": "reviewed_dependency",
+      "bytes": 172913,
+      "sha256": "2a3ece57eda8c78c502b98c96d34c634a8c011b2b5b12899bdfe7c6e68488c4b"
+    },
+    {
+      "path": "apps/api/src/jobs/opponentMmrEnrichmentJob.js",
+      "kind": "reviewed_dependency",
+      "bytes": 19736,
+      "sha256": "885232eeabbb8228e1538abdd9ae32eac1fef7164d84ee61fa8b755390d65651"
+    },
+    {
+      "path": "apps/api/src/config/constants.js",
+      "kind": "reviewed_dependency",
+      "bytes": 13863,
+      "sha256": "8784ba8f5ac4e7091143c7579231264e51a1655606d5ba6c1a27556e7d373b49"
+    },
+    {
+      "path": "apps/api/src/util/opponentRaceCounts.js",
+      "kind": "reviewed_dependency",
+      "bytes": 620,
+      "sha256": "9c8a13fcabc7be7e51d24abeeef0272c990a6a902c575f8fd6769d452860e00e"
+    },
+    {
+      "path": "apps/web/lib/clientApi.ts",
+      "kind": "reviewed_dependency",
+      "bytes": 20362,
+      "sha256": "5e143c65dc8d2d93ad1643a7a74dd4aad31f6dc6b4ea8619f01d4ea9c19ca0c2"
+    },
+    {
+      "path": "apps/web/lib/conditionalApiResponses.ts",
+      "kind": "reviewed_dependency",
+      "bytes": 8824,
+      "sha256": "ae67f2397b0a225a7f1f95abbf2c26d94273f2a894932d335ec703d787fb7875"
+    },
+    {
+      "path": "apps/api/__tests__/userCacheRoutes.test.js",
+      "kind": "reviewed_test",
+      "bytes": 11343,
+      "sha256": "81759e627a708788a29ee386dd284307bb9fa07fc448e6590d3c87985a19c00d"
+    },
+    {
+      "path": "apps/api/__tests__/userCacheCoverage.mongo.test.js",
+      "kind": "reviewed_test",
+      "bytes": 4443,
+      "sha256": "527b5b4978a876869f666a006b7f97fb07f95d8fa689d7c0282382e87844520e"
+    },
+    {
+      "path": "apps/web/lib/__tests__/clientApi.conditional.test.tsx",
+      "kind": "reviewed_test",
+      "bytes": 19441,
+      "sha256": "2df980a4e64cbb2663f7c7e10bfea9920bbdef2e23a7e081c0712e1650345098"
+    }
+  ]
+}
