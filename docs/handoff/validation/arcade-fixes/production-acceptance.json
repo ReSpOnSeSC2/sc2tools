@@ -1,0 +1,18 @@
+{
+  "supersedesMeasurementIn": "production-acceptance-01.json",
+  "correction": "The first after-deployment DOM measurement was taken in a background tab that had returned to1920px. Its390px qualification was invalid. The dedicated fresh document below explicitly measured innerWidth390; earlier evidence is retained.",
+  "pr": 797,
+  "source": "c100529d394e0a12fa3c95676cf6eef763dc1d07",
+  "deployment": "8Aun1CWuJJCrzY5KJdR3jTxKLNke",
+  "scope": "Actual signed-in production saved Bingo card; dedicated fresh tab",
+  "viewport": 390,
+  "cells": 25,
+  "rows": 5,
+  "escaping": 0,
+  "horizontalOverflow": false,
+  "savedScore": "16/25",
+  "rerollSubmitted": false,
+  "bracketAttemptSubmitted": false,
+  "bracketNextRound": "Live submission awaits explicit user choice; real ModeRunner repeated-round regression passed",
+  "privateAccountDataCaptured": false
+}

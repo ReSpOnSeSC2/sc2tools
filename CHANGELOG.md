@@ -31,6 +31,10 @@ corresponding GitHub Release.
 - Find your opponents and saved builds by the start of their names in Search. Private results clear when the search or account changes, with full-library links when quick search is unavailable.
 - Keep private Search selections subject to unsaved Settings confirmation, and discard expired selections when another search or route opens.
 
+### Today on phones
+
+- Keep Win rate, Active streak, MMR and Games in range cards compact on phones, without stretching them to match the taller session card.
+
 ### Sessions and date filters
 
 - Keep Auto-track current season selected when opening Sessions, paging history or returning to Today. Explicit custom dates, pinned seasons and saved views keep their selected ranges.
