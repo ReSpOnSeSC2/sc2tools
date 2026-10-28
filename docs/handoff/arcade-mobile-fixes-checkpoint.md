@@ -34,4 +34,3 @@ separate slice, with USER_CACHE_ENABLED kept off; maintained gameStats/lighter
 corpus delta/IndexedDB/history contracts remain outstanding.
 
 Final local release gates: production build succeeds, including whole-web types; all83 original caps pass. Postbuild engine admission remains identical. Scoped lint has zero errors and only the unchanged Bingo effect warning. Help97 regeneration is deterministic; UI baseline has1763files/639existing occurrences with no new or stale allowances. Remote CI, merge and live acceptance are still pending.
-
