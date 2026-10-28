@@ -26,6 +26,7 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Show ties and unrecorded results accurately in admin opponent and global player game lists and the selected-game detail.
 - Show small replay files in B or KB in the home-page demo, including analyzer loading and errors, while keeping the existing MB format for larger files.
 - Respect device and page motion reduction in build randomizer reveals, and announce the selected build only after its reveal resolves. Guide legends now offer the likely-range definition, with publishing-floor and trend-arrow explanations in the glossary.
 - Keep eliminated randomizer build labels readable while retaining their strike-through and faded icons.

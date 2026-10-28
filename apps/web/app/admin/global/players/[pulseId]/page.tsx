@@ -24,8 +24,8 @@ import {
 import {
   fmtDate,
   fmtDuration,
-  isWin,
 } from "../../../components/AdminGameDetail";
+import { ResultBadge } from "../../../components/ResultBadge";
 import type {
   GlobalPlayerGamesResp,
   GlobalPlayerProfilePerUser,
@@ -196,16 +196,7 @@ function GamesSection({ pulseId }: { pulseId: string }) {
                         ].join(" ")}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span
-                            className={[
-                              "rounded-full px-2 py-0.5 text-caption font-semibold",
-                              isWin(g.result)
-                                ? "bg-success/15 text-success"
-                                : "bg-danger/15 text-danger",
-                            ].join(" ")}
-                          >
-                            {isWin(g.result) ? "Win" : "Loss"}
-                          </span>
+                          <ResultBadge result={g.result} />
                           <span className="text-caption text-text-dim">
                             {fmtDate(g.date)}
                           </span>
