@@ -129,6 +129,19 @@ describe("update prompt", () => {
     expect(shown.className).toContain("z-banner");
   });
 
+  it("offers the release notes while leaving update activation and Later unchanged", async () => {
+    const waiting = installWaitingWorker();
+    render(<><button type="button">Continue editing</button><ServiceWorkerRegister /></>);
+    const editing = screen.getByRole("button", { name: "Continue editing" }); editing.focus();
+    const changes = await screen.findByRole("link", { name: "What changed" });
+    expect(changes.getAttribute("href")).toBe("/changelog");
+    changes.focus();
+    expect(waiting.postMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Later" }));
+    expect(prompt()).toBeNull(); expect(document.activeElement).toBe(editing);
+    expect(waiting.postMessage).not.toHaveBeenCalled();
+  });
+
   it("Reload hands control to the waiting worker", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout"] });
     try {

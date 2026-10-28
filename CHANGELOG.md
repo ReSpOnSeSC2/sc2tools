@@ -44,6 +44,12 @@ corresponding GitHub Release.
 - Keep Auto-track current season selected when opening Sessions, paging history or returning to Today. Explicit custom dates, pinned seasons and saved views keep their selected ranges.
 - Give the current-filter summary a supported accessible label for screen readers.
 
+### Help and recovery shortcuts
+
+- Read the changelog from What changed in the website update prompt or What's new in desktop and mobile Help & support.
+- Open Overlay settings directly at Setup from the Stream Dock, including an invalid or replaced link.
+- Show a replay-analysis loading layout on shared game pages, and keep the private home-page demo's selected filename, size and Choose another replay recovery visible.
+
 ### Build check-in shortcuts
 
 - Add your own build directly beside the replay's classified label in the check-in list. Keep a clearly named Add opponent build action beside the opponent's build.

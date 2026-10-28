@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "completedAtUtc": "2026-10-28T05:35:43.3232414Z",
+  "checkout": "C:/SC2TOOLS/.worktrees/help-recovery-completion",
+  "ci": {
+    "head": "5195b26d38862ad13408e72746410b367c0a8656",
+    "runId": 40637043049,
+    "jobId": 122646291037,
+    "failure": "ReviewReplayDownload.ownerScope.test.tsx73: disabled expectedfalse gottrue",
+    "retainedEvidence": "C:/SC2TOOLS/.cache/help-recovery-completion-verification-20261028/ci-failure-5195b26d.json",
+    "evidenceSha256": "e526481c2930ea9fe5d3c7212af72cab8e01691fdc9e8ca28b0d3f3996e371e4",
+    "logTruncated": true,
+    "qualification": "Original failure retained; no alternate raw-log fetch; failing assertion and context visible in bounded Codex diagnostic"
+  },
+  "mainComparison": {
+    "componentEqualsMainBeforeFix": true,
+    "testEqualsMainBeforeFix": true,
+    "normalization": "CRLF→LF only",
+    "componentBlob": "b1785abd7d25ed3343e964f9fece1aec9c4cc788",
+    "testBlob": "2f2a6fa0db74e1457ee56ac4f4b302f9387622d3"
+  },
+  "diagnosis": "The test waits for anchor.click, an external side effect, then reads React button state synchronously. ReviewReplayDownload calls setState(idle) after that click; the scheduled React commit can still be pending when the array wait resolves. Under CI the old assertion observed that valid intermediate loading state. No product owner-fence regression found.",
+  "fix": "Existing success test now awaits BOTH exactlyone recorded click and enabledReactDOM before all remaining assertions. Every original assertion/test remains. No delay, skip, timeout increase or product control change.",
+  "addedRegression": "Held JSON body keeps buttondisabled/no click; deterministic anchor spy observes disabledtrue at actual download side effect; awaiting completion then proves enabledDOM, exactlyone fetch/click and removedanchor.",
+  "source": {
+    "componentUnchanged": true,
+    "componentSha256": "c2df9bd30039e5cd7c68831af8482f13d04f182d86fd41eb45edeea74bdefc74",
+    "clientApiSha256": "5e143c65dc8d2d93ad1643a7a74dd4aad31f6dc6b4ea8619f01d4ea9c19ca0c2",
+    "testBeforeSha256": "5dc48bba172e2750f1857ca95dd309fe9e630e6f7118b5a061753bbab3116cec",
+    "testAfterSha256": "183bbfc89d1c7eae53e78a82882a8e2c1eb398478d5b50886c7951d785a76024",
+    "changedTrackedPaths": [
+      "apps/web/components/reviews/__tests__/ReviewReplayDownload.ownerScope.test.tsx"
+    ]
+  },
+  "verification": {
+    "baseline": {
+      "exitCode": 0,
+      "tests": 6,
+      "qualification": "Isolated originalsuite passed; CI race not claimed locally reproduced"
+    },
+    "fixed": {
+      "exitCode": 0,
+      "tests": 7,
+      "originalCasesRetained": 6,
+      "addedCase": 1,
+      "workersMaximum": 2
+    },
+    "strictChangedTestLint": {
+      "exitCode": 0,
+      "sourceWarnings": 0,
+      "sourceErrors": 0,
+      "actualArguments": [
+        "lint",
+        "--max-warnings",
+        "0",
+        "--file",
+        "components/reviews/__tests__/ReviewReplayDownload.ownerScope.test.tsx"
+      ]
+    },
+    "noBuildOrFullTypes": true,
+    "runtimeUnchanged": true,
+    "allOwnedCommandsExited": true,
+    "heavySlot": "Released before metadata preparation",
+    "pending": "Root-owned test-only commit/push and exact-current-head required CI"
+  },
+  "evidenceFiles": [
+    {
+      "name": "baseline-unit-exit.json",
+      "bytes": 308,
+      "sha256": "9c5d57d18a182e54193f36da7e9b281a5d7e65ef02e9737e0668388960a3bd16"
+    },
+    {
+      "name": "baseline-unit.log",
+      "bytes": 502,
+      "sha256": "2541f0060ed2d6e9af533cb7002e487ec3baa92e33d0ed99f3c6ab46fecbd354"
+    },
+    {
+      "name": "fixed-test-lint-exit.json",
+      "bytes": 196,
+      "sha256": "6e7b4d055bd2cf5a258557f07f6b00a2acd59b73bd0de3b58308963dfdfeea46"
+    },
+    {
+      "name": "fixed-test-lint.log",
+      "bytes": 908,
+      "sha256": "4358e333a3b9bfbbd5bcfca80ac24bdaac112917d871e03c3e6b621c58ad22ae"
+    },
+    {
+      "name": "fixed-unit-exit.json",
+      "bytes": 204,
+      "sha256": "3f5ff9df10b0b1a55b0b28935aa1bb223161f91f9c1da7df69654eae378c3705"
+    },
+    {
+      "name": "fixed-unit.log",
+      "bytes": 502,
+      "sha256": "b65341199e30e7c3421f88e532913e92ef78a208e7aa09c3e5c192302a683b4b"
+    },
+    {
+      "name": "ReviewReplayDownload.before.tsx",
+      "bytes": 6425,
+      "sha256": "c2df9bd30039e5cd7c68831af8482f13d04f182d86fd41eb45edeea74bdefc74"
+    },
+    {
+      "name": "ReviewReplayDownload.ownerScope.before.tsx",
+      "bytes": 5056,
+      "sha256": "5dc48bba172e2750f1857ca95dd309fe9e630e6f7118b5a061753bbab3116cec"
+    }
+  ]
+}

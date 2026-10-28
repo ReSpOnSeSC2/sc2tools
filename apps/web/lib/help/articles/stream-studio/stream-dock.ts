@@ -23,7 +23,7 @@ const article: HelpArticle = {
     "clip",
     "block spammers",
   ],
-  updated: "2026-10-25",
+  updated: "2026-10-28",
   body: [
     { type: "paragraph", text: "The Game section also shows **Twitch Channel Points** state when configured. This is separate from Crystal Ball. **Resolve verified result** uses the stored replay result; **Cancel / refund** asks Twitch to refund and reports success only after confirmation. Missing provider IDs require a manual Twitch dashboard check. Both automation switches and the server feature gate start off. Current desktop telemetry cannot prove ranked queue status, so automatic Twitch Predictions remain unavailable; opted-in live 1v1 start markers can still work. [Twitch setup and recovery](/help/viewer-engagement#twitch-predictions)." },
     {
@@ -52,6 +52,7 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "The private Stream Dock URL (shown in Settings → Chat & alerts → Stream Dock) is a second-screen control panel — add it in OBS via **Docks → Custom Browser Docks**, or open it on a phone. From it you can: pin a chat highlight on stream (and have it read aloud), run chat polls and **build votes** (chat picks your opening from your real saved builds), update stream goals, switch **Starting Soon, BRB, Intermission and Stream ending scenes** with a countdown, fire the session recap card, review the **clip-moment log** (every chat spike and big game moment, timestamped with the chat lines that caused it), and block spammers everywhere at once.",
     },
+    { type: "paragraph", text: "The Dock's **Open Overlay settings** link opens [Overlay → Setup](/settings?tab=overlay&section=setup) directly, including when a Dock link is invalid or has been replaced. Check your setup there before copying a fresh private Dock URL from Chat & alerts." },
     {
       type: "paragraph",
       text: "In Scenes, choose **Starting Soon**, **BRB**, **Intermission** or **Stream ending**. Set an optional message and countdown first; your last five submitted messages are saved per Dock as reusable, removable chips. **Go live** clears the scene. Returning live from Starting Soon marks the stream start only when no mark exists; ending the stream does not change that mark. Refresh existing scene Browser Sources once after this update so they recognize the new modes.",

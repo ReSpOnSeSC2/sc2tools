@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "preparedOn": "2026-10-28",
+  "scope": "Independent source/contract review of PR802 authority-safe loading repair; no application edits, Git mutations or runtime checks.",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/help-recovery-completion",
+  "reviewedBase": "7b57d86e1de7121bdc4eeac1a96a723d371b2d3d",
+  "priorArchitectureReview": "C:/SC2TOOLS/.cache/shared-analysis-safe-loading-review-20261028.json",
+  "decision": {
+    "source": "No product source blocker found in the current six-path repair.",
+    "rationale": "The page still awaits the same authenticated request-memoized detail fetch and resolves notFound, existing busy/outage handling and canonical redirect before returning the dynamic analysis boundary. The complete skeleton survives as a reusable presentation component.",
+    "release": "Source approval is not HTTP, browser, build, CI or production acceptance. Keep all existing assertions and complete actual pending-boundary/status proof before delivery."
+  },
+  "filenameConflict": {
+    "original": "profiles-replays-polish-1 step4 explicitly names app/players/[player]/replays/[gameId]/loading.tsx and analysis-shaped loading; it also requires a real404, one request memoized API read and canonical redirect preservation.",
+    "later": "ADR0065 and the implemented public status contract prohibit that detail loader and listed ancestors because they can flush HTTP200 before fresh privacy/existence admission. publicStatusBoundaries.test.ts is the direct unchanged regression contract.",
+    "resolution": "Delete only the unsafe route artifact. Reuse the same skeleton body in components/public-profile/SharedReplayAnalysisLoading.tsx, supplied to a real dynamic import after authority. This fulfills analysis-shaped post-authority code loading and preserves the later status/privacy contract; it is an explicit named-artifact substitution, not literal route-file completion.",
+    "documentationFollowup": "The current Help/recovery checkpoint still refers to a canonical loading-route artifact/test. Update checkpoint and root-owned ledger to explain this exact substitution and ADR precedence; update the new test title to post-authority loading if useful. Do not rewrite the original197-item specification."
+  },
+  "sourceFindings": [
+    {
+      "id": "authority",
+      "result": "pass",
+      "evidence": [
+        "page.tsx changes only the success renderer import/return. Params decoding, from sanitization, cache()-wrapped fetchAnalysis, auth server API, force-dynamic/revalidate0, metadata noindex/canonical handling and all !ok branches remain unchanged.",
+        "404 in page or metadata still calls notFound; page returns existing PublicUnavailable for401/429/5xx/transport results, preserving the existing detail UI contract. Canonical mismatch redirects before analysis output.",
+        "New seven gate cases exercise unresolved authority, page/metadata404,401/429/500/0 and canonical redirect without returning the analysis island."
+      ]
+    },
+    {
+      "id": "no-extra-api-or-private-props",
+      "result": "pass",
+      "evidence": [
+        "SharedReplayAnalysisContent imports next/dynamic, DTO type and local skeleton only. It performs no fetch, Clerk/token read, preflight, new endpoint or request.",
+        "The exact already-admitted data and sanitized from props, plus existing game key, pass to the same PublicReplayAnalysis.",
+        "lib/api.ts still obtains a fresh server Clerk token and uses cache:no-store. Token/headers are not added to client props.",
+        "publicFetchCaching.test.tsx remains unchanged and still asserts one shared authenticated metadata/page call, including separately parsed equivalent filter queries."
+      ]
+    },
+    {
+      "id": "ssr-and-genuine-suspension",
+      "result": "pass in source; runtime proof pending",
+      "evidence": [
+        "Dynamic import is declared at module scope and resolves the named PublicReplayAnalysis export. No ssr:false, synthetic delay, artificial fetch or route-wide Suspense is added.",
+        "Installed Next app-dynamic delegates to lazy-dynamic/loadable; defaults include ssr:true. Supplying loading creates a real Suspense fallback around the lazy module.",
+        "The boundary exists only in the admitted canonical200 branch. Therefore its potential stream cannot precede the page's authoritative404/redirect decisions.",
+        "A warm hard document load may render the real analysis on the server without a visible fallback. Prove genuine pending code behavior through a cold client navigation/held actual chunk; do not force CSR or add synthetic product waiting to manufacture a screenshot."
+      ]
+    },
+    {
+      "id": "skeleton-not-weakened",
+      "result": "pass",
+      "evidence": [
+        "Compared removed HEAD route loader against new component: all presentation lines match exactly, excluding the updated placement comment.",
+        "It retains header, hero, five statistic shapes, wrapping navigation placeholders, timeline, mechanics and build-order blocks.",
+        "One SkeletonRegion busy status remains. Decorative blocks are aria-hidden; no fake result,0%,unknown opponent, navigation link or action is introduced.",
+        "SharedReplayLoading.test.tsx changes only its import; every prior accessibility/no-fake-data/action assertion remains."
+      ]
+    },
+    {
+      "id": "old-contracts",
+      "result": "pass in source",
+      "evidence": [
+        "publicStatusBoundaries.test.ts byte hash matches prior independent review; all forbidden detail/ancestor entries and positive Community directory loader assertion remain.",
+        "PublicReplays.test.tsx and publicFetchCaching.test.tsx are unchanged at this review, preserving all existing privacy, filters, back-context, share download, team replay, metadata and transient-failure assertions.",
+        "Middleware/replayRouteAccess and API detail admission were not changed. Status-page middleware bypass does not become public replay admission."
+      ]
+    }
+  ],
+  "verificationGaps": [
+    {
+      "kind": "existing async UI tests",
+      "detail": "PublicReplays successful-detail tests currently call synchronous getByRole after rendering the newly lazy boundary (e.g. lines437,459,503). Full suite may need only actual-boundary findBy/waitFor waits, preserving every old content, navigation, download and props assertion. The49 reported focused passes do not cover all these original success assertions."
+    },
+    {
+      "kind": "actual wrapper pending contract",
+      "detail": "New page-gate tests mock the content wrapper and the skeleton test renders it directly. They do not yet prove actual dynamic import fallback/replacement or retired-route behavior. Exercise the real wrapper with a controlled genuine module load or actual built client chunk."
+    },
+    {
+      "kind": "built HTTP",
+      "detail": "Confirmed private/missing detail must remain a real404 with no preceding analysis success stream, including delayed API rejection and metadata flow. Keep signed-out auth protection/dotted IDs, canonical/legacy redirects and all existing profile/archive temporary status assertions. Existing authenticated detail busy/outage UI semantics must not be silently replaced with invented new status expectations."
+    },
+    {
+      "kind": "SSR",
+      "detail": "On admitted success, inspect completed real server-rendered analysis markup, not only serialized DTO strings in RSC. Verify no CSR bailout or ssr:false is introduced. A held client chunk test alone does not prove SSR."
+    },
+    {
+      "kind": "responsive/AA and release",
+      "detail": "Run existing/new actual production-CSS320/390 and desktop skeleton/content checks, one busy announcement and no fake actions, all83 unchanged budgets/assets, required exact-head CI and relevant signed-in deployment acceptance. No failing assertion may be skipped or narrowed."
+    },
+    {
+      "kind": "evidence/docs",
+      "detail": "Keep original7b CI failure and any new failures. Record actual tool receipts and qualify synthetic authority fixtures separately from real production acceptance. Update the stale artifact wording before final ledger adoption."
+    }
+  ],
+  "statusProofQualification": "Root reports7 new gate cases + unchanged boundary test +40 middleware cases =49 passing. This reviewer did not run or independently certify those tests. Source inspection and hash verification only.",
+  "supportingSourcePins": [
+    {
+      "path": "apps/web/components/public-profile/__tests__/publicStatusBoundaries.test.ts",
+      "sha256": "027933ccda7bbc1122822a4a96d567b5b7baa124ba57ed9424bc9ca6948b1248"
+    },
+    {
+      "path": "apps/web/components/public-profile/__tests__/PublicReplays.test.tsx",
+      "sha256": "50f14d9fd9fe0822a8a5c0ad586d4cab469a0ce3d5deb7cbbaed3f792063a1cd"
+    },
+    {
+      "path": "apps/web/components/public-profile/__tests__/publicFetchCaching.test.tsx",
+      "sha256": "ef994b72a2ff402d5ff80dc7a88bc612e5eb876815d28a304f16db2cf3739d65"
+    },
+    {
+      "path": "apps/web/components/public-profile/PublicReplayAnalysis.tsx",
+      "sha256": "229eb975e9a3c81ffdbc903cbfae39bf2161648bd9f42ec74c05efb4fa8c399e"
+    },
+    {
+      "path": "apps/web/lib/api.ts",
+      "sha256": "99874b16bf96cb9ac6f39af0054836ac4ffe2aea359dead3c75ee81bdd6d76fd"
+    },
+    {
+      "path": "apps/web/middleware.ts",
+      "sha256": "f591a75e695ff8ce26b1adc53def7addb904a58ef5e724a00f7dd8e845366934"
+    },
+    {
+      "path": "apps/web/lib/replayRouteAccess.ts",
+      "sha256": "64bc88052394de9e708ce35cf3d5ba07d09ea0979400117a69930f14072bf178"
+    },
+    {
+      "path": "apps/web/lib/publicStatusMiddleware.test.ts",
+      "sha256": "b2f4531f956f6d66c2d446148dc26854c0d3aab5d115546bc243d342dcffa529"
+    },
+    {
+      "path": "apps/web/components/ui/Skeleton.tsx",
+      "sha256": "66b279a7b56a8ffb61d7b3135a54e1c86324abbc3a5dc3325d52de75f9b43911"
+    },
+    {
+      "path": "docs/adr/0065-public-player-privacy.md",
+      "sha256": "0ab8bcb8f873d8634af141470e92170952ce6d9477af762d35f6492cf081ec78"
+    },
+    {
+      "path": "docs/handoff/public-player-checkpoint.md",
+      "sha256": "20c353d9831574da3827b211c46d6ef01fc8993ca7c2c27ab4c8b08dfadcf10f"
+    },
+    {
+      "path": "docs/handoff/plan/final-plan.json",
+      "sha256": "7736aa72eada3a1b6d71ac1570accdbb24dbc6634138e5445c0fd3ce7fc58b60"
+    },
+    {
+      "path": "docs/handoff/help-recovery-completion-checkpoint.md",
+      "sha256": "7513de8e652855b59cb6f5895443848ea4e58428c4bc0bfb530203e16fb529a4"
+    }
+  ],
+  "currentRepairPins": [
+    {
+      "path": "apps/web/app/players/[player]/replays/[gameId]/page.tsx",
+      "sha256": "7c843a3c5c7663403e9f251f023b60b06cee7a3d7578a56b0d5da013407d2f50"
+    },
+    {
+      "path": "apps/web/components/public-profile/SharedReplayAnalysisContent.tsx",
+      "sha256": "2f0c067a5c306a927fdc6d853d4de7f6b13f75fbb13bdf7ff0490f58f4edeccc"
+    },
+    {
+      "path": "apps/web/components/public-profile/SharedReplayAnalysisLoading.tsx",
+      "sha256": "2b1d78d96ac6543c69201223dde5ac529ab7d42e55120dc461dfbc2e4ec61f0e"
+    },
+    {
+      "path": "apps/web/components/public-profile/__tests__/SharedReplayAnalysisGate.test.tsx",
+      "sha256": "56eb279b82eafe93e0f188d2944394b678e1b362d588bf648a1b3bb37024e62d"
+    },
+    {
+      "path": "apps/web/components/public-profile/__tests__/SharedReplayLoading.test.tsx",
+      "sha256": "a008f80b8d2ea13c2354df11c0530b33be02dd92db425bf68ffb487bce2e66e4"
+    }
+  ],
+  "deletedPaths": [
+    "apps/web/app/players/[player]/replays/[gameId]/loading.tsx"
+  ],
+  "noClaims": [
+    "No literal loading.tsx completion.",
+    "No additional data fetch or auth path.",
+    "No production or whole-roadmap completion.",
+    "No browser, server, native process or test command started by reviewer."
+  ]
+}

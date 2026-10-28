@@ -7,6 +7,7 @@ import {
   Lightbulb,
   Mail,
   Search,
+  Sparkles,
 } from "lucide-react";
 import { HELP_SUPPORT_EMAIL } from "@/lib/help/support";
 import type { ReportType } from "@/lib/feedback/reportContext";
@@ -50,6 +51,7 @@ const HELP_ITEMS: readonly HelpMenuItem[] = [
     href: "/download",
     group: "help",
   },
+  { key: "whats-new", label: "What's new", icon: Sparkles, href: "/changelog", group: "help" },
   { key: "appearance", label: "Accessibility & appearance", icon: BookOpen, href: "/help/appearance", group: "help" },
   { key: "accessibility", label: "Accessibility statement", icon: BookOpen, href: "/legal/accessibility", group: "help" },
 ];

@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "preparedOn": "2026-10-28",
+  "scope": "Independent source-only architecture review for PR802 loading-boundary CI failure",
+  "requestedCiHead": "7b57d86e",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/help-recovery-completion",
+  "gitExecuted": false,
+  "runtimeExecuted": false,
+  "providersAccessed": false,
+  "applicationSourceEdited": false,
+  "decision": "Retain every public status assertion unchanged. Reuse the complete analysis-shaped skeleton as a component at a genuine post-authority, default-SSR dynamic analysis-island boundary; remove the unsafe route loading.tsx artifact without dropping its functional loading requirement.",
+  "conflict": {
+    "originalRequirement": "profiles-replays-polish-1 step4 explicitly names app/players/[player]/replays/[gameId]/loading.tsx, replacing the wrong list-shaped skeleton with an analysis-shaped loading surface while preserving real404 and canonical redirects.",
+    "laterContract": "ADR0065 and public-player-checkpoint explicitly supersede planned cached/streaming public admission: fresh no-store consent and canonical identity must resolve before a loading route or ancestor can flush HTTP200. publicStatusBoundaries.test.ts intentionally forbids canonical detail loading.tsx and its listed ancestor boundaries.",
+    "requiredResolution": "The literal route-artifact placement conflicts with the later measured status/privacy contract. Preserve the skeleton's layout/accessibility and provide real loading at the admitted analysis-code boundary instead. Record this explicit named-artifact substitution in the checkpoint/ledger; do not claim literal loading.tsx completion or merely delete the skeleton to make CI green.",
+    "evidence": [
+      "docs/handoff/plan/final-plan.json: profiles-replays-polish-1 full spec/howto (howto none)",
+      "docs/adr/0065-public-player-privacy.md: Fresh admission takes priority over planned ISR/CDN TTLs; no early loading route or ancestor",
+      "docs/handoff/public-player-checkpoint.md: final real HTTP proof and removal of author loading boundary after streamed200 reproduction",
+      "apps/web/components/public-profile/__tests__/publicStatusBoundaries.test.ts:5-12"
+    ]
+  },
+  "existingAuthority": {
+    "middleware": "middleware.ts retains Clerk wrapper/protect for exact per-game replay paths, including dotted game IDs. lib/publicStatusRoute.ts only bypasses Clerk for exact /status and /api/ping. The similarly named publicStatusMiddleware test verifies this status-page bypass and existing private protection; it is not a public replay existence/privacy preflight.",
+    "insufficientGate": "Signed-in status does not prove the replay exists or sharing is still enabled. Clerk protection cannot justify an early detail-route loading boundary.",
+    "detailPageObserved": "Canonical page uses force-dynamic/revalidate0; cache()-wrapped authenticated apiFetch deduplicates metadata/page work using decoded player/gameId and sanitized queryKey. Both metadata and page call notFound on confirmed404. The page handles existing busy/outage states, then canonical-handle redirect, then returns PublicReplayAnalysis.",
+    "serverApiObserved": "lib/api.ts obtains a fresh Clerk token for server apiFetch and sends Authorization with cache:no-store. No token is serialized into client props. Missing token is401; transport failure is status0.",
+    "privacy": "API detail stays authenticated and share-scoped. ReplayLibrary/API allowlists retain current eligibility, detector-view build labels and conditional public-profile capability. No new endpoint, cross-request retained admission or private owner identifier is needed for this repair.",
+    "statusScopeCaution": "Do not silently redefine authenticated detail429/503 recovery behavior: existing detail unit assertions expect busy/outage UI. The public profile/legacy author500 and private/missing404 contracts also remain intact. A separate proposed status change requires its own actual HTTP proof rather than assumptions from the title of this test."
+  },
+  "minimalImplementation": {
+    "skeleton": "Move the current canonical route loader's complete presentation to components/public-profile/SharedReplayAnalysisSkeleton.tsx (or similarly explicit name). Keep one busy status, no fake replay facts/actions, analysis header/hero/five stats/nav/timeline/mechanics/build-order shapes and responsive layout. Delete only the canonical app/.../loading.tsx route artifact, not the reusable skeleton.",
+    "boundary": "Add a small use-client SharedReplayAnalysisBoundary component. Declare next/dynamic at module scope loading named PublicReplayAnalysis from its existing module, with loading: SharedReplayAnalysisSkeleton. Keep default SSR enabled; use type-only imports for DTO types and no server API/auth imports in this client module.",
+    "pagePlacement": "Keep params/query resolution and await fetchAnalysis outside and before any returned Suspense/dynamic loading boundary. Preserve !ok branches, confirmed404 notFound and canonical-handle redirect in their existing order. Only the successful canonical branch returns the new boundary with the already-admitted data/from and existing game key.",
+    "realLoading": "The skeleton represents a genuinely pending analysis code chunk after authority is resolved. Do not add a sleep, synthetic pending promise, forced remount, artificial data refetch or fixture-only style/loading switch to make it visible.",
+    "metadataAndCache": "Keep the same request-only cached loader in generateMetadata and page. Preserve exact sanitized from/query semantics, canonical URLs, noindex and force-dynamic/no-store behavior. No ISR, shared result cache, provider preflight or flag changes.",
+    "whySafe": "The dynamic component may suspend only after the page has completed its authoritative result/404/redirect decisions. The generic route loader cannot suspend the page while that authority is pending because the forbidden file is absent. The resulting success response can legitimately show an analysis-shaped fallback while its code becomes ready.",
+    "whyNotStaticSuspenseOnly": "Wrapping the already-static synchronous PublicReplayAnalysis in Suspense supplies no demonstrated pending work, so it can leave the functional loading requirement unmet. Use a real dynamic import, then prove the held-chunk fallback.",
+    "whyNotSsrFalse": "ssr:false would unnecessarily remove existing server rendering and can leave an admitted no-JavaScript visitor at a permanent skeleton. It is not required to enforce the gate and must not be used as a shortcut.",
+    "installedNextSource": "The retained Next15.5.15 implementation of app-dynamic.js delegates to lazy-dynamic/loadable.js, which defaults ssr:true and creates a React.Suspense fallback when a loading component is supplied. This was read locally; no external-version claim or runtime behavior is inferred as production proof.",
+    "rootDisposition": "Root accepted this post-authority default-SSR wrapper approach and is implementing it. This report makes no claim that the new source or HTTP behavior has passed verification."
+  },
+  "testsAndProof": {
+    "unchangedHardGate": "Keep publicStatusBoundaries.test.ts entirely unchanged, including all forbidden ancestor/detail paths and the positive Community(directory) loader assertion. Keep every existing profile/archive/detail404, outage, auth-protection and redirect assertion; no deletion, skip or weaker expected status.",
+    "skeletonUnit": "Retarget SharedReplayLoading.test.tsx to the reusable skeleton component; retain all its existing one-status/aria-busy/no-fake-data/no-links/no-buttons assertions. Update the description to say post-authority loading instead of claiming a route loading.tsx artifact.",
+    "authorityUnit": "Prove404/error/redirect branches do not render the admitted boundary. The successful branch passes the exact admitted DTO/from/game identity; metadata/page still use the same request loader and no extra public identity or detail API request is added.",
+    "boundaryUnit": "Exercise the actual client wrapper with a held dynamic module: real analysis-shaped fallback before resolution, real analysis after resolution, no second fetch, and no fallback after an unmounted/retired route returns. Existing page UI assertions may await the real dynamic result or isolate the wrapper in focused unit tests while preserving their assertions.",
+    "actualBuiltHttp": [
+      "With a delayed missing/private detail API result, the initial document remains a real404 and raw HTML/RSC contains no prior analysis payload. Do not treat visible not-found UI or noindex inside a200 response as equivalent.",
+      "Signed-out detail navigation retains the current auth redirect/protection, including dotted IDs and legacy URL families. No loading success shell or data leaks before the redirect.",
+      "Preserve exact canonical/legacy redirects and all existing public profile/archive temporary5xx/status checks. Test both hard requests and client navigation where existing fixtures support them.",
+      "For an admitted successful detail, hold the actual analysis chunk after server authority succeeds. Verify the complete skeleton appears with one accessible busy message, then actual analysis replaces it without another detail request. Preserve from/back/navigation/download semantics.",
+      "Keep full responsive/AA checks, real production CSS/fonts, unchanged83 route budgets and the existing anti-fake-data assertions. Fixture authority may be synthetic, but built HTTP status/chunk timing must be real and explicitly qualified; do not substitute a static component snapshot for HTTP proof."
+    ],
+    "verificationQualification": "No tests, build, browser or HTTP request was run by this review. Root owns PR802 repair verification; guide browser review owns/released its independent local slot separately."
+  },
+  "rejectedAlternatives": [
+    "Delete/skip/change the forbidden-file status assertion to permit canonical loading.tsx.",
+    "Merely remove the new loader with no real analysis-shaped loading boundary.",
+    "Place Suspense outside the authoritative fetch or around the whole async page/parent layout.",
+    "Treat middleware auth.protect as proof of current sharing, canonical handle or replay existence.",
+    "Rely on generateMetadata alone to block all Next15 user-agent streaming modes while retaining a route loader.",
+    "Enable ISR/cache admission, add a second preflight fetch, or use stale props as a positive privacy decision.",
+    "Add a preloading gate without proving all status/auth/privacy branches in actual built HTTP; it is larger and unnecessary for this repair."
+  ],
+  "completion": "A source repair plus preserved hard status assertions and actual positive loading proof is required. The original artifact name is superseded by the later privacy/status contract; its functional analysis-shaped loading requirement remains mandatory.",
+  "sourceFilePins": [
+    {
+      "path": "apps/web/components/public-profile/__tests__/publicStatusBoundaries.test.ts",
+      "sha256": "027933ccda7bbc1122822a4a96d567b5b7baa124ba57ed9424bc9ca6948b1248"
+    },
+    {
+      "path": "apps/web/middleware.ts",
+      "sha256": "f591a75e695ff8ce26b1adc53def7addb904a58ef5e724a00f7dd8e845366934"
+    },
+    {
+      "path": "apps/web/lib/publicStatusRoute.ts",
+      "sha256": "93f2c3dc4005de1bcd6fd285b6ddf3793019cb075260fe0247ea23aba051343c"
+    },
+    {
+      "path": "apps/web/lib/publicStatusMiddleware.test.ts",
+      "sha256": "b2f4531f956f6d66c2d446148dc26854c0d3aab5d115546bc243d342dcffa529"
+    },
+    {
+      "path": "apps/web/lib/replayRouteAccess.ts",
+      "sha256": "64bc88052394de9e708ce35cf3d5ba07d09ea0979400117a69930f14072bf178"
+    },
+    {
+      "path": "apps/web/lib/api.ts",
+      "sha256": "99874b16bf96cb9ac6f39af0054836ac4ffe2aea359dead3c75ee81bdd6d76fd"
+    },
+    {
+      "path": "apps/web/lib/publicPlayer.ts",
+      "sha256": "a1e75034394480887c5bdf13819eff4541202aa6644f1ddc066d5fa1d737d74f"
+    },
+    {
+      "path": "apps/web/lib/publicReplayIdentity.ts",
+      "sha256": "1ccab8ca1818dfb72d4afd02244a8282ddb08429a95f4ea48e90c9d8f9784312"
+    },
+    {
+      "path": "apps/web/components/public-profile/PublicReplayAnalysis.tsx",
+      "sha256": "229eb975e9a3c81ffdbc903cbfae39bf2161648bd9f42ec74c05efb4fa8c399e"
+    },
+    {
+      "path": "apps/web/components/public-profile/__tests__/PublicReplays.test.tsx",
+      "sha256": "d1ed51efb7f09f5c382a901da176eb816cc7d415c61f5dd22c2e79ca08fab1fd"
+    },
+    {
+      "path": "apps/web/tests/e2e/public-player.spec.ts",
+      "sha256": "744cabce30401e1c51636dee86edfb2365272f75a98b05865f5df279e51139f6"
+    },
+    {
+      "path": "apps/web/tests/e2e/public-pages.spec.ts",
+      "sha256": "8cce36415ff61d7088e4809d9f4a1d8d8262e5f290ada3640b8ea8f5a162d8cc"
+    },
+    {
+      "path": "apps/api/src/routes/publicReplays.js",
+      "sha256": "bb76fb99794dede012a6b07644914eb4afe38b22b078e71031d8e4584a240c9a"
+    },
+    {
+      "path": "apps/api/src/services/replayLibrary.js",
+      "sha256": "f1b08ff002bb7fa313a5b2a982439e49d77b64ae1f5f081f458f0d6a7dd32cfd"
+    },
+    {
+      "path": "docs/adr/0065-public-player-privacy.md",
+      "sha256": "0ab8bcb8f873d8634af141470e92170952ce6d9477af762d35f6492cf081ec78"
+    },
+    {
+      "path": "docs/handoff/public-player-checkpoint.md",
+      "sha256": "20c353d9831574da3827b211c46d6ef01fc8993ca7c2c27ab4c8b08dfadcf10f"
+    },
+    {
+      "path": "docs/handoff/plan/final-plan.json",
+      "sha256": "7736aa72eada3a1b6d71ac1570accdbb24dbc6634138e5445c0fd3ce7fc58b60"
+    }
+  ],
+  "pinQualification": "Current supporting source hashes at report write. Root may concurrently repair canonical page/loading/tests in this checkout; this audit performed no Git inspection and does not attest that all current files equal the requested CI head."
+}

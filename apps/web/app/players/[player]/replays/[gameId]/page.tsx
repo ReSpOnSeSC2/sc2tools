@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 import type { PublicReplayDetailResponse } from "@/components/analyzer/replays/types";
-import { PublicReplayAnalysis } from "@/components/public-profile/PublicReplayAnalysis";
+import { SharedReplayAnalysisContent } from "@/components/public-profile/SharedReplayAnalysisContent";
 import { PublicUnavailable } from "@/components/public-profile/PublicUnavailable";
 import { parseArchiveFrom, parseArchiveQuery, sharedAnalysisHref } from "@/components/public-profile/archiveQuery";
 import { archiveRequestQuery } from "@/components/public-profile/archiveRequest";
@@ -55,7 +55,7 @@ export default async function SharedReplayAnalysisPage({ params, searchParams }:
       sharedAnalysisHref(`/players/${encodeURIComponent(result.data.profile.handle)}/replays`, requestedGameId, from),
     );
   }
-  return <PublicReplayAnalysis key={result.data.game.gameId} data={result.data} from={from} />;
+  return <SharedReplayAnalysisContent key={result.data.game.gameId} data={result.data} from={from} />;
 }
 
 function safeDecode(segment: string): string {

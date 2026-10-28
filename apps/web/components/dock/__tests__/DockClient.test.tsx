@@ -117,7 +117,7 @@ describe("DockClient", () => {
     render(<DockClient token="private-revoked-token" />);
     await drain();
     expect(screen.getByRole("heading", { name: "This Dock link no longer works" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Open Overlay settings/ }).getAttribute("href")).toBe("/settings?tab=overlay");
+    expect(screen.getByRole("link", { name: /Open Overlay settings/ }).getAttribute("href")).toBe("/settings?tab=overlay&section=setup");
     expect(document.body.textContent).not.toContain("private-revoked-token");
     const calls = fetchMock.mock.calls.length;
     await act(async () => { vi.advanceTimersByTime(120000); });
@@ -854,7 +854,7 @@ describe("DockClient", () => {
   it("links straight to the Overlay settings tab", async () => {
     render(<DockClient token="tok_test" />);
     const link = await screen.findByRole("link", { name: "Open Overlay settings" });
-    expect(link.getAttribute("href")).toBe("/settings?tab=overlay");
+    expect(link.getAttribute("href")).toBe("/settings?tab=overlay&section=setup");
     expect(link.getAttribute("target")).toBe("_blank");
   });
 

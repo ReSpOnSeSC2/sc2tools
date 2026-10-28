@@ -28,7 +28,7 @@ const article: HelpArticle = {
     "later",
     "uninstall",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-28",
   body: [
     { type: "callout", tone: "info", title: "Agent 0.24.1 and later", text: "Use the [Windows download](/download) or **Agent → Check for updates** for the latest Companion controls. An existing installation keeps its pairing and settings. See [Desktop Companion](/help/desktop-companion)." },
     { type: "heading", text: "Windows desktop Companion", anchor: "desktop-companion" },
@@ -94,7 +94,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Updates" },
     {
       type: "paragraph",
-      text: "The app updates itself. When a new version is ready, **Update available** appears at the bottom of the screen. **Reload** switches to it now, so save any edits first. **Later** hides the message until you next open SC2 Tools.",
+      text: "The app updates itself. When a new version is ready, **Update available** appears at the bottom of the screen. **What changed** opens the [changelog](/changelog) without applying the update. **Reload** switches to it now, so save any edits first. **Later** hides the message for this browser session.",
     },
     { type: "heading", text: "Installed it before this update?" },
     {
