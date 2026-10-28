@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { WinRateCell } from "../WinRateCell";
 import { GuideStatsLegend } from "../GuideStatsLegend";
@@ -30,5 +30,20 @@ describe("GuideStatsLegend", () => {
     expect(screen.getByText(/Updated nightly/).textContent).toContain("Oct 21, 2026");
     expect(screen.getByRole("link", { name: GUIDE_STATS_LEGEND.help, hidden: true }).getAttribute("href")).toBe("/help/reading-guide-stats");
     expect(container.querySelectorAll("li")).toHaveLength(3);
+  });
+
+  it("opens the real likely-range definition from the expanded legend without changing its numbers", async () => {
+    const { container } = render(<GuideStatsLegend computedAt={null} />);
+    const details = container.querySelector("details")!; details.open = true;
+    expect(container.querySelector('[data-glossary-term="likely-range"]')).toBeTruthy();
+    const trigger = screen.getByRole("button", { name: "About Likely range" });
+    trigger.focus(); fireEvent.click(trigger);
+    const tip = await screen.findByRole("dialog", { name: "About Likely range" });
+    expect(await within(tip).findByText(/uncertainty around a guide's recorded win rate/)).toBeTruthy();
+    expect(within(tip).getByRole("link", { name: "Learn more" }).getAttribute("href")).toBe("/help/glossary#likely-range");
+    expect(screen.getByText(GUIDE_STATS_LEGEND.floors).textContent).toContain(`${GUIDE_CELL_MIN_USERS} players`);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull(); expect(document.activeElement).toBe(trigger);
+    expect(details.open).toBe(true);
   });
 });

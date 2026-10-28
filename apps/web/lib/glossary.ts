@@ -36,6 +36,33 @@ export interface GlossaryTerm {
 
 export const GLOSSARY: readonly GlossaryTerm[] = [
   {
+    id: "likely-range",
+    term: "Likely range",
+    short: "The uncertainty around a guide's recorded win rate; fewer games make the range wider.",
+    long: "Guide openers are ranked by the low end of this range so a few lucky games cannot top the table. Verdict symbols describe whether the whole range is above or below an even result, or too close to call.",
+    related: ["sample-size", "publishing-floor", "trend-arrow"],
+    category: "statistics",
+    help: { slug: "reading-guide-stats", anchor: "likely-range" },
+  },
+  {
+    id: "publishing-floor",
+    term: "Publishing floor",
+    short: "The minimum sample of games and players needed before a guide statistic is shown.",
+    long: "Individual cells and full guide pages have different sample requirements. A filtered sample can fall below its floor even when the broader guide is published; the missing number does not mean a zero win rate.",
+    related: ["sample-size", "likely-range"],
+    category: "statistics",
+    help: { slug: "reading-guide-stats", anchor: "publishing-floors" },
+  },
+  {
+    id: "trend-arrow",
+    term: "Trend arrow",
+    short: "A guide's win-rate change from an earlier snapshot, with small moves treated as flat.",
+    long: "Changes are measured in percentage points using a sufficiently old comparison snapshot. New means no suitable earlier comparison is available. An arrow describes the recorded sample, rather than predicting your next result.",
+    related: ["likely-range", "sample-size"],
+    category: "statistics",
+    help: { slug: "reading-guide-stats", anchor: "trends" },
+  },
+  {
     id: "session",
     term: "Session",
     short: "A continuous run of games with no gap longer than your selected inactivity threshold.",

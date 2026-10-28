@@ -21,6 +21,9 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Respect device and page motion reduction in build randomizer reveals, and announce the selected build only after its reveal resolves. Guide legends now offer the likely-range definition, with publishing-floor and trend-arrow explanations in the glossary.
+- Keep eliminated randomizer build labels readable while retaining their strike-through and faded icons.
+- Stop remaining randomizer chip transitions when reduced motion is selected, including changes while a reveal is playing.
 - Keep the full Bingo: Ladder Edition objectives inside their tiles on phones and with larger text. Rows grow to fit longer goals, and long unit names wrap without overlapping neighboring boxes.
 - Clear the previous Opponent Bracket Pick highlight when the next round starts, including rounds with the same opponents or answer position.
 
