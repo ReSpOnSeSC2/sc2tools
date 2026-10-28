@@ -83,3 +83,32 @@ closed; no process was killed.
 No browser rule, exclusion, expectation or budget was relaxed. Fresh build,
 all 83 unchanged caps/source/asset guards and the same real responsive/focus/
 target/full-Axe browser verification remain required before delivery.
+
+## Page position on close — fresh build/browser verification pending
+
+The second browser run passed both desktop cases and all 16 full-default Axe
+scans. Both phone cases reached the final close assertion but retained a page
+scroll change caused during orientation; repeat-open steps were not reached.
+Paired controls kept the page at the original position with only opener focus
+or body overflow locking, while the real Macro dialog reproduced the drift
+without inspecting or zooming. Reports, traces and unchanged source/asset
+guards are preserved; the original exact close-position assertion is retained.
+
+Macro now captures the page coordinates and URL once per open. After unlocking,
+ordinary same-page close/unmount restores the connected opener with
+`preventScroll` and restores both coordinates, including when the opener was
+removed. A Full game navigation-intent latch and changed-URL guard suppress
+both restorations during navigation. Passive data, inspection and game changes
+do not restore or recapture page position; shared body locking is unchanged.
+
+Local checks passed 31 cases across six files, followed by a focused ten-case
+rerun after making the isolated Next Link test adapter's href/children explicit.
+The other 21 consumer cases and product bytes are unchanged; these are separate
+runs. Current whole-web types and strict lint on 16 owned TypeScript files pass.
+All 3,535 web inputs remain exact within each command. The first three test-seam
+lint warnings and raw PID observations are retained. Exact-identity settlement
+finds no remaining observed owned processes/listeners or unknown scoped rows;
+a proven unrelated Chrome PID reuse is excluded, with no kills. This is local
+synthetic-router evidence, not actual Next navigation or production acceptance.
+Fresh build, unchanged budgets/assets and the original responsive browser
+matrix remain required.

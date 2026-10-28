@@ -58,6 +58,7 @@ export function MacroBreakdownPanel({
   const dialogRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const previouslyFocusedRef = useRef<Element | null>(null);
+  const navigatingRef = useRef(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -95,6 +96,8 @@ export function MacroBreakdownPanel({
 
   useEffect(() => {
     if (!open) return;
+    const origin = { x: window.scrollX, y: window.scrollY, href: window.location.href };
+    navigatingRef.current = false;
     previouslyFocusedRef.current = document.activeElement;
     const unlockScroll = lockBodyScroll();
 
@@ -124,7 +127,12 @@ export function MacroBreakdownPanel({
       unlockScroll();
       window.clearTimeout(initFocus);
       const prev = previouslyFocusedRef.current as HTMLElement | null;
-      if (prev?.isConnected) prev.focus();
+      if (!navigatingRef.current && window.location.href === origin.href) {
+        if (prev?.isConnected) prev.focus({ preventScroll: true });
+        if (window.scrollX !== origin.x || window.scrollY !== origin.y) {
+          window.scrollTo({ left: origin.x, top: origin.y, behavior: "instant" });
+        }
+      }
     };
   }, [open]);
 
@@ -166,6 +174,7 @@ export function MacroBreakdownPanel({
             />
           ) : null}
           onClose={onClose}
+          onNavigate={() => { navigatingRef.current = true; onClose(); }}
         />
         <div className="min-w-0 flex-1 space-y-4 px-4 pb-6 pt-3 sm:px-6 sm:py-5 lg:px-8">
           {isLoading ? (
@@ -216,6 +225,7 @@ function PanelHeader({
   meta,
   action,
   onClose,
+  onNavigate,
 }: {
   headerRef: RefObject<HTMLElement | null>;
   titleId: string;
@@ -224,6 +234,7 @@ function PanelHeader({
   /** Optional header action beside Close (e.g. "Ask for a review"). */
   action?: ReactNode;
   onClose: () => void;
+  onNavigate: () => void;
 }) {
   const playerName = meta?.playerName?.trim() || "You";
   const opponent = meta?.opponentName?.trim();
@@ -275,7 +286,10 @@ function PanelHeader({
         <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2">
           <Link
             href={`/app/game/${encodeURIComponent(gameId)}#macro`}
-            onClick={onClose}
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) onClose();
+            }}
+            onNavigate={onNavigate}
             aria-label="Open full game page"
             className="inline-flex h-11 min-w-11 items-center justify-center rounded-md text-caption font-semibold text-accent hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:px-2"
           >
