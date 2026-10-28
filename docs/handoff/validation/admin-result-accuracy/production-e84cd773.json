@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "status": "actual_production_acceptance_reported_by_parent",
+  "observedAtUtc": "2026-10-28T19:46:53.991Z",
+  "mergedPr": 811,
+  "revision": "e84cd77397033a5c46c5fcb2bfd936b42f499950",
+  "testedHead": "fcb728413e148b66b587545d5af166bdca405d67",
+  "testedAndMergedTree": "64376663bcdd00ee1ff2aa0f4ce0339828134a26",
+  "observedExactHeadChecks": [
+    {
+      "name": "Lint + typecheck + test (apps/web)",
+      "status": "completed",
+      "conclusion": "success",
+      "head": "fcb728413e148b66b587545d5af166bdca405d67"
+    },
+    {
+      "name": "Responsive e2e smoke (public pages)",
+      "status": "completed",
+      "conclusion": "success",
+      "head": "fcb728413e148b66b587545d5af166bdca405d67"
+    }
+  ],
+  "vercelCheck": "success",
+  "web": {
+    "deployment": "DoebteCrdHT3F4xHd1GcZzFH26gh",
+    "status": "Ready / Production / Latest",
+    "fullSourceCommitHrefObserved": true,
+    "primaryDomain": "sc2tools.com"
+  },
+  "acceptance": {
+    "approvedReadOnlyAccountGameNavigation": true,
+    "selectedGameQueryPreserved": true,
+    "nonEmptyWinAndLossSamplesVerified": true,
+    "winUsesSharedOpaqueBackingAndSuccessVariant": true,
+    "lossUsesSharedOpaqueBackingAndDangerVariant": true
+  },
+  "scope": "Actual signed-in desktop opponent recent-game list and selected game. Evidence is a sanitized derivative of the parent acceptance receipt, not a new independent production visit.",
+  "limits": [
+    "No actual Tie/Unknown record or global-other-account consumer was exercised in this production observation; those cases retain their local component/matrix and exact-head CI proof.",
+    "No phone, API deployment, cache activation, infrastructure change or savings claim. API source is unchanged by this web slice.",
+    "Only approved read-only navigation and rendered-result inspection were performed. This is not a universal claim that background activity made no writes."
+  ],
+  "privacy": "No account IDs, owner URLs, opponent names, result counts, private viewport data or production photograph is included. No private image was opened or copied for this candidate.",
+  "roadmap": {
+    "id": "admin-polish-5",
+    "status": "partial",
+    "remainingProgramItems": 73,
+    "closureOrLedgerChange": false
+  },
+  "sourceEvidence": [
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/production-e84cd773/acceptance-receipt.json",
+      "sha256": "168535206f7afd0904d922d2eadef0d6d5825a55d2834e98520028ce7729e92b"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/admin-result-accuracy-20261028/ci-fcb-exact-success.json",
+      "sha256": "418f17799ae7e34c4eb3d99bd43fcc8338d69af6dc0c113a796daaf34ac807ae"
+    }
+  ]
+}

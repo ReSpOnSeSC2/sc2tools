@@ -1,4 +1,19 @@
-# Admin result accuracy — current local compatibility verification
+# Admin result accuracy — delivered slice
+
+The [sanitized production receipt](production-e84cd773.json) records PR811 at
+`e84cd773`: actual exact-head CI, production Ready / Production / Latest,
+and an approved signed-in desktop opponent-list/selected-game inspection.
+Nonempty Win and Loss samples use the shared backing and correct variants;
+the selected game query is preserved. No private account identifiers, counts
+or photograph are included. Real Tie/Unknown, global other-account and phone
+acceptance remain outside this particular production observation.
+
+The parent `admin-polish-5` remains partial and the program's 73 remaining items
+are unchanged. The evidence below retains its historical local-source and
+synthetic fixture boundaries; its earlier pending-release statements do not
+replace the production chronology above. No API deployment or savings claim.
+
+## Historical local compatibility verification
 
 The [current compact summary](current-title-verification.json) binds base `c0e2b770` (passed Reader810 integrated) plus only the restored Unknown-dash title. The original screen-reader sibling, em dash text content, canonical labels and opaque contrast backing remain. Historical `9d67` CI caught an existing detail-consumer assertion omitted from the first focused batch; all its original assertions remain untouched. The expanded current batch passes 52 cases across five actual files, whole-web types and strict six-file lint.
 

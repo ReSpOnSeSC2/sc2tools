@@ -1,6 +1,29 @@
 # Admin game result accuracy
 
-## Current post-Auth integration — 2026-10-28
+## Current delivered slice — PR811, 2026-10-28
+
+PR811 merged at `e84cd77397033a5c46c5fcb2bfd936b42f499950` after the
+actual required checks passed at `fcb728413e148b66b587545d5af166bdca405d67`.
+The tested and merged tree is `64376663bcdd00ee1ff2aa0f4ce0339828134a26`.
+Vercel production `DoebteCrdHT3F4xHd1GcZzFH26gh` was observed Ready /
+Production / Latest with its full source commit link on the primary domain.
+
+An approved, signed-in desktop check opened an account's opponent recent-game
+list and selected game, preserved the game query, and verified nonempty Win
+and Loss samples using the shared opaque backing and correct variants. The
+[sanitized production receipt](validation/admin-result-accuracy/production-e84cd773.json)
+contains no account IDs, URLs, opponent names, result counts or private image.
+This production check did not exercise real Tie/Unknown records, the global
+other-account consumer or phones; their existing local matrix and exact-head
+CI evidence retain those separate boundaries. No API deployment is claimed.
+
+The original `admin-polish-5` remains partial. Its remaining requirements below
+are unchanged, and the program still has 73 items remaining. Earlier sections
+retain historical candidate/check boundaries; their pending-release wording
+describes those earlier snapshots rather than this delivered slice. This
+chronology/receipt adoption follows those frozen build/browser guards.
+
+## Historical post-Auth integration — 2026-10-28
 
 Clean committed head `36c7fc11d8560a9f0d9c3a5a9f7e9a208418a04b` integrates
 accepted Auth main. The actual 240-input comparison found only its new Help
@@ -114,7 +137,7 @@ keyboard navigation and polite announcements, URL result/map filters and the
 global user filter, plus their API/UI regressions. This narrow accuracy slice
 does not satisfy those requirements.
 
-## Current Unknown-title compatibility verification
+## Historical Unknown-title compatibility verification
 
 Base `c0e2b770` integrates passed/deployed Reader810 `b8ef1b94`. Only `ResultBadge.tsx` differs: the existing aria-hidden Unknown em dash regains `title="Result not recorded"`, preserving its exact text content and the screen-reader sibling. Historical `9d67` CI exposed an existing seven-case detail suite omitted from the first 45-case focused batch. No original assertion was changed. The expanded current batch passes 52 cases in five actual files, whole-web types and strict six-file lint with one unit worker.
 

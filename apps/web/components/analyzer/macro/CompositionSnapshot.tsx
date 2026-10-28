@@ -43,6 +43,8 @@ export interface BuildOrderResponse {
 }
 
 export interface CompositionSnapshotProps {
+  /** Two cards with 44px logical tiles inside the modal's fitted overview. */
+  fitOverview?: boolean;
   /**
    * Pre-built per-tick series for the local player. Built once by the
    * parent (``MacroChartSection``) and threaded to both the chart and
@@ -175,6 +177,7 @@ export function CompositionSnapshot({
   myProductionBuildings,
   oppProductionBuildings,
   patchEra,
+  fitOverview = false,
 }: CompositionSnapshotProps) {
   const hasMySeries = Array.isArray(mySeries) && mySeries.length > 0;
   const hasOppSeries = Array.isArray(oppSeries) && oppSeries.length > 0;
@@ -317,8 +320,9 @@ export function CompositionSnapshot({
         </p>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className={fitOverview ? "grid grid-cols-2 gap-3" : "grid grid-cols-1 gap-3 md:grid-cols-2"}>
         <PlayerStrip
+          fitOverview={fitOverview}
           side="me"
           name={myName?.trim() || "You"}
           race={myRace || ""}
@@ -335,6 +339,7 @@ export function CompositionSnapshot({
           onSelect={setDetail}
         />
         <PlayerStrip
+          fitOverview={fitOverview}
           side="opp"
           name={oppName?.trim() || "Opponent"}
           race={oppRace || ""}
@@ -374,6 +379,7 @@ function PlayerStrip({
   buildOrderState,
   patchEra,
   onSelect,
+  fitOverview,
 }: {
   side: "me" | "opp";
   name: string;
@@ -390,6 +396,7 @@ function PlayerStrip({
   patchEra?: PatchEra | null;
   /** Opens the enlarge dialog for a chip. */
   onSelect: (detail: ChipDetail) => void;
+  fitOverview: boolean;
 }) {
   const sortedUnits = useMemo(
     () => sortedArmyComposition(composition, patchEra),
@@ -408,8 +415,8 @@ function PlayerStrip({
   // is constant across the whole strip. Bundled so each chip call site
   // stays about the chip.
   const chipContext: ChipContext = useMemo(
-    () => ({ side, playerName: name, playerRace: race, time, onSelect }),
-    [side, name, race, time, onSelect],
+    () => ({ side, playerName: name, playerRace: race, time, onSelect, fitOverview }),
+    [side, name, race, time, onSelect, fitOverview],
   );
   const accentClass =
     side === "me"
@@ -419,7 +426,7 @@ function PlayerStrip({
   return (
     <section
       aria-label={`${name} composition at ${formatGameClock(time)}`}
-      className={`rounded-md border ${accentClass} p-3`}
+      className={`min-w-0 rounded-md border ${accentClass} p-3`}
     >
       <header className="mb-2 flex items-baseline justify-between gap-2 text-caption">
         <span className="flex min-w-0 items-center gap-2">
@@ -612,6 +619,7 @@ function ChipIcon({
   fallback,
   px = CHIP_ICON_PX,
   tile = false,
+  fitOverview = false,
 }: {
   name: string;
   kind: ChipKind;
@@ -625,9 +633,10 @@ function ChipIcon({
    * inline size cannot change with the screen.
    */
   tile?: boolean;
+  fitOverview?: boolean;
 }) {
   const [failedUrls, setFailedUrls] = useState<string[]>([]);
-  const tileSize = tile ? TILE_ICON_CLASS : undefined;
+  const tileSize = tile ? (fitOverview ? "h-[34px] w-[34px]" : TILE_ICON_CLASS) : undefined;
   if (kind === "upgrade") {
     return (
       <Icon
@@ -731,7 +740,7 @@ function UnitChip({
       // Phones: a 44 px square tile with the number printed over the
       // icon's corner, sc2replaystats' dense icon grid (seven across a
       // typical phone). From sm up: the compact icon + number pill.
-      className={`relative inline-flex h-11 w-11 touch-manipulation items-center justify-center rounded-md ${toneClass} tabular-nums text-text transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:h-auto sm:w-auto sm:justify-start sm:gap-1.5 sm:rounded sm:px-2 sm:py-1 sm:text-[13px]`}
+      className={`relative inline-flex h-11 w-11 touch-manipulation items-center justify-center rounded-md ${toneClass} tabular-nums text-text transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${ctx.fitOverview ? "" : "sm:h-auto sm:w-auto sm:justify-start sm:gap-1.5 sm:rounded sm:px-2 sm:py-1 sm:text-[13px]"}`}
       title={label}
       aria-label={label}
       aria-haspopup="dialog"
@@ -748,9 +757,9 @@ function UnitChip({
         })
       }
     >
-      <ChipIcon name={name} kind={kind} side={ctx.side} fallback={fallback} tile />
+      <ChipIcon name={name} kind={kind} side={ctx.side} fallback={fallback} tile fitOverview={ctx.fitOverview} />
       {countText != null ? (
-        <span className="pointer-events-none absolute bottom-0.5 right-1 text-[15px] font-extrabold leading-none text-white [text-shadow:0_0_2px_rgb(0_0_0),0_0_2px_rgb(0_0_0),1px_1px_1px_rgb(0_0_0)] sm:static sm:text-[13px] sm:font-semibold sm:leading-normal sm:text-text sm:[text-shadow:none]">
+        <span className={`pointer-events-none absolute bottom-0.5 right-1 text-[15px] font-extrabold leading-none text-white [text-shadow:0_0_2px_rgb(0_0_0),0_0_2px_rgb(0_0_0),1px_1px_1px_rgb(0_0_0)] ${ctx.fitOverview ? "" : "sm:static sm:text-[13px] sm:font-semibold sm:leading-normal sm:text-text sm:[text-shadow:none]"}`}>
           {countText}
         </span>
       ) : null}
@@ -760,6 +769,7 @@ function UnitChip({
 
 /** Strip-wide context every chip in a strip shares. */
 interface ChipContext {
+  fitOverview: boolean;
   side: "me" | "opp";
   playerName: string;
   playerRace: string;
