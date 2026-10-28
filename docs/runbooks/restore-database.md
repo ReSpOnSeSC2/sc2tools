@@ -160,13 +160,19 @@ its outstanding writes have an authoritative settled outcome. The
 `game_stats_writers_drained` log only proves local promises settled; an unknown
 commit acknowledgement is not proof of rollback or server settlement.
 
-This release still uses the authoritative count/latest queries and introduces
-no retained statistics reader. Before adding such a reader, its rollout must
-prove retirement/rebuild of restored authority for every owner and serving
-process, including a fresh mutation epoch. Never clear the epoch back to
-missing, restore it from an in-app snapshot, or use a restored protocol marker
-as proof that old writers have stopped. The manual drop/`$out` rollback in the
-timebase migration has the same boundary. `USER_CACHE_ENABLED` stays off.
+The maintained account reader may reuse a ready tuple from an exact owner row.
+Do **not** resume the same reader binary directly after a raw restore. First
+retire restored derived authority for every owner and serving process,
+including a fresh mutation epoch, and deliver a new maintenance/reader version
+whose bootstrap recounts instead of trusting the restored version. Keep the
+API stopped until this recovery change is reviewed and verified; accounts
+without newly qualified tuples must use the original count/latest queries.
+The once-client causal majority floor orders that bootstrap after settled
+older operations; it does not retire actors or invalidate restored metadata.
+Never clear the epoch back to missing, restore it from an in-app snapshot, or
+use a restored protocol marker as proof that old writers have stopped. The
+manual drop/`$out` rollback in the timebase migration has the same boundary.
+`USER_CACHE_ENABLED` stays off. See ADR 0070 for the reader contract.
 
 Resume the Render service (or redeploy if `MONGODB_URI` changed). Boot
 recreates any missing indexes. Then confirm:

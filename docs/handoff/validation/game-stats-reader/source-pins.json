@@ -1,0 +1,334 @@
+{
+  "schemaVersion": 1,
+  "head": "55be35e56b42090dbf91331dcc40c5476551c30e",
+  "main": "df5cf875d588fafba5456695a1c3550fc42ba587",
+  "parents": [
+    "c3134c4aa07a3d659c7b53b35b9e7fbcfd313026",
+    "df5cf875d588fafba5456695a1c3550fc42ba587"
+  ],
+  "implementation": [
+    {
+      "file": "apps/api/src/services/users.js",
+      "sha256": "4a1ba9f5a397865f3e3ea5e60c62f8dccc400dd30c4d78bf700157379d20abae",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/src/services/maintainedGameStatsRead.js",
+      "sha256": "918abbf9dde2d7ad45b3886399b68acc07879583528b0a2f5d9917f6651dacdb",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/src/services/gameStatsReadFloor.js",
+      "sha256": "d0d408eec8737fa95003f135a84f390ac911526b1482d762489567493e817d15",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/src/services/gameStatsWrites.js",
+      "sha256": "420cb0ce61d73e82fdbb521660984362b0721da405a2e9ac3aec0812884a2eb3",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/src/services/gameStatsMaintenance.js",
+      "sha256": "31c109c650ae4ceed352fca94efaed68c45c6edd508de01f37b2da8d1a768767",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/src/db/connect.js",
+      "sha256": "d13b9d5325a751854dba35679170a58dbb0aa1c8e2e9037dd5be03c1e78d6393",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/src/server.js",
+      "sha256": "d0b76db6c957b578f8149de897f54aa2d16142f42805da1739240e0a875f9cea",
+      "sameAsPriorReader": false
+    },
+    {
+      "file": "apps/api/__tests__/maintainedGameStatsRead.test.js",
+      "sha256": "83d4af2c95858df60835d624289158d0744a30bb1bafe571ad95470dada649c9",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/__tests__/userReadSnapshots.test.js",
+      "sha256": "5146f8d537d56e42a3b1851d1393e64f19f79fc9096df516e0a7340128a648e0",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/__tests__/gameStatsReadFloor.test.js",
+      "sha256": "f688554c1aaea17fbdc386349d5f59213a9907577d269079ba45a8977d000c23",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/__tests__/gameStatsMaintenance.unit.test.js",
+      "sha256": "e1888d77f0aed612d89783be16fe54586c957fcb5b3c3eceed655deb728fb2ed",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/__tests__/gameStatsWrites.unit.test.js",
+      "sha256": "f751a6d0b156f19b0ffe025a67c0004d65df033334ace1cd13d7b9533a0af059",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/__tests__/gameStatsWrites.replset.test.js",
+      "sha256": "6a2c7a57a06259af32ec7b60522d9eae2c7e8a6a07dc40223c3001fd47323cf8",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "docs/handoff/game-stats-reader-checkpoint.md",
+      "sha256": "ec8a82df56829fd786a9e0cee8ee472c130f529545d5d97445593e33169d4f61",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/src/routes/me.js",
+      "sha256": "588a2ca3a3ec1d07b3f7eaa64dbc5a06c1a1c3a800530bb931b8269acad093dd",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/src/services/doctor.js",
+      "sha256": "29e8acf7947da2d0bf56bbe1b5a718fbc106e087438d801854ce0f96e9271784",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "apps/api/__tests__/dashboardMaintainedReads.replset.test.js",
+      "sha256": "4e06d91ab1b607431e6706e12ade065b2d7490f1d197a3b3fd98f0cbec2b1bc9",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "CHANGELOG.md",
+      "sha256": "a4ab7b22371c0adf3ec3f87836ca7b31fbc54e72f479380f2d0c8367ab394be5",
+      "sameAsPriorReader": false
+    },
+    {
+      "file": "apps/web/lib/help/articles/troubleshooting/setup-health.ts",
+      "sha256": "511a46fc913178ea6dc2f43336a3a5fb9b305ba17f5072954c5b589638476f46",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "docs/adr/0070-maintained-account-statistics.md",
+      "sha256": "f2507d415e85950a4df75b8f71cc76604481daa93da7d419562e0d91c94017b6",
+      "sameAsPriorReader": true
+    },
+    {
+      "file": "docs/runbooks/restore-database.md",
+      "sha256": "aaa8a3bb97a2937ca4b8d682e3bae016812fd6dae7b0b8763eea5c8430c3038d",
+      "sameAsPriorReader": true
+    }
+  ],
+  "protectedMain": [
+    {
+      "file": "apps/api/src/services/games.js",
+      "sha256": "c36a682c701298117e74c9ef5b5bb2640f923981b0c4147a916c77b56e274bc6",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/services/gdpr.js",
+      "sha256": "65d47e6b15a58b5173d105bb2d621830415fac3807edf138410a493a222f8fce",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/services/userBackups.js",
+      "sha256": "6313b97b0ae1c1ac22ddaed2d5aba1441ac42d9b77e248a5cc0fd5d9e9c901ce",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/util/gameVisibility.js",
+      "sha256": "19c27606d695bd3dad83c39dd28d6ed38a0497feafdcf76e0dbf35c277e5ac0b",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/middleware/userCache.js",
+      "sha256": "7764fc5f40b2bd6edb55221e8231081de38ffcd90cc74da1cee40a1944f81564",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/config/loader.js",
+      "sha256": "bf31686466fb38a3657d0150cff555802c07e170631ca694594855ad00b09718",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/config/constants.js",
+      "sha256": "8784ba8f5ac4e7091143c7579231264e51a1655606d5ba6c1a27556e7d373b49",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/middleware/auth.js",
+      "sha256": "04f11fd11e46b3f767070603727669d47778a2b53a0f6bf06fdabbf8960fd5c2",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/services/devicePairings.js",
+      "sha256": "3b8efccc0c3f442d5546b13533c488b313b958505bdb327a19ce7caddfc716f0",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/app.js",
+      "sha256": "b0ba87bd887b109576607d0fc02db1b66f96d6760c65d7a15c9fc754f2adc38e",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/services/arcade.js",
+      "sha256": "9c4dbc9ec0e9d08c9160f2e5275b086bd8ba0ba015d00c02d89bd4e6b93522cb",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/__tests__/arcadeUnitStatsReadiness.test.js",
+      "sha256": "4ed57081b2312e6b3072373262663c87ce010bf30ae42b973765e09919f28e29",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/__tests__/publicReplayRetirement.test.js",
+      "sha256": "ce12bd58df6d0583f8651dfac74a792afea3c537ae5c59f6cfa61f985b6a74ce",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/web/components/analyzer/arcade/ModeRunner.tsx",
+      "sha256": "8d8d443718aa7a1116942ba75b1302309816610b18f5084d54725e4abea6bb85",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/web/components/analyzer/arcade/hooks/useArcadeData.ts",
+      "sha256": "d1728fb94bbb6799bfeabe1ca3b5564ce6984fe04c80c4eb18f33461bbb68cbc",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/web/components/analyzer/arcade/__tests__/UnitProfile.historyReadiness.test.tsx",
+      "sha256": "99b08bcdd336253cb2fc8e9e12bd51f910f0eaf9c6cc1c4fdb92d93139eeb57c",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/web/components/landing/ReplayDemo.tsx",
+      "sha256": "1188ffd11a18738ad421e66223d247eadcd488c32d47a11f6e5bf22cbec8bd73",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/web/lib/help/articles/analyzer/arcade.ts",
+      "sha256": "d0c00c3fbe976cc1f824fa4d5e8e64af1b6a77d15456024fa98600d1a0195d57",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/services/deviceCredentialWrites.js",
+      "sha256": "f59a76d2d82dd88602b9f741db9d91da5f260e6eb1e74f8bc3df4851f1480d27",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/jobs/backupHealthJob.js",
+      "sha256": "da865fbcef7c4dd4d0a71c8ff2ad1d0a8f22e9a72b63e46ea5e333477961d379",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/__tests__/backupStatus.test.js",
+      "sha256": "970ef972b30996e5534d5ec60c36a02e4eef7cdd73130aa6e322b00344a82429",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.test.js",
+      "sha256": "f4837c1a12916d5804a078f2466c50d5f77509c40626c71e906aed3bdd14f1f5",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.integration.test.js",
+      "sha256": "06e17ee8ebc959e5a1000a1e034d4f24350b4437ff54b504f5bb59d3dc55b933",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/__tests__/replayFiles.test.js",
+      "sha256": "c67dd567b72b0fe9661d3dd7776533218f8d86306df7e559c1dd647cae62bfab",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/web/lib/help/articles/getting-started/install-and-pair.ts",
+      "sha256": "85e7185f78db80e5e0863754d5bdadc2636794a0293f1cac2f55491ef34a6361",
+      "sameAsMain": true
+    },
+    {
+      "file": ".github/workflows/api-ci.yml",
+      "sha256": "d37def230229563a31ed14f27d3a4e2a22a5bd2d7eb4d99857a4b901a59c9464",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/jobs/identityDeletionJob.js",
+      "sha256": "9b19ed8e2bb1c62f5df5d8c6716cde0484788e7cfac8f8e16e27fcf9bf802b10",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/services/identityDeletions.js",
+      "sha256": "12a32f8f0d3d3170e6c9affc400e3face8e71458771abdb0e7d12cbd249d97e3",
+      "sameAsMain": true
+    },
+    {
+      "file": "apps/api/src/socket/auth.js",
+      "sha256": "a847122a8e3e46a012d3ed171d2101ca318b3e69b0c5f1e54cbb740e5b221ab5",
+      "sameAsMain": true
+    }
+  ],
+  "dependencies": [
+    {
+      "file": "package.json",
+      "sha256": "b635c05492c0c473a3b5bafd90df991248d7efd6e077303673044cb4a1e15014",
+      "sameAsPrior": true,
+      "sameGitMain": true
+    },
+    {
+      "file": "package-lock.json",
+      "sha256": "27311b12b287d7e089d107c9f9742ae884cf1cab7de4a03fdfcea2176e38cbff",
+      "sameAsPrior": true,
+      "sameGitMain": true
+    },
+    {
+      "file": "apps/api/package.json",
+      "sha256": "e28fb9223b5258d5ff06398c4cf21451671c754deaaf28eb174733cb2c571a6e",
+      "sameAsPrior": true,
+      "sameGitMain": true
+    },
+    {
+      "file": "apps/api/package-lock.json",
+      "sha256": "5b127ffac70fc054f3ae550f3187cb847dd7512e972fba85e96b6a431ff5a796",
+      "sameAsPrior": true,
+      "sameGitMain": true
+    },
+    {
+      "file": "apps/web/package.json",
+      "sha256": "f3747c470882ec1d84858c912797842f6b1df409924e6aa328e4ba833e5bc9cf",
+      "sameAsPrior": true,
+      "sameGitMain": true
+    },
+    {
+      "file": "apps/web/package-lock.json",
+      "sha256": "e9aabbfbfebb4c91f81f60d2b7e8ae875424d504baef560a7b03f54c0557169b",
+      "sameAsPrior": true,
+      "sameGitMain": true
+    }
+  ],
+  "phase2AndRetiredPathsAbsent": [
+    "apps/api/src/routes/publicReplay.js",
+    "apps/api/__tests__/publicReplay.test.js",
+    "apps/api/src/services/deviceAuthAuthority.js",
+    "apps/api/src/services/deviceAuthDeadline.js",
+    "apps/api/src/services/deviceAuthLease.js",
+    "apps/api/src/services/deviceAuthReuse.js",
+    "apps/api/src/services/deviceAuthTokenRead.js"
+  ],
+  "fullTrackedDeltaFromMain": [
+    "CHANGELOG.md",
+    "apps/api/__tests__/dashboardMaintainedReads.replset.test.js",
+    "apps/api/__tests__/gameStatsMaintenance.unit.test.js",
+    "apps/api/__tests__/gameStatsReadFloor.test.js",
+    "apps/api/__tests__/gameStatsWrites.replset.test.js",
+    "apps/api/__tests__/gameStatsWrites.unit.test.js",
+    "apps/api/__tests__/maintainedGameStatsRead.test.js",
+    "apps/api/__tests__/userReadSnapshots.test.js",
+    "apps/api/src/db/connect.js",
+    "apps/api/src/routes/me.js",
+    "apps/api/src/server.js",
+    "apps/api/src/services/doctor.js",
+    "apps/api/src/services/gameStatsMaintenance.js",
+    "apps/api/src/services/gameStatsReadFloor.js",
+    "apps/api/src/services/gameStatsWrites.js",
+    "apps/api/src/services/maintainedGameStatsRead.js",
+    "apps/api/src/services/users.js",
+    "apps/web/lib/help/articles/troubleshooting/setup-health.ts",
+    "docs/adr/0070-maintained-account-statistics.md",
+    "docs/handoff/game-stats-reader-checkpoint.md",
+    "docs/runbooks/restore-database.md"
+  ],
+  "sourceReadyReceiptSha256": "082b7e31bc187f7160f86236590a75e45c19bf3c6fdb3ab9da5ae14ca1581e45"
+}

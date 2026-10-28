@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "head": "55be35e56b42090dbf91331dcc40c5476551c30e",
+  "main": "df5cf875d588fafba5456695a1c3550fc42ba587",
+  "parents": [
+    "c3134c4aa07a3d659c7b53b35b9e7fbcfd313026",
+    "df5cf875d588fafba5456695a1c3550fc42ba587"
+  ],
+  "status": "CURRENT_LOCAL_GATES_PASSED_READER_NOT_YET_PUBLISHED",
+  "api": {
+    "passed": 390,
+    "files": 16,
+    "failed": 0,
+    "skipped": 0,
+    "wholeApiTypes": true,
+    "strictNewAndOwnedLint": true,
+    "addedWarnings": 0,
+    "inputPins": 56
+  },
+  "build": {
+    "id": "Ymz0AGEMdraLvQtvmKtlr",
+    "sourceInputs": 6921,
+    "unchangedBudgets": 83,
+    "listed": 18,
+    "default": 65,
+    "staticWorkers": 1,
+    "heapMiB": 4096,
+    "directNext": true,
+    "prebuild": false,
+    "realDotenv": false,
+    "sourceAndAssetsUnchanged": true
+  },
+  "assets": {
+    "canonicalInputs": 40,
+    "servedFiles": 7,
+    "strictSampleGames": 4,
+    "generation": false,
+    "downloads": false,
+    "pruning": false
+  },
+  "receipts": {
+    "currentApiSha256": "86836971b377ca3215970bf7a620d9f908373719f08bd407291750995f32444b",
+    "currentBuildSha256": "e626bb6daca330b8eabe53286918d622d41169161209495dd54e02205c1b2d77",
+    "independentReviewSha256": "6d6fb1e446ce0e11d135a3ac664d3ceaaaa854d59e219c1030ccda42ee081bfd"
+  },
+  "historical": {
+    "head": "c3134c4aa07a3d659c7b53b35b9e7fbcfd313026",
+    "buildSha256": "34f6bd9d8e6e88b5fe336eccd64dd5bc801da05115e2504ea4e8bee63257cc04",
+    "qualification": "Earlier311-case/build receipts remain preserved historical evidence; current390-case and build above bind the combined55be tree."
+  },
+  "limits": [
+    "No reader production deployment, required exact-head CI or signed-in maintained2 acceptance claim.",
+    "Auth807 actual Ready/Live/read-only acceptance is a separate prerequisite receipt, not credential cutover or cached-auth activation.",
+    "Later docs-only adoption is outside the captured6921 snapshot; unchanged runtime/asset pins are the transfer boundary.",
+    "USER_CACHE_ENABLED remains off; retained-auth/phase2 helpers remain unwired and faster-dashboards/whole program remain incomplete."
+  ]
+}

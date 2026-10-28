@@ -1,6 +1,8 @@
 # ADR 0059: Intent-loaded browser replay demo
 
-Status: accepted; browser implementation delivered, server-retirement candidate unverified
+Status: accepted; browser implementation and server retirement delivered.
+
+PR808 retirement at76fbc441 and currentf2138684 production editor/FAQ acceptance are recorded in the landing checkpoint and sanitized receipt. The compatibility/candidate sections below remain historical. The existing shared React.lazy/import() editor recovery boundary is retained instead of adding a second next/dynamic wrapper; successful parsing gates the actual optional chunk and preserves its finite Retry/owner safeguards.
 
 The Wave 5 `landing-demo-in-browser` pack moves the home-page one-replay build editor demo onto the existing Instant Analysis runtime when `NEXT_PUBLIC_INSTANT_IMPORT=all`. This changes source behavior behind the existing build-time flag; it changes no environment, rollout setting, release or production data.
 

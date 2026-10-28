@@ -1,14 +1,15 @@
 // @ts-nocheck
 "use strict";
 const { MongoMemoryReplSet } = require("mongodb-memory-server");
-const { MongoServerError, MongoNetworkError, Long } = require("mongodb");
+const { MongoServerError, MongoNetworkError, Long, Timestamp } = require("mongodb");
 const pino = require("pino");
 const request = require("supertest");
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
 const { GamesService } = require("../src/services/games");
 const { GameStatsWrites, PROTOCOL_VERSION } = require("../src/services/gameStatsWrites");
-const { statsMatch, MAX_STATS_BYTES } = require("../src/services/gameStatsMaintenance");
+const { statsMatch, MAINTENANCE_VERSION, MAX_STATS_BYTES } = require("../src/services/gameStatsMaintenance");
+const { readyStatsFromOwnerRow } = require("../src/services/maintainedGameStatsRead");
 const { createBackupStore } = require("./helpers/userBackupsStore");
 const { insertDeviceToken, sampleGame } = require("./helpers/browserIngestHarness");
 
@@ -28,7 +29,7 @@ async function expectRetired(before) {
   expect(row.gameStats).toEqual(await services.games.stats(userId)); expect(row.gameStatsProtocolVersion).toBe(PROTOCOL_VERSION);
   expect(row.gameStatsWriterStatus).toBe("transactional");
   expect(row.gameStatsRevision).toEqual(expect.any(String)); expect(row.gameStatsRevision).not.toBe(before);
-  expect(row.gameStatsMaintenance).toMatchObject({ version: 1, ownerId: row._id, revision: row.gameStatsRevision });
+  expect(row.gameStatsMaintenance).toMatchObject({ version: MAINTENANCE_VERSION, ownerId: row._id, revision: row.gameStatsRevision });
   return row.gameStatsRevision;
 }
 
@@ -447,4 +448,32 @@ test("failed final eager publication aborts games and initial revision together"
   await expect(services.games.upsert(userId, game("aborted"))).rejects.toBe(originalError);
   expect(await db.games.findOne({ userId, gameId: "aborted" })).toBeNull();
   expect(await readOwner()).toMatchObject({ gameStats: original, gameStatsRevision: "before" });
+});
+
+test("new-version bootstrap recounts legacy1 and actual Mongo commands carry the acknowledged causal floor", async () => {
+  const row = await readOwner(), revision = "11111111-2222-4333-8444-555555555555";
+  await db.games.insertMany([game("legacy-first"), game("legacy-second")]);
+  await db.users.updateOne({ userId }, { $set: { gameStats: { total: 700, latest: played },
+    gameStatsProtocolVersion: PROTOCOL_VERSION, gameStatsWriterStatus: "transactional", gameStatsRevision: revision,
+    gameStatsMaintenance: { version: 1, status: "ready", ownerId: row._id, revision } } });
+  // A distinct real client forces its own once-client majority barrier.
+  const fresh = await connect({ uri: mongo.getUri(), dbName: "game_stats_transactions", awaitBackgroundIndexes: true }, { logger });
+  const commands = [], writer = new GameStatsWrites(fresh);
+  fresh.client.on("commandStarted", event => commands.push(event.command));
+  try {
+    const owner = await writer.capture(userId);
+    await writer.write(owner, session => fresh.games.insertOne(game("new-version"), { session }), { selection: { gameIds: ["new-version"] } });
+    const maintained = await fresh.users.findOne({ userId });
+    expect(maintained.gameStats).toEqual({ total: 3, latest: played });
+    expect(maintained.gameStatsMaintenance.version).toBe(MAINTENANCE_VERSION);
+    expect(readyStatsFromOwnerRow(maintained, userId, true)).toEqual({ total: 3, latest: played });
+    const majority = commands.find(command => command.find === "users" && command.readConcern?.level === "majority");
+    const atomic = commands.find(command => command.findAndModify === "users" && command.startTransaction === true);
+    expect(majority.readConcern.afterClusterTime).toBeInstanceOf(Timestamp);
+    expect(majority.readConcern.afterClusterTime.isZero()).toBe(false);
+    expect(atomic.readConcern.level).toBe("snapshot");
+    expect(atomic.readConcern.afterClusterTime.greaterThanOrEqual(majority.readConcern.afterClusterTime)).toBe(true);
+    const counts = commands.filter(command => command.aggregate === "games" && command.pipeline?.some(stage => stage.$group));
+    expect(counts).toHaveLength(1); expect(counts[0].pipeline[0].$match).toEqual(statsMatch(userId));
+  } finally { await writer.stopAndDrain(); await fresh.close(); }
 });

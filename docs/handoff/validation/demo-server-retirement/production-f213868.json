@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "kind": "Sanitized delivered landing browser-demo/server-retirement acceptance",
+  "observedAtUtc": "2026-10-28T16:22:34.322Z",
+  "revision": "f2138684da9a57981d3c980efb8f5482b228d2e4",
+  "retirementRevision": "76fbc441cadcf92b1d4452d5ae8feeac4fa1433f",
+  "mergedPullRequests": [
+    808,
+    809
+  ],
+  "ci": {
+    "testedHead": "aa2dafd264f267302053903567f30a80af0047dd",
+    "testedAndFreshMergedTree": "dc6f3fc56074fe6961a0bd2b47bb97b5f51ed5bc",
+    "status": "Required checks passed on the actual served f213 implementation through PR809; PR808 retirement was separately merged after required gates.",
+    "qualification": "Releasing parent verified exact-head checks/tree/deployment. This source-only reviewer uses its retained receipts and local commit ancestry; no new provider call or live action."
+  },
+  "web": {
+    "deployment": "4cJ8x7xHwJoTgcqjs33854NrPiCP",
+    "status": "Ready / Production / Latest / exact f213 source",
+    "domain": "sc2tools.com: new unique loading copy observed in actual signed-in app"
+  },
+  "api": {
+    "deployment": "dep-dbh131tg1s2s73eipu8g",
+    "status": "Live / exact f213 source"
+  },
+  "url": "https://sc2tools.com/#replay-demo",
+  "publicFixture": {
+    "repositoryPath": "apps/replay-engine/tests/fixtures/replays/warpgate_adept_tracking.SC2Replay",
+    "bytes": 76569,
+    "sha256": "ee7bc0cdc81cfe550937af4aa577b91a52e2e088fd62dfc920c3175fe56840e4",
+    "personalReplay": false
+  },
+  "observed": [
+    {
+      "player": "Protoss",
+      "referenceSteps": 102,
+      "sourceTimelineEvents": 75,
+      "firstEvent": "Nexus at0:00"
+    },
+    {
+      "player": "Zerg",
+      "referenceSteps": 120,
+      "sourceTimelineEvents": 182,
+      "firstEvent": "Hatchery at0:00"
+    }
+  ],
+  "finalState": "Both retained player choices present; no error dialog. Each editor closed using its header Close control.",
+  "viewport": {
+    "height": 945,
+    "width": 1905
+  },
+  "actions": "One committed public fixture selected, player choices and editor Close only. No Save, sign-up, rule edit, settings change, quiz answer or personal upload action.",
+  "networkQualification": "DOM/pixel production acceptance only. No live request trace, zero-network or parser-latency claim. Separate local real-Next/worker tests retain their API-origin network guard.",
+  "liveGuidance": {
+    "observedAtUtc": "2026-10-28T16:01:00.064Z",
+    "home": "Runs in your browser — the replay never leaves your device.",
+    "homeHowToDestination": "https://sc2tools.com/try#home-replay-demo",
+    "faq": "Home-page build editor demo reads one1v1 replay in your browser; choose your player and reopen either build without analyzing again.",
+    "scope": "Actual post-retirement guidance smoke only. No file selected, no parse/network guard claimed. Initial cookie Reject locator became absent after asynchronous existing-preference hydration; no cookie action succeeded.",
+    "actions": "Read-only navigation; no quiz/account/settings/save/upload/credential action."
+  },
+  "privacy": {
+    "productionPhotographsCopied": false,
+    "privateAccountIdentityIncluded": false,
+    "positiveEditorEvidenceHashes": [
+      "346bad50cdb60454ebffeb4b6d29917419a169cf62347e5ade1773ef02e7caf9",
+      "13df0836263d84a98ce9e8d80a5008050db7e9540e4f265e4be7eb6249899434"
+    ],
+    "earlyLoadingCapturePositiveProof": false,
+    "qualification": "Original photos remain in cache. The releasing parent independently viewed the two actual ready editor captures; the early loading capture is retained and excluded. This reviewer did not reproduce a live parse."
+  },
+  "sources": {
+    "productionReceipt": {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/production-f213868-acceptance/acceptance-receipt.json",
+      "sha256": "0ca5fd52468b12a6f209695a1a3cc9a2a107f62cde66131e14ed4a36ae720b8a",
+      "bytes": 3201
+    },
+    "guidanceReceipt": {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/production-f213868-guidance/observations.json",
+      "sha256": "d2ef4e183d8cbc3e63cc78885e7186f927ff59e433319cb539f75e4723eae3f0",
+      "bytes": 779
+    },
+    "deploymentReceipt": {
+      "file": "C:\\SC2TOOLS\\.worktrees\\guide-randomizer-completion\\docs\\handoff\\validation\\unit-profile-history\\production-f213868.json",
+      "sha256": "b441947feb1efacbc7c828245d6f00cb2d04752c815b0632cce63369adb464ee",
+      "bytes": 3210
+    }
+  },
+  "limits": [
+    "Production acceptance is DOM/pixels on measured desktop1905x945. No live negative404, request trace, zero-network, performance or phone-production claim.",
+    "Separate retained local real-Next/worker tests prove API-origin blocking/no replay payload writes while preserving the existing small same-site presence allowance. Local disabled modes and AA are separate from actual rollout flags.",
+    "No Save, rule edit, account settings, quiz answer, personal replay upload or provider/flag change. Normal background account/network activity was not instrumented.",
+    "The unused standalone CLI source is intentionally retained unchanged; the required route/health/API spawn wiring and obsolete tests are retired.",
+    "Shared LazyBuildEditorModal is the accepted optional import()/React.lazy boundary rather than a second next/dynamic wrapper. Closed pages request no editor; successful parsing gates open; actual Next chunk failure/Retry proof is retained.",
+    "This receipt supports only landing-demo-in-browser closure; program remains incomplete."
+  ]
+}
