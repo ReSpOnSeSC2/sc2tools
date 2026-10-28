@@ -1,0 +1,59 @@
+{
+  "sourceHead": "1e1a736ff8d43fef7e91abaf2db8fd4a21073e07",
+  "sourceSnapshot": {
+    "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/build-01/source-snapshots/build-inputs-01.json",
+    "bytes": 2113818,
+    "sha256": "29fa15c82d3e83a357b3430ce16d6b18fff9425b0389bcdbb3dbd114dfcbbcd6"
+  },
+  "guards": [
+    {
+      "phase": "prebuild",
+      "evidence": {
+        "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/build-01/full-source-prebuild.json",
+        "bytes": 242,
+        "sha256": "2346d5ba8713107cb1179905ec05a475418e448ce06f67a950951b691db73ce0"
+      },
+      "result": {
+        "phase": "prebuild",
+        "checkedAtUtc": "2026-10-28T14:30:06.553Z",
+        "sourceInputs": 6843,
+        "sourceSnapshotSha256": "29fa15c82d3e83a357b3430ce16d6b18fff9425b0389bcdbb3dbd114dfcbbcd6",
+        "allMatch": true,
+        "filesAddedOrRemoved": false
+      }
+    },
+    {
+      "phase": "postbuild",
+      "evidence": {
+        "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/build-01/full-source-postbuild.json",
+        "bytes": 243,
+        "sha256": "db3e2138f75315591278c816fe260744afe834aa6f0b31bf40ed27434078cb29"
+      },
+      "result": {
+        "phase": "postbuild",
+        "checkedAtUtc": "2026-10-28T14:32:10.832Z",
+        "sourceInputs": 6843,
+        "sourceSnapshotSha256": "29fa15c82d3e83a357b3430ce16d6b18fff9425b0389bcdbb3dbd114dfcbbcd6",
+        "allMatch": true,
+        "filesAddedOrRemoved": false
+      }
+    },
+    {
+      "phase": "postbrowser",
+      "evidence": {
+        "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/build-01/full-source-postbrowser.json",
+        "bytes": 245,
+        "sha256": "bbe7328413509233a890bae71f3f27cf9f998cfd7a44c517fae34d40f7896c66"
+      },
+      "result": {
+        "phase": "postbrowser",
+        "checkedAtUtc": "2026-10-28T14:40:36.572Z",
+        "sourceInputs": 6843,
+        "sourceSnapshotSha256": "29fa15c82d3e83a357b3430ce16d6b18fff9425b0389bcdbb3dbd114dfcbbcd6",
+        "allMatch": true,
+        "filesAddedOrRemoved": false
+      }
+    }
+  ],
+  "qualification": "These6843-file exact guards and independent rehash precede this documentation/evidence adoption. This adoption changes only the checkpoint and adds compact validation files, so no claim of unchanged current6843-file inventory is made afterward."
+}

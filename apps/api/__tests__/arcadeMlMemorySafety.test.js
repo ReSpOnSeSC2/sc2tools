@@ -166,8 +166,9 @@ describe("Arcade heavy-detail memory bounds", () => {
     for (const call of calls) {
       expect(call.ids).toHaveLength(1);
       expect(call.options).toEqual({
-        fields: ["buildLog", "macroBreakdown"],
+        fields: ["buildLog", "macroBreakdown.player_stats"],
         concurrency: 1,
+        strict: true,
       });
     }
   });

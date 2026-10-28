@@ -393,15 +393,12 @@ describe("ArcadeService.unitStats", () => {
     expect(out.builtByUnit.Pylon).toBeUndefined();
   });
 
-  test("degrades gracefully when gameDetails is missing", async () => {
+  test("reports unavailable when gameDetails is missing instead of inventing empty facts", async () => {
     const svc = makeService([w({ gameId: "g1" })]);
-    const out = await svc.unitStats("user1");
-    expect(out.scannedGames).toBe(1);
-    expect(out.builtByUnit).toEqual({});
-    expect(out.totalUnitsLost).toBe(0);
+    await expect(svc.unitStats("user1")).rejects.toMatchObject({ status: 503, code: "arcade_unit_stats_unavailable" });
   });
 
-  test("degrades gracefully when the heavy store throws", async () => {
+  test("reports a retryable failure when the heavy store throws instead of inventing empty facts", async () => {
     const fakeColl = /** @type {any} */ ({
       find: () => ({
         sort: () => ({
@@ -422,10 +419,7 @@ describe("ArcadeService.unitStats", () => {
         },
       }),
     );
-    const out = await svc.unitStats("user1");
-    expect(out.scannedGames).toBe(1);
-    expect(out.builtByUnit).toEqual({});
-    expect(out.totalUnitsLost).toBe(0);
+    await expect(svc.unitStats("user1")).rejects.toMatchObject({ status: 503, code: "arcade_unit_stats_unavailable" });
   });
 
   test("returns the all-zeros payload for a user with no games", async () => {

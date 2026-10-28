@@ -1,0 +1,756 @@
+{
+  "BUILD_ID": "bYQf505RuQP3HOsucpPUj",
+  "snapshot": {
+    "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/build-01/source-snapshots/build-inputs-01.json",
+    "sha256": "29fa15c82d3e83a357b3430ce16d6b18fff9425b0389bcdbb3dbd114dfcbbcd6",
+    "head": "1e1a736ff8d43fef7e91abaf2db8fd4a21073e07"
+  },
+  "inputs": [
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\api\\src\\config\\accountFilter.json",
+      "sha256": "3f716b76af66a91da049cc7f35d5102b216a1b79b15bb612d78800720bacc783"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\api\\src\\config\\replayExportColumns.json",
+      "sha256": "746dcf17f7c427048700cee9ed5cbd5571c17659135d1c3eac3b9a07e8555394"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\analyzer\\arcade\\ArcadeEngine.ts",
+      "sha256": "253be5eda1ad21ab4dfec5e02d1d7c9675ac0fb9b610980137be61242874a065"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\analyzer\\arcade\\hooks\\useAnalysisGames.ts",
+      "sha256": "813b3d2853d53d332319acb4f20c8f3d68b438f4e39cb7a226c17427f2804bd6"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\analyzer\\arcade\\hooks\\useArcadeData.ts",
+      "sha256": "d1728fb94bbb6799bfeabe1ca3b5564ce6984fe04c80c4eb18f33461bbb68cbc"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\analyzer\\arcade\\icons.tsx",
+      "sha256": "92e8e0961b4542713df4d79391eaf24522ff8a5511a04ea501f380a703181cac"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\analyzer\\arcade\\ModeRunner.tsx",
+      "sha256": "8d8d443718aa7a1116942ba75b1302309816610b18f5084d54725e4abea6bb85"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\analyzer\\arcade\\modes\\quizzes\\unitProfile.tsx",
+      "sha256": "ce686fd605a82ead6709a3c57c0f1a21fca9ecf8751130dc7fb5ceedb510c082"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\analyzer\\arcade\\ShareCard.tsx",
+      "sha256": "11e1993ef30ed12c8a9e070b3ab1ed0bd57d9df95944f23e1e3e4b50f0993ea4"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\analyzer\\arcade\\shells\\QuizCard.tsx",
+      "sha256": "24b199f46530669dcb134ea7215874144e1ec8cfbf300d944ffbc9b3bf0564fa"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\analyzer\\arcade\\surfaces\\DailyEmptyState.tsx",
+      "sha256": "6349a630bb4e38ee5a4890481ea6c1fac23a1ae145685f5e26631208ed94db81"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\analyzer\\arcade\\types.ts",
+      "sha256": "0c7aa3e943e4fc9f0a1f00d183ce3beb4da8dbfc6d404f6090e013f0d7b46e2d"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\analyzer\\settings\\ChatCommandsCard.tsx",
+      "sha256": "bbb454b1ccb32dccb5cd4f94b223ebbb721b4015738e1d9239ecb25aef4d05c2"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\analyzer\\settings\\ChatCommandsEditor.tsx",
+      "sha256": "99cbd5c143a30787c407fa09f38a5159027179528d3e21572bc858797dad2388"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\builds\\useCustomBuildCatalog.ts",
+      "sha256": "5d9b6647992859810ac32a05d4112e1bb269d7a9a3140b8d9fcc60bf0c36f923"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\feedback\\LazyReportIssueModal.tsx",
+      "sha256": "4fb775c104467bc70eda183f29e76fa4e2ad3d925fbc6d28708cceaf193b3b60"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\feedback\\ReportContextPanel.tsx",
+      "sha256": "d6e7955eac5a1f1cbcdda3f798489516eed1ea2081f22ef49cc9f20d44e121f2"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\feedback\\ReportHelpSuggestions.tsx",
+      "sha256": "41dcace8124264fa08c9fde3a4b2f7e2dea244600e8f42489f24de07f3e16556"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\feedback\\ReportIssueModal.tsx",
+      "sha256": "d3e17e637d5e6a3105c3d23f9eae8e6d40a7cb5c21df6fe602c4cc2de41ec510"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\feedback\\ReportTypePicker.tsx",
+      "sha256": "14ede377b32789149c92622c6106e1ec4e7ec8ee643129b23b521a92383e8449"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\help\\GlossaryBrowser.tsx",
+      "sha256": "871556f5585105add36afbcf12010d67337c51fcbc451f860ef00a51a4226c77"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\help\\HelpArticleBody.tsx",
+      "sha256": "7b2e75f9bc738145eb6125fa8e7f5f1d6a069333fade2146ff6dfcd8df20a46f"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\help\\HelpInline.tsx",
+      "sha256": "2bd246814fe60cbb5fdc737771dae51cb6a0d017a0531223ba56d7f68d3ad128"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\help\\HelpLink.tsx",
+      "sha256": "95b6bf22f81831b054570cd0a0728fb979cbf0abead6786646775e84d0f08dd5"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\help\\HelpSupportLine.tsx",
+      "sha256": "49837f3b7fc6c6b05976cbdc5558ee2a0b3035fc694b764e2c22cbec4cf4e69b"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\help\\HelpWidget.tsx",
+      "sha256": "28a5d1d65b561b4d47236c29f4a6451fa325fa230a2bd766911d38d07f0c7a07"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\help\\LazyHelpLink.tsx",
+      "sha256": "5efa90f36155108440a796c7028c38fc12bd2b09ff2838f4107a43306e9f44ab"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\help\\TakeATour.tsx",
+      "sha256": "96825d07da332ac63f3088e52e5e282e8201278d122d3d9816500ef8c766cfdc"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\ui\\Button.tsx",
+      "sha256": "f7a30265f5487e91bd5c98da64271247deba554b7ed2ddb17b49e5b9cb9b71db"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\ui\\buttonStyles.ts",
+      "sha256": "e6ce882b432ef6ee15cb125356d22d8c9da4fdcca2ddd506c6d222c350a3af13"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\ui\\Card.tsx",
+      "sha256": "2eaa757fa8fb32cd7e4da358d55c12d44e752e5289330afd9bd03075a59161c1"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\ui\\EmptyState.tsx",
+      "sha256": "b7e03f291344845148f536b15970435b9ce5c8a8c5ef2e0b92e6d354719f3e89"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\ui\\Input.tsx",
+      "sha256": "e3c1ef0aad082e9ad2c73ead8af18e9df54cbd77c41087c2034e566bf2dcd657"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\ui\\Modal.tsx",
+      "sha256": "31bba856ca70fa500b8fb0a4dcd726cebfcf3b849c5fbbff0f37027b55a4bc11"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\ui\\OverlayLayer.tsx",
+      "sha256": "0c6b10f8fb01e5f7c44105c88f2c472ad80907580965875f5278efb027d5cc0d"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\ui\\Select.tsx",
+      "sha256": "f1b7c1e730264fcbb36dc5bd63592aeb09b5b0fa2dc16762a9fbb6ee374add68"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\ui\\Skeleton.tsx",
+      "sha256": "66b279a7b56a8ffb61d7b3135a54e1c86324abbc3a5dc3325d52de75f9b43911"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\components\\ui\\Toast.tsx",
+      "sha256": "cdbb48681955daa498e17c3c3cd3d666fdfba4d135dd89b40b54469451b003a0"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\a11y\\focusScopes.ts",
+      "sha256": "85747b9204c268cdc76657e0a4a80ede6f6be24d72fbbfd61a84d418b3b69789"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\a11y\\useFocusTrap.ts",
+      "sha256": "c95712fdaa6f2f87ab0762cd0ae1dcca733e75de4c789a214f0883b75a4e155d"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\accountFilter.ts",
+      "sha256": "45081fa98fa0aac5689b84cdc5300fb14231ef39c9957710a7d97e76fb2cd7f0"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\bodyScrollLock.ts",
+      "sha256": "e54775096c9a43fe35310a4e0e88ea0f1138612c499ae894c93d0ae985a87326"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\clientApi.ts",
+      "sha256": "5e143c65dc8d2d93ad1643a7a74dd4aad31f6dc6b4ea8619f01d4ea9c19ca0c2"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\conditionalApiResponses.ts",
+      "sha256": "ae67f2397b0a225a7f1f95abbf2c26d94273f2a894932d335ec703d787fb7875"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\conditionalApiScope.tsx",
+      "sha256": "cb729d1b7f0bab272098cd31dcb0330f298543efe2e6488fa1cf9b66c0073f0c"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\datePresets.ts",
+      "sha256": "8519f7e8cb3486c68dd998282ccd9bbf3905155979f099da853f02cd7066ade3"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\feedback\\errorReport.ts",
+      "sha256": "d056a1e483e42449461ba5c57fefb8b63ccb5f7fff8c9070fc966d478dd363b5"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\feedback\\failedRequests.ts",
+      "sha256": "e648a01436bea5a85f2282a3156ec9225127b02751d5ea55a67efb4dd00332e9"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\feedback\\reportContext.ts",
+      "sha256": "934fac3b05c72930e844cd2bef82935d1b7342c9c5c3daa68baa44305d33b90f"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\feedback\\sanitise.ts",
+      "sha256": "ea4e73e6c1fa0820a3080b79aa4cbde2e6ff85cb20110d7d8ec5e205743992fd"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\feedback\\suggestions.ts",
+      "sha256": "953bb48b562abd77aba7fb760e62443ade043a43d3c156c846a684e3084232f2"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\filterContext.ts",
+      "sha256": "ebb100ed3b38bfee9459a9b7331d4792ec4c7ba36ab6ddb1babd3932b54d76de"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\format.ts",
+      "sha256": "097d8155a906e805fe6eff7cea2780d82f649b4348bc6f147c466f5f065f57be"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\glossary.ts",
+      "sha256": "a64e737042ee0b806845da644f2a8b837afe09d5a54db98f0f536ac5c9a0d091"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\guides\\format.ts",
+      "sha256": "a8aaee024e0e7f3cfb50aafc8800175857fb04f370a31d1d79d744df2bbadbdf"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\guides\\guideCopy.ts",
+      "sha256": "f920598b1605b4fa52d4312c885cc75f7745b97c109d59e0430d97d97c37f01e"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\account-data\\appearance.ts",
+      "sha256": "d025a463d96882744ae227632a5ff27b0d51b1b47c4c6545e129054967a19568"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\account-data\\backups-and-export.ts",
+      "sha256": "597b8c5b329aad95b47b485e5a63a287df9c4498ba4f3d90bc5d49ef02010767"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\account-data\\delete-account.ts",
+      "sha256": "9060d10b90d9a3eccddb716b6cbc8b8b3f5944ece4e8af00fd1faad5936edc52"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\account-data\\deleting-game-history.ts",
+      "sha256": "41f593836a2492de88db887fbc5340da0e4075de81ab587f81c0337bb4386c09"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\account-data\\export-csv.ts",
+      "sha256": "bbbe5464e965ef223e66aed750d96432ccf04ed4de0bd2c0f0b4473a54eed4b5"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\account-data\\hide-or-delete-a-game.ts",
+      "sha256": "de5320881600ff09777443587496f7bb94087c4f437e4bf609ce614b2d8c4266"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\account-data\\notifications.ts",
+      "sha256": "ccb12f08a651fb4fbb02f1906101ae767535275c6995d1fcd1307414cbf8ceab"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\account-data\\player-channels.ts",
+      "sha256": "20d93eb94abfe713e6fd01316d9d025f6a4ba7e2b5a6e1516d130c4d33157e5c"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\account-data\\privacy-cookies.ts",
+      "sha256": "4b0fc3c95268470a76973b6e6d709195588b397ab389f7a8c5df2c0aa25027b5"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\account-data\\public-profile.ts",
+      "sha256": "ef148fb903cf37631f25348dd477b1b1a1da652a29f08d0cbae7336f86e6ea59"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\account-data\\repair-my-data.ts",
+      "sha256": "3016108bd9b758804c8bbcacc887759b0c53b471539af925e837fd52fece673b"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\account-data\\stay-up-to-date.ts",
+      "sha256": "3ca50660818b98998a73a075d6eb1d203e011eb62dfec354eb9bd2f155a21f2c"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\analyzer-filters.ts",
+      "sha256": "65e196f5bb5ed04c0a772b73fa472eebd5160fbc941e8bedbc888d4410b7c929"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\arcade.ts",
+      "sha256": "d0c00c3fbe976cc1f824fa4d5e8e64af1b6a77d15456024fa98600d1a0195d57"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\builds.ts",
+      "sha256": "c30506cf81f3e91518f3e4659f7fa728b2886440f6a41eb06e5ae86d64bc1071"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\dashboard-and-analyzer.ts",
+      "sha256": "a15979b995711fbbe23d20a8340b6aed115c31d7d4ce1783b203b1376bc6f93e"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\filter-by-account.ts",
+      "sha256": "b6f4394c3426a362bc6c8f4333abd00e307a96f4f824458e8735b6460e202d10"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\glossary.ts",
+      "sha256": "9a58b47310a66c5a1e39d2f6825bcaaaf00880117f6c6067c250d2f5b6c2153e"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\how-analysis-works.ts",
+      "sha256": "918561f4f82fbdae7d083d3d3a673fbdace35071d099d7c0af697cc428a1471e"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\live-scouting.ts",
+      "sha256": "68fcb2ed10644fbb0e6f5161a84d97e7b5505646e9c22467e555d6d5ecccc814"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\macro.ts",
+      "sha256": "e293533e1c2aba74e38633ab7fadb86aa1f9f1d20e110037c659e152ffdf2110"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\maps.ts",
+      "sha256": "ab3ca8cc7e3ed729be9b8a0da45aa280ec8db6e879aec208f56b76aa6f96b61c"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\opponents.ts",
+      "sha256": "13644b3dd3be0fab9d02af0923fbc58aff3b8f05c5f35a16630cab3acfa9cea6"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\reading-the-charts.ts",
+      "sha256": "083f363bba59b1d2ef36e4c1c4206e1f221752ff87cf45a59d97f5435fdb6d9c"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\reading-your-stats.ts",
+      "sha256": "99ced826a6f506f88aee3d706e2d3ccb50ec27d357580dfc96a848f6df03385c"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\replays.ts",
+      "sha256": "ed002c610e65ef746e49f7a508bcdd749f79320a36f559c8754688149237a13e"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\sessions.ts",
+      "sha256": "839a4a62ed4c8ce6357313ee68c67ae280aca18116cdcd1c84fddf01f61111f6"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\stock-market-leaderboard.ts",
+      "sha256": "067da8b4962ac6f3aabe42ee91aa8ec3a56eb2705fe5d43f4d452ecd88418f18"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\strategies.ts",
+      "sha256": "2a8326af64a6c07965ae77416ff76572cf7b60eac21cf4d0f6bd45bda348012f"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\today.ts",
+      "sha256": "d4795a4f06ede7f050b1c4473aae0038be1814a56d959bd3e5d48e501ab9892b"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\trends.ts",
+      "sha256": "99f39a8f4375da7cc7c04f91ae7426c05c0ebe427fef7a182782d3eb7e0561c3"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\analyzer\\vs-expected.ts",
+      "sha256": "d3086331e5946290ad2e20b5a99313aeb205b0743e6aee88a711f30bacbdf7b7"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\builds\\build-check-in.ts",
+      "sha256": "c78e444fdb992bdd4a9b982cc6487a9525a41dd564f68ce21fbd3a6d60a7d92b"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\builds\\build-guides.ts",
+      "sha256": "b6586520ce2dfd99cc107f1c7ea8954207baea2e8b6387322026dc0ed874db42"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\builds\\build-order-paste.ts",
+      "sha256": "2f17e6b8be70b04d94f033cad89a5bc2c9997062124274a8956d455f15779957"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\builds\\build-orders-export.ts",
+      "sha256": "37389a69425af1acbfec42dce24541ae2e1676468f6f5ee2fe3395ee950bbd23"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\builds\\community-builds.ts",
+      "sha256": "b34c286512cc308fc340e9c3b33c86a6285879c8954fa20596fc808112edfd8e"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\builds\\custom-builds.ts",
+      "sha256": "2583ab71e81faedb507ea4c44a8cb9ea7ce3633c68c303cf466afeb42e1339ed"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\builds\\practice-ghost-build.ts",
+      "sha256": "9fa84b8d2cadd2f9064d6ecf2feefbbfb2ac4fb78d83605209fc72da77b23116"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\builds\\publish-community-builds.ts",
+      "sha256": "73bd16f1731f3ac467c1a58f6dd80f641df4e0649a6afce41a29738ab454cd6b"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\builds\\randomizer.ts",
+      "sha256": "c82465057870e2a823067cddabfb3d3b5a1a895d5af83026c788d6edcaaad9c0"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\builds\\reading-guide-stats.ts",
+      "sha256": "131c2a948adfe40b88a5c30f4f66716156c8ad1ef92cb0f753fd096980830e9e"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\builds\\rules-explained.ts",
+      "sha256": "cac41f60f16631c2802edd300adb93b29681ece960afdd52e85b93cb6ebfe60f"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-app-activity-log.ts",
+      "sha256": "26bf9b9d401b2d77db9f685f86770b8b1b4dfb7f386c9f8de483d98f941e0f3a"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-app-import.ts",
+      "sha256": "6cefc349b311cb67ba19d6865db0afbd389a5ac9253efab838b69b9c55ffb478"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-app-install.ts",
+      "sha256": "9e793e3fe7aade3b6d47544b658556d82ced90c292851c9ebe1fa1fc96c7b205"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-app-overview.ts",
+      "sha256": "5a47717553d9bda6a370c8ab0eca326eafda6285364c42ea2682a4e2392cad15"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-app-performance.ts",
+      "sha256": "476307be69abe7427cfa06a2a7e83270a8e38c46004cb91a832fd54e02129616"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-app-recent-games.ts",
+      "sha256": "2f71c50e5065a3600cfe3e406a0d443331eee6ec2d1f9cbd25cb6bd4413a36ff"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-app-status.ts",
+      "sha256": "94a96c8e34602e6dd28fa16a64cd8f9701e76ae475fef5c84877bb2b54e40ca2"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-app-sync-problems.ts",
+      "sha256": "e6ac2f6a952397a1be4d06afba4d6a467933df8592a9fe0c7c54b81bb7c9bf35"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-app-sync-range.ts",
+      "sha256": "80c3c64555c18e12d815c8ff1546f2bbfa14dfb2bbf6b0e87a1c4873b61e63e8"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-app-tray.ts",
+      "sha256": "d5ef420f6b0c24f99ec56f8eee95d72d9be508e4b43e9dce1c9d33284be8c843"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-app-updates.ts",
+      "sha256": "b85e45db6635c75c20fcf869c43575f8ac77aba1083102045ae5cdb76c62eef7"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-companion.ts",
+      "sha256": "94f6a4a223a0121105b6da060dbe2ba2b38cb8e449529742d4d60243506e4402"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-scouting.ts",
+      "sha256": "71e5e6fbac4cd66ce4093b6062c92e66c62969f6797f7f8cc627f9abef1aa7c9"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\desktop-stream-titles.ts",
+      "sha256": "913d1a0635dd52e59034e42c29251c20d16ef75c390c152df9f9d3cbf70308d2"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\pairing-troubleshooting.ts",
+      "sha256": "c643e210a8a7aa46c38fee03825d6414832ebbf83bdc408a277e4a23e59c986d"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\desktop-app\\replay-folders.ts",
+      "sha256": "5dcffa25b73df0bc9bc1bb2b809dc2755139ff114899307e1d31b39df1e53b62"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\game-page\\battle-reports.ts",
+      "sha256": "a1856f19b40e0e7d0d386fa03048c762800e4293dc6a259811488e33fa62de9b"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\game-page\\benchmarks.ts",
+      "sha256": "eb55e38f25aa96cec6d66bcb0e2edab4b2bd996d35305e17f2a7293f07708eea"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\game-page\\game-page-accurate-playback.ts",
+      "sha256": "18ae58fc7baf571cbba9d0bcab670789f3838e9700cbafc0fe70f6fa1b4b3129"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\game-page\\game-page-replay.ts",
+      "sha256": "45e3739b1c889cee5b88f2fb6a3661a64cdf728b1394709dfaaa12160b0cd0c8"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\game-page\\game-page.ts",
+      "sha256": "984f49a36983f666519c4938e5c899378d7aa35c62bd16ef23aa5eff3419c0f7"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\game-page\\your-first-game.ts",
+      "sha256": "726f7e33c3dd2f3799188cfd0804f5c36b64b1bf55fe2953ad32eb39e5edcf8b"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\getting-started\\a-page-asked-me-to-sign-in.ts",
+      "sha256": "34fefdf86cd1c25fe42e9ea23dad16725259a0c2b720cd1a2ef0ad393e2bf3e9"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\getting-started\\browser-import.ts",
+      "sha256": "de680d0fe7f1f261961777a296f414ba5a3144e90ff8f5fab7cad72ca985083f"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\getting-started\\getting-started.ts",
+      "sha256": "35ca4ee079cfbea1a1dc219b35d5ce06d6d5f5882cc8ffbed8431b42cb518ac5"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\getting-started\\how-to-use-help.ts",
+      "sha256": "3c936f2d49309f4b58a046d5234f19dcfa084a2aad32922c6b3b4f451f529c60"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\getting-started\\importing-replay-history.ts",
+      "sha256": "39269f2a6fd707e24f0b94788690677d9b44f07ad5e0df51c2824bb665b658fb"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\getting-started\\install-and-pair.ts",
+      "sha256": "05bbcba99c6c6de502309449ce1ce2062a6b87e10f9adf82876e6cb505b62322"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\getting-started\\install-app.ts",
+      "sha256": "001d70e840929492a5ab23e985230e06a46664c9b2b61d07650858d585038f44"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\getting-started\\instant-analysis.ts",
+      "sha256": "b24b46b69f2da0ccba828e9a713b291cf07293675adc3a5b793f195a3c09317a"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\getting-started\\keyboard-shortcuts.ts",
+      "sha256": "3540a90c6bd03f23c22600f3883a456c07203051a186f36382b657ef7ab6185f"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\getting-started\\settings-overview.ts",
+      "sha256": "45b676a2ffb3073604589e81963d138c8933886e3aa706030906473110ba204e"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\getting-started\\take-a-tour.ts",
+      "sha256": "682ae527b58ab7a41111e9b73b4a3277a7d6868ba586c1ce7bc158c5c881e21d"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\getting-started\\your-first-week.ts",
+      "sha256": "32849d67a1ee3daaa3cf8329fa2184551c9e30f9141b1a777e73dc2bb5475581"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\index.generated.ts",
+      "sha256": "d83ea5c5adb7e3e16056e8e66f62d74021f8e3f892d36b8bc8324064429a5738"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\opponents\\opponent-dossier.ts",
+      "sha256": "6998b559f4c66f826ef50d5b2ddda931b4217604da86c9a07ddc0ff03633a7ee"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\reviews-coaching\\coaching.ts",
+      "sha256": "6ded4707e6a1b2630c2e072e4738a05f1afd094f830c42cb77c6176911bd18c5"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\reviews-coaching\\replay-reviews.ts",
+      "sha256": "b539f954604f9a6504949eeded48e3e94e8ad5dff9a6273bafab281dd5649065"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\stream-studio\\custom-chat-commands.ts",
+      "sha256": "cd11744c8900a497c29a9770804156b0273026c10a3b84b209a1353431a2c345"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\stream-studio\\game-moment-alerts.ts",
+      "sha256": "44abd33c1d27c264fe29408d55f6540ab96ab1f11abd3007e62c9bbf9b3e8881"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\stream-studio\\multi-platform-chat.ts",
+      "sha256": "2323a9a3740c2c388938ce75ba1c193f4c18d1e13c9a2859473dc49e8ed4e9bf"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\stream-studio\\obs-auto-scene-switching.ts",
+      "sha256": "3997f858c70023eb89370bae921ff8892a63b0fad98f2b9b21d06dd0bb1b33e9"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\stream-studio\\obs-overlay-setup.ts",
+      "sha256": "0be4249f961554465a61e443e2d1d422c38580b74d4d7070893d85147d40806c"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\stream-studio\\opponent-scouting.ts",
+      "sha256": "88c78b1ce85ffa97488d59fe566026024c06e2611aebafe30de6e11879015bf1"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\stream-studio\\overlay-health.ts",
+      "sha256": "e7a863fb0ab4f1f974bfd2e5d2e6f0e9fe9b162c8886018680694c1f61f91739"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\stream-studio\\overlay-url-leaked.ts",
+      "sha256": "6221cc4a420c892eb4608573f65a62d84c33b0f8f76e4eb85290c77dac3c0682"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\stream-studio\\series-mode.ts",
+      "sha256": "a5fcd8b539e269cd40d90bdb689b20f3a4643ec5e060b0dd287ace8e7c1c0bd0"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\stream-studio\\stream-dock.ts",
+      "sha256": "eb4e10aff5c684bbef0457cf53a8065b952e31c5a987232cf817f8c3b7f0ad44"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\stream-studio\\viewer-engagement.ts",
+      "sha256": "e7c85e2ab274166947985c2ad9c3a01964e2a62f90b115ddc9281e207a3cb310"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\stream-studio\\voice.ts",
+      "sha256": "1b1aeec039d30780155f2f1c3111f33315b0c458ec30f2cd8a16a9552b07c8aa"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\troubleshooting\\my-game-didnt-show-up.ts",
+      "sha256": "0d30a747c2932f0ff4a51705c6fc34406764825a70a1d3301f1b94e3d9280000"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\troubleshooting\\report-a-problem.ts",
+      "sha256": "450ffaf8c7282866aa589dba254ba681376ae51e0284fcd7113208f996a6f2ec"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\troubleshooting\\setup-health.ts",
+      "sha256": "1d8c10619e3f62834aec8dee487893312f3be00207a2701f2ccd9fb51451a474"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\troubleshooting\\something-went-wrong.ts",
+      "sha256": "7f20db1d82b23fc88aa28c9e0cd210dc9aa8dfc4bab23aa4aa50abd814ecc392"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articles\\troubleshooting\\troubleshooting-and-support.ts",
+      "sha256": "7e05125598298dbab5270c04ff3862506e0ebc9acb24c3016ae9dd7e0cc06be9"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\articleText.ts",
+      "sha256": "8f307d8ae63a6d627e97f4a89694423fba79a1078445372ee6b979001f76543d"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\categories.ts",
+      "sha256": "f77dcbe171434cda7536992a8abda98a2faf1fb1a367d1101370ea02b47bd21a"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\index.ts",
+      "sha256": "0b4f92a2da511a09b400f36db85268e9e56c7c054adb0344833ee1bfbd0f808b"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\inline.ts",
+      "sha256": "cf47e67562210f2ad7fdaeae7a5c86568ab3db84670532fcb7e23c5932c81db5"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\paths.ts",
+      "sha256": "9d406d5f7218470a46e65d80f692949932c56eb046ce2843fcd96110df9b73f7"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\popular.ts",
+      "sha256": "ce236417bde35960f835d985a220bf936c43f17157ade0d1838a74ef1a856c9d"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\search.ts",
+      "sha256": "f1ea4a7267a2d70be4e7327fdf7d77215f944d63f6211916c27b97cda4a0bc0b"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\support.ts",
+      "sha256": "c6e13102ce0f7aab4ed3e9d2ed181ac54e4a297c719e0c3f500d4ac1fc91d2c9"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\help\\widgets.ts",
+      "sha256": "7759eadfb83ab073441f32045e47b482d270e7defb964517f0a6da45ad651cd2"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\meta.ts",
+      "sha256": "1182951da643e57fe895a709ad28feb4a08d45ba32ce2d869bc194f5943ff260"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\multichat\\chatCommandCatalog.generated.json",
+      "sha256": "68c75485756b4d07a8f888f3ef4a6c3e82f87fb5870a98971cb9b4d6626d5cb4"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\multichat\\chatCommandPreferences.ts",
+      "sha256": "107771cfd3ffb16a6b5fe9c2c7bcaa46dc94d88373fc98b98a44d6c0cfa08eba"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\multichat\\commandsGuide.ts",
+      "sha256": "aa89a8f23e41c8c9ec338dc77ff9e3e20d121c62e0d6b969cdbab816c75aabd1"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\multichat\\rankLadders.ts",
+      "sha256": "8b93b637a7952b9fea6a4f57cdc2dfb5e699576003a43d33f8dd1720825ddd73"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\multichat\\useChatCommandSettings.ts",
+      "sha256": "95025b46bedeeab7765360e6b87f77f4a37257029172395fa55660296faafc16"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\race.ts",
+      "sha256": "0f79955f81e05547fb84d65248daf588ba26c678fc83c7d234559d4b99d07873"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\replayControls.ts",
+      "sha256": "884723893a114624dfc918e6d1df4e6e9790d483c07fcd53ea28ffec29839b64"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\requestErrors.ts",
+      "sha256": "c900bdc70250c4ac9dd32a9278ddd7f8d985fef675b45d894c1e08f7c4255a0a"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\reviews.ts",
+      "sha256": "2944fcf15600e31ef9ecd57d8d26c7fbb7329da21ea04acdce0a1d888c44350e"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\seasonCatalog.ts",
+      "sha256": "09bc1b57c5d23cc4ebc693d4282183dc9f79983cd82e211c6ec3525f1f603497"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\session-policy.ts",
+      "sha256": "9e7ef2783fd9c17cacc00519806d5fa7404870ee7c298a4efa8663c27722a28a"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\sessions.ts",
+      "sha256": "048cebeb09a1416bd1f9198ccaf69eeb3aa1aaa5b49392941d423f759cd92f74"
+    },
+    {
+      "file": "C:\\SC2TOOLS\\.worktrees\\unit-profile-history\\apps\\web\\lib\\tours.ts",
+      "sha256": "03981fbedc20d8a7ed4bed24d604e1705369cc23b6d4a9f21f5d5467ec65ba4a"
+    }
+  ],
+  "productionCss": [
+    {
+      "file": ".next/static/css/085eec6ea1a84fdf.css",
+      "sha256": "e13e1137cb8ca4a0a41db4908a8637dc00d87b9606f17e1e37aaf68f0690d24e"
+    },
+    {
+      "file": ".next/static/css/9e93c7f0ce562f59.css",
+      "sha256": "d8b7c1f3afde1bb374a0aa3f612708060f47eb7a74112b9c087ec724caa81aa5"
+    },
+    {
+      "file": ".next/static/css/a49a1a968352c402.css",
+      "sha256": "d82269d7d364ccc2807b1fa12e2e411cdee6ce228a458a0737225c5d7c2ecea0"
+    },
+    {
+      "file": ".next/static/css/c8183fd076b4bf97.css",
+      "sha256": "ada3f5bb8b53d5513ea9cab47cfe0cf4856db6536239f40b09755985e8786794"
+    },
+    {
+      "file": ".next/static/css/e73fc7fc7e03df69.css",
+      "sha256": "94ac09441bb1ffd71b02db4d92b59596a8ef06479da01e6c14fc670434609218"
+    }
+  ],
+  "fonts": [
+    {
+      "file": "hanken-grotesk-latin.woff2",
+      "sha256": "1f21c6eaa0000f3329cfcfac966b43d5bebf5aa610303e33294ac31bc6f4bb59"
+    },
+    {
+      "file": "bricolage-grotesque-latin.woff2",
+      "sha256": "4fd48b2c1ab27220e71f15f990550261b35245c3bdfd8d8025b4bdac0459ee2d"
+    },
+    {
+      "file": "fraunces-latin-normal.woff2",
+      "sha256": "88e17be075f1be50ab67b057b99e3701b828f44ed28f9452df6c02645bb0cba9"
+    }
+  ],
+  "fixtureSha256": "13a5b531b305bec94a990d8cbefb5d840a13291f20170b6df134f8d8e5c41cf0",
+  "boundaries": "Actual ModeRunner, useArcadeData, useApi/SWR, corpus pagination, custom catalog, session-policy hook, unit generator/renderer/shell and completed productionCSS/localWOFF2. Explicit synthetic auth/dailyseed/account-write/HTTP and local Next primitives only. Observed generator wrapper counts invocations; unrelated mode is an explicit simple specimen. No provider, actual account, real routing or live acceptance proof."
+}

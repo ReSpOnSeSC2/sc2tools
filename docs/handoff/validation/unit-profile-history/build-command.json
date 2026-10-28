@@ -1,0 +1,14 @@
+{
+  "label": "production-build-01",
+  "args": [
+    "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web/node_modules/next/dist/bin/next",
+    "build"
+  ],
+  "cwd": "C:/SC2TOOLS/.worktrees/unit-profile-history/apps/web",
+  "pid": 18472,
+  "startedAtUtc": "2026-10-28T14:30:07.303Z",
+  "endedAtUtc": "2026-10-28T14:32:07.105Z",
+  "exitCode": 0,
+  "processAliveAfterExit": false,
+  "log": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/build-01/production-build-01.log"
+}
