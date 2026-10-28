@@ -62,7 +62,9 @@ jobs:
   e2e-responsive:
     name: Responsive e2e smoke (public pages)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Allow the full browser suite plus setup and the engine/web build.
+    # Per-test deadlines, retries, workers and assertions stay unchanged.
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: apps/web

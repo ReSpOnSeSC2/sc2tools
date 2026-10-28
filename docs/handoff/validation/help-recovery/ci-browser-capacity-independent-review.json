@@ -1,0 +1,538 @@
+{
+  "schemaVersion": 1,
+  "preparedAtUtc": "2026-10-28T06:12:02.6434630Z",
+  "scope": "Independent public-browser CI job capacity diagnosis and scoped workflow review",
+  "reviewerHeavyRuntimeExecuted": false,
+  "applicationSourceEdited": false,
+  "ciLogsAccess": "Codex PR-check diagnostics only. GitHub connector metadata lacks times; read-only gh API job metadata supplied timestamps. No alternative raw log fetch.",
+  "recommendation": "Accept e2e-responsive overall job timeout25 to35 minutes only. Keep per-case30-second default, all per-test deadlines, retry1, worker policy/projects, all tests/assertions and unchanged83routebudgets.",
+  "prior": {
+    "pullRequest": 801,
+    "head": "f5d19cae623388779190b383bb8ff8512bc1edff",
+    "runId": 40628200547,
+    "jobId": 122618107508,
+    "jobStartedAt": "2026-10-28T03:42:22Z",
+    "jobCompletedAt": "2026-10-28T04:02:22Z",
+    "jobSeconds": 1200,
+    "preBrowserSeconds": 232,
+    "browserSeconds": 965,
+    "browserStartedAt": "2026-10-28T03:46:14Z",
+    "browserCompletedAt": "2026-10-28T04:02:19Z",
+    "conclusion": "success",
+    "reportedResult": "591 passed /92 skipped (16.1m)",
+    "retainedProgress": {
+      "lines": 9,
+      "passedDots": 591,
+      "skipMarks": 92,
+      "retryMarks": 0,
+      "failedMarks": 0,
+      "flakyMarks": 0,
+      "last": "2026-10-28T04:02:19.5138493Z ·····························°·············"
+    }
+  },
+  "cancelled": {
+    "pullRequest": 802,
+    "head": "1af28ef249e47501df50bb6462ab36d47a392c91",
+    "runId": 40639214373,
+    "jobId": 122653341746,
+    "jobStartedAt": "2026-10-28T05:39:34Z",
+    "jobCompletedAt": "2026-10-28T06:04:51Z",
+    "jobSeconds": 1517,
+    "preBrowserSeconds": 307,
+    "browserSeconds": 1209,
+    "browserStartedAt": "2026-10-28T05:44:41Z",
+    "browserCompletedAt": "2026-10-28T06:04:50Z",
+    "conclusion": "cancelled",
+    "retainedProgress": {
+      "lines": 8,
+      "passedDots": 549,
+      "skipMarks": 91,
+      "retryMarks": 0,
+      "failedMarks": 0,
+      "flakyMarks": 0,
+      "last": "2026-10-28T06:02:44.3060713Z ················································································"
+    }
+  },
+  "evidenceInterpretation": [
+    "Prior total job20:00 consists of pre-browser3:52 and browser16:05 plus cleanup. Cancelled job pre-browser5:07 and browser20:09 exceeds current25-minute overall budget including setup/build.",
+    "Cancelled retained progress contains640 completion marks:549pass+91skip, zero retry/failure/flaky marks, last full block06:02:44. Prior683completed cases includes same640-count block04:00:38 and remaining43 completions by04:02:19 (101 seconds). Cancelled job was stopped126seconds after its640-count block; case identities/order not exposed by dot reporter.",
+    "Progress continued to near completion; current log does not show a failed assertion. Repeated esbuild import.meta warnings alone do not prove failure or hang.",
+    "Direct esbuild shared-analysis fixture imports PublicReplayAnalysis, not newly added SharedReplayAnalysisContent dynamic island; fixture/config bytes are unchanged from physical main-base checkout."
+  ],
+  "sourceParity": {
+    "baseCheckout": "C:/SC2TOOLS/.worktrees/dashboard-cache-coverage",
+    "reportedBase": "9d6525e54a81dc23768232881f063d7864d24055",
+    "candidateCheckout": "C:/SC2TOOLS/.worktrees/help-recovery-completion",
+    "baseE2eFiles": 82,
+    "candidateE2eFiles": 82,
+    "checkedPaths": 83,
+    "mismatches": [],
+    "allUnchanged": true
+  },
+  "workflowReview": {
+    "path": ".github/workflows/web-ci.yml",
+    "baseSha256": "584d41fb465d15260a7bf78ac45223c4154b6bc2623bf3acdb0f1404358602bf",
+    "candidateSha256": "92a3a5f708013df1a37a0e4c07c5a1fef3bfdcc4ee98476848dbccca316e1d73",
+    "nonCommentDeltaOnly25to35": true,
+    "lineDiff": [
+      {
+        "InputObject": "    # Allow the full browser suite plus setup and the engine/web build.",
+        "SideIndicator": "=>"
+      },
+      {
+        "InputObject": "    # Per-test deadlines, retries, workers and assertions stay unchanged.",
+        "SideIndicator": "=>"
+      },
+      {
+        "InputObject": "    timeout-minutes: 35",
+        "SideIndicator": "=>"
+      },
+      {
+        "InputObject": "    timeout-minutes: 25",
+        "SideIndicator": "<="
+      }
+    ],
+    "decision": "Clear for scoped workflow adoption; no other executable setting changed."
+  },
+  "limits": [
+    "Both CI logs are bounded/truncated; absence of a recorded failure is not proof no earlier/later assertion could fail.",
+    "Timing comparison supports capacity adjustment; it does not prove product regression absence or predict completion within35minutes.",
+    "No cases are skipped/removed and no retry/per-test timeout/budget/worker increase recommended. Fresh exact-head required checks must pass before merge.",
+    "Source parity is filesystem SHA equality at these observed checkouts; no Git mutation or rerun was performed."
+  ],
+  "sourceChecks": [
+    {
+      "path": "apps/web/tests/e2e/accessibility-allowlist.json",
+      "candidateSha256": "a5338d955b09046ec0b16f3a9625b7955c763aae07dc722e474e6078745f932f",
+      "baseSha256": "a5338d955b09046ec0b16f3a9625b7955c763aae07dc722e474e6078745f932f"
+    },
+    {
+      "path": "apps/web/tests/e2e/accessibility-check.ts",
+      "candidateSha256": "9282570cdbe035255af23d0bb477891a5838ca7d7ecf278b16cdb4271bda50fb",
+      "baseSha256": "9282570cdbe035255af23d0bb477891a5838ca7d7ecf278b16cdb4271bda50fb"
+    },
+    {
+      "path": "apps/web/tests/e2e/activation-checklist-fixture.mjs",
+      "candidateSha256": "f2ed0c4ca8e4485d2216f1053e85f337f123b4c21fbeac4e883f0d14631b77fc",
+      "baseSha256": "f2ed0c4ca8e4485d2216f1053e85f337f123b4c21fbeac4e883f0d14631b77fc"
+    },
+    {
+      "path": "apps/web/tests/e2e/activation-checklist.spec.ts",
+      "candidateSha256": "4ae2791f86fc842316a57f3a31f5176d58687adcde25d6d3e38517450ceddd51",
+      "baseSha256": "4ae2791f86fc842316a57f3a31f5176d58687adcde25d6d3e38517450ceddd51"
+    },
+    {
+      "path": "apps/web/tests/e2e/admin-cache-health-fixture.mjs",
+      "candidateSha256": "44b9746aa0238003ffc06f6a3c239bff85d83fd99754d2024dee1784e753f099",
+      "baseSha256": "44b9746aa0238003ffc06f6a3c239bff85d83fd99754d2024dee1784e753f099"
+    },
+    {
+      "path": "apps/web/tests/e2e/admin-cache-health.spec.ts",
+      "candidateSha256": "dfcb7713a26735241a0b3c06eee59602bfa0d0d804d3d7b9c78b68f52a4500ec",
+      "baseSha256": "dfcb7713a26735241a0b3c06eee59602bfa0d0d804d3d7b9c78b68f52a4500ec"
+    },
+    {
+      "path": "apps/web/tests/e2e/appearance-more-fixture.mjs",
+      "candidateSha256": "1940fdba54340a4c0b58221580c01fc755add727e872183ae88ffe684512bd04",
+      "baseSha256": "1940fdba54340a4c0b58221580c01fc755add727e872183ae88ffe684512bd04"
+    },
+    {
+      "path": "apps/web/tests/e2e/appearance.spec.ts",
+      "candidateSha256": "10c14f4b3225342a8e268a95a4c672054a2bd415abdc0fd75c822922f09f9e8a",
+      "baseSha256": "10c14f4b3225342a8e268a95a4c672054a2bd415abdc0fd75c822922f09f9e8a"
+    },
+    {
+      "path": "apps/web/tests/e2e/bingo-ladder-fixture.mjs",
+      "candidateSha256": "8fcc0142ec3a52d14eaf25f77654f2136e9ac86bc7ddbf11fb057dff54b6210c",
+      "baseSha256": "8fcc0142ec3a52d14eaf25f77654f2136e9ac86bc7ddbf11fb057dff54b6210c"
+    },
+    {
+      "path": "apps/web/tests/e2e/bingo-ladder.spec.ts",
+      "candidateSha256": "336a540cdb572bcf0ad6e6c2345a4bafae4f8e14abe686b9c333a02a84286308",
+      "baseSha256": "336a540cdb572bcf0ad6e6c2345a4bafae4f8e14abe686b9c333a02a84286308"
+    },
+    {
+      "path": "apps/web/tests/e2e/build-editor.spec.ts",
+      "candidateSha256": "cff16b115f102e2ba0b48de44fc26df7970108c07843ec585e91e602bd57dfc3",
+      "baseSha256": "cff16b115f102e2ba0b48de44fc26df7970108c07843ec585e91e602bd57dfc3"
+    },
+    {
+      "path": "apps/web/tests/e2e/chart-kit-fixture.mjs",
+      "candidateSha256": "940a4d236dee8f11d35fa1ce45927cbae9807241825abd3e9be47488900fb676",
+      "baseSha256": "940a4d236dee8f11d35fa1ce45927cbae9807241825abd3e9be47488900fb676"
+    },
+    {
+      "path": "apps/web/tests/e2e/chart-kit.spec.ts",
+      "candidateSha256": "2b443ac0a0659bab9cac2728a128c4e032b6475e03a1f2f56041a3dee8832be2",
+      "baseSha256": "2b443ac0a0659bab9cac2728a128c4e032b6475e03a1f2f56041a3dee8832be2"
+    },
+    {
+      "path": "apps/web/tests/e2e/coaching-forms-fixture.mjs",
+      "candidateSha256": "4a5f38f1f7f0662a8cfca9fa4642afe9e471798a37593114ccb68ecc563c3681",
+      "baseSha256": "4a5f38f1f7f0662a8cfca9fa4642afe9e471798a37593114ccb68ecc563c3681"
+    },
+    {
+      "path": "apps/web/tests/e2e/coaching-forms.spec.ts",
+      "candidateSha256": "99ee29d56da6bfc523048d8b3d2c3932952442dbf0b69cbd5e2b61a34d9eed1a",
+      "baseSha256": "99ee29d56da6bfc523048d8b3d2c3932952442dbf0b69cbd5e2b61a34d9eed1a"
+    },
+    {
+      "path": "apps/web/tests/e2e/community-creator.spec.ts",
+      "candidateSha256": "0c1443620598a0d5cf1222035c2af852843cbc0dc253903cc4bac326bd054221",
+      "baseSha256": "0c1443620598a0d5cf1222035c2af852843cbc0dc253903cc4bac326bd054221"
+    },
+    {
+      "path": "apps/web/tests/e2e/community-detail.spec.ts",
+      "candidateSha256": "450f4f5091746022de11ae4f615b7915a8007d97aea9df91f37a9b92501285ca",
+      "baseSha256": "450f4f5091746022de11ae4f615b7915a8007d97aea9df91f37a9b92501285ca"
+    },
+    {
+      "path": "apps/web/tests/e2e/community-filters.spec.ts",
+      "candidateSha256": "94913d29d29c6761aa34b3fef0c7a002c4485238465d7ca3c6a2e51809cebe4f",
+      "baseSha256": "94913d29d29c6761aa34b3fef0c7a002c4485238465d7ca3c6a2e51809cebe4f"
+    },
+    {
+      "path": "apps/web/tests/e2e/community-interactive-fixture.mjs",
+      "candidateSha256": "81ac5c61adeffcf25841fa99f6afa6344f0587e949c3dc642b94a7262e5be28e",
+      "baseSha256": "81ac5c61adeffcf25841fa99f6afa6344f0587e949c3dc642b94a7262e5be28e"
+    },
+    {
+      "path": "apps/web/tests/e2e/community-interactive.spec.ts",
+      "candidateSha256": "c92df026166a2245be577e0fe9ade5e7c195e06c9ae9bece52ad083222beaf09",
+      "baseSha256": "c92df026166a2245be577e0fe9ade5e7c195e06c9ae9bece52ad083222beaf09"
+    },
+    {
+      "path": "apps/web/tests/e2e/copy-consumers-fixture.mjs",
+      "candidateSha256": "bb5fa50be946e2d4603562736d874a81ef348662fe5ffe2705cd245b24e8eeda",
+      "baseSha256": "bb5fa50be946e2d4603562736d874a81ef348662fe5ffe2705cd245b24e8eeda"
+    },
+    {
+      "path": "apps/web/tests/e2e/copy-consumers.spec.ts",
+      "candidateSha256": "493e458c8dce83ec3d81417ded3c145b8ba2985ff38fe6bad7c489c9a2674bce",
+      "baseSha256": "493e458c8dce83ec3d81417ded3c145b8ba2985ff38fe6bad7c489c9a2674bce"
+    },
+    {
+      "path": "apps/web/tests/e2e/definitions.spec.ts",
+      "candidateSha256": "556f22fb93f3e969437a26af087d12fd3a818e48e8e31f6884ba698aa9537bd3",
+      "baseSha256": "556f22fb93f3e969437a26af087d12fd3a818e48e8e31f6884ba698aa9537bd3"
+    },
+    {
+      "path": "apps/web/tests/e2e/design-gallery-fixture.mjs",
+      "candidateSha256": "7f9ae8aa1bf06fee291583d11b2491c058308ec3ff244b0762b5c8de508289ee",
+      "baseSha256": "7f9ae8aa1bf06fee291583d11b2491c058308ec3ff244b0762b5c8de508289ee"
+    },
+    {
+      "path": "apps/web/tests/e2e/design-gallery.spec.ts",
+      "candidateSha256": "b794161336593aa5f5367b01799abccbe2cce4148ce3acf428b1351e6fd354c5",
+      "baseSha256": "b794161336593aa5f5367b01799abccbe2cce4148ce3acf428b1351e6fd354c5"
+    },
+    {
+      "path": "apps/web/tests/e2e/dock.spec.ts",
+      "candidateSha256": "aa415980be84992403c9668805c4827463b317374b0243a2ea08d5990ac4be1c",
+      "baseSha256": "aa415980be84992403c9668805c4827463b317374b0243a2ea08d5990ac4be1c"
+    },
+    {
+      "path": "apps/web/tests/e2e/filter-overlays-fixture.mjs",
+      "candidateSha256": "18953f97f1bdaa04a0383a0ab0f9fbfb812ce3106d000830e5390f532a2129cc",
+      "baseSha256": "18953f97f1bdaa04a0383a0ab0f9fbfb812ce3106d000830e5390f532a2129cc"
+    },
+    {
+      "path": "apps/web/tests/e2e/filter-overlays.spec.ts",
+      "candidateSha256": "7a330b6afb00fdf3d0104230f786f875b8c9507d440e883be035d15e85a2046b",
+      "baseSha256": "7a330b6afb00fdf3d0104230f786f875b8c9507d440e883be035d15e85a2046b"
+    },
+    {
+      "path": "apps/web/tests/e2e/global-search.spec.ts",
+      "candidateSha256": "e0a9d36b09928dd2f9d857c2358ccd1ed23484b348b3fa6c07722ff7663ec14f",
+      "baseSha256": "e0a9d36b09928dd2f9d857c2358ccd1ed23484b348b3fa6c07722ff7663ec14f"
+    },
+    {
+      "path": "apps/web/tests/e2e/guide-timings-fixture.mjs",
+      "candidateSha256": "c74a6e79613b1ea676ca1ffdf6d4815ab78c444ed9dd65ef3bde459f87440b72",
+      "baseSha256": "c74a6e79613b1ea676ca1ffdf6d4815ab78c444ed9dd65ef3bde459f87440b72"
+    },
+    {
+      "path": "apps/web/tests/e2e/guided-tours-fixture.mjs",
+      "candidateSha256": "4737f8637e8ff64922a66bec1b79cdc2a883a0e8938de35e1db81897258088d2",
+      "baseSha256": "4737f8637e8ff64922a66bec1b79cdc2a883a0e8938de35e1db81897258088d2"
+    },
+    {
+      "path": "apps/web/tests/e2e/guided-tours.spec.ts",
+      "candidateSha256": "9927250df0b168fafaae7853030d4fa9822a768a3469f0f2984ec0cc8249e91e",
+      "baseSha256": "9927250df0b168fafaae7853030d4fa9822a768a3469f0f2984ec0cc8249e91e"
+    },
+    {
+      "path": "apps/web/tests/e2e/guides-expansion.spec.ts",
+      "candidateSha256": "8726c430d977ec2a359441d70a47a0dd58099cfdca055fe1dbe3a7b2fac6eb05",
+      "baseSha256": "8726c430d977ec2a359441d70a47a0dd58099cfdca055fe1dbe3a7b2fac6eb05"
+    },
+    {
+      "path": "apps/web/tests/e2e/info-tip-fixture.mjs",
+      "candidateSha256": "e4e9a3fab011ed5960844770fdc1c63ed31a3ac08f5ef5fe06091926291a40ba",
+      "baseSha256": "e4e9a3fab011ed5960844770fdc1c63ed31a3ac08f5ef5fe06091926291a40ba"
+    },
+    {
+      "path": "apps/web/tests/e2e/info-tip.spec.ts",
+      "candidateSha256": "c203188fe14330ae0ea3efdac37a47c3cd2b84c1cd460ebacb48ad2349e56f3a",
+      "baseSha256": "c203188fe14330ae0ea3efdac37a47c3cd2b84c1cd460ebacb48ad2349e56f3a"
+    },
+    {
+      "path": "apps/web/tests/e2e/matchup-rating-window.spec.ts",
+      "candidateSha256": "399045630378f2f15884c11297e79d32701784c441b10ad66873962ac9396240",
+      "baseSha256": "399045630378f2f15884c11297e79d32701784c441b10ad66873962ac9396240"
+    },
+    {
+      "path": "apps/web/tests/e2e/mobile-nav-fixture.mjs",
+      "candidateSha256": "813ceec0b602e72762063abe47d9f37412eb345b796a6e40f4e5a8c5d51a2e66",
+      "baseSha256": "813ceec0b602e72762063abe47d9f37412eb345b796a6e40f4e5a8c5d51a2e66"
+    },
+    {
+      "path": "apps/web/tests/e2e/mock-community-api.mjs",
+      "candidateSha256": "9ec113bb2c29f04883f3569e53a9c0350489aea4188052dd8a78fcf6485f95e8",
+      "baseSha256": "9ec113bb2c29f04883f3569e53a9c0350489aea4188052dd8a78fcf6485f95e8"
+    },
+    {
+      "path": "apps/web/tests/e2e/mock-community-detail-api.mjs",
+      "candidateSha256": "d54cdac76cf46b10627995f5a65dc124eb1996c5d52a5e3888173919913a5821",
+      "baseSha256": "d54cdac76cf46b10627995f5a65dc124eb1996c5d52a5e3888173919913a5821"
+    },
+    {
+      "path": "apps/web/tests/e2e/mock-guides-api.mjs",
+      "candidateSha256": "f17da7f2d280ad4aed8ccfaffa01d836f09adc4abc8efa3b968da04e6737a0e0",
+      "baseSha256": "f17da7f2d280ad4aed8ccfaffa01d836f09adc4abc8efa3b968da04e6737a0e0"
+    },
+    {
+      "path": "apps/web/tests/e2e/mock-public-archive-api.mjs",
+      "candidateSha256": "f9c8a99aa9835870ecdb0e051908c0a4540021d713116a5ba40cd1afa74034ed",
+      "baseSha256": "f9c8a99aa9835870ecdb0e051908c0a4540021d713116a5ba40cd1afa74034ed"
+    },
+    {
+      "path": "apps/web/tests/e2e/mock-public-player-api.mjs",
+      "candidateSha256": "6c3f77d19fdb82d740bcd2b3ce139f046ebd7c7ef79a9937b4bbd956afe67134",
+      "baseSha256": "6c3f77d19fdb82d740bcd2b3ce139f046ebd7c7ef79a9937b4bbd956afe67134"
+    },
+    {
+      "path": "apps/web/tests/e2e/mock-review-api.mjs",
+      "candidateSha256": "c9a15f3caca09736cf74f30cb66995e3e88e2f6f5d6c706b4f1dc1dcfe6abe93",
+      "baseSha256": "c9a15f3caca09736cf74f30cb66995e3e88e2f6f5d6c706b4f1dc1dcfe6abe93"
+    },
+    {
+      "path": "apps/web/tests/e2e/my-reviews-fixture.mjs",
+      "candidateSha256": "838b7b427156de94feee6d6922104e8bd0b41ffa084e068caff781a6d3c35c5b",
+      "baseSha256": "838b7b427156de94feee6d6922104e8bd0b41ffa084e068caff781a6d3c35c5b"
+    },
+    {
+      "path": "apps/web/tests/e2e/my-reviews.spec.ts",
+      "candidateSha256": "6a095350323c54b21677c6b240245e2b23387a641ac51615b539d1ebdaf7e234",
+      "baseSha256": "6a095350323c54b21677c6b240245e2b23387a641ac51615b539d1ebdaf7e234"
+    },
+    {
+      "path": "apps/web/tests/e2e/notification-popover-fixture.mjs",
+      "candidateSha256": "ec5d5a2696979451f4445813edfeff152bb6e5e9897417ea65251d715f49270e",
+      "baseSha256": "ec5d5a2696979451f4445813edfeff152bb6e5e9897417ea65251d715f49270e"
+    },
+    {
+      "path": "apps/web/tests/e2e/notification-popover.spec.ts",
+      "candidateSha256": "39c17e03cca9baa336d02cf73f9d73c430c5a32464de1a8f57a3d9ceca86d496",
+      "baseSha256": "39c17e03cca9baa336d02cf73f9d73c430c5a32464de1a8f57a3d9ceca86d496"
+    },
+    {
+      "path": "apps/web/tests/e2e/platform-disconnect-fixture.mjs",
+      "candidateSha256": "4c4e1cb0603aa0de660b625802e218c74a2d7d372f70c3f6115d6aaaa0321291",
+      "baseSha256": "4c4e1cb0603aa0de660b625802e218c74a2d7d372f70c3f6115d6aaaa0321291"
+    },
+    {
+      "path": "apps/web/tests/e2e/platform-disconnect.spec.ts",
+      "candidateSha256": "9754d3a14e1dbf00c0a573968d729b738323523da2a4b045228ee014a5618b5e",
+      "baseSha256": "9754d3a14e1dbf00c0a573968d729b738323523da2a4b045228ee014a5618b5e"
+    },
+    {
+      "path": "apps/web/tests/e2e/public-archive.spec.ts",
+      "candidateSha256": "b5089ce5b3f54d5496d1c2ce59f1de7bc1e017bcbcdb61c8a491d9e0b7ea8bcf",
+      "baseSha256": "b5089ce5b3f54d5496d1c2ce59f1de7bc1e017bcbcdb61c8a491d9e0b7ea8bcf"
+    },
+    {
+      "path": "apps/web/tests/e2e/public-pages.spec.ts",
+      "candidateSha256": "8cce36415ff61d7088e4809d9f4a1d8d8262e5f290ada3640b8ea8f5a162d8cc",
+      "baseSha256": "8cce36415ff61d7088e4809d9f4a1d8d8262e5f290ada3640b8ea8f5a162d8cc"
+    },
+    {
+      "path": "apps/web/tests/e2e/public-player-settings-fixture.mjs",
+      "candidateSha256": "2fe8771e74298f41571011c2799567bac0097c44d6bfb5e5b4464725c43d95c9",
+      "baseSha256": "2fe8771e74298f41571011c2799567bac0097c44d6bfb5e5b4464725c43d95c9"
+    },
+    {
+      "path": "apps/web/tests/e2e/public-player-settings.spec.ts",
+      "candidateSha256": "d2682c0ded17ae7c5e89ab74a37332d2b274d2899ec82f6b55ab93fce017c777",
+      "baseSha256": "d2682c0ded17ae7c5e89ab74a37332d2b274d2899ec82f6b55ab93fce017c777"
+    },
+    {
+      "path": "apps/web/tests/e2e/public-player.spec.ts",
+      "candidateSha256": "744cabce30401e1c51636dee86edfb2365272f75a98b05865f5df279e51139f6",
+      "baseSha256": "744cabce30401e1c51636dee86edfb2365272f75a98b05865f5df279e51139f6"
+    },
+    {
+      "path": "apps/web/tests/e2e/public-seo.spec.ts",
+      "candidateSha256": "415537c0573495fbca0e804dcb20e7b5f237c28720e69fecbf2265a0998e6abc",
+      "baseSha256": "415537c0573495fbca0e804dcb20e7b5f237c28720e69fecbf2265a0998e6abc"
+    },
+    {
+      "path": "apps/web/tests/e2e/review-lifecycle-fixture.mjs",
+      "candidateSha256": "9a4e50e8ad32e6eca542b6d2ab53b0fa047bf13b2a1396d15642f2b1d0dd8057",
+      "baseSha256": "9a4e50e8ad32e6eca542b6d2ab53b0fa047bf13b2a1396d15642f2b1d0dd8057"
+    },
+    {
+      "path": "apps/web/tests/e2e/review-lifecycle.spec.ts",
+      "candidateSha256": "165fb8a874098066b5d4274bb31577d21166095faf0a3df910e9130f27c81dab",
+      "baseSha256": "165fb8a874098066b5d4274bb31577d21166095faf0a3df910e9130f27c81dab"
+    },
+    {
+      "path": "apps/web/tests/e2e/reviews.spec.ts",
+      "candidateSha256": "b3b4b2451085f4bada4a09c55fdd426f7bc56c766a3515c70614ab06242e8e84",
+      "baseSha256": "b3b4b2451085f4bada4a09c55fdd426f7bc56c766a3515c70614ab06242e8e84"
+    },
+    {
+      "path": "apps/web/tests/e2e/settings-chat-fixture.mjs",
+      "candidateSha256": "ea3195394797e4d0559119f231b4282abd2e241fe5722cf9c3fb2afeadb457ce",
+      "baseSha256": "ea3195394797e4d0559119f231b4282abd2e241fe5722cf9c3fb2afeadb457ce"
+    },
+    {
+      "path": "apps/web/tests/e2e/settings-chat.spec.ts",
+      "candidateSha256": "6173cb234a932bae96489f70a2dc7e4651847e15170dc3b19d46dd9bae0965d9",
+      "baseSha256": "6173cb234a932bae96489f70a2dc7e4651847e15170dc3b19d46dd9bae0965d9"
+    },
+    {
+      "path": "apps/web/tests/e2e/settings-registry-fixture.mjs",
+      "candidateSha256": "75d9845e14bb1ead587afc4b02bf4e6231458a4097e7078babe8533fa355df80",
+      "baseSha256": "75d9845e14bb1ead587afc4b02bf4e6231458a4097e7078babe8533fa355df80"
+    },
+    {
+      "path": "apps/web/tests/e2e/settings-registry.spec.ts",
+      "candidateSha256": "6e69728c0b3470032295c725161b0b5db4dda0b0764248a0ad78a4b3d72aa240",
+      "baseSha256": "6e69728c0b3470032295c725161b0b5db4dda0b0764248a0ad78a4b3d72aa240"
+    },
+    {
+      "path": "apps/web/tests/e2e/settings-search-fixture.mjs",
+      "candidateSha256": "5fbca3a3282317519011c83d76e68c1f6c717239fa43131547a6e52b23daa952",
+      "baseSha256": "5fbca3a3282317519011c83d76e68c1f6c717239fa43131547a6e52b23daa952"
+    },
+    {
+      "path": "apps/web/tests/e2e/settings-search.spec.ts",
+      "candidateSha256": "19233fd65ad69507432496f037cba854d10dadbe05879f6551b753cbada395be",
+      "baseSha256": "19233fd65ad69507432496f037cba854d10dadbe05879f6551b753cbada395be"
+    },
+    {
+      "path": "apps/web/tests/e2e/settings-sections-fixture.mjs",
+      "candidateSha256": "42298c3f6190ec332cec8010fd929360e0bd83cc2fe60bad93297d75e837e031",
+      "baseSha256": "42298c3f6190ec332cec8010fd929360e0bd83cc2fe60bad93297d75e837e031"
+    },
+    {
+      "path": "apps/web/tests/e2e/settings-sections.spec.ts",
+      "candidateSha256": "562bb45cf6d6394d7b2ccd2b7deee6661af4cc8139cb85e1999cab532354b3bc",
+      "baseSha256": "562bb45cf6d6394d7b2ccd2b7deee6661af4cc8139cb85e1999cab532354b3bc"
+    },
+    {
+      "path": "apps/web/tests/e2e/shared-analysis-fixture-data.mjs",
+      "candidateSha256": "56b1ff4f429108392f085df7bcbaa4a91bac9d898de9c2908887e0e74aec7ee2",
+      "baseSha256": "56b1ff4f429108392f085df7bcbaa4a91bac9d898de9c2908887e0e74aec7ee2"
+    },
+    {
+      "path": "apps/web/tests/e2e/shared-analysis-fixture.mjs",
+      "candidateSha256": "6985ee0633bdf8b2bd0fb27688dc300cce0dfb43fde67247c12ab78da2b3bf44",
+      "baseSha256": "6985ee0633bdf8b2bd0fb27688dc300cce0dfb43fde67247c12ab78da2b3bf44"
+    },
+    {
+      "path": "apps/web/tests/e2e/shared-analysis.spec.ts",
+      "candidateSha256": "7028877cf1c95ef388ed007653545ad78283c6ac5188bcd71b7ad3aa4004f13a",
+      "baseSha256": "7028877cf1c95ef388ed007653545ad78283c6ac5188bcd71b7ad3aa4004f13a"
+    },
+    {
+      "path": "apps/web/tests/e2e/site-cta-fixture.mjs",
+      "candidateSha256": "10a2ebf70c6cd52a3713081fdbf4fff4fa2c2392b9abb2bf060b95ca44406965",
+      "baseSha256": "10a2ebf70c6cd52a3713081fdbf4fff4fa2c2392b9abb2bf060b95ca44406965"
+    },
+    {
+      "path": "apps/web/tests/e2e/today-stat-height-fixture.mjs",
+      "candidateSha256": "1d6e4a38090127f58828ee58823a7aadbcc148a975a8b08de68e7d3a0785aaa5",
+      "baseSha256": "1d6e4a38090127f58828ee58823a7aadbcc148a975a8b08de68e7d3a0785aaa5"
+    },
+    {
+      "path": "apps/web/tests/e2e/today-stat-height.spec.ts",
+      "candidateSha256": "9e4a3ecb86f221b79da6f8a987c00aea70eaa845e27ecdc9dde84d7263254ef8",
+      "baseSha256": "9e4a3ecb86f221b79da6f8a987c00aea70eaa845e27ecdc9dde84d7263254ef8"
+    },
+    {
+      "path": "apps/web/tests/e2e/trends-demand-fixture-data.mjs",
+      "candidateSha256": "d32c2d3cd62164524eab01a8f28e56bfca0c34e108ceff5816099e175ac94f1b",
+      "baseSha256": "d32c2d3cd62164524eab01a8f28e56bfca0c34e108ceff5816099e175ac94f1b"
+    },
+    {
+      "path": "apps/web/tests/e2e/trends-demand-fixture.mjs",
+      "candidateSha256": "8b3b3e816145fbb913552e3e4c01354317016c1b06984ebe93581ea0a8066c28",
+      "baseSha256": "8b3b3e816145fbb913552e3e4c01354317016c1b06984ebe93581ea0a8066c28"
+    },
+    {
+      "path": "apps/web/tests/e2e/trends-demand.spec.ts",
+      "candidateSha256": "4af621a816f59108dca5af6facd4b77a65027ecd4a51386cdaad32f4ee539dd8",
+      "baseSha256": "4af621a816f59108dca5af6facd4b77a65027ecd4a51386cdaad32f4ee539dd8"
+    },
+    {
+      "path": "apps/web/tests/e2e/try-instant.spec.ts",
+      "candidateSha256": "fe3aa1ce1d170a97cc6a434623f9a6c39ad7f2f5f9c55e0edbdb716f56db2232",
+      "baseSha256": "fe3aa1ce1d170a97cc6a434623f9a6c39ad7f2f5f9c55e0edbdb716f56db2232"
+    },
+    {
+      "path": "apps/web/tests/e2e/ui-primitives-fixture.mjs",
+      "candidateSha256": "ab2145a2263d539bdb0f6dc55f058e5c4dbe8f32be45d52eccca3a7f25942860",
+      "baseSha256": "ab2145a2263d539bdb0f6dc55f058e5c4dbe8f32be45d52eccca3a7f25942860"
+    },
+    {
+      "path": "apps/web/tests/e2e/ui-primitives.spec.ts",
+      "candidateSha256": "716a18d753e94868225680f1d4fc8aedee92fcbc2c66fcb2240dedefb771a925",
+      "baseSha256": "716a18d753e94868225680f1d4fc8aedee92fcbc2c66fcb2240dedefb771a925"
+    },
+    {
+      "path": "apps/web/tests/e2e/visitor-walk.spec.ts",
+      "candidateSha256": "248800816bb05a7bbdedc04b6261d65173829aa78dc3898d0ea85a6bab8d087d",
+      "baseSha256": "248800816bb05a7bbdedc04b6261d65173829aa78dc3898d0ea85a6bab8d087d"
+    },
+    {
+      "path": "apps/web/tests/e2e/fixtures/review-tls/local-test-only-cert.pem",
+      "candidateSha256": "6bed271c911f54caee31db744ce9b43edd7d8e1b9615d7477f48a1b16be9884e",
+      "baseSha256": "6bed271c911f54caee31db744ce9b43edd7d8e1b9615d7477f48a1b16be9884e"
+    },
+    {
+      "path": "apps/web/tests/e2e/fixtures/review-tls/local-test-only-key.pem",
+      "candidateSha256": "62dfad571818bab85798bc1c294d19a4dbdbd18f0addb263dd7713d54739b6ae",
+      "baseSha256": "62dfad571818bab85798bc1c294d19a4dbdbd18f0addb263dd7713d54739b6ae"
+    },
+    {
+      "path": "apps/web/tests/e2e/fixtures/review-tls/README.md",
+      "candidateSha256": "f1b9682614c9756e77d3a19ec60ff005036ecdef9a08492537a0238e0f117726",
+      "baseSha256": "f1b9682614c9756e77d3a19ec60ff005036ecdef9a08492537a0238e0f117726"
+    },
+    {
+      "path": "apps/web/playwright.config.ts",
+      "candidateSha256": "b0a5a762fccd282f8cf52fe6421ecc8a7488ccea8963eda8e3369a5b17a8e97d",
+      "baseSha256": "b0a5a762fccd282f8cf52fe6421ecc8a7488ccea8963eda8e3369a5b17a8e97d"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\help-recovery-completion-verification-20261028\\ci-job-metadata-pr801.json",
+      "sha256": "96c949218471080b3a89281eea52c1c74d826a7c3ff53ef693b30bc6c1abb67e"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\help-recovery-completion-verification-20261028\\ci-job-metadata-help1af.json",
+      "sha256": "347fbdbef9599665b12790786e4f37e8705ba434cc18275f5a87f8ce77b271a3"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\help-recovery-completion-verification-20261028\\ci-browser-pr801-success-codex.json",
+      "sha256": "c3c8555f318b33d627a880c8d427c1506a538e291f43c7cac4230329b4a5a883"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\help-recovery-completion-verification-20261028\\ci-browser-cancelled-1af28ef2.json",
+      "sha256": "a54bf745a018e0e3bce7825ecc7d0f50a1b5019a7f55b0cf756481559a4b0fb5"
+    }
+  ]
+}
