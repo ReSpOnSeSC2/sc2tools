@@ -7,15 +7,16 @@ async function buildDoctor(deps, userId) {
   /** @type {Array<{id: string, severity: 'info'|'warn'|'error', message: string, cta?: {label: string, href: string}}>} */
   const warnings = [];
 
-  const [profile, devices, gameStats, replayCounts, replayArchivePrefs] = await Promise.all([
-    deps.users.getProfile(userId),
+  const ownerSnapshot = readDoctorSnapshot(deps.users, userId);
+  const [snapshot, devices, gameStats, replayCounts] = await Promise.all([
+    ownerSnapshot,
     deps.pairings.listDevices(userId),
-    deps.games.stats(userId),
+    ownerSnapshot.then(owner => owner.statsCandidate ?? deps.games.stats(userId)),
     deps.replayArchiveEnabled
       ? deps.games.replayArchiveStatus(userId)
       : Promise.resolve(emptyReplayArchiveCounts()),
-    deps.users.getPreferences(userId, "replayArchive"),
   ]);
+  const { profile, replayArchivePrefs } = snapshot;
   const replayArchive = withReplayResyncState(
     replayCounts,
     replayArchivePrefs,
@@ -97,6 +98,16 @@ function withReplayResyncState(counts, prefs, enabled) {
   && counts.missingGames > 0
   && (backfillVersion < 1 || !resyncRequestedAt),
   };
+}
+
+/** Older injected services keep the exact authoritative path; a missing owner
+ * never supplies an invented empty stats tuple. @param {any} users @param {string} userId */
+async function readDoctorSnapshot(users, userId) {
+  if (typeof users.getDoctorSnapshot === "function") return users.getDoctorSnapshot(userId);
+  const [profile, replayArchivePrefs] = await Promise.all([
+    users.getProfile(userId), users.getPreferences(userId, "replayArchive"),
+  ]);
+  return { profile, replayArchivePrefs, statsCandidate: null };
 }
 
 function emptyReplayArchiveCounts() {

@@ -5,7 +5,9 @@ const { isDeepStrictEqual } = require("util");
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 
 const PROTOCOL_VERSION = 2;
-const MAINTENANCE_VERSION = 1;
+// Version2 is minted only after an acknowledged causal floor; version1 cannot
+// supply its bootstrap delta base, even though the transaction protocol agrees.
+const MAINTENANCE_VERSION = 2;
 const MAX_SELECTION = 100;
 const MAX_STATS_BYTES = 16 * 1024;
 /** @typedef {{gameIds?:ReadonlyArray<string>,ids?:ReadonlyArray<any>}} StatsSelection */

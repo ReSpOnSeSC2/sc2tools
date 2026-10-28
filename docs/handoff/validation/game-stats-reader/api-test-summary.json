@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "head": "55be35e56b42090dbf91331dcc40c5476551c30e",
+  "sourceReportSha256": "78018ec43b4e654a08a1bc9ab1b93fc9a160248e0420ecd44d0b0b5370b6f1a8",
+  "sourceCommandSha256": "8ab2e5538300d7456af5ccb25689cbfe84d7511ebc56d667462c32109a81f668",
+  "passed": 390,
+  "files": 16,
+  "failed": 0,
+  "skipped": 0,
+  "currentSingleRun": true,
+  "unitWorkers": 1,
+  "cachedMongo": "7.0.14",
+  "downloads": false,
+  "suites": [
+    {
+      "file": "__tests__/backupStatus.test.js",
+      "passed": 37,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/deviceCredentialWrites.test.js",
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/deviceCredentialWrites.integration.test.js",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/gameStatsWrites.replset.test.js",
+      "passed": 48,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/opsConsole.test.js",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/meFoundation.test.js",
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/publicReplayRetirement.test.js",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/dashboardMaintainedReads.replset.test.js",
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/meProfile.test.js",
+      "passed": 23,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/arcadeUnitStatsReadiness.test.js",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/meReplayArchiveState.test.js",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/gameStatsWrites.unit.test.js",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/maintainedGameStatsRead.test.js",
+      "passed": 66,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/userReadSnapshots.test.js",
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/gameStatsReadFloor.test.js",
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "__tests__/gameStatsMaintenance.unit.test.js",
+      "passed": 31,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "qualification": "Derived from the retained exact current raw Jest result. Raw source reports and logs remain in the owned cache packet; no live/account evidence is substituted."
+}
