@@ -193,6 +193,13 @@ export interface ArcadeUnitStats {
   lostGames: number;
 }
 
+/** Separate from the shared corpus: only unit trivia needs these details. */
+export interface ArcadeUnitStatsRead {
+  loading: boolean;
+  error: string | null;
+  retry: () => Promise<unknown>;
+}
+
 export interface ArcadeGame {
   gameId: string;
   date: string;
