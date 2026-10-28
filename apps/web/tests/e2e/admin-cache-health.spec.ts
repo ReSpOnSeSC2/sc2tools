@@ -27,7 +27,7 @@ async function tileGeometry(page: Page) {
       if (element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1) failures.push({ text, issue: "label or value overflows its allocated space" });
     }
     return { failures, horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
-      width: border.width, height: border.height, text: card.textContent };
+      cardWidth: border.width, height: border.height, text: card.textContent };
   });
 }
 
