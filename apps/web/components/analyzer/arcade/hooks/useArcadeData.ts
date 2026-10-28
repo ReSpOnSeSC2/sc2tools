@@ -17,6 +17,7 @@ import type {
   ArcadeOpponent,
   ArcadeSummary,
   ArcadeUnitStats,
+  ArcadeUnitStatsRead,
 } from "../types";
 
 interface ApiOpp {
@@ -151,6 +152,8 @@ export function useArcadeData(): {
   loading: boolean;
   error: string | null;
   retrySessionPolicy: () => Promise<unknown>;
+  /** Optional only for older narrow fixtures; the real hook always supplies it. */
+  unitStatsRead?: ArcadeUnitStatsRead;
 } {
   // /v1/opponents returns { items, nextBefore }, not a bare array.
   const opp = useApi<ApiOppPage>("/v1/opponents?limit=500");
@@ -183,11 +186,11 @@ export function useArcadeData(): {
   );
   const seasons = useApi<ApiSeasons>("/v1/seasons");
   // /v1/arcade/unit-stats — bounded aggregate over the user's recent
-  // game_details. Powers the unit-trivia quiz; missing it just means
-  // that quiz stays in its empty state, so don't gate ``loading`` on
-  // it (other modes don't need it and shouldn't block on the heavy
-  // round-trip).
+  // game_details. Keep its readiness separate so other modes remain usable;
+  // pending/failed detail reads must not become Unit Profile's data gate.
   const unitStats = useApi<ArcadeUnitStats>("/v1/arcade/unit-stats");
+  const unitStatsLoading = (!unitStats.data && !unitStats.error)
+    || Boolean(unitStats.isValidating && unitStats.error);
 
   const loading =
     opp.isLoading ||
@@ -337,5 +340,12 @@ export function useArcadeData(): {
     ...baseData, sessionPolicy: session.policy,
     sessionPolicyError: session.loading ? "Loading session settings. Try this quiz again shortly." : session.error,
   } : null, [baseData, session.policy, session.error, session.loading]);
-  return { data, baseData, loading, error, retrySessionPolicy: () => session.retry() };
+  return { data, baseData, loading, error, retrySessionPolicy: () => session.retry(),
+    unitStatsRead: { loading: unitStatsLoading,
+      error: unitStatsLoading || !unitStats.error ? null
+        : unitStats.error.message || "Your unit history couldn't load. Try again.",
+      // SWR retains a failed retry in error. Handle the action's rejection so
+      // it remains a retryable UI state, not an unhandled event promise.
+      retry: async () => { try { return await unitStats.mutate(); } catch { return undefined; } },
+    } };
 }

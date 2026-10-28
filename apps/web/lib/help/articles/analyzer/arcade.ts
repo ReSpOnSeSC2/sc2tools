@@ -31,7 +31,7 @@ const article: HelpArticle = {
     "bingo",
     "buildle",
   ],
-  updated: "2026-10-27",
+  updated: "2026-10-28",
   body: [
     {
       type: "paragraph",
@@ -88,6 +88,10 @@ const article: HelpArticle = {
     {
       type: "paragraph",
       text: "Every question and answer is computed from your replays with fixed rules, never AI.",
+    },
+    {
+      type: "paragraph",
+      text: "**Unit Profile** reads the detailed unit history from up to your latest 1,000 eligible games separately. It shows **Loading your unit history** while that read is in progress. If the read fails, use **Retry unit history**; this does not mean you need to play more games. Other Arcade modes remain available. A completed read still needs enough real unit records to build a fair question.",
     },
   ],
   related: ["today", "builds", "opponents", "trends"],

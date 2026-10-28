@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 1,
+  "createdAtUtc": "2026-10-28T12:42:56.575Z",
+  "status": "locally-verified-not-delivered",
+  "sourceHead": "4cc3811334e06e8c721d05664d863d52b8eaeba0",
+  "adoptedMain": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+  "buildId": "jazSofhZfqsc8J13rzgI5",
+  "sourceQualification": {
+    "checkedAtUtc": "2026-10-28T12:40:27.223Z",
+    "head": "4cc3811334e06e8c721d05664d863d52b8eaeba0",
+    "originalSnapshot": {
+      "path": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-01/source-snapshots/build-inputs-01.json",
+      "sha256": "33b2ca58be5778497e9ac3f4b82e4ecd80dc20f04b39abb9a84e5bf60eb3997f"
+    },
+    "strictPostbrowserSourceGuard": "Expected failure preserved separately; original all-file snapshot was not rewritten or relaxed.",
+    "sourceInputs": 6823,
+    "unchangedFiles": 6822,
+    "filesAddedOrRemoved": false,
+    "changes": [
+      {
+        "relative": "apps/web/tests/manual/unified-build-editor-next.cjs",
+        "beforeSha256": "2bbb3f830cb99b316a8af8d63c76717612f21350b81661ecdb1140bef9d2e695",
+        "afterSha256": "b7ea1a61284d1d1f7229cb536723f2d995471d5b6fbcbaee9899c68caa9170d3",
+        "beforeBytes": 5522,
+        "afterBytes": 6288
+      }
+    ],
+    "qualification": "Only the manual browser-driver instrumentation changed after build; no compiled application, route, dependency, configuration, font, or canonical engine source changed. Driver now faults the unique lazy editor factory-owning chunk rather than shared loader prerequisites. App build/source identity remains qualified by exact equality of every other input, not claimed as all-files equality.",
+    "buildId": "jazSofhZfqsc8J13rzgI5"
+  },
+  "results": {
+    "previousUnitTypesLint": {
+      "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/source-ready-03-local.json",
+      "bytes": 16277,
+      "sha256": "b9494f575203a68d06de697f3b9c68ffb42f6f848645d013ad88c368507a2037"
+    },
+    "api": {
+      "passed": 58,
+      "files": 3,
+      "skipped": 0
+    },
+    "web": {
+      "passed": 127,
+      "files": 19,
+      "skipped": 0
+    },
+    "productionBuild": {
+      "exitCode": 0,
+      "directNext": true,
+      "prebuildInvoked": false,
+      "unchangedRouteCaps": 83,
+      "overBudget": 0
+    },
+    "assets": {
+      "canonicalInputs": 40,
+      "activeFiles": 7,
+      "strictSampleGames": 4,
+      "prebuild": true,
+      "postbuild": true,
+      "postbrowser": true,
+      "generation": false,
+      "downloads": false,
+      "pruning": false
+    },
+    "actualNext": {
+      "joint": {
+        "startTime": "2026-10-28T12:21:17.021Z",
+        "duration": 14184.304,
+        "expected": 2,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0,
+        "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-01/browser-joint-01.json"
+      },
+      "editor": {
+        "startTime": "2026-10-28T12:21:31.773Z",
+        "duration": 7594.432000000001,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0,
+        "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-01/browser-editor-01.json"
+      },
+      "disabled": {
+        "startTime": "2026-10-28T12:39:38.630Z",
+        "duration": 21044.081,
+        "expected": 16,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0,
+        "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/ui-browser/browser-03.json"
+      }
+    },
+    "editorChunkRecovery": {
+      "result": "PASS",
+      "checks": {
+        "realLandingParse": true,
+        "editorRetry": true,
+        "ruleControls": true,
+        "noPreviewRequests": true,
+        "noApiRequests": true,
+        "noReplayUploads": true
+      },
+      "nextPid": 51288,
+      "nextPort": 49729,
+      "apiPort": 49728,
+      "editorModule": "19172",
+      "editorPath": "/_next/static/chunks/9172-5d2b8e6c298238a6.js",
+      "failedChunk": "/_next/static/chunks/9172-5d2b8e6c298238a6.js",
+      "editorChunkRequests": 2,
+      "previewReads": 0,
+      "apiRequests": [],
+      "uploads": [],
+      "boundary": "Actual local Next/worker/replay/editor; only dummy auth/API and one intentional factory-owning editor chunk failure. Shared loader dependencies are not mistaken for an eager editor import. No server-preview fixture."
+    },
+    "manualMatrix": {
+      "checks": 220,
+      "captures": 36,
+      "widths": [
+        320,
+        390,
+        768,
+        1440
+      ],
+      "themes": [
+        "light",
+        "dark"
+      ],
+      "productionCss": [
+        "085eec6ea1a84fdf.css",
+        "9e93c7f0ce562f59.css",
+        "a49a1a968352c402.css",
+        "c8183fd076b4bf97.css",
+        "e73fc7fc7e03df69.css"
+      ],
+      "browserApiRequests": 0,
+      "disabledModeApiRequests": 0,
+      "externalRequests": 0,
+      "boundary": "Real demo/editor/session and real worker/fixture replay; local Next/Clerk/analytics/Worker URL adapter. Retired preview path has no synthetic success; off/admins expose desktop recovery without intake/worker/API."
+    },
+    "disabledAccessibility": {
+      "cases": 16,
+      "fullDefaultAxeScans": 32,
+      "violations": 0,
+      "retries": 0,
+      "workers": 1,
+      "widths": [
+        320,
+        390,
+        768,
+        1280
+      ],
+      "themes": [
+        "light",
+        "dark"
+      ],
+      "modes": [
+        "off",
+        "admins"
+      ]
+    },
+    "cleanup": {
+      "recentPlaywrightChromeCandidates": [],
+      "checkedAtUtc": "2026-10-28T12:41:15.3077772Z",
+      "ownedCandidates": [],
+      "recordedPids": [
+        7116,
+        38748,
+        30080,
+        51288,
+        22188,
+        37720,
+        53212
+      ],
+      "listeners": [],
+      "limitations": "Historical PID equality alone is not ownership; PIDs may be reused. Candidate test windows and command markers checked; actual UI browser afterAll close and manual driver finally exit also retained.",
+      "stoppedProcesses": [],
+      "scope": "Owned build/browser/test PID descendants or exact checkout/packet command markers since build start; additionally playwright Chrome created in same ownership window. No unrelated processes stopped."
+    }
+  },
+  "evidenceIndex": {
+    "file": "C:/SC2TOOLS/.cache/demo-server-retirement-20261028/build-browser-evidence-index-01.json",
+    "bytes": 51471,
+    "sha256": "d4456882767982d3474ec65d19f12da265c66bc0356836063e822c8aeb021582"
+  },
+  "retainedFailures": [
+    "api-focused-01:54pass/2new-fail due mistaken anonymous404 fixture assumption; preserve authentic404 and add baseline anonymous401 parity",
+    "ui-prune-preparation-01:missing baseline backup path; official command did not execute",
+    "cleanup01:self control-shell marker matched, preserved and explicitly qualified in cleanup02",
+    "manual-next-editor-01: initial driver mistaken shared loader prerequisites for factory-owning editor chunk; unique-module instrumentation correction, all assertions retained",
+    "ui-browser01: missing sandbox browser executable before test bodies",
+    "ui-browser02: qualified Chromium process blocked by restricted sandbox before test bodies",
+    "source-postbrowser-strict01: expected full-source mismatch from single manual CJS driver edit after build; original guard/snapshot preserved and exact6822other inputs equality separately proved"
+  ],
+  "boundaries": [
+    "Actual original Next tests exercise real worker/replay/both editor logs, API-origin requests=[] and replay/payload/other writes=[]; existing small same-site /api/site/presence allowance remains. No zero-all-network claim.",
+    "Disabled AA fixture compiles actual ReplayDemo/flag/Card/LinkButton with admitted production CSS/fonts; Next anchors/destination documents and throwing unexercised analyzer/editor/API seams are explicit. It does not prove real Next navigation, worker, replay parse, provider or live flags.",
+    "Manual landing matrix uses real worker/replay with explicit local Next/Clerk/analytics/Worker URL adapters; actual Next cases supply separate full framework proof.",
+    "Original full-source all-files postbrowser guard fails exactly one manual CJS driver instrumentation edit. No compiled application/build input changed; no false all6823 equality claim.",
+    "No CI, deployment or production retirement proof; historical standalone CLI source and11protected paths retained. No native release required."
+  ],
+  "visualInspection": {
+    "performedBy": "Codex image inspection after passing browser run",
+    "images": [
+      "build-01/browser-editor-01/build-editor-phone-build-e-2dbe7-e-controls-inside-its-modal-desktop-1280/build-editor-phone.png",
+      "build-01/landing-captures/landing-demo-editor-dark-320.png",
+      "build-01/landing-captures/landing-demo-unsupported-light-320.png",
+      "ui-browser/browser-03/disabled-demo-disabled-admins-card-at-320px-light/disabled-admins-320-light.png"
+    ],
+    "observed": "320px disabled recovery text/buttons, dark320 editor and light320 unsupported sheet fit;375px actualNext phone notes/rules/footer remain within modal. Expected scrolling/truncated dialog title is preserved."
+  }
+}

@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Private home-page replay demo
+
+- Retire the old anonymous server replay parser. The home-page demo keeps replay analysis in your browser; unavailable or unsupported configurations offer desktop recovery without an upload fallback.
+
 ### History write consistency
 
 - Maintain game totals and the exact latest-game value during replay ingest, visibility changes, history wipes and restores. Dashboard readers retain their existing behavior while the writer rollout is verified.
@@ -27,6 +31,7 @@ corresponding GitHub Release.
 ### Fixed
 
 - Show ties and unrecorded results accurately in admin opponent and global player game lists and the selected-game detail.
+- Wait for Unit Profile's detailed unit history before building its quiz, and offer a retry when that read fails instead of telling established accounts to play more games.
 - Show small replay files in B or KB in the home-page demo, including analyzer loading and errors, while keeping the existing MB format for larger files.
 - Respect device and page motion reduction in build randomizer reveals, and announce the selected build only after its reveal resolves. Guide legends now offer the likely-range definition, with publishing-floor and trend-arrow explanations in the glossary.
 - Keep eliminated randomizer build labels readable while retaining their strike-through and faded icons.

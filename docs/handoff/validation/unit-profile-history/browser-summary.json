@@ -1,0 +1,391 @@
+{
+  "sourceHead": "1e1a736ff8d43fef7e91abaf2db8fd4a21073e07",
+  "BUILD_ID": "bYQf505RuQP3HOsucpPUj",
+  "originalReport": {
+    "file": "C:/SC2TOOLS/.cache/unit-profile-history-fix-20261028/ui-browser/browser-01.json",
+    "bytes": 3059746,
+    "sha256": "ae94b6c5ac60af158fab74b3f9dd193775d7b210fe8205e110fef8a2d7af31a2"
+  },
+  "cases": [
+    {
+      "title": "Unit Profile 320px light",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 3679
+    },
+    {
+      "title": "Unit Profile 320px dark",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 2387
+    },
+    {
+      "title": "Unit Profile 390px light",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 2504
+    },
+    {
+      "title": "Unit Profile 390px dark",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 2682
+    },
+    {
+      "title": "Unit Profile 768px light",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 2828
+    },
+    {
+      "title": "Unit Profile 768px dark",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 2525
+    },
+    {
+      "title": "Unit Profile 1280px light",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 2492
+    },
+    {
+      "title": "Unit Profile 1280px dark",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 2464
+    }
+  ],
+  "fullDefaultAxeScans": 40,
+  "geometrySpecimens": 40,
+  "scans": [
+    {
+      "case": "Unit Profile 320px light",
+      "state": "axe-loading",
+      "passes": 26,
+      "incomplete": 0,
+      "inapplicable": 63,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 320px light",
+      "state": "axe-error",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 320px light",
+      "state": "axe-ready",
+      "passes": 30,
+      "incomplete": 0,
+      "inapplicable": 59,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 320px light",
+      "state": "axe-genuine-insufficient",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 320px light",
+      "state": "axe-unrelated",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 320px dark",
+      "state": "axe-loading",
+      "passes": 26,
+      "incomplete": 0,
+      "inapplicable": 63,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 320px dark",
+      "state": "axe-error",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 320px dark",
+      "state": "axe-ready",
+      "passes": 30,
+      "incomplete": 0,
+      "inapplicable": 59,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 320px dark",
+      "state": "axe-genuine-insufficient",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 320px dark",
+      "state": "axe-unrelated",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 390px light",
+      "state": "axe-loading",
+      "passes": 26,
+      "incomplete": 0,
+      "inapplicable": 63,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 390px light",
+      "state": "axe-error",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 390px light",
+      "state": "axe-ready",
+      "passes": 30,
+      "incomplete": 0,
+      "inapplicable": 59,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 390px light",
+      "state": "axe-genuine-insufficient",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 390px light",
+      "state": "axe-unrelated",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 390px dark",
+      "state": "axe-loading",
+      "passes": 26,
+      "incomplete": 0,
+      "inapplicable": 63,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 390px dark",
+      "state": "axe-error",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 390px dark",
+      "state": "axe-ready",
+      "passes": 30,
+      "incomplete": 0,
+      "inapplicable": 59,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 390px dark",
+      "state": "axe-genuine-insufficient",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 390px dark",
+      "state": "axe-unrelated",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 768px light",
+      "state": "axe-loading",
+      "passes": 26,
+      "incomplete": 0,
+      "inapplicable": 63,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 768px light",
+      "state": "axe-error",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 768px light",
+      "state": "axe-ready",
+      "passes": 30,
+      "incomplete": 0,
+      "inapplicable": 59,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 768px light",
+      "state": "axe-genuine-insufficient",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 768px light",
+      "state": "axe-unrelated",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 768px dark",
+      "state": "axe-loading",
+      "passes": 26,
+      "incomplete": 0,
+      "inapplicable": 63,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 768px dark",
+      "state": "axe-error",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 768px dark",
+      "state": "axe-ready",
+      "passes": 30,
+      "incomplete": 0,
+      "inapplicable": 59,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 768px dark",
+      "state": "axe-genuine-insufficient",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 768px dark",
+      "state": "axe-unrelated",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 1280px light",
+      "state": "axe-loading",
+      "passes": 26,
+      "incomplete": 0,
+      "inapplicable": 63,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 1280px light",
+      "state": "axe-error",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 1280px light",
+      "state": "axe-ready",
+      "passes": 30,
+      "incomplete": 0,
+      "inapplicable": 59,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 1280px light",
+      "state": "axe-genuine-insufficient",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 1280px light",
+      "state": "axe-unrelated",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 1280px dark",
+      "state": "axe-loading",
+      "passes": 26,
+      "incomplete": 0,
+      "inapplicable": 63,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 1280px dark",
+      "state": "axe-error",
+      "passes": 23,
+      "incomplete": 0,
+      "inapplicable": 66,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 1280px dark",
+      "state": "axe-ready",
+      "passes": 30,
+      "incomplete": 0,
+      "inapplicable": 59,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 1280px dark",
+      "state": "axe-genuine-insufficient",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    },
+    {
+      "case": "Unit Profile 1280px dark",
+      "state": "axe-unrelated",
+      "passes": 21,
+      "incomplete": 0,
+      "inapplicable": 68,
+      "violations": 0
+    }
+  ],
+  "boundaries": "Actual ModeRunner, useArcadeData, useApi/SWR, corpus pagination, custom catalog, session-policy hook, unit generator/renderer/shell and completed productionCSS/localWOFF2. Explicit synthetic auth/dailyseed/account-write/HTTP and local Next primitives only. Observed generator wrapper counts invocations; unrelated mode is an explicit simple specimen. No provider, actual account, real routing or live acceptance proof.",
+  "limits": [
+    "Synthetic13,000-game corpus and unit counts exercise actual hooks/rendering; no real account, network provider, actual Next router or live acceptance is claimed.",
+    "ProductionCSS and localWOFF2 are exact completed-build inputs. The fixture compiles source components; it is not the shipped Next route or a network-latency benchmark.",
+    "Account-write sinks throw and all transport is GET-only local fulfillment. Native Tab/Enter operates only Retry, never an answer.",
+    "Original prechange production error/eventual question remain separate diagnosis evidence; no speedup, cache activation or deployed fix is inferred.",
+    "Source/asset postbrowser guards and required exact-head CI/deploy/live acceptance remain parent release steps."
+  ]
+}

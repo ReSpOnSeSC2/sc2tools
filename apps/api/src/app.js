@@ -235,7 +235,6 @@ const { buildMlRouter } = require("./routes/ml");
 const { buildAgentVersionRouter } = require("./routes/agentVersion");
 const { buildSiteStatsRouter } = require("./routes/siteStats");
 const { buildCommunityRouter } = require("./routes/community");
-const { buildPublicReplayRouter } = require("./routes/publicReplay");
 const { buildSeasonsRouter } = require("./routes/seasons");
 const { buildClerkWebhookRouter } = require("./routes/clerkWebhook");
 const { buildAdminRouter } = require("./routes/admin");
@@ -1337,13 +1336,6 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       auth,
       enabled: Boolean(deps.config.guidesEnabled),
     }),
-  );
-  // Public marketing-page replay preview. Unauth'd by design — the
-  // landing page demo accepts a single .SC2Replay upload and returns
-  // a parsed dossier. Rate-limited per IP inside the router.
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildPublicReplayRouter({ logger: deps.logger }),
   );
   // Chat-bot lines — PUBLIC bundle (Nightbot's urlfetch can't send
   // headers; the overlay token in the path is the credential).
