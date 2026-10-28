@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-28T10:59:22.852Z",
+  "status": "scoped-production-acceptance-passed",
+  "pr": 803,
+  "testedHead": "da264541cc24303deabb3f42e47c5e575b0543c1",
+  "mergedRevision": "ccb5987e145968059097ecf440204c3972279ded",
+  "deployments": {
+    "web": {
+      "id": "64x3iJnoY5wcuR1AiugoSmzqkGGz",
+      "state": "Ready/Production/sc2tools.com",
+      "sourceCommitLinkObserved": true
+    },
+    "api": {
+      "id": "dep-dbgsm6uq1p3s73bard6g",
+      "state": "Live",
+      "sourceCommitLinkObserved": true
+    }
+  },
+  "actualBrowser": {
+    "browser": "Chrome1",
+    "signedIn": true,
+    "guide": "/guides/pvp/standard-stargate-opener",
+    "guideChecks": [
+      "Native statistics disclosure opens",
+      "Actual About Likely range control loads",
+      "Actual Likely range definition and Learn more render",
+      "Escape closes definition and restores About Likely range focus",
+      "Help link reaches /help/reading-guide-stats and Build guides: reading the stats heading"
+    ],
+    "randomizer": {
+      "path": "/settings?tab=randomizer",
+      "kind": "Local Settings preview; no saved draw or preference API mutation",
+      "initialStatus": "empty",
+      "resolvedStatus": {
+        "prefix": "Build chosen:",
+        "containsWinningName": true,
+        "containsRarity": true,
+        "containsFullPoolPercentage": true,
+        "role": "status",
+        "ariaAtomic": true
+      },
+      "previewDraft": {
+        "change": "Opening Gateway units temporarily unchecked in unsaved PvT draft to retain the one-act result for inspection",
+        "restoredOriginalCheckedValue": true,
+        "dirtyControlsAfterRestoration": 0,
+        "saveClicked": false
+      },
+      "osReduced": false,
+      "pageMotionOverride": false
+    },
+    "existingAllMode": {
+      "homeCopy": "Runs in your browser — the replay never leaves your device.",
+      "observedOnServedRelease": true,
+      "firstObservedRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
+      "providerFlagChanged": false
+    }
+  },
+  "qualifications": [
+    "Live normal-motion preview DOM status was observed directly; no screen-reader speech or live OS/page-reduction claim. Actual all-style OS/page-motion and AA evidence remains the separately recorded local component-browser matrix.",
+    "Opening-unit sequence clears transient build status after its documented hold. CUA hasText waiters missed transient and visually hidden status; direct DOM inspection of the retained one-act result succeeded. Failed attempts remain in conversation/cache; no fabricated pass.",
+    "Initial Help-heading waiter used the link label rather than actual article title; actual destination and correct article heading were read afterward.",
+    "Source-only Sequence lifecycle review confirms scheduled holds, not immediate batching unmount. The retained browser matrix covers actual Stage, not a claimed full Sequence rerun.",
+    "Screenshots stay in the local cache because the full Settings view can contain owner configuration. No private Dock URL, credential, IP address or personal replay is included in this receipt.",
+    "No settings saved, sharing changed, real replay uploaded, extra bracket answer submitted, provider flag changed or native process launched."
+  ],
+  "sourceReview": "C:/SC2TOOLS/.cache/randomizer-sequence-announcement-source-review-20261028.json",
+  "sourceReviewSha256": "6f68084e9de238897d03e2328baaca6f04387ec964992c6cde6d971dc7c4e81e",
+  "remainingProgram": "faster-dashboards, legacy demo retirement and all other partial/open original requirements remain separate."
+}

@@ -1,0 +1,68 @@
+{
+  "checkedAtUtc": "2026-10-28T10:44:07.760Z",
+  "ledgerSha256": "2749d59e23555a5e946e625bf08ed2a34a19e9b8a0373956bd954071efa23c74",
+  "canonicalSha256": "7736aa72eada3a1b6d71ac1570accdbb24dbc6634138e5445c0fd3ce7fc58b60",
+  "all197RequirementPinsUnchangedFromHead": true,
+  "counts": {
+    "completed": 120,
+    "partial": 57,
+    "open": 20,
+    "unknown": 0
+  },
+  "programStatus": "active_incomplete",
+  "scoped": [
+    {
+      "id": "landing-demo-in-browser",
+      "status": "partial",
+      "remainingRequirements": [
+        "Complete the original one-served-release migration lifecycle, then retire /v1/public/preview-replay, its health route, preview_replay_cli.py wiring and associated tests; preserve unsupported-browser guidance and rollout/how-to documentation. First actual all-mode observation is release263. Next served release PR803/ccb598 production verification remains pending."
+      ]
+    },
+    {
+      "id": "faster-dashboards",
+      "status": "partial",
+      "remainingRequirements": [
+        "Maintain users.gameStats and remove repeated stats count/latest work from /me.",
+        "Extend caching only after route-specific dependency/revocation audits beyond the current six charts.",
+        "Implement bounded revocation-coherent60s device-auth reuse; current findTokenByHash still performs an authoritative lookup on every request.",
+        "Keep USER_CACHE_ENABLED off and do not claim measured savings or complete this item from the status card alone.",
+        "Device auth reuse needs an explicit serving-process/rolling-overlap revocation contract; metadata liveness reuse is not authentication authority. See device-auth-reuse-checkpoint.md."
+      ]
+    },
+    {
+      "id": "analysis-corpus-local-cache",
+      "status": "partial",
+      "remainingRequirements": [
+        "Stamp updatedAt on every semantic writer and add the userId/updatedAt index through the existing migration workflow.",
+        "Define/implement changed_since,cursor,removed tombstones/exclusions and corpusVersion; dataRev is explicitly not a durable change feed.",
+        "Implement bounded IndexedDB account/version storage, atomic watermark/delta merge and snapshot fallback.",
+        "Clear disk on sign-out, account switch and Delete history; retire stale owner/version work.",
+        "Add one-time history gate, count/refresh footer, Backups & data local bytes/Clear controls and history-on-this-device Help."
+      ]
+    },
+    {
+      "id": "builds-polish-7",
+      "status": "partial",
+      "remainingRequirements": [
+        "Verify actual Ready production deployment for PR803/ccb598 and relevant signed-in reduced-motion/announcement behavior before marking this item completed."
+      ]
+    },
+    {
+      "id": "guides-polish-4",
+      "status": "partial",
+      "remainingRequirements": [
+        "Verify actual Ready production deployment for PR803/ccb598 and relevant guide legend Term/Help/focus behavior before marking this item completed."
+      ]
+    },
+    {
+      "id": "landing-try-polish-1",
+      "status": "partial",
+      "remainingRequirements": [
+        "Ship readable small-file units so the recorded1024-byte file does not display0.00 MB; the tiny-size correction is underway and remains separate from this completed PR802 recovery work.",
+        "Verify the readable-size correction on its actual deployed source. PR803/ccb598 production verification is still pending; the existing receipt proves only the scoped release263 invalid-file recovery interaction."
+      ]
+    }
+  ],
+  "productionReceiptSha256": "ea8ae560ccc87e2ad0875eef0799ba0e9632ccd05fd10e48d4992d09f32a7c57",
+  "assessment": "Source and actual scoped release263 evidence are reconciled conservatively. Tiny is locally implemented but unshipped, guide803 acceptance is not yet adopted, browser-demo server-retirement lifecycle and full dashboard/corpus remain unfinished. No ledger mutation by reviewer."
+}

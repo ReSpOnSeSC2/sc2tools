@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "createdAtUtc": "2026-10-28T11:07:08.539Z",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/help-recovery-completion",
+  "branch": "codex/demo-readable-file-sizes",
+  "base": "ccb5987e145968059097ecf440204c3972279ded",
+  "status": "child-source-and-local-verification-complete-ready-for-parent-commit-CI-deploy",
+  "source": [
+    {
+      "path": "CHANGELOG.md",
+      "owner": "child",
+      "sha256": "ac21eb27fc9dca9d2ef3446b7734741fcc41f07c8aa698c450706ab63ce94f2e",
+      "bytes": 374134,
+      "baseGitBlobSha256": "d7c2853ad0da65c16d343970a1f1feafc107893988c7fce03e1bfb23822e2676",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "963f054f5cad65fdf7a86f5040cc0155f9cb630d51b2e6c5597d871674a70c12"
+    },
+    {
+      "path": "apps/web/components/landing/ReplayDemo.tsx",
+      "owner": "child",
+      "sha256": "ae324942be5674cfe25e2bc196a8032bea88804c7fb68d9df876b7cf881f4518",
+      "bytes": 26931,
+      "baseGitBlobSha256": "1b3b41633011936ffb0bd223492f2eb23668b556a1b0f917ff0864399e1913f1",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "492c2f032d434a43feda4635240b08dcc48dd9cb590098f614c11f3ce6bf7470"
+    },
+    {
+      "path": "apps/web/components/landing/ReplayDemoBrowserIsland.tsx",
+      "owner": "child",
+      "sha256": "8f23050a6bb390135a55db8150cf9ffa4ea9bcddba41a608f3b9bd05b13dcc3f",
+      "bytes": 3427,
+      "baseGitBlobSha256": "025ab1aecec0bd2e68d1deedbc9bb494b4ab9e7e4da51f151b546e0df63460f7",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "36219157e9eb32b291788f9768ccd261c686a65592b986e0ad776e75fe08c421"
+    },
+    {
+      "path": "apps/web/components/landing/ReplayDemoBrowserSession.tsx",
+      "owner": "child",
+      "sha256": "1da6c4f1811d9df25e12e06e7a0686a2e244fa71446175e707bc7bff310ae2c1",
+      "bytes": 6040,
+      "baseGitBlobSha256": "6d19aa379158b6c5c94f029603ce40e9b8da11d991a0d7fe51dbd848752d7fbd",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "a1953aea6780d8692b250e1281f79e3131787b0afa4ab0a6436e7a78bcf2da39"
+    },
+    {
+      "path": "apps/web/components/landing/__tests__/ReplayDemo.browser.test.tsx",
+      "owner": "child",
+      "sha256": "9148801347304d629353149c2088f8dafb7e071e1805d4b7f9ce3613e7af39ff",
+      "bytes": 10925,
+      "baseGitBlobSha256": "17953b4ba7c528288e9b2adca75b01b984f84c8b1b93fad63638ed0d2d889680",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "ce4eec70ad787019acfc016d91387057b5353771eec5d1ede389ffb0d6833dd8"
+    },
+    {
+      "path": "apps/web/components/landing/__tests__/ReplayDemo.test.tsx",
+      "owner": "child",
+      "sha256": "2c84a33deeb92346908f3c2820ee7b17b382a8426b8f5102c399b803e6eb0fb5",
+      "bytes": 5416,
+      "baseGitBlobSha256": "050086592107444de14803ea351ec86f58c1ba183fda428c6f10ca84a5fde8a6",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "a02108322a207db3455b7b0ed70ba9dd5fb49ffee49bb961e4139c3b46ae29f2"
+    },
+    {
+      "path": "apps/web/components/landing/__tests__/ReplayDemoBrowserIsland.test.tsx",
+      "owner": "child",
+      "sha256": "ad88ae4486a69ce7ea704b93a87c702f319ee836927bba5f3c107bb61f931ac0",
+      "bytes": 4401,
+      "baseGitBlobSha256": "03240dad7250a579a832e2a459d773edd240c53a7372bd0a8a9a60b14b0713ae",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "887f4518fc1f60aca87324bf7bb76135bc80b76b8477d24e51d939449f9a1bea"
+    },
+    {
+      "path": "apps/web/lib/help/articles/getting-started/instant-analysis.ts",
+      "owner": "child",
+      "sha256": "88f9d15c6b244ab5949d72db73bf30d5954d5c82756098a4a501dd0d41b5f348",
+      "bytes": 3927,
+      "baseGitBlobSha256": "733fcd181ce9a20dc586672c03876ff8f48223c34964a9591287839fbf6b0c97",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "cb255af56eda377743f5832a12adba4265694036760d6cdf4925aa72df67b194"
+    },
+    {
+      "path": "apps/web/components/landing/replayDemoFileSize.ts",
+      "owner": "child",
+      "sha256": "f3145d7209101359515ac1a7b17b16e3243c19f53afb00290170b0446daa779d",
+      "bytes": 381,
+      "baseGitBlobSha256": null,
+      "newTargetAbsentAtBase": true,
+      "exactWorkingPreimageSha256": null
+    },
+    {
+      "path": "docs/handoff/demo-readable-file-sizes-checkpoint.md",
+      "owner": "child",
+      "sha256": "f5fce7d3a6e4919fceb03e5778f2152a91c08e8548038dc0d7a6d9ec3ca46b57",
+      "bytes": 3210,
+      "baseGitBlobSha256": null,
+      "newTargetAbsentAtBase": true,
+      "exactWorkingPreimageSha256": null
+    }
+  ],
+  "parentOwnedPaths": [
+    {
+      "path": "docs/handoff/roadmap-progress-2026-10-28.json",
+      "sha256": "3d817e5e8fb37ae0344ab6202d4d70b6ab19ca91be45b2755c36c0d32331289e",
+      "owner": "parent",
+      "qualification": "Parent-produced documentation/evidence/ledger; not modified by child and not part of child runtime-source acceptance."
+    },
+    {
+      "path": "docs/handoff/validation/game-stats-writers/production-910a1e4.json",
+      "sha256": "f652c75dbf5c9412aeec137005b940183414ea5f74f8ae670d331838d5c94200",
+      "owner": "parent",
+      "qualification": "Parent-produced documentation/evidence/ledger; not modified by child and not part of child runtime-source acceptance."
+    },
+    {
+      "path": "docs/handoff/validation/guide-randomizer/production-ccb598.json",
+      "sha256": "f20b75d86ccaee6beea906c5e0b9c1c1857bae0ad36f9603ddaf5b1a1450be48",
+      "owner": "parent",
+      "qualification": "Parent-produced documentation/evidence/ledger; not modified by child and not part of child runtime-source acceptance."
+    },
+    {
+      "path": "docs/handoff/validation/guide-randomizer/sequence-announcement-source-review.json",
+      "sha256": "6f68084e9de238897d03e2328baaca6f04387ec964992c6cde6d971dc7c4e81e",
+      "owner": "parent",
+      "qualification": "Parent-produced documentation/evidence/ledger; not modified by child and not part of child runtime-source acceptance."
+    },
+    {
+      "path": "docs/handoff/validation/help-recovery/production-263.json",
+      "sha256": "ea8ae560ccc87e2ad0875eef0799ba0e9632ccd05fd10e48d4992d09f32a7c57",
+      "owner": "parent",
+      "qualification": "Parent-produced documentation/evidence/ledger; not modified by child and not part of child runtime-source acceptance."
+    },
+    {
+      "path": "docs/handoff/validation/help-recovery/screenshots/production-tiny-size-before.png",
+      "sha256": "a3ed53e8da6c5153694374a51e6423a8e00b391eef34cbeaf94fad13ca3a44d9",
+      "owner": "parent",
+      "qualification": "Parent-produced documentation/evidence/ledger; not modified by child and not part of child runtime-source acceptance."
+    }
+  ],
+  "unitTypesLint": {
+    "priorManifest": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-implementation-ready-20261028.json",
+    "sha256": "c5baa57eccea3830787cf66fdac801fa5fad1282d667a7b368822d14a37a8ab2",
+    "cases": 48,
+    "suites": 4,
+    "wholeWebTypes": "pass",
+    "ownedStrictLint": "pass/0warnings"
+  },
+  "buildBrowser": {
+    "receipt": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/build-browser-receipt.json",
+    "sha256": "c357b64d82dc0a5b8177b5d9f770e2a312bf46f91918ce1071bc6174301b19f2",
+    "BUILD_ID": "OF7PaPIju4ePerx5fa7B_",
+    "budgets": 83,
+    "browserCases": 8,
+    "aaScans": 48,
+    "violations": 0,
+    "specimens": 64,
+    "manualCaptures": [
+      {
+        "name": "private-error-320-light",
+        "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-error-320-light.png",
+        "sha256": "941ea669f56d68d15a4c496ea621e6916aab09763cdb36263827ac52101d5f1d",
+        "review": "Viewed original PNG pixels:1.00KB visible, full relevant filename wraps, dialog/footer/control geometry contained and readable. Error focus outlines and recovery affordances present where applicable; no new visual blocker."
+      },
+      {
+        "name": "unsupported-320-dark",
+        "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/unsupported-320-dark.png",
+        "sha256": "ab56d2c68d006f2c37459da73e4521386843eeb10fd65e4c7e366f1795eb7415",
+        "review": "Viewed original PNG pixels:1.00KB visible, full relevant filename wraps, dialog/footer/control geometry contained and readable. Error focus outlines and recovery affordances present where applicable; no new visual blocker."
+      },
+      {
+        "name": "chunk-error-390-dark",
+        "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-error-390-dark.png",
+        "sha256": "2389ac7b4ab2d90b0a1fe0006684b0c0fc9206cac89e93989db01fc3954546ca",
+        "review": "Viewed original PNG pixels:1.00KB visible, full relevant filename wraps, dialog/footer/control geometry contained and readable. Error focus outlines and recovery affordances present where applicable; no new visual blocker."
+      },
+      {
+        "name": "legacy-1kb-1280-light",
+        "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/legacy-1kb-1280-light.png",
+        "sha256": "82d90a89795b274567efe7a255a35ba09443da52268692cc14573cfd48750fd7",
+        "review": "Viewed original PNG pixels:1.00KB visible, full relevant filename wraps, dialog/footer/control geometry contained and readable. Error focus outlines and recovery affordances present where applicable; no new visual blocker."
+      }
+    ]
+  },
+  "fullSourceQualification": "Actual6786-source prebuild/postbuild/postbrowser identity included ledger120/57/20. Parent intentionally updated only docs/ledger after release; all10current child pins still exactly match tested source. No rebuild claimed necessary for those parent docs-only changes.",
+  "separateStage2Qualification": "No child writes. Current older15-pin manifest differs only in parent-owned CHANGELOG after parent ancestry merge; all11API pins still match. This observation is retained, not overwritten.",
+  "remaining": [
+    "Parent exact-head commit/push/CI/deployment and actual Tiny1KB acceptance",
+    "New122ledger/803closure audit separate after handoff",
+    "Original197program remains incomplete"
+  ],
+  "cleanup": {
+    "buildPid": 42868,
+    "buildExited": true,
+    "buildProcessAliveAfterExit": false,
+    "playwrightToolExitCode": 0,
+    "actualBrowserCloseAwaited": true,
+    "httpListenersStarted": 0,
+    "broadProcessKills": 0,
+    "heavySlotReleased": true
+  },
+  "sourceOrGitMutationsByThisFinalizer": false
+}

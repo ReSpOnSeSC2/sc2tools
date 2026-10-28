@@ -1,0 +1,321 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--config",
+      "C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\playwright-01.config.ts"
+    ],
+    "configFile": "C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\playwright-01.config.ts",
+    "rootDir": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 1,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/browser-01",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028",
+        "testIgnore": [],
+        "testMatch": [
+          "tiny.spec.ts"
+        ],
+        "timeout": 120000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/browser-01.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.61.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tiny.spec.ts",
+      "file": "tiny.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "320 light: readable units in actual legacy, private, chunk and unsupported states",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 644,
+                  "error": {
+                    "message": "Error: ENOENT: no such file or directory, open 'C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\<define:process.env>'",
+                    "stack": "Error: ENOENT: no such file or directory, open 'C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\<define:process.env>'\n    at C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\tiny-fixture.mjs:33:255\n    at openFixture (C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\tiny-fixture.mjs:44:26)\n    at C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\tiny.spec.ts:16:18",
+                    "location": {
+                      "file": "C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\tiny-fixture.mjs",
+                      "column": 255,
+                      "line": 33
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mtiny-fixture.mjs:33\n\n  31 |  }}]});\n  32 |  const snapshot=JSON.parse(await readFile(packet+'/source-snapshots/build-inputs-01.json','utf8'));\n> 33 |  const imported=[];for(const input of Object.keys(result.metafile.inputs)){if(input.startsWith('fixture-adapter:')||input==='<stdin>')continue;const file=path.resolve(web,input);if(file.includes(`${path.sep}node_modules${path.sep}`))continue;const bytes=await readFile(file),row=snapshot.files.find(row=>path.resolve(row.path).toLowerCase()===file.toLowerCase());if(!row||sha(bytes)!==row.sha256)throw Error('Imported product input not admitted: '+file);imported.push({path:file,sha256:sha(bytes)});}\n     |                                                                                                                                                                                                                                                               ^\n  34 |  const cssFiles=(await readdir(web+'/.next/static/css')).filter(file=>file.endsWith('.css')).sort();\n  35 |  const cssParts=await Promise.all(cssFiles.map(file=>readFile(web+'/.next/static/css/'+file)));\n  36 |  const definitions=[['ProofHanken','hanken-grotesk-latin.woff2','100 900'],['ProofBricolage','bricolage-grotesque-latin.woff2','600 800'],['ProofFraunces','fraunces-latin-normal.woff2','400 700']];"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\tiny-fixture.mjs",
+                        "column": 255,
+                        "line": 33
+                      },
+                      "message": "Error: ENOENT: no such file or directory, open 'C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\<define:process.env>'\n\n   at tiny-fixture.mjs:33\n\n  31 |  }}]});\n  32 |  const snapshot=JSON.parse(await readFile(packet+'/source-snapshots/build-inputs-01.json','utf8'));\n> 33 |  const imported=[];for(const input of Object.keys(result.metafile.inputs)){if(input.startsWith('fixture-adapter:')||input==='<stdin>')continue;const file=path.resolve(web,input);if(file.includes(`${path.sep}node_modules${path.sep}`))continue;const bytes=await readFile(file),row=snapshot.files.find(row=>path.resolve(row.path).toLowerCase()===file.toLowerCase());if(!row||sha(bytes)!==row.sha256)throw Error('Imported product input not admitted: '+file);imported.push({path:file,sha256:sha(bytes)});}\n     |                                                                                                                                                                                                                                                               ^\n  34 |  const cssFiles=(await readdir(web+'/.next/static/css')).filter(file=>file.endsWith('.css')).sort();\n  35 |  const cssParts=await Promise.all(cssFiles.map(file=>readFile(web+'/.next/static/css/'+file)));\n  36 |  const definitions=[['ProofHanken','hanken-grotesk-latin.woff2','100 900'],['ProofBricolage','bricolage-grotesque-latin.woff2','600 800'],['ProofFraunces','fraunces-latin-normal.woff2','400 700']];\n    at C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\tiny-fixture.mjs:33:255\n    at openFixture (C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\tiny-fixture.mjs:44:26)\n    at C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\tiny.spec.ts:16:18"
+                    }
+                  ],
+                  "stdout": [
+                    {
+                      "text": "tiny_owned_browser_closed\n"
+                    }
+                  ],
+                  "stderr": [
+                    {
+                      "text": "(node:53556) ExperimentalWarning: CommonJS module C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\tiny.spec.ts is loading ES Module C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\tiny-fixture.mjs using require().\nSupport for loading ES Module in require() is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+                    },
+                    {
+                      "text": "(node:53556) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.\n"
+                    }
+                  ],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:53:48.403Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\browser-01\\tiny-320-light-readable-un-fcd4f-hunk-and-unsupported-states\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\browser-01\\tiny-320-light-readable-un-fcd4f-hunk-and-unsupported-states\\error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\browser-01\\tiny-320-light-readable-un-fcd4f-hunk-and-unsupported-states\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\browser-01\\tiny-320-light-readable-un-fcd4f-hunk-and-unsupported-states\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\SC2TOOLS\\.cache\\demo-readable-file-sizes-verification-20261028\\tiny-fixture.mjs",
+                    "column": 255,
+                    "line": 33
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "640bd639e28d259f6418-35cb26e8c451bfdbf432",
+          "file": "tiny.spec.ts",
+          "line": 13,
+          "column": 73
+        },
+        {
+          "title": "320 dark: readable units in actual legacy, private, chunk and unsupported states",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [],
+              "status": "skipped"
+            }
+          ],
+          "id": "640bd639e28d259f6418-012f28a7ac4403637517",
+          "file": "tiny.spec.ts",
+          "line": 13,
+          "column": 73
+        },
+        {
+          "title": "390 light: readable units in actual legacy, private, chunk and unsupported states",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [],
+              "status": "skipped"
+            }
+          ],
+          "id": "640bd639e28d259f6418-356138e6e9ce6e6de714",
+          "file": "tiny.spec.ts",
+          "line": 13,
+          "column": 73
+        },
+        {
+          "title": "390 dark: readable units in actual legacy, private, chunk and unsupported states",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [],
+              "status": "skipped"
+            }
+          ],
+          "id": "640bd639e28d259f6418-d6c988c4466224854503",
+          "file": "tiny.spec.ts",
+          "line": 13,
+          "column": 73
+        },
+        {
+          "title": "768 light: readable units in actual legacy, private, chunk and unsupported states",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [],
+              "status": "skipped"
+            }
+          ],
+          "id": "640bd639e28d259f6418-a7226d6b5c4769152b02",
+          "file": "tiny.spec.ts",
+          "line": 13,
+          "column": 73
+        },
+        {
+          "title": "768 dark: readable units in actual legacy, private, chunk and unsupported states",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [],
+              "status": "skipped"
+            }
+          ],
+          "id": "640bd639e28d259f6418-e6ab256218af3cb0f6a1",
+          "file": "tiny.spec.ts",
+          "line": 13,
+          "column": 73
+        },
+        {
+          "title": "1280 light: readable units in actual legacy, private, chunk and unsupported states",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [],
+              "status": "skipped"
+            }
+          ],
+          "id": "640bd639e28d259f6418-275ab9c2a7f2e57fd28c",
+          "file": "tiny.spec.ts",
+          "line": 13,
+          "column": 73
+        },
+        {
+          "title": "1280 dark: readable units in actual legacy, private, chunk and unsupported states",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [],
+              "status": "skipped"
+            }
+          ],
+          "id": "640bd639e28d259f6418-974f1dcced3c81d43303",
+          "file": "tiny.spec.ts",
+          "line": 13,
+          "column": 73
+        }
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "message": "\u001b[31mTesting stopped early after 1 maximum allowed failures.\u001b[39m"
+    }
+  ],
+  "stats": {
+    "startTime": "2026-10-28T10:53:47.883Z",
+    "duration": 2161.84,
+    "expected": 0,
+    "skipped": 7,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

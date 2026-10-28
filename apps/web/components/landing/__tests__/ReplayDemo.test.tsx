@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ReplayDemo } from "../ReplayDemo";
 const mock = vi.hoisted(() => ({ mode: "off", fetch: vi.fn(), editor: vi.fn() }));
 vi.mock("@/lib/instant/flag", () => ({ getInstantImportMode: () => mock.mode }));
@@ -38,4 +38,16 @@ it("aborts compatibility parsing on close and never opens an editor from its lat
   finish({ ok: true, status: 200, headers: new Headers(), json: async () => ({ ok: true, game_id: "late", map: "Map", duration_sec: 60, date: "2020-01-01", players: [] }) });
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   expect(mock.editor.mock.calls.every(([props]) => props.open === false)).toBe(true);
+});
+it.each([[1, "1 B"], [1024, "1.00 KB"], [2 * 1024 * 1024, "2.00 MB"]] as const)("shows a readable %i-byte legacy busy label without changing request/cancel ownership", async (bytes, label) => {
+  let finish!: (value: unknown) => void; mock.fetch.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+  const file = new File([new Uint8Array(bytes)], "legacy.SC2Replay");
+  Object.defineProperty(file, "arrayBuffer", { value: async () => new ArrayBuffer(bytes) });
+  render(<ReplayDemo />); fireEvent.drop(card(), { dataTransfer: { types: ["Files"], files: [file] } });
+  await screen.findByText(`legacy.SC2Replay · ${label}`); await waitFor(() => expect(mock.fetch).toHaveBeenCalledOnce());
+  const signal = mock.fetch.mock.calls[0][1].signal as AbortSignal;
+  expect(screen.getByRole("dialog").textContent).not.toContain("0.00 MB");
+  fireEvent.click(screen.getByRole("button", { name: "Close" })); expect(signal.aborted).toBe(true);
+  await act(async () => finish({ ok: false, status: 504, headers: new Headers(), json: async () => ({ error: { code: "preview_timeout" } }) }));
+  expect(screen.queryByRole("dialog")).toBeNull(); expect(mock.editor.mock.calls.every(([props]) => props.open === false)).toBe(true);
 });

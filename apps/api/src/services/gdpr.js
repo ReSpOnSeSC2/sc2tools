@@ -289,7 +289,7 @@ class GdprService {
     }
     const user = await this.db.users.findOne(
       { userId },
-      { projection: { _id: 0, gameStats: 0, gameStatsRevision: 0, gameStatsProtocolVersion: 0, gameStatsWriterStatus: 0, gameStatsMutationEpoch: 0 } },
+      { projection: { _id: 0, gameStats: 0, gameStatsRevision: 0, gameStatsProtocolVersion: 0, gameStatsWriterStatus: 0, gameStatsMutationEpoch: 0, gameStatsMaintenance: 0 } },
     );
     if (this.db.playerChannels) {
       data.playerChannels = await this.db.playerChannels.find(
