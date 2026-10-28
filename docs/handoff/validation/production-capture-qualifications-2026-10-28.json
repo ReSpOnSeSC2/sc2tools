@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-28T13:06:28.732Z",
+  "scope": "Independent pixel review of clipped browser captures. No original screenshot is edited or replaced with an invented historical state.",
+  "failed": [
+    {
+      "repositoryPath": "docs/handoff/validation/help-recovery/screenshots/production-tiny-size-before.png",
+      "sha256": "a3ed53e8da6c5153694374a51e6423a8e00b391eef34cbeaf94fad13ca3a44d9",
+      "actualMimeType": "image/jpeg",
+      "actualContent": "Home/carousel crop; no error modal or0.00MB visible.",
+      "preservedTrackedByteExact": true,
+      "qualification": "Historical263DOMreceipt remains unchanged and separately supports the observed0.00MB text; this image is not positive evidence."
+    },
+    {
+      "file": "one-kb-error.png",
+      "sha256": "8791330af984d5804839cf3fadab4c24d91c6c893bf0475bd92b6d1644150e38",
+      "mimeType": "image/jpeg",
+      "actualContent": "Unrelated home crop; does not show the modal or size. Retained only as failed capture evidence in local cache."
+    },
+    {
+      "file": "both-build-orders.png",
+      "sha256": "4bf0abd6829c95bd5a4d77a05bccb1c67f40df291321ba57859e632e21905c78",
+      "validForClaim": false,
+      "mimeType": "image/jpeg",
+      "actualContent": "Unrelated home crop; does not show parsed-player controls. Original retained only as failed local capture evidence."
+    }
+  ],
+  "accepted": {
+    "file": "one-kb-error-full.jpg",
+    "repositoryPath": "docs/handoff/validation/demo-readable-file-sizes/screenshots/production-one-kb-error.jpg",
+    "sha256": "749431d75f9218ba2f158745cccbb74de8c1c6d02c39709e64a5ca18a9541885",
+    "mimeType": "image/jpeg",
+    "method": "Full viewport with fullPage:false; no crop",
+    "pixelReview": "Actual error modal,1.00KB,Not a replay and recovery controls visibly present."
+  },
+  "causalQualification": "The output content mismatch is proved. No unverified browser-internal cause is asserted."
+}

@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "kind": "sanitized actual signed-in production acceptance",
+  "observedAt": "2026-10-28T15:31:33.329Z",
+  "revision": "f2138684da9a57981d3c980efb8f5482b228d2e4",
+  "testedHead": "aa2dafd264f267302053903567f30a80af0047dd",
+  "testedAndFreshMergedTree": "dc6f3fc56074fe6961a0bd2b47bb97b5f51ed5bc",
+  "delivery": {
+    "pullRequest": 809,
+    "ci": "Required checks passed at the exact tested head; parent verified fresh-main tree equality before squash merge.",
+    "qualification": "CI/deployment result reported and verified by the releasing parent. This sanitized receipt was prepared from its retained acceptance receipt; the preparing reviewer made no provider call."
+  },
+  "web": {
+    "deployment": "4cJ8x7xHwJoTgcqjs33854NrPiCP",
+    "status": "Ready / Production / Latest / exact f213 source",
+    "domain": "sc2tools.com: new unique loading copy observed in actual signed-in app"
+  },
+  "api": {
+    "deployment": "dep-dbh131tg1s2s73eipu8g",
+    "status": "Live / exact f213 source"
+  },
+  "observations": [
+    {
+      "state": "loading",
+      "visibleCopy": "Reading your recent replay details…",
+      "statusLabel": "Loading your unit history for this round",
+      "falseInsufficientMessage": false
+    },
+    {
+      "state": "ready",
+      "heading": "Unit Profile",
+      "realQuestion": true,
+      "macroDataGames": 1000,
+      "selectedAnswers": 0,
+      "falseInsufficientMessage": false
+    }
+  ],
+  "viewport": {
+    "actualWidth": 1905,
+    "actualHeight": 889,
+    "requestedOverride": {
+      "width": 390,
+      "height": 844
+    },
+    "overrideNotReflected": true,
+    "resetCompleted": true
+  },
+  "responsiveQualification": "Actual production acceptance used the measured desktop viewport. The separate local8-case matrix proves320/390/768/1280 in both themes with actual product inputs and fresh productionCSS/fonts.",
+  "actions": "Reload and select Quick Play/Unit Profile only; no quiz answer, settings save or personal replay upload action. Normal background activity was not network-instrumented.",
+  "limits": "No live fault injection, zero-network, all-history unit aggregate or speed/duration claim. Error/keyboard Retry is verified by the separate local transport fixture. The account history changed organically during acceptance; exact owner counts remain in the private cache receipt.",
+  "privacy": {
+    "accountIdentityIncluded": false,
+    "exactAccountHistoryCountIncluded": false,
+    "privateImagesIncluded": false,
+    "privateImagePathsIncluded": false,
+    "questionAndAnswerChoicesIncluded": false,
+    "qualification": "Only product loading copy, successful state and the unchanged 1,000-game aggregate cap are retained. Private production photographs and owner-specific DOM remain in cache."
+  },
+  "sourceReceipt": {
+    "sha256": "747400f0e26dd48149c5a47430e204b3303b3039225c2dec85635580810ff7b2",
+    "retention": "Original receipt and private images remain unchanged in local cache; no private production photograph is copied to tracked evidence."
+  },
+  "scope": {
+    "unitProfileCorrectionDelivered": true,
+    "wholeProgramComplete": false,
+    "ledgerChanged": false,
+    "combinedAuthBuildAcceptance": false
+  }
+}

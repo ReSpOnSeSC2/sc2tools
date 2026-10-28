@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "status": "focused-ci-fixture-repair-verified-full-CI-pending",
+  "createdAtUtc": "2026-10-28T13:51:04.817Z",
+  "sourceHead": "df88f0ce29901276fe2f9fa1a8df1810b317bc3f",
+  "ownedPins": [
+    {
+      "file": "apps/api/__tests__/replayFiles.test.js",
+      "sha256": "aa6edf98acb7b18a59d95c10aaa102598e4feb1d2c7227e8b1fc507b7843abc3"
+    },
+    {
+      "file": ".github/workflows/api-ci.yml",
+      "sha256": "d37def230229563a31ed14f27d3a4e2a22a5bd2d7eb4d99857a4b901a59c9464"
+    }
+  ],
+  "protectedPins": [
+    {
+      "file": "apps/api/src/services/deviceCredentialWrites.js",
+      "sha256": "8da8919a976e94734bcfe86e3c9f7dd0e1c624938835b7fb7a76d254fb89bfeb",
+      "normalizedUnchanged": true
+    },
+    {
+      "file": "apps/api/src/services/devicePairings.js",
+      "sha256": "3b8efccc0c3f442d5546b13533c488b313b958505bdb327a19ce7caddfc716f0",
+      "normalizedUnchanged": true
+    },
+    {
+      "file": "apps/api/src/services/gdpr.js",
+      "sha256": "65d47e6b15a58b5173d105bb2d621830415fac3807edf138410a493a222f8fce",
+      "normalizedUnchanged": true
+    }
+  ],
+  "tests": {
+    "passed": 65,
+    "files": 3,
+    "failed": 0,
+    "pending": 0,
+    "replayFiles": 23,
+    "credentialCoordination": 42,
+    "runInBand": true,
+    "cachedMongo": {
+      "binary": "C:/Users/jay19/.cache/mongodb-binaries/mongod-x64-win32-7.0.14.exe",
+      "sha256": "919ce2ee9893ffcac72e95610f543beacce721a7c226867568856ca0754d49d8",
+      "version": "7.0.14",
+      "runtimeDownload": false
+    }
+  },
+  "assertionsAndLint": {
+    "realMongoJobLocks": true,
+    "defaultSharedProductionFactory": true,
+    "productionCoordinatorBypass": false,
+    "virtualMonotonicClockOnly": true,
+    "unchangedOriginalAssertLines": true,
+    "newGateAssertions": [
+      "R2 unavailable retains uncertain erase gate",
+      "both R2 cleanup passes see writing gate",
+      "successful erase completes pending gate"
+    ],
+    "newSkips": false
+  },
+  "lint": {
+    "beforeWarnings": 3,
+    "afterWarnings": 2,
+    "errors": 0,
+    "beforeMessages": [
+      {
+        "ruleId": "max-lines-per-function",
+        "severity": 1,
+        "message": "Arrow function has too many lines (310). Maximum allowed is 60.",
+        "line": 155,
+        "column": 32,
+        "nodeType": "ArrowFunctionExpression",
+        "messageId": "exceed",
+        "endLine": 488,
+        "endColumn": 2
+      },
+      {
+        "ruleId": "max-lines-per-function",
+        "severity": 1,
+        "message": "Arrow function has too many lines (74). Maximum allowed is 60.",
+        "line": 506,
+        "column": 32,
+        "nodeType": "ArrowFunctionExpression",
+        "messageId": "exceed",
+        "endLine": 585,
+        "endColumn": 2
+      },
+      {
+        "ruleId": "max-lines-per-function",
+        "severity": 1,
+        "message": "Arrow function has too many lines (88). Maximum allowed is 60.",
+        "line": 678,
+        "column": 44,
+        "nodeType": "ArrowFunctionExpression",
+        "messageId": "exceed",
+        "endLine": 773,
+        "endColumn": 2
+      }
+    ],
+    "afterMessages": [
+      {
+        "ruleId": "max-lines-per-function",
+        "severity": 1,
+        "message": "Arrow function has too many lines (310). Maximum allowed is 60.",
+        "line": 158,
+        "column": 32,
+        "nodeType": "ArrowFunctionExpression",
+        "messageId": "exceed",
+        "endLine": 491,
+        "endColumn": 2
+      },
+      {
+        "ruleId": "max-lines-per-function",
+        "severity": 1,
+        "message": "Arrow function has too many lines (74). Maximum allowed is 60.",
+        "line": 509,
+        "column": 32,
+        "nodeType": "ArrowFunctionExpression",
+        "messageId": "exceed",
+        "endLine": 588,
+        "endColumn": 2
+      }
+    ],
+    "noAddedOrIncreasedMessage": true
+  },
+  "workflow": {
+    "onlyTotalBudgetAndCommentChanged": true,
+    "beforeMinutes": 15,
+    "afterMinutes": 25,
+    "perCaseDeadlinesChanged": false,
+    "assertionsChanged": false,
+    "serialCommandUnchanged": true,
+    "forceExitAdded": false
+  },
+  "cleanup": {
+    "checkedAtUtc": "2026-10-28T13:46:56.6495384Z",
+    "testPid": 40920,
+    "ownedProcessWindowStart": "2026-10-28T13:45:54.059Z",
+    "ownedProcessesRemaining": [],
+    "ownedListenersRemaining": [],
+    "stoppedProcesses": [],
+    "unrelatedProcessesTouched": false
+  },
+  "evidence": [
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-repair-api-01.json",
+      "sha256": "e5619a362a08b87e60e6ab2e36bfd0c496146a614442d722fec7681bdbe041ca",
+      "bytes": 8291
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-repair-api-01-jest.json",
+      "sha256": "765f3cf3ef2a47ba0e29a734888dd1687d005b87c1f5d4a15f3ae2dca3761f1d",
+      "bytes": 24450
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-repair-api-01.log",
+      "sha256": "8f2aae93f9249125723ee03426396c41382eaac23f060f3b2f38ed91b3ecef93",
+      "bytes": 1674
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-repair-api-02.json",
+      "sha256": "4cda6aac7a00701d7abcfeacf079271ab2f06a3307ec8a32aafadbc00141a54a",
+      "bytes": 8291
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-repair-api-02-jest.json",
+      "sha256": "3b9a05cda635963590767fea669e0e927e6453b390ce469bda5b6e54ed63b146",
+      "bytes": 24447
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-repair-api-02.log",
+      "sha256": "9e0bb4f8c46a368b6d1dd0b3904c13eb88ffb2d90eddc910f02f48360ea56dd1",
+      "bytes": 1689
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-repair-lint-01.json",
+      "sha256": "b87916cdd35a7e1729f996ad6522ce0824b4dfa662df18dc80a64bc6bb0373a4",
+      "bytes": 7940
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-repair-lint-01.log",
+      "sha256": "fb13e29750b40fa708f960dfb66e94939172a1364524dd939ac28cdc9beaf4c6",
+      "bytes": 494
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-repair-cleanup-01.json",
+      "sha256": "25725b424c66665d42484dc32dc85bfe0de8ec717f3d9caabbb19f7a152f2661",
+      "bytes": 269
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-repair-cleanup-02.json",
+      "sha256": "4953fd95afa67451666dc9152b2163687e7f643696bd638f4bc05dd38562f3aa",
+      "bytes": 269
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-repair-source-review-01.json",
+      "sha256": "d5a3c474d9c107d93e9d0a3adebd68c91bbcfb0ce5755d2b1302dd50724d97a4",
+      "bytes": 3248
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-repair-source-review-02.json",
+      "sha256": "347861f243a15a26f17c020a1777f754793ba7848005ac138a9575a1f73704d1",
+      "bytes": 3248
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/ci-df88-api-cancelled-122841332137.log",
+      "sha256": "b7e8cb920db5dc3f7857d73a44f5c263a005efd11700c11d1834bcc3ef09eeb0",
+      "bytes": 120095
+    }
+  ],
+  "qualification": [
+    "First65-case run passed; existing file-wide strictlint found3warnings. Extracting unchanged ranged-test registration reduced debt3→2 with no added/increased warning; final65-case rerun passed.",
+    "Only the total CI job budget/comment changes15→25minutes; test commands, case deadlines, assertions and inband execution remain.",
+    "Production credential coordination/Pairings/GDPR source unchanged; separate backupHealthJob production repair and its tests belong to peer verification.",
+    "Full exact-current-head CI remains required; this receipt claims only the focused65 tests and source/lint/cleanup checks.",
+    "MongoMemoryServer stop warning retained in logs; actual owned process/listener checks found0remaining, no kills."
+  ]
+}

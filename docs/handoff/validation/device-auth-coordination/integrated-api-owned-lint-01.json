@@ -1,0 +1,211 @@
+{
+  "label": "integrated-api-owned-lint-01",
+  "pid": 26288,
+  "startedAt": "2026-10-28T12:07:37.092Z",
+  "endedAt": "2026-10-28T12:07:38.465Z",
+  "elapsedMs": 1371.7154,
+  "cwd": "C:\\SC2TOOLS\\.worktrees\\guide-randomizer-completion\\apps\\api",
+  "node": "C:\\Program Files\\nodejs\\node.exe",
+  "nodeVersion": "v22.12.0",
+  "script": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/lint-integrated-owned.mjs",
+  "args": [],
+  "exitCode": 0,
+  "signal": null,
+  "sourcePins": [
+    {
+      "file": "apps/api/src/services/deviceCredentialWrites.js",
+      "sha256": "8da8919a976e94734bcfe86e3c9f7dd0e1c624938835b7fb7a76d254fb89bfeb"
+    },
+    {
+      "file": "apps/api/src/services/devicePairings.js",
+      "sha256": "3b8efccc0c3f442d5546b13533c488b313b958505bdb327a19ce7caddfc716f0"
+    },
+    {
+      "file": "apps/api/src/services/gdpr.js",
+      "sha256": "65d47e6b15a58b5173d105bb2d621830415fac3807edf138410a493a222f8fce"
+    },
+    {
+      "file": "apps/api/src/server.js",
+      "sha256": "a2a7c83e9d8ce7acec1fa263d3735fe38944b0efba6ae7b0bbbc17606def6e28"
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.test.js",
+      "sha256": "5a141b027a89dfdfdc2521e85a6258548519eb490230a2ce1979655d293c9c57"
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.integration.test.js",
+      "sha256": "f4cf91e4b1c214725a02a49e6b82cef97ff039232b37551a895f727441874c88"
+    },
+    {
+      "file": "apps/web/lib/help/articles/getting-started/install-and-pair.ts",
+      "sha256": "85e7185f78db80e5e0863754d5bdadc2636794a0293f1cac2f55491ef34a6361"
+    },
+    {
+      "file": "CHANGELOG.md",
+      "sha256": "e602710147ddd717300e55ce03837feafe25b40ca5e2af404bd828a21b1bba48"
+    },
+    {
+      "file": "docs/engineeringexplanation.md",
+      "sha256": "d9e3394cbda0446cd3e384c0e0fd645ebcc04a0804be6b78eaa49564c2c53df6"
+    },
+    {
+      "file": "docs/handoff/device-auth-reuse-checkpoint.md",
+      "sha256": "5caf90bf062dfefa9a8cddb9e2ddca557dd30c4d2af0653829d9c6fe8ae53aa6"
+    },
+    {
+      "file": "apps/api/src/middleware/auth.js",
+      "sha256": "04f11fd11e46b3f767070603727669d47778a2b53a0f6bf06fdabbf8960fd5c2"
+    },
+    {
+      "file": "apps/api/src/socket/auth.js",
+      "sha256": "a847122a8e3e46a012d3ed171d2101ca318b3e69b0c5f1e54cbb740e5b221ab5"
+    },
+    {
+      "file": "apps/api/src/services/deviceLiveness.js",
+      "sha256": "df4ce0f6b9df458228459db6988608b0bfaae9cd8112577e04036bdef1ffcbcf"
+    },
+    {
+      "file": "apps/api/src/app.js",
+      "sha256": "a33b9a319bf14c2947127da48f71fa2050ac5494d8e0fbe00a118c606295e162"
+    },
+    {
+      "file": "apps/api/src/middleware/userDataWriteFence.js",
+      "sha256": "df8f402ec6f29c1b5ee610265a743f1a39f7d969f1c15a7d5f1ea572adaa886e"
+    },
+    {
+      "file": "apps/api/src/config/loader.js",
+      "sha256": "bf31686466fb38a3657d0150cff555802c07e170631ca694594855ad00b09718"
+    },
+    {
+      "file": "apps/api/src/config/constants.js",
+      "sha256": "8784ba8f5ac4e7091143c7579231264e51a1655606d5ba6c1a27556e7d373b49"
+    },
+    {
+      "file": "apps/api/src/services/gameStatsWrites.js",
+      "sha256": "b3f5c264dd202b5fd5a3e2cb79c7b6bb998d15b712376aa61e19ed542789f78d"
+    },
+    {
+      "file": "apps/api/src/services/gameStatsMaintenance.js",
+      "sha256": "19061d786ebae914a25045f54e22161847c9aeb324f4ae433933c79b7d60f2b6"
+    },
+    {
+      "file": "apps/api/src/services/games.js",
+      "sha256": "c36a682c701298117e74c9ef5b5bb2640f923981b0c4147a916c77b56e274bc6"
+    },
+    {
+      "file": "apps/api/src/services/userBackups.js",
+      "sha256": "6313b97b0ae1c1ac22ddaed2d5aba1441ac42d9b77e248a5cc0fd5d9e9c901ce"
+    },
+    {
+      "file": "apps/api/src/services/users.js",
+      "sha256": "f28929583b57af643e407461ce8153669681222c856e7f8072d1dc2f09b3bd67"
+    },
+    {
+      "file": "apps/api/src/services/doctor.js",
+      "sha256": "9a924e703dc08250e50b376bde6128545dee72752b91a24db40774cfd0aa29d4"
+    },
+    {
+      "file": "apps/api/src/util/gameVisibility.js",
+      "sha256": "19c27606d695bd3dad83c39dd28d6ed38a0497feafdcf76e0dbf35c277e5ac0b"
+    },
+    {
+      "file": "apps/api/src/routes/me.js",
+      "sha256": "0247d490ecee2dcb3be0807d33dc2cc615b1de88ee0c9f299ad59de0ac66c57c"
+    },
+    {
+      "file": "apps/api/src/db/connect.js",
+      "sha256": "d84200918419e659e841782253eda750032c39e09ed9dfc61a4e501c4fd5a668"
+    },
+    {
+      "file": "apps/api/src/services/types.d.ts",
+      "sha256": "e09b6698aa3d6efb7039e52b2680774d6c8956d44f18eb1bcae3767dd55404d1"
+    },
+    {
+      "file": "apps/api/package.json",
+      "sha256": "e28fb9223b5258d5ff06398c4cf21451671c754deaaf28eb174733cb2c571a6e"
+    },
+    {
+      "file": "apps/api/package-lock.json",
+      "sha256": "5b127ffac70fc054f3ae550f3187cb847dd7512e972fba85e96b6a431ff5a796"
+    },
+    {
+      "file": "apps/api/jest.config.js",
+      "sha256": "ed59e7198bb2f2cab684d05b11e8cd1fd3c3dcd64000103b30a20d2d82879e4a"
+    },
+    {
+      "file": "apps/api/eslint.config.js",
+      "sha256": "56e504a14df657e575619a53baa0636a47606e39d2d5a63da2e21a3aec6f9cf0"
+    },
+    {
+      "file": "apps/api/__tests__/devicePairings.test.js",
+      "sha256": "dd90a18b30297c41ea4998a97e6b5e519295aa293bfd979e151173ffcf830e1e"
+    },
+    {
+      "file": "apps/api/__tests__/deviceLiveness.test.js",
+      "sha256": "92fb370c3d77557ebf8133cc2463b8515fd9a6b63a8d4e05a1b3d03695b1717e"
+    },
+    {
+      "file": "apps/api/__tests__/deviceLiveness.mongo.test.js",
+      "sha256": "4ebec50fe20b338dd13f4fb13b8d2056988a6931c9bbbf19bf961449e9216081"
+    },
+    {
+      "file": "apps/api/__tests__/accountDeletion.test.js",
+      "sha256": "018b5c1192932a7b8414d2c26ee94b6bc04df1d01ba997460b9a77755e101a36"
+    },
+    {
+      "file": "apps/api/__tests__/gdprMutationAdmission.test.js",
+      "sha256": "a95867361332cc4ea44fbcce0bdea6e39c4c72ec20aeb91bbf0deab3ca093c01"
+    },
+    {
+      "file": "apps/api/__tests__/gdprCacheInvalidation.test.js",
+      "sha256": "1eff313961135a54ff9235be15d117c571c2b12a43f173a0df901e1df7d3779a"
+    },
+    {
+      "file": "apps/api/__tests__/gdprWipeAudit.test.js",
+      "sha256": "d8288c794726eeb0bfd0820cc08285b97d5565ecee95137fc24d107f446f9faa"
+    },
+    {
+      "file": "apps/api/__tests__/userBackups.test.js",
+      "sha256": "741112cb8b0bd7fdc7dacab667a463ec7b52beeb67eb6c1df7cdc6e7684b9e1e"
+    },
+    {
+      "file": "apps/api/__tests__/socketAuthWeb.test.js",
+      "sha256": "a0accf6c687b2b65b78be88c8895e049642e02c0e3247dd734502343605f29ac"
+    },
+    {
+      "file": "apps/api/__tests__/socketAuthObs.test.js",
+      "sha256": "720170def8280ee14f9536fa7cfe0c8e2d30be4ed328ceb0c02e2f8530199988"
+    },
+    {
+      "file": "apps/api/__tests__/companionDeviceAccess.test.js",
+      "sha256": "5c7eee8f4dc668ad23aaea52182ecc540d23e684daa4758cf25243563dcd26a6"
+    },
+    {
+      "file": "apps/api/__tests__/meFoundation.test.js",
+      "sha256": "1a2b4a61ef634b17e190996a87f9100abe7348a4b3d6ddebe62a1d491a2e432d"
+    },
+    {
+      "file": "apps/api/__tests__/routes.integration.test.js",
+      "sha256": "d9375937cdf83259ecad013f76b10ec18b054ce5db65055e783521779056203d"
+    },
+    {
+      "file": "apps/api/__tests__/gameStatsMaintenance.unit.test.js",
+      "sha256": "6958c8370438968ddd8dbcc3f8e370a77ef9fa0ca547d392805fed32bd4f1c2c"
+    },
+    {
+      "file": "apps/api/__tests__/gameStatsWrites.unit.test.js",
+      "sha256": "52fd1ce73a59854c070cbfe2c4c685dd936c7ec99529ae3042576aa3ebb2b99f"
+    },
+    {
+      "file": "apps/api/__tests__/gameStatsWrites.replset.test.js",
+      "sha256": "449a9cea8653bf06a9d3cb6711117e21b0bd1689d8f00076aae529e74cf8319d"
+    }
+  ],
+  "mongo": {
+    "binary": "C:/Users/jay19/.cache/mongodb-binaries/mongod-x64-win32-7.0.14.exe",
+    "sha256": "919ce2ee9893ffcac72e95610f543beacce721a7c226867568856ca0754d49d8",
+    "version": "7.0.14",
+    "runtimeDownload": false
+  },
+  "log": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\integrated-api-owned-lint-01.log"
+}

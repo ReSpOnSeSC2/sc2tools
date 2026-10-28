@@ -1,0 +1,221 @@
+{
+  "createdAt": "2026-10-28T12:07:38.453Z",
+  "base": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+  "files": [
+    {
+      "file": "apps/api/src/server.js",
+      "baseline": {
+        "errors": 0,
+        "warnings": 1,
+        "rules": {
+          "max-lines-per-function": 1
+        },
+        "messages": [
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async function 'main' has too many lines (288). Maximum allowed is 60.",
+            "line": 47,
+            "column": 1,
+            "nodeType": "FunctionDeclaration",
+            "messageId": "exceed",
+            "endLine": 474,
+            "endColumn": 2
+          }
+        ]
+      },
+      "current": {
+        "errors": 0,
+        "warnings": 1,
+        "rules": {
+          "max-lines-per-function": 1
+        },
+        "messages": [
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async function 'main' has too many lines (290). Maximum allowed is 60.",
+            "line": 47,
+            "column": 1,
+            "nodeType": "FunctionDeclaration",
+            "messageId": "exceed",
+            "endLine": 478,
+            "endColumn": 2
+          }
+        ]
+      },
+      "increasedRuleCounts": []
+    },
+    {
+      "file": "apps/api/src/services/devicePairings.js",
+      "baseline": {
+        "errors": 0,
+        "warnings": 0,
+        "rules": {},
+        "messages": []
+      },
+      "current": {
+        "errors": 0,
+        "warnings": 0,
+        "rules": {},
+        "messages": []
+      },
+      "increasedRuleCounts": []
+    },
+    {
+      "file": "apps/api/src/services/gdpr.js",
+      "baseline": {
+        "errors": 0,
+        "warnings": 6,
+        "rules": {
+          "max-lines-per-function": 6
+        },
+        "messages": [
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async method 'export' has too many lines (97). Maximum allowed is 60.",
+            "line": 209,
+            "column": 3,
+            "nodeType": "MethodDefinition",
+            "messageId": "exceed",
+            "endLine": 312,
+            "endColumn": 4
+          },
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async method 'deleteAll' has too many lines (136). Maximum allowed is 60.",
+            "line": 379,
+            "column": 3,
+            "nodeType": "MethodDefinition",
+            "messageId": "exceed",
+            "endLine": 564,
+            "endColumn": 4
+          },
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async method '_deleteCoachingData' has too many lines (63). Maximum allowed is 60.",
+            "line": 590,
+            "column": 3,
+            "nodeType": "MethodDefinition",
+            "messageId": "exceed",
+            "endLine": 656,
+            "endColumn": 4
+          },
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async method 'wipeGames' has too many lines (113). Maximum allowed is 60.",
+            "line": 839,
+            "column": 3,
+            "nodeType": "MethodDefinition",
+            "messageId": "exceed",
+            "endLine": 996,
+            "endColumn": 4
+          },
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async method '_competitiveOpponentBuckets' has too many lines (72). Maximum allowed is 60.",
+            "line": 1112,
+            "column": 3,
+            "nodeType": "MethodDefinition",
+            "messageId": "exceed",
+            "endLine": 1184,
+            "endColumn": 4
+          },
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async method '_acquireMutationFenceCore' has too many lines (94). Maximum allowed is 60.",
+            "line": 1290,
+            "column": 3,
+            "nodeType": "MethodDefinition",
+            "messageId": "exceed",
+            "endLine": 1390,
+            "endColumn": 4
+          }
+        ]
+      },
+      "current": {
+        "errors": 0,
+        "warnings": 6,
+        "rules": {
+          "max-lines-per-function": 6
+        },
+        "messages": [
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async method 'export' has too many lines (97). Maximum allowed is 60.",
+            "line": 212,
+            "column": 3,
+            "nodeType": "MethodDefinition",
+            "messageId": "exceed",
+            "endLine": 315,
+            "endColumn": 4
+          },
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async method '_deleteAll' has too many lines (138). Maximum allowed is 60.",
+            "line": 393,
+            "column": 3,
+            "nodeType": "MethodDefinition",
+            "messageId": "exceed",
+            "endLine": 580,
+            "endColumn": 4
+          },
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async method '_deleteCoachingData' has too many lines (63). Maximum allowed is 60.",
+            "line": 606,
+            "column": 3,
+            "nodeType": "MethodDefinition",
+            "messageId": "exceed",
+            "endLine": 672,
+            "endColumn": 4
+          },
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async method 'wipeGames' has too many lines (113). Maximum allowed is 60.",
+            "line": 855,
+            "column": 3,
+            "nodeType": "MethodDefinition",
+            "messageId": "exceed",
+            "endLine": 1012,
+            "endColumn": 4
+          },
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async method '_competitiveOpponentBuckets' has too many lines (72). Maximum allowed is 60.",
+            "line": 1128,
+            "column": 3,
+            "nodeType": "MethodDefinition",
+            "messageId": "exceed",
+            "endLine": 1200,
+            "endColumn": 4
+          },
+          {
+            "ruleId": "max-lines-per-function",
+            "severity": 1,
+            "message": "Async method '_acquireMutationFenceCore' has too many lines (94). Maximum allowed is 60.",
+            "line": 1306,
+            "column": 3,
+            "nodeType": "MethodDefinition",
+            "messageId": "exceed",
+            "endLine": 1406,
+            "endColumn": 4
+          }
+        ]
+      },
+      "increasedRuleCounts": []
+    }
+  ],
+  "clear": true
+}

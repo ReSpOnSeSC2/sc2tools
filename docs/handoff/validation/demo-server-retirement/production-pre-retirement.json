@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-28T12:20:04.846Z",
+  "kind": "actual-production-before-server-retirement",
+  "sourceRevision": "49acfe7c71d1c1f231cde9851781c4f363f9525e",
+  "origin": "https://sc2tools.com/",
+  "mode": "Existing all branch; no flag changed",
+  "fixture": {
+    "repositoryPath": "apps/replay-engine/tests/fixtures/replays/warpgate_adept_tracking.SC2Replay",
+    "bytes": 76569,
+    "sha256": "ee7bc0cdc81cfe550937af4aa577b91a52e2e088fd62dfc920c3175fe56840e4",
+    "source": "Existing committed public fixture; no personal replay selected"
+  },
+  "observed": {
+    "playerChooser": true,
+    "privateBrowserCopy": true,
+    "chosenEditor": {
+      "matchup": "PvZ",
+      "referenceSteps": 102,
+      "sourceTimelineCount": 75,
+      "events": [
+        "Nexus",
+        "Gateway",
+        "Adept"
+      ]
+    },
+    "closedEditorShowsBothPlayers": true,
+    "otherEditor": {
+      "matchup": "ZvP",
+      "referenceSteps": 120,
+      "sourceTimelineCount": 182,
+      "events": [
+        "Hatchery",
+        "Spawning Pool",
+        "Queen"
+      ]
+    },
+    "bothPlayersRemainAfterOtherClose": true,
+    "saveClicked": false
+  },
+  "screenshot": {
+    "file": "both-build-orders.png",
+    "sha256": "4bf0abd6829c95bd5a4d77a05bccb1c67f40df291321ba57859e632e21905c78",
+    "validForClaim": false,
+    "mimeType": "image/jpeg",
+    "actualContent": "Unrelated home crop; does not show parsed-player controls. Original retained only as failed local capture evidence."
+  },
+  "qualifications": [
+    "Counts are visible editor/reference-timeline labels, not claimed raw parser event lengths.",
+    "The initial file-picker call returned after946326.3ms tool wall time. This includes browser control/file selection and is not a parser performance measurement.",
+    "An early other-editor read saw its loading boundary and was closed; the subsequent wait for the real heading confirmed the fully loaded Zerg editor.",
+    "No live network instrumentation. The original joint actual-worker fixture/network guard remains a separate final local browser gate; no zero-network live claim.",
+    "No build saved, no personal replay selected, no extra bracket answer, settings/provider/flag change or native process launch.",
+    "The clipped image is invalid as visual proof and is explicitly withdrawn. Genuine production DOM observations and later local actual-worker/network checks remain separately qualified."
+  ],
+  "cleanup": {
+    "ownedAppWorkerTabClosed": true,
+    "ownedDeploymentTabsClosed": true,
+    "userTabsUntouched": true,
+    "viewportOverride": false
+  },
+  "captureCorrectionAtUtc": "2026-10-28T13:06:28.732Z"
+}

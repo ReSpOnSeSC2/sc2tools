@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "status": "CI-fixture-source-and-baseline-lint-clear",
+  "createdAtUtc": "2026-10-28T13:49:10.489Z",
+  "baseHead": "df88f0ce29901276fe2f9fa1a8df1810b317bc3f",
+  "ownedPins": [
+    {
+      "file": "apps/api/__tests__/replayFiles.test.js",
+      "sha256": "aa6edf98acb7b18a59d95c10aaa102598e4feb1d2c7227e8b1fc507b7843abc3"
+    },
+    {
+      "file": ".github/workflows/api-ci.yml",
+      "sha256": "d37def230229563a31ed14f27d3a4e2a22a5bd2d7eb4d99857a4b901a59c9464"
+    }
+  ],
+  "fixture": {
+    "realMongoJobLocks": true,
+    "defaultSharedProductionFactory": true,
+    "productionCoordinatorBypass": false,
+    "virtualMonotonicClockOnly": true,
+    "unchangedOriginalAssertLines": true,
+    "newGateAssertions": [
+      "R2 unavailable retains uncertain erase gate",
+      "both R2 cleanup passes see writing gate",
+      "successful erase completes pending gate"
+    ],
+    "newSkips": false
+  },
+  "lint": {
+    "beforeWarnings": 3,
+    "afterWarnings": 2,
+    "errors": 0,
+    "beforeMessages": [
+      {
+        "ruleId": "max-lines-per-function",
+        "severity": 1,
+        "message": "Arrow function has too many lines (310). Maximum allowed is 60.",
+        "line": 155,
+        "column": 32,
+        "nodeType": "ArrowFunctionExpression",
+        "messageId": "exceed",
+        "endLine": 488,
+        "endColumn": 2
+      },
+      {
+        "ruleId": "max-lines-per-function",
+        "severity": 1,
+        "message": "Arrow function has too many lines (74). Maximum allowed is 60.",
+        "line": 506,
+        "column": 32,
+        "nodeType": "ArrowFunctionExpression",
+        "messageId": "exceed",
+        "endLine": 585,
+        "endColumn": 2
+      },
+      {
+        "ruleId": "max-lines-per-function",
+        "severity": 1,
+        "message": "Arrow function has too many lines (88). Maximum allowed is 60.",
+        "line": 678,
+        "column": 44,
+        "nodeType": "ArrowFunctionExpression",
+        "messageId": "exceed",
+        "endLine": 773,
+        "endColumn": 2
+      }
+    ],
+    "afterMessages": [
+      {
+        "ruleId": "max-lines-per-function",
+        "severity": 1,
+        "message": "Arrow function has too many lines (310). Maximum allowed is 60.",
+        "line": 158,
+        "column": 32,
+        "nodeType": "ArrowFunctionExpression",
+        "messageId": "exceed",
+        "endLine": 491,
+        "endColumn": 2
+      },
+      {
+        "ruleId": "max-lines-per-function",
+        "severity": 1,
+        "message": "Arrow function has too many lines (74). Maximum allowed is 60.",
+        "line": 509,
+        "column": 32,
+        "nodeType": "ArrowFunctionExpression",
+        "messageId": "exceed",
+        "endLine": 588,
+        "endColumn": 2
+      }
+    ],
+    "noAddedOrIncreasedMessage": true
+  },
+  "workflow": {
+    "onlyTotalBudgetAndCommentChanged": true,
+    "beforeMinutes": 15,
+    "afterMinutes": 25,
+    "perCaseDeadlinesChanged": false,
+    "assertionsChanged": false,
+    "serialCommandUnchanged": true,
+    "forceExitAdded": false
+  },
+  "retainedFailure": "ci-repair-lint-01: original file-wide --max-warnings0 found3 existing/moved describe warnings; extracted unchanged ranged-test registration, reducing total3→2; no rule relaxation."
+}

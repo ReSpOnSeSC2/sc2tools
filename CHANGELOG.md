@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Device credential write coordination
+
+- Coordinate device pairing, revocation and account erasure through durable database gates. These controls can take a few seconds to finish; uncertain writes keep their reuse scope blocked. Device authentication still reads the database on every request, and the proposed 60-second credential cache remains off.
+
 ### Private home-page replay demo
 
 - Retire the old anonymous server replay parser. The home-page demo keeps replay analysis in your browser; unavailable or unsupported configurations offer desktop recovery without an upload fallback.
@@ -31,6 +35,7 @@ corresponding GitHub Release.
 ### Fixed
 
 - Show ties and unrecorded results accurately in admin opponent and global player game lists and the selected-game detail. Keep result badges readable on selected rows.
+- Let backup-health checks finish during API shutdown without calling a missing method, so the remaining cleanup can proceed.
 - Wait for Unit Profile's detailed unit history before building its quiz, and offer a retry when that read fails instead of telling established accounts to play more games.
 - Show small replay files in B or KB in the home-page demo, including analyzer loading and errors, while keeping the existing MB format for larger files.
 - Respect device and page motion reduction in build randomizer reveals, and announce the selected build only after its reveal resolves. Guide legends now offer the likely-range definition, with publishing-floor and trend-arrow explanations in the glossary.

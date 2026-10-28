@@ -1,0 +1,18 @@
+{
+  "checkedAtUtc": "2026-10-28T12:49:56.0298418Z",
+  "ownedPids": [
+    924,
+    8048,
+    9636,
+    10468,
+    28876,
+    31940,
+    39448
+  ],
+  "ownedProcessesRemaining": [],
+  "ownedListenersRemaining": [],
+  "terminatedProcesses": [],
+  "unrelatedProcessesTouched": false,
+  "nextServerStarted": false,
+  "browserStarted": false
+}
