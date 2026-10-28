@@ -23,7 +23,28 @@ the full stored user document.
 
 ## Freshness and rollout ordering
 
-Maintenance 1 is never a maintenance-2 delta base. Its first new transaction
+The bounded macro recompute extension uses a named server-owned operation for
+`macroScore`, optional `top3Leaks`, schema stamping and removal of the legacy
+inline macro blob. Its filter is the exact owner/game plus the existing live
+predicate, with no upsert. The descriptor and owner are copied before awaits;
+callers cannot select neutrality for an arbitrary callback or patch. The shared
+owner-first transaction body accepts an existing session and never nests a
+transaction. Production dispatch still owns the original causal floor,
+admission and drain lifecycle.
+The composition regression proves same-session/no-nesting only. Any later
+production caller must own that lifecycle and immutable inputs across its
+outer retry closure before using the internal body.
+
+Only a strict ready maintenance-2 tuple from that atomic owner's preimage can
+carry unchanged under the new UUID, in the same transaction as the macro
+update. Unqualified proof is retired without recounting history; the existing
+reader fallback remains. Membership/date/eligibility writers retain eager
+maintenance. This count-only proof is not an expanded chart dependency seal;
+other non-count writers and any future retained-chart cohort gate are separate.
+Detail-store reads/uploads remain outside transaction retry callbacks.
+
+Maintenance 1 is never a maintenance-2 delta base. Its first eager
+membership/date/eligibility transaction
 bootstraps with the original Mongo count and `sort({date:-1}).limit(1)` query.
 Qualified later mutations keep bounded subset deltas. The exact Mongo `$ne`
 eligibility, legacy array behavior and `first.date || null` behavior remain.

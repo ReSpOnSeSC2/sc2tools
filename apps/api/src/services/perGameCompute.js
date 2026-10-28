@@ -1,6 +1,8 @@
 "use strict";
 const { gameWrite } = require("../util/userRevision");
 const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
+const { gameStatsWritesFor } = require("./gameStatsWrites");
+const { immutableMacroSurface } = require("./gameStatsCountNeutral");
 
 const { randomUUID } = require("crypto");
 const { COLLECTIONS, LIMITS } = require("../config/constants");
@@ -150,6 +152,7 @@ class PerGameComputeService {
    */
   constructor(db, opts = {}) {
     this.userRevision = opts.userRevision || null;
+    this.gameStatsWrites = gameStatsWritesFor(/** @type {import('../db/connect').DbContext} */ (db));
     this.db = db;
     this.catalog = opts.catalog || null;
     // ``gameDetails`` may be omitted in narrow unit tests that only
@@ -489,16 +492,10 @@ class PerGameComputeService {
     // hover cards. The macroBreakdown blob itself goes to the detail
     // store. ``$unset`` removes any legacy inline copy from games
     // — the cutover is incremental: each recompute flips one game.
-    /** @type {Record<string, any>} */
-    const set = { macroScore: payload.macroScore };
-    if (Array.isArray(payload.top3Leaks)) {
-      set.top3Leaks = payload.top3Leaks;
-    }
-    stampVersion(set, COLLECTIONS.GAMES);
-    await gameWrite(this.userRevision, userId, () => this.db.games.updateOne(
-      { userId, gameId, ...LIVE_GAME_MATCH },
-      { $set: set, $unset: { macroBreakdown: "" } },
-    ));
+    const mutation = immutableMacroSurface({ kind: "macroSurface", gameId, macroScore: payload.macroScore,
+      ...(Array.isArray(payload.top3Leaks) ? { top3Leaks: payload.top3Leaks } : {}) });
+    const owner = await this.gameStatsWrites.capture(userId);
+    await gameWrite(this.userRevision, userId, () => this.gameStatsWrites.write(owner, mutation));
     if (this.gameDetails) {
       const slim = await this.db.games.findOne(
         { userId, gameId, ...LIVE_GAME_MATCH },
