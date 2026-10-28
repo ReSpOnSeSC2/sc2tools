@@ -1,5 +1,38 @@
 # Admin game result accuracy
 
+## Current post-Auth integration — 2026-10-28
+
+Clean committed head `36c7fc11d8560a9f0d9c3a5a9f7e9a208418a04b` integrates
+accepted Auth main. The actual 240-input comparison found only its new Help
+sentence changed; the other 239 inputs and prior completed CSS remained exact.
+A fresh direct production build `M4nwPYsjZEE9j7FnvivmK` then passed all 83
+unchanged caps, full 6,931-source pre/post/postbrowser equality and 40/7/4
+canonical/active/sample guards, using one static worker and a 4 GiB heap.
+
+The unchanged full browser spec passes 16 cases, 80 full default Axe scans with
+zero violations/exclusions, 80 geometry states and 48 LOCAL captures at all
+four widths and both themes. All 240 product inputs and fresh CSS/fonts are
+bound to the build. The original selected Win contrast regression remains
+fixed at 5.02:1; no assertion expectation or threshold changed. Three existing
+unit assertions traverse the backing wrapper to the same Badge. The earlier
+45-case unit run remains historical with six runtime/test and four protected
+inputs exact; current build/type/browser gates are fresh.
+
+Three current LOCAL captures were inspected. No source, provider, flag, native
+asset or engine was changed during this verification. There is no listener or
+remaining owned process/cached runtime candidate; no process was stopped. The
+component fixture still has explicit synthetic auth/HTTP/Next seams and makes
+no actual admin-account, HTTP-authorization or live-delivery claim.
+
+See [the current compact receipt](validation/admin-result-accuracy/current-36c7.json).
+All earlier failures and pre-integration receipts remain historical. The old
+cache candidate path-reference issue is retained and corrected by a new isolated
+manifest; no historical candidate is modified. This checkpoint/evidence/README
+adoption is a later documentation-only delta outside the 6,931-file build guard.
+Exact final-head CI, deployment and relevant signed-in acceptance remain pending;
+`admin-polish-5` stays partial with the original remaining scope below.
+
+
 2026-10-28. Candidate `codex/admin-result-accuracy`, based on main
 `2242d112d9124bca8cfae92d00bc852ccab2f85b`. This is the presentation slice of
 original `admin-polish-5`, requirement SHA256
