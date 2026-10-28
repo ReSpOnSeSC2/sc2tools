@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "date": "2026-10-28",
   "sourceRevision": "477298dd7c397af2baaa79d19736ae43d1a4510d",
-  "sourceQualification": "All 197 original entries reconciled at merged source477298dd. Independent audits close42 formerly unknown items and retain18 concrete partial/open requirements. This source audit does not assert fresh manual or native delivery acceptance of every completed ancestor. The original all197 source-audit boundary remains unchanged. Later implementation PR803/ccb598 and actual scoped production PR802/263 evidence are reconciled below; this does not claim all197 items were rerun at either revision. Actual scoped production803 acceptance is now reconciled; the later writer prerequisite910a1e4 does not complete its parent performance item.",
+  "sourceQualification": "All 197 original entries reconciled at merged source477298dd. Independent audits close42 formerly unknown items and retain18 concrete partial/open requirements. This source audit does not assert fresh manual or native delivery acceptance of every completed ancestor. The original all197 source-audit boundary remains unchanged. Later implementation PR803/ccb598 and actual scoped production PR802/263 evidence are reconciled below; this does not claim all197 items were rerun at either revision. Actual scoped production803 acceptance is now reconciled; the later writer prerequisite910a1e4 does not complete its parent performance item. Scoped later PR808 retirement at76 and actual productionf213 acceptance close only landing-demo-in-browser. All477/full197 historical source-audit and earlier receipt qualifications remain; no fresh all197 runtime/deployment proof.",
   "canonicalRoadmap": "docs/handoff/plan/final-plan.json",
   "canonicalSha256": "7736aa72eada3a1b6d71ac1570accdbb24dbc6634138e5445c0fd3ce7fc58b60",
   "programStatus": "active_incomplete",
   "counts": {
-    "completed": 123,
-    "partial": 54,
+    "completed": 124,
+    "partial": 53,
     "open": 20,
     "unknown": 0
   },
@@ -21,21 +21,23 @@
   },
   "precedence": "Latest active cache checkpoint supersedes historical pause/pending-release wording; the program is active and incomplete.",
   "productionEvidence": {
-    "webRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
-    "webDeployment": "Fjjx69hgBkAJg4nAeAvD5UnzHBKM",
-    "status": "Ready / Production / Current / sc2tools.com",
-    "apiRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
-    "apiDeployment": "dep-dbgtsgavcj2c73dreh70",
-    "apiStatus": "Live",
+    "webRevision": "f2138684da9a57981d3c980efb8f5482b228d2e4",
+    "webDeployment": "4cJ8x7xHwJoTgcqjs33854NrPiCP",
+    "status": "Ready / Production / Latest / exact f213 source",
+    "apiRevision": "f2138684da9a57981d3c980efb8f5482b228d2e4",
+    "apiDeployment": "dep-dbh131tg1s2s73eipu8g",
+    "apiStatus": "Live / exact f213 source",
     "receipts": [
       "validation/help-recovery/production-263.json",
       "validation/guide-randomizer/production-ccb598.json",
       "validation/game-stats-writers/production-910a1e4.json",
       "validation/game-stats-maintenance/production-49acfe7.json",
-      "validation/demo-readable-file-sizes/production-2242.json"
+      "validation/demo-readable-file-sizes/production-2242.json",
+      "validation/unit-profile-history/production-f213868.json",
+      "validation/demo-server-retirement/production-f213868.json"
     ],
-    "receiptSha256": "0362649057b0fde14f9bdbe1f18305daecb378e3a12ec8b7deb77ad169feca85",
-    "scope": "Scoped earlier802/803 acceptance plus actual804/805 writer deployment and806 small-file/focus recovery. No live destructive writer/credential mutation, retained-reader activation, old-command settlement or production savings claim."
+    "receiptSha256": "6758663d51fafa0e6bc1021f58ea5abcaecd4337eacb47f0e1e68160698c1916",
+    "scope": "Scoped delivered Unit owner correction plus browser-demo retirement/current actual two-editor acceptance. Desktop DOM/pixels and separate local network/phone/disabled evidence stay qualified; no all197 rerun, Auth credential cutover/reuse, retained-reader activation, destructive production writer mutation or savings claim."
   },
   "currentRootSlices": {
     "arcade": {
@@ -82,6 +84,16 @@
       "testedHead": "22830012333abedbd3df44687f2552b336c0e88a",
       "status": "Merged and actual Ready/Live plus signed-in1KB/error/focus/Escape accepted.",
       "receipt": "validation/demo-readable-file-sizes/production-2242.json"
+    },
+    "landingDemoRetirement": {
+      "pr": 808,
+      "source": "76fbc441cadcf92b1d4452d5ae8feeac4fa1433f",
+      "acceptedProductionRevision": "f2138684da9a57981d3c980efb8f5482b228d2e4",
+      "status": "Merged retirement and actual current Ready/Live + two public-fixture editor/guidance acceptance; no flag changed.",
+      "receipt": "docs/handoff/validation/demo-server-retirement/production-f213868.json",
+      "completedIds": [
+        "landing-demo-in-browser"
+      ]
     }
   },
   "nextCanonical": "faster-dashboards",
@@ -1685,13 +1697,11 @@
       "ordinal": 65,
       "id": "landing-demo-in-browser",
       "wave": 5,
-      "status": "partial",
+      "status": "completed",
       "title": "Run the landing 'Try a replay' demo in the browser and retire the server preview parser",
       "dependsOn": [],
-      "implemented": "Browser replay demo and recovery are merged. Actual production263 TryExplainer and home Runs in your browser/replay-never-leaves-device copy establish the existing NEXT_PUBLIC_INSTANT_IMPORT=all branch. The earlier ledger claim that delivery left it disabled is superseded; no flag was changed by this reconciliation. Actual production49 public repository fixture parsed both player editors with visible timelines; this DOM-only proof does not replace the final local real-worker/network guard or server retirement delivery.",
-      "remainingRequirements": [
-        "The required subsequent served release is now observed at PR803/ccb598. Retire /v1/public/preview-replay, its health route, preview_replay_cli.py wiring and associated tests after preserving unsupported-browser guidance, old-mode compatibility recovery and rollout/how-to documentation."
-      ],
+      "implemented": "The home demo uses an intent-only one-file1v1 browser session, full two-player preview mapping, shared errors and the accepted optional editor boundary. The compatibility window was observed at production263 and a subsequent served803/ccb598 release before PR808 retired the singular preview route/health/API CLI wiring and obsolete tests. Off/admins and unsupported configurations retain explicit recovery; /try behavior is unchanged. Current source contains no server fallback. Actual productionf213 Ready/Live and public-fixture acceptance show both complete editor perspectives; local real-Next/worker/privacy/disabled/AA/build proofs remain separately scoped.",
+      "remainingRequirements": [],
       "evidence": [
         "docs/handoff/landing-demo-checkpoint.md",
         "docs/handoff/landing-try-checkpoint.md",
@@ -1701,11 +1711,21 @@
         "docs/handoff/validation/help-recovery/production-263.json",
         "docs/handoff/validation/guide-randomizer/production-ccb598.json",
         "docs/handoff/validation/demo-server-retirement/production-pre-retirement.json",
-        "docs/handoff/validation/production-capture-qualifications-2026-10-28.json"
+        "docs/handoff/validation/production-capture-qualifications-2026-10-28.json",
+        "docs/handoff/validation/demo-server-retirement/production-f213868.json",
+        "docs/handoff/validation/demo-server-retirement/local-verification.json",
+        "docs/handoff/validation/demo-server-retirement/real-next-joint-results.json",
+        "docs/handoff/validation/demo-server-retirement/disabled-browser-results.json",
+        "docs/instant-analysis.md",
+        "docs/adr/0059-landing-browser-replay-demo.md",
+        "apps/api/__tests__/publicReplayRetirement.test.js",
+        "apps/web/components/builds/editor/LazyBuildEditorModal.tsx"
       ],
       "mergedPrs": [
         751,
-        802
+        802,
+        808,
+        809
       ],
       "requirementSha256": "6f6e370a741cba6bbb9a76dddd5c80ca9366560496b9be1b626f7adaa88aec27",
       "rolloutObservation": {
@@ -1716,7 +1736,15 @@
         "proof": "Actual TryExplainer and home browser-mode copy, not a newly applied setting or private environment dump.",
         "nextServedReleaseRevision": "ccb5987e145968059097ecf440204c3972279ded",
         "nextServedReleaseVerification": "passed: actual Ready/Production and Live at PR803/ccb598 plus browser-mode home copy; no flag changed",
-        "remaining": "Original legacy route/health/CLI-wiring/test retirement remains unfinished."
+        "remaining": "None for this item after PR808 retirement and current f213 production acceptance. No flag was changed; later all-mode behavior is observed, not configured by this audit."
+      },
+      "deliveryQualification": {
+        "retirementRevision": "76fbc441cadcf92b1d4452d5ae8feeac4fa1433f",
+        "acceptedProductionRevision": "f2138684da9a57981d3c980efb8f5482b228d2e4",
+        "receipt": "docs/handoff/validation/demo-server-retirement/production-f213868.json",
+        "receiptSha256": "6758663d51fafa0e6bc1021f58ea5abcaecd4337eacb47f0e1e68160698c1916",
+        "sourceProof": "Original functional spec/augments/howto reconciled. Existing shared React.lazy/import editor boundary intentionally preserves the approved finite Retry/owner safeguards instead of introducing a duplicate next/dynamic wrapper; real Next chunk-boundary behavior is separately verified.",
+        "liveBoundary": "Measured desktop DOM/pixels only; local negative-route/API-origin/privacy/phone/disabled checks stay separate; no live404 or zero-network claim."
       }
     },
     {
@@ -5150,8 +5178,8 @@
     "validation/roadmap-audit/unknown-a.json",
     "validation/roadmap-audit/unknown-b.json"
   ],
-  "remainingCount": 74,
-  "remainingMeaning": "54 partial and20 open original roadmap items remain (74 total). Sizes vary; these are not74 equal releases. Reader/cutover, native/provider/operational and all other delivery requirements remain explicit.",
+  "remainingCount": 73,
+  "remainingMeaning": "53 partial and20 open original roadmap items remain (73 total). Sizes vary; these are not73 equal releases. Only landing-demo-in-browser closes in this scoped delivery reconciliation; reader/cutover, native/provider/operational and all other delivery requirements remain explicit.",
   "historicalProductionEvidenceUpdates": [
     {
       "supersededByAcceptedRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
@@ -5205,10 +5233,31 @@
         "scope": "Scoped original802 acceptance plus actual803 guide glossary/focus/Help and normal preview resolved status. Full OS/page/AA matrix remains separately local. Tiny-size fix and demo server retirement remain incomplete."
       },
       "qualification": "Earlier scoped receipts are retained unchanged; later acceptance does not rerun every historical feature."
+    },
+    {
+      "supersededByAcceptedRevision": "f2138684da9a57981d3c980efb8f5482b228d2e4",
+      "record": {
+        "webRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+        "webDeployment": "Fjjx69hgBkAJg4nAeAvD5UnzHBKM",
+        "status": "Ready / Production / Current / sc2tools.com",
+        "apiRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+        "apiDeployment": "dep-dbgtsgavcj2c73dreh70",
+        "apiStatus": "Live",
+        "receipts": [
+          "validation/help-recovery/production-263.json",
+          "validation/guide-randomizer/production-ccb598.json",
+          "validation/game-stats-writers/production-910a1e4.json",
+          "validation/game-stats-maintenance/production-49acfe7.json",
+          "validation/demo-readable-file-sizes/production-2242.json"
+        ],
+        "receiptSha256": "0362649057b0fde14f9bdbe1f18305daecb378e3a12ec8b7deb77ad169feca85",
+        "scope": "Scoped earlier802/803 acceptance plus actual804/805 writer deployment and806 small-file/focus recovery. No live destructive writer/credential mutation, retained-reader activation, old-command settlement or production savings claim."
+      },
+      "qualification": "Earlier scoped production2242 evidence remains unchanged. Current receipt closes only landing-demo-in-browser; current Unit owner correction has no separate197-item status change. No fresh proof of every ancestor."
     }
   ],
-  "latestImplementationRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
-  "latestProductionAcceptedRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+  "latestImplementationRevision": "f2138684da9a57981d3c980efb8f5482b228d2e4",
+  "latestProductionAcceptedRevision": "f2138684da9a57981d3c980efb8f5482b228d2e4",
   "recentDeliveryReconciliation": {
     "date": "2026-10-28",
     "implementationRevision": "ccb5987e145968059097ecf440204c3972279ded",
@@ -5227,7 +5276,7 @@
       "builds-polish-7",
       "guides-polish-4"
     ],
-    "qualification": "PR802 closes its four named statuses; additional PR803 andPR806 closures are recorded separately. Conditional service-worker UI, ADR0065 substitution and strict HTTP7/9 limitation remain visible. Historical clipped-image failures are explicitly qualified; server retirement and performance remain unfinished.",
+    "qualification": "Earlier802/803/806 closures remain unchanged. PR808 retirement/currentf213 acceptance closes only landing-demo-in-browser below. Earlier nested retirement-pending wording records the prior release boundary and is superseded by this scoped closure; no all197 fresh acceptance is implied.",
     "guideRandomizer": {
       "acceptedProductionRevision": "ccb5987e145968059097ecf440204c3972279ded",
       "receipt": "docs/handoff/validation/guide-randomizer/production-ccb598.json",
@@ -5246,6 +5295,23 @@
       "receipt": "docs/handoff/validation/demo-readable-file-sizes/production-2242.json",
       "receiptSha256": "0362649057b0fde14f9bdbe1f18305daecb378e3a12ec8b7deb77ad169feca85",
       "qualification": "One additional status closes. Server retirement and the performance parent remain unfinished."
+    },
+    "historicalQualificationBeforeLandingRetirement": "PR802 closes its four named statuses; additional PR803 andPR806 closures are recorded separately. Conditional service-worker UI, ADR0065 substitution and strict HTTP7/9 limitation remain visible. Historical clipped-image failures are explicitly qualified; server retirement and performance remain unfinished.",
+    "landingDemoRetirement": {
+      "completedIds": [
+        "landing-demo-in-browser"
+      ],
+      "retirementRevision": "76fbc441cadcf92b1d4452d5ae8feeac4fa1433f",
+      "acceptedProductionRevision": "f2138684da9a57981d3c980efb8f5482b228d2e4",
+      "receipt": "docs/handoff/validation/demo-server-retirement/production-f213868.json",
+      "receiptSha256": "6758663d51fafa0e6bc1021f58ea5abcaecd4337eacb47f0e1e68160698c1916",
+      "previousItemStatus": "partial",
+      "previousImplemented": "Browser replay demo and recovery are merged. Actual production263 TryExplainer and home Runs in your browser/replay-never-leaves-device copy establish the existing NEXT_PUBLIC_INSTANT_IMPORT=all branch. The earlier ledger claim that delivery left it disabled is superseded; no flag was changed by this reconciliation. Actual production49 public repository fixture parsed both player editors with visible timelines; this DOM-only proof does not replace the final local real-worker/network guard or server retirement delivery.",
+      "previousRemainingRequirements": [
+        "The required subsequent served release is now observed at PR803/ccb598. Retire /v1/public/preview-replay, its health route, preview_replay_cli.py wiring and associated tests after preserving unsupported-browser guidance, old-mode compatibility recovery and rollout/how-to documentation."
+      ],
+      "qualification": "One partial-to-completed item only. Original all197 source audit boundary477, canonical hash, IDs, original dependencies and requirement hashes remain unchanged. Production means desktop editor/guidance acceptance; network/negative/capability/phone proof remains local. Standalone historical CLI source is intentionally retained."
     }
-  }
+  },
+  "latestImplementationRevisionQualification": "Latest scoped delivery implementation reconciled by this update, not an assertion of current Git HEAD. Root merged Auth807/df5 later; its actual deployment/cutover/reuse acceptance is outside this candidate."
 }

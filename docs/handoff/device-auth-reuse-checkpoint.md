@@ -1,6 +1,12 @@
 # Device authentication reuse: writer preparation
 
-## 2026-10-28 candidate — locally verified, not released
+## 2026-10-28 delivered writer prerequisite
+
+PR 807 merged as `df5cf875d588fafba5456695a1c3550fc42ba587` after its exact tested head and fresh-main tree checks. Actual Vercel Ready and Render Live source were observed at `2026-10-28T16:46:09.182Z`; primary-domain new Help and read-only Devices loading were verified. [Sanitized production receipt](validation/device-auth-coordination/production-df5cf875.json) preserves that scope without account/device rows, counts or private photos. No production credential mutation, credential metadata observer or activation was performed.
+
+Writer preparation and the backup-health shutdown correction are deployed. Retained authentication remains off; the separate credential-writer/incarnation cutover is unqualified and dependent reuse is unwired. The game-statistics cutover cannot replace it. The pre-release sections below are retained historical candidate chronology, superseded by this delivery status without transferring their local tests into production proof.
+
+## 2026-10-28 candidate — historical local verification
 
 The write coordination stage is implemented for review. It does **not** add
 retained REST authentication, lease grants, reader activation or an endpoint.

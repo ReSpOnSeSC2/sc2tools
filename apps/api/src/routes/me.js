@@ -52,7 +52,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   POST   /me/backups/:id/restore  — restore from a snapshot
  *
  * @param {{
- *   users: import('../services/types').UsersService & Pick<import('../services/users').UsersService, 'getAnalyzerDefaultView'|'markFirstGameViewed'>,
+ *   users: import('../services/types').UsersService & Pick<import('../services/users').UsersService, 'getAnalyzerDefaultView'|'markFirstGameViewed'> & Partial<Pick<import('../services/users').UsersService, 'getMeSnapshot'>>,
  *   activation?: import('../services/activation').ActivationService,
  *   announcements?: import('../services/announcements').AnnouncementsService,
  *   games: import('../services/types').GamesService,
@@ -138,16 +138,17 @@ function buildMeRouter(deps) {
       if (!auth) throw new Error("auth_required");
       await deps.users.touch(auth.userId);
       await deps.announcements?.deliverMajors(auth.userId);
-      const [stats, summary, agent, activeImportJob, onboarding] =
+      const ownerSnapshot = readMeSnapshot(deps.users, auth.userId);
+      const [snapshot, stats, agent, activeImportJob] =
         await Promise.all([
-          deps.games.stats(auth.userId),
-          deps.users.getSummary(auth.userId),
+          ownerSnapshot,
+          ownerSnapshot.then(owner => owner.statsCandidate ?? deps.games.stats(auth.userId)),
           deps.pairings.latestAgent(auth.userId),
           // Optional deps so narrow tests (and older wiring) that don't
           // inject them keep working — the fields just come back null.
           deps.imports ? deps.imports.activeJob(auth.userId) : null,
-          deps.users.getPreferences(auth.userId, "onboarding"),
         ]);
+      const { summary, onboarding } = snapshot;
       // Lazy email backfill: if the row pre-dates the webhook (or no
       // webhook is configured), pull the email from Clerk on first read
       // and cache it. Best-effort — clerk.getEmail returns null on
@@ -993,6 +994,18 @@ function buildMeRouter(deps) {
   });
 
   return router;
+}
+
+/** Compatibility for narrow/older injected services; production uses the
+ * single primary owner envelope without a second preferences read.
+ * @param {import('../services/types').UsersService & Partial<Pick<import('../services/users').UsersService, 'getMeSnapshot'>>} users
+ * @param {string} userId */
+async function readMeSnapshot(users, userId) {
+  if (typeof users.getMeSnapshot === "function") return users.getMeSnapshot(userId);
+  const [summary, onboarding] = await Promise.all([
+    users.getSummary(userId), users.getPreferences(userId, "onboarding"),
+  ]);
+  return { summary, onboarding, statsCandidate: null };
 }
 
 /**

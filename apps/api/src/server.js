@@ -12,7 +12,7 @@ const pino = /** @type {any} */ (pinoModule).default || pinoModule;
 const { loadConfig } = require("./config/loader");
 const { connect } = require("./db/connect");
 const { buildApp } = require("./app");
-const { PROTOCOL_VERSION } = require("./services/gameStatsMaintenance");
+const { PROTOCOL_VERSION, MAINTENANCE_VERSION } = require("./services/gameStatsMaintenance");
 const { attachSocketAuth } = require("./socket/auth");
 const { buildKeepaliveWorker } = require("./services/keepalive");
 const { buildSessionRefresher } = require("./services/sessionRefresher");
@@ -470,7 +470,7 @@ async function main() {
     // game dispatch and drain actual admitted membership transactions before
     // closing Mongo; a held payload write cannot start a late games command.
     await services.gameStatsWrites.stopAndDrain();
-    logger.info({ protocolVersion: PROTOCOL_VERSION }, "game_stats_writers_drained");
+    logger.info({ protocolVersion: PROTOCOL_VERSION, maintenanceVersion: MAINTENANCE_VERSION }, "game_stats_writers_drained");
     await db.close();
     logger.info("shutdown_complete");
     process.exit(0);

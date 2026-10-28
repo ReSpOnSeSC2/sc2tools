@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "head": "55be35e56b42090dbf91331dcc40c5476551c30e",
+  "sourceInputs": 6921,
+  "before": {
+    "phase": "prebuild",
+    "checkedAtUtc": "2026-10-28T16:43:32.424Z",
+    "sourceInputs": 6921,
+    "sourceSnapshotSha256": "7dea66e487403b552bc40be37373df7e7ce713c2d83ccc771a41ddbd045d805c",
+    "allMatch": true,
+    "filesAddedOrRemoved": false
+  },
+  "after": {
+    "phase": "postbuild",
+    "checkedAtUtc": "2026-10-28T16:45:51.694Z",
+    "sourceInputs": 6921,
+    "sourceSnapshotSha256": "7dea66e487403b552bc40be37373df7e7ce713c2d83ccc771a41ddbd045d805c",
+    "allMatch": true,
+    "filesAddedOrRemoved": false
+  },
+  "fullSnapshotSha256": "7dea66e487403b552bc40be37373df7e7ce713c2d83ccc771a41ddbd045d805c",
+  "boundary": "Exact equality covers the captured clean55be snapshot before/after the build. Later docs-only adoption changes the source set; preserve runtime/asset pins and never claim6921 equality for that later metadata tree."
+}
