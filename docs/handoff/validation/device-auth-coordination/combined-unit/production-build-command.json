@@ -1,0 +1,25 @@
+{
+  "sourceReceipt": {
+    "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-build-01/production-build-01-command.json",
+    "bytes": 506,
+    "sha256": "7f20f4fdaca70a18c8a5e440cd3728858f092281097a2faf2d54369d9ae70b82"
+  },
+  "label": "production-build-01",
+  "args": [
+    "C:/SC2TOOLS/.worktrees/guide-randomizer-completion/apps/web/node_modules/next/dist/bin/next",
+    "build"
+  ],
+  "cwd": "C:/SC2TOOLS/.worktrees/guide-randomizer-completion/apps/web",
+  "pid": 50840,
+  "startedAt": "2026-10-28T15:21:17.408Z",
+  "endedAt": "2026-10-28T15:22:59.912Z",
+  "exitCode": 0,
+  "signal": null,
+  "processAliveAfterExit": false,
+  "log": {
+    "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-build-01/production-build-01.log",
+    "bytes": 42163,
+    "sha256": "10bf8b316ee21342fc1cead3ded462ff6654a5fd2f23035ae5f3e87924c59f69"
+  },
+  "qualification": "Compact digest of exact retained command receipt; source receipt and raw log remain in cache."
+}

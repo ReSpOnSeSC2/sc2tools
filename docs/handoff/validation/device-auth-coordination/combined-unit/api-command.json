@@ -1,0 +1,36 @@
+{
+  "sourceReceipt": {
+    "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-api-01.json",
+    "bytes": 8398,
+    "sha256": "d21f5281a22098dd95bdeb708cce26ccdcd9e611043c85d66725cda0788d2479"
+  },
+  "label": "combined-unit-api-01",
+  "args": [
+    "--runInBand",
+    "--runTestsByPath",
+    "__tests__/deviceCredentialWrites.test.js",
+    "__tests__/deviceCredentialWrites.integration.test.js",
+    "__tests__/replayFiles.test.js",
+    "__tests__/backupStatus.test.js",
+    "__tests__/opsConsole.test.js",
+    "__tests__/publicReplayRetirement.test.js",
+    "__tests__/routes.integration.test.js",
+    "__tests__/arcadeUnitStatsReadiness.test.js",
+    "--json",
+    "--outputFile=C:/SC2TOOLS/.cache/device-auth-coordination-20261028/combined-unit-api-01-jest.json"
+  ],
+  "cwd": "C:\\SC2TOOLS\\.worktrees\\guide-randomizer-completion\\apps\\api",
+  "pid": 34404,
+  "nodeVersion": "v22.12.0",
+  "startedAt": "2026-10-28T15:18:38.025Z",
+  "endedAt": "2026-10-28T15:18:59.667Z",
+  "exitCode": 0,
+  "signal": null,
+  "processAliveAfterExit": null,
+  "log": {
+    "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\combined-unit-api-01.log",
+    "bytes": 3231,
+    "sha256": "71c4fabb45d30fdef9633881da1afa7fcc8adaea5a2a73f5c5b33b21f8496e3d"
+  },
+  "qualification": "Compact digest of exact retained command receipt; source receipt and raw log remain in cache."
+}
