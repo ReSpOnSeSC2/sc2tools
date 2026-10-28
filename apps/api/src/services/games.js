@@ -1,5 +1,6 @@
 "use strict";
 const { gameWrite } = require("../util/userRevision");
+const { gameStatsWritesFor, sessionArgs } = require("./gameStatsWrites");
 const { LIVE_GAME_MATCH, STATS_GAME_MATCH } = require("../util/gameVisibility");
 
 const crypto = require("crypto");
@@ -182,7 +183,7 @@ const PUBLIC_GAME_PROJECTION = Object.freeze({
  */
 class GamesService {
   /**
-   * @param {{games: import('mongodb').Collection, opponents?:import('mongodb').Collection}} db
+   * @param {import('../db/connect').DbContext} db
    * @param {{
    *   gameDetails?: import('./gameDetails').GameDetailsService,
    *   users?: {
@@ -217,6 +218,7 @@ class GamesService {
    */
   constructor(db, opts = {}) {
     this.userRevision = opts.userRevision || null;
+    this.gameStatsWrites = gameStatsWritesFor(db, opts.logger);
     this.db = db;
     // Optional dep so unit tests that only need the slim-row code
     // path can still construct GamesService without a details stub.
@@ -275,10 +277,11 @@ class GamesService {
    *
    * @param {string} userId
    * @param {{gameId: string, date: string | Date} & Record<string, unknown>} game
+   * @param {import('./gameStatsWrites').GameStatsOwner} [admissionOwner]
    * @returns {Promise<boolean>}
    */
-  async upsert(userId, game) {
-    const result = await this.upsertWithRevision(userId, game);
+  async upsert(userId, game, admissionOwner) {
+    const result = await this.upsertWithRevision(userId, game, admissionOwner);
     return result.created;
   }
 
@@ -288,10 +291,13 @@ class GamesService {
    * boolean continue to use `upsert` above.
    * @param {string} userId
    * @param {{gameId: string, date: string | Date} & Record<string, unknown>} game
+   * @param {import('./gameStatsWrites').GameStatsOwner} [admissionOwner]
    * @returns {Promise<{created: boolean, customBuildRevision: string, spatial?: Record<string, any>, excluded?: boolean}>}
    */
-  async upsertWithRevision(userId, game) {
+  async upsertWithRevision(userId, game, admissionOwner) {
     if (!game || !game.gameId) throw new Error("gameId required");
+    const statsOwner = admissionOwner || await this.gameStatsWrites.capture(userId);
+    if (statsOwner.userId !== userId) throw Object.assign(new Error("game_stats_owner_unavailable"), { code: "game_stats_owner_unavailable", status: 503 });
     const controls = await this.db.games.findOne({ userId, gameId: game.gameId }, { projection: { _id: 0, _deleted: 1, _deletionPending: 1, excluded: 1 } });
     if (controls?._deleted || controls?._deletionPending) throw require("../util/deletedGames").gameDeletedError();
     const date = game.date instanceof Date ? game.date : new Date(game.date);
@@ -457,37 +463,47 @@ class GamesService {
     // then atomically invalidates classification state with its fresh row.
     return gameWrite(this.userRevision, userId, async () => {
       let res;
+      let excluded = controls?.excluded === true;
       const leaseDeadline = Date.now() + 1_000;
       for (;;) {
         const now = new Date();
-        res = await this.db.games.updateOne(
-          {
-            userId,
-            gameId: game.gameId,
-            _deleted: { $ne: true },
-            _deletionPending: { $ne: true },
-            $or: [
-              { _opponentBuildOrderWriteLease: { $exists: false } },
-              { "_opponentBuildOrderWriteLease.leaseUntil": { $lte: now } },
-              { "_opponentBuildOrderWriteLease.leaseUntil": { $exists: false } },
-            ],
-          },
-          update,
-        );
-        if (res.matchedCount > 0 || res.upsertedCount > 0) break;
-        const existing = await this.db.games.findOne(
-          { userId, gameId: game.gameId },
-          { projection: { _id: 1, _deleted: 1, _deletionPending: 1 } },
-        );
-        if (existing?._deleted || existing?._deletionPending) throw require("../util/deletedGames").gameDeletedError();
-        if (!existing) {
-          res = await this.db.games.updateOne(
-            { userId, gameId: game.gameId },
+        const attempt = await this.gameStatsWrites.write(statsOwner, async session => {
+          const current = await this.db.games.findOne({ userId, gameId: game.gameId }, {
+            projection: { _id: 1, _deleted: 1, _deletionPending: 1, excluded: 1 }, ...(session ? { session } : {}),
+          });
+          if (current?._deleted || current?._deletionPending) throw require("../util/deletedGames").gameDeletedError();
+          const updated = await this.db.games.updateOne(
+            {
+              userId,
+              gameId: game.gameId,
+              _deleted: { $ne: true },
+              _deletionPending: { $ne: true },
+              $or: [
+                { _opponentBuildOrderWriteLease: { $exists: false } },
+                { "_opponentBuildOrderWriteLease.leaseUntil": { $lte: now } },
+                { "_opponentBuildOrderWriteLease.leaseUntil": { $exists: false } },
+              ],
+            },
             update,
-            { upsert: true },
+            ...sessionArgs(session),
           );
-          break;
-        }
+          if (updated.matchedCount > 0 || updated.upsertedCount > 0) return { result: updated, excluded: current?.excluded === true };
+          const existing = await this.db.games.findOne(
+            { userId, gameId: game.gameId },
+            { projection: { _id: 1, _deleted: 1, _deletionPending: 1 }, ...(session ? { session } : {}) },
+          );
+          if (existing?._deleted || existing?._deletionPending) throw require("../util/deletedGames").gameDeletedError();
+          if (!existing) {
+            const inserted = await this.db.games.updateOne(
+              { userId, gameId: game.gameId },
+              update,
+              { upsert: true, ...(session ? { session } : {}) },
+            );
+            return { result: inserted, excluded: false };
+          }
+          return null;
+        }, { selection: { gameIds: [game.gameId] } });
+        if (attempt) { res = attempt.result; excluded = attempt.excluded; break; }
         if (Date.now() >= leaseDeadline) throw opponentBuildOrderBusyError();
         await wait(50);
       }
@@ -495,7 +511,7 @@ class GamesService {
       return {
         created: res.upsertedCount === 1,
         customBuildRevision,
-        excluded: controls?.excluded === true,
+        excluded,
         spatial: slimSet.spatial,
       };
     });
@@ -509,13 +525,16 @@ class GamesService {
    *
    * @param {string} userId
    * @param {{gameId: string, date: string | Date, resumedReplayGameIds?: string[]} & Record<string, any>} game
+   * @param {import('./gameStatsWrites').GameStatsOwner} [admissionOwner]
    * @returns {Promise<{
    *   created: boolean,
    *   newlyFlaggedExisting: number,
    *   gameIds: string[],
    * }>}
    */
-  async quarantineResumedReplay(userId, game) {
+  async quarantineResumedReplay(userId, game, admissionOwner) {
+    const statsOwner = admissionOwner || await this.gameStatsWrites.capture(userId);
+    if (statsOwner.userId !== userId) throw Object.assign(new Error("game_stats_owner_unavailable"), { code: "game_stats_owner_unavailable", status: 503 });
     const deleted = await this.db.games.findOne({ userId, gameId: String(game.gameId), $or: [{ _deleted: true }, { _deletionPending: true }] }, { projection: { _id: 1 } });
     if (deleted) throw require("../util/deletedGames").gameDeletedError();
     if (!game || !game.gameId) throw new Error("gameId required");
@@ -573,12 +592,15 @@ class GamesService {
     // now visible to the transition below. If this upsert wins, the inserted
     // audit-only row is already quarantined and correctly has no repair work.
     return gameWrite(this.userRevision, userId, async () => {
+      const result = await this.gameStatsWrites.write(statsOwner, async session => {
+      const current = await this.db.games.findOne({ userId, gameId: currentId, $or: [{ _deleted: true }, { _deletionPending: true }] }, { projection: { _id: 1 }, ...(session ? { session } : {}) });
+      if (current) throw require("../util/deletedGames").gameDeletedError();
       const ensured = await this.db.games.updateOne(
         { userId, gameId: currentId },
         {
           $setOnInsert: { ...insert, createdAt: new Date() },
         },
-        { upsert: true },
+        { upsert: true, ...(session ? { session } : {}) },
       );
 
       // Existing competitive rows need durable repair work for three cached
@@ -613,14 +635,17 @@ class GamesService {
             resumedReplayBoundaryRepairedAt: "",
           },
         },
+        ...sessionArgs(session),
       );
 
-      this._sessionResolutionGate.invalidate(userId);
       return {
         created: ensured.upsertedCount === 1,
         newlyFlaggedExisting: Number(marked.matchedCount || 0),
         gameIds,
       };
+      }, { selection: { gameIds } });
+      this._sessionResolutionGate.invalidate(userId);
+      return result;
     });
   }
 

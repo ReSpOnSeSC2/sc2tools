@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 2,
+  "preparedAtUtc": "2026-10-28T06:06:25.7893850Z",
+  "status": "source-review-clear-at-exact-13-file-freeze",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/dashboard-cache-coverage",
+  "base": "9d6525e54a81dc23768232881f063d7864d24055",
+  "sourceFreeze": {
+    "path": "C:\\SC2TOOLS\\.cache\\game-stats-writer-verification-20261028\\api-source-freeze.json",
+    "sha256": "eff1803aa613c0af83b75baadf0409fcf5d8301c5da288bc175c2fd81a9f825a",
+    "filesChecked": 13,
+    "allMatch": true
+  },
+  "reviewerRuntimeExecuted": false,
+  "reviewerGitExecuted": false,
+  "reviewerProviderMutations": false,
+  "reviewerApplicationSourceEdited": false,
+  "decision": "No remaining source blocker found for writer-first adoption at the pinned source. Does not authorize or qualify read-second retention, deployment, all197 completion or external/raw restore safety.",
+  "supersedes": [
+    "Provisional owner/fence review before the retained-owner wipe edge",
+    "Pre-fix remaining-boundary finding in independent-retained-owner-wipe-edge.json; retained as historical evidence"
+  ],
+  "findings": [
+    {
+      "area": "Production composition/topology",
+      "result": "makeServices guard checks configured nodeEnv or actual production environment and requires connected topology capability plus startSession. Connected hello requires replica-set/mongos and logical sessions. No flag/provider activation."
+    },
+    {
+      "area": "Atomic writer protocol",
+      "result": "Dedicated revision/snapshot retirement owner write precedes same-session game commands under snapshot/majority+journaled transaction; exact admitted _id/fence/epoch guards; no owner upsert or fallback production game dispatch. Private perform prevents alternate bypass."
+    },
+    {
+      "area": "Resolved retained-owner wipe/restore edge",
+      "result": "Validated UUID/missing epoch captured with owner; every successful guarded exclusive claim atomically advances epoch and fence; epoch survives release; old held per-game work rejects after full/range wipe or restore retaining _id. Missing/malformed generation never treated as a fresh zero."
+    },
+    {
+      "area": "Resolved active-fence capture and whole batch edge",
+      "result": "Ordinary capture atomically requires fence absent. POST games captures one immutable handle before quota/pool waits and passes it into every upsert/quarantine branch; same old request never recaptures. Both authority-change catches abort whole batch. Cross-owner handles rejected before payload/game work."
+    },
+    {
+      "area": "Restore/GDPR retry purity",
+      "result": "Existing-owner identity captured before staging; immutable <=100/~4MiB restore batches and bounded deletes use exact owner/fence/epoch/session. R2, staging/cursors, fence renewal, notifications/recounts and payload cleanup remain outside retry callbacks. Settings whitelist preserves live authority and export strips all five protocol fields."
+    },
+    {
+      "area": "Ownerless erasure and compatibility",
+      "result": "Missing-owner deleteAll is destructive orphan cleanup only, preserves absence assertions, creates no authority/owner. Standalone/test path cannot mint protocol1 and production rejects it; transaction guarantees do not apply to that development compatibility path."
+    },
+    {
+      "area": "Original tests and stats contract",
+      "result": "All four original GDPR admission test names and twelve expect lines unchanged. Injection selects actual failed-claim reread rather than new identity pre-read; same second-writer race and guarded second/third claims remain. Original count/sorted-latest stats body byte-identical after LF normalization; raw BSON behavior retained."
+    },
+    {
+      "area": "Writer enumeration",
+      "result": "Seven active stats membership/date groups covered, including current/alias quarantine, dynamic GDPR/RESTORABLE games branches and gamesCollection aliases. Forty pinned source/ops files enumerate relevant writers and negative controls; no extra active group found."
+    }
+  ],
+  "executionEvidence": {
+    "authorTestRun": "writer-batch-services-09.log observed 168 passing cases/17 suites, no skips stated in summary",
+    "realReplicaSetScope": "Real one-member Mongo transactions and actual command monitoring; synthetic transient/lost-ACK injection surrounds real writes/commits. Includes partial ordered insert rollback, exact fence/owner replacement, HTTP batch held over expired lease, parallel fresh ingests and no-owner cleanup.",
+    "testCorrectionReview": "Preserved failures01-03 inspected: initial parse formatting, proper Mongo error class for driver label contract, valid replacement Clerk fixture IDs, and monitor selection limited to actual membership/date mutations. No original assertion removed/weakened; no new skip/only found.",
+    "types": "Author freeze reports exit0; silent log exists at zero bytes. Exit is author transcript/manifest evidence, not inferred from empty stdout.",
+    "strictNewLint": "Author freeze reports exit0; silent log exists at zero bytes. Exit not inferred from empty stdout.",
+    "ownedLint": "Observed zero errors/21 warnings. Same 21 warning sites as combined baseline after excluding summary lines and normalizing changed line counts; no rule/cap relaxation.",
+    "cleanup": "Observed final author receipt lists five owned mongod PID/ports absent and closed; fixture afterAll asserts ESRCH. Reviewer did not launch or stop processes."
+  },
+  "limits": [
+    "No physical network partition, failover/stepdown or kill-during-command result is claimed by these injected one-member tests.",
+    "stopAndDrain proves tracked promises settled and blocks late dispatch; unknown server commit cannot be called rolled back from its log alone.",
+    "All exclusive claims currently rotate epoch, including read-only snapshot/preview; conservative retries for expired prior writers are intentional source behavior.",
+    "Timebase manual drop/$out rollback and Atlas/raw database restore remain outside revision protocol; future retained reads require offline settlement, derived-authority retirement and operational cutover receipt.",
+    "Legacy external actor inventory/settlement and real deployment acceptance remain root-owned and unproved here. USER_CACHE_ENABLED stays off; read-second and full faster-dashboards remain incomplete."
+  ],
+  "sourceChecks": [
+    {
+      "path": "apps/api/src/app.js",
+      "expectedSha256": "a33b9a319bf14c2947127da48f71fa2050ac5494d8e0fbe00a118c606295e162",
+      "actualSha256": "a33b9a319bf14c2947127da48f71fa2050ac5494d8e0fbe00a118c606295e162",
+      "matches": true
+    },
+    {
+      "path": "apps/api/src/server.js",
+      "expectedSha256": "dd50e6fcaa0c64ece9dbe0ae74449f5bdeea17c8474bbe255af5e9c63f49b4aa",
+      "actualSha256": "dd50e6fcaa0c64ece9dbe0ae74449f5bdeea17c8474bbe255af5e9c63f49b4aa",
+      "matches": true
+    },
+    {
+      "path": "apps/api/src/db/connect.js",
+      "expectedSha256": "2a8008c3558e8b4ef0f68a6bfed54440ea79d1090402a52a13e2f78adf17c24c",
+      "actualSha256": "2a8008c3558e8b4ef0f68a6bfed54440ea79d1090402a52a13e2f78adf17c24c",
+      "matches": true
+    },
+    {
+      "path": "apps/api/src/routes/games.js",
+      "expectedSha256": "ad1b9d5d479a701acdcd23a65150b87eb9b8a4bc06d1dfe3e67ade3551440975",
+      "actualSha256": "ad1b9d5d479a701acdcd23a65150b87eb9b8a4bc06d1dfe3e67ade3551440975",
+      "matches": true
+    },
+    {
+      "path": "apps/api/src/services/games.js",
+      "expectedSha256": "cd51d7c52c63d20cd4f0040e12d7a98ea501656328c9c623286f9c226f61b0bd",
+      "actualSha256": "cd51d7c52c63d20cd4f0040e12d7a98ea501656328c9c623286f9c226f61b0bd",
+      "matches": true
+    },
+    {
+      "path": "apps/api/src/services/gameControls.js",
+      "expectedSha256": "f6adf09c2b32ecb11ccc3ceaf76a3040bafefedfbbc57bcb847d59344c9ca538",
+      "actualSha256": "f6adf09c2b32ecb11ccc3ceaf76a3040bafefedfbbc57bcb847d59344c9ca538",
+      "matches": true
+    },
+    {
+      "path": "apps/api/src/services/gdpr.js",
+      "expectedSha256": "7d14144ed0513f2bc002e80893bacfed018c289dd186f2b4a626e8ff1e0d7410",
+      "actualSha256": "7d14144ed0513f2bc002e80893bacfed018c289dd186f2b4a626e8ff1e0d7410",
+      "matches": true
+    },
+    {
+      "path": "apps/api/src/services/userBackups.js",
+      "expectedSha256": "5cfaf389b782ac71cfb568a3e9e8f176b2a218966570c5978b7a542f034e1d11",
+      "actualSha256": "5cfaf389b782ac71cfb568a3e9e8f176b2a218966570c5978b7a542f034e1d11",
+      "matches": true
+    },
+    {
+      "path": "apps/api/src/services/gameStatsWrites.js",
+      "expectedSha256": "9cfae366f680ec60b6c47d0d013dbc2287a07a9b2481253db7e3dac8d789130c",
+      "actualSha256": "9cfae366f680ec60b6c47d0d013dbc2287a07a9b2481253db7e3dac8d789130c",
+      "matches": true
+    },
+    {
+      "path": "apps/api/src/services/types.d.ts",
+      "expectedSha256": "e09b6698aa3d6efb7039e52b2680774d6c8956d44f18eb1bcae3767dd55404d1",
+      "actualSha256": "e09b6698aa3d6efb7039e52b2680774d6c8956d44f18eb1bcae3767dd55404d1",
+      "matches": true
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsWrites.unit.test.js",
+      "expectedSha256": "5e76b1f70998807f0ace0420bbbc43512bcdc8339d7ea27ead0b31a70b85afd6",
+      "actualSha256": "5e76b1f70998807f0ace0420bbbc43512bcdc8339d7ea27ead0b31a70b85afd6",
+      "matches": true
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsWrites.replset.test.js",
+      "expectedSha256": "e51cdc22743d193158b9dd4899de9d104409677ae69ba17c171e77883e8edfed",
+      "actualSha256": "e51cdc22743d193158b9dd4899de9d104409677ae69ba17c171e77883e8edfed",
+      "matches": true
+    },
+    {
+      "path": "apps/api/__tests__/gdprMutationAdmission.test.js",
+      "expectedSha256": "a95867361332cc4ea44fbcce0bdea6e39c4c72ec20aeb91bbf0deab3ca093c01",
+      "actualSha256": "a95867361332cc4ea44fbcce0bdea6e39c4c72ec20aeb91bbf0deab3ca093c01",
+      "matches": true
+    }
+  ],
+  "evidence": [
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\game-stats-writer-verification-20261028\\writer-batch-services-09.log",
+      "bytes": 2908,
+      "sha256": "8da33c9e5ab2fdc5a290f0e6530351df9f1f75ddf7cd6a096e0520e0c345bf14"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\game-stats-writer-verification-20261028\\api-types-final-03.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\game-stats-writer-verification-20261028\\api-lint-new-final-03.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\game-stats-writer-verification-20261028\\api-lint-owned-final-02.log",
+      "bytes": 3294,
+      "sha256": "e8073c17534976701190bf621a48f730d7f209bfc09c8e54cbc44f60ed09eaee"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\game-stats-writer-verification-20261028\\api-lint-baseline-01.log",
+      "bytes": 2887,
+      "sha256": "3e5c6529b3ba5f7c2e3d5d45144e3ab5379c0b529825af090f1daab41c485392"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\game-stats-writer-verification-20261028\\api-lint-baseline-route-02.log",
+      "bytes": 655,
+      "sha256": "fab8780fe24829208c6b15811a577d97e39e58c8baa8ac2e1a2d942b15bedc23"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\game-stats-writer-verification-20261028\\owned-cleanup-final.json",
+      "bytes": 936,
+      "sha256": "dc4e4568625b333132c995bd55aded2333ede7e2a34a852d982dda94183bc966"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\game-stats-writer-verification-20261028\\independent-admission-stats-source-check.json",
+      "bytes": 1308,
+      "sha256": "32d9cc1cb27343b88f3ebc54f000ca5505f7de9a0071399a4ffda0858810cbb2"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\game-stats-writer-verification-20261028\\independent-writer-enumeration.json",
+      "bytes": 12915,
+      "sha256": "9f0353b629efaf7e2105ac4e6a78d4a6e8873b7b26db4e50cf07c30cf86feb54"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.cache\\game-stats-writer-verification-20261028\\independent-retained-owner-wipe-edge.json",
+      "bytes": 3264,
+      "sha256": "8cab9006389874cee9fb27c304a2d2c30ec5e8b22324859360746e123aa88ee6"
+    }
+  ]
+}

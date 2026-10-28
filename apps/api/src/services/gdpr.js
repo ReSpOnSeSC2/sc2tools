@@ -1,5 +1,6 @@
 "use strict";
 const { gameWrite } = require("../util/userRevision");
+const { gameStatsWritesFor } = require("./gameStatsWrites");
 
 const { randomUUID } = require("crypto");
 const { stampVersion } = require("../db/schemaVersioning");
@@ -138,6 +139,7 @@ class GdprService {
    */
   constructor(db, opts = {}) {
     this.userRevision = opts.userRevision || null;
+    this.gameStatsWrites = gameStatsWritesFor(db, opts.logger);
     this.beginDeviceMutation = opts.beginDeviceMutation || null;
     this.db = db;
     /** @type {import("./userBackups").UserBackupsService|null} */
@@ -284,7 +286,7 @@ class GdprService {
     }
     const user = await this.db.users.findOne(
       { userId },
-      { projection: { _id: 0 } },
+      { projection: { _id: 0, gameStats: 0, gameStatsRevision: 0, gameStatsProtocolVersion: 0, gameStatsWriterStatus: 0, gameStatsMutationEpoch: 0, gameStatsMaintenance: 0 } },
     );
     if (this.db.playerChannels) {
       data.playerChannels = await this.db.playerChannels.find(
@@ -421,7 +423,15 @@ class GdprService {
       if (!coll) continue;
       // Full erasure retires all owner snapshots, including already-empty
       // history; partial range wipes below still optimize known no-op deletes.
-      const res = key === "games" ? await this.communityMutation(userId, () => coll.deleteMany({ userId }), () => true, true) : await coll.deleteMany({ userId });
+      const res = key === "games" ? await this.communityMutation(userId, async () => {
+        if (!gdprFence.owner) {
+          // Already-missing-owner idempotent erasure is destructive only; it
+          // creates no revision/owner and cannot ever qualify retained stats.
+          await gdprFence.assert();
+          return coll.deleteMany({ userId });
+        }
+        return this.gameStatsWrites.deleteMany(gdprFence.owner, { userId }, { fenceId: gdprFence.id, assert: gdprFence.assert });
+      }, () => true, true) : await coll.deleteMany({ userId });
       counts[key] = res.deletedCount || 0;
     }
 
@@ -536,7 +546,7 @@ class GdprService {
     clearInterval(gdprFence.timer);
     let userRes;
     try {
-      userRes = await this.db.users.deleteOne({ userId, "_gdprMutation.id": gdprFence.id });
+      userRes = await this.db.users.deleteOne({ userId, ...(gdprFence.owner ? { _id: gdprFence.owner.id } : {}), "_gdprMutation.id": gdprFence.id });
     } finally { this.userRevision?.forget(userId); }
     if (!userRes.deletedCount && await this.db.users.findOne({ userId }, { projection: { _id: 1 } })) throw new Error("gdpr_operation_lease_lost");
     counts.users = userRes.deletedCount || 0;
@@ -893,7 +903,10 @@ class GdprService {
     if (guideGameIds && !this.replayFiles) gamesDeleteFilter = { userId, gameId: { $in: guideGameIds } };
 
     await gdprFence.assert();
-    const gamesRes = await this.communityMutation(userId, () => this.db.games.deleteMany(gamesDeleteFilter), value => (value.deletedCount || 0) > 0, true);
+    const statsOwner = await this.gameStatsWrites.forFence(userId, gdprFence);
+    const gamesRes = await this.communityMutation(userId, () => this.gameStatsWrites.deleteMany(statsOwner, gamesDeleteFilter, {
+      fenceId: gdprFence.id, assert: gdprFence.assert,
+    }), value => (value.deletedCount || 0) > 0, true);
     const guideSamplesDeleted = await this._deleteWipedGuideSamples(userId, guideGameIds);
     // Every example of the handle goes (not just the wiped range): the
     // nightly run re-picks examples from the surviving games.
@@ -1276,11 +1289,12 @@ class GdprService {
   /** @param {string} userId @param {string} kind */
   async _acquireMutationFenceCore(userId, kind) {
     const id = randomUUID();
+    const owner = await this.gameStatsWrites.captureOptional(userId);
     const deadline = Date.now() + GDPR_COACHING_DRAIN_MS;
     for (;;) {
       const now = new Date();
       const claimed = await this.db.users.updateOne(
-        { userId, $and: [
+        { userId, ...(owner ? { _id: owner.id } : { _id: { $exists: false } }), $and: [
           { $or: [
             { _gdprMutation: { $exists: false } },
             { "_gdprMutation.leaseUntil": { $lte: now } },
@@ -1295,7 +1309,10 @@ class GdprService {
             { _dataMutations: { $not: { $elemMatch: { leaseUntil: { $gt: now } } } } },
           ] },
         ] },
-        { $set: { _gdprMutation: {
+        // A lease can expire while its request is still doing external work.
+        // The durable epoch retires that request even after this fence is
+        // released, including wipes/restores that retain the same owner _id.
+        { $set: { gameStatsMutationEpoch: id, _gdprMutation: {
           id,
           kind,
           startedAt: now,
@@ -1310,10 +1327,11 @@ class GdprService {
         { projection: { _id: 0, _gdprMutation: 1, _coachingMutations: 1, _dataMutations: 1 } },
       );
       if (!blocked && kind === "delete_all") {
+        if (owner) throw new Error("gdpr_erasure_identity_changed");
         // Idempotent webhook/API repeat: the original user row is already
         // gone. No new account is created just to clean up orphaned records.
         const timer = setTimeout(() => {}, 0); timer.unref?.();
-        return { id: "", timer, assert: async () => {
+        return { id: "", timer, owner: null, assert: async () => {
           if (await this.db.users.findOne({ userId }, { projection: { _id: 1 } })) throw new Error("gdpr_erasure_identity_changed");
         } };
       }
@@ -1339,7 +1357,7 @@ class GdprService {
     let lost = false;
     const renew = async () => {
       const renewed = await this.db.users.updateOne(
-        { userId, "_gdprMutation.id": id },
+        { userId, ...(owner ? { _id: owner.id } : {}), "_gdprMutation.id": id },
         { $set: {
           "_gdprMutation.leaseUntil": new Date(
             Date.now() + GDPR_MUTATION_LEASE_MS,
@@ -1368,15 +1386,15 @@ class GdprService {
       await renew();
       if (lost) throw new Error("gdpr_operation_lease_lost");
     };
-    return { id, timer, assert };
+    return { id, timer, assert, owner: owner ? { ...owner, epoch: id } : null };
   }
 
-  /** @param {string} userId @param {{id: string, timer: NodeJS.Timeout, assert: () => Promise<void>,policyMutation?:boolean}} fence */
+  /** @param {string} userId @param {{id: string, timer: NodeJS.Timeout, assert: () => Promise<void>,owner?:import('./gameStatsWrites').GameStatsOwner|null,policyMutation?:boolean}} fence */
   async _releaseMutationFence(userId, fence) {
     clearInterval(fence.timer);
     try {
       if (fence.id) await this.db.users.updateOne(
-        { userId, "_gdprMutation.id": fence.id },
+        { userId, ...(fence.owner ? { _id: fence.owner.id } : {}), "_gdprMutation.id": fence.id },
         { $unset: { _gdprMutation: "" } },
       );
     } finally { if (fence.policyMutation) this.onSessionPolicyChanged?.(userId); }

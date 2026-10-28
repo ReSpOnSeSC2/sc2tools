@@ -297,6 +297,7 @@ export interface OpponentsService {
 }
 
 export interface GamesService {
+  gameStatsWrites?: Pick<import("./gameStatsWrites").GameStatsWrites, "capture">;
   neighbors: import("./games").GamesService["neighbors"];
   list(
     userId: string,
@@ -310,10 +311,11 @@ export interface GamesService {
   findMany(userId: string, gameIds: string[]): Promise<object[]>;
   /** Ids from ``gameIds`` with a stored row (quarantined rows included). */
   existingGameIds(userId: string, gameIds: string[]): Promise<string[]>;
-  upsert(userId: string, game: object & { gameId: string }): Promise<boolean>;
+  upsert(userId: string, game: object & { gameId: string }, admissionOwner?: import("./gameStatsWrites").GameStatsOwner): Promise<boolean>;
   upsertWithRevision?(
     userId: string,
     game: object & { gameId: string },
+    admissionOwner?: import("./gameStatsWrites").GameStatsOwner,
   ): Promise<{
     created: boolean;
     customBuildRevision: string;
@@ -327,6 +329,7 @@ export interface GamesService {
       date: string | Date;
       resumedReplayGameIds?: string[];
     },
+    admissionOwner?: import("./gameStatsWrites").GameStatsOwner,
   ): Promise<{
     created: boolean;
     newlyFlaggedExisting: number;

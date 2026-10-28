@@ -1,0 +1,25 @@
+{
+  "checkedAtUtc": "2026-10-28T06:58:19.1761682Z",
+  "owned": [
+    {
+      "pid": 30140,
+      "port": 62000,
+      "processAlive": false,
+      "loopbackConnectSucceeded": false
+    },
+    {
+      "pid": 37336,
+      "port": 62466,
+      "processAlive": false,
+      "loopbackConnectSucceeded": false
+    },
+    {
+      "pid": 38552,
+      "port": 62728,
+      "processAlive": false,
+      "loopbackConnectSucceeded": false
+    }
+  ],
+  "unrelatedProcessesKilled": false,
+  "note": "Final Jest also asserts ESRCH after await MongoMemoryReplSet.stop; existing standalone suites await their own stop."
+}

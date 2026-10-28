@@ -5,10 +5,12 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
 const { ensureGuideIndexes, startBackgroundIndexBuilds } = require("./guideIndexes");
 const { PRIVATE_SEARCH_COMMENT } = require("../services/privateSearchReader");
 const { startPrivateSearchIndex } = require("./privateSearchIndexes");
+const { PROTOCOL_VERSION } = require("../services/gameStatsMaintenance");
 
 /**
  * @typedef {{
  *   client: MongoClient,
+ *   gameStatsTransactions: boolean,
  *   db: import('mongodb').Db,
  *   backgroundIndexes?: import('./guideIndexes').BackgroundIndexBuilds,
  *   privateSearchIndexes?: import('./guideIndexes').BackgroundIndexBuilds,
@@ -105,10 +107,20 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
   }
   await client.connect();
   const db = client.db(dbName);
+  // Check the connected topology rather than inferring transaction support
+  // from a URI or a paid tier. No provider setting or topology is changed.
+  let hello;
+  try { hello = await db.admin().command({ hello: 1, maxTimeMS: 2000 }); }
+  catch (error) { await client.close(); throw error; }
+  const transactionTopology = Boolean((hello.setName && hello.maxWireVersion >= 7)
+    || (hello.msg === "isdbgrid" && hello.maxWireVersion >= 8));
+  const gameStatsTransactions = transactionTopology && typeof hello.logicalSessionTimeoutMinutes === "number";
+  logger?.info({ gameStatsTransactions, protocolVersion: PROTOCOL_VERSION }, "game_stats_transaction_capability");
   try { await db.createCollection(COLLECTIONS.JOB_RUNS, { capped: true, size: 8 * 1024 * 1024, max: 5000 }); }
   catch (error) { if (/** @type {any} */ (error).code !== 48) throw error; }
   const ctx = {
     client,
+    gameStatsTransactions,
     db,
     users: db.collection(COLLECTIONS.USERS),
     profiles: db.collection(COLLECTIONS.PROFILES),

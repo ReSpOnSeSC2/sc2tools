@@ -23,7 +23,7 @@ const article: HelpArticle = {
     "delete account",
     "recovery",
   ],
-  updated: "2026-10-25",
+  updated: "2026-10-28",
   body: [
     { type: "heading", text: "Deleting game history" },
     { type: "paragraph", text: "A Before action snapshot is saved automatically before deletion. In Settings → Backups & data, From and Through use your local time and include both chosen days. The confirmation dialog shows how many games will be deleted; an empty range cannot be confirmed. Re-sync from the desktop app afterwards to upload your replays again. [Step-by-step deletion guide](/help/deleting-game-history)." },
@@ -63,6 +63,7 @@ const article: HelpArticle = {
       text: "Check the preview before confirming. Covered data is replaced. A snapshot contains no heavy game details or replay binaries, so files already deleted need a desktop Re-sync from replays on your PC. Keep a download of any snapshot you need beyond its retention limit.",
     },
     { type: "paragraph", text: "If backup storage is unavailable or an archive cannot be verified, restore does not change your current data. Existing uploaded replays are checked before restore. For derived-data problems, try [Fixing wrong opponent counts](/help/repair-my-data)." },
+    { type: "paragraph", text: "If a restore stops part-way through, refresh its preview before trying again. The Before action snapshot remains a separate restore point. An upload batch already in progress when history is replaced may need to retry; use a fresh desktop Re-sync when you want to upload that history again." },
     { type: "heading", text: "Export your data" },
     {
       type: "paragraph",

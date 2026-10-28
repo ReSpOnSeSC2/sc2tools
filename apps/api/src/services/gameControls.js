@@ -1,5 +1,6 @@
 "use strict";
 const { gameWrite } = require("../util/userRevision");
+const { gameStatsWritesFor, sessionArgs } = require("./gameStatsWrites");
 
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
@@ -17,7 +18,7 @@ const CONTROL_PROJECTION = Object.freeze({ _id: 0, gameId: 1, "opponent.pulseId"
 class GameControlsService {
   /** @param {import('../db/connect').DbContext} db
    * @param {{gdpr:import('./gdpr').GdprService,onChanged?:(userId:string,game:Record<string,any>|null)=>Promise<void>}} deps */
-  constructor(db, deps) { this.db = db; this.gdpr = deps.gdpr; this.onChanged = deps.onChanged; }
+  constructor(db, deps) { this.db = db; this.gdpr = deps.gdpr; this.onChanged = deps.onChanged; this.gameStatsWrites = gameStatsWritesFor(db); }
 
   /** Settings-only control records, including incomplete cleanup retries.
    * Tombstones never enter the replay library or analysis DTOs.
@@ -72,6 +73,7 @@ class GameControlsService {
     const fence = await this.gdpr._acquireMutationFence(userId, "game_visibility");
     let changedGame = null;
     try {
+      const statsOwner = await this.gameStatsWrites.forFence(userId, fence);
       const game = await this.db.games.findOne({ userId, gameId }, { projection: CONTROL_PROJECTION });
       if (!game || game._deleted) return null;
       if (game._deletionPending) throw failure("game_deletion_pending", 409);
@@ -80,9 +82,9 @@ class GameControlsService {
       // The driver can reject after committing this owner-only visibility
       // write. Its finally path must still retire cached contributions.
       changedGame = game;
-      await gameWrite(this.gdpr.userRevision, userId, () => this.db.games.updateOne({ userId, gameId, _deleted: { $ne: true } }, input.excluded
+      await gameWrite(this.gdpr.userRevision, userId, () => this.gameStatsWrites.write(statsOwner, session => this.db.games.updateOne({ userId, gameId, _deleted: { $ne: true } }, input.excluded
         ? { $set: { excluded: true, exclusionReason: input.reason, excludedAt: new Date() } }
-        : { $unset: { excluded: "", exclusionReason: "", excludedAt: "" } }));
+        : { $unset: { excluded: "", exclusionReason: "", excludedAt: "" } }, ...sessionArgs(session)), { fenceId: fence.id, selection: { gameIds: [gameId] } }));
       await this.recountOpponent(userId, game.opponent?.pulseId);
       if (this.gdpr.guideSamples) await this.gdpr.guideSamples.setExcluded(userId, gameId, input.excluded);
       // Public guide example slots never retain an owner's hidden contribution.
@@ -99,6 +101,7 @@ class GameControlsService {
     const fence = await this.gdpr._acquireMutationFence(userId, "delete_game");
     let changedGame = null;
     try {
+      const statsOwner = await this.gameStatsWrites.forFence(userId, fence);
       const game = await this.db.games.findOne({ userId, gameId }, { projection: CONTROL_PROJECTION });
       if (!game) return null;
       changedGame = game;
@@ -115,7 +118,7 @@ class GameControlsService {
       if (!game._deleted) {
         // Pending deletion is owner-controlled and cannot be undone by ingest
         // or Unhide if object storage fails before the operation completes.
-        await gameWrite(this.gdpr.userRevision, userId, () => this.db.games.updateOne({ userId, gameId }, { $set: { excluded: true, _deletionPending: true, _cleanupRequired: cleanupRequired } }));
+        await gameWrite(this.gdpr.userRevision, userId, () => this.gameStatsWrites.write(statsOwner, session => this.db.games.updateOne({ userId, gameId }, { $set: { excluded: true, _deletionPending: true, _cleanupRequired: cleanupRequired } }, ...sessionArgs(session)), { fenceId: fence.id, selection: { gameIds: [gameId] } }));
         await this.recountOpponent(userId, game.opponent?.pulseId);
       }
       await this.purgePayloads(userId, gameId);
@@ -124,7 +127,7 @@ class GameControlsService {
       await this.gdpr._scrubUserGuideExamples(userId);
       await fence.assert();
       const deletedAt = game._deleted && game.deletedAt instanceof Date ? game.deletedAt : new Date();
-      await gameWrite(this.gdpr.userRevision, userId, () => this.db.games.replaceOne({ userId, gameId }, stampVersion({ userId, gameId, deletedAt, _deleted: true, excluded: true, _cleanupRequired: cleanupRequired }, COLLECTIONS.GAMES)));
+      await gameWrite(this.gdpr.userRevision, userId, () => this.gameStatsWrites.write(statsOwner, session => this.db.games.replaceOne({ userId, gameId }, stampVersion({ userId, gameId, deletedAt, _deleted: true, excluded: true, _cleanupRequired: cleanupRequired }, COLLECTIONS.GAMES), ...sessionArgs(session)), { fenceId: fence.id, selection: { gameIds: [gameId] } }));
       // A stale upload completion cannot authorize against the minimal row.
       // Repeat the same scoped cleanup to catch an earlier in-flight write.
       await this.purgePayloads(userId, gameId);
