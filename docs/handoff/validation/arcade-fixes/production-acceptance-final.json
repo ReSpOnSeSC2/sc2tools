@@ -1,0 +1,58 @@
+{
+  "supersedes": [
+    "production-acceptance-01.json",
+    "production-acceptance-02.json"
+  ],
+  "pr": 797,
+  "testedHead": "0e88349e181e95e288d2e5766f27f8821efcecb3",
+  "squash": "c100529d394e0a12fa3c95676cf6eef763dc1d07",
+  "deployment": {
+    "id": "8Aun1CWuJJCrzY5KJdR3jTxKLNke",
+    "status": "Ready",
+    "environment": "Production",
+    "source": "c100529d394e0a12fa3c95676cf6eef763dc1d07",
+    "domain": "sc2tools.com"
+  },
+  "bingo": {
+    "actualSignedIn": true,
+    "explicitlyMeasuredViewport": 390,
+    "cells": 25,
+    "rows": 5,
+    "escaping": 0,
+    "horizontalOverflow": false,
+    "savedScore": "16/25",
+    "rerollSubmitted": false
+  },
+  "bracket": {
+    "actualSignedIn": true,
+    "userApprovedAnswers": 1,
+    "answersSubmitted": 1,
+    "selectedAfterAnswer": [
+      true,
+      false,
+      false,
+      false
+    ],
+    "nextRoundOpened": true,
+    "nextRoundCandidatesChanged": true,
+    "answerCount": 4,
+    "selectedNextRound": [
+      false,
+      false,
+      false,
+      false
+    ],
+    "furtherAnswersSubmitted": 0
+  },
+  "qualification": "Initial desktop measurement scope error remains preserved in01 and corrected by the dedicated390px document in02. Final bracket check was performed only after explicit user authorization; XP amount was not independently read.",
+  "privacy": "No opponent names, identifiers, tokens, raw API bodies or storage retained in this receipt",
+  "remainingCurrentRelease": "none; merged and live",
+  "cleanup": {
+    "ownedTabsClosed": 6,
+    "verificationPortListeners": 0,
+    "viewportReset": true,
+    "mongodProcesses": 0,
+    "userTabsAndProcessesUntouched": true,
+    "ownedVerificationNodeProcesses": 0
+  }
+}
