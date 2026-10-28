@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 2,
+  "createdAt": "2026-10-28T11:39:35.032Z",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/guide-randomizer-completion",
+  "sourceHead": "a5240eb13b1094a2ee3a220f41aa800fe6df63d9",
+  "branch": "codex/device-auth-coordination",
+  "supersedes": {
+    "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\final-source-ready.json",
+    "sha256": "2faf579eb17a9ff7ef3ee5d1c59321a0e70bbe50eb67304e776b195572544420",
+    "reason": "Final private-helper/validator DoD cleanup with scoped exact-byte42/type/lint rerun; historical227/88 evidence remains separate."
+  },
+  "sourcePins": [
+    {
+      "file": "apps/api/src/services/deviceCredentialWrites.js",
+      "sha256": "8da8919a976e94734bcfe86e3c9f7dd0e1c624938835b7fb7a76d254fb89bfeb"
+    },
+    {
+      "file": "apps/api/src/services/devicePairings.js",
+      "sha256": "3b8efccc0c3f442d5546b13533c488b313b958505bdb327a19ce7caddfc716f0"
+    },
+    {
+      "file": "apps/api/src/services/gdpr.js",
+      "sha256": "daef3b45190b78f26f714ebe416571fd16ed2d10ec600662510b87c2e417f101"
+    },
+    {
+      "file": "apps/api/src/server.js",
+      "sha256": "edad76171bf02233d983726f9bb65c4687447b946ef66567e771a1e39ddc5db2"
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.test.js",
+      "sha256": "5a141b027a89dfdfdc2521e85a6258548519eb490230a2ce1979655d293c9c57"
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.integration.test.js",
+      "sha256": "f4cf91e4b1c214725a02a49e6b82cef97ff039232b37551a895f727441874c88"
+    },
+    {
+      "file": "apps/web/lib/help/articles/getting-started/install-and-pair.ts",
+      "sha256": "85e7185f78db80e5e0863754d5bdadc2636794a0293f1cac2f55491ef34a6361"
+    },
+    {
+      "file": "CHANGELOG.md",
+      "sha256": "5b1c58c1508064ec9ddc20e41c7b581e45fbbdaad66e54e2511e4ac8a49d9d14"
+    },
+    {
+      "file": "docs/engineeringexplanation.md",
+      "sha256": "878ce0120f6d08ccf9835f1083abf3792022e0e56af9bdb3bb47e5c615ccdb34"
+    },
+    {
+      "file": "docs/handoff/device-auth-reuse-checkpoint.md",
+      "sha256": "5caf90bf062dfefa9a8cddb9e2ddca557dd30c4d2af0653829d9c6fe8ae53aa6"
+    }
+  ],
+  "scope": "Credential WRITE coordination only; no retained read/cache/grant/activation endpoint. USER_CACHE_ENABLED unchanged/off;60s auth reuse and faster-dashboards remain unfinished.",
+  "authAndConfigUnchanged": [
+    {
+      "file": "apps/api/src/middleware/auth.js",
+      "sha256": "04f11fd11e46b3f767070603727669d47778a2b53a0f6bf06fdabbf8960fd5c2",
+      "normalizedEqual": true
+    },
+    {
+      "file": "apps/api/src/socket/auth.js",
+      "sha256": "a847122a8e3e46a012d3ed171d2101ca318b3e69b0c5f1e54cbb740e5b221ab5",
+      "normalizedEqual": true
+    },
+    {
+      "file": "apps/api/src/services/deviceLiveness.js",
+      "sha256": "df4ce0f6b9df458228459db6988608b0bfaae9cd8112577e04036bdef1ffcbcf",
+      "normalizedEqual": true
+    },
+    {
+      "file": "apps/api/src/app.js",
+      "sha256": "a33b9a319bf14c2947127da48f71fa2050ac5494d8e0fbe00a118c606295e162",
+      "normalizedEqual": true
+    },
+    {
+      "file": "apps/api/src/middleware/userDataWriteFence.js",
+      "sha256": "df8f402ec6f29c1b5ee610265a743f1a39f7d969f1c15a7d5f1ea572adaa886e",
+      "normalizedEqual": true
+    },
+    {
+      "file": "apps/api/src/config/loader.js",
+      "sha256": "bf31686466fb38a3657d0150cff555802c07e170631ca694594855ad00b09718",
+      "normalizedEqual": true
+    },
+    {
+      "file": "apps/api/src/config/constants.js",
+      "sha256": "8784ba8f5ac4e7091143c7579231264e51a1655606d5ba6c1a27556e7d373b49",
+      "normalizedEqual": true
+    }
+  ],
+  "authoritativeLookup": {
+    "file": "apps/api/src/services/devicePairings.js",
+    "method": "findTokenByHash",
+    "normalizedSourceSha256": "d6810761571055e5a2a15f41700bf3e9b778b799229b6712c49b5fbdb8533365",
+    "baseEqual": true
+  },
+  "cachedMongo": {
+    "file": "C:/Users/jay19/.cache/mongodb-binaries/mongod-x64-win32-7.0.14.exe",
+    "sha256": "919ce2ee9893ffcac72e95610f543beacce721a7c226867568856ca0754d49d8",
+    "bytes": 63694848,
+    "version": "7.0.14",
+    "runtimeDownload": false
+  },
+  "dependencies": {
+    "junction": "C:\\SC2TOOLS\\.worktrees\\guide-randomizer-completion\\apps\\api\\node_modules",
+    "target": "C:\\SC2TOOLS\\.worktrees\\handoff-ci-repair\\apps\\api\\node_modules",
+    "noInstallOrDownload": true,
+    "pins": [
+      {
+        "file": "package.json",
+        "normalizedJsonSha256": "6cdd2c6810af8cf7a41c0d6a5cc4b246c4ad6f908e54fcda92377463f01819f3",
+        "matchesExisting": true
+      },
+      {
+        "file": "package-lock.json",
+        "normalizedJsonSha256": "5fbd5a2cad1677ffeda1f4a842605a35acdf8a40884d025eafc5463002d3af7f",
+        "matchesExisting": true
+      }
+    ]
+  },
+  "freshVerification": {
+    "tests": 42,
+    "files": 2,
+    "failed": 0,
+    "skipped": 0,
+    "wholeApiTypes": true,
+    "strictCoordinatorPairingTestsLint": true,
+    "explicitDoD": {
+      "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\dod-verification.json",
+      "sha256": "da1c12ad7c37c35c4195010129c525d6ec702172312098ff3034ade7b755acf5",
+      "publicMethods": 7,
+      "classLines": 166,
+      "fileLines": 237,
+      "maxComplexity": 10,
+      "maxFunctionLines": 60,
+      "errors": 0,
+      "warnings": 0
+    },
+    "results": [
+      {
+        "label": "new-suites-04",
+        "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\new-suites-04.json",
+        "sha256": "a633459e34baaeed69c61fac3a6c761bac6135a87da4cdb8d92a957b18f52c68",
+        "pid": 35200,
+        "exitCode": 0,
+        "elapsedMs": 6110.1707,
+        "exactAppTestInputs": 7
+      },
+      {
+        "label": "api-types-04",
+        "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\api-types-04.json",
+        "sha256": "4125fbd4c32d2634e1355bad3601acb8be3650ac83ea6268a3bf91de6977a9ae",
+        "pid": 26880,
+        "exitCode": 0,
+        "elapsedMs": 10249.421900000001,
+        "exactAppTestInputs": 7
+      },
+      {
+        "label": "api-new-lint-03",
+        "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\api-new-lint-03.json",
+        "sha256": "1482f10a09bdaabb44038c111ed96f872311a261ee108ceb06c15f29cf0fa6d8",
+        "pid": 54924,
+        "exitCode": 0,
+        "elapsedMs": 527.1462,
+        "exactAppTestInputs": 7
+      },
+      {
+        "label": "dod-lint-01",
+        "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\dod-lint-01.json",
+        "sha256": "5b47fad55fb8270fcf4b59595b8b384dfbf00c676b5649b0a2d19c40e30a8f9b",
+        "pid": 43940,
+        "exitCode": 0,
+        "elapsedMs": 422.5752,
+        "exactAppTestInputs": 7
+      }
+    ]
+  },
+  "historicalVerification": {
+    "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\runtime-verification.json",
+    "sha256": "ed652299358b1941685518306db882328f55ef8baa7d38132d09920af744a727",
+    "apiTests": 227,
+    "apiFiles": 15,
+    "helpTests": 88,
+    "helpFiles": 13,
+    "wholeWebTypes": true,
+    "helpLint": true,
+    "qualification": "Full227/88 were not rerun after the internal helper cleanup. Other8owned paths are exact; checkpoint changed only verification prose. The independent delta reconstructs the earlier tested helper byte-exact."
+  },
+  "independentDelta": {
+    "file": "C:\\SC2TOOLS\\.cache\\device-auth-coordination-20261028\\final-independent-review-02-dod-delta.json",
+    "sha256": "51f2221a9db773ce207b3f3adfd79bb0f1e8f9e1f25e49e1806b65be9a2d84d9",
+    "qualification": "Source-only reversible reconstruction proof, not execution or branch coverage."
+  },
+  "serialLimits": {
+    "workers": 1,
+    "databaseMembersAtATime": 1,
+    "runtimeDownloads": false
+  },
+  "noActivationCommitPushProviders": true,
+  "gitDiffCheck": "pass",
+  "remaining": [
+    "Actual writer-first all-actors cutover and unknown-work settlement/new-incarnation receipt.",
+    "Separately reviewed short-grant/read-cache implementation, clock/failover proof and explicit activation; none performed here.",
+    "Required exact-head CI, authorized integration/merge, actual deployment and relevant production acceptance remain root-owned."
+  ],
+  "notReleased": true
+}

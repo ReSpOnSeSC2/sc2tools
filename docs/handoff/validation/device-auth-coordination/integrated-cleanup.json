@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-28T12:08:14.9351239Z",
+  "sourceHead": "354a2fa343d5d3dccc38d4965a71b20b08ceccfa",
+  "checkedOwnedPids": [
+    45232,
+    35528,
+    49604,
+    26288,
+    46944
+  ],
+  "remainingOwnedDescendants": [],
+  "remainingOwnedListeners": [],
+  "remainingPinnedMongo": [],
+  "monitoredReplica": {
+    "pid": 46944,
+    "stopAssertedByTest": true,
+    "port": 56466
+  },
+  "killedProcesses": [],
+  "otherProcessesUntouched": true
+}

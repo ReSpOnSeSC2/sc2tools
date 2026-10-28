@@ -7,8 +7,8 @@
   "canonicalSha256": "7736aa72eada3a1b6d71ac1570accdbb24dbc6634138e5445c0fd3ce7fc58b60",
   "programStatus": "active_incomplete",
   "counts": {
-    "completed": 122,
-    "partial": 55,
+    "completed": 123,
+    "partial": 54,
     "open": 20,
     "unknown": 0
   },
@@ -21,18 +21,21 @@
   },
   "precedence": "Latest active cache checkpoint supersedes historical pause/pending-release wording; the program is active and incomplete.",
   "productionEvidence": {
-    "webRevision": "ccb5987e145968059097ecf440204c3972279ded",
-    "webDeployment": "64x3iJnoY5wcuR1AiugoSmzqkGGz",
-    "status": "Ready / Production / sc2tools.com",
-    "apiRevision": "ccb5987e145968059097ecf440204c3972279ded",
-    "apiDeployment": "dep-dbgsm6uq1p3s73bard6g",
+    "webRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+    "webDeployment": "Fjjx69hgBkAJg4nAeAvD5UnzHBKM",
+    "status": "Ready / Production / Current / sc2tools.com",
+    "apiRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+    "apiDeployment": "dep-dbgtsgavcj2c73dreh70",
     "apiStatus": "Live",
     "receipts": [
       "validation/help-recovery/production-263.json",
-      "validation/guide-randomizer/production-ccb598.json"
+      "validation/guide-randomizer/production-ccb598.json",
+      "validation/game-stats-writers/production-910a1e4.json",
+      "validation/game-stats-maintenance/production-49acfe7.json",
+      "validation/demo-readable-file-sizes/production-2242.json"
     ],
-    "receiptSha256": "f20b75d86ccaee6beea906c5e0b9c1c1857bae0ad36f9603ddaf5b1a1450be48",
-    "scope": "Scoped original802 acceptance plus actual803 guide glossary/focus/Help and normal preview resolved status. Full OS/page/AA matrix remains separately local. Tiny-size fix and demo server retirement remain incomplete."
+    "receiptSha256": "0362649057b0fde14f9bdbe1f18305daecb378e3a12ec8b7deb77ad169feca85",
+    "scope": "Scoped earlier802/803 acceptance plus actual804/805 writer deployment and806 small-file/focus recovery. No live destructive writer/credential mutation, retained-reader activation, old-command settlement or production savings claim."
   },
   "currentRootSlices": {
     "arcade": {
@@ -72,6 +75,13 @@
       "testedHead": "da264541cc24303deabb3f42e47c5e575b0543c1",
       "status": "Merged, actual Ready/Live and scoped signed-in acceptance passed; both named roadmap items complete with local/live qualifications retained.",
       "receipt": "validation/guide-randomizer/production-ccb598.json"
+    },
+    "tinyReplaySizes": {
+      "pr": 806,
+      "source": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+      "testedHead": "22830012333abedbd3df44687f2552b336c0e88a",
+      "status": "Merged and actual Ready/Live plus signed-in1KB/error/focus/Escape accepted.",
+      "receipt": "validation/demo-readable-file-sizes/production-2242.json"
     }
   },
   "nextCanonical": "faster-dashboards",
@@ -1678,7 +1688,7 @@
       "status": "partial",
       "title": "Run the landing 'Try a replay' demo in the browser and retire the server preview parser",
       "dependsOn": [],
-      "implemented": "Browser replay demo and recovery are merged. Actual production263 TryExplainer and home Runs in your browser/replay-never-leaves-device copy establish the existing NEXT_PUBLIC_INSTANT_IMPORT=all branch. The earlier ledger claim that delivery left it disabled is superseded; no flag was changed by this reconciliation.",
+      "implemented": "Browser replay demo and recovery are merged. Actual production263 TryExplainer and home Runs in your browser/replay-never-leaves-device copy establish the existing NEXT_PUBLIC_INSTANT_IMPORT=all branch. The earlier ledger claim that delivery left it disabled is superseded; no flag was changed by this reconciliation. Actual production49 public repository fixture parsed both player editors with visible timelines; this DOM-only proof does not replace the final local real-worker/network guard or server retirement delivery.",
       "remainingRequirements": [
         "The required subsequent served release is now observed at PR803/ccb598. Retire /v1/public/preview-replay, its health route, preview_replay_cli.py wiring and associated tests after preserving unsupported-browser guidance, old-mode compatibility recovery and rollout/how-to documentation."
       ],
@@ -1689,7 +1699,9 @@
         "apps/web/components/landing/LandingPageContent.tsx",
         "docs/handoff/help-recovery-completion-checkpoint.md",
         "docs/handoff/validation/help-recovery/production-263.json",
-        "docs/handoff/validation/guide-randomizer/production-ccb598.json"
+        "docs/handoff/validation/guide-randomizer/production-ccb598.json",
+        "docs/handoff/validation/demo-server-retirement/production-pre-retirement.json",
+        "docs/handoff/validation/production-capture-qualifications-2026-10-28.json"
       ],
       "mergedPrs": [
         751,
@@ -1915,10 +1927,10 @@
       "dependsOn": [
         "realtime-one-connection"
       ],
-      "implemented": "Owner revisions/default-off six-chart cache, ETag/304, deferred Trends, five-minute activity writes,30s latestAgent and minute device touches are merged. Read-only admin chart-cache health is delivered in PR798 with Off/Not reported/Enabled distinctions and no activation.",
+      "implemented": "Owner revisions/default-off six-chart cache, ETag/304, deferred Trends, five-minute activity writes,30s latestAgent and minute device touches are merged. Read-only admin chart-cache health is delivered in PR798 with Off/Not reported/Enabled distinctions and no activation. PR801 extends safe owner-game cache coverage to11 response kinds while the chart flag stays off. PR804 fences all inventoried owner-game writers; PR805 eagerly maintains totals/latest in those transactions. Both are merged and actual protocol2 startup/Ready/Live is recorded. Authoritative readers remain unchanged; local-only credential writer coordination and future reader freshness/cutover are separate unfinished stages.",
       "remainingRequirements": [
-        "Maintain users.gameStats and remove repeated stats count/latest work from /me.",
-        "Extend caching only after route-specific dependency/revocation audits beyond the current six charts.",
+        "Use the delivered eager users.gameStats safely in lighter /me/Doctor only after a fresh retained-state boundary and inventoried old-writer/unknown-command cutover proof; preserve unsupported raw BSON fallback.",
+        "Extend caching only after route-specific dependency/revocation audits beyond the current 11 response kinds.",
         "Implement bounded revocation-coherent60s device-auth reuse; current findTokenByHash still performs an authoritative lookup on every request.",
         "Keep USER_CACHE_ENABLED off and do not claim measured savings or complete this item from the status card alone.",
         "Device auth reuse needs an explicit serving-process/rolling-overlap revocation contract; metadata liveness reuse is not authentication authority. See device-auth-reuse-checkpoint.md."
@@ -1933,14 +1945,19 @@
         "apps/api/src/services/games.js",
         "apps/api/src/services/devicePairings.js",
         "docs/handoff/dashboard-cache-health-checkpoint.md",
-        "docs/handoff/device-auth-reuse-checkpoint.md"
+        "docs/handoff/device-auth-reuse-checkpoint.md",
+        "docs/handoff/game-stats-writer-stage-checkpoint.md",
+        "docs/handoff/game-stats-maintenance-checkpoint.md",
+        "docs/handoff/validation/game-stats-maintenance/production-49acfe7.json"
       ],
       "mergedPrs": [
         778,
         779,
         782,
         783,
-        787
+        787,
+        804,
+        805
       ],
       "requirementSha256": "3a582d2301ebae22937707d3b214e1f4b0c57d1e9fa5218a9a345a1d622d0311"
     },
@@ -4219,14 +4236,11 @@
       "ordinal": 164,
       "id": "landing-try-polish-1",
       "wave": 1,
-      "status": "partial",
+      "status": "completed",
       "title": "Landing replay demo that works: real drag-and-drop, iPhone picking, recoverable errors, and one clear 'try it' path",
       "dependsOn": [],
-      "implemented": "PR802 adds selected filename/size and direct Choose another replay recovery to browser-mode parsing/error/loading states. Actual1024-byte synthetic invalid replay selection at production263 showed Not a replay, Retry and Choose another; the displayed0.00 MB size exposed a remaining readability defect.",
-      "remainingRequirements": [
-        "Ship readable small-file units so the recorded1024-byte file does not display0.00 MB; the correction is locally verified but unshipped.",
-        "Verify the readable-size correction on its actual deployed source. Prior PR802 recovery and PR803 deployment are separately accepted; neither proves this unshipped correction."
-      ],
+      "implemented": "PR802 supplies private-demo name/recovery parity; PR806 corrects all three size-label sites using readable B/KB and preserved MB. Exact-head CI, actual Ready/Live source2242 and the same owned1024-byte invalid-file1.00KB/error/focus/Escape interaction passed. Existing drag/picker/editor/privacy scope remains covered by retained source and independently scoped tests.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/instant/useDropTarget.ts",
         "apps/web/components/instant/useReplayAccept.ts",
@@ -4240,16 +4254,29 @@
         "docs/handoff/try-conversion-checkpoint.md",
         "docs/handoff/help-recovery-completion-checkpoint.md",
         "docs/handoff/validation/help-recovery/production-263.json",
-        "docs/handoff/validation/help-recovery/screenshots/production-tiny-size-before.png"
+        "docs/handoff/validation/demo-readable-file-sizes/production-2242.json",
+        "docs/handoff/validation/demo-readable-file-sizes/build-browser-receipt.json",
+        "docs/handoff/validation/demo-readable-file-sizes/screenshots/production-one-kb-error.jpg",
+        "docs/handoff/validation/production-capture-qualifications-2026-10-28.json"
       ],
       "mergedPrs": [
         687,
         751,
         772,
-        802
+        802,
+        806
       ],
       "requirementSha256": "01d088e0ab4982cc324053bd95bd4d00dd8185ce1b36b05049fd182846619ef7",
-      "acceptanceQualification": "Production chooser used only an owned1024-byte invalid synthetic file. No personal replay or replacement parse occurred; CUA did not instrument network, so no live no-request/no-upload assertion is fabricated. Existing source/component/CI proof remains separate."
+      "acceptanceQualification": "Production chooser used only an owned1024-byte invalid synthetic file. No personal replay or replacement parse occurred; CUA did not instrument network, so no live no-request/no-upload assertion is fabricated. Existing source/component/CI proof remains separate.",
+      "completionProof": {
+        "pr": 806,
+        "mergedRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+        "testedHead": "22830012333abedbd3df44687f2552b336c0e88a",
+        "productionReceipt": "docs/handoff/validation/demo-readable-file-sizes/production-2242.json",
+        "receiptSha256": "0362649057b0fde14f9bdbe1f18305daecb378e3a12ec8b7deb77ad169feca85",
+        "qualification": "Actual live synthetic-file size/error/focus/Escape observed. No live network instrumentation or real private replay claim; local worker/transport boundaries remain explicit."
+      },
+      "captureEvidenceQualification": "Old clipped before/error images were rejected by pixel review and preserved as failed evidence; actual DOM observations remain valid. Current full viewport JPEG749431 is genuine inspected error-modal proof."
     },
     {
       "ordinal": 165,
@@ -5123,8 +5150,8 @@
     "validation/roadmap-audit/unknown-a.json",
     "validation/roadmap-audit/unknown-b.json"
   ],
-  "remainingCount": 75,
-  "remainingMeaning": "55 partial and20 open original roadmap items remain (75 total). Sizes vary; these are not75 equally sized releases. Native/provider/operational and retained-reader/cutover requirements remain explicit.",
+  "remainingCount": 74,
+  "remainingMeaning": "54 partial and20 open original roadmap items remain (74 total). Sizes vary; these are not74 equal releases. Reader/cutover, native/provider/operational and all other delivery requirements remain explicit.",
   "historicalProductionEvidenceUpdates": [
     {
       "supersededByAcceptedRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
@@ -5160,10 +5187,28 @@
         "scope": "Actual signed-in desktop/mobile Help, private Dock-to-Setup new tab and admitted shared analysis acceptance at release263. Conditional service-worker prompt and held-loading/HTTP behavior are separately scoped local/CI proofs. Browser demo all branch first observed here without flag change; tiny-size0.00MB defect remains."
       },
       "qualification": "Original scoped production263 receipt retained unchanged; this later evidence covers only the named803 features and subsequent served all-mode release."
+    },
+    {
+      "supersededByAcceptedRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+      "record": {
+        "webRevision": "ccb5987e145968059097ecf440204c3972279ded",
+        "webDeployment": "64x3iJnoY5wcuR1AiugoSmzqkGGz",
+        "status": "Ready / Production / sc2tools.com",
+        "apiRevision": "ccb5987e145968059097ecf440204c3972279ded",
+        "apiDeployment": "dep-dbgsm6uq1p3s73bard6g",
+        "apiStatus": "Live",
+        "receipts": [
+          "validation/help-recovery/production-263.json",
+          "validation/guide-randomizer/production-ccb598.json"
+        ],
+        "receiptSha256": "f20b75d86ccaee6beea906c5e0b9c1c1857bae0ad36f9603ddaf5b1a1450be48",
+        "scope": "Scoped original802 acceptance plus actual803 guide glossary/focus/Help and normal preview resolved status. Full OS/page/AA matrix remains separately local. Tiny-size fix and demo server retirement remain incomplete."
+      },
+      "qualification": "Earlier scoped receipts are retained unchanged; later acceptance does not rerun every historical feature."
     }
   ],
-  "latestImplementationRevision": "910a1e4365adadc908e624d2bb99fbfd6eeff145",
-  "latestProductionAcceptedRevision": "ccb5987e145968059097ecf440204c3972279ded",
+  "latestImplementationRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+  "latestProductionAcceptedRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
   "recentDeliveryReconciliation": {
     "date": "2026-10-28",
     "implementationRevision": "ccb5987e145968059097ecf440204c3972279ded",
@@ -5182,7 +5227,7 @@
       "builds-polish-7",
       "guides-polish-4"
     ],
-    "qualification": "PR802 closes only the four named statuses; the additional two PR803 closures are recorded separately below. Conditional service-worker UI, explicit ADR0065 literal-filename substitution and retained strict HTTP7/9 limitation remain visible. Landing tiny-size delivery and demo server retirement remain unfinished.",
+    "qualification": "PR802 closes its four named statuses; additional PR803 andPR806 closures are recorded separately. Conditional service-worker UI, ADR0065 substitution and strict HTTP7/9 limitation remain visible. Historical clipped-image failures are explicitly qualified; server retirement and performance remain unfinished.",
     "guideRandomizer": {
       "acceptedProductionRevision": "ccb5987e145968059097ecf440204c3972279ded",
       "receipt": "docs/handoff/validation/guide-randomizer/production-ccb598.json",
@@ -5191,7 +5236,16 @@
         "builds-polish-7",
         "guides-polish-4"
       ],
-      "qualification": "Only these two additional statuses close; full197 historical acceptance is not claimed. Tiny readability and legacy demo retirement remain partial."
+      "qualification": "Only these two additional statuses close; full197 historical acceptance is not claimed. Legacy demo retirement remains partial; the later Tiny closure is recorded separately below."
+    },
+    "tinyReplaySizes": {
+      "completedIds": [
+        "landing-try-polish-1"
+      ],
+      "acceptedProductionRevision": "2242d112d9124bca8cfae92d00bc852ccab2f85b",
+      "receipt": "docs/handoff/validation/demo-readable-file-sizes/production-2242.json",
+      "receiptSha256": "0362649057b0fde14f9bdbe1f18305daecb378e3a12ec8b7deb77ad169feca85",
+      "qualification": "One additional status closes. Server retirement and the performance parent remain unfinished."
     }
   }
 }

@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "reviewedAtUtc": "2026-10-28T11:31:33.655Z",
+  "reviewer": "/root/cache_review_adopt",
+  "status": "source-only-DoD-gate-clear-pending-final-runtime-requalification",
+  "supersedesFinding": {
+    "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/final-independent-review-01.json",
+    "sha256": "fa0204c4c95393e4ef6cd3ac948d60702c9df786bff5f01589d6c4f89f57bb5f",
+    "area": "9publicMethods and validator complexity"
+  },
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/guide-randomizer-completion",
+  "sourceHead": "a5240eb13b1094a2ee3a220f41aa800fe6df63d9",
+  "helper": {
+    "file": "apps/api/src/services/deviceCredentialWrites.js",
+    "sha256": "8da8919a976e94734bcfe86e3c9f7dd0e1c624938835b7fb7a76d254fb89bfeb",
+    "priorSha256": "7a3b7d4fcbe5e3b19e5ebd682620b132423acc31c39e99eb90765ee9b7ce90d2",
+    "exactReverseDeltaReconstructsPriorHash": true,
+    "publicMethods": [
+      "prepare",
+      "ownerHash",
+      "begin",
+      "complete",
+      "uncertain",
+      "run",
+      "stopAndDrain"
+    ],
+    "publicMethodCount": 7,
+    "classLines": 166
+  },
+  "unchangedOtherOwnedPins": [
+    {
+      "file": "apps/api/src/services/devicePairings.js",
+      "sha256": "3b8efccc0c3f442d5546b13533c488b313b958505bdb327a19ce7caddfc716f0",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/services/gdpr.js",
+      "sha256": "daef3b45190b78f26f714ebe416571fd16ed2d10ec600662510b87c2e417f101",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/server.js",
+      "sha256": "edad76171bf02233d983726f9bb65c4687447b946ef66567e771a1e39ddc5db2",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.test.js",
+      "sha256": "5a141b027a89dfdfdc2521e85a6258548519eb490230a2ce1979655d293c9c57",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/__tests__/deviceCredentialWrites.integration.test.js",
+      "sha256": "f4cf91e4b1c214725a02a49e6b82cef97ff039232b37551a895f727441874c88",
+      "unchanged": true
+    },
+    {
+      "file": "apps/web/lib/help/articles/getting-started/install-and-pair.ts",
+      "sha256": "85e7185f78db80e5e0863754d5bdadc2636794a0293f1cac2f55491ef34a6361",
+      "unchanged": true
+    },
+    {
+      "file": "CHANGELOG.md",
+      "sha256": "5b1c58c1508064ec9ddc20e41c7b581e45fbbdaad66e54e2511e4ac8a49d9d14",
+      "unchanged": true
+    },
+    {
+      "file": "docs/engineeringexplanation.md",
+      "sha256": "878ce0120f6d08ccf9835f1083abf3792022e0e56af9bdb3bb47e5c615ccdb34",
+      "unchanged": true
+    },
+    {
+      "file": "docs/handoff/device-auth-reuse-checkpoint.md",
+      "sha256": "9fbadc6db43c873f8b1c0d7835f0b335f6ea1cfc13324143a1588dbc991f352d",
+      "unchanged": true
+    }
+  ],
+  "reviewedDelta": [
+    "Only authority/drainLeaseBound methods and their callsites become native private identifiers; tests use neither public name.",
+    "Module-private validIdentity/validUuid/validMode/validPending decomposition preserves every original validation conjunct, UUID type check, active-history rule, pending-array bound, exact unique operation ID and prohibited expiry/owner fields.",
+    "validPending booleanizes its original first truthy-entry check; consumed only by Array.every, so acceptance remains identical. Short-circuit row/array checks precede dependent access.",
+    "No metadata command, gate/drain timing, callback, lease, credential operation, error handling, exports, test or assertion changed."
+  ],
+  "DoD": {
+    "publicMethods": "7<=7 by source",
+    "classLines": "166<=200 by source",
+    "validatorComplexity": "Decomposed pure validators each contain fewer than10 branch/boolean sites; dedicated AST/lint check authored but not executed by reviewer.",
+    "verifyDodScript": {
+      "file": "C:/SC2TOOLS/.cache/device-auth-coordination-20261028/verify-dod.mjs",
+      "sha256": "9f026f00cc71c1263a4dceda761eb81b26231a246ce0d8376e9206a06c3e219c",
+      "sourceReviewed": true,
+      "executed": false
+    }
+  },
+  "runtimeQualification": "Earlier227API/88Help/type/lint receipts are historical for the changed helper. Source-only review closes the pending design/template finding, not final verification or delivery. Root-authorized focused42 cases/types/DoD lint plus fresh pin binding remain required.",
+  "verification": {
+    "cacheWritesOnly": true,
+    "productModulesLoaded": false,
+    "testsRun": false,
+    "typesRun": false,
+    "lintRun": false,
+    "buildRun": false,
+    "browserRun": false,
+    "gitMutations": false,
+    "providerActions": false,
+    "processesStarted": 0
+  }
+}
