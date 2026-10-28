@@ -176,3 +176,22 @@ The seven-case suite and strict changed-test lint pass. The diagnosis and
 artifact hashes are in `validation/help-recovery/review-download-ci-diagnosis.json`.
 Existing runtime build/browser/HTTP evidence remains applicable because this
 repair changes only the test. Fresh exact-head CI and delivery remain pending.
+
+## Browser CI capacity
+
+Head1af28ef2 passes the web gate:9,990 tests/1 existing skip in1,023 passing
+suites, plus one existing skipped suite. Fresh root whole-web types also pass.
+Its responsive job was cancelled by the overall25-minute limit after640 of
+683 cases (549 passed/91 existing skips), with no recorded retry or assertion
+failure. The remaining43 were not verified by that cancelled run.
+
+Independent job metadata shows the earlier PR801 job took20:00 (setup3:52,
+browser16:05); this run took25:17 (setup5:07, browser20:09 before cancellation).
+All82 E2E files and Playwright configuration match the main baseline. The
+scoped workflow repair allows35 minutes for the entire responsive job. It
+changes no per-test timeout, retry, worker, project, test, assertion, asset
+step or route budget. Parsed YAML verifies the separate web job still has
+15 minutes. The independent timing/source review and evidence hashes are in
+`validation/help-recovery/ci-browser-capacity-independent-review.json`.
+This capacity adjustment does not constitute a passing browser result;
+fresh exact-head CI, merge and actual deployment acceptance remain required.
