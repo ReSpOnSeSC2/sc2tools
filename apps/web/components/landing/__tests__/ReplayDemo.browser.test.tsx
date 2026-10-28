@@ -44,8 +44,9 @@ describe("landing browser session with real controller", () => {
     expect(screen.getByRole("link", { name: "How this works" }).getAttribute("href")).toBe("/try#home-replay-demo");
   });
   it("keeps unsupported browsers local and offers Chrome/Edge or desktop recovery", async () => {
-    vi.stubGlobal("Worker", undefined); render(<ReplayDemo />); drop();
+    vi.stubGlobal("Worker", undefined); render(<ReplayDemo />); drop(new File([new Uint8Array(1024)], "unsupported.SC2Replay"));
     await screen.findByText("This browser cannot run the replay analyzer."); expect(screen.getByRole("link", { name: "use the desktop app" }).getAttribute("href")).toBe("/download");
+    expect(screen.getByText("unsupported.SC2Replay · 1.00 KB")).toBeTruthy();
     expect(h.factory).not.toHaveBeenCalled(); expect(h.fetch).not.toHaveBeenCalled();
   });
   it("uses shared engine error copy and never falls through to the server", async () => {
@@ -80,6 +81,19 @@ describe("landing browser session with real controller", () => {
     fireEvent.click(screen.getByRole("button", { name: /Alpha · Protoss/ }));
     await screen.findByRole("region", { name: "Parsed editor" });
     expect(h.scan).toHaveBeenCalledTimes(2); expect(h.fetch).not.toHaveBeenCalled();
+  });
+  it("keeps a 1 KB local filename readable during held scan and parse error", async () => {
+    let finish!: (rows: PlayersResult[]) => void;
+    h.scan.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    render(<ReplayDemo />); drop(new File([new Uint8Array(1024)], "tiny.SC2Replay", { lastModified: 1 }));
+    await screen.findByText("tiny.SC2Replay · 1.00 KB"); await waitFor(() => expect(h.scan).toHaveBeenCalledOnce());
+    expect(screen.getByRole("dialog", { name: "Analyzing in your browser…" })).toBeTruthy();
+    await act(async () => finish([{ ok: false, errorKind: "not_a_replay" }]));
+    const heading = await screen.findByRole("heading", { name: "Not a replay" });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+    expect(screen.getByText("tiny.SC2Replay · 1.00 KB")).toBeTruthy(); expect(screen.queryByText(/0\.00 MB/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy(); expect(screen.getByRole("button", { name: "Choose another replay" })).toBeTruthy();
+    expect(h.parse).not.toHaveBeenCalled(); expect(h.fetch).not.toHaveBeenCalled();
   });
   it("reports AI skips instead of opening an invented dossier or calling the server", async () => {
     h.scan.mockResolvedValue([{ ...players, isAiGame: true }]); render(<ReplayDemo />); drop();

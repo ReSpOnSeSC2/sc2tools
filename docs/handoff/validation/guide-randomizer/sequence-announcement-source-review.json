@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "reviewedAtUtc": "2026-10-28T10:51:24.2812376Z",
+  "reviewer": "/root/roadmap_audit",
+  "scope": "Read-only source/test/retained-evidence check of actual production803 preview announcement lifecycle; no new runtime.",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/guide-randomizer-completion",
+  "servedRevision": "ccb5987e145968059097ecf440204c3972279ded",
+  "sourcePins": [
+    {
+      "file": "apps/web/components/randomizer/RandomizerStage.tsx",
+      "sha256": "3470d5303fcc40a7a02358896c56ac040950396aefb0c6ba756d3b0f652e2cf1",
+      "normalizedSourceEqualTo803": true
+    },
+    {
+      "file": "apps/web/components/randomizer/RandomizerSequence.tsx",
+      "sha256": "014e924c0e152a13553b69f3b18aec232c2e180b54110d912575550135a81118",
+      "normalizedSourceEqualTo803": true
+    },
+    {
+      "file": "apps/web/components/randomizer/reveals/revealShared.tsx",
+      "sha256": "c2863fbf112a6e2fa8578d6a9f37b016a2595d758aa1fc32f174a4e99534df00",
+      "normalizedSourceEqualTo803": true
+    },
+    {
+      "file": "apps/web/components/analyzer/settings/randomizer/RandomizerPreview.tsx",
+      "sha256": "0f206838f2c4b1150404dedb92661fbd76062d68e249db49936c158209e2cc1a",
+      "normalizedSourceEqualTo803": true
+    },
+    {
+      "file": "apps/web/components/randomizer/__tests__/RandomizerStage.accessibility.test.tsx",
+      "sha256": "4cfb75036905648c9f28bd93cdfb695717b3fd5f14ede80b02fc2f6d62d854fc",
+      "normalizedSourceEqualTo803": true
+    },
+    {
+      "file": "apps/web/components/randomizer/__tests__/RandomizerSequence.test.tsx",
+      "sha256": "e05b2bc83fbc5d376a01facbb266d987718ed0f52e666ece4ffdc9bcd1389e23",
+      "normalizedSourceEqualTo803": true
+    }
+  ],
+  "retainedEvidencePins": [
+    {
+      "file": "C:/SC2TOOLS/.cache/guide-randomizer-verification-20261028/fixture.mjs",
+      "sha256": "8487a1e7f1ceaeb844ab6bab21b633242f2ec3e69c86b2b014cd65bddf304cf7"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/guide-randomizer-verification-20261028/guide-randomizer.spec.ts",
+      "sha256": "ace04dcf1719cc89a813a23f18a8290d9965f98136907f666b6c83de75802dd2"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/guide-randomizer-verification-20261028/browser-05.json",
+      "sha256": "594b1b0af3a801b908f7af52b0c0d71545e77c7d5c5f84dc464ac1cbf19483e3"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/guide-randomizer-verification-20261028/browser-06.json",
+      "sha256": "de20453df9250ce51550a3e36d5218c8d98a47b6afd2ede006f2f60d1b1098de"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/guide-randomizer-verification-20261028/independent-browser-review.json",
+      "sha256": "caf9f9a5ee71d6cc97195965f8c562f344935c7323131b2aabda05edca6dbd7f"
+    }
+  ],
+  "findings": [
+    "RandomizerPreview runs spinResult against the current draft and mounts real keyed RandomizerSequence; no config save or persistence is performed by Spin.",
+    "RandomizerStage handleComplete deduplicates the current keyed run, sets resolved=true and invokes current parent callback. RevealFrame always renders role=status aria-atomic=true sr-only text from resolved announcement context; WinnerCard show/opacity does not own or clear that status.",
+    "Sequence handleBuildComplete schedules future timers only. It does not set units/done immediately or invoke outer onComplete, so no same-batch parent unmount can discard the resolved state update.",
+    "With eligible openingUnits under normal preference, status remains in the mounted build stage throughout1100ms hold; build-exit then hides/fades its visual wrapper and the stage remains mounted until1100+320+160=1580ms, when units replace it.",
+    "With eligible openingUnits under reduced preference, hold is700ms and zero exit/gap timers replace build stage at700ms. The resolved status therefore has a700ms source-defined mounted hold, rather than synchronous unmount.",
+    "Without openingUnits, handleBuildComplete returns without scheduling transition, keeping resolved build status/result mounted. New spin remounts/clears live text; old completion is rejected by active/completed guards.",
+    "Sequence cleanup effect returns timer cleanup rather than clearing timers on mount, preserving completion scheduled by a child first effect. Existing test explicitly covers synchronous reduced completion, normal hold/exit/gap and old-run timer retirement."
+  ],
+  "evidenceQualification": {
+    "stageBrowser": "Retained fixture.mjs imports and mounts RandomizerStage directly, not RandomizerSequence. Actual weighted engine output in observed fixtures has openingUnits:null. It covers actual stage/reveal timers, completion, once-only resolved DOM announcements and OS/page motion, plus explicit cancel/reset lifecycle.",
+    "sequenceUnit": "Existing RandomizerSequence.test.tsx mocks RandomizerStage and UnitRandomizerStage; it proves parent timer/phase order but is not actual Stage+Sequence browser integration or speech acceptance.",
+    "sourceConclusion": "No batching/immediate-unmount defect found. Expected full preview transition explains a transient status window, but does not prove a particular live locator missed it for that reason.",
+    "live": "Root observed live initial status empty and preview sequence clearing. Live resolved announcement was not observed by this reviewer or claimed by this receipt; no assistive-technology speech test claimed.",
+    "browser05": "Historical18cases/132all-style OS/page reduced specimens recorded by independent review; full sequence absent.",
+    "browser06": "Retained JSON parsed stats:12expected,0unexpected,0skipped,0flaky; these stage/guide tests also do not mount Sequence."
+  },
+  "recommendation": "Preserve live observation qualification. Any stronger real full-sequence announcement acceptance must arm a DOM observer before Spin and capture the transient resolved mutation, then units/cleanup, without claiming speech or changing the saved draft.",
+  "sourceBlockers": [],
+  "sourceEdited": false,
+  "testsExecuted": false,
+  "runtimeStarted": false,
+  "providerChanges": false
+}

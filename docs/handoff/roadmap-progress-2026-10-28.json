@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "date": "2026-10-28",
   "sourceRevision": "477298dd7c397af2baaa79d19736ae43d1a4510d",
-  "sourceQualification": "All 197 original entries reconciled at merged source477298dd. Independent audits close42 formerly unknown items and retain18 concrete partial/open requirements. This source audit does not assert fresh manual or native delivery acceptance of every completed ancestor.",
+  "sourceQualification": "All 197 original entries reconciled at merged source477298dd. Independent audits close42 formerly unknown items and retain18 concrete partial/open requirements. This source audit does not assert fresh manual or native delivery acceptance of every completed ancestor. The original all197 source-audit boundary remains unchanged. Later implementation PR803/ccb598 and actual scoped production PR802/263 evidence are reconciled below; this does not claim all197 items were rerun at either revision. Actual scoped production803 acceptance is now reconciled; the later writer prerequisite910a1e4 does not complete its parent performance item.",
   "canonicalRoadmap": "docs/handoff/plan/final-plan.json",
   "canonicalSha256": "7736aa72eada3a1b6d71ac1570accdbb24dbc6634138e5445c0fd3ce7fc58b60",
   "programStatus": "active_incomplete",
   "counts": {
-    "completed": 116,
-    "partial": 61,
+    "completed": 122,
+    "partial": 55,
     "open": 20,
     "unknown": 0
   },
@@ -21,18 +21,18 @@
   },
   "precedence": "Latest active cache checkpoint supersedes historical pause/pending-release wording; the program is active and incomplete.",
   "productionEvidence": {
-    "webRevision": "161449b4f28b74b4d74b80333a5c1e1993c69d4b",
-    "webDeployment": "DM6HcDa3Tv4KG4zC1Aof8kaBHwno",
-    "status": "Ready/Production/sc2tools.com",
-    "apiRevision": "161449b4f28b74b4d74b80333a5c1e1993c69d4b",
-    "apiDeployment": "dep-dbglvq2vcj2c73dj466g",
-    "apiStatus": "Live; API bytes unchanged from PR798",
+    "webRevision": "ccb5987e145968059097ecf440204c3972279ded",
+    "webDeployment": "64x3iJnoY5wcuR1AiugoSmzqkGGz",
+    "status": "Ready / Production / sc2tools.com",
+    "apiRevision": "ccb5987e145968059097ecf440204c3972279ded",
+    "apiDeployment": "dep-dbgsm6uq1p3s73bard6g",
+    "apiStatus": "Live",
     "receipts": [
-      "validation/arcade-fixes/production-acceptance-final.json",
-      "validation/dashboard-cache-health/production-acceptance.json",
-      "validation/today-mobile-stat-height/production-acceptance.json"
+      "validation/help-recovery/production-263.json",
+      "validation/guide-randomizer/production-ccb598.json"
     ],
-    "scope": "Actual signed-in Bingo/bracket/cache-card/Today acceptance is scoped in those receipts; no new manual proof for every197-item ancestor."
+    "receiptSha256": "f20b75d86ccaee6beea906c5e0b9c1c1857bae0ad36f9603ddaf5b1a1450be48",
+    "scope": "Scoped original802 acceptance plus actual803 guide glossary/focus/Help and normal preview resolved status. Full OS/page/AA matrix remains separately local. Tiny-size fix and demo server retirement remain incomplete."
   },
   "currentRootSlices": {
     "arcade": {
@@ -52,6 +52,26 @@
     },
     "macro": {
       "status": "Owner explicitly chose Leave Macro as it is; optional candidate preserved locally, not shipped"
+    },
+    "helpRecovery": {
+      "pr": 802,
+      "source": "263a0805abb4084ea70460a02a3a217d5f16a76e",
+      "testedHead": "e2c195e79a49c4f237eafe1a72c8b957166ed1c5",
+      "status": "Merged; actual Vercel Ready and Render Live plus scoped signed-in acceptance.",
+      "receipt": "validation/help-recovery/production-263.json",
+      "completedIds": [
+        "app-shell-quick-fixes",
+        "help-and-feedback-menu",
+        "settings-quickwins",
+        "profiles-replays-polish-1"
+      ]
+    },
+    "guideRandomizer": {
+      "pr": 803,
+      "source": "ccb5987e145968059097ecf440204c3972279ded",
+      "testedHead": "da264541cc24303deabb3f42e47c5e575b0543c1",
+      "status": "Merged, actual Ready/Live and scoped signed-in acceptance passed; both named roadmap items complete with local/live qualifications retained.",
+      "receipt": "validation/guide-randomizer/production-ccb598.json"
     }
   },
   "nextCanonical": "faster-dashboards",
@@ -94,13 +114,11 @@
       "ordinal": 2,
       "id": "app-shell-quick-fixes",
       "wave": 1,
-      "status": "partial",
+      "status": "completed",
       "title": "App shell fixes: mobile Save bar and safe areas, page titles, lighter bundles, correct PWA manifest",
       "dependsOn": [],
-      "implemented": "Safe-inset observer/positioned floating controls, dynamic sections/Settings, title coverage/manifest and Later behavior are implemented and documented.",
-      "remainingRequirements": [
-        "Add the requested What changed link to /changelog in the service-worker update prompt, preserving Later/Reload/focus behavior."
-      ],
+      "implemented": "Existing safe-area/mobile Save controls, titles, lighter sections and manifest remain implemented. PR802 adds What changed to the service-worker update prompt, linking /changelog without activating an update and preserving Later, Reload and focus behavior.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/app/__tests__/pageTitles.test.ts",
         "apps/web/app/manifest.ts",
@@ -113,13 +131,25 @@
         "apps/web/README.md",
         "docs/design-system.md",
         "docs/handoff/chrome-navigation-checkpoint.md",
-        "docs/handoff/mobile-nav-sheet-checkpoint.md"
+        "docs/handoff/mobile-nav-sheet-checkpoint.md",
+        "docs/handoff/help-recovery-completion-checkpoint.md",
+        "docs/handoff/validation/help-recovery/production-263.json"
       ],
       "mergedPrs": [
         647,
-        767
+        767,
+        802
       ],
-      "requirementSha256": "c91fef3957a7cf0517f10e94b3e782767de588596dcdc4bb9d14888d4dd2bc19"
+      "requirementSha256": "c91fef3957a7cf0517f10e94b3e782767de588596dcdc4bb9d14888d4dd2bc19",
+      "completionProof": {
+        "pr": 802,
+        "mergedRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
+        "testedHead": "e2c195e79a49c4f237eafe1a72c8b957166ed1c5",
+        "productionReceipt": "docs/handoff/validation/help-recovery/production-263.json",
+        "receiptSha256": "ea8ae560ccc87e2ad0875eef0799ba0e9632ccd05fd10e48d4992d09f32a7c57",
+        "scope": "Merged implementation and retained unit/component-browser proof cover the conditional update prompt; release-note destination is delivered on Ready/Live release263.",
+        "qualification": "No pending service-worker update prompt appeared during actual production acceptance. Do not describe the dedicated component browser event proof as a live production prompt."
+      }
     },
     {
       "ordinal": 3,
@@ -172,15 +202,13 @@
       "ordinal": 5,
       "id": "help-and-feedback-menu",
       "wave": 1,
-      "status": "partial",
+      "status": "completed",
       "title": "Help & feedback menu in the app chrome, with bug reports that carry their own diagnostics",
       "dependsOn": [
         "help-center-foundation"
       ],
-      "implemented": "Help/report entry points, bounded opt-out diagnostics, five-failure memory ring, suggestions, API2KiB validation, sent-state/error fallbacks and admin context rows are implemented.",
-      "remainingRequirements": [
-        "Add the requested Whats new entry to the shared desktop/mobile Help menu; dedicated header Sparkles does not satisfy this named menu requirement."
-      ],
+      "implemented": "Existing Help/report diagnostics and admin handling remain implemented. Shared desktop Help and mobile More now include What's new from the same registry; actual desktop and 390px More navigation to the public changelog passed at release263.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/api/src/validation/userMessage.js",
         "apps/web/app/admin/components/AdminEventRow.tsx",
@@ -192,12 +220,25 @@
         "apps/web/components/feedback/ReportIssueModal.tsx",
         "apps/web/lib/feedback/failedRequests.ts",
         "apps/web/lib/feedback/reportContext.ts",
-        "apps/web/lib/help/articles/troubleshooting/report-a-problem.ts"
+        "apps/web/lib/help/articles/troubleshooting/report-a-problem.ts",
+        "apps/web/components/chrome/AppChrome.tsx",
+        "docs/handoff/help-recovery-completion-checkpoint.md",
+        "docs/handoff/validation/help-recovery/production-263.json"
       ],
       "mergedPrs": [
-        647
+        647,
+        802
       ],
-      "requirementSha256": "b803a5a9ed5d1ce84afd45784fc0863f2f1ecd256981b021ca6889d187964bab"
+      "requirementSha256": "b803a5a9ed5d1ce84afd45784fc0863f2f1ecd256981b021ca6889d187964bab",
+      "completionProof": {
+        "pr": 802,
+        "mergedRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
+        "testedHead": "e2c195e79a49c4f237eafe1a72c8b957166ed1c5",
+        "productionReceipt": "docs/handoff/validation/help-recovery/production-263.json",
+        "receiptSha256": "ea8ae560ccc87e2ad0875eef0799ba0e9632ccd05fd10e48d4992d09f32a7c57",
+        "scope": "Actual signed-in desktop Help and 390px mobile More What's new navigation passed; original report-context and error-handling scope remains covered by retained source/tests.",
+        "qualification": "Acceptance is scoped to the recorded production interactions; it does not rerun every historical feedback path."
+      }
     },
     {
       "ordinal": 6,
@@ -261,13 +302,11 @@
       "ordinal": 8,
       "id": "settings-quickwins",
       "wave": 1,
-      "status": "partial",
+      "status": "completed",
       "title": "Settings fixes: broken deep links, two dead toggles, lost multichat edits, misleading default tab",
       "dependsOn": [],
-      "implemented": "Canonical hash/alias resolution, per-source dirty guards moved to Chat, real analytics consent/retired-key stripping, Today default and setup links are implemented and documented.",
-      "remainingRequirements": [
-        "Add &section=setup to the Dock Open Overlay settings destinations now that widget-manager is delivered; preserve moved Chat aliases and guarded drafts."
-      ],
+      "implemented": "Existing Settings aliases, dirty guards, analytics consent and Today default remain implemented. Normal and terminal Dock Open Overlay settings links now target /settings?tab=overlay&section=setup; actual private-Dock click opened a new Settings tab at Setup after query consumption.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/app/streaming/page.tsx",
         "apps/web/components/analyzer/settings/SettingsContext.tsx",
@@ -278,14 +317,26 @@
         "apps/web/lib/help/articles/getting-started/settings-overview.ts",
         "docs/handoff/settings-chat-checkpoint.md",
         "docs/handoff/settings-registry-checkpoint.md",
-        "docs/handoff/settings-search-checkpoint.md"
+        "docs/handoff/settings-search-checkpoint.md",
+        "docs/handoff/help-recovery-completion-checkpoint.md",
+        "docs/handoff/validation/help-recovery/production-263.json"
       ],
       "mergedPrs": [
         647,
         777,
-        780
+        780,
+        802
       ],
-      "requirementSha256": "4249a523e13496b7767cfa97dfecbdc495fab25a6673c4054e8f2d8f06987926"
+      "requirementSha256": "4249a523e13496b7767cfa97dfecbdc495fab25a6673c4054e8f2d8f06987926",
+      "completionProof": {
+        "pr": 802,
+        "mergedRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
+        "testedHead": "e2c195e79a49c4f237eafe1a72c8b957166ed1c5",
+        "productionReceipt": "docs/handoff/validation/help-recovery/production-263.json",
+        "receiptSha256": "ea8ae560ccc87e2ad0875eef0799ba0e9632ccd05fd10e48d4992d09f32a7c57",
+        "scope": "Actual production Dock destination, new-tab behavior and Setup placement passed without changing settings, chat or provider state. Source/tests cover both normal and terminal Dock links and prior guarded aliases.",
+        "qualification": "Private Dock URL was not persisted in the receipt or ledger. The public Settings destination alone is recorded."
+      }
     },
     {
       "ordinal": 9,
@@ -1627,18 +1678,34 @@
       "status": "partial",
       "title": "Run the landing 'Try a replay' demo in the browser and retire the server preview parser",
       "dependsOn": [],
-      "implemented": "Browser replay demo and default-off controlled public mode are merged.",
+      "implemented": "Browser replay demo and recovery are merged. Actual production263 TryExplainer and home Runs in your browser/replay-never-leaves-device copy establish the existing NEXT_PUBLIC_INSTANT_IMPORT=all branch. The earlier ledger claim that delivery left it disabled is superseded; no flag was changed by this reconciliation.",
       "remainingRequirements": [
-        "Disabled rollout mode was not enabled by delivery; operational activation remains distinct from implementation and needs the existing owner decision."
+        "The required subsequent served release is now observed at PR803/ccb598. Retire /v1/public/preview-replay, its health route, preview_replay_cli.py wiring and associated tests after preserving unsupported-browser guidance, old-mode compatibility recovery and rollout/how-to documentation."
       ],
       "evidence": [
         "docs/handoff/landing-demo-checkpoint.md",
-        "docs/handoff/landing-try-checkpoint.md"
+        "docs/handoff/landing-try-checkpoint.md",
+        "apps/web/components/instant/TryExplainer.tsx",
+        "apps/web/components/landing/LandingPageContent.tsx",
+        "docs/handoff/help-recovery-completion-checkpoint.md",
+        "docs/handoff/validation/help-recovery/production-263.json",
+        "docs/handoff/validation/guide-randomizer/production-ccb598.json"
       ],
       "mergedPrs": [
-        751
+        751,
+        802
       ],
-      "requirementSha256": "6f6e370a741cba6bbb9a76dddd5c80ca9366560496b9be1b626f7adaa88aec27"
+      "requirementSha256": "6f6e370a741cba6bbb9a76dddd5c80ca9366560496b9be1b626f7adaa88aec27",
+      "rolloutObservation": {
+        "mode": "all",
+        "firstObservedRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
+        "firstObservedReceipt": "docs/handoff/validation/help-recovery/production-263.json",
+        "providerFlagChanged": false,
+        "proof": "Actual TryExplainer and home browser-mode copy, not a newly applied setting or private environment dump.",
+        "nextServedReleaseRevision": "ccb5987e145968059097ecf440204c3972279ded",
+        "nextServedReleaseVerification": "passed: actual Ready/Production and Live at PR803/ccb598 plus browser-mode home copy; no flag changed",
+        "remaining": "Original legacy route/health/CLI-wiring/test retirement remains unfinished."
+      }
     },
     {
       "ordinal": 66,
@@ -3007,26 +3074,35 @@
       "ordinal": 121,
       "id": "builds-polish-7",
       "wave": 6,
-      "status": "partial",
+      "status": "completed",
       "title": "Randomizer reveals: calm under reduced motion and announced to screen readers",
       "dependsOn": [],
-      "implemented": "Existing OS hook short-circuits reveal timers and unit reveals announce outcomes. Build WinnerCard still unconditionally pulses/zooms/springs; Gacha pulse and build resolved-status/Help requirements remain.",
-      "remainingRequirements": [
-        "Propagate reducedMotion into WinnerCard/Gacha and use opacity200ms only for resolved winners without pulse/winzoom/overshoot.",
-        "Extend reveal CSS for rdz-pulse/rdz-winzoom/rdz-charge plus confetti under OS reduction and data-motion=reduce; use shared override-aware hook once available.",
-        "Add a resolved-only Build chosen: name, rarity, pct status region; it must stay empty during spin.",
-        "Add original motion/status tests and randomizer Help statement about Reduce motion and screen-reader announcements."
-      ],
+      "implemented": "PR803 implements the audited OS and data-motion reduction, opacity-only winner behavior, resolved-only full-pool announcement, live preference handling and Help parity. Exact-head CI and actual Ready/Live deployment passed. Signed-in normal local preview showed an empty early status and the resolved Build chosen name/rarity/percentage; the original unsaved opening-unit draft was restored without saving. Reduced-motion/all-style behavior remains qualified by the retained real component-browser matrix, not claimed live speech.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/randomizer/reveals/revealShared.tsx",
         "apps/web/components/randomizer/reveals/GachaSummonReveal.tsx",
         "apps/web/components/randomizer/RandomizerStage.tsx",
         "apps/web/components/randomizer/RandomizerSequence.tsx",
         "apps/web/components/randomizer/unit-reveals/unitRevealShared.tsx",
-        "apps/web/lib/help/articles/builds/randomizer.ts"
+        "apps/web/lib/help/articles/builds/randomizer.ts",
+        "docs/handoff/guide-randomizer-completion-checkpoint.md",
+        "docs/handoff/validation/guide-randomizer/final-verification-02.json",
+        "docs/handoff/validation/guide-randomizer/production-ccb598.json",
+        "docs/handoff/validation/guide-randomizer/sequence-announcement-source-review.json"
       ],
-      "mergedPrs": [],
-      "requirementSha256": "f69807f9ecdf094ad2f95bd22da06d16b5544ebab6964b9168b3197cc9003ed5"
+      "mergedPrs": [
+        803
+      ],
+      "requirementSha256": "f69807f9ecdf094ad2f95bd22da06d16b5544ebab6964b9168b3197cc9003ed5",
+      "completionProof": {
+        "pr": 803,
+        "mergedRevision": "ccb5987e145968059097ecf440204c3972279ded",
+        "testedHead": "da264541cc24303deabb3f42e47c5e575b0543c1",
+        "productionReceipt": "docs/handoff/validation/guide-randomizer/production-ccb598.json",
+        "receiptSha256": "f20b75d86ccaee6beea906c5e0b9c1c1857bae0ad36f9603ddaf5b1a1450be48",
+        "qualification": "Live normal preview DOM status verified; no live OS/page override or speech claim. Stage matrix and separate Sequence timing review retain their stated boundaries."
+      }
     },
     {
       "ordinal": 122,
@@ -3258,13 +3334,11 @@
       "ordinal": 130,
       "id": "guides-polish-4",
       "wave": 2,
-      "status": "partial",
+      "status": "completed",
       "title": "Readable, accessible stats: verdict glyphs, one Tab stop per chart, a 'How to read these numbers' legend and the guide stats help article",
       "dependsOn": [],
-      "implemented": "Shared verdict glyph/phrase, compact cells/whiskers, hatched even bars/roving+pin tooltips, constant-driven single legend and reading-guide-stats Help are implemented. The explicit follow-on glossary integration is still a TODO after glossary delivery.",
-      "remainingRequirements": [
-        "Wrap likely range in the existing Term primitive in GuideStatsLegend and register likely-range, publishing-floor and trend-arrow glossary IDs; remove the fulfilled dependency TODO and add regression coverage."
-      ],
+      "implemented": "Existing accessible guide statistics remain. PR803 supplies real likely-range Term integration and all3 glossary entries through the budget-safe recoverable focus-preserving lazy boundary. Exact-head CI/Ready/Live delivery and actual signed-in legend definition, Escape/focus restoration and correct Help destination passed.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/guides/GuideStatsLegend.tsx",
         "apps/web/components/guides/WinRateCell.tsx",
@@ -3274,14 +3348,27 @@
         "apps/web/lib/guides/guideCopy.ts",
         "apps/web/lib/glossary.ts",
         "apps/web/components/ui/Term.tsx",
-        "apps/web/lib/help/articles/builds/reading-guide-stats.ts"
+        "apps/web/lib/help/articles/builds/reading-guide-stats.ts",
+        "docs/handoff/guide-randomizer-completion-checkpoint.md",
+        "docs/handoff/validation/guide-randomizer/final-verification-02.json",
+        "docs/handoff/validation/guide-randomizer/production-ccb598.json",
+        "docs/handoff/validation/guide-randomizer/sequence-announcement-source-review.json"
       ],
       "mergedPrs": [
         662,
         695,
-        720
+        720,
+        803
       ],
-      "requirementSha256": "5ce66736718556291ad3f1ab95ec9d4daee80dedba8c933317f3c34baac91685"
+      "requirementSha256": "5ce66736718556291ad3f1ab95ec9d4daee80dedba8c933317f3c34baac91685",
+      "completionProof": {
+        "pr": 803,
+        "mergedRevision": "ccb5987e145968059097ecf440204c3972279ded",
+        "testedHead": "da264541cc24303deabb3f42e47c5e575b0543c1",
+        "productionReceipt": "docs/handoff/validation/guide-randomizer/production-ccb598.json",
+        "receiptSha256": "f20b75d86ccaee6beea906c5e0b9c1c1857bae0ad36f9603ddaf5b1a1450be48",
+        "qualification": "Actual loaded glossary/Help/focus verified; held chunk/transport failure and full AA/responsive cases are separately recorded local proofs."
+      }
     },
     {
       "ordinal": 131,
@@ -3405,13 +3492,11 @@
       "ordinal": 137,
       "id": "profiles-replays-polish-1",
       "wave": 1,
-      "status": "partial",
+      "status": "completed",
       "title": "Public profile and replay pages survive share traffic, return real 404s and never dead-end",
       "dependsOn": [],
-      "implemented": "Public status/recovery/cursor contracts survive canonical migration; route loading-shape requirement remains.",
-      "remainingRequirements": [
-        "Restore the required analysis-shaped loading skeleton at apps/web/app/players/[player]/replays/[gameId]/loading.tsx, without adding duplicate legacy redirect loading UIs."
-      ],
+      "implemented": "Existing public status/privacy/canonical/recovery contracts remain. PR802 delivers the full analysis-shaped skeleton through an SSR-enabled dynamic analysis boundary after authoritative API/status/redirect decisions. Actual existing production archive50 to admitted analysis showed Game timeline, Economy and mechanics, and Build orders without an alert.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/api/__tests__/publicProfile.test.js",
         "apps/api/__tests__/publicReplaysRoute.test.js",
@@ -3429,14 +3514,33 @@
         "apps/web/lib/publicPlayer.ts",
         "apps/web/lib/publicReplayIdentity.ts",
         "docs/handoff/public-player-checkpoint.md",
-        "docs/handoff/replay-sharing-copy-checkpoint.md"
+        "docs/handoff/replay-sharing-copy-checkpoint.md",
+        "apps/web/components/public-profile/SharedReplayAnalysisLoading.tsx",
+        "apps/web/components/public-profile/SharedReplayAnalysisContent.tsx",
+        "apps/web/components/public-profile/__tests__/publicStatusBoundaries.test.ts",
+        "docs/adr/0065-public-player-privacy.md",
+        "docs/handoff/help-recovery-completion-checkpoint.md",
+        "docs/handoff/validation/help-recovery/production-263.json",
+        "docs/handoff/validation/help-recovery/safe-loading-architecture-review.json",
+        "docs/handoff/validation/help-recovery/shared-analysis-http-comparison-02.json",
+        "docs/handoff/validation/help-recovery/shared-analysis-independent-browser-review.json"
       ],
       "mergedPrs": [
         688,
         758,
-        765
+        765,
+        802
       ],
-      "requirementSha256": "554ab3174c853b3202248ea367503cc1739fa67e49ccc242ad66264e0e32a841"
+      "requirementSha256": "554ab3174c853b3202248ea367503cc1739fa67e49ccc242ad66264e0e32a841",
+      "completionProof": {
+        "pr": 802,
+        "mergedRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
+        "testedHead": "e2c195e79a49c4f237eafe1a72c8b957166ed1c5",
+        "productionReceipt": "docs/handoff/validation/help-recovery/production-263.json",
+        "receiptSha256": "ea8ae560ccc87e2ad0875eef0799ba0e9632ccd05fd10e48d4992d09f32a7c57",
+        "scope": "Full analysis-shaped waiting UI is implemented and independently source/component-browser/real-Next verified; actual production admitted-analysis content passed.",
+        "qualification": "The original literal app/players/[player]/replays/[gameId]/loading.tsx artifact is intentionally absent: later ADR0065/status/privacy authority forbids a fallback that could flush200 before admission. SharedReplayAnalysisLoading plus the post-authority SSR dynamic boundary is the explicit implementation-path substitution. No waiting fallback was observed live. Local real-Next baseline/candidate comparison preserves all9 case statuses/counts; strict HTTP fixture remains7/9 because pre-existing canonical/legacy redirects each read authority twice, not a claimed one-read9/9 pass."
+      }
     },
     {
       "ordinal": 138,
@@ -4118,10 +4222,10 @@
       "status": "partial",
       "title": "Landing replay demo that works: real drag-and-drop, iPhone picking, recoverable errors, and one clear 'try it' path",
       "dependsOn": [],
-      "implemented": "Landing replay intake and legacy recovery implemented; two browser-mode parity requirements remain.",
+      "implemented": "PR802 adds selected filename/size and direct Choose another replay recovery to browser-mode parsing/error/loading states. Actual1024-byte synthetic invalid replay selection at production263 showed Not a replay, Retry and Choose another; the displayed0.00 MB size exposed a remaining readability defect.",
       "remainingRequirements": [
-        "Show selected replay size alongside filename during browser-mode parsing.",
-        "Retain direct Choose another replay recovery in browser-mode failure footer, including unsupported failure, without uploading or falling through to legacy parsing."
+        "Ship readable small-file units so the recorded1024-byte file does not display0.00 MB; the correction is locally verified but unshipped.",
+        "Verify the readable-size correction on its actual deployed source. Prior PR802 recovery and PR803 deployment are separately accepted; neither proves this unshipped correction."
       ],
       "evidence": [
         "apps/web/components/instant/useDropTarget.ts",
@@ -4133,14 +4237,19 @@
         "docs/handoff/landing-demo-checkpoint.md",
         "docs/handoff/landing-try-checkpoint.md",
         "docs/handoff/site-cta-checkpoint.md",
-        "docs/handoff/try-conversion-checkpoint.md"
+        "docs/handoff/try-conversion-checkpoint.md",
+        "docs/handoff/help-recovery-completion-checkpoint.md",
+        "docs/handoff/validation/help-recovery/production-263.json",
+        "docs/handoff/validation/help-recovery/screenshots/production-tiny-size-before.png"
       ],
       "mergedPrs": [
         687,
         751,
-        772
+        772,
+        802
       ],
-      "requirementSha256": "01d088e0ab4982cc324053bd95bd4d00dd8185ce1b36b05049fd182846619ef7"
+      "requirementSha256": "01d088e0ab4982cc324053bd95bd4d00dd8185ce1b36b05049fd182846619ef7",
+      "acceptanceQualification": "Production chooser used only an owned1024-byte invalid synthetic file. No personal replay or replacement parse occurred; CUA did not instrument network, so no live no-request/no-upload assertion is fabricated. Existing source/component/CI proof remains separate."
     },
     {
       "ordinal": 165,
@@ -5014,6 +5123,75 @@
     "validation/roadmap-audit/unknown-a.json",
     "validation/roadmap-audit/unknown-b.json"
   ],
-  "remainingCount": 81,
-  "remainingMeaning": "61 partial and20 open original roadmap items. Sizes vary; this is not81 equally sized features or PRs. Native/provider/operational delivery gates remain explicit."
+  "remainingCount": 75,
+  "remainingMeaning": "55 partial and20 open original roadmap items remain (75 total). Sizes vary; these are not75 equally sized releases. Native/provider/operational and retained-reader/cutover requirements remain explicit.",
+  "historicalProductionEvidenceUpdates": [
+    {
+      "supersededByAcceptedRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
+      "record": {
+        "webRevision": "161449b4f28b74b4d74b80333a5c1e1993c69d4b",
+        "webDeployment": "DM6HcDa3Tv4KG4zC1Aof8kaBHwno",
+        "status": "Ready/Production/sc2tools.com",
+        "apiRevision": "161449b4f28b74b4d74b80333a5c1e1993c69d4b",
+        "apiDeployment": "dep-dbglvq2vcj2c73dj466g",
+        "apiStatus": "Live; API bytes unchanged from PR798",
+        "receipts": [
+          "validation/arcade-fixes/production-acceptance-final.json",
+          "validation/dashboard-cache-health/production-acceptance.json",
+          "validation/today-mobile-stat-height/production-acceptance.json"
+        ],
+        "scope": "Actual signed-in Bingo/bracket/cache-card/Today acceptance is scoped in those receipts; no new manual proof for every197-item ancestor."
+      },
+      "qualification": "Prior scoped production evidence retained unchanged; newer acceptance does not rerun every ancestor."
+    },
+    {
+      "supersededByAcceptedRevision": "ccb5987e145968059097ecf440204c3972279ded",
+      "record": {
+        "webRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
+        "webDeployment": "D9bzVaNsQW3gFbbZcFnuur5jUk85",
+        "status": "Ready / Production / sc2tools.com",
+        "apiRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
+        "apiDeployment": "dep-dbgpkd4s728c7393u3mg",
+        "apiStatus": "Live",
+        "receipts": [
+          "validation/help-recovery/production-263.json"
+        ],
+        "receiptSha256": "ea8ae560ccc87e2ad0875eef0799ba0e9632ccd05fd10e48d4992d09f32a7c57",
+        "scope": "Actual signed-in desktop/mobile Help, private Dock-to-Setup new tab and admitted shared analysis acceptance at release263. Conditional service-worker prompt and held-loading/HTTP behavior are separately scoped local/CI proofs. Browser demo all branch first observed here without flag change; tiny-size0.00MB defect remains."
+      },
+      "qualification": "Original scoped production263 receipt retained unchanged; this later evidence covers only the named803 features and subsequent served all-mode release."
+    }
+  ],
+  "latestImplementationRevision": "910a1e4365adadc908e624d2bb99fbfd6eeff145",
+  "latestProductionAcceptedRevision": "ccb5987e145968059097ecf440204c3972279ded",
+  "recentDeliveryReconciliation": {
+    "date": "2026-10-28",
+    "implementationRevision": "ccb5987e145968059097ecf440204c3972279ded",
+    "acceptedProductionRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
+    "receipt": "docs/handoff/validation/help-recovery/production-263.json",
+    "receiptSha256": "ea8ae560ccc87e2ad0875eef0799ba0e9632ccd05fd10e48d4992d09f32a7c57",
+    "completedIds": [
+      "app-shell-quick-fixes",
+      "help-and-feedback-menu",
+      "settings-quickwins",
+      "profiles-replays-polish-1"
+    ],
+    "partialNotesUpdated": [
+      "landing-demo-in-browser",
+      "landing-try-polish-1",
+      "builds-polish-7",
+      "guides-polish-4"
+    ],
+    "qualification": "PR802 closes only the four named statuses; the additional two PR803 closures are recorded separately below. Conditional service-worker UI, explicit ADR0065 literal-filename substitution and retained strict HTTP7/9 limitation remain visible. Landing tiny-size delivery and demo server retirement remain unfinished.",
+    "guideRandomizer": {
+      "acceptedProductionRevision": "ccb5987e145968059097ecf440204c3972279ded",
+      "receipt": "docs/handoff/validation/guide-randomizer/production-ccb598.json",
+      "receiptSha256": "f20b75d86ccaee6beea906c5e0b9c1c1857bae0ad36f9603ddaf5b1a1450be48",
+      "completedIds": [
+        "builds-polish-7",
+        "guides-polish-4"
+      ],
+      "qualification": "Only these two additional statuses close; full197 historical acceptance is not claimed. Tiny readability and legacy demo retirement remain partial."
+    }
+  }
 }
