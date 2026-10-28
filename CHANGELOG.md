@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Private home-page replay demo
+
+- Retire the old anonymous server replay parser. The home-page demo keeps replay analysis in your browser; unavailable or unsupported configurations offer desktop recovery without an upload fallback.
+
 ### History write consistency
 
 - Maintain game totals and the exact latest-game value during replay ingest, visibility changes, history wipes and restores. Dashboard readers retain their existing behavior while the writer rollout is verified.
