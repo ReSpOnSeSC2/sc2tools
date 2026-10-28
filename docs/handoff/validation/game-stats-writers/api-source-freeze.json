@@ -1,0 +1,63 @@
+{
+  "sourceRoot": "C:\\SC2TOOLS\\.worktrees\\dashboard-cache-coverage",
+  "base": "9d6525e54a81dc23768232881f063d7864d24055",
+  "frozenAtUtc": "2026-10-28T06:03:27.0747090Z",
+  "pins": [
+    {
+      "path": "apps/api/src/app.js",
+      "sha256": "a33b9a319bf14c2947127da48f71fa2050ac5494d8e0fbe00a118c606295e162"
+    },
+    {
+      "path": "apps/api/src/server.js",
+      "sha256": "dd50e6fcaa0c64ece9dbe0ae74449f5bdeea17c8474bbe255af5e9c63f49b4aa"
+    },
+    {
+      "path": "apps/api/src/db/connect.js",
+      "sha256": "2a8008c3558e8b4ef0f68a6bfed54440ea79d1090402a52a13e2f78adf17c24c"
+    },
+    {
+      "path": "apps/api/src/routes/games.js",
+      "sha256": "ad1b9d5d479a701acdcd23a65150b87eb9b8a4bc06d1dfe3e67ade3551440975"
+    },
+    {
+      "path": "apps/api/src/services/games.js",
+      "sha256": "cd51d7c52c63d20cd4f0040e12d7a98ea501656328c9c623286f9c226f61b0bd"
+    },
+    {
+      "path": "apps/api/src/services/gameControls.js",
+      "sha256": "f6adf09c2b32ecb11ccc3ceaf76a3040bafefedfbbc57bcb847d59344c9ca538"
+    },
+    {
+      "path": "apps/api/src/services/gdpr.js",
+      "sha256": "7d14144ed0513f2bc002e80893bacfed018c289dd186f2b4a626e8ff1e0d7410"
+    },
+    {
+      "path": "apps/api/src/services/userBackups.js",
+      "sha256": "5cfaf389b782ac71cfb568a3e9e8f176b2a218966570c5978b7a542f034e1d11"
+    },
+    {
+      "path": "apps/api/src/services/gameStatsWrites.js",
+      "sha256": "9cfae366f680ec60b6c47d0d013dbc2287a07a9b2481253db7e3dac8d789130c"
+    },
+    {
+      "path": "apps/api/src/services/types.d.ts",
+      "sha256": "e09b6698aa3d6efb7039e52b2680774d6c8956d44f18eb1bcae3767dd55404d1"
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsWrites.unit.test.js",
+      "sha256": "5e76b1f70998807f0ace0420bbbc43512bcdc8339d7ea27ead0b31a70b85afd6"
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsWrites.replset.test.js",
+      "sha256": "e51cdc22743d193158b9dd4899de9d104409677ae69ba17c171e77883e8edfed"
+    },
+    {
+      "path": "apps/api/__tests__/gdprMutationAdmission.test.js",
+      "sha256": "a95867361332cc4ea44fbcce0bdea6e39c4c72ec20aeb91bbf0deab3ca093c01"
+    }
+  ],
+  "tests": "writer-batch-services-09.log:168 cases/17 suites",
+  "types": "api-types-final-03.log:exit0",
+  "strictNewLint": "api-lint-new-final-03.log:exit0",
+  "ownedLint": "api-lint-owned-final-02.log:exit0/21 existing warning sites (17 prior files+4 route)"
+}

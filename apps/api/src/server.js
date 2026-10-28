@@ -94,6 +94,7 @@ async function main() {
       overlayTokens: import('./services/types').OverlayTokensService,
       games: import('./services/types').GamesService,
       opponents: import('./services/opponents').OpponentsService,
+      gameStatsWrites: import('./services/gameStatsWrites').GameStatsWrites,
       [k: string]: unknown,
     },
     adminClerkIds: Set<string>,
@@ -460,6 +461,11 @@ async function main() {
     await /** @type {any} */ (services).dataRepairs.drain();
     await guideVideosJob.stop();
     await /** @type {any} */ (services).customBuilds.stopReclassifications();
+    // Closed HTTP sockets do not prove their handlers stopped. Retire future
+    // game dispatch and drain actual admitted membership transactions before
+    // closing Mongo; a held payload write cannot start a late games command.
+    await services.gameStatsWrites.stopAndDrain();
+    logger.info({ protocolVersion: 1 }, "game_stats_writers_drained");
     await db.close();
     logger.info("shutdown_complete");
     process.exit(0);

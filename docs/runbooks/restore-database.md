@@ -152,6 +152,22 @@ db.custom_builds.countDocuments()
 
 ### 4. Bring the API back
 
+The game-statistics writer protocol does not make an Atlas restore or raw
+collection replacement an application-level snapshot restore. Raw restores can
+rewind `users.gameStatsMutationEpoch`, `gameStatsRevision` and protocol metadata
+alongside games. Keep every old API process, script and migration stopped until
+its outstanding writes have an authoritative settled outcome. The
+`game_stats_writers_drained` log only proves local promises settled; an unknown
+commit acknowledgement is not proof of rollback or server settlement.
+
+This release still uses the authoritative count/latest queries and introduces
+no retained statistics reader. Before adding such a reader, its rollout must
+prove retirement/rebuild of restored authority for every owner and serving
+process, including a fresh mutation epoch. Never clear the epoch back to
+missing, restore it from an in-app snapshot, or use a restored protocol marker
+as proof that old writers have stopped. The manual drop/`$out` rollback in the
+timebase migration has the same boundary. `USER_CACHE_ENABLED` stays off.
+
 Resume the Render service (or redeploy if `MONGODB_URI` changed). Boot
 recreates any missing indexes. Then confirm:
 

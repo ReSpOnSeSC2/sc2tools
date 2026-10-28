@@ -1,0 +1,310 @@
+{
+  "schemaVersion": 1,
+  "preparedAtUtc": "2026-10-28T06:06:25.7620298Z",
+  "scope": "Independent current-source direct and aliased games writer enumeration",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/dashboard-cache-coverage",
+  "runtimeExecuted": false,
+  "gitExecuted": false,
+  "providersAccessed": false,
+  "applicationSourceEdited": false,
+  "decision": "No additional active membership/date writer group found beyond seven integrated groups and the explicit absent-owner destructive cleanup exception.",
+  "integratedGroups": [
+    {
+      "name": "Ingest insert/date replacement",
+      "paths": [
+        "services/games.js upsertWithRevision/upsert"
+      ],
+      "status": "integrated owner/revision transaction",
+      "proof": "One immutable batch owner/epoch captured before quota/pool waits; all service branches forward it. Ordinary capture requires fence absent in same read; conditional update/deleted recheck/insert fallback use same transaction session; payload and waits outside callback."
+    },
+    {
+      "name": "Current/alias resumed quarantine",
+      "paths": [
+        "services/games.js quarantineResumedReplay"
+      ],
+      "status": "integrated bounded transaction",
+      "proof": "Current marker ensure plus <=51 alias membership transitions share same owner/session; journaling metadata not separate stats input."
+    },
+    {
+      "name": "Hide/unhide",
+      "paths": [
+        "services/gameControls.js setExcluded"
+      ],
+      "status": "integrated exact-fence transaction",
+      "proof": "Owner controlled exclusion transition; existing pending/deleted safeguards retained."
+    },
+    {
+      "name": "Pending permanent deletion and final tombstone",
+      "paths": [
+        "services/gameControls.js deleteGame"
+      ],
+      "status": "two exact-fence transactions",
+      "proof": "Payload cleanup between transactions outside callback; cleanup-only final unset not a stats input."
+    },
+    {
+      "name": "Full/range history wipe",
+      "paths": [
+        "services/gdpr.js wipeGames",
+        "services/gameStatsWrites.js deleteMany"
+      ],
+      "status": "bounded exact-fence transactions",
+      "proof": "Original range/captured-ID filter AND bounded _id set preserved; external cleanup outside callback."
+    },
+    {
+      "name": "Account erasure",
+      "paths": [
+        "services/gdpr.js deleteAll"
+      ],
+      "status": "bounded existing-owner transactions; explicit destructive-only missing-owner exception",
+      "proof": "Exact admitted owner/fence pinned through final users deletion. Missing owner never upserts or creates stats and keeps absence assertions."
+    },
+    {
+      "name": "Snapshot restore",
+      "paths": [
+        "services/userBackups.js restore dynamic RESTORABLE games branch"
+      ],
+      "status": "bounded exact-fence delete/insert transactions",
+      "proof": "Captured owner before stage, immutable <=100/~4MiB batches; every game command receives supplied session; forged stored authority excluded by settings whitelist."
+    }
+  ],
+  "negativeControls": [
+    {
+      "paths": [
+        "customBuilds",
+        "buildIntentBind",
+        "buildIntentGameState",
+        "buildIntentAttribution",
+        "opponentBuildOrderFence"
+      ],
+      "why": "Only build labels/provenance/staging/leases/schema markers; gamesCollection alias explicitly included. No date/user ownership/membership replacement."
+    },
+    {
+      "paths": [
+        "perGameCompute",
+        "gameMoments",
+        "replayFiles",
+        "playbackArtifacts"
+      ],
+      "why": "Macro/leaks/APM, moment receipts and replay/archive/upload/playback metadata only."
+    },
+    {
+      "paths": [
+        "opponents",
+        "users",
+        "opponentMmrEnrichmentJob"
+      ],
+      "why": "Opponent identity/MMR and resumed-repair journal fields only; no quarantine eligibility flag changes."
+    },
+    {
+      "paths": [
+        "ladderMapBackfillJob",
+        "2026-05-27-backfill-is-ladder-map"
+      ],
+      "why": "Only isLadderMap/classification markers; authoritative stats predicate has no map/ranked constraint."
+    },
+    {
+      "paths": [
+        "2026-05-07-backfill-game-details",
+        "2026-05-07-trim-early-build-logs",
+        "2026-05-08-unset-heavy-from-games",
+        "2026-05-12-heal-opponent-current-name",
+        "2026-05-17-rescale-timebase normal execution",
+        "2026-09-30-rename-8-pool-builds",
+        "migration registry"
+      ],
+      "why": "Details/log/schema/timebase/build labels/name repairs only; registry shape transforms do not persist whole games rows."
+    },
+    {
+      "paths": [
+        "relink-clerk-user",
+        "audit-duplicate-games",
+        "scripts/load_test.mjs",
+        "scripts/benchmark_map_stats.py"
+      ],
+      "why": "Relink keeps games.userId unchanged, audit is read-only, load test uses authorized API writer, benchmark creates local in-memory analyzer data."
+    },
+    {
+      "paths": [
+        "trendsExplorerBackfill.collection",
+        "gdprOwnedData dynamic collections",
+        "2026-10-23-retire-ml"
+      ],
+      "why": "Collection aliases resolve to gameDetails, token stores, or retired model collections, not games membership."
+    }
+  ],
+  "externalUnsupportedBoundaries": [
+    {
+      "source": "apps/api/src/db/migrations/2026-05-17-rescale-timebase.js:97-101",
+      "operation": "Manual documented games.drop then games_timebase_pre aggregate $out games",
+      "implication": "Whole collection membership/date replacement bypasses revision protocol. Not an active normal migration operation; must be offline/settled with derived authority retired before any future retained read."
+    },
+    {
+      "source": "docs/runbooks/restore-database.md Atlas restore",
+      "operation": "Whole cluster/raw database restore replays owner _id and protocol/revision/snapshots together with games",
+      "implication": "Existing runbook lacks derived-authority retirement. Unchanged authoritative reads are safe for this writer-only release; read-second needs explicit stop/settle+retire/rebuild instructions and operational receipt."
+    }
+  ],
+  "inventoryLimit": "Source audit cannot inventory arbitrary external actors/Atlas consoles/manual commands or prove legacy actors stopped. The read-second legacy writer cutover remains unproven.",
+  "sourcePins": [
+    {
+      "path": "apps/api/src/services/gameStatsWrites.js",
+      "sha256": "9cfae366f680ec60b6c47d0d013dbc2287a07a9b2481253db7e3dac8d789130c"
+    },
+    {
+      "path": "apps/api/src/services/games.js",
+      "sha256": "cd51d7c52c63d20cd4f0040e12d7a98ea501656328c9c623286f9c226f61b0bd"
+    },
+    {
+      "path": "apps/api/src/services/gameControls.js",
+      "sha256": "f6adf09c2b32ecb11ccc3ceaf76a3040bafefedfbbc57bcb847d59344c9ca538"
+    },
+    {
+      "path": "apps/api/src/services/gdpr.js",
+      "sha256": "7d14144ed0513f2bc002e80893bacfed018c289dd186f2b4a626e8ff1e0d7410"
+    },
+    {
+      "path": "apps/api/src/services/userBackups.js",
+      "sha256": "5cfaf389b782ac71cfb568a3e9e8f176b2a218966570c5978b7a542f034e1d11"
+    },
+    {
+      "path": "apps/api/src/services/customBuilds.js",
+      "sha256": "eceece874558336cb4840604fee36be20203201fcce62ded8032a2b01ed31ba8"
+    },
+    {
+      "path": "apps/api/src/services/buildIntentBind.js",
+      "sha256": "7c88a9d1f6ccae2b380c77a582bc5e0662682542c535ab69bc05a39ce06c0749"
+    },
+    {
+      "path": "apps/api/src/services/buildIntentGameState.js",
+      "sha256": "9ab05ddaef59bd3cb3f11dd06534b0668fafd2b372aa59d17187e6bce7a4c708"
+    },
+    {
+      "path": "apps/api/src/services/buildIntentAttribution.js",
+      "sha256": "29e8cfe4b4b2016f891bb3e6eb5fc3fea0b16379fb0841b1b1ff3d8fc13191ab"
+    },
+    {
+      "path": "apps/api/src/services/perGameCompute.js",
+      "sha256": "0751003453895444c000f619b8491bf529563bee7d3c8062306546b053649f8f"
+    },
+    {
+      "path": "apps/api/src/services/opponents.js",
+      "sha256": "2a3ece57eda8c78c502b98c96d34c634a8c011b2b5b12899bdfe7c6e68488c4b"
+    },
+    {
+      "path": "apps/api/src/services/opponentBuildOrderFence.js",
+      "sha256": "30af85d1245e764611d8f9843a37a34bf7bde6836e68864351ca083917246133"
+    },
+    {
+      "path": "apps/api/src/services/users.js",
+      "sha256": "f28929583b57af643e407461ce8153669681222c856e7f8072d1dc2f09b3bd67"
+    },
+    {
+      "path": "apps/api/src/services/replayFiles.js",
+      "sha256": "d3803571573dcfea4759b0b279d7481b2ba9ea6f754516223f20d3a3b954a8e2"
+    },
+    {
+      "path": "apps/api/src/services/playbackArtifacts.js",
+      "sha256": "ac5f76e4f9d2a901aae5a82b675223fcba3c678eb548fbe46e96d933aa519bf6"
+    },
+    {
+      "path": "apps/api/src/services/gameMoments.js",
+      "sha256": "77ab2c9c07be856033cf6f9b305ec3212fcf78acbc1fc8d0c05ffdab7d7370e7"
+    },
+    {
+      "path": "apps/api/src/services/trendsExplorerBackfill.js",
+      "sha256": "641fdc845c4e5df5db845cc6524cf09197eafa6879a1cbe94fb97a7958753579"
+    },
+    {
+      "path": "apps/api/src/services/gdprOwnedData.js",
+      "sha256": "062f4df88b9f3dbcffc704e02572baec146f691fff636c50c6552c15eae5ccbc"
+    },
+    {
+      "path": "apps/api/src/jobs/ladderMapBackfillJob.js",
+      "sha256": "f497769653725e47de05b67eb27691d0bd3a73313d461fb7a4c094562a010ed5"
+    },
+    {
+      "path": "apps/api/src/jobs/opponentMmrEnrichmentJob.js",
+      "sha256": "885232eeabbb8228e1538abdd9ae32eac1fef7164d84ee61fa8b755390d65651"
+    },
+    {
+      "path": "apps/api/src/db/migrations/index.js",
+      "sha256": "b7c21a622b0dc4139ce3f319700804dc7a345fce3113eaeb5fa06815441eb10e"
+    },
+    {
+      "path": "apps/api/src/db/migrations/2026-05-07-backfill-game-details.js",
+      "sha256": "0444b717d052fc18f6c04db01e1c222a61577684cf03817e7b406dd5743ffe6e"
+    },
+    {
+      "path": "apps/api/src/db/migrations/2026-05-07-trim-early-build-logs.js",
+      "sha256": "6be7be7898afb8ec85af969b16fb5535dd914c29e29b3cd71342800460062cf4"
+    },
+    {
+      "path": "apps/api/src/db/migrations/2026-05-08-unset-heavy-from-games.js",
+      "sha256": "364eba26b585425d2165f054f06ff74cbdea95185988fdf68636ebd5888275f4"
+    },
+    {
+      "path": "apps/api/src/db/migrations/2026-05-12-heal-opponent-current-name.js",
+      "sha256": "b867622cee8f4cba4edb6032fe288b3521195434c06a9516c5cc9c94424515ae"
+    },
+    {
+      "path": "apps/api/src/db/migrations/2026-05-17-rescale-timebase.js",
+      "sha256": "5f064d48a3f812cb69e397581537fd35bef7041d8373a65c61ccff4f8fe400e4"
+    },
+    {
+      "path": "apps/api/src/db/migrations/2026-05-27-backfill-is-ladder-map.js",
+      "sha256": "230a197b9971a21fde7ea2b028260762714d6fd999b80d5cd5f532b260bd1228"
+    },
+    {
+      "path": "apps/api/src/db/migrations/2026-09-30-rename-8-pool-builds.js",
+      "sha256": "22843a04fad725b1e6ac83b90334884105e80ca542899f1fccded5fa23e20105"
+    },
+    {
+      "path": "apps/api/src/db/migrations/2026-10-23-retire-ml.js",
+      "sha256": "f37c10e4908dcb0c33344c513de5a86352eac51dca0c0afb34ac6c0676d574da"
+    },
+    {
+      "path": "apps/api/scripts/relink-clerk-user.js",
+      "sha256": "07615bf3a9afd578f7bec4bbe290208125090d817b64db5fb0a9c303036f5b70"
+    },
+    {
+      "path": "apps/api/scripts/audit-duplicate-games.js",
+      "sha256": "51643730b680ce1812bf170e2049607b23532f2b7756824755c15eddb1ddc1ab"
+    },
+    {
+      "path": "scripts/load_test.mjs",
+      "sha256": "7891a9f81a42043ff46eb2dc71e8e669f0f4c7b5e74c0b6224e8ab8752166f95"
+    },
+    {
+      "path": "scripts/benchmark_map_stats.py",
+      "sha256": "0538da9f5c9aaf343dd638afa3479a84eceac4737902007bfd7a61ec6a717749"
+    },
+    {
+      "path": "docs/runbooks/restore-database.md",
+      "sha256": "909b1dd2032741b86be651ef65c25a5e59e9b060ee852b33fa53b626606e32ed"
+    },
+    {
+      "path": "cloud/community-builds/src/db.js",
+      "sha256": "30812480cb291cb1f0e9360e7f99a35188070d03f44cb6fe48473425a9cbab3f"
+    },
+    {
+      "path": "apps/api/scripts/cleanup-support-email.js",
+      "sha256": "d9935613dae547a30ff32f9b817aa049e33b3226ed6914df18f080a90ff1acd7"
+    },
+    {
+      "path": "apps/api/scripts/audit-retired-ml.js",
+      "sha256": "3c697cd37b6e068433df57b9669113abd8eda876ec6586b6a2f0072896ad4ef9"
+    },
+    {
+      "path": "apps/api/src/db/migrations/2026-05-08-mongo-to-r2.js",
+      "sha256": "f084707d57ac1aa571499fc19cd8e45b20e62c1026b2143fe4834e3925d63ad9"
+    },
+    {
+      "path": "apps/api/src/routes/games.js",
+      "sha256": "ad1b9d5d479a701acdcd23a65150b87eb9b8a4bc06d1dfe3e67ade3551440975"
+    },
+    {
+      "path": "apps/api/src/middleware/userDataWriteFence.js",
+      "sha256": "df8f402ec6f29c1b5ee610265a743f1a39f7d969f1c15a7d5f1ea572adaa886e"
+    }
+  ]
+}

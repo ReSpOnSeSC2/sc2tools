@@ -63,7 +63,9 @@ test("a writer reappearing after the empty reread cannot be bypassed by the retr
   });
   jest.spyOn(users, "findOne").mockImplementation(async (...args) => {
     const snapshot = await read(...args);
-    if (++reads === 1) await update({ userId: owner }, { $set: { _dataMutations: [writer("second")] } });
+    // Identity capture now precedes admission. Inject only after the actual
+    // failed-claim reread, preserving the original race boundary.
+    if (args[1]?.projection?._dataMutations && ++reads === 1) await update({ userId: owner }, { $set: { _dataMutations: [writer("second")] } });
     return snapshot;
   });
   const service = new GdprService({ users }); let fence;
