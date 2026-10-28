@@ -132,6 +132,27 @@ consumer assertions now await the genuine lazy component before checking the
 same content/navigation/download behavior; no assertion was removed. The
 original synchronous failures are retained. The combined gate, existing detail,
 fetch-cache, skeleton and middleware suites pass 79 cases; strict repair-file
-lint passes. New production-build, real held-chunk/HTTP and exact-head CI proof
-remain separate pending gates. Earlier build/browser receipts qualify the prior
-source, not this authority correction.
+lint passes. The corrected all-features production build passes all 83 original
+route caps and unchanged asset admission. Twelve fresh browser cases and 18 AA
+scans pass at 320/390/1280 in both themes: six unchanged skeleton checks and six
+genuine held-ESM-chunk handoffs through the installed Next App Router dynamic
+loader into the real analysis. Focus and vertical scroll stay unchanged.
+
+Actual local production Next HTTP/SSR was compared with the merged dashboard
+build using the unmodified Clerk SDK/middleware, generated in-memory test keys,
+loopback JWKS and synthetic replay authority. Both authenticated held requests
+stayed header-free until the authority returned, then produced real 404s. Both
+builds return complete analysis HTML after script/style removal; canonical and
+legacy redirect destinations/context, auth negatives, busy/outage behavior and
+per-case authority request counts match across all nine cases. No production
+credentials, account or provider request was used.
+
+The strict HTTP runs remain **7/9**, not 9/9: canonical and legacy detail redirects
+make two identical authority reads on both baseline and candidate, failing the
+fixture's one-read expectation. Those assertions and failures are retained. The
+separate nine-case comparison proves no introduced status or request-count
+regression; it does not resolve the existing redirect double-read observation
+or claim one read on those paths. Ordinary admitted/missing/error cases make one
+read. Initial sandbox-loopback and IPv4/IPv6 fixture failures are also retained.
+All owned Next processes and loopback listeners closed. Exact-head CI and actual
+production delivery remain required before this slice is delivered.

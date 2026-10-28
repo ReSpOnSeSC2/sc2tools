@@ -1,0 +1,355 @@
+{
+  "schemaVersion": 1,
+  "label": "candidate",
+  "web": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web",
+  "runDir": "C:\\SC2TOOLS\\.cache\\help-recovery-completion-verification-20261028\\http-candidate-2026-10-28T04-45-58-146Z",
+  "startedAt": "2026-10-28T04:45:58.148Z",
+  "qualification": "Actual local production Next HTTP/SSR with unmodified Clerk SDK and middleware; only authentication key/JWKS and API DTO authority are synthetic. Not production account acceptance.",
+  "sourceUnmodified": true,
+  "authTransport": "Real Bearer signature verification against generated RSA public JWK served at supported CLERK_API_URL loopback /v1/jwks. No internal Clerk auth headers are fabricated.",
+  "nextPort": 3327,
+  "apiPort": 8080,
+  "events": [
+    {
+      "type": "port-vacant-before-launch",
+      "at": 1793162758164,
+      "port": 8080,
+      "host": "127.0.0.1"
+    },
+    {
+      "type": "port-vacant-before-launch",
+      "at": 1793162758164,
+      "port": 8080,
+      "host": "::1"
+    },
+    {
+      "type": "port-vacant-before-launch",
+      "at": 1793162758165,
+      "port": 3327,
+      "host": "127.0.0.1"
+    },
+    {
+      "type": "port-vacant-before-launch",
+      "at": 1793162758166,
+      "port": 3327,
+      "host": "::1"
+    },
+    {
+      "type": "owned-api-listener",
+      "at": 1793162758545,
+      "host": "127.0.0.1",
+      "port": 8080
+    },
+    {
+      "type": "owned-api-listener",
+      "at": 1793162758546,
+      "host": "::1",
+      "port": 8080
+    },
+    {
+      "type": "owned-next-start",
+      "at": 1793162758659,
+      "pid": 47100
+    },
+    {
+      "type": "readiness-error",
+      "at": 1793162758665,
+      "message": "Error: connect ECONNREFUSED ::1:3327"
+    },
+    {
+      "type": "readiness-error",
+      "at": 1793162758831,
+      "message": "Error: connect ECONNREFUSED ::1:3327"
+    },
+    {
+      "type": "readiness-error",
+      "at": 1793162758986,
+      "message": "Error: connect ECONNREFUSED ::1:3327"
+    },
+    {
+      "type": "readiness-error",
+      "at": 1793162759141,
+      "message": "Error: connect ECONNREFUSED ::1:3327"
+    },
+    {
+      "type": "readiness-error",
+      "at": 1793162759297,
+      "message": "Error: connect ECONNREFUSED ::1:3327"
+    },
+    {
+      "type": "readiness-response",
+      "at": 1793162759917,
+      "status": 200,
+      "location": null
+    },
+    {
+      "type": "owned-next-stop",
+      "at": 1793162762012,
+      "pid": 47100
+    }
+  ],
+  "cases": [
+    {
+      "name": "invalid-signature-rejected",
+      "route": "/players/fixture-owner/replays/fixture-replay",
+      "startedAt": "2026-10-28T04:45:59.918Z",
+      "outcome": "passed",
+      "status": 307,
+      "headersAt": 1793162760407,
+      "firstByteAt": 1793162760408,
+      "endedAt": 1793162760408,
+      "apiRequests": 0,
+      "location": "https://accounts.example.com/sign-in?redirect_url=http%3A%2F%2Flocalhost%3A3327%2Fplayers%2Ffixture-owner%2Freplays%2Ffixture-replay",
+      "bodySha256": "5056fd397a582a9ae9764327ac322d4a3dbd7223a2ad0ea8a8a2178bf1d530de",
+      "bodyBytes": 132,
+      "html": "01-invalid-signature-rejected.html"
+    },
+    {
+      "name": "signed-out-protected",
+      "route": "/players/fixture-owner/replays/fixture-replay",
+      "startedAt": "2026-10-28T04:46:00.410Z",
+      "outcome": "passed",
+      "status": 307,
+      "headersAt": 1793162760871,
+      "firstByteAt": 1793162760871,
+      "endedAt": 1793162760871,
+      "apiRequests": 0,
+      "location": "https://accounts.example.com/sign-in?redirect_url=http%3A%2F%2Flocalhost%3A3327%2Fplayers%2Ffixture-owner%2Freplays%2Ffixture-replay",
+      "bodySha256": "5056fd397a582a9ae9764327ac322d4a3dbd7223a2ad0ea8a8a2178bf1d530de",
+      "bodyBytes": 132,
+      "html": "02-signed-out-protected.html"
+    },
+    {
+      "name": "held-missing-real404",
+      "route": "/players/fixture-owner/replays/held-missing",
+      "startedAt": "2026-10-28T04:46:00.873Z",
+      "outcome": "passed",
+      "apiHeldAt": 1793162760962,
+      "observedHoldMs": 261,
+      "headersBeforeAuthority": false,
+      "status": 404,
+      "headersAt": 1793162761708,
+      "firstByteAt": 1793162761708,
+      "endedAt": 1793162761714,
+      "apiRequests": 1,
+      "location": null,
+      "bodySha256": "8e1bb3e8b878f253e19a082ee7253ed5747319cb673f032fce4838303873be0c",
+      "bodyBytes": 24071,
+      "html": "03-held-missing-real404.html"
+    },
+    {
+      "name": "dotted-id-missing-real404",
+      "route": "/players/fixture-owner/replays/missing.replay",
+      "startedAt": "2026-10-28T04:46:01.717Z",
+      "outcome": "passed",
+      "status": 404,
+      "headersAt": 1793162761755,
+      "firstByteAt": 1793162761756,
+      "endedAt": 1793162761760,
+      "apiRequests": 1,
+      "location": null,
+      "bodySha256": "5f96a5669788b421c7a606275bae79f9e758d90d10c9499dd92979bff6dc3583",
+      "bodyBytes": 24077,
+      "html": "04-dotted-id-missing-real404.html"
+    },
+    {
+      "name": "canonical-owner-redirect",
+      "route": "/players/legacy-owner/replays/canonical-replay?from=matchup%3DPvZ%26cursor%3Dold%26page%3D2",
+      "startedAt": "2026-10-28T04:46:01.763Z",
+      "outcome": "failed",
+      "status": 307,
+      "headersAt": 1793162761802,
+      "firstByteAt": 1793162761802,
+      "endedAt": 1793162761813,
+      "apiRequests": 2,
+      "location": "/players/fixture-owner/replays/canonical-replay?from=matchup%3DPvZ%26cursor%3Dold%26page%3D2",
+      "bodySha256": "7f1e303cf99010d99895d65c9f09fb94a91f31842d53df68acb456a458bd4bbc",
+      "bodyBytes": 24474,
+      "html": "05-canonical-owner-redirect.html",
+      "error": "AssertionError: Expected values to be strictly equal:\n\n2 !== 1\n"
+    },
+    {
+      "name": "busy-keeps-existing-detail-ui",
+      "route": "/players/fixture-owner/replays/busy-replay",
+      "startedAt": "2026-10-28T04:46:01.817Z",
+      "outcome": "passed",
+      "status": 200,
+      "headersAt": 1793162761849,
+      "firstByteAt": 1793162761849,
+      "endedAt": 1793162761854,
+      "apiRequests": 1,
+      "location": null,
+      "bodySha256": "19b9dd013e0de1e00a216f6ece8e41e7f766763417d079748aa208e5a3531de8",
+      "bodyBytes": 47247,
+      "html": "06-busy-keeps-existing-detail-ui.html"
+    },
+    {
+      "name": "outage-keeps-existing-detail-ui",
+      "route": "/players/fixture-owner/replays/outage-replay",
+      "startedAt": "2026-10-28T04:46:01.857Z",
+      "outcome": "passed",
+      "status": 200,
+      "headersAt": 1793162761897,
+      "firstByteAt": 1793162761897,
+      "endedAt": 1793162761900,
+      "apiRequests": 1,
+      "location": null,
+      "bodySha256": "cc279c7112a9986cfe8983906c74358dadeb2b117d7b9ab9b79a585910cb6d51",
+      "bodyBytes": 47308,
+      "html": "07-outage-keeps-existing-detail-ui.html"
+    },
+    {
+      "name": "admitted-complete-analysis-ssr",
+      "route": "/players/fixture-owner/replays/fixture-replay",
+      "startedAt": "2026-10-28T04:46:01.903Z",
+      "outcome": "passed",
+      "status": 200,
+      "headersAt": 1793162761956,
+      "firstByteAt": 1793162761956,
+      "endedAt": 1793162761963,
+      "apiRequests": 1,
+      "location": null,
+      "bodySha256": "4eb829e6e0c229bfc86f8f38c3c7da81b4f3c6683b49192640a5f8dc6fe47f73",
+      "bodyBytes": 69465,
+      "html": "08-admitted-complete-analysis-ssr.html",
+      "renderedAnalysisMarkup": true,
+      "skeletonMayAppearEarlierInStream": true
+    },
+    {
+      "name": "legacy-detail-direct-redirect",
+      "route": "/p/legacy-owner/replays/fixture-replay?from=matchup%3DPvZ%26cursor%3Dold%26page%3D2",
+      "startedAt": "2026-10-28T04:46:01.967Z",
+      "outcome": "failed",
+      "status": 308,
+      "headersAt": 1793162762000,
+      "firstByteAt": 1793162762000,
+      "endedAt": 1793162762008,
+      "apiRequests": 2,
+      "location": "/players/fixture-owner/replays/fixture-replay?from=matchup%3DPvZ%26cursor%3Dold%26page%3D2",
+      "bodySha256": "e6abe7704480eb971303ff44f2f160d475489ff2dac19451e62aa1c4e9d629a2",
+      "bodyBytes": 20994,
+      "html": "09-legacy-detail-direct-redirect.html",
+      "error": "AssertionError: Expected values to be strictly equal:\n\n2 !== 1\n"
+    }
+  ],
+  "apiRequests": [
+    {
+      "at": 1793162760962,
+      "owner": "fixture-owner",
+      "gameId": "held-missing",
+      "query": "",
+      "verifiedSyntheticBearer": true
+    },
+    {
+      "at": 1793162761734,
+      "owner": "fixture-owner",
+      "gameId": "missing.replay",
+      "query": "",
+      "verifiedSyntheticBearer": true
+    },
+    {
+      "at": 1793162761781,
+      "owner": "legacy-owner",
+      "gameId": "canonical-replay",
+      "query": "?matchup=PvZ",
+      "verifiedSyntheticBearer": true
+    },
+    {
+      "at": 1793162761802,
+      "owner": "legacy-owner",
+      "gameId": "canonical-replay",
+      "query": "?matchup=PvZ",
+      "verifiedSyntheticBearer": true
+    },
+    {
+      "at": 1793162761832,
+      "owner": "fixture-owner",
+      "gameId": "busy-replay",
+      "query": "",
+      "verifiedSyntheticBearer": true
+    },
+    {
+      "at": 1793162761875,
+      "owner": "fixture-owner",
+      "gameId": "outage-replay",
+      "query": "",
+      "verifiedSyntheticBearer": true
+    },
+    {
+      "at": 1793162761920,
+      "owner": "fixture-owner",
+      "gameId": "fixture-replay",
+      "query": "",
+      "verifiedSyntheticBearer": true
+    },
+    {
+      "at": 1793162761984,
+      "owner": "legacy-owner",
+      "kind": "public-identity",
+      "query": "?limit=1&fields=profile"
+    },
+    {
+      "at": 1793162761999,
+      "owner": "legacy-owner",
+      "kind": "public-identity",
+      "query": "?limit=1&fields=profile"
+    }
+  ],
+  "jwksRequests": [
+    {
+      "at": 1793162759937,
+      "path": "/v1/jwks",
+      "dummyAuthorization": true
+    }
+  ],
+  "unexpectedRequests": [],
+  "cleanup": {
+    "nextChildExited": true,
+    "listenersClosed": [
+      {
+        "port": 8080,
+        "host": "127.0.0.1",
+        "closed": true
+      },
+      {
+        "port": 8080,
+        "host": "::1",
+        "closed": true
+      },
+      {
+        "port": 3327,
+        "host": "127.0.0.1",
+        "closed": true
+      },
+      {
+        "port": 3327,
+        "host": "::1",
+        "closed": true
+      }
+    ]
+  },
+  "buildId": "BYnF4WIuksJTv8rh0w6di",
+  "middlewareSha256": "5b68448aa0c28daaf9973ff58e1ca9c1d64adc66a285a186b65f1bafe686acff",
+  "localhostResolution": [
+    {
+      "address": "::1",
+      "family": 6
+    }
+  ],
+  "publicJwk": {
+    "kty": "RSA",
+    "n": "hSesRrTV18c2eYb7RK__VoWFb9N16L6GdCszF3UEuUdkfQtAl6Gv8_rDj3QxQ4OjaKosouWCwZWKLeI9iN8RI6wQE1NE8pJ1o2TRwagBbHznO-l9W_fdjsRrH_vxJvC_Cu_K3TYeDhSR8nwFtTIkjRXWTgI8ituRDKiTwgKhoITD7aOkkeQ_SRfE0SK6K6qpRicAamv6-iwl-zFWOmkZvppKIr2LFV8K5eadHivEUQsMnNJehEpYtAyoz2PWaSsxhD3lrS9kqo8vrLXZrCSFm-e0y3FpdhS6zdejFEaaHltjK2ECtpZUUuUHVbyTlnGvRMo2fAHfL_kiLbRsuMKUBQ",
+    "e": "AQAB",
+    "alg": "RS256",
+    "use": "sig",
+    "kid": "local-fixture-269098031128cf2b"
+  },
+  "syntheticTokenSha256": "36ccabab26430e342e540a04d6a602482bfcc6d452e73abca91b32cc8a96a1c1",
+  "ownedNextPid": 47100,
+  "childExit": {
+    "code": null,
+    "signal": "SIGTERM"
+  },
+  "finishedAt": "2026-10-28T04:46:02.045Z",
+  "passed": false
+}
