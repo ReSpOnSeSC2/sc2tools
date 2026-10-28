@@ -9,7 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, RefreshCcw, X } from "lucide-react";
+import { AlertCircle, ExternalLink, RefreshCcw, X } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { useMapReplay } from "@/lib/useMapReplay";
 import { fmtDate } from "@/lib/format";
@@ -40,7 +40,7 @@ const FOCUSABLE_SELECTOR = [
  * MacroBreakdownPanel — drilldown surface for a single game's macro
  * score. On mobile it renders as a full-bleed page that takes over the
  * viewport (matching the look of the Strategies dossier), with the
- * match timeline pinned under the header while the roster scrolls; on
+ * timeline and both army rosters fitted beneath local zoom controls; on
  * ≥640px it becomes a wide centered modal with margin + rounded corners.
  *
  * Esc closes; focus traps inside; body scrolls locked while open;
@@ -179,6 +179,7 @@ export function MacroBreakdownPanel({
             />
           ) : !data ? null : (
             <MacroBreakdownBody
+              fitOverview
               data={data}
               gameId={gameId}
               initialScore={initialScore}
@@ -234,14 +235,14 @@ function PanelHeader({
       ref={headerRef}
       className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border bg-bg-elevated/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85 sm:rounded-t-xl sm:px-6 sm:py-3 lg:px-8"
     >
-      <div className="mx-auto flex w-full max-w-[1440px] items-start justify-between gap-3">
+      <div className="mx-auto grid w-full max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 sm:gap-x-3">
         <div className="min-w-0 space-y-0.5 sm:space-y-1">
           <div className="text-micro font-semibold uppercase tracking-wider text-accent-cyan sm:text-caption">
             Macro breakdown
           </div>
           <h2
             id={titleId}
-            className="flex flex-wrap items-center gap-2 text-h4 font-semibold text-text sm:text-h2"
+            className="flex min-w-0 items-center gap-1.5 text-body font-semibold text-text sm:flex-wrap sm:gap-2 sm:text-h2"
           >
             {myRaceLetter ? (
               <Icon
@@ -252,10 +253,10 @@ function PanelHeader({
                 decorative
               />
             ) : null}
-            <span>{playerName}</span>
+            <span className="truncate">{playerName}</span>
             {opponent ? (
               <>
-                <span className="text-text-dim">vs</span>
+                <span className="shrink-0 text-text-dim">vs</span>
                 {oppRaceLetter ? (
                   <Icon
                     name={oppRaceLetter}
@@ -269,7 +270,28 @@ function PanelHeader({
               </>
             ) : null}
           </h2>
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-text-muted">
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2">
+          <Link
+            href={`/app/game/${encodeURIComponent(gameId)}#macro`}
+            onClick={onClose}
+            aria-label="Open full game page"
+            className="inline-flex h-11 min-w-11 items-center justify-center rounded-md text-caption font-semibold text-accent hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:px-2"
+          >
+            <ExternalLink className="h-5 w-5 sm:hidden" aria-hidden />
+            <span className="hidden sm:inline">Open full game page →</span>
+          </Link>
+          {action}
+          <button
+            type="button"
+            aria-label="Close macro breakdown"
+            onClick={onClose}
+            className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
+          <p className="col-span-full flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-text-muted">
             {dateLine ? <span>{dateLine}</span> : null}
             {meta?.map ? (
               <>
@@ -287,19 +309,6 @@ function PanelHeader({
               {gameId}
             </span>
           </p>
-        </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
-          <Link href={`/app/game/${encodeURIComponent(gameId)}#macro`} onClick={onClose} className="inline-flex min-h-11 items-center text-caption font-semibold text-accent hover:underline">Open full game page →</Link>
-          {action}
-          <button
-            type="button"
-            aria-label="Close macro breakdown"
-            onClick={onClose}
-            className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            <X className="h-5 w-5" aria-hidden />
-          </button>
-        </div>
       </div>
     </header>
   );

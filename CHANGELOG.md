@@ -35,6 +35,7 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Fit the Macro breakdown timeline and both army compositions into a local overview on phones, with Fit and zoom controls, full-size timeline controls and a compact header. Zoom resets on exit or when opening another game.
 - Let backup-health checks finish during API shutdown without calling a missing method, so the remaining cleanup can proceed.
 - Wait for Unit Profile's detailed unit history before building its quiz, and offer a retry when that read fails instead of telling established accounts to play more games.
 - Show small replay files in B or KB in the home-page demo, including analyzer loading and errors, while keeping the existing MB format for larger files.

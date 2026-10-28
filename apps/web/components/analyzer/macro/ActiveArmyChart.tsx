@@ -116,6 +116,8 @@ export interface ActiveArmyChartProps {
   showSupplyBlocks?: boolean;
   /** Render the "Match timeline" caption (off when the host titles it). */
   showTitle?: boolean;
+  /** Hosts may keep the shared controls outside a scaled visualization. */
+  showControls?: boolean;
   /** Classes for the outer figure (e.g. sticky positioning). */
   className?: string;
 }
@@ -179,6 +181,7 @@ export function ActiveArmyChart({
   apmAverages = null,
   showSupplyBlocks = true,
   showTitle = true,
+  showControls = true,
   className = "",
 }: ActiveArmyChartProps) {
   const chartId = useId();
@@ -326,7 +329,7 @@ export function ActiveArmyChart({
         </figcaption>
       ) : null}
 
-      <MetricSwitch
+      {showControls ? <MetricSwitch
         selected={shown}
         onChange={(next) => {
           setChosen(next);
@@ -334,9 +337,9 @@ export function ActiveArmyChart({
         }}
         race={myRace}
         metrics={metrics}
-      />
+      /> : null}
 
-      {shown.includes("bank") ? <BankViewSwitch view={resourceView} onChange={(next) => {
+      {showControls && shown.includes("bank") ? <BankViewSwitch view={resourceView} onChange={(next) => {
         setChosenBankView(next);
         onBankViewChange?.(next);
       }} /> : null}
