@@ -9,6 +9,7 @@ import { useInstantSession } from "@/lib/instant/useInstantSession";
 import type { MeCandidate } from "@/lib/instant/meDetection";
 import type { ErrorKind } from "@/lib/instant/types";
 import { instantPreview, type PreviewDossier } from "./replayDemoPreview";
+import { replayDemoFileSize } from "./replayDemoFileSize";
 
 export type DemoRequest = { file: File; id: number };
 export interface BrowserDemoProps {
@@ -63,7 +64,7 @@ export function ReplayDemoBrowserSession(props: BrowserDemoProps) {
     run.complete = true; setFailure(session.error ?? session.failed[0]?.errorKind ?? "analysis_failed"); callbacks.current.onBusy(run.request, false);
   }, [props.request, session.phase, session.candidates, session.parsed, session.error, session.failed]);
   const copy = failure && failure !== "unsupported" ? errorCopy(failure) : null;
-  const fileLabel = props.request ? `${props.request.file.name} · ${(props.request.file.size / 1024 / 1024).toFixed(2)} MB` : "";
+  const fileLabel = props.request ? `${props.request.file.name} · ${replayDemoFileSize(props.request.file.size)}` : "";
   return <Modal open={!!props.request} onClose={props.onClose} title={failure ? "Couldn't analyze that replay" : session.phase === "choosing" ? "Choose your player" : "Analyzing in your browser…"}
     description="Runs in your browser — the replay never leaves your device."
     footer={<><Button variant="secondary" onClick={props.onClose}>Cancel</Button>{failure && failure !== "unsupported" ? <Button variant="secondary" onClick={() => setRetry(value => value + 1)}>Try again</Button> : null}{failure ? <Button onClick={props.onChooseAnother}>Choose another replay</Button> : null}</>}>

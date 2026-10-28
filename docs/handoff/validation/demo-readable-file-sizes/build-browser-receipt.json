@@ -1,0 +1,392 @@
+{
+  "schemaVersion": 1,
+  "createdAtUtc": "2026-10-28T11:04:53.582Z",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/help-recovery-completion",
+  "base": "ccb5987e145968059097ecf440204c3972279ded",
+  "BUILD_ID": "OF7PaPIju4ePerx5fa7B_",
+  "decision": "local-build-budget-responsive-AA-clear",
+  "childSourcePins": [
+    {
+      "path": "CHANGELOG.md",
+      "owner": "child",
+      "sha256": "ac21eb27fc9dca9d2ef3446b7734741fcc41f07c8aa698c450706ab63ce94f2e",
+      "bytes": 374134,
+      "baseGitBlobSha256": "d7c2853ad0da65c16d343970a1f1feafc107893988c7fce03e1bfb23822e2676",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "963f054f5cad65fdf7a86f5040cc0155f9cb630d51b2e6c5597d871674a70c12"
+    },
+    {
+      "path": "apps/web/components/landing/ReplayDemo.tsx",
+      "owner": "child",
+      "sha256": "ae324942be5674cfe25e2bc196a8032bea88804c7fb68d9df876b7cf881f4518",
+      "bytes": 26931,
+      "baseGitBlobSha256": "1b3b41633011936ffb0bd223492f2eb23668b556a1b0f917ff0864399e1913f1",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "492c2f032d434a43feda4635240b08dcc48dd9cb590098f614c11f3ce6bf7470"
+    },
+    {
+      "path": "apps/web/components/landing/ReplayDemoBrowserIsland.tsx",
+      "owner": "child",
+      "sha256": "8f23050a6bb390135a55db8150cf9ffa4ea9bcddba41a608f3b9bd05b13dcc3f",
+      "bytes": 3427,
+      "baseGitBlobSha256": "025ab1aecec0bd2e68d1deedbc9bb494b4ab9e7e4da51f151b546e0df63460f7",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "36219157e9eb32b291788f9768ccd261c686a65592b986e0ad776e75fe08c421"
+    },
+    {
+      "path": "apps/web/components/landing/ReplayDemoBrowserSession.tsx",
+      "owner": "child",
+      "sha256": "1da6c4f1811d9df25e12e06e7a0686a2e244fa71446175e707bc7bff310ae2c1",
+      "bytes": 6040,
+      "baseGitBlobSha256": "6d19aa379158b6c5c94f029603ce40e9b8da11d991a0d7fe51dbd848752d7fbd",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "a1953aea6780d8692b250e1281f79e3131787b0afa4ab0a6436e7a78bcf2da39"
+    },
+    {
+      "path": "apps/web/components/landing/__tests__/ReplayDemo.browser.test.tsx",
+      "owner": "child",
+      "sha256": "9148801347304d629353149c2088f8dafb7e071e1805d4b7f9ce3613e7af39ff",
+      "bytes": 10925,
+      "baseGitBlobSha256": "17953b4ba7c528288e9b2adca75b01b984f84c8b1b93fad63638ed0d2d889680",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "ce4eec70ad787019acfc016d91387057b5353771eec5d1ede389ffb0d6833dd8"
+    },
+    {
+      "path": "apps/web/components/landing/__tests__/ReplayDemo.test.tsx",
+      "owner": "child",
+      "sha256": "2c84a33deeb92346908f3c2820ee7b17b382a8426b8f5102c399b803e6eb0fb5",
+      "bytes": 5416,
+      "baseGitBlobSha256": "050086592107444de14803ea351ec86f58c1ba183fda428c6f10ca84a5fde8a6",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "a02108322a207db3455b7b0ed70ba9dd5fb49ffee49bb961e4139c3b46ae29f2"
+    },
+    {
+      "path": "apps/web/components/landing/__tests__/ReplayDemoBrowserIsland.test.tsx",
+      "owner": "child",
+      "sha256": "ad88ae4486a69ce7ea704b93a87c702f319ee836927bba5f3c107bb61f931ac0",
+      "bytes": 4401,
+      "baseGitBlobSha256": "03240dad7250a579a832e2a459d773edd240c53a7372bd0a8a9a60b14b0713ae",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "887f4518fc1f60aca87324bf7bb76135bc80b76b8477d24e51d939449f9a1bea"
+    },
+    {
+      "path": "apps/web/lib/help/articles/getting-started/instant-analysis.ts",
+      "owner": "child",
+      "sha256": "88f9d15c6b244ab5949d72db73bf30d5954d5c82756098a4a501dd0d41b5f348",
+      "bytes": 3927,
+      "baseGitBlobSha256": "733fcd181ce9a20dc586672c03876ff8f48223c34964a9591287839fbf6b0c97",
+      "newTargetAbsentAtBase": false,
+      "exactWorkingPreimageSha256": "cb255af56eda377743f5832a12adba4265694036760d6cdf4925aa72df67b194"
+    },
+    {
+      "path": "apps/web/components/landing/replayDemoFileSize.ts",
+      "owner": "child",
+      "sha256": "f3145d7209101359515ac1a7b17b16e3243c19f53afb00290170b0446daa779d",
+      "bytes": 381,
+      "baseGitBlobSha256": null,
+      "newTargetAbsentAtBase": true,
+      "exactWorkingPreimageSha256": null
+    },
+    {
+      "path": "docs/handoff/demo-readable-file-sizes-checkpoint.md",
+      "owner": "child",
+      "sha256": "f5fce7d3a6e4919fceb03e5778f2152a91c08e8548038dc0d7a6d9ec3ca46b57",
+      "bytes": 3210,
+      "baseGitBlobSha256": null,
+      "newTargetAbsentAtBase": true,
+      "exactWorkingPreimageSha256": null
+    }
+  ],
+  "build": {
+    "directNext": true,
+    "NODE_ENV": "production",
+    "prebuildInvoked": false,
+    "exitCode": 0,
+    "budgets": {
+      "passed": 83,
+      "explicit": 18,
+      "default": 65,
+      "capsChanged": false
+    },
+    "fullSource": {
+      "inputs": 6786,
+      "snapshotSha256": "9a3451af813b6f30a9b97b058fc5c84faf1b15532ba94cbc92cc3b0fb50bf1ea",
+      "prebuildPostbuildPostbrowserIdentical": true,
+      "qualification": "Includes then-current ledger120/57/20. Parent intentionally updated only docs/ledger after slot release; this equality is scoped to actual before/after build/browser, not the later updated ledger."
+    },
+    "assets": {
+      "canonicalInputs": 40,
+      "activeFiles": 7,
+      "strictSampleGames": 4,
+      "identical": true,
+      "generation": false,
+      "downloads": false,
+      "pruning": false
+    }
+  },
+  "browser": {
+    "cases": 8,
+    "widths": [
+      320,
+      390,
+      768,
+      1280
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "workerLimit": 1,
+    "retries": 0,
+    "skipped": 0,
+    "flaky": 0,
+    "aaScans": 48,
+    "aaViolations": 0,
+    "ruleExclusions": [],
+    "specimens": 64,
+    "rawIncompleteEntriesPreserved": true,
+    "binding": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/browser-input-binding.json",
+    "manualReview": [
+      {
+        "name": "private-error-320-light",
+        "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-error-320-light.png",
+        "sha256": "941ea669f56d68d15a4c496ea621e6916aab09763cdb36263827ac52101d5f1d",
+        "review": "Viewed original PNG pixels:1.00KB visible, full relevant filename wraps, dialog/footer/control geometry contained and readable. Error focus outlines and recovery affordances present where applicable; no new visual blocker."
+      },
+      {
+        "name": "unsupported-320-dark",
+        "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/unsupported-320-dark.png",
+        "sha256": "ab56d2c68d006f2c37459da73e4521386843eeb10fd65e4c7e366f1795eb7415",
+        "review": "Viewed original PNG pixels:1.00KB visible, full relevant filename wraps, dialog/footer/control geometry contained and readable. Error focus outlines and recovery affordances present where applicable; no new visual blocker."
+      },
+      {
+        "name": "chunk-error-390-dark",
+        "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-error-390-dark.png",
+        "sha256": "2389ac7b4ab2d90b0a1fe0006684b0c0fc9206cac89e93989db01fc3954546ca",
+        "review": "Viewed original PNG pixels:1.00KB visible, full relevant filename wraps, dialog/footer/control geometry contained and readable. Error focus outlines and recovery affordances present where applicable; no new visual blocker."
+      },
+      {
+        "name": "legacy-1kb-1280-light",
+        "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/legacy-1kb-1280-light.png",
+        "sha256": "82d90a89795b274567efe7a255a35ba09443da52268692cc14573cfd48750fd7",
+        "review": "Viewed original PNG pixels:1.00KB visible, full relevant filename wraps, dialog/footer/control geometry contained and readable. Error focus outlines and recovery affordances present where applicable; no new visual blocker."
+      }
+    ],
+    "scope": "Real browser/current product components/controller/Modal with actual fresh Next CSS and local WOFF2. Explicit synthetic engine/legacy transport/flag/Next/analytics/unexercised editor adapters. Legacy normal filenames B/KB/MB; private/chunk long1KB filenames; unsupported recovery, focus, Escape, retries and network boundaries. No live account/provider/engine worker/Next hydration or production acceptance claim."
+  },
+  "ledgerAudit": {
+    "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/ledger-independent-review.json",
+    "countsAtFrozenBuild": {
+      "completed": 120,
+      "partial": 57,
+      "open": 20
+    },
+    "all197IdentitiesAndRequirementHashesPreserved": true,
+    "status": "conservative scoped source/live gates clear at freeze; later122closure audit separate"
+  },
+  "cleanup": {
+    "buildPid": 42868,
+    "buildExited": true,
+    "buildProcessAliveAfterExit": false,
+    "playwrightToolExitCode": 0,
+    "actualBrowserCloseAwaited": true,
+    "httpListenersStarted": 0,
+    "broadProcessKills": 0,
+    "heavySlotReleased": true
+  },
+  "stage2": {
+    "checkedPins": 15,
+    "allMatch": false,
+    "pins": [
+      {
+        "path": "CHANGELOG.md",
+        "matches": false
+      },
+      {
+        "path": "apps/api/__tests__/gameStatsWrites.replset.test.js",
+        "matches": true
+      },
+      {
+        "path": "apps/api/__tests__/gameStatsWrites.unit.test.js",
+        "matches": true
+      },
+      {
+        "path": "apps/api/src/db/connect.js",
+        "matches": true
+      },
+      {
+        "path": "apps/api/src/server.js",
+        "matches": true
+      },
+      {
+        "path": "apps/api/src/services/gameControls.js",
+        "matches": true
+      },
+      {
+        "path": "apps/api/src/services/gameStatsWrites.js",
+        "matches": true
+      },
+      {
+        "path": "apps/api/src/services/games.js",
+        "matches": true
+      },
+      {
+        "path": "apps/api/src/services/gdpr.js",
+        "matches": true
+      },
+      {
+        "path": "apps/api/src/services/userBackups.js",
+        "matches": true
+      },
+      {
+        "path": "docs/engineeringexplanation.md",
+        "matches": true
+      },
+      {
+        "path": "docs/handoff/HANDOFF.md",
+        "matches": true
+      },
+      {
+        "path": "apps/api/__tests__/gameStatsMaintenance.unit.test.js",
+        "matches": true
+      },
+      {
+        "path": "apps/api/src/services/gameStatsMaintenance.js",
+        "matches": true
+      },
+      {
+        "path": "docs/handoff/game-stats-maintenance-checkpoint.md",
+        "matches": true
+      }
+    ],
+    "sourceEditedByChild": false
+  },
+  "dependencies": [
+    {
+      "name": "next",
+      "version": "15.5.15",
+      "sha256": "7081bb3659c70ddd75fc089d0e4f34850736d825e9eec26990ab5be0ecf9d3f0"
+    },
+    {
+      "name": "react",
+      "version": "19.0.0",
+      "sha256": "9000ced5f7bfae3479981149e94f5e3ac9025e6a5fb08ab95c0cebb186123161"
+    },
+    {
+      "name": "react-dom",
+      "version": "19.0.0",
+      "sha256": "cc4fb5f07997d43a095bdae48ea26153970e21c774648bca1708e4ad4fd83469"
+    },
+    {
+      "name": "esbuild",
+      "version": "0.21.5",
+      "sha256": "0f35e0d63bd60a43ed85879604a40f7e9688b321904cf28a95be5b1bc629559c"
+    },
+    {
+      "name": "@playwright/test",
+      "version": "1.61.1",
+      "sha256": "9d8556509e073169efec663b7f71c13f17d7002b307d00d48bf88ee91c387f3e"
+    },
+    {
+      "name": "@axe-core/playwright",
+      "version": "4.11.2",
+      "sha256": "1156c42aeefc8ef879874b67d1d93de43d295adf2bb637ffa6c022d0147982a5"
+    }
+  ],
+  "evidence": [
+    {
+      "name": "production-build-01-command.json",
+      "sha256": "70c9ebbf22ea00e51af5932b7c51bc397c6e84235ed554b07f167bf448a12a66",
+      "bytes": 490
+    },
+    {
+      "name": "production-build-01.log",
+      "sha256": "f8b4ca5b163b6ec65c26debd25ed643479814876cd0817b623e08396831cd590",
+      "bytes": 42515
+    },
+    {
+      "name": "all-budgets-01.json",
+      "sha256": "49594855471b285d8af940b0bf41349254ddda366bcfaf85b223eaf953cd3b45",
+      "bytes": 9255
+    },
+    {
+      "name": "budgets-01.log",
+      "sha256": "29d3a54eb02419307f44390a8d2a0617214da061f70028998d9b7f0bc6ec62d3",
+      "bytes": 1245
+    },
+    {
+      "name": "full-source-prebuild.json",
+      "sha256": "6ee0e4615abaab09a67c0d85eb673d3763de0f0723210c617b9cfb5fe0481205",
+      "bytes": 242
+    },
+    {
+      "name": "full-source-postbuild.json",
+      "sha256": "149f0ace379f9b30cb3c3ddaf47ec15e11fb03621edb3021604dadae17f29b28",
+      "bytes": 243
+    },
+    {
+      "name": "full-source-postbrowser.json",
+      "sha256": "9d7f66fbaa2cef0cb3b5a3c19a8c7c8a24bcbc9905985878e3cc9baf638763f8",
+      "bytes": 245
+    },
+    {
+      "name": "assets-01/asset-admission-history-prebuild.json",
+      "sha256": "20576f6910dfcf4820d32f757729c6ee2b4af47cdaad15350d7a3d82450c408e",
+      "bytes": 9429
+    },
+    {
+      "name": "assets-01/asset-admission-history-postbuild.json",
+      "sha256": "20576f6910dfcf4820d32f757729c6ee2b4af47cdaad15350d7a3d82450c408e",
+      "bytes": 9429
+    },
+    {
+      "name": "assets-01/asset-admission-history-postbrowser.json",
+      "sha256": "20576f6910dfcf4820d32f757729c6ee2b4af47cdaad15350d7a3d82450c408e",
+      "bytes": 9429
+    },
+    {
+      "name": "browser-02.json",
+      "sha256": "3450d9491df7678b1cbb4026c665131a944b27965c26ce13046399221f04ddfc",
+      "bytes": 8588350
+    },
+    {
+      "name": "browser-02.log",
+      "sha256": "13e2d38ac2cf838f9616b5dd9c09492bf9cbf560e0978974a73fa3a126bfd902",
+      "bytes": 2512
+    },
+    {
+      "name": "browser-summary-02.json",
+      "sha256": "8ff4f23327394c1b87893d187c367197737c59e4c3a83c56f2358de4dfbe5b08",
+      "bytes": 126925
+    },
+    {
+      "name": "browser-input-binding.json",
+      "sha256": "37de55b12355038fa00102f02963e2021612b38d01ddc6c4ce379ad39de1e24d",
+      "bytes": 9441
+    },
+    {
+      "name": "ledger-independent-review.json",
+      "sha256": "cf8ac107e513e1c21fe586d4fa089386f6a900730e0cca1f212231165e161548",
+      "bytes": 3929
+    },
+    {
+      "name": "fixture-syntax-01.log",
+      "sha256": "0ebad9e49541f117f33499a825fbd0b64109d85b3ceea3e68778e8b516231a27",
+      "bytes": 570
+    },
+    {
+      "name": "browser-01.json",
+      "sha256": "a4d4903765a678ec341cf86e95222b2e7b0527d8b566c686144e7ff4b9b036e9",
+      "bytes": 14472
+    }
+  ],
+  "failedEvidence": [
+    "Fixture syntax01 escaped backticks caused node--check failure; original fixture and actual syntax log retained. Cache-only correction, no product source changed.",
+    "Browser01 stopped before UI because esbuild virtual<define:process.env> was mistaken for a filesystem product input. Exact compiler virtual input is now explicitly qualified; every real imported product file remains bound to full source snapshot. Trace/report/failed fixture retained. Browser02 passes all original UI assertions."
+  ],
+  "remaining": [
+    "Parent exact-head CI and actual deployed Tiny1KB acceptance",
+    "No roadmap item marked complete by this local evidence",
+    "Parent docs/ledger may adopt later803 acceptance after the completed source freeze; no rebuild needed for docs-only changes"
+  ]
+}

@@ -1,0 +1,4553 @@
+{
+  "createdAtUtc": "2026-10-28T10:57:44.747Z",
+  "browserReportSha256": "3450d9491df7678b1cbb4026c665131a944b27965c26ce13046399221f04ddfc",
+  "stats": {
+    "startTime": "2026-10-28T10:54:27.815Z",
+    "duration": 28918.972,
+    "expected": 8,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "workerLimit": 1,
+  "retries": 0,
+  "widths": [
+    320,
+    390,
+    768,
+    1280
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "cases": [
+    {
+      "title": "320 light: readable units in actual legacy, private, chunk and unsupported states",
+      "status": "passed"
+    },
+    {
+      "title": "320 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "status": "passed"
+    },
+    {
+      "title": "390 light: readable units in actual legacy, private, chunk and unsupported states",
+      "status": "passed"
+    },
+    {
+      "title": "390 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "status": "passed"
+    },
+    {
+      "title": "768 light: readable units in actual legacy, private, chunk and unsupported states",
+      "status": "passed"
+    },
+    {
+      "title": "768 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "status": "passed"
+    },
+    {
+      "title": "1280 light: readable units in actual legacy, private, chunk and unsupported states",
+      "status": "passed"
+    },
+    {
+      "title": "1280 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "status": "passed"
+    }
+  ],
+  "aaScans": 48,
+  "aaViolations": 0,
+  "ruleExclusions": [],
+  "specimens": 64,
+  "audits": [
+    {
+      "title": "320 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "legacy-1kb-320-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/legacy-1kb-320-light-aa.json",
+      "sha256": "af0a72174a6007380bc6a3fe58f41d9eea235fccedf6dd2a74f32cc0451ed2c1",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "320 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-pending-320-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-pending-320-light-aa.json",
+      "sha256": "dd50136a14f476c5f0ed454ee38107cee8e3a083b91c7bf38d834aa25f39611d",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 5
+        }
+      ]
+    },
+    {
+      "title": "320 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-error-320-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-error-320-light-aa.json",
+      "sha256": "14e11a3369c2cb51fcc3f1e307967b7d428e569912191809c6d827b36be2e699",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "320 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-pending-320-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-pending-320-light-aa.json",
+      "sha256": "553445ce8e27d91ae23cb89e4299be11452e2b01880fdbf99f934570b419fe12",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "320 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-error-320-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-error-320-light-aa.json",
+      "sha256": "8ab3c454792341aae0b73c614ff4a1f63afbcd682689d49ed0c9f685a1e0afb4",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "320 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "unsupported-320-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/unsupported-320-light-aa.json",
+      "sha256": "b830b593c5841b9a4fee23eff98a9b826780c8dc7dd10f578496f433b3dfc7ed",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 6
+        }
+      ]
+    },
+    {
+      "title": "320 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "legacy-1kb-320-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/legacy-1kb-320-dark-aa.json",
+      "sha256": "bc4dec9ba3c642c454798055553f0e6cd4c8f0fce1a1e95810a06cc7b40f9c75",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "320 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-pending-320-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-pending-320-dark-aa.json",
+      "sha256": "cca859b9ce93e3126a658a33ce1b7afddd67e4bef2696b274bb18f1fe36f22e8",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 5
+        }
+      ]
+    },
+    {
+      "title": "320 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-error-320-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-error-320-dark-aa.json",
+      "sha256": "b6c9ada29697df8a62593ffcca722acc1974e8ad0add2c40c510088b74fa8420",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "320 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-pending-320-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-pending-320-dark-aa.json",
+      "sha256": "4ab65421daa59af69fba44553abe4c79958dec8b950bbfef9c5f8029dae91b93",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "320 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-error-320-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-error-320-dark-aa.json",
+      "sha256": "d47ca6b82f1f7d04f2114c2681e4697237e23a32d0a05692259f91b9389433b2",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "320 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "unsupported-320-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/unsupported-320-dark-aa.json",
+      "sha256": "1d8a06440316fe093dd7511ffcea9bb3c648413aae58d619890bbea2b59a6d63",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 6
+        }
+      ]
+    },
+    {
+      "title": "390 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "legacy-1kb-390-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/legacy-1kb-390-light-aa.json",
+      "sha256": "5a43ef5fbf3d6234db706e006fd14df4b70d7a1416e0b6b5ccaff52bb3ffd2df",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 2
+        }
+      ]
+    },
+    {
+      "title": "390 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-pending-390-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-pending-390-light-aa.json",
+      "sha256": "dc03d084182bde81c74ac80b38656573089347c49a5e3d85845101fc4476a564",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 4
+        }
+      ]
+    },
+    {
+      "title": "390 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-error-390-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-error-390-light-aa.json",
+      "sha256": "f05c6561fe992fcf377c40ac93f8869056b149dd53793eb4439ffd7cf2e5b5d8",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "390 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-pending-390-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-pending-390-light-aa.json",
+      "sha256": "39d5281d5c28ef2c1cd8962a08473426b321d5b855216c46c9e7359b4a9d605e",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "390 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-error-390-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-error-390-light-aa.json",
+      "sha256": "7f400fdd91f156db492266795d4d0a6eca3ef0f9938d8d5cf3320acc2be7c600",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "390 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "unsupported-390-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/unsupported-390-light-aa.json",
+      "sha256": "5db2a85e29471255b9e04bb98bdde36bcd544712c4dd49075b613987f76573d6",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 4
+        }
+      ]
+    },
+    {
+      "title": "390 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "legacy-1kb-390-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/legacy-1kb-390-dark-aa.json",
+      "sha256": "8e1230018585ce2747c968d3bc32d5c9d6691c6ec5a183daadd9183e690ce996",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 2
+        }
+      ]
+    },
+    {
+      "title": "390 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-pending-390-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-pending-390-dark-aa.json",
+      "sha256": "96ac956d02d989308cad4448496719d409a354f6535e6ce7d5a950d200c3b0b8",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 4
+        }
+      ]
+    },
+    {
+      "title": "390 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-error-390-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-error-390-dark-aa.json",
+      "sha256": "0e1e9c30f600ff9ebff76829e74e9f4862b86667f14b8da9413087735ccfe05b",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "390 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-pending-390-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-pending-390-dark-aa.json",
+      "sha256": "e1a5e10171e426e6aea4ad68e9e57617222fb0ece24ca4c8321f0ffe806f7a14",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "390 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-error-390-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-error-390-dark-aa.json",
+      "sha256": "3b9aa2a021e07b46c1a15859211718c684f31e6845301071a98b0e61658f35d0",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "390 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "unsupported-390-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/unsupported-390-dark-aa.json",
+      "sha256": "3bc61dffd8a078ff6b10f9e6a6744e34a02923d28a8d3779b7af829273a603c9",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 4
+        }
+      ]
+    },
+    {
+      "title": "768 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "legacy-1kb-768-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/legacy-1kb-768-light-aa.json",
+      "sha256": "9ed68a8df1aeade06a1be7b82b6ba5d3639ea65ba3b24be8138a3d74c35d05ca",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 2
+        }
+      ]
+    },
+    {
+      "title": "768 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-pending-768-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-pending-768-light-aa.json",
+      "sha256": "5303d0e423a184cfa5d747c94d1136c899d7191042195d8ee492e31f2881cb3a",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "768 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-error-768-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-error-768-light-aa.json",
+      "sha256": "fa568d430c243b765c45c34cd5dbf1a91f2d5f6d4ff81e392fb6cc87d9e7e988",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "768 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-pending-768-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-pending-768-light-aa.json",
+      "sha256": "61f18f870a0971fcc1da23bce7a4ee6267a8ed861febb44154833bd0f2ec73f9",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "768 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-error-768-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-error-768-light-aa.json",
+      "sha256": "354b0d573ed8dccc9a4c8bd6ff2a617942b9ea94a02857fb49e8d1c0f309105e",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "768 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "unsupported-768-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/unsupported-768-light-aa.json",
+      "sha256": "7678870af703dde17e1c6fa9a7621e12a1a90a0f18a5c4739013e0dad72b80fd",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 4
+        }
+      ]
+    },
+    {
+      "title": "768 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "legacy-1kb-768-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/legacy-1kb-768-dark-aa.json",
+      "sha256": "1de27e45f618aac1497d4df6378db11134207fb48a7933ba60a129b8515e079f",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 2
+        }
+      ]
+    },
+    {
+      "title": "768 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-pending-768-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-pending-768-dark-aa.json",
+      "sha256": "a8514cbe522a67d19a4b691deddeb7b4568df584fdf7f8e77a303fea24432767",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "768 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-error-768-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-error-768-dark-aa.json",
+      "sha256": "ffdffb112978347903e456ac84e5cc8eeb92a4361bcfd6ecbe14b3db05681398",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "768 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-pending-768-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-pending-768-dark-aa.json",
+      "sha256": "13ad4881727953adfb9f85dec365a8e6cf3c5434bbd7b9182caf133e763e59f4",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "768 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-error-768-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-error-768-dark-aa.json",
+      "sha256": "b9030748c087cb6e9f2ad4ce932ae6ce3e66472f4608a0d8c2ae767b25842cc4",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "768 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "unsupported-768-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/unsupported-768-dark-aa.json",
+      "sha256": "c4e2acfa27bc128ced523aaafb3e152fba631806f0168f70274f5cd16a483255",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 4
+        }
+      ]
+    },
+    {
+      "title": "1280 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "legacy-1kb-1280-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/legacy-1kb-1280-light-aa.json",
+      "sha256": "9f1258c916754436b7f350924ef0a884fb6b21b3bc6e79172b9424b1458c3b97",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 2
+        }
+      ]
+    },
+    {
+      "title": "1280 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-pending-1280-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-pending-1280-light-aa.json",
+      "sha256": "cd3e6f1f21ce2542752bbef567855000923606620930cfac9eadae30b40c1665",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "1280 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-error-1280-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-error-1280-light-aa.json",
+      "sha256": "744a37e05c50b44c3284581823c4af67088f8006a0632a45060fa37f6b5698e8",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "1280 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-pending-1280-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-pending-1280-light-aa.json",
+      "sha256": "836ad9b23fe261df3988d1f58ae771a8c429333b36acd14cdfe97776e8611421",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "1280 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-error-1280-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-error-1280-light-aa.json",
+      "sha256": "cf25b271b80cff5b783a831a78d3c35dd6f1f8e04178145d09d763b9e2f77644",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "1280 light: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "unsupported-1280-light-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/unsupported-1280-light-aa.json",
+      "sha256": "63cbd3c964c09eabf2f35f15ae6b11e533e73c4f9fc01ceca68acdf40dd0d7c2",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 4
+        }
+      ]
+    },
+    {
+      "title": "1280 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "legacy-1kb-1280-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/legacy-1kb-1280-dark-aa.json",
+      "sha256": "b0be7910994071370cf806e738f9ac72f966c019c409b9f5328d98cb64685e33",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 2
+        }
+      ]
+    },
+    {
+      "title": "1280 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-pending-1280-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-pending-1280-dark-aa.json",
+      "sha256": "f94615cf1a0647b7b54b3b560c9be78188d5bb2612c1b3723212caafdd4cbb1d",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "1280 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "private-error-1280-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/private-error-1280-dark-aa.json",
+      "sha256": "c96f0bbdd98c5c81eda81d1900643be6b2b9d725d5541a0cc3321ff1ac15e38c",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 3
+        }
+      ]
+    },
+    {
+      "title": "1280 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-pending-1280-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-pending-1280-dark-aa.json",
+      "sha256": "9dbf7e01c97cb2c8839d96d911a76218cf4f9d64ce82a414552db0ed6f04190c",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "1280 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "chunk-error-1280-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/chunk-error-1280-dark-aa.json",
+      "sha256": "5b344e7bbfb4039e104f29496fa77a9f81694fb058f37f6da3faea02760abdae",
+      "violations": 0,
+      "incomplete": []
+    },
+    {
+      "title": "1280 dark: readable units in actual legacy, private, chunk and unsupported states",
+      "name": "unsupported-1280-dark-aa",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/aa-02/unsupported-1280-dark-aa.json",
+      "sha256": "31a1ae52a04b1fca0293981749e2979002fd70f12ac5c3a8110bc2aeadaa8363",
+      "violations": 0,
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": 4
+        }
+      ]
+    }
+  ],
+  "captures": [
+    {
+      "name": "legacy-1kb-320-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/legacy-1kb-320-light.png",
+      "sha256": "a5c038899e502dfcbc31ec4315badb16ce4482ec8c191f104d7e83352069a617"
+    },
+    {
+      "name": "private-pending-320-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-pending-320-light.png",
+      "sha256": "8d14ce93aaf75a5322b13e70425b45ceb751fb2f6969d02e89865c5b7af3d537"
+    },
+    {
+      "name": "private-error-320-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-error-320-light.png",
+      "sha256": "941ea669f56d68d15a4c496ea621e6916aab09763cdb36263827ac52101d5f1d"
+    },
+    {
+      "name": "chunk-pending-320-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-pending-320-light.png",
+      "sha256": "55c9de323a0a109b98785d5f1d739dedac6f34dcde1c2d013cfae8d02c95e9ca"
+    },
+    {
+      "name": "chunk-error-320-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-error-320-light.png",
+      "sha256": "042eaddc0bf79b88681e42398d723cb57ed2248f2a956d62f51002b451494108"
+    },
+    {
+      "name": "unsupported-320-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/unsupported-320-light.png",
+      "sha256": "50c8fbb0450125ae561283c65fabd9bd2b8bf297b20a4e24e25e38c2d0295a49"
+    },
+    {
+      "name": "legacy-1kb-320-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/legacy-1kb-320-dark.png",
+      "sha256": "8c84094b94ec2033686141ef0d85c454825f1842517132db00c8fbf127efa888"
+    },
+    {
+      "name": "private-pending-320-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-pending-320-dark.png",
+      "sha256": "44325eefe22bdbec4455865d67494ec0794f6647a188a80cfef35bb8a5821942"
+    },
+    {
+      "name": "private-error-320-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-error-320-dark.png",
+      "sha256": "6c8eebab3bb924539c9f9ca8c899bd4f344f8bd6dae5ef996a8d47b9516ead00"
+    },
+    {
+      "name": "chunk-pending-320-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-pending-320-dark.png",
+      "sha256": "95dd001f7e64c4abd2cf8d85aa673778201e8ed053707b9e5cc9b4261f7b9e74"
+    },
+    {
+      "name": "chunk-error-320-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-error-320-dark.png",
+      "sha256": "e9d0e15e6e8ce2c8561fc81c6f8c966a456db56ec6f53ba9e53d9a372f8a3037"
+    },
+    {
+      "name": "unsupported-320-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/unsupported-320-dark.png",
+      "sha256": "ab56d2c68d006f2c37459da73e4521386843eeb10fd65e4c7e366f1795eb7415"
+    },
+    {
+      "name": "legacy-1kb-390-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/legacy-1kb-390-light.png",
+      "sha256": "a6daf827feb517a4e7f62e97637d856939d20007db2e8369a2cb4c5974b281f4"
+    },
+    {
+      "name": "private-pending-390-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-pending-390-light.png",
+      "sha256": "d132deb6a26c45696ea7d7a8c8648e98afcef720464f6ad49638b2e89ac10299"
+    },
+    {
+      "name": "private-error-390-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-error-390-light.png",
+      "sha256": "48948d513acfe7ec47a8369c6e0309de090b5fdf4c923943f282d7221b4a2365"
+    },
+    {
+      "name": "chunk-pending-390-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-pending-390-light.png",
+      "sha256": "1b6418b85840442d932fce11901cdee3f220209a50c7001b6188c01ab00fa1f9"
+    },
+    {
+      "name": "chunk-error-390-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-error-390-light.png",
+      "sha256": "6f0f207e02ae43a36dfbbff5c24c382e6572327617624988c1eef07f27d58a18"
+    },
+    {
+      "name": "unsupported-390-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/unsupported-390-light.png",
+      "sha256": "6f231ff0d5f993c89f43320c1cc886b73ef5a2b238e05670606192b064e0771b"
+    },
+    {
+      "name": "legacy-1kb-390-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/legacy-1kb-390-dark.png",
+      "sha256": "2cc8fdb86551de9901231d7a898f2a4440a97480c84401ec6c51340ef64fdee2"
+    },
+    {
+      "name": "private-pending-390-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-pending-390-dark.png",
+      "sha256": "9d722a62921dc46f836e41007ee1dd034bcb779552a1c0706813069f44a8d7a5"
+    },
+    {
+      "name": "private-error-390-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-error-390-dark.png",
+      "sha256": "d7319bec50bdd52b811aa42736441090d54223f1d4ee4ddb63044d5a2d88f4f4"
+    },
+    {
+      "name": "chunk-pending-390-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-pending-390-dark.png",
+      "sha256": "2565911bc4f76814c7959e82e5a888447dae43d3f7d34f1dabc63d792e09ed70"
+    },
+    {
+      "name": "chunk-error-390-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-error-390-dark.png",
+      "sha256": "2389ac7b4ab2d90b0a1fe0006684b0c0fc9206cac89e93989db01fc3954546ca"
+    },
+    {
+      "name": "unsupported-390-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/unsupported-390-dark.png",
+      "sha256": "d85c85aca9b55223ab3c6cc0e196b8f21ebfab175de3d7aa3cc6e34ee18f77b1"
+    },
+    {
+      "name": "legacy-1kb-768-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/legacy-1kb-768-light.png",
+      "sha256": "a91c2e721cb0cd49a497630bb94c67f1f31595777e5b294e84b8c47897410844"
+    },
+    {
+      "name": "private-pending-768-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-pending-768-light.png",
+      "sha256": "24b301d71b2baefab6998a9eadd2966317e9a5eaa2bb469b03ea6ec53e6ca585"
+    },
+    {
+      "name": "private-error-768-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-error-768-light.png",
+      "sha256": "8fbcc5d8d6c10bc59e321ad3a5747e08909d0d40a69816b458464517f0d6413f"
+    },
+    {
+      "name": "chunk-pending-768-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-pending-768-light.png",
+      "sha256": "9cbbdeda2b65c4da0b025a3e887751b42611c1f7561538c9f4d5e2d90a102415"
+    },
+    {
+      "name": "chunk-error-768-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-error-768-light.png",
+      "sha256": "80e39ab24ff61d75c6ab3ce3379ac382c62e672ed561ab0c77c62c7aa6b08586"
+    },
+    {
+      "name": "unsupported-768-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/unsupported-768-light.png",
+      "sha256": "229ba60e40a5a52a807995bec2e17a434ef3d9d1ab13d1e12e791fc4f5068599"
+    },
+    {
+      "name": "legacy-1kb-768-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/legacy-1kb-768-dark.png",
+      "sha256": "7d9ef7abe7c0e514b240bbe856b9eab28df58e5dd93911162d7afad1049223bd"
+    },
+    {
+      "name": "private-pending-768-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-pending-768-dark.png",
+      "sha256": "caa0722cb2b60454521305cb17b5a8fef83ab99292e222e0edd9cb60daaa6fd5"
+    },
+    {
+      "name": "private-error-768-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-error-768-dark.png",
+      "sha256": "c242287d9ee2b3e313a3e3f14216a18de86120674a4174b3c20d2d5b9752a86d"
+    },
+    {
+      "name": "chunk-pending-768-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-pending-768-dark.png",
+      "sha256": "a2ed2075682b2ad0f019987a356d4998454032270ef971b2dfc7abacb458e12e"
+    },
+    {
+      "name": "chunk-error-768-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-error-768-dark.png",
+      "sha256": "76f4853df568d0271c2b769e6c8daf862f3b4052451d65e3e59434fa517266f6"
+    },
+    {
+      "name": "unsupported-768-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/unsupported-768-dark.png",
+      "sha256": "8d6f8a0c9fb1bf9588f09e3996211adf7d3e3f29dc885fc5ce35f11e711fa770"
+    },
+    {
+      "name": "legacy-1kb-1280-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/legacy-1kb-1280-light.png",
+      "sha256": "82d90a89795b274567efe7a255a35ba09443da52268692cc14573cfd48750fd7"
+    },
+    {
+      "name": "private-pending-1280-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-pending-1280-light.png",
+      "sha256": "6b0c18f77160d2b88a5e2ef2d21a06c02fcd75653c5b31d8ef85205d6af3b4e0"
+    },
+    {
+      "name": "private-error-1280-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-error-1280-light.png",
+      "sha256": "af0e601f1ee3708eec3b3f3913b0e95618b54df37f8c6d22a55383a6c5de8b05"
+    },
+    {
+      "name": "chunk-pending-1280-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-pending-1280-light.png",
+      "sha256": "23537898919a1def5d3a5b390d70c0c56b7e388e081aec4b7b75d32558fe288c"
+    },
+    {
+      "name": "chunk-error-1280-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-error-1280-light.png",
+      "sha256": "cbe37d6f429f0950ed161ea30398f0b588da65179733ad5b15a07c4b5a47e7df"
+    },
+    {
+      "name": "unsupported-1280-light",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/unsupported-1280-light.png",
+      "sha256": "39981bd83b5f6d411f8068f65a2b0dc4e4bdc0541d93cb8bde144d72f483ec73"
+    },
+    {
+      "name": "legacy-1kb-1280-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/legacy-1kb-1280-dark.png",
+      "sha256": "df4dae17cc386811fec82e4e036e5b8bc335cc2a571fadfb7984b6aa07982464"
+    },
+    {
+      "name": "private-pending-1280-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-pending-1280-dark.png",
+      "sha256": "66d3b658fff344d355fdcf2b1bade0f7bb1ba8cecf4304e32e181ff2e9535367"
+    },
+    {
+      "name": "private-error-1280-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/private-error-1280-dark.png",
+      "sha256": "e3901b95ad30b1a9d0ea840e04c7a01ee3126ef5008e57e73b3295d3d8980115"
+    },
+    {
+      "name": "chunk-pending-1280-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-pending-1280-dark.png",
+      "sha256": "c949cf733b8958d799200608655858e225b5a05bb79f222ba3321d81b80d3ec4"
+    },
+    {
+      "name": "chunk-error-1280-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/chunk-error-1280-dark.png",
+      "sha256": "0278906919d6947d5ac4c31f42c343f1d04d10a49e61534ecbc7cbc409882ae6"
+    },
+    {
+      "name": "unsupported-1280-dark",
+      "path": "C:/SC2TOOLS/.cache/demo-readable-file-sizes-verification-20261028/captures-02/unsupported-1280-dark.png",
+      "sha256": "abd7259cf3216d0bf5b45da0572d8a254419eac9119d7f73ba9090e4d4ad101b"
+    }
+  ],
+  "observations": [
+    {
+      "width": 320,
+      "theme": "light",
+      "observations": [
+        {
+          "scenario": "legacy",
+          "bytes": 1,
+          "size": "1 B",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 743,
+              "bottom": 763
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 108.265625,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 108.265625,
+                "right": 119.375,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 119.375,
+                "right": 137.859375,
+                "top": 744,
+                "bottom": 761
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 1024,
+          "size": "1.00 KB",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 743,
+              "bottom": 763
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 108.265625,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 108.265625,
+                "right": 119.375,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 119.375,
+                "right": 163.78125,
+                "top": 744,
+                "bottom": 761
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 2097152,
+          "size": "2.00 MB",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 743,
+              "bottom": 763
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 108.265625,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 108.265625,
+                "right": 119.375,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 119.375,
+                "right": 166.4375,
+                "top": 744,
+                "bottom": 761
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-pending",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 618,
+              "bottom": 718
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 298.421875,
+                "top": 619,
+                "bottom": 636
+              },
+              {
+                "left": 21,
+                "right": 295.96875,
+                "top": 639,
+                "bottom": 656
+              },
+              {
+                "left": 21,
+                "right": 298.96875,
+                "top": 659,
+                "bottom": 676
+              },
+              {
+                "left": 21,
+                "right": 294.703125,
+                "top": 679,
+                "bottom": 696
+              },
+              {
+                "left": 21,
+                "right": 73.125,
+                "top": 699,
+                "bottom": 716
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-error",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 590,
+              "bottom": 690
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 298.421875,
+                "top": 591,
+                "bottom": 608
+              },
+              {
+                "left": 21,
+                "right": 295.96875,
+                "top": 611,
+                "bottom": 628
+              },
+              {
+                "left": 21,
+                "right": 298.96875,
+                "top": 631,
+                "bottom": 648
+              },
+              {
+                "left": 21,
+                "right": 294.703125,
+                "top": 651,
+                "bottom": 668
+              },
+              {
+                "left": 21,
+                "right": 73.125,
+                "top": 671,
+                "bottom": 688
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Try again",
+              "width": 108.046875,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-pending",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 678,
+              "bottom": 778
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 298.421875,
+                "top": 679,
+                "bottom": 696
+              },
+              {
+                "left": 21,
+                "right": 295.96875,
+                "top": 699,
+                "bottom": 716
+              },
+              {
+                "left": 21,
+                "right": 298.96875,
+                "top": 719,
+                "bottom": 736
+              },
+              {
+                "left": 21,
+                "right": 294.703125,
+                "top": 739,
+                "bottom": 756
+              },
+              {
+                "left": 21,
+                "right": 73.125,
+                "top": 759,
+                "bottom": 776
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-error",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 554,
+              "bottom": 654
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 298.421875,
+                "top": 555,
+                "bottom": 572
+              },
+              {
+                "left": 21,
+                "right": 295.96875,
+                "top": 575,
+                "bottom": 592
+              },
+              {
+                "left": 21,
+                "right": 298.96875,
+                "top": 595,
+                "bottom": 612
+              },
+              {
+                "left": 21,
+                "right": 294.703125,
+                "top": 615,
+                "bottom": 632
+              },
+              {
+                "left": 21,
+                "right": 73.125,
+                "top": 635,
+                "bottom": 652
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Retry analyzer",
+              "width": 145.75,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "unsupported",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 506,
+              "bottom": 606
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 298.421875,
+                "top": 507,
+                "bottom": 524
+              },
+              {
+                "left": 21,
+                "right": 295.96875,
+                "top": 527,
+                "bottom": 544
+              },
+              {
+                "left": 21,
+                "right": 298.96875,
+                "top": 547,
+                "bottom": 564
+              },
+              {
+                "left": 21,
+                "right": 294.703125,
+                "top": 567,
+                "bottom": 584
+              },
+              {
+                "left": 21,
+                "right": 73.125,
+                "top": 587,
+                "bottom": 604
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "width": 320,
+      "theme": "dark",
+      "observations": [
+        {
+          "scenario": "legacy",
+          "bytes": 1,
+          "size": "1 B",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 743,
+              "bottom": 763
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 108.265625,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 108.265625,
+                "right": 119.375,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 119.375,
+                "right": 137.859375,
+                "top": 744,
+                "bottom": 761
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 1024,
+          "size": "1.00 KB",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 743,
+              "bottom": 763
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 108.265625,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 108.265625,
+                "right": 119.375,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 119.375,
+                "right": 163.78125,
+                "top": 744,
+                "bottom": 761
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 2097152,
+          "size": "2.00 MB",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 743,
+              "bottom": 763
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 108.265625,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 108.265625,
+                "right": 119.375,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 119.375,
+                "right": 166.4375,
+                "top": 744,
+                "bottom": 761
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-pending",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 618,
+              "bottom": 718
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 298.421875,
+                "top": 619,
+                "bottom": 636
+              },
+              {
+                "left": 21,
+                "right": 295.96875,
+                "top": 639,
+                "bottom": 656
+              },
+              {
+                "left": 21,
+                "right": 298.96875,
+                "top": 659,
+                "bottom": 676
+              },
+              {
+                "left": 21,
+                "right": 294.703125,
+                "top": 679,
+                "bottom": 696
+              },
+              {
+                "left": 21,
+                "right": 73.125,
+                "top": 699,
+                "bottom": 716
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-error",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 590,
+              "bottom": 690
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 298.421875,
+                "top": 591,
+                "bottom": 608
+              },
+              {
+                "left": 21,
+                "right": 295.96875,
+                "top": 611,
+                "bottom": 628
+              },
+              {
+                "left": 21,
+                "right": 298.96875,
+                "top": 631,
+                "bottom": 648
+              },
+              {
+                "left": 21,
+                "right": 294.703125,
+                "top": 651,
+                "bottom": 668
+              },
+              {
+                "left": 21,
+                "right": 73.125,
+                "top": 671,
+                "bottom": 688
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Try again",
+              "width": 108.046875,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-pending",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 678,
+              "bottom": 778
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 298.421875,
+                "top": 679,
+                "bottom": 696
+              },
+              {
+                "left": 21,
+                "right": 295.96875,
+                "top": 699,
+                "bottom": 716
+              },
+              {
+                "left": 21,
+                "right": 298.96875,
+                "top": 719,
+                "bottom": 736
+              },
+              {
+                "left": 21,
+                "right": 294.703125,
+                "top": 739,
+                "bottom": 756
+              },
+              {
+                "left": 21,
+                "right": 73.125,
+                "top": 759,
+                "bottom": 776
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-error",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 554,
+              "bottom": 654
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 298.421875,
+                "top": 555,
+                "bottom": 572
+              },
+              {
+                "left": 21,
+                "right": 295.96875,
+                "top": 575,
+                "bottom": 592
+              },
+              {
+                "left": 21,
+                "right": 298.96875,
+                "top": 595,
+                "bottom": 612
+              },
+              {
+                "left": 21,
+                "right": 294.703125,
+                "top": 615,
+                "bottom": 632
+              },
+              {
+                "left": 21,
+                "right": 73.125,
+                "top": 635,
+                "bottom": 652
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Retry analyzer",
+              "width": 145.75,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "unsupported",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 299,
+              "top": 506,
+              "bottom": 606
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 298.421875,
+                "top": 507,
+                "bottom": 524
+              },
+              {
+                "left": 21,
+                "right": 295.96875,
+                "top": 527,
+                "bottom": 544
+              },
+              {
+                "left": 21,
+                "right": 298.96875,
+                "top": 547,
+                "bottom": 564
+              },
+              {
+                "left": 21,
+                "right": 294.703125,
+                "top": 567,
+                "bottom": 584
+              },
+              {
+                "left": 21,
+                "right": 73.125,
+                "top": 587,
+                "bottom": 604
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "theme": "light",
+      "observations": [
+        {
+          "scenario": "legacy",
+          "bytes": 1,
+          "size": "1 B",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 743,
+              "bottom": 763
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 108.265625,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 108.265625,
+                "right": 119.375,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 119.375,
+                "right": 137.859375,
+                "top": 744,
+                "bottom": 761
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 1024,
+          "size": "1.00 KB",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 743,
+              "bottom": 763
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 108.265625,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 108.265625,
+                "right": 119.375,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 119.375,
+                "right": 163.78125,
+                "top": 744,
+                "bottom": 761
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 2097152,
+          "size": "2.00 MB",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 743,
+              "bottom": 763
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 108.265625,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 108.265625,
+                "right": 119.375,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 119.375,
+                "right": 166.4375,
+                "top": 744,
+                "bottom": 761
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-pending",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 638,
+              "bottom": 718
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 365.796875,
+                "top": 639,
+                "bottom": 656
+              },
+              {
+                "left": 21,
+                "right": 368.796875,
+                "top": 659,
+                "bottom": 676
+              },
+              {
+                "left": 21,
+                "right": 366.359375,
+                "top": 679,
+                "bottom": 696
+              },
+              {
+                "left": 21,
+                "right": 142.609375,
+                "top": 699,
+                "bottom": 716
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-error",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 610,
+              "bottom": 690
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 365.796875,
+                "top": 611,
+                "bottom": 628
+              },
+              {
+                "left": 21,
+                "right": 368.796875,
+                "top": 631,
+                "bottom": 648
+              },
+              {
+                "left": 21,
+                "right": 366.359375,
+                "top": 651,
+                "bottom": 668
+              },
+              {
+                "left": 21,
+                "right": 142.609375,
+                "top": 671,
+                "bottom": 688
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Try again",
+              "width": 108.046875,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-pending",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 698,
+              "bottom": 778
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 365.796875,
+                "top": 699,
+                "bottom": 716
+              },
+              {
+                "left": 21,
+                "right": 368.796875,
+                "top": 719,
+                "bottom": 736
+              },
+              {
+                "left": 21,
+                "right": 366.359375,
+                "top": 739,
+                "bottom": 756
+              },
+              {
+                "left": 21,
+                "right": 142.609375,
+                "top": 759,
+                "bottom": 776
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-error",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 574,
+              "bottom": 654
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 365.796875,
+                "top": 575,
+                "bottom": 592
+              },
+              {
+                "left": 21,
+                "right": 368.796875,
+                "top": 595,
+                "bottom": 612
+              },
+              {
+                "left": 21,
+                "right": 366.359375,
+                "top": 615,
+                "bottom": 632
+              },
+              {
+                "left": 21,
+                "right": 142.609375,
+                "top": 635,
+                "bottom": 652
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Retry analyzer",
+              "width": 145.75,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "unsupported",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 602,
+              "bottom": 682
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 365.796875,
+                "top": 603,
+                "bottom": 620
+              },
+              {
+                "left": 21,
+                "right": 368.796875,
+                "top": 623,
+                "bottom": 640
+              },
+              {
+                "left": 21,
+                "right": 366.359375,
+                "top": 643,
+                "bottom": 660
+              },
+              {
+                "left": 21,
+                "right": 142.609375,
+                "top": 663,
+                "bottom": 680
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "theme": "dark",
+      "observations": [
+        {
+          "scenario": "legacy",
+          "bytes": 1,
+          "size": "1 B",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 743,
+              "bottom": 763
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 108.265625,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 108.265625,
+                "right": 119.375,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 119.375,
+                "right": 137.859375,
+                "top": 744,
+                "bottom": 761
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 1024,
+          "size": "1.00 KB",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 743,
+              "bottom": 763
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 108.265625,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 108.265625,
+                "right": 119.375,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 119.375,
+                "right": 163.78125,
+                "top": 744,
+                "bottom": 761
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 2097152,
+          "size": "2.00 MB",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 743,
+              "bottom": 763
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 108.265625,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 108.265625,
+                "right": 119.375,
+                "top": 744,
+                "bottom": 761
+              },
+              {
+                "left": 119.375,
+                "right": 166.4375,
+                "top": 744,
+                "bottom": 761
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-pending",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 638,
+              "bottom": 718
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 365.796875,
+                "top": 639,
+                "bottom": 656
+              },
+              {
+                "left": 21,
+                "right": 368.796875,
+                "top": 659,
+                "bottom": 676
+              },
+              {
+                "left": 21,
+                "right": 366.359375,
+                "top": 679,
+                "bottom": 696
+              },
+              {
+                "left": 21,
+                "right": 142.609375,
+                "top": 699,
+                "bottom": 716
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-error",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 610,
+              "bottom": 690
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 365.796875,
+                "top": 611,
+                "bottom": 628
+              },
+              {
+                "left": 21,
+                "right": 368.796875,
+                "top": 631,
+                "bottom": 648
+              },
+              {
+                "left": 21,
+                "right": 366.359375,
+                "top": 651,
+                "bottom": 668
+              },
+              {
+                "left": 21,
+                "right": 142.609375,
+                "top": 671,
+                "bottom": 688
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Try again",
+              "width": 108.046875,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-pending",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 698,
+              "bottom": 778
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 365.796875,
+                "top": 699,
+                "bottom": 716
+              },
+              {
+                "left": 21,
+                "right": 368.796875,
+                "top": 719,
+                "bottom": 736
+              },
+              {
+                "left": 21,
+                "right": 366.359375,
+                "top": 739,
+                "bottom": 756
+              },
+              {
+                "left": 21,
+                "right": 142.609375,
+                "top": 759,
+                "bottom": 776
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-error",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 574,
+              "bottom": 654
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 365.796875,
+                "top": 575,
+                "bottom": 592
+              },
+              {
+                "left": 21,
+                "right": 368.796875,
+                "top": 595,
+                "bottom": 612
+              },
+              {
+                "left": 21,
+                "right": 366.359375,
+                "top": 615,
+                "bottom": 632
+              },
+              {
+                "left": 21,
+                "right": 142.609375,
+                "top": 635,
+                "bottom": 652
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Retry analyzer",
+              "width": 145.75,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "unsupported",
+          "label": {
+            "box": {
+              "left": 21,
+              "right": 369,
+              "top": 602,
+              "bottom": 682
+            },
+            "lines": [
+              {
+                "left": 21,
+                "right": 365.796875,
+                "top": 603,
+                "bottom": 620
+              },
+              {
+                "left": 21,
+                "right": 368.796875,
+                "top": 623,
+                "bottom": 640
+              },
+              {
+                "left": 21,
+                "right": 366.359375,
+                "top": 643,
+                "bottom": 660
+              },
+              {
+                "left": 21,
+                "right": 142.609375,
+                "top": 663,
+                "bottom": 680
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "width": 768,
+      "theme": "light",
+      "observations": [
+        {
+          "scenario": "legacy",
+          "bytes": 1,
+          "size": "1 B",
+          "label": {
+            "box": {
+              "left": 69,
+              "right": 699,
+              "top": 420.5,
+              "bottom": 440.5
+            },
+            "lines": [
+              {
+                "left": 69,
+                "right": 156.265625,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 156.265625,
+                "right": 167.375,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 167.375,
+                "right": 185.859375,
+                "top": 421.5,
+                "bottom": 438.5
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 1024,
+          "size": "1.00 KB",
+          "label": {
+            "box": {
+              "left": 69,
+              "right": 699,
+              "top": 420.5,
+              "bottom": 440.5
+            },
+            "lines": [
+              {
+                "left": 69,
+                "right": 156.265625,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 156.265625,
+                "right": 167.375,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 167.375,
+                "right": 211.78125,
+                "top": 421.5,
+                "bottom": 438.5
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 2097152,
+          "size": "2.00 MB",
+          "label": {
+            "box": {
+              "left": 69,
+              "right": 699,
+              "top": 420.5,
+              "bottom": 440.5
+            },
+            "lines": [
+              {
+                "left": 69,
+                "right": 156.265625,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 156.265625,
+                "right": 167.375,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 167.375,
+                "right": 214.4375,
+                "top": 421.5,
+                "bottom": 438.5
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-pending",
+          "label": {
+            "box": {
+              "left": 149,
+              "right": 619,
+              "top": 378,
+              "bottom": 438
+            },
+            "lines": [
+              {
+                "left": 149,
+                "right": 615.375,
+                "top": 379,
+                "bottom": 396
+              },
+              {
+                "left": 149,
+                "right": 616.765625,
+                "top": 399,
+                "bottom": 416
+              },
+              {
+                "left": 149,
+                "right": 374.40625,
+                "top": 419,
+                "bottom": 436
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-error",
+          "label": {
+            "box": {
+              "left": 149,
+              "right": 619,
+              "top": 390,
+              "bottom": 450
+            },
+            "lines": [
+              {
+                "left": 149,
+                "right": 615.375,
+                "top": 391,
+                "bottom": 408
+              },
+              {
+                "left": 149,
+                "right": 616.765625,
+                "top": 411,
+                "bottom": 428
+              },
+              {
+                "left": 149,
+                "right": 374.40625,
+                "top": 431,
+                "bottom": 448
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Try again",
+              "width": 108.046875,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-pending",
+          "label": {
+            "box": {
+              "left": 149,
+              "right": 619,
+              "top": 405,
+              "bottom": 465
+            },
+            "lines": [
+              {
+                "left": 149,
+                "right": 615.375,
+                "top": 406,
+                "bottom": 423
+              },
+              {
+                "left": 149,
+                "right": 616.765625,
+                "top": 426,
+                "bottom": 443
+              },
+              {
+                "left": 149,
+                "right": 374.40625,
+                "top": 446,
+                "bottom": 463
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-error",
+          "label": {
+            "box": {
+              "left": 149,
+              "right": 619,
+              "top": 381,
+              "bottom": 441
+            },
+            "lines": [
+              {
+                "left": 149,
+                "right": 615.375,
+                "top": 382,
+                "bottom": 399
+              },
+              {
+                "left": 149,
+                "right": 616.765625,
+                "top": 402,
+                "bottom": 419
+              },
+              {
+                "left": 149,
+                "right": 374.40625,
+                "top": 422,
+                "bottom": 439
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Retry analyzer",
+              "width": 145.75,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "unsupported",
+          "label": {
+            "box": {
+              "left": 149,
+              "right": 619,
+              "top": 372,
+              "bottom": 432
+            },
+            "lines": [
+              {
+                "left": 149,
+                "right": 615.375,
+                "top": 373,
+                "bottom": 390
+              },
+              {
+                "left": 149,
+                "right": 616.765625,
+                "top": 393,
+                "bottom": 410
+              },
+              {
+                "left": 149,
+                "right": 374.40625,
+                "top": 413,
+                "bottom": 430
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "width": 768,
+      "theme": "dark",
+      "observations": [
+        {
+          "scenario": "legacy",
+          "bytes": 1,
+          "size": "1 B",
+          "label": {
+            "box": {
+              "left": 69,
+              "right": 699,
+              "top": 420.5,
+              "bottom": 440.5
+            },
+            "lines": [
+              {
+                "left": 69,
+                "right": 156.265625,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 156.265625,
+                "right": 167.375,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 167.375,
+                "right": 185.859375,
+                "top": 421.5,
+                "bottom": 438.5
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 1024,
+          "size": "1.00 KB",
+          "label": {
+            "box": {
+              "left": 69,
+              "right": 699,
+              "top": 420.5,
+              "bottom": 440.5
+            },
+            "lines": [
+              {
+                "left": 69,
+                "right": 156.265625,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 156.265625,
+                "right": 167.375,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 167.375,
+                "right": 211.78125,
+                "top": 421.5,
+                "bottom": 438.5
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 2097152,
+          "size": "2.00 MB",
+          "label": {
+            "box": {
+              "left": 69,
+              "right": 699,
+              "top": 420.5,
+              "bottom": 440.5
+            },
+            "lines": [
+              {
+                "left": 69,
+                "right": 156.265625,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 156.265625,
+                "right": 167.375,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 167.375,
+                "right": 214.4375,
+                "top": 421.5,
+                "bottom": 438.5
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-pending",
+          "label": {
+            "box": {
+              "left": 149,
+              "right": 619,
+              "top": 378,
+              "bottom": 438
+            },
+            "lines": [
+              {
+                "left": 149,
+                "right": 615.375,
+                "top": 379,
+                "bottom": 396
+              },
+              {
+                "left": 149,
+                "right": 616.765625,
+                "top": 399,
+                "bottom": 416
+              },
+              {
+                "left": 149,
+                "right": 374.40625,
+                "top": 419,
+                "bottom": 436
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-error",
+          "label": {
+            "box": {
+              "left": 149,
+              "right": 619,
+              "top": 390,
+              "bottom": 450
+            },
+            "lines": [
+              {
+                "left": 149,
+                "right": 615.375,
+                "top": 391,
+                "bottom": 408
+              },
+              {
+                "left": 149,
+                "right": 616.765625,
+                "top": 411,
+                "bottom": 428
+              },
+              {
+                "left": 149,
+                "right": 374.40625,
+                "top": 431,
+                "bottom": 448
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Try again",
+              "width": 108.046875,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-pending",
+          "label": {
+            "box": {
+              "left": 149,
+              "right": 619,
+              "top": 405,
+              "bottom": 465
+            },
+            "lines": [
+              {
+                "left": 149,
+                "right": 615.375,
+                "top": 406,
+                "bottom": 423
+              },
+              {
+                "left": 149,
+                "right": 616.765625,
+                "top": 426,
+                "bottom": 443
+              },
+              {
+                "left": 149,
+                "right": 374.40625,
+                "top": 446,
+                "bottom": 463
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-error",
+          "label": {
+            "box": {
+              "left": 149,
+              "right": 619,
+              "top": 381,
+              "bottom": 441
+            },
+            "lines": [
+              {
+                "left": 149,
+                "right": 615.375,
+                "top": 382,
+                "bottom": 399
+              },
+              {
+                "left": 149,
+                "right": 616.765625,
+                "top": 402,
+                "bottom": 419
+              },
+              {
+                "left": 149,
+                "right": 374.40625,
+                "top": 422,
+                "bottom": 439
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Retry analyzer",
+              "width": 145.75,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "unsupported",
+          "label": {
+            "box": {
+              "left": 149,
+              "right": 619,
+              "top": 372,
+              "bottom": 432
+            },
+            "lines": [
+              {
+                "left": 149,
+                "right": 615.375,
+                "top": 373,
+                "bottom": 390
+              },
+              {
+                "left": 149,
+                "right": 616.765625,
+                "top": 393,
+                "bottom": 410
+              },
+              {
+                "left": 149,
+                "right": 374.40625,
+                "top": 413,
+                "bottom": 430
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "width": 1280,
+      "theme": "light",
+      "observations": [
+        {
+          "scenario": "legacy",
+          "bytes": 1,
+          "size": "1 B",
+          "label": {
+            "box": {
+              "left": 325,
+              "right": 955,
+              "top": 420.5,
+              "bottom": 440.5
+            },
+            "lines": [
+              {
+                "left": 325,
+                "right": 412.265625,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 412.265625,
+                "right": 423.375,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 423.375,
+                "right": 441.859375,
+                "top": 421.5,
+                "bottom": 438.5
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 1024,
+          "size": "1.00 KB",
+          "label": {
+            "box": {
+              "left": 325,
+              "right": 955,
+              "top": 420.5,
+              "bottom": 440.5
+            },
+            "lines": [
+              {
+                "left": 325,
+                "right": 412.265625,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 412.265625,
+                "right": 423.375,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 423.375,
+                "right": 467.78125,
+                "top": 421.5,
+                "bottom": 438.5
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 2097152,
+          "size": "2.00 MB",
+          "label": {
+            "box": {
+              "left": 325,
+              "right": 955,
+              "top": 420.5,
+              "bottom": 440.5
+            },
+            "lines": [
+              {
+                "left": 325,
+                "right": 412.265625,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 412.265625,
+                "right": 423.375,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 423.375,
+                "right": 470.4375,
+                "top": 421.5,
+                "bottom": 438.5
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-pending",
+          "label": {
+            "box": {
+              "left": 405,
+              "right": 875,
+              "top": 378,
+              "bottom": 438
+            },
+            "lines": [
+              {
+                "left": 405,
+                "right": 871.375,
+                "top": 379,
+                "bottom": 396
+              },
+              {
+                "left": 405,
+                "right": 872.765625,
+                "top": 399,
+                "bottom": 416
+              },
+              {
+                "left": 405,
+                "right": 630.40625,
+                "top": 419,
+                "bottom": 436
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-error",
+          "label": {
+            "box": {
+              "left": 405,
+              "right": 875,
+              "top": 390,
+              "bottom": 450
+            },
+            "lines": [
+              {
+                "left": 405,
+                "right": 871.375,
+                "top": 391,
+                "bottom": 408
+              },
+              {
+                "left": 405,
+                "right": 872.765625,
+                "top": 411,
+                "bottom": 428
+              },
+              {
+                "left": 405,
+                "right": 630.40625,
+                "top": 431,
+                "bottom": 448
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Try again",
+              "width": 108.046875,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-pending",
+          "label": {
+            "box": {
+              "left": 405,
+              "right": 875,
+              "top": 405,
+              "bottom": 465
+            },
+            "lines": [
+              {
+                "left": 405,
+                "right": 871.375,
+                "top": 406,
+                "bottom": 423
+              },
+              {
+                "left": 405,
+                "right": 872.765625,
+                "top": 426,
+                "bottom": 443
+              },
+              {
+                "left": 405,
+                "right": 630.40625,
+                "top": 446,
+                "bottom": 463
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-error",
+          "label": {
+            "box": {
+              "left": 405,
+              "right": 875,
+              "top": 381,
+              "bottom": 441
+            },
+            "lines": [
+              {
+                "left": 405,
+                "right": 871.375,
+                "top": 382,
+                "bottom": 399
+              },
+              {
+                "left": 405,
+                "right": 872.765625,
+                "top": 402,
+                "bottom": 419
+              },
+              {
+                "left": 405,
+                "right": 630.40625,
+                "top": 422,
+                "bottom": 439
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Retry analyzer",
+              "width": 145.75,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "unsupported",
+          "label": {
+            "box": {
+              "left": 405,
+              "right": 875,
+              "top": 372,
+              "bottom": 432
+            },
+            "lines": [
+              {
+                "left": 405,
+                "right": 871.375,
+                "top": 373,
+                "bottom": 390
+              },
+              {
+                "left": 405,
+                "right": 872.765625,
+                "top": 393,
+                "bottom": 410
+              },
+              {
+                "left": 405,
+                "right": 630.40625,
+                "top": 413,
+                "bottom": 430
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "width": 1280,
+      "theme": "dark",
+      "observations": [
+        {
+          "scenario": "legacy",
+          "bytes": 1,
+          "size": "1 B",
+          "label": {
+            "box": {
+              "left": 325,
+              "right": 955,
+              "top": 420.5,
+              "bottom": 440.5
+            },
+            "lines": [
+              {
+                "left": 325,
+                "right": 412.265625,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 412.265625,
+                "right": 423.375,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 423.375,
+                "right": 441.859375,
+                "top": 421.5,
+                "bottom": 438.5
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 1024,
+          "size": "1.00 KB",
+          "label": {
+            "box": {
+              "left": 325,
+              "right": 955,
+              "top": 420.5,
+              "bottom": 440.5
+            },
+            "lines": [
+              {
+                "left": 325,
+                "right": 412.265625,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 412.265625,
+                "right": 423.375,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 423.375,
+                "right": 467.78125,
+                "top": 421.5,
+                "bottom": 438.5
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "legacy",
+          "bytes": 2097152,
+          "size": "2.00 MB",
+          "label": {
+            "box": {
+              "left": 325,
+              "right": 955,
+              "top": 420.5,
+              "bottom": 440.5
+            },
+            "lines": [
+              {
+                "left": 325,
+                "right": 412.265625,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 412.265625,
+                "right": 423.375,
+                "top": 421.5,
+                "bottom": 438.5
+              },
+              {
+                "left": 423.375,
+                "right": 470.4375,
+                "top": 421.5,
+                "bottom": 438.5
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-pending",
+          "label": {
+            "box": {
+              "left": 405,
+              "right": 875,
+              "top": 378,
+              "bottom": 438
+            },
+            "lines": [
+              {
+                "left": 405,
+                "right": 871.375,
+                "top": 379,
+                "bottom": 396
+              },
+              {
+                "left": 405,
+                "right": 872.765625,
+                "top": 399,
+                "bottom": 416
+              },
+              {
+                "left": 405,
+                "right": 630.40625,
+                "top": 419,
+                "bottom": 436
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "private-error",
+          "label": {
+            "box": {
+              "left": 405,
+              "right": 875,
+              "top": 390,
+              "bottom": 450
+            },
+            "lines": [
+              {
+                "left": 405,
+                "right": 871.375,
+                "top": 391,
+                "bottom": 408
+              },
+              {
+                "left": 405,
+                "right": 872.765625,
+                "top": 411,
+                "bottom": 428
+              },
+              {
+                "left": 405,
+                "right": 630.40625,
+                "top": 431,
+                "bottom": 448
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Try again",
+              "width": 108.046875,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-pending",
+          "label": {
+            "box": {
+              "left": 405,
+              "right": 875,
+              "top": 405,
+              "bottom": 465
+            },
+            "lines": [
+              {
+                "left": 405,
+                "right": 871.375,
+                "top": 406,
+                "bottom": 423
+              },
+              {
+                "left": 405,
+                "right": 872.765625,
+                "top": 426,
+                "bottom": 443
+              },
+              {
+                "left": 405,
+                "right": 630.40625,
+                "top": 446,
+                "bottom": 463
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "chunk-error",
+          "label": {
+            "box": {
+              "left": 405,
+              "right": 875,
+              "top": 381,
+              "bottom": 441
+            },
+            "lines": [
+              {
+                "left": 405,
+                "right": 871.375,
+                "top": 382,
+                "bottom": 399
+              },
+              {
+                "left": 405,
+                "right": 872.765625,
+                "top": 402,
+                "bottom": 419
+              },
+              {
+                "left": 405,
+                "right": 630.40625,
+                "top": 422,
+                "bottom": 439
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Retry analyzer",
+              "width": 145.75,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        },
+        {
+          "scenario": "unsupported",
+          "label": {
+            "box": {
+              "left": 405,
+              "right": 875,
+              "top": 372,
+              "bottom": 432
+            },
+            "lines": [
+              {
+                "left": 405,
+                "right": 871.375,
+                "top": 373,
+                "bottom": 390
+              },
+              {
+                "left": 405,
+                "right": 872.765625,
+                "top": 393,
+                "bottom": 410
+              },
+              {
+                "left": 405,
+                "right": 630.40625,
+                "top": 413,
+                "bottom": 430
+              }
+            ],
+            "overflow": "visible",
+            "textOverflow": "clip",
+            "clamp": "none"
+          },
+          "geometry": {
+            "bodyOverflow": false,
+            "issues": []
+          },
+          "controls": [
+            {
+              "text": "Close",
+              "width": 44,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Cancel",
+              "width": 91.53125,
+              "height": 44,
+              "hit": true
+            },
+            {
+              "text": "Choose another replay",
+              "width": 202.71875,
+              "height": 44,
+              "hit": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "boundary": "Actual current components/controller and fresh production build CSS/local WOFF2 in an intercepted browser document; explicit synthetic engine/legacy transport/flag/Next adapters. No real worker, provider, account or deployed acceptance claimed."
+}

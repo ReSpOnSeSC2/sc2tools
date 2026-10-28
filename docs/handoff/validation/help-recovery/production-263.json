@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "qualification": "Actual signed-in production acceptance plus explicitly scoped local/CI evidence; no synthesized live result.",
+  "pr": 802,
+  "testedHead": "e2c195e79a49c4f237eafe1a72c8b957166ed1c5",
+  "mergedRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
+  "web": {
+    "deployment": "D9bzVaNsQW3gFbbZcFnuur5jUk85",
+    "status": "Ready / Production / sc2tools.com",
+    "source": "Actual Vercel UI exact commit link"
+  },
+  "api": {
+    "deployment": "dep-dbgpkd4s728c7393u3mg",
+    "status": "Live",
+    "source": "Actual Render service UI exact Last successfully deployed commit"
+  },
+  "acceptance": {
+    "signedIn": "Actual Open user menu and existing account profile/archive; no fixture auth",
+    "desktopHelp": "What's new href/changelog and actual navigation to heading What's new passed",
+    "mobileHelp": "390x900 More sheet What's new actual navigation passed; temporary viewport reset",
+    "dock": "Existing private Dock URL used without exposing/storing it; actual Open Overlay settings href /settings?tab=overlay&section=setup target_blank; actual click opened new Settings tab and setup section top80px after query consumption; no takeover/setting/chat action",
+    "sharedReplay": "Existing profile preview -> existing archive50 visible analysis links -> actual visible link -> admitted Game timeline, Economy and mechanics, Both build orders/Build orders, no alert. No sharing control changed. Dynamic waiting/specific HTTP count remains separately proven by local real Next/Clerk fixtures, not claimed observed live.",
+    "landingMode": "Actual public /try and landing Runs in your browser/replay never leaves device copy prove NEXT_PUBLIC_INSTANT_IMPORT=all branch at this release. No flag changed. Prior disabled-rollout ledger claim contradicted.",
+    "landingInvalid": "Owned 1024-byte synthetic invalid .SC2Replay selected through real chooser; actual Not a replay error, Retry and Choose another replay present; no personal replay. Direct Choose another event observed with concurrent click/event pattern; error dialog retired. No replacement file parsed. CUA did not instrument network, so no live no-request assertion is claimed.",
+    "serviceWorker": "No actual pending update prompt appeared; exact source/CI and dedicated component browser event proof cover this conditional UI. No synthetic prompt injected in production."
+  },
+  "observedIssue": {
+    "scope": "landing-try-polish-1",
+    "fileBytes": 1024,
+    "actualDisplayedSize": "0.00 MB",
+    "action": "Keep partial and fix readable small-file units; screenshot demo-tiny-size-before.png retained"
+  },
+  "retainedFailures": [
+    "Initial /dock attempt returned404; followed actual Settings Chat & alerts/Add Stream Dock to OBS private URL instead; correct target passed.",
+    "First archive CDP navigation timed out and tab stayed blank; same known route retried after observation, archive50/admitted analysis then passed.",
+    "First chooser tool call returned successful invalid-fixture UI but took9399.35s; subsequent across-cell unhandled chooser timeout reset only automation kernel. Recovered Chrome from fresh inventory, no native auth window interaction.",
+    "Recovered concurrent click/chooser observed event; setFiles([]) unsupported (requires at least one file). Dialog had already retired; no empty-selection/cancel success fabricated."
+  ],
+  "privacyAndCleanup": {
+    "newBracketAnswers": 0,
+    "privacySharingChanges": 0,
+    "flagProviderPaidInfraChanges": 0,
+    "nativeOrStarcraftLaunches": 0,
+    "credential": "Private Dock URL kept only in ephemeral tool variable, cleared and tab closed; not in receipt",
+    "fixture": "Synthetic1024bytes of x only; no personal data",
+    "remainingOwnedTabs": "All four exact owned tabs closed after acceptance; user tabs and unrelated native authentication window untouched. Temporary390px viewport had already been reset."
+  }
+}

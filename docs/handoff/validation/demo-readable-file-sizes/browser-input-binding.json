@@ -1,0 +1,192 @@
+{
+  "BUILD_ID": "OF7PaPIju4ePerx5fa7B_",
+  "sourceSnapshotSha256": "9a3451af813b6f30a9b97b058fc5c84faf1b15532ba94cbc92cc3b0fb50bf1ea",
+  "importedProductInputs": [
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\instant\\replayDropFiles.ts",
+      "sha256": "aa322dc4f1bce1e40004224b0061a3118baa2b0a04af3710040657f166942489"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\instant\\useDropTarget.ts",
+      "sha256": "4b950baecdecb3bff1f995d4fcfbabc44cbecfb3a6d91d02bf6f46477600656f"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\fileIntake.ts",
+      "sha256": "69d561e64221aedf897135beb9abbe65de994ee1b7226a506534530ce2a24817"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\instant\\useReplayAccept.ts",
+      "sha256": "fa7b4859a7b043c7b2fcdfb8e818d05fa10d7249fa3e0866acdcf7065dbb5457"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\ui\\Badge.tsx",
+      "sha256": "ddf30f121d9eadb39e079bb19153346012ba4703ffefb16a034de76bdbe055fc"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\ui\\buttonStyles.ts",
+      "sha256": "e6ce882b432ef6ee15cb125356d22d8c9da4fdcca2ddd506c6d222c350a3af13"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\ui\\Button.tsx",
+      "sha256": "f7a30265f5487e91bd5c98da64271247deba554b7ed2ddb17b49e5b9cb9b71db"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\ui\\EmptyState.tsx",
+      "sha256": "b7e03f291344845148f536b15970435b9ce5c8a8c5ef2e0b92e6d354719f3e89"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\ui\\Card.tsx",
+      "sha256": "2eaa757fa8fb32cd7e4da358d55c12d44e752e5289330afd9bd03075a59161c1"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\bodyScrollLock.ts",
+      "sha256": "e54775096c9a43fe35310a4e0e88ea0f1138612c499ae894c93d0ae985a87326"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\a11y\\focusScopes.ts",
+      "sha256": "85747b9204c268cdc76657e0a4a80ede6f6be24d72fbbfd61a84d418b3b69789"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\a11y\\useFocusTrap.ts",
+      "sha256": "c95712fdaa6f2f87ab0762cd0ae1dcca733e75de4c789a214f0883b75a4e155d"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\ui\\OverlayLayer.tsx",
+      "sha256": "0c6b10f8fb01e5f7c44105c88f2c472ad80907580965875f5278efb027d5cc0d"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\ui\\Modal.tsx",
+      "sha256": "31bba856ca70fa500b8fb0a4dcd726cebfcf3b849c5fbbff0f37027b55a4bc11"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\sc2-icons.ts",
+      "sha256": "13d3205fc639693b7af890ba79836b839314438173a774a8d528df8fd6884c83"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\build-events.ts",
+      "sha256": "967c79e39852c0fad4aabac9c078b7f50afc0740bd827d619750fe4278ba3482"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\instant\\SampleReportButton.tsx",
+      "sha256": "bc3f02fb1a601e524fbcb08c2597d5bb099ca72425089cdb1a30f6944bd88fbd"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\landing\\replayDemoFileSize.ts",
+      "sha256": "f3145d7209101359515ac1a7b17b16e3243c19f53afb00290170b0446daa779d"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\instant\\PlayerChooser.tsx",
+      "sha256": "907b3a2e1faca197d6cae751cd4e3fdb97252e207d746fefca6e2b30f88dd15a"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\errorCopy.ts",
+      "sha256": "910fb41270bb38a1a00a02fec7dcb18fa66b755fd98d33498ffbee837d964b06"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\analytics.ts",
+      "sha256": "142b3f19004cce801b6faf71760f5caf540158ce1b6fe7dc1e7fb325f17e6f78"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\engineErrors.ts",
+      "sha256": "624f5f28bf88c85bf33ba41e529584300b132ef4dcbaa0224385260f41c46149"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\sessionEngine.ts",
+      "sha256": "7f6692bf53166698b92e18f81b14b7dce89bb61251020e4d4dbbf9d2f6e35096"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\ledger.ts",
+      "sha256": "a085550dd7979584bdd82c40bfd42e6e88ad1ade2955763e6ee7322f33300202"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\engineOutcome.ts",
+      "sha256": "6030a02ce0af05136eccc29f9bce745a8fe030480d052eaf1ac2ab6cf1c2427f"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\sessionIntake.ts",
+      "sha256": "548563b3a543a0886d86c79618ccfe8d6d0ec95f968b33c96f5e67a521754864"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\sessionProgress.ts",
+      "sha256": "c8f087ad8907b6db65bb2116bedd61cc0a67062147f6f68595dc168150cd066f"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\meDetection.ts",
+      "sha256": "c23e2f58a4b5fdd956f9e035e61fc996a1d1f5eb00a85485c5f18167706b2ed7"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\sessionPipeline.ts",
+      "sha256": "c7654ca3750bcc85cd764472a1cbe2c97c9dbd77a8b91c0da103fed23510c177"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\sessionRun.ts",
+      "sha256": "d138ee10a5e1eacf24a186c66fa7db3b223aa5578c91b0296ec7c76177f28d28"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\sessionState.ts",
+      "sha256": "782e304a2b633dea9d0c9520a449d8632d819b67ab20f2cff96c1e8700c0490f"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\sessionController.ts",
+      "sha256": "bd99d6d053f726cd1f2d37e4f6cf969191a7afd019053dd2261dc31b480c52fe"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\lib\\instant\\useInstantSession.ts",
+      "sha256": "75e20a3547cbd4b26bb7b751d0f239918431ea21160e0681a97a89911445aa0e"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\landing\\replayDemoPreview.ts",
+      "sha256": "e71959749d09f0919648ff50cd5c7f6032d46161cc9c3c3c42815d405dbb0a1a"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\landing\\ReplayDemoBrowserSession.tsx",
+      "sha256": "1da6c4f1811d9df25e12e06e7a0686a2e244fa71446175e707bc7bff310ae2c1"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\landing\\ReplayDemoBrowserIsland.tsx",
+      "sha256": "8f23050a6bb390135a55db8150cf9ffa4ea9bcddba41a608f3b9bd05b13dcc3f"
+    },
+    {
+      "path": "C:\\SC2TOOLS\\.worktrees\\help-recovery-completion\\apps\\web\\components\\landing\\ReplayDemo.tsx",
+      "sha256": "ae324942be5674cfe25e2bc196a8032bea88804c7fb68d9df876b7cf881f4518"
+    }
+  ],
+  "productionCss": [
+    {
+      "path": ".next/static/css/085eec6ea1a84fdf.css",
+      "sha256": "e13e1137cb8ca4a0a41db4908a8637dc00d87b9606f17e1e37aaf68f0690d24e"
+    },
+    {
+      "path": ".next/static/css/2db041b12b3c0c38.css",
+      "sha256": "df10332a96b060b59634d531d146749639b3a2ae5d074c461bce9f35f88aa009"
+    },
+    {
+      "path": ".next/static/css/9e93c7f0ce562f59.css",
+      "sha256": "d8b7c1f3afde1bb374a0aa3f612708060f47eb7a74112b9c087ec724caa81aa5"
+    },
+    {
+      "path": ".next/static/css/c8183fd076b4bf97.css",
+      "sha256": "ada3f5bb8b53d5513ea9cab47cfe0cf4856db6536239f40b09755985e8786794"
+    },
+    {
+      "path": ".next/static/css/e73fc7fc7e03df69.css",
+      "sha256": "94ac09441bb1ffd71b02db4d92b59596a8ef06479da01e6c14fc670434609218"
+    }
+  ],
+  "fonts": [
+    {
+      "file": "hanken-grotesk-latin.woff2",
+      "sha256": "1f21c6eaa0000f3329cfcfac966b43d5bebf5aa610303e33294ac31bc6f4bb59"
+    },
+    {
+      "file": "bricolage-grotesque-latin.woff2",
+      "sha256": "4fd48b2c1ab27220e71f15f990550261b35245c3bdfd8d8025b4bdac0459ee2d"
+    },
+    {
+      "file": "fraunces-latin-normal.woff2",
+      "sha256": "88e17be075f1be50ab67b057b99e3701b828f44ed28f9452df6c02645bb0cba9"
+    }
+  ],
+  "boundaries": "Real current components/session/controller/Modal + fresh Next production CSS/local fonts. Explicit synthetic engine, flag selector, legacy transport, Next primitives, analytics, unexercised editor/sample/Help; no real worker/provider/account.",
+  "fixtureSha256": "afb9549dfce8d64563cbb280715d1b718a577094b6d61d96841d7ef94397ca6d"
+}

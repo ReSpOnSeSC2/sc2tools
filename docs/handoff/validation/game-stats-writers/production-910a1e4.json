@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-28T11:05:07.711Z",
+  "pr": 804,
+  "testedHead": "a5240eb13b1094a2ee3a220f41aa800fe6df63d9",
+  "mergedRevision": "910a1e4365adadc908e624d2bb99fbfd6eeff145",
+  "testedAndMergedTree": "6397da0f92eedcbbb6377051121dce816928da64",
+  "ci": {
+    "checks": [
+      {
+        "id": 122760902096,
+        "name": "Vercel Preview Comments",
+        "head": "a5240eb13b1094a2ee3a220f41aa800fe6df63d9",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 122757750317,
+        "name": "Responsive e2e smoke (public pages)",
+        "head": "a5240eb13b1094a2ee3a220f41aa800fe6df63d9",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 122757750173,
+        "name": "Lint + typecheck + test (apps/api)",
+        "head": "a5240eb13b1094a2ee3a220f41aa800fe6df63d9",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 122757749930,
+        "name": "Lint + typecheck + test (apps/web)",
+        "head": "a5240eb13b1094a2ee3a220f41aa800fe6df63d9",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "vercel": "success",
+    "api": {
+      "casesPassed": 6965,
+      "existingSkipped": 9,
+      "suitesPassed": 483,
+      "existingSkippedSuites": 1
+    },
+    "web": {
+      "casesPassed": 10026,
+      "existingSkipped": 1
+    },
+    "browser": {
+      "status": "success",
+      "countQualification": "Success verified through Codex diagnostics; no invented count from truncated logs."
+    }
+  },
+  "actualProduction": {
+    "web": {
+      "deployment": "2fyTCbWaxibNyFB9y2iZgJutMqeG",
+      "status": "Ready/Production/Current/sc2tools.com",
+      "sourceCommitLinkObserved": true
+    },
+    "api": {
+      "deployment": "dep-dbgt46ijnfac739mcre0",
+      "status": "Live",
+      "sourceCommitLinkObserved": true,
+      "startupEvent": {
+        "gameStatsTransactions": true,
+        "protocolVersion": 1,
+        "msg": "game_stats_transaction_capability",
+        "timestamp": 1793184341682
+      }
+    },
+    "signedIn": {
+      "personalChartCache": "Off",
+      "copy": "Personal chart requests use the normal API path. Cache activity figures are hidden while it is off.",
+      "activityFiguresHidden": true,
+      "normalDashboardAndSettingsRead": true
+    }
+  },
+  "qualification": [
+    "No live destructive writer/account erasure/wipe submitted; writer/fault behavior remains qualified by local synthetic Mongo and CI evidence.",
+    "Startup capability reports actual topology support; this does not establish every legacy actor or unknown write has settled.",
+    "No retained reader, cache activation, production savings or faster-dashboards completion claim. PR805 maintenance is separate."
+  ],
+  "ownerProcesses": "No native agent or StarCraft launched; owned Mongo processes stopped. Browser acceptance tabs remain owned and tracked for cleanup."
+}

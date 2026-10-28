@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "preparedAtUtc": "2026-10-28T10:27:00.390Z",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/help-recovery-completion",
+  "verification": {
+    "componentCases": 23,
+    "componentSuites": 3,
+    "helpCases": 25,
+    "helpSuites": 1,
+    "totalCases": 48,
+    "totalSuites": 4,
+    "maxUnitWorkers": 2,
+    "wholeWebTypes": {
+      "actualToolExitCode": 0,
+      "log": "web-types-01.log",
+      "genuinelyEmptySuccessfulRedirect": true
+    },
+    "ownedStrictLint": {
+      "actualToolExitCode": 0,
+      "warnings": 0,
+      "log": "web-lint-owned-01.log",
+      "genuinelyEmptySuccessfulRedirect": true
+    },
+    "diffCheck": "pass"
+  },
+  "evidence": [
+    {
+      "name": "web-demo-unit-01.log",
+      "sha256": "27fc0d18f01e7be3922e001c710c3e684612dc033e11a770bbfaec5939312a9d",
+      "bytes": 809
+    },
+    {
+      "name": "web-help-unit-01.log",
+      "sha256": "2c63158d398eabef38de719e6a439128edbb7102d0ed5127288b38db56368320",
+      "bytes": 472
+    },
+    {
+      "name": "web-types-01.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "name": "web-lint-owned-01.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "name": "preimages.json",
+      "sha256": "34cebb4cd56a50a3c4c7895fef2d094efd104d173549f1375cf23849b9693557",
+      "bytes": 1638
+    },
+    {
+      "name": "stage2-frozen-audit.json",
+      "sha256": "e02660f291a944f3436c0449ae1c3b8f89b05860fbb195801a59edb3927f50d6",
+      "bytes": 4206
+    },
+    {
+      "name": "stage2-audit-metadata-01-error.json",
+      "sha256": "bff6b829c910fd41ff97aaf806f24a462a617b8cbdedfc5577c5289d9eb2b2c2",
+      "bytes": 379
+    }
+  ],
+  "separateStage2": {
+    "all15FrozenPinsMatch": true,
+    "sourceEdited": false
+  },
+  "preservedFailure": "Cache-only stage2 audit metadata first used PowerShell false instead of $false. Actual error transcript preserved and explicitly qualified in stage2-audit-metadata-01-error.json; corrected source hash audit passed. No unit/type/lint failure occurred.",
+  "cleanup": "All owned check commands reported exit0. No app server, browser or long-lived listener was launched; no process was killed.",
+  "qualification": "Local component/controller fixtures and type/lint evidence; no browser/build/CI/production acceptance claimed."
+}
