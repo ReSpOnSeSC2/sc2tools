@@ -1,6 +1,7 @@
 # Handoff: SC2 Tools upgrade program (Wave 1 in progress)
 
-Latest active state: read [the writer prerequisite checkpoint](game-stats-writer-stage-checkpoint.md),
+Latest active state: read [the eager maintenance checkpoint](game-stats-maintenance-checkpoint.md),
+[the writer prerequisite checkpoint](game-stats-writer-stage-checkpoint.md),
 [the dashboard continuation checkpoint](dashboard-cache-coverage-checkpoint.md),
 [the qualified 197-item ledger](roadmap-progress-2026-10-28.json) and
 [the October 27 delivery checkpoint](active-2026-10-27-delivery-checkpoint.md) first.

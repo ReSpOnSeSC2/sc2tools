@@ -466,6 +466,45 @@ METRICS_TOKEN registry only. Maintained gameStats, the 60-second device-auth loo
 admin-health presentation, broader dependencies and IndexedDB/corpus deltas also
 remain separate work. Source and test preparation is not measured speedup.
 
+### Eager game-statistics maintenance: writer stage
+
+The subsequent writer stage maintains `users.gameStats {total, latest}` inside
+each selected games transaction. It is distinct from lazy read repair and the
+optional `dataRev` response cache. The first atomic owner write returns its
+prior state while retiring the old statistics and rotating protocol 2/revision.
+An independent maintenance envelope validates version, owner, epoch, dedicated
+revision and count/status shape. A qualified total changes by before/after
+Mongo counts of the same immutable, owner-scoped subset: one game, at most 51
+quarantine IDs, or at most 100 restore/delete IDs. It never mirrors Mongo's
+legacy array-valued exclusion behavior in JavaScript.
+
+An absent, protocol 1 or otherwise unqualified record bootstraps with the original
+whole-owner count under the same transaction. Corrupt/unsafe delta results also
+bootstrap. Exact latest always uses the original projection and descending-date
+sort with limit 1 under that session, with no `$max`, date conversion or tie
+breaker. A positive total and null latest are valid for legacy missing/falsy
+dates. Truthy unsupported BSON remains raw and carries `unsupported_latest`;
+it cannot qualify a future retained reader. Representations over 16 KiB or values
+that BSON would normalize on a driver round trip are not retained. Eager
+maintenance does not change the authoritative return value.
+
+These checks establish schema/protocol trust, not detection of an arbitrarily
+forged plausible positive total. All selected membership/date writers must
+participate and old actors must be settled before a reader can trust the state.
+Every successful exclusive epoch rotation conservatively makes the first
+following maintenance bootstrap, including snapshot/preview. An empty wipe
+also maintains statistics rather than inventing zero for a range with other
+history. Restore still commits bounded independent batches; a later abort does
+not undo earlier batches. External side effects stay outside retry callbacks.
+
+Routine qualified writes perform two bounded subset counts and the original
+indexed latest query, plus the final owner CAS; they do not recount the complete
+history. Bootstrap performs a complete count instead. A limit 1 result is not a
+physical scan guarantee when many rows are ineligible. No production saving is
+claimed. `/me`, Doctor and `GamesService.stats` still use their unchanged
+authoritative queries; `USER_CACHE_ENABLED` remains off. See the
+[maintenance checkpoint](handoff/game-stats-maintenance-checkpoint.md).
+
 ## Device liveness
 
 Every device-auth request still performs one active-token lookup by the existing

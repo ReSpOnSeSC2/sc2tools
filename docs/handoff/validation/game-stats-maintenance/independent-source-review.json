@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 2,
+  "preparedAtUtc": "2026-10-28T07:05:52.3093444Z",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/dashboard-cache-health",
+  "base": "7b9a30a288ca1adae7b90ac14ea360947cc26049",
+  "status": "final-source-and-doc-review-clear-at-15-path-freeze",
+  "reviewerRuntimeExecuted": false,
+  "reviewerApplicationSourceEdited": false,
+  "reviewerGitExecuted": false,
+  "readerActivation": false,
+  "originalRequirement": "faster-dashboards original spec API3: users.gameStats {total,latest} maintained by ingest and wipe. This eager writer stage alone does not complete lighter me/cache/device-auth/cutover scope.",
+  "designAssessment": "Bounded Mongo subset deltas plus original sorted latest in the existing serialized owner transaction preserve the required count/date semantics; no JavaScript eligibility mirror or max/date coercion.",
+  "verifiedSource": [
+    "Owner findOneAndUpdate uses projected atomic preimage, returnDocument before/includeResultMetadata false, exact _id/epoch/fence guard, protocol2 fresh revision and no upsert; final same-session CAS pins new revision.",
+    "All7 actual writer groups supply complete immutable bounded selectors: upsert1, quarantine current+aliases<=51, controls1, restore inserts<=100 and destructive exact _ids<=100. Mongo eligibility AND selector stays owner-scoped.",
+    "Qualified total uses previous+after-before subset count; bootstrap uses original full-owner count after work. Latest always uses original raw date projection/sort date:-1/limit1 then first.date||null. Positive total/latestnull remains valid.",
+    "Zero-match deleteMany now performs empty-selection maintenance transaction, preserving remaining non-range games rather than fabricating zero.",
+    "Unsupported truthy latest stays raw with unsupported_latest status <=16KiB; oversize/unserializable snapshot omitted with unretained state. Original GamesService.stats/Doctor/me read paths remain authoritative.",
+    "GDPR export strips new maintenance authority; restore settings whitelist never imports it. Compatibility unsets stats/protocol/maintenance and cannot mint retained authority."
+  ],
+  "requestedRepairs": [
+    {
+      "area": "Qualification/type/size/UUID and zero-latest guards",
+      "status": "resolved-source-and-test-reviewed"
+    },
+    {
+      "area": "Concurrent and partial restore maintained values",
+      "status": "resolved-original-assertions-retained-and-eager-checks-added"
+    },
+    {
+      "area": "Unsupported non-roundtrip BSON",
+      "status": "resolved-real-server-Long-MAX-VALUE-and-driver-boundary-cases-inspected"
+    }
+  ],
+  "performanceRequirements": [
+    "Command monitoring must show no full-owner total count on a routine qualified write; before/after subset count selectors <=100 IDs and all share session.",
+    "Bootstrap/invalid/mixed protocol may perform one original full-owner count. Every exclusive epoch rotation conservatively causes first following writer to bootstrap, including read-only snapshots/previews.",
+    "Original latest may use existing userId/date index but legacy multikey/all-excluded histories can cost more; no savings/production latency proof claimed. Existing10s transaction and8actual-work gate stay intact."
+  ],
+  "unproved": [
+    "Reviewer executed no tests/processes/Git/provider actions. Local author logs observed; runtime acceptance is separate from source review.",
+    "No retained reader activation, lighter me/Doctor, production saving or full faster-dashboards/197-item completion claimed.",
+    "Exact-head CI/build/budget/asset/deployment gates and actual old-actor settlement/cutover remain root-owned. Physical failover/crash/ambiguous old-writer settlement not proved by local one-member tests."
+  ],
+  "inputContract": {
+    "path": "C:/SC2TOOLS/.cache/game-stats-eager-maintenance-design-20261028.json",
+    "sha256": "2b6e2ab4f4115f4f47683bf7c2c45bd066ac24fb96341056ea5fa4dcb62a000a"
+  },
+  "sourcePins": [
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "3fec0c9e075aad07cec5927258e48350deabef9e54f99c215819b8560e54af6e"
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsWrites.replset.test.js",
+      "sha256": "449a9cea8653bf06a9d3cb6711117e21b0bd1689d8f00076aae529e74cf8319d"
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsWrites.unit.test.js",
+      "sha256": "52fd1ce73a59854c070cbfe2c4c685dd936c7ec99529ae3042576aa3ebb2b99f"
+    },
+    {
+      "path": "apps/api/src/db/connect.js",
+      "sha256": "d84200918419e659e841782253eda750032c39e09ed9dfc61a4e501c4fd5a668"
+    },
+    {
+      "path": "apps/api/src/server.js",
+      "sha256": "6adbbae4d62a8e6631ebd27661a3209f36fc94654515184b2d8999b296efd5ac"
+    },
+    {
+      "path": "apps/api/src/services/gameControls.js",
+      "sha256": "de0cbd2d731f1e37da55b2557abe587b39f4023170d7c118c865b71ede6ad9fc"
+    },
+    {
+      "path": "apps/api/src/services/gameStatsWrites.js",
+      "sha256": "b3f5c264dd202b5fd5a3e2cb79c7b6bb998d15b712376aa61e19ed542789f78d"
+    },
+    {
+      "path": "apps/api/src/services/games.js",
+      "sha256": "c36a682c701298117e74c9ef5b5bb2640f923981b0c4147a916c77b56e274bc6"
+    },
+    {
+      "path": "apps/api/src/services/gdpr.js",
+      "sha256": "6a73646ee13ba50b77e954e1ee1ae818ff5405d39d746798824e70fddc9cd879"
+    },
+    {
+      "path": "apps/api/src/services/userBackups.js",
+      "sha256": "6313b97b0ae1c1ac22ddaed2d5aba1441ac42d9b77e248a5cc0fd5d9e9c901ce"
+    },
+    {
+      "path": "docs/engineeringexplanation.md",
+      "sha256": "b54d6504987269810149064ea0a15aaf5ab4bf70325fdaaa8e693300d3e8fedc"
+    },
+    {
+      "path": "docs/handoff/HANDOFF.md",
+      "sha256": "e40a0b928912286059079f3515c4284b51a0bda28711d323e1c3926392ea1161"
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsMaintenance.unit.test.js",
+      "sha256": "23daed01865e9a26ef5b205b4acef7aa2d96edfef08b0740b707342fe74d4fa7"
+    },
+    {
+      "path": "apps/api/src/services/gameStatsMaintenance.js",
+      "sha256": "a4cdf5c58452c835e0c216af373a09be82457f851e7e33770c1048a798de4a1c"
+    },
+    {
+      "path": "docs/handoff/game-stats-maintenance-checkpoint.md",
+      "sha256": "d4c5d4b7e604035640f1020199ba1a19a8a820d7ac19772bc0f2848f11daf56c"
+    }
+  ],
+  "noReadActivationChecks": {
+    "readerAndConfigPaths": [
+      {
+        "path": "apps/api/src/routes/me.js",
+        "unchanged": true
+      },
+      {
+        "path": "apps/api/src/services/doctor.js",
+        "unchanged": true
+      },
+      {
+        "path": "apps/api/src/config/loader.js",
+        "unchanged": true
+      }
+    ],
+    "authoritativeStatsBodyUnchanged": true,
+    "baselineCheckout": "C:/SC2TOOLS/.worktrees/dashboard-cache-coverage"
+  },
+  "additionalSourceReview": [
+    "BSON round-trip equality plus16KiB cap prevents invalid Date/unstable raw value normalization; those snapshots become unretained while authoritative stats query remains unchanged.",
+    "Server drain/connect capability log protocolVersion now comes from shared protocol2 constant, not old hard-coded1.",
+    "All existing owner/fence/batch/cross-owner/no-resurrection guards remain in place. No per-test skip/only found in the inspected3 test files."
+  ],
+  "finalFreeze": {
+    "reviewedImplementationManifest": "C:/SC2TOOLS/.cache/game-stats-maintenance-implementation-ready-20261028.json",
+    "reviewedManifestSha256": "127fb50a921591520938a93291f6033b0461fff5f91666121a1e38661c544f6c",
+    "all15SourcePinsMatch": true,
+    "apiFreeze": "C:\\SC2TOOLS\\.cache\\game-stats-maintenance-verification-20261028\\api-source-freeze.json",
+    "apiFreezeSha256": "1254458516a193e9579659086d64e38bc2dc8e18c592dd717ad580c10c81d338",
+    "all11ApiPinsMatch": true,
+    "allowedSubsequentManifestOnlyChange": "Independent review metadata pointer/hash may refresh; product source pins must remain identical."
+  },
+  "finalEvidenceReview": {
+    "receipt": "C:\\SC2TOOLS\\.cache\\game-stats-maintenance-verification-20261028\\receipt.json",
+    "receiptSha256": "60ddb1ecda31f13077b5e07b26778954208629e7d22ff400652a80d2c6237cdd",
+    "all10EvidenceHashesMatch": true,
+    "focusedJson": {
+      "success": true,
+      "suitesPassed": 3,
+      "testsPassed": 93,
+      "pending": 0
+    },
+    "servicesObserved": "129 passing tests/15suites in retained service log; disjoint from focused3 suites",
+    "combined": "222 tests/18suites",
+    "queryCostObserved": {
+      "syntheticLocalMongo": true,
+      "bootstrapWholeOwnerCounts": 1,
+      "qualifiedSubsetCounts": 2,
+      "qualifiedWholeOwnerCounts": 0,
+      "originalLatestQueries": 1,
+      "subsetMatches": [
+        {
+          "$and": [
+            {
+              "userId": "stats-owner",
+              "_deleted": {
+                "$ne": true
+              },
+              "_deletionPending": {
+                "$ne": true
+              },
+              "excluded": {
+                "$ne": true
+              },
+              "isResumedFromReplay": {
+                "$ne": true
+              }
+            },
+            {
+              "gameId": {
+                "$in": [
+                  "latest"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "$and": [
+            {
+              "userId": "stats-owner",
+              "_deleted": {
+                "$ne": true
+              },
+              "_deletionPending": {
+                "$ne": true
+              },
+              "excluded": {
+                "$ne": true
+              },
+              "isResumedFromReplay": {
+                "$ne": true
+              }
+            },
+            {
+              "gameId": {
+                "$in": [
+                  "latest"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "sort": {
+        "date": -1
+      }
+    },
+    "realServerBoundaryObserved": {
+      "syntheticLocalMongo": true,
+      "operator": "$toDate",
+      "exactSigned64BitInput": "9223372036854775807",
+      "originalInvalidDate": true,
+      "unretained": true,
+      "afterInvalidDate": true
+    },
+    "driverBoundaryObserved": {
+      "syntheticLocalMongo": true,
+      "actualBsonDateMillis": 9000000000000000,
+      "originalInvalidDate": true,
+      "unretained": true,
+      "afterInvalidDate": true
+    },
+    "typeAndNewLint": "Author tool exit0 recorded in receipt, genuine quiet logs exist; reviewer does not infer exit from silence or rerun.",
+    "ownedLint": {
+      "baselineWarnings": 14,
+      "currentWarnings": 14,
+      "exactMessagesAndMethodSizesEqual": true
+    },
+    "cleanup": "Author receipt lists three owned PID/ports closed; final test asserts ESRCH after awaited stop; no reviewer launch/kill."
+  },
+  "finalDocsReview": {
+    "paths": [
+      "CHANGELOG.md",
+      "docs/engineeringexplanation.md",
+      "docs/handoff/HANDOFF.md",
+      "docs/handoff/game-stats-maintenance-checkpoint.md"
+    ],
+    "result": "Accurate local-only eager-writer wording, original raw Mongo semantics, bounded normal query cost and full recount/bootstrap limitations. Clearly preserves authoritative readers/flags and names old-writer/raw-restore/R2/prod evidence limits.",
+    "testAdaptation": "Owner initial-command assertions adapted to atomic preimage; restore replacement injector remains after first actual committed insert batch, skipping new empty-delete maintenance transaction. Original race assertions retained.",
+    "sameBsonTypeRepair": "isDeepStrictEqual over two BSON.serialize Uint8Arrays preserves exact serialized byte equality; initial .equals type failure retained and final focused cases rerun."
+  }
+}

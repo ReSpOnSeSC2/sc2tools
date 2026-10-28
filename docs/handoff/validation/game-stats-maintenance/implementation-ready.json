@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "preparedAtUtc": "2026-10-28T07:02:08.494Z",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/dashboard-cache-health",
+  "branch": "codex/dashboard-game-stats-maintenance",
+  "base": "7b9a30a288ca1adae7b90ac14ea360947cc26049",
+  "status": "implemented-locally-verified-writer-stage2-ready-not-committed",
+  "source": [
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "3fec0c9e075aad07cec5927258e48350deabef9e54f99c215819b8560e54af6e",
+      "bytes": 374049,
+      "basePreimageSha256": "4a9d6230c25ba5689d9294927ffd82610f31233a8d79eb558dd6739be2eb17c8",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": null
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsWrites.replset.test.js",
+      "sha256": "449a9cea8653bf06a9d3cb6711117e21b0bd1689d8f00076aae529e74cf8319d",
+      "bytes": 33645,
+      "basePreimageSha256": "e51cdc22743d193158b9dd4899de9d104409677ae69ba17c171e77883e8edfed",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsWrites.unit.test.js",
+      "sha256": "52fd1ce73a59854c070cbfe2c4c685dd936c7ec99529ae3042576aa3ebb2b99f",
+      "bytes": 8489,
+      "basePreimageSha256": "5e76b1f70998807f0ace0420bbbc43512bcdc8339d7ea27ead0b31a70b85afd6",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/db/connect.js",
+      "sha256": "d84200918419e659e841782253eda750032c39e09ed9dfc61a4e501c4fd5a668",
+      "bytes": 39871,
+      "basePreimageSha256": "0889c1f5287f47c0904d1e66ac431beeb2682b5c3ef6b64b1044ef8140a1cd55",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/server.js",
+      "sha256": "6adbbae4d62a8e6631ebd27661a3209f36fc94654515184b2d8999b296efd5ac",
+      "bytes": 21577,
+      "basePreimageSha256": "0ccbe85e41db0fe20ab4ee751fc25d9cd39dc0ee506d1fab088b5d93528a51e1",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/services/gameControls.js",
+      "sha256": "de0cbd2d731f1e37da55b2557abe587b39f4023170d7c118c865b71ede6ad9fc",
+      "bytes": 11565,
+      "basePreimageSha256": "fba3b91549c6f30bc2cbee92ed9eaf6ee2665f3658aec8b8e7e8203b23402ef5",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/services/gameStatsWrites.js",
+      "sha256": "b3f5c264dd202b5fd5a3e2cb79c7b6bb998d15b712376aa61e19ed542789f78d",
+      "bytes": 9685,
+      "basePreimageSha256": "9cfae366f680ec60b6c47d0d013dbc2287a07a9b2481253db7e3dac8d789130c",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/services/games.js",
+      "sha256": "c36a682c701298117e74c9ef5b5bb2640f923981b0c4147a916c77b56e274bc6",
+      "bytes": 92778,
+      "basePreimageSha256": "aef70e01b2a1f606f69fb6d62aaae22c0550818418618c604e8b260b94b12ddd",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/services/gdpr.js",
+      "sha256": "6a73646ee13ba50b77e954e1ee1ae818ff5405d39d746798824e70fddc9cd879",
+      "bytes": 70567,
+      "basePreimageSha256": "b648c8f7e4fc0ebae3dd61897f4c8be2093793c53955cc8f4cc5e90de768483b",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/services/userBackups.js",
+      "sha256": "6313b97b0ae1c1ac22ddaed2d5aba1441ac42d9b77e248a5cc0fd5d9e9c901ce",
+      "bytes": 23704,
+      "basePreimageSha256": "e9ba8575f82e7684e30e4850d68caf19578ae7653bd570b01c62ebfc08e54793",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "docs/engineeringexplanation.md",
+      "sha256": "b54d6504987269810149064ea0a15aaf5ab4bf70325fdaaa8e693300d3e8fedc",
+      "bytes": 48746,
+      "basePreimageSha256": "1ddd7b1593bb4eaa6abbd5b0bdc249e6c82a3e2e2226d3400688e3ed61a4be34",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": null
+    },
+    {
+      "path": "docs/handoff/HANDOFF.md",
+      "sha256": "e40a0b928912286059079f3515c4284b51a0bda28711d323e1c3926392ea1161",
+      "bytes": 11425,
+      "basePreimageSha256": "f3e85fb956cdce4d6fb6eb7af8e5804fe8a4460506ba20a564d0e1421a52a7c5",
+      "newTargetAbsentAtBase": false,
+      "finalApiFreezeMatch": null
+    },
+    {
+      "path": "apps/api/__tests__/gameStatsMaintenance.unit.test.js",
+      "sha256": "23daed01865e9a26ef5b205b4acef7aa2d96edfef08b0740b707342fe74d4fa7",
+      "bytes": 4399,
+      "basePreimageSha256": null,
+      "newTargetAbsentAtBase": true,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "apps/api/src/services/gameStatsMaintenance.js",
+      "sha256": "a4cdf5c58452c835e0c216af373a09be82457f851e7e33770c1048a798de4a1c",
+      "bytes": 7450,
+      "basePreimageSha256": null,
+      "newTargetAbsentAtBase": true,
+      "finalApiFreezeMatch": true
+    },
+    {
+      "path": "docs/handoff/game-stats-maintenance-checkpoint.md",
+      "sha256": "d4c5d4b7e604035640f1020199ba1a19a8a820d7ac19772bc0f2848f11daf56c",
+      "bytes": 9206,
+      "basePreimageSha256": null,
+      "newTargetAbsentAtBase": true,
+      "finalApiFreezeMatch": null
+    }
+  ],
+  "verification": {
+    "receipt": "C:\\SC2TOOLS\\.cache\\game-stats-maintenance-verification-20261028\\receipt.json",
+    "sha256": "60ddb1ecda31f13077b5e07b26778954208629e7d22ff400652a80d2c6237cdd",
+    "cases": 222,
+    "suites": 18
+  },
+  "independentReview": {
+    "path": "C:/SC2TOOLS/.cache/game-stats-eager-independent-review-20261028.json",
+    "sha256": "43c898a257910fd7abb3d8e8312a34b8b2a36a5c34f8571142007477a442e2cb",
+    "qualification": "Final independent15-path source/doc/hash review clear;11API freeze pins and all10receipt evidence hashes verified. Reviewer ran no runtime/Git/providers. Separate from local execution and remaining release gates."
+  },
+  "protocol": {
+    "writerVersion": 2,
+    "maintenanceVersion": 1,
+    "eager": true,
+    "normalQualifiedCounts": "2 bounded subset counts,0 global counts",
+    "latest": "Original sorted query every write",
+    "readerActivation": false
+  },
+  "remaining": [
+    "Exact-head release CI and unchanged83route budgets/asset checks",
+    "Actual deployed protocol2 writer verification and old-writer cutover/ambiguous outcome settlement",
+    "Lighter /me and Doctor readers separately after cutover proof, preserving unsupported raw BSON uncached answer",
+    "Raw-restore authority retirement/rebuild before retained readers",
+    "Remaining dashboard dependencies/device revocation and full original program"
+  ],
+  "qualifications": [
+    "USER_CACHE_ENABLED stays off; no new flags/infra/provider/native/agent changes",
+    "No Git mutation/commit/push/PR by child",
+    "Schema/protocol trust cannot detect arbitrary forged plausible positive total",
+    "Unsupported Date/non-roundtrip or over16KiB raw latest is unretained; authoritative response unchanged",
+    "Existing Help accurate; no user-flow or reader response change",
+    "Eager writer stage alone does not complete faster-dashboards"
+  ]
+}

@@ -1,16 +1,15 @@
 "use strict";
 
-const { randomUUID } = require("crypto");
+const { maintainGameStats, immutableSelection, PROTOCOL_VERSION } = require("./gameStatsMaintenance");
 
-const PROTOCOL_VERSION = 1;
 const MAX_ACTIVE = 8;
 const DELETE_BATCH = 100;
 /** @typedef {{userId:string,id:any,epoch?:string,compatibility:boolean}} GameStatsOwner */
-/** @typedef {{fenceId?:string}} AuthorityOptions */
+/** @typedef {{fenceId?:string,selection?:import('./gameStatsMaintenance').StatsSelection}} AuthorityOptions */
 /** @type {WeakMap<object,GameStatsWrites>} */
 const instances = new WeakMap();
 
-/** Writer stage only: no count, snapshot retention, response cache or /me read.
+/** Eager writer maintenance only: no response cache or /me read activation.
  * A real owner write conflicts with fence acquisition/erasure on that row.
  * Every games command in work must receive the supplied session. */
 class GameStatsWrites {
@@ -79,7 +78,10 @@ class GameStatsWrites {
   write(owner, work, options = {}) {
     if (this.stopped) return Promise.reject(failure("game_stats_writer_stopping"));
     if (this.pending.size >= MAX_ACTIVE) return Promise.reject(failure("game_stats_writer_busy"));
-    const task = this.#perform(owner, work, options);
+    let selection;
+    try { selection = owner.compatibility ? null : immutableSelection(options.selection); }
+    catch (error) { return Promise.reject(error); }
+    const task = this.#perform(owner, work, options, selection);
     this.pending.add(task);
     void task.then(() => this.pending.delete(task), () => this.pending.delete(task));
     return task;
@@ -87,8 +89,8 @@ class GameStatsWrites {
 
   /** @template T @param {GameStatsOwner} owner
    * @param {(session:import('mongodb').ClientSession|undefined)=>Promise<T>} work
-   * @param {AuthorityOptions} options @returns {Promise<T>} */
-  async #perform(owner, work, options) {
+   * @param {AuthorityOptions} options @param {Readonly<Record<string,any>>|null} selection @returns {Promise<T>} */
+  async #perform(owner, work, options, selection) {
     if (owner.compatibility) {
       // Explicit standalone/test compatibility does not mint a valid revision.
       // Existing retained state is durably retired before legacy work. Unknown
@@ -96,7 +98,7 @@ class GameStatsWrites {
       if (owner.id !== null) {
         const retired = await this.db.users.updateOne(this.authority(owner, options), {
           $set: { gameStatsWriterStatus: "unsupported" },
-          $unset: { gameStats: "", gameStatsRevision: "", gameStatsProtocolVersion: "" },
+          $unset: { gameStats: "", gameStatsRevision: "", gameStatsProtocolVersion: "", gameStatsMaintenance: "" },
         }, { upsert: false });
         if (retired.matchedCount !== 1) throw failure("game_stats_authority_changed");
       }
@@ -105,14 +107,9 @@ class GameStatsWrites {
     if (!this.db.client || owner.id === null) throw failure("game_stats_transactions_required");
     const session = this.db.client.startSession();
     try {
-      return /** @type {T} */ (await session.withTransaction(async () => {
-        const retired = await this.db.users.updateOne(this.authority(owner, options), {
-          $set: { gameStatsProtocolVersion: PROTOCOL_VERSION, gameStatsRevision: randomUUID(), gameStatsWriterStatus: "transactional" },
-          $unset: { gameStats: "" },
-        }, { session, upsert: false });
-        if (retired.matchedCount !== 1) throw failure("game_stats_authority_changed");
-        return work(session);
-      }, { readConcern: { level: "snapshot" }, writeConcern: { w: "majority", j: true, wtimeoutMS: 5000 },
+      return /** @type {T} */ (await session.withTransaction(() => maintainGameStats(this.db, owner,
+        this.authority(owner, options), /** @type {Readonly<Record<string,any>>} */ (selection), work, session),
+      { readConcern: { level: "snapshot" }, writeConcern: { w: "majority", j: true, wtimeoutMS: 5000 },
         readPreference: "primary", maxCommitTimeMS: 5000, timeoutMS: 10_000 }));
     } finally {
       // Disposal failure is diagnostic; it cannot replace an original Mongo
@@ -135,11 +132,15 @@ class GameStatsWrites {
     for (;;) {
       await options.assert?.();
       const rows = await this.db.games.find(filter, { projection: { _id: 1 } }).limit(DELETE_BATCH).toArray();
-      if (!rows.length) return { acknowledged: true, deletedCount };
+      if (!rows.length) {
+        // Even an empty wipe eagerly initializes/recovers its retained total.
+        if (!deletedCount) return this.write(owner, async () => ({ acknowledged: true, deletedCount }), { ...options, selection: { ids: [] } });
+        return { acknowledged: true, deletedCount };
+      }
       const ids = rows.map(row => row._id);
       const result = await this.write(owner, session => this.db.games.deleteMany(
         { $and: [filter, { _id: { $in: ids } }] }, session ? { session } : {},
-      ), options);
+      ), { ...options, selection: { ids } });
       deletedCount += result.deletedCount;
     }
   }

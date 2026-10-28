@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "preparedAtUtc": "2026-10-28T07:02:08.493Z",
+  "sourceRoot": "C:/SC2TOOLS/.worktrees/dashboard-cache-health",
+  "localVerification": {
+    "focused": {
+      "cases": 93,
+      "suites": 3,
+      "skipped": 0
+    },
+    "services": {
+      "cases": 129,
+      "suites": 15
+    },
+    "uniqueCombined": {
+      "cases": 222,
+      "suites": 18
+    },
+    "workers": 1,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "types": {
+      "result": "pass",
+      "actualToolReportedExitCode": 0,
+      "log": "api-types-02.log",
+      "qualification": "Native redirection created this genuinely empty successful log; no synthetic type log."
+    },
+    "newLint": {
+      "result": "pass",
+      "warnings": 0,
+      "actualToolReportedExitCode": 0
+    },
+    "ownedLint": {
+      "result": "pass",
+      "actualToolReportedExitCode": 0,
+      "warnings": 14,
+      "exactBaselineMessagesAndMethodSizesMatch": true
+    },
+    "diffCheck": "pass"
+  },
+  "observations": {
+    "queryCost": {
+      "syntheticLocalMongo": true,
+      "bootstrapWholeOwnerCounts": 1,
+      "qualifiedSubsetCounts": 2,
+      "qualifiedWholeOwnerCounts": 0,
+      "originalLatestQueries": 1,
+      "subsetMatches": [
+        {
+          "$and": [
+            {
+              "userId": "stats-owner",
+              "_deleted": {
+                "$ne": true
+              },
+              "_deletionPending": {
+                "$ne": true
+              },
+              "excluded": {
+                "$ne": true
+              },
+              "isResumedFromReplay": {
+                "$ne": true
+              }
+            },
+            {
+              "gameId": {
+                "$in": [
+                  "latest"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "$and": [
+            {
+              "userId": "stats-owner",
+              "_deleted": {
+                "$ne": true
+              },
+              "_deletionPending": {
+                "$ne": true
+              },
+              "excluded": {
+                "$ne": true
+              },
+              "isResumedFromReplay": {
+                "$ne": true
+              }
+            },
+            {
+              "gameId": {
+                "$in": [
+                  "latest"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "sort": {
+        "date": -1
+      }
+    },
+    "driverBoundary": {
+      "syntheticLocalMongo": true,
+      "actualBsonDateMillis": 9000000000000000,
+      "originalInvalidDate": true,
+      "unretained": true,
+      "afterInvalidDate": true
+    },
+    "serverBoundary": {
+      "syntheticLocalMongo": true,
+      "operator": "$toDate",
+      "exactSigned64BitInput": "9223372036854775807",
+      "originalInvalidDate": true,
+      "unretained": true,
+      "afterInvalidDate": true
+    }
+  },
+  "ownedCleanup": {
+    "checkedAtUtc": "2026-10-28T06:58:19.1761682Z",
+    "owned": [
+      {
+        "pid": 30140,
+        "port": 62000,
+        "processAlive": false,
+        "loopbackConnectSucceeded": false
+      },
+      {
+        "pid": 37336,
+        "port": 62466,
+        "processAlive": false,
+        "loopbackConnectSucceeded": false
+      },
+      {
+        "pid": 38552,
+        "port": 62728,
+        "processAlive": false,
+        "loopbackConnectSucceeded": false
+      }
+    ],
+    "unrelatedProcessesKilled": false,
+    "note": "Final Jest also asserts ESRCH after await MongoMemoryReplSet.stop; existing standalone suites await their own stop."
+  },
+  "evidence": [
+    {
+      "name": "eager-focused-final-04.json",
+      "sha256": "35e75ad84cff9b70c9f491f270a0a1e501913b689ea4d1810ea37ff884614332",
+      "bytes": 31775
+    },
+    {
+      "name": "eager-focused-final-04.log",
+      "sha256": "45d601c4542b93acf7892994d13ecbca44bd36c7c41e5625cc04819dc3f157f5",
+      "bytes": 2787
+    },
+    {
+      "name": "eager-services-02.log",
+      "sha256": "5d1b66fef0be7d8bd86501ab30cc0e75980c58b7e55b9be4b1cf1694efb1c017",
+      "bytes": 1443
+    },
+    {
+      "name": "api-types-01.log",
+      "sha256": "3b96d1a8423899cb4c9abcc5188716bb83a796b0b6460a82182a2ecfa6be1b1d",
+      "bytes": 132
+    },
+    {
+      "name": "api-types-02.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "name": "api-lint-new-final-02.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "name": "api-lint-owned-01.log",
+      "sha256": "9a40be02f3eb9db2a4b471c76658bf8d9c2dc1947662bf77a8627a365356f4a7",
+      "bytes": 2235
+    },
+    {
+      "name": "api-lint-baseline-01.log",
+      "sha256": "daf315a79098bd823766fc563c808ba605baaf99e6e29e12325f9affdd109ade",
+      "bytes": 2401
+    },
+    {
+      "name": "api-source-freeze.json",
+      "sha256": "1254458516a193e9579659086d64e38bc2dc8e18c592dd717ad580c10c81d338",
+      "bytes": 2189
+    },
+    {
+      "name": "owned-cleanup-final.json",
+      "sha256": "38cda1aae0b2819385347e7221d5d70f5270b31ae3c146fbb09cad0073dc703d",
+      "bytes": 630
+    }
+  ],
+  "apiFreezeSha256": "1254458516a193e9579659086d64e38bc2dc8e18c592dd717ad580c10c81d338",
+  "all11ApiPinsMatch": true,
+  "failedEvidence": "Initial APItypes01 failed because BSON.serialize is typed Uint8Array, not Buffer.equals. Fixed via exact serialized-byte isDeepStrictEqual; final focused tests rerun. Original type failure and all earlier focused logs retained. Intentional Mongo stop ECONNRESET retained; actual exit verified.",
+  "scope": "Local synthetic Mongo evidence; no reader activation, physical failover, CI/deployment/provider acceptance or production saving claimed."
+}
