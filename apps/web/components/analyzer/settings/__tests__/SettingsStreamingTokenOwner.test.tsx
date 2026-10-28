@@ -239,6 +239,7 @@ describe("one admitted streaming-token authority", () => {
   it("blocks selector/mint/rotation for Chat drafts but permits label rename without resetting the body", async () => {
     render(owner(<Probe dirty />)); const body = await screen.findByTestId("body");
     const before = body.textContent;
+    await screen.findByText("Save or reset your unsaved Overlay or Chat & alerts edits before switching or rotating tokens.", { exact: true });
     expect((screen.getByLabelText("URLs shown for") as HTMLSelectElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Mint another token" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Rotate" }) as HTMLButtonElement).disabled).toBe(true);
@@ -248,6 +249,7 @@ describe("one admitted streaming-token authority", () => {
     transport = async (_url, init) => init.method === "PATCH" ? reply({}) : reply(list("a", "b"));
     fireEvent.click(screen.getByRole("button", { name: "Save label" }));
     await waitFor(() => expect(writes).toHaveLength(1));
+    await screen.findByText("Token renamed.", { exact: true });
     expect(writes[0].method).toBe("PATCH"); expect(screen.getByTestId("body").textContent).toBe(before);
   });
   it("mints a fresh credential generation for token A→B→A and rejects its retained JWT callback", async () => {

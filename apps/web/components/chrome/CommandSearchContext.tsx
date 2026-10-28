@@ -12,8 +12,12 @@ export type CommandChrome = {
   defaultSettingsAvailable?: boolean;
 };
 export type CommandSettings = {
-  ownerKey: string | null; tabs: readonly SettingsTabId[]; navigate: (href: string) => void;
+  ownerKey: string | null; tabs: readonly SettingsTabId[]; navigate: (href: string, admission?: CommandAdmission) => void;
 };
+/** The provider transfers a current selection before its dialog unmounts.
+ * Settings checks this lease again after dirty confirmation and retires it on
+ * Stay/commit. Ordinary Settings navigation has no command lease. */
+export type CommandAdmission = (() => boolean) & { retire?: () => void };
 export type CommandOpening = {
   scope?: "all" | "guides"; query?: string; defaultMatchup?: string; returnFocus?: HTMLElement | null;
 };

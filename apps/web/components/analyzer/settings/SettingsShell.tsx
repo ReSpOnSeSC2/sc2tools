@@ -40,7 +40,7 @@ import { settingsSectionsForTab } from "@/lib/settingsIndex";
 import { SettingsSectionNav } from "./SettingsSectionNav";
 import { OverlayManagerNav } from "./OverlayManagerNav";
 import { SettingsSearch } from "./SettingsSearch";
-import { useCommandSettings } from "@/components/chrome/CommandSearchContext";
+import { useCommandSettings, type CommandAdmission } from "@/components/chrome/CommandSearchContext";
 import { isCommandSearchHref } from "@/lib/commandSearchTarget";
 
 // Preserve existing imports while non-UI consumers can use the pure leaf.
@@ -62,9 +62,9 @@ const TAB_ICONS: Record<SettingsTabId, typeof ServerCog> = {
 const TABS = SETTINGS_TABS.map((tab) => ({ ...tab, Icon: TAB_ICONS[tab.id] }));
 type TabDef = (typeof TABS)[number];
 type PendingDestination =
-  | { kind: "tab"; destination: SettingsDestination; fromUrl: boolean; previousHref: string; action: object; owner: object }
+  | { kind: "tab"; destination: SettingsDestination; fromUrl: boolean; previousHref: string; action: object; owner: object; admission?: CommandAdmission }
   | { kind: "devices"; action: object; owner: object }
-  | { kind: "route"; href: string; action: object; owner: object };
+  | { kind: "route"; href: string; action: object; owner: object; admission?: CommandAdmission };
 
 export interface SettingsShellProps {
   /**
@@ -128,13 +128,23 @@ function SettingsShellInner({
   const [pending, setPending] = useState<PendingDestination | null>(
     null,
   );
+  const pendingAdmission = useRef<CommandAdmission | null>(null);
+  useLayoutEffect(() => {
+    const next = pending && pending.kind !== "devices" ? pending.admission ?? null : null;
+    if (pendingAdmission.current !== next) { pendingAdmission.current?.retire?.(); pendingAdmission.current = next; }
+  }, [pending]);
+  useLayoutEffect(() => () => { pendingAdmission.current?.retire?.(); pendingAdmission.current = null; }, []);
   const ctx = useSettingsContext();
   const [destination, setDestination] = useState(() => resolveSettingsDestination(`tab=${initialTab}`));
   const [locationReady, setLocationReady] = useState(false);
   const owner = useMemo(() => ({ key: ownerKey }), [ownerKey]);
-  const latestOwner = useRef(owner); latestOwner.current = owner;
+  const latestOwner = useRef(owner);
   const mounted = useRef(true);
   const action = useRef<object>({});
+  useLayoutEffect(() => {
+    latestOwner.current = owner;
+    return () => { action.current = {}; };
+  }, [owner]);
   const admittedHref = useRef("");
   const [anchorChanges, setAnchorChanges] = useState(0);
   // "Overlay · Settings · SC2 Tools": the browser tab (and a bookmark of
@@ -146,8 +156,8 @@ function SettingsShellInner({
     if (window.location.pathname + window.location.search + window.location.hash !== next.href) window.history.replaceState(null, "", next.href);
     admittedHref.current = next.href;
   }, []);
-  const requestDestination = useCallback((next: SettingsDestination, fromUrl: boolean) => {
-    if (!mounted.current || latestOwner.current !== owner) return;
+  const requestDestination = useCallback((next: SettingsDestination, fromUrl: boolean, admission?: CommandAdmission) => {
+    if (!mounted.current || latestOwner.current !== owner || (admission && !admission())) return;
     if (!tabs.some(tab => tab.id === next.tab)) return;
     const attempt = {}; action.current = attempt;
     if (next.tab === active && next.href === admittedHref.current) {
@@ -155,13 +165,15 @@ function SettingsShellInner({
       // A player may scroll elsewhere while this anchor stays in the URL.
       // Only an explicit repeat choice reveals it again; URL sync stays inert.
       if (!fromUrl) setAnchorChanges(value => value + 1);
+      admission?.retire?.();
       return;
     }
     if (next.tab !== active && ctx.isDirty(active)) {
-      setPending({ kind: "tab", destination: next, fromUrl, previousHref: admittedHref.current, action: attempt, owner });
+      setPending({ kind: "tab", destination: next, fromUrl, previousHref: admittedHref.current, action: attempt, owner, admission });
       return;
     }
-    setPending(null); activate(next);
+    if (admission && !admission()) { admission.retire?.(); return; }
+    setPending(null); activate(next); admission?.retire?.();
   }, [tabs, active, ctx, owner, activate]);
   const requestSwitch = useCallback((next: string) => {
     if (!tabs.some(tab => tab.id === next) || next === active) return;
@@ -228,15 +240,15 @@ function SettingsShellInner({
     const [search, hash = ""] = href.replace(/^\/settings\?/, "").split("#");
     requestDestination(resolveSettingsDestination(search, hash ? `#${hash}` : "", active), false);
   };
-  const requestCommand = (href: string) => {
-    if (!mounted.current || latestOwner.current !== owner || !isCommandSearchHref(href)) return;
+  const requestCommand = (href: string, admission?: CommandAdmission) => {
+    if (!mounted.current || latestOwner.current !== owner || !isCommandSearchHref(href) || (admission && !admission())) return;
     const target = new URL(href, window.location.origin);
     if (target.pathname === "/settings") {
-      requestDestination(resolveSettingsDestination(target.search.slice(1), target.hash, active), false);
+      requestDestination(resolveSettingsDestination(target.search.slice(1), target.hash, active), false, admission);
     } else {
       const attempt = {}; action.current = attempt;
-      if (ctx.hasAnyDirty()) setPending({ kind: "route", href, action: attempt, owner });
-      else router.push(href);
+      if (ctx.hasAnyDirty()) setPending({ kind: "route", href, action: attempt, owner, admission });
+      else if (!admission || admission()) { router.push(href); admission?.retire?.(); }
     }
   };
   useCommandSettings({ ownerKey: owner.key ?? null, tabs: tabs.map(tab => tab.id), navigate: requestCommand });
@@ -244,9 +256,14 @@ function SettingsShellInner({
   const confirmDiscard = () => {
     if (pending && mounted.current && pending.owner === latestOwner.current && pending.action === action.current) {
       setPending(null);
+      action.current = {};
+      const admission = pending.kind === "devices" ? undefined : pending.admission;
+      if (pendingAdmission.current === admission) pendingAdmission.current = null;
+      if (admission && !admission()) { admission.retire?.(); return; }
       if (pending.kind === "devices") router.push("/devices");
       else if (pending.kind === "route") router.push(pending.href);
       else activate(pending.destination);
+      admission?.retire?.();
     }
   };
 
@@ -255,6 +272,10 @@ function SettingsShellInner({
     // the URL back on the tab that is actually showing.
     if (!pending || !mounted.current || pending.owner !== latestOwner.current || pending.action !== action.current) return;
     if (pending.kind === "tab" && pending.fromUrl) window.history.replaceState(null, "", pending.previousHref);
+    if (pending.kind !== "devices") {
+      if (pendingAdmission.current === pending.admission) pendingAdmission.current = null;
+      pending.admission?.retire?.();
+    }
     action.current = {};
     setPending(null);
   };

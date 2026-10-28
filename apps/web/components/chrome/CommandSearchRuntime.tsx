@@ -10,15 +10,21 @@ import { loadCommandGuideMetadata, type CommandGuideMetadata } from "@/lib/comma
 import { commandGuideQueryMatchup, createCommandGuideCatalog } from "@/lib/commandGuideSearch";
 import { readCommandSearchRecent } from "@/lib/commandSearchRecent";
 import { COMMAND_GO_KEYS } from "@/lib/useCommandSearchShortcuts";
-import type { CommandSearchItem } from "@/lib/commandSearch";
+import { COMMAND_QUERY_MAX_CHARS, type CommandSearchItem } from "@/lib/commandSearch";
+import { privateCommandQuery } from "@/lib/privateCommandSearch";
+import { usePrivateCommandSearch, type PrivateCommandSelectionDraft } from "@/lib/usePrivateCommandSearch";
 import type { CommandFrame } from "./CommandSearchProvider";
 import type { CommandNavigation } from "./CommandSearchContext";
 import { CommandPalette } from "./CommandPalette";
 
+export { commandActivationPolicy } from "@/lib/commandSearchActivation";
+
 type Props = {
   frame: CommandFrame; navigation: readonly CommandNavigation[]; settingsTabs?: readonly SettingsTabId[];
   allowDefaultSettings?: boolean;
-  onClose: () => void; onSelect: (item: CommandSearchItem) => void;
+  onClose: () => void; onSelect: (item: CommandSearchItem) => boolean | void;
+  onQueryEdit: () => object | null;
+  onPrivateSelect: (draft: PrivateCommandSelectionDraft, queryEpoch: object) => boolean;
 };
 type GuideState = { status: "loading" | "ready" | "unavailable"; data: CommandGuideMetadata | null };
 
@@ -43,8 +49,17 @@ function useGuideMetadata() {
   return { ...state, items, retry: () => setRetry(value => value + 1) };
 }
 
-function PaletteRuntime({ frame, navigation, settingsTabs, allowDefaultSettings, onClose, onSelect }: Props) {
+function PaletteRuntime({ frame, navigation, settingsTabs, allowDefaultSettings, onClose, onSelect, onQueryEdit, onPrivateSelect }: Props) {
   const guides = useGuideMetadata(), returnFocusRef = useRef(frame.returnFocus ?? null);
+  const [query, setQuery] = useState(() => {
+    const initial = frame.scope === "guides"
+      ? `${commandGuideQueryMatchup(frame.query ?? "") ? "" : frame.defaultMatchup ?? ""} ${frame.query ?? ""}`.trim()
+      : frame.query ?? "";
+    return { epoch: frame as object,
+      value: Array.from(initial.slice(0, COMMAND_QUERY_MAX_CHARS * 2)).slice(0, COMMAND_QUERY_MAX_CHARS).join("") };
+  });
+  const privateSearch = usePrivateCommandSearch({ open: true, scope: frame.scope ?? "all", query: query.value,
+    ownerKey: frame.owner.key, openingEpoch: frame, routeEpoch: frame.route });
   const recents = useMemo(() => readCommandSearchRecent(frame.owner.key, navigation.map(row => row.key))
     .flatMap(id => {
       const entry = navigation.find(row => row.key === id);
@@ -53,7 +68,17 @@ function PaletteRuntime({ frame, navigation, settingsTabs, allowDefaultSettings,
     }), [frame.owner, navigation]);
   return <CommandPalette navigation={navigation} signedIn={Boolean(frame.owner.key)}
     settingsTabs={settingsTabs ?? (frame.owner.key && allowDefaultSettings ? visibleSettingsTabs() : [])}
-    initialQuery={`${commandGuideQueryMatchup(frame.query ?? "") ? "" : frame.defaultMatchup ?? ""} ${frame.query ?? ""}`.trim()}
+    controlledQuery={{ value: query.value, onChange: value => {
+      const epoch = onQueryEdit(); if (epoch) setQuery({ value, epoch });
+    } }}
+    privateSearch={frame.owner.key && frame.scope !== "guides" ? {
+      phase: privateSearch.phase, data: privateSearch.data, choices: privateSearch.choices,
+      validQuery: privateCommandQuery(query.value) !== null, onRetry: privateSearch.retry,
+      onSelect: choice => {
+        const draft = privateSearch.selectionDraft(choice);
+        return !!draft && onPrivateSelect(draft, query.epoch);
+      },
+    } : undefined}
     scope={frame.scope} guideItems={[...recents, ...guides.items]}
     guidesStatus={guides.status} onRetryGuides={guides.retry} onClose={onClose} onSelect={onSelect}
     returnFocusRef={returnFocusRef} />;

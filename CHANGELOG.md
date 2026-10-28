@@ -19,6 +19,8 @@ corresponding GitHub Release.
 
 - Open Search from the header, mobile More menu or Ctrl/Cmd K to find pages, settings, Help and public guides. Search respects unsaved settings and keeps recent destinations separate for each signed-in account.
 - Find public guides from the guide hub or matchup page, with clear availability and Retry when the guide list cannot load.
+- Find your opponents and saved builds by the start of their names in Search. Private results clear when the search or account changes, with full-library links when quick search is unavailable.
+- Keep private Search selections subject to unsaved Settings confirmation, and discard expired selections when another search or route opens.
 
 ### Sessions and date filters
 

@@ -2,7 +2,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCommandGuideCatalog } from "@/lib/commandGuideSearch";
-import { CommandPalette, type CommandPaletteProps } from "../CommandPalette";
+import { CommandPalette, type CommandPalettePrivateState, type CommandPaletteProps } from "../CommandPalette";
+import { COMMAND_SEARCH_GROUPS } from "@/lib/commandSearch";
+import { decodePrivateCommandSearch, privateCommandChoices } from "@/lib/privateCommandSearch";
 
 const defaults: CommandPaletteProps = {
   navigation: [], settingsTabs: ["chat"], signedIn: true, guideItems: [], guidesStatus: "ready",
@@ -57,6 +59,104 @@ describe("actual palette and Modal keyboard consumer", () => {
     expect(select).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+});
+
+function personal(count = 1): CommandPalettePrivateState {
+  const data = decodePrivateCommandSearch({ version: 2, groups: {
+    opponents: { status: "ready", hasMore: count === 8, items: Array.from({ length: count }, (_, index) => ({
+      pulseId: `id${index}`, displayNameSample: `Unrelated private opponent ${index}`, race: null, lastSeen: null,
+    })) },
+    customBuilds: { status: "ready", hasMore: false, items: Array.from({ length: count }, (_, index) => ({
+      slug: `build${index}`, name: `Unrelated private build ${index}`, race: null, vsRace: null, perspective: null, updatedAt: null,
+    })) },
+    maps: { status: "ready", hasMore: false, items: Array.from({ length: count }, (_, index) => ({ map: `Map ${index}` })) },
+  } });
+  return { phase: "ready", validQuery: true, data, choices: privateCommandChoices(data), onRetry: vi.fn(), onSelect: vi.fn(() => true) };
+}
+
+describe("private groups remain literal, distinct and bounded", () => {
+  it("keeps the active opponent identity through same-query Retry and a changed server order", async () => {
+    const base = personal(2), select = vi.fn(() => true);
+    const first = decodePrivateCommandSearch({ version: 2, groups: { ...base.data!.groups,
+      maps: { status: "unavailable", items: [], hasMore: null, reason: "deferred" } } });
+    const reordered = decodePrivateCommandSearch({ version: 2, groups: { ...first.groups, opponents: {
+      status: "ready", hasMore: false, items: [
+        { ...first.groups.opponents.items[1], lastSeen: "2026-10-27T12:00:00.000Z" },
+        { ...first.groups.opponents.items[0], lastSeen: null },
+      ],
+    } } });
+    const next = { ...base, data: reordered, choices: privateCommandChoices(reordered), onSelect: select };
+    function RetryHarness() {
+      const [state, setState] = useState({ ...base, data: first, choices: privateCommandChoices(first), onSelect: select });
+      return <CommandPalette {...defaults} initialQuery="unmatched-public-word"
+        privateSearch={{ ...state, onRetry: () => setState(next) }} />;
+    }
+    render(<RetryHarness />);
+    const input = screen.getByRole("combobox", { name: "Search" });
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    fireEvent.keyDown(input, { key: "ArrowDown" }); fireEvent.keyDown(input, { key: "ArrowDown" });
+    const chosen = screen.getByRole("option", { name: "Unrelated private opponent 1" }), activeId = chosen.id;
+    expect(input.getAttribute("aria-activedescendant")).toBe(activeId);
+    fireEvent.click(screen.getByRole("button", { name: "Retry your library search" }));
+    expect(screen.getByRole("option", { name: "Unrelated private opponent 1" })).toBe(chosen);
+    expect(input.getAttribute("aria-activedescendant")).toBe(activeId);
+    expect((input as HTMLInputElement).value).toBe("unmatched-public-word");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(select).toHaveBeenCalledWith(next.choices[0]);
+    expect(next.choices[0].target).toEqual({ kind: "opponent", pulseId: "id1" });
+  });
+  it("keeps all server rows in server order without public query scoring", async () => {
+    const state = personal(8), select = vi.fn();
+    const { input } = await open({ initialQuery: "no-public-match-at-all", privateSearch: state, onSelect: select });
+    const own = screen.getByRole("group", { name: "Your opponents" });
+    expect(Array.from(own.querySelectorAll('[role="option"]')).map(option => option.textContent)).toEqual(
+      Array.from({ length: 8 }, (_, index) => `Unrelated private opponent ${index}`));
+    expect(screen.getByText("More matches are available in the full library.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("option", { name: "Unrelated private opponent 0" }));
+    expect(state.onSelect).toHaveBeenCalledWith(state.choices[0]); expect(select).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(input);
+  });
+  it("reserves all24 private rows plus library actions within the existing total60", async () => {
+    const guideItems = COMMAND_SEARCH_GROUPS.flatMap((group, groupIndex) => Array.from({ length: 8 }, (_, index) => ({
+      id: `cap:${group.id}:${index}`, group: group.id, label: `Capquery ${groupIndex} ${index}`, href: `/help/cap-${groupIndex}-${index}`,
+    })));
+    await open({ initialQuery: "Capquery", guideItems, privateSearch: personal(8) });
+    expect(screen.getAllByRole("option")).toHaveLength(60);
+    for (const name of ["Your opponents", "Your builds", "Your maps"]) {
+      expect(screen.getByRole("group", { name }).querySelectorAll('[role="option"]')).toHaveLength(8);
+    }
+    expect(screen.getByRole("group", { name: "Your library" }).querySelectorAll('[role="option"]')).toHaveLength(3);
+  });
+  it("announces unavailable groups and explicit retry/library actions rather than false no matches", async () => {
+    const data = decodePrivateCommandSearch({ version: 2, groups: {
+      opponents: { status: "unavailable", items: [], hasMore: null, reason: "retired" },
+      customBuilds: { status: "ready", items: [], hasMore: false },
+      maps: { status: "unavailable", items: [], hasMore: null, reason: "source_budget_exceeded" },
+    } });
+    const state = { ...personal(), data, choices: privateCommandChoices(data) };
+    await open({ initialQuery: "unknown-public-term", privateSearch: state });
+    expect(screen.getByRole("status").textContent).not.toContain("No matching results");
+    expect(screen.getByText("This library changed during search. Search again.")).toBeTruthy();
+    expect(screen.getByText("This library is too large for quick search.")).toBeTruthy();
+    expect(screen.getByText("No matching saved builds.")).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Open Maps" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry your library search" })); expect(state.onRetry).toHaveBeenCalledOnce();
+  });
+  it.each(["short", "pending"])("uses an honest %s prompt and keeps pure presentation off the network", async kind => {
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+    const state: CommandPalettePrivateState = { ...personal(), data: null, choices: [],
+      validQuery: kind !== "short", phase: kind === "short" ? "idle" : "loading" };
+    await open({ initialQuery: kind === "short" ? "x" : "unlikely-public-token", privateSearch: state });
+    const status = screen.getByRole("status").textContent;
+    expect(status).toContain(kind === "short" ? "at least 2 valid characters" : "Searching your library");
+    expect(status).not.toContain("No matching results"); expect(fetch).not.toHaveBeenCalled();
+  });
+  it("does not expose personal groups/actions in a Guides-only or signed-out palette", async () => {
+    const view = await open({ scope: "guides", privateSearch: personal(), initialQuery: "private" });
+    expect(screen.queryByRole("group", { name: "Your library" })).toBeNull();
+    view.unmount(); await open({ signedIn: false, privateSearch: personal(), initialQuery: "private" });
+    expect(screen.queryByRole("group", { name: "Your opponents" })).toBeNull();
   });
 });
 

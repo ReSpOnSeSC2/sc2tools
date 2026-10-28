@@ -2,3 +2,9 @@
 export function isCommandSearchHref(href: string): boolean {
   return href.startsWith("/") && !href.startsWith("//") && !/[\\\s\p{Cc}]/u.test(href);
 }
+
+export type CommandPrivateTarget = Readonly<
+  | { kind: "opponent"; pulseId: string }
+  | { kind: "customBuild"; slug: string }
+  | { kind: "map"; map: string }
+>;

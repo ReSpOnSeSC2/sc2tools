@@ -39,6 +39,14 @@ describe("failed request ring buffer", () => {
     expect(recentFailedRequests()).toEqual([{ path: "/v1/me", status: 0 }]);
   });
 
+  it("retains only the fixed private-search route for diagnostics", () => {
+    recordFailedRequest({ path: "/V1/search/quick/?q=secret-name&other=secret-build", status: 503,
+      code: "private_search_busy", requestId: "req_search" });
+    expect(recentFailedRequests()).toEqual([{ path: "/v1/search/quick", status: 503,
+      code: "private_search_busy", requestId: "req_search" }]);
+    expect(JSON.stringify(recentFailedRequests())).not.toContain("secret");
+  });
+
   it("hands out copies, and clears", () => {
     recordFailedRequest({ path: "/v1/me", status: 500 });
     recentFailedRequests()[0].path = "/changed";

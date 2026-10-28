@@ -40,6 +40,7 @@ describe("normalizePagePath", () => {
       "/app/game/:gameId",
     );
     expect(normalizePagePath("/app/opponents/1-S2-1-20646762")).toBe("/app/opponents/:pulseId");
+    expect(normalizePagePath("/builds/private-build-name")).toBe("/builds/:slug");
     expect(normalizePagePath("/community/opponents/2-S2-1-6910729")).toBe("/community/opponents/:pulseId");
     expect(normalizePagePath("/community/authors/user_2abc")).toBe("/community/authors/:userId");
   });
