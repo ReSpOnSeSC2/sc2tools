@@ -34,9 +34,9 @@ describe("GuideStatsLegend", () => {
 
   it("opens the real likely-range definition from the expanded legend without changing its numbers", async () => {
     const { container } = render(<GuideStatsLegend computedAt={null} />);
-    const details = container.querySelector("details")!; details.open = true;
+    const details = container.querySelector("details")!; details.open = true; fireEvent(details, new Event("toggle"));
+    const trigger = await screen.findByRole("button", { name: "About Likely range" });
     expect(container.querySelector('[data-glossary-term="likely-range"]')).toBeTruthy();
-    const trigger = screen.getByRole("button", { name: "About Likely range" });
     trigger.focus(); fireEvent.click(trigger);
     const tip = await screen.findByRole("dialog", { name: "About Likely range" });
     expect(await within(tip).findByText(/uncertainty around a guide's recorded win rate/)).toBeTruthy();

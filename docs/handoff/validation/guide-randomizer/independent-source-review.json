@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-28T05:32:20.9807593Z",
+  "reviewer": "independent bingo_browser_regression agent",
+  "sourceBase": "d4ee182d75806b3f642c1bf9607915df501f2292",
+  "sourceReadySha256": "35970abce57519db4aff8915b9b5070ed0cca1b97e6491d7b8bac38ab31c2560",
+  "decision": "clear",
+  "blockers": [],
+  "sourcePins": [
+    {
+      "file": "apps/web/components/guides/GuideStatsLegend.tsx",
+      "sha256": "c52f1aed6f235cd1c73d75f449ed7514c30372234057bcb1fd325cf2c2466619"
+    },
+    {
+      "file": "apps/web/components/guides/GuideLikelyRangeTerm.tsx",
+      "sha256": "bb0ceaf8d5a677e2775a8be54dd0482b2324be987d0ef04fa04f06eb003bbf43"
+    },
+    {
+      "file": "apps/web/components/guides/loadGuideLegendTerm.ts",
+      "sha256": "74d6af2b09524476e73d92ddf95f143e1ef365da5483c8fd3d3ae2ba7b8e4966"
+    },
+    {
+      "file": "apps/web/lib/guides/guideCopy.ts",
+      "sha256": "f920598b1605b4fa52d4312c885cc75f7745b97c109d59e0430d97d97c37f01e"
+    },
+    {
+      "file": "apps/web/components/guides/__tests__/statsPresentation.test.tsx",
+      "sha256": "d4988233f044c6b9b2a3ac304d7cbf889a713b3c80bac43574ceaeea79f996d9"
+    },
+    {
+      "file": "apps/web/components/guides/__tests__/GuideLikelyRangeTerm.test.tsx",
+      "sha256": "89bb52ba40ef84b63cf368e5d09786c28a6df3351a0ec250fe51af7ada770050"
+    },
+    {
+      "file": "docs/handoff/guide-randomizer-completion-checkpoint.md",
+      "sha256": "673b34132b8e5d22f6958e4d574895304af668281710d33ba68e1df55214ab22"
+    }
+  ],
+  "resolvedFinding": {
+    "problem": "Retry removed the focused button; rejection or deadline remounted a new Retry without restoring owned focus.",
+    "fix": "retryButton ref plus layout effect on Term and failed restores the real trigger on success or current Retry on failure, only while disclosure is open and focus scope/ownership still permits it.",
+    "regression": "Two added tests cover rejection after retry and deadline after retry, including late completion remaining retired."
+  },
+  "sourceChecks": [
+    "Native details and server label/full explanatory Help remain readable without optional Term code; no pretend trigger before load.",
+    "Initial already-open disclosure is admitted on effect mount; normal first open uses native toggle and imports once.",
+    "Load has an 8-second settled terminal deadline; retry changes attempt and cleanup retires earlier promises; unmount clears timer/admission. Closing never opens a tip or steals focus.",
+    "Unmodified real Term/InfoTip retains its glossary load/error/retry/help/Escape behavior after admission.",
+    "Guide-only client receives four public copy strings; no guideCopy runtime import, raw server payload, secret or new service request.",
+    "All existing legend numeric copy, floors, date, trend and Help link remain unchanged. Three added status/retry strings are public static copy.",
+    "No Macro, engine, budget cap or global UI component changes in this seven-file delta."
+  ],
+  "verification": "Source-only review: no unit, type, lint, browser or build execution by reviewer. Parent owns serial verification; no size reduction claimed before actual unchanged-budget build."
+}
