@@ -36,7 +36,11 @@ response or caller can register its own navigation policy.
 - All 37 streaming-token and related Settings guard cases pass. The dirty
   fixture awaits real state publication and completed rename/refresh while
   retaining every original lockout and body-preservation assertion.
-- Final whole-web TypeScript and strict lint of all 30 changed web files pass.
+- All 42 Arcade census cases pass with Date pinned to their existing fixture
+  clock. The original failure was reproduced as UTC passed the fixture's
+  one-year boundary; fallback assertions now verify the actual variant and
+  counts. Production clocks and logic remain unchanged.
+- Final whole-web TypeScript and strict lint of all 31 validated web files pass.
 - Production build `PJe4s15VV3tjLeDyFTb9q` passes all 83 original route caps:
   `/app` is 239.8/240 kB and `/community` is 190.0/190 kB.
 - Forty canonical engine inputs, seven active assets and the four-game sample

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   bucketize,
   dayOfYearUtc,
@@ -36,6 +36,15 @@ const baseDataset: ArcadeDataset = {
 
 const ONE_DAY = 86_400_000;
 const NOW = new Date("2026-05-16T00:00:00Z");
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 /* ──────────── helpers ──────────── */
 
@@ -517,6 +526,11 @@ describe("groupCensus.generate — produces a question on rich data", () => {
       data: { ...baseDataset, games },
     });
     expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.question.variant).toEqual(VARIANT_ROTATION[0]);
+    expect(out.question.qualifying).toBe(8);
+    expect(out.question.count).toBe(0);
+    expect(out.question.truth).toBe("0");
   });
 
   test("examples cap at 6 even when more match", async () => {
