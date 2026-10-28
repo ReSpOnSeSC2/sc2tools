@@ -3,10 +3,10 @@
 const { requestKey } = require("../services/trendsRequests");
 const { createHmac, randomBytes } = require("node:crypto");
 const TAG_BYTES = 72;
-// Only owner-game inputs belong here. Strength-adjusted responses also read a
-// global MMR curve; doctor/opponent/build responses have other dependencies.
+// Mixed routes require their exact captured global-curve dependency as well.
+const DEPENDENT_ROUTES = new Set(["matchups", "maps", "mapMatchups", "buildVsStrategy"]);
 const ALLOWED_ROUTES = new Set(["timeseries", "dayHourHeatmap", "lengthBuckets", "activityCalendar", "momentum", "mapTrend",
-  "summary", "macroSummary", "mmrProgression", "myBuildMixOverTime", "oppStrategyMixOverTime"]);
+  "summary", "macroSummary", "mmrProgression", "myBuildMixOverTime", "oppStrategyMixOverTime", ...DEPENDENT_ROUTES]);
 const LIMITS = Object.freeze({ bytes: 64 * 1024 * 1024, entryBytes: 512 * 1024,
   keyBytes: 16 * 1024, entries: 512, ttlMs: 600000, active: 4, ownerActive: 2,
   waiting: 32, subscribers: 16, responses: 64, queueMs: 5000, responseMs: 30000 });
@@ -25,7 +25,7 @@ class UserCache {
     /** @type {Map<string,any>} */ this.pending = new Map();
     /** @type {any[]} */ this.queue = [];
     /** @type {Map<string,number>} */ this.ownerActive = new Map();
-    this.bytes = 0; this.reserved = 0; this.active = 0; this.waiting = 0; this.responses = 0; this.serial = 0;
+    this.bytes = 0; this.reserved = 0; this.active = 0; this.waiting = 0; this.responses = 0; this.preparing = 0; this.serial = 0;
     /** @type {Record<string,number>} */
     this.stats = { hit: 0, miss: 0, join: 0, eviction: 0, expiry: 0, oversize: 0, bypass: 0, rejected: 0, late_fill: 0 };
     this.tagSalt = this.enabled ? randomBytes(32) : null;
@@ -102,25 +102,33 @@ class UserCache {
   }
   /** @param {any} req @param {any} res @param {string} owner @param {string} route
    * @param {object} filters @param {object} options @param {()=>Promise<any>} work
-   * @param {()=>void} [publishGuard] synchronous subscriber-specific guard */
-  async send(req, res, owner, route, filters, options, work, publishGuard = () => {}) {
-    if (!this.enabled || req.method !== "GET" || !ALLOWED_ROUTES.has(route)) {
+   * @param {()=>void} [publishGuard] synchronous subscriber-specific guard
+   * @param {import('../services/strengthCurveSnapshots').CurveDependency|null|(()=>Promise<import('../services/strengthCurveSnapshots').CurveDependency|null>)} [dependency] */
+  async send(req, res, owner, route, filters, options, work, publishGuard = () => {}, dependency) {
+    const dependent = DEPENDENT_ROUTES.has(route);
+    if (!this.enabled || req.method !== "GET" || !ALLOWED_ROUTES.has(route) || (dependent && dependency === undefined)) {
       const value = await work(); publishGuard(); return res.json(value);
     }
     const { sub, close } = this.beginResponse(req, res);
-    sub.publishGuard = publishGuard;
+    Object.assign(sub, { publishGuard, dependent, retained: false });
     try {
+      const selected = typeof dependency === "function" ? await prepareDependency(this, dependency) : dependency;
+      if (!sub.active || res.destroyed) return;
+      Object.assign(sub, { dependency: selected });
       const snapshot = await this.revisions.snapshot(owner);
       if (!sub.active || res.destroyed) return;
       if (!this.revisions.sameGeneration(snapshot)) throw this.retired();
       const stable = this.revisions.current(snapshot);
-      const encoded = stable ? requestKey([owner, route, filters, options, snapshot.rev, snapshot.epoch, snapshot.token.id]) : null;
+      const parts = [owner, route, filters, options, snapshot.rev, snapshot.epoch, snapshot.token.id];
+      if (dependent) parts.push(selected?.keyPart);
+      const encoded = stable && (!dependent || dependencyCurrent(selected)) ? requestKey(parts) : null;
       const key = encoded !== null && Buffer.byteLength(encoded) <= this.limits.keyBytes ? encoded : null;
       let entry = key ? this.completed.get(key) : null;
       if (entry && key && entry.expiresAt <= this.now()) { this.evict(key, "expiry"); entry = null; }
       if (entry && key) {
         this.stats.hit += 1; this.completed.delete(key); this.completed.set(key, entry);
         entry.refs += 1; sub.entry = entry;
+        Object.assign(sub, { retained: true });
         return this.respond(res, { body: entry.body, etag: entry.etag }, sub);
       }
       if (this.waiting >= this.limits.waiting) throw this.busy();
@@ -128,11 +136,11 @@ class UserCache {
       if (task && task.subs.size >= this.limits.subscribers) throw this.busy();
       if (!task) {
         this.stats.miss += 1; if (!key) this.stats.bypass += 1;
-        task = { owner, key: key || `uncached:${++this.serial}`, cacheKey: key, snapshot, work,
+        task = { owner, key: key || `uncached:${++this.serial}`, cacheKey: key, snapshot, work, dependent, dependency: selected,
           subs: new Set(), started: false, serialize: (/** @type {any} */ value) => serialize(req, value), releaseResponse: null };
         if (key) this.pending.set(key, task);
         this.queue.push(task);
-      } else this.stats.join += 1;
+      } else { this.stats.join += 1; Object.assign(sub, { retained: true }); }
       sub.task = task; sub.queued = true; this.waiting += 1; task.subs.add(sub);
       const packet = await new Promise((resolve, reject) => {
         sub.reject = reject;
@@ -158,13 +166,15 @@ class UserCache {
   /** @param {any} res @param {{body:Buffer|string,etag:string|null}} packet @param {any} sub */
   respond(res, packet, sub) {
     sub.responseTimer = setTimeout(() => res.destroy(), this.limits.responseMs); sub.responseTimer.unref?.();
+    // Both guards run after every await; only synchronous header/body writes follow.
+    sub.publishGuard?.();
+    packet = dependencyPacket(this, packet, sub);
     if (packet.etag) {
       res.set("Cache-Control", "private, no-cache").set("ETag", packet.etag).vary("Authorization");
       if (matchesValidator(sub.ifNoneMatch, packet.etag)) {
         res.removeHeader("Content-Type"); res.removeHeader("Content-Length"); res.removeHeader("Transfer-Encoding");
         // Each subscriber keeps its own policy lease, including retained hits.
         // No asynchronous boundary may follow this assertion before publication.
-        sub.publishGuard?.();
         return res.status(304).end();
       }
     } else res.set("Cache-Control", "private, no-store");
@@ -172,7 +182,6 @@ class UserCache {
     res.set("Content-Length", String(Buffer.byteLength(packet.body)));
     // Explicit per-subscriber conditional delivery; all current generation and
     // deletion guards above still run, including on a retained hit.
-    sub.publishGuard?.();
     return res.end(packet.body);
   }
   drain() {
@@ -188,7 +197,8 @@ class UserCache {
   }
   /** @param {any} task */
   async perform(task) {
-    const allowance = this.limits.entryBytes + (task.cacheKey ? Buffer.byteLength(task.cacheKey) + TAG_BYTES : 0);
+    const allowance = this.limits.entryBytes + (task.cacheKey ? Buffer.byteLength(task.cacheKey) + TAG_BYTES : 0)
+      + (task.dependent ? 4096 : 0);
     let reserved = false;
     try {
       this.reserve(allowance); reserved = true;
@@ -200,7 +210,8 @@ class UserCache {
       if (!this.revisions.sameGeneration(task.snapshot) || !this.revisions.sameGeneration(latest)) throw this.retired();
       this.reserved -= allowance; reserved = false;
       if (!task.subs.size) return;
-      const keep = !!task.cacheKey && this.revisions.current(task.snapshot) && this.revisions.current(latest);
+      const keep = !!task.cacheKey && this.revisions.current(task.snapshot) && this.revisions.current(latest)
+        && (!task.dependent || dependencyCurrent(task.dependency));
       if (task.cacheKey && !keep) this.stats.late_fill += 1;
       if (size > this.limits.entryBytes) {
         this.stats.oversize += 1;
@@ -214,7 +225,7 @@ class UserCache {
         const body = Buffer.from(text), charge = body.length + (task.cacheKey ? Buffer.byteLength(task.cacheKey) : 0)
           + (etag ? Buffer.byteLength(etag) : 0);
         const entry = { owner: task.owner, body, etag, charge, refs: task.subs.size, cached: keep,
-          expiresAt: this.now() + this.limits.ttlMs, freed: false };
+          expiresAt: Math.min(this.now() + this.limits.ttlMs, task.dependent ? task.dependency?.expiresAt ?? 0 : Infinity), freed: false };
         this.bytes += charge;
         if (keep) {
           while (this.completed.size >= this.limits.entries) this.evict(this.completed.keys().next().value || "");
@@ -238,6 +249,28 @@ class UserCache {
     if (sub.queued) { sub.queued = false; this.waiting -= 1; }
     sub.reject = null; sub.resolve(packet);
   }
+}
+/** Capture admission survives response abort until actual IO settles.
+ * @param {UserCache} cache
+ * @param {()=>Promise<import('../services/strengthCurveSnapshots').CurveDependency|null>} input */
+async function prepareDependency(cache, input) {
+  if (cache.preparing >= cache.limits.responses) throw cache.busy();
+  cache.preparing += 1;
+  try { return await input(); } finally { cache.preparing -= 1; }
+}
+/** @param {import('../services/strengthCurveSnapshots').CurveDependency|null|undefined} value */
+function dependencyCurrent(value) {
+  try { return !!value && typeof value.keyPart === "string" && Buffer.byteLength(value.keyPart) <= 4096
+    && Number.isFinite(value.expiresAt) && value.isCurrent() === true; }
+  catch { return false; }
+}
+/** A new computation preserves baseline snapshot delivery; reuse requires live proof.
+ * @param {UserCache} cache @param {{body:Buffer|string,etag:string|null}} packet @param {any} sub */
+function dependencyPacket(cache, packet, sub) {
+  if (!sub.dependent || dependencyCurrent(sub.dependency)) return packet;
+  if (sub.retained) throw cache.retired();
+  if (sub.entry?.cached && sub.task?.cacheKey) cache.evict(sub.task.cacheKey);
+  return { body: packet.body, etag: null };
 }
 /** Bounded If-None-Match weak comparison. Malformed input receives ordinary200.
  * Quoted commas belong to opaque tags, not separators.

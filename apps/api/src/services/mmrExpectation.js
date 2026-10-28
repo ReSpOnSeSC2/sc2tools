@@ -2,6 +2,7 @@
 
 const { VERSION_KEY } = require("../db/schemaVersioning");
 const { RULES, BIN_COUNT, fitCalibration, validatedAnchors } = require("./mmrExpectationMath");
+const { StrengthCurveSnapshots } = require("./strengthCurveSnapshots");
 
 const COLLECTION_NAME = "mmr_expectation";
 const DOCUMENT_ID = "corpus-1v1";
@@ -64,29 +65,39 @@ class MmrExpectationService {
     this.games = db.games;
     this.coll = db.db.collection(COLLECTION_NAME);
     this.now = opts.now || Date.now;
-    /** @type {{expires:number,curve:import('./mmrExpectationMath').Calibration|null}|null} */
+    /** @type {import('./strengthCurveSnapshots').CurveMemo|null} */
     this.cache = null;
-    /** @type {Promise<import('./mmrExpectationMath').Calibration|null>|null} */
+    this.snapshots = new StrengthCurveSnapshots(() => this.cache, () => this.now());
+    /** @type {Promise<import('./strengthCurveSnapshots').CurveMemo>|null} */
     this.loading = null;
   }
 
   /** Aggregate document only; a missing/unavailable calibration uses Elo.
    * No read ever launches a corpus rebuild. */
   async curve() {
-    if (this.cache && this.cache.expires > this.now()) return this.cache.curve;
+    return (await this.#curveMemo()).curve;
+  }
+
+  /** Internal snapshot: curve and proof come from the exact same settled IO. */
+  async snapshot() { return this.snapshots.capture(await this.#curveMemo()); }
+
+  async #curveMemo() {
+    if (this.cache && this.cache.expires > this.now()) return this.cache;
     if (this.loading) return this.loading;
     this.loading = this._loadCurve().finally(() => { this.loading = null; });
     return this.loading;
   }
 
   async _loadCurve() {
+    const origin = this.snapshots.origin();
     let curve = null;
     try {
       const doc = /** @type {(import('./mmrExpectationMath').Calibration & {ruleVersion:number})|null} */ (/** @type {unknown} */ (await this.readRun()));
       if (doc?.ruleVersion === RULE_VERSION && validatedAnchors(doc)) curve = doc;
     } catch { /* Read failure preserves the documented deterministic Elo fallback. */ }
-    this.cache = { expires: this.now() + CACHE_MS, curve };
-    return curve;
+    const memo = this.snapshots.memo(curve, this.now() + CACHE_MS, origin);
+    this.cache = memo;
+    return memo;
   }
 
   async readRun() { return this.coll.findOne({ _id: /** @type {any} */ (DOCUMENT_ID) }); }
@@ -95,13 +106,22 @@ class MmrExpectationService {
    * lost-owner runs leave the previous complete curve intact.
    * @param {{beforePublish?:()=>Promise<void>}} [opts] */
   async recompute(opts = {}) {
+    this.snapshots.retire();
+    try { return await this.#recompute(opts); }
+    catch (error) { this.snapshots.retire(); throw error; }
+  }
+
+  /** @param {{beforePublish?:()=>Promise<void>}} opts */
+  async #recompute(opts) {
     const rows = await this.games.aggregate(buildRecomputePipeline(), { maxTimeMS: MAX_TIME_MS }).toArray();
     const fitted = fitCalibration(rows);
     const updatedAt = new Date(this.now());
     const doc = { _id: DOCUMENT_ID, [VERSION_KEY]: 1, ruleVersion: RULE_VERSION, ...RULES, ...fitted, updatedAt };
     if (opts.beforePublish) await opts.beforePublish();
-    await this.coll.replaceOne({ _id: /** @type {any} */ (DOCUMENT_ID) }, /** @type {any} */ (doc), { upsert: true });
-    this.cache = { expires: this.now() + CACHE_MS, curve: fitted.method === "calibrated" ? fitted : null };
+    const result = await this.coll.replaceOne({ _id: /** @type {any} */ (DOCUMENT_ID) }, /** @type {any} */ (doc), { upsert: true });
+    this.snapshots.retire();
+    const origin = result?.acknowledged === true ? this.snapshots.origin() : {};
+    this.cache = this.snapshots.memo(fitted.method === "calibrated" ? fitted : null, this.now() + CACHE_MS, origin);
     return { updatedAt, sampleGames: fitted.sampleGames, supportedBins: fitted.supportedBins, method: fitted.method };
   }
 }

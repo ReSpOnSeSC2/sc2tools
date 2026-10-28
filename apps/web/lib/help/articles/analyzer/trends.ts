@@ -27,7 +27,7 @@ const article: HelpArticle = {
     "fingerprint",
     "day week month",
   ],
-  updated: "2026-10-26",
+  updated: "2026-10-28",
   body: [
     { type: "heading", text: "Getting around", anchor: "getting-around" },
     { type: "paragraph", text: "Use the section links to jump to Overview, Performance & MMR, Time & activity, Explorer or your Fingerprint. The current section is highlighted as you scroll. The first chart row loads straight away; charts below it load as you approach them, or when you press their **Load** button. Jumping to a section loads its charts and moves focus to its heading. Scrolling keeps your chart choices, Inspect window selection and unapplied Explorer settings. Collapse chart groups from their headings; that choice stays on this device and collapsed charts stop loading. Jumping to a collapsed group opens it. Collapsing a group closes its current chart controls. **Group charts by** sets day, week or month buckets for activity, matchup, MMR and map charts." },
@@ -75,6 +75,7 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "Every chart is computed from your replays with fixed rules, never AI. New to reading these charts? See [Reading the charts](/help/reading-the-charts).",
     },
+    { type: "paragraph", text: "Strength-adjusted matchup, map and build-versus-strategy comparisons show the benchmark method and its sample size alongside your own rated-game coverage. Missing replay-time MMR stays missing; the comparison uses the documented Elo fallback when a calibrated benchmark is unavailable." },
   ],
   related: ["reading-the-charts", "today", "opponents", "analyzer-filters"],
 };

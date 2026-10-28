@@ -866,9 +866,10 @@ export interface AggregationsService {
   assertSessionPolicy(lease: ReturnType<import("./sessionPolicy").SessionPolicyService["lease"]> | null): void;
   explorer(userId: string, filters: Record<string, any>, opts: ReturnType<typeof import('./trendsExplorer').parseExplorerOptions>): Promise<any>;
   summary(userId: string, filters: object): Promise<object>;
-  matchups(userId: string, filters: object): Promise<object>;
-  maps(userId: string, filters: object): Promise<object>;
-  buildVsStrategy(userId: string, filters: object): Promise<object>;
+  captureStrengthCurve?(): Promise<import('./strengthCurveSnapshots').CurveSnapshot|null>;
+  matchups(userId: string, filters: object, snapshot?: import('./strengthCurveSnapshots').CurveSnapshot): Promise<object>;
+  maps(userId: string, filters: object, snapshot?: import('./strengthCurveSnapshots').CurveSnapshot): Promise<object>;
+  buildVsStrategy(userId: string, filters: object, snapshot?: import('./strengthCurveSnapshots').CurveSnapshot): Promise<object>;
   randomSummary(userId: string, filters: object): Promise<object>;
   timeseries(
     userId: string,
@@ -894,7 +895,7 @@ export interface AggregationsService {
       lastSeen: Date | null;
     }>
   >;
-  mapMatchups(userId: string, filters: object): Promise<object>;
+  mapMatchups(userId: string, filters: object, snapshot?: import('./strengthCurveSnapshots').CurveSnapshot): Promise<object>;
   macroSummary(userId: string, filters: object): Promise<object>;
   matchupTimeseries(
     userId: string,

@@ -352,7 +352,7 @@ and verification limits.
 
 `USER_CACHE_ENABLED` enables the first chart-cache slice only when its value is
 the literal string `true`. The default and `.env.example` are false. While off,
-the eleven routes call their original services and `res.json` directly; revision
+the fifteen routes call their original services and `res.json` directly; revision
 hooks add no database command, owner lookup, retained body, admission limit or
 new busy response. The flag is not changed by source preparation.
 
@@ -367,13 +367,40 @@ The allowlist is `/v1/timeseries`, `/v1/timeseries/day-hour`,
 `/v1/length-buckets`, `/v1/activity-calendar`, `/v1/momentum` and
 `/v1/timeseries/maps`, plus `/v1/summary`, `/v1/macro/summary`,
 `/v1/timeseries/mmr`, `/v1/timeseries/my-builds` and
-`/v1/timeseries/opp-strategies`. The same eleven paths participate in optional
+`/v1/timeseries/opp-strategies`, plus `/v1/matchups`, `/v1/maps`,
+`/v1/maps/matchups` and `/v1/build-vs-strategy`. The same fifteen paths participate in optional
 browser capability discovery and retained-body revalidation. Existing parsing,
 filters, calculations and history bounds
 stay in their original aggregation methods. All global filters are dependencies:
 even a time chart's membership can change after an opponent MMR or region stamp.
-Doctor/health, opponents and notes, build stats, Explorer, global calibration,
+Doctor/health, opponents and notes, saved-build stats, Explorer, matchup time series,
 exports, streams and tokens are outside this allowlist.
+
+The four direct strength-adjusted routes require a captured global-curve proof
+in addition to owner revision. Its immutable anchors, emitted sample/support
+counts, rules and memo identity drive both the key and the actual Mongo/JS
+calculation, including every race subgroup. The body expiry cannot outlive the
+existing 60-second curve memo. Reads preserve the original lazy aggregate-document
+lookup and Elo fallback; they never rebuild the corpus. A recompute attempt and
+its outcome retire retention epochs. A held load keeps its pre-IO origin even
+if it later installs an older baseline memo, so it cannot gain new authority.
+
+A new computation whose curve retires may deliver its original 200 with
+`private, no-store`; a retained hit or joined subscriber must reject a retired
+proof before publication. There is no hidden fallback work or retry loop.
+Task reservations include 4 KiB for bounded dependency metadata; at most 64
+response leases can separately hold a bounded proof. Lazy capture starts after
+response admission; up to 64 preparations remain charged until actual curve IO
+settles, even when all of their responses abort. Byte accounting is not a
+limit on the entire Node/Mongo heap. The original queue and compute limits stay
+unchanged. Matchup time series remains excluded until its inner work-sharing key
+can consume the same proof.
+
+This source coverage does not authorize activation. Advisory `dataRev` is not a
+durable feed, and an uncertain revision write can poison only its own process.
+Fleet/rolling-overlap and out-of-band writer coherence must be qualified before
+enabling the flag. Maintained membership/date statistics and credential cutover
+are separate contracts. No request reduction, latency or savings is claimed.
 
 Every selected-input writer calls `gameWrite` inside its service or existing
 job around the semantic Mongo attempt. `UserRevision` retires owner tokens

@@ -5,7 +5,8 @@ import { createContext, useContext, useLayoutEffect, useRef, type ReactNode } fr
 const ROUTES = ["/v1/timeseries", "/v1/timeseries/day-hour", "/v1/length-buckets",
   "/v1/activity-calendar", "/v1/momentum", "/v1/timeseries/maps",
   "/v1/summary", "/v1/macro/summary", "/v1/timeseries/mmr",
-  "/v1/timeseries/my-builds", "/v1/timeseries/opp-strategies"];
+  "/v1/timeseries/my-builds", "/v1/timeseries/opp-strategies",
+  "/v1/matchups", "/v1/maps", "/v1/maps/matchups", "/v1/build-vs-strategy"];
 let nextScope = 0;
 
 export type ConditionalApiScope = {

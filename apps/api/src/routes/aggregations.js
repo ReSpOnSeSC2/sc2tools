@@ -21,9 +21,10 @@ function buildAggregationsRouter(deps) {
   router.use(deps.auth);
   /** @param {any} req @param {any} res @param {string} owner @param {string} route
    * @param {object} filters @param {object} options @param {()=>Promise<any>} work
-   * @param {()=>void} [publishGuard] */
-  const send = (req, res, owner, route, filters, options, work, publishGuard = () => {}) => deps.userCache
-    ? deps.userCache.send(req, res, owner, route, filters, options, work, publishGuard)
+   * @param {()=>void} [publishGuard]
+   * @param {import('../services/strengthCurveSnapshots').CurveDependency|null|(()=>Promise<import('../services/strengthCurveSnapshots').CurveDependency|null>)} [dependency] */
+  const send = (req, res, owner, route, filters, options, work, publishGuard = () => {}, dependency) => deps.userCache
+    ? deps.userCache.send(req, res, owner, route, filters, options, work, publishGuard, dependency)
     : work().then((value) => { publishGuard(); return res.json(value); });
 
   router.get(["/trends/explorer/:view", "/trends/explorer/:view/games"], async (req, res, next) => {
@@ -50,7 +51,7 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.aggregations.matchups(userId, filters));
+      await sendStrength(deps, send, req, res, userId, "matchups", filters);
     } catch (err) {
       next(err);
     }
@@ -60,7 +61,7 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.aggregations.maps(userId, filters));
+      await sendStrength(deps, send, req, res, userId, "maps", filters);
     } catch (err) {
       next(err);
     }
@@ -72,7 +73,7 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.aggregations.mapMatchups(userId, filters));
+      await sendStrength(deps, send, req, res, userId, "mapMatchups", filters);
     } catch (err) {
       next(err);
     }
@@ -96,7 +97,7 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.aggregations.buildVsStrategy(userId, filters));
+      await sendStrength(deps, send, req, res, userId, "buildVsStrategy", filters);
     } catch (err) {
       next(err);
     }
@@ -449,6 +450,18 @@ function buildAggregationsRouter(deps) {
   });
 
   return router;
+}
+
+/** @param {Parameters<typeof buildAggregationsRouter>[0]} deps @param {any} send
+ * @param {any} req @param {any} res @param {string} owner
+ * @param {'matchups'|'maps'|'mapMatchups'|'buildVsStrategy'} method @param {object} filters */
+async function sendStrength(deps, send, req, res, owner, method, filters) {
+  if (!deps.userCache?.enabled || !deps.aggregations.captureStrengthCurve) return res.json(await deps.aggregations[method](owner, filters));
+  /** @type {import('../services/strengthCurveSnapshots').CurveSnapshot|null|undefined} */ let snapshot;
+  const capture = async () => { snapshot = await deps.aggregations.captureStrengthCurve?.(); return snapshot?.dependency ?? null; };
+  return send(req, res, owner, method, filters, {},
+    () => snapshot ? deps.aggregations[method](owner, filters, snapshot) : deps.aggregations[method](owner, filters),
+    () => {}, capture);
 }
 
 /** @param {import('express').Request} req */
