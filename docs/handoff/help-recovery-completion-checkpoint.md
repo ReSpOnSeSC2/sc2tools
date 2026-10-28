@@ -156,3 +156,23 @@ or claim one read on those paths. Ordinary admitted/missing/error cases make one
 read. Initial sandbox-loopback and IPv4/IPv6 fixture failures are also retained.
 All owned Next processes and loopback listeners closed. Exact-head CI and actual
 production delivery remain required before this slice is delivered.
+
+## Replay-download CI synchronization
+
+Head5195b26d web CI run40637043049 reported one failure, 9,988 passing tests
+and one existing skip. The failing owner-scoped replay-download test and its
+component matched main before this repair. It waited for the external anchor
+click, then read the button before React necessarily committed its following
+idle state. The bounded Codex diagnostics remain preserved in the local packet;
+the unchanged isolated six-case suite passed locally, so no local reproduction
+is claimed.
+
+The same test now waits for both the single click and enabled DOM before its
+original remaining assertions. An additional held-response case proves that
+the button stays disabled through the download side effect, then re-enables
+after completion. All original assertions and account-retirement protections
+remain; no delay, timeout increase, skip or product code change was added.
+The seven-case suite and strict changed-test lint pass. The diagnosis and
+artifact hashes are in `validation/help-recovery/review-download-ci-diagnosis.json`.
+Existing runtime build/browser/HTTP evidence remains applicable because this
+repair changes only the test. Fresh exact-head CI and delivery remain pending.
