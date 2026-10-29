@@ -22,6 +22,7 @@ corresponding GitHub Release.
 
 ### History write consistency
 
+- Publish completed saved-build reclassification together with the account statistics revision, preserving verified game totals and the latest-game value.
 - Keep verified account totals and latest-game values consistent when missing opponent ladder MMR or league metadata is filled in. Existing replay ratings and historical dates stay intact.
 - Commit build check-in labels, notes and pending-state changes together with their account statistics revision, preserving verified totals and latest-game values.
 - Preserve verified account totals and latest-game values when recomputing macro scores, with the score change and statistics revision committed together. Older statistics keep the existing history-query fallback.

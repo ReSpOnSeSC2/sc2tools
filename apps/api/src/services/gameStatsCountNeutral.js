@@ -8,14 +8,18 @@ const { withGameStatsAuthority, saveGameStats, MAINTENANCE_VERSION } = require("
 const { readyStatsFromOwnerRow } = require("./maintainedGameStatsRead");
 const { immutableBuildState, applyBuildState } = require("./gameStatsBuildStateNeutral");
 const { immutablePulseStamp, applyPulseStamp } = require("./gameStatsPulseNeutral");
+const { immutableCustomBuildEof, applyCustomBuildEof, customBuildEofRepairAuthority } = require("./gameStatsCustomBuildEof");
 
 /** This named operation owns its filter and update. No arbitrary callback or
  * caller-declared neutral boolean can select the carry path.
  * @typedef {{kind:"macroSurface",gameId:string,macroScore:number,top3Leaks?:object[]}} MacroSurfaceMutation */
-/** @typedef {MacroSurfaceMutation|import('./gameStatsBuildStateNeutral').BuildStateMutation|import('./gameStatsPulseNeutral').PulseStampMutation} NeutralMutation */
+/** @typedef {MacroSurfaceMutation|import('./gameStatsBuildStateNeutral').BuildStateMutation|import('./gameStatsPulseNeutral').PulseStampMutation|import('./gameStatsCustomBuildEof').CustomBuildEofMutation} NeutralMutation */
 
 /** @param {NeutralMutation} input @param {Record<string,any>} [options] */
 function immutableNeutralMutation(input, options = {}) {
+  if (input?.kind === "customBuildEof") {
+    return immutableCustomBuildEof(input, options);
+  }
   if (input?.kind === "pulseGameStamp") {
     return immutablePulseStamp(input, options);
   }
@@ -24,6 +28,9 @@ function immutableNeutralMutation(input, options = {}) {
 /** @param {import('../db/connect').DbContext} db @param {import('./gameStatsWrites').GameStatsOwner} owner
  * @param {Readonly<NeutralMutation>} mutation @param {import('mongodb').ClientSession|undefined} session */
 function applyNeutralMutation(db, owner, mutation, session) {
+  if (mutation.kind === "customBuildEof") {
+    return applyCustomBuildEof(db, owner, mutation, session);
+  }
   if (mutation.kind === "pulseGameStamp") {
     return applyPulseStamp(db, owner, mutation, session);
   }
@@ -64,6 +71,19 @@ function validNeutralOwner(owner) {
       || (typeof owner.epoch === "string" && /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(owner.epoch)));
 }
 
+/** Named EOF repair is the only additional authority. Caller options cannot
+ * select it, and other neutral families retain the absent-fence predicate.
+ * @param {import('./gameStatsWrites').GameStatsOwner} owner
+ * @param {Readonly<NeutralMutation>} mutation */
+function neutralAuthority(owner, mutation) {
+  if (mutation.kind === "customBuildEof" && mutation.repairFenceId !== undefined) {
+    return customBuildEofRepairAuthority(owner, mutation);
+  }
+  return { userId: owner.userId, _id: owner.id,
+    gameStatsMutationEpoch: owner.epoch === undefined ? { $exists: false } : owner.epoch,
+    _gdprMutation: { $exists: false } };
+}
+
 /** Preserve one server-owned identity across a request's reads/claim/retries.
  * Never recapture a supplied ingest handle after its epoch is retired.
  * @param {import('./gameStatsWrites').GameStatsWrites} writer @param {string} userId
@@ -98,9 +118,7 @@ function applyMacroSurface(db, owner, mutation, session) {
  * @param {import('mongodb').ClientSession} session */
 function carryUnchangedGameStats(db, owner, mutation, session) {
   const fixedOwner = immutableNeutralOwner(owner), fixedMutation = immutableNeutralMutation(mutation);
-  const authority = { userId: fixedOwner.userId, _id: fixedOwner.id,
-    gameStatsMutationEpoch: fixedOwner.epoch === undefined ? { $exists: false } : fixedOwner.epoch,
-    _gdprMutation: { $exists: false } };
+  const authority = neutralAuthority(fixedOwner, fixedMutation);
   return withGameStatsAuthority(db, fixedOwner, authority, async (before, revision) => {
     const stats = readyStatsFromOwnerRow(before, fixedOwner.userId, true);
     const result = await applyNeutralMutation(db, fixedOwner, fixedMutation, session);
@@ -114,4 +132,5 @@ function carryUnchangedGameStats(db, owner, mutation, session) {
 /** @param {string} code */
 function failure(code) { return Object.assign(new Error(code), { code, status: 503 }); }
 
-module.exports = { immutableMacroSurface, immutableNeutralOwner, applyMacroSurface, carryUnchangedGameStats, immutableNeutralMutation, applyNeutralMutation, capturedNeutralOwner };
+module.exports = { immutableMacroSurface, immutableNeutralOwner, applyMacroSurface, carryUnchangedGameStats,
+  immutableNeutralMutation, applyNeutralMutation, capturedNeutralOwner, neutralAuthority };

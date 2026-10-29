@@ -1497,19 +1497,8 @@ describe("custom-build rule scan memory safety", () => {
             };
           },
         };
-        const service = new CustomBuildsService(
-          { games, customBuilds: db.collection("custom_builds") },
-          { perGame },
-        );
-        service.get = jest.fn(async () => ({
-          slug: name.toLowerCase(),
-          name,
-          race: "Protoss",
-          vsRace: "Terran",
-          rules: [{ type: "before", name: "BuildPylon", time_lt: 60 }],
-        }));
         const originalBulkWrite = games.bulkWrite.bind(games);
-        service._gamesCollection = () => ({
+        const scopedGames = {
           bulkWrite: async (...args) => {
             const result = await originalBulkWrite(...args);
             pageReady.resolve();
@@ -1522,7 +1511,19 @@ describe("custom-build rule scan memory safety", () => {
             return games.updateMany(...args);
           },
           findOne: (...args) => games.findOne(...args),
-        });
+        };
+        const service = new CustomBuildsService(
+          { games: scopedGames, customBuilds: db.collection("custom_builds") },
+          { perGame },
+        );
+        service.get = jest.fn(async () => ({
+          slug: name.toLowerCase(),
+          name,
+          race: "Protoss",
+          vsRace: "Terran",
+          rules: [{ type: "before", name: "BuildPylon", time_lt: 60 }],
+        }));
+
         return service;
       }
 
@@ -1580,8 +1581,27 @@ describe("custom-build rule scan memory safety", () => {
     });
 
     function makeService(name, stagedSignal, commitGate, shouldAbort) {
+      const originalBulkWrite = games.bulkWrite.bind(games);
+      let updateCalls = 0;
+      const scopedGames = {
+        bulkWrite: async (...args) => {
+          const result = await originalBulkWrite(...args);
+          stagedSignal.resolve();
+          return result;
+        },
+        updateMany: async (...args) => {
+          if (!args[0] || !args[0]["_customBuildReclassify.runId"]) {
+            return games.updateMany(...args);
+          }
+          updateCalls += 1;
+          if (updateCalls === 1 && commitGate) await commitGate.promise;
+          if (shouldAbort && updateCalls === 1) throw abortError("superseded");
+          return games.updateMany(...args);
+        },
+        findOne: (...args) => games.findOne(...args),
+      };
       const service = new CustomBuildsService(
-        { games, customBuilds: db.collection("custom_builds") },
+        { games: scopedGames, customBuilds: db.collection("custom_builds") },
         { perGame: {
           iterateRulePreviewPages: async function* () {
             yield {
@@ -1607,25 +1627,7 @@ describe("custom-build rule scan memory safety", () => {
         vsRace: "Terran",
         rules: [{ type: "before", name: "BuildPylon", time_lt: 60 }],
       }));
-      const originalBulkWrite = games.bulkWrite.bind(games);
-      let updateCalls = 0;
-      service._gamesCollection = () => ({
-        bulkWrite: async (...args) => {
-          const result = await originalBulkWrite(...args);
-          stagedSignal.resolve();
-          return result;
-        },
-        updateMany: async (...args) => {
-          if (!args[0] || !args[0]["_customBuildReclassify.runId"]) {
-            return games.updateMany(...args);
-          }
-          updateCalls += 1;
-          if (updateCalls === 1 && commitGate) await commitGate.promise;
-          if (shouldAbort && updateCalls === 1) throw abortError("superseded");
-          return games.updateMany(...args);
-        },
-        findOne: (...args) => games.findOne(...args),
-      });
+
       return service;
     }
 
