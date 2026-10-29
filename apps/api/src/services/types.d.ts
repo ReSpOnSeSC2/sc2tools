@@ -655,6 +655,9 @@ export interface CustomBuildsService {
       signal?: AbortSignal;
       previousNamesBySlug?: Record<string, string[]>;
       assertLease?: () => Promise<void>;
+      leaseAuthority?: import("./gameStatsCustomBuildEof").EofJobLease;
+      owner?: import("./gameStatsWrites").GameStatsOwner | null;
+      fenceId?: string;
       jobSequence?: number;
       onProgress?: (progress: {
         builds: number;

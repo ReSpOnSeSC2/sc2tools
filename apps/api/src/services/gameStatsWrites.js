@@ -2,7 +2,7 @@
 
 const { maintainGameStats, immutableSelection, PROTOCOL_VERSION } = require("./gameStatsMaintenance");
 const { statsReadFloorFor } = require("./gameStatsReadFloor");
-const { immutableNeutralMutation, immutableNeutralOwner, applyNeutralMutation, carryUnchangedGameStats } = require("./gameStatsCountNeutral");
+const { immutableNeutralMutation, immutableNeutralOwner, applyNeutralMutation, carryUnchangedGameStats, neutralAuthority } = require("./gameStatsCountNeutral");
 
 const MAX_ACTIVE = 8;
 const DELETE_BATCH = 100;
@@ -105,7 +105,7 @@ class GameStatsWrites {
       // Existing retained state is durably retired before legacy work. Unknown
       // or failed retirement must never dispatch that work.
       if (owner.id !== null) {
-        const retired = await this.db.users.updateOne(this.authority(owner, options), {
+        const retired = await this.db.users.updateOne(operationAuthority(this, owner, options, mutation), {
           $set: { gameStatsWriterStatus: "unsupported" },
           $unset: { gameStats: "", gameStatsRevision: "", gameStatsProtocolVersion: "", gameStatsMaintenance: "" },
         }, { upsert: false });
@@ -180,6 +180,14 @@ function prepareOperation(db, owner, work, options) {
   const mutation = immutableNeutralMutation(work, options), captured = immutableNeutralOwner(owner);
   return { owner: captured, options: Object.freeze({}), selection: null, mutation,
     work: (/** @type {import('mongodb').ClientSession|undefined} */ session) => applyNeutralMutation(db, captured, mutation, session) };
+}
+
+/** Internal authority selection does not broaden ordinary callback options.
+ * @param {GameStatsWrites} writer @param {GameStatsOwner} owner
+ * @param {AuthorityOptions} options
+ * @param {Readonly<import('./gameStatsCountNeutral').NeutralMutation>|null} mutation */
+function operationAuthority(writer, owner, options, mutation) {
+  return mutation ? neutralAuthority(owner, mutation) : writer.authority(owner, options);
 }
 
 /** @param {import('../db/connect').DbContext} db @param {any} [logger] */

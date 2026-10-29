@@ -1,5 +1,9 @@
 "use strict";
 const { gameWrite } = require("../util/userRevision");
+const { gameStatsWritesFor } = require("./gameStatsWrites");
+const { immutableNeutralOwner } = require("./gameStatsCountNeutral");
+const { immutableCustomBuildEof, customBuildEofRepairAuthority } = require("./gameStatsCustomBuildEof");
+const { commitReclassifyRunPipeline, removeReclassifyRunPipeline, RECLASSIFY_LEASE_MS } = require("./customBuildReclassifyPipeline");
 
 const { policyLabelForGame } = require("./presetIngest");
 const { createHash, randomUUID } = require("crypto");
@@ -55,13 +59,8 @@ const {
   renameCustomOverrides,
 } = require("./buildIntentAttribution");
 const {
-  OPP_OVERRIDE_SLUG_EXPR,
-  OVERRIDE_SLUG_EXPR,
-  intentDetectedOnOverride,
   opponentClaimFilter,
   tagClassificationPipeline,
-  unlessOppOverride,
-  unlessOverride,
   youClaimFilter,
 } = require("./buildIntentGuards");
 
@@ -76,7 +75,6 @@ const RECLASSIFY_MAX_ATTEMPTS = 3;
 const RECLASSIFY_TRANSIENT_MAX_ATTEMPTS = 8;
 const RECLASSIFY_RETRY_BASE_MS = 250;
 const RECLASSIFY_WORKER_RETRY_MS = 1000;
-const RECLASSIFY_LEASE_MS = 60 * 1000;
 const RECLASSIFY_LEASE_RENEW_MS = 20 * 1000;
 const RECLASSIFY_RECOVERY_INTERVAL_MS = 15 * 1000;
 
@@ -390,6 +388,7 @@ class CustomBuildsService {
    */
   constructor(db, opts = {}) {
     this.userRevision = opts.userRevision || null;
+    this.gameStatsWrites = gameStatsWritesFor(/** @type {import('../db/connect').DbContext} */ (db), opts.logger);
     this.db = db;
     // Production uses a dedicated, stable per-user job document. Focused
     // legacy test doubles fall back to a sibling collection from the same DB.
@@ -1116,11 +1115,7 @@ class CustomBuildsService {
       };
       try {
         const result = await this.reclassifyAll(userId, {
-          clearUnmatched: !!job.clearUnmatched,
-          previousNamesBySlug: job.previousNamesBySlug || {},
-          signal: controller.signal,
-          assertLease,
-          jobSequence: Number(job.sequence) || 0,
+          ...leasedReclassifyOptions(job, controller, assertLease, generation, leaseToken),
           onProgress: async (progress) => {
             const checkpoint = await this.reclassifyJobs.updateOne(
               { userId, generation, leaseToken, status: "running" },
@@ -1929,6 +1924,9 @@ class CustomBuildsService {
    */
   async reclassify(userId, slug, opts = {}) {
     if (!this.perGame) throw new Error("perGame_unavailable");
+    const mutation = customEofMutation("single", opts);
+    const owner = await customEofOwner(this.gameStatsWrites, userId, opts, mutation);
+    const { runId, sequence: jobSequence } = mutation;
     await assertNoActiveOpponentBuildOrderWrites(
       this._gamesCollection(),
       userId,
@@ -1940,8 +1938,6 @@ class CustomBuildsService {
     const buildName = build.name || build.slug;
     const perspective = buildPerspective(build);
     const otherPerspective = perspective === "opponent" ? "you" : "opponent";
-    const runId = randomUUID();
-    const jobSequence = Math.max(0, Number(opts.jobSequence) || 0);
     const gamesCollection = this._gamesCollection();
     let scanned = 0;
     let matchedCount = 0;
@@ -2094,10 +2090,7 @@ class CustomBuildsService {
     // A writer that starts after this scan began rotates the replay revision;
     // its stale staged rows therefore match zero documents at commit. Queued
     // all-build work is coalesced by the writer after its final fence.
-    await gameWrite(this.userRevision, userId, () => gamesCollection.updateMany(
-      { userId, "_customBuildReclassify.runId": runId },
-      commitReclassifyRunPipeline(runId, jobSequence),
-    ));
+    await gameWrite(this.userRevision, userId, () => this.gameStatsWrites.write(owner, mutation));
     } catch (err) {
       // A partial/failed history scan must have zero destructive effects.
       await gamesCollection.updateMany(
@@ -2129,12 +2122,18 @@ class CustomBuildsService {
    *   signal?: AbortSignal,
    *   previousNamesBySlug?: Record<string, string[]>,
    *   assertLease?: () => Promise<void>,
+   *   leaseAuthority?: import('./gameStatsCustomBuildEof').EofJobLease,
+   *   owner?: import('./gameStatsWrites').GameStatsOwner|null,
+   *   fenceId?: string,
    *   jobSequence?: number,
    *   onProgress?: (progress: {builds: number, scanned: number, tagged: number, cleared: number, deferred: number, total?: number}) => void|Promise<void>,
    * }} [opts]
    */
   async reclassifyAll(userId, opts = {}) {
     if (!this.perGame) throw new Error("perGame_unavailable");
+    const mutation = customEofMutation("all", opts);
+    const owner = await customEofOwner(this.gameStatsWrites, userId, opts, mutation);
+    const { runId, sequence: jobSequence } = mutation;
     await assertNoActiveOpponentBuildOrderWrites(
       this._gamesCollection(),
       userId,
@@ -2165,8 +2164,6 @@ class CustomBuildsService {
       }
     }
     const libraryFingerprint = libraryHash.digest("hex");
-    const runId = randomUUID();
-    const jobSequence = Math.max(0, Number(opts.jobSequence) || 0);
     const games = this._gamesCollection();
     const total = typeof games.countDocuments === "function"
       ? await games.countDocuments({ userId, isResumedFromReplay: { $ne: true } }) : undefined;
@@ -2393,10 +2390,7 @@ class CustomBuildsService {
       // Commit every staged decision in one server-side update. `$$REMOVE`
       // clears definitive stale tags and the private marker; set actions copy
       // their desired value to the marker's declared perspective.
-      await gameWrite(this.userRevision, userId, () => games.updateMany(
-        { userId, "_customBuildReclassify.runId": runId },
-        commitReclassifyRunPipeline(runId, jobSequence),
-      ));
+      await gameWrite(this.userRevision, userId, () => this.gameStatsWrites.write(owner, mutation));
     } catch (err) {
       await games.updateMany(
         { userId, "_customBuildReclassify.runId": runId },
@@ -3022,236 +3016,46 @@ function customBuildRevisionMatch(revision) {
   return { _customBuildRevision: revision || null };
 }
 
-/** Convert legacy single-object staging into the current marker-array shape. */
-function reclassifyMarkersExpression() {
+/** Fixed job options retain their original evaluation order before the
+ * progress callback is constructed; no await or authority decision is added.
+ * @param {any} job @param {AbortController} controller
+ * @param {()=>Promise<void>} assertLease @param {string} generation @param {string} leaseToken */
+function leasedReclassifyOptions(job, controller, assertLease, generation, leaseToken) {
   return {
-    $cond: [
-      { $isArray: "$_customBuildReclassify" },
-      "$_customBuildReclassify",
-      {
-        $cond: [
-          { $eq: [{ $type: "$_customBuildReclassify" }, "object"] },
-          ["$_customBuildReclassify"],
-          [],
-        ],
-      },
-    ],
+    clearUnmatched: !!job.clearUnmatched,
+    previousNamesBySlug: job.previousNamesBySlug || {},
+    signal: controller.signal,
+    assertLease,
+    jobSequence: Number(job.sequence) || 0,
+    leaseAuthority: { generation, leaseToken },
   };
 }
 
-/**
- * @param {string} runId
- * @param {"you"|"opponent"} [perspective]
- */
-function reclassifyDecisionExpression(runId, perspective) {
-  /** @type {Record<string, any>} */
-  const condition = { $eq: ["$$marker.runId", runId] };
-  const scopedCondition = perspective
-    ? {
-      $and: [
-        condition,
-        {
-          // Markers written before perspective-aware classification all
-          // targeted myBuild, so missing perspective is legacy "you".
-          $eq: [
-            { $ifNull: ["$$marker.perspective", "you"] },
-            perspective,
-          ],
-        },
-      ],
-    }
-    : condition;
-  return {
-    $arrayElemAt: [
-      {
-        $filter: {
-          input: reclassifyMarkersExpression(),
-          as: "marker",
-          cond: scopedCondition,
-        },
-      },
-      0,
-    ],
-  };
+/** Capture server run data before owner/library/detail awaits. Live native
+ * cancellation is deliberately retained separately from BSON query data.
+ * @param {"single"|"all"} mode @param {any} opts */
+function customEofMutation(mode, opts) {
+  return immutableCustomBuildEof({ kind: "customBuildEof", runId: randomUUID(),
+    sequence: Math.max(0, Number(opts.jobSequence) || 0), mode,
+    ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+    ...(opts.leaseAuthority === undefined ? {} : { lease: opts.leaseAuthority }),
+    ...(opts.fenceId === undefined ? {} : { repairFenceId: opts.fenceId }) });
 }
 
-/** @param {string} runId */
-function remainingReclassifyMarkersExpression(runId) {
-  return {
-    $filter: {
-      input: reclassifyMarkersExpression(),
-      as: "marker",
-      cond: { $ne: ["$$marker.runId", runId] },
-    },
-  };
-}
-
-/**
- * A successful sequence makes every older/equal staged verdict obsolete,
- * including residue from a hard crash that recovery resumed with a new runId.
- * @param {number} sequence
- */
-function newerReclassifyMarkersExpression(sequence) {
-  return {
-    $filter: {
-      input: reclassifyMarkersExpression(),
-      as: "marker",
-      cond: {
-        $gt: [
-          { $ifNull: ["$$marker.sequence", 0] },
-          Math.max(0, Number(sequence) || 0),
-        ],
-      },
-    },
-  };
-}
-
-/**
- * Apply only this run's staged verdict and retain every other in-flight run.
- * On a build check-in row the "you" verdict updates ``buildIntent.detected``
- * and the declared ``myBuild``/``_customBuildSlug`` stay; on an opponent
- * correction row the opponent verdict updates
- * ``buildIntent.opponent.detected`` and the declared opponent build is
- * (re)written, healing a row whose ingest tagger was superseded after a
- * re-upload patched the agent's label over it (buildIntentGuards).
- * @param {string} runId
- * @param {number} sequence
- */
-function commitReclassifyRunPipeline(runId, sequence) {
-  const safeSequence = Math.max(0, Number(sequence) || 0);
-  const sequenceDecision = reclassifyDecisionExpression(runId);
-  /**
-   * @param {"you"|"opponent"} perspective
-   * @param {any} currentValue
-   * @param {any} desiredValue
-   * @param {any} [clearedValue]
-   */
-  const sideValue = (perspective, currentValue, desiredValue, clearedValue = "$$REMOVE") => ({
-    $let: {
-      vars: { decision: reclassifyDecisionExpression(runId, perspective) },
-      in: {
-        $cond: [
-          {
-            $and: [
-              { $eq: [{ $type: "$$decision" }, "object"] },
-              {
-                $gte: [
-                  { $ifNull: ["$$decision.sequence", safeSequence] },
-                  { $ifNull: ["$_customBuildClassificationSequence", 0] },
-                ],
-              },
-            ],
-          },
-          {
-            $cond: [
-              { $eq: ["$$decision.action", "set"] },
-              desiredValue,
-              clearedValue,
-            ],
-          },
-          currentValue,
-        ],
-      },
-    },
-  });
-  return [{
-    $set: {
-      _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
-      // Check-in rows get the declared values back (not merely kept), so a
-      // row whose ingest tagger lost its revision race heals on commit, as
-      // the opponent axis below does.
-      myBuild: unlessOverride(
-        "$buildIntent.build.name",
-        sideValue("you", "$myBuild", "$$decision.desiredBuild"),
-      ),
-      _customBuildSlug: unlessOverride(
-        OVERRIDE_SLUG_EXPR,
-        sideValue("you", "$_customBuildSlug", "$$decision.desiredSlug"),
-      ),
-      buildIntent: intentDetectedOnOverride({
-        you: sideValue(
-          "you",
-          "$buildIntent.detected",
-          {
-            name: { $ifNull: ["$$decision.desiredBuild", null] },
-            slug: { $ifNull: ["$$decision.desiredSlug", null] },
-          },
-          { name: null, slug: null },
-        ),
-        opponent: sideValue(
-          "opponent",
-          "$buildIntent.opponent.detected",
-          {
-            name: { $ifNull: ["$$decision.desiredBuild", null] },
-            slug: { $ifNull: ["$$decision.desiredSlug", null] },
-          },
-          { name: null, slug: null },
-        ),
-      }),
-      "opponent.strategy": unlessOppOverride(
-        "$buildIntent.opponent.build.name",
-        sideValue("opponent", "$opponent.strategy", "$$decision.desiredBuild"),
-      ),
-      _customOpponentStrategySlug: unlessOppOverride(
-        OPP_OVERRIDE_SLUG_EXPR,
-        sideValue("opponent", "$_customOpponentStrategySlug", "$$decision.desiredSlug"),
-      ),
-      _customBuildClassificationSequence: {
-        $let: {
-          vars: { decision: sequenceDecision },
-          in: {
-            $cond: [
-              {
-                $and: [
-                  { $eq: [{ $type: "$$decision" }, "object"] },
-                  {
-                    $gte: [
-                      { $ifNull: ["$$decision.sequence", safeSequence] },
-                      { $ifNull: ["$_customBuildClassificationSequence", 0] },
-                    ],
-                  },
-                ],
-              },
-              { $ifNull: ["$$decision.sequence", safeSequence] },
-              "$_customBuildClassificationSequence",
-            ],
-          },
-        },
-      },
-      _customBuildReclassify: {
-        $let: {
-          vars: { remaining: newerReclassifyMarkersExpression(safeSequence) },
-          in: {
-            $cond: [
-              { $gt: [{ $size: "$$remaining" }, 0] },
-              "$$remaining",
-              "$$REMOVE",
-            ],
-          },
-        },
-      },
-    },
-  }];
-}
-
-/** Remove only this failed/aborted run's staging. @param {string} runId */
-function removeReclassifyRunPipeline(runId) {
-  return [{
-    $set: {
-      _customBuildReclassify: {
-        $let: {
-          vars: { remaining: remainingReclassifyMarkersExpression(runId) },
-          in: {
-            $cond: [
-              { $gt: [{ $size: "$$remaining" }, 0] },
-              "$$remaining",
-              "$$REMOVE",
-            ],
-          },
-        },
-      },
-    },
-  }];
+/** Repair delegates its existing captured owner; it never recaptures while
+ * the destructive fence is active. Ordinary entry captures before the scan.
+ * @param {import('./gameStatsWrites').GameStatsWrites} writer
+ * @param {string} userId @param {any} opts
+ * @param {Readonly<import('./gameStatsCustomBuildEof').CustomBuildEofMutation>} mutation */
+async function customEofOwner(writer, userId, opts, mutation) {
+  if (mutation.repairFenceId !== undefined) {
+    const owner = immutableNeutralOwner(opts.owner);
+    if (owner.userId !== userId) throw Object.assign(new Error("game_stats_owner_unavailable"), { code: "game_stats_owner_unavailable", status: 503 });
+    customBuildEofRepairAuthority(owner, mutation);
+    return owner;
+  }
+  if (opts.owner !== undefined || opts.fenceId !== undefined) throw Object.assign(new Error("game_stats_owner_unavailable"), { code: "game_stats_owner_unavailable", status: 503 });
+  return immutableNeutralOwner(await writer.capture(userId));
 }
 
 /** @param {unknown} err */
@@ -3463,6 +3267,8 @@ function toClassifiedRecent(game) {
 
 module.exports = {
   CustomBuildsService,
+  commitReclassifyRunPipeline,
+  removeReclassifyRunPipeline,
   extractRules,
   CUSTOM_BUILD_PAGE_SIZE,
   CUSTOM_BUILD_MAX_PAGE_SIZE,

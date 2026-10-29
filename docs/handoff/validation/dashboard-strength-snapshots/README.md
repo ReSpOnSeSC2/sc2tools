@@ -1,8 +1,8 @@
 # Dashboard strength snapshots: current local evidence
 
 The [compact summary](current-integrated-verification.json) describes the
-default-off four-route candidate at Source05, separately from delivered main
-`6e663568`. It records local 893 API/43-file results carried only through exact
+default-off four-route slice at Source05, with its original main baseline
+`6e663568` and subsequent PR818 delivery at `4cc33ba2`. It records local 893 API/43-file results carried only through exact
 API-byte equality, plus a separate current 121 web/8-file run, API/web types and
 scoped lint. No result is relabeled as one combined run or a CI count.
 
@@ -15,7 +15,9 @@ Normal integration of actual main retained the tested content tree. Current
 build iUSG passes all 83 original budgets and 40/49/7/4 input/asset/sample
 guards; two current phone/desktop transport cases pass with zero skips or
 retries. Raw failures and subsequent settlement remain separate. The 7,024-file
-pre/post snapshot precedes these documentation-only changes. Exact-head CI,
-deployment and acceptance remain pending release gates. `USER_CACHE_ENABLED` remains off; other mixed dependencies, writer/auth
+pre/post snapshot precedes subsequent documentation-only changes. PR818
+exact-head checks passed, and exact-source Live/Ready deployments received
+scoped read-only desktop acceptance. This does not prove enabled cache hits,
+new mobile behavior, production response instrumentation or savings. `USER_CACHE_ENABLED` remains off; other mixed dependencies, writer/auth
 and common-fleet gates remain. The 197-item roadmap stays unchanged and the
 parent remains partial, with 73 items remaining.

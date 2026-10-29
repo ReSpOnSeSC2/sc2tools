@@ -36,7 +36,7 @@ class DataRepairsService {
     void task.then(() => this.pending.delete(task), () => this.pending.delete(task));
     return { accepted: true, id, kind };
   }
-  /** @param {string} userId @param {string} kind @param {string} id @param {string} field @param {{assert:()=>Promise<void>, id:string, timer:NodeJS.Timeout}} fence */
+  /** @param {string} userId @param {string} kind @param {string} id @param {string} field @param {{assert:()=>Promise<void>, id:string, timer:NodeJS.Timeout,owner?:import('./gameStatsWrites').GameStatsOwner|null}} fence */
   async run(userId, kind, id, field, fence) {
     let success = false;
     try {
@@ -44,7 +44,7 @@ class DataRepairsService {
       if (kind === "opponents") await this.gdpr.rebuildOpponentsAndHealForUser(userId);
       else if (kind === "custom-builds") {
         if (!this.gdpr.customBuilds) throw new Error("custom_builds_unavailable");
-        await this.gdpr.customBuilds.reclassifyAll(userId, { assertLease: fence.assert });
+        await this.gdpr.customBuilds.reclassifyAll(userId, { assertLease: fence.assert, owner: fence.owner, fenceId: fence.id });
       } else {
         if (!this.gdpr.replayFiles) throw new Error("replay_archive_unavailable");
         for await (const game of this.db.games.find({ userId, "replayFile.storedAt": { $exists: true } }, { projection: { gameId: 1, replayFile: 1 } }).batchSize(100)) {
