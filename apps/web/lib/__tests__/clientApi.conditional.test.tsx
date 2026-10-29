@@ -59,10 +59,12 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-describe("useApi actual SWR manual conditional integration", () => {
-  it.each([path, "/v1/summary", "/v1/macro/summary", "/v1/timeseries/mmr",
+const conditionalResources = [path, "/v1/summary", "/v1/macro/summary", "/v1/timeseries/mmr",
     "/v1/timeseries/my-builds", "/v1/timeseries/opp-strategies",
-    "/v1/matchups", "/v1/maps", "/v1/maps/matchups", "/v1/build-vs-strategy"])("%s discovers capability with one ordinary read, retains the next200 and reconstructs304", async resource => {
+    "/v1/matchups", "/v1/maps", "/v1/maps/matchups", "/v1/build-vs-strategy"];
+
+describe("useApi actual SWR manual conditional integration", () => {
+  it.each(conditionalResources)("%s discovers capability with one ordinary read, retains the next200 and reconstructs304", async resource => {
     const fetcher = vi.fn(async (_url: string, init?: RequestInit) =>
       header(init, "If-None-Match") ? same() : response("private"));
     vi.stubGlobal("fetch", fetcher);

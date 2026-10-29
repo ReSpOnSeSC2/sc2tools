@@ -113,16 +113,12 @@ class UserCache {
     Object.assign(sub, { publishGuard, dependent, retained: false });
     try {
       const selected = typeof dependency === "function" ? await prepareDependency(this, dependency) : dependency;
-      if (!sub.active || res.destroyed) return;
+      if (responseUnavailable(sub, res)) return;
       Object.assign(sub, { dependency: selected });
       const snapshot = await this.revisions.snapshot(owner);
-      if (!sub.active || res.destroyed) return;
+      if (responseUnavailable(sub, res)) return;
       if (!this.revisions.sameGeneration(snapshot)) throw this.retired();
-      const stable = this.revisions.current(snapshot);
-      const parts = [owner, route, filters, options, snapshot.rev, snapshot.epoch, snapshot.token.id];
-      if (dependent) parts.push(selected?.keyPart);
-      const encoded = stable && (!dependent || dependencyCurrent(selected)) ? requestKey(parts) : null;
-      const key = encoded !== null && Buffer.byteLength(encoded) <= this.limits.keyBytes ? encoded : null;
+      const key = boundedCapturedKey(this, owner, route, filters, options, snapshot, dependent, selected);
       let entry = key ? this.completed.get(key) : null;
       if (entry && key && entry.expiresAt <= this.now()) { this.evict(key, "expiry"); entry = null; }
       if (entry && key) {
@@ -210,8 +206,7 @@ class UserCache {
       if (!this.revisions.sameGeneration(task.snapshot) || !this.revisions.sameGeneration(latest)) throw this.retired();
       this.reserved -= allowance; reserved = false;
       if (!task.subs.size) return;
-      const keep = !!task.cacheKey && this.revisions.current(task.snapshot) && this.revisions.current(latest)
-        && (!task.dependent || dependencyCurrent(task.dependency));
+      const keep = retainTask(this, task, latest);
       if (task.cacheKey && !keep) this.stats.late_fill += 1;
       if (size > this.limits.entryBytes) {
         this.stats.oversize += 1;
@@ -225,7 +220,7 @@ class UserCache {
         const body = Buffer.from(text), charge = body.length + (task.cacheKey ? Buffer.byteLength(task.cacheKey) : 0)
           + (etag ? Buffer.byteLength(etag) : 0);
         const entry = { owner: task.owner, body, etag, charge, refs: task.subs.size, cached: keep,
-          expiresAt: Math.min(this.now() + this.limits.ttlMs, task.dependent ? task.dependency?.expiresAt ?? 0 : Infinity), freed: false };
+          expiresAt: dependencyExpiry(this, task), freed: false };
         this.bytes += charge;
         if (keep) {
           while (this.completed.size >= this.limits.entries) this.evict(this.completed.keys().next().value || "");
@@ -249,6 +244,29 @@ class UserCache {
     if (sub.queued) { sub.queued = false; this.waiting -= 1; }
     sub.reject = null; sub.resolve(packet);
   }
+}
+/** @param {any} sub @param {any} res */
+function responseUnavailable(sub, res) { return !sub.active || res.destroyed; }
+/** Preserve the exact captured dependency and bounded request-key admission.
+ * @param {UserCache} cache @param {string} owner @param {string} route
+ * @param {object} filters @param {object} options @param {any} snapshot
+ * @param {boolean} dependent
+ * @param {import('../services/strengthCurveSnapshots').CurveDependency|null|undefined} selected */
+function boundedCapturedKey(cache, owner, route, filters, options, snapshot, dependent, selected) {
+  const stable = cache.revisions.current(snapshot);
+  const parts = [owner, route, filters, options, snapshot.rev, snapshot.epoch, snapshot.token.id];
+  if (dependent) parts.push(selected?.keyPart);
+  const encoded = stable && (!dependent || dependencyCurrent(selected)) ? requestKey(parts) : null;
+  return encoded !== null && Buffer.byteLength(encoded) <= cache.limits.keyBytes ? encoded : null;
+}
+/** @param {UserCache} cache @param {any} task @param {any} latest */
+function retainTask(cache, task, latest) {
+  return !!task.cacheKey && cache.revisions.current(task.snapshot) && cache.revisions.current(latest)
+    && (!task.dependent || dependencyCurrent(task.dependency));
+}
+/** @param {UserCache} cache @param {any} task */
+function dependencyExpiry(cache, task) {
+  return Math.min(cache.now() + cache.limits.ttlMs, task.dependent ? task.dependency?.expiresAt ?? 0 : Infinity);
 }
 /** Capture admission survives response abort until actual IO settles.
  * @param {UserCache} cache
