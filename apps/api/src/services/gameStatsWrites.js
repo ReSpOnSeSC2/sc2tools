@@ -170,7 +170,7 @@ class GameStatsWrites {
 }
 
 /** Synchronous preparation precedes admission/floor awaits. Only the named
- * fixed updater can select carry; ordinary callbacks retain full maintenance.
+ * fixed updaters can select carry; ordinary callbacks retain full maintenance.
  * @param {import('../db/connect').DbContext} db @param {GameStatsOwner} owner
  * @param {((session:import('mongodb').ClientSession|undefined)=>Promise<any>)|import('./gameStatsCountNeutral').NeutralMutation} work
  * @param {AuthorityOptions} options */

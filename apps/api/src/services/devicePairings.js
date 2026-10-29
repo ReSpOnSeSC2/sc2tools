@@ -5,8 +5,10 @@ const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { randomDigits, randomToken, sha256 } = require("../util/hash");
 const { stampVersion } = require("../db/schemaVersioning");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
-const { DeviceLiveness, DEVICE_TOUCH_MS } = require("./deviceLiveness");
+const { DeviceLiveness } = require("./deviceLiveness");
 const { deviceCredentialWritesFor } = require("./deviceCredentialWrites");
+const { readDeviceTokenCore, readDeviceAuthSnapshot } = require("./deviceAuthTokenRead");
+const { deviceRestAuthFor } = require("./deviceRestAuth");
 
 const PAIRING_TTL_MS = LIMITS.PAIRING_CODE_TTL_SEC * 1000;
 // One API instance serves the ten-minute code lifetime. A restart safely turns
@@ -53,6 +55,8 @@ class DevicePairingsService {
     this.ipSalt = opts.ipSalt || PROCESS_IP_SALT;
     this.liveness = opts.liveness || new DeviceLiveness();
     this.credentialWrites = opts.credentialWrites || deviceCredentialWritesFor(db, opts.logger);
+    /** @type {import('./deviceAuthReuse').DeviceAuthReuse|null} */
+    this.restAuthReuse = null;
   }
 
   /** Always active, including when the independent chart cache is disabled.
@@ -241,20 +245,20 @@ class DevicePairingsService {
    * @returns {Promise<{userId: string, deviceId: string}|null>}
    */
   async findTokenByHash(tokenHash) {
-    const row = await this.db.deviceTokens.findOne({ tokenHash, revokedAt: null },
-      { projection: { _id: 1, userId: 1, lastSeenAt: 1 } });
-    if (!row) return null;
-    const now = new Date(this.liveness.now()), cutoff = new Date(now.getTime() - DEVICE_TOUCH_MS);
-    if (!(row.lastSeenAt instanceof Date) || !Number.isFinite(row.lastSeenAt.getTime()) || row.lastSeenAt <= cutoff) {
-      // One authoritative lookup per request remains. The stale predicate is
-      // evaluated at the write, so an old REST touch cannot roll back heartbeat.
-      void this.liveness.touch(row.userId, tokenHash, () => this.db.deviceTokens.updateOne({
-        _id: row._id, userId: row.userId, tokenHash, revokedAt: null, $or: [
-          { lastSeenAt: { $lte: cutoff } }, { $expr: { $ne: [{ $type: "$lastSeenAt" }, "date"] } },
-        ],
-      }, { $set: { lastSeenAt: now } }, { upsert: false }));
-    }
-    return { userId: row.userId, deviceId: String(row._id) };
+    return readDeviceTokenCore(this.db.deviceTokens, this.liveness, tokenHash);
+  }
+
+  /** Internal server-owned REST seam; sockets always use findTokenByHash.
+   * Creating an adapter never creates/activates authority. */
+  createRestAuthReuse() {
+    this.restAuthReuse = deviceRestAuthFor(this.db,
+      (hash, options) => this.#readRestSnapshot(hash, options), () => this.liveness.now());
+    return this.restAuthReuse;
+  }
+
+  /** @param {string} hash @param {any} options */
+  #readRestSnapshot(hash, options) {
+    return readDeviceAuthSnapshot(this.db.deviceTokens, this.liveness, hash, options);
   }
 
   /**

@@ -13,6 +13,7 @@ corresponding GitHub Release.
 
 ### Device credential write coordination
 
+- Keep ordinary account and agent requests usable while device-access changes wait for their coordination checks. The optional retained-authentication path remains inactive.
 - Coordinate device pairing, revocation and account erasure through durable database gates. These controls can take a few seconds to finish; uncertain writes keep their reuse scope blocked. Device authentication still reads the database on every request, and the proposed 60-second credential cache remains off.
 
 ### Private home-page replay demo
@@ -22,6 +23,7 @@ corresponding GitHub Release.
 ### History write consistency
 
 - Keep verified account totals and latest-game values consistent when missing opponent ladder MMR or league metadata is filled in. Existing replay ratings and historical dates stay intact.
+- Commit build check-in labels, notes and pending-state changes together with their account statistics revision, preserving verified totals and latest-game values.
 - Preserve verified account totals and latest-game values when recomputing macro scores, with the score change and statistics revision committed together. Older statistics keep the existing history-query fallback.
 - Reuse verified, maintained game totals and latest-game values in account setup and diagnostics. Older or unsupported records keep the existing history queries, and account preferences share the same account read.
 - Maintain game totals and the exact latest-game value during replay ingest, visibility changes, history wipes and restores.
@@ -37,7 +39,8 @@ corresponding GitHub Release.
 
 ### Fixed
 
-- Fit the Macro breakdown timeline and both army compositions into a local overview on phones, with Fit and zoom controls, full-size timeline controls and a compact header. Zoom resets on exit or when opening another game.
+- Keep the Opponents quick-view selection and phone sort menu in sync. Lost to most highlights its loss ranking, All opponents restores newest first, and the phone menu includes Wins and Losses.
+- Keep the mobile Macro timeline and both army compositions at a fixed 50% overview, with full-size timeline controls and a compact header. Remove zoom controls and keep metric choices on one horizontally scrollable row.
 - Show ties and unrecorded results accurately in admin opponent and global player game lists and the selected-game detail. Keep result badges readable on selected rows.
 - Let backup-health checks finish during API shutdown without calling a missing method, so the remaining cleanup can proceed.
 - Wait for Unit Profile's detailed unit history before building its quiz, and offer a retry when that read fails instead of telling established accounts to play more games.

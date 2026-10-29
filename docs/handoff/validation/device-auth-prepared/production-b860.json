@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "status": "DELIVERED_PREPARED_CREDENTIAL_PREREQUISITE_RETENTION_UNACTIVATED",
+  "observedAt": "2026-10-29T00:32:42.544Z",
+  "revision": "b8608d90ead8d09cdf5566a3fe43da09483eeea8",
+  "pr": 813,
+  "testedHead": "6acb0820cacb373227deb5e2efbeb7baaa51d34d",
+  "matchingTestedFreshMergedAndSquashTree": "1a80eb4923eabfae08c056ff2ad82dcbf3c3db1e",
+  "requiredChecks": {
+    "api": {
+      "run": 40792308559,
+      "job": 123180235901,
+      "status": "success"
+    },
+    "vercel": "success",
+    "previewComments": "success"
+  },
+  "deployments": {
+    "api": {
+      "deployment": "dep-dbh95k0473hc73caiug0",
+      "status": "Live",
+      "sourceExact": true
+    },
+    "web": {
+      "deployment": "5TGo9zSji7YK4uAssjAHCzVujvtC",
+      "status": "Ready",
+      "production": true,
+      "sourceExact": true
+    }
+  },
+  "startup": {
+    "protocolVersion": 1,
+    "mode": "prepared",
+    "capability": "causal",
+    "sourceExact": true,
+    "incarnationDigestFormatVerified": true,
+    "rawDigestPublished": false,
+    "proof": "One actual successful startup preparation attempt only; no later incarnation continuity, pre-readiness actor retirement, unknown-work settlement or cache activation proof."
+  },
+  "acceptance": {
+    "settingsLoaded": true,
+    "devicesLoaded": true,
+    "loadingSettled": true,
+    "authOrLoadError": false,
+    "scope": "Actual signed-in desktop read-only Settings and Devices availability. Device/account rows, names, counts, viewport, DOM, URLs and photographs are omitted. No production phone claim."
+  },
+  "actions": {
+    "pair": false,
+    "unpair": false,
+    "label": false,
+    "settingsSave": false,
+    "personalUpload": false,
+    "recompute": false,
+    "quizAnswer": false,
+    "nativeAgentLaunch": false,
+    "providerChange": false,
+    "flagChange": false,
+    "qualification": "No such UI actions were performed. Ordinary background session/liveness activity was not instrumented; no universal no-account-write or no-network claim."
+  },
+  "cleanup": {
+    "ownedTabsClosed": 4,
+    "recordMutationActions": 0,
+    "cookieOrProviderSettingsChanged": false
+  },
+  "retainedMisses": [
+    "An unscoped Devices locator matched two links and performed no click; the observed setup navigation was then scoped.",
+    "The first read-only oracle expected Rename/Revoke wording; actual UI uses Unpair. Only the observer was corrected; no product/data mutation."
+  ],
+  "limits": [
+    "Optional REST adapter remains uncreated/uninjected by the serving app; ordinary REST and sockets keep authoritative lookups. No retained device-token reuse acceptance or savings claim.",
+    "Prepared startup is delivered, but later activation still needs the entire prepared cohort/old-actor and unknown-work settlement, fresh same-incarnation causal binding, independent clock/election/runtime gates and separate expected-incarnation/generation activation review.",
+    "USER_CACHE_ENABLED stays off. No provider/infrastructure/native release/ledger status change."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-rest-reuse-implementation-20261028/production-b860-01/MANIFEST.json",
+      "bytes": 1498,
+      "sha256": "9c3b16446447700a670f656a75e3e9d1ea56a56d353ee101bbf7340c5aa5c13a"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-rest-reuse-implementation-20261028/production-b860-01/acceptance-receipt.json",
+      "bytes": 1243,
+      "sha256": "17029df721ae81e33d531376d0a26e27e1680e124cf5b99dab9fad2067c4b411"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-rest-reuse-implementation-20261028/production-b860-01/deployments.json",
+      "bytes": 616,
+      "sha256": "b2ad3dc9047b16e25a57c4be44a0a0ca0f7da5a0384c890433efa4e0359e2e42"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-rest-reuse-implementation-20261028/production-b860-01/startup-readiness.json",
+      "bytes": 838,
+      "sha256": "24cd8dfb6823352eab43b04bc90e9578b75b8ceb2dee4da87163207c2d7496e5"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-rest-reuse-implementation-20261028/production-b860-01/retained-attempts.json",
+      "bytes": 590,
+      "sha256": "455bc27423a5e5333cee090f387d0e645385d411e99086fba8e16f21439ae171"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-rest-reuse-implementation-20261028/production-b860-01/browser-cleanup.json",
+      "bytes": 318,
+      "sha256": "4b3d3c884fa521a4dddd17ff459f798e96d833c45766737e290149d6c4e2de8f"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-rest-reuse-implementation-20261028/release-6acb-01/exact-head-ci-success.json",
+      "bytes": 1353,
+      "sha256": "09ed22af0b1e5eb3208d933ea28f1d35c6dba28de38459bd872b2d12e6c32839"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-rest-reuse-implementation-20261028/release-6acb-01/fresh-main-merge-proof.json",
+      "bytes": 431,
+      "sha256": "744a5a1ee0fa249ab022c7a5be02a6b0bafcc85f5e5c3b32ce151b8c5921e801"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-rest-reuse-implementation-20261028/release-6acb-01/actual-squash-tree.json",
+      "bytes": 384,
+      "sha256": "a0263e5d2ad0c6fd5f31adbf502ceb1ca085cf52d71b3be0f7e3c7c6d85cece6"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-fixed-mobile-view-20261028/source-ready-02.json",
+      "bytes": 39715,
+      "sha256": "f58f7aac0b48a4ce815143f5c98e47bd4b112903cf4e458da84e2947f26add5c"
+    }
+  ]
+}

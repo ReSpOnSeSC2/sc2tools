@@ -21,7 +21,8 @@ import { OpponentDetailCells, UNSORTED_OPPONENT_COLUMNS } from "./OpponentDetail
 
 const EXTRA_COLUMNS = [{ key: "pulseId", label: "Pulse ID", termId: "pulse-id" }, { key: "mmr", label: "Last MMR", termId: "last-mmr" }, { key: "netMmr", label: "Net MMR", termId: "net-mmr" }, { key: "mmrWon", label: "MMR won", termId: "mmr-won" }, { key: "mmrLost", label: "MMR lost", termId: "mmr-lost" }] as const;
 const MOBILE_SORTS = [
-  { key: "lastPlayed", label: "Last played" }, { key: "games", label: "Games" }, { key: "winRate", label: "Win rate" },
+  { key: "lastPlayed", label: "Last played" }, { key: "games", label: "Games" },
+  { key: "wins", label: "Wins" }, { key: "losses", label: "Losses" }, { key: "winRate", label: "Win rate" },
   { key: "netMmr", label: "Net MMR" }, { key: "name", label: "Name" }, { key: "race", label: "Race" },
   ...OPPONENT_EXTRA_COLUMNS.filter(column => column.key !== "netMmr" && !UNSORTED_OPPONENT_COLUMNS.has(column.key)),
 ];

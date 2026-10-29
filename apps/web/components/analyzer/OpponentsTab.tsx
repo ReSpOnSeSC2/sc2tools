@@ -46,6 +46,7 @@ import {
 import { type Opp, type OpenOpponent, type OpponentExportAction, notePreview } from "./opponents/types";
 
 const LS_MIN_OPP = "analyzer.opponents.minGames";
+type QuickOpponentView = "all" | "regulars" | "week" | "rivals";
 
 /**
  * Opponents tab — full filters, search, sort, drilldown.
@@ -81,7 +82,7 @@ export function OpponentsTab({
   const { filters, dbRev } = useFilters();
   const { search, setSearch, impact: mmrImpactFilter, setImpact: setMmrImpactFilter, hasNotes, setHasNotes, sort, remember } = useOpponentListNavigation(location, controls);
   const rivals = useRivals();
-  const [quick, setQuick] = useState<"all" | "regulars" | "week" | "rivals">("all");
+  const [quick, setQuick] = useState<QuickOpponentView>("all");
   const [columnOverrides, setColumnOverrides] = useLocalStorageState<Partial<OpponentColumns>>("analyzer.opponents.columns", {}, isOpponentColumnOverrides);
   const searchRef = useRef<HTMLInputElement>(null);
   const deferredSearch = useDeferredValue(search);
@@ -352,12 +353,8 @@ export function OpponentsTab({
       />
 
       <RivalriesStrip rows={items} onOpen={open} incomplete={isLoading || isLoadingMore || hitMaxPages || !!error} recentAvailable={summary.data?.recentComplete === true} />
-      <div className="flex flex-wrap items-center gap-2" aria-label="Quick opponent views">
-        <Button variant={quick === "all" ? "primary" : "secondary"} aria-pressed={quick === "all"} onClick={() => setQuick("all")}>All opponents</Button>
-        <Button variant={quick === "regulars" ? "primary" : "secondary"} aria-pressed={quick === "regulars"} onClick={() => setQuick(quick === "regulars" ? "all" : "regulars")}>Regulars: 5+ games</Button>
-        <Button variant={quick === "week" ? "primary" : "secondary"} aria-pressed={quick === "week"} onClick={() => setQuick(quick === "week" ? "all" : "week")}>Played this week</Button>
-        <Button variant="secondary" onClick={() => { setQuick("all"); sort.setSortExplicit("losses", "desc"); }}>Lost to most</Button>
-        <Button variant={quick === "rivals" ? "primary" : "secondary"} aria-pressed={quick === "rivals"} onClick={() => setQuick(quick === "rivals" ? "all" : "rivals")}>Rivals ({rivals.keys.length})</Button>
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quick opponent views">
+        <OpponentQuickViews quick={quick} onChange={setQuick} sort={sort} rivalCount={rivals.keys.length} />
         {!onExportAction ? <Button variant="secondary" disabled={exportDisabled} title={`Export all ${items.length.toLocaleString()} matching ${groupByPlayer ? "players" : "accounts"}, including rows outside the render window`} onClick={exportRows}>Export CSV</Button> : null}
         <div className="ml-auto"><OpponentColumnPicker columns={columns} onChange={(key, checked) => setColumnOverrides({ ...columnOverrides, [key]: checked })} onReset={() => setColumnOverrides({})} /></div>
       </div>
@@ -459,6 +456,36 @@ export function OpponentsTab({
       )}
     </div>
   );
+}
+
+function OpponentQuickViews({ quick, onChange, sort, rivalCount }: {
+  quick: QuickOpponentView; onChange: (view: QuickOpponentView) => void;
+  sort: Pick<OpponentListControls["sort"], "sortBy" | "sortDir" | "setSortExplicit">; rivalCount: number;
+}) {
+  const lostToMost = quick === "all" && sort.sortBy === "losses" && sort.sortDir === "desc";
+  const allSelected = quick === "all" && !lostToMost;
+  return <>
+    <Button variant={allSelected ? "primary" : "secondary"} aria-pressed={allSelected}
+      onClick={() => { onChange("all"); sort.setSortExplicit("lastPlayed", "desc"); }}>
+      All opponents
+    </Button>
+    <Button variant={quick === "regulars" ? "primary" : "secondary"} aria-pressed={quick === "regulars"}
+      onClick={() => onChange(quick === "regulars" ? "all" : "regulars")}>
+      Regulars: 5+ games
+    </Button>
+    <Button variant={quick === "week" ? "primary" : "secondary"} aria-pressed={quick === "week"}
+      onClick={() => onChange(quick === "week" ? "all" : "week")}>
+      Played this week
+    </Button>
+    <Button variant={lostToMost ? "primary" : "secondary"} aria-pressed={lostToMost}
+      onClick={() => { onChange("all"); sort.setSortExplicit("losses", "desc"); }}>
+      Lost to most
+    </Button>
+    <Button variant={quick === "rivals" ? "primary" : "secondary"} aria-pressed={quick === "rivals"}
+      onClick={() => onChange(quick === "rivals" ? "all" : "rivals")}>
+      Rivals ({rivalCount})
+    </Button>
+  </>;
 }
 
 function matchesMmrImpactFilter(
