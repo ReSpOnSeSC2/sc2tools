@@ -56,6 +56,26 @@ function captureGuideSample(guideSamples, userId, game, customTag, created) {
   }
 }
 
+/** Await the check-in decision without making stored ingest retryable.
+ * @param {import('../services/types').BuildIntentBinder} binder
+ * @param {import('express').Request} req @param {string} userId
+ * @param {Record<string,any>} game
+ * @param {Parameters<import('../services/types').BuildIntentBinder['bindIngestedGame']>[2]} options
+ */
+async function bindIngestedBuildIntent(binder, req, userId, game, options) {
+  try {
+    await binder.bindIngestedGame(userId, game, options);
+  } catch (err) {
+    if (req.log) {
+      const e = /** @type {{ code?: unknown, name?: unknown }} */ (err);
+      req.log.warn(
+        { userId, errName: String(e && (e.code || e.name) || "error") },
+        "ingest_build_intent_bind_failed",
+      );
+    }
+  }
+}
+
 /**
  * /v1/games — list, get, exists, ingest from the agent or a browser.
  *
@@ -835,20 +855,11 @@ function buildGamesRouter(deps) {
         // the agent's follow-up read sees it; a failure never makes the game
         // retryable.
         if (deps.buildIntents) {
-          try {
-            await deps.buildIntents.bindIngestedGame(userId, game, {
-              created,
-              spatial: storedSpatial,
-            });
-          } catch (err) {
-            if (req.log) {
-              const e = /** @type {{ code?: unknown, name?: unknown }} */ (err);
-              req.log.warn(
-                { userId, errName: String(e && (e.code || e.name) || "error") },
-                "ingest_build_intent_bind_failed",
-              );
-            }
-          }
+          await bindIngestedBuildIntent(deps.buildIntents, req, userId, game, {
+            created,
+            spatial: storedSpatial,
+            statsOwner,
+          });
         }
         captureGuideSample(deps.guideSamples, userId, game, customTag, created);
         const outcome = { gameId: game.gameId, created };

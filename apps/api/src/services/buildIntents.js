@@ -162,7 +162,7 @@ class BuildIntentsService {
   /**
    * @param {string} userId
    * @param {Record<string, any>} game
-   * @param {{ created: boolean, spatial?: unknown }} opts
+   * @param {{ created: boolean, spatial?: unknown, statsOwner?:import('./gameStatsWrites').GameStatsOwner }} opts
    */
   bindIngestedGame(userId, game, opts) {
     return this.binder.bindIngestedGame(userId, game, opts);
