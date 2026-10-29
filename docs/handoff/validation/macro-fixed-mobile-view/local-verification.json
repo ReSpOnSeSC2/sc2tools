@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "status": "LOCAL_PASS_EXACT_HEAD_CI_PASS_PRODUCTION_DESKTOP_ACCEPTED",
+  "atUtc": "2026-10-29T03:00:44.627Z",
+  "head": "5d5bbc038ca6026723d785f9d8b697741d7ea82d",
+  "unit": {
+    "passed": 132,
+    "files": 13,
+    "workers": 1,
+    "skipped": 0
+  },
+  "wholeWebTypes": true,
+  "ownedStrictLint": {
+    "files": 9,
+    "errors": 0,
+    "warnings": 0
+  },
+  "cleanCommitCarryover": {
+    "webInputs": 3535,
+    "qualification": "Exact input equality; no redundant unit rerun on clean commit"
+  },
+  "build": {
+    "BUILD_ID": "DUGkQ_YgZ9b_-KFYhgoTJ",
+    "budgets": 83,
+    "fullSourceFiles": 6994,
+    "canonicalSources": 40,
+    "activeAssets": 7,
+    "strictSamples": 4
+  },
+  "browser": {
+    "cases": 4,
+    "retries": 0,
+    "fullAxeScans": 16,
+    "violations": 0,
+    "excludedRules": 0,
+    "physicalTargets": 236,
+    "productInputs": 311,
+    "captures": 8
+  },
+  "cleanup": {
+    "browserObservedIdentities": 23,
+    "currentOwned": 0,
+    "currentUnknown": 0,
+    "listeners": 0,
+    "historicalUnknowns": 2,
+    "directlySettled": 2,
+    "kills": 0
+  },
+  "limits": [
+    "LOCAL synthetic Next/Clerk/GET fixture; no actual Next router or production phone claim.",
+    "Pre-keyboard 126/light/Build02/diagnostic evidence remains historical.",
+    "Earlier source03 132 pass with types3 errors/lint1 warning remains; current source04 light checks passed all three.",
+    "First postbrowser asset invocation failed argument admission; corrected argument-only call passed.",
+    "Metadata proposals only, prepared after completed full-source guards; no tested source changed or ledger closure.",
+    "First exact-head web job cancellation remains preserved; unchanged-head retry passed. This establishes no specific root cause for the earlier runner stall."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-fixed-mobile-view-20261028/source-ready-05.json",
+      "bytes": 44863,
+      "sha256": "29cc1d5806568f0fc533b1245ec60cb3bdeb267fc8e85e072cbcee10ebf3ffd5"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-fixed-mobile-view-20261028/light-checks-04/LOCAL-READY-01.json",
+      "bytes": 5369,
+      "sha256": "9dc463ab2defcfc015d05e4bc0298af7bdd9e21d1f3e5bc465519c99d43c86f9"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-fixed-mobile-view-20261028/production-build-03/VERIFIED.json",
+      "bytes": 20423,
+      "sha256": "a717ac488cc814b9bf079425336012ed52c9f34c084ff8568e972a9acf1e6427"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-fixed-mobile-view-20261028/ui-browser-03/VERIFIED-01.json",
+      "bytes": 17367,
+      "sha256": "0dcb3a5ac5ad4b8a0fa20aa15dc5b1df2735939ad3d907c67d404196109975fb"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-fixed-mobile-view-20261028/ui-browser-03/INDEPENDENT-FINAL-BINDING-01.json",
+      "bytes": 2491,
+      "sha256": "57be862fddfb43ddbff146b7c649096ad4eb9e0ea41f8f1c92e0b0059cda6afe"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-fixed-mobile-view-20261028/ci-5d5-cancelled-web-01/independent-source-triage-01.json",
+      "bytes": 5605,
+      "sha256": "2da6d14efcce6b44b5b08256648b4feba0f1e9650f0a747d73c78c9b8d26cb43"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-fixed-mobile-view-20261028/release-5d5-01/exact-head-ci-success.json",
+      "bytes": 1717,
+      "sha256": "b43c0364ad6b0fc962dfd4a4915d535fcf4cef85ec08825533ceb218b293a5a4"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-fixed-mobile-view-20261028/release-5d5-01/codex-web-success.json",
+      "bytes": 167207,
+      "sha256": "b6ac3fb7bea1f3892c96ead1df9548742966661e2d2f4fa7d7e7798f2507f050"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-fixed-mobile-view-20261028/release-5d5-01/codex-responsive-success.json",
+      "bytes": 125139,
+      "sha256": "b082d9fea88ac91d9088145e0ef3349b83c8b0ebf1439c8f390f443be5a0f507"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-fixed-mobile-view-20261028/release-5d5-01/fresh-main-merge-proof.json",
+      "bytes": 293,
+      "sha256": "639c8a030810694e6898710a928d779c9f151ef10f9c84328781bae0310cce1e"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/macro-fixed-mobile-view-20261028/release-5d5-01/actual-squash-tree.json",
+      "bytes": 231,
+      "sha256": "fadab5ff991cc2de4b043ef1c69320e92c892b17b03eab054b1165f0753810ca"
+    }
+  ],
+  "deliveredRevision": "0b90c1b8a3b96f0b748da539b291f7878574023d",
+  "CI": {
+    "testedHead": "5d5bbc038ca6026723d785f9d8b697741d7ea82d",
+    "web": {
+      "jobId": 123226561049,
+      "passed": 10089,
+      "skipped": 1,
+      "filesPassed": 1035,
+      "filesSkipped": 1
+    },
+    "responsive": {
+      "jobId": 123226562197,
+      "passed": 591,
+      "skipped": 92
+    },
+    "skipQualification": "Existing skips retained; no skip/assertion/deadline/worker changes for the successful exact-head retry."
+  },
+  "production": {
+    "receipt": "production-0b90.json",
+    "actualViewport": "1920x1024 desktop",
+    "livePhone": false
+  }
+}

@@ -2,6 +2,7 @@
 
 const { maintainGameStats, immutableSelection, PROTOCOL_VERSION } = require("./gameStatsMaintenance");
 const { statsReadFloorFor } = require("./gameStatsReadFloor");
+const { immutableNeutralMutation, immutableNeutralOwner, applyNeutralMutation, carryUnchangedGameStats } = require("./gameStatsCountNeutral");
 
 const MAX_ACTIVE = 8;
 const DELETE_BATCH = 100;
@@ -73,16 +74,22 @@ class GameStatsWrites {
       ...(options.fenceId ? { "_gdprMutation.id": options.fenceId } : { _gdprMutation: { $exists: false } }) };
   }
 
-  /** @template T @param {GameStatsOwner} owner
+  /** @template T @overload @param {GameStatsOwner} owner
    * @param {(session:import('mongodb').ClientSession|undefined)=>Promise<T>} work
    * @param {AuthorityOptions} [options] @returns {Promise<T>} */
+  /** @overload @param {GameStatsOwner} owner
+   * @param {import('./gameStatsCountNeutral').NeutralMutation} work
+   * @returns {Promise<import('mongodb').UpdateResult>} */
+  /** @template T @param {GameStatsOwner} owner
+   * @param {((session:import('mongodb').ClientSession|undefined)=>Promise<T>)|import('./gameStatsCountNeutral').NeutralMutation} work
+   * @param {AuthorityOptions} [options] @returns {Promise<any>} */
   write(owner, work, options = {}) {
     if (this.stopped) return Promise.reject(failure("game_stats_writer_stopping"));
     if (this.pending.size >= MAX_ACTIVE) return Promise.reject(failure("game_stats_writer_busy"));
-    let selection;
-    try { selection = owner.compatibility ? null : immutableSelection(options.selection); }
+    let operation;
+    try { operation = prepareOperation(this.db, owner, work, options); }
     catch (error) { return Promise.reject(error); }
-    const task = this.#perform(owner, work, options, selection);
+    const task = this.#perform(operation.owner, operation.work, operation.options, operation.selection, operation.mutation);
     this.pending.add(task);
     void task.then(() => this.pending.delete(task), () => this.pending.delete(task));
     return task;
@@ -90,8 +97,9 @@ class GameStatsWrites {
 
   /** @template T @param {GameStatsOwner} owner
    * @param {(session:import('mongodb').ClientSession|undefined)=>Promise<T>} work
-   * @param {AuthorityOptions} options @param {Readonly<Record<string,any>>|null} selection @returns {Promise<T>} */
-  async #perform(owner, work, options, selection) {
+   * @param {AuthorityOptions} options @param {Readonly<Record<string,any>>|null} selection
+   * @param {Readonly<import('./gameStatsCountNeutral').NeutralMutation>|null} mutation @returns {Promise<T>} */
+  async #perform(owner, work, options, selection, mutation) {
     if (owner.compatibility) {
       // Explicit standalone/test compatibility does not mint a valid revision.
       // Existing retained state is durably retired before legacy work. Unknown
@@ -114,8 +122,9 @@ class GameStatsWrites {
     const session = this.db.client.startSession({ causalConsistency: true });
     session.advanceOperationTime(floor);
     try {
-      return /** @type {T} */ (await session.withTransaction(() => maintainGameStats(this.db, owner,
-        this.authority(owner, options), /** @type {Readonly<Record<string,any>>} */ (selection), work, session),
+      return /** @type {T} */ (await session.withTransaction(/** @returns {Promise<T|import('mongodb').UpdateResult>} */ () => mutation
+        ? carryUnchangedGameStats(this.db, owner, mutation, session)
+        : maintainGameStats(this.db, owner, this.authority(owner, options), /** @type {Readonly<Record<string,any>>} */ (selection), work, session),
       { readConcern: { level: "snapshot" }, writeConcern: { w: "majority", j: true, wtimeoutMS: 5000 },
         readPreference: "primary", maxCommitTimeMS: 5000, timeoutMS: 10_000 }));
     } finally {
@@ -158,6 +167,19 @@ class GameStatsWrites {
     this.stopped = true;
     await Promise.allSettled([...this.pending]);
   }
+}
+
+/** Synchronous preparation precedes admission/floor awaits. Only the named
+ * fixed updaters can select carry; ordinary callbacks retain full maintenance.
+ * @param {import('../db/connect').DbContext} db @param {GameStatsOwner} owner
+ * @param {((session:import('mongodb').ClientSession|undefined)=>Promise<any>)|import('./gameStatsCountNeutral').NeutralMutation} work
+ * @param {AuthorityOptions} options */
+function prepareOperation(db, owner, work, options) {
+  if (typeof work === "function") return { owner, work, options,
+    selection: owner.compatibility ? null : immutableSelection(options.selection), mutation: null };
+  const mutation = immutableNeutralMutation(work, options), captured = immutableNeutralOwner(owner);
+  return { owner: captured, options: Object.freeze({}), selection: null, mutation,
+    work: (/** @type {import('mongodb').ClientSession|undefined} */ session) => applyNeutralMutation(db, captured, mutation, session) };
 }
 
 /** @param {import('../db/connect').DbContext} db @param {any} [logger] */

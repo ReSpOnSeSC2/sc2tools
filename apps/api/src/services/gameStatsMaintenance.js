@@ -75,6 +75,35 @@ function canRetain(stats) {
     return isDeepStrictEqual(stats.latest, BSON.deserialize(BSON.serialize({ value: stats.latest })).value);
   } catch { return false; }
 }
+/** @param {number} total */
+function safeTotal(total) { return Number.isSafeInteger(total) && total >= 0; }
+
+/** Internal session-aware owner-first body. Its caller owns the admitted,
+ * causally bounded transaction; this never starts a nested transaction.
+ * @template T @param {import('../db/connect').DbContext} db
+ * @param {import('./gameStatsWrites').GameStatsOwner} owner
+ * @param {Record<string,any>} authority
+ * @param {(before:any,revision:string)=>Promise<T>} work
+ * @param {import('mongodb').ClientSession} session @returns {Promise<T>} */
+async function withGameStatsAuthority(db, owner, authority, work, session) {
+  const revision = randomUUID();
+  const before = await db.users.findOneAndUpdate({ ...authority, userId: owner.userId, _id: owner.id }, {
+    $set: { gameStatsProtocolVersion: PROTOCOL_VERSION, gameStatsRevision: revision, gameStatsWriterStatus: "transactional" },
+    $unset: { gameStats: "", gameStatsMaintenance: "" },
+  }, { session, upsert: false, returnDocument: "before", includeResultMetadata: false,
+    projection: { _id: 1, userId: 1, _gdprMutation: 1, gameStats: 1, gameStatsRevision: 1, gameStatsProtocolVersion: 1, gameStatsWriterStatus: 1, gameStatsMutationEpoch: 1, gameStatsMaintenance: 1 } });
+  if (!before) throw failure("game_stats_authority_changed");
+  return work(before, revision);
+}
+
+/** Final publication is pinned to the same owner, epoch, fence and UUID.
+ * @param {import('../db/connect').DbContext} db @param {Record<string,any>} authority
+ * @param {string} revision @param {Record<string,any>} update
+ * @param {import('mongodb').ClientSession} session */
+async function saveGameStats(db, authority, revision, update, session) {
+  const saved = await db.users.updateOne({ ...authority, gameStatsRevision: revision, gameStatsProtocolVersion: PROTOCOL_VERSION }, update, { session, upsert: false });
+  if (saved.matchedCount !== 1) throw failure("game_stats_authority_changed");
+}
 
 /** All commands use the existing transaction. Work is prepared Mongo-only
  * mutation; external effects/cursors/notifications stay outside retries.
@@ -84,37 +113,31 @@ function canRetain(stats) {
  * @param {(session:import('mongodb').ClientSession)=>Promise<T>} work
  * @param {import('mongodb').ClientSession} session @returns {Promise<T>} */
 async function maintainGameStats(db, owner, authority, selection, work, session) {
-  const revision = randomUUID();
-  const before = await db.users.findOneAndUpdate(authority, {
-    $set: { gameStatsProtocolVersion: PROTOCOL_VERSION, gameStatsRevision: revision, gameStatsWriterStatus: "transactional" },
-    $unset: { gameStats: "", gameStatsMaintenance: "" },
-  }, { session, upsert: false, returnDocument: "before", includeResultMetadata: false,
-    projection: { _id: 1, gameStats: 1, gameStatsRevision: 1, gameStatsProtocolVersion: 1, gameStatsWriterStatus: 1, gameStatsMutationEpoch: 1, gameStatsMaintenance: 1 } });
-  if (!before) throw failure("game_stats_authority_changed");
-  const match = statsMatch(owner.userId), subset = { $and: [match, selection] };
-  const previous = qualifiedTotal(before, owner);
-  const beforeCount = previous === null ? null : await db.games.countDocuments(subset, { session });
-  const result = await work(session);
-  let total = previous === null ? await db.games.countDocuments(match, { session })
-    : previous + await db.games.countDocuments(subset, { session }) - /** @type {number} */ (beforeCount);
-  if (!Number.isSafeInteger(total) || total < 0) total = await db.games.countDocuments(match, { session });
-  const latest = await latestValue(db.games, match, session);
-  if (total === 0 && latest !== null) total = await db.games.countDocuments(match, { session });
-  const metadata = { version: MAINTENANCE_VERSION, ownerId: owner.id, revision,
-    ...(owner.epoch === undefined ? {} : { epoch: owner.epoch }), status: latestStatus(latest) };
-  const stats = { total, latest };
-  const retain = Number.isSafeInteger(total) && total >= 0 && canRetain(stats);
-  // Unsupported raw latest stays raw. Its status cannot qualify a future reader.
-  // Oversize/unserializable data retires retention; authoritative reads still
-  // return their exact old answer, never a normalized placeholder.
-  const update = retain ? { $set: { gameStats: stats, gameStatsMaintenance: metadata } }
-    : { $set: { gameStatsMaintenance: { ...metadata, status: "unretained" } }, $unset: { gameStats: "" } };
-  const saved = await db.users.updateOne({ ...authority, gameStatsRevision: revision, gameStatsProtocolVersion: PROTOCOL_VERSION }, update, { session, upsert: false });
-  if (saved.matchedCount !== 1) throw failure("game_stats_authority_changed");
-  return result;
+  return withGameStatsAuthority(db, owner, authority, async (before, revision) => {
+    const match = statsMatch(owner.userId), subset = { $and: [match, selection] };
+    const previous = qualifiedTotal(before, owner);
+    const beforeCount = previous === null ? null : await db.games.countDocuments(subset, { session });
+    const result = await work(session);
+    let total = previous === null ? await db.games.countDocuments(match, { session })
+      : previous + await db.games.countDocuments(subset, { session }) - /** @type {number} */ (beforeCount);
+    if (!safeTotal(total)) total = await db.games.countDocuments(match, { session });
+    const latest = await latestValue(db.games, match, session);
+    if (total === 0 && latest !== null) total = await db.games.countDocuments(match, { session });
+    const metadata = { version: MAINTENANCE_VERSION, ownerId: owner.id, revision,
+      ...(owner.epoch === undefined ? {} : { epoch: owner.epoch }), status: latestStatus(latest) };
+    const stats = { total, latest };
+    const retain = safeTotal(total) && canRetain(stats);
+    // Unsupported raw latest stays raw. Its status cannot qualify a future reader.
+    // Oversize/unserializable data retires retention; authoritative reads still
+    // return their exact old answer, never a normalized placeholder.
+    const update = retain ? { $set: { gameStats: stats, gameStatsMaintenance: metadata } }
+      : { $set: { gameStatsMaintenance: { ...metadata, status: "unretained" } }, $unset: { gameStats: "" } };
+    await saveGameStats(db, authority, revision, update, session);
+    return result;
+  }, session);
 }
 /** @param {string} code */
 function failure(code) { return Object.assign(new Error(code), { code, status: 503 }); }
 
 module.exports = { maintainGameStats, immutableSelection, statsMatch, qualifiedTotal, latestValue,
-  PROTOCOL_VERSION, MAINTENANCE_VERSION, MAX_SELECTION, MAX_STATS_BYTES };
+  withGameStatsAuthority, saveGameStats, PROTOCOL_VERSION, MAINTENANCE_VERSION, MAX_SELECTION, MAX_STATS_BYTES };

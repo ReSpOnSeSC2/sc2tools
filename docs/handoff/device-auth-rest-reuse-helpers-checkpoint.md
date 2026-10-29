@@ -1,11 +1,27 @@
 # Device REST reuse helpers — unwired preparation
 
+## Prepared prerequisite delivered; retained adapter remains unwired
+
+PR813 is delivered at `b8608d90`: exact-head checks/tree equality, actual
+Ready/Live source, one prepared/causal startup attempt and read-only desktop
+Settings/Devices acceptance are recorded in
+[the sanitized receipt](validation/device-auth-prepared/production-b860.json).
+The shared private lookup core and readiness wiring are delivered. The serving
+app still does not create or inject the optional retained REST adapter; REST
+and sockets retain authoritative lookups. No cache activation occurred.
+
+This startup observation is not continuing-incarnation, all-writer retirement
+or unknown-work settlement proof. Those cutover/runtime gates and separate
+activation review remain open. The original helper-only/local results below
+remain historical at their stated source boundaries; no native release or
+ledger change is implied.
+
 The original `codex/device-auth-rest-reuse-helpers` slice, preserved at
 `c3d7a592`, was based on tested Auth `e0c47b9c`. It left existing production
 modules untouched and had no production imports. The helper behavior and
 59-case verification below are historical evidence for that slice.
 
-The current prepared-readiness candidate was integrated with passed main
+The historical prepared-readiness candidate was integrated with passed main
 `dfe4d623` at `98b9cfff`. Readiness now imports the deadline helper and Pairings
 shares the authoritative lookup/touch core. The optional retained REST adapter
 is still not created or injected by the serving app; REST and sockets use

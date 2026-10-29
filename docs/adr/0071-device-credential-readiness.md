@@ -1,9 +1,15 @@
 # ADR 0071: Prepared credential authority and optional REST reuse
 
-Status: source candidate; no retained authentication activation.
+Status: prepared writer/readiness prerequisite delivered in PR813 (`b8608d90`); retained authentication remains unactivated.
+
+Actual Ready/Live source and one prepared/causal startup attempt are accepted
+in [the sanitized delivery receipt](../handoff/validation/device-auth-prepared/production-b860.json).
+That attempt proves neither ongoing incarnation nor old-actor/unknown-work
+settlement. Ordinary REST/socket authentication remains authoritative and the
+optional retained adapter is still uninjected.
 
 The deployed credential writers coordinate issuance, revocation and erasure.
-The approved read-only observation found their authority absent. Its legacy
+The earlier approved read-only observation found their authority absent. Its legacy
 retirement inference and causal majority read establish neither an incarnation
 nor settlement of current handlers paused before credential enrollment.
 
@@ -42,7 +48,7 @@ renamed as fallback. The app does not inject this adapter in the prerequisite
 release, so prepared metadata adds no grant probes to ordinary authentication.
 No code creates active mode or clears uncertainty.
 
-Before activation, deploy and accept the prepared cohort, retire/drain every
+Before activation, qualify the entire prepared serving cohort, retire/drain every
 prior pre-readiness actor (including df5-derived releases) and actual lifetimes
 (or bind explicitly qualified provider retirement
 and settlement), then freshly read that same prepared incarnation at a causal
