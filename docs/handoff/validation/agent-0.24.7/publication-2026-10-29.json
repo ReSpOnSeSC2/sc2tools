@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "publicationStatus": "published-unsigned-and-latest",
+  "publishedAt": "2026-10-29T12:02:09Z",
+  "release": {
+    "id": 427506713,
+    "url": "https://github.com/ReSpOnSeSC2/sc2tools/releases/tag/agent-v0.24.7",
+    "tag": "agent-v0.24.7",
+    "draft": false,
+    "prerelease": false,
+    "publishedAt": "2026-10-29T12:02:09Z",
+    "latestId": 427506713,
+    "latestTag": "agent-v0.24.7",
+    "publicAnonymousLatestStatus": 200
+  },
+  "assets": [
+    {
+      "id": 687504990,
+      "name": "SC2ToolsAgent-Setup-0.24.7.exe",
+      "size": 231728420,
+      "digest": "sha256:c404cd377da5ed8bb35b3f352537d0af9e134bfdd5c8a1e3092aa965e450d76c",
+      "url": "https://github.com/ReSpOnSeSC2/sc2tools/releases/download/agent-v0.24.7/SC2ToolsAgent-Setup-0.24.7.exe"
+    },
+    {
+      "id": 687504994,
+      "name": "SC2ToolsAgent-Setup-0.24.7.exe.sha256",
+      "size": 98,
+      "digest": "sha256:acd47349b73c6b56406585858f8cb9b4ee3db640697ea3e32cf692f8cc6ef1a2",
+      "url": "https://github.com/ReSpOnSeSC2/sc2tools/releases/download/agent-v0.24.7/SC2ToolsAgent-Setup-0.24.7.exe.sha256"
+    }
+  ],
+  "signature": {
+    "status": "NotSigned",
+    "signerPresent": false,
+    "timestampPresent": false
+  },
+  "provenance": {
+    "manualRun": 40823286314,
+    "manualJob": 123280448387,
+    "artifact": 12875986876,
+    "manualBuildSource": "0eb06c18e5d5743e7230e4b4db41553fca6e363f",
+    "existingTagCommit": "ae21f7a284176112021cdcb80781ca7613fc5032",
+    "tagObjectUnchanged": "6f4aa9b29df8c30a3125fed8f9c861d8b905b22d",
+    "workflowBlob": "81a69f3037c2c81966d7372a04fb541a162ea4d2",
+    "packageInputsEqualTag": true,
+    "zipSha256": "559d29ab59b8b9b1b14328050e0a29aa0be040b1cb51d520724b154e51829744"
+  },
+  "verification": {
+    "publicLatestHttpStatus": 200,
+    "publicChecksumHttpStatus": 200,
+    "checksumBytes": 98,
+    "checksumSha256": "acd47349b73c6b56406585858f8cb9b4ee3db640697ea3e32cf692f8cc6ef1a2",
+    "installerExecuted": false
+  },
+  "cleanup": {
+    "cliChildren": 8,
+    "allExit0": true,
+    "scopedPidAndDescendantCandidates": 0,
+    "listeners": 0,
+    "kills": 0,
+    "outerCommandExit0": true
+  },
+  "publicationReceiptSha256": "acb8a38b3cb3a5a37dfa21e1df935759ce520c26fa859822f2b819b278a9f95c",
+  "boundaries": [
+    "Current unsigned publication explicitly authorized; existing tag and signing workflow preserved.",
+    "Installer/update/live capture/session/provider acceptance not performed by this publication.",
+    "Future SignPath setup is an owner-guided step after program updates; no provider/secret settings changed.",
+    "No whole roadmap item or program completion is asserted."
+  ],
+  "applicationUpdateFeed": {
+    "githubPublicLatest": "0.24.7",
+    "apiUpdaterFeedVerified": true,
+    "apiLatest": "0.24.7",
+    "apiInstallerSha256": "c404cd377da5ed8bb35b3f352537d0af9e134bfdd5c8a1e3092aa965e450d76c",
+    "websiteObservedVersion": "0.24.6",
+    "websiteCurrentVersionAcceptance": "pending",
+    "websiteOrdinaryObservations": [
+      {
+        "atUtc": "2026-10-29T12:57:40.277Z",
+        "version": "0.24.6",
+        "cache": "STALE",
+        "ageSeconds": 969,
+        "date": "Thu, 29 Oct 2026 12:41:31 GMT"
+      },
+      {
+        "atUtc": "2026-10-29T12:59:31.173Z",
+        "version": "0.24.6",
+        "cache": "HIT",
+        "ageSeconds": 109,
+        "date": "Thu, 29 Oct 2026 12:57:41 GMT"
+      }
+    ],
+    "websiteBodyUnchanged": true,
+    "installedUpdaterUptakeVerified": false,
+    "causeQualification": "Outer revalidation refilled old content; inner Next cache/regeneration freshness is unproved. No source-selection, browser-only or simple edge-TTL cause established.",
+    "diagnosticReceiptSha256": "412019e02d5ee97f5211bf8ecab87879b22ce5118e30626a3a57ec4dba1cbdd3"
+  }
+}
