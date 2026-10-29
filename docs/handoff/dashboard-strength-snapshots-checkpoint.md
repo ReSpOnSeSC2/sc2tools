@@ -1,6 +1,6 @@
-# Dashboard strength snapshots: default-off candidate
+# Dashboard strength snapshots: delivered default-off slice
 
-This candidate covers four direct responses: `/v1/matchups`, `/v1/maps`,
+PR818 delivers four direct responses: `/v1/matchups`, `/v1/maps`,
 `/v1/maps/matchups` and `/v1/build-vs-strategy`. It preserves the first eleven
 conditional-client capability positions and appends positions 11–14.
 `USER_CACHE_ENABLED` remains off. No activation, production saving or completion
@@ -55,7 +55,21 @@ current CSS files and three admitted fonts. Source/assets postguards passed;
 final strict cleanup settled 14 identities with no current or historical
 candidate, orphan, listener or kill. These fixtures use explicit synthetic
 HTTP/auth boundaries; they do not prove an enabled production cache or savings.
-Exact-head CI, deployment and relevant acceptance remain release gates.
+PR818 passed all required checks at 31abb9e6. Squash main 4cc33ba2 retained
+tested tree 1dfd84bbcd1660840a4b1c374e9449b1d8c24173. The API is Live and the
+web deployment is Ready/Production at that exact revision. Scoped read-only
+desktop acceptance loaded Strategies rating/expected-win/calibration content
+and Maps pool/matchup/win-rate content while retaining existing filters.
+Cache status was Off and activity figures hidden. No record, credential,
+setting, flag, provider or job control was changed. This is not new mobile,
+production response instrumentation, cache-hit or savings proof.
+
+Separately, the normal new-deployment guide-video job recovered from the
+earlier feed HTTP404; its previous error remains visible. No manual rerun or
+configuration change was needed. This operational observation is separate
+from chart behavior. Sanitized delivery facts and the source receipt hash are
+included in the compact summary; private DOM, images and account values stay
+in the validation cache.
 
 The matchup time series remains excluded until its inner joins carry the same
 owner and dependency context. Opponent/private-note/identity overlays, custom

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "date": "2026-10-28",
   "sourceRevision": "477298dd7c397af2baaa79d19736ae43d1a4510d",
-  "sourceQualification": "All 197 original entries reconciled at merged source477298dd. Independent audits close42 formerly unknown items and retain18 concrete partial/open requirements. This source audit does not assert fresh manual or native delivery acceptance of every completed ancestor. The original all197 source-audit boundary remains unchanged. Later implementation PR803/ccb598 and actual scoped production PR802/263 evidence are reconciled below; this does not claim all197 items were rerun at either revision. Actual scoped production803 acceptance is now reconciled; the later writer prerequisite910a1e4 does not complete its parent performance item. Scoped later PR808 retirement at76 and actual productionf213 acceptance close only landing-demo-in-browser. All477/full197 historical source-audit and earlier receipt qualifications remain; no fresh all197 runtime/deployment proof. Scoped later PR810/b8ef1b94 delivery qualifies only the maintained-account-reader portion of faster-dashboards. Its status remains partial, all197 audit boundary477 and canonical identities stay unchanged, and no fresh all197 runtime/deployment or live query-path proof is implied. Later scoped PR815/PR817 writes and current default-off four-route source are reconciled only within faster-dashboards, which remains partial. The original all197 audit boundary and requirement identities remain unchanged.",
+  "sourceQualification": "All 197 original entries reconciled at merged source477298dd. Independent audits close42 formerly unknown items and retain18 concrete partial/open requirements. This source audit does not assert fresh manual or native delivery acceptance of every completed ancestor. The original all197 source-audit boundary remains unchanged. Later implementation PR803/ccb598 and actual scoped production PR802/263 evidence are reconciled below; this does not claim all197 items were rerun at either revision. Actual scoped production803 acceptance is now reconciled; the later writer prerequisite910a1e4 does not complete its parent performance item. Scoped later PR808 retirement at76 and actual productionf213 acceptance close only landing-demo-in-browser. All477/full197 historical source-audit and earlier receipt qualifications remain; no fresh all197 runtime/deployment proof. Scoped later PR810/b8ef1b94 delivery qualifies only the maintained-account-reader portion of faster-dashboards. Its status remains partial, all197 audit boundary477 and canonical identities stay unchanged, and no fresh all197 runtime/deployment or live query-path proof is implied. Later scoped PR815/PR817 writes and current default-off four-route source are reconciled only within faster-dashboards, which remains partial. The original all197 audit boundary and requirement identities remain unchanged. Scoped later PR818/default-off delivery, local EOF writer verification and owner-approved unsigned Agent0.24.7 publication are reconciled only as derived progress below. No canonical requirement/status/count/dependency changes or fresh all197 audit are asserted.",
   "canonicalRoadmap": "docs/handoff/plan/final-plan.json",
   "canonicalSha256": "7736aa72eada3a1b6d71ac1570accdbb24dbc6634138e5445c0fd3ce7fc58b60",
   "programStatus": "active_incomplete",
@@ -527,14 +527,14 @@
       "dependsOn": [
         "pairing-web-and-devices"
       ],
-      "implemented": "Pairing retry/unlink recovery and AuthWatchdog are merged.",
+      "implemented": "Pairing retry/unlink recovery and AuthWatchdog are merged. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Desktop delivery is not established by source merge: agent0.24.7 installer run40256176096 failed signing configuration and produced no installer.",
-        "Reconcile installed-version acceptance and any original augment not explicitly covered by the cited feature checkpoint."
+        "Installed/released pairing retry, self-refreshing code, unlink/relink recovery and watchdog behavior; reconcile original augments."
       ],
       "evidence": [
         "apps/agent/sc2tools_agent/auth_watchdog.py",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [
         661
@@ -548,14 +548,14 @@
       "status": "partial",
       "title": "Desktop app: plain-language sync errors, real backoff, and a calm offline banner",
       "dependsOn": [],
-      "implemented": "Classified errors and bounded retry/backoff are merged.",
+      "implemented": "Classified errors and bounded retry/backoff are merged. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Desktop delivery is not established by source merge: agent0.24.7 installer run40256176096 failed signing configuration and produced no installer.",
-        "Reconcile installed-version acceptance and any original augment not explicitly covered by the cited feature checkpoint."
+        "Installed/released classified errors, bounded backoff/offline recovery and calm banner behavior; reconcile original augments."
       ],
       "evidence": [
         "apps/agent/sc2tools_agent/errors.py",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [
         661
@@ -569,14 +569,14 @@
       "status": "partial",
       "title": "Desktop app: relaunch brings the window back, tray and window agree, and every replay folder is found and labelled",
       "dependsOn": [],
-      "implemented": "Relaunch activation, timed pause, rich folder discovery and instant Undo are merged.",
+      "implemented": "Relaunch activation, timed pause, rich folder discovery and instant Undo are merged. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Desktop delivery is not established by source merge: agent0.24.7 installer run40256176096 failed signing configuration and produced no installer.",
-        "Reconcile installed-version acceptance and any original augment not explicitly covered by the cited feature checkpoint."
+        "Installed/released single-instance relaunch, tray/window agreement, pause/Undo and folder discovery/labels."
       ],
       "evidence": [
         "docs/handoff/agent-runtime-checkpoint.md",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [
         687
@@ -590,14 +590,14 @@
       "status": "partial",
       "title": "Trustworthy installer: one startup switch, an options page, a clean uninstall and signed builds",
       "dependsOn": [],
-      "implemented": "Run-value migration, installer options and fail-closed signing workflow are prepared.",
+      "implemented": "Run-value migration, installer options and fail-closed signing workflow are prepared. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Desktop delivery is not established by source merge: agent0.24.7 installer run40256176096 failed signing configuration and produced no installer.",
-        "Reconcile installed-version acceptance and any original augment not explicitly covered by the cited feature checkpoint."
+        "Actual install/upgrade/uninstall, legacy-startup migration, one Run switch, silent-choice preservation and opt-in data removal excluding replay folders. Original inner/setup signing criterion is still unmet (setup NotSigned)."
       ],
       "evidence": [
         "docs/handoff/agent-installer-checkpoint.md",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [
         687
@@ -611,14 +611,14 @@
       "status": "partial",
       "title": "Match-aware background work: imports and updates never cost you FPS or interrupt a game",
       "dependsOn": [],
-      "implemented": "Game activity/performance gate and safe-time update scheduling are merged.",
+      "implemented": "Game activity/performance gate and safe-time update scheduling are merged. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Desktop delivery is not established by source merge: agent0.24.7 installer run40256176096 failed signing configuration and produced no installer.",
-        "Reconcile installed-version acceptance and any original augment not explicitly covered by the cited feature checkpoint."
+        "Installed updater recognizes the feed and respects match/OBS/capture safety; import priority/pause/battery and update/transient-notice augments require explicit acceptance."
       ],
       "evidence": [
         "apps/agent/sc2tools_agent/game_activity.py",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [
         687
@@ -1080,9 +1080,9 @@
       "dependsOn": [
         "live-scouting-openings-fix"
       ],
-      "implemented": "Approved/cache-only identity grouping<=20 and owner-saved preference feed a shared bounded50-row deterministic posterior, recency8/map1.5/prior3, count explanations and explicit incomplete-source withholding. Dossier/live/web/overlay source and golden/identity/preference tests are present. Owner setup explicitly says installed desktop retains old compatible brief until a future ordinary update includes new confidence copy.",
+      "implemented": "Approved/cache-only identity grouping<=20 and owner-saved preference feed a shared bounded50-row deterministic posterior, recency8/map1.5/prior3, count explanations and explicit incomplete-source withholding. Dossier/live/web/overlay source and golden/identity/preference tests are present. Owner setup explicitly says installed desktop retains old compatible brief until a future ordinary update includes new confidence copy. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Complete or reconcile the native delivery of updated forecast/confidence/also-account display: owner setup explicitly retains old installed brief pending a future ordinary desktop update. Verify the actual released agent before claiming all surfaces agree; do not create an unnecessary release if that later release already contains it."
+        "Released native forecast/confidence/also-account code is now distributed. Reconcile actual brief/live/dossier display parity and existing exact-release acceptance before claiming every surface agrees."
       ],
       "evidence": [
         "apps/api/src/services/scoutingIdentities.js",
@@ -1094,7 +1094,9 @@
         "apps/web/lib/streamStudioLearn.ts",
         "docs/handoff/live-scouting-v2-checkpoint.md",
         "docs/handoff/plan/owner-setup.md",
-        "apps/web/lib/help/articles/stream-studio/opponent-scouting.ts"
+        "apps/web/lib/help/articles/stream-studio/opponent-scouting.ts",
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [
         731
@@ -1110,14 +1112,14 @@
       "dependsOn": [
         "live-scouting-openings-fix"
       ],
-      "implemented": "Private bounded loading-card scouting and note synchronization are merged.",
+      "implemented": "Private bounded loading-card scouting and note synchronization are merged. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Desktop delivery is not established by source merge: agent0.24.7 installer run40256176096 failed signing configuration and produced no installer.",
-        "Reconcile installed-version acceptance and any original augment not explicitly covered by the cited feature checkpoint."
+        "Installed/released loading/postgame scouting and note flow, matching gameKey, private/off-stream behavior and controls."
       ],
       "evidence": [
         "docs/handoff/private-scouting-checkpoint.md",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [
         691
@@ -1400,13 +1402,14 @@
       "status": "partial",
       "title": "Safe overlay token rotation and real multi-token management",
       "dependsOn": [],
-      "implemented": "Private URL rotation and multi-token lifecycle preserve canonical Studio data and fence retired-token actions.",
+      "implemented": "Private URL rotation and multi-token lifecycle preserve canonical Studio data and fence retired-token actions. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Native generated-OBS-source repair participates in this item; signed/installed delivery and actual native acceptance are not established after the latest signing-configuration failure."
+        "Installed generated-OBS-source URL repair after rotation with existing scenes/assets/unrelated sources preserved; publication does not establish actual OBS operation acceptance."
       ],
       "evidence": [
         "docs/handoff/token-rotation-checkpoint.md",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [
         726
@@ -1511,14 +1514,14 @@
       "status": "partial",
       "title": "Desktop app: stream titles with live stat tokens that refresh after each game",
       "dependsOn": [],
-      "implemented": "Opt-in stream-title templates and refresh source are merged at31e19599.",
+      "implemented": "Opt-in stream-title templates and refresh source are merged at31e19599. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Desktop delivery is not established by source merge: agent0.24.7 installer run40256176096 failed signing configuration and produced no installer.",
-        "Reconcile installed-version acceptance and any original augment not explicitly covered by the cited feature checkpoint."
+        "Installed/released token rendering, post-game refresh/throttle/unchanged skip and actual per-platform accepted status; no provider activation was performed."
       ],
       "evidence": [
         "docs/handoff/stream-title-automation-checkpoint.md",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [],
       "requirementSha256": "beb3f996593e7faffd45b0fac865cacd6518a405ce70fae9be678bc884e7bbe6"
@@ -1636,14 +1639,14 @@
       "dependsOn": [
         "agent-calm-sync"
       ],
-      "implemented": "Durable recent games, incremental table, Today facts, imports and reason-scoped retries are merged.",
+      "implemented": "Durable recent games, incremental table, Today facts, imports and reason-scoped retries are merged. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Desktop delivery is not established by source merge: agent0.24.7 installer run40256176096 failed signing configuration and produced no installer.",
-        "Reconcile installed-version acceptance and any original augment not explicitly covered by the cited feature checkpoint."
+        "Installed/released recent history/Today/import/skipped-retry persistence and original seeding/model/filter/context/action augments."
       ],
       "evidence": [
         "docs/handoff/agent-dashboard-games-checkpoint.md",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [
         701
@@ -1955,7 +1958,7 @@
       "dependsOn": [
         "realtime-one-connection"
       ],
-      "implemented": "Owner revisions/default-off six-chart cache, ETag/304, deferred Trends, five-minute activity writes,30s latestAgent and minute device touches are merged. Read-only admin chart-cache health is delivered in PR798 with Off/Not reported/Enabled distinctions and no activation. PR801 extends safe owner-game cache coverage to11 response kinds while the chart flag stays off. PR804 fences all inventoried owner-game writers; PR805 eagerly maintains totals/latest in those transactions. Both are merged and actual protocol2 startup/Ready/Live is recorded. PR810 now deploys the maintenance2 retained-state boundary and single fresh owner/preferences/proof envelope for lighter /me and Doctor, with exact original Mongo fallback for unsupported BSON or unqualified state. Actual Ready/Live b8ef1b94 and scoped signed-in header/Doctor acceptance are recorded; the live query branch and savings were not instrumented. Revocation-coherent device-auth retention, its serving-cohort/cutover proof and common fleet/chart coherence remain unfinished. PR813 prepares credential writer readiness and an unwired retained REST adapter; it does not activate retained authentication. PR815 delivers closed count-neutral macro/build-decision writes; PR817 delivers owner-captured Pulse MMR/league stamps with exact required checks and scoped Ready/Live acceptance at6e663568. The current default-off source adds four direct strength responses using one immutable curve proof for key and calculation. Local 893 API and121 web cases, types/lint, all83 budgets and two transport cases pass; exact published-head CI and deployment remain release gates. No cache activation or savings is claimed.",
+      "implemented": "Owner revisions/default-off six-chart cache, ETag/304, deferred Trends, five-minute activity writes,30s latestAgent and minute device touches are merged. Read-only admin chart-cache health is delivered in PR798 with Off/Not reported/Enabled distinctions and no activation. PR801 extends safe owner-game cache coverage to11 response kinds while the chart flag stays off. PR804 fences all inventoried owner-game writers; PR805 eagerly maintains totals/latest in those transactions. Both are merged and actual protocol2 startup/Ready/Live is recorded. PR810 now deploys the maintenance2 retained-state boundary and single fresh owner/preferences/proof envelope for lighter /me and Doctor, with exact original Mongo fallback for unsupported BSON or unqualified state. Actual Ready/Live b8ef1b94 and scoped signed-in header/Doctor acceptance are recorded; the live query branch and savings were not instrumented. Revocation-coherent device-auth retention, its serving-cohort/cutover proof and common fleet/chart coherence remain unfinished. PR813 prepares credential writer readiness and an unwired retained REST adapter; it does not activate retained authentication. PR815 delivers closed count-neutral macro/build-decision writes; PR817 delivers owner-captured Pulse MMR/league stamps with exact required checks and scoped Ready/Live acceptance at6e663568. The current default-off source adds four direct strength responses using one immutable curve proof for key and calculation. Separate local 893 API/121 web cases, types/lint, all83 budgets and two transport cases are retained. PR818 then passed exact-head CI and scoped Live/Ready desktop acceptance at4cc33ba2 with the chart cache Off. The closed custom-build EOF writer prerequisite now has local801/37/types/lint proof; its own published-head CI/deployment and wider writer/fleet proof remain pending. No cache activation or savings is claimed.",
       "remainingRequirements": [
         "Extend caching only after complete dependency/revocation and shared-fleet audits beyond the 15 source-covered response kinds; matchup time series and other mixed dependencies remain excluded.",
         "Implement bounded revocation-coherent60s device-auth reuse; current findTokenByHash still performs an authoritative lookup on every request.",
@@ -1987,7 +1990,9 @@
         "docs/handoff/validation/dashboard-strength-snapshots/current-integrated-verification.json",
         "docs/handoff/pulse-stamp-revision-checkpoint.md",
         "apps/api/src/services/gameStatsPulseNeutral.js",
-        "apps/api/src/services/gameStatsBuildStateNeutral.js"
+        "apps/api/src/services/gameStatsBuildStateNeutral.js",
+        "docs/handoff/custom-build-eof-count-neutral-checkpoint.md",
+        "docs/handoff/validation/custom-build-eof-count-neutral/local-verification.json"
       ],
       "mergedPrs": [
         778,
@@ -2000,7 +2005,8 @@
         810,
         813,
         815,
-        817
+        817,
+        818
       ],
       "requirementSha256": "3a582d2301ebae22937707d3b214e1f4b0c57d1e9fa5218a9a345a1d622d0311"
     },
@@ -2480,15 +2486,15 @@
         "agent-pairing-recovery",
         "agent-window-tray-folders"
       ],
-      "implemented": "Accessible themes/Companion and runtime/settings recovery have shipped source foundations.",
+      "implemented": "Accessible themes/Companion and runtime/settings recovery have shipped source foundations. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Reconcile grouped settings and guided first-run requirements, migration of settings and all original augments.",
-        "Complete signed native delivery/installed acceptance; no installer produced by the latest recorded release run."
+        "Reconcile grouped settings, dirty/save/restart/theme/shortcut and first-run migration/gating augments; installed/released acceptance is not established by publication."
       ],
       "evidence": [
         "docs/handoff/agent-runtime-checkpoint.md",
         "apps/agent/sc2tools_agent/ui/gui.py",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [],
       "requirementSha256": "8c9baba40de3b3143401cfbcd2edcc4c4e8004c836709809b69e06b36f22b88a"
@@ -4864,14 +4870,15 @@
       "status": "partial",
       "title": "Settings you can trust: wheel guard, honest Save message, resettable API address, remembered window",
       "dependsOn": [],
-      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence.",
+      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Reconcile the original per-item augments; complete signed installer/installed-version delivery after the retained signing-configuration failure."
+        "Reconcile original wheel/save/API-reset/window-state augments against released code and installed/native acceptance."
       ],
       "evidence": [
         "docs/handoff/agent-runtime-checkpoint.md",
         "docs/handoff/card-preview-checkpoint.md",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [
         658,
@@ -4887,14 +4894,15 @@
       "status": "partial",
       "title": "Help one click away and an Activity log you can copy errors from during a sync",
       "dependsOn": [],
-      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence.",
+      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Reconcile the original per-item augments; complete signed installer/installed-version delivery after the retained signing-configuration failure."
+        "Reconcile original contextual Help/copyable-log/search/incremental-history augments against released code and native acceptance."
       ],
       "evidence": [
         "docs/handoff/agent-runtime-checkpoint.md",
         "docs/handoff/card-preview-checkpoint.md",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [
         658,
@@ -4910,14 +4918,15 @@
       "status": "partial",
       "title": "One honest status: the card, sidebar and tray icon say what the agent is really doing",
       "dependsOn": [],
-      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence.",
+      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Reconcile the original per-item augments; complete signed installer/installed-version delivery after the retained signing-configuration failure."
+        "Reconcile original unified status/tray/activity and unpaired-control augments against released code and native acceptance."
       ],
       "evidence": [
         "docs/handoff/agent-runtime-checkpoint.md",
         "docs/handoff/card-preview-checkpoint.md",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [
         658,
@@ -4933,14 +4942,15 @@
       "status": "partial",
       "title": "Build check-in cards: preview them, reset their position, and type, Enter, Ctrl+Enter to check in",
       "dependsOn": [],
-      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence.",
+      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
       "remainingRequirements": [
-        "Reconcile the original per-item augments; complete signed installer/installed-version delivery after the retained signing-configuration failure."
+        "Reconcile original preview/position reset/typing/Enter/Ctrl+Enter augments against released code and native acceptance."
       ],
       "evidence": [
         "docs/handoff/agent-runtime-checkpoint.md",
         "docs/handoff/card-preview-checkpoint.md",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
       ],
       "mergedPrs": [
         658,
@@ -5271,8 +5281,8 @@
       "qualification": "Earlier scoped production2242 evidence remains unchanged. Current receipt closes only landing-demo-in-browser; current Unit owner correction has no separate197-item status change. No fresh proof of every ancestor."
     }
   ],
-  "latestImplementationRevision": "6e66356817cf1700921efc51412f5e016cfe9a2d",
-  "latestProductionAcceptedRevision": "6e66356817cf1700921efc51412f5e016cfe9a2d",
+  "latestImplementationRevision": "4cc33ba2a286083f9baf6479cb17ed66ee97905b",
+  "latestProductionAcceptedRevision": "4cc33ba2a286083f9baf6479cb17ed66ee97905b",
   "recentDeliveryReconciliation": {
     "date": "2026-10-28",
     "implementationRevision": "ccb5987e145968059097ecf440204c3972279ded",
@@ -5354,7 +5364,56 @@
       "currentItemStatus": "partial",
       "remainingCount": 73,
       "qualification": "Scoped code and read-only availability/job acceptance. No private owner values, forced production stamp, query instrumentation, savings or cache activation."
+    },
+    "strength818": {
+      "date": "2026-10-29",
+      "mergedPr": 818,
+      "acceptedProductionRevision": "4cc33ba2a286083f9baf6479cb17ed66ee97905b",
+      "testedHead": "31abb9e6c23ca80f14b71fb93918591aa5ae857c",
+      "testedAndActualTree": "1dfd84bbcd1660840a4b1c374e9449b1d8c24173",
+      "receipt": "docs/handoff/validation/dashboard-strength-snapshots/current-integrated-verification.json",
+      "completedIds": [],
+      "remainingCount": 73,
+      "qualification": "Scoped read-only desktop acceptance with cacheOff; no activation, savings, full fleet, new mobile or other writer completion."
+    },
+    "customBuildEofLocal": {
+      "date": "2026-10-29",
+      "integratedHead": "19d21fd2d6e3f487a31b5fec9f68cf30aec62632",
+      "localCases": 801,
+      "localFiles": 37,
+      "receipt": "docs/handoff/validation/custom-build-eof-count-neutral/local-verification.json",
+      "released": false,
+      "completedIds": [],
+      "remainingCount": 73
+    },
+    "agent0247Publication": {
+      "date": "2026-10-29",
+      "version": "0.24.7",
+      "approvedUnsigned": true,
+      "artifactPublicationFulfilledIds": [
+        "agent-pairing-recovery",
+        "agent-calm-sync",
+        "agent-window-tray-folders",
+        "agent-installer-autostart",
+        "agent-match-aware",
+        "live-scouting-v2",
+        "agent-private-scouting-card",
+        "token-rotation",
+        "agent-stream-automation",
+        "agent-dashboard-games",
+        "agent-settings-and-first-run",
+        "agent-gui-polish-1",
+        "agent-gui-polish-2",
+        "agent-gui-polish-3",
+        "agent-gui-expansion-1"
+      ],
+      "receipt": "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json",
+      "signature": "NotSigned",
+      "applicationUpdateFeedAndInstalledUptakeVerified": false,
+      "completedIds": [],
+      "remainingCount": 73,
+      "qualification": "Availability/publication subrequirement fulfilled for15 existing rows; original explicit signing criterion and installed/native augment acceptance remain separately open. No redundant rebuild/tag/publication prerequisite."
     }
   },
-  "latestImplementationRevisionQualification": "Latest scoped delivered source reconciled here is PR817/main6e, not a fresh all197 runtime audit. The four-route Strength source remains pending its own published-head CI/deployment; cache/auth serving activation and savings are not claimed."
+  "latestImplementationRevisionQualification": "Latest scoped delivered source here is PR818/main4cc, not a fresh all197 audit. EOF writer code remains a locally verified release candidate. Agent0.24.7 GitHub publication is approved unsigned and actual updater API0.24.7 metadata/checksum are verified; ordinary website feed responses still show0.24.6, with inner Next/cache-regeneration freshness unproved. Website-current-version acceptance and installed uptake remain pending. Cache/auth serving activation, broader writer/fleet proof and savings remain unclaimed."
 }

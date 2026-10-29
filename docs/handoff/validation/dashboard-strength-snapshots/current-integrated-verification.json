@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "status": "CURRENT_LOCAL_GATES_PASSED_RELEASE_PENDING",
-  "acceptedMain": "6e66356817cf1700921efc51412f5e016cfe9a2d",
+  "status": "DELIVERED_DEFAULT_OFF_STRENGTH_WITH_SCOPED_ACCEPTANCE",
+  "acceptedMain": "4cc33ba2a286083f9baf6479cb17ed66ee97905b",
   "integratedHead": "232b3ee5102d89bbb3018e44a1db6c45f6c76360",
   "testedAndIntegratedTree": "f693e6a4a30e9606446b69faee58a546f6fe9899",
   "preservedStrengthCommit": "637e8811c7217a5375da4904fccbe5e5bf93e248",
@@ -72,7 +72,7 @@
       "admittedFonts": 3,
       "qualification": "Real client code with synthetic HTTP/auth fixtures; no enabled production-cache or savings proof."
     },
-    "release": "Required checks on the final published head, actual deployments and scoped signed-in acceptance remain pending."
+    "release": "PR818 exact31abb required checks passed; actual4cc Live/Ready and scoped read-only desktop acceptance completed. Common-fleet, other writer/dependency and activation gates remain."
   },
   "cleanup": {
     "lightExactIdentities": 73,
@@ -119,5 +119,43 @@
       "bytes": 11426,
       "sha256": "e42b464a17156e6923c4623af3bf2fe4ad20769341607350e8f82ef85df860e8"
     }
-  ]
+  ],
+  "baselineMainBeforeStrength": "6e66356817cf1700921efc51412f5e016cfe9a2d",
+  "delivery": {
+    "pullRequest": 818,
+    "testedHead": "31abb9e6c23ca80f14b71fb93918591aa5ae857c",
+    "mergedMain": "4cc33ba2a286083f9baf6479cb17ed66ee97905b",
+    "testedAndActualTree": "1dfd84bbcd1660840a4b1c374e9449b1d8c24173",
+    "ci": {
+      "webPassed": 10121,
+      "webExistingSkip": 1,
+      "apiPassed": 7503,
+      "apiExistingSkips": 9,
+      "responsivePassed": 591,
+      "responsiveExistingSkips": 92,
+      "exactHeadRequiredChecks": "all success; raw Codex diagnostics and status proof in sibling release-pr818-31abb-01"
+    },
+    "providers": {
+      "api": "Live",
+      "web": "Ready/Production",
+      "exactSource": true
+    },
+    "readOnlyAcceptance": {
+      "desktop": true,
+      "viewportOverride": false,
+      "strategiesLoaded": true,
+      "mapsLoaded": true,
+      "existingFiltersRetained": true,
+      "cache": "Off",
+      "activityFiguresHidden": true,
+      "controlsChanged": false
+    },
+    "operationalFollowup": "Normal guide-video job recovered after earlier feed HTTP404; historical error remains, with no manual rerun/configuration change. This is separate from chart-cache proof.",
+    "sourceReceiptSha256": "17b6b5098c82f844db8e81dcbde987194c56b03605a5225e9054b300c2dcff5a",
+    "privacy": "No private account/opponent identifiers, totals, DOM or photos copied.",
+    "limits": [
+      "No enabled cache hit, savings, fleet or writer-completion proof.",
+      "No individual production-response instrumentation or new mobile acceptance."
+    ]
+  }
 }

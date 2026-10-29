@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "status": "CURRENT_LOCAL_EOF_GATES_PASSED_RELEASE_PENDING",
+  "source": {
+    "testedHead": "e72772c9792baa5828371a0aaba36f7f2fc60789",
+    "workingChange": "Three optional types-only fields",
+    "sourceSha256": "38a2ce70ce9c799b2e2c4f748becf4cbac14b01da793f36790bc2d364e52b60f",
+    "preservedTypeCommit": "1b5c0ad78fb2ef3a8783dfe75072bd31e493d27d",
+    "integratedHead": "19d21fd2d6e3f487a31b5fec9f68cf30aec62632",
+    "integratedTree": "2b4f7ce6679b8ddfac9a1d12af91a1952ed003da",
+    "acceptedBaseline": "4cc33ba2a286083f9baf6479cb17ed66ee97905b"
+  },
+  "scope": "Closed single/all custom-build EOF count-neutral publication and fixed captured repair authority; no expanded chart seal or other writer-family completion.",
+  "actual": {
+    "apiCases": 801,
+    "files": 37,
+    "newEofCases": 53,
+    "skipped": 0,
+    "inBand": true,
+    "typesExit": 0,
+    "lintExit": 0,
+    "childAndWrapperExits": [
+      0,
+      0,
+      0
+    ],
+    "strictNewFiles": 4,
+    "legacyNoAddedFiles": 5,
+    "cachedMongo": "7.0.14",
+    "downloads": false
+  },
+  "guards": {
+    "apiInputs": 1041,
+    "apiCaptures": 3,
+    "webInputs": 3537,
+    "fullSourceFiles": 7029,
+    "physicalRows": 126,
+    "rawAssets": 49,
+    "dependencies": 6,
+    "changed": 0
+  },
+  "cleanup": {
+    "exactIdentities": 44,
+    "retainedIncompleteObservations": 4,
+    "unresolvedCurrentOrphansListeners": 0,
+    "kills": 0,
+    "wholeFinalGlobalCensusStored": false,
+    "qualification": "Scoped fresh-global absence, not retrospective ownership or continuous observation."
+  },
+  "retained": [
+    "Initial TS2353 types failure child2/wrapper1; lint/unit not dispatched in that gate.",
+    "Successful-run Mongo shutdown ECONNRESET warnings; no suppression or assertion skips."
+  ],
+  "boundaries": [
+    "Current local source results are separate from PR818 remote CI and production UI acceptance.",
+    "Later documentation adoption is outside the recorded source guards; application bytes must remain exact.",
+    "No new web/build/browser, production mutation, cache activation, savings or complete common-fleet proof."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-eof-count-neutral-20261029/integration-strength31-01/SOURCE-READY-02.json",
+      "sha256": "38a2ce70ce9c799b2e2c4f748becf4cbac14b01da793f36790bc2d364e52b60f",
+      "bytes": 53704
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-eof-count-neutral-20261029/integration-strength31-01/checks-02/LOCAL-READY-01.json",
+      "sha256": "af6c0cb39ccb7ade3dce7d93019a3fa0aef8f279d0c9a32c42ebe57c70192c05",
+      "bytes": 10144
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-eof-count-neutral-20261029/integration-strength31-01/checks-02/INDEPENDENT-ACTUAL-EVIDENCE-REVIEW-01.json",
+      "sha256": "6316b58fdc5053219eeb65250046f53d052d145481fd61ab89f8469217e1c5df",
+      "bytes": 2186
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-eof-count-neutral-20261029/integration-strength31-01/POSTGATE-INTEGRATION-01.json",
+      "sha256": "40c91afce17acd16c73851cc3e5bac08ed837609786b40edeceef107e2accaa9",
+      "bytes": 2877
+    }
+  ]
+}
