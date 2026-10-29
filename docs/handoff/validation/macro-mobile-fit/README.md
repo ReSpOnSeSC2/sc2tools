@@ -1,8 +1,9 @@
 # Macro mobile fit: local validation
 
-The current local release gate passed at `cd25ed68f222c48cc80c0a8bcb6d174fe1064cfc`
-and build `EE76oB0LZMFMkqAEyZDxe`. CI, deployed revision checks and actual
-signed-in Macro acceptance remain pending. No roadmap item is closed here.
+The local gate passed at `cd25ed68f222c48cc80c0a8bcb6d174fe1064cfc` and build
+`EE76oB0LZMFMkqAEyZDxe`. Macro subsequently shipped as
+`dfe4d6234e9242bad9ff5d4a52ad2e36cbb7bc78`; see the sanitized
+[production receipt](production-dfe4.json). No roadmap item is closed here.
 
 [current-cd25ed68.json](current-cd25ed68.json) binds these compact results to
 the raw artifacts retained under `.cache/macro-mobile-fit-20261028/`.
@@ -42,5 +43,22 @@ unfinished. Costs, providers and cache activation remain unchanged.
 The initial PR812 responsive run failed three Community footer-locator cases
 (588 passed/92 existing skips). A test-only native-footer selector correction
 preserves every original assertion and adds semantic guards. All 12 existing
-Community cases now pass across three projects; new exact-head CI is pending.
+Community cases passed across three projects at that pre-release boundary.
+The later exact-head checks and production acceptance passed; see below.
 See `ciIntegrationCorrection` in the compact summary for hashes and boundaries.
+
+## Actual production acceptance
+
+Vercel Ready/Production was verified at dfe4. On the primary site, an actual
+signed-in desktop session (1920×889) showed the chart and both army columns.
+Escape and per-opening Close restored exact state, focus and global styles;
+the actual Full game navigation loaded the normal destination. Phone proof
+remains the LOCAL four-case/16-Axe matrix above, not an actual mobile session.
+The production receipt excludes private account/game data and all photos.
+Earlier attempt/oracle failures stay private and preserved.
+
+Delivery metadata is later than Auth98b9's b071 local-check receipt and its
+77 then-current rows. Only the Macro checkpoint/README and a new receipt
+change; all 1,024 API inputs, dependencies and web app bytes stay unchanged.
+Earlier checks are not relabeled as post-adoption, and pending Auth code is
+not claimed deployed. The 197-item ledger and 73 unfinished items stay unchanged.

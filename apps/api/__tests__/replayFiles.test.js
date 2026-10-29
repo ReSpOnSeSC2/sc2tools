@@ -7,6 +7,7 @@ const { Readable } = require("stream");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const { MongoClient } = require("mongodb");
 const { deviceCredentialWritesFor, AUTHORITY_KEY } = require("../src/services/deviceCredentialWrites");
+const { credentialReadinessCapability } = require("../src/services/deviceCredentialTopology");
 
 const {
   ReplayFilesService,
@@ -663,8 +664,11 @@ function fakeCollection(overrides = {}) {
   };
 }
 
-function fakeGdprDb(credentialCollection) {
+async function fakeGdprDb(credentialCollection) {
   const db = {};
+  const hello = await credentialCollection.client.db(credentialCollection.dbName).command({ hello: 1 });
+  db.deviceCredentialReadiness = credentialReadinessCapability(hello);
+  expect(db.deviceCredentialReadiness).toBe("writer-only-standalone");
   for (const [key] of USER_SCOPED_COLLECTIONS) db[key] = fakeCollection();
   db.users = fakeCollection();
   db.gameDetails = fakeCollection();
@@ -690,7 +694,7 @@ function fakeGdprDb(credentialCollection) {
 
 function registerRangedHistoryWipe(getCredentialCollection) {
   test("ranged history wipe resolves game ids before deletion", async () => {
-    const db = fakeGdprDb(getCredentialCollection());
+    const db = await fakeGdprDb(getCredentialCollection());
     db.games.find = jest.fn(() => ({
       toArray: jest.fn(async () => [{ gameId: "g1" }, { gameId: "g2" }]),
     }));
@@ -747,7 +751,7 @@ describe("GDPR replay object integration", () => {
   afterAll(async () => { await client?.close(); await mongo?.stop(); });
 
   test("fails closed when archived games exist but R2 is disabled", async () => {
-    const db = fakeGdprDb(credentialCollection);
+    const db = await fakeGdprDb(credentialCollection);
     db.games.findOne.mockImplementation(async (filter) => (
       filter["_opponentBuildOrderWriteLease.leaseUntil"]
         ? null
@@ -764,7 +768,7 @@ describe("GDPR replay object integration", () => {
   });
 
   test("account deletion purges the user's private R2 prefix", async () => {
-    const db = fakeGdprDb(credentialCollection);
+    const db = await fakeGdprDb(credentialCollection);
     let objectPresent = true;
     const replayFiles = {
       deleteAllForUser: jest.fn(async () => {
@@ -792,7 +796,7 @@ describe("GDPR replay object integration", () => {
   registerRangedHistoryWipe(() => credentialCollection);
 
   test("snapshot restore delegates to validated streamed restore while holding the GDPR fence", async () => {
-    const db = fakeGdprDb(credentialCollection);
+    const db = await fakeGdprDb(credentialCollection);
     const gdpr = new GdprService(db);
     gdpr.backups = { restore: jest.fn(async () => ({ counts: { games: 1 } })) };
     const result = await gdpr.restoreSnapshot("u1", "bk_streamed");
