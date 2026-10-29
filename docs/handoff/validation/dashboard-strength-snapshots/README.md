@@ -1,30 +1,21 @@
-# Dashboard strength snapshots — local evidence
+# Dashboard strength snapshots: current local evidence
 
-The [compact summary](current-integrated-verification.json) binds local head
-`6715b0ba` (the reviewed strength slice plus deployed Reader810 `b8ef1b94`)
-and production build `DOJx8sH90GXvnejpkSqtM`. This is optional cache
-preparation: `USER_CACHE_ENABLED` stays off and faster-dashboards stays partial.
+The [compact summary](current-integrated-verification.json) describes the
+default-off four-route candidate at Source05, separately from delivered main
+`6e663568`. It records local 893 API/43-file results carried only through exact
+API-byte equality, plus a separate current 121 web/8-file run, API/web types and
+scoped lint. No result is relabeled as one combined run or a CI count.
 
-Current checks pass 469 API cases/21 files, whole API types, nine owned lint
-files with six inherited/no added warnings, and 94 current Help/client cases
-in seven files. The production build passes all 83 unchanged caps and
-40 canonical / 7 active / 4 strict sample guards. No assets were generated,
-downloaded or pruned. Source guards originally cover 6,938 files; two later
-transport guards cover 6,939 with only four root-adopted Reader metadata files
-qualified. This evidence/checkpoint adoption is a subsequent docs-only delta.
+Raw failures, source/input lists, process observations and their hashes stay in
+the local validation cache. The summary preserves the failed cleanup and its
+later qualified absence/strict-settlement boundary. It publishes no screenshot
+or private account data and copies no large raw report.
 
-Two actual-client transport cases pass at390 dark/1280 light. The actual
-useApi/SWR/conditional modules preserve four exact paths, race/map/debug query
-and URL, reconstruct 304 bodies and isolate account tags/data. Synthetic Clerk
-and local GET transport are explicit seams; no actual server/authentication,
-Next routing, production cache, visual/accessibility or savings claim is made.
-Both held late-A requests genuinely abort; no stale body delivery is claimed.
-The raw report retains Chromium's bodyless304 request abort signals separately
-from that held request. The initial overall backup-discovery failure is retained
-and fixed only by excluding preserved historical specs; current assertions stay.
-
-Raw reports/source lists, installed dependency qualifications and failures
-remain cache-only with exact hashes in the compact summary. No screenshot,
-private account data or duplicate full report is published. Owned API/build
-processes and 31 browser/esbuild identities are clear, with no listeners/kills.
-Final-head CI, deployment and relevant acceptance remain pending.
+Normal integration of actual main retained the tested content tree. Current
+build iUSG passes all 83 original budgets and 40/49/7/4 input/asset/sample
+guards; two current phone/desktop transport cases pass with zero skips or
+retries. Raw failures and subsequent settlement remain separate. The 7,024-file
+pre/post snapshot precedes these documentation-only changes. Exact-head CI,
+deployment and acceptance remain pending release gates. `USER_CACHE_ENABLED` remains off; other mixed dependencies, writer/auth
+and common-fleet gates remain. The 197-item roadmap stays unchanged and the
+parent remains partial, with 73 items remaining.

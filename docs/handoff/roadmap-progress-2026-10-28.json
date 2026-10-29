@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "date": "2026-10-28",
   "sourceRevision": "477298dd7c397af2baaa79d19736ae43d1a4510d",
-  "sourceQualification": "All 197 original entries reconciled at merged source477298dd. Independent audits close42 formerly unknown items and retain18 concrete partial/open requirements. This source audit does not assert fresh manual or native delivery acceptance of every completed ancestor. The original all197 source-audit boundary remains unchanged. Later implementation PR803/ccb598 and actual scoped production PR802/263 evidence are reconciled below; this does not claim all197 items were rerun at either revision. Actual scoped production803 acceptance is now reconciled; the later writer prerequisite910a1e4 does not complete its parent performance item. Scoped later PR808 retirement at76 and actual productionf213 acceptance close only landing-demo-in-browser. All477/full197 historical source-audit and earlier receipt qualifications remain; no fresh all197 runtime/deployment proof. Scoped later PR810/b8ef1b94 delivery qualifies only the maintained-account-reader portion of faster-dashboards. Its status remains partial, all197 audit boundary477 and canonical identities stay unchanged, and no fresh all197 runtime/deployment or live query-path proof is implied.",
+  "sourceQualification": "All 197 original entries reconciled at merged source477298dd. Independent audits close42 formerly unknown items and retain18 concrete partial/open requirements. This source audit does not assert fresh manual or native delivery acceptance of every completed ancestor. The original all197 source-audit boundary remains unchanged. Later implementation PR803/ccb598 and actual scoped production PR802/263 evidence are reconciled below; this does not claim all197 items were rerun at either revision. Actual scoped production803 acceptance is now reconciled; the later writer prerequisite910a1e4 does not complete its parent performance item. Scoped later PR808 retirement at76 and actual productionf213 acceptance close only landing-demo-in-browser. All477/full197 historical source-audit and earlier receipt qualifications remain; no fresh all197 runtime/deployment proof. Scoped later PR810/b8ef1b94 delivery qualifies only the maintained-account-reader portion of faster-dashboards. Its status remains partial, all197 audit boundary477 and canonical identities stay unchanged, and no fresh all197 runtime/deployment or live query-path proof is implied. Later scoped PR815/PR817 writes and current default-off four-route source are reconciled only within faster-dashboards, which remains partial. The original all197 audit boundary and requirement identities remain unchanged.",
   "canonicalRoadmap": "docs/handoff/plan/final-plan.json",
   "canonicalSha256": "7736aa72eada3a1b6d71ac1570accdbb24dbc6634138e5445c0fd3ce7fc58b60",
   "programStatus": "active_incomplete",
@@ -1955,9 +1955,9 @@
       "dependsOn": [
         "realtime-one-connection"
       ],
-      "implemented": "Owner revisions/default-off six-chart cache, ETag/304, deferred Trends, five-minute activity writes,30s latestAgent and minute device touches are merged. Read-only admin chart-cache health is delivered in PR798 with Off/Not reported/Enabled distinctions and no activation. PR801 extends safe owner-game cache coverage to11 response kinds while the chart flag stays off. PR804 fences all inventoried owner-game writers; PR805 eagerly maintains totals/latest in those transactions. Both are merged and actual protocol2 startup/Ready/Live is recorded. PR810 now deploys the maintenance2 retained-state boundary and single fresh owner/preferences/proof envelope for lighter /me and Doctor, with exact original Mongo fallback for unsupported BSON or unqualified state. Actual Ready/Live b8ef1b94 and scoped signed-in header/Doctor acceptance are recorded; the live query branch and savings were not instrumented. Revocation-coherent device-auth retention, its serving-cohort/cutover proof and common fleet/chart coherence remain unfinished.",
+      "implemented": "Owner revisions/default-off six-chart cache, ETag/304, deferred Trends, five-minute activity writes,30s latestAgent and minute device touches are merged. Read-only admin chart-cache health is delivered in PR798 with Off/Not reported/Enabled distinctions and no activation. PR801 extends safe owner-game cache coverage to11 response kinds while the chart flag stays off. PR804 fences all inventoried owner-game writers; PR805 eagerly maintains totals/latest in those transactions. Both are merged and actual protocol2 startup/Ready/Live is recorded. PR810 now deploys the maintenance2 retained-state boundary and single fresh owner/preferences/proof envelope for lighter /me and Doctor, with exact original Mongo fallback for unsupported BSON or unqualified state. Actual Ready/Live b8ef1b94 and scoped signed-in header/Doctor acceptance are recorded; the live query branch and savings were not instrumented. Revocation-coherent device-auth retention, its serving-cohort/cutover proof and common fleet/chart coherence remain unfinished. PR813 prepares credential writer readiness and an unwired retained REST adapter; it does not activate retained authentication. PR815 delivers closed count-neutral macro/build-decision writes; PR817 delivers owner-captured Pulse MMR/league stamps with exact required checks and scoped Ready/Live acceptance at6e663568. The current default-off source adds four direct strength responses using one immutable curve proof for key and calculation. Local 893 API and121 web cases, types/lint, all83 budgets and two transport cases pass; exact published-head CI and deployment remain release gates. No cache activation or savings is claimed.",
       "remainingRequirements": [
-        "Extend caching only after route-specific dependency/revocation audits beyond the current 11 response kinds.",
+        "Extend caching only after complete dependency/revocation and shared-fleet audits beyond the 15 source-covered response kinds; matchup time series and other mixed dependencies remain excluded.",
         "Implement bounded revocation-coherent60s device-auth reuse; current findTokenByHash still performs an authoritative lookup on every request.",
         "Keep USER_CACHE_ENABLED off and do not claim measured savings or complete this item from the status card alone.",
         "Device auth reuse needs an explicit serving-process/rolling-overlap revocation contract; metadata liveness reuse is not authentication authority. See device-auth-reuse-checkpoint.md."
@@ -1982,7 +1982,12 @@
         "apps/api/src/services/users.js",
         "apps/api/src/services/doctor.js",
         "apps/api/src/services/maintainedGameStatsRead.js",
-        "apps/api/src/services/gameStatsReadFloor.js"
+        "apps/api/src/services/gameStatsReadFloor.js",
+        "docs/handoff/dashboard-strength-snapshots-checkpoint.md",
+        "docs/handoff/validation/dashboard-strength-snapshots/current-integrated-verification.json",
+        "docs/handoff/pulse-stamp-revision-checkpoint.md",
+        "apps/api/src/services/gameStatsPulseNeutral.js",
+        "apps/api/src/services/gameStatsBuildStateNeutral.js"
       ],
       "mergedPrs": [
         778,
@@ -1992,7 +1997,10 @@
         787,
         804,
         805,
-        810
+        810,
+        813,
+        815,
+        817
       ],
       "requirementSha256": "3a582d2301ebae22937707d3b214e1f4b0c57d1e9fa5218a9a345a1d622d0311"
     },
@@ -5263,8 +5271,8 @@
       "qualification": "Earlier scoped production2242 evidence remains unchanged. Current receipt closes only landing-demo-in-browser; current Unit owner correction has no separate197-item status change. No fresh proof of every ancestor."
     }
   ],
-  "latestImplementationRevision": "b8ef1b945effef54d9f7bad13e5ee27f1525a3db",
-  "latestProductionAcceptedRevision": "b8ef1b945effef54d9f7bad13e5ee27f1525a3db",
+  "latestImplementationRevision": "6e66356817cf1700921efc51412f5e016cfe9a2d",
+  "latestProductionAcceptedRevision": "6e66356817cf1700921efc51412f5e016cfe9a2d",
   "recentDeliveryReconciliation": {
     "date": "2026-10-28",
     "implementationRevision": "ccb5987e145968059097ecf440204c3972279ded",
@@ -5334,7 +5342,19 @@
       "fulfilledRemainingRequirement": "Use the delivered eager users.gameStats safely in lighter /me/Doctor only after a fresh retained-state boundary and inventoried old-writer/unknown-command cutover proof; preserve unsupported raw BSON fallback.",
       "remainingCount": 73,
       "qualification": "One scoped partial-item requirement removed; no status/count change. Actual Ready/Live and read-only UI acceptance do not prove the live qualified/fallback query branch, savings, zero network/account writes or cache activation."
+    },
+    "countNeutralPulse": {
+      "date": "2026-10-29",
+      "mergedPr": 817,
+      "acceptedProductionRevision": "6e66356817cf1700921efc51412f5e016cfe9a2d",
+      "testedHead": "c06746224d496f9814bc2fb33f298612fe7bb2ca",
+      "testedAndActualTree": "2c1e5ca34ae929f99a631b13b14250ba91fc5df6",
+      "receipt": "docs/handoff/pulse-stamp-revision-checkpoint.md",
+      "completedIds": [],
+      "currentItemStatus": "partial",
+      "remainingCount": 73,
+      "qualification": "Scoped code and read-only availability/job acceptance. No private owner values, forced production stamp, query instrumentation, savings or cache activation."
     }
   },
-  "latestImplementationRevisionQualification": "Latest scoped delivered implementation reconciled by this update, not current Git HEAD or a fresh all197 audit. PR810 is Ready/Live with scoped read-only header/Doctor/Help acceptance; the production query branch, savings and cache activation are not claimed."
+  "latestImplementationRevisionQualification": "Latest scoped delivered source reconciled here is PR817/main6e, not a fresh all197 runtime audit. The four-route Strength source remains pending its own published-head CI/deployment; cache/auth serving activation and savings are not claimed."
 }

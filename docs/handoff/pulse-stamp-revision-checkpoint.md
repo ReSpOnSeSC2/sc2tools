@@ -56,8 +56,18 @@ unknown row, orphan, listener or kill. It does not relabel the earlier wrapper
 failure. Current receipt `delivery-integration-01/checks-01/LOCAL-READY-01.json`
 has SHA-256 `12d1eac0bfa4afbb869dc25517e6ccff2b88df7a648a7fe644b846a941039814`.
 No web source changed, so the delivered main web checks and all 83 unchanged
-budgets remain the qualified web baseline. Exact-head CI and deployment remain
-release gates.
+budgets remain the qualified web baseline. PR817 then passed all required checks at
+`c06746224d496f9814bc2fb33f298612fe7bb2ca` (run40828166541). Actual squash
+`6e66356817cf1700921efc51412f5e016cfe9a2d` retained tested tree
+`2c1e5ca34ae929f99a631b13b14250ba91fc5df6`. Render deployment
+`dep-dbhej0dckfvc73fa2qd0` is Live and Vercel production
+`9KR5trz5qaXqkbgv4VKS122vXGXq` is Ready at that exact revision.
+Read-only signed-in setup and expected totals passed; the actual enrichment
+job completed successfully after deployment. Chart-cache status was Off with
+activity hidden. No job was manually triggered or production count-preservation
+write instrumented. Transaction, identity and rollback proof is local/CI;
+bounded CI job-log retrieval was unavailable, so no unverified CI total is
+quoted. Private production receipts remain outside the repository.
 
 Custom classification, linked rename, EOF bulk publication and region/identity
 writers remain separate. Writer cohort retirement, common-fleet/dependency
