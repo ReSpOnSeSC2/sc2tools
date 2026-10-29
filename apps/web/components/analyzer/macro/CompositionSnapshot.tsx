@@ -43,7 +43,7 @@ export interface BuildOrderResponse {
 }
 
 export interface CompositionSnapshotProps {
-  /** Two cards with 44px logical tiles inside the modal's fitted overview. */
+  /** Two cards with 48px logical tiles inside the modal's 50% overview. */
   fitOverview?: boolean;
   /**
    * Pre-built per-tick series for the local player. Built once by the
@@ -737,10 +737,10 @@ function UnitChip({
   return (
     <button
       type="button"
-      // Phones: a 44 px square tile with the number printed over the
+      // Phones: a 44px tile (48px in the fixed overview) with the number over the
       // icon's corner, sc2replaystats' dense icon grid (seven across a
       // typical phone). From sm up: the compact icon + number pill.
-      className={`relative inline-flex h-11 w-11 touch-manipulation items-center justify-center rounded-md ${toneClass} tabular-nums text-text transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${ctx.fitOverview ? "" : "sm:h-auto sm:w-auto sm:justify-start sm:gap-1.5 sm:rounded sm:px-2 sm:py-1 sm:text-[13px]"}`}
+      className={`relative inline-flex touch-manipulation items-center justify-center rounded-md ${toneClass} tabular-nums text-text transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${ctx.fitOverview ? "h-12 w-12" : "h-11 w-11 sm:h-auto sm:w-auto sm:justify-start sm:gap-1.5 sm:rounded sm:px-2 sm:py-1 sm:text-[13px]"}`}
       title={label}
       aria-label={label}
       aria-haspopup="dialog"

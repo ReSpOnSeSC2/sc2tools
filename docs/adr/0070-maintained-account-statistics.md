@@ -23,7 +23,48 @@ the full stored user document.
 
 ## Freshness and rollout ordering
 
-Maintenance 1 is never a maintenance-2 delta base. Its first new transaction
+The bounded macro recompute extension uses a named server-owned operation for
+`macroScore`, optional `top3Leaks`, schema stamping and removal of the legacy
+inline macro blob. Its filter is the exact owner/game plus the existing live
+predicate, with no upsert. The descriptor and owner are copied before awaits;
+callers cannot select neutrality for an arbitrary callback or patch. The shared
+owner-first transaction body accepts an existing session and never nests a
+transaction. Production dispatch still owns the original causal floor,
+admission and drain lifecycle.
+The composition regression proves same-session/no-nesting only. Any later
+production caller must own that lifecycle and immutable inputs across its
+outer retry closure before using the internal body.
+
+Only a strict ready maintenance-2 tuple from that atomic owner's preimage can
+carry unchanged under the new UUID, in the same transaction as the macro
+update. Unqualified proof is retired without recounting history; the existing
+reader fallback remains. Membership/date/eligibility writers retain eager
+maintenance. This count-only proof is not an expanded chart dependency seal;
+other non-count writers and any future retained-chart cohort gate are separate.
+Detail-store reads/uploads remain outside transaction retry callbacks.
+
+The bounded check-in extension adds four closed named operations: game update,
+pending-queue dismissal, fresh pending mark and claimed live-record bind. Each
+owns its existing complete game filter and no-upsert command. Only plain
+`$set` stages on the operation's explicit check-in/label paths are admitted;
+schema values must match the server stamp. Existing attribution expressions
+and literal user text remain unchanged. Descriptors and owner identities are
+BSON-copied before transaction/floor awaits; raw values that cannot round-trip
+are rejected. Dismissal retains the existing maximum of 500 selected IDs.
+
+PUT and dismissal capture once before their reads. Ingest forwards its admitted
+batch identity to binding, which never recaptures after an epoch change or
+between optimistic attempts. Direct service entry captures once. Live-record
+claims/releases, option/suggestion reads and notifications retain their existing
+order outside transaction retries. This does not make live-record and game
+writes cross-collection atomic: the existing first-wins recovery checks an
+uncertain game outcome before returning a claim. Strict count-only carry or
+retirement uses the same owner-first transaction and admission lifecycle as
+macro recompute; no expanded chart seal or serving-cohort certification is
+minted. Other classification/rename/non-count writers remain separate.
+
+Maintenance 1 is never a maintenance-2 delta base. Its first eager
+membership/date/eligibility transaction
 bootstraps with the original Mongo count and `sort({date:-1}).limit(1)` query.
 Qualified later mutations keep bounded subset deltas. The exact Mongo `$ne`
 eligibility, legacy array behavior and `first.date || null` behavior remain.

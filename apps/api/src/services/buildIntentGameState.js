@@ -1,6 +1,9 @@
 "use strict";
 const { gameWrite } = require("../util/userRevision");
 const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
+const { gameStatsWritesFor } = require("./gameStatsWrites");
+const { capturedNeutralOwner } = require("./gameStatsCountNeutral");
+const { immutableBuildState } = require("./gameStatsBuildStateNeutral");
 
 /**
  * Build check-in on a stored game: ``GET/PUT /v1/games/:gameId/build-intent``
@@ -239,6 +242,7 @@ class BuildIntentGameState {
    */
   constructor(deps) {
     this.userRevision = deps.userRevision || null;
+    this.gameStatsWrites = gameStatsWritesFor(/** @type {import('../db/connect').DbContext} */ (deps.db));
     this.games = deps.db.games;
     this.users = deps.db.users;
     this.options = deps.options;
@@ -310,11 +314,13 @@ class BuildIntentGameState {
    */
   async put(userId, gameId, body, auth) {
     const notesPatch = notesPatchFor(body);
+    body = { ...body };
+    const owner = await capturedNeutralOwner(this.gameStatsWrites, userId);
     const before = await this.games.findOne({ userId, gameId, ...LIVE_GAME_MATCH }, { projection: GAME_PROJECTION });
     if (!before) throw new BuildIntentError(404, "not_found", "Game not found.");
     const matchup = gameMatchup(before);
     const { options, oppOptions } = await this._optionsFor(userId, matchup);
-    await this._applyAction(userId, gameId, body, { before, matchup, options, oppOptions, notesPatch, auth });
+    await this._applyAction(userId, gameId, body, { before, matchup, options, oppOptions, notesPatch, auth, owner });
     const after = await this.games.findOne({ userId, gameId, ...LIVE_GAME_MATCH }, { projection: GAME_PROJECTION });
     if (!after) throw new BuildIntentError(404, "not_found", "Game not found.");
     this.options.invalidate(userId);
@@ -348,6 +354,7 @@ class BuildIntentGameState {
    *   oppOptions: OptionsPayload|null,
    *   notesPatch: { notes?: string },
    *   auth: { source?: string },
+   *   owner: import('./gameStatsWrites').GameStatsOwner,
    * }} ctx
    */
   async _applyAction(userId, gameId, body, ctx) {
@@ -394,11 +401,9 @@ class BuildIntentGameState {
       reason, matchup: ctx.matchup, oppOptions: ctx.oppOptions, via, origin, now,
     });
     if (you.length === 0 && opponent.length === 0) return;
-    const res = await gameWrite(this.userRevision, userId, () => this.games.updateOne(
-      { userId, gameId,
-          ...LIVE_GAME_MATCH, isResumedFromReplay: { $ne: true } },
-      [ensureIntentStage(now), ...you, ...opponent],
-    ));
+    const mutation = immutableBuildState({ kind: "buildIntentUpdate", gameId,
+      pipeline: [ensureIntentStage(now), ...you, ...opponent] });
+    const res = await gameWrite(this.userRevision, userId, () => this.gameStatsWrites.write(ctx.owner, mutation));
     if (res.matchedCount === 0) {
       // Quarantined (or deleted) between the read and the write.
       const gone = !(await this.games.findOne({ userId, gameId, ...LIVE_GAME_MATCH }, { projection: { _id: 1 } }));
@@ -504,6 +509,7 @@ class BuildIntentGameState {
    */
   async dismissPending(userId, auth) {
     const { via, origin } = provenanceFromAuth(auth);
+    const owner = await capturedNeutralOwner(this.gameStatsWrites, userId);
     const ids = (await this.games
       .find(this._pendingFilter(userId), { projection: { _id: 0, gameId: 1 } })
       .sort({ date: -1 })
@@ -512,18 +518,12 @@ class BuildIntentGameState {
       .map((row) => String(row.gameId));
     if (ids.length === 0) return { dismissed: 0 };
     const now = new Date(this.now());
-    const res = await gameWrite(this.userRevision, userId, () => this.games.updateMany(
-      {
-        userId,
-        gameId: { $in: ids },
-        ...LIVE_GAME_MATCH,
-        "buildIntent.status": "pending",
-        isResumedFromReplay: { $ne: true },
-      },
-      clearOverridePipeline({
+    const mutation = immutableBuildState({ kind: "buildIntentDismiss", gameIds: ids,
+      pipeline: clearOverridePipeline({
         status: "skipped", build: null, origin, via, confirmedAt: null, updatedAt: now,
       }),
-    ));
+    });
+    const res = await gameWrite(this.userRevision, userId, () => this.gameStatsWrites.write(owner, mutation));
     this.options.invalidate(userId);
     // The newest games are the ones an agent card or queue may still show.
     for (const gameId of ids.slice(0, BUILD_INTENT.PENDING_LIMIT_MAX)) {

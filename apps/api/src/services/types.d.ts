@@ -716,7 +716,7 @@ export interface BuildIntentBinder {
   bindIngestedGame(
     userId: string,
     game: Record<string, any>,
-    opts: { created: boolean; spatial?: unknown },
+    opts: { created: boolean; spatial?: unknown; statsOwner?: import('./gameStatsWrites').GameStatsOwner },
   ): Promise<{ bound: boolean; status: string } | null>;
 }
 

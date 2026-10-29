@@ -6,11 +6,13 @@ const { ensureGuideIndexes, startBackgroundIndexBuilds } = require("./guideIndex
 const { PRIVATE_SEARCH_COMMENT } = require("../services/privateSearchReader");
 const { startPrivateSearchIndex } = require("./privateSearchIndexes");
 const { PROTOCOL_VERSION, MAINTENANCE_VERSION } = require("../services/gameStatsMaintenance");
+const { credentialReadinessCapability } = require("../services/deviceCredentialTopology");
 
 /**
  * @typedef {{
  *   client: MongoClient,
  *   gameStatsTransactions: boolean,
+ *   deviceCredentialReadiness: 'causal'|'writer-only-standalone'|'unavailable',
  *   db: import('mongodb').Db,
  *   backgroundIndexes?: import('./guideIndexes').BackgroundIndexBuilds,
  *   privateSearchIndexes?: import('./guideIndexes').BackgroundIndexBuilds,
@@ -121,6 +123,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
   const ctx = {
     client,
     gameStatsTransactions,
+    deviceCredentialReadiness: credentialReadinessCapability(hello),
     db,
     users: db.collection(COLLECTIONS.USERS),
     profiles: db.collection(COLLECTIONS.PROFILES),

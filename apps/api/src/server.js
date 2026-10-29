@@ -43,6 +43,8 @@ const { buildIdentityDeletionJob } = require("./jobs/identityDeletionJob");
 const sentry = require("./util/sentry");
 const { TrendsExplorerBackfill } = require("./services/trendsExplorerBackfill");
 const { startBrowserUploadCorsCheck } = require("./services/replayFilesCors");
+const { deviceCredentialWritesFor } = require("./services/deviceCredentialWrites");
+const { prepareDeviceCredentialsForServing } = require("./services/deviceCredentialReadiness");
 
 async function main() {
   const config = loadConfig();
@@ -78,6 +80,10 @@ async function main() {
     { logger, slowQueryMs: config.slowQueryMs },
   );
   logger.info("mongo_connected");
+  // Metadata readiness is not an API availability gate. Every credential
+  // mutation independently awaits the same bounded writer-owned readiness;
+  // ordinary REST/socket lookups stay authoritative and usable on failure.
+  await prepareDeviceCredentialsForServing(deviceCredentialWritesFor(db, logger), logger);
 
   const httpServer = http.createServer();
   const io = new IoServer(httpServer, {
@@ -410,6 +416,9 @@ async function main() {
   /** @param {string} signal */
   async function shutdown(signal) {
     logger.info({ signal }, "shutdown_start");
+    // Optional REST reuse is not injected in this prerequisite release. If
+    // present, synchronously retire tickets before any shutdown awaits.
+    const restAuthDrain = /** @type {any} */ (services).pairings.restAuthReuse?.stopAndDrain();
     runtimeCapacity.stop();
     stopJobMonitor();
     await trendsExplorerBackfill.stop();
@@ -462,6 +471,7 @@ async function main() {
     await /** @type {any} */ (services).dataRepairs.drain();
     await guideVideosJob.stop();
     await /** @type {any} */ (services).customBuilds.stopReclassifications();
+    await restAuthDrain;
     // Erasure may still need membership writes after HTTP close. Drain its
     // admitted credential lifetime before retiring the dependent game writer.
     await /** @type {import('./services/devicePairings').DevicePairingsService} */ (services.pairings).credentialWrites.stopAndDrain();
