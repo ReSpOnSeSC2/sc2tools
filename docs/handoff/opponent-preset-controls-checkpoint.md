@@ -1,9 +1,10 @@
-# Opponents preset and phone sort correction: locally verified
+# Opponents preset and phone sort correction: delivered
 
 Based on locally tested `f0faac0b4d16c1914b50d793d72e9e6e2e0fa5d2`, whose web
 source matches delivered `0b90c1b8a3b96f0b748da539b291f7878574023d`.
 The parent later merged as `0eb06c18e5d5743e7230e4b4db41553fca6e363f` with
-the same content tree. This branch has not been advanced over its own work.
+the same content tree. PR816 then integrated that actual main without changing
+its tested content tree.
 
 The owner reported that Lost to most changed the list while All opponents
 stayed selected, and phone controls then appeared stuck. The source confirmed
@@ -40,10 +41,26 @@ foreground/background contrast 6.01:1).
 LOCAL fixture captures use synthetic account/HTTP data and explicit Next and
 dossier boundaries. They establish consumer behavior, native sort selection,
 row order, browser Back/reload and accessibility in those fixtures; live phone
-or real Next routing acceptance is not claimed. Exact-head CI, deployment and
-signed-in production acceptance remain required.
+or real Next routing acceptance is not claimed by those fixtures.
 
-The separate Pulse source stays preserved and held. No provider, native,
+Required CI passed at exact head `47c8692678fe66c34e8f5ee4790f0136d51b4b27`:
+10,116 web tests / one existing skip and 591 responsive cases / 92 existing
+skips (run40822407272). Actual squash
+`2a2bb882b7cf6f77da9ff1616e50fadfd0e52ba1` has the same tested tree
+`573851db447322f69d0aa5a7d13bda4798c11370`. Vercel production
+`C9giNzfeZg8KdX9b9QwRrS4P9Hux` was Ready at that exact revision.
+
+Real signed-in production acceptance at measured 390 by 844 CSS pixels
+verified Lost/All pressed states, native Wins/Losses, direction changes and
+reload persistence. Saved columns, MMR impact and global filters stayed
+unchanged. The temporary viewport was reset and three owned tabs closed.
+This proves a phone-sized Chrome viewport, not physical Android gestures.
+Initial rapid readbacks preceded asynchronous route commits; they are retained
+as observations rather than a passed race stress test. Single actions checked
+after exact URL settlement were consistent. Private account receipts and
+screenshots remain outside the repository.
+
+This correction did not change Pulse enrichment. No provider, native,
 cache activation, flag, infrastructure, engine asset or roadmap-count change
 is included. The program remains active and incomplete at 124 completed,
 53 partial and 20 open original items (73 unfinished).
