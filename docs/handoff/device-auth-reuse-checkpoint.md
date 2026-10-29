@@ -1,6 +1,42 @@
-# Device authentication reuse: writer preparation
+# Device authentication reuse: delivered prepared prerequisite
 
-## Prepared readiness and optional REST seam — local candidate
+## PR813 delivered at b860 — prepared startup and availability
+
+PR813 merged as `b8608d90ead8d09cdf5566a3fe43da09483eeea8` after the exact
+`6acb0820` API, Vercel and Preview Comments checks passed. The tested, fresh
+merged and actual squash trees match `1a80eb4923eabfae08c056ff2ad82dcbf3c3db1e`.
+Actual Render Live and Vercel Production Ready source match that revision.
+Primary signed-in Settings and Devices settled without an auth/load error.
+[Sanitized delivery receipt](validation/device-auth-prepared/production-b860.json)
+retains the exact evidence references without private account/device fields or images.
+
+The actual startup record reports protocol1, prepared mode, causal capability
+and exact source, with a valid digest format. This proves that startup attempt
+only. It does not establish continuing incarnation, prior-actor retirement,
+unknown-work settlement or retained authentication activation. The optional
+REST adapter remains uninjected; REST and sockets keep authoritative lookups.
+Prepared metadata adds no retained grant probes to ordinary authentication.
+
+No Pair, Unpair, label, Save, upload, recompute, quiz answer, agent launch,
+provider or flag action was performed. Normal background session/liveness
+traffic was not instrumented. Four owned browser tabs were closed. This is
+actual desktop availability, not production phone or retained-token proof.
+Two observer misses are preserved: ambiguous Devices navigation and an initial
+Rename/Revoke oracle corrected to the witnessed Unpair UI.
+
+The prepared-serving cohort and old/unknown-work cutover, fresh same-incarnation
+binding, clock/election/runtime obligations and independent activation review
+remain open. The parent stays partial; USER_CACHE_ENABLED stays off. All 197
+ledger identities and the qualified 73 unfinished items are unchanged.
+
+This delivery update is prepared against clean Macro integration `9d8ac45b`
+and must be adopted only after its final source/build/browser guards. These
+four metadata files are then a separately qualified post-guard delta; no
+application/test/dependency bytes change and no old proof is relabeled.
+
+## Historical implementation and local verification
+
+### Prepared readiness and optional REST seam — historical local candidate
 
 The implementation was preserved at `db99e5ce` and its startup-log follow-up
 at `87fe1c1b`, then integrated with passed main `dfe4d623` at `98b9cfff`. The
@@ -253,7 +289,7 @@ in `C:/SC2TOOLS/.cache/device-auth-reuse-audit-20261027.json`. Future implementa
 requires focused issue/revoke/GDPR/unknown-outcome/delayed-load tests and actual
 deployment-lifecycle verification. The broader dashboard item remains partial.
 
-## PR813 replay-storage fixture correction — CI pending
+## Historical PR813 replay-storage fixture correction — before final CI and delivery
 
 The original PR813 CI failed two GDPR replay-storage fixture cases: their fake
 context omitted the new positive topology capability. The fixture now derives

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "status": "ACTUAL_PRIMARY_DESKTOP_ACCEPTED_LOCAL_PHONE_QUALIFIED",
+  "atUtc": "2026-10-29T02:54:21.680Z",
+  "mergedRevision": "0b90c1b8a3b96f0b748da539b291f7878574023d",
+  "testedHead": "5d5bbc038ca6026723d785f9d8b697741d7ea82d",
+  "tree": "9caa729c143df576225aaeadd144b7254373df62",
+  "deployment": {
+    "id": "4VnGyKtJy2vgJnUGkn5gj6yvo13q",
+    "ready": true,
+    "environment": "Production",
+    "source": "main exact squash",
+    "primaryDomainAccepted": true
+  },
+  "actualViewport": {
+    "width": 1920,
+    "height": 1024,
+    "overrideUsed": false
+  },
+  "observations": {
+    "bothArmySectionsPresent": true,
+    "escape": {
+      "dialogsClosed": true,
+      "openerFocusObservedImmediately": true,
+      "delayedActiveElementAriaLabel": null,
+      "qualification": "Later label was null; sustained opener focus is not claimed."
+    },
+    "close": {
+      "openerFocusObserved": true,
+      "exactRootPositionRestored": true
+    },
+    "fullGame": {
+      "actualNavigation": true,
+      "normalGlobalViewportZoomAndTransforms": true,
+      "noModalFitStage": true
+    }
+  },
+  "cleanup": {
+    "ownedTabsCreated": 2,
+    "ownedTabsClosed": 2
+  },
+  "retainedMisses": [
+    "Full-game accessible-name observer did not locate the link; actual native link navigation was observed separately."
+  ],
+  "limits": [
+    "Actual production check was desktop1920x1024 without viewport override; no live-phone or production Axe claim.",
+    "LOCAL phone browser and focused-unit evidence remains distinct.",
+    "No game/account identifiers, names, counts, URLs, screenshots, photos, raw observation payloads or credentials copied."
+  ],
+  "privateEvidenceSha256": "1882a6222a4cb12a0c13d3d726a4165864b372c0a718a4a0c43f75202ad27b0d"
+}
