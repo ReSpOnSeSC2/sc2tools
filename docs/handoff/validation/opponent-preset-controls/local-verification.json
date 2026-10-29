@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "status": "LOCAL_GATES_PASSED_CI_AND_PRODUCTION_PENDING",
+  "sourceFreeze": "b866286f01376a02b4e4a62d1aca8cec7ed690375d436d3712da965c8bda7b8f",
+  "base": "f0faac0b4d16c1914b50d793d72e9e6e2e0fa5d2",
+  "matchingMainBase": "0eb06c18e5d5743e7230e4b4db41553fca6e363f",
+  "tests": {
+    "passed": 179,
+    "files": 14,
+    "newConsumerCases": 27,
+    "sortFields": 22,
+    "failed": 0,
+    "skipped": 0
+  },
+  "types": {
+    "nonincremental": true,
+    "passed": true
+  },
+  "lint": {
+    "newTestWarnings": 0,
+    "legacyAddedDiagnostics": 0
+  },
+  "build": {
+    "id": "QDShh4TdDS3gDMJTLw3JA",
+    "originalBudgets": 83,
+    "sourceInputs": 7007,
+    "staticWorkers": 1,
+    "heapGiB": 4
+  },
+  "browser": {
+    "passed": 2,
+    "retries": 0,
+    "phone": "390px light",
+    "desktop": "1280px dark",
+    "fullDefaultAxeScans": 4,
+    "violations": 0,
+    "groupRoleFindingResolved": true,
+    "remainingIncompleteRule": "color-contrast: nontext arrow glyphs",
+    "readOnlyGlyphObservations": 18,
+    "minimumComputedRatio": 6.011916201451852,
+    "manualReview": "Actual opaque computed colors, opacity1/no background images; no universal AA certification."
+  },
+  "assets": {
+    "canonical": 40,
+    "raw": 49,
+    "active": 7,
+    "strictSample": 4,
+    "unchanged": true
+  },
+  "cleanup": {
+    "lightIdentities": 14,
+    "buildIdentities": 11,
+    "browserIdentities": 15,
+    "currentUnresolved": 0,
+    "listeners": 0,
+    "kills": 0
+  },
+  "captures": [
+    {
+      "file": "screenshots/LOCAL-390-light-lost.png",
+      "sha256": "1e6f4d5a06cbac7cc4c7c55716d5e58471fef7dbbf7fe8996feaf848ba66109e",
+      "bytes": 143291
+    },
+    {
+      "file": "screenshots/LOCAL-390-light-all.png",
+      "sha256": "0b1918c8694c9bd9bdbde5cda3d45e864d0f9fe9b393c53fd721735a73944307",
+      "bytes": 143915
+    }
+  ],
+  "limits": [
+    "LOCALsynthetic auth/HTTP/Next/dossier boundaries; actual consumers and browserBack/reload. No live-phone or realNext-routing proof.",
+    "Required exact-head CI, deployment and signed-in production acceptance pending.",
+    "Earlier two unrecorded read-only preflight IDs remain unclaimed; independent no-escaped-app recovery is separate from current successful gate cleanup."
+  ],
+  "proofs": {
+    "light": "afd65671d142dce128ae8c37071284f0b940ae8a27817cf9385f798e01a32b1a",
+    "build": "7d0df6ad9601918506995888df1003f8f8b8544107bbfd472d7ff04093bb1c45",
+    "browser": "f6f32e807a6a497d923198aca231f55ca529230d4f6592ea9f283383e974f71e",
+    "browserPeer": "52328064ee5c5d12304cf5c7c1249b20cb09704d5b9e3963ce367821c4f366a4"
+  },
+  "program": {
+    "items": 197,
+    "completed": 124,
+    "partial": 53,
+    "open": 20,
+    "remaining": 73
+  }
+}

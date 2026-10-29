@@ -39,6 +39,7 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Keep the Opponents quick-view selection and phone sort menu in sync. Lost to most highlights its loss ranking, All opponents restores newest first, and the phone menu includes Wins and Losses.
 - Keep the mobile Macro timeline and both army compositions at a fixed 50% overview, with full-size timeline controls and a compact header. Remove zoom controls and keep metric choices on one horizontally scrollable row.
 - Show ties and unrecorded results accurately in admin opponent and global player game lists and the selected-game detail. Keep result badges readable on selected rows.
 - Let backup-health checks finish during API shutdown without calling a missing method, so the remaining cleanup can proceed.
