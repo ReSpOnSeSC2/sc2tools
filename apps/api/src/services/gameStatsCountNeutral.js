@@ -7,19 +7,26 @@ const { stampVersion } = require("../db/schemaVersioning");
 const { withGameStatsAuthority, saveGameStats, MAINTENANCE_VERSION } = require("./gameStatsMaintenance");
 const { readyStatsFromOwnerRow } = require("./maintainedGameStatsRead");
 const { immutableBuildState, applyBuildState } = require("./gameStatsBuildStateNeutral");
+const { immutablePulseStamp, applyPulseStamp } = require("./gameStatsPulseNeutral");
 
 /** This named operation owns its filter and update. No arbitrary callback or
  * caller-declared neutral boolean can select the carry path.
  * @typedef {{kind:"macroSurface",gameId:string,macroScore:number,top3Leaks?:object[]}} MacroSurfaceMutation */
-/** @typedef {MacroSurfaceMutation|import('./gameStatsBuildStateNeutral').BuildStateMutation} NeutralMutation */
+/** @typedef {MacroSurfaceMutation|import('./gameStatsBuildStateNeutral').BuildStateMutation|import('./gameStatsPulseNeutral').PulseStampMutation} NeutralMutation */
 
 /** @param {NeutralMutation} input @param {Record<string,any>} [options] */
 function immutableNeutralMutation(input, options = {}) {
+  if (input?.kind === "pulseGameStamp") {
+    return immutablePulseStamp(input, options);
+  }
   return input?.kind === "macroSurface" ? immutableMacroSurface(input, options) : immutableBuildState(input, options);
 }
 /** @param {import('../db/connect').DbContext} db @param {import('./gameStatsWrites').GameStatsOwner} owner
  * @param {Readonly<NeutralMutation>} mutation @param {import('mongodb').ClientSession|undefined} session */
 function applyNeutralMutation(db, owner, mutation, session) {
+  if (mutation.kind === "pulseGameStamp") {
+    return applyPulseStamp(db, owner, mutation, session);
+  }
   return mutation.kind === "macroSurface" ? applyMacroSurface(db, owner, mutation, session) : applyBuildState(db, owner, mutation, session);
 }
 

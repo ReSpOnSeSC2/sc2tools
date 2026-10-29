@@ -26,6 +26,9 @@ const { observeJob } = require("../util/jobLedger");
 
 const { randomUUID } = require("crypto");
 const { gameWrite } = require("../util/userRevision");
+const { gameStatsWritesFor } = require("../services/gameStatsWrites");
+const { immutableNeutralOwner } = require("../services/gameStatsCountNeutral");
+const { copyPulseId } = require("../services/gameStatsPulseNeutral");
 const { canonicalRaceName, pickRaceMmr } = require("../services/oppMmrStamp");
 const { MMR_FLOOR, MMR_CEILING } = require("../util/mmrBracketing");
 
@@ -94,6 +97,7 @@ function buildOpponentMmrEnrichmentJob(deps) {
   const context = {
     config,
     games: deps.db.games,
+    gameStatsWrites: gameStatsWritesFor(deps.db, logger),
     userRevision: deps.userRevision,
     lock,
     logger,
@@ -358,50 +362,70 @@ async function processCandidates(context, rows, summary) {
  * @returns {Promise<'enriched'|'missed'|'pulse_error'|'write_error'|'skipped'>}
  */
 async function attemptCandidate(context, row, cache, summary) {
+  let candidate, owner;
+  try {
+    candidate = pendingCandidate(row);
+    if (!candidate) return "skipped";
+    owner = immutableNeutralOwner(await context.gameStatsWrites.capture(candidate.userId));
+  } catch { return "write_error"; }
+  const lookup = await cachedRaceBreakdown(cache, context.pulseMmr, candidate.pulseId);
+  // A failed provider read never consumes a one-shot marker.
+  if (lookup.failed) return "pulse_error";
+  return stampCandidate(context, candidate, owner, lookup.races, summary);
+}
+
+/** Snapshot server-selected identity before any owner/provider await.
+ * @param {any} row */
+function pendingCandidate(row) {
   const opponent = row.opponent || {};
   const needsMmr = !isFiniteNumber(opponent.mmr)
     && opponent.mmrLookupAttempted !== true;
   const needsLeague = !isFiniteNumber(opponent.leagueId)
     && opponent.leagueLookupAttempted !== true;
-  if (!needsMmr && !needsLeague) return "skipped";
+  if (!needsMmr && !needsLeague) return null;
+  return Object.freeze({ id: copyPulseId(row._id), userId: row.userId,
+    pulseId: String(opponent.pulseCharacterId), race: opponent.race, needsMmr, needsLeague });
+}
 
-  const id = String(row.opponent.pulseCharacterId);
-  const lookup = await cachedRaceBreakdown(cache, context.pulseMmr, id);
-  // Transport failures remain retryable. Only a completed Pulse response is
-  // allowed to consume either one-shot marker.
-  if (lookup.failed) return "pulse_error";
-  const mmr = selectRaceMmr(lookup.races, row.opponent.race);
-  const leagueId = selectRaceLeagueId(lookup.races, row.opponent.race);
-  let matched = false;
-  let enriched = false;
-  let writeError = false;
+/** Independent fields retain their existing partial-success accounting.
+ * @param {any} context @param {NonNullable<ReturnType<typeof pendingCandidate>>} candidate
+ * @param {import('../services/gameStatsWrites').GameStatsOwner} owner
+ * @param {any[]} races @param {TickResult} summary */
+async function stampCandidate(context, candidate, owner, races, summary) {
+  const mmr = selectRaceMmr(races, candidate.race);
+  const leagueId = selectRaceLeagueId(races, candidate.race);
+  const mmrResult = candidate.needsMmr ? await stampMissingField(context, owner, candidate.id, "mmr", mmr) : null;
+  const leagueResult = candidate.needsLeague ? await stampMissingField(context, owner, candidate.id, "league", leagueId) : null;
+  if (leagueResult?.matched && leagueId !== null) summary.leagueEnriched += 1;
+  return stampStatus(mmrResult, leagueResult, mmr, leagueId);
+}
 
-  if (needsMmr) {
-    const result = await stampMissingField(context.games, row._id, {
-      field: "opponent.mmr",
-      marker: "opponent.mmrLookupAttempted",
-      value: mmr,
-    }, context.userRevision, row.userId);
-    matched = matched || result.matched;
-    enriched = enriched || (result.matched && mmr !== null);
-    writeError = writeError || result.failed;
+/** @param {{matched:boolean,failed:boolean}|null} result
+ * @param {number|null} value */
+function fieldStampOutcome(result, value) {
+  const matched = Boolean(result?.matched);
+  return {
+    matched,
+    failed: Boolean(result?.failed),
+    enriched: matched && value !== null,
+  };
+}
+
+/** @param {{matched:boolean,failed:boolean}|null} mmrResult
+ * @param {{matched:boolean,failed:boolean}|null} leagueResult
+ * @param {number|null} mmr @param {number|null} league */
+function stampStatus(mmrResult, leagueResult, mmr, league) {
+  const mmrOutcome = fieldStampOutcome(mmrResult, mmr);
+  const leagueOutcome = fieldStampOutcome(leagueResult, league);
+  if (mmrOutcome.failed || leagueOutcome.failed) {
+    return "write_error";
   }
-
-  if (needsLeague) {
-    const result = await stampMissingField(context.games, row._id, {
-      field: "opponent.leagueId",
-      marker: "opponent.leagueLookupAttempted",
-      value: leagueId,
-    });
-    matched = matched || result.matched;
-    enriched = enriched || (result.matched && leagueId !== null);
-    if (result.matched && leagueId !== null) summary.leagueEnriched += 1;
-    writeError = writeError || result.failed;
+  if (!mmrOutcome.matched && !leagueOutcome.matched) {
+    return "skipped";
   }
-
-  if (writeError) return "write_error";
-  if (!matched) return "skipped";
-  if (enriched) return "enriched";
+  if (mmrOutcome.enriched || leagueOutcome.enriched) {
+    return "enriched";
+  }
   return "missed";
 }
 
@@ -410,27 +434,17 @@ async function attemptCandidate(context, row, cache, summary) {
  * re-upload. Attempt markers are independent so an existing MMR never blocks
  * league repair (and vice versa).
  *
- * @param {import('mongodb').Collection} games
+ * @param {any} context
+ * @param {import('../services/gameStatsWrites').GameStatsOwner} owner
  * @param {any} rowId
- * @param {{field: string, marker: string, value: number|null}} input
- * @param {import('../util/userRevision').UserRevision} [userRevision]
- * @param {string} [owner]
+ * @param {"mmr"|"league"} field
+ * @param {number|null} value
  * @returns {Promise<{matched: boolean, failed: boolean}>}
  */
-async function stampMissingField(games, rowId, input, userRevision, owner = "") {
-  /** @type {Record<string, boolean|number|string>} */
-  const set = { [input.marker]: true };
-  if (input.value !== null) set[input.field] = input.value;
-  if (input.field === "opponent.mmr" && input.value !== null) set["opponent.mmrSource"] = "pulse";
+async function stampMissingField(context, owner, rowId, field, value) {
   try {
-    const res = await gameWrite(userRevision, owner, () => games.updateOne(
-      {
-        _id: rowId,
-        [input.field]: { $not: { $type: "number" } },
-        [input.marker]: { $ne: true },
-      },
-      { $set: set },
-    ));
+    const res = await gameWrite(context.userRevision, owner.userId, () => context.gameStatsWrites.write(owner,
+      { kind: "pulseGameStamp", id: rowId, field, value }));
     return { matched: (res.matchedCount || 0) > 0, failed: false };
   } catch {
     return { matched: false, failed: true };
