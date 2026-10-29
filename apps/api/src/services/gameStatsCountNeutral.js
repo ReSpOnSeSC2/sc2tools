@@ -10,6 +10,7 @@ const { immutableBuildState, applyBuildState } = require("./gameStatsBuildStateN
 const { immutablePulseStamp, applyPulseStamp } = require("./gameStatsPulseNeutral");
 const { immutableCustomBuildEof, applyCustomBuildEof, customBuildEofRepairAuthority } = require("./gameStatsCustomBuildEof");
 const { immutableCustomBuildIngestTag, applyCustomBuildIngestTag } = require("./gameStatsCustomBuildIngestTag");
+const { immutableCustomBuildDefinitionSave, applyCustomBuildDefinitionSave } = require("./gameStatsCustomBuildDefinitionSave");
 
 /** This named operation owns its filter and update. No arbitrary callback or
  * caller-declared neutral boolean can select the carry path.
@@ -17,6 +18,7 @@ const { immutableCustomBuildIngestTag, applyCustomBuildIngestTag } = require("./
 /** @typedef {MacroSurfaceMutation|import('./gameStatsBuildStateNeutral').BuildStateMutation|import('./gameStatsPulseNeutral').PulseStampMutation|import('./gameStatsCustomBuildEof').CustomBuildEofMutation} UpdateNeutralMutation */
 /** @typedef {UpdateNeutralMutation|import('./gameStatsCustomBuildIngestTag').CustomBuildIngestTagMutation} NeutralMutation */
 /** @typedef {import('mongodb').UpdateResult|import('./gameStatsCustomBuildIngestTag').CustomBuildIngestTagResult} NeutralResult */
+/** @typedef {NeutralMutation|import('./gameStatsCustomBuildDefinitionSave').DefinitionSaveMutation} ReservedCarryMutation */
 
 /** @param {NeutralMutation} input @param {Record<string,any>} [options] */
 function immutableNeutralMutation(input, options = {}) {
@@ -83,7 +85,7 @@ function validNeutralOwner(owner) {
 /** Named EOF repair is the only additional authority. Caller options cannot
  * select it, and other neutral families retain the absent-fence predicate.
  * @param {import('./gameStatsWrites').GameStatsOwner} owner
- * @param {Readonly<NeutralMutation>} mutation */
+ * @param {Readonly<ReservedCarryMutation>} mutation */
 function neutralAuthority(owner, mutation) {
   if (mutation.kind === "customBuildEof" && mutation.repairFenceId !== undefined) {
     return customBuildEofRepairAuthority(owner, mutation);
@@ -126,14 +128,30 @@ function applyMacroSurface(db, owner, mutation, session) {
  * @param {Readonly<NeutralMutation>} mutation
  * @param {import('mongodb').ClientSession} session */
 function carryUnchangedGameStats(db, owner, mutation, session) {
-  const fixedOwner = immutableNeutralOwner(owner), fixedMutation = immutableNeutralMutation(mutation);
-  const authority = neutralAuthority(fixedOwner, fixedMutation);
-  return withGameStatsAuthority(db, fixedOwner, authority, async (before, revision) => {
-    const stats = readyStatsFromOwnerRow(before, fixedOwner.userId, true);
-    const result = await applyNeutralMutation(db, fixedOwner, fixedMutation, session);
+  return carryFixedGameStats(db, immutableNeutralOwner(owner), immutableNeutralMutation(mutation), session);
+}
+
+/** Only the already-reserved fixed definition executor enters this path.
+ * The public neutral validator deliberately does not accept this kind.
+ * @param {import('../db/connect').DbContext} db @param {import('./gameStatsWrites').GameStatsOwner} owner
+ * @param {Readonly<import('./gameStatsCustomBuildDefinitionSave').DefinitionSaveMutation>} mutation
+ * @param {import('mongodb').ClientSession} session */
+function carryDefinitionGameStats(db, owner, mutation, session) {
+  return carryFixedGameStats(db, immutableNeutralOwner(owner), immutableCustomBuildDefinitionSave(mutation), session);
+}
+
+/** @param {import('../db/connect').DbContext} db @param {import('./gameStatsWrites').GameStatsOwner} owner
+ * @param {Readonly<ReservedCarryMutation>} mutation @param {import('mongodb').ClientSession} session */
+function carryFixedGameStats(db, owner, mutation, session) {
+  const authority = neutralAuthority(owner, mutation);
+  return withGameStatsAuthority(db, owner, authority, async (before, revision) => {
+    const stats = readyStatsFromOwnerRow(before, owner.userId, true);
+    const result = await (mutation.kind === "customBuildDefinitionSave"
+      ? applyCustomBuildDefinitionSave(db, owner, mutation, session)
+      : applyNeutralMutation(db, owner, mutation, session));
     if (stats) await saveGameStats(db, authority, revision, { $set: {
       gameStats: stats, gameStatsMaintenance: { version: MAINTENANCE_VERSION, status: "ready",
-        ownerId: fixedOwner.id, revision, ...(fixedOwner.epoch === undefined ? {} : { epoch: fixedOwner.epoch }) },
+        ownerId: owner.id, revision, ...(owner.epoch === undefined ? {} : { epoch: owner.epoch }) },
     } }, session);
     return result;
   }, session);
@@ -142,4 +160,4 @@ function carryUnchangedGameStats(db, owner, mutation, session) {
 function failure(code) { return Object.assign(new Error(code), { code, status: 503 }); }
 
 module.exports = { immutableMacroSurface, immutableNeutralOwner, applyMacroSurface, carryUnchangedGameStats,
-  immutableNeutralMutation, applyNeutralMutation, capturedNeutralOwner, neutralAuthority };
+  immutableNeutralMutation, applyNeutralMutation, capturedNeutralOwner, neutralAuthority, carryDefinitionGameStats };

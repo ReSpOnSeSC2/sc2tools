@@ -2,7 +2,7 @@
 "use strict";
 
 const { MongoMemoryServer } = require("mongodb-memory-server");
-const { MongoClient } = require("mongodb");
+const { connect } = require("../src/db/connect");
 const { CustomBuildsService } = require("../src/services/customBuilds");
 const { PerGameComputeService } = require("../src/services/perGameCompute");
 
@@ -46,12 +46,15 @@ describe("classification across bounded custom-build pages", () => {
   let games;
   let builds;
   let service;
+  let definitionContext;
 
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create();
-    client = new MongoClient(mongo.getUri());
-    await client.connect();
+    const connected = await connect({ uri: mongo.getUri(), dbName: "custom_build_paged_classification" });
+    client = connected.client;
     db = client.db("custom_build_paged_classification");
+    definitionContext = { client, users: connected.users, gameStatsTransactions: connected.gameStatsTransactions };
+    await connected.users.insertOne({ userId: USER_ID });
     games = db.collection("games");
     builds = db.collection("custom_builds");
     await builds.createIndex({ userId: 1, slug: 1 }, { unique: true });
@@ -60,7 +63,7 @@ describe("classification across bounded custom-build pages", () => {
 
   beforeEach(() => {
     service = new CustomBuildsService(
-      { games, customBuilds: builds },
+      { ...definitionContext, games, customBuilds: builds },
       { perGame: new PerGameComputeService({ games }) },
     );
   });

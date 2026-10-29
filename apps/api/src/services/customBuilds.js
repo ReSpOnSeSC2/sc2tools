@@ -1,6 +1,7 @@
 "use strict";
 const { gameWrite } = require("../util/userRevision");
-const { gameStatsWritesFor } = require("./gameStatsWrites");
+const { gameStatsWritesFor, reserveCustomDefinitionSave } = require("./gameStatsWrites");
+const { buildPerspective } = require("./customBuildDefinitionCommands");
 const { immutableNeutralOwner, capturedNeutralOwner } = require("./gameStatsCountNeutral");
 const { immutableCustomBuildEof, customBuildEofRepairAuthority } = require("./gameStatsCustomBuildEof");
 const { immutableCustomBuildIngestTag, snapshotTagGame } = require("./gameStatsCustomBuildIngestTag");
@@ -56,10 +57,6 @@ const {
   overrideActive,
 } = require("./buildIntentShape");
 const {
-  renameCustomOpponentOverrides,
-  renameCustomOverrides,
-} = require("./buildIntentAttribution");
-const {
   opponentClaimFilter,
   youClaimFilter,
 } = require("./buildIntentGuards");
@@ -77,17 +74,6 @@ const RECLASSIFY_RETRY_BASE_MS = 250;
 const RECLASSIFY_WORKER_RETRY_MS = 1000;
 const RECLASSIFY_LEASE_RENEW_MS = 20 * 1000;
 const RECLASSIFY_RECOVERY_INTERVAL_MS = 15 * 1000;
-
-function definitionTransactionsRequired() {
-  return Object.assign(new Error("build_definition_transactions_required"), {
-    status: 503, code: "build_definition_transactions_required",
-  });
-}
-
-/** @param {any} build @returns {"you"|"opponent"} */
-function buildPerspective(build) {
-  return build && build.perspective === "opponent" ? "opponent" : "you";
-}
 
 /** @param {"you"|"opponent"} perspective */
 function customBuildProvenanceField(perspective) {
@@ -119,25 +105,6 @@ function provenanceClaimFilter(perspective, slug) {
   return perspective === "opponent"
     ? opponentClaimFilter(slug)
     : youClaimFilter(slug);
-}
-
-/**
- * Name to write onto a saved build's check-in rows on ``perspective``'s
- * axis, or null when they keep theirs: only an existing build of that
- * perspective whose name (or perspective) changed. A flip to the other
- * perspective or a delete leaves them frozen.
- * @param {any} previous the stored build before this save (deleted included)
- * @param {Record<string, unknown>} next
- * @param {"you"|"opponent"} [perspective]
- * @returns {string|null}
- */
-function checkinRenameTarget(previous, next, perspective = "you") {
-  if (!previous || buildPerspective(next) !== perspective) return null;
-  const name = typeof next.name === "string" && next.name ? next.name : null;
-  if (name === null) return null;
-  return previous.name === name && buildPerspective(previous) === perspective
-    ? null
-    : name;
 }
 
 /** @param {any} game @param {"you"|"opponent"} perspective */
@@ -621,112 +588,19 @@ class CustomBuildsService {
    * @param {{expectedRevision?:number, expectedId?:string, recordHistory?:boolean}} [options]
    */
   async upsert(userId, build, options = {}) {
-    return this._withUserBuildMutation(userId, () => gameWrite(this.userRevision, userId, async () => {
-      const client = this.db.client;
-      if (!client) {
-        if (options.expectedRevision !== undefined) throw definitionTransactionsRequired();
-        await this._upsertUnlocked(userId, build, options);
-        return;
-      }
-      const session = client.startSession();
-      let renamedCheckins = 0;
-      let initialReadCompleted = false;
-      try {
-        // Definition CAS and linked check-in names commit together, including
-        // ordinary owner saves on another API process. Publish only once,
-        // after commit; the Mongo driver may retry this callback.
-        await session.withTransaction(async () => {
-          renamedCheckins = await this._upsertUnlocked(userId, build, {
-            ...options, session, deferNotifications: true,
-            onInitialRead: () => { initialReadCompleted = true; },
-          });
-        });
-      } catch (error) {
-        const failure = /** @type {any} */ (error);
-        // Standalone development Mongo rejects the first transactional read
-        // before any write. Keep legacy owner saves available there; a
-        // version-fenced admin save must never fall back to partial writes.
-        if (!initialReadCompleted && failure?.code === 20 && /Transaction numbers are only allowed/.test(String(failure.message))) {
-          if (options.expectedRevision !== undefined) throw definitionTransactionsRequired();
-          await this._upsertUnlocked(userId, build, options);
-          return;
-        }
-        throw error;
-      } finally {
-        await session.endSession();
-      }
-      if (renamedCheckins > 0) this._notifyGamesChanged(userId, renamedCheckins);
-      this._notifyDefinitionsChanged(userId);
-    }));
-  }
-
-  /**
-   * @private
-   * @param {string} userId
-   * @param {{slug: string} & Record<string, unknown>} build
-   * @param {{expectedRevision?:number, expectedId?:string, recordHistory?:boolean, session?:import('mongodb').ClientSession, deferNotifications?:boolean, onInitialRead?:()=>void}} [options]
-   */
-  async _upsertUnlocked(userId, build, options = {}) {
-    if (!build || !build.slug) throw new Error("slug required");
-    // Build check-ins (and opponent corrections) store the declared custom
-    // build's display name on the replay row. Rename them in the same
-    // transaction as the definition, independent of the reclassify flag.
-    const previous = options.recordHistory
-      ? await this.db.customBuilds.aggregate([
-        { $match: { userId, slug: build.slug, deletedAt: { $exists: false }, ...(options.expectedId ? { _id: new (require('mongodb').ObjectId)(options.expectedId) } : {}) } },
-        { $limit: 1 },
-        { $project: { _id: 0, ...ROOT_PUBLIC_BUILD_EXPRESSION, definitionRevision: { $ifNull: ["$definitionRevision", 0] }, updatedAt: 1 } },
-      ], options.session ? { session: options.session } : {}).next()
-      : typeof this.db.customBuilds.findOne === "function"
-      ? await this.db.customBuilds.findOne(
-        { userId, slug: build.slug },
-        { projection: { _id: 0, name: 1, perspective: 1, definitionRevision: 1 }, ...(options.session ? { session: options.session } : {}) },
-      )
-      : null;
-    options.onInitialRead?.();
-    if (options.expectedRevision !== undefined && (!previous || (previous.definitionRevision || 0) !== options.expectedRevision)) {
-      throw Object.assign(new Error("build_definition_changed"), { status: 409, code: "build_definition_changed" });
-    }
-    const overrideName = checkinRenameTarget(previous, build, "you");
-    const opponentOverrideName = checkinRenameTarget(previous, build, "opponent");
-    const games = this._gamesCollection();
-    const renameGames = options.session && games
-      ? /** @type {import('mongodb').Collection} */ (/** @type {unknown} */ ({
-        updateMany: (/** @type {any} */ filter, /** @type {any} */ update) => games.updateMany(filter, update, { session: options.session }),
-      })) : games;
-    let renamedCheckins = 0;
-    if (renameGames && overrideName !== null) {
-      renamedCheckins += await renameCustomOverrides(renameGames, userId, build.slug, overrideName);
-    }
-    if (renameGames && opponentOverrideName !== null) {
-      renamedCheckins += await renameCustomOpponentOverrides(
-        renameGames, userId, build.slug, opponentOverrideName,
-      );
-    }
-    const now = new Date();
-    /** @type {Record<string, any>} */
-    const doc = { ...build, userId, updatedAt: now };
-    delete doc._id;
-    delete doc.deletedAt;
-    delete doc._schemaVersion;
-    // Background classification state is server-owned. Never allow a web
-    // client save to forge, erase, or replace it.
-    delete doc.reclassifyJob;
-    delete doc.definitionRevision;
-    delete doc._definitionHistory;
-    stampVersion(doc, COLLECTIONS.CUSTOM_BUILDS);
-    const saved = await /** @type {import('mongodb').Collection<any>} */ (this.db.customBuilds).updateOne(
-      { userId, slug: build.slug, ...(options.expectedRevision === undefined ? {} : { deletedAt: { $exists: false } }), ...(options.expectedId ? { _id: new (require('mongodb').ObjectId)(options.expectedId) } : {}), ...(options.expectedRevision === undefined ? {} : options.expectedRevision === 0 ? { $or: [{ definitionRevision: 0 }, { definitionRevision: { $exists: false } }] } : { definitionRevision: options.expectedRevision }) },
-      /** @type {import('mongodb').Document} */ ({ $setOnInsert: { createdAt: now }, $set: doc, $unset: { deletedAt: "" }, $inc: { definitionRevision: 1 },
-        ...(options.recordHistory && previous ? { $push: { _definitionHistory: { $each: [{ revision: previous.definitionRevision || 0, savedAt: now, build: Object.fromEntries(Object.entries(previous).filter(([key]) => key !== "definitionRevision" && key !== "updatedAt")) }], $slice: -10 } } } : {}) }),
-      { upsert: options.expectedRevision === undefined, ...(options.session ? { session: options.session } : {}) },
-    );
-    if (options.expectedRevision !== undefined && !saved.matchedCount) throw Object.assign(new Error("build_definition_changed"), { status: 409, code: "build_definition_changed" });
-    if (!options.deferNotifications) {
-      if (renamedCheckins > 0) this._notifyGamesChanged(userId, renamedCheckins);
-      this._notifyDefinitionsChanged(userId);
-    }
-    return renamedCheckins;
+    const ticket = reserveCustomDefinitionSave(this.gameStatsWrites, userId, {
+      kind: "customBuildDefinitionSave", definition: build, expectedRevision: options.expectedRevision,
+      expectedId: options.expectedId, recordHistory: options.recordHistory,
+    });
+    let queued;
+    try {
+      queued = this._withUserBuildMutation(userId, () => gameWrite(this.userRevision, userId, async () => {
+        const renamedCheckins = await ticket.commit();
+        if (renamedCheckins > 0) this._notifyGamesChanged(userId, renamedCheckins);
+        this._notifyDefinitionsChanged(userId);
+      }));
+    } catch (error) { return ticket.abandon(error); }
+    return ticket.start(queued);
   }
 
   /**

@@ -13,7 +13,7 @@
  */
 
 const { MongoMemoryServer } = require("mongodb-memory-server");
-const { MongoClient } = require("mongodb");
+const { connect } = require("../src/db/connect");
 
 const { CustomBuildsService } = require("../src/services/customBuilds");
 const { PerGameComputeService } = require("../src/services/perGameCompute");
@@ -79,11 +79,15 @@ let client;
 let games;
 let builds;
 let jobs;
+let definitionContext;
 
 beforeAll(async () => {
   mongo = await MongoMemoryServer.create();
-  client = await MongoClient.connect(mongo.getUri());
+  const connected = await connect({ uri: mongo.getUri(), dbName: "build_intent_opponent_guards" });
+  client = connected.client;
   const db = client.db("build_intent_opponent_guards");
+  definitionContext = { client, users: connected.users, gameStatsTransactions: connected.gameStatsTransactions };
+  await connected.users.insertOne({ userId: USER });
   games = db.collection("games");
   builds = db.collection("custom_builds");
   jobs = db.collection("custom_build_jobs");
@@ -103,7 +107,7 @@ afterEach(async () => {
 
 function newService(opts = {}) {
   return new CustomBuildsService(
-    { games, customBuilds: builds, customBuildJobs: jobs },
+    { ...definitionContext, games, customBuilds: builds, customBuildJobs: jobs },
     { perGame: new PerGameComputeService({ games }), ...opts },
   );
 }
