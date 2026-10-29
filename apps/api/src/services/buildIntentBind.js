@@ -1,5 +1,8 @@
 "use strict";
 const { gameWrite } = require("../util/userRevision");
+const { gameStatsWritesFor } = require("./gameStatsWrites");
+const { capturedNeutralOwner } = require("./gameStatsCountNeutral");
+const { immutableBuildState } = require("./gameStatsBuildStateNeutral");
 
 /**
  * Bind an ingested replay to its live check-in record (``POST /v1/games``,
@@ -116,6 +119,30 @@ function acceptableCandidates(candidates, opponentName) {
   return candidates.length === 1 && hasNoOpponentInfo(candidates[0]) ? candidates : [];
 }
 
+/** Snapshot the caller's replay/options before the owner read can wait.
+ * @param {import('./gameStatsWrites').GameStatsWrites} writer @param {string} userId
+ * @param {Record<string,any>} game @param {{created:boolean,spatial?:unknown,statsOwner?:import('./gameStatsWrites').GameStatsOwner}} opts
+ * @param {Record<string,any>} opponent
+ */
+async function captureBindAdmission(writer, userId, game, opts, opponent) {
+  /** @type {Record<string, any>} */
+  const capturedGame = { ...game, opponent };
+  const capturedOpts = { ...opts };
+  const owner = await capturedNeutralOwner(writer, userId, capturedOpts.statsOwner);
+  return { capturedGame, capturedOpts, owner, created: capturedOpts.created === true };
+}
+
+/** Preserve the original empty/missing-date/exact-date first-wins guard.
+ * @param {string} gameId @param {Record<string,any>|null} intent
+ * @param {Array<Record<string,any>>} pipeline
+ */
+function claimedBindMutation(gameId, intent, pipeline) {
+  const updatedAt = intent?.updatedAt;
+  const guard = intent ? updatedAt instanceof Date ? "updatedAt" : "missingUpdatedAt" : "empty";
+  return immutableBuildState({ kind: "buildIntentBind", gameId, pipeline, guard,
+    ...(updatedAt instanceof Date ? { updatedAt } : {}) });
+}
+
 class BuildIntentBind {
   /**
    * @param {{
@@ -133,6 +160,7 @@ class BuildIntentBind {
    */
   constructor(deps) {
     this.userRevision = deps.userRevision || null;
+    this.gameStatsWrites = gameStatsWritesFor(/** @type {import('../db/connect').DbContext} */ (deps.db));
     this.games = deps.db.games;
     this.users = deps.db.users;
     this.live = deps.db.buildIntentLive;
@@ -145,21 +173,21 @@ class BuildIntentBind {
   /**
    * @param {string} userId
    * @param {Record<string, any>} game the validated ingest payload
-   * @param {{ created: boolean, spatial?: unknown }} opts ``spatial``: the
+   * @param {{ created: boolean, spatial?: unknown, statsOwner?:import('./gameStatsWrites').GameStatsOwner }} opts ``spatial``: the
    *        stored (bounded) spatial block, as the tagger evaluated it
    * @returns {Promise<{ bound: boolean, status: string } | null>}
    */
   async bindIngestedGame(userId, game, opts) {
     if (!game || typeof game !== "object" || typeof game.gameId !== "string") return null;
     if (game.isResumedFromReplay === true) return null;
-    const opponent = game.opponent && typeof game.opponent === "object" ? game.opponent : null;
+    const opponent = game.opponent && typeof game.opponent === "object" ? { ...game.opponent } : null;
     const format = game.matchFormat;
     if (!opponent || (format !== undefined && format !== null && format !== "1v1")) return null;
     const dateMs = new Date(game.date).getTime();
     if (!Number.isFinite(dateMs)) return null;
-    const created = opts.created === true;
+    const { capturedGame, capturedOpts, owner, created } = await captureBindAdmission(this.gameStatsWrites, userId, game, opts, opponent);
     const fresh = Math.abs(this.now() - dateMs) <= BUILD_INTENT.FRESH_PENDING_MS;
-    const startedAtMs = startedAtMsFor(game, dateMs);
+    const startedAtMs = startedAtMsFor(capturedGame, dateMs);
     const candidates = await this.live
       .find({
         userId,
@@ -188,36 +216,36 @@ class BuildIntentBind {
     // Array#sort is stable: window before late and newest first hold within a rank.
     const acceptable = [...same.sort((a, b) => answerRank(a) - answerRank(b)), ...older];
     if (acceptable.length === 0 && !(created && fresh)) return null;
-    const row = await this.games.findOne({ userId, gameId: game.gameId }, { projection: GAME_PROJECTION });
+    const row = await this.games.findOne({ userId, gameId: capturedGame.gameId }, { projection: GAME_PROJECTION });
     if (!row) return null;
     if (row.buildIntent && typeof row.buildIntent === "object"
       && Object.hasOwn(row.buildIntent, "gameKey")) return null;
-    const payload = { ...game, spatial: opts.spatial !== undefined ? opts.spatial : game.spatial };
+    const payload = { ...capturedGame, spatial: capturedOpts.spatial !== undefined ? capturedOpts.spatial : capturedGame.spatial };
     for (const candidate of acceptable) {
       const now = new Date(this.now());
       const claimed = await this.live.findOneAndUpdate(
         { _id: candidate._id, gameId: null },
-        { $set: { gameId: game.gameId, boundAt: now, updatedAt: now } },
+        { $set: { gameId: capturedGame.gameId, boundAt: now, updatedAt: now } },
         { returnDocument: "after" },
       );
       if (!claimed) continue;
       let outcome;
       try {
-        outcome = await this._bindClaimed(userId, payload, row, claimed);
+        outcome = await this._bindClaimed(userId, payload, row, claimed, owner);
       } catch (err) {
-        await this._releaseAfterFailure(userId, game.gameId, claimed);
+        await this._releaseAfterFailure(userId, capturedGame.gameId, claimed);
         throw err;
       }
       if (outcome) {
-        this._changed(userId, game.gameId);
+        this._changed(userId, capturedGame.gameId);
         return outcome;
       }
       // The game was bound meanwhile: give the record back.
-      await this._release(claimed._id, game.gameId);
+      await this._release(claimed._id, capturedGame.gameId);
       return null;
     }
     if (!created || !fresh) return null;
-    return this._markPending(userId, payload, row);
+    return this._markPending(userId, payload, row, owner);
   }
 
   /**
@@ -290,21 +318,23 @@ class BuildIntentBind {
    * @param {string} userId
    * @param {Record<string, any>} game
    * @param {Record<string, any>} row
+   * @param {import('./gameStatsWrites').GameStatsOwner} [statsOwner]
    */
-  async _markPending(userId, game, row) {
+  async _markPending(userId, game, row, statsOwner) {
     if (row.buildIntent) return null;
+    const gameId = row.gameId;
+    const owner = await capturedNeutralOwner(this.gameStatsWrites, userId, statsOwner);
     const matchup = gameMatchup(row);
     if (!matchup || ineligibleReason(row) !== null) return null;
     const prefs = await readBuildIntentPrefs(this.users, userId);
     if (!prefs.checkin.enabled) return null;
     const suggestion = await this._suggest(userId, game, row, matchup, null, null);
     const now = new Date(this.now());
-    const res = await gameWrite(this.userRevision, userId, () => this.games.updateOne(
-      { userId, gameId: row.gameId, buildIntent: { $exists: false } },
-      mergeIntentPipeline({ ...defaultIntent(now), status: "pending", suggestion }),
-    ));
+    const mutation = immutableBuildState({ kind: "buildIntentPending", gameId,
+      pipeline: mergeIntentPipeline({ ...defaultIntent(now), status: "pending", suggestion }) });
+    const res = await gameWrite(this.userRevision, userId, () => this.gameStatsWrites.write(owner, mutation));
     if (res.matchedCount === 0) return null;
-    this._changed(userId, String(row.gameId));
+    this._changed(userId, String(gameId));
     return { bound: false, status: "pending" };
   }
 
@@ -315,27 +345,25 @@ class BuildIntentBind {
    * @param {Record<string, any>} game
    * @param {Record<string, any>} firstRow
    * @param {Record<string, any>} doc the claimed live record
+   * @param {import('./gameStatsWrites').GameStatsOwner} [statsOwner]
    * @returns {Promise<{ bound: boolean, status: string } | null>}
    */
-  async _bindClaimed(userId, game, firstRow, doc) {
+  async _bindClaimed(userId, game, firstRow, doc, statsOwner) {
+    const gameId = game.gameId;
+    const owner = await capturedNeutralOwner(this.gameStatsWrites, userId, statsOwner);
     const prefs = await readBuildIntentPrefs(this.users, userId);
     let row = firstRow;
     for (let attempt = 0; attempt < BIND_ATTEMPTS; attempt += 1) {
       if (attempt > 0) {
-        const fresh = await this.games.findOne({ userId, gameId: game.gameId }, { projection: GAME_PROJECTION });
+        const fresh = await this.games.findOne({ userId, gameId }, { projection: GAME_PROJECTION });
         if (!fresh) return null;
         row = fresh;
       }
       const intent = row.buildIntent && typeof row.buildIntent === "object" ? row.buildIntent : null;
       if (intent && Object.hasOwn(intent, "gameKey")) return null;
       const plan = await this._plan(userId, game, row, doc, prefs.checkin.enabled);
-      const guard = intent
-        ? { "buildIntent.updatedAt": intent.updatedAt instanceof Date ? intent.updatedAt : { $exists: false } }
-        : { buildIntent: null };
-      const res = await gameWrite(this.userRevision, userId, () => this.games.updateOne(
-        { userId, gameId: game.gameId, "buildIntent.gameKey": { $exists: false }, ...guard },
-        plan.pipeline,
-      ));
+      const mutation = claimedBindMutation(gameId, intent, plan.pipeline);
+      const res = await gameWrite(this.userRevision, userId, () => this.gameStatsWrites.write(owner, mutation));
       if (res.matchedCount > 0) return { bound: true, status: plan.status };
     }
     return null;

@@ -43,6 +43,26 @@ maintenance. This count-only proof is not an expanded chart dependency seal;
 other non-count writers and any future retained-chart cohort gate are separate.
 Detail-store reads/uploads remain outside transaction retry callbacks.
 
+The bounded check-in extension adds four closed named operations: game update,
+pending-queue dismissal, fresh pending mark and claimed live-record bind. Each
+owns its existing complete game filter and no-upsert command. Only plain
+`$set` stages on the operation's explicit check-in/label paths are admitted;
+schema values must match the server stamp. Existing attribution expressions
+and literal user text remain unchanged. Descriptors and owner identities are
+BSON-copied before transaction/floor awaits; raw values that cannot round-trip
+are rejected. Dismissal retains the existing maximum of 500 selected IDs.
+
+PUT and dismissal capture once before their reads. Ingest forwards its admitted
+batch identity to binding, which never recaptures after an epoch change or
+between optimistic attempts. Direct service entry captures once. Live-record
+claims/releases, option/suggestion reads and notifications retain their existing
+order outside transaction retries. This does not make live-record and game
+writes cross-collection atomic: the existing first-wins recovery checks an
+uncertain game outcome before returning a claim. Strict count-only carry or
+retirement uses the same owner-first transaction and admission lifecycle as
+macro recompute; no expanded chart seal or serving-cohort certification is
+minted. Other classification/rename/non-count writers remain separate.
+
 Maintenance 1 is never a maintenance-2 delta base. Its first eager
 membership/date/eligibility transaction
 bootstraps with the original Mongo count and `sort({date:-1}).limit(1)` query.

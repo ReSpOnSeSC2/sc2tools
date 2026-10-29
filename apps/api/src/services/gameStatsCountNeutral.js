@@ -6,10 +6,22 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { withGameStatsAuthority, saveGameStats, MAINTENANCE_VERSION } = require("./gameStatsMaintenance");
 const { readyStatsFromOwnerRow } = require("./maintainedGameStatsRead");
+const { immutableBuildState, applyBuildState } = require("./gameStatsBuildStateNeutral");
 
 /** This named operation owns its filter and update. No arbitrary callback or
  * caller-declared neutral boolean can select the carry path.
  * @typedef {{kind:"macroSurface",gameId:string,macroScore:number,top3Leaks?:object[]}} MacroSurfaceMutation */
+/** @typedef {MacroSurfaceMutation|import('./gameStatsBuildStateNeutral').BuildStateMutation} NeutralMutation */
+
+/** @param {NeutralMutation} input @param {Record<string,any>} [options] */
+function immutableNeutralMutation(input, options = {}) {
+  return input?.kind === "macroSurface" ? immutableMacroSurface(input, options) : immutableBuildState(input, options);
+}
+/** @param {import('../db/connect').DbContext} db @param {import('./gameStatsWrites').GameStatsOwner} owner
+ * @param {Readonly<NeutralMutation>} mutation @param {import('mongodb').ClientSession|undefined} session */
+function applyNeutralMutation(db, owner, mutation, session) {
+  return mutation.kind === "macroSurface" ? applyMacroSurface(db, owner, mutation, session) : applyBuildState(db, owner, mutation, session);
+}
 
 /** Snapshot before owner/floor awaits, including nested payload arrays.
  * _schemaVersion is stamped by the server, never accepted in this descriptor.
@@ -40,9 +52,19 @@ function immutableNeutralOwner(owner) {
 }
 /** @param {import('./gameStatsWrites').GameStatsOwner} owner */
 function validNeutralOwner(owner) {
-  return typeof owner.userId === "string" && !!owner.userId && owner.id !== undefined
+  return !!owner && typeof owner.userId === "string" && !!owner.userId && owner.id !== undefined
     && typeof owner.compatibility === "boolean" && (owner.epoch === undefined
       || (typeof owner.epoch === "string" && /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(owner.epoch)));
+}
+
+/** Preserve one server-owned identity across a request's reads/claim/retries.
+ * Never recapture a supplied ingest handle after its epoch is retired.
+ * @param {import('./gameStatsWrites').GameStatsWrites} writer @param {string} userId
+ * @param {import('./gameStatsWrites').GameStatsOwner} [supplied] */
+async function capturedNeutralOwner(writer, userId, supplied) {
+  const owner = immutableNeutralOwner(supplied === undefined ? await writer.capture(userId) : supplied);
+  if (owner.userId !== userId) throw failure("game_stats_owner_unavailable");
+  return owner;
 }
 
 /** Only these macro fields are neutral to the original count/latest contract.
@@ -60,21 +82,21 @@ function applyMacroSurface(db, owner, mutation, session) {
     { $set: set, $unset: { macroBreakdown: "" } }, { ...(session ? { session } : {}), upsert: false });
 }
 
-/** Internal body used only by the admitted writer's named macro operation.
+/** Internal body used only by the admitted writer's closed named operations.
  * An invalid prior tuple stays retired; neutral work must not recount history.
  * This is count proof only, not an expanded chart-coverage seal.
  * @param {import('../db/connect').DbContext} db
  * @param {import('./gameStatsWrites').GameStatsOwner} owner
- * @param {Readonly<MacroSurfaceMutation>} mutation
+ * @param {Readonly<NeutralMutation>} mutation
  * @param {import('mongodb').ClientSession} session */
 function carryUnchangedGameStats(db, owner, mutation, session) {
-  const fixedOwner = immutableNeutralOwner(owner), fixedMutation = immutableMacroSurface(mutation);
+  const fixedOwner = immutableNeutralOwner(owner), fixedMutation = immutableNeutralMutation(mutation);
   const authority = { userId: fixedOwner.userId, _id: fixedOwner.id,
     gameStatsMutationEpoch: fixedOwner.epoch === undefined ? { $exists: false } : fixedOwner.epoch,
     _gdprMutation: { $exists: false } };
   return withGameStatsAuthority(db, fixedOwner, authority, async (before, revision) => {
     const stats = readyStatsFromOwnerRow(before, fixedOwner.userId, true);
-    const result = await applyMacroSurface(db, fixedOwner, fixedMutation, session);
+    const result = await applyNeutralMutation(db, fixedOwner, fixedMutation, session);
     if (stats) await saveGameStats(db, authority, revision, { $set: {
       gameStats: stats, gameStatsMaintenance: { version: MAINTENANCE_VERSION, status: "ready",
         ownerId: fixedOwner.id, revision, ...(fixedOwner.epoch === undefined ? {} : { epoch: fixedOwner.epoch }) },
@@ -85,4 +107,4 @@ function carryUnchangedGameStats(db, owner, mutation, session) {
 /** @param {string} code */
 function failure(code) { return Object.assign(new Error(code), { code, status: 503 }); }
 
-module.exports = { immutableMacroSurface, immutableNeutralOwner, applyMacroSurface, carryUnchangedGameStats };
+module.exports = { immutableMacroSurface, immutableNeutralOwner, applyMacroSurface, carryUnchangedGameStats, immutableNeutralMutation, applyNeutralMutation, capturedNeutralOwner };
