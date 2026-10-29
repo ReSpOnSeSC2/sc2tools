@@ -36,9 +36,9 @@ describe("fitted timeline and compositions", () => {
     expect(stage.contains(screen.getByRole("heading", { name: "Killed & lost", hidden: true }))).toBe(false);
   });
 
-  it("uses the physical transformed plot fraction once, preserving both rosters and passive inspection through zoom", () => {
+  it("uses the physical transformed plot fraction once, preserving both rosters and passive inspection through late data", () => {
     const onSeek = vi.fn();
-    render(<MacroChartSection fitOverview gameId="one" samples={samples} oppSamples={samples} leaks={[]} gameLengthSec={300} onSeek={onSeek} />);
+    const view = render(<MacroChartSection fitOverview gameId="one" samples={samples} oppSamples={samples} leaks={[]} gameLengthSec={300} onSeek={onSeek} />);
     const chart = screen.getByRole("img", { name: /Army value/ });
     const overlay = chart.querySelector<SVGRectElement>('rect[fill="transparent"]')!;
     // Logical600px plot shown at50%: a physical75px is75s, not150s.
@@ -46,9 +46,41 @@ describe("fitted timeline and compositions", () => {
     fireEvent.click(overlay, { clientX: 95, clientY: 40 });
     expect(onSeek).toHaveBeenCalledTimes(1); expect(onSeek).toHaveBeenCalledWith(75);
     for (const name of ["You composition at 1:15", "Opponent composition at 1:15"]) expect(screen.getByRole("region", { name })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Zoom in timeline and armies" }));
+    expect(screen.queryByRole("group", { name: "Timeline and armies zoom" })).toBeNull();
+    const later = [...samples, { time: 360, army_value: 3400, food_workers: 50 }];
+    view.rerender(<MacroChartSection fitOverview gameId="one" samples={later} oppSamples={later} leaks={[]} gameLengthSec={360} onSeek={onSeek} />);
     expect(screen.getByRole("img", { name: /Army value/ })).toBe(chart);
     expect(screen.getByRole("region", { name: "You composition at 1:15" })).toBeTruthy();
     expect(onSeek).toHaveBeenCalledTimes(1); expect(scroll).not.toHaveBeenCalled();
+  });
+
+  it("reveals a clipped focused metric using only the fitted row's horizontal scroll", () => {
+    const { container } = render(<MacroChartSection fitOverview samples={samples} oppSamples={samples} leaks={[]} gameLengthSec={300} />);
+    const row = screen.getByRole("group", { name: "Chart metrics" });
+    const first = within(row).getByRole("button", { name: /^Army$/ });
+    const last = within(row).getByRole("button", { name: /^All$/ });
+    Object.defineProperties(row, { clientWidth: { value: 100 }, clientLeft: { value: 1 } });
+    vi.spyOn(row, "getBoundingClientRect").mockReturnValue(new DOMRect(10, 10, 102, 50));
+    vi.spyOn(last, "getBoundingClientRect").mockImplementation(() => new DOMRect(130 - row.scrollLeft, 10, 40, 44));
+    vi.spyOn(first, "getBoundingClientRect").mockImplementation(() => new DOMRect(11 - row.scrollLeft, 10, 40, 44));
+    container.scrollTop = 47;
+    fireEvent.focus(last);
+    expect(row.scrollLeft).toBeGreaterThan(0);
+    expect(last.getBoundingClientRect().right).toBeLessThanOrEqual(111);
+    fireEvent.focus(first);
+    expect(row.scrollLeft).toBe(0);
+    expect(container.scrollTop).toBe(47);
+    expect(scroll).not.toHaveBeenCalled();
+  });
+
+  it("retains native focus behavior in the normal full-game metric layout", () => {
+    render(<MacroChartSection samples={samples} oppSamples={samples} leaks={[]} gameLengthSec={300} />);
+    const row = screen.getByRole("group", { name: "Chart metrics" });
+    const last = within(row).getByRole("button", { name: /^All$/ });
+    Object.defineProperty(row, "clientWidth", { value: 100 });
+    vi.spyOn(row, "getBoundingClientRect").mockReturnValue(new DOMRect(10, 10, 100, 50));
+    vi.spyOn(last, "getBoundingClientRect").mockReturnValue(new DOMRect(130, 10, 40, 44));
+    fireEvent.focus(last);
+    expect(row.scrollLeft).toBe(0);
   });
 });

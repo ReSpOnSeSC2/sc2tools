@@ -1,23 +1,20 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { Minus, Plus } from "lucide-react";
+import { useEffect, type ReactNode } from "react";
 import { useMacroOverviewFit } from "./useMacroOverviewFit";
 
-const CONTROL = "inline-flex h-11 min-w-11 items-center justify-center rounded-md border border-border bg-bg-surface px-3 text-caption font-semibold text-text hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent disabled:opacity-50";
-
-/** Only the overview is transformed. Controls and detail-dialog portals stay full size. */
+/** Fixed mobile overview. Controls and detail-dialog portals stay full size. */
 export function MacroOverviewFit({ children, gameId }: { children: ReactNode; gameId?: string | null }) {
   const fit = useMacroOverviewFit(gameId);
+  useEffect(() => {
+    const viewport = fit.viewportRef.current, view = viewport?.ownerDocument.defaultView;
+    if (!viewport || !view) return;
+    const handleKey = (event: KeyboardEvent) => scrollOverviewFromKeyboard(event, viewport);
+    view.addEventListener("keydown", handleKey);
+    return () => view.removeEventListener("keydown", handleKey);
+  }, [fit.viewportRef]);
   const measured = fit.size.width > 0 && fit.size.height > 0;
   return <div className="space-y-2 px-3 sm:px-0" data-macro-overview="">
-    {fit.supported ? <div role="group" aria-label="Timeline and armies zoom" data-timeline-control="" className="flex flex-wrap items-center gap-1.5">
-      <button type="button" onClick={fit.reset} aria-pressed={fit.fitted} className={CONTROL}>Fit</button>
-      <button type="button" onClick={() => fit.step(-1)} disabled={fit.scale <= fit.fit + 0.001} aria-label="Zoom out timeline and armies" className={CONTROL}><Minus className="h-4 w-4" aria-hidden /></button>
-      <button type="button" onClick={() => fit.step(1)} disabled={fit.scale >= 1.5} aria-label="Zoom in timeline and armies" className={CONTROL}><Plus className="h-4 w-4" aria-hidden /></button>
-      <span className="text-micro tabular-nums text-text-muted" aria-label={`Overview scale ${Math.round(fit.scale * 100)} percent`}>{Math.round(fit.scale * 100)}%</span>
-      <span className="min-w-0 text-micro text-text-muted">Zoom in for detail; Fit shows both armies.</span>
-    </div> : null}
     <div ref={fit.viewportRef} data-macro-overview-viewport="" role="region" aria-label="Timeline and both armies"
       className="max-w-full overflow-auto rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       style={measured ? { maxHeight: fit.size.availableHeight } : undefined}>
@@ -29,4 +26,28 @@ export function MacroOverviewFit({ children, gameId }: { children: ReactNode; ga
       </div>
     </div>
   </div>;
+}
+
+/** Native animated key scrolling can chain into the modal after reaching an edge. */
+function scrollOverviewFromKeyboard(event: KeyboardEvent, viewport: HTMLDivElement) {
+  if (!plainOverviewKey(event, viewport)) return;
+  const max = viewport.scrollHeight - viewport.clientHeight;
+  const steps: Record<string, number> = { ArrowDown: 40, ArrowUp: -40,
+    PageDown: viewport.clientHeight, PageUp: -viewport.clientHeight,
+    Home: -viewport.scrollHeight, End: viewport.scrollHeight };
+  const step = Object.hasOwn(steps, event.key) ? steps[event.key] : undefined;
+  if (step === undefined || max <= 0) return;
+  event.preventDefault();
+  viewport.scrollTop = Math.max(0, Math.min(max, viewport.scrollTop + step));
+}
+
+function plainOverviewKey(event: KeyboardEvent, viewport: HTMLDivElement) {
+  const target = event.target;
+  if (!(target instanceof Node) || !viewport.contains(target)) return false;
+  return !event.defaultPrevented && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+    && !overviewEditable(target);
+}
+
+function overviewEditable(target: EventTarget) {
+  return target instanceof HTMLElement && (target.isContentEditable || !!target.closest("input, textarea, select"));
 }

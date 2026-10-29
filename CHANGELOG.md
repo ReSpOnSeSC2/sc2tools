@@ -13,6 +13,7 @@ corresponding GitHub Release.
 
 ### Device credential write coordination
 
+- Keep ordinary account and agent requests usable while device-access changes wait for their coordination checks. The optional retained-authentication path remains inactive.
 - Coordinate device pairing, revocation and account erasure through durable database gates. These controls can take a few seconds to finish; uncertain writes keep their reuse scope blocked. Device authentication still reads the database on every request, and the proposed 60-second credential cache remains off.
 
 ### Private home-page replay demo
@@ -36,7 +37,7 @@ corresponding GitHub Release.
 
 ### Fixed
 
-- Fit the Macro breakdown timeline and both army compositions into a local overview on phones, with Fit and zoom controls, full-size timeline controls and a compact header. Zoom resets on exit or when opening another game.
+- Keep the mobile Macro timeline and both army compositions at a fixed 50% overview, with full-size timeline controls and a compact header. Remove zoom controls and keep metric choices on one horizontally scrollable row.
 - Show ties and unrecorded results accurately in admin opponent and global player game lists and the selected-game detail. Keep result badges readable on selected rows.
 - Let backup-health checks finish during API shutdown without calling a missing method, so the remaining cleanup can proceed.
 - Wait for Unit Profile's detailed unit history before building its quiz, and offer a retry when that read fails instead of telling established accounts to play more games.

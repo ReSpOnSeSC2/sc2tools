@@ -1,6 +1,53 @@
 # Device authentication reuse: writer preparation
 
-## 2026-10-28 delivered writer prerequisite
+## Prepared readiness and optional REST seam — local candidate
+
+The implementation was preserved at `db99e5ce` and its startup-log follow-up
+at `87fe1c1b`, then integrated with passed main `dfe4d623` at `98b9cfff`. The
+original helper-only slice remains separately preserved at `c3d7a592`.
+
+The 239-case pre-log run and 12-case logging follow-up are separate historical
+runs. Current integrated whole-API types and owned lint pass. These local
+checks do not establish publication, deployment, a prepared serving cohort or
+retained-reader activation; final published-head CI and deployment/acceptance
+gates remain pending.
+
+Production factory writers share bounded prepared-authority readiness. Startup
+failure leaves original uncached REST/socket authentication usable. Credential
+callbacks still await valid readiness and their original durable gate/drain.
+Actual preparation/session work remains charged after timeout and drains on
+stop; readiness binds the same incarnation before begin's CAS.
+
+One bounded startup success record uses the already-validated source/protocol,
+mode/capability and observer-compatible incarnation digest. It adds no query or
+raw UUID/owner/token data; a logger failure never changes successful readiness.
+This proves that attempt's ordering, not later continuity or activation.
+
+The existing hello distinguishes strict causal readiness, positive writer-only
+standalone and unsupported/unknown state. There is no new flag or NODE_ENV
+bypass. Standalone cannot construct a retained adapter; a missing replica
+operationTime never selects compatibility. Schema, pending/denyAll and original
+majority/journal writer behavior remain.
+
+The public Pairings lookup shares its exact query/projection/touch body with a
+private cache-only closure. Optional REST middleware consumes a ticket once at
+its final synchronous boundary and uses a new independent original fallback.
+The app leaves this adapter uninjected; sockets retain the original method.
+No reader prepares authority, writes active mode or clears uncertainty.
+
+The approved production observation covers only legacy retirement inference,
+one own-principal quiet snapshot and a causal majority barrier. Authority was
+absent: current df5 paused/unknown lifetimes and incarnation continuity remain
+unqualified. Deploy a prepared cohort, retire every prior pre-readiness writer
+(including later df5-derived releases), bind the same
+incarnation and complete independent runtime/release/clock/election gates before
+activation. See [ADR 0071](../adr/0071-device-credential-readiness.md).
+
+Existing Help already explains confirmation can take a few seconds and remains
+unchanged; this prerequisite adds no public control. Chart caching stays off
+and the parent performance item remains partial. No native release is needed.
+
+## 2026-10-28 delivered writer prerequisite — prior chronology
 
 PR 807 merged as `df5cf875d588fafba5456695a1c3550fc42ba587` after its exact tested head and fresh-main tree checks. Actual Vercel Ready and Render Live source were observed at `2026-10-28T16:46:09.182Z`; primary-domain new Help and read-only Devices loading were verified. [Sanitized production receipt](validation/device-auth-coordination/production-df5cf875.json) preserves that scope without account/device rows, counts or private photos. No production credential mutation, credential metadata observer or activation was performed.
 
@@ -205,3 +252,21 @@ audit. Detailed local contract, 12 writer cases and 15 source pins are retained
 in `C:/SC2TOOLS/.cache/device-auth-reuse-audit-20261027.json`. Future implementation
 requires focused issue/revoke/GDPR/unknown-outcome/delayed-load tests and actual
 deployment-lifecycle verification. The broader dashboard item remains partial.
+
+## PR813 replay-storage fixture correction — CI pending
+
+The original PR813 CI failed two GDPR replay-storage fixture cases: their fake
+context omitted the new positive topology capability. The fixture now derives
+writer-only standalone capability from its actual owned Mongo `hello` through
+the production classifier. Original assertions and behavior remain unchanged.
+The focused replay-files suite passes all 23 cases. Strict lint still fails on
+the exact two inherited function-length warnings; a separate same-path/config
+comparison passes with zero errors or new warnings. The original CI log
+(`6a0e02cc…`), strict-lint failure and preflight preparation issue are retained.
+All 1,024 API inputs stayed fixed during these checks; observed process/listener
+cleanup is zero with no kills. Only this fixture and checkpoint change from
+`ec5f76ff`; runtime, web, dependencies and ledger remain unchanged. No new types
+or full-CI pass is claimed. Exact new-head CI, deployment and relevant acceptance
+remain pending; the REST adapter stays uninjected and retained auth stays off.
+Evidence: `.cache/device-auth-rest-reuse-implementation-20261028/replay-fixture-repair-02/`
+and `replay-fixture-repair-03/LOCAL-READY-01.json`.

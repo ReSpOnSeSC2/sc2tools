@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "status": "DELIVERED_MACRO_RELEASE_WITH_ACTUAL_DESKTOP_ACCEPTANCE",
+  "observedAtUtc": "2026-10-28T23:19:57.989Z",
+  "mergedRevision": "dfe4d6234e9242bad9ff5d4a52ad2e36cbb7bc78",
+  "deployment": {
+    "provider": "Vercel",
+    "status": "Ready",
+    "environment": "Production",
+    "exactMergedRevisionVerified": true
+  },
+  "actualAcceptance": {
+    "site": "Primary production site",
+    "signedIn": true,
+    "viewport": {
+      "width": 1920,
+      "height": 889
+    },
+    "timelineAndBothArmyColumnsVisible": true,
+    "close44pxMinimumMet": true,
+    "escapeRestoresExactPerOpeningStateAndFocus": true,
+    "closeRestoresExactPerOpeningStateAndFocus": true,
+    "globalStylesAndViewportStatePreserved": true,
+    "fullGameNavigationLoadedNormalPage": true,
+    "noMacroPortalOrFitGroupOnDestination": true
+  },
+  "mobileQualification": "Actual production acceptance was desktop 1920×889. Phone responsive/touch/focus proof is the retained LOCAL four-case matrix with 16 full default Axe scans and zero violations; no actual mobile production session is claimed.",
+  "attemptQualification": "Two earlier attempt/oracle failures remain in the private acceptance packet. Only later successful per-opening controls and actual navigation establish delivery; earlier attempts are not relabeled.",
+  "privacy": "Allowlisted public revision/readiness and functional assertions only. Private account/game URLs, identifiers, names, gameplay counts, raw DOM and every production photo are excluded.",
+  "sourceEvidence": {
+    "file": ".cache/macro-mobile-fit-20261028/production-dfe4/acceptance-receipt.json",
+    "sha256": "f660fce137ad204d1011abdf8f7301dae1e86aff2f59aa90cad4ac6a4695878d",
+    "qualification": "Private original retained locally; no private data or images copied."
+  },
+  "sourceBoundary": "This records delivered Macro dfe4. It is later documentation adoption on Auth98b9, not proof that pending Auth code has deployed or that earlier Auth checks ran after these three metadata changes.",
+  "limits": [
+    "Observed UI behavior only; no production network-write instrumentation or universal no-account-write claim.",
+    "No cache activation, provider configuration, native release, roadmap closure or count change."
+  ]
+}
