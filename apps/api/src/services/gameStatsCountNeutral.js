@@ -6,10 +6,22 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { withGameStatsAuthority, saveGameStats, MAINTENANCE_VERSION } = require("./gameStatsMaintenance");
 const { readyStatsFromOwnerRow } = require("./maintainedGameStatsRead");
+const { immutablePulseStamp, applyPulseStamp } = require("./gameStatsPulseNeutral");
 
 /** This named operation owns its filter and update. No arbitrary callback or
  * caller-declared neutral boolean can select the carry path.
  * @typedef {{kind:"macroSurface",gameId:string,macroScore:number,top3Leaks?:object[]}} MacroSurfaceMutation */
+/** @typedef {MacroSurfaceMutation|import('./gameStatsPulseNeutral').PulseStampMutation} NeutralMutation */
+
+/** @param {NeutralMutation} input @param {Record<string,any>} [options] */
+function immutableNeutralMutation(input, options = {}) {
+  return input?.kind === "pulseGameStamp" ? immutablePulseStamp(input, options) : immutableMacroSurface(input, options);
+}
+/** @param {import('../db/connect').DbContext} db @param {import('./gameStatsWrites').GameStatsOwner} owner
+ * @param {Readonly<NeutralMutation>} mutation @param {import('mongodb').ClientSession|undefined} session */
+function applyNeutralMutation(db, owner, mutation, session) {
+  return mutation.kind === "pulseGameStamp" ? applyPulseStamp(db, owner, mutation, session) : applyMacroSurface(db, owner, mutation, session);
+}
 
 /** Snapshot before owner/floor awaits, including nested payload arrays.
  * _schemaVersion is stamped by the server, never accepted in this descriptor.
@@ -60,21 +72,21 @@ function applyMacroSurface(db, owner, mutation, session) {
     { $set: set, $unset: { macroBreakdown: "" } }, { ...(session ? { session } : {}), upsert: false });
 }
 
-/** Internal body used only by the admitted writer's named macro operation.
+/** Internal body used only by the admitted writer's fixed named operations.
  * An invalid prior tuple stays retired; neutral work must not recount history.
  * This is count proof only, not an expanded chart-coverage seal.
  * @param {import('../db/connect').DbContext} db
  * @param {import('./gameStatsWrites').GameStatsOwner} owner
- * @param {Readonly<MacroSurfaceMutation>} mutation
+ * @param {Readonly<NeutralMutation>} mutation
  * @param {import('mongodb').ClientSession} session */
 function carryUnchangedGameStats(db, owner, mutation, session) {
-  const fixedOwner = immutableNeutralOwner(owner), fixedMutation = immutableMacroSurface(mutation);
+  const fixedOwner = immutableNeutralOwner(owner), fixedMutation = immutableNeutralMutation(mutation);
   const authority = { userId: fixedOwner.userId, _id: fixedOwner.id,
     gameStatsMutationEpoch: fixedOwner.epoch === undefined ? { $exists: false } : fixedOwner.epoch,
     _gdprMutation: { $exists: false } };
   return withGameStatsAuthority(db, fixedOwner, authority, async (before, revision) => {
     const stats = readyStatsFromOwnerRow(before, fixedOwner.userId, true);
-    const result = await applyMacroSurface(db, fixedOwner, fixedMutation, session);
+    const result = await applyNeutralMutation(db, fixedOwner, fixedMutation, session);
     if (stats) await saveGameStats(db, authority, revision, { $set: {
       gameStats: stats, gameStatsMaintenance: { version: MAINTENANCE_VERSION, status: "ready",
         ownerId: fixedOwner.id, revision, ...(fixedOwner.epoch === undefined ? {} : { epoch: fixedOwner.epoch }) },
@@ -85,4 +97,5 @@ function carryUnchangedGameStats(db, owner, mutation, session) {
 /** @param {string} code */
 function failure(code) { return Object.assign(new Error(code), { code, status: 503 }); }
 
-module.exports = { immutableMacroSurface, immutableNeutralOwner, applyMacroSurface, carryUnchangedGameStats };
+module.exports = { immutableMacroSurface, immutableNeutralOwner, applyMacroSurface, carryUnchangedGameStats,
+  immutableNeutralMutation, applyNeutralMutation };

@@ -2,7 +2,7 @@
 
 const { maintainGameStats, immutableSelection, PROTOCOL_VERSION } = require("./gameStatsMaintenance");
 const { statsReadFloorFor } = require("./gameStatsReadFloor");
-const { immutableMacroSurface, immutableNeutralOwner, applyMacroSurface, carryUnchangedGameStats } = require("./gameStatsCountNeutral");
+const { immutableNeutralMutation, immutableNeutralOwner, applyNeutralMutation, carryUnchangedGameStats } = require("./gameStatsCountNeutral");
 
 const MAX_ACTIVE = 8;
 const DELETE_BATCH = 100;
@@ -78,10 +78,10 @@ class GameStatsWrites {
    * @param {(session:import('mongodb').ClientSession|undefined)=>Promise<T>} work
    * @param {AuthorityOptions} [options] @returns {Promise<T>} */
   /** @overload @param {GameStatsOwner} owner
-   * @param {import('./gameStatsCountNeutral').MacroSurfaceMutation} work
+   * @param {import('./gameStatsCountNeutral').NeutralMutation} work
    * @returns {Promise<import('mongodb').UpdateResult>} */
   /** @template T @param {GameStatsOwner} owner
-   * @param {((session:import('mongodb').ClientSession|undefined)=>Promise<T>)|import('./gameStatsCountNeutral').MacroSurfaceMutation} work
+   * @param {((session:import('mongodb').ClientSession|undefined)=>Promise<T>)|import('./gameStatsCountNeutral').NeutralMutation} work
    * @param {AuthorityOptions} [options] @returns {Promise<any>} */
   write(owner, work, options = {}) {
     if (this.stopped) return Promise.reject(failure("game_stats_writer_stopping"));
@@ -98,7 +98,7 @@ class GameStatsWrites {
   /** @template T @param {GameStatsOwner} owner
    * @param {(session:import('mongodb').ClientSession|undefined)=>Promise<T>} work
    * @param {AuthorityOptions} options @param {Readonly<Record<string,any>>|null} selection
-   * @param {Readonly<import('./gameStatsCountNeutral').MacroSurfaceMutation>|null} mutation @returns {Promise<T>} */
+   * @param {Readonly<import('./gameStatsCountNeutral').NeutralMutation>|null} mutation @returns {Promise<T>} */
   async #perform(owner, work, options, selection, mutation) {
     if (owner.compatibility) {
       // Explicit standalone/test compatibility does not mint a valid revision.
@@ -172,14 +172,14 @@ class GameStatsWrites {
 /** Synchronous preparation precedes admission/floor awaits. Only the named
  * fixed updater can select carry; ordinary callbacks retain full maintenance.
  * @param {import('../db/connect').DbContext} db @param {GameStatsOwner} owner
- * @param {((session:import('mongodb').ClientSession|undefined)=>Promise<any>)|import('./gameStatsCountNeutral').MacroSurfaceMutation} work
+ * @param {((session:import('mongodb').ClientSession|undefined)=>Promise<any>)|import('./gameStatsCountNeutral').NeutralMutation} work
  * @param {AuthorityOptions} options */
 function prepareOperation(db, owner, work, options) {
   if (typeof work === "function") return { owner, work, options,
     selection: owner.compatibility ? null : immutableSelection(options.selection), mutation: null };
-  const mutation = immutableMacroSurface(work, options), captured = immutableNeutralOwner(owner);
+  const mutation = immutableNeutralMutation(work, options), captured = immutableNeutralOwner(owner);
   return { owner: captured, options: Object.freeze({}), selection: null, mutation,
-    work: (/** @type {import('mongodb').ClientSession|undefined} */ session) => applyMacroSurface(db, captured, mutation, session) };
+    work: (/** @type {import('mongodb').ClientSession|undefined} */ session) => applyNeutralMutation(db, captured, mutation, session) };
 }
 
 /** @param {import('../db/connect').DbContext} db @param {any} [logger] */
