@@ -693,7 +693,7 @@ export interface CustomBuildsService {
       };
       opponent?: { race?: string | null } | null;
     },
-    opts?: { expectedRevision?: string | null },
+    opts?: { expectedRevision?: string | null; statsOwner?: import("./gameStatsWrites").GameStatsOwner },
   ): Promise<
     | null
     | {

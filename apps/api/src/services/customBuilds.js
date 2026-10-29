@@ -1,8 +1,9 @@
 "use strict";
 const { gameWrite } = require("../util/userRevision");
 const { gameStatsWritesFor } = require("./gameStatsWrites");
-const { immutableNeutralOwner } = require("./gameStatsCountNeutral");
+const { immutableNeutralOwner, capturedNeutralOwner } = require("./gameStatsCountNeutral");
 const { immutableCustomBuildEof, customBuildEofRepairAuthority } = require("./gameStatsCustomBuildEof");
+const { immutableCustomBuildIngestTag, snapshotTagGame } = require("./gameStatsCustomBuildIngestTag");
 const { commitReclassifyRunPipeline, removeReclassifyRunPipeline, RECLASSIFY_LEASE_MS } = require("./customBuildReclassifyPipeline");
 
 const { policyLabelForGame } = require("./presetIngest");
@@ -60,7 +61,6 @@ const {
 } = require("./buildIntentAttribution");
 const {
   opponentClaimFilter,
-  tagClassificationPipeline,
   youClaimFilter,
 } = require("./buildIntentGuards");
 
@@ -2452,7 +2452,7 @@ class CustomBuildsService {
    *   that picks 8- vs 12-worker build durations; ``myBuild`` /
    *   ``opponent.strategy`` are the agent's labels a check-in row records
    *   as detected
-   * @param {{expectedRevision?: string|null}} [opts]
+   * @param {import('./gameStatsCustomBuildIngestTag').TagSingleGameOptions} [opts]
    * @returns {Promise<null | {
    *   gameId: string,
    *   matched: number,
@@ -2467,10 +2467,12 @@ class CustomBuildsService {
    */
   async tagSingleGame(userId, game, opts = {}) {
     if (!this.perGame || !game || !game.gameId) return null;
+    const admission = ingestTagAdmission(game, opts);
+    const owner = await capturedNeutralOwner(this.gameStatsWrites, userId, admission.owner);
+    game = admission.game;
     // Parse the just-uploaded build logs into the same event shape the
     // rule evaluator expects. We pull this from the game payload (not
-    // re-reading from Mongo) so this stays a pure post-write hook with
-    // no extra round-trip.
+    // re-reading the game from Mongo); the owner was captured separately.
     // The catalog enriches events (is_building / category / race) for
     // rules that depend on those fields; we reach for it via /any/ to
     // mirror how the rest of this file reaches for the games collection
@@ -2562,7 +2564,6 @@ class CustomBuildsService {
     const policy = game.presetEvidence && this.presetPolicies ? await this.presetPolicies.current() : null;
     const policyBuild = policy ? policyLabelForGame(policy, game, "you") : null;
     const policyStrategy = policy ? policyLabelForGame(policy, game, "opponent") : null;
-    const fenced = typeof opts.expectedRevision === "string";
     const payloadBuild = typeof game.myBuild === "string" ? game.myBuild : null;
     const payloadStrategy = game.opponent && typeof game.opponent === "object"
       && typeof game.opponent.strategy === "string"
@@ -2570,23 +2571,13 @@ class CustomBuildsService {
       : null;
     /** @param {{you: AxisOutcome, opponent: AxisOutcome, clearStaging: boolean}} decision */
     const writeDecision = async (decision) => {
-      const written = await gameWrite(this.userRevision, userId, () => this._gamesCollection().findOneAndUpdate(
-        {
-          userId,
-          gameId: probe.gameId,
-          ...(fenced ? { _customBuildRevision: opts.expectedRevision } : {}),
-        },
-        tagClassificationPipeline({ ...decision,
+      const mutation = immutableCustomBuildIngestTag({ kind: "customBuildIngestTag",
+        gameId: probe.gameId, expectedRevision: admission.expectedRevision,
+        decision: { ...decision,
           payloadBuild: decision.you.mode === "unset" ? policyBuild ?? payloadBuild : payloadBuild,
           payloadStrategy: decision.opponent.mode === "unset" ? policyStrategy ?? payloadStrategy : payloadStrategy,
-          policyBuild, policyStrategy }),
-        { projection: { _id: 1 } },
-      ));
-      if (fenced && !written) {
-        const err = new Error("custom_build_tag_superseded");
-        /** @type {any} */ (err).code = "custom_build_tag_superseded";
-        throw err;
-      }
+          policyBuild, policyStrategy } });
+      await gameWrite(this.userRevision, userId, () => this.gameStatsWrites.write(owner, mutation));
     };
 
     if (buildCount === 0) {
@@ -2595,7 +2586,7 @@ class CustomBuildsService {
         opponent: { mode: "unset" },
         clearStaging: true,
       });
-      return { gameId: game.gameId, matched: 0, chosen: null, ruleCount: 0 };
+      return { gameId: /** @type {string} */ (game.gameId), matched: 0, chosen: null, ruleCount: 0 };
     }
 
     // An unavailable higher-priority proxy contender makes the winner on that
@@ -3014,6 +3005,16 @@ function descriptorOutranks(candidate, current) {
  */
 function customBuildRevisionMatch(revision) {
   return { _customBuildRevision: revision || null };
+}
+
+/** Supplied-but-unavailable is different from an omitted direct-call owner.
+ * Copy the owner and all payload inputs before the first asynchronous read.
+ * @param {Record<string,any>} game
+ * @param {import('./gameStatsCustomBuildIngestTag').TagSingleGameOptions} opts */
+function ingestTagAdmission(game, opts) {
+  const revision = opts.expectedRevision;
+  return { game: snapshotTagGame(game), expectedRevision: typeof revision === "string" ? revision : null,
+    owner: Object.hasOwn(opts, "statsOwner") ? immutableNeutralOwner(/** @type {any} */ (opts.statsOwner)) : undefined };
 }
 
 /** Fixed job options retain their original evaluation order before the

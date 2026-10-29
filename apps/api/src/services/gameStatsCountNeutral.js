@@ -9,14 +9,20 @@ const { readyStatsFromOwnerRow } = require("./maintainedGameStatsRead");
 const { immutableBuildState, applyBuildState } = require("./gameStatsBuildStateNeutral");
 const { immutablePulseStamp, applyPulseStamp } = require("./gameStatsPulseNeutral");
 const { immutableCustomBuildEof, applyCustomBuildEof, customBuildEofRepairAuthority } = require("./gameStatsCustomBuildEof");
+const { immutableCustomBuildIngestTag, applyCustomBuildIngestTag } = require("./gameStatsCustomBuildIngestTag");
 
 /** This named operation owns its filter and update. No arbitrary callback or
  * caller-declared neutral boolean can select the carry path.
  * @typedef {{kind:"macroSurface",gameId:string,macroScore:number,top3Leaks?:object[]}} MacroSurfaceMutation */
-/** @typedef {MacroSurfaceMutation|import('./gameStatsBuildStateNeutral').BuildStateMutation|import('./gameStatsPulseNeutral').PulseStampMutation|import('./gameStatsCustomBuildEof').CustomBuildEofMutation} NeutralMutation */
+/** @typedef {MacroSurfaceMutation|import('./gameStatsBuildStateNeutral').BuildStateMutation|import('./gameStatsPulseNeutral').PulseStampMutation|import('./gameStatsCustomBuildEof').CustomBuildEofMutation} UpdateNeutralMutation */
+/** @typedef {UpdateNeutralMutation|import('./gameStatsCustomBuildIngestTag').CustomBuildIngestTagMutation} NeutralMutation */
+/** @typedef {import('mongodb').UpdateResult|import('./gameStatsCustomBuildIngestTag').CustomBuildIngestTagResult} NeutralResult */
 
 /** @param {NeutralMutation} input @param {Record<string,any>} [options] */
 function immutableNeutralMutation(input, options = {}) {
+  if (input?.kind === "customBuildIngestTag") {
+    return immutableCustomBuildIngestTag(input, options);
+  }
   if (input?.kind === "customBuildEof") {
     return immutableCustomBuildEof(input, options);
   }
@@ -28,6 +34,9 @@ function immutableNeutralMutation(input, options = {}) {
 /** @param {import('../db/connect').DbContext} db @param {import('./gameStatsWrites').GameStatsOwner} owner
  * @param {Readonly<NeutralMutation>} mutation @param {import('mongodb').ClientSession|undefined} session */
 function applyNeutralMutation(db, owner, mutation, session) {
+  if (mutation.kind === "customBuildIngestTag") {
+    return applyCustomBuildIngestTag(db, owner, mutation, session);
+  }
   if (mutation.kind === "customBuildEof") {
     return applyCustomBuildEof(db, owner, mutation, session);
   }
