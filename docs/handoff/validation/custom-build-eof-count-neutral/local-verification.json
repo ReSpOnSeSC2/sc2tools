@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "CURRENT_LOCAL_EOF_GATES_PASSED_RELEASE_PENDING",
+  "status": "LOCAL_EOF_GATES_PASSED_AND_PR819_SCOPED_DELIVERY_VERIFIED",
   "source": {
     "testedHead": "e72772c9792baa5828371a0aaba36f7f2fc60789",
     "workingChange": "Three optional types-only fields",
@@ -54,7 +54,8 @@
   "boundaries": [
     "Current local source results are separate from PR818 remote CI and production UI acceptance.",
     "Later documentation adoption is outside the recorded source guards; application bytes must remain exact.",
-    "No new web/build/browser, production mutation, cache activation, savings or complete common-fleet proof."
+    "No new web/build/browser, production mutation, cache activation, savings or complete common-fleet proof.",
+    "PR819 CI/deployment/read-only desktop acceptance is now verified; the retained local result remains historical to its tested source. No forced production EOF, enabled cache, savings or fleet completion."
   ],
   "references": [
     {
@@ -76,6 +77,35 @@
       "file": "C:/SC2TOOLS/.cache/custom-build-eof-count-neutral-20261029/integration-strength31-01/POSTGATE-INTEGRATION-01.json",
       "sha256": "40c91afce17acd16c73851cc3e5bac08ed837609786b40edeceef107e2accaa9",
       "bytes": 2877
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-eof-count-neutral-20261029/production-5e48-01/ACCEPTANCE-01.json",
+      "sha256": "764e5211e9c1af26193b81fc55da2d163c422561ae8437bc1aa02e1bee406b80",
+      "bytes": 4043
     }
-  ]
+  ],
+  "delivery": {
+    "pr": 819,
+    "testedHead": "21567e067587c09adbf5635ad9a4e25e7a0c57ed",
+    "mergedMain": "5e48898a7d3d1c7e282e930e03ef8c0db00253c3",
+    "testedAndMergedTree": "882ecba906ffa3c3364054298568752fcc0ab309",
+    "exactHeadCi": {
+      "apiPassed": 7556,
+      "existingTestSkips": 9,
+      "suitesPassed": 512,
+      "existingSuiteSkip": 1,
+      "types": "pass",
+      "lint": "pass",
+      "requiredChecks": "all success"
+    },
+    "actualApiLive": true,
+    "actualWebReadyProduction": true,
+    "sourceExact": true,
+    "scopedReadOnlyDesktopAccepted": true,
+    "personalCache": "Off",
+    "productionEofMutationTriggered": false,
+    "newWebBuildOrBrowserClaim": false,
+    "ownedTabsClosed": 3,
+    "qualification": "Existing build statistics and operational availability only; local real-Mongo proof remains separate from production instrumentation. No private DOM, counts, opponent labels, photographs or provider identifiers are copied."
+  }
 }

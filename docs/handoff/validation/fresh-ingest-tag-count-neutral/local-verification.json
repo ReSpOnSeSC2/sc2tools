@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "status": "LOCAL_SOURCE03_TYPES_CONFIGURED_LINT_AND_40_FILES_PASS_RELEASE_PENDING",
+  "source": {
+    "testedBase": "19d21fd2d6e3f487a31b5fec9f68cf30aec62632",
+    "testedWorkingSource": "a289bc856390538a82cbff9259b762f016ba4b0cab040a8c678d6fb8a64e5086",
+    "preservedCommit": "d601b3c593284313046dc0243bdb15f85ae9229b",
+    "integratedHead": "6862fd6e9448f243343635ceffd86776bad2159b",
+    "integratedTree": "2b15937219af20e111de1eaadde449ade8f87eb3",
+    "acceptedMain": "5e48898a7d3d1c7e282e930e03ef8c0db00253c3"
+  },
+  "actual": {
+    "apiCases": 867,
+    "files": 40,
+    "newUnit": 32,
+    "newReplset": 23,
+    "failed": 0,
+    "pending": 0,
+    "typesExit": 0,
+    "configuredLintExit": 0,
+    "unitExit": 0,
+    "allChildAndWrapperExits": 0,
+    "strictNewFiles": 3,
+    "legacyNoAddedFiles": 5,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false
+  },
+  "testedGuards": {
+    "apiInputs": 1044,
+    "captures": 3,
+    "webInputs": 3537,
+    "fullSourceFiles": 7032,
+    "sourceConfigDependencyRows": 35,
+    "rawAssets": 49,
+    "localRaw": 42,
+    "retainedExternalRaw": 7
+  },
+  "cleanup": {
+    "exactIdentities": 43,
+    "retainedHistory": 6,
+    "incompleteIdentities": 3,
+    "ownershipUnproved": 3,
+    "unresolvedCurrentHistoricalOrphansListeners": 0,
+    "kills": 0,
+    "wholeFinalGlobalCensusStored": false,
+    "qualification": "Scoped current absence; no retrospective ownership or continuous observation."
+  },
+  "retained": [
+    "Source02 types TS2322 child2/wrapper1, strict2 cleanup; no lint/unit dispatched in that failed gate.",
+    "Only the approved JSDoc string assertion/grouping changed afterward; no emitted behavior or returned value changed.",
+    "LOCAL-READY-01 preserved; LOCAL-READY-02 corrects only the six history labels without rerunning checks."
+  ],
+  "boundaries": [
+    "Own exact-head CI, deployment and production acceptance remain pending.",
+    "Post-gate source preservation/main integration and later documentation are qualified separately from recorded runtime guards.",
+    "No new web/build/browser, production mutation, cache/auth activation, expanded coverage seal, savings or whole-roadmap completion."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/fresh-ingest-tag-count-neutral-20261029/SOURCE-READY-03.json",
+      "sha256": "a289bc856390538a82cbff9259b762f016ba4b0cab040a8c678d6fb8a64e5086",
+      "bytes": 27509
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/fresh-ingest-tag-count-neutral-20261029/checks-02/LOCAL-READY-02.json",
+      "sha256": "ef84f1b92beb995a8d2a404d6dceb693f444437c1a4e15bb3b94bd49a92819e4",
+      "bytes": 10372
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/fresh-ingest-tag-count-neutral-20261029/checks-02/INDEPENDENT-ACTUAL-EVIDENCE-REVIEW-02.json",
+      "sha256": "8b3150993ed5e42c096e7117fb87fb1d70133bda09838bac93d571b116ab8a78",
+      "bytes": 2640
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/fresh-ingest-tag-count-neutral-20261029/checks-01/LOCAL-RESULT-01.json",
+      "sha256": "518b2ab26b718fe7a2c1383b29cf09bc2dcc4ef7efa51c6ea45d60b636beaaf7",
+      "bytes": 5967
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/fresh-ingest-tag-count-neutral-20261029/type-fix-03/TYPE-ONLY-PROPOSAL-01.json",
+      "sha256": "83da6a7128f689897f49ad3de1e0181d87a03091592a8ac7578d9b0d43c2d927",
+      "bytes": 2830
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/fresh-ingest-tag-count-neutral-20261029/type-fix-03/INDEPENDENT-TYPE-PROPOSAL-REVIEW-01.json",
+      "sha256": "d5106240a6bb5d38a1a9cb53dfef21ded93970c07cdbe114a79249d8f344b942",
+      "bytes": 2025
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/fresh-ingest-tag-count-neutral-20261029/postgate-main5e-01/resolution-01/POSTGATE-INTEGRATION-01.json",
+      "sha256": "7806996dcba5962efb578f957cfa17378e4d5c4df7ef3c13b9ce652e43bb7fc3",
+      "bytes": 6104
+    }
+  ]
+}

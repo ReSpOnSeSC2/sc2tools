@@ -84,7 +84,25 @@ The outer response refreshed with the same old body. Inner Next data-cache or
 regeneration freshness remains unproved; these observations establish neither
 a source-selection bug nor a browser-only or simple edge-TTL cause.
 
-GitHub publication and API updater metadata are verified. Website-current
-version acceptance and installed updater uptake remain pending. No installer,
+At that earlier four-GET boundary, GitHub publication and API updater metadata
+were verified while website-current acceptance and installed uptake were pending. No installer,
 forced refresh, purge, rebuild, new signing setup or configuration change was
 performed by this follow-up. The approved unsigned publication remains complete.
+
+
+## Subsequent ordinary website acceptance
+
+After the ordinary PR819 production deployment, the website displayed Agent
+0.24.7 as latest stable and an update available for the installed 0.24.6 agent.
+Together with the earlier actual API metadata/checksum verification, website
+and API update availability are now verified. The earlier STALE-to-HIT 0.24.6
+responses remain historical evidence; their inner cache/regeneration cause
+was not established. No purge, forced refresh, source fix or special rebuild
+was performed to obtain this observation.
+
+Installed 0.24.7 uptake, updater execution and live native session acceptance
+remain unverified. No download or installation was performed. The release
+remains the explicitly approved unsigned artifact (Authenticode NotSigned);
+publication is complete, and future SignPath setup remains a later owner-guided
+step. This adds no roadmap status/count promotion. The sanitized publication
+receipt links the scoped PR819 acceptance hash without private UI material.

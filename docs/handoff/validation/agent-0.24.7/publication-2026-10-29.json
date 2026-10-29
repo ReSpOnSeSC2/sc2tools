@@ -72,8 +72,8 @@
     "apiUpdaterFeedVerified": true,
     "apiLatest": "0.24.7",
     "apiInstallerSha256": "c404cd377da5ed8bb35b3f352537d0af9e134bfdd5c8a1e3092aa965e450d76c",
-    "websiteObservedVersion": "0.24.6",
-    "websiteCurrentVersionAcceptance": "pending",
+    "websiteObservedVersion": "0.24.7",
+    "websiteCurrentVersionAcceptance": "verified by subsequent ordinary read-only desktop acceptance",
     "websiteOrdinaryObservations": [
       {
         "atUtc": "2026-10-29T12:57:40.277Z",
@@ -90,9 +90,18 @@
         "date": "Thu, 29 Oct 2026 12:57:41 GMT"
       }
     ],
-    "websiteBodyUnchanged": true,
     "installedUpdaterUptakeVerified": false,
-    "causeQualification": "Outer revalidation refilled old content; inner Next cache/regeneration freshness is unproved. No source-selection, browser-only or simple edge-TTL cause established.",
-    "diagnosticReceiptSha256": "412019e02d5ee97f5211bf8ecab87879b22ce5118e30626a3a57ec4dba1cbdd3"
+    "causeQualification": "Earlier inner cache/regeneration cause remains unproved. A later ordinary deployment/read displayed 0.24.7 naturally; no purge, forced refresh, source fix or installer action is evidenced.",
+    "diagnosticReceiptSha256": "412019e02d5ee97f5211bf8ecab87879b22ce5118e30626a3a57ec4dba1cbdd3",
+    "websiteEarlierBodyUnchanged": true,
+    "historicalWebsiteObservationsQualification": "The retained ordinary STALE and HIT observations both showed 0.24.6 before subsequent PR819 website acceptance.",
+    "websiteAcceptedSource": "5e48898a7d3d1c7e282e930e03ef8c0db00253c3",
+    "installedObservedVersion": "0.24.6",
+    "updateAvailableObserved": "0.24.7",
+    "subsequentAcceptance": {
+      "file": "C:/SC2TOOLS/.cache/custom-build-eof-count-neutral-20261029/production-5e48-01/ACCEPTANCE-01.json",
+      "sha256": "764e5211e9c1af26193b81fc55da2d163c422561ae8437bc1aa02e1bee406b80",
+      "bytes": 4043
+    }
   }
 }

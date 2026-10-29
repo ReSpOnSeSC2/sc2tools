@@ -1,10 +1,33 @@
-# Custom-build EOF revision: local verification, release pending
+# Custom-build EOF revision: delivered in PR819
+
+## Delivered on 2026-10-29
+
+PR819 passed its exact-head required checks at `21567e067587c09adbf5635ad9a4e25e7a0c57ed` and
+merged as `5e48898a7d3d1c7e282e930e03ef8c0db00253c3`, with the tested tree preserved. The API gate passed
+7,556 cases across 512 suites, with nine existing test skips and one existing
+suite skip; types and lint passed. These remote results are separate from the
+local 801/37 EOF batch below.
+
+Actual API Live and website Ready/Production reported the exact merged source.
+Scoped signed-in normal desktop acceptance loaded existing build statistics and
+operational health; personal cache remained Off. No repair, reclassification,
+production EOF transaction, credential, setting, provider or flag action was
+triggered. Three owned tabs were closed. Local real-Mongo tests establish the
+EOF atomic behavior; production availability does not instrument that path.
+
+The website also displayed Agent 0.24.7 as latest and an update available for
+installed 0.24.6. No installer or update was executed. No new phone, web build,
+cache-hit, savings or complete fleet proof is claimed. The existing web tree is
+the delivered PR818 tree. Sanitized delivery fields and raw hash references are
+added to the [existing compact receipt](validation/custom-build-eof-count-neutral/local-verification.json).
+
+## Historical source and local verification
 
 This source-only slice starts at the preserved Pulse integration
 `c06746224d496f9814bc2fb33f298612fe7bb2ca`. It covers only the successful
 single-build and all-build reclassification EOF commits. Rename, ingest,
 definition edits, staging, cleanup and notifications retain their existing
-paths. Local verification is recorded below; this EOF slice still requires its own exact-head CI and release acceptance.
+paths. This paragraph records the historical source-preparation boundary; PR819 delivery is recorded above.
 
 The original EOF pipeline has one pure implementation, reexported by
 `customBuilds`. The closed server descriptor accepts a run UUID, sequence,
@@ -72,8 +95,8 @@ browser result is claimed: the web tree is the exact delivered PR818 tree.
 
 The [compact local receipt](validation/custom-build-eof-count-neutral/local-verification.json)
 links the immutable source, current results and post-gate integration proof.
-EOF exact-published-head CI, deployment and relevant acceptance remain pending.
-PR818 delivery and the approved unsigned Agent publication are separate proof.
+At that local-only boundary, EOF exact-head CI and release acceptance were pending.
+The subsequent PR819 delivery is recorded above; PR818 and native publication remain separate proof.
 
 The faster-dashboards parent remains partial. The ledger remains 197 items:
 124 completed, 53 partial, 20 open and 73 remaining. No cache flag, dependency,
