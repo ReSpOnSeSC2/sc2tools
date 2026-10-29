@@ -59,10 +59,10 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "Click any row or band to see the games behind it, then open one to see that game's own macro breakdown.",
     },
-    { type: "heading", text: "Fit one game's timeline and armies", anchor: "fit-overview" },
+    { type: "heading", text: "Mobile timeline and armies", anchor: "fit-overview" },
     {
       type: "paragraph",
-      text: "In the Macro breakdown panel, **Fit** shows the timeline and both army compositions side by side. Use **+** to enlarge them and **−** or **Fit** to return to the overview. When enlarged, scroll inside that area to reach the rest. Very dense rosters or a short screen can also scroll at Fit, keeping the unit buttons usable. Metric, bank and supply-block controls stay full size. Tap a unit for its full-size details. Zoom resets when you close the panel or open a different game; your chosen timeline metrics stay remembered.",
+      text: "On phones, the Macro breakdown panel shows the timeline and both army compositions side by side at a fixed **50%** size. Metric choices stay on one row; swipe that row sideways on narrow screens. Metric, bank and supply-block controls stay full size. Dense rosters or short screens can scroll inside the overview. Tap a unit for its full-size details. Closing the panel returns you to the normal page size; your chosen timeline metrics stay remembered.",
     },
     { type: "heading", text: "Track mechanics progress", anchor: "progress" },
     {

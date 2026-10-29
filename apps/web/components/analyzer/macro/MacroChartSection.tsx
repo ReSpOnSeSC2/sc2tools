@@ -290,7 +290,7 @@ export function MacroChartSection({
       </div>
       {fitOverview ? <>
         <div data-timeline-control="" className="space-y-2 px-3 sm:px-0">
-          <MetricSwitch selected={shownMetrics.map((metric) => metric.key)} onChange={setChosenMetrics} race={myRace} metrics={metrics} />
+          <MetricSwitch selected={shownMetrics.map((metric) => metric.key)} onChange={setChosenMetrics} race={myRace} metrics={metrics} singleRow />
           {shownMetrics.some((metric) => metric.key === "bank") ? <BankViewSwitch view={bankView} onChange={setBankView} /> : null}
         </div>
         <MacroOverviewFit gameId={gameId}>{overview}</MacroOverviewFit>
