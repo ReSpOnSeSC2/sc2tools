@@ -252,3 +252,21 @@ audit. Detailed local contract, 12 writer cases and 15 source pins are retained
 in `C:/SC2TOOLS/.cache/device-auth-reuse-audit-20261027.json`. Future implementation
 requires focused issue/revoke/GDPR/unknown-outcome/delayed-load tests and actual
 deployment-lifecycle verification. The broader dashboard item remains partial.
+
+## PR813 replay-storage fixture correction — CI pending
+
+The original PR813 CI failed two GDPR replay-storage fixture cases: their fake
+context omitted the new positive topology capability. The fixture now derives
+writer-only standalone capability from its actual owned Mongo `hello` through
+the production classifier. Original assertions and behavior remain unchanged.
+The focused replay-files suite passes all 23 cases. Strict lint still fails on
+the exact two inherited function-length warnings; a separate same-path/config
+comparison passes with zero errors or new warnings. The original CI log
+(`6a0e02cc…`), strict-lint failure and preflight preparation issue are retained.
+All 1,024 API inputs stayed fixed during these checks; observed process/listener
+cleanup is zero with no kills. Only this fixture and checkpoint change from
+`ec5f76ff`; runtime, web, dependencies and ledger remain unchanged. No new types
+or full-CI pass is claimed. Exact new-head CI, deployment and relevant acceptance
+remain pending; the REST adapter stays uninjected and retained auth stays off.
+Evidence: `.cache/device-auth-rest-reuse-implementation-20261028/replay-fixture-repair-02/`
+and `replay-fixture-repair-03/LOCAL-READY-01.json`.
