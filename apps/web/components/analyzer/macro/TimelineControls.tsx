@@ -12,6 +12,7 @@
  * underlined in their colour.
  */
 
+import type { FocusEvent } from "react";
 import { Lock } from "lucide-react";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
@@ -118,6 +119,7 @@ export function MetricSwitch({
     <div
       role="group"
       aria-label="Chart metrics"
+      onFocus={singleRow ? revealFocusedMetric : undefined}
       className={singleRow
         ? "flex max-w-full flex-nowrap gap-0.5 overflow-x-auto rounded-full border border-border bg-bg-subtle p-1"
         : "flex max-w-full flex-wrap gap-0.5 rounded-2xl border border-border bg-bg-subtle p-1 sm:rounded-full"}
@@ -169,6 +171,17 @@ export function MetricSwitch({
       </button>
     </div>
   );
+}
+
+/** Reveal the complete focused choice using only this row's horizontal scroll. */
+function revealFocusedMetric(event: FocusEvent<HTMLDivElement>) {
+  const row = event.currentTarget;
+  const button = event.target instanceof HTMLElement ? event.target.closest("button") : null;
+  if (!button || !row.contains(button)) return;
+  const bounds = row.getBoundingClientRect(), target = button.getBoundingClientRect();
+  const left = bounds.left + row.clientLeft, right = left + row.clientWidth;
+  if (target.left < left) row.scrollLeft -= left - target.left;
+  else if (target.right > right) row.scrollLeft += target.right - right;
 }
 
 /** Bank stays one metric; choose which resource its two player lines compare. */
