@@ -113,7 +113,7 @@ synthetic-router evidence, not actual Next navigation or production acceptance.
 Fresh build, unchanged budgets/assets and the original responsive browser
 matrix remain required.
 
-## Current local gate — CI and production acceptance pending
+## Local gate at cd25 — retained before delivery
 
 This section supersedes earlier pending local build/browser wording.
 The preserved clean source is `cd25ed68f222c48cc80c0a8bcb6d174fe1064cfc`,
@@ -159,4 +159,30 @@ skips or retries. Strict spec lint, 6,970 current-source guards, unchanged EE76
 runtime and 40/7/4 asset guards pass; owned servers/listeners are closed. The
 [compact summary](validation/macro-mobile-fit/current-cd25ed68.json) pins the
 retained Codex failure and current receipt. These documentation edits follow
-that frozen run; new exact-head CI and live acceptance remain pending.
+that frozen run. Exact-head CI and live acceptance were pending at that
+pre-release boundary; the later passed release and acceptance are recorded below.
+
+## Delivered Macro release at dfe4
+
+Macro was merged as `dfe4d6234e9242bad9ff5d4a52ad2e36cbb7bc78` after
+the exact release-head checks passed. Vercel was verified Ready/Production
+at that merged revision. Actual signed-in acceptance on the primary site
+showed the timeline and both army columns with a 44px Close control.
+Escape and Close each restored the exact state captured for that opening,
+including focus and global styles. The real Full game link loaded the normal
+game page with no Macro portal or Fit group remaining.
+
+The actual production viewport was desktop 1920×889. Phone/touch behavior
+remains proved by the retained LOCAL four-case matrix and 16 full default Axe
+scans with zero violations; no actual mobile production session is claimed.
+Two earlier attempt/oracle failures remain private and are not relabeled as
+successful checks. The sanitized [production receipt](validation/macro-mobile-fit/production-dfe4.json)
+contains no private URLs, identifiers, names, gameplay counts or photos.
+
+These three delivery documents are adopted after Auth98b9's local checks.
+Its b071 receipt still describes 77 then-current pins, before the Macro
+checkpoint/README updates and the new production receipt. All 1,024 API
+inputs, dependencies and web application bytes are unaffected by this
+documentation-only boundary; no old log or guard is rewritten as post-docs.
+This records Macro delivery, not deployment of pending Auth changes.
+The original 197-item ledger and 73 unfinished items remain unchanged.
