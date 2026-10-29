@@ -1,6 +1,10 @@
-# Maintained account statistics: current candidate
+# Maintained account statistics
 
-Current locally integrated head: `55be35e56b42090dbf91331dcc40c5476551c30e`, on accepted main `df5cf875d588fafba5456695a1c3550fc42ba587`. The reader remains unpublished. Auth PR 807's writer prerequisite is actually Ready/Live with read-only Devices and primary Help acceptance; that is separate from credential cutover and cached-auth activation. `USER_CACHE_ENABLED` stays off. This slice does not complete `faster-dashboards` or the 197-item program.
+PR 810 merged as `b8ef1b945effef54d9f7bad13e5ee27f1525a3db` after required checks passed at exact head `fc65ce4c54cc0307f4e7c63cf0b8c2897df90d59` and the fresh identical tree `878865c4244c503807ee3f0771ac0d80c3236dba`. Actual Vercel `CPAt1Svg6UqyvfDD6crYAV26Q8qG` is Ready / Production / Latest and Render `dep-dbh3fc29lscs7381jhe0` is Live at that exact revision. Primary Setup & health Help copy and signed-in header/Doctor loaded; their displayed game totals matched. The [sanitized production receipt](validation/game-stats-reader/production-b8ef1b94.json) omits owner counts and private images.
+
+This delivers the maintained-account-statistics/lighter `/me` and Doctor portion. Live acceptance is read-only UI/DOM/pixel evidence, not instrumentation of the qualified-versus-fallback query path, network, latency or savings. No Save, reprocess, upload, diagnostics copy, history mutation, pairing or quiz action was performed. No mobile production viewport is asserted. `USER_CACHE_ENABLED` stays off; cached device authentication, fleet coherence and other route-specific dependencies remain separate unfinished work. `faster-dashboards` stays partial and the program remains incomplete.
+
+Historical local candidate head `55be35e56b42090dbf91331dcc40c5476551c30e` was integrated with accepted main `df5cf875d588fafba5456695a1c3550fc42ba587`. The local source/build evidence below retains that exact boundary; it is not relabeled as the later documentation or production tree. Auth PR 807's writer prerequisite and credential cutover are separate contracts.
 
 ## Request-local behavior
 
@@ -16,12 +20,12 @@ Before a connected client mints maintenance 2, a coalesced majority read after t
 
 The separate qualified game-writer cutover receipt is a release prerequisite. The floor orders snapshots; it does not retire old actors. Auth credential cutover is different and remains unqualified here. Raw restore/collection replacement requires retired derived authority, fresh epochs and a fresh maintenance/reader version before serving; follow ADR 0070 and the restore runbook.
 
-## Current local evidence
+## Historical local evidence at 55be
 
 The [validation packet](validation/game-stats-reader/README.md) binds one actual current 390-case run in 16 suites, zero failures/skips, whole API types and strict new/owned lint with no added warnings. All 56 current input pins match. Build `Ymz0AGEMdraLvQtvmKtlr` passed all 83 original budgets (18 listed / 65 default), full6921-source pre/post equality and 40 canonical engine inputs / 7 served assets / 4 strict sample games. It used one static worker and 4 GiB heap with direct Next, synthetic build keys and no real dotenv, prebuild, generation, download or pruning. Actual recorded test/build PIDs, listeners and scoped child checks are clear; no processes were killed.
 
 Current independent source/evidence review is clear. The prior c313 311-case/build and earlier208/96 preparation runs remain historical with their own exact inputs. Initial fixture/complexity failures and Mongo teardown warnings remain preserved; no assertion, skip, rule or cap was weakened.
 
-## Guard boundary and release work
+## Guard boundary and subsequent delivery
 
-These gates cover the captured clean 55be tree. Later checkpoint/ledger/evidence adoption is docs-only, after the build guards. Preserve the runtime/asset pins and never claim the 6,921-file full-source snapshot covers that later metadata tree. Required exact-head CI, actual reader deployments and relevant signed-in acceptance remain root-owned publication gates. No production reader, credential metadata observer, cached-auth activation, savings, provider, infrastructure, engine or native release claim is made by these local receipts.
+Those local gates cover the captured clean 55be tree. Later checkpoint/ledger/evidence adoption is docs-only, after the build guards; the 6,921-file source snapshot does not cover that later metadata tree. The required exact-head CI and scoped reader deployments/acceptance are now delivered as recorded above. The historical local tests/build, their initial failures and source limitations remain preserved. Neither the live receipt nor these local gates prove a production query branch or measured savings. No cached-auth activation, credential cutover completion, provider/infrastructure change, engine or native release is claimed.
