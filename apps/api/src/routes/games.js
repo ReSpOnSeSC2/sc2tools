@@ -76,6 +76,17 @@ async function bindIngestedBuildIntent(binder, req, userId, game, options) {
   }
 }
 
+/** Tag exactly the bounded evidence GamesService persisted. Malformed/truncated
+ * v1 lists have already lost their coverage stamp and must not classify only
+ * on ingest. The batch's original owner slot is forwarded, never recaptured.
+ * @param {import('../services/types').CustomBuildsService} customBuilds
+ * @param {string} userId @param {Record<string,any>} game
+ * @param {any} spatial @param {string|null} expectedRevision
+ * @param {import('../services/gameStatsWrites').GameStatsOwner|undefined} statsOwner */
+function tagIngestedCustomBuild(customBuilds, userId, game, spatial, expectedRevision, statsOwner) {
+  return customBuilds.tagSingleGame(userId, { ...game, spatial }, { expectedRevision, statsOwner });
+}
+
 /**
  * /v1/games — list, get, exists, ingest from the agent or a browser.
  *
@@ -825,16 +836,7 @@ function buildGamesRouter(deps) {
         let customTag = null;
         if (deps.customBuilds && typeof deps.customBuilds.tagSingleGame === "function") {
           try {
-            customTag = await deps.customBuilds.tagSingleGame(userId, {
-              ...game,
-              // Evaluate exactly the bounded evidence GamesService persisted.
-              // In particular, a malformed/truncated v1 candidate list has
-              // already lost its coverage stamp here and must not classify on
-              // ingest only to disagree with the next reclassification.
-              spatial: storedSpatial,
-            }, {
-              expectedRevision: customBuildRevision,
-            });
+            customTag = await tagIngestedCustomBuild(deps.customBuilds, userId, game, storedSpatial, customBuildRevision, statsOwner);
           } catch (e) {
             if (req.log) {
               req.log.warn(

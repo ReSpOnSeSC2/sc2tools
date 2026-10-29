@@ -44,6 +44,45 @@ const baseGame = {
   myRace: "Zerg",
 };
 
+function capturedTagApp(owner) {
+  const events = [], spatial = { my_proxies: [], my_proxy_classification_v: 1 };
+  const games = {
+    gameStatsWrites: { capture: jest.fn(async () => { events.push("capture"); return owner; }) },
+    upsertWithRevision: jest.fn(async () => { events.push("upsert"); return { created: true, customBuildRevision: "stored-revision", spatial }; }),
+  };
+  const customBuilds = { tagSingleGame: jest.fn()
+    .mockImplementationOnce(async () => { events.push("tag"); throw new Error("custom_build_tag_superseded"); })
+    .mockImplementation(async () => { events.push("tag"); return { gameId: "owner-tag", userSlug: "saved" }; }) };
+  const buildIntents = { bindIngestedGame: jest.fn(async () => { events.push("bind"); }) };
+  const guideSamples = { capture: jest.fn(() => { events.push("sample"); }) };
+  const app = express(); app.use(express.json());
+  app.use(buildGamesRouter({ games, customBuilds, buildIntents, guideSamples,
+    opponents: { refreshMetadata: jest.fn(async () => ({})) },
+    auth: (req, _res, next) => { req.auth = { userId: "u1" }; next(); }, testOnlyAllowMissingReplayIngestAdmission: true }));
+  return { app, events, games, customBuilds, buildIntents, guideSamples, spatial };
+}
+
+test("ingest reuses its original owner/revision and publishes only after durable tagging", async () => {
+  const owner = { userId: "u1", id: "captured-owner", epoch: "00000000-0000-4000-8000-000000000001", compatibility: false }, h = capturedTagApp(owner);
+  const payload = { ...baseGame, gameId: "owner-tag", map: "Site Delta" };
+  const failed = await request(h.app).post("/games").send(payload);
+  expect(failed.status).toBe(202); expect(failed.body.accepted).toEqual([]);
+  expect(failed.body.rejected).toEqual([{ gameId: "owner-tag", retryable: true, errors: ["custom_build_tag_retry_required"] }]);
+  expect(h.buildIntents.bindIngestedGame).not.toHaveBeenCalled(); expect(h.guideSamples.capture).not.toHaveBeenCalled();
+  const healed = await request(h.app).post("/games").send(payload);
+  expect(healed.status).toBe(202); expect(healed.body.rejected).toEqual([]);
+  expect(healed.body.accepted).toEqual([expect.objectContaining({ gameId: "owner-tag" })]);
+  expect(h.events).toEqual(["capture", "upsert", "tag", "capture", "upsert", "tag", "bind", "sample"]);
+  expect(h.games.gameStatsWrites.capture).toHaveBeenCalledTimes(2);
+  for (const call of h.games.upsertWithRevision.mock.calls) expect(call[2]).toBe(owner);
+  for (const call of h.customBuilds.tagSingleGame.mock.calls) {
+    expect(call[2]).toEqual({ expectedRevision: "stored-revision", statsOwner: owner }); expect(call[2].statsOwner).toBe(owner);
+    expect(call[1].spatial).toBe(h.spatial);
+  }
+  expect(h.buildIntents.bindIngestedGame.mock.calls[0][2]).toEqual({ created: true, spatial: h.spatial, statsOwner: owner });
+  expect(h.guideSamples.capture.mock.calls[0][1]._customBuildSlug).toBe("saved");
+});
+
 describe("POST /games ladder-map + player-count stamping", () => {
   test("rejects oversized item batches before validation or storage work", async () => {
     const ladderMapPool = { get: jest.fn(async () => ({ maps: [] })) };

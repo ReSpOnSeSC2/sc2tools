@@ -78,8 +78,14 @@ class GameStatsWrites {
    * @param {(session:import('mongodb').ClientSession|undefined)=>Promise<T>} work
    * @param {AuthorityOptions} [options] @returns {Promise<T>} */
   /** @overload @param {GameStatsOwner} owner
-   * @param {import('./gameStatsCountNeutral').NeutralMutation} work
+   * @param {import('./gameStatsCustomBuildIngestTag').CustomBuildIngestTagMutation} work
+   * @returns {Promise<import('./gameStatsCustomBuildIngestTag').CustomBuildIngestTagResult>} */
+  /** @overload @param {GameStatsOwner} owner
+   * @param {import('./gameStatsCountNeutral').UpdateNeutralMutation} work
    * @returns {Promise<import('mongodb').UpdateResult>} */
+  /** @overload @param {GameStatsOwner} owner
+   * @param {import('./gameStatsCountNeutral').NeutralMutation} work
+   * @returns {Promise<import('./gameStatsCountNeutral').NeutralResult>} */
   /** @template T @param {GameStatsOwner} owner
    * @param {((session:import('mongodb').ClientSession|undefined)=>Promise<T>)|import('./gameStatsCountNeutral').NeutralMutation} work
    * @param {AuthorityOptions} [options] @returns {Promise<any>} */
@@ -122,7 +128,7 @@ class GameStatsWrites {
     const session = this.db.client.startSession({ causalConsistency: true });
     session.advanceOperationTime(floor);
     try {
-      return /** @type {T} */ (await session.withTransaction(/** @returns {Promise<T|import('mongodb').UpdateResult>} */ () => mutation
+      return /** @type {T} */ (await session.withTransaction(/** @returns {Promise<T|import('./gameStatsCountNeutral').NeutralResult>} */ () => mutation
         ? carryUnchangedGameStats(this.db, owner, mutation, session)
         : maintainGameStats(this.db, owner, this.authority(owner, options), /** @type {Readonly<Record<string,any>>} */ (selection), work, session),
       { readConcern: { level: "snapshot" }, writeConcern: { w: "majority", j: true, wtimeoutMS: 5000 },
