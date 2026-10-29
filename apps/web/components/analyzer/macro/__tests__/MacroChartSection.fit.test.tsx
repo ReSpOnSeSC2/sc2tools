@@ -36,9 +36,9 @@ describe("fitted timeline and compositions", () => {
     expect(stage.contains(screen.getByRole("heading", { name: "Killed & lost", hidden: true }))).toBe(false);
   });
 
-  it("uses the physical transformed plot fraction once, preserving both rosters and passive inspection through zoom", () => {
+  it("uses the physical transformed plot fraction once, preserving both rosters and passive inspection through late data", () => {
     const onSeek = vi.fn();
-    render(<MacroChartSection fitOverview gameId="one" samples={samples} oppSamples={samples} leaks={[]} gameLengthSec={300} onSeek={onSeek} />);
+    const view = render(<MacroChartSection fitOverview gameId="one" samples={samples} oppSamples={samples} leaks={[]} gameLengthSec={300} onSeek={onSeek} />);
     const chart = screen.getByRole("img", { name: /Army value/ });
     const overlay = chart.querySelector<SVGRectElement>('rect[fill="transparent"]')!;
     // Logical600px plot shown at50%: a physical75px is75s, not150s.
@@ -46,7 +46,9 @@ describe("fitted timeline and compositions", () => {
     fireEvent.click(overlay, { clientX: 95, clientY: 40 });
     expect(onSeek).toHaveBeenCalledTimes(1); expect(onSeek).toHaveBeenCalledWith(75);
     for (const name of ["You composition at 1:15", "Opponent composition at 1:15"]) expect(screen.getByRole("region", { name })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Zoom in timeline and armies" }));
+    expect(screen.queryByRole("group", { name: "Timeline and armies zoom" })).toBeNull();
+    const later = [...samples, { time: 360, army_value: 3400, food_workers: 50 }];
+    view.rerender(<MacroChartSection fitOverview gameId="one" samples={later} oppSamples={later} leaks={[]} gameLengthSec={360} onSeek={onSeek} />);
     expect(screen.getByRole("img", { name: /Army value/ })).toBe(chart);
     expect(screen.getByRole("region", { name: "You composition at 1:15" })).toBeTruthy();
     expect(onSeek).toHaveBeenCalledTimes(1); expect(scroll).not.toHaveBeenCalled();

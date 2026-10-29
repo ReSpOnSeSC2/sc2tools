@@ -78,14 +78,15 @@ export function LineKey({
 /**
  * One rounded track of toggles, one per metric, then "All". Any mix can
  * be on; with two or more on, each lit segment also shows its line
- * pattern so the switch doubles as the chart's legend. Wrap full labels
- * when the Bank/APM choices cannot fit on one phone row.
+ * pattern so the switch doubles as the chart's legend. The mobile modal can
+ * request one scrollable row without changing other chart layouts.
  */
 export function MetricSwitch({
   selected,
   onChange,
   race,
   metrics = timelineMetricsFor({ apm: false }),
+  singleRow = false,
 }: {
   /** The metrics currently plotted. */
   selected: readonly TimelineMetric[];
@@ -95,6 +96,8 @@ export function MetricSwitch({
   race?: string | null;
   /** The metrics this game can show (APM only with a trusted curve). */
   metrics?: readonly TimelineMetricDef[];
+  /** The fitted mobile modal keeps every choice on one scrollable row. */
+  singleRow?: boolean;
 }) {
   const on = new Set(selected);
   const allOn = metrics.every((m) => on.has(m.key));
@@ -115,7 +118,9 @@ export function MetricSwitch({
     <div
       role="group"
       aria-label="Chart metrics"
-      className="flex max-w-full flex-wrap gap-0.5 rounded-2xl border border-border bg-bg-subtle p-1 sm:rounded-full"
+      className={singleRow
+        ? "flex max-w-full flex-nowrap gap-0.5 overflow-x-auto rounded-full border border-border bg-bg-subtle p-1"
+        : "flex max-w-full flex-wrap gap-0.5 rounded-2xl border border-border bg-bg-subtle p-1 sm:rounded-full"}
     >
       {metrics.map((m) => {
         const pressed = on.has(m.key);
