@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "status": "CURRENT_LOCAL_GATES_PASSED_RELEASE_PENDING",
+  "acceptedMain": "6e66356817cf1700921efc51412f5e016cfe9a2d",
+  "integratedHead": "232b3ee5102d89bbb3018e44a1db6c45f6c76360",
+  "testedAndIntegratedTree": "f693e6a4a30e9606446b69faee58a546f6fe9899",
+  "preservedStrengthCommit": "637e8811c7217a5375da4904fccbe5e5bf93e248",
+  "source": {
+    "head": "8762a71fc684331eb122ae31bd5cf077445b234f",
+    "workingSource": "Source05",
+    "sha256": "73f9e7c45d80ac273519ea95f3910dee2e7dcc5fee0bf7cefd52f421210d5e35",
+    "laterChanges": "Two tested files committed; normal main integration preserved the complete tree. Later five-file prose/ledger adoption does not change application inputs."
+  },
+  "scope": {
+    "routes": [
+      "/v1/matchups",
+      "/v1/maps",
+      "/v1/maps/matchups",
+      "/v1/build-vs-strategy"
+    ],
+    "existingCapabilityPositionsPreserved": 11,
+    "appendedPositions": [
+      11,
+      12,
+      13,
+      14
+    ],
+    "flag": "USER_CACHE_ENABLED remains off",
+    "excluded": "Matchup time series and other mixed dependencies remain unfinished."
+  },
+  "checks": {
+    "api": {
+      "passed": 893,
+      "files": 43,
+      "skipped": 0,
+      "types": "pass",
+      "lint": "pass",
+      "qualification": "Actual Source04 API run, carried only through exact 1037 API/dependency/shared-type equality at Source05."
+    },
+    "web": {
+      "passed": 121,
+      "files": 8,
+      "skipped": 0,
+      "types": "pass",
+      "lint": "pass",
+      "qualification": "Separate actual current Source05 run; no combined-run or CI-total claim."
+    },
+    "build": {
+      "id": "iUSG61Bdeb2EfqzhWiRp2",
+      "budgets": 83,
+      "listed": 18,
+      "default": 65,
+      "sourceInputs": 7024,
+      "canonicalInputs": 40,
+      "rawAssetPins": 49,
+      "servedAssets": 7,
+      "strictSamples": 4,
+      "staticWorkers": 1,
+      "heapGiB": 4
+    },
+    "browser": {
+      "passed": 2,
+      "skipped": 0,
+      "retries": 0,
+      "workers": 1,
+      "viewports": [
+        "390 dark",
+        "1280 light"
+      ],
+      "realClientModules": 6,
+      "cssFiles": 5,
+      "admittedFonts": 3,
+      "qualification": "Real client code with synthetic HTTP/auth fixtures; no enabled production-cache or savings proof."
+    },
+    "release": "Required checks on the final published head, actual deployments and scoped signed-in acceptance remain pending."
+  },
+  "cleanup": {
+    "lightExactIdentities": 73,
+    "buildExactIdentities": 10,
+    "browserExactIdentities": 14,
+    "current": 0,
+    "unresolvedHistorical": 0,
+    "orphans": 0,
+    "listeners": 0,
+    "kills": 0
+  },
+  "retainedFailures": [
+    "API legacy complexity growth, resolved by reviewed pure helpers",
+    "Web fixture table growth, resolved by the exact ten-resource table lift without assertion changes",
+    "Transient unproven process observations with later targeted absence and strict settlement; no retrospective ownership",
+    "Precompiler metadata/assertion-formatting OOM; no compiler ran on that failed attempt"
+  ],
+  "sourceBoundary": "The 7024 pre/post build snapshot covers the verified source before later documentation adoption. All API/web application bytes and protected inputs must remain exact; final CI covers the published commit.",
+  "program": {
+    "originalItems": 197,
+    "completed": 124,
+    "partial": 53,
+    "open": 20,
+    "remaining": 73,
+    "parent": "faster-dashboards remains partial"
+  },
+  "privacy": "No owner totals, identifiers, private screenshots, raw process rows or provider credentials are published.",
+  "references": [
+    {
+      "kind": "light",
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/current-checks-03/LOCAL-READY-01.json",
+      "bytes": 10868,
+      "sha256": "000b9f25a22806fcda200e3c2f09a80790a5080cd95e7be1ae318b7c2adbee81"
+    },
+    {
+      "kind": "build",
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/build-current-02/VERIFIED.json",
+      "bytes": 30199,
+      "sha256": "a7e175c6334afd55e2ef3f3a47a7c446583ca99b03883e644141130371ce1a9e"
+    },
+    {
+      "kind": "browser",
+      "file": "C:/SC2TOOLS/.cache/dashboard-strength-snapshots-20261028/transport-current-01/VERIFIED-01.json",
+      "bytes": 11426,
+      "sha256": "e42b464a17156e6923c4623af3bf2fe4ad20769341607350e8f82ef85df860e8"
+    }
+  ]
+}

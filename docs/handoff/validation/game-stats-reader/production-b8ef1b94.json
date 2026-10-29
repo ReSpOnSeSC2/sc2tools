@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "status": "DELIVERED_EXACT_REVISION_READY_LIVE_WITH_SCOPED_READ_ONLY_ACCEPTANCE",
+  "observedAtUtc": "2026-10-28T18:13:32.111Z",
+  "revision": "b8ef1b945effef54d9f7bad13e5ee27f1525a3db",
+  "testedHead": "fc65ce4c54cc0307f4e7c63cf0b8c2897df90d59",
+  "testedAndFreshMergedTree": "878865c4244c503807ee3f0771ac0d80c3236dba",
+  "web": {
+    "deployment": "CPAt1Svg6UqyvfDD6crYAV26Q8qG",
+    "state": "Ready / Production / Latest",
+    "exactSourceObserved": true,
+    "primaryDomainNewSetupHealthCopy": true
+  },
+  "api": {
+    "deployment": "dep-dbh3fc29lscs7381jhe0",
+    "state": "Live",
+    "exactSourceObserved": true
+  },
+  "acceptance": {
+    "signedInSettingsLoaded": true,
+    "setupHealthHeading": "Everything's set up",
+    "headerAndDoctorCountsMatch": true,
+    "newHelpParagraphVerified": true
+  },
+  "actions": "Hosting status/source, primary Help and signed-in Foundation navigation only. No Save, reprocess, upload, diagnostics copy, history mutation, pairing or quiz action.",
+  "limits": "Actual read-only UI/DOM/pixel acceptance. No query-path or network instrumentation, maintained-ready-vs-fallback claim, latency/savings measurement, raw BSON/GDPR fault injection or cache activation. Local real-Mongo tests and exact-head CI cover those source paths separately.",
+  "privacy": "Allowlisted delivery receipt only: no owner totals/identifiers, device rows, private production photos or photo paths. User actions above are bounded; normal background activity is not a universal no-account-writes claim.",
+  "sourceReceipt": {
+    "file": "C:/SC2TOOLS/.cache/maintained-read-integration-df5cf875-20261028/production-b8ef1b94/acceptance-receipt.json",
+    "bytes": 1463,
+    "sha256": "f680506609bf3e242903ebe5082e92ca0d895b989a798014f561ada89a33d92b"
+  },
+  "qualification": "Root actual production receipt, independently sanitized and source-bound here; reviewer did not rerun production acceptance. No live query-path, maintained-ready-versus-fallback, latency/savings, mobile viewport or zero-network claim. Existing chart cache remains off; no activation action."
+}

@@ -82,7 +82,7 @@ test("a committed or unknown mutation forces new aggregation without socket emis
   await expect(f.revisions.run("a", async () => { throw error; })).rejects.toBe(error);
   await get(f.app, "/timeseries"); expect(f.aggregations.timeseries).toHaveBeenCalledTimes(3);
 });
-test.each(["/matchups", "/maps", "/maps/matchups", "/build-vs-strategy", "/timeseries/matchups", "/opp-mmr-buckets", "/random-summary", "/trends/explorer/periods"])("%s never enters the cache allowlist", async (path) => {
+test.each(["/matchups", "/maps", "/maps/matchups", "/build-vs-strategy", "/timeseries/matchups", "/opp-mmr-buckets", "/random-summary", "/trends/explorer/periods"])("%s without captured dependencies or explicit coverage never enters retention", async (path) => {
   const f = fixture(); await get(f.app, path); await get(f.app, path);
   expect(f.users.findOne).not.toHaveBeenCalled(); expect(f.cache.completed.size).toBe(0);
 });

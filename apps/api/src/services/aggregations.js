@@ -37,13 +37,16 @@ const RESULT_BUCKET_BRANCHES = [
  */
 class AggregationsService {
   /** @param {{games: import('mongodb').Collection, gameDetails?: import('mongodb').Collection}} db
-   * @param {{mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'>}} [opts] */
+   * @param {{mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'> & Partial<Pick<import('./mmrExpectation').MmrExpectationService,'snapshot'>>}} [opts] */
   constructor(db, opts = {}) {
     this.db = db;
     this.mmrExpectation = opts.mmrExpectation;
     this.trendsRequests = new TrendsRequests();
     /** @type {import('./sessionPolicy').SessionPolicyService|null} */ this.sessionPolicy = null;
   }
+
+  /** Only the explicitly enabled direct routes request this optional proof. */
+  async captureStrengthCurve() { return this.mmrExpectation?.snapshot?.() ?? null; }
 
   /**
    * Top-of-app overview: totals, byMatchup, byMap, last 20 games.
@@ -121,19 +124,21 @@ class AggregationsService {
    *
    * @param {string} userId
    * @param {object} filters
+   * @param {import('./strengthCurveSnapshots').CurveSnapshot} [snapshot]
    */
-  async matchups(userId, filters) {
-    return applyRaceGrouping(filters, (f) => this._matchupsOnce(userId, f));
+  async matchups(userId, filters, snapshot) {
+    return applyRaceGrouping(filters, (f) => this._matchupsOnce(userId, f, snapshot));
   }
 
   /**
    * @private
    * @param {string} userId
    * @param {object} filters
+   * @param {import('./strengthCurveSnapshots').CurveSnapshot} [snapshot]
    */
-  async _matchupsOnce(userId, filters) {
+  async _matchupsOnce(userId, filters, snapshot) {
     const match = gamesMatchStage(userId, filters);
-    const curve = await this.mmrExpectation?.curve() || null;
+    const curve = snapshot ? snapshot.curve : await this.mmrExpectation?.curve() || null;
     const rows = await this.db.games
       .aggregate(strengthPipeline([
         { $match: match },
@@ -198,19 +203,21 @@ class AggregationsService {
    *
    * @param {string} userId
    * @param {object} filters
+   * @param {import('./strengthCurveSnapshots').CurveSnapshot} [snapshot]
    */
-  async maps(userId, filters) {
-    return applyRaceGrouping(filters, (f) => this._mapsOnce(userId, f));
+  async maps(userId, filters, snapshot) {
+    return applyRaceGrouping(filters, (f) => this._mapsOnce(userId, f, snapshot));
   }
 
   /**
    * @private
    * @param {string} userId
    * @param {object} filters
+   * @param {import('./strengthCurveSnapshots').CurveSnapshot} [snapshot]
    */
-  async _mapsOnce(userId, filters) {
+  async _mapsOnce(userId, filters, snapshot) {
     const match = gamesMatchStage(userId, filters);
-    const curve = await this.mmrExpectation?.curve() || null;
+    const curve = snapshot ? snapshot.curve : await this.mmrExpectation?.curve() || null;
     const rows = await this.db.games
       .aggregate(strengthPipeline([
         { $match: match },
@@ -233,19 +240,21 @@ class AggregationsService {
    *
    * @param {string} userId
    * @param {object} filters
+   * @param {import('./strengthCurveSnapshots').CurveSnapshot} [snapshot]
    */
-  async mapMatchups(userId, filters) {
-    return applyRaceGrouping(filters, (f) => this._mapMatchupsOnce(userId, f));
+  async mapMatchups(userId, filters, snapshot) {
+    return applyRaceGrouping(filters, (f) => this._mapMatchupsOnce(userId, f, snapshot));
   }
 
   /**
    * @private
    * @param {string} userId
    * @param {object} filters
+   * @param {import('./strengthCurveSnapshots').CurveSnapshot} [snapshot]
    */
-  async _mapMatchupsOnce(userId, filters) {
+  async _mapMatchupsOnce(userId, filters, snapshot) {
     const match = gamesMatchStage(userId, filters);
-    const curve = await this.mmrExpectation?.curve() || null;
+    const curve = snapshot ? snapshot.curve : await this.mmrExpectation?.curve() || null;
     const rows = await this.db.games
       .aggregate(strengthPipeline([
         { $match: match },
@@ -282,10 +291,11 @@ class AggregationsService {
    *
    * @param {string} userId
    * @param {object} filters
+   * @param {import('./strengthCurveSnapshots').CurveSnapshot} [snapshot]
    */
-  async buildVsStrategy(userId, filters) {
+  async buildVsStrategy(userId, filters, snapshot) {
     return applyRaceGrouping(filters, (f) =>
-      this._buildVsStrategyOnce(userId, f),
+      this._buildVsStrategyOnce(userId, f, snapshot),
     );
   }
 
@@ -293,10 +303,11 @@ class AggregationsService {
    * @private
    * @param {string} userId
    * @param {object} filters
+   * @param {import('./strengthCurveSnapshots').CurveSnapshot} [snapshot]
    */
-  async _buildVsStrategyOnce(userId, filters) {
+  async _buildVsStrategyOnce(userId, filters, snapshot) {
     const match = gamesMatchStage(userId, filters);
-    const curve = await this.mmrExpectation?.curve() || null;
+    const curve = snapshot ? snapshot.curve : await this.mmrExpectation?.curve() || null;
     const rows = await this.db.games
       .aggregate(strengthPipeline([
         { $match: match },

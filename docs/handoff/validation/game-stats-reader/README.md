@@ -1,4 +1,12 @@
-# Maintained account statistics: current local release evidence
+# Maintained account statistics: delivered reader
+
+[Actual production acceptance](production-b8ef1b94.json) records PR 810 at `b8ef1b94`: exact Ready/Production/Latest Vercel and Live Render sources, primary Setup & health Help, and signed-in header/Doctor with matching displayed totals. Required checks passed at exact `fc65ce4c` before the fresh identical tree and merge. No owner totals, identifiers or private production images are published.
+
+This is scoped read-only UI/DOM/pixel acceptance. It does not identify whether a live request used maintained-ready state or original fallback, instrument network/query paths, measure latency/savings, or activate the chart/device-auth caches. No Save, reprocess, upload, diagnostics copy, history mutation, pairing or quiz action was performed. The performance roadmap item remains partial with the remaining count unchanged.
+
+The historical local packet below keeps its original 55be/6,921-source boundary. These delivery/checkpoint/ledger files are later documentation-only updates, not a new build or rerun of all 197 items.
+
+## Historical local release evidence
 
 Candidate head: `55be35e56b42090dbf91331dcc40c5476551c30e`, integrated with accepted main `df5cf875d588fafba5456695a1c3550fc42ba587`. The reader has not been published by this packet.
 
