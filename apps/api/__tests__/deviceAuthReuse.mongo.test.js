@@ -95,6 +95,8 @@ test("missing or recreated prepared authority never auto-activates and unknown g
   // Each later step waits out the no-grant hold-off, so every acquire dispatches a real probe.
   await writer().prepare(); mono += DEVICE_AUTH_LEASE_MS; expect(await a.lease.acquire()).toBeNull(); expect(probes()).toBe(2);
   expect((await authority.findOne({ _id: AUTHORITY_KEY }, { readPreference: "primary" })).mode).toBe("prepared");
+  // The failed probe against the prepared row re-armed the hold-off: one tick before it ends, nothing is sent.
+  mono += DEVICE_AUTH_LEASE_MS - 1; expect(await a.lease.acquire()).toBeNull(); expect(probes()).toBe(2);
   await authority.replaceOne({ _id: AUTHORITY_KEY }, activeAuthority());
   const actual = client.db(authority.dbName);
   jest.spyOn(client, "db").mockReturnValueOnce({ command: async (...args) => { await actual.command(...args); throw new Error("lost grant ACK"); } });

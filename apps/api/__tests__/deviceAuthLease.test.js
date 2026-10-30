@@ -4,6 +4,7 @@ const { randomUUID } = require("crypto");
 const { Timestamp } = require("mongodb");
 const { deviceAuthOwnerHash } = require("../src/services/deviceAuthAuthority");
 const { deferred, until, authFixture } = require("./helpers/deviceAuthFixture");
+afterEach(() => jest.useRealTimers());
 
 test("grant is one actual primary majority nonce write with an owned causal session and command floor", async () => {
   const f = authFixture(), grant = await f.lease.acquire();
@@ -103,11 +104,30 @@ test("a probe retired by its caller's deadline starts the hold-off only at its a
   });
   const pending = f.lease.acquire(); f.clock.mono = 1800; await jest.advanceTimersByTimeAsync(1800);
   expect(await pending).toBeNull(); expect(f.lease.probe.retired).toBe(true);
-  f.clock.mono = 5000; expect(await f.lease.acquire()).toBeNull(); expect(f.command).toHaveBeenCalledTimes(1);
-  gate.resolve(); await until(() => f.lease.probe === null);
+  // A refused caller and the settlement happen at different times, so only settlement timing ends the hold-off at 6800.
+  f.clock.mono = 3000; expect(await f.lease.acquire()).toBeNull(); expect(f.command).toHaveBeenCalledTimes(1);
+  f.clock.mono = 5000; gate.resolve(); await until(() => f.lease.probe === null);
   f.clock.mono = 6799; expect(await f.lease.acquire()).toBeNull(); expect(f.command).toHaveBeenCalledTimes(1);
   f.clock.mono = 6800; expect(await f.lease.acquire()).not.toBeNull(); expect(f.command).toHaveBeenCalledTimes(2);
-  await f.cache.stopAndDrain(); jest.useRealTimers();
+  await f.cache.stopAndDrain();
+});
+
+test.each(["prepared", "missing"])("a persistently %s authority re-arms the hold-off after every failed probe", async kind => {
+  const f = authFixture(), original = f.command.getMockImplementation(), hash = "a".repeat(64);
+  f.command.mockImplementation(async (/** @type {any} */ command, /** @type {any} */ options) => {
+    const reply = await original(command, options);
+    if (kind === "prepared") reply.value.mode = "prepared";
+    if (kind === "missing") { reply.lastErrorObject.n = 0; reply.value = null; }
+    return reply;
+  });
+  f.clock.mono = 5; expect(await f.lease.acquire()).toBeNull(); expect(f.command).toHaveBeenCalledTimes(1);
+  f.clock.mono = 1805; expect(await f.lease.acquire()).toBeNull(); expect(f.command).toHaveBeenCalledTimes(2);
+  for (const at of [1805, 2500, 3604]) {
+    f.clock.mono = at; expect(await f.lease.acquire()).toBeNull(); expect(await f.cache.prepare(hash)).toBeNull();
+  }
+  expect(f.command).toHaveBeenCalledTimes(2); expect(f.read).not.toHaveBeenCalled();
+  f.clock.mono = 3605; expect(await f.lease.acquire()).toBeNull(); expect(f.command).toHaveBeenCalledTimes(3);
+  await f.cache.stopAndDrain();
 });
 
 test("a denyAll grant is still kept for its lease and starts no hold-off", async () => {
