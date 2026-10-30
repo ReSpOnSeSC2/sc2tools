@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "status": "LOCAL_SOURCE08_TYPES_CONFIGURED_LINT_AND_71_FILES_PASS_RELEASE_PENDING",
+  "source": {
+    "base": "059a168bb2619cc7c16625778ac99687ce39b353",
+    "preservationHead": "c9d20a99d11c7095689662f8848a0d10910ea40c",
+    "testedSource": "84cba2a73c5a45acb18139c40711b4bca32f482a2ed5e5df90ed7474447bfa45",
+    "testedCommit": "c16ae8fcad0ba9aeaf8c1549fa5035839ab8660b",
+    "testedTree": "7796761a87fa1faad427e163319c3775313167fe"
+  },
+  "actual": {
+    "apiCases": 1393,
+    "files": 71,
+    "newUnit": 48,
+    "newReplset": 43,
+    "failed": 0,
+    "pending": 0,
+    "typesExit": 0,
+    "configuredLintExit": 0,
+    "unitExit": 0,
+    "allChildAndWrapperExits": 0,
+    "strictNewFiles": 4,
+    "legacyNoAddedFiles": 13,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "batchSeconds": 176
+  },
+  "testedGuards": {
+    "apiInputs": 1048,
+    "webInputs": 3537,
+    "fullSourceFiles": 7040,
+    "ownedFiles": 17,
+    "rawAssets": 49
+  },
+  "cleanup": {
+    "exactIdentities": 210,
+    "strictHistory": 9,
+    "preEpochHistory": 11,
+    "preEpochPidReuseThisBoot": 1,
+    "unresolvedCurrentHistoricalOrphansListeners": 0,
+    "kills": 0,
+    "qualification": "Scoped current absence under the declared boot-epoch rule; no retrospective ownership or continuous observation."
+  },
+  "retained": [
+    "Source03 types: one TS2339 in the admin rename race spy; type-only receiver assertion.",
+    "Source04 lint: complexity 13 in a new real-Mongo callback, an unused import and one fixture callback 231 -> 234 lines.",
+    "Source05 unit: 129 of 991 cases failed in five suites (realm re-validation, harness job collection, owner clerk IDs, fixed event-loop wait).",
+    "Peer-found before runtime: unseeded recovery owners; three out-of-set consumer fixtures; batch widened 45 -> 71.",
+    "PREFLIGHT-07 stopped on seven post-reboot PID collisions; boot-epoch rule declared, tested and reviewed before reuse."
+  ],
+  "boundaries": [
+    "Own exact-head CI, deployment and production acceptance remain pending.",
+    "No new web/build/browser, production mutation, cache/auth activation, expanded coverage seal, savings or whole-roadmap completion."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/SOURCE-READY-08.json",
+      "sha256": "84cba2a73c5a45acb18139c40711b4bca32f482a2ed5e5df90ed7474447bfa45",
+      "bytes": 40622
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/GATE-SOURCE-READY-06.json",
+      "sha256": "fff8c01b0424b00cb8c53a186b9267b6b506440081534a88a2d1d61bf4129eca",
+      "bytes": 44222
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/CHECKS-READY-12.json",
+      "sha256": "7c139969f6e71f2443b045c9e40ff727dc70e90a1e4c78e3bebaa705688de150",
+      "bytes": 45480
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/INDEPENDENT-GATE-REVIEW-12.json",
+      "sha256": "e19a99e5ce24d9bce2ac25a22a5288b2c7a3a2bd7567c5ad7c5d7a37685ff41f",
+      "bytes": 10690
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/INDEPENDENT-SOURCE-GATE-REVIEW-11.json",
+      "sha256": "9f3211b5a1828f8cc48ed60a92096f1cebfac47e2f12cdf5944a1801f850d6eb",
+      "bytes": 38146
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/ROOT-EXECUTION-GRANT-03.json",
+      "sha256": "1dd99414b8d1981e471db9fa830ccd1535df90e6112e8288d217b44773d55a8e",
+      "bytes": 7173
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/PREFLIGHT-13.json",
+      "sha256": "bca8d72182b741024a03ef122af84127f55d1d3d287eb8fd57d702a3e6244678",
+      "bytes": 3633
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/PREFLIGHT-14.json",
+      "sha256": "c067fd92dc319b289ac613136f15bca2b80ae3d529e50f4a8fc9f5db9bb255b2",
+      "bytes": 3631
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/COMPETING-WORK-OBSERVATION-04.json",
+      "sha256": "41f839e221d4d24242bf11fc2efb604a7ee24725d9f2b5e83cd098ce5c93e067",
+      "bytes": 1135
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/checks-09/types-01-command.json",
+      "sha256": "23c870d867300dc6e82747af998e8bfce91982724dd46cc62398a477488c690e",
+      "bytes": 4135
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/checks-09/lint-01-command.json",
+      "sha256": "4210913bb7e857d43ca5771392e949ace678311ec7b50e332e1dd18e830fefb6",
+      "bytes": 3388
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/checks-09/lint-01-results.json",
+      "sha256": "2abaf7521175ea3346c0b7f143645211f42cc57ac32bf658a91b8a578e6c89fd",
+      "bytes": 47191
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/checks-09/unit-01-command.json",
+      "sha256": "7f5d3c0aa5a931effb3a95a8a63f32fecdaf6c5e2841add7e8d24635a0f93ddf",
+      "bytes": 47376
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/checks-09/cleanup-03.json",
+      "sha256": "b87b26bc6a4a6410cc09b6fe6e5a7153af51d8d117a3151598c281f5ea4f1eb4",
+      "bytes": 14579
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/checks-09/ROOT-cleanup-03.json",
+      "sha256": "a039d5a9897d35e0e6a11fafe2f7976fb5df1cadde8b21e28dcb15d711db9252",
+      "bytes": 2700
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/checks-04/types-01-command.json",
+      "sha256": "626b62bf434deec40fca9c4401837f10bc71eb6a95b06636c0b81e2fb50a64cf",
+      "bytes": 4140
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/checks-05/lint-01-command.json",
+      "sha256": "966c8edee034f5434250f847d8cfbb591f831b61755d08a6bfb5e42094d7b24e",
+      "bytes": 3392
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/checks-06/unit-01-command.json",
+      "sha256": "d60980a333a94b8f918c29e6a073056b5cfb529b2a9640b86e3cbc07ab31a318",
+      "bytes": 40603
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/PREFLIGHT-07-FAILURE-01.json",
+      "sha256": "1b560c5172d373996161ace5916da610b03a898a175191a57e6b18d22c6a38c8",
+      "bytes": 5688
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/BOOT-EPOCH-OBSERVATION-01.json",
+      "sha256": "39f621d28b8ca12148ada025eb4813f5445b174b1fc18d2349a91628bff9bb76",
+      "bytes": 1911
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/custom-build-definition-count-neutral-20261029/boot-epoch-01/PURE-RESULT-01.tap",
+      "sha256": "ffb2084075d3af04f8c3cd8ec8f4281f75f3e37a2e91d050d632fa8bdd23c4b0",
+      "bytes": 2121
+    }
+  ]
+}

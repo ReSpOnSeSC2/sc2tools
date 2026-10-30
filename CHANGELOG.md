@@ -22,6 +22,7 @@ corresponding GitHub Release.
 
 ### History write consistency
 
+- Save custom-build definitions and rename their linked game labels together with the account statistics revision, preserving verified totals and latest-game values.
 - Commit fresh-ingest saved-build classification labels with the account statistics revision, preserving verified totals, latest-game values and explicit check-in choices.
 - Publish completed saved-build reclassification together with the account statistics revision, preserving verified game totals and the latest-game value.
 - Keep verified account totals and latest-game values consistent when missing opponent ladder MMR or league metadata is filled in. Existing replay ratings and historical dates stay intact.

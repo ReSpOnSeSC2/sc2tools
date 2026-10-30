@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "status": "DELIVERED_WITH_SCOPED_READ_ONLY_ACCEPTANCE",
+  "pullRequest": 820,
+  "testedHead": "11b623aa2de2ca651c8ec3ecc57de62c7c833e43",
+  "mergedMain": "059a168bb2619cc7c16625778ac99687ce39b353",
+  "tree": "c764b2377de5617983bb428cf26ebebee0cad490",
+  "exactHeadCI": {
+    "apiPassed": 7612,
+    "existingSkippedTests": 9,
+    "suitesPassed": 514,
+    "existingSkippedSuite": 1,
+    "wholeAPITypes": "pass",
+    "configuredLint": "pass",
+    "requiredChecks": "all success",
+    "boundedLogReadWasTruncated": true
+  },
+  "deployment": {
+    "api": "Live",
+    "web": "Ready / Production / current",
+    "bothSourcesExactMergedMain": true
+  },
+  "readOnlyAcceptance": {
+    "signedIn": true,
+    "accepted": true,
+    "personalChartCache": "Off",
+    "cacheOffEvidence": "Saved DOM observation; the screenshot shows health context, not the cache card.",
+    "ownedTabsClosed": 3,
+    "productRecordsOrSettingsChanged": false,
+    "nativeApplicationLaunched": false
+  },
+  "localProof": "The separate local-verification receipt retains the 867-case / 40-file gate, initial type failure, type-only correction and scoped cleanup qualifications.",
+  "limitations": [
+    "No production tag transaction was forced or instrumented. Local real-Mongo cases and exact-head API CI establish the implementation behavior.",
+    "No new mobile, web build or browser-matrix proof, enabled-cache hit, savings, complete writer/fleet coverage or roadmap completion is claimed.",
+    "No private account details, DOM, images, provider identifiers or private URLs are copied here."
+  ],
+  "sourceReceiptSha256": "8a8cbc60ba54030539bc4196dd5f679e56e288bce22731e5a6464b528bf82cd7"
+}
