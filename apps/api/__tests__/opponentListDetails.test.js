@@ -59,12 +59,12 @@ describe("opt-in opponent list scalar details", () => {
   });
   const load = (query = "") => request(app).get(`/opponents${query}`).set("x-user", USER);
 
-  test("ordinary clients neither receive summaries nor add top work; opt-in replaces one existing batch", async () => {
+  test("ordinary clients neither receive summaries nor add summary work; opt-in replaces one existing batch", async () => {
     const aggregate = jest.spyOn(db.games, "aggregate");
     const plain = await load();
     expect(plain.status).toBe(200);
     expect(plain.body.items[0]).not.toHaveProperty("latestGame");
-    expect(JSON.stringify(aggregate.mock.calls)).not.toContain('"$top"');
+    expect(JSON.stringify(aggregate.mock.calls)).not.toMatch(/_listLatest|_listCandidates|_listDurationSum|_listMacroSum/);
     const reads = aggregate.mock.calls.length;
     aggregate.mockClear();
     const detailed = await load("?listDetails=1");
@@ -72,9 +72,26 @@ describe("opt-in opponent list scalar details", () => {
     expect(detailed.status).toBe(200);
     expect(aggregate).toHaveBeenCalledTimes(reads - 1);
     expect(detailed.headers["cache-control"]).toBe("private, no-store");
-    expect(aggregate.mock.calls.find(([pipeline]) => JSON.stringify(pipeline).includes('"$top"'))[1]).toEqual({ maxTimeMS: 5000, timeoutMS: 5000 });
+    expect(aggregate.mock.calls.find(([pipeline]) => JSON.stringify(pipeline).includes('"_listLatest"'))[1]).toEqual({ maxTimeMS: 5000, timeoutMS: 5000 });
     expect(detailed.body.items[0]).toHaveProperty("latestGame.gameId", "a");
     aggregate.mockRestore();
+  });
+
+  test("listDetails keeps both recorded races when the same account switches from Zerg to Protoss", async () => {
+    await db.games.deleteMany({});
+    await db.opponents.updateOne({ userId: USER, pulseId: PULSE }, { $set: { race: "Zerg" } });
+    await db.games.insertMany([
+      game("new-protoss", { date: new Date("2026-10-29"), opponent: { pulseId: PULSE, displayName: "Ali", race: "Protoss" } }),
+      game("old-zerg", { date: new Date("2026-10-01"), opponent: { pulseId: PULSE, displayName: "Ali", race: "Zerg" } }),
+    ]);
+
+    const response = await load("?listDetails=1");
+
+    expect(response.status).toBe(200);
+    expect(response.body.items.find(row => row.pulseId === PULSE)).toMatchObject({
+      race: "P", races: ["P", "Z"], latestGame: { gameId: "new-protoss" },
+    });
+    expect((await db.opponents.findOne({ userId: USER, pulseId: PULSE })).race).toBe("Zerg");
   });
 
   test.each(["?listDetails=true", "?listDetails=0", "?listDetails=1&listDetails=1", "?listDetails[x]=1"])("strict opt-in ignores %s", async (query) => {
