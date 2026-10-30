@@ -174,6 +174,17 @@ use a restored protocol marker as proof that old writers have stopped. The
 manual drop/`$out` rollback in the timebase migration has the same boundary.
 `USER_CACHE_ENABLED` stays off. See ADR 0070 for the reader contract.
 
+Retained chart and credential state follows the same rule (see
+[ADR 0072](../adr/0072-serving-cohort-coherence.md)). Never trust `users.dataRev`
+or a retained chart body across a raw restore: the restore can rewind `dataRev`,
+so a revision a process saw before the restore can later name different data.
+Suspending the service in step 1 discards every retained body, because they
+live only in process memory. Keep `USER_CACHE_ENABLED` off until a fresh
+activation receipt exists. The device-credential authority record in `jobLocks`
+(`device-auth-reuse-authority-v1`) also comes back at its restored generation
+and pending list. It is not settlement evidence: before any retained device-auth
+reader, deliver a fresh incarnation and an all-writers cutover.
+
 Resume the Render service (or redeploy if `MONGODB_URI` changed). Boot
 recreates any missing indexes. Then confirm:
 
@@ -225,6 +236,13 @@ recreates any missing indexes. Then confirm:
   an all-history wipe: that also permanently deletes replay files and R2
   detail blobs outside the intended range. Admin wipes before this audit
   update were not logged; reconcile those with the admin and affected users.
+- **Device unpairs after the restore point are undone.** Device sign-in reads
+  only the restored `device_tokens` rows, so a device unpaired after the
+  restore time can authenticate again. No dedicated event records an unpair:
+  search the request logs from the restore time onward for
+  `DELETE /v1/devices/<deviceId>` answered 204; the restored row names the
+  owner. Ask each owner to unpair that device again on the **Devices** page.
+  Devices paired after the restore point lost their tokens and must pair again.
 - **R2 is not rolled back.** Games deleted after the restore point come
   back in Mongo but their replay files and R2 detail blobs are gone; games
   created after it have R2 objects with no Mongo row (harmless orphans).

@@ -60,3 +60,9 @@ Rollback keeps coordinated writers until grants are durably disabled and the
 full old-grant drain passed. Reader rollback does not remove writer gates.
 Provider, flags, infrastructure, engine and native release stay unchanged.
 USER_CACHE_ENABLED stays off and faster-dashboards remains partial.
+
+The serving-cohort and rolling-overlap contract for these gates lives only in
+[ADR 0072](0072-serving-cohort-coherence.md): the fleet model, the transcribed
+ordering argument, clock inequality and deployment rules, the operations
+forbidden while retention could be active, and the activation receipt. It does
+not settle the clock, election or cross-process validation that remains due here.

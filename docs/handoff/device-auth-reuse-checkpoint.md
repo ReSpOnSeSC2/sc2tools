@@ -28,6 +28,9 @@ The prepared-serving cohort and old/unknown-work cutover, fresh same-incarnation
 binding, clock/election/runtime obligations and independent activation review
 remain open. The parent stays partial; USER_CACHE_ENABLED stays off. All 197
 ledger identities and the qualified 73 unfinished items are unchanged.
+[ADR 0072](../adr/0072-serving-cohort-coherence.md) now states the cross-process
+contract these open items must satisfy. It is a document, not a cutover receipt
+or an activation.
 
 This delivery update is prepared against clean Macro integration `9d8ac45b`
 and must be adopted only after its final source/build/browser guards. These
