@@ -20,6 +20,8 @@ const {
 const {
   PROXY_ELIGIBLE_BUILDING_NAMES,
 } = require("../src/services/knownBuildings");
+const { MongoMemoryServer } = require("mongodb-memory-server");
+const { connect } = require("../src/db/connect");
 const fs = require("node:fs");
 const path = require("node:path");
 const { CommunityService } = require("../src/services/community");
@@ -32,6 +34,13 @@ const minimalBuild = (extra = {}) => ({
 });
 
 describe("custom/community build payload bounds", () => {
+  let definitionMongo, definitionDb;
+  beforeAll(async () => {
+    definitionMongo = await MongoMemoryServer.create();
+    definitionDb = await connect({ uri: definitionMongo.getUri(), dbName: "definition_payload_bounds" });
+    await definitionDb.users.insertOne({ userId: "quota-user" });
+  });
+  afterAll(async () => { await definitionDb?.close(); await definitionMongo?.stop(); });
   test("validation drops giant unknown fields before persistence", () => {
     const giant = "private-giant".repeat(400_000);
     const result = validateCustomBuild(minimalBuild({
@@ -334,7 +343,8 @@ describe("custom/community build payload bounds", () => {
       countDocuments: jest.fn(async () => 1000),
       updateOne: jest.fn(async () => ({ acknowledged: true })),
     };
-    const service = new CustomBuildsService({ customBuilds, customBuildJobs: {} });
+    const service = new CustomBuildsService({ client: definitionDb.client, users: definitionDb.users,
+      gameStatsTransactions: definitionDb.gameStatsTransactions, customBuilds, customBuildJobs: {} });
 
     await expect(service.upsert("quota-user", minimalBuild()))
       .resolves.toBeUndefined();
@@ -359,7 +369,8 @@ describe("custom/community build payload bounds", () => {
         return { acknowledged: true };
       }),
     };
-    const service = new CustomBuildsService({ customBuilds, customBuildJobs: {} });
+    const service = new CustomBuildsService({ client: definitionDb.client, users: definitionDb.users,
+      gameStatsTransactions: definitionDb.gameStatsTransactions, customBuilds, customBuildJobs: {} });
 
     const outcomes = await Promise.allSettled([
       service.upsert("quota-user", minimalBuild({ slug: "create-a" })),

@@ -1958,7 +1958,7 @@
       "dependsOn": [
         "realtime-one-connection"
       ],
-      "implemented": "Owner revisions/default-off six-chart cache, ETag/304, deferred Trends, five-minute activity writes,30s latestAgent and minute device touches are merged. Read-only admin chart-cache health is delivered in PR798 with Off/Not reported/Enabled distinctions and no activation. PR801 extends safe owner-game cache coverage to11 response kinds while the chart flag stays off. PR804 fences all inventoried owner-game writers; PR805 eagerly maintains totals/latest in those transactions. Both are merged and actual protocol2 startup/Ready/Live is recorded. PR810 now deploys the maintenance2 retained-state boundary and single fresh owner/preferences/proof envelope for lighter /me and Doctor, with exact original Mongo fallback for unsupported BSON or unqualified state. Actual Ready/Live b8ef1b94 and scoped signed-in header/Doctor acceptance are recorded; the live query branch and savings were not instrumented. Revocation-coherent device-auth retention, its serving-cohort/cutover proof and common fleet/chart coherence remain unfinished. PR813 prepares credential writer readiness and an unwired retained REST adapter; it does not activate retained authentication. PR815 delivers closed count-neutral macro/build-decision writes; PR817 delivers owner-captured Pulse MMR/league stamps with exact required checks and scoped Ready/Live acceptance at6e663568. The current default-off source adds four direct strength responses using one immutable curve proof for key and calculation. Separate local 893 API/121 web cases, types/lint, all83 budgets and two transport cases are retained. PR818 then passed exact-head CI and scoped Live/Ready desktop acceptance at4cc33ba2 with the chart cache Off. The closed custom-build EOF writer prerequisite passed local 801/37/types/lint, then PR819 exact-head CI and scoped API Live/website Ready desktop acceptance at 5e48898a. The fresh-ingest tag writer now has local 867/40/types/configured-lint proof with exact source preservation; its own exact-head CI/deployment remain pending. Wider writer/fleet proof remains unfinished. No cache activation or savings is claimed.",
+      "implemented": "Owner revisions/default-off six-chart cache, ETag/304, deferred Trends, five-minute activity writes,30s latestAgent and minute device touches are merged. Read-only admin chart-cache health is delivered in PR798 with Off/Not reported/Enabled distinctions and no activation. PR801 extends safe owner-game cache coverage to11 response kinds while the chart flag stays off. PR804 fences all inventoried owner-game writers; PR805 eagerly maintains totals/latest in those transactions. Both are merged and actual protocol2 startup/Ready/Live is recorded. PR810 now deploys the maintenance2 retained-state boundary and single fresh owner/preferences/proof envelope for lighter /me and Doctor, with exact original Mongo fallback for unsupported BSON or unqualified state. Actual Ready/Live b8ef1b94 and scoped signed-in header/Doctor acceptance are recorded; the live query branch and savings were not instrumented. Revocation-coherent device-auth retention, its serving-cohort/cutover proof and common fleet/chart coherence remain unfinished. PR813 prepares credential writer readiness and an unwired retained REST adapter; it does not activate retained authentication. PR815 delivers closed count-neutral macro/build-decision writes; PR817 delivers owner-captured Pulse MMR/league stamps with exact required checks and scoped Ready/Live acceptance at6e663568. The current default-off source adds four direct strength responses using one immutable curve proof for key and calculation. Separate local 893 API/121 web cases, types/lint, all83 budgets and two transport cases are retained. PR818 then passed exact-head CI and scoped Live/Ready desktop acceptance at4cc33ba2 with the chart cache Off. The closed custom-build EOF writer prerequisite passed local 801/37/types/lint, then PR819 exact-head CI and scoped API Live/website Ready desktop acceptance at 5e48898a. The fresh-ingest tag writer then passed PR820 exact-head CI and scoped API Live/website Ready desktop acceptance at 059a168b. The closed custom-build definition save/rename writer now has local 1393/71/types/configured-lint proof after retained type, lint and test-batch failures; its own exact-head CI/deployment remain pending. Wider writer/fleet proof remains unfinished. No cache activation or savings is claimed.",
       "remainingRequirements": [
         "Extend caching only after complete dependency/revocation and shared-fleet audits beyond the 15 source-covered response kinds; matchup time series and other mixed dependencies remain excluded.",
         "Implement bounded revocation-coherent60s device-auth reuse; current findTokenByHash still performs an authoritative lookup on every request.",
@@ -1994,7 +1994,12 @@
         "docs/handoff/custom-build-eof-count-neutral-checkpoint.md",
         "docs/handoff/validation/custom-build-eof-count-neutral/local-verification.json",
         "docs/handoff/fresh-ingest-tag-count-neutral-checkpoint.md",
-        "docs/handoff/validation/fresh-ingest-tag-count-neutral/local-verification.json"
+        "docs/handoff/validation/fresh-ingest-tag-count-neutral/local-verification.json",
+        "docs/handoff/validation/fresh-ingest-tag-count-neutral/production-059a168b.json",
+        "apps/api/src/services/gameStatsCustomBuildDefinitionSave.js",
+        "apps/api/src/services/customBuildDefinitionCommands.js",
+        "docs/handoff/custom-build-definition-count-neutral-checkpoint.md",
+        "docs/handoff/validation/custom-build-definition-count-neutral/local-verification.json"
       ],
       "mergedPrs": [
         778,
@@ -2009,7 +2014,8 @@
         815,
         817,
         818,
-        819
+        819,
+        820
       ],
       "requirementSha256": "3a582d2301ebae22937707d3b214e1f4b0c57d1e9fa5218a9a345a1d622d0311"
     },
@@ -5284,8 +5290,8 @@
       "qualification": "Earlier scoped production2242 evidence remains unchanged. Current receipt closes only landing-demo-in-browser; current Unit owner correction has no separate197-item status change. No fresh proof of every ancestor."
     }
   ],
-  "latestImplementationRevision": "6862fd6e9448f243343635ceffd86776bad2159b",
-  "latestProductionAcceptedRevision": "5e48898a7d3d1c7e282e930e03ef8c0db00253c3",
+  "latestImplementationRevision": "c16ae8fcad0ba9aeaf8c1549fa5035839ab8660b",
+  "latestProductionAcceptedRevision": "059a168bb2619cc7c16625778ac99687ce39b353",
   "recentDeliveryReconciliation": {
     "date": "2026-10-28",
     "implementationRevision": "ccb5987e145968059097ecf440204c3972279ded",
@@ -5444,8 +5450,31 @@
       "released": false,
       "completedIds": [],
       "remainingCount": 73,
-      "qualification": "Local types/configured lint/in-band tests and exact-byte source preservation only; own CI/deployment pending."
+      "qualification": "Historical local-only boundary; subsequent PR820 delivery is recorded separately below."
+    },
+    "freshIngestTag820": {
+      "date": "2026-10-29",
+      "mergedPr": 820,
+      "acceptedProductionRevision": "059a168bb2619cc7c16625778ac99687ce39b353",
+      "testedHead": "11b623aa2de2ca651c8ec3ecc57de62c7c833e43",
+      "receipt": "docs/handoff/validation/fresh-ingest-tag-count-neutral/production-059a168b.json",
+      "receiptSha256": "5349603b95e403484084d0cd8d7750781c997462fd4261bd11505a6343de6d07",
+      "completedIds": [],
+      "remainingCount": 73,
+      "qualification": "Exact-head CI and scoped read-only desktop availability; no forced production tag transaction, private UI data, activation, savings or full fleet proof."
+    },
+    "customBuildDefinitionLocal": {
+      "date": "2026-10-30",
+      "testedCommit": "c16ae8fcad0ba9aeaf8c1549fa5035839ab8660b",
+      "localCases": 1393,
+      "localFiles": 71,
+      "receipt": "docs/handoff/validation/custom-build-definition-count-neutral/local-verification.json",
+      "receiptSha256": "951ee134820a1bcd74c49f30fca452bb70f0ed02b5b0650b57937e5b7e98c901",
+      "released": false,
+      "completedIds": [],
+      "remainingCount": 73,
+      "qualification": "Local types/configured lint/in-band tests on the exact tested source; own exact-head CI, deployment and acceptance pending."
     }
   },
-  "latestImplementationRevisionQualification": "PR819/main5e EOF delivery is verified by exact-head API CI, types/lint, Live/Ready source and scoped read-only desktop acceptance. The fresh-ingest tag writer is locally verified at 867/40 with types/configured lint and preserved application bytes; its own exact-head CI/deployment remain pending. Agent0.24.7 GitHub publication is complete under the approved unsigned exception; actual API and subsequent website update availability are verified, with installed0.24.6 showing update available. No installed0.24.7 uptake, signing, cache/auth activation, full writer/fleet proof, savings or fresh all197 audit is claimed."
+  "latestImplementationRevisionQualification": "PR820/main059a fresh-ingest tag delivery is verified by exact-head API CI, types/lint, Live/Ready source and scoped read-only desktop acceptance. The custom-build definition save writer is locally verified at 1393/71 with types/configured lint; its own exact-head CI/deployment remain pending. Agent0.24.7 GitHub publication is complete under the approved unsigned exception; actual API and website update availability are verified, with installed0.24.6 showing update available. No installed0.24.7 uptake, signing, cache/auth activation, full writer/fleet proof, savings or fresh all197 audit is claimed."
 }

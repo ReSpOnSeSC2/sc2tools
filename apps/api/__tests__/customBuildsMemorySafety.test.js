@@ -3,7 +3,7 @@
 /* eslint-disable max-lines-per-function */
 
 const { MongoMemoryServer } = require("mongodb-memory-server");
-const { MongoClient } = require("mongodb");
+const { connect } = require("../src/db/connect");
 const express = require("express");
 const request = require("supertest");
 
@@ -15,6 +15,11 @@ const { CustomBuildsService } = require("../src/services/customBuilds");
 const { GamesService } = require("../src/services/games");
 const { GdprService } = require("../src/services/gdpr");
 const { buildCustomBuildsRouter } = require("../src/routes/customBuilds");
+
+let definitionContext;
+function fixtureService(context, options) {
+  return new CustomBuildsService({ ...definitionContext, ...context }, options);
+}
 
 function deferred() {
   let resolve;
@@ -48,9 +53,22 @@ describe("custom-build rule scan memory safety", () => {
 
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create();
-    client = new MongoClient(mongo.getUri());
-    await client.connect();
+    const connected = await connect({ uri: mongo.getUri(), dbName: "custom_build_memory_safety" });
+    client = connected.client;
     db = client.db("custom_build_memory_safety");
+    definitionContext = { client, users: connected.users, gameStatsTransactions: connected.gameStatsTransactions };
+    await connected.users.insertMany([
+      "u-proxy-sanitize", "u-proxy-version", "u-opponent-bounds",
+      "u-full-library", "u-full-library-all", "u-closest-claim",
+      "u-rename", "u-matchup-change", "u-missing-detail",
+      "u-failed-scan", "u-aborted-scan", "u-rapid-rename",
+      "u-global-a", "u-global-b", "u-exit-race",
+      "u-stop-active", "u-superseded-generation", "u-revision-replay-upsert",
+      "u-unproven-name-collision", "u-claim-name-collision", "u-single-tag-revision-cas",
+      "u-clear-owned-slug", "u-delete-name-collision", "u-one-sided-detail",
+      "u-equal-unknown-detail", "u-deferred-missing-detail", "u-cancel-active",
+      "u-recover-queued", "u-recover-running",
+    ].map(userId => ({ userId, clerkUserId: `clerk-${userId}` })));
     await db.collection("games").createIndex({ userId: 1, date: -1, _id: -1 });
   });
 
@@ -413,7 +431,7 @@ describe("custom-build rule scan memory safety", () => {
         oppBuildLog: [oppLine],
       }]]);
     });
-    const service = new CustomBuildsService({
+    const service = fixtureService({
       games: db.collection("games"),
       customBuilds: db.collection("custom_builds"),
       customBuildJobs: db.collection("custom_build_jobs"),
@@ -539,7 +557,7 @@ describe("custom-build rule scan memory safety", () => {
     await db.collection("games").insertMany(games);
 
     const perGame = new PerGameComputeService({ games: db.collection("games") });
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -588,7 +606,7 @@ describe("custom-build rule scan memory safety", () => {
       })),
     );
     const perGame = new PerGameComputeService({ games: db.collection("games") });
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -625,7 +643,7 @@ describe("custom-build rule scan memory safety", () => {
       myBuild: "Old classifier label",
     });
     const perGame = new PerGameComputeService({ games: db.collection("games") });
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -684,7 +702,7 @@ describe("custom-build rule scan memory safety", () => {
       },
     ]);
     const perGame = new PerGameComputeService({ games: db.collection("games") });
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -723,7 +741,7 @@ describe("custom-build rule scan memory safety", () => {
       _customBuildSlug: "matchup-build",
     });
     const perGame = new PerGameComputeService({ games: db.collection("games") });
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -759,7 +777,7 @@ describe("custom-build rule scan memory safety", () => {
       myBuild: buildName,
     });
     const perGame = new PerGameComputeService({ games: db.collection("games") });
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -815,7 +833,7 @@ describe("custom-build rule scan memory safety", () => {
         throw new Error("detail page failed");
       },
     };
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -873,7 +891,7 @@ describe("custom-build rule scan memory safety", () => {
         yield { games: [], candidates: 0, hasMore: false };
       },
     };
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -905,7 +923,7 @@ describe("custom-build rule scan memory safety", () => {
     const userId = "u-rapid-rename";
     const slug = "rapid-rename";
     const jobs = db.collection("custom_build_jobs");
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -1078,7 +1096,7 @@ describe("custom-build rule scan memory safety", () => {
       error: "must_not_leak",
       progress: { scanned: 999 },
     });
-    const service = new CustomBuildsService({
+    const service = fixtureService({
       games: db.collection("games"),
       customBuilds: db.collection("custom_builds"),
       customBuildJobs: jobs,
@@ -1134,7 +1152,7 @@ describe("custom-build rule scan memory safety", () => {
 
   test("ordinary storage transients enter bounded retry without exhausting immediately", async () => {
     const jobs = db.collection("custom_build_jobs");
-    const service = new CustomBuildsService({
+    const service = fixtureService({
       games: db.collection("games"),
       customBuilds: db.collection("custom_builds"),
       customBuildJobs: jobs,
@@ -1162,7 +1180,7 @@ describe("custom-build rule scan memory safety", () => {
 
   test("failed status sanitizes its error and never exposes durable job inputs", async () => {
     const jobs = db.collection("custom_build_jobs");
-    const service = new CustomBuildsService({
+    const service = fixtureService({
       games: db.collection("games"),
       customBuilds: db.collection("custom_builds"),
       customBuildJobs: jobs,
@@ -1191,7 +1209,7 @@ describe("custom-build rule scan memory safety", () => {
 
   test("recovery resumes both queued and interrupted running jobs", async () => {
     const jobs = db.collection("custom_build_jobs");
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -1237,7 +1255,7 @@ describe("custom-build rule scan memory safety", () => {
 
   test("background reclassification admits only one full scan globally", async () => {
     const jobs = db.collection("custom_build_jobs");
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -1287,7 +1305,7 @@ describe("custom-build rule scan memory safety", () => {
   test("an enqueue arriving as the worker exits is not stranded", async () => {
     const collection = db.collection("custom_builds");
     const jobs = db.collection("custom_build_jobs");
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: collection,
@@ -1349,7 +1367,7 @@ describe("custom-build rule scan memory safety", () => {
     const slug = "stop-active";
     const scanStarted = deferred();
     const jobs = db.collection("custom_build_jobs");
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -1398,7 +1416,7 @@ describe("custom-build rule scan memory safety", () => {
     const notified = jest.fn();
     const observed = [];
     const jobs = db.collection("custom_build_jobs");
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -1512,7 +1530,7 @@ describe("custom-build rule scan memory safety", () => {
           },
           findOne: (...args) => games.findOne(...args),
         };
-        const service = new CustomBuildsService(
+        const service = fixtureService(
           { games: scopedGames, customBuilds: db.collection("custom_builds") },
           { perGame },
         );
@@ -1600,7 +1618,7 @@ describe("custom-build rule scan memory safety", () => {
         },
         findOne: (...args) => games.findOne(...args),
       };
-      const service = new CustomBuildsService(
+      const service = fixtureService(
         { games: scopedGames, customBuilds: db.collection("custom_builds") },
         { perGame: {
           iterateRulePreviewPages: async function* () {
@@ -1674,7 +1692,7 @@ describe("custom-build rule scan memory safety", () => {
       _schemaVersion: 6,
     });
 
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       { games, customBuilds: db.collection("custom_builds") },
       { perGame: {
         iterateRulePreviewPages: async function* () {
@@ -1769,7 +1787,7 @@ describe("custom-build rule scan memory safety", () => {
       _schemaVersion: 6,
     });
 
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       { games, customBuilds: db.collection("custom_builds") },
       { perGame: {
         iterateRulePreviewPages: async function* () {
@@ -1906,7 +1924,7 @@ describe("custom-build rule scan memory safety", () => {
     expect(preFence._customBuildClassificationSequence)
       .toBe(Number.MAX_SAFE_INTEGER);
 
-    const classifier = new CustomBuildsService(
+    const classifier = fixtureService(
       { games, customBuilds: db.collection("custom_builds") },
       { perGame },
     );
@@ -1978,7 +1996,7 @@ describe("custom-build rule scan memory safety", () => {
         myBuild: "Prior shared name",
       },
     ]);
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       { games, customBuilds: db.collection("custom_builds") },
       { perGame: new PerGameComputeService({ games }) },
     );
@@ -2017,7 +2035,7 @@ describe("custom-build rule scan memory safety", () => {
       buildLog: ["[0:17] Pylon"],
       myBuild: "Shared display name",
     });
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       { games, customBuilds: db.collection("custom_builds") },
       { perGame: new PerGameComputeService({ games }) },
     );
@@ -2062,7 +2080,7 @@ describe("custom-build rule scan memory safety", () => {
       _customBuildSlug: "newer-payload-slug",
       _customBuildRevision: "revision-new",
     });
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       { games, customBuilds: db.collection("custom_builds") },
       { perGame: new PerGameComputeService({ games }) },
     );
@@ -2122,7 +2140,7 @@ describe("custom-build rule scan memory safety", () => {
       myBuild: "Collision-prone label",
       _customBuildSlug: "owned-slug",
     });
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       { games, customBuilds: db.collection("custom_builds") },
       { perGame: new PerGameComputeService({ games }) },
     );
@@ -2158,7 +2176,7 @@ describe("custom-build rule scan memory safety", () => {
       buildLog: ["[0:49] Gateway"],
       myBuild: "Legacy shared deletion name",
     });
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games,
         customBuilds: db.collection("custom_builds"),
@@ -2204,7 +2222,7 @@ describe("custom-build rule scan memory safety", () => {
       myBuild: "Old classifier label",
     });
     const perGame = new PerGameComputeService({ games: db.collection("games") });
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -2258,7 +2276,7 @@ describe("custom-build rule scan memory safety", () => {
       myBuild: "Existing classifier label",
     });
     const perGame = new PerGameComputeService({ games: db.collection("games") });
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),
@@ -2343,7 +2361,7 @@ describe("custom-build rule scan memory safety", () => {
       { games },
       { gameDetails: { findMany } },
     );
-    const service = new CustomBuildsService({
+    const service = fixtureService({
       games,
       customBuilds: db.collection("custom_builds"),
       customBuildJobs: jobs,
@@ -2389,7 +2407,7 @@ describe("custom-build rule scan memory safety", () => {
     const abortObserved = deferred();
     const releasePage = deferred();
     const jobs = db.collection("custom_build_jobs");
-    const service = new CustomBuildsService(
+    const service = fixtureService(
       {
         games: db.collection("games"),
         customBuilds: db.collection("custom_builds"),

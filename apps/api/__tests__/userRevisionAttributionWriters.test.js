@@ -20,7 +20,7 @@ beforeEach(async () => {
   revisions = new UserRevision(db.users, { enabled: true });
 });
 test("standalone rename changes applied labels and retires only after the public save", async () => {
-  const custom = new CustomBuildsService({ ...db, client: undefined }, { userRevision: revisions });
+  const custom = new CustomBuildsService(db, { userRevision: revisions });
   await db.customBuilds.insertOne({ ...definition, userId: "a" });
   await db.games.updateOne({ userId: "a" }, { $set: { myBuild: definition.name, _customBuildSlug: "opener",
     buildIntent: { applied: true, build: { source: "custom", slug: "opener", name: definition.name } } } });
@@ -28,14 +28,18 @@ test("standalone rename changes applied labels and retires only after the public
   expect((await db.games.findOne({ userId: "a" })).myBuild).toBe("Renamed opener"); expect(revisions.current(before)).toBe(false);
 });
 test("transaction callback completion cannot end the fence before commit, including commit failure", async () => {
-  let finishCommit; const error = new Error("unknown transaction commit");
-  const session = { endSession: jest.fn(async () => {}), withTransaction: async (work) => { await work(); await new Promise((resolve) => { finishCommit = resolve; }); throw error; } };
-  const custom = new CustomBuildsService({ ...db, client: { startSession: () => session } }, { userRevision: revisions });
-  custom._upsertUnlocked = jest.fn(async (_owner, _build, opts) => { opts.onInitialRead(); return 1; });
+  let finishCommit, reachedCommit; const error = new Error("unknown transaction commit"), atCommit = new Promise((resolve) => { reachedCommit = resolve; });
+  const actualStart = db.client.startSession.bind(db.client), session = actualStart();
+  const dispose = jest.spyOn(session, "endSession");
+  jest.spyOn(session, "withTransaction").mockImplementation(async (work) => {
+    await work(session); await new Promise((resolve) => { finishCommit = resolve; reachedCommit(); }); throw error;
+  });
+  jest.spyOn(db.client, "startSession").mockImplementation((options) => options === undefined ? session : actualStart(options));
+  const custom = new CustomBuildsService(db, { userRevision: revisions });
   const before = await revisions.snapshot("a"); const saving = custom.upsert("a", definition); const outcome = saving.catch((failure) => failure);
-  for (let n = 0; !finishCommit && n < 40; n += 1) await new Promise(setImmediate);
+  await Promise.race([atCommit, outcome]);
   expect(finishCommit).toEqual(expect.any(Function)); expect(revisions.current(await revisions.snapshot("a"))).toBe(false);
-  finishCommit(); expect(await outcome).toBe(error); expect(revisions.current(before)).toBe(false); expect(session.endSession).toHaveBeenCalled();
+  finishCommit(); expect(await outcome).toBe(error); expect(revisions.current(before)).toBe(false); expect(session.endSession).toHaveBeenCalled(); expect(dispose).toHaveBeenCalledTimes(1);
 });
 test("single/all promotions and quick tag retire; staging alone never increments", async () => {
   await db.customBuilds.insertOne({ ...definition, userId: "a" });

@@ -2,7 +2,10 @@
 
 const { maintainGameStats, immutableSelection, PROTOCOL_VERSION } = require("./gameStatsMaintenance");
 const { statsReadFloorFor } = require("./gameStatsReadFloor");
-const { immutableNeutralMutation, immutableNeutralOwner, applyNeutralMutation, carryUnchangedGameStats, neutralAuthority } = require("./gameStatsCountNeutral");
+const { immutableNeutralMutation, immutableNeutralOwner, applyNeutralMutation, carryUnchangedGameStats, carryDefinitionGameStats, neutralAuthority } = require("./gameStatsCountNeutral");
+
+const { types } = require("util");
+const { immutableCustomBuildDefinitionSave, applyCustomBuildDefinitionSave } = require("./gameStatsCustomBuildDefinitionSave");
 
 const MAX_ACTIVE = 8;
 const DELETE_BATCH = 100;
@@ -10,6 +13,8 @@ const DELETE_BATCH = 100;
 /** @typedef {{fenceId?:string,selection?:import('./gameStatsMaintenance').StatsSelection}} AuthorityOptions */
 /** @type {WeakMap<object,GameStatsWrites>} */
 const instances = new WeakMap();
+/** @type {WeakMap<GameStatsWrites,DefinitionCapability>} */
+const definitionCapabilities = new WeakMap();
 
 /** Eager writer maintenance; request-local readers use separate strict proof.
  * A real owner write conflicts with fence acquisition/erasure on that row.
@@ -20,6 +25,11 @@ class GameStatsWrites {
     this.db = db; this.logger = logger;
     this.stopped = false;
     /** @type {Set<Promise<any>>} */ this.pending = new Set();
+    definitionCapabilities.set(this, { reservations: new Set(), perform: (owner, mutation) => this.#perform(owner,
+      session => {
+        if (this.stopped) throw failure("game_stats_writer_stopping");
+        return applyCustomBuildDefinitionSave(this.db, owner, mutation, session, this.logger);
+      }, Object.freeze({}), null, mutation) });
   }
 
   /** Capture identity before external payload work; never rebind on retry.
@@ -104,7 +114,7 @@ class GameStatsWrites {
   /** @template T @param {GameStatsOwner} owner
    * @param {(session:import('mongodb').ClientSession|undefined)=>Promise<T>} work
    * @param {AuthorityOptions} options @param {Readonly<Record<string,any>>|null} selection
-   * @param {Readonly<import('./gameStatsCountNeutral').NeutralMutation>|null} mutation @returns {Promise<T>} */
+   * @param {Readonly<import('./gameStatsCountNeutral').ReservedCarryMutation>|null} mutation @returns {Promise<T>} */
   async #perform(owner, work, options, selection, mutation) {
     if (owner.compatibility) {
       // Explicit standalone/test compatibility does not mint a valid revision.
@@ -128,8 +138,8 @@ class GameStatsWrites {
     const session = this.db.client.startSession({ causalConsistency: true });
     session.advanceOperationTime(floor);
     try {
-      return /** @type {T} */ (await session.withTransaction(/** @returns {Promise<T|import('./gameStatsCountNeutral').NeutralResult>} */ () => mutation
-        ? carryUnchangedGameStats(this.db, owner, mutation, session)
+      return /** @type {T} */ (await session.withTransaction(/** @returns {Promise<T|import('./gameStatsCountNeutral').NeutralResult|number>} */ () => mutation
+        ? performNeutral(this.db, owner, mutation, session)
         : maintainGameStats(this.db, owner, this.authority(owner, options), /** @type {Readonly<Record<string,any>>} */ (selection), work, session),
       { readConcern: { level: "snapshot" }, writeConcern: { w: "majority", j: true, wtimeoutMS: 5000 },
         readPreference: "primary", maxCommitTimeMS: 5000, timeoutMS: 10_000 }));
@@ -171,6 +181,9 @@ class GameStatsWrites {
    * requests whose HTTP socket already closed. @returns {Promise<void>} */
   async stopAndDrain() {
     this.stopped = true;
+    for (const state of definitionCapabilities.get(this)?.reservations || []) {
+      if (!state.started) abandonDefinition(state, failure("game_stats_writer_stopping"));
+    }
     await Promise.allSettled([...this.pending]);
   }
 }
@@ -191,7 +204,7 @@ function prepareOperation(db, owner, work, options) {
 /** Internal authority selection does not broaden ordinary callback options.
  * @param {GameStatsWrites} writer @param {GameStatsOwner} owner
  * @param {AuthorityOptions} options
- * @param {Readonly<import('./gameStatsCountNeutral').NeutralMutation>|null} mutation */
+ * @param {Readonly<import('./gameStatsCountNeutral').ReservedCarryMutation>|null} mutation */
 function operationAuthority(writer, owner, options, mutation) {
   return mutation ? neutralAuthority(owner, mutation) : writer.authority(owner, options);
 }
@@ -203,6 +216,135 @@ function gameStatsWritesFor(db, logger) {
   else if (logger) writer.logger = logger;
   return writer;
 }
+
+/** @param {import('../db/connect').DbContext} db @param {GameStatsOwner} owner
+ * @param {Readonly<import('./gameStatsCountNeutral').ReservedCarryMutation>} mutation
+ * @param {import('mongodb').ClientSession} session */
+function performNeutral(db, owner, mutation, session) {
+  return mutation.kind === "customBuildDefinitionSave" ? carryDefinitionGameStats(db, owner, mutation, session)
+    : carryUnchangedGameStats(db, owner, mutation, session);
+}
+
+/** @template T @typedef {{ok:true,value:T}|{ok:false,error:unknown}} DefinitionOutcome */
+/** @typedef {{perform:(owner:GameStatsOwner,mutation:Readonly<import('./gameStatsCustomBuildDefinitionSave').DefinitionSaveMutation>)=>Promise<number>,reservations:Set<DefinitionReservation>}} DefinitionCapability */
+/** @typedef {{writer:GameStatsWrites,capability:DefinitionCapability,userId:string,
+ * mutation:Readonly<import('./gameStatsCustomBuildDefinitionSave').DefinitionSaveMutation>,started:boolean,
+ * committed:boolean,abandoned:boolean,finishing:boolean,reason:unknown,
+ * capture:Promise<DefinitionOutcome<GameStatsOwner>>|null,queue:Promise<DefinitionOutcome<unknown>>|null,
+ * work:Promise<DefinitionOutcome<number>>|null,lifetime:Promise<void>,resolve:()=>void,reject:(error:unknown)=>void}} DefinitionReservation */
+/** @typedef {{start:(queue:Promise<unknown>)=>Promise<void>,commit:()=>Promise<number>,abandon:(error:unknown)=>Promise<void>}} DefinitionSaveTicket */
+/** A fixed reservation, not an arbitrary admitted callback. Constructor-owned
+ * capabilities reject structural lookalikes and avoid an eighth class method.
+ * @param {GameStatsWrites} writer @param {string} userId
+ * @param {import('./gameStatsCustomBuildDefinitionSave').DefinitionSaveMutation} input
+ * @returns {DefinitionSaveTicket} */
+function reserveCustomDefinitionSave(writer, userId, input) {
+  const capability = definitionCapabilities.get(writer);
+  if (!capability) throw failure("game_stats_definition_writer_required");
+  if (writer.stopped) throw failure("game_stats_writer_stopping");
+  if (writer.pending.size >= MAX_ACTIVE) throw failure("game_stats_writer_busy");
+  const mutation = immutableCustomBuildDefinitionSave(input);
+  if (typeof userId !== "string" || !userId) throw failure("game_stats_owner_required");
+  const state = definitionState(writer, capability, userId, mutation);
+  return Object.freeze({ start: queue => startDefinition(state, queue), commit: () => commitDefinition(state),
+    abandon: error => abandonDefinition(state, error) });
+}
+
+/** @param {GameStatsWrites} writer @param {DefinitionCapability} capability @param {string} userId
+ * @param {Readonly<import('./gameStatsCustomBuildDefinitionSave').DefinitionSaveMutation>} mutation */
+function definitionState(writer, capability, userId, mutation) {
+  let resolve = () => {}; /** @type {(error:unknown)=>void} */ let reject = () => {};
+  /** @type {Promise<void>} */ const lifetime = new Promise((done, fail) => { resolve = done; reject = fail; });
+  /** @type {DefinitionReservation} */ const state = { writer, capability, userId, mutation, started: false,
+    committed: false, abandoned: false, finishing: false, capture: null, queue: null, work: null, reason: null,
+    lifetime, resolve, reject };
+  writer.pending.add(lifetime); capability.reservations.add(state);
+  const release = () => { writer.pending.delete(lifetime); capability.reservations.delete(state); };
+  void lifetime.then(release, release);
+  return state;
+}
+
+/** Immediate outcome handlers avoid detached capture or queue rejections.
+ * @template T @param {Promise<T>} promise @returns {Promise<DefinitionOutcome<T>>} */
+function definitionOutcome(promise) {
+  return promise.then(value => /** @type {DefinitionOutcome<T>} */ ({ ok: true, value }),
+    error => /** @type {DefinitionOutcome<T>} */ ({ ok: false, error }));
+}
+
+/** @param {DefinitionReservation} state @param {Promise<unknown>} queue @returns {Promise<void>} */
+function startDefinition(state, queue) {
+  if (state.started || state.abandoned || !types.isPromise(queue)) throw failure("game_stats_definition_ticket_used");
+  state.started = true;
+  state.queue = definitionOutcome(queue);
+  state.capture = definitionOutcome(captureDefinitionOwner(state));
+  void state.queue.then(queued => finishDefinition(state, queued));
+  return state.lifetime;
+}
+
+/** @param {DefinitionReservation} state @returns {Promise<GameStatsOwner>} */
+async function captureDefinitionOwner(state) {
+  const owner = immutableNeutralOwner(await state.writer.capture(state.userId));
+  if (owner.userId !== state.userId || owner.id === null || !state.writer.db.client?.startSession) throw failure("game_stats_owner_unavailable");
+  return owner;
+}
+
+/** WORK is separate from lifetime: the queue contains this promise and must
+ * finish gameWrite/FIFO finally before the joined pending slot can release.
+ * @param {DefinitionReservation} state @returns {Promise<number>} */
+function commitDefinition(state) {
+  if (!state.started || state.committed || state.abandoned) return Promise.reject(state.abandoned ? state.reason : failure("game_stats_definition_ticket_used"));
+  state.committed = true;
+  const work = runDefinition(state);
+  state.work = definitionOutcome(work);
+  return work;
+}
+
+/** @param {DefinitionReservation} state @returns {Promise<number>} */
+async function runDefinition(state) {
+  const captured = await /** @type {Promise<DefinitionOutcome<GameStatsOwner>>} */ (state.capture);
+  if (!captured.ok) throw captured.error;
+  if (state.writer.stopped) throw failure("game_stats_writer_stopping");
+  return state.capability.perform(captured.value, state.mutation);
+}
+
+/** Close future commit before awaiting. An already-running transaction is
+ * never cancelled, relabelled or released by abandonment.
+ * @param {DefinitionReservation} state @param {unknown} error @returns {Promise<void>} */
+function abandonDefinition(state, error) {
+  if (!state.committed && !state.abandoned) { state.abandoned = true; state.reason = error; }
+  if (!state.started) {
+    /** @type {DefinitionOutcome<unknown>} */ const queued = { ok: false, error };
+    state.queue = Promise.resolve(queued);
+    void finishDefinition(state, queued);
+  }
+  return state.lifetime;
+}
+
+/** Terminal queue state closes future commit before awaiting capture/work.
+ * @param {DefinitionReservation} state @param {DefinitionOutcome<unknown>} queued @returns {Promise<void>} */
+async function finishDefinition(state, queued) {
+  if (state.finishing) return;
+  state.finishing = true;
+  if (!state.committed && !state.abandoned) {
+    state.abandoned = true; state.reason = failure("game_stats_definition_ticket_unused");
+  }
+  const captured = state.capture ? await state.capture : null;
+  const worked = state.work ? await state.work : null;
+  const outcome = definitionResult(state, queued, captured, worked);
+  if (outcome.ok) state.resolve(); else state.reject(outcome.error);
+}
+
+/** Queue failure stays primary after every actual lifetime has joined.
+ * @param {DefinitionReservation} state @param {DefinitionOutcome<unknown>} queued
+ * @param {DefinitionOutcome<GameStatsOwner>|null} captured @param {DefinitionOutcome<number>|null} worked
+ * @returns {DefinitionOutcome<void>} */
+function definitionResult(state, queued, captured, worked) {
+  if (!queued.ok) return queued;
+  if (worked?.ok === false) return worked;
+  if (captured?.ok === false) return captured;
+  return state.committed ? { ok: true, value: undefined } : { ok: false, error: state.reason };
+}
+
 /** @param {string} code */
 function failure(code) { return Object.assign(new Error(code), { code, status: 503 }); }
 
@@ -219,4 +361,4 @@ function assertGameStatsContext(db, nodeEnv) {
     && (db.gameStatsTransactions !== true || typeof db.client?.startSession !== "function")) throw failure("game_stats_transactions_required");
 }
 
-module.exports = { GameStatsWrites, gameStatsWritesFor, sessionArgs, assertGameStatsContext, PROTOCOL_VERSION, MAX_ACTIVE, DELETE_BATCH };
+module.exports = { GameStatsWrites, gameStatsWritesFor, sessionArgs, assertGameStatsContext, PROTOCOL_VERSION, MAX_ACTIVE, DELETE_BATCH, reserveCustomDefinitionSave };

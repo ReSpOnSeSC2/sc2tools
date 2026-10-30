@@ -1,7 +1,35 @@
-# Fresh-ingest build tags: local verification, release pending
+# Fresh-ingest build tags: delivered in PR820
 
-The closed fresh-ingest tag writer is locally verified. Its own exact-head CI,
-deployment and production acceptance remain pending. This is an internal API
+## Delivered on 2026-10-29
+
+PR820 passed its exact-head required checks at `11b623aa2de2ca651c8ec3ecc57de62c7c833e43` and
+merged as `059a168bb2619cc7c16625778ac99687ce39b353`, with the tested tree
+`c764b2377de5617983bb428cf26ebebee0cad490` preserved. The API gate passed 7,612
+cases across 514 suites, with nine existing test skips and one existing suite
+skip; types, lint and Vercel passed. These remote results are separate from the
+local 867/40 batch below.
+
+Actual API Live and website Ready/Production/current reported the exact merged
+source. Scoped signed-in normal desktop acceptance loaded nonempty build
+statistics without a failed-load state, and operational health and the database
+ping were healthy. The personal chart cache remained Off, with activity hidden
+and no controls. The saved cache image shows the health context rather than the
+cache card, so Off is established by the saved page text, not that image. Three
+owned tabs were closed.
+
+No replay upload, production tag transaction, repair, reclassification,
+provider setting, flag or password change was made, and no native application
+was launched. Local real-Mongo tests and exact-head API CI establish the tag
+transaction behavior; production availability does not instrument that path.
+No new phone, web build, cache-hit, savings or complete fleet proof is claimed.
+Sanitized delivery fields are in the
+[production receipt](validation/fresh-ingest-tag-count-neutral/production-059a168b.json).
+
+## Historical source and local verification
+
+At this local-only boundary, the closed fresh-ingest tag writer was locally
+verified and its own exact-head CI, deployment and production acceptance were
+pending; the PR820 delivery is recorded above. This is an internal API
 prerequisite; the faster-dashboards parent remains partial and caches remain off.
 
 The writer preserves the initially captured owner. Its closed descriptor copies
@@ -18,7 +46,7 @@ the count proof remains retired without recount. The precise row-or-null result
 and post-commit local invalidation remain intact. This supplies no expanded
 chart seal, complete writer/fleet proof, retained-auth activation or savings.
 
-## Current local result
+### Local result
 
 One admitted in-band batch passed 867 cases across 40 files, including 32 new
 unit and 23 new real-Mongo cases. Whole API types and configured lint passed;
@@ -48,7 +76,8 @@ six rows accurately and did not repeat runtime.
 Commit `d601b3c593284313046dc0243bdb15f85ae9229b` preserved the nine tested source paths; normal
 main integration produced clean `6862fd6e9448f243343635ceffd86776bad2159b`, tree `2b15937219af20e111de1eaadde449ade8f87eb3`. The post-gate
 receipt qualifies incoming PR819 documentation separately from exact application
-bytes. These documentation proposals follow the recorded guards.
+bytes. The published PR820 head `11b623aa` changed only documentation relative to
+`6862fd6e`, and its tree equals the merged main tree.
 
 The [compact local receipt](validation/fresh-ingest-tag-count-neutral/local-verification.json)
 links immutable results, the retained failure, type-only proposal and integration.

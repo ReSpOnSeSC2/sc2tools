@@ -2,7 +2,7 @@
 "use strict";
 
 const { MongoMemoryServer } = require("mongodb-memory-server");
-const { MongoClient } = require("mongodb");
+const { connect } = require("../src/db/connect");
 const { CustomBuildsService } = require("../src/services/customBuilds");
 const { PerGameComputeService } = require("../src/services/perGameCompute");
 
@@ -39,6 +39,13 @@ function replay(index = 0, overrides = {}) {
   };
 }
 
+async function definitionStore(uri) {
+  const connected = await connect({ uri, dbName: "custom_build_paged_classification" });
+  await connected.users.insertOne({ userId: USER_ID });
+  const { client, users, gameStatsTransactions } = connected;
+  return { client, definitionContext: { client, users, gameStatsTransactions } };
+}
+
 describe("classification across bounded custom-build pages", () => {
   let mongo;
   let client;
@@ -46,11 +53,11 @@ describe("classification across bounded custom-build pages", () => {
   let games;
   let builds;
   let service;
+  let definitionContext;
 
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create();
-    client = new MongoClient(mongo.getUri());
-    await client.connect();
+    ({ client, definitionContext } = await definitionStore(mongo.getUri()));
     db = client.db("custom_build_paged_classification");
     games = db.collection("games");
     builds = db.collection("custom_builds");
@@ -60,7 +67,7 @@ describe("classification across bounded custom-build pages", () => {
 
   beforeEach(() => {
     service = new CustomBuildsService(
-      { games, customBuilds: builds },
+      { ...definitionContext, games, customBuilds: builds },
       { perGame: new PerGameComputeService({ games }) },
     );
   });

@@ -241,10 +241,10 @@ test("a losing cross-process admin rename cannot partially change confirmed game
   /** @type {()=>void} */ let entered = () => {}; /** @type {()=>void} */ let release = () => {};
   const started = new Promise(resolve => { entered = () => resolve(undefined); });
   const hold = new Promise(resolve => { release = () => resolve(undefined); });
-  const actualUpdate = db.games.updateMany.bind(db.games);
+  const actualUpdate = db.users.findOneAndUpdate.bind(db.users);
   let held = false;
-  const spy = jest.spyOn(db.games, "updateMany").mockImplementation(async (...args) => {
-    if (!held && /** @type {any} */ (args[1])?.[0]?.$set?.myBuild?.$literal === "Admin stale rename") {
+  const spy = jest.spyOn(db.users, "findOneAndUpdate").mockImplementation(async (...args) => {
+    if (!held && /** @type {{userId?:unknown}} */ (args[0])?.userId === raceOwner && typeof /** @type {any} */ (args[1])?.$set?.gameStatsRevision === "string") {
       held = true; entered(); await hold;
     }
     return actualUpdate(...args);
@@ -278,6 +278,7 @@ test("standalone development owner saves work but versioned admin saves fail bef
   const local = await connect({ uri: standalone.getUri(), dbName: "studio_standalone_only" });
   try {
     const onDefinitionsChanged = jest.fn();
+    await local.users.insertOne({ userId: "local-owner" });
     const service = new CustomBuildsService(local, { onDefinitionsChanged });
     await service.upsert("local-owner", { ...original, slug: "local-build", name: "Local initial" });
     expect(onDefinitionsChanged).toHaveBeenCalledTimes(1);
@@ -297,6 +298,7 @@ test("standalone development owner saves work but versioned admin saves fail bef
 test("an unsupported-transaction error after the initial read never retries without a transaction", async () => {
   const { CustomBuildsService } = require("../src/services/customBuilds");
   const userId = "late-transaction-error-owner", slug = "late-transaction-error";
+  await db.users.insertOne({ userId });
   await db.customBuilds.insertOne({ ...original, userId, slug, name: "Original name", definitionRevision: 1 });
   await db.games.insertOne({ userId, gameId: slug, myBuild: "Original name", _customBuildSlug: slug });
   const onGamesChanged = jest.fn(), onDefinitionsChanged = jest.fn();

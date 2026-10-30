@@ -25,6 +25,12 @@ const definition = (index, extra = {}) => ({
   ...extra,
 });
 
+async function ownerUsers(db) {
+  const users = db.collection("users");
+  await users.insertOne({ userId: USER });
+  return users;
+}
+
 describe("custom build library pagination", () => {
   let mongo;
   let client;
@@ -44,7 +50,7 @@ describe("custom build library pagination", () => {
     await builds.createIndex({ userId: 1, slug: 1 }, { unique: true });
     await games.createIndex({ userId: 1, _customBuildSlug: 1 });
     await games.createIndex({ userId: 1, _customOpponentStrategySlug: 1 });
-    service = new CustomBuildsService({ games, customBuilds: builds, customBuildJobs: db.collection("custom_build_jobs") });
+    service = new CustomBuildsService({ client, users: await ownerUsers(db), games, customBuilds: builds, customBuildJobs: db.collection("custom_build_jobs") });
     app = express();
     app.use(express.json());
     app.use("/v1", buildCustomBuildsRouter({

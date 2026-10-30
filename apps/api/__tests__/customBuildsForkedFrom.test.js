@@ -89,7 +89,10 @@ describe("custom builds forkedFrom (route + Mongo)", () => {
     const db = client.db("custom_builds_forked_from");
     builds = db.collection("custom_builds");
     await builds.createIndex({ userId: 1, slug: 1 }, { unique: true });
+    await db.collection("users").insertMany([USER, "another-account"].map((userId) => ({ userId })));
     service = new CustomBuildsService({
+      client,
+      users: db.collection("users"),
       games: db.collection("games"),
       customBuilds: builds,
       customBuildJobs: db.collection("custom_build_jobs"),
