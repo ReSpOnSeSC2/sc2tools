@@ -15,7 +15,7 @@ const ROUTES = [["timeseries", "/timeseries"], ["dayHourHeatmap", "/timeseries/d
 const PLAIN = [["streak", "/streak"], ["macroReport", "/macro/report"]];
 // Net-MMR kinds, whose routes pass exactly the service's options; random summary also gets the memo switch.
 const NET = [["netMmrByMatchup", "/mmr-by-matchup"], ["netMmrByOpponent", "/mmr-by-matchup/opponents"]], RANDOM = [["randomSummary", "/random-summary"]];
-function fixture(enabled = true, legacy = false) {
+function fixture(enabled = true, legacy = false, capture) {
   const rows = new Map([ ["a", { userId: "a", clerkUserId: "clerk-a", dataRev: 0 }], ["b", { userId: "b", dataRev: 0 }] ]);
   let deleted = false, revoked = false;
   const users = { findOne: jest.fn(async ({ userId }) => rows.get(userId)),
@@ -27,7 +27,7 @@ function fixture(enabled = true, legacy = false) {
     aggregations[method] = jest.fn(async (owner, ...input) => ({ owner, method, input, points: [{ date: new Date(0), missing: null }] }));
   }
   aggregations.resolveMomentumPolicy = async (_owner, gap) => ({ sessionGapMinutes: gap ?? 90, sessionPolicyGeneration: 0, lease: null });
-  aggregations.assertSessionPolicy = () => {};
+  aggregations.assertSessionPolicy = () => {}; if (capture) aggregations.captureStrengthCurve = jest.fn(capture);
   const app = express();
   const streak = { current: (...input) => aggregations.streak(...input) };
   const macroReport = { report: (...input) => aggregations.macroReport(...input) };
@@ -191,3 +191,59 @@ test.each([["enabled", true, false, false], ["off", false, false, true], ["legac
     expect((await request(f.app).head("/random-summary").set("authorization", "Bearer a")).status).toBe(200);
     expect(f.aggregations.randomSummary.mock.calls.map(([, , opts]) => opts)).toEqual([{ memo }, { memo }]);
   });
+
+// Curve-dependent kinds with the arity of their proof-less call: a captured proof keys and calculates the body.
+const DEPENDENT = [["matchups", "/matchups", 2], ["maps", "/maps", 2], ["mapMatchups", "/maps/matchups", 2],
+  ["buildVsStrategy", "/build-vs-strategy", 2], ["matchupTimeseries", "/timeseries/matchups", 3]];
+function curveProofs() {
+  const state = { keyPart: "strength1:one", current: true };
+  const capture = async () => ({ curve: { proof: state.keyPart },
+    dependency: { keyPart: state.keyPart, expiresAt: Date.now() + 60000, isCurrent: () => state.current } });
+  return { state, capture };
+}
+test.each(DEPENDENT)("%s keys and calculates with one captured proof, and a retired proof is a 200/no-store baseline, never a 304", async (method, path, at) => {
+  const proofs = curveProofs(), f = fixture(true, false, proofs.capture);
+  const first = await get(f.app, path);
+  expect(first.status).toBe(200); expect(first.headers["cache-control"]).toBe("private, no-cache"); expect(first.headers.etag).toMatch(/^W\/"uc1-/);
+  expect((await get(f.app, path).set("If-None-Match", first.headers.etag)).status).toBe(304);
+  expect(f.aggregations[method]).toHaveBeenCalledTimes(1);
+  // The service receives the very snapshot the cache captured, after its proof-less arguments.
+  expect(f.aggregations[method].mock.calls[0][at]).toBe(await f.aggregations.captureStrengthCurve.mock.results[0].value);
+  proofs.state.keyPart = "strength1:two";
+  const next = await get(f.app, path).set("If-None-Match", first.headers.etag);
+  expect(next.status).toBe(200); expect(next.headers.etag).not.toBe(first.headers.etag); expect(f.aggregations[method]).toHaveBeenCalledTimes(2);
+  proofs.state.current = false;
+  const retired = await get(f.app, path).set("If-None-Match", next.headers.etag);
+  expect(retired.status).toBe(200); expect(retired.headers["cache-control"]).toBe("private, no-store"); expect(retired.headers.etag).toBeUndefined();
+});
+test("matchup time series gives each chart option its own key and keys the very options object the service receives", async () => {
+  const f = fixture(true, false, curveProofs().capture), sent = jest.spyOn(f.cache, "send");
+  const queries = ["", "?interval=day", "?interval=month", "?interval=month&tz=Europe%2FBerlin", "?group_by=matchup", "?interval=junk"];
+  for (const query of queries) {
+    expect((await get(f.app, `/timeseries/matchups${query}`)).status).toBe(200);
+    expect((await get(f.app, `/timeseries/matchups${query}`)).status).toBe(200);
+  }
+  // An unknown interval is normalized to the default week, so it shares the first query's entry.
+  expect(f.aggregations.matchupTimeseries).toHaveBeenCalledTimes(5);
+  const options = f.aggregations.matchupTimeseries.mock.calls.map(([, opts]) => opts);
+  expect(new Set(options.map(opts => JSON.stringify(opts))).size).toBe(5);
+  for (const opts of options) expect(sent.mock.calls.some(call => call[5] === opts)).toBe(true);
+});
+test("a HEAD with the cache enabled never captures a proof and keeps each service's original arguments", async () => {
+  const f = fixture(true, false, curveProofs().capture);
+  for (const [method, path, at] of DEPENDENT) {
+    expect((await request(f.app).head(path).set("authorization", "Bearer a")).status).toBe(200);
+    expect(f.aggregations[method].mock.calls[0]).toHaveLength(at);
+  }
+  expect(f.aggregations.captureStrengthCurve).not.toHaveBeenCalled(); expect(f.cache.completed.size).toBe(0);
+});
+test.each(DEPENDENT)("%s off is identical to the old router, never captures and keeps the service's original arguments", async (method, path, at) => {
+  const old = fixture(false, true, curveProofs().capture), off = fixture(false, false, curveProofs().capture);
+  const a = await get(old.app, path), b = await get(off.app, path);
+  expect([b.status, b.text, b.headers["cache-control"], b.headers.etag, b.headers["content-type"]])
+    .toEqual([a.status, a.text, a.headers["cache-control"], a.headers.etag, a.headers["content-type"]]);
+  for (const f of [old, off]) {
+    expect(f.aggregations.captureStrengthCurve).not.toHaveBeenCalled(); expect(f.aggregations[method].mock.calls[0]).toHaveLength(at);
+  }
+  expect(off.users.findOne).not.toHaveBeenCalled();
+});

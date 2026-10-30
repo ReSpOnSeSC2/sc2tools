@@ -906,7 +906,7 @@ export interface AggregationsService {
   matchupTimeseries(
     userId: string,
     opts: { interval?: "day" | "week" | "month"; tz?: string; groupByOwnRace?: boolean },
-    filters: object,
+    filters: object, snapshot?: import('./strengthCurveSnapshots').CurveSnapshot,
   ): Promise<{
     interval: "day" | "week" | "month";
     points: Array<{

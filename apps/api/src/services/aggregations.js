@@ -672,14 +672,14 @@ class AggregationsService {
   // know about the singleton service.
 
   /**
-   * Implementation in ``./trendsAggregations.js``.
+   * Implementation in ``./trendsAggregations.js``. Work under a captured curve proof never joins in-flight work.
    * @param {string} userId
    * @param {{interval?: 'day'|'week'|'month', tz?: string, groupByOwnRace?: boolean}} opts
-   * @param {object} filters
+   * @param {object} filters @param {import('./strengthCurveSnapshots').CurveSnapshot} [snapshot]
    */
-  async matchupTimeseries(userId, opts, filters) {
-    return this.trendsRequests.run(["matchupTimeseries", userId, filters, opts], () =>
-      trendsAgg.matchupTimeseries(this._trendsDeps(), userId, opts, filters));
+  async matchupTimeseries(userId, opts, filters, snapshot) {
+    const work = () => trendsAgg.matchupTimeseries(this._trendsDeps(), userId, opts, filters, snapshot);
+    return snapshot ? work() : this.trendsRequests.run(["matchupTimeseries", userId, filters, opts], work);
   }
 
   /**

@@ -5,7 +5,7 @@ const request = require("supertest");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const { connect } = require("../src/db/connect");
 const { GamesService } = require("../src/services/games");
-const { AggregationsService } = require("../src/services/aggregations");
+const { AggregationsService } = require("../src/services/aggregations"); const { MmrExpectationService } = require("../src/services/mmrExpectation"); const { fitCalibration } = require("../src/services/mmrExpectationMath");
 const { StreakService } = require("../src/services/streak");
 const { MacroReportService } = require("../src/services/macroReport");
 const { UserRevision } = require("../src/util/userRevision");
@@ -15,14 +15,14 @@ const { buildAggregationsRouter } = require("../src/routes/aggregations");
 let mongo, db;
 beforeAll(async () => { mongo = await MongoMemoryServer.create(); db = await connect({ uri: mongo.getUri(), dbName: "cache_coverage" }); });
 afterAll(async () => { await db.close(); await mongo.stop(); });
-beforeEach(async () => { jest.restoreAllMocks(); await db.games.deleteMany({}); await db.users.deleteMany({}); await db.users.insertOne({ userId: "a" }); });
+beforeEach(async () => { jest.restoreAllMocks(); await db.games.deleteMany({}); await db.users.deleteMany({}); await db.users.insertOne({ userId: "a" }); await db.db.collection("mmr_expectation").replaceOne({ _id: "corpus-1v1" }, { _id: "corpus-1v1", ruleVersion: 1, ...fitCalibration([{ bin: 0, n: 200, wins: 180 }, { bin: 23, n: 200, wins: 110 }]) }, { upsert: true }); });
 const game = (gameId, overrides = {}) => ({ gameId, date: new Date("2026-01-01T12:00:00Z"), result: "Victory",
   myRace: "Protoss", myLadderRace: "P", myToonHandle: "1-S2-1-123", myMmr: 4000, myMmrSource: "replay",
   playerCount: 2, isLadderGame: true, map: "Site Delta LE", durationSec: 600, macroScore: 70,
   top3Leaks: [{ name: "Supply Blocked", mineral_cost: 120, penalty: 4 }], myBuild: "Expand", opponent: { race: "Zerg", strategy: "Pool", displayName: "Opponent" }, ...overrides });
 function fixture() {
   const revisions = new UserRevision(db.users, { enabled: true });
-  const cache = new UserCache(revisions, { enabled: true }), aggregations = new AggregationsService(db);
+  const cache = new UserCache(revisions, { enabled: true }), aggregations = new AggregationsService(db, { mmrExpectation: new MmrExpectationService(db) });
   const streak = new StreakService(db), macroReport = new MacroReportService(db);
   // Match the production composition: retirement also detaches inner chart joins.
   revisions.addInvalidator(owner => aggregations.trendsRequests.invalidateForUser(owner));
@@ -34,7 +34,7 @@ function fixture() {
 const routes = [["summary", "/summary"], ["macroSummary", "/macro/summary"], ["mmrProgression", "/timeseries/mmr"],
   ["myBuildMixOverTime", "/timeseries/my-builds"], ["oppStrategyMixOverTime", "/timeseries/opp-strategies"],
   ["current", "/streak", "streak"], ["report", "/macro/report", "macroReport"],
-  ["netMmrByMatchup", "/mmr-by-matchup"], ["netMmrByOpponent", "/mmr-by-matchup/opponents"], ["randomSummary", "/random-summary"]];
+  ["netMmrByMatchup", "/mmr-by-matchup"], ["netMmrByOpponent", "/mmr-by-matchup/opponents"], ["randomSummary", "/random-summary"], ["matchupTimeseries", "/timeseries/matchups?interval=day&tz=UTC&group_by=matchup"]];
 test.each(routes)("%s serves real aggregates and retires ingest, reupload, quarantine and unknown commits", async (method, path, service = "aggregations") => {
   // "zero" pairs with "one"; each later write changes an accepted net-MMR pair as well as the other charts.
   const f = fixture(); await f.games.upsert("a", game("zero", { date: new Date("2025-12-31T12:00:00Z"), myMmr: 3950 }));
