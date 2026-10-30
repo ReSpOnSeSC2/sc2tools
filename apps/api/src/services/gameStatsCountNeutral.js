@@ -11,14 +11,17 @@ const { immutablePulseStamp, applyPulseStamp } = require("./gameStatsPulseNeutra
 const { immutableCustomBuildEof, applyCustomBuildEof, customBuildEofRepairAuthority } = require("./gameStatsCustomBuildEof");
 const { immutableCustomBuildIngestTag, applyCustomBuildIngestTag } = require("./gameStatsCustomBuildIngestTag");
 const { immutableCustomBuildDefinitionSave, applyCustomBuildDefinitionSave } = require("./gameStatsCustomBuildDefinitionSave");
+const { OPPONENT_REPAIR_KIND, immutableOpponentGameMutation, applyOpponentGameMutation, opponentRepairAuthority,
+  issuedOpponentRepair, applyOpponentGameIdentityRepair } = require("./gameStatsOpponentGame");
 
 /** This named operation owns its filter and update. No arbitrary callback or
  * caller-declared neutral boolean can select the carry path.
  * @typedef {{kind:"macroSurface",gameId:string,macroScore:number,top3Leaks?:object[]}} MacroSurfaceMutation */
-/** @typedef {MacroSurfaceMutation|import('./gameStatsBuildStateNeutral').BuildStateMutation|import('./gameStatsPulseNeutral').PulseStampMutation|import('./gameStatsCustomBuildEof').CustomBuildEofMutation} UpdateNeutralMutation */
+/** @typedef {MacroSurfaceMutation|import('./gameStatsBuildStateNeutral').BuildStateMutation|import('./gameStatsPulseNeutral').PulseStampMutation|import('./gameStatsCustomBuildEof').CustomBuildEofMutation|import('./gameStatsOpponentGame').OpponentGameMutation} UpdateNeutralMutation */
 /** @typedef {UpdateNeutralMutation|import('./gameStatsCustomBuildIngestTag').CustomBuildIngestTagMutation} NeutralMutation */
 /** @typedef {import('mongodb').UpdateResult|import('./gameStatsCustomBuildIngestTag').CustomBuildIngestTagResult} NeutralResult */
-/** @typedef {NeutralMutation|import('./gameStatsCustomBuildDefinitionSave').DefinitionSaveMutation} ReservedCarryMutation */
+/** @typedef {NeutralMutation|import('./gameStatsCustomBuildDefinitionSave').DefinitionSaveMutation|import('./gameStatsOpponentGame').OpponentGameIdentityRepairMutation} ReservedCarryMutation */
+/** @typedef {import('./gameStatsBuildStateNeutral').BuildStateMutation|import('./gameStatsOpponentGame').OpponentGameMutation} RemainingNeutralMutation */
 
 /** @param {NeutralMutation} input @param {Record<string,any>} [options] */
 function immutableNeutralMutation(input, options = {}) {
@@ -31,7 +34,13 @@ function immutableNeutralMutation(input, options = {}) {
   if (input?.kind === "pulseGameStamp") {
     return immutablePulseStamp(input, options);
   }
-  return input?.kind === "macroSurface" ? immutableMacroSurface(input, options) : immutableBuildState(input, options);
+  return input?.kind === "macroSurface" ? immutableMacroSurface(input, options) : immutableRemainingNeutral(input, options);
+}
+/** The repair kind is not a public neutral kind and falls to rejection.
+ * @param {RemainingNeutralMutation} input @param {Record<string,any>} options */
+function immutableRemainingNeutral(input, options) {
+  return input?.kind === "opponentGameRegion" || input?.kind === "opponentGameIdentity"
+    ? immutableOpponentGameMutation(input, options) : immutableBuildState(input, options);
 }
 /** @param {import('../db/connect').DbContext} db @param {import('./gameStatsWrites').GameStatsOwner} owner
  * @param {Readonly<NeutralMutation>} mutation @param {import('mongodb').ClientSession|undefined} session */
@@ -45,7 +54,13 @@ function applyNeutralMutation(db, owner, mutation, session) {
   if (mutation.kind === "pulseGameStamp") {
     return applyPulseStamp(db, owner, mutation, session);
   }
-  return mutation.kind === "macroSurface" ? applyMacroSurface(db, owner, mutation, session) : applyBuildState(db, owner, mutation, session);
+  return mutation.kind === "macroSurface" ? applyMacroSurface(db, owner, mutation, session) : applyRemainingNeutral(db, owner, mutation, session);
+}
+/** @param {import('../db/connect').DbContext} db @param {import('./gameStatsWrites').GameStatsOwner} owner
+ * @param {Readonly<RemainingNeutralMutation>} mutation @param {import('mongodb').ClientSession|undefined} session */
+function applyRemainingNeutral(db, owner, mutation, session) {
+  return mutation.kind === "opponentGameRegion" || mutation.kind === "opponentGameIdentity"
+    ? applyOpponentGameMutation(db, owner, mutation, session) : applyBuildState(db, owner, mutation, session);
 }
 
 /** Snapshot before owner/floor awaits, including nested payload arrays.
@@ -87,6 +102,7 @@ function validNeutralOwner(owner) {
  * @param {import('./gameStatsWrites').GameStatsOwner} owner
  * @param {Readonly<ReservedCarryMutation>} mutation */
 function neutralAuthority(owner, mutation) {
+  if (mutation.kind === OPPONENT_REPAIR_KIND) return opponentRepairAuthority(owner, mutation);
   if (mutation.kind === "customBuildEof" && mutation.repairFenceId !== undefined) {
     return customBuildEofRepairAuthority(owner, mutation);
   }
@@ -140,15 +156,22 @@ function carryDefinitionGameStats(db, owner, mutation, session) {
   return carryFixedGameStats(db, immutableNeutralOwner(owner), immutableCustomBuildDefinitionSave(mutation), session);
 }
 
+/** Only the writer's fenced repair capability enters this path. The brand,
+ * not a copy, keeps the issued handle; a fenced preimage is never ready.
+ * @param {import('../db/connect').DbContext} db @param {import('./gameStatsWrites').GameStatsOwner} owner
+ * @param {Readonly<import('./gameStatsOpponentGame').OpponentGameIdentityRepairMutation>} mutation
+ * @param {import('mongodb').ClientSession} session */
+function carryOpponentRepairGameStats(db, owner, mutation, session) {
+  return carryFixedGameStats(db, immutableNeutralOwner(owner), issuedOpponentRepair(mutation), session);
+}
+
 /** @param {import('../db/connect').DbContext} db @param {import('./gameStatsWrites').GameStatsOwner} owner
  * @param {Readonly<ReservedCarryMutation>} mutation @param {import('mongodb').ClientSession} session */
 function carryFixedGameStats(db, owner, mutation, session) {
   const authority = neutralAuthority(owner, mutation);
   return withGameStatsAuthority(db, owner, authority, async (before, revision) => {
     const stats = readyStatsFromOwnerRow(before, owner.userId, true);
-    const result = await (mutation.kind === "customBuildDefinitionSave"
-      ? applyCustomBuildDefinitionSave(db, owner, mutation, session)
-      : applyNeutralMutation(db, owner, mutation, session));
+    const result = await applyCarriedMutation(db, owner, mutation, session);
     if (stats) await saveGameStats(db, authority, revision, { $set: {
       gameStats: stats, gameStatsMaintenance: { version: MAINTENANCE_VERSION, status: "ready",
         ownerId: owner.id, revision, ...(owner.epoch === undefined ? {} : { epoch: owner.epoch }) },
@@ -156,8 +179,17 @@ function carryFixedGameStats(db, owner, mutation, session) {
     return result;
   }, session);
 }
+
+/** @param {import('../db/connect').DbContext} db @param {import('./gameStatsWrites').GameStatsOwner} owner
+ * @param {Readonly<ReservedCarryMutation>} mutation @param {import('mongodb').ClientSession} session */
+function applyCarriedMutation(db, owner, mutation, session) {
+  if (mutation.kind === "customBuildDefinitionSave") return applyCustomBuildDefinitionSave(db, owner, mutation, session);
+  return mutation.kind === OPPONENT_REPAIR_KIND ? applyOpponentGameIdentityRepair(db, owner, mutation, session)
+    : applyNeutralMutation(db, owner, mutation, session);
+}
 /** @param {string} code */
 function failure(code) { return Object.assign(new Error(code), { code, status: 503 }); }
 
 module.exports = { immutableMacroSurface, immutableNeutralOwner, applyMacroSurface, carryUnchangedGameStats,
-  immutableNeutralMutation, applyNeutralMutation, capturedNeutralOwner, neutralAuthority, carryDefinitionGameStats };
+  immutableNeutralMutation, applyNeutralMutation, capturedNeutralOwner, neutralAuthority, carryDefinitionGameStats,
+  carryOpponentRepairGameStats };

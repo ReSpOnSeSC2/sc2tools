@@ -204,6 +204,7 @@ export interface OpponentsService {
       opening?: string;
       playedAt: Date;
     },
+    options?: { statsOwner?: import("./gameStatsWrites").GameStatsOwner },
   ): Promise<{
     upgraded: boolean;
     from: string | null;
@@ -225,6 +226,7 @@ export interface OpponentsService {
       leagueId?: number;
       playedAt: Date;
     },
+    options?: { statsOwner?: import("./gameStatsWrites").GameStatsOwner },
   ): Promise<{
     matched: number;
     modified: number;
@@ -254,6 +256,7 @@ export interface OpponentsService {
   retryPulseResolution(
     userId: string,
     pulseId: string,
+    options?: { statsOwner?: import("./gameStatsWrites").GameStatsOwner },
   ): Promise<{
     resolvedPulseCharacterId: boolean;
     pulseCharacterId: string | null;

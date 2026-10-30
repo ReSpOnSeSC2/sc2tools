@@ -153,7 +153,7 @@ test("admin rebuild excludes concurrent owner writes until its pre-snapshot and 
   const user=(await request(app).get("/v1/me").set("authorization","Bearer normal-token")).body.userId;
   let entered,release;const began=new Promise(resolve=>{entered=resolve;}),hold=new Promise(resolve=>{release=resolve;});
   const original=services.gdpr.rebuildOpponentsAndHealForUser.bind(services.gdpr);
-  const spy=jest.spyOn(services.gdpr,"rebuildOpponentsAndHealForUser").mockImplementationOnce(async id=>{entered();await hold;return original(id);});
+  const spy=jest.spyOn(services.gdpr,"rebuildOpponentsAndHealForUser").mockImplementationOnce(async(...args)=>{entered();await hold;return original(...args);});
   const rebuilding=admin(request(app).post(`/v1/admin/users/${user}/rebuild-opponents`)).then(response=>response);await began;
   try {
     expect((await db.users.findOne({userId:user}))._gdprMutation.kind).toBe("admin_rebuild_opponents");

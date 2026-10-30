@@ -154,4 +154,4 @@ function abortError() { return Object.assign(new Error("reclassify_aborted"), { 
 /** @param {string} code */
 function failure(code) { return Object.assign(new Error(code), { code, status: 503 }); }
 
-module.exports = { immutableCustomBuildEof, applyCustomBuildEof, customBuildEofRepairAuthority, assertEofNotAborted };
+module.exports = { immutableCustomBuildEof, applyCustomBuildEof, customBuildEofRepairAuthority, assertEofNotAborted, dataFields };

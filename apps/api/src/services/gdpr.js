@@ -2,6 +2,10 @@
 const { gameWrite } = require("../util/userRevision");
 const { gameStatsWritesFor } = require("./gameStatsWrites");
 const { deviceCredentialWritesFor } = require("./deviceCredentialWrites");
+const { takeRepairLivenessIssuer } = require("./gdprRepairLiveness");
+
+// Only genuine opponents-repair claims below issue deny-only liveness handles.
+const repairLiveness = takeRepairLivenessIssuer();
 
 const { randomUUID } = require("crypto");
 const { stampVersion } = require("../db/schemaVersioning");
@@ -1210,8 +1214,11 @@ class GdprService {
    * already rebuilt; the periodic backfill cron will pick the
    * survivors up next cycle.
    *
+   * The repair option is always forwarded as an own property, so a dropped
+   * context vetoes game heals instead of recapturing under the fence.
+   *
    * @param {string} userId
-   * @param {{ backfillLimit?: number }} [opts]
+   * @param {{ backfillLimit?: number, repair?: import('./gameStatsOpponentGame').OpponentRepairContext }} [opts]
    * @returns {Promise<{
    *   droppedRows: number,
    *   pulseBackfill: {
@@ -1234,6 +1241,7 @@ class GdprService {
           // "skip rows attempted within the last 6h" guard so the
           // operator sees a fresh result rather than a stale stamp.
           force: true,
+          repair: opts.repair,
         });
       } catch (err) {
         if (this.logger) {
@@ -1256,7 +1264,7 @@ class GdprService {
       await fence.assert(); await this._drainOpponentBuildOrderWriters(userId);
       if (this.customBuilds) await this.customBuilds.cancelUserReclassifications(userId);
       if (this.backups) await this.backups.create(userId, { type: "pre_action", label: "Before admin opponent repair", assert: fence.assert });
-      const result = await this.rebuildOpponentsAndHealForUser(userId);
+      const result = await this.rebuildOpponentsAndHealForUser(userId, { repair: { owner: fence.owner, fenceId: fence.id, kind: "admin_rebuild_opponents", handle: fence.liveness } });
       await fence.assert();
       const [games, opponents, macroJobs] = await Promise.all([this.db.games.countDocuments({userId}), this.db.opponents.countDocuments({userId}), this.db.macroJobs.countDocuments({userId})]);
       return { userId, ...result, games, opponents, macroJobs };
@@ -1370,7 +1378,7 @@ class GdprService {
       /** @type {any} */ (err).status = 409;
       throw err;
     }
-    let lost = false;
+    let lost = false; const liveness = repairLiveness.issue(owner, id, kind);
     const renew = async () => {
       const renewed = await this.db.users.updateOne(
         { userId, ...(owner ? { _id: owner.id } : {}), "_gdprMutation.id": id },
@@ -1381,13 +1389,13 @@ class GdprService {
         } },
       );
       if (renewed.matchedCount === 0) {
-        lost = true;
-        throw new Error("gdpr_operation_lease_lost");
+        const lostError = repairLiveness.fail(liveness, new Error("gdpr_operation_lease_lost")); lost = true;
+        throw lostError;
       }
     };
     const timer = setInterval(() => {
       void renew().catch((err) => {
-        lost = true;
+        repairLiveness.fail(liveness, err); lost = true;
         if (this.logger?.error) {
           this.logger.error(
             { err, userId, kind },
@@ -1398,15 +1406,17 @@ class GdprService {
     }, GDPR_MUTATION_RENEW_MS);
     if (typeof timer.unref === "function") timer.unref();
     const assert = async () => {
-      if (lost) throw new Error("gdpr_operation_lease_lost");
-      await renew();
-      if (lost) throw new Error("gdpr_operation_lease_lost");
+      if (lost) throw repairLiveness.fail(liveness, new Error("gdpr_operation_lease_lost"));
+      await renew().catch((error) => { throw repairLiveness.fail(liveness, error); });
+      if (lost) throw repairLiveness.fail(liveness, new Error("gdpr_operation_lease_lost"));
     };
-    return { id, timer, assert, owner: owner ? { ...owner, epoch: id } : null };
+    return { id, timer, assert, owner: owner ? { ...owner, epoch: id } : null, liveness };
   }
 
-  /** @param {string} userId @param {{id: string, timer: NodeJS.Timeout, assert: () => Promise<void>,owner?:import('./gameStatsWrites').GameStatsOwner|null,policyMutation?:boolean}} fence */
+  /** Release-begin closes the opponents-repair handle before any release work.
+   * @param {string} userId @param {{id: string, timer: NodeJS.Timeout, assert: () => Promise<void>,owner?:import('./gameStatsWrites').GameStatsOwner|null,policyMutation?:boolean,liveness?:object}} fence */
   async _releaseMutationFence(userId, fence) {
+    repairLiveness.release(fence.liveness);
     clearInterval(fence.timer);
     try {
       if (fence.id) await this.db.users.updateOne(
