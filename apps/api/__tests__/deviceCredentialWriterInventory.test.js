@@ -14,12 +14,16 @@
 // - an authority write is not awaited inside the coordinator, directly or through
 //   an allowlisted wrapper, for the same top-level owner;
 // - a metadata writer sets anything but metadata fields through a literal
-//   document, or may upsert.
+//   document, or may upsert;
+// - a classified file contains any $out or $merge stage name, on any receiver,
+//   or a `var` declaration.
 // Named limitations (ADR 0072): lexical evidence only, not a runtime, failover,
 // clock or separate-process proof. It cannot see manual edits, raw restores, code
-// outside apps/api, names built at run time from non-literal parts, iteration
-// over the whole database context or the COLLECTIONS or schema registry, or a
-// collection reached through a parameter of a function in an unclassified file.
+// outside apps/api, names built at run time from non-literal parts (stage names
+// included), iteration over the whole database context or the COLLECTIONS or
+// schema registry, a collection reached through a parameter of a function in an
+// unclassified file, or a mutation of an owner object (Object.assign, delete or a
+// mutating helper).
 
 const fs = require("fs");
 const path = require("path");
@@ -374,10 +378,18 @@ function settled(call, stop) {
 
 const memberName = p => ((ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p))
   && (ts.isIdentifier(p.name) || ts.isStringLiteralLike(p.name)) ? p.name.text : null);
+// A call of the schema-version stamp destructured from ../db/schemaVersioning, which only adds its version key.
+function isVersionStamp(call) {
+  const callee = strip(call.expression);
+  const declaration = ts.isIdentifier(callee) && callee.text === "stampVersion" ? declarationOf(callee) : null;
+  const source = declaration && ts.isBindingElement(declaration) ? declaration.parent.parent.initializer : null;
+  return !!source && source.getText() === 'require("../db/schemaVersioning")';
+}
+
 // The owner named by the top-level `userId` of a write's filter or document; null for anything looser.
 function ownerOf(write) {
   let target = strip(write.arguments[0]);
-  if (target && ts.isCallExpression(target) && calleeName(target) === "stampVersion") target = strip(target.arguments[0]);
+  if (target && ts.isCallExpression(target) && isVersionStamp(target)) target = strip(target.arguments[0]);
   if (!target || !ts.isObjectLiteralExpression(target)) return null;
   if (target.properties.some(p => memberName(p) === null || memberName(p).startsWith("$"))) return null;
   const owner = target.properties.find(p => memberName(p) === "userId");
@@ -397,24 +409,31 @@ function fallbackBranch(call) {
   return guarded ? "no coordinator" : "unguarded";
 }
 
-// [exported name, value] for `module.exports = {...}`, `module.exports.X =` and `exports.X =`.
+// [exported name, whether its value names the collection] for `module.exports = {...}`, `module.exports.X =` and
+// `exports.X =`. A value names it directly or through any top-level initializer an identifier inside it reaches.
 function exportedValues(sf) {
   const top = new Map(sf.statements.filter(ts.isVariableStatement).flatMap(statement => statement.declarationList.declarations)
     .filter(d => ts.isIdentifier(d.name)).map(d => [d.name.text, d.initializer]));
-  const resolve = node => {
-    for (let depth = 0; depth < 4 && node && ts.isIdentifier(strip(node)) && top.has(strip(node).text); depth += 1) node = top.get(strip(node).text);
+  const reach = (n, seen) => ts.isIdentifier(n) && top.has(n.text) && !seen.has(n.text) && (seen.add(n.text), namesDeep(top.get(n.text), seen));
+  const namesDeep = (value, seen = new Set()) => !!value && nodes(value, n => namesCollection(n) || reach(n, seen)).length > 0;
+  const spreadOf = p => {
+    let node = strip(p.expression);
+    for (const seen = new Set(); node && ts.isIdentifier(node) && top.has(node.text) && !seen.has(node.text);) { seen.add(node.text); node = strip(top.get(node.text)); }
     return node;
   };
-  const member = p => (ts.isSpreadAssignment(p) ? ["<spread>", resolve(p.expression)]
-    : [p.name.getText(), resolve(ts.isShorthandPropertyAssignment(p) ? p.name : p.initializer) || p]);
+  const member = p => {
+    const spread = ts.isSpreadAssignment(p) ? spreadOf(p) : null;
+    if (spread && ts.isObjectLiteralExpression(spread)) return spread.properties.flatMap(member);
+    const value = ts.isSpreadAssignment(p) ? p.expression : ts.isShorthandPropertyAssignment(p) ? p.name : p.initializer || p;
+    return [[ts.isSpreadAssignment(p) ? "<spread>" : p.name.getText(), namesDeep(value)]];
+  };
   return nodes(sf, n => ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken
     && /^(module\.)?exports(\.|$)/.test(n.left.getText())).flatMap(n => (ts.isObjectLiteralExpression(n.right)
-    ? n.right.properties.map(member) : [[n.left.getText().split(".").pop(), resolve(n.right)]]));
+    ? n.right.properties.flatMap(member) : [[n.left.getText().split(".").pop(), namesDeep(n.right)]]));
 }
 
 function exportedLists() {
-  return Object.keys(REFERENCES).flatMap(file => exportedValues(parse(file))
-    .filter(([, value]) => value && nodes(value, namesCollection).length).map(([name]) => name))
+  return Object.keys(REFERENCES).flatMap(file => exportedValues(parse(file)).filter(([, names]) => names).map(([name]) => name))
     .filter(name => !REGISTRIES.has(name)).sort();
 }
 
@@ -527,9 +546,12 @@ test("ADR 0072: every unresolved write in a classified file comes from a listed 
     .filter(write => write.kind !== "token" && write.kind !== "other")
     .map(write => `${write.file} ${functionName(write.call)} ${strip(write.call.expression).name.text} ${write.kind}`));
   expect(dynamic.sort()).toEqual([...DYNAMIC].sort());
-  // An output stage could take its target from a listed loop, so none may exist in a classified file.
-  expect(classified.flatMap(file => propertyNamed(parse(file), ["$out", "$merge"]).map(p => `${file} ${functionName(p)} ${p.name.text}`)))
-    .toEqual([]);
+  // An output stage could take its target from a listed loop, so no stage name may appear in a classified file.
+  const outputStage = n => (ts.isIdentifier(n) || ts.isStringLiteralLike(n)) && ["$out", "$merge"].includes(n.text);
+  expect(classified.flatMap(file => nodes(parse(file), outputStage).map(n => `${file} ${functionName(n)} ${n.text}`))).toEqual([]);
+  // A `var` can rebind a receiver where the resolver does not look, so classified files declare none.
+  const isVar = n => ts.isVariableDeclarationList(n) && (n.flags & (ts.NodeFlags.Let | ts.NodeFlags.Const)) === 0;
+  expect(classified.flatMap(file => nodes(parse(file), isVar).map(n => `${file} ${functionName(n)} var`))).toEqual([]);
   // Of the lists those loops and helpers iterate, only the erase list holds the collection.
   expect(USER_SCOPED_COLLECTIONS.filter(([key]) => isTokenString(key))).toEqual([["deviceTokens", "deviceTokens"]]);
   for (const list of [PURGE_ONLY_COLLECTIONS, RESTORABLE, TOKEN_COLLECTIONS]) {
@@ -549,6 +571,11 @@ test("ADR 0072: revocation and issuance are awaited inside the coordinator for t
   const param = method.parameters[0].name.getText(), argument = strip(issues[0].arguments[0]), owner = strip(run.arguments[0]);
   expect([settled(insert, method), settled(issues[0], run.arguments[2]), ownerOf(insert), assignsTo(method, param)])
     .toEqual([true, true, `${param}.userId`, false]);
+  // The inserted owner is read from the method's own first parameter, not from a shadowing binding.
+  const stamped = strip(strip(insert.arguments[0]).arguments[0]);
+  const issued = strip(stamped.properties.find(p => memberName(p) === "userId").initializer);
+  expect(ts.isPropertyAccessExpression(issued) && ts.isIdentifier(issued.expression)
+    && declarationOf(issued.expression) === method.parameters[0]).toBe(true);
   // The argument and the run owner's object resolve to one declaration that nothing rebinds.
   const declaration = ts.isIdentifier(argument) ? declarationOf(argument) : null;
   expect(ts.isPropertyAccessExpression(owner) && owner.name.text === "userId" && ts.isIdentifier(owner.expression)).toBe(true);
