@@ -84,3 +84,10 @@ test("with the memo switched off, concurrent loads still join but completed answ
   expect(games.aggregate).toHaveBeenCalledTimes(2);
   expect(service.trendsRequests.completed.size).toBe(0);
 });
+
+test("with the memo switched off, concurrent filtered and unfiltered loads never share a computation", async () => {
+  const { service, games } = fixture();
+  await Promise.all([service.randomSummary("u1", {}, { memo: false }), service.randomSummary("u1", { map: "arena" }, { memo: false })]);
+  expect(games.aggregate).toHaveBeenCalledTimes(2);
+  expect(games.aggregate.mock.calls[1][0][0].$match).not.toEqual(games.aggregate.mock.calls[0][0][0].$match);
+});
