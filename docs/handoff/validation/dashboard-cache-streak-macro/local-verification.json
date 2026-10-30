@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "slice": "C1-streak-macro-report",
+  "status": "LOCAL_TYPES_LINT_290_API_117_WEB_PASS_4_OF_4_MUTATIONS_NOT_RELEASED",
+  "source": {
+    "base": "82186babb48e0720ca73306026a811419980a6aa",
+    "baseQualification": "F1 head (PR824, draft and unmerged). C1 is stacked on it; F1 itself changes no application file.",
+    "testedCommit": "83e53307d096d6315bc6b9f91ef7f928a31e51c8",
+    "testedTree": "a8ecc31b20ca02e5ab32f68cdfe1561f4e487301",
+    "applicationFiles": [
+      "apps/api/src/middleware/userCache.js",
+      "apps/api/src/routes/aggregations.js",
+      "apps/web/lib/conditionalApiScope.tsx"
+    ],
+    "testFiles": [
+      "apps/api/__tests__/userCacheRoutes.test.js",
+      "apps/api/__tests__/userCacheCoverage.mongo.test.js",
+      "apps/api/__tests__/userCacheStreakMacro.mongo.test.js",
+      "apps/web/lib/__tests__/conditionalApiScope.routes.test.ts",
+      "apps/web/lib/__tests__/clientApi.conditional.test.tsx"
+    ]
+  },
+  "admission": {
+    "kinds": [
+      "streak",
+      "macroReport"
+    ],
+    "paths": [
+      "/v1/streak",
+      "/v1/macro/report"
+    ],
+    "webCapabilityPositions": [
+      15,
+      16
+    ],
+    "coveredKindsBefore": 15,
+    "coveredKindsAfter": 17,
+    "checklist": "docs/handoff/dashboard-cache-streak-macro-checkpoint.md",
+    "structurallyBoundedSize": {
+      "streak": true,
+      "macroReport": false
+    },
+    "unguardedCallers": "HEAD only; it computes and discards the body"
+  },
+  "actual": {
+    "apiTypesExit": 0,
+    "apiConfiguredLint": {
+      "errors": 0,
+      "warnings": 757,
+      "equalsF1Head": true
+    },
+    "changedLegacyFilesAddedLintMessages": 0,
+    "apiSuites": 15,
+    "apiCases": 290,
+    "newApiCases": 11,
+    "failed": 0,
+    "pending": 0,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "ownedMongodLeftover": 0,
+    "webTypesExit": 0,
+    "webLintExit": 0,
+    "webFiles": 9,
+    "webCases": 117,
+    "newWebCases": 2,
+    "mutationsKilled": "4/4"
+  },
+  "retained": [
+    "The pre-commit runs c1-dev-01 (3 suites, 51 cases) and c1-affected-01 (15 suites, 290 cases) used the uncommitted tree about two minutes before 83e53307 was committed. They are superseded by CHECKS-01, which re-ran at the commit with application files equal to it.",
+    "CHECKS-01's webVitest.files value (26/26) is vitest's JSON suite count, describe blocks included; the run executed 9 test files (checks-01/web-vitest.log).",
+    "Web types were checked with the incremental build info already in the worktree."
+  ],
+  "boundaries": [
+    "Stacked on unmerged F1. Exact-head CI (including web-ci's route-budget check), merge, deployment and production acceptance remain pending.",
+    "USER_CACHE_ENABLED stays off. No activation, latency, request-reduction, savings or fleet proof; G1-G3 stay unmet as ADR 0072 records."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/opponent-game-region-identity-20261030/FASTER-DASHBOARDS-SCOPING-01.json",
+      "sha256": "3d57aa7955498824d9c396682dbd8a9b1e31aa7f0face074a500acbd84c513bf",
+      "bytes": 92680
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/CHECKS-01.json",
+      "sha256": "f3dc3bb7433f8d19576b82cccf3656e4fc12ee4849f449a7837684ba011b4fea",
+      "bytes": 2747
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/checks-01/api-jest.json",
+      "sha256": "ba389fe51fffbe266c524e45c7e3bc19f3b6744c8a360db24a68e7928a47cbd1",
+      "bytes": 111902
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/checks-01/api-lint.json",
+      "sha256": "25bf3542fdc7eb429c449a438c097fc30222d76d9726803f76aec2e48aced996",
+      "bytes": 7480367
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/checks-01/web-vitest.json",
+      "sha256": "88e89a2e7c9ed22cd52f181224a739b677052027ef890c8244f9e32424dcb72c",
+      "bytes": 42811
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/checks-01/lint-no-added.txt",
+      "sha256": "75b1b9c0528a789541d099baadf0a7df972a288151366b083a9e8c02f3aef503",
+      "bytes": 250
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/mutation-01/MUTATION-RESULTS.json",
+      "sha256": "d0fd8a08e9e69b6fb96db3b8aa8c11b1f8f987a53f9214bb92fe25f260742429",
+      "bytes": 957
+    }
+  ]
+}

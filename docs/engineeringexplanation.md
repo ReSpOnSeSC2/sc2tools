@@ -352,7 +352,7 @@ and verification limits.
 
 `USER_CACHE_ENABLED` enables the first chart-cache slice only when its value is
 the literal string `true`. The default and `.env.example` are false. While off,
-the fifteen routes call their original services and `res.json` directly; revision
+the seventeen routes call their original services and `res.json` directly; revision
 hooks add no database command, owner lookup, retained body, admission limit or
 new busy response. The flag is not changed by source preparation.
 
@@ -368,7 +368,7 @@ The allowlist is `/v1/timeseries`, `/v1/timeseries/day-hour`,
 `/v1/timeseries/maps`, plus `/v1/summary`, `/v1/macro/summary`,
 `/v1/timeseries/mmr`, `/v1/timeseries/my-builds` and
 `/v1/timeseries/opp-strategies`, plus `/v1/matchups`, `/v1/maps`,
-`/v1/maps/matchups` and `/v1/build-vs-strategy`. The same fifteen paths participate in optional
+`/v1/maps/matchups` and `/v1/build-vs-strategy`, plus `/v1/streak` and `/v1/macro/report`. The same seventeen paths participate in optional
 browser capability discovery and retained-body revalidation. Existing parsing,
 filters, calculations and history bounds
 stay in their original aggregation methods. All global filters are dependencies:
@@ -412,7 +412,7 @@ TrendsRequests joins. This applies without Socket.io and after unknown write
 outcomes, swallowed metadata errors, partial restores and later detail failures.
 Reclassification retires at promotion, not at every staging page. Custom-build
 rename fencing spans transaction commit. Active work retains its admission
-permit after invalidation. None of the fifteen covered responses reads the legacy
+permit after invalidation. None of the seventeen covered responses reads the legacy
 `isLadderMap`/`isLadderMapV` stamp, replay or playback storage markers, the
 opponent build-order write lease, moment receipts, reclassification staging
 markers or resumed-replay repair markers (the `isResumedFromReplay` quarantine
@@ -467,7 +467,7 @@ cache. Dirty, active, invalid-revision and oversized bypass bodies stay 200 with
 `private, no-store`. OFF preserves the original Express JSON/freshness behavior.
 CORS exposes ETag without changing allowed origins or authentication.
 
-Only the fifteen allowlisted useApi paths can discover the explicit enabled-cache
+Only the seventeen allowlisted useApi paths can discover the explicit enabled-cache
 capability and start a background dynamic import. Before that module is ready,
 after import failure, or outside the AppChrome conditional provider, useApi makes
 one ordinary request. No eager retained-body engine or import wait is added to

@@ -12,7 +12,7 @@ application source equals `27b9aeb0`.
 ## Context
 
 Two retained-state features are built but inactive: the default-off per-user
-chart cache, which covers fifteen response kinds in source, and the uninjected
+chart cache, which covers seventeen response kinds in source, and the uninjected
 retained device-auth REST adapter. Both keep their state in one process. The
 roadmap allows wider cache coverage only after "complete dependency/revocation
 and shared-fleet audits" (`docs/handoff/roadmap-progress-2026-10-28.json:1963`)
@@ -223,7 +223,7 @@ Items 1-10 are the per-kind dependency and revocation audit. Item 11 binds the
 kind to the shared-fleet audit recorded in the three sections above. G1-G3 stay
 unmet: chart-cache activation never meets them and covers them only through the
 receipt rows under Activation receipts. Together these are the audits the roadmap
-requires before source coverage grows beyond fifteen kinds. They qualify source
+requires before source coverage grows (`docs/handoff/roadmap-progress-2026-10-28.json:1963`). They qualify source
 coverage only while the flag stays off and are never activation evidence.
 
 ## Device-credential contract
