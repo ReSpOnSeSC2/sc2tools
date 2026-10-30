@@ -432,10 +432,11 @@ Code-side shipped in this drop; account-side runbook lives in
   Express error handler forwards 5xx to Sentry; bootstrap errors in
   `server.js` likewise.
 - [x] **Render instance pin + healthcheck.** `apps/api/render.yaml` pins
-  `numInstances: 1` with `healthCheckPath: /v1/health`. There is no
-  autoscaling policy or session affinity: the realtime layer keeps its
-  state in one process. Each deploy still runs the old and new process
-  side by side briefly; see [ADR 0072](../adr/0072-serving-cohort-coherence.md).
+  `numInstances: 1` with `healthCheckPath: /v1/health`. The blueprint
+  configures no autoscaling policy and cannot express session affinity,
+  because the realtime layer keeps its state in one process; the operator
+  verifies the live settings. Each deploy still runs the old and new
+  process side by side briefly; see [ADR 0072](../adr/0072-serving-cohort-coherence.md).
 - [x] **Privacy policy + ToS** at [`/legal/privacy`](../../apps/web/app/legal/privacy/page.tsx)
   and [`/legal/terms`](../../apps/web/app/legal/terms/page.tsx). Footer
   links them site-wide.

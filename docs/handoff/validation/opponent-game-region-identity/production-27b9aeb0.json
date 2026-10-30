@@ -34,13 +34,15 @@
       "environment": "main - sc2tools-api",
       "deploymentId": 7440593847,
       "state": "success",
-      "at": "2026-10-30T14:21:09Z"
+      "at": "2026-10-30T14:21:09Z",
+      "sha": "27b9aeb0db1707a116bd30a58ad980daa12524cd"
     },
     "web": {
       "environment": "Production",
       "deploymentId": 7440654042,
       "state": "success",
-      "at": "2026-10-30T14:23:17Z"
+      "at": "2026-10-30T14:23:17Z",
+      "sha": "27b9aeb0db1707a116bd30a58ad980daa12524cd"
     },
     "bothForExactMergedMain": true
   },

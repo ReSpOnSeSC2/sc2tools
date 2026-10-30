@@ -238,11 +238,19 @@ recreates any missing indexes. Then confirm:
   update were not logged; reconcile those with the admin and affected users.
 - **Device unpairs after the restore point are undone.** Device sign-in reads
   only the restored `device_tokens` rows, so a device unpaired after the
-  restore time can authenticate again. No dedicated event records an unpair:
-  search the request logs from the restore time onward for
-  `DELETE /v1/devices/<deviceId>` answered 204; the restored row names the
-  owner. Ask each owner to unpair that device again on the **Devices** page.
-  Devices paired after the restore point lost their tokens and must pair again.
+  restore time authenticates again from the moment the service resumes. No
+  dedicated event records an unpair: search the request logs from the restore
+  time onward for `DELETE /v1/devices/<deviceId>` answered 204, and read
+  `userId` from the restored `device_tokens` row with that `_id`. Re-apply each
+  revoke first thing after resuming, with the account-deletion command above
+  and its service call replaced by
+  `services.pairings.revokeById(process.argv[1], process.argv[2])`, passing
+  `<userId> <deviceId>`. `true` means the device is revoked again; `false`
+  means it was already revoked or is not found. Revoking does not disconnect a
+  device socket that is already open (see ADR 0072), so restart the service
+  once afterwards. Tell each owner the device was unpaired again; an owner can
+  also unpair it on the **Devices** page. Devices paired after the restore
+  point lost their tokens and must pair again.
 - **R2 is not rolled back.** Games deleted after the restore point come
   back in Mongo but their replay files and R2 detail blobs are gone; games
   created after it have R2 objects with no Mongo row (harmless orphans).

@@ -61,8 +61,11 @@ full old-grant drain passed. Reader rollback does not remove writer gates.
 Provider, flags, infrastructure, engine and native release stay unchanged.
 USER_CACHE_ENABLED stays off and faster-dashboards remains partial.
 
-The serving-cohort and rolling-overlap contract for these gates lives only in
+The serving-cohort and rolling-overlap contract for these gates is defined in
 [ADR 0072](0072-serving-cohort-coherence.md): the fleet model, the transcribed
 ordering argument, clock inequality and deployment rules, the operations
 forbidden while retention could be active, and the activation receipt. It does
-not settle the clock, election or cross-process validation that remains due here.
+not replace the activation and rollback prerequisites above, and it narrows the
+rollback rule's coordinated writers to protocol-v1 writers at or after
+`b8608d90`; a change to either rule updates both. It does not settle the clock,
+election or cross-process validation that remains due here.
