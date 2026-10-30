@@ -268,19 +268,23 @@ destructured bindings, assignment patterns and reassignment, and it fails on:
   including a list derived from one;
 - any other use of the collection, such as a new writer, hand-off or escape;
 - a read that could write, such as an `$out` or `$merge` stage or a TTL index;
+- any `$out` or `$merge` stage name, on any receiver, or any `var` declaration in a
+  classified file;
 - an unresolved write, aggregation or database-level command in a classified file
   outside its listed loops, parameters and command documents;
 - an authority write that is not awaited inside the coordinator, directly or
-  through an allowlisted wrapper, for the same top-level owner;
+  through an allowlisted wrapper, for the same top-level owner, bound by
+  declaration from the coordinator's owner to the inserted document;
 - a metadata writer whose literal `$set` writes anything but metadata fields, or
   which may upsert.
 
 It is lexical evidence, not a runtime, failover, clock or separate-process proof.
 It cannot see manual edits, raw restores, code outside `apps/api`, names built at
-run time from non-literal parts, iteration over the whole database context or the
-`COLLECTIONS` or schema registry, or a collection reached through a parameter of
-a function in an unclassified file. It does not read this ADR, so this table and
-its citations stay in step by review.
+run time from non-literal parts (stage names included), iteration over the whole
+database context or the `COLLECTIONS` or schema registry, a collection reached
+through a parameter of a function in an unclassified file, or a mutation of an
+owner object (`Object.assign`, `delete` or a mutating helper). It does not read
+this ADR, so this table and its citations stay in step by review.
 
 ### Transcribed reviewed design
 
@@ -426,8 +430,9 @@ under `apps/api/scripts`, manual database edits and raw restores.
   bodies live only in process memory (`config/loader.js:151`; `app.js:394-396`;
   `middleware/userCache.js:19-33`), so that deploy discards them. Turn the flag
   back on only with a fresh receipt.
-- **Device credentials.** Use the barriers under Scope. Until a disable primitive
-  exists, the only compliant state is that retention is not active.
+- **Device credentials.** Use the barriers under Scope. Until the disable and
+  authorized repair primitives exist, the only compliant state is that retention
+  is not active.
 
 ## Activation receipts
 
@@ -529,13 +534,16 @@ retained bodies in at least these four cases:
 
 Shutdown-start retirement ends each case at the signal. The residual runs from
 the successor's first write to the predecessor's SIGTERM, and that write can come
-before the successor is healthy: custom-build recovery writes before the server
-listens (`server.js:205-207,217`), and the opponent-MMR job starts at boot with no
-health gate and stamps games at once (`server.js:289`;
-`jobs/opponentMmrEnrichmentJob.js:136-138,446-447`). So the residual is the
+before the successor is healthy: custom-build recovery restarts its background
+reclassification lane before the server listens, and the lane promotes reclassified
+games after its full-history scan with no health gate (`server.js:205-207,217`;
+`services/customBuilds.js:852,856-873,2267`), while the opponent-MMR job starts at
+boot with no health gate and stamps games at once (`server.js:289`;
+`jobs/opponentMmrEnrichmentJob.js:136-138,446-447`). So the residual is at most the
 successor's start-to-healthy time, which no assumed bound covers, plus the second
 assumed bound. A successor that never becomes healthy triggers no signal, and its
-boot writes leave the predecessor stale for the whole G4 window. The guard slice
+boot writes can leave the predecessor stale, in the cases above, for the whole G4
+window. The guard slice
 must hold the successor's background writers until it is healthy, or its review
 must accept this. A durable cohort registration in `jobLocks` is deferred, and is reconsidered only
 if either provider bound cannot be qualified. A pub/sub broadcast is excluded as
@@ -570,6 +578,7 @@ citations stay in step by review, like the chart-cache tables.
 No runtime behavior changes. `USER_CACHE_ENABLED` stays off, the REST adapter
 stays uninjected and faster-dashboards stays partial. The next cache-coverage
 slice cites the admission checklist; probe suppression, the disable primitive,
-the overlap guard and the cohort receipt consume the definitions here. A contract
+the authorized repair primitive, the overlap guard and the cohort receipt consume
+the definitions here. A contract
 cannot prove the production cohort, provider retirement timing, clocks or
 elections.
