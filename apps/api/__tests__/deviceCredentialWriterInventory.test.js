@@ -190,14 +190,36 @@ function bindingKind(element) {
 function keySource(key) {
   key = strip(key);
   const declaration = ts.isIdentifier(key) ? declarationOf(key) : null;
+  if (declaration && assignsTo(ts.findAncestor(declaration, ts.isFunctionLike) || declaration.getSourceFile(), key.text)) {
+    return `reassigned:${key.text}`;
+  }
   for (let at = declaration; at; at = at.parent) {
     if (ts.isForOfStatement(at) && contains(at.initializer, declaration)) return `loop:${at.expression.getText()}`;
   }
   return `dynamic:${key.getText()}`;
 }
 
-const assignsTo = (scope, name) => nodes(scope, n => ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken
-  && ts.isIdentifier(strip(n.left)) && strip(n.left).text === name).length > 0;
+// Names an assignment target rebinds, including inside destructuring; a property write rebinds nothing.
+const objectTargets = p => (ts.isShorthandPropertyAssignment(p) ? [p.name.text]
+  : targetNames(ts.isPropertyAssignment(p) ? p.initializer : ts.isSpreadAssignment(p) ? p.expression : undefined));
+function targetNames(target) {
+  target = strip(target);
+  if (!target) return [];
+  if (ts.isIdentifier(target)) return [target.text];
+  if (ts.isArrayLiteralExpression(target)) return target.elements.flatMap(targetNames);
+  if (ts.isObjectLiteralExpression(target)) return target.properties.flatMap(objectTargets);
+  if (ts.isSpreadElement(target)) return targetNames(target.expression);
+  const defaulted = ts.isBinaryExpression(target) && target.operatorToken.kind === ts.SyntaxKind.EqualsToken;
+  return defaulted ? targetNames(target.left) : [];
+}
+const isAssignment = n => ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+  && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment;
+const isStep = n => (ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n))
+  && (n.operator === ts.SyntaxKind.PlusPlusToken || n.operator === ts.SyntaxKind.MinusMinusToken);
+const loopTarget = n => (ts.isForOfStatement(n) || ts.isForInStatement(n)) && !ts.isVariableDeclarationList(n.initializer);
+// True when `scope` rebinds `name` with any assignment operator, ++/--, a destructuring target or a for-in/of target.
+const assignsTo = (scope, name) => nodes(scope, n => (isAssignment(n) ? targetNames(n.left) : isStep(n) ? targetNames(n.operand)
+  : loopTarget(n) ? targetNames(n.initializer) : []).includes(name)).length > 0;
 
 function identifierKind(id, depth) {
   const declaration = declarationOf(id);
@@ -355,7 +377,7 @@ const memberName = p => ((ts.isPropertyAssignment(p) || ts.isShorthandPropertyAs
 // The owner named by the top-level `userId` of a write's filter or document; null for anything looser.
 function ownerOf(write) {
   let target = strip(write.arguments[0]);
-  if (target && ts.isCallExpression(target)) target = strip(target.arguments[0]);
+  if (target && ts.isCallExpression(target) && calleeName(target) === "stampVersion") target = strip(target.arguments[0]);
   if (!target || !ts.isObjectLiteralExpression(target)) return null;
   if (target.properties.some(p => memberName(p) === null || memberName(p).startsWith("$"))) return null;
   const owner = target.properties.find(p => memberName(p) === "userId");
@@ -379,10 +401,15 @@ function fallbackBranch(call) {
 function exportedValues(sf) {
   const top = new Map(sf.statements.filter(ts.isVariableStatement).flatMap(statement => statement.declarationList.declarations)
     .filter(d => ts.isIdentifier(d.name)).map(d => [d.name.text, d.initializer]));
-  const member = p => [p.name ? p.name.getText() : "<spread>", ts.isShorthandPropertyAssignment(p) ? top.get(p.name.text) : p.initializer || p];
+  const resolve = node => {
+    for (let depth = 0; depth < 4 && node && ts.isIdentifier(strip(node)) && top.has(strip(node).text); depth += 1) node = top.get(strip(node).text);
+    return node;
+  };
+  const member = p => (ts.isSpreadAssignment(p) ? ["<spread>", resolve(p.expression)]
+    : [p.name.getText(), resolve(ts.isShorthandPropertyAssignment(p) ? p.name : p.initializer) || p]);
   return nodes(sf, n => ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken
     && /^(module\.)?exports(\.|$)/.test(n.left.getText())).flatMap(n => (ts.isObjectLiteralExpression(n.right)
-    ? n.right.properties.map(member) : [[n.left.getText().split(".").pop(), n.right]]));
+    ? n.right.properties.map(member) : [[n.left.getText().split(".").pop(), resolve(n.right)]]));
 }
 
 function exportedLists() {
@@ -500,6 +527,9 @@ test("ADR 0072: every unresolved write in a classified file comes from a listed 
     .filter(write => write.kind !== "token" && write.kind !== "other")
     .map(write => `${write.file} ${functionName(write.call)} ${strip(write.call.expression).name.text} ${write.kind}`));
   expect(dynamic.sort()).toEqual([...DYNAMIC].sort());
+  // An output stage could take its target from a listed loop, so none may exist in a classified file.
+  expect(classified.flatMap(file => propertyNamed(parse(file), ["$out", "$merge"]).map(p => `${file} ${functionName(p)} ${p.name.text}`)))
+    .toEqual([]);
   // Of the lists those loops and helpers iterate, only the erase list holds the collection.
   expect(USER_SCOPED_COLLECTIONS.filter(([key]) => isTokenString(key))).toEqual([["deviceTokens", "deviceTokens"]]);
   for (const list of [PURGE_ONLY_COLLECTIONS, RESTORABLE, TOKEN_COLLECTIONS]) {
@@ -515,9 +545,15 @@ test("ADR 0072: revocation and issuance are awaited inside the coordinator for t
   const [insert] = directWrites("#insertIssuedToken");
   const issues = callsTo(PAIRINGS, "#insertIssuedToken");
   expect(issues.map(call => runKindOf(runCallOf(call)))).toEqual(["issue"]);
-  const run = runCallOf(issues[0]);
-  expect([settled(insert, ts.findAncestor(insert, ts.isMethodDeclaration)), settled(issues[0], run.arguments[2]), ownerOf(insert)])
-    .toEqual([true, true, run.arguments[0].getText()]);
+  const run = runCallOf(issues[0]), method = ts.findAncestor(insert, ts.isMethodDeclaration);
+  const param = method.parameters[0].name.getText(), argument = strip(issues[0].arguments[0]), owner = strip(run.arguments[0]);
+  expect([settled(insert, method), settled(issues[0], run.arguments[2]), ownerOf(insert), assignsTo(method, param)])
+    .toEqual([true, true, `${param}.userId`, false]);
+  // The argument and the run owner's object resolve to one declaration that nothing rebinds.
+  const declaration = ts.isIdentifier(argument) ? declarationOf(argument) : null;
+  expect(ts.isPropertyAccessExpression(owner) && owner.name.text === "userId" && ts.isIdentifier(owner.expression)).toBe(true);
+  expect([declaration !== null, declaration === declarationOf(owner.expression)]).toEqual([true, true]);
+  expect(assignsTo(ts.findAncestor(declaration, ts.isFunctionLike), argument.text)).toBe(false);
 });
 
 test("ADR 0072: account erasure reaches the collection only through the coordinator", () => {

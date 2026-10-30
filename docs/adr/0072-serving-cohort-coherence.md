@@ -381,8 +381,8 @@ While retention could be active, each of these needs its barrier first:
   recreates it, because that insert resets pending and `denyAll`
   (`services/deviceCredentialPreparation.js:38-45`).
 
-No durable disable exists yet, so retention must not be activated before one
-ships.
+No durable disable or authorized repair primitive exists yet, so retention must
+not be activated before both ship.
 
 Protocol changes keep `AUTHORITY_KEY` and the fail-closed filters
 (`services/deviceCredentialWrites.js:7,72-79`; `services/deviceAuthAuthority.js:11-17`).
@@ -440,7 +440,8 @@ For the chart cache, activation is the flag-on deploy. For device auth, activati
 is the reviewed activation CAS, never a deploy or a boot (design line 249,
 transcribed above), in this order:
 
-1. Ship failed-probe suppression and the disable primitive.
+1. Ship failed-probe suppression, the disable primitive and the authorized repair
+   primitive.
 2. Inject `deviceTokenReuse` in a deploy while the record stays prepared, which
    grants nothing (`services/deviceAuthAuthority.js:11-17`).
 3. After that deploy's predecessor has retired, take the receipt of the injected
@@ -477,7 +478,7 @@ names serving processes.
 | Authority record: protocol, namespace, incarnation, generation, mode, pending and `denyAll` at a causal majority read | Device auth | Owner-run read |
 | Readiness digest equals the read record's incarnation digest | Device auth | Log and read |
 | Pre-readiness retirement: the last process older than `b8608d90` has exited | Device auth | Deploy history and that process's shutdown lines |
-| Disable primitive and failed-probe suppression shipped | Device auth | Repository |
+| Disable primitive, authorized repair primitive and failed-probe suppression shipped | Device auth | Repository |
 
 A receipt describes one serving cohort and decays at the next deploy, restart,
 flag change, fleet-shape change or out-of-band write. A decayed receipt supports
@@ -513,16 +514,28 @@ new infrastructure and stays default-off.
 
 The guard leaves a residual window that the review must accept explicitly. Until
 its SIGTERM, and within the G4 window, a flag-on predecessor keeps serving
-retained bodies in three cases:
+retained bodies in at least these four cases:
 
 - after a successor write whose bump fails or is skipped (`util/userRevision.js:69,86-88`);
 - while a successor's bump is in flight (`:61-85`);
 - after any write by a flag-off successor, which never bumps (`:55,102`), as in a
-  deactivation or rollback deploy.
+  deactivation or rollback deploy;
+- after a successful successor bump, when the predecessor first observes the
+  owner, or observes it again after eviction, and adopts a join or session-policy
+  reuse that began before that write (the first-observation rule under Chart-cache
+  guarantees).
 
-Shutdown-start retirement ends each case at the signal, so the residual runs from
-the successor becoming healthy to the predecessor's SIGTERM, under the second
-assumed bound. A durable cohort registration in `jobLocks` is deferred, and is reconsidered only
+Shutdown-start retirement ends each case at the signal. The residual runs from
+the successor's first write to the predecessor's SIGTERM, and that write can come
+before the successor is healthy: custom-build recovery writes before the server
+listens (`server.js:205-207,217`), and the opponent-MMR job starts at boot with no
+health gate and stamps games at once (`server.js:289`;
+`jobs/opponentMmrEnrichmentJob.js:136-138,446-447`). So the residual is the
+successor's start-to-healthy time, which no assumed bound covers, plus the second
+assumed bound. A successor that never becomes healthy triggers no signal, and its
+boot writes leave the predecessor stale for the whole G4 window. The guard slice
+must hold the successor's background writers until it is healthy, or its review
+must accept this. A durable cohort registration in `jobLocks` is deferred, and is reconsidered only
 if either provider bound cannot be qualified. A pub/sub broadcast is excluded as
 new infrastructure (`apps/api/render.yaml:20-30`).
 
