@@ -119,14 +119,16 @@ test.each([
   ["netMmrByMatchup", "/mmr-by-matchup", ["", "?group_by=matchup", "?tz=Europe%2FBerlin", "?group_by=matchup&tz=Europe%2FBerlin"]],
   ["netMmrByOpponent", "/mmr-by-matchup/opponents", ["", "?opp_race=Z", "?oppRace=T", "?my_race=P", "?search=abc", "?min_pairs=3",
     "?sort=net", "?sort=net&order=asc", "?limit=10", "?offset=5"]],
-])("%s keys every route option and passes the same options to the service", async (method, path, queries) => {
-  const f = fixture();
+])("%s gives each route option its own key and keys the very options object the service receives", async (method, path, queries) => {
+  const f = fixture(), sent = jest.spyOn(f.cache, "send");
   for (const query of queries) {
     expect((await get(f.app, path + query)).status).toBe(200); expect((await get(f.app, path + query)).status).toBe(200);
   }
   expect(f.aggregations[method]).toHaveBeenCalledTimes(queries.length);
-  const options = f.aggregations[method].mock.calls.map(([, , opts]) => JSON.stringify(opts));
-  expect(new Set(options).size).toBe(queries.length);
+  const options = f.aggregations[method].mock.calls.map(([, , opts]) => opts);
+  expect(new Set(options.map(opts => JSON.stringify(opts))).size).toBe(queries.length);
+  // A key built from a narrower copy (a clamped limit, a truncated zone) would let two bodies share one entry.
+  for (const opts of options) expect(sent.mock.calls.some(call => call[5] === opts)).toBe(true);
 });
 
 test.each(ROUTES.slice(8))("%s keys every chart option after route normalization", async (method, path) => {

@@ -57,7 +57,7 @@ const WRITES = [
   ["pending delete and tombstone", () => services.gameControls.deleteGame("a", "g4"), true, true],
 ];
 
-test.each(PATHS)("%s retains owner bodies and every window-only write retires them", async path => {
+test.each(PATHS)("%s retains owner bodies and every listed fenced write retires them", async path => {
   for (const [id, day, result, mmr] of [["g1", "01", "Victory", 4000], ["g2", "02", "Defeat", 4020], ["g3", "03", "Victory", 4005],
     ["g4", "04", "Victory", 4030]]) await services.games.upsert("a", game(id, day, { result, myMmr: mmr }));
   await services.games.upsert("b", game("other", "01", { myMmr: 1000 }));
