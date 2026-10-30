@@ -2,10 +2,13 @@
 
 const { maintainGameStats, immutableSelection, PROTOCOL_VERSION } = require("./gameStatsMaintenance");
 const { statsReadFloorFor } = require("./gameStatsReadFloor");
-const { immutableNeutralMutation, immutableNeutralOwner, applyNeutralMutation, carryUnchangedGameStats, carryDefinitionGameStats, neutralAuthority } = require("./gameStatsCountNeutral");
+const { immutableNeutralMutation, immutableNeutralOwner, applyNeutralMutation, carryUnchangedGameStats, carryDefinitionGameStats, neutralAuthority,
+  carryOpponentRepairGameStats } = require("./gameStatsCountNeutral");
 
 const { types } = require("util");
 const { immutableCustomBuildDefinitionSave, applyCustomBuildDefinitionSave } = require("./gameStatsCustomBuildDefinitionSave");
+const { OPPONENT_REPAIR_KIND, isOpponentGameFamily, repairContextOwner, issueOpponentIdentityRepair, assertReservedDispatch,
+  applyOpponentGameIdentityRepair } = require("./gameStatsOpponentGame");
 
 const MAX_ACTIVE = 8;
 const DELETE_BATCH = 100;
@@ -15,6 +18,9 @@ const DELETE_BATCH = 100;
 const instances = new WeakMap();
 /** @type {WeakMap<GameStatsWrites,DefinitionCapability>} */
 const definitionCapabilities = new WeakMap();
+/** @typedef {{perform:(owner:GameStatsOwner,mutation:Readonly<import('./gameStatsOpponentGame').OpponentGameIdentityRepairMutation>)=>Promise<import('mongodb').UpdateResult>}} OpponentRepairCapability */
+/** @type {WeakMap<GameStatsWrites,OpponentRepairCapability>} */
+const opponentRepairCapabilities = new WeakMap();
 
 /** Eager writer maintenance; request-local readers use separate strict proof.
  * A real owner write conflicts with fence acquisition/erasure on that row.
@@ -30,6 +36,8 @@ class GameStatsWrites {
         if (this.stopped) throw failure("game_stats_writer_stopping");
         return applyCustomBuildDefinitionSave(this.db, owner, mutation, session, this.logger);
       }, Object.freeze({}), null, mutation) });
+    opponentRepairCapabilities.set(this, { perform: (owner, mutation) => this.#perform(owner,
+      session => applyOpponentGameIdentityRepair(this.db, owner, mutation, session), Object.freeze({}), null, mutation) });
   }
 
   /** Capture identity before external payload work; never rebind on retry.
@@ -125,9 +133,9 @@ class GameStatsWrites {
           $set: { gameStatsWriterStatus: "unsupported" },
           $unset: { gameStats: "", gameStatsRevision: "", gameStatsProtocolVersion: "", gameStatsMaintenance: "" },
         }, { upsert: false });
-        if (retired.matchedCount !== 1) throw failure("game_stats_authority_changed");
+        if (!retiredExactly(retired, mutation)) throw failure("game_stats_authority_changed");
       }
-      return work(undefined);
+      return compatibilityWork(this, work, mutation);
     }
     if (!this.db.client || owner.id === null) throw failure("game_stats_transactions_required");
     const prepared = statsReadFloorFor(this.db, this.logger)();
@@ -135,6 +143,7 @@ class GameStatsWrites {
     // The barrier may outlive HTTP closure or shutdown. Never dispatch new
     // transaction work after stop; the charged task owns the barrier lifetime.
     if (this.stopped) throw failure("game_stats_writer_stopping");
+    assertReservedDispatch(owner, mutation);
     const session = this.db.client.startSession({ causalConsistency: true });
     session.advanceOperationTime(floor);
     try {
@@ -221,8 +230,49 @@ function gameStatsWritesFor(db, logger) {
  * @param {Readonly<import('./gameStatsCountNeutral').ReservedCarryMutation>} mutation
  * @param {import('mongodb').ClientSession} session */
 function performNeutral(db, owner, mutation, session) {
+  if (mutation.kind === OPPONENT_REPAIR_KIND) return carryOpponentRepairGameStats(db, owner, mutation, session);
   return mutation.kind === "customBuildDefinitionSave" ? carryDefinitionGameStats(db, owner, mutation, session)
     : carryUnchangedGameStats(db, owner, mutation, session);
+}
+
+/** Opponent-game families also require an acknowledged single retirement;
+ * every existing callback keeps its matched-count-only behavior.
+ * @param {import('mongodb').UpdateResult} retired
+ * @param {Readonly<import('./gameStatsCountNeutral').ReservedCarryMutation>|null} mutation */
+function retiredExactly(retired, mutation) {
+  return retired.matchedCount === 1 && (!isOpponentGameFamily(mutation?.kind) || retired.acknowledged === true);
+}
+
+/** After acknowledged retirement, a stopped writer never dispatches opponent
+ * game work; existing callback families keep their prior behavior.
+ * @template T @param {GameStatsWrites} writer
+ * @param {(session:import('mongodb').ClientSession|undefined)=>Promise<T>} work
+ * @param {Readonly<import('./gameStatsCountNeutral').ReservedCarryMutation>|null} mutation @returns {Promise<T>} */
+function compatibilityWork(writer, work, mutation) {
+  if (writer.stopped && isOpponentGameFamily(mutation?.kind)) throw failure("game_stats_writer_stopping");
+  return work(undefined);
+}
+
+/** A fixed fenced heal, not an arbitrary admitted callback. It repeats write()'s
+ * stop, capacity and pending accounting, so stopAndDrain awaits it; only a
+ * genuine live repair context with the identity descriptor can be issued.
+ * @param {GameStatsWrites} writer @param {Readonly<import('./gameStatsOpponentGame').OpponentRepairContext>} context
+ * @param {import('./gameStatsOpponentGame').OpponentGameIdentityMutation} input
+ * @returns {Promise<import('mongodb').UpdateResult>} */
+function writeOpponentGameIdentityRepair(writer, context, input) {
+  const capability = opponentRepairCapabilities.get(writer);
+  if (!capability) return Promise.reject(failure("game_stats_repair_writer_required"));
+  if (writer.stopped) return Promise.reject(failure("game_stats_writer_stopping"));
+  if (writer.pending.size >= MAX_ACTIVE) return Promise.reject(failure("game_stats_writer_busy"));
+  let owner, mutation;
+  try {
+    owner = immutableNeutralOwner(/** @type {GameStatsOwner} */ (repairContextOwner(context)));
+    mutation = issueOpponentIdentityRepair(context, owner, input);
+  } catch (error) { return Promise.reject(error); }
+  const task = capability.perform(owner, mutation);
+  writer.pending.add(task);
+  void task.then(() => writer.pending.delete(task), () => writer.pending.delete(task));
+  return task;
 }
 
 /** @template T @typedef {{ok:true,value:T}|{ok:false,error:unknown}} DefinitionOutcome */
@@ -361,4 +411,5 @@ function assertGameStatsContext(db, nodeEnv) {
     && (db.gameStatsTransactions !== true || typeof db.client?.startSession !== "function")) throw failure("game_stats_transactions_required");
 }
 
-module.exports = { GameStatsWrites, gameStatsWritesFor, sessionArgs, assertGameStatsContext, PROTOCOL_VERSION, MAX_ACTIVE, DELETE_BATCH, reserveCustomDefinitionSave };
+module.exports = { GameStatsWrites, gameStatsWritesFor, sessionArgs, assertGameStatsContext, PROTOCOL_VERSION, MAX_ACTIVE, DELETE_BATCH, reserveCustomDefinitionSave,
+  writeOpponentGameIdentityRepair };

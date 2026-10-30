@@ -1,5 +1,7 @@
 "use strict";
-const { gameWrite } = require("../util/userRevision");
+const { gameStatsWritesFor } = require("./gameStatsWrites");
+const { snapshotStampGame, regionStampPossible, gameStampAdmission, backfillStampAdmission, stampOpponentGameRegion,
+  healOpponentGameIdentity } = require("./opponentGameStamps");
 
 const { STATS_GAME_MATCH, isStatsGame } = require("../util/gameVisibility");
 
@@ -299,6 +301,9 @@ class OpponentsService {
   constructor(db, pepper, opts = {}) {
     this.userRevision = opts.userRevision || null;
     this.db = db;
+    // The same per-db count-neutral writer GdprService and GamesService use;
+    // production composition passes the full connected context.
+    this.gameStatsWrites = gameStatsWritesFor(/** @type {import('../db/connect').DbContext} */ (db), opts.logger);
     this.pepper = pepper;
     this.gameDetails = opts.gameDetails || null;
     // Optional pino logger. Used for the structured "pulseCharacterId
@@ -1902,10 +1907,13 @@ class OpponentsService {
    *   result: 'Victory'|'Defeat'|'Tie',
    *   opening?: string,
    *   playedAt: Date,
-   * }} game
+   * }} input
+   * @param {{ statsOwner?: import('./gameStatsWrites').GameStatsOwner }} [options]
+   *        Ingest forwards its batch owner; only omission permits one capture.
    */
-  async recordGame(userId, game) {
-    if (!game.pulseId) throw new Error("pulseId required");
+  async recordGame(userId, input, options) {
+    if (!input.pulseId) throw new Error("pulseId required");
+    const game = snapshotStampGame(input), admission = await gameStampAdmission(this.gameStatsWrites, userId, options, regionStampPossible(game));
     const displayHash = hmac(this.pepper, game.displayName || "");
     const winInc = game.result === "Victory" ? 1 : 0;
     const lossInc = game.result === "Defeat" ? 1 : 0;
@@ -1920,8 +1928,7 @@ class OpponentsService {
       { userId, pulseId: game.pulseId },
       {
         projection: {
-          pulseCharacterId: 1,
-          lastSeen: 1,
+          pulseCharacterId: 1, lastSeen: 1,
           mmr: 1,
           mmrFetchedAt: 1,
           region: 1,
@@ -2078,7 +2085,7 @@ class OpponentsService {
         "opponent_pulse_character_id_upgraded",
       );
     }
-    await this._stampGameRegion(userId, game.gameId, game, set);
+    await this._stampGameRegion(userId, game.gameId, game, set, admission);
     return {
       upgraded: Boolean(pulseCharIdChange),
       from: pulseCharIdChange ? pulseCharIdChange.from : null,
@@ -2347,10 +2354,13 @@ class OpponentsService {
    *   mmr?: number,
    *   leagueId?: number,
    *   playedAt: Date,
-   * }} game
+   * }} input
+   * @param {{ statsOwner?: import('./gameStatsWrites').GameStatsOwner }} [options]
+   *        Same admission contract as ``recordGame``.
    */
-  async refreshMetadata(userId, game) {
-    if (!game.pulseId) throw new Error("pulseId required");
+  async refreshMetadata(userId, input, options) {
+    if (!input.pulseId) throw new Error("pulseId required");
+    const game = snapshotStampGame(input), admission = await gameStampAdmission(this.gameStatsWrites, userId, options, regionStampPossible(game));
     // A legacy agent may re-upload an already-quarantined resume artifact
     // without sending the newer resume metadata. GamesService preserves the
     // server-owned quarantine flag, so consult that durable row before this
@@ -2379,8 +2389,7 @@ class OpponentsService {
       { userId, pulseId: game.pulseId },
       {
         projection: {
-          pulseCharacterId: 1,
-          lastSeen: 1,
+          pulseCharacterId: 1, lastSeen: 1,
           mmr: 1,
           mmrFetchedAt: 1,
           region: 1,
@@ -2480,7 +2489,7 @@ class OpponentsService {
         "opponent_pulse_character_id_upgraded",
       );
     }
-    await this._stampGameRegion(userId, game.gameId, game, set);
+    await this._stampGameRegion(userId, game.gameId, game, set, admission);
     return {
       matched: res.matchedCount || 0,
       modified: res.modifiedCount || 0,
@@ -2502,17 +2511,16 @@ class OpponentsService {
    * @param {string|undefined} gameId
    * @param {Record<string, any>} incomingGame
    * @param {Record<string, any>} set The opponents-row $set we just wrote.
+   * @param {import('./opponentGameStamps').GameStampAdmission} [admission]
+   *        The producer's single admission; this helper never captures.
    * @returns {Promise<void>}
    */
-  async _stampGameRegion(userId, gameId, incomingGame, set) {
+  async _stampGameRegion(userId, gameId, incomingGame, set, admission) {
     if (typeof gameId !== "string" || !gameId) return;
     if (typeof incomingGame.region === "string") return;
     if (typeof set.region !== "string") return;
     try {
-      await gameWrite(this.userRevision, userId, () => this.db.games.updateOne(
-        { userId, gameId },
-        { $set: { "opponent.region": set.region } },
-      ));
+      await stampOpponentGameRegion(this.gameStatsWrites, this.userRevision, userId, gameId, set.region, admission);
     } catch (err) {
       this.logger.warn(
         { err, userId, gameId },
@@ -2531,26 +2539,22 @@ class OpponentsService {
    * @param {string} userId
    * @param {string} pulseId
    * @param {Record<string, any>} set The opponents-row $set just written.
+   * @param {import('./opponentGameStamps').GameStampAdmission} [admission]
+   *        The producer's single admission; this helper never captures.
    * @returns {Promise<number>}
    */
-  async _backfillGameIdentity(userId, pulseId, set) {
-    /** @type {Record<string, string>} */
+  async _backfillGameIdentity(userId, pulseId, set, admission) {
+    /** @type {{ region?: string, pulseCharacterId?: string }} */
     const update = {};
     if (typeof set.region === "string") {
-      update["opponent.region"] = set.region;
+      update.region = set.region;
     }
     if (typeof set.pulseCharacterId === "string") {
-      update["opponent.pulseCharacterId"] = set.pulseCharacterId;
+      update.pulseCharacterId = set.pulseCharacterId;
     }
     if (Object.keys(update).length === 0) return 0;
     try {
-      const res = await gameWrite(this.userRevision, userId, () => this.db.games.updateMany(
-        {
-          userId,
-          "opponent.pulseId": pulseId,
-        },
-        { $set: update },
-      ));
+      const res = await healOpponentGameIdentity(this.gameStatsWrites, this.userRevision, userId, pulseId, update, admission);
       return res.modifiedCount || 0;
     } catch (err) {
       this.logger.warn(
@@ -2783,7 +2787,11 @@ class OpponentsService {
    *   limit?: number,
    *   maxAgeSec?: number,
    *   force?: boolean,
+   *   statsOwner?: import('./gameStatsWrites').GameStatsOwner,
+   *   repair?: import('./gameStatsOpponentGame').OpponentRepairContext,
    * }} [opts]
+   *        A repair forwards its genuine fence context; only omission of
+   *        both statsOwner and repair permits one capture before the scan.
    * @returns {Promise<{
    *   scanned: number,
    *   resolved: number,
@@ -2824,11 +2832,11 @@ class OpponentsService {
         },
       ];
     }
+    const admission = await backfillStampAdmission(this.gameStatsWrites, userId, opts);
     const rows = await this.db.opponents
       .find(filter, {
         projection: {
-          _id: 0,
-          pulseId: 1,
+          _id: 0, pulseId: 1,
           toonHandle: 1,
           displayNameSample: 1,
         },
@@ -2926,7 +2934,7 @@ class OpponentsService {
         // Heal stable identity metadata only. Current Pulse MMR never
         // back-stamps prior games; the recent-row enrichment job owns
         // that bounded, race-correct write from this deploy forward.
-        await this._backfillGameIdentity(userId, row.pulseId, set);
+        await this._backfillGameIdentity(userId, row.pulseId, set, admission);
       }
     }
     return { scanned: rows.length, resolved, updated, skipped };
@@ -3264,6 +3272,8 @@ class OpponentsService {
    *
    * @param {string} userId
    * @param {string} pulseId
+   * @param {{ statsOwner?: import('./gameStatsWrites').GameStatsOwner }} [options]
+   *        Same admission contract as ``recordGame``.
    * @returns {Promise<null | {
    *   resolvedPulseCharacterId: boolean,
    *   pulseCharacterId: string|null,
@@ -3272,15 +3282,15 @@ class OpponentsService {
    *   gamesRestamped: number,
    * }>}
    */
-  async retryPulseResolution(userId, pulseId) {
+  async retryPulseResolution(userId, pulseId, options) {
     if (!userId) throw new Error("userId required");
     if (typeof pulseId !== "string" || !pulseId) throw new Error("pulseId required");
+    const admission = await gameStampAdmission(this.gameStatsWrites, userId, options, true);
     const row = await this.db.opponents.findOne(
       { userId, pulseId },
       {
         projection: {
-          _id: 0,
-          pulseId: 1,
+          _id: 0, pulseId: 1,
           toonHandle: 1,
           pulseCharacterId: 1,
           displayNameSample: 1,
@@ -3364,7 +3374,7 @@ class OpponentsService {
     const gamesRestamped = await this._backfillGameIdentity(
       userId,
       pulseId,
-      { region: set.region, pulseCharacterId: charId },
+      { region: set.region, pulseCharacterId: charId }, admission,
     );
 
     this.logger.info(

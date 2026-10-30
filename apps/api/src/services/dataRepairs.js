@@ -36,12 +36,12 @@ class DataRepairsService {
     void task.then(() => this.pending.delete(task), () => this.pending.delete(task));
     return { accepted: true, id, kind };
   }
-  /** @param {string} userId @param {string} kind @param {string} id @param {string} field @param {{assert:()=>Promise<void>, id:string, timer:NodeJS.Timeout,owner?:import('./gameStatsWrites').GameStatsOwner|null}} fence */
+  /** @param {string} userId @param {string} kind @param {string} id @param {string} field @param {{assert:()=>Promise<void>, id:string, timer:NodeJS.Timeout,owner?:import('./gameStatsWrites').GameStatsOwner|null,liveness?:object}} fence */
   async run(userId, kind, id, field, fence) {
     let success = false;
     try {
       await fence.assert();
-      if (kind === "opponents") await this.gdpr.rebuildOpponentsAndHealForUser(userId);
+      if (kind === "opponents") await this.gdpr.rebuildOpponentsAndHealForUser(userId, { repair: { owner: fence.owner, fenceId: fence.id, kind: "repair_opponents", handle: fence.liveness } });
       else if (kind === "custom-builds") {
         if (!this.gdpr.customBuilds) throw new Error("custom_builds_unavailable");
         await this.gdpr.customBuilds.reclassifyAll(userId, { assertLease: fence.assert, owner: fence.owner, fenceId: fence.id });

@@ -6,6 +6,8 @@ const { UserRevision } = require("../src/util/userRevision");
 const { GamesService } = require("../src/services/games");
 const { PerGameComputeService } = require("../src/services/perGameCompute");
 const { OpponentsService } = require("../src/services/opponents");
+const { gameStampAdmission } = require("../src/services/opponentGameStamps");
+const { gameStatsWritesFor } = require("../src/services/gameStatsWrites");
 let mongo, db, revisions;
 const game = (overrides = {}) => ({ gameId: "game", date: new Date(), result: "Victory", myRace: "Protoss", map: "Site Delta LE", durationSec: 600,
   opponent: { race: "Zerg", pulseId: "opponent" }, ...overrides });
@@ -51,9 +53,10 @@ test("macro slim commit survives later detail failure and always retires old mea
 test("swallowed region/identity write failures still retire filter membership", async () => {
   await db.games.insertOne({ ...game(), userId: "a" });
   const opponents = new OpponentsService(db, Buffer.alloc(32), { userRevision: revisions });
+  const admission = await gameStampAdmission(gameStatsWritesFor(db), "a", undefined, true);
   for (const [method, collectionMethod, args] of [
-    ["_stampGameRegion", "updateOne", ["a", "game", {}, { region: "EU" }]],
-    ["_backfillGameIdentity", "updateMany", ["a", "opponent", { region: "NA", pulseCharacterId: "123" }]],
+    ["_stampGameRegion", "updateOne", ["a", "game", {}, { region: "EU" }, admission]],
+    ["_backfillGameIdentity", "updateMany", ["a", "opponent", { region: "NA", pulseCharacterId: "123" }, admission]],
   ]) {
     const original = db.games[collectionMethod].bind(db.games); const before = await revisions.snapshot("a");
     const spy = jest.spyOn(db.games, collectionMethod).mockImplementationOnce(async (...input) => { await original(...input); throw new Error("lost stamp ack"); });

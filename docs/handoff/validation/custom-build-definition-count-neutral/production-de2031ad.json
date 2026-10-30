@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "status": "DELIVERED_EXACT_SOURCE_DEPLOYED_SIGNED_IN_ACCEPTANCE_NOT_PERFORMED",
+  "pullRequest": 821,
+  "testedHead": "bd25dae1ae352dc1ebdf87e274e4734739af4625",
+  "testedSourceCommit": "c16ae8fcad0ba9aeaf8c1549fa5035839ab8660b",
+  "mergedMain": "de2031adcf4cc7a0cfe3e18cfae0ff0a3891b49e",
+  "parent": "059a168bb2619cc7c16625778ac99687ce39b353",
+  "tree": "61f19870be6ad27dc5d7ec86966d49cd749757b1",
+  "treeEqualsTestedHead": true,
+  "exactHeadCI": {
+    "run": 41028268555,
+    "job": 123971515307,
+    "apiPassed": 7703,
+    "existingSkippedTests": 9,
+    "suitesPassed": 516,
+    "existingSkippedSuite": 1,
+    "wholeAPITypes": "pass",
+    "configuredLint": "pass (757 warnings, 0 errors; equals the PR820 baseline)",
+    "requiredChecks": "all success"
+  },
+  "deployment": {
+    "api": {
+      "environment": "main - sc2tools-api",
+      "deploymentId": 7439388960,
+      "state": "success",
+      "at": "2026-10-30T13:25:52Z"
+    },
+    "web": {
+      "environment": "Production",
+      "deploymentId": 7439485013,
+      "state": "success",
+      "at": "2026-10-30T13:29:28Z"
+    },
+    "bothForExactMergedMain": true
+  },
+  "publicHealth": {
+    "api": "GET /v1/health returned 200 with status ok, mongoPing true and mongoWrite true at 2026-10-30T13:29:47Z.",
+    "web": "GET /api/ping returned 200 with status ok at 2026-10-30T13:29:48Z."
+  },
+  "readOnlyAcceptance": {
+    "signedIn": false,
+    "performed": false,
+    "reason": "The built-in browser showed the public landing page with a Sign in link. No session was signed in, and none was created or attempted.",
+    "ownedTabsClosed": 1,
+    "productRecordsOrSettingsChanged": false,
+    "nativeApplicationLaunched": false
+  },
+  "localProof": "The separate local-verification receipt retains the 1393-case / 71-file gate, its retained type, lint and test-batch failures, and the process settlement.",
+  "limitations": [
+    "No production save, rename or tag transaction was forced or instrumented. Local real-Mongo cases and exact-head API CI establish the implementation behavior.",
+    "No signed-in desktop acceptance, mobile, web build or browser-matrix proof, enabled-cache hit, savings, complete writer/fleet coverage or roadmap completion is claimed.",
+    "No private account details, DOM, images, provider identifiers or private URLs are copied here."
+  ],
+  "sourceReceiptSha256": "951ee134820a1bcd74c49f30fca452bb70f0ed02b5b0650b57937e5b7e98c901"
+}

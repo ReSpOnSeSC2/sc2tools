@@ -760,11 +760,11 @@ function buildGamesRouter(deps) {
                 ...opponentPayload,
                 result: game.result,
                 opening: game.opponent.opening,
-              });
+              }, { statsOwner });
             } else {
               refreshResult = await deps.opponents.refreshMetadata(
                 userId,
-                opponentPayload,
+                opponentPayload, { statsOwner },
               );
             }
           } catch (err) {
