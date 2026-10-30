@@ -338,9 +338,9 @@ function buildAggregationsRouter(deps) {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
       const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
-      res.json(
-        await deps.aggregations.netMmrByMatchup(userId, filters, { tz, groupByOwnRace: req.query.group_by === "matchup" }),
-      );
+      const options = { tz, groupByOwnRace: req.query.group_by === "matchup" };
+      await send(req, res, userId, "netMmrByMatchup", filters, options,
+        () => deps.aggregations.netMmrByMatchup(userId, filters, options));
     } catch (err) {
       next(err);
     }
@@ -364,18 +364,18 @@ function buildAggregationsRouter(deps) {
       const order = parseSortOrder(req.query.order);
       const limit = parseFiniteInt(req.query.limit);
       const offset = parseFiniteInt(req.query.offset);
-      res.json(
-        await deps.aggregations.netMmrByOpponent(userId, filters, {
-          opponentRace,
-          myRace,
-          search,
-          minPairs,
-          sort,
-          order,
-          limit,
-          offset,
-        }),
-      );
+      // Exactly the service's options, so every input that changes the drill-down is in the key.
+      const options = {
+        opponentRace,
+        myRace,
+        search,
+        minPairs,
+        sort,
+        order,
+        limit,
+        offset,
+      };
+      await send(req, res, userId, "netMmrByOpponent", filters, options, () => deps.aggregations.netMmrByOpponent(userId, filters, options));
     } catch (err) {
       next(err);
     }

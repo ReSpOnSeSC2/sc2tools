@@ -33,16 +33,19 @@ function fixture() {
 }
 const routes = [["summary", "/summary"], ["macroSummary", "/macro/summary"], ["mmrProgression", "/timeseries/mmr"],
   ["myBuildMixOverTime", "/timeseries/my-builds"], ["oppStrategyMixOverTime", "/timeseries/opp-strategies"],
-  ["current", "/streak", "streak"], ["report", "/macro/report", "macroReport"]];
+  ["current", "/streak", "streak"], ["report", "/macro/report", "macroReport"],
+  ["netMmrByMatchup", "/mmr-by-matchup"], ["netMmrByOpponent", "/mmr-by-matchup/opponents"]];
 test.each(routes)("%s serves real aggregates and retires ingest, reupload, quarantine and unknown commits", async (method, path, service = "aggregations") => {
-  const f = fixture(); await f.games.upsert("a", game("one"));
+  // "zero" pairs with "one"; each later write changes an accepted net-MMR pair as well as the other charts.
+  const f = fixture(); await f.games.upsert("a", game("zero", { date: new Date("2025-12-31T12:00:00Z"), myMmr: 3950 }));
+  await f.games.upsert("a", game("one"));
   // A second owner's data must never enter a retained response.
   await f.games.upsert("b", game("other", { macroScore: 1, myMmr: 1000 }));
   const spy = jest.spyOn(f[service], method);
   let previous;
   for (const mutate of [null,
-    () => f.games.upsert("a", game("two", { date: new Date("2026-02-01T12:00:00Z"), macroScore: 90, myMmr: 4500, myBuild: "Air", opponent: { race: "Terran", strategy: "Bio" } })),
-    () => f.games.upsert("a", game("two", { date: new Date("2026-03-01T12:00:00Z"), result: "Defeat", macroScore: 80, myMmr: 4300, myBuild: "Tech",
+    () => f.games.upsert("a", game("two", { date: new Date("2026-02-01T12:00:00Z"), macroScore: 90, myMmr: 4100, myBuild: "Air", opponent: { race: "Terran", strategy: "Bio" } })),
+    () => f.games.upsert("a", game("two", { date: new Date("2026-03-01T12:00:00Z"), result: "Defeat", macroScore: 80, myMmr: 4050, myBuild: "Tech",
       top3Leaks: [{ name: "Idle Production", mineral_cost: 300, penalty: 9 }] })),
     () => f.games.quarantineResumedReplay("a", game("two")),
   ]) {

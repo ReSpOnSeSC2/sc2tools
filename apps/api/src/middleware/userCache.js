@@ -6,7 +6,7 @@ const TAG_BYTES = 72;
 // Mixed routes require their exact captured global-curve dependency as well.
 const DEPENDENT_ROUTES = new Set(["matchups", "maps", "mapMatchups", "buildVsStrategy"]);
 const ALLOWED_ROUTES = new Set(["timeseries", "dayHourHeatmap", "lengthBuckets", "activityCalendar", "momentum", "mapTrend",
-  "summary", "macroSummary", "mmrProgression", "myBuildMixOverTime", "oppStrategyMixOverTime", "streak", "macroReport", ...DEPENDENT_ROUTES]);
+  "summary", "macroSummary", "mmrProgression", "myBuildMixOverTime", "oppStrategyMixOverTime", "streak", "macroReport", "netMmrByMatchup", "netMmrByOpponent", ...DEPENDENT_ROUTES]);
 const LIMITS = Object.freeze({ bytes: 64 * 1024 * 1024, entryBytes: 512 * 1024,
   keyBytes: 16 * 1024, entries: 512, ttlMs: 600000, active: 4, ownerActive: 2,
   waiting: 32, subscribers: 16, responses: 64, queueMs: 5000, responseMs: 30000 });

@@ -6,15 +6,16 @@ no receipt and activates nothing. `USER_CACHE_ENABLED` stays off and
 faster-dashboards remains partial.
 
 Source paths are relative to `apps/api/src/` unless they start with `apps/` or
-`docs/`. Line numbers were checked at slice DA2's tested source (`1dde734b`).
-The ADR was added at application source `27b9aeb0`; C1 changed the cited
-allowlist and route lines in place and DA2 added lease lines after the cited
-ones, so every citation still resolves.
+`docs/`. Line numbers were checked at slice C2's tested source (`f9cc5ccc`).
+The ADR was added at application source `27b9aeb0`. C1 and C2 changed the cited
+allowlist line in place and edited only uncited route lines without changing
+line counts, and DA2 added lease lines after the cited ones, so every citation
+still resolves.
 
 ## Context
 
 Two retained-state features are built but inactive: the default-off per-user
-chart cache, which covers seventeen response kinds in source, and the uninjected
+chart cache, which covers nineteen response kinds in source, and the uninjected
 retained device-auth REST adapter. Both keep their state in one process. The
 roadmap allows wider cache coverage only after "complete dependency/revocation
 and shared-fleet audits" (`docs/handoff/roadmap-progress-2026-10-28.json:1963`)
@@ -152,7 +153,14 @@ retire (`app.js:1004-1007,1011-1019`): the owner's in-flight TrendsRequests join
 and the session-policy reuse. Any caller that skips the guard can seed that state:
 
 - HEAD requests (`middleware/userCache.js:109-111`);
-- coaching's MMR progression (`routes/coaching.js:570-576`);
+- coaching's MMR progression and net MMR by matchup (`routes/coaching.js:570-583`).
+  The net-MMR call's join key equals a guarded `/v1/mmr-by-matchup` request's for
+  the same owner when that request sends `map_pool=ladder`, `game_size=1v1`,
+  `group_by=matchup`, the same other filters and a `tz` string identical to the
+  zone coaching passes (its trimmed, valid `tz`, else `UTC`). The guarded route
+  keys `tz` raw, so an omitted or padded `tz` never matches
+  (`routes/coaching.js:560-569,857-866`; `routes/aggregations.js:340-341`;
+  `services/aggregations.js:749`; `services/trendsRequests.js:126,129`);
 - uncovered routes that share an inner key, such as the matchup time series
   (`routes/aggregations.js:139-153`), whose `dateRange` probe
   (`services/aggregations.js:634`) the covered timeseries, MMR progression and
@@ -175,13 +183,31 @@ at the pull request's head, and the pull request description states what items 8
 9 and 11 require. Admission wires an unchanged computation: items 1-4 already
 hold at the base.
 
-1. **Owner games only.** Every database read in the computation is on `games`
-   and starts with `gamesMatchStage(userId, filters)` (`util/parseQuery.js:240-247`).
-   There is no `$lookup`, `$unionWith` or other collection.
+1. **Owner games only.** Every database read in the computation is on `games`,
+   is scoped to the owner's `userId` and uses `gamesMatchStage(userId, filters)`
+   (`util/parseQuery.js:240-247`) to select every row the response counts. It
+   normally starts with that stage. A read that first scans a wider set of the
+   owner's rows, as the net-MMR pairing window does with
+   `{ userId, isResumedFromReplay: { $ne: true } }` before `$setWindowFields`
+   (`services/trendsNetMmr.js:95,130-150`), lets rows the stage excludes
+   (quarantined, hidden, pending-deletion, tombstoned and out-of-filter rows)
+   affect the response only through fields named with file:line evidence: their
+   window membership, partition and sort order, and the values `$shift` copies
+   into counted rows. Item 2 covers those fields on those rows. The macro report's
+   date-extremes pre-pass, admitted in C1 under the earlier wording, is the other
+   wider read: it replaces any `macro_min`/`macro_max` range with a type test
+   (`services/macroReport.js:107-122`; `util/parseQuery.js:288-295`), so `date` and
+   `macroScore` on scored rows outside the range set the trend split, while the
+   owner, deletion and exclusion clauses stay; those fields' writers are fenced
+   (`services/perGameCompute.js:498`;
+   `apps/api/__tests__/userCacheStreakMacro.mongo.test.js:42-70`). There is no
+   `$lookup`, `$unionWith` or other collection.
 2. **Fenced writers.** Every field it reads, filter fields included, is written
    only inside `gameWrite` or `UserRevision.run` (`util/userRevision.js:98-106,163`),
-   or, when a new kind is admitted, is already read by a covered kind. Out-of-band
-   writers stay G1 gaps.
+   or, when a new kind is admitted, is already read by a covered kind on the same
+   rows. A field the computation reads, other than through the stage's own
+   predicate, on rows that `gamesMatchStage` excludes, or read by no covered kind,
+   needs its own writer evidence. Out-of-band writers stay G1 gaps.
 3. **No completed owner-data memo.** An inner memo of owner data must be retired
    by the `UserRevision` invalidator (`app.js:1004-1007,1011-1019`;
    `services/trendsRequests.js:31-36`). A completed-result memo disqualifies the
