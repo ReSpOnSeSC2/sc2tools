@@ -37,18 +37,37 @@ export function poolMapRows(pool: readonly string[], cells: readonly MapMatchupS
   });
 }
 
-export function vetoMaps(rows: readonly VetoMap[], matchup: string, amount: number): string[] {
-  return rows.map((row) => ({ name: row.name, record: matchup ? row.cells[matchup] : row.all }))
-    .filter((row) => row.record?.decided >= 5 && row.record.ci !== null)
-    .sort((a, b) => a.record.ci!.low - b.record.ci!.low || currentMapPoolKey(a.name).localeCompare(currentMapPoolKey(b.name)))
-    .slice(0, Math.max(1, Math.min(3, Math.trunc(amount) || 1))).map((row) => row.name);
+/** A map needs this many decided games in the ranking matchup before it can be vetoed. */
+export const VETO_MIN_DECIDED = 5;
+/** Virtual games at the pool average blended into every map, so a short run moves its rate less than a long record. */
+export const VETO_PRIOR_GAMES = 20;
+const rankedRecord = (row: VetoMap, matchup: string): MapRecord | undefined => matchup ? row.cells[matchup] : row.all;
+
+/** Decided-game win rate across every pool map in the ranking matchup; "" ranks all matchups together. */
+export function poolWinRate(rows: readonly VetoMap[], matchup: string): number | null {
+  let wins = 0, decided = 0;
+  for (const row of rows) { const record = rankedRecord(row, matchup); wins += record?.wins ?? 0; decided += record?.decided ?? 0; }
+  return decided ? wins / decided : null;
 }
 
-export function mostPlayedMapMatchup(cells: readonly MapMatchupStats[], random = false): string {
-  if (random) return "";
-  const totals = new Map<string, number>();
-  for (const cell of cells) { const race = opponentRace(cell.matchup); if (/^[PTZ]$/.test(race)) totals.set(race, (totals.get(race) ?? 0) + count(cell.total)); }
-  return [...totals].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? "";
+/** Beta-prior posterior mean: the map's wins and decided games plus VETO_PRIOR_GAMES at the pool average. */
+export function adjustedWinRate(record: MapRecord, average: number): number {
+  return (record.wins + VETO_PRIOR_GAMES * average) / (record.decided + VETO_PRIOR_GAMES);
+}
+
+/**
+ * Lowest sample-adjusted win rates in the ranking matchup. Ladder vetoes apply against every opponent race, so
+ * "" (all matchups) is the planner default. Wilson lower bounds are not used: a smaller sample has a lower bound,
+ * which would veto short winning runs ahead of long losing records. Ties prefer the longer record, then the name.
+ */
+export function vetoMaps(rows: readonly VetoMap[], matchup: string, amount: number): string[] {
+  const average = poolWinRate(rows, matchup);
+  if (average === null) return [];
+  return rows.flatMap((row) => {
+    const record = rankedRecord(row, matchup);
+    return record && record.decided >= VETO_MIN_DECIDED ? [{ name: row.name, decided: record.decided, score: adjustedWinRate(record, average) }] : [];
+  }).sort((a, b) => a.score - b.score || b.decided - a.decided || currentMapPoolKey(a.name).localeCompare(currentMapPoolKey(b.name)))
+    .slice(0, Math.max(1, Math.min(3, Math.trunc(amount) || 1))).map((row) => row.name);
 }
 
 /** The public index already emits both sides; never complement a cell containing ties. */

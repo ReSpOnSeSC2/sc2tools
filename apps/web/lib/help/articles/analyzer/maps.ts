@@ -4,7 +4,7 @@ const article: HelpArticle = {
   slug: "maps",
   title: "Maps & the veto planner",
   summary:
-    "Compare your record on the current ladder pool, choose vetoes with sample-aware Wilson rankings, and inspect the games behind every map and matchup.",
+    "Compare your record on the current ladder pool, choose vetoes by sample-adjusted win rate across all matchups, and inspect the games behind every map and matchup.",
   category: "analyzer",
   audience: "player",
   signedInOnly: true,
@@ -24,7 +24,7 @@ const article: HelpArticle = {
     "recent form",
     "map preview",
   ],
-  updated: "2026-10-25",
+  updated: "2026-10-30",
   body: [
     {
       type: "paragraph",
@@ -50,10 +50,10 @@ const article: HelpArticle = {
     { type: "heading", text: "Using it to pick vetoes", anchor: "vetoes" },
     {
       type: "paragraph",
-      text: "The Current ladder pool card ranks maps by the lower end of their 95% Wilson interval. The bottom one to three maps receive Suggested veto. A map needs at least five decided games in the ranking matchup; low-sample maps are never vetoed, even at 0% win rate. Ties and other undecided results do not count in the win-rate denominator or this five-game minimum.",
+      text: "The Current ladder pool card suggests vetoing the maps where your win rate in the ranking matchup is lowest after adjusting for sample size. Each map's record gets 20 extra games at your average across the pool in that matchup, so a short run moves it less than a long record. For example, with a 55% pool average, 3–4 (43%) counts as about 52% and 13–15 (46%) as 50%, so the longer losing record is suggested first. The lowest one to three maps receive Suggested veto, labeled with the matchup they were ranked on. A map needs at least five decided games in the ranking matchup; low-sample maps are never vetoed, even at 0% win rate. Ties and other undecided results do not count in the win-rate denominator or this five-game minimum.",
     },
     { type: "list", items: [
-      "Ranking matchup defaults to your most-played opponent race in the sample; a Random race filter defaults to All matchups. This control changes the recommendation while all matchup columns stay visible. The planner compares every opponent race, independently of an opponent-race filter above it.",
+      "Ranking matchup defaults to All matchups, because a ladder veto removes the map against every opponent race. Choose vs P, vs T or vs Z to rank one matchup only, for example before a series against a known race; the suggestion then reads vs Z only. This control changes the recommendation while all matchup columns stay visible. The planner compares every opponent race, independently of an opponent-race filter above it.",
       "Choose Filter range, Last 90 days or Current season. Current season needs a measured season start. Other global filters still apply. Set your own race in the filter bar to compare the matching side of the community matchup; mixed-race and unpublished community cells stay unavailable.",
       "Each cell shows wins, losses, the decided sample n and the likely range. Recent form dots refer to the ranking matchup, oldest to newest; form is unavailable when edition variants cannot be ordered reliably. Community numbers show their snapshot date and worker era; their sample window can differ from yours, so a delta is context rather than a controlled comparison.",
       "The pool source, fetch date and age are shown. Stale, missing or fallback pool data disables suggestions and copying until a fresh pool is available. A failed sample refresh also pauses recommendations and offers Retry.",

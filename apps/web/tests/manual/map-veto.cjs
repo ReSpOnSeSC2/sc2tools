@@ -44,7 +44,8 @@ const server = http.createServer((req, res) => {
       const page = await context.newPage(), errors = [], requests = [];
       page.on('pageerror', error => errors.push(error.message)); page.on('request', request => requests.push(new URL(request.url()).pathname));
       await page.goto(origin + '/app/maps'); await expect(page.getByRole('heading', { name: 'Current ladder pool' })).toBeVisible();
-      await expect(page.getByRole('combobox', { name: 'Ranking matchup' })).toHaveValue('Z'); await expect(page.getByText('Suggested veto', { exact: true })).toHaveCount(1); checks++;
+      await expect(page.getByRole('combobox', { name: 'Ranking matchup' })).toHaveValue(''); await expect(page.getByText('Suggested veto', { exact: true })).toHaveCount(1);
+      await expect(page.locator('tbody tr').filter({ hasText: 'Suggested veto' })).toContainText('Ancient Cistern'); await expect(page.locator('tbody tr').filter({ hasText: 'Suggested veto' })).toContainText('All matchups'); checks++;
       await expect(page.getByRole('switch', { name: 'Current ladder pool only' })).toHaveAttribute('aria-checked', 'true');
       await expect(page.getByRole('button', { name: 'View games on Custom Practice Map', exact: true })).toHaveCount(0); checks++;
       const detail = page.getByRole('list', { name: 'Map performance by matchup' }).locator('li').filter({ has: page.getByRole('button', { name: 'View games on Ancient Cistern LE', exact: true }) }).first();
