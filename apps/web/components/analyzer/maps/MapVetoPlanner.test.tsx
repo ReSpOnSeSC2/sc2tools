@@ -3,18 +3,24 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { MapVetoPlanner } from "./MapVetoPlanner";
 import { POOL_MAX_AGE_MS } from "@/lib/currentMapPool";
 
-const state = vi.hoisted(() => ({ now: Date.now(), filters: { race: "P", opp_race: "T", since: "2026-10-01" } as Record<string, string>, source: "persisted" as "persisted" | "fallback", age: 0, error: false, stale: false, paths: [] as (string | null)[], copied: vi.fn(), retry: vi.fn() }));
-const CELLS = [{ map: "Alpha LE", matchup: "vs Z", wins: 1, losses: 9, total: 10 }, { map: "Beta", matchup: "vs Z", wins: 9, losses: 1, total: 10 }, { map: "Tiny", matchup: "vs Z", wins: 0, losses: 4, total: 10 }];
+type Cell = { map: string; matchup: string; wins: number; losses: number; total: number };
+const state = vi.hoisted(() => ({ now: Date.now(), filters: { race: "P", opp_race: "T", since: "2026-10-01" } as Record<string, string>, source: "persisted" as "persisted" | "fallback", age: 0, error: false, stale: false, cells: [] as Cell[], paths: [] as (string | null)[], copied: vi.fn(), retry: vi.fn() }));
+const CELLS: Cell[] = [{ map: "Alpha LE", matchup: "vs Z", wins: 1, losses: 9, total: 10 }, { map: "Beta", matchup: "vs Z", wins: 9, losses: 1, total: 10 }, { map: "Tiny", matchup: "vs Z", wins: 0, losses: 4, total: 10 }];
+// Alpha is the weakest vs Z record but strong overall; Beta is the weakest overall record.
+const SPLIT: Cell[] = [
+  { map: "Alpha", matchup: "vs Z", wins: 9, losses: 11, total: 20 }, { map: "Alpha", matchup: "vs P", wins: 20, losses: 5, total: 25 }, { map: "Alpha", matchup: "vs T", wins: 20, losses: 5, total: 25 },
+  { map: "Beta", matchup: "vs Z", wins: 14, losses: 11, total: 25 }, { map: "Beta", matchup: "vs P", wins: 8, losses: 12, total: 20 }, { map: "Beta", matchup: "vs T", wins: 8, losses: 12, total: 20 },
+];
 const csvExport = vi.hoisted(() => ({ download: vi.fn() }));
 vi.mock("@/lib/csvExport", async original => ({ ...(await original<typeof import("@/lib/csvExport")>()), downloadCsv: csvExport.download }));
 vi.mock("@/lib/filterContext", async (original) => ({ ...(await original<typeof import("@/lib/filterContext")>()), useFilters: () => ({ filters: state.filters, dbRev: 7, seasons: [{ isCurrent: true, start: "2026-09-15" }] }) }));
 vi.mock("@/lib/useSeasons", () => ({ useSeasons: () => ({ data: { mapPool: ["Alpha", "Beta", "Tiny"], mapPoolSource: state.source, mapPoolFetchedAt: state.now - state.age }, mutate: vi.fn() }) }));
 vi.mock("@/lib/useGuideMapPool", () => ({ useGuideMapPool: () => ({ data: { computedAt: "2026-10-20", era: "after", maps: [{ map: "Alpha", cells: [{ matchup: "PvZ", winRate: 0.55 }] }] } }) }));
-vi.mock("@/lib/clientApi", () => ({ useApi: (path: string | null) => { state.paths.push(path); return { data: path?.startsWith("/v1/maps/matchups") ? CELLS : path?.startsWith("/v1/maps?") ? [{ name: "Alpha LE", recent: ["loss", "win"] }] : undefined, error: state.error && path?.includes("matchups") ? new Error("Synthetic outage") : undefined, isPreviousData: state.stale, mutate: state.retry }; } }));
+vi.mock("@/lib/clientApi", () => ({ useApi: (path: string | null) => { state.paths.push(path); return { data: path?.startsWith("/v1/maps/matchups") ? state.cells : path?.startsWith("/v1/maps?") ? [{ name: "Alpha LE", recent: ["loss", "win"] }] : undefined, error: state.error && path?.includes("matchups") ? new Error("Synthetic outage") : undefined, isPreviousData: state.stale, mutate: state.retry }; } }));
 vi.mock("@/components/maps/MapArtwork", () => ({ MapLabel: ({ name }: { name: string }) => <span>{name}</span> }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: () => <span>Help</span> }));
 
-beforeEach(() => { state.now = Date.now(); state.age = 0; state.source = "persisted"; state.error = false; state.stale = false; state.filters = { race: "P", opp_race: "T", since: "2026-10-01" }; state.paths = []; state.copied.mockReset(); state.copied.mockResolvedValue(undefined); state.retry.mockReset(); Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: state.copied } }); });
+beforeEach(() => { state.now = Date.now(); state.age = 0; state.source = "persisted"; state.error = false; state.stale = false; state.cells = CELLS; state.filters = { race: "P", opp_race: "T", since: "2026-10-01" }; state.paths = []; state.copied.mockReset(); state.copied.mockResolvedValue(undefined); state.retry.mockReset(); Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: state.copied } }); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("map veto planner", () => {
@@ -24,7 +30,8 @@ describe("map veto planner", () => {
     fireEvent.click(screen.getByRole("button", { name: /Export these rows as CSV/ }));
     const [filename, csv] = csvExport.download.mock.calls[0];
     expect(filename).toMatch(/^sc2tools-map-pool-\d{4}-\d{2}-\d{2}\.csv$/);
-    expect(csv).toContain("ranking vs Z"); expect(csv).toContain("window filters");
+    expect(csv).toContain("ranking All"); expect(csv).toContain("window filters");
+    expect(csv).toContain("maps below the pool average (41.7%) with at least 5 decided, ranked with 20 added games at that average");
     expect(csv.split("\r\n").filter((line: string) => /^(Alpha|Beta|Tiny),/.test(line))).toHaveLength(12);
     expect(csv).toContain("Alpha,vs Z,1,9,10,10,0.1,0.55,true");
     expect(state.paths.length).toBe(requests);
@@ -43,20 +50,48 @@ describe("map veto planner", () => {
 
   it("uses a bounded shared sample, real rankings, community side, copy and cell drilldowns", async () => {
     const open = vi.fn(); render(<MapVetoPlanner openGames={open} />);
-    expect((screen.getByRole("combobox", { name: "Ranking matchup" }) as HTMLSelectElement).value).toBe("Z");
+    expect((screen.getByRole("combobox", { name: "Ranking matchup" }) as HTMLSelectElement).value).toBe("");
     expect(screen.getAllByText("Suggested veto")).toHaveLength(1);
     expect(screen.getByText("Not enough games")).toBeTruthy();
     const alpha = screen.getByRole("button", { name: "View games on Alpha" }).closest("tr")!;
-    expect(within(alpha).getByText("Suggested veto")).toBeTruthy(); expect(within(alpha).getByText(/Community 55/)).toBeTruthy();
+    expect(within(alpha).getByText("Suggested veto")).toBeTruthy(); expect(within(alpha).getByText("All matchups")).toBeTruthy(); expect(within(alpha).getByText(/Community 55/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "View vs Z games on Alpha" }));
     expect(open).toHaveBeenCalledWith({ map: "Alpha LE", maps: ["Alpha LE"], opponent: "Z", filters: { race: "P", opp_race: undefined, since: "2026-10-01" } });
-    fireEvent.click(screen.getByRole("button", { name: "Copy veto list" })); await waitFor(() => expect(state.copied).toHaveBeenCalledWith("Suggested SC2 vetoes vs Z: Alpha"));
+    fireEvent.click(screen.getByRole("button", { name: "Copy veto list" })); await waitFor(() => expect(state.copied).toHaveBeenCalledWith("Suggested SC2 vetoes: Alpha"));
     expect(new Set(state.paths.filter((path) => path?.startsWith("/v1/maps/matchups"))).size).toBe(1);
     expect(state.paths.some((path) => path?.includes("/games"))).toBe(false);
   });
+  it("defaults to all matchups and names the single matchup a suggestion was ranked on", async () => {
+    state.cells = SPLIT; render(<MapVetoPlanner openGames={vi.fn()} />);
+    const row = (name: string) => screen.getByRole("button", { name: `View games on ${name}` }).closest("tr")!;
+    const forms = () => state.paths.filter((path) => path?.startsWith("/v1/maps?"));
+    expect((screen.getByRole("combobox", { name: "Ranking matchup" }) as HTMLSelectElement).value).toBe("");
+    expect(within(row("Beta")).getByText("Suggested veto")).toBeTruthy(); expect(within(row("Beta")).getByText("All matchups")).toBeTruthy();
+    expect(within(row("Alpha")).queryByText("Suggested veto")).toBeNull(); expect(within(row("Tiny")).getByText("Not enough games")).toBeTruthy();
+    expect(screen.getByText(/lowest win rates across all matchups, because ladder vetoes apply against every opponent race.*pool average \(58\.5%\)/)).toBeTruthy();
+    expect(forms().length).toBeGreaterThan(0); expect(forms().some((path) => path?.includes("opp_race"))).toBe(false);
+    fireEvent.change(screen.getByRole("combobox", { name: "Ranking matchup" }), { target: { value: "Z" } });
+    expect(within(row("Alpha")).getByText("Suggested veto")).toBeTruthy(); expect(within(row("Alpha")).getByText("vs Z only")).toBeTruthy();
+    expect(within(row("Beta")).queryByText("Suggested veto")).toBeNull(); expect(within(row("Tiny")).getByText("Not enough games vs Z")).toBeTruthy();
+    expect(screen.getByText(/lowest win rates vs Z only\. Ladder vetoes apply against every opponent race.*vs Z pool average \(51\.1%\)/)).toBeTruthy();
+    expect(forms().at(-1)).toContain("opp_race=Z");
+    fireEvent.click(screen.getByRole("button", { name: "Copy veto list" })); await waitFor(() => expect(state.copied).toHaveBeenCalledWith("Suggested SC2 vetoes vs Z: Alpha"));
+  });
+  it("says when fewer maps qualify than the veto count instead of filling the slots", () => {
+    const shortfall = (cells: Cell[], count: string) => {
+      state.cells = cells; const view = render(<MapVetoPlanner openGames={vi.fn()} />);
+      fireEvent.change(screen.getByRole("combobox", { name: "Veto count" }), { target: { value: count } });
+      const result = { tags: screen.queryAllByText("Suggested veto").length, note: screen.getByText(/veto suggested|decided games in this sample yet/).textContent };
+      view.unmount(); return result;
+    };
+    // Beta (9-1) is far above the 41.7% pool average and Tiny (0-4) is under the floor, so only Alpha qualifies.
+    expect(shortfall(CELLS, "3")).toEqual({ tags: 1, note: "Only 1 veto suggested: no other map with at least 5 decided games is below your pool average (41.7%)." });
+    expect(shortfall([{ map: "Alpha", matchup: "vs Z", wins: 5, losses: 5, total: 10 }], "1")).toEqual({ tags: 0, note: "No veto suggested: no map with at least 5 decided games is below your pool average (50.0%)." });
+    expect(shortfall([{ map: "Alpha", matchup: "vs Z", wins: 0, losses: 4, total: 4 }], "1")).toEqual({ tags: 0, note: "No map has 5 decided games in this sample yet." });
+  });
   it("switches date windows and count without per-map requests or vetoing the low sample", () => {
     render(<MapVetoPlanner openGames={vi.fn()} />); fireEvent.change(screen.getByRole("combobox", { name: "Veto count" }), { target: { value: "3" } });
-    expect(screen.getAllByText("Suggested veto")).toHaveLength(2);
+    expect(screen.getAllByText("Suggested veto")).toHaveLength(1);
     fireEvent.change(screen.getByRole("combobox", { name: "Sample window" }), { target: { value: "90d" } });
     expect(state.paths.filter((path) => path?.includes("/maps/matchups")).at(-1)).toContain(encodeURIComponent(new Date(state.now - 90 * 86400_000).toISOString()).slice(0, 10));
     fireEvent.change(screen.getByRole("combobox", { name: "Sample window" }), { target: { value: "season" } });

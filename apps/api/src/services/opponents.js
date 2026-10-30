@@ -18,6 +18,7 @@ const { parseAnalysisGameIds } = require("../util/opponentAnalysisMembership");
 const { prepareReplayCsv } = require("./replayCsv");
 const { eraForGame } = require("../util/patchEra");
 const { opponentGamesFilter } = require("../util/opponentIdentity");
+const { OPPONENT_RACES, OPPONENT_RACE_LETTER } = require("../util/opponentRaceHistory");
 const {
   regionFromToonHandle,
   isLadderRegion,
@@ -486,7 +487,8 @@ class OpponentsService {
           firstPlayed: { $min: "$date" },
           lastPlayed: { $max: "$date" },
           displayNameSample: { $last: { $ifNull: ["$opponent.displayName", ""] } },
-          race: { $last: { $ifNull: ["$opponent.race", ""] } },
+          race: { $top: { sortBy: { date: -1, gameId: 1 }, output: OPPONENT_RACE_LETTER } },
+          races: { $addToSet: OPPONENT_RACE_LETTER },
           mmr: { $last: { $ifNull: ["$opponent.mmr", null] } },
           leagueId: { $last: { $ifNull: ["$opponent.leagueId", null] } },
           toonHandle: { $last: { $ifNull: ["$opponent.toonHandle", null] } },
@@ -505,6 +507,7 @@ class OpponentsService {
           lastPlayed: "$lastPlayed",
           displayNameSample: 1,
           race: 1,
+          races: 1,
           mmr: 1,
           leagueId: 1,
           toonHandle: 1,
@@ -533,6 +536,9 @@ class OpponentsService {
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;
     const nextBefore = hasMore ? page[page.length - 1].lastPlayed : null;
+    for (const row of page) {
+      row.races = OPPONENT_RACES.filter(race => row.races.includes(race));
+    }
     // Two overlays:
     //
     // (1) Identity fields (``pulseCharacterId`` / ``toonHandle``) —
@@ -1006,9 +1012,11 @@ class OpponentsService {
   }
 
   /**
-   * In-place overlay of ``lastPlayed`` with each opponent's
-   * globally-most-recent game date. Source of truth: the games
-   * collection (immutable, dated, definitive).
+   * In-place overlay of ``lastPlayed``, latest ``race``, and recorded
+   * ``races`` from each opponent's games. Source of truth: the games
+   * collection (immutable, dated, definitive). Reusing this aggregation
+   * repairs stale single-race metadata and includes off-races played on
+   * the same account without another query or a data migration.
    *
    * Why "from games" instead of the opponents row's ``lastSeen``:
    *   * The row's ``lastSeen`` is maintained by ``recordGame`` /
@@ -1042,7 +1050,7 @@ class OpponentsService {
    *
    * @private
    * @param {string} userId
-   * @param {Array<{pulseId: string, lastSeen?: Date|null, lastPlayed?: Date|null}>} rows
+   * @param {Array<{pulseId: string, lastSeen?: Date|null, lastPlayed?: Date|null, race?: string|null, races?: string[]}>} rows
    */
   async _overlayLatestSeenFromGames(userId, rows) {
     if (!Array.isArray(rows) || rows.length === 0) return;
@@ -1065,19 +1073,29 @@ class OpponentsService {
         $group: {
           _id: "$opponent.pulseId",
           latestDate: { $max: "$date" },
+          latestRace: { $top: { sortBy: { date: -1, gameId: 1 }, output: OPPONENT_RACE_LETTER } },
+          races: { $addToSet: OPPONENT_RACE_LETTER },
         },
       },
     ]);
-    /** @type {Map<string, Date>} */
+    /** @type {Map<string, {latestDate?: Date, latestRace?: string|null, races: Array<string|null>}>} */
     const byPulseId = new Map();
     for await (const doc of cursor) {
-      if (typeof doc._id === "string" && doc.latestDate instanceof Date) {
-        byPulseId.set(doc._id, doc.latestDate);
+      if (typeof doc._id === "string") {
+        byPulseId.set(doc._id, {
+          latestDate: doc.latestDate,
+          latestRace: doc.latestRace,
+          races: doc.races,
+        });
       }
     }
     for (const r of rows) {
       if (!r || typeof r.pulseId !== "string") continue;
-      const latest = byPulseId.get(r.pulseId);
+      const history = byPulseId.get(r.pulseId);
+      if (!history) continue;
+      r.races = OPPONENT_RACES.filter(race => history.races.includes(race));
+      if (history.latestRace) r.race = history.latestRace;
+      const latest = history.latestDate;
       if (!(latest instanceof Date)) continue;
       const stored = r.lastSeen instanceof Date ? r.lastSeen : null;
       const storedMs = stored ? stored.getTime() : 0;

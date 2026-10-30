@@ -699,6 +699,13 @@ describe("rivals and responsive opponent consumers", () => {
     expect(within(table).getByRole("img", { name: "Protoss" })).toBeTruthy();
     expect(within(table).getByRole("img", { name: "Zerg" })).toBeTruthy();
   });
+  it("displays every recorded race for a single opponent account", () => {
+    useApiPaginatedMock.mockReturnValue({ items: [{ ...opponents[0], name: "Ali", revealedName: "Nina", race: "P", races: ["P", "Z"] }], isLoading: false });
+    render(<OpponentsTab />);
+    const row = within(screen.getByRole("table")).getByRole("link", { name: "Ali" }).closest("tr")!;
+    expect(within(row).getByRole("img", { name: "Protoss" })).toBeTruthy();
+    expect(within(row).getByRole("img", { name: "Zerg" })).toBeTruthy();
+  });
   it("uses actual mobile dossier links with notes/disclosures/stars outside the anchor and the same Back flag", () => {
     vi.stubGlobal("matchMedia", () => ({ matches:true, addEventListener:vi.fn(), removeEventListener:vi.fn() }));
     useApiMock.mockReturnValue({ data: { links: { "101": { accountId:"one" }, "202": { accountId:"one" } } } });
