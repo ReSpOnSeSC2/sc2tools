@@ -189,9 +189,11 @@ checks. Changing the cache setting still requires the normal reviewed operator
 configuration process; the card changes no setting or provider connection.
 
 Optional coverage includes the overview summary, macro summary, MMR progression,
-build/strategy mix and the original six personal charts. It does not cover every
-dashboard request. Strength-adjusted charts also depend on global calibration;
-doctor, opponent and build-stat responses have additional dependencies. The
+build/strategy mix, the original six personal charts, the four strength-adjusted
+responses (each keyed to the calibration snapshot that computed it), the current
+streak, the Macro report, and net MMR by matchup with its opponent drill-down.
+It does not cover every dashboard request: Doctor, the Opponents list and
+profile, build stats and other mixed responses have additional dependencies. The
 cache remains off, with no measured performance or cost saving claimed.
 
 ## Web analytics (GA4) setup
