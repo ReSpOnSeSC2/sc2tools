@@ -22,6 +22,7 @@ corresponding GitHub Release.
 
 ### History write consistency
 
+- Stamp opponent regions on new games and heal opponent identity links across past games together with the account statistics revision, preserving verified totals and latest-game values. Opponent repairs heal games only while their repair lock is still held.
 - Save custom-build definitions and rename their linked game labels together with the account statistics revision, preserving verified totals and latest-game values.
 - Commit fresh-ingest saved-build classification labels with the account statistics revision, preserving verified totals, latest-game values and explicit check-in choices.
 - Publish completed saved-build reclassification together with the account statistics revision, preserving verified game totals and the latest-game value.

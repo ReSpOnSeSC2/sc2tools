@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "status": "LOCAL_TYPES_CONFIGURED_LINT_AND_214_FILES_PASS_STACKED_ON_PR821_RELEASE_PENDING",
+  "source": {
+    "base": "bd25dae1ae352dc1ebdf87e274e4734739af4625",
+    "baseQualification": "PR821 head; origin/main unchanged at 059a168b, so the PR821 squash carries this same tree (61f19870).",
+    "testedSource": "819205c20011b0b7dae62f3d33e6875a65b74556d1449dd1b46788ec5087be77",
+    "testedCommit": "5dc7423504b0a6a13b901f3d386e947d1ba12513",
+    "testedTree": "d0c1349d4bb05144e073595f41727f33855f2019"
+  },
+  "actual": {
+    "apiCases": 3056,
+    "files": 214,
+    "newCases": 159,
+    "newUnit": 82,
+    "newRealMongo": 77,
+    "newFiles": 8,
+    "changedFixtures": 2,
+    "failed": 0,
+    "pending": 0,
+    "typesExit": 0,
+    "configuredLintExit": 0,
+    "unitChunkExits": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "strictNewFiles": 11,
+    "legacyNoAddedFiles": 9,
+    "inBand": true,
+    "chunks": 4,
+    "chunkSeconds": [
+      205,
+      190,
+      140,
+      140
+    ],
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "ownedMongodLeftover": 0
+  },
+  "review": {
+    "agents": 9,
+    "verifiedBlocking": 5,
+    "distinctGaps": 2,
+    "sourceDefects": 0,
+    "fixed": 27,
+    "accepted": 8,
+    "noted": 1,
+    "mutationsKilled": "7/7"
+  },
+  "retained": [
+    "The first producers real-Mongo run had 19 of 41 cases fail: one assertion forbade the authority-checked owner claim attempt, seeded owners lacked unique clerk IDs, and an in-loop mock restore lost the capture hold. That run also left its own jest process open; only that owned child was stopped.",
+    "The single in-band 214-suite run exhausted the unchanged 2 GiB heap after 160 passing suites; the gate runs four serial chunks with identical flags and suites.",
+    "The first mutation attempt aborted on a CRLF pattern mismatch; every file was restored and hash-verified before the corrected run."
+  ],
+  "deviations": [
+    "gameStatsOpponentGame.js exports repairContextOwner so the writer validates the context before copying its owner.",
+    "opponentGameStamps.js exports backfillStampAdmission; ordinary producers refuse a repair context (review hardening).",
+    "immutableNeutralMutation is complexity 10 before and after; the brief stated 9."
+  ],
+  "boundaries": [
+    "Stacked on unmerged PR821; own exact-head CI, merge, deployment and production acceptance remain pending.",
+    "No production mutation, cache/auth activation, expanded coverage seal, savings, durable failed-heal retry or whole-roadmap completion."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/count-neutral-region-identity-20261029/DESIGN-CONTRACT-02.json",
+      "sha256": "684d81c8da3aae281b0dee1b7c2956f08845e191357325a1f2b11ec0772cbd4b",
+      "bytes": 22010
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/count-neutral-region-identity-20261029/IMPLEMENTATION-BRIEF-01.json",
+      "sha256": "35402a7645e43a6cc942602570ace5227779ee8b52bfe79cb9b847d469a92a5f",
+      "bytes": 121147
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/opponent-game-region-identity-20261030/LINT-BASELINE-01.json",
+      "sha256": "70e4b737614afff155d58cffc3c07b2a960b91b030524eeb92f507b470e31a1d",
+      "bytes": 23967
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/opponent-game-region-identity-20261030/checks-01/SOURCE-READY.json",
+      "sha256": "819205c20011b0b7dae62f3d33e6875a65b74556d1449dd1b46788ec5087be77",
+      "bytes": 5551
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/opponent-game-region-identity-20261030/checks-01/CHECKS.json",
+      "sha256": "e39d9e672b0c0cff484f828606bad74c9a76c0897b6d1f2f8d4a6fcacb17f335",
+      "bytes": 1720
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/opponent-game-region-identity-20261030/checks-01-lint-lint-results.json",
+      "sha256": "fa614e94d2a0ccb1957e13fe8eb933748dbc5c6c8435d07231956d2d993689ce",
+      "bytes": 2880
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/opponent-game-region-identity-20261030/IMPLEMENTATION-REVIEW-01.json",
+      "sha256": "eca9941137873632df2ec8668a76249bf91ccc5d2c59ccb59276d2acc609ab8a",
+      "bytes": 11019
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/opponent-game-region-identity-20261030/MUTATION-CHECK-02.json",
+      "sha256": "bdcc0bf324ab32df3cc979cd3cfe7b5844547f56dc3ff8f8042d653d89a59785",
+      "bytes": 4119
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/opponent-game-region-identity-20261030/COMMIT-SOURCE-01.json",
+      "sha256": "c46d1cff4dbd02dd2a0f9702193235e9503c5feb7eb40cd42215d5d14fff7ed7",
+      "bytes": 6796
+    }
+  ]
+}
