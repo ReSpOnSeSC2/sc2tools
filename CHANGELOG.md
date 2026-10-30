@@ -44,6 +44,7 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Base Maps veto suggestions on all matchups by default, because ladder vetoes apply against every opponent race, and rank them by sample-adjusted win rate instead of the lower Wilson bound, which favored vetoing short winning runs. Only maps below your pool average are suggested, so a sparse sample can show fewer suggestions than the veto count and says why. The suggestion now names the matchup it was ranked on.
 - Keep the Opponents quick-view selection and phone sort menu in sync. Lost to most highlights its loss ranking, All opponents restores newest first, and the phone menu includes Wins and Losses.
 - Keep the mobile Macro timeline and both army compositions at a fixed 50% overview, with full-size timeline controls and a compact header. Remove zoom controls and keep metric choices on one horizontally scrollable row.
 - Show ties and unrecorded results accurately in admin opponent and global player game lists and the selected-game detail. Keep result badges readable on selected rows.
