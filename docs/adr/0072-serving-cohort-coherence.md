@@ -6,8 +6,9 @@ no receipt and activates nothing. `USER_CACHE_ENABLED` stays off and
 faster-dashboards remains partial.
 
 Source paths are relative to `apps/api/src/` unless they start with `apps/` or
-`docs/`. Line numbers are those of the commit that adds this ADR; its
-application source equals `27b9aeb0`.
+`docs/`. Line numbers were checked at slice C1's tested source (`1fecfca0`).
+The ADR was added at application source `27b9aeb0`; C1 changed the cited
+allowlist and route lines in place, so every citation still resolves.
 
 ## Context
 
@@ -222,8 +223,9 @@ hold at the base.
 Items 1-10 are the per-kind dependency and revocation audit. Item 11 binds the
 kind to the shared-fleet audit recorded in the three sections above. G1-G3 stay
 unmet: chart-cache activation never meets them and covers them only through the
-receipt rows under Activation receipts. Together these are the audits the roadmap
-requires before source coverage grows (`docs/handoff/roadmap-progress-2026-10-28.json:1963`). They qualify source
+receipt rows under Activation receipts. Together these are the audits the
+roadmap requires before source coverage grows
+(`docs/handoff/roadmap-progress-2026-10-28.json:1963`). They qualify source
 coverage only while the flag stays off and are never activation evidence.
 
 ## Device-credential contract

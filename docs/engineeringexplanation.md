@@ -352,9 +352,9 @@ and verification limits.
 
 `USER_CACHE_ENABLED` enables the first chart-cache slice only when its value is
 the literal string `true`. The default and `.env.example` are false. While off,
-the seventeen routes call their original services and `res.json` directly; revision
-hooks add no database command, owner lookup, retained body, admission limit or
-new busy response. The flag is not changed by source preparation.
+the seventeen routes call their original services and `res.json` directly;
+revision hooks add no database command, owner lookup, retained body, admission
+limit or new busy response. The flag is not changed by source preparation.
 
 Before enabling, an operator must verify one API instance, a fully settled
 deployment and upgraded writers throughout that instance. The Render blueprint
@@ -368,11 +368,11 @@ The allowlist is `/v1/timeseries`, `/v1/timeseries/day-hour`,
 `/v1/timeseries/maps`, plus `/v1/summary`, `/v1/macro/summary`,
 `/v1/timeseries/mmr`, `/v1/timeseries/my-builds` and
 `/v1/timeseries/opp-strategies`, plus `/v1/matchups`, `/v1/maps`,
-`/v1/maps/matchups` and `/v1/build-vs-strategy`, plus `/v1/streak` and `/v1/macro/report`. The same seventeen paths participate in optional
-browser capability discovery and retained-body revalidation. Existing parsing,
-filters, calculations and history bounds
-stay in their original aggregation methods. All global filters are dependencies:
-even a time chart's membership can change after an opponent MMR or region stamp.
+`/v1/maps/matchups` and `/v1/build-vs-strategy`, plus `/v1/streak` and
+`/v1/macro/report`. The same seventeen paths participate in optional browser
+capability discovery and retained-body revalidation. Existing parsing, filters,
+calculations and history bounds stay in their original service methods. All
+global filters are dependencies: even a time chart's membership can change after an opponent MMR or region stamp.
 Doctor/health, opponents and notes, saved-build stats, Explorer, matchup time series,
 exports, streams and tokens are outside this allowlist.
 

@@ -35,6 +35,7 @@ corresponding GitHub Release.
 
 ### Dashboard cache coverage
 
+- Extend optional private revalidation to the dashboard's current streak and the Macro tab's report. The cache remains off; these routes keep their normal behavior while it is off.
 - Prepare optional private revalidation for Matchups, Maps, Maps by matchup and Build versus strategy using the exact benchmark snapshot that calculates each response. Reuse respects the benchmark's existing one-minute memo. The cache remains off; other mixed-dependency responses remain outside this slice.
 - Extend optional private revalidation to the dashboard summary, macro summary, MMR progression and build/strategy mix charts. The cache remains off; these routes keep their normal behavior while it is off.
 
