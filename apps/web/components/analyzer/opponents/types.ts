@@ -9,6 +9,8 @@ export type Opp = OpponentListDetails & {
   pulseCharacterId?: string | null;
   toonHandle?: string | null;
   race?: string | null;
+  /** Distinct races observed in this account's qualifying game history. */
+  races?: string[];
   region?: string | null;
   name?: string;
   displayNameSample?: string;

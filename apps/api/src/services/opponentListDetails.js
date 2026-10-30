@@ -3,6 +3,7 @@
 const { ownerBuildFlags } = require("./buildIntentReaders");
 const { COLLECTIONS } = require("../config/constants");
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+const { OPPONENT_RACES, OPPONENT_RACE_LETTER } = require("../util/opponentRaceHistory");
 const SUMMARY_FIELDS = ["_listTotal", "_listDurationSum", "_listDurationSamples", "_listMacroSum", "_listMacroSamples", "_listLatest", "_listCandidates", "_listDetailRows"];
 const LIST_DETAIL_QUERY_OPTIONS = Object.freeze({ maxTimeMS: 5000, timeoutMS: 5000 });
 const MAX_DETAIL_CANDIDATES = 5000;
@@ -206,7 +207,12 @@ function listDetailsPipeline(userId, match, pulseIds) {
       ],
       details: [
         { $match: match }, ...listDetailStages(),
-        { $group: { _id: "$opponent.pulseId", latestDate: { $max: "$date" }, ...listDetailGroup(candidateCount) } },
+        { $group: {
+          _id: "$opponent.pulseId", latestDate: { $max: "$date" },
+          latestRace: { $top: { sortBy: { date: -1, gameId: 1 }, output: OPPONENT_RACE_LETTER } },
+          races: { $addToSet: OPPONENT_RACE_LETTER },
+          ...listDetailGroup(candidateCount),
+        } },
         listDetailLookup(userId),
       ],
     } },
@@ -234,6 +240,8 @@ async function overlayListDetails(games, userId, match, rows, confirmedMongo = f
     const summary = byId.get(row.pulseId);
     if (summary) {
       for (const key of SUMMARY_FIELDS) row[key] = summary[key];
+      row.races = OPPONENT_RACES.filter(race => summary.races.includes(race));
+      if (summary.latestRace) row.race = summary.latestRace;
       if (summary.latestDate instanceof Date && summary.latestDate > (row.lastSeen || new Date(0))) row.lastPlayed = summary.latestDate;
     }
     applyListDetails(row, confirmedMongo);
