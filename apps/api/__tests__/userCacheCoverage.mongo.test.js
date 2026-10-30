@@ -6,6 +6,8 @@ const { MongoMemoryServer } = require("mongodb-memory-server");
 const { connect } = require("../src/db/connect");
 const { GamesService } = require("../src/services/games");
 const { AggregationsService } = require("../src/services/aggregations");
+const { StreakService } = require("../src/services/streak");
+const { MacroReportService } = require("../src/services/macroReport");
 const { UserRevision } = require("../src/util/userRevision");
 const { UserCache } = require("../src/middleware/userCache");
 const { buildAggregationsRouter } = require("../src/routes/aggregations");
@@ -17,28 +19,31 @@ beforeEach(async () => { jest.restoreAllMocks(); await db.games.deleteMany({}); 
 const game = (gameId, overrides = {}) => ({ gameId, date: new Date("2026-01-01T12:00:00Z"), result: "Victory",
   myRace: "Protoss", myLadderRace: "P", myToonHandle: "1-S2-1-123", myMmr: 4000, myMmrSource: "replay",
   playerCount: 2, isLadderGame: true, map: "Site Delta LE", durationSec: 600, macroScore: 70,
-  myBuild: "Expand", opponent: { race: "Zerg", strategy: "Pool", displayName: "Opponent" }, ...overrides });
+  top3Leaks: [{ name: "Supply Blocked", mineral_cost: 120, penalty: 4 }], myBuild: "Expand", opponent: { race: "Zerg", strategy: "Pool", displayName: "Opponent" }, ...overrides });
 function fixture() {
   const revisions = new UserRevision(db.users, { enabled: true });
   const cache = new UserCache(revisions, { enabled: true }), aggregations = new AggregationsService(db);
+  const streak = new StreakService(db), macroReport = new MacroReportService(db);
   // Match the production composition: retirement also detaches inner chart joins.
   revisions.addInvalidator(owner => aggregations.trendsRequests.invalidateForUser(owner));
   const app = express();
-  app.use(buildAggregationsRouter({ aggregations, userCache: cache, auth: (req, _res, next) => { req.auth = { userId: "a", source: "device" }; next(); } }));
+  app.use(buildAggregationsRouter({ aggregations, streak, macroReport, userCache: cache, auth: (req, _res, next) => { req.auth = { userId: "a", source: "device" }; next(); } }));
   app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: error.code || error.message }));
-  return { app, aggregations, games: new GamesService(db, { userRevision: revisions }), revisions, cache };
+  return { app, aggregations, streak, macroReport, games: new GamesService(db, { userRevision: revisions }), revisions, cache };
 }
 const routes = [["summary", "/summary"], ["macroSummary", "/macro/summary"], ["mmrProgression", "/timeseries/mmr"],
-  ["myBuildMixOverTime", "/timeseries/my-builds"], ["oppStrategyMixOverTime", "/timeseries/opp-strategies"]];
-test.each(routes)("%s serves real aggregates and retires ingest, reupload, quarantine and unknown commits", async (method, path) => {
+  ["myBuildMixOverTime", "/timeseries/my-builds"], ["oppStrategyMixOverTime", "/timeseries/opp-strategies"],
+  ["current", "/streak", "streak"], ["report", "/macro/report", "macroReport"]];
+test.each(routes)("%s serves real aggregates and retires ingest, reupload, quarantine and unknown commits", async (method, path, service = "aggregations") => {
   const f = fixture(); await f.games.upsert("a", game("one"));
   // A second owner's data must never enter a retained response.
   await f.games.upsert("b", game("other", { macroScore: 1, myMmr: 1000 }));
-  const spy = jest.spyOn(f.aggregations, method);
+  const spy = jest.spyOn(f[service], method);
   let previous;
   for (const mutate of [null,
     () => f.games.upsert("a", game("two", { date: new Date("2026-02-01T12:00:00Z"), macroScore: 90, myMmr: 4500, myBuild: "Air", opponent: { race: "Terran", strategy: "Bio" } })),
-    () => f.games.upsert("a", game("two", { date: new Date("2026-03-01T12:00:00Z"), macroScore: 80, myMmr: 4300, myBuild: "Tech" })),
+    () => f.games.upsert("a", game("two", { date: new Date("2026-03-01T12:00:00Z"), result: "Defeat", macroScore: 80, myMmr: 4300, myBuild: "Tech",
+      top3Leaks: [{ name: "Idle Production", mineral_cost: 300, penalty: 9 }] })),
     () => f.games.quarantineResumedReplay("a", game("two")),
   ]) {
     if (mutate) await mutate();
@@ -53,7 +58,7 @@ test.each(routes)("%s serves real aggregates and retires ingest, reupload, quara
   }
   const original = db.games.updateOne.bind(db.games);
   jest.spyOn(db.games, "updateOne").mockImplementationOnce(async (...args) => { await original(...args); throw new Error("lost acknowledgement"); });
-  await expect(f.games.upsert("a", game("one", { macroScore: 85, myMmr: 4700, myBuild: "Changed", opponent: { race: "Terran", strategy: "Mech", displayName: "Changed" } }))).rejects.toThrow("lost acknowledgement");
+  await expect(f.games.upsert("a", game("one", { result: "Defeat", macroScore: 85, myMmr: 4700, myBuild: "Changed", opponent: { race: "Terran", strategy: "Mech", displayName: "Changed" } }))).rejects.toThrow("lost acknowledgement");
   const afterUnknown = await request(f.app).get(path).set("If-None-Match", previous.headers.etag);
   expect(afterUnknown.status).toBe(200); expect(afterUnknown.body).not.toEqual(previous.body);
 });
