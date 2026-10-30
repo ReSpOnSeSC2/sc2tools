@@ -10,7 +10,7 @@ Each item is applied below with file:line evidence at this branch's head. API
 paths are relative to `apps/api/src/`.
 
 C1 is stacked on F1 ([PR #824](https://github.com/ReSpOnSeSC2/sc2tools/pull/824),
-unmerged at `c420f832`), which adds ADR 0072. Its admission checklist and
+unmerged; this branch carries its head), which adds ADR 0072. Its admission checklist and
 shared-fleet audit meet the ledger's precondition for wider coverage
 (`docs/handoff/roadmap-progress-2026-10-28.json:1963`). C1 merges only after F1.
 
