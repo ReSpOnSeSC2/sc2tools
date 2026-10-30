@@ -4,7 +4,7 @@
 const { MongoMemoryReplSet } = require("mongodb-memory-server");
 const { MongoClient, ObjectId } = require("mongodb");
 const { sha256 } = require("../src/util/hash");
-const { DeviceAuthLease } = require("../src/services/deviceAuthLease");
+const { DeviceAuthLease, DEVICE_AUTH_LEASE_MS } = require("../src/services/deviceAuthLease");
 const { DeviceAuthReuse } = require("../src/services/deviceAuthReuse");
 const { readDeviceAuthSnapshot } = require("../src/services/deviceAuthTokenRead");
 const { DeviceLiveness } = require("../src/services/deviceLiveness");
@@ -89,14 +89,17 @@ test("unknown writer outcome denies only retained reuse while a new original loo
 });
 
 test("missing or recreated prepared authority never auto-activates and unknown grant ACK never publishes", async () => {
+  const probes = () => commands.filter(command => command.findAndModify === "jobLocks" && command.update?.$set?.grantProbeNonce).length;
   await authority.deleteMany({}); const a = service();
-  expect(await a.lease.acquire()).toBeNull(); expect(await authority.countDocuments({})).toBe(0);
-  await writer().prepare(); expect(await a.lease.acquire()).toBeNull();
+  expect(await a.lease.acquire()).toBeNull(); expect(await authority.countDocuments({})).toBe(0); expect(probes()).toBe(1);
+  // Each later step waits out the no-grant hold-off, so every acquire dispatches a real probe.
+  await writer().prepare(); mono += DEVICE_AUTH_LEASE_MS; expect(await a.lease.acquire()).toBeNull(); expect(probes()).toBe(2);
   expect((await authority.findOne({ _id: AUTHORITY_KEY }, { readPreference: "primary" })).mode).toBe("prepared");
   await authority.replaceOne({ _id: AUTHORITY_KEY }, activeAuthority());
   const actual = client.db(authority.dbName);
   jest.spyOn(client, "db").mockReturnValueOnce({ command: async (...args) => { await actual.command(...args); throw new Error("lost grant ACK"); } });
-  expect(await a.lease.acquire()).toBeNull(); expect(a.lease.current()).toBeNull();
+  mono += DEVICE_AUTH_LEASE_MS; expect(await a.lease.acquire()).toBeNull(); expect(a.lease.current()).toBeNull();
+  expect(probes()).toBe(3);
 });
 
 test("real pool pressure is bounded by command CSOT without a late grant after checkout", async () => {

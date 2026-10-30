@@ -8,6 +8,7 @@ const { deviceCredentialWritesFor, AUTHORITY_KEY, WRITER_DRAIN_MS } = require(".
 const { prepareDeviceCredentialsForServing, READINESS_MS } = require("../src/services/deviceCredentialReadiness");
 const { DevicePairingsService } = require("../src/services/devicePairings");
 const { DeviceLiveness } = require("../src/services/deviceLiveness");
+const { DEVICE_AUTH_LEASE_MS } = require("../src/services/deviceAuthLease");
 const { activeAuthority, deferred } = require("./helpers/deviceAuthFixture");
 
 let replica, client, database, authority, db, coordinator, commands;
@@ -95,11 +96,14 @@ test("same database adapter is shared, remains inactive and never creates author
   try {
     expect(await adapter.prepare("a".repeat(64))).toBeNull();
     expect(await authority.countDocuments({})).toBe(0);
-    const probe = commands.find(command => command.findAndModify === "jobLocks");
+    const probes = () => commands.filter(command => command.findAndModify === "jobLocks" && command.update?.$set?.grantProbeNonce);
+    const [probe] = probes(); expect(probes()).toHaveLength(1);
     expect(probe.upsert).toBe(false); expect(probe.query.mode).toBe("active");
     expect(probe.update.$set).not.toHaveProperty("mode");
     await prepareDeviceCredentialsForServing(coordinator, null);
-    expect(await adapter.prepare("a".repeat(64))).toBeNull();
+    // This lease uses the real elapsed clock: wait out the no-grant hold-off so a real probe meets the prepared row.
+    await new Promise(resolve => setTimeout(resolve, DEVICE_AUTH_LEASE_MS));
+    expect(await adapter.prepare("a".repeat(64))).toBeNull(); expect(probes()).toHaveLength(2);
     expect((await authority.findOne({ _id: AUTHORITY_KEY })).mode).toBe("prepared");
   } finally { await adapter.stopAndDrain(); }
 });
