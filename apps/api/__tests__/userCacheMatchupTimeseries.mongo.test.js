@@ -31,7 +31,7 @@ beforeEach(async () => {
   await db.users.insertMany([{ userId: "a", clerkUserId: "clerk-a" }, { userId: "b", clerkUserId: "clerk-b" }]);
   await db.db.collection("mmr_expectation").replaceOne({ _id: "corpus-1v1" }, curve(), { upsert: true });
 });
-afterAll(async () => { await db?.close(); await mongo?.stop(); });
+afterAll(async () => { await db?.close(); await mongo?.stop(); }); const holds = []; afterEach(() => { for (const hold of holds.splice(0)) hold.release.resolve(); }); // A test that fails mid-hold still lets its held work finish.
 function fixture(enabled = true, legacy = false) {
   let now = 1000;
   const model = new MmrExpectationService(db, { now: () => now });
@@ -57,7 +57,7 @@ async function holdAggregate() {
     const cursor = original(...args);
     return { toArray: async () => { const value = await cursor.toArray(); entered.resolve(); await release.promise; return value; } };
   });
-  return { entered, release };
+  const hold = { entered, release }; holds.push(hold); return hold;
 }
 // Four rated race pairs on separate days, plus another owner's private game.
 async function seed(f) {
