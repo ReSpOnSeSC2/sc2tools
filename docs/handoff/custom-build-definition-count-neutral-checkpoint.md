@@ -1,9 +1,11 @@
-# Custom-build definition saves: local verification, release pending
+# Custom-build definition saves: delivered in PR821
 
-The closed custom-build definition save and its linked game rename are locally
-verified. Own exact-head CI, deployment and production acceptance remain
-pending. This is an internal API prerequisite; the faster-dashboards parent
-remains partial and caches remain off.
+The closed custom-build definition save and its linked game rename are
+delivered. PR821 merged as `de2031ad` with the exact tested tree, its exact-head
+CI passed, and both production deployments succeeded for that commit. Signed-in
+read-only acceptance was not performed because no browser session was signed
+in. This is an internal API prerequisite; the faster-dashboards parent remains
+partial and caches remain off.
 
 ## Source boundary
 
@@ -101,3 +103,14 @@ links the immutable source, results, retained failures and settlement proof.
 The ledger stays at 197 items: 124 completed, 53 partial, 20 open, 73 remaining.
 No cache flag, dependency, asset, provider or production state changes are part
 of this slice.
+
+## Delivery
+
+PR821 squash-merged as `de2031adcf4cc7a0cfe3e18cfae0ff0a3891b49e` on parent `059a168bb2619cc7c16625778ac99687ce39b353`. Its tree
+`61f19870be6ad27dc5d7ec86966d49cd749757b1` equals the tested head `bd25dae1ae352dc1ebdf87e274e4734739af4625`.
+Exact-head CI passed whole API types, configured lint (757 warnings and no
+errors, the same as PR820) and 7,703 API cases in 516 suites. The API (Render) and website
+(Vercel production) deployment records both report success for that exact
+commit, and the public API health check reports the database read and write
+paths healthy. The [production receipt](validation/custom-build-definition-count-neutral/production-de2031ad.json)
+records this evidence and its limits.

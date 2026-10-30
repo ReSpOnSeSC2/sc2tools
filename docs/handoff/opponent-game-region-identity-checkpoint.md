@@ -1,10 +1,10 @@
 # Opponent region and identity writes: local verification, release pending
 
 The opponent region stamp and the opponent identity heal are locally verified as
-closed count-neutral writer families. The slice is stacked on PR821, which still
-awaits its merge; its own exact-head CI, deployment and production acceptance are
-pending. This is an internal API prerequisite; the faster-dashboards parent
-remains partial and caches remain off.
+closed count-neutral writer families. PR821's squash `de2031ad` is merged into
+this branch without changing its tree; its own exact-head CI, deployment and
+production acceptance are pending. This is an internal API prerequisite; the
+faster-dashboards parent remains partial and caches remain off.
 
 ## Source boundary
 
@@ -73,7 +73,10 @@ run.
 
 Commit `5dc7423504b0a6a13b901f3d386e947d1ba12513` records the tested source on top of PR821's head
 `bd25dae1ae352dc1ebdf87e274e4734739af4625`, with tree `d0c1349d4bb05144e073595f41727f33855f2019`. The committed blobs equal the gate-tested
-bytes. These documentation changes do not touch application bytes.
+bytes. After PR821 merged, `main` (`de2031adcf4cc7a0cfe3e18cfae0ff0a3891b49e`) was merged into
+the branch as `e417031b53a907936a440dd653469393428266d0` without changing its tree, and the tested
+source commit is unchanged. These documentation changes do not touch
+application bytes.
 
 The [compact local receipt](validation/opponent-game-region-identity/local-verification.json)
 links the immutable source, results, review and mutation evidence. The ledger

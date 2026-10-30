@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "LOCAL_TYPES_CONFIGURED_LINT_AND_214_FILES_PASS_STACKED_ON_PR821_RELEASE_PENDING",
+  "status": "LOCAL_TYPES_CONFIGURED_LINT_AND_214_FILES_PASS_PR821_SQUASH_MERGED_IN_RELEASE_PENDING",
   "source": {
     "base": "bd25dae1ae352dc1ebdf87e274e4734739af4625",
     "baseQualification": "PR821 head; origin/main unchanged at 059a168b, so the PR821 squash carries this same tree (61f19870).",
@@ -61,7 +61,7 @@
     "immutableNeutralMutation is complexity 10 before and after; the brief stated 9."
   ],
   "boundaries": [
-    "Stacked on unmerged PR821; own exact-head CI, merge, deployment and production acceptance remain pending.",
+    "PR821's squash de2031ad is merged into the branch without changing its tree; own exact-head CI, merge, deployment and production acceptance remain pending.",
     "No production mutation, cache/auth activation, expanded coverage seal, savings, durable failed-heal retry or whole-roadmap completion."
   ],
   "references": [
@@ -110,5 +110,11 @@
       "sha256": "c46d1cff4dbd02dd2a0f9702193235e9503c5feb7eb40cd42215d5d14fff7ed7",
       "bytes": 6796
     }
-  ]
+  ],
+  "baseMerge": {
+    "main": "de2031adcf4cc7a0cfe3e18cfae0ff0a3891b49e",
+    "mergeCommit": "e417031b53a907936a440dd653469393428266d0",
+    "treeUnchanged": true,
+    "testedSourceCommitUnchanged": true
+  }
 }
