@@ -6,9 +6,10 @@ no receipt and activates nothing. `USER_CACHE_ENABLED` stays off and
 faster-dashboards remains partial.
 
 Source paths are relative to `apps/api/src/` unless they start with `apps/` or
-`docs/`. Line numbers were checked at slice C1's tested source (`1fecfca0`).
+`docs/`. Line numbers were checked at slice DA2's tested source (`1dde734b`).
 The ADR was added at application source `27b9aeb0`; C1 changed the cited
-allowlist and route lines in place, so every citation still resolves.
+allowlist and route lines in place and DA2 added lease lines after the cited
+ones, so every citation still resolves.
 
 ## Context
 
@@ -115,6 +116,7 @@ classes, and the last column bounds how long it can disagree with a peer:
 | Device touch dedupe and 30-second latestAgent reuse | `services/deviceLiveness.js:6,75-91,101-118` | Local reuse | 30 s; the minute touch filter itself is durable (`services/deviceAuthTokenRead.js:37-44`) |
 | Overlay-token resolve cache | `services/overlayTokens.js:60-61,88` | Local reuse | 10 s; a token revoked on a peer still resolves here until then, because a revoke evicts only the local entry |
 | `DeviceAuthReuse` and `DeviceAuthLease` grants (uninjected) | `services/deviceAuthLease.js:8,48-77`; `services/deviceAuthReuse.js:10-11,139-141` | Local lease | 1.8-second grant; 60-second entries need the current incarnation and generation |
+| `DeviceAuthLease` failed-probe hold-off (uninjected) | `services/deviceAuthLease.js:20,50,94-96` | Local state | None needed: it is deny-only, withholds grants for 1.8 s after a probe settles without one, and holds no token or authority value |
 | Credential authority record in `jobLocks` | `services/deviceCredentialWrites.js:7,12,90-133`; `services/deviceCredentialPreparation.js:38-45` | Durable fencing | Majority writes; 2.1-second writer drain |
 | `gameStatsMutationEpoch` and `_gdprMutation` | `services/gameStatsWrites.js:89-93,147-154`; `services/gameStatsMaintenance.js:88-97,103-106` | Durable fencing | Checked inside majority snapshot transactions |
 | GDPR repair liveness handle | `services/gdprRepairLiveness.js:15-19,80-97` | Local state | None; deny-only, and it cannot see lease expiry or loss in another process |
@@ -340,7 +342,11 @@ so a recreated record's empty pending list is not settlement evidence
 (`docs/handoff/device-auth-reuse-checkpoint.md:107-115`). The departure is
 accepted only because prepared mode grants nothing, every gate still drains in
 full, and any activation needs a new binding to that incarnation
-(`docs/adr/0071-device-credential-readiness.md:55-56`).
+(`docs/adr/0071-device-credential-readiness.md:55-56`). The failed-probe hold-off
+under Gates is not a departure: it adds no grant, every probe that runs is still
+a new demand probe with a new start and deadline that must satisfy current
+authority (design line 49), and a request without a grant runs the original
+lookup (`middleware/auth.js:76-82`).
 
 The constants in source match the design's examples: an 1800 ms reader grant
 (`services/deviceAuthLease.js:8`) and a 2100 ms writer drain
@@ -414,7 +420,7 @@ authentication authority.
 | Separate-process evidence | Unmet (`docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:89-91`) |
 | Durable disable and rollback primitive | Unmet; the rollback rule requires one (`docs/adr/0071-device-credential-readiness.md:59-60`; `docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:114`). The source has no deliberate disable: `denyAll` is set only by pending overflow or a missing owner scope (`services/deviceCredentialWrites.js:87-89,98`), and nothing exposes a way to set it (`:23-25`; `services/deviceAuthLease.js:12-13`) |
 | Authorized repair that mints a fresh incarnation | Unmet; the only source path that mints one recreates a missing record (`services/deviceCredentialPreparation.js:38-45`), which this ADR forbids as a repair |
-| Failed-probe suppression | Unmet; a gate this ADR adds. A probe that settles without a grant is cleared, so the next demand dispatches a new majority write (`services/deviceAuthLease.js:47-61`; `apps/api/__tests__/deviceAuthLease.test.js:69-77`). An injected adapter facing a prepared, missing or unreachable record would add probes to ordinary authentication, which ADR 0071 avoids today by not injecting it (`docs/adr/0071-device-credential-readiness.md:47-48`) |
+| Failed-probe suppression | Met in source as a bounded rate, unwired. A probe that settles without a usable grant holds off new probes for one lease, timed from its actual settlement and re-armed after every failed probe; until then `acquire()` returns no grant with no dispatch and no wait, and a valid grant, `denyAll` included, starts no hold-off (`services/deviceAuthLease.js:20,50,94-96`; `apps/api/__tests__/deviceAuthLease.test.js:80-144`). It bounds the probes but does not remove them: under continuous demand an injected adapter facing a prepared, missing or unreachable record still sends at most one majority/journal `findAndModify` (a nonce write only when a row matches) per probe duration plus 1.8 s per process, and the caller that starts it, with up to 15 coalesced callers, can wait up to about 1.8 s. ADR 0071's statement that prepared metadata adds no grant probes therefore holds only while the adapter stays uninjected (`docs/adr/0071-device-credential-readiness.md:47-48`). Before step 2 under Activation receipts, the wiring slice must either accept this bounded rate in ADR 0071 and this row, or send no probes while the record is prepared |
 | Reviewed activation CAS | Unmet (`docs/adr/0071-device-credential-readiness.md:49,56-57`; `services/deviceAuthLease.js:12-13`) |
 
 ## Out-of-band writers
