@@ -876,7 +876,7 @@ export interface AggregationsService {
   matchups(userId: string, filters: object, snapshot?: import('./strengthCurveSnapshots').CurveSnapshot): Promise<object>;
   maps(userId: string, filters: object, snapshot?: import('./strengthCurveSnapshots').CurveSnapshot): Promise<object>;
   buildVsStrategy(userId: string, filters: object, snapshot?: import('./strengthCurveSnapshots').CurveSnapshot): Promise<object>;
-  randomSummary(userId: string, filters: object): Promise<object>;
+  randomSummary(userId: string, filters: object, opts?: { memo?: boolean }): Promise<object>;
   timeseries(
     userId: string,
     opts: { interval?: "day" | "week" | "month"; tz?: string },

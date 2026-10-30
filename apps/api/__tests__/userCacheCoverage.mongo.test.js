@@ -34,7 +34,7 @@ function fixture() {
 const routes = [["summary", "/summary"], ["macroSummary", "/macro/summary"], ["mmrProgression", "/timeseries/mmr"],
   ["myBuildMixOverTime", "/timeseries/my-builds"], ["oppStrategyMixOverTime", "/timeseries/opp-strategies"],
   ["current", "/streak", "streak"], ["report", "/macro/report", "macroReport"],
-  ["netMmrByMatchup", "/mmr-by-matchup"], ["netMmrByOpponent", "/mmr-by-matchup/opponents"]];
+  ["netMmrByMatchup", "/mmr-by-matchup"], ["netMmrByOpponent", "/mmr-by-matchup/opponents"], ["randomSummary", "/random-summary"]];
 test.each(routes)("%s serves real aggregates and retires ingest, reupload, quarantine and unknown commits", async (method, path, service = "aggregations") => {
   // "zero" pairs with "one"; each later write changes an accepted net-MMR pair as well as the other charts.
   const f = fixture(); await f.games.upsert("a", game("zero", { date: new Date("2025-12-31T12:00:00Z"), myMmr: 3950 }));
