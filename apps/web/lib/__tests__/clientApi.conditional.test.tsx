@@ -61,7 +61,8 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const conditionalResources = [path, "/v1/summary", "/v1/macro/summary", "/v1/timeseries/mmr",
     "/v1/timeseries/my-builds", "/v1/timeseries/opp-strategies",
-    "/v1/matchups", "/v1/maps", "/v1/maps/matchups", "/v1/build-vs-strategy", "/v1/streak", "/v1/macro/report"];
+    "/v1/matchups", "/v1/maps", "/v1/maps/matchups", "/v1/build-vs-strategy", "/v1/streak", "/v1/macro/report",
+    "/v1/mmr-by-matchup", "/v1/mmr-by-matchup/opponents"];
 
 describe("useApi actual SWR manual conditional integration", () => {
   it.each(conditionalResources)("%s discovers capability with one ordinary read, retains the next200 and reconstructs304", async resource => {

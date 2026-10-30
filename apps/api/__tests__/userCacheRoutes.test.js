@@ -13,6 +13,8 @@ const ROUTES = [["timeseries", "/timeseries"], ["dayHourHeatmap", "/timeseries/d
   ["oppStrategyMixOverTime", "/timeseries/opp-strategies"]];
 // Owner-game kinds served by their own services rather than AggregationsService.
 const PLAIN = [["streak", "/streak"], ["macroReport", "/macro/report"]];
+// Net-MMR kinds, whose routes pass exactly the service's options.
+const NET = [["netMmrByMatchup", "/mmr-by-matchup"], ["netMmrByOpponent", "/mmr-by-matchup/opponents"]];
 function fixture(enabled = true, legacy = false) {
   const rows = new Map([ ["a", { userId: "a", clerkUserId: "clerk-a", dataRev: 0 }], ["b", { userId: "b", dataRev: 0 }] ]);
   let deleted = false, revoked = false;
@@ -21,7 +23,7 @@ function fixture(enabled = true, legacy = false) {
   const revisions = new UserRevision(users, { enabled, isDeleted: async () => deleted });
   const cache = new UserCache(revisions, { enabled }); const aggregations = {};
   for (const method of [...ROUTES.map(([name]) => name), ...PLAIN.map(([name]) => name), "matchups", "maps", "mapMatchups", "buildVsStrategy",
-    "matchupTimeseries", "oppMmrBuckets", "randomSummary", "explorer", "distinctMaps", "netMmrByMatchup", "gamesList"]) {
+    "matchupTimeseries", "oppMmrBuckets", "randomSummary", "explorer", "distinctMaps", "netMmrByMatchup", "netMmrByOpponent", "gamesList"]) {
     aggregations[method] = jest.fn(async (owner, ...input) => ({ owner, method, input, points: [{ date: new Date(0), missing: null }] }));
   }
   aggregations.resolveMomentumPolicy = async (_owner, gap) => ({ sessionGapMinutes: gap ?? 90, sessionPolicyGeneration: 0, lease: null });
@@ -38,7 +40,7 @@ function fixture(enabled = true, legacy = false) {
   return { app, users, rows, cache, revisions, aggregations, setDeleted: () => { deleted = true; }, revoke: () => { revoked = true; } };
 }
 const get = (app, path, owner = "a") => request(app).get(path).set("authorization", `Bearer ${owner}`);
-test.each([...ROUTES, ...PLAIN])("%s preserves200 DTOs and conditionally returns private empty304", async (method, path) => {
+test.each([...ROUTES, ...PLAIN, ...NET])("%s preserves200 DTOs and conditionally returns private empty304", async (method, path) => {
   const f = fixture(); const first = await get(f.app, path); const second = await get(f.app, path);
   expect(second.status).toBe(200); expect(second.body).toEqual(first.body);
   expect(second.headers["cache-control"]).toBe("private, no-cache"); expect(second.headers.etag).toMatch(/^W\/"uc1-[0-9a-f]{64}"$/);
@@ -51,7 +53,7 @@ test.each([...ROUTES, ...PLAIN])("%s preserves200 DTOs and conditionally returns
 });
 test("off is byte/header/status-identical to the old router and makes zero revision commands", async () => {
   const old = fixture(false, true), off = fixture(false);
-  for (const [, path] of [...ROUTES, ...PLAIN]) {
+  for (const [, path] of [...ROUTES, ...PLAIN, ...NET]) {
     const a = await get(old.app, path), b = await get(off.app, path);
     expect([b.status, b.text, b.headers["cache-control"], b.headers.etag, b.headers["content-type"]])
       .toEqual([a.status, a.text, a.headers["cache-control"], a.headers.etag, a.headers["content-type"]]);
@@ -88,17 +90,17 @@ test("a committed or unknown mutation forces new aggregation without socket emis
   await get(f.app, "/timeseries"); expect(f.aggregations.timeseries).toHaveBeenCalledTimes(3);
 });
 test.each(["/matchups", "/maps", "/maps/matchups", "/build-vs-strategy", "/timeseries/matchups", "/opp-mmr-buckets", "/random-summary",
-  "/trends/explorer/periods", "/games-list", "/maps/diagnostic", "/mmr-by-matchup"])("%s without captured dependencies or explicit coverage never enters retention", async (path) => {
+  "/trends/explorer/periods", "/games-list", "/maps/diagnostic"])("%s without captured dependencies or explicit coverage never enters retention", async (path) => {
   const f = fixture(); expect((await get(f.app, path)).status).toBe(200); expect((await get(f.app, path)).status).toBe(200);
   expect(f.users.findOne).not.toHaveBeenCalled(); expect(f.cache.completed.size).toBe(0);
 });
 test("each non-dependent covered kind keeps its own retained body in one cache", async () => {
   const f = fixture();
-  for (const [method, path] of [...ROUTES, ...PLAIN]) expect([path, (await get(f.app, path)).body.method]).toEqual([path, method]);
-  expect(f.cache.completed.size).toBe(ROUTES.length + PLAIN.length);
+  for (const [method, path] of [...ROUTES, ...PLAIN, ...NET]) expect([path, (await get(f.app, path)).body.method]).toEqual([path, method]);
+  expect(f.cache.completed.size).toBe(ROUTES.length + PLAIN.length + NET.length);
 });
 
-test.each([...ROUTES.slice(6), ...PLAIN])("%s isolates filters and owners and retires committed/unknown results", async (method, path) => {
+test.each([...ROUTES.slice(6), ...PLAIN, ...NET])("%s isolates filters and owners and retires committed/unknown results", async (method, path) => {
   const f = fixture();
   const first = await get(f.app, path), tag = first.headers.etag;
   for (const [query, owner] of [["?race=Z", "a"], ["", "b"]]) {
@@ -111,6 +113,20 @@ test.each([...ROUTES.slice(6), ...PLAIN])("%s isolates filters and owners and re
   await expect(f.revisions.run("a", async () => { throw new Error("unknown write"); })).rejects.toThrow("unknown write");
   expect((await get(f.app, path).set("If-None-Match", changed.headers.etag)).status).toBe(200);
   expect(f.aggregations[method]).toHaveBeenCalledTimes(5);
+});
+
+test.each([
+  ["netMmrByMatchup", "/mmr-by-matchup", ["", "?group_by=matchup", "?tz=Europe%2FBerlin", "?group_by=matchup&tz=Europe%2FBerlin"]],
+  ["netMmrByOpponent", "/mmr-by-matchup/opponents", ["", "?opp_race=Z", "?oppRace=T", "?my_race=P", "?search=abc", "?min_pairs=3",
+    "?sort=net", "?sort=net&order=asc", "?limit=10", "?offset=5"]],
+])("%s keys every route option and passes the same options to the service", async (method, path, queries) => {
+  const f = fixture();
+  for (const query of queries) {
+    expect((await get(f.app, path + query)).status).toBe(200); expect((await get(f.app, path + query)).status).toBe(200);
+  }
+  expect(f.aggregations[method]).toHaveBeenCalledTimes(queries.length);
+  const options = f.aggregations[method].mock.calls.map(([, , opts]) => JSON.stringify(opts));
+  expect(new Set(options).size).toBe(queries.length);
 });
 
 test.each(ROUTES.slice(8))("%s keys every chart option after route normalization", async (method, path) => {
