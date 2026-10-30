@@ -89,8 +89,13 @@ test("a committed or unknown mutation forces new aggregation without socket emis
 });
 test.each(["/matchups", "/maps", "/maps/matchups", "/build-vs-strategy", "/timeseries/matchups", "/opp-mmr-buckets", "/random-summary",
   "/trends/explorer/periods", "/games-list", "/maps/diagnostic", "/mmr-by-matchup"])("%s without captured dependencies or explicit coverage never enters retention", async (path) => {
-  const f = fixture(); await get(f.app, path); await get(f.app, path);
+  const f = fixture(); expect((await get(f.app, path)).status).toBe(200); expect((await get(f.app, path)).status).toBe(200);
   expect(f.users.findOne).not.toHaveBeenCalled(); expect(f.cache.completed.size).toBe(0);
+});
+test("each non-dependent covered kind keeps its own retained body in one cache", async () => {
+  const f = fixture();
+  for (const [method, path] of [...ROUTES, ...PLAIN]) expect([path, (await get(f.app, path)).body.method]).toEqual([path, method]);
+  expect(f.cache.completed.size).toBe(ROUTES.length + PLAIN.length);
 });
 
 test.each([...ROUTES.slice(6), ...PLAIN])("%s isolates filters and owners and retires committed/unknown results", async (method, path) => {
