@@ -107,7 +107,7 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.aggregations.randomSummary(userId, filters));
+      await send(req, res, userId, "randomSummary", filters, {}, () => deps.aggregations.randomSummary(userId, filters, { memo: !deps.userCache?.enabled }));
     } catch (err) {
       next(err);
     }

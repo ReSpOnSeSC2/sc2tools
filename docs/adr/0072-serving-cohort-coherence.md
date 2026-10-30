@@ -6,16 +6,16 @@ no receipt and activates nothing. `USER_CACHE_ENABLED` stays off and
 faster-dashboards remains partial.
 
 Source paths are relative to `apps/api/src/` unless they start with `apps/` or
-`docs/`. Line numbers were checked at slice C2's tested source (`f9cc5ccc`).
-The ADR was added at application source `27b9aeb0`. C1 and C2 changed the cited
-allowlist line in place and edited only uncited route lines without changing
-line counts, and DA2 added lease lines after the cited ones, so every citation
-still resolves.
+`docs/`. Line numbers were checked at slice C3's tested source (`10cdb0fd`).
+The ADR was added at application source `27b9aeb0`. C1, C2 and C3 changed the
+cited allowlist line in place and edited route and service lines without
+changing line counts, and DA2 added lease lines after the cited ones, so every
+citation still resolves.
 
 ## Context
 
 Two retained-state features are built but inactive: the default-off per-user
-chart cache, which covers nineteen response kinds in source, and the uninjected
+chart cache, which covers twenty response kinds in source, and the uninjected
 retained device-auth REST adapter. Both keep their state in one process. The
 roadmap allows wider cache coverage only after "complete dependency/revocation
 and shared-fleet audits" (`docs/handoff/roadmap-progress-2026-10-28.json:1963`)
@@ -111,7 +111,7 @@ classes, and the last column bounds how long it can disagree with a peer:
 | `users.dataRev` | `util/userRevision.js:61-88,109-139` | Durable advisory | Re-read by every guarded request. A higher value retires; equality never proves freshness, and a first observation adopts it unchecked (`:126-131`). A flag-off process never bumps it (`:55,102`) |
 | `UserCache` entries and ETag salt | `middleware/userCache.js:10-12,19-33` | Local reuse | 600 s after storage (`:11,222-223,269`), plus the computation's duration and any adopted join age |
 | TrendsRequests in-flight joins | `services/trendsRequests.js:4-5,21-28,76-84` | Local reuse | 30 s; the join key carries no revision (`:79`), and covered and uncovered kinds share keys such as `dateRange` (`services/aggregations.js:634`) |
-| `cached()` completed memo (random summary only, not covered) | `services/trendsRequests.js:42-67` | Local reuse | 60 s |
+| `cached()` completed memo (random summary only, and only while the chart cache is off) | `services/trendsRequests.js:42-67`; `services/aggregations.js:360-362`; `routes/aggregations.js:110` | Local reuse | 60 s. A cache-enabled process never fills or consults it, so no retained body can adopt it |
 | Momentum session-policy reuse gate | `services/sessionResolutionGate.js:14` | Local reuse | 15 s |
 | MMR curve memo and snapshot epoch | `services/mmrExpectation.js:10,84-89`; `services/strengthCurveSnapshots.js:13-27` | Local reuse | 60 s; dependent entries expire with their proof (`middleware/userCache.js:268-270`) |
 | Device touch dedupe and 30-second latestAgent reuse | `services/deviceLiveness.js:6,75-91,101-118` | Local reuse | 30 s; the minute touch filter itself is durable (`services/deviceAuthTokenRead.js:37-44`) |
@@ -180,8 +180,10 @@ New kinds inherit this and every row above.
 A response kind may join the allowlist (`middleware/userCache.js:7-9`) while the
 flag stays off only when a reviewer can tick every line with file:line evidence
 at the pull request's head, and the pull request description states what items 8,
-9 and 11 require. Admission wires an unchanged computation: items 1-4 already
-hold at the base.
+9 and 11 require. Admission wires an unchanged computation: items 1, 2 and 4
+already hold at the base, and so does item 3 unless the kind must stop using a
+completed memo whenever the cache is enabled, which leaves the calculation
+itself unchanged (random summary, slice C3).
 
 1. **Owner games only.** Every database read in the computation is on `games`,
    is scoped to the owner's `userId` and uses `gamesMatchStage(userId, filters)`
@@ -211,10 +213,13 @@ hold at the base.
 3. **No completed owner-data memo.** An inner memo of owner data must be retired
    by the `UserRevision` invalidator (`app.js:1004-1007,1011-1019`;
    `services/trendsRequests.js:31-36`). A completed-result memo disqualifies the
-   kind even when that invalidator retires it, as random summary's 60-second
-   `cached()` shows (`services/trendsRequests.js:42-67`; `services/aggregations.js:361`):
-   a first observation keeps it, widening the 30-second join window to the memo's
-   lifetime. Item 6 governs a memo of a global input.
+   kind even when that invalidator retires it, because a first observation keeps
+   it, widening the 30-second join window to the memo's lifetime, unless the
+   computation skips the memo whenever the cache is enabled. Random summary does:
+   its route passes `memo: false` under an enabled cache, so its 60-second
+   `cached()` answers only while the cache is off (`routes/aggregations.js:110`;
+   `services/aggregations.js:360-362`; `services/trendsRequests.js:42-67`). Item 6
+   governs a memo of a global input.
 4. **No clock in the result.** No value derived from the current time (`Date.now`,
    `new Date()`, `$$NOW` or a relative window) reaches a query, pipeline or
    response body. Timers that only age joins or expire reuse are exempt, such as

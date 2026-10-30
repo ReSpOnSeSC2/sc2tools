@@ -13,8 +13,8 @@ const ROUTES = [["timeseries", "/timeseries"], ["dayHourHeatmap", "/timeseries/d
   ["oppStrategyMixOverTime", "/timeseries/opp-strategies"]];
 // Owner-game kinds served by their own services rather than AggregationsService.
 const PLAIN = [["streak", "/streak"], ["macroReport", "/macro/report"]];
-// Net-MMR kinds, whose routes pass exactly the service's options.
-const NET = [["netMmrByMatchup", "/mmr-by-matchup"], ["netMmrByOpponent", "/mmr-by-matchup/opponents"]];
+// Net-MMR kinds, whose routes pass exactly the service's options; random summary also gets the memo switch.
+const NET = [["netMmrByMatchup", "/mmr-by-matchup"], ["netMmrByOpponent", "/mmr-by-matchup/opponents"]], RANDOM = [["randomSummary", "/random-summary"]];
 function fixture(enabled = true, legacy = false) {
   const rows = new Map([ ["a", { userId: "a", clerkUserId: "clerk-a", dataRev: 0 }], ["b", { userId: "b", dataRev: 0 }] ]);
   let deleted = false, revoked = false;
@@ -40,7 +40,7 @@ function fixture(enabled = true, legacy = false) {
   return { app, users, rows, cache, revisions, aggregations, setDeleted: () => { deleted = true; }, revoke: () => { revoked = true; } };
 }
 const get = (app, path, owner = "a") => request(app).get(path).set("authorization", `Bearer ${owner}`);
-test.each([...ROUTES, ...PLAIN, ...NET])("%s preserves200 DTOs and conditionally returns private empty304", async (method, path) => {
+test.each([...ROUTES, ...PLAIN, ...NET, ...RANDOM])("%s preserves200 DTOs and conditionally returns private empty304", async (method, path) => {
   const f = fixture(); const first = await get(f.app, path); const second = await get(f.app, path);
   expect(second.status).toBe(200); expect(second.body).toEqual(first.body);
   expect(second.headers["cache-control"]).toBe("private, no-cache"); expect(second.headers.etag).toMatch(/^W\/"uc1-[0-9a-f]{64}"$/);
@@ -53,7 +53,7 @@ test.each([...ROUTES, ...PLAIN, ...NET])("%s preserves200 DTOs and conditionally
 });
 test("off is byte/header/status-identical to the old router and makes zero revision commands", async () => {
   const old = fixture(false, true), off = fixture(false);
-  for (const [, path] of [...ROUTES, ...PLAIN, ...NET]) {
+  for (const [, path] of [...ROUTES, ...PLAIN, ...NET, ...RANDOM]) {
     const a = await get(old.app, path), b = await get(off.app, path);
     expect([b.status, b.text, b.headers["cache-control"], b.headers.etag, b.headers["content-type"]])
       .toEqual([a.status, a.text, a.headers["cache-control"], a.headers.etag, a.headers["content-type"]]);
@@ -89,18 +89,18 @@ test("a committed or unknown mutation forces new aggregation without socket emis
   await expect(f.revisions.run("a", async () => { throw error; })).rejects.toBe(error);
   await get(f.app, "/timeseries"); expect(f.aggregations.timeseries).toHaveBeenCalledTimes(3);
 });
-test.each(["/matchups", "/maps", "/maps/matchups", "/build-vs-strategy", "/timeseries/matchups", "/opp-mmr-buckets", "/random-summary",
+test.each(["/matchups", "/maps", "/maps/matchups", "/build-vs-strategy", "/timeseries/matchups", "/opp-mmr-buckets",
   "/trends/explorer/periods", "/games-list", "/maps/diagnostic"])("%s without captured dependencies or explicit coverage never enters retention", async (path) => {
   const f = fixture(); expect((await get(f.app, path)).status).toBe(200); expect((await get(f.app, path)).status).toBe(200);
   expect(f.users.findOne).not.toHaveBeenCalled(); expect(f.cache.completed.size).toBe(0);
 });
 test("each non-dependent covered kind keeps its own retained body in one cache", async () => {
   const f = fixture();
-  for (const [method, path] of [...ROUTES, ...PLAIN, ...NET]) expect([path, (await get(f.app, path)).body.method]).toEqual([path, method]);
-  expect(f.cache.completed.size).toBe(ROUTES.length + PLAIN.length + NET.length);
+  for (const [method, path] of [...ROUTES, ...PLAIN, ...NET, ...RANDOM]) expect([path, (await get(f.app, path)).body.method]).toEqual([path, method]);
+  expect(f.cache.completed.size).toBe(ROUTES.length + PLAIN.length + NET.length + RANDOM.length);
 });
 
-test.each([...ROUTES.slice(6), ...PLAIN, ...NET])("%s isolates filters and owners and retires committed/unknown results", async (method, path) => {
+test.each([...ROUTES.slice(6), ...PLAIN, ...NET, ...RANDOM])("%s isolates filters and owners and retires committed/unknown results", async (method, path) => {
   const f = fixture();
   const first = await get(f.app, path), tag = first.headers.etag;
   for (const [query, owner] of [["?race=Z", "a"], ["", "b"]]) {
@@ -182,3 +182,12 @@ test("cache OFF preserves legacy conditional status/body/header behavior too", a
     .toEqual([ac.status, ac.text, ac.headers.etag, ac.headers["cache-control"]]);
   expect(off.users.findOne).not.toHaveBeenCalled();
 });
+
+test.each([["enabled", true, false, false], ["off", false, false, true], ["legacy", false, true, true]])(
+  "random summary skips its completed memo exactly when the cache is enabled (%s)", async (_mode, enabled, legacy, memo) => {
+    const f = fixture(enabled, legacy);
+    expect((await get(f.app, "/random-summary?map=x")).status).toBe(200);
+    // HEAD bypasses the guard (middleware/userCache.js:109-111), so it must not seed the memo either.
+    expect((await request(f.app).head("/random-summary").set("authorization", "Bearer a")).status).toBe(200);
+    expect(f.aggregations.randomSummary.mock.calls.map(([, , opts]) => opts)).toEqual([{ memo }, { memo }]);
+  });

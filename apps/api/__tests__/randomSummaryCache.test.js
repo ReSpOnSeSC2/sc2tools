@@ -73,3 +73,21 @@ test("an older slow metadata request cannot replace a newer completed answer", a
   await expect(old).resolves.toBe("old");
   await expect(requests.cached(["race-metadata"], async () => "unexpected", 60000)).resolves.toBe("new");
 });
+
+test("with the memo switched off, concurrent loads still join but completed answers are never reused", async () => {
+  const { service, games } = fixture();
+  const [first, second] = await Promise.all([
+    service.randomSummary("u1", {}, { memo: false }), service.randomSummary("u1", {}, { memo: false }),
+  ]);
+  expect(second).toEqual(first); expect(games.aggregate).toHaveBeenCalledTimes(1);
+  await service.randomSummary("u1", {}, { memo: false });
+  expect(games.aggregate).toHaveBeenCalledTimes(2);
+  expect(service.trendsRequests.completed.size).toBe(0);
+});
+
+test("with the memo switched off, concurrent filtered and unfiltered loads never share a computation", async () => {
+  const { service, games } = fixture();
+  await Promise.all([service.randomSummary("u1", {}, { memo: false }), service.randomSummary("u1", { map: "arena" }, { memo: false })]);
+  expect(games.aggregate).toHaveBeenCalledTimes(2);
+  expect(games.aggregate.mock.calls[1][0][0].$match).not.toEqual(games.aggregate.mock.calls[0][0][0].$match);
+});
