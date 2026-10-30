@@ -31,7 +31,7 @@ describe("map veto planner", () => {
     const [filename, csv] = csvExport.download.mock.calls[0];
     expect(filename).toMatch(/^sc2tools-map-pool-\d{4}-\d{2}-\d{2}\.csv$/);
     expect(csv).toContain("ranking All"); expect(csv).toContain("window filters");
-    expect(csv).toContain("lowest win rate with 20 added games at the pool average (41.7%) and at least 5 decided");
+    expect(csv).toContain("maps below the pool average (41.7%) with at least 5 decided, ranked with 20 added games at that average");
     expect(csv.split("\r\n").filter((line: string) => /^(Alpha|Beta|Tiny),/.test(line))).toHaveLength(12);
     expect(csv).toContain("Alpha,vs Z,1,9,10,10,0.1,0.55,true");
     expect(state.paths.length).toBe(requests);
@@ -77,9 +77,21 @@ describe("map veto planner", () => {
     expect(forms().at(-1)).toContain("opp_race=Z");
     fireEvent.click(screen.getByRole("button", { name: "Copy veto list" })); await waitFor(() => expect(state.copied).toHaveBeenCalledWith("Suggested SC2 vetoes vs Z: Alpha"));
   });
+  it("says when fewer maps qualify than the veto count instead of filling the slots", () => {
+    const shortfall = (cells: Cell[], count: string) => {
+      state.cells = cells; const view = render(<MapVetoPlanner openGames={vi.fn()} />);
+      fireEvent.change(screen.getByRole("combobox", { name: "Veto count" }), { target: { value: count } });
+      const result = { tags: screen.queryAllByText("Suggested veto").length, note: screen.getByText(/veto suggested|decided games in this sample yet/).textContent };
+      view.unmount(); return result;
+    };
+    // Beta (9-1) is far above the 41.7% pool average and Tiny (0-4) is under the floor, so only Alpha qualifies.
+    expect(shortfall(CELLS, "3")).toEqual({ tags: 1, note: "Only 1 veto suggested: no other map with at least 5 decided games is below your pool average (41.7%)." });
+    expect(shortfall([{ map: "Alpha", matchup: "vs Z", wins: 5, losses: 5, total: 10 }], "1")).toEqual({ tags: 0, note: "No veto suggested: no map with at least 5 decided games is below your pool average (50.0%)." });
+    expect(shortfall([{ map: "Alpha", matchup: "vs Z", wins: 0, losses: 4, total: 4 }], "1")).toEqual({ tags: 0, note: "No map has 5 decided games in this sample yet." });
+  });
   it("switches date windows and count without per-map requests or vetoing the low sample", () => {
     render(<MapVetoPlanner openGames={vi.fn()} />); fireEvent.change(screen.getByRole("combobox", { name: "Veto count" }), { target: { value: "3" } });
-    expect(screen.getAllByText("Suggested veto")).toHaveLength(2);
+    expect(screen.getAllByText("Suggested veto")).toHaveLength(1);
     fireEvent.change(screen.getByRole("combobox", { name: "Sample window" }), { target: { value: "90d" } });
     expect(state.paths.filter((path) => path?.includes("/maps/matchups")).at(-1)).toContain(encodeURIComponent(new Date(state.now - 90 * 86400_000).toISOString()).slice(0, 10));
     fireEvent.change(screen.getByRole("combobox", { name: "Sample window" }), { target: { value: "season" } });

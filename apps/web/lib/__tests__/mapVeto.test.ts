@@ -13,6 +13,12 @@ const SCREENSHOT: Record<string, Record<"P" | "T" | "Z", [number, number]>> = {
 const screenshotRows = () => poolMapRows(Object.keys(SCREENSHOT), Object.entries(SCREENSHOT).flatMap(([map, races]) =>
   Object.entries(races).map(([race, [wins, losses]]) => ({ map: `${map} LE`, matchup: `vs ${race}`, wins, losses, total: wins + losses }))));
 const record = (rows: ReturnType<typeof screenshotRows>, name: string) => rows.find((row) => row.name === name)!;
+// The manual browser fixture's sparse pool, where Sanctuary III has only losses among its decided games.
+const sparseRows = (sanctuaryLosses = 4) => poolMapRows(["Ancient Cistern", "Ruby Rock", "Sanctuary III"], [
+  { map: "Ancient Cistern LE", matchup: "vs Z", wins: 2, losses: 10, total: 13 }, { map: "Ancient Cistern LE", matchup: "vs T", wins: 5, losses: 2, total: 7 },
+  { map: "Ruby Rock LE", matchup: "vs Z", wins: 9, losses: 3, total: 12 }, { map: "Ruby Rock LE", matchup: "vs P", wins: 4, losses: 3, total: 7 },
+  { map: "Sanctuary III LE", matchup: "vs Z", wins: 0, losses: sanctuaryLosses, total: 12 },
+]);
 
 describe("current map pool matching and freshness", () => {
   it("matches editions, accents and ampersands while preserving distinct Roman numerals", () => {
@@ -49,8 +55,27 @@ describe("map sample statistics and veto ranking", () => {
       { map: "Tiny", matchup: "vs Z", wins: 0, losses: 4, total: 4 }, { map: "Weak", matchup: "vs Z", wins: 1, losses: 9, total: 10 },
       { map: "Strong", matchup: "vs Z", wins: 9, losses: 1, total: 10 }, { map: "Ties", matchup: "vs Z", wins: 0, losses: 2, total: 20 },
     ]);
-    expect(vetoMaps(rows, "Z", 3)).toEqual(["Weak", "Strong"]);
+    expect(vetoMaps(rows, "Z", 3)).toEqual(["Weak"]);
     expect(vetoMaps(rows, "P", 3)).toEqual([]);
+  });
+  it("never suggests a map at or above the pool average, so a sparse pool can return fewer than the veto count", () => {
+    const rows = sparseRows();
+    // 13-6 (68.4%) sits far above the 47.6% pool average, so it never fills the second or third slot.
+    expect(poolWinRate(rows, "")).toBeCloseTo(20 / 42, 10);
+    expect(vetoMaps(rows, "", 3)).toEqual(["Ancient Cistern"]); expect(vetoMaps(rows, "Z", 3)).toEqual(["Ancient Cistern"]);
+    const even = poolMapRows(["Even", "Weak", "Strong"], [
+      { map: "Even", matchup: "vs T", wins: 5, losses: 5, total: 10 }, { map: "Weak", matchup: "vs T", wins: 2, losses: 8, total: 10 },
+      { map: "Strong", matchup: "vs T", wins: 8, losses: 2, total: 10 },
+    ]);
+    expect(vetoMaps(even, "T", 3)).toEqual(["Weak"]);
+  });
+  it("keeps a 0-4 map out until its fifth decided game without filling its slot with a strong map", () => {
+    const rows = sparseRows(), sanctuary = record(rows, "Sanctuary III").all;
+    // 0-4 adjusts to about 39.7%, the pool's lowest, but four decided games stay under the five-game floor.
+    expect(sanctuary).toMatchObject({ wins: 0, losses: 4, decided: 4, total: 12 });
+    expect(adjustedWinRate(sanctuary, poolWinRate(rows, "")!)).toBeCloseTo(0.3968, 4);
+    expect(vetoMaps(rows, "", 3)).not.toContain("Sanctuary III"); expect(vetoMaps(rows, "", 3)).not.toContain("Ruby Rock");
+    expect(vetoMaps(sparseRows(5), "", 3)).toEqual(["Sanctuary III", "Ancient Cistern"]);
   });
   it("ranks all matchups on the overall record, while one matchup ranks only its own column", () => {
     const rows = screenshotRows();
@@ -59,7 +84,7 @@ describe("map sample statistics and veto ranking", () => {
     expect(vetoMaps(rows, "", 3)).toEqual(["Blackrock", "Rainfall", "Old Sun Temple"]);
     // At Eternity's Edge (58.9% overall) is only the weakest vs Z record, so it is a vs Z-only suggestion.
     expect(vetoMaps(rows, "Z", 3)).toEqual(["At Eternity's Edge", "Blackrock", "Washout"]);
-    expect(vetoMaps(rows, "T", 1)).toEqual(["Rorschach"]);
+    expect(vetoMaps(rows, "T", 3)).toEqual(["Rorschach", "Rainfall", "Lockdown"]);
   });
   it("does not veto a short winning run because its Wilson lower bound is low", () => {
     const rows = screenshotRows(), faith = record(rows, "Fear and Faith"), rorschach = record(rows, "Rorschach");
@@ -93,9 +118,10 @@ describe("map sample statistics and veto ranking", () => {
     expect(adjustedWinRate(mapRecord(0, 0, 3), 0.58)).toBeCloseTo(0.58, 10);
   });
   it("breaks equal adjusted rates by the longer record, then by stable map name", () => {
-    const rows = poolMapRows(["B", "A", "Long sample"], [
-      { map: "B", matchup: "vs P", wins: 3, losses: 3, total: 6 }, { map: "A", matchup: "vs P", wins: 3, losses: 3, total: 6 },
-      { map: "Long sample", matchup: "vs P", wins: 30, losses: 30, total: 60 },
+    // In a 50% pool, 1-4 and 12-18 both adjust to exactly 44%; 16-4 is above the average and never qualifies.
+    const rows = poolMapRows(["B", "A", "Long sample", "Strong"], [
+      { map: "B", matchup: "vs P", wins: 1, losses: 4, total: 5 }, { map: "A", matchup: "vs P", wins: 1, losses: 4, total: 5 },
+      { map: "Long sample", matchup: "vs P", wins: 12, losses: 18, total: 30 }, { map: "Strong", matchup: "vs P", wins: 16, losses: 4, total: 20 },
     ]);
     expect(vetoMaps(rows, "P", 3)).toEqual(["Long sample", "A", "B"]);
     expect(vetoMaps(rows, "", 20)).toHaveLength(3);

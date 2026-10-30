@@ -5,7 +5,7 @@ import { useApi } from "@/lib/clientApi";
 import { filtersToQuery, useFilters, describeActiveFilters, type AnalyzerFilters } from "@/lib/filterContext";
 import { useSeasons } from "@/lib/useSeasons";
 import { useCurrentMapPool } from "@/lib/useCurrentMapPool";
-import { poolMapRows, poolWinRate, vetoMaps, mapRecord, communityMapRate, VETO_MIN_DECIDED, VETO_PRIOR_GAMES, type MapFormStats, type MapMatchupStats } from "@/lib/mapVeto";
+import { poolMapRows, poolWinRate, rankedRecord, vetoMaps, mapRecord, communityMapRate, VETO_MIN_DECIDED, VETO_PRIOR_GAMES, type MapFormStats, type MapMatchupStats } from "@/lib/mapVeto";
 import { pct1 } from "@/lib/format";
 import { useGuideMapPool } from "@/lib/useGuideMapPool";
 import { Card } from "@/components/ui/Card";
@@ -33,6 +33,13 @@ function CopyVetoes({ names, matchup }: { names: readonly string[]; matchup: str
   }}>Copy veto list</Button>{copied ? <p role="status" className="text-micro text-success">Veto list copied.</p> : null}{fallback ? <label className="block text-caption text-text-muted">Copy this veto list<textarea readOnly value={text} onFocus={(event) => event.target.select()} className="mt-1 w-full rounded border border-border bg-bg-surface p-2 text-text" /></label> : null}</div>;
 }
 
+/** Why fewer vetoes than the chosen count are suggested: too few decided games, or no other map below the pool average. */
+function shortfallNote(found: number, eligible: number, matchup: string, averageLabel: string): string {
+  if (!eligible) return `No map has ${VETO_MIN_DECIDED} decided games ${matchup ? `vs ${matchup}` : "in this sample"} yet.`;
+  const lead = found ? `Only ${found} ${found === 1 ? "veto" : "vetoes"} suggested: no other map` : "No veto suggested: no map";
+  return `${lead} with at least ${VETO_MIN_DECIDED} decided games is below your ${matchup ? `vs ${matchup} ` : ""}pool average${averageLabel}.`;
+}
+
 export function MapVetoPlanner({ openGames }: { openGames: (drill: MapGamesDrill) => void }) {
   const { filters, dbRev, seasons } = useFilters(); const catalog = useSeasons(); const community = useGuideMapPool();
   // Ladder vetoes apply against every opponent race, so the default ranks all matchups together.
@@ -46,6 +53,7 @@ export function MapVetoPlanner({ openGames }: { openGames: (drill: MapGamesDrill
   const pool = useCurrentMapPool(catalog.data); const rows = poolMapRows(pool.maps, cells.isPreviousData ? [] : cells.data ?? [], forms.isPreviousData ? [] : forms.data ?? []);
   const suggested = pool.fresh && !cells.error && !cells.isPreviousData ? vetoMaps(rows, matchup, count) : [];
   const average = poolWinRate(rows, matchup), averageLabel = average === null ? "" : ` (${pct1(average)})`;
+  const eligible = rows.filter((row) => (rankedRecord(row, matchup)?.decided ?? 0) >= VETO_MIN_DECIDED).length;
   const mine = filters.race?.[0]?.toUpperCase() ?? "";
   const exportRows = rows.flatMap(row => POOL_MATCHUPS.map(race => {
     const record = race ? row.cells[race] ?? mapRecord() : row.all;
@@ -58,7 +66,7 @@ export function MapVetoPlanner({ openGames }: { openGames: (drill: MapGamesDrill
     { key: "total", label: "Games" }, { key: "decided", label: "Decided games" }, { key: "winRate", label: "WR" },
     { key: "communityWinRate", label: "Community WR" }, { key: "suggestedVeto", label: "Suggested veto" }, { key: "recent", label: "Recent (ranking matchup)" },
   ];
-  const exportScope = `Current ladder pool · ${describeActiveFilters(scope, { seasons }).map(item => `${item.label}: ${item.value}`).join(" · ") || "Default filters"} · window ${activeWindow} · ranking ${poolMatchupLabel(matchup)} · veto count ${count}, lowest win rate with ${VETO_PRIOR_GAMES} added games at the pool average${averageLabel} and at least ${VETO_MIN_DECIDED} decided · pool ${pool.source}, fetched ${pool.fetchedAt ? new Date(pool.fetchedAt).toISOString() : "unknown"} · displayed P/T/Z/All columns`;
+  const exportScope = `Current ladder pool · ${describeActiveFilters(scope, { seasons }).map(item => `${item.label}: ${item.value}`).join(" · ") || "Default filters"} · window ${activeWindow} · ranking ${poolMatchupLabel(matchup)} · veto count ${count}, maps below the pool average${averageLabel} with at least ${VETO_MIN_DECIDED} decided, ranked with ${VETO_PRIOR_GAMES} added games at that average · pool ${pool.source}, fetched ${pool.fetchedAt ? new Date(pool.fetchedAt).toISOString() : "unknown"} · displayed P/T/Z/All columns`;
   return <Card title="Current ladder pool" right={<div className="flex flex-wrap items-center gap-2"><TableCsvButton section="map-pool" rows={exportRows} columns={exportColumns} scope={exportScope} disabled={!cells.data || !!cells.error || cells.isPreviousData || !pool.maps.length} /><LazyHelpLink slug="maps">How to use</LazyHelpLink></div>} className="min-w-0">
     <div className="mb-4 grid gap-3 sm:grid-cols-3"><label className="text-caption font-semibold text-text">Ranking matchup<Select value={matchup} onChange={(event) => setMatchup(event.target.value)}><option value="">All matchups</option>{["P", "T", "Z"].map((race) => <option key={race} value={race}>vs {race}</option>)}</Select></label>
       <label className="text-caption font-semibold text-text">Sample window<Select value={activeWindow} onChange={(event) => setWindow(event.target.value)}><option value="filters">Filter range</option><option value="90d">Last 90 days</option><option value="season" disabled={!seasonStart}>Current season</option></Select></label>
@@ -66,12 +74,12 @@ export function MapVetoPlanner({ openGames }: { openGames: (drill: MapGamesDrill
     <QueryState q={catalog} errorTitle="Couldn't load the ladder pool" isEmpty={() => !pool.maps.length} empty={<p className="text-caption text-text-muted">No ladder pool is available yet.</p>}>
       {() => <div className="space-y-3"><p className="text-micro text-text-muted">Pool source: {pool.source === "persisted" ? "persisted snapshot" : pool.source} · {pool.age === null ? "age unavailable" : `${Math.floor(pool.age / 86400_000)} days old`}{pool.fetchedAt ? ` · fetched ${new Date(pool.fetchedAt).toLocaleDateString()}` : ""}</p>
         {!pool.fresh ? <p role="status" className="text-caption text-warning">Pool data may be out of date. Suggestions and copying stay unavailable until a fresh pool is available.</p> : null}
-        <p className="text-caption text-text-muted">{matchup ? `Suggested veto marks your lowest win rates vs ${matchup} only. Ladder vetoes apply against every opponent race, so All matchups ranks them together.` : "Suggested veto marks your lowest win rates across all matchups, because ladder vetoes apply against every opponent race."} Each rate is adjusted for sample size, as if the map had {VETO_PRIOR_GAMES} more games at your {matchup ? `vs ${matchup} ` : ""}pool average{averageLabel}, so a short run can&apos;t outrank a long record. A map needs at least {VETO_MIN_DECIDED} decided games. Other active filters apply, except opponent race.</p>
+        <p className="text-caption text-text-muted">{matchup ? `Suggested veto marks your lowest win rates vs ${matchup} only. Ladder vetoes apply against every opponent race, so All matchups ranks them together.` : "Suggested veto marks your lowest win rates across all matchups, because ladder vetoes apply against every opponent race."} Each rate is adjusted for sample size, as if the map had {VETO_PRIOR_GAMES} more games at your {matchup ? `vs ${matchup} ` : ""}pool average{averageLabel}, so a short run can&apos;t outrank a long record. A map needs at least {VETO_MIN_DECIDED} decided games and a win rate below that average, since vetoing a stronger map would lower your expected win rate. Other active filters apply, except opponent race.</p>
         <QueryState q={cells} errorTitle="Couldn't load your map sample" filtered isEmpty={() => false}>{() => <MapVetoTable rows={rows} suggested={suggested} matchup={matchup} mine={mine} community={community.data?.maps ?? []} openGames={(drill) => openGames({ ...drill, filters: scope })} />}</QueryState>
         {cells.error && cells.data ? <p role="status" className="text-caption text-warning">The displayed map sample could not refresh; recommendations are paused. <button type="button" className="min-h-11 text-accent underline" onClick={() => { void cells.mutate(); }}>Retry sample</button></p> : null}
         {forms.error ? <p className="text-micro text-text-muted">Recent form is unavailable. <button className="min-h-11 text-accent underline" onClick={() => { void forms.mutate(); }}>Retry form</button></p> : null}
         <p className="text-micro text-text-dim">{community.data?.computedAt ? `Community ranked 1v1 snapshot ${new Date(community.data.computedAt).toLocaleDateString()}, ${community.data.era === "after" ? "12" : "8"} starting workers. Your filters and sample window may differ.` : "Community snapshot unavailable."}{!/^[PTZ]$/.test(mine) ? " Choose your race in the filter bar for individual-matchup community comparisons." : " Community comparisons use the selected race's side; unpublished cells stay unavailable."}{community.error ? <> <button type="button" className="min-h-11 text-accent underline" onClick={() => { void community.mutate(); }}>Retry community</button></> : null}</p>
-        {!suggested.length && pool.fresh && cells.data && !cells.error && !cells.isPreviousData ? <p className="text-caption text-text-muted">No map has {VETO_MIN_DECIDED} decided games {matchup ? `vs ${matchup}` : "in this sample"} yet.</p> : null}
+        {suggested.length < count && pool.fresh && cells.data && !cells.error && !cells.isPreviousData ? <p className="text-caption text-text-muted">{shortfallNote(suggested.length, eligible, matchup, averageLabel)}</p> : null}
         <CopyVetoes key={`${suggested.join("|")}:${matchup}`} names={suggested} matchup={matchup} />
       </div>}
     </QueryState>

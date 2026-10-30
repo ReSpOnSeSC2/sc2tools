@@ -53,9 +53,11 @@ const server = http.createServer((req, res) => {
       const detail = page.getByRole('list', { name: 'Map performance by matchup' }).locator('li').filter({ has: page.getByRole('button', { name: 'View games on Ancient Cistern LE', exact: true }) }).first();
       const ratio = await detail.locator('.h-full.bg-success').first().evaluate(element => ({ style: element.getAttribute('style'), ratio: element.getBoundingClientRect().width / element.parentElement.getBoundingClientRect().width, min: getComputedStyle(element).minWidth }));
       expect(ratio.ratio).toBeCloseTo(2 / 12, 2); checks++;
-      await page.getByRole('combobox', { name: 'Veto count' }).selectOption('3'); await expect(page.getByText('Suggested veto', { exact: true })).toHaveCount(2); checks++;
+      // Ruby Rock (13-6) is above the 47.6% pool average and Sanctuary III (0-4) is under the floor, so one slot stays empty.
+      await page.getByRole('combobox', { name: 'Veto count' }).selectOption('3'); await expect(page.getByText('Suggested veto', { exact: true })).toHaveCount(1);
+      await expect(page.getByText('Only 1 veto suggested: no other map with at least 5 decided games is below your pool average (47.6%).')).toBeVisible(); checks++;
       await page.getByRole('button', { name: 'Copy veto list' }).click(); await expect(page.getByRole('status').filter({ hasText: 'Veto list copied.' })).toBeVisible();
-      if (!(await page.evaluate(() => navigator.clipboard.readText())).includes('Ancient Cistern, Ruby Rock')) throw new Error('Wrong copied vetoes'); checks++;
+      if ((await page.evaluate(() => navigator.clipboard.readText())) !== 'Suggested SC2 vetoes: Ancient Cistern') throw new Error('Wrong copied vetoes'); checks++;
       await page.evaluate(() => document.fonts.ready);
       if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) { await page.screenshot({ path: '.tmp/map-overflow.png', fullPage: true }); throw new Error(`Map overflow ${width}`); }
       await page.screenshot({ path: `../../docs/handoff/screenshots/map-veto-${width}.png`, fullPage: true }); checks++;
