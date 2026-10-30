@@ -11,12 +11,14 @@
 //   definition, or a read could write ($out/$merge, a TTL index);
 // - a write in a classified file has a receiver that is neither resolved nor one
 //   of the listed loops and parameters;
-// - an authority write is not awaited inside the coordinator for the same owner;
+// - an authority write is not awaited inside the coordinator, directly or through
+//   an allowlisted wrapper, for the same top-level owner;
 // - a metadata writer sets anything but metadata fields through a literal
 //   document, or may upsert.
 // Named limitations (ADR 0072): lexical evidence only, not a runtime, failover,
 // clock or separate-process proof. It cannot see manual edits, raw restores, code
-// outside apps/api, iteration over the whole COLLECTIONS or schema registry, or a
+// outside apps/api, names built at run time from non-literal parts, iteration
+// over the whole database context or the COLLECTIONS or schema registry, or a
 // collection reached through a parameter of a function in an unclassified file.
 
 const fs = require("fs");
@@ -38,6 +40,14 @@ const WRITE_METHODS = new Set(["insertOne", "insertMany", "updateOne", "updateMa
 const READ_METHODS = new Set(["find", "findOne", "countDocuments", "estimatedDocumentCount", "distinct",
   "aggregate", "createIndex", "createIndexes", "listIndexes", "indexes", "indexExists", "indexInformation"]);
 const DB_LEVEL = new Set(["dropCollection", "renameCollection", "command", "runCommand", "dropDatabase", "bulkWrite"]);
+const RISKY_READS = new Set(["aggregate", "createIndex", "createIndexes"]);
+// Callback wrappers that hand back the promise of the work they run.
+const WRAPPERS = new Set(["mutate", "communityMutation"]);
+const BLOCK_SCOPES = new Set([ts.SyntaxKind.Block, ts.SyntaxKind.CaseBlock, ts.SyntaxKind.CatchClause,
+  ts.SyntaxKind.ForStatement, ts.SyntaxKind.ForInStatement, ts.SyntaxKind.ForOfStatement]);
+const PATTERN_PARTS = new Set([ts.SyntaxKind.ObjectLiteralExpression, ts.SyntaxKind.ArrayLiteralExpression,
+  ts.SyntaxKind.PropertyAssignment, ts.SyntaxKind.ShorthandPropertyAssignment, ts.SyntaxKind.SpreadAssignment,
+  ts.SyntaxKind.SpreadElement, ts.SyntaxKind.ParenthesizedExpression]);
 const AUTHORITY_FIELDS = new Set(["tokenHash", "revokedAt", "userId", "_id"]);
 const METADATA_FIELDS = new Set(["lastSeenAt", "label", "connectedEventRecordedAt",
   "agentVersion", "agentOs", "agentOsRelease", "hostname"]);
@@ -83,6 +93,8 @@ const DYNAMIC = [
   `${GDPR} _deleteAll deleteMany loop:USER_SCOPED_COLLECTIONS`,
   `${TOKEN_READ} readDeviceTokenCore updateOne param:collection`,
 ];
+// Database-level calls in classified files, with the keys of a literal command document.
+const DB_SITES = ["src/db/connect.js connect command hello,maxTimeMS", "src/services/admin.js storageStats command collStats"];
 const FIELDS_FROM_UPDATE = "Object.fromEntries(Object.entries(update).map(([key, value]) => [key, { $literal: value }]))";
 
 const parsed = new Map();
@@ -120,9 +132,10 @@ const outer = node => {
   return at;
 };
 const contains = (outerNode, inner) => inner.pos >= outerNode.pos && inner.end <= outerNode.end;
-const isTokenString = text => text === "deviceTokens" || text === "device_tokens" || /\.device_tokens$/.test(text);
+const isTokenString = text => ["deviceTokens", "device_tokens", "DEVICE_TOKENS"].includes(text) || /\.device_tokens$/.test(text);
+const isTextNode = node => ts.isStringLiteralLike(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node);
 const directName = node => (ts.isIdentifier(node) && (node.text === "deviceTokens" || node.text === "DEVICE_TOKENS"))
-  || (ts.isStringLiteralLike(node) && isTokenString(node.text));
+  || (isTextNode(node) && isTokenString(node.text));
 const namesCollection = node => directName(node) || (ts.isIdentifier(node) && LISTS.includes(node.text));
 const calleeName = call => {
   const callee = strip(call.expression);
@@ -131,8 +144,10 @@ const calleeName = call => {
 
 function tokenLiteral(node) {
   node = strip(node);
-  return !!node && ((ts.isPropertyAccessExpression(node) && node.name.text === "DEVICE_TOKENS")
-    || (ts.isStringLiteralLike(node) && isTokenString(node.text)));
+  if (!node) return false;
+  if (ts.isPropertyAccessExpression(node)) return node.name.text === "DEVICE_TOKENS";
+  if (ts.isElementAccessExpression(node)) return tokenLiteral(node.argumentExpression);
+  return ts.isStringLiteralLike(node) && isTokenString(node.text);
 }
 
 // An expression that evaluates to the device-token collection itself.
@@ -140,14 +155,14 @@ function isTokenHandle(node) {
   node = strip(node);
   if (ts.isPropertyAccessExpression(node)) return node.name.text === "deviceTokens";
   if (ts.isElementAccessExpression(node)) return tokenLiteral(node.argumentExpression);
-  if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return false;
-  return node.expression.name.text === "collection" && node.arguments.length > 0 && tokenLiteral(node.arguments[0]);
+  return ts.isCallExpression(node) && calleeName(node) === "collection" && node.arguments.length > 0 && tokenLiteral(node.arguments[0]);
 }
 
+const hiddenFrom = (node, scope, id) => node !== scope && !contains(node, id) && (ts.isFunctionLike(node) || BLOCK_SCOPES.has(node.kind));
 function declarationsIn(scope, id) {
   const found = [];
   const visit = node => {
-    if (node !== scope && ts.isFunctionLike(node) && !contains(node, id)) return;
+    if (hiddenFrom(node, scope, id)) return;
     const named = ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node);
     if (named && ts.isIdentifier(node.name) && node.name.text === id.text && node.name !== id) found.push(node);
     ts.forEachChild(node, visit);
@@ -159,7 +174,7 @@ function declarationsIn(scope, id) {
 function declarationOf(id) {
   for (let scope = id.parent; scope; scope = scope.parent) {
     const found = declarationsIn(scope, id);
-    if (found.length) return found[found.length - 1];
+    if (found.length) return found.length === 1 ? found[0] : null;
   }
   return null;
 }
@@ -181,9 +196,13 @@ function keySource(key) {
   return `dynamic:${key.getText()}`;
 }
 
+const assignsTo = (scope, name) => nodes(scope, n => ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken
+  && ts.isIdentifier(strip(n.left)) && strip(n.left).text === name).length > 0;
+
 function identifierKind(id, depth) {
   const declaration = declarationOf(id);
   if (!declaration) return `free:${id.text}`;
+  if (assignsTo(ts.findAncestor(declaration, ts.isFunctionLike) || declaration.getSourceFile(), id.text)) return `reassigned:${id.text}`;
   if (ts.isParameter(declaration)) return `param:${id.text}`;
   if (ts.isBindingElement(declaration)) return bindingKind(declaration);
   return declaration.initializer ? receiverKind(declaration.initializer, depth + 1) : `unset:${id.text}`;
@@ -195,6 +214,11 @@ function collectionCallKind(node) {
   return name && (ts.isStringLiteralLike(name) || ts.isPropertyAccessExpression(name)) ? "other" : "dynamic:collection";
 }
 
+function conditionalKind(node, depth) {
+  const whenTrue = receiverKind(node.whenTrue, depth + 1), whenFalse = receiverKind(node.whenFalse, depth + 1);
+  return whenTrue === whenFalse ? whenTrue : `unresolved:${node.getText()}`;
+}
+
 // "token", "other", or a label for a receiver the source does not resolve statically.
 function receiverKind(node, depth = 0) {
   node = strip(node);
@@ -202,8 +226,9 @@ function receiverKind(node, depth = 0) {
   if (ts.isPropertyAccessExpression(node)) return "other";
   if (ts.isElementAccessExpression(node)) return elementKind(node);
   if (ts.isCallExpression(node) && calleeName(node) === "collection") return collectionCallKind(node);
-  if (ts.isIdentifier(node) && depth < 4) return identifierKind(node, depth);
-  return `unresolved:${node.getText()}`;
+  if (depth >= 4) return `unresolved:${node.getText()}`;
+  if (ts.isConditionalExpression(node)) return conditionalKind(node, depth);
+  return ts.isIdentifier(node) ? identifierKind(node, depth) : `unresolved:${node.getText()}`;
 }
 
 function functionName(node) {
@@ -254,21 +279,41 @@ function useOf(node) {
   while (ts.isParenthesizedExpression(at.parent) || ts.isNonNullExpression(at.parent)) at = at.parent;
   const parent = at.parent;
   if (ts.isPropertyAccessExpression(parent) && parent.expression === at) return memberUse(parent);
-  if (ts.isVariableDeclaration(parent) && parent.initializer === at) return { use: "alias" };
+  if (ts.isVariableDeclaration(parent) && parent.initializer === at && ts.isIdentifier(parent.name)) return { use: "alias" };
   return { use: valueUse(parent, at) };
 }
+
+const keyIsToken = name => (ts.isComputedPropertyName(name) ? tokenLiteral(name.expression)
+  : (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) && isTokenString(name.text));
+function inAssignmentPattern(node) {
+  let at = node;
+  while (at.parent && PATTERN_PARTS.has(at.parent.kind)) at = at.parent;
+  const parent = at.parent;
+  const assigned = ts.isBinaryExpression(parent) && parent.left === at && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken;
+  return assigned || ((ts.isForOfStatement(parent) || ts.isForInStatement(parent)) && parent.initializer === at);
+}
+const patternEscape = n => ((ts.isPropertyAssignment(n) || ts.isShorthandPropertyAssignment(n)) && keyIsToken(n.name) && inAssignmentPattern(n))
+  || (ts.isBindingElement(n) && !ts.isIdentifier(n.name) && bindingKind(n) === "token");
 
 // Every place a file uses the collection itself, directly or through a local alias.
 function tokenUses(file) {
   const sf = parse(file), aliases = aliasNames(sf);
   const handles = nodes(sf, n => !ts.isParenthesizedExpression(n) && !ts.isNonNullExpression(n) && isTokenHandle(n));
   const references = nodes(sf, n => ts.isIdentifier(n) && aliases.has(n.text) && isReference(n)
-    && identifierKind(n, 0) === "token");
-  return handles.concat(references).map(node => ({ file, node, fn: functionName(node), ...useOf(node) }));
+    && identifierKind(n, 0) !== "other");
+  const patterns = nodes(sf, patternEscape).map(node => ({ file, node, fn: functionName(node), use: `escape:${ts.SyntaxKind[node.kind]}` }));
+  return handles.concat(references).map(node => ({ file, node, fn: functionName(node), ...useOf(node) })).concat(patterns);
 }
 
 const isWriteCall = node => ts.isCallExpression(node) && ts.isPropertyAccessExpression(strip(node.expression))
   && WRITE_METHODS.has(strip(node.expression).name.text);
+const isRiskyCall = node => isWriteCall(node) || (ts.isCallExpression(node) && ts.isPropertyAccessExpression(strip(node.expression))
+  && RISKY_READS.has(strip(node.expression).name.text));
+function dbLevelSite(file, call) {
+  const first = strip(call.arguments[0]);
+  const keys = first && ts.isObjectLiteralExpression(first) ? first.properties.map(p => memberName(p) ?? "<computed>").join(",") : "<dynamic>";
+  return `${file} ${functionName(call)} ${calleeName(call)} ${keys}`;
+}
 const isRunCallee = callee => ts.isPropertyAccessExpression(callee) && callee.name.text === "run"
   && ts.isPropertyAccessExpression(callee.expression) && callee.expression.name.text === "credentialWrites";
 
@@ -283,24 +328,37 @@ function runCallOf(node) {
 }
 const runKindOf = run => (run && ts.isStringLiteralLike(run.arguments[1]) ? run.arguments[1].text : null);
 
-// True when the promise of `call` is awaited, returned or an arrow's result up to `stop`.
+const wrapperOf = fn => (ts.isCallExpression(fn.parent) && fn.parent.arguments.includes(fn) && WRAPPERS.has(calleeName(fn.parent))
+  ? fn.parent : null);
+function settlingFunction(parent, node) {
+  if (ts.isAwaitExpression(parent) || ts.isReturnStatement(parent)) return ts.findAncestor(parent.parent, ts.isFunctionLike);
+  return ts.isArrowFunction(parent) && strip(parent.body) === node ? parent : null;
+}
+
+// True when the promise of `call` is awaited or returned inside `stop`, directly or through WRAPPERS.
 function settled(call, stop) {
   let node = call;
-  for (let depth = 0; depth < 5; depth += 1) {
+  for (let depth = 0; depth < 6; depth += 1) {
     const parent = outer(node);
-    if (ts.isAwaitExpression(parent) || ts.isReturnStatement(parent)) return true;
     if (ts.isConditionalExpression(parent) && parent.condition !== node) { node = parent; continue; }
-    if (!ts.isArrowFunction(parent) || strip(parent.body) !== node) return false;
-    if (parent === stop) return true;
-    if (!ts.isCallExpression(parent.parent)) return false;
-    node = parent.parent;
+    const fn = settlingFunction(parent, node);
+    if (!fn) return false;
+    if (fn === stop) return true;
+    node = wrapperOf(fn);
+    if (!node) return false;
   }
   return false;
 }
 
+const memberName = p => ((ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p))
+  && (ts.isIdentifier(p.name) || ts.isStringLiteralLike(p.name)) ? p.name.text : null);
+// The owner named by the top-level `userId` of a write's filter or document; null for anything looser.
 function ownerOf(write) {
-  const [owner] = nodes(write.arguments[0], n => (ts.isPropertyAssignment(n) || ts.isShorthandPropertyAssignment(n))
-    && n.name.getText() === "userId");
+  let target = strip(write.arguments[0]);
+  if (target && ts.isCallExpression(target)) target = strip(target.arguments[0]);
+  if (!target || !ts.isObjectLiteralExpression(target)) return null;
+  if (target.properties.some(p => memberName(p) === null || memberName(p).startsWith("$"))) return null;
+  const owner = target.properties.find(p => memberName(p) === "userId");
   if (!owner) return null;
   return ts.isShorthandPropertyAssignment(owner) ? "userId" : owner.initializer.getText();
 }
@@ -317,15 +375,20 @@ function fallbackBranch(call) {
   return guarded ? "no coordinator" : "unguarded";
 }
 
+// [exported name, value] for `module.exports = {...}`, `module.exports.X =` and `exports.X =`.
+function exportedValues(sf) {
+  const top = new Map(sf.statements.filter(ts.isVariableStatement).flatMap(statement => statement.declarationList.declarations)
+    .filter(d => ts.isIdentifier(d.name)).map(d => [d.name.text, d.initializer]));
+  const member = p => [p.name ? p.name.getText() : "<spread>", ts.isShorthandPropertyAssignment(p) ? top.get(p.name.text) : p.initializer || p];
+  return nodes(sf, n => ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken
+    && /^(module\.)?exports(\.|$)/.test(n.left.getText())).flatMap(n => (ts.isObjectLiteralExpression(n.right)
+    ? n.right.properties.map(member) : [[n.left.getText().split(".").pop(), n.right]]));
+}
+
 function exportedLists() {
-  return Object.keys(REFERENCES).flatMap(file => {
-    const sf = parse(file);
-    const exported = new Set(nodes(sf, n => ts.isBinaryExpression(n) && n.left.getText() === "module.exports"
-      && ts.isObjectLiteralExpression(n.right)).flatMap(n => n.right.properties.map(p => (p.name ? p.name.getText() : ""))));
-    return sf.statements.filter(ts.isVariableStatement).flatMap(statement => statement.declarationList.declarations)
-      .filter(d => ts.isIdentifier(d.name) && d.initializer && exported.has(d.name.text) && nodes(d.initializer, directName).length)
-      .map(d => d.name.text);
-  }).filter(name => !REGISTRIES.has(name)).sort();
+  return Object.keys(REFERENCES).flatMap(file => exportedValues(parse(file))
+    .filter(([, value]) => value && nodes(value, namesCollection).length).map(([name]) => name))
+    .filter(name => !REGISTRIES.has(name)).sort();
 }
 
 const propertyNamed = (root, names) => nodes(root, n => ts.isPropertyAssignment(n) && names.includes(n.name.text));
@@ -374,13 +437,17 @@ function updateAssignments(fn) {
   return reads === 1 && startsEmpty(fn) ? fields : fields.concat("<update-shape>");
 }
 
+// The heartbeat's `fields`: a const with the pinned initializer, referenced only by this spread.
+function pinnedSpread(expression, fn) {
+  const declaration = ts.isIdentifier(expression) ? declarationOf(expression) : null;
+  if (!declaration || !declaration.initializer || declaration.initializer.getText() !== FIELDS_FROM_UPDATE) return false;
+  const references = nodes(fn, n => ts.isIdentifier(n) && n.text === expression.text && isReference(n));
+  return (declaration.parent.flags & ts.NodeFlags.Const) !== 0 && references.length === 1;
+}
+
 function setFields(set, fn) {
   return set.properties.flatMap(member => {
-    if (ts.isSpreadAssignment(member)) {
-      const declaration = ts.isIdentifier(member.expression) ? declarationOf(member.expression) : null;
-      const pinned = declaration && declaration.initializer && declaration.initializer.getText() === FIELDS_FROM_UPDATE;
-      return pinned ? updateAssignments(fn) : ["<spread>"];
-    }
+    if (ts.isSpreadAssignment(member)) return pinnedSpread(member.expression, fn) ? updateAssignments(fn) : ["<spread>"];
     const plain = (ts.isPropertyAssignment(member) || ts.isShorthandPropertyAssignment(member))
       && (ts.isIdentifier(member.name) || ts.isStringLiteralLike(member.name));
     return [plain ? member.name.text : "<computed>"];
@@ -391,8 +458,8 @@ function mayUpsert(write) {
   const options = strip(write.arguments[2]);
   if (!options) return false;
   if (!ts.isObjectLiteralExpression(options)) return true;
-  return options.properties.some(p => !ts.isPropertyAssignment(p)
-    || (p.name.text === "upsert" && p.initializer.kind !== ts.SyntaxKind.FalseKeyword));
+  return options.properties.some(p => !ts.isPropertyAssignment(p) || memberName(p) === null
+    || (memberName(p) === "upsert" && p.initializer.kind !== ts.SyntaxKind.FalseKeyword));
 }
 
 test("ADR 0072: every file naming the collection, or a list that names it, is classified", () => {
@@ -424,7 +491,11 @@ test("ADR 0072: no read, pipeline stage or database-level call can write the col
 });
 
 test("ADR 0072: every unresolved write in a classified file comes from a listed loop or parameter", () => {
-  const dynamic = Object.keys(REFERENCES).concat(TOKEN_READ).flatMap(file => nodes(parse(file), isWriteCall)
+  const classified = Object.keys(REFERENCES).concat(TOKEN_READ);
+  const dbLevel = classified.flatMap(file => nodes(parse(file), n => ts.isCallExpression(n) && DB_LEVEL.has(calleeName(n)))
+    .map(call => dbLevelSite(file, call)));
+  expect(dbLevel.sort()).toEqual([...DB_SITES].sort());
+  const dynamic = classified.flatMap(file => nodes(parse(file), isRiskyCall)
     .map(call => ({ file, call, kind: receiverKind(strip(call.expression).expression) }))
     .filter(write => write.kind !== "token" && write.kind !== "other")
     .map(write => `${write.file} ${functionName(write.call)} ${strip(write.call.expression).name.text} ${write.kind}`));
@@ -445,17 +516,19 @@ test("ADR 0072: revocation and issuance are awaited inside the coordinator for t
   const issues = callsTo(PAIRINGS, "#insertIssuedToken");
   expect(issues.map(call => runKindOf(runCallOf(call)))).toEqual(["issue"]);
   const run = runCallOf(issues[0]);
-  expect([settled(insert, null), settled(issues[0], run.arguments[2]), ownerOf(insert)])
+  expect([settled(insert, ts.findAncestor(insert, ts.isMethodDeclaration)), settled(issues[0], run.arguments[2]), ownerOf(insert)])
     .toEqual([true, true, run.arguments[0].getText()]);
 });
 
 test("ADR 0072: account erasure reaches the collection only through the coordinator", () => {
   const erasures = loopWrites("USER_SCOPED_COLLECTIONS");
-  expect(erasures.map(write => [functionName(write), settled(write, null), ownerOf(write)]))
-    .toEqual([["_deleteAll", true, "userId"], ["_deleteAll", true, "userId"]]);
+  const deleteAll = ts.findAncestor(erasures[0], ts.isMethodDeclaration), owner = deleteAll.parameters[0].name.getText();
+  expect(erasures.map(write => [functionName(write), settled(write, deleteAll), ownerOf(write)]))
+    .toEqual([["_deleteAll", true, owner], ["_deleteAll", true, owner]]);
   const callers = allFiles().flatMap(file => callsTo(file, "_deleteAll"));
   expect(callers.map(call => runKindOf(runCallOf(call)) || fallbackBranch(call))).toEqual(["erase", "no coordinator"]);
-  expect(settled(callers[0], runCallOf(callers[0]).arguments[2])).toBe(true);
+  const run = runCallOf(callers[0]);
+  expect([settled(callers[0], run.arguments[2]), callers[0].arguments[0].getText()]).toEqual([true, run.arguments[0].getText()]);
   // The coordinator is missing only when the context has no device-token collection.
   const assignments = nodes(parse(GDPR), n => ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken
     && n.left.getText() === "this.credentialWrites");

@@ -87,8 +87,9 @@ and the realtime state behind the one-instance pin. Each row has one of five
 classes, and the last column bounds how long it can disagree with a peer:
 
 - **Durable fencing** is a durable row read or written with majority or
-  transactional semantics. Only this class can authorize work that must hold
-  against a peer's credential or semantic write.
+  transactional semantics. Only this class, or a local lease derived from one of
+  its majority-acknowledged grants, can authorize work that must hold against a
+  peer's credential or semantic write.
 - **Durable advisory** is a durable value or wall-clock lease that each process
   reads for itself. A change retires local state or blocks a claim; it never
   proves freshness or authorizes on its own.
@@ -105,7 +106,7 @@ classes, and the last column bounds how long it can disagree with a peer:
 | --- | --- | --- | --- |
 | `UserRevision` tokens, process epoch, owners, dirty and poisoned marks | `util/userRevision.js:11-21` | Local state | None; peers never see them, and the marks can only deny reuse locally |
 | `users.dataRev` | `util/userRevision.js:61-88,109-139` | Durable advisory | Re-read by every guarded request. A higher value retires; equality never proves freshness, and a first observation adopts it unchecked (`:126-131`). A flag-off process never bumps it (`:55,102`) |
-| `UserCache` entries and ETag salt | `middleware/userCache.js:10-12,19-33` | Local reuse | 600 s after storage (`:11,222-223,269`), plus the computation's duration |
+| `UserCache` entries and ETag salt | `middleware/userCache.js:10-12,19-33` | Local reuse | 600 s after storage (`:11,222-223,269`), plus the computation's duration and any adopted join age |
 | TrendsRequests in-flight joins | `services/trendsRequests.js:4-5,21-28,76-84` | Local reuse | 30 s; the join key carries no revision (`:79`), and covered and uncovered kinds share keys such as `dateRange` (`services/aggregations.js:634`) |
 | `cached()` completed memo (random summary only, not covered) | `services/trendsRequests.js:42-67` | Local reuse | 60 s |
 | Momentum session-policy reuse gate | `services/sessionResolutionGate.js:14` | Local reuse | 15 s |
@@ -116,9 +117,9 @@ classes, and the last column bounds how long it can disagree with a peer:
 | Credential authority record in `jobLocks` | `services/deviceCredentialWrites.js:7,12,90-133`; `services/deviceCredentialPreparation.js:38-45` | Durable fencing | Majority writes; 2.1-second writer drain |
 | `gameStatsMutationEpoch` and `_gdprMutation` | `services/gameStatsWrites.js:89-93,147-154`; `services/gameStatsMaintenance.js:88-97,103-106` | Durable fencing | Checked inside majority snapshot transactions |
 | GDPR repair liveness handle | `services/gdprRepairLiveness.js:15-19,80-97` | Local state | None; deny-only, and it cannot see lease expiry or loss in another process |
-| User-data write fence lease | `middleware/userDataWriteFence.js:4,13-27,50-56` | Durable advisory | 15-minute lease on the claimant's wall clock, renewed every 60 s until release, response close or a failed renewal. An abandoned lease blocks GDPR claims for at most 15 minutes after its last renewal (`services/gdpr.js:1331-1334,1373-1379`). Admitted requests are not re-checked, and it never touches `dataRev` |
+| User-data write fence lease | `middleware/userDataWriteFence.js:4,13-27,50-56` | Durable advisory | 15-minute lease on the claimant's wall clock, renewed every 60 s until release, response close or a failed renewal. An abandoned lease blocks GDPR claims for at most 15 minutes after its last renewal, as the GDPR process's wall clock judges the claimant's stamp, so clock skew adds to it (`services/gdpr.js:1331-1334,1373-1379`). Admitted requests are not re-checked, and it never touches `dataRev` |
 | Generic job-lock leases | `util/jobLock.js:4,63-70,80-86` | Durable advisory | One lease, stamped from the holder's wall clock and judged against the acquirer's. The holder re-checks only between steps and its writes carry no owner condition, so a holder paused past expiry can overlap its successor. Never authorizes |
-| Socket.io rooms, LiveGameBroker and rate-limit stores | `server.js:89-95`; `services/liveGameBroker.js:22-27,96-140`; `middleware/boundedRateLimitStore.js:12-14` | Local state | None. The pin prevents only a steady-state split; every deploy, restart or flag-change overlap splits rooms, live snapshots and rate-limit windows until the old process closes HTTP and Socket.io (`server.js:432-435`) |
+| Socket.io rooms, LiveGameBroker and rate-limit stores | `server.js:89-95`; `services/liveGameBroker.js:22-27,96-140`; `middleware/boundedRateLimitStore.js:12-14` | Local state | None. The pin prevents only a steady-state split; every deploy, restart or flag-change overlap splits rooms, live snapshots and rate-limit windows until the old process closes HTTP and Socket.io (`server.js:432-435`), or, if an earlier stop rejects, until the platform kills it |
 
 No invalidation broadcast and no durable record of serving processes exist.
 Retained keys contain process-local parts, the process epoch and token ids
@@ -137,7 +138,7 @@ process during an overlap stays authorized on the new process until it restarts.
 | G1 | Every writer of a covered input invalidates retained bodies | Met only inside one flag-on process running the current writer set. Unmet for flag-off processes, older writer sets during an overlap, out-of-band migrations, manual edits and raw restores | In-process writers call `gameWrite` (`util/userRevision.js:163`; `docs/engineeringexplanation.md:408-412`); flag-off processes skip revision work (`util/userRevision.js:55,102`); `db/migrations/2026-09-30-rename-8-pool-builds.js:50,115-119` rewrites build and strategy labels with a plain `updateMany` |
 | G2 | Revision uncertainty is visible across the fleet | Unmet | A failed, unknown or skipped bump marks only the local owner dirty (`util/userRevision.js:69,86-88`) |
 | G3 | In-flight writes are visible across processes | Unmet | The bump runs after the semantic write and outside its transaction (`util/userRevision.js:61-85`); until a peer reads it, the peer can serve or 304 the prior body |
-| G4 | Staleness has a time bound | Met per process | Entries leave the cache 600 s after they are stored (`middleware/userCache.js:11,123,222-223,269`), and curve-dependent entries with their proof (`:268-270`). A body's data can be older by the computation's duration and the age of an adopted join (under 30 s). Chart pipelines set no deadline beyond the 30-second Mongo socket timeout per round trip (`db/connect.js:103`; `config/constants.js:288`). This is the only bound on the G1 and G2 gaps, and on G3 when the bump fails |
+| G4 | Staleness has a time bound | Met per process | Entries leave the cache 600 s after they are stored (`middleware/userCache.js:11,123,222-223,269`), and curve-dependent entries with their proof (`:268-270`). A body's data can be older by the computation's duration and the age of an adopted join: under 30 s per join, and under 60 s when an adopted chart join itself adopted the shared `dateRange` probe. Chart pipelines set no deadline beyond the 30-second Mongo socket timeout per round trip (`db/connect.js:103`; `config/constants.js:288`). This is the only bound on the G1 and G2 gaps, and on G3 when the bump fails |
 | G5 | A validator never matches stale state from another process | Met for opaque tags only | Tags use a per-process salt and epoch (`middleware/userCache.js:31,219,257`; `util/userRevision.js:15`), so a peer's tag gets a full 200. `If-None-Match: *` matches any retained entry (`middleware/userCache.js:299`) |
 | G6 | Deleted or GDPR-locked owners are never served | Met | Each guarded request re-reads the durable rows (`util/userRevision.js:119-125`) |
 
@@ -153,11 +154,13 @@ and the session-policy reuse. Any caller that skips the guard can seed that stat
   (`routes/aggregations.js:139-153`), whose `dateRange` probe
   (`services/aggregations.js:634`) the covered timeseries, MMR progression and
   map trend adopt (`services/aggregations.js:474`; `services/trendsInsights.js:92-93,806-807`);
-- the session-policy read in `routes/me.js:235` (`services/sessionPolicy.js:47-48`).
+- session-policy reads without a known value, which share momentum's reuse key
+  (`services/sessionPolicy.js:47-48,74`): `routes/me.js:235`, and the session list
+  and detail (`routes/sessions.js:17,19`; `services/sessionHistory.js:92,99`).
 
-A first-observation request can therefore adopt a join up to 30 seconds old that
-began before another process's write, then retain its result for up to 600
-seconds. A later observation of a higher `dataRev` retires locally and answers
+A first-observation request can therefore adopt a join up to 30 seconds old,
+whose inner `dateRange` input can be up to 60 seconds old, that began before
+another process's write, then retain its result for up to 600 seconds. A later observation of a higher `dataRev` retires locally and answers
 that request with a 503 and `Retry-After: 1` (`middleware/userCache.js:118-120,156-158`).
 New kinds inherit this and every row above.
 
@@ -165,16 +168,17 @@ New kinds inherit this and every row above.
 
 A response kind may join the allowlist (`middleware/userCache.js:7-9`) while the
 flag stays off only when a reviewer can tick every line with file:line evidence
-at the pull request's head, and the pull request description states what items 8
-and 11 require. Admission wires an unchanged computation: items 1-4 already hold
-at the base.
+at the pull request's head, and the pull request description states what items 8,
+9 and 11 require. Admission wires an unchanged computation: items 1-4 already
+hold at the base.
 
 1. **Owner games only.** Every database read in the computation is on `games`
    and starts with `gamesMatchStage(userId, filters)` (`util/parseQuery.js:240-247`).
    There is no `$lookup`, `$unionWith` or other collection.
 2. **Fenced writers.** Every field it reads, filter fields included, is written
-   only inside `gameWrite` or `UserRevision.run` (`util/userRevision.js:98-106,163`)
-   or is already read by a covered kind. Out-of-band writers stay G1 activation gates.
+   only inside `gameWrite` or `UserRevision.run` (`util/userRevision.js:98-106,163`),
+   or, when a new kind is admitted, is already read by a covered kind. Out-of-band
+   writers stay G1 gaps.
 3. **No completed owner-data memo.** An inner memo of owner data must be retired
    by the `UserRevision` invalidator (`app.js:1004-1007,1011-1019`;
    `services/trendsRequests.js:31-36`). A completed-result memo disqualifies the
@@ -185,8 +189,8 @@ at the base.
 4. **No clock in the result.** No value derived from the current time (`Date.now`,
    `new Date()`, `$$NOW` or a relative window) reaches a query, pipeline or
    response body. Timers that only age joins or expire reuse are exempt, such as
-   TrendsRequests join aging (`services/trendsRequests.js:75-78`) and the item-6
-   proof expiry (`services/mmrExpectation.js:84-89`).
+   TrendsRequests join aging (`services/trendsRequests.js:75-78`) and the curve
+   memo's expiry behind item 6 (`services/mmrExpectation.js:84-89`).
 5. **Other collections only before admission.** A route-level read of another
    collection is allowed only when its result is part of the key and checked by
    a publish guard, as momentum's session policy is (`routes/aggregations.js:224-235`).
@@ -216,8 +220,9 @@ at the base.
     evidence.
 
 Items 1-10 are the per-kind dependency and revocation audit. Item 11 binds the
-kind to the shared-fleet audit recorded in the three sections above, whose unmet
-rows (G1-G3) remain activation gates. Together they are the audits the roadmap
+kind to the shared-fleet audit recorded in the three sections above. G1-G3 stay
+unmet: chart-cache activation never meets them and covers them only through the
+receipt rows under Activation receipts. Together these are the audits the roadmap
 requires before source coverage grows beyond fifteen kinds. They qualify source
 coverage only while the flag stays off and are never activation evidence.
 
@@ -254,22 +259,26 @@ fixed when it is loaded (`:185-190`). The 30-second latestAgent memo
 
 `apps/api/__tests__/deviceCredentialWriterInventory.test.js` checks the source
 against its own copy of this table and fails closed. It resolves direct
-properties, element access, `collection(...)` calls, local aliases and
-destructured bindings, and it fails on:
+properties, element access, `collection(...)` calls, block-scoped local aliases,
+destructured bindings, assignment patterns and reassignment, and it fails on:
 
-- an unclassified file naming the collection or an exported list that names it;
+- an unclassified file naming the collection or an exported list that names it,
+  including a list derived from one;
 - any other use of the collection, such as a new writer, hand-off or escape;
 - a read that could write, such as an `$out` or `$merge` stage or a TTL index;
-- an unresolved write in a classified file outside its listed loops and parameters;
-- an authority write that is not awaited inside the coordinator for the same owner;
+- an unresolved write, aggregation or database-level command in a classified file
+  outside its listed loops, parameters and command documents;
+- an authority write that is not awaited inside the coordinator, directly or
+  through an allowlisted wrapper, for the same top-level owner;
 - a metadata writer whose literal `$set` writes anything but metadata fields, or
   which may upsert.
 
 It is lexical evidence, not a runtime, failover, clock or separate-process proof.
-It cannot see manual edits, raw restores, code outside `apps/api`, iteration over
-the whole `COLLECTIONS` or schema registry, or a collection reached through a
-parameter of a function in an unclassified file. It does not read this ADR, so
-this table and its citations stay in step by review.
+It cannot see manual edits, raw restores, code outside `apps/api`, names built at
+run time from non-literal parts, iteration over the whole database context or the
+`COLLECTIONS` or schema registry, or a collection reached through a parameter of
+a function in an unclassified file. It does not read this ADR, so this table and
+its citations stay in step by review.
 
 ### Transcribed reviewed design
 
@@ -320,11 +329,11 @@ choice departs from the design. The design says never to delete or recreate the
 authority record automatically and makes repair an authorized step (design line
 44). A writer that finds the record missing recreates it in prepared mode
 (`services/deviceCredentialPreparation.js:38-45`; `services/deviceCredentialWrites.js:48-52`).
-This loosens the design. It is accepted only because prepared mode grants
-nothing, every gate still drains in full, a recreated record's empty pending list
-is not settlement evidence, recreation can lose the predecessor's unresolved
-scopes (`docs/handoff/device-auth-reuse-checkpoint.md:107-115`), and any
-activation needs a new binding to that incarnation
+This loosens the design. Recreation can lose the predecessor's unresolved scopes,
+so a recreated record's empty pending list is not settlement evidence
+(`docs/handoff/device-auth-reuse-checkpoint.md:107-115`). The departure is
+accepted only because prepared mode grants nothing, every gate still drains in
+full, and any activation needs a new binding to that incarnation
 (`docs/adr/0071-device-credential-readiness.md:55-56`).
 
 The constants in source match the design's examples: an 1800 ms reader grant
@@ -358,16 +367,19 @@ While retention could be active, each of these needs its barrier first:
   `docs/handoff/device-auth-reuse-checkpoint.md:187-188`). Re-enable only after a
   new all-writers, old-actor proof and a reviewed activation CAS (design lines
   248-249).
-- **Scripts and manual device-token edits.** A `denyAll` drain barrier (design
-  line 250; `docs/handoff/device-auth-reuse-checkpoint.md:188-190`), which stays
-  set until explicit settlement.
+- **Scripts outside this protocol and manual device-token edits.** A `denyAll`
+  drain barrier (design line 250; `docs/handoff/device-auth-reuse-checkpoint.md:188-190`),
+  which stays set until explicit settlement (design line 81;
+  `services/deviceCredentialWrites.js:87-89`).
 - **Raw restores and manual edits of the authority record.** The same barrier,
-  plus a fresh incarnation. This last step is this ADR's own rule: a restored or
-  edited record can carry a rewound generation, mode or pending list, so a
-  disable set before the write does not survive it (compare
-  `docs/runbooks/restore-database.md:164-167`). Never mint that incarnation by
-  deleting a live record so a writer recreates it, because the insert resets
-  pending and `denyAll` (`services/deviceCredentialPreparation.js:38-45`).
+  then the design's authorized repair: a fresh incarnation and generation, with
+  grants kept disabled and the old lease bound drained (design line 44). A
+  restored or edited record can carry a rewound generation, mode or pending list,
+  so a disable set before the write does not survive it (compare
+  `docs/runbooks/restore-database.md:164-167`). No repair primitive exists yet.
+  It must never mint the incarnation by deleting a live record so that a writer
+  recreates it, because that insert resets pending and `denyAll`
+  (`services/deviceCredentialPreparation.js:38-45`).
 
 No durable disable exists yet, so retention must not be activated before one
 ships.
@@ -394,7 +406,8 @@ authentication authority.
 | Clock rate and suspension behavior verified | Unmet; the constants are proposed (`docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:89-91`; `docs/adr/0071-device-credential-readiness.md:56-57`) |
 | Primary change and election behavior verified | Unmet (`docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:89-91`) |
 | Separate-process evidence | Unmet (`docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:89-91`) |
-| Durable disable and rollback primitive | Unmet; the rollback rule requires one (`docs/adr/0071-device-credential-readiness.md:59-60`; `docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:114`), and the source has no disable path (`services/deviceCredentialWrites.js:23-25`; `services/deviceAuthLease.js:12-13`) |
+| Durable disable and rollback primitive | Unmet; the rollback rule requires one (`docs/adr/0071-device-credential-readiness.md:59-60`; `docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:114`). The source has no deliberate disable: `denyAll` is set only by pending overflow or a missing owner scope (`services/deviceCredentialWrites.js:87-89,98`), and nothing exposes a way to set it (`:23-25`; `services/deviceAuthLease.js:12-13`) |
+| Authorized repair that mints a fresh incarnation | Unmet; the only source path that mints one recreates a missing record (`services/deviceCredentialPreparation.js:38-45`), which this ADR forbids as a repair |
 | Failed-probe suppression | Unmet; a gate this ADR adds. A probe that settles without a grant is cleared, so the next demand dispatches a new majority write (`services/deviceAuthLease.js:47-61`; `apps/api/__tests__/deviceAuthLease.test.js:69-77`). An injected adapter facing a prepared, missing or unreachable record would add probes to ordinary authentication, which ADR 0071 avoids today by not injecting it (`docs/adr/0071-device-credential-readiness.md:47-48`) |
 | Reviewed activation CAS | Unmet (`docs/adr/0071-device-credential-readiness.md:49,56-57`; `services/deviceAuthLease.js:12-13`) |
 
@@ -409,7 +422,7 @@ under `apps/api/scripts`, manual database edits and raw restores.
 - **Chart cache.** Deploy with the flag off and let the old process retire under
   the assumed bound before the write. The flag is read once at boot and retained
   bodies live only in process memory (`config/loader.js:151`; `app.js:394-396`;
-  `middleware/userCache.js:10-12`), so that deploy discards them. Turn the flag
+  `middleware/userCache.js:19-33`), so that deploy discards them. Turn the flag
   back on only with a fresh receipt.
 - **Device credentials.** Use the barriers under Scope. Until a disable primitive
   exists, the only compliant state is that retention is not active.
@@ -419,19 +432,20 @@ under `apps/api/scripts`, manual database edits and raw restores.
 Neither enabling `USER_CACHE_ENABLED` nor activating retained device auth may rely
 on this ADR. Each needs a fresh read-only receipt, taken for a scheduled
 activation review. This slice produces none. A receipt is necessary, not
-sufficient: activation also needs every other gate in this ADR met.
+sufficient. Device-auth activation also needs every row of its Gates table met.
+Chart-cache activation needs every chart-cache receipt row; G1-G3 stay unmet and
+are covered only as those rows allow.
 
 For the chart cache, activation is the flag-on deploy. For device auth, activation
 is the reviewed activation CAS, never a deploy or a boot (design line 249,
 transcribed above), in this order:
 
-1. Once failed-probe suppression has shipped, inject `deviceTokenReuse` in a deploy
-   while the record stays prepared, which grants nothing
-   (`services/deviceAuthAuthority.js:11-17`).
-2. After that deploy's predecessor has retired, take the receipt of the injected
+1. Ship failed-probe suppression and the disable primitive.
+2. Inject `deviceTokenReuse` in a deploy while the record stays prepared, which
+   grants nothing (`services/deviceAuthAuthority.js:11-17`).
+3. After that deploy's predecessor has retired, take the receipt of the injected
    cohort.
-3. With the disable primitive shipped, run the CAS with the receipt's protocol,
-   namespace, incarnation and generation.
+4. Run the CAS with the receipt's protocol, namespace, incarnation and generation.
 
 Any deploy, restart, flag change, fleet-shape change or out-of-band write between
 the receipt and the CAS voids it.
@@ -456,9 +470,9 @@ names serving processes.
 | Earlier processes: every other process in the retained logs and every earlier deploy or restart shows `shutdown_complete`; any that does not is named, and its exit rests on the assumed bound | Both | Logs and the event history |
 | One cohort: no deploy, restart, flag change or fleet-shape change since the predecessor retired | Both | Owner-run read of the deploy and event history |
 | Out-of-band freeze: none is running or scheduled, and none ran since the predecessor retired | Both | Owner attestation |
-| Writer set: the review re-derives the writers of every covered input at the serving revision and cites them, re-ticking checklist item 2 | Chart cache | Repository review |
+| Writer set: the review re-derives the writers of every covered input at the serving revision and cites them. Each in-process writer runs inside `gameWrite` with the app-level `UserRevision` passed in (`util/userRevision.js:163` runs the work unfenced without one) or inside `UserRevision.run`; this is item 2's first clause only. Any other writer is named as a G1 gap under the freeze, and an unfenced in-process writer fails the receipt | Chart cache | Repository review |
 | Configured flag value and the admin tile reading | Chart cache | Owner-run dashboard read and the tile |
-| Overlap guard deployed, or the retention window accepted for activation and every later overlap while the flag is on | Chart cache | Repository and review |
+| Overlap guard deployed with its residual window accepted, or the full retention window accepted, for activation and every later overlap while the flag is on | Chart cache | Repository and review |
 | Writer set: the serving revision contains every writer in the actor table, and the inventory test passes there | Device auth | Repository |
 | Authority record: protocol, namespace, incarnation, generation, mode, pending and `denyAll` at a causal majority read | Device auth | Owner-run read |
 | Readiness digest equals the read record's incarnation digest | Device auth | Log and read |
@@ -470,10 +484,10 @@ flag change, fleet-shape change or out-of-band write. A decayed receipt supports
 nothing. For the chart cache, activation is itself a deploy, and while the flag is
 on every later deploy (each merge, under `autoDeploy: true`), restart or flag
 change, including turning the flag off, is another overlap. Each is covered only
-by the deployed guard below, or by an activation review that explicitly accepts
-the retention window for every overlap while the flag stays on. That window is
-600 s after the last retained store, plus that computation's duration and any
-adopted join age. Turning the flag off is not a substitute, because flag-off
+by the deployed guard below with its residual window accepted, or by an
+activation review that explicitly accepts the full retention window for every
+overlap while the flag stays on. That window is 600 s after the last retained
+store, plus that computation's duration and any adopted join age. Turning the flag off is not a substitute, because flag-off
 processes never bump `dataRev`. Device auth accepts no overlap window: after
 activation, overlap is safe only among protocol-v1 actors (design line 250).
 
@@ -497,10 +511,18 @@ new infrastructure and stays default-off.
 - **Startup cohort record.** A log line carries the revision, flag value and
   quarantine end.
 
-A flag-off successor never bumps `dataRev` (`util/userRevision.js:55,102`), so
-during a deactivation or rollback deploy a flag-on predecessor keeps serving
-retained bodies until SIGTERM; shutdown-start retirement ends that at the signal.
-A durable cohort registration in `jobLocks` is deferred, and is reconsidered only
+The guard leaves a residual window that the review must accept explicitly. Until
+its SIGTERM, and within the G4 window, a flag-on predecessor keeps serving
+retained bodies in three cases:
+
+- after a successor write whose bump fails or is skipped (`util/userRevision.js:69,86-88`);
+- while a successor's bump is in flight (`:61-85`);
+- after any write by a flag-off successor, which never bumps (`:55,102`), as in a
+  deactivation or rollback deploy.
+
+Shutdown-start retirement ends each case at the signal, so the residual runs from
+the successor becoming healthy to the predecessor's SIGTERM, under the second
+assumed bound. A durable cohort registration in `jobLocks` is deferred, and is reconsidered only
 if either provider bound cannot be qualified. A pub/sub broadcast is excluded as
 new infrastructure (`apps/api/render.yaml:20-30`).
 
@@ -512,11 +534,16 @@ Update this ADR in the same pull request, with fresh citations, when a change:
 - adds a process-local cache that answers for durable state read by a covered
   kind or a device-credential path;
 - adds, moves or reclassifies a device-credential writer or reader path;
+- adds or removes an unguarded first-observation source, which the list under
+  Chart-cache guarantees must then match: a caller outside `send(kind)` of a
+  covered kind's method that runs through TrendsRequests, another caller of a
+  TrendsRequests or session-policy key that a covered kind adopts, or a change to
+  which requests bypass the guard (`middleware/userCache.js:109-111`);
 - changes the fleet shape, the shutdown order, the logs a receipt relies on, or a
   time bound, size cap or constant cited here, such as the 1800 ms and 2100 ms
   constants, the 600-second cache TTL, the 30-second join age or the 60-second
   device-auth entry lifetime;
-- changes the `UserRevision` invalidator wiring (`app.js:1011-1019`) or ADR 0071's
+- changes the `UserRevision` invalidator wiring (`app.js:1004-1007,1011-1019`) or ADR 0071's
   activation and rollback prerequisites.
 
 The inventory test fails when the source drifts from its own copy of the

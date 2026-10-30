@@ -238,7 +238,8 @@ recreates any missing indexes. Then confirm:
   update were not logged; reconcile those with the admin and affected users.
 - **Device unpairs after the restore point are undone.** Device sign-in reads
   only the restored `device_tokens` rows, so a device unpaired after the
-  restore time authenticates again from the moment the service resumes. No
+  restore time can authenticate again, if its agent still holds the token,
+  from the moment the service resumes. No
   dedicated event records an unpair: search the request logs from the restore
   time onward for `DELETE /v1/devices/<deviceId>` answered 204, and read
   `userId` from the restored `device_tokens` row with that `_id`. Re-apply each
