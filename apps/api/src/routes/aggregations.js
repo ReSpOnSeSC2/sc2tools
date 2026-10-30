@@ -403,7 +403,7 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.macroReport.report(userId, filters));
+      await send(req, res, userId, "macroReport", filters, {}, () => deps.macroReport.report(userId, filters));
     } catch (err) {
       next(err);
     }
@@ -416,7 +416,7 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.streak.current(userId, filters));
+      await send(req, res, userId, "streak", filters, {}, () => deps.streak.current(userId, filters));
     } catch (err) {
       next(err);
     }
