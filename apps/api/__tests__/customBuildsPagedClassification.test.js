@@ -39,6 +39,13 @@ function replay(index = 0, overrides = {}) {
   };
 }
 
+async function definitionStore(uri) {
+  const connected = await connect({ uri, dbName: "custom_build_paged_classification" });
+  await connected.users.insertOne({ userId: USER_ID });
+  const { client, users, gameStatsTransactions } = connected;
+  return { client, definitionContext: { client, users, gameStatsTransactions } };
+}
+
 describe("classification across bounded custom-build pages", () => {
   let mongo;
   let client;
@@ -50,11 +57,8 @@ describe("classification across bounded custom-build pages", () => {
 
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create();
-    const connected = await connect({ uri: mongo.getUri(), dbName: "custom_build_paged_classification" });
-    client = connected.client;
+    ({ client, definitionContext } = await definitionStore(mongo.getUri()));
     db = client.db("custom_build_paged_classification");
-    definitionContext = { client, users: connected.users, gameStatsTransactions: connected.gameStatsTransactions };
-    await connected.users.insertOne({ userId: USER_ID });
     games = db.collection("games");
     builds = db.collection("custom_builds");
     await builds.createIndex({ userId: 1, slug: 1 }, { unique: true });

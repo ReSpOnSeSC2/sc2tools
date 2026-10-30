@@ -284,7 +284,7 @@ function startDefinition(state, queue) {
 /** @param {DefinitionReservation} state @returns {Promise<GameStatsOwner>} */
 async function captureDefinitionOwner(state) {
   const owner = immutableNeutralOwner(await state.writer.capture(state.userId));
-  if (owner.id === null || !state.writer.db.client?.startSession) throw failure("game_stats_owner_unavailable");
+  if (owner.userId !== state.userId || owner.id === null || !state.writer.db.client?.startSession) throw failure("game_stats_owner_unavailable");
   return owner;
 }
 
@@ -311,7 +311,7 @@ async function runDefinition(state) {
  * never cancelled, relabelled or released by abandonment.
  * @param {DefinitionReservation} state @param {unknown} error @returns {Promise<void>} */
 function abandonDefinition(state, error) {
-  if (!state.committed) { state.abandoned = true; state.reason = error; }
+  if (!state.committed && !state.abandoned) { state.abandoned = true; state.reason = error; }
   if (!state.started) {
     /** @type {DefinitionOutcome<unknown>} */ const queued = { ok: false, error };
     state.queue = Promise.resolve(queued);

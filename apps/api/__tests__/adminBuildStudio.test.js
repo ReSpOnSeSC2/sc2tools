@@ -244,7 +244,7 @@ test("a losing cross-process admin rename cannot partially change confirmed game
   const actualUpdate = db.users.findOneAndUpdate.bind(db.users);
   let held = false;
   const spy = jest.spyOn(db.users, "findOneAndUpdate").mockImplementation(async (...args) => {
-    if (!held && args[0]?.userId === raceOwner && typeof /** @type {any} */ (args[1])?.$set?.gameStatsRevision === "string") {
+    if (!held && /** @type {{userId?:unknown}} */ (args[0])?.userId === raceOwner && typeof /** @type {any} */ (args[1])?.$set?.gameStatsRevision === "string") {
       held = true; entered(); await hold;
     }
     return actualUpdate(...args);

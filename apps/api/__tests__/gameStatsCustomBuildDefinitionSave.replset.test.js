@@ -298,19 +298,24 @@ function sessionFault(mode, wrapper) {
   return observed;
 }
 const compoundCases = ["success", "primary", "unknown", "retry-ack"].flatMap(mode => [false, true].map(loggerThrows => ({ mode, loggerThrows })));
+function mainOutcome(mode) {
+  const committed = mode !== "primary";
+  return { rejects: mode === "primary" || mode === "unknown", commits: mode === "primary" ? 0 : mode === "retry-ack" ? 2 : 1,
+    revision: committed ? 1 : 0, history: committed ? 1 : 0, notifications: mode === "success" || mode === "retry-ack" ? 1 : 0 };
+}
 test.each(compoundCases)("main real outcome $mode + disposal failure/loggerThrows=$loggerThrows", async ({ mode, loggerThrows }) => {
   const { before } = await seed(); await statsReadFloorFor(db)();
   const diagnostic = { warn: jest.fn(() => { if (loggerThrows) throw new Error("logger failed"); }) };
   const revisions = new UserRevision(db.users, { enabled: true }), saved = service({ logger: diagnostic, userRevision: revisions });
-  const oldView = await revisions.snapshot(userId), fault = sessionFault(mode, "main");
+  const oldView = await revisions.snapshot(userId), fault = sessionFault(mode, "main"), expected = mainOutcome(mode);
   const task = saved.custom.upsert(userId, definition(), { expectedRevision: 0, recordHistory: true });
-  if (mode === "primary" || mode === "unknown") await expect(task).rejects.toBe(fault.original); else await expect(task).resolves.toBeUndefined();
-  expect(fault.sessions).toBe(1); expect(fault.disposals).toBe(1); expect(fault.commits).toBe(mode === "primary" ? 0 : mode === "retry-ack" ? 2 : 1);
+  if (expected.rejects) await expect(task).rejects.toBe(fault.original); else await expect(task).resolves.toBeUndefined();
+  expect(fault.sessions).toBe(1); expect(fault.disposals).toBe(1); expect(fault.commits).toBe(expected.commits);
   expect(diagnostic.warn).toHaveBeenCalledWith({ err: fault.cleanup }, "game_stats_session_cleanup_failed");
-  const result = await db.customBuilds.findOne({ userId }); expect(result.definitionRevision).toBe(mode === "primary" ? 0 : 1);
-  expect(result._definitionHistory?.length || 0).toBe(mode === "primary" ? 0 : 1);
-  expect(saved.onDefinitionsChanged).toHaveBeenCalledTimes(mode === "success" || mode === "retry-ack" ? 1 : 0);
-  expect(saved.onGamesChanged).toHaveBeenCalledTimes(mode === "success" || mode === "retry-ack" ? 1 : 0);
+  const result = await db.customBuilds.findOne({ userId }); expect(result.definitionRevision).toBe(expected.revision);
+  expect(result._definitionHistory?.length || 0).toBe(expected.history);
+  expect(saved.onDefinitionsChanged).toHaveBeenCalledTimes(expected.notifications);
+  expect(saved.onGamesChanged).toHaveBeenCalledTimes(expected.notifications);
   expect(revisions.current(oldView)).toBe(false); expect((await row()).gameStats).toEqual(before.gameStats);
 });
 

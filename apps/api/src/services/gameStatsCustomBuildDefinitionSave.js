@@ -7,20 +7,38 @@ const { renameCustomOverrides, renameCustomOpponentOverrides } = require("./buil
 /** @typedef {{kind:"customBuildDefinitionSave",definition:{slug:string}&Record<string,unknown>,
  * expectedRevision?:number,expectedId?:string,recordHistory?:boolean}} DefinitionSaveMutation */
 
+/** Descriptors issued below, with their private data deep-frozen. The
+ * in-transaction re-check returns them as-is: structuredClone may build the
+ * private copy in a host realm (as under Jest), so re-validating it against
+ * this realm's prototypes would reject valid data. */
+const issuedDefinitionSaves = new WeakSet();
+
 /** Closed root data only; never a query, callback, session or neutrality flag.
  * The private definition keeps the established save fields and their bounds.
  * @param {DefinitionSaveMutation} input @returns {Readonly<DefinitionSaveMutation>} */
 function immutableCustomBuildDefinitionSave(input) {
+  if (issuedDefinitionSaves.has(input)) return input;
   if (!definitionFields(input)) throw definitionInvalid();
   const privateData = definitionSaveData(input.definition);
-  if (!privateData.slug) throw new Error("slug required");
+  if (typeof privateData.slug !== "string" || !privateData.slug) throw new Error("slug required");
   if (!definitionData(privateData, new Set())) throw definitionInvalid();
-  const definition = structuredClone(privateData);
+  const definition = frozenDefinitionData(structuredClone(privateData));
+  const issued = Object.freeze(definitionOptions(input, definition));
+  issuedDefinitionSaves.add(issued);
+  return issued;
+}
+
+/** Validate and snapshot only the existing CAS/history options. The original
+ * ID validation precedes private freezing and option copying for valid data.
+ * @param {DefinitionSaveMutation} input @param {{slug:string}&Record<string,unknown>} definition
+ * @returns {DefinitionSaveMutation} */
+function definitionOptions(input, definition) {
+  if (input.expectedRevision !== undefined && typeof input.expectedRevision !== "number") throw definitionInvalid();
   if (input.expectedId && typeof input.expectedId !== "string") throw definitionInvalid();
   if (input.expectedId) new ObjectId(input.expectedId);
-  return Object.freeze({ kind: "customBuildDefinitionSave", definition: Object.freeze(definition),
+  return { kind: "customBuildDefinitionSave", definition: Object.freeze(definition),
     ...(input.expectedRevision === undefined ? {} : { expectedRevision: structuredClone(input.expectedRevision) }),
-    ...(input.expectedId === undefined ? {} : { expectedId: input.expectedId }), recordHistory: !!input.recordHistory });
+    ...(input.expectedId === undefined ? {} : { expectedId: input.expectedId }), recordHistory: !!input.recordHistory };
 }
 
 /** @param {DefinitionSaveMutation} input */
@@ -60,6 +78,17 @@ function definitionData(input, seen) {
   const valid = Object.values(descriptors).every(field => definitionData(field.value, seen));
   seen.delete(input);
   return valid;
+}
+
+/** Freeze the validated private copy throughout, so an issued descriptor's
+ * structure cannot change after validation (a Date keeps its own time value).
+ * @param {any} value @returns {any} */
+function frozenDefinitionData(value) {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const field of Object.values(value)) frozenDefinitionData(field);
+  }
+  return value;
 }
 
 /** Fixed body shares the owner's transaction; compatibility alone owns the

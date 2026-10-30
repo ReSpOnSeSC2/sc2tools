@@ -37,7 +37,7 @@ function harness() {
   const customBuilds = { findOne: jest.fn(async () => { events.push("definition-read"); return previous; }),
     aggregate: jest.fn(() => ({ next: async () => { events.push("definition-read"); return previous; } })),
     updateOne: jest.fn(async () => { events.push("definition-save"); return { acknowledged: true, matchedCount: 1, modifiedCount: 1 }; }) };
-  const db = { users, games, customBuilds, gameStatsTransactions: true, client: { startSession: jest.fn(() => session) } };
+  const db = { users, games, customBuilds, customBuildJobs: {}, gameStatsTransactions: true, client: { startSession: jest.fn(() => session) } };
   const logger = { warn: jest.fn() }, writer = new GameStatsWrites(db, logger);
   const custom = new CustomBuildsService(db, { logger }); custom.gameStatsWrites = writer;
   return { owner, before, previous, events, session, users, games, customBuilds, db, logger, writer, custom };
@@ -79,13 +79,11 @@ test("accepted large private data is copied without a 16 KiB public-history subs
   expect(captured.definition.signature[0].unit).toBe("x".repeat(80));
 });
 
-test("legacy falsey ID/undefined revision stay ordinary but null revision never becomes unfenced", () => {
+test("legacy falsey ID/undefined revision stay ordinary but invalid null revision rejects", () => {
   const ordinary = immutableCustomBuildDefinitionSave(data({ expectedRevision: undefined, expectedId: "", recordHistory: "yes" }));
   const command = definitionWriteCommand(userId, ordinary, null, played);
   expect(ordinary.recordHistory).toBe(true); expect(command.upsert).toBe(true); expect(command.filter).toEqual({ userId, slug: "saved" });
-  const invalidFence = immutableCustomBuildDefinitionSave(data({ expectedRevision: null }));
-  const fenced = definitionWriteCommand(userId, invalidFence, null, played);
-  expect(fenced.upsert).toBe(false); expect(fenced.filter).toMatchObject({ definitionRevision: null, deletedAt: { $exists: false } });
+  expect(() => immutableCustomBuildDefinitionSave(data({ expectedRevision: null }))).toThrow("game_stats_neutral_operation_invalid");
 });
 
 test("MAX8 is charged before FIFO or capture, and shutdown closes unused reservations", async () => {
@@ -276,4 +274,43 @@ test("setup throw abandons its reservation without capture or a stranded drain",
   jest.spyOn(h.custom, "_withUserBuildMutation").mockImplementation(() => { throw original; });
   await expect(h.custom.upsert(userId, definition())).rejects.toBe(original); await h.writer.stopAndDrain();
   expect(capture).not.toHaveBeenCalled(); expect(h.writer.pending.size).toBe(0); expect(h.customBuilds.updateOne).not.toHaveBeenCalled();
+});
+
+test.each([{ $ne: null }, { $gt: "" }, ["saved"], 42, true, null, undefined, ""].map(slug => ({ slug })))("nonstring or empty slug %p never enters an owner/game command", async ({ slug }) => {
+  const h = harness(), capture = jest.spyOn(h.writer, "capture");
+  await expect(h.custom.upsert(userId, definition({ slug }))).rejects.toThrow("slug required");
+  expect(capture).not.toHaveBeenCalled(); expect(statsReadFloorFor).not.toHaveBeenCalled();
+  expect(h.users.findOneAndUpdate).not.toHaveBeenCalled(); expect(h.users.updateOne).not.toHaveBeenCalled();
+  expect(h.customBuilds.findOne).not.toHaveBeenCalled(); expect(h.customBuilds.updateOne).not.toHaveBeenCalled();
+  expect(h.games.updateMany).not.toHaveBeenCalled(); expect(h.writer.pending.size).toBe(0);
+  expect(h.custom._buildMutationTails.size).toBe(0);
+});
+
+test.each([null, { $ne: null }, { $gte: 0 }, "0", true, []].map(expectedRevision => ({ expectedRevision })))("defined nonnumber revision %p rejects before reserved work", async ({ expectedRevision }) => {
+  const h = harness(), capture = jest.spyOn(h.writer, "capture");
+  await expect(h.custom.upsert(userId, definition(), { expectedRevision })).rejects.toMatchObject({ code: "game_stats_neutral_operation_invalid", status: 503 });
+  expect(capture).not.toHaveBeenCalled(); expect(statsReadFloorFor).not.toHaveBeenCalled();
+  expect(h.users.findOneAndUpdate).not.toHaveBeenCalled(); expect(h.customBuilds.findOne).not.toHaveBeenCalled();
+  expect(h.customBuilds.updateOne).not.toHaveBeenCalled(); expect(h.games.updateMany).not.toHaveBeenCalled();
+  expect(h.writer.pending.size).toBe(0); expect(h.custom._buildMutationTails.size).toBe(0);
+});
+
+test("repeated abandon retains the first terminal reason for late commit without extra work", async () => {
+  const h = harness(), capture = jest.spyOn(h.writer, "capture"), ticket = reserveCustomDefinitionSave(h.writer, userId, data());
+  const first = 0, a = ticket.abandon(first), b = ticket.abandon(new Error("later terminal reason"));
+  expect(b).toBe(a); await expect(a).rejects.toBe(first); await expect(ticket.commit()).rejects.toBe(first);
+  expect(capture).not.toHaveBeenCalled(); expect(statsReadFloorFor).not.toHaveBeenCalled();
+  expect(h.users.findOneAndUpdate).not.toHaveBeenCalled(); expect(h.customBuilds.updateOne).not.toHaveBeenCalled();
+  expect(h.games.updateMany).not.toHaveBeenCalled(); await h.writer.stopAndDrain(); expect(h.writer.pending.size).toBe(0);
+});
+
+test("a valid foreign capture handle cannot replace the reserved user's identity", async () => {
+  const h = harness(), foreign = { userId: "foreign-owner", id: new ObjectId(), epoch: uuid(), compatibility: false };
+  const capture = jest.spyOn(h.writer, "capture").mockResolvedValue(foreign);
+  await expect(h.custom.upsert(userId, definition())).rejects.toMatchObject({ code: "game_stats_owner_unavailable" });
+  expect(capture).toHaveBeenCalledTimes(1); expect(capture).toHaveBeenCalledWith(userId);
+  expect(statsReadFloorFor).not.toHaveBeenCalled(); expect(h.users.findOneAndUpdate).not.toHaveBeenCalled();
+  expect(h.users.updateOne).not.toHaveBeenCalled(); expect(h.customBuilds.findOne).not.toHaveBeenCalled();
+  expect(h.customBuilds.updateOne).not.toHaveBeenCalled(); expect(h.games.updateMany).not.toHaveBeenCalled();
+  expect(h.writer.pending.size).toBe(0); expect(h.custom._buildMutationTails.size).toBe(0);
 });

@@ -67,7 +67,8 @@ describe("custom-build rule scan memory safety", () => {
       "u-unproven-name-collision", "u-claim-name-collision", "u-single-tag-revision-cas",
       "u-clear-owned-slug", "u-delete-name-collision", "u-one-sided-detail",
       "u-equal-unknown-detail", "u-deferred-missing-detail", "u-cancel-active",
-    ].map(userId => ({ userId })));
+      "u-recover-queued", "u-recover-running",
+    ].map(userId => ({ userId, clerkUserId: `clerk-${userId}` })));
     await db.collection("games").createIndex({ userId: 1, date: -1, _id: -1 });
   });
 

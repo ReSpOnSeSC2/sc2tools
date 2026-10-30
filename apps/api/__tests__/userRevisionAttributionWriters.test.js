@@ -28,16 +28,16 @@ test("standalone rename changes applied labels and retires only after the public
   expect((await db.games.findOne({ userId: "a" })).myBuild).toBe("Renamed opener"); expect(revisions.current(before)).toBe(false);
 });
 test("transaction callback completion cannot end the fence before commit, including commit failure", async () => {
-  let finishCommit; const error = new Error("unknown transaction commit");
+  let finishCommit, reachedCommit; const error = new Error("unknown transaction commit"), atCommit = new Promise((resolve) => { reachedCommit = resolve; });
   const actualStart = db.client.startSession.bind(db.client), session = actualStart();
   const dispose = jest.spyOn(session, "endSession");
   jest.spyOn(session, "withTransaction").mockImplementation(async (work) => {
-    await work(session); await new Promise((resolve) => { finishCommit = resolve; }); throw error;
+    await work(session); await new Promise((resolve) => { finishCommit = resolve; reachedCommit(); }); throw error;
   });
   jest.spyOn(db.client, "startSession").mockImplementation((options) => options === undefined ? session : actualStart(options));
   const custom = new CustomBuildsService(db, { userRevision: revisions });
   const before = await revisions.snapshot("a"); const saving = custom.upsert("a", definition); const outcome = saving.catch((failure) => failure);
-  for (let n = 0; !finishCommit && n < 40; n += 1) await new Promise(setImmediate);
+  await Promise.race([atCommit, outcome]);
   expect(finishCommit).toEqual(expect.any(Function)); expect(revisions.current(await revisions.snapshot("a"))).toBe(false);
   finishCommit(); expect(await outcome).toBe(error); expect(revisions.current(before)).toBe(false); expect(session.endSession).toHaveBeenCalled(); expect(dispose).toHaveBeenCalledTimes(1);
 });

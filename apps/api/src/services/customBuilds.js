@@ -10,7 +10,7 @@ const { commitReclassifyRunPipeline, removeReclassifyRunPipeline, RECLASSIFY_LEA
 const { policyLabelForGame } = require("./presetIngest");
 const { createHash, randomUUID } = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
-const { expectedVersion, stampVersion } = require("../db/schemaVersioning");
+const { expectedVersion } = require("../db/schemaVersioning");
 const { evaluateRules } = require("./buildRulesEvaluator");
 const { computeDossierExtras } = require("./buildDossier");
 const {

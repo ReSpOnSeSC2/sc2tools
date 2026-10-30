@@ -18,6 +18,11 @@ jest.mock("@clerk/backend", () => ({
   }),
 }));
 
+async function seededOwner(db, userId, clerkUserId) {
+  await db.users.insertOne({ userId, clerkUserId });
+  return userId;
+}
+
 describe("community + gdpr integration", () => {
   let mongo;
   let db;
@@ -894,7 +899,7 @@ describe("community + gdpr integration", () => {
     test("moderation removal mirrors only the actual owner's private build", async () => {
       const ownerSourceSlug = "moderation-owner-build";
       const ownerPublicSlug = await publishRemovalFixture(ownerSourceSlug);
-      const unrelatedUserId = "u_unrelated_owner";
+      const unrelatedUserId = await seededOwner(db, "u_unrelated_owner", "synthetic-unrelated-owner");
       const unrelatedSourceSlug = "moderation-unrelated-build";
       await services.customBuilds.upsert(unrelatedUserId, {
         slug: unrelatedSourceSlug,
