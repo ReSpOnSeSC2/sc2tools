@@ -401,6 +401,9 @@ durable feed, and an uncertain revision write can poison only its own process.
 Fleet/rolling-overlap and out-of-band writer coherence must be qualified before
 enabling the flag. Maintained membership/date statistics and credential cutover
 are separate contracts. No request reduction, latency or savings is claimed.
+[ADR 0072](adr/0072-serving-cohort-coherence.md) states that qualification's
+contract: the fleet model, which guarantees hold across processes, the admission
+checklist for new kinds and the receipt required before the flag is enabled.
 
 Every selected-input writer calls `gameWrite` inside its service or existing
 job around the semantic Mongo attempt. `UserRevision` retires owner tokens
@@ -409,8 +412,11 @@ TrendsRequests joins. This applies without Socket.io and after unknown write
 outcomes, swallowed metadata errors, partial restores and later detail failures.
 Reclassification retires at promotion, not at every staging page. Custom-build
 rename fencing spans transaction commit. Active work retains its admission
-permit after invalidation. Internal bookkeeping, storage leases and the legacy
-isLadderMap backfill do not change these six chart inputs.
+permit after invalidation. None of the fifteen covered responses reads the legacy
+`isLadderMap`/`isLadderMapV` stamp, replay or playback storage markers, the
+opponent build-order write lease, moment receipts, reclassification staging
+markers or resumed-replay repair markers (the `isResumedFromReplay` quarantine
+flag is an input), so writes limited to those fields cannot change their inputs.
 
 An existing user's absent `dataRev` seeds as zero; a guarded `$inc` creates it on
 the first semantic change. There is no revision upsert or automatic legacy-data
@@ -461,7 +467,7 @@ cache. Dirty, active, invalid-revision and oversized bypass bodies stay 200 with
 `private, no-store`. OFF preserves the original Express JSON/freshness behavior.
 CORS exposes ETag without changing allowed origins or authentication.
 
-Only the eleven allowlisted useApi paths can discover the explicit enabled-cache
+Only the fifteen allowlisted useApi paths can discover the explicit enabled-cache
 capability and start a background dynamic import. Before that module is ready,
 after import failure, or outside the AppChrome conditional provider, useApi makes
 one ordinary request. No eager retained-body engine or import wait is added to

@@ -21,9 +21,12 @@ operational scripts that ship with the repo.
   [`apps/api/src/util/sentry.js`](../../apps/api/src/util/sentry.js)
   and [`apps/web/lib/sentry.ts`](../../apps/web/lib/sentry.ts) — no-op
   until you install `@sentry/node` / `@sentry/nextjs` and set the DSN.
-- **Render autoscaling + healthcheck.** `render.yaml` sets
-  `numInstances: 1`, `minInstances: 1`, `maxInstances: 3`,
-  `targetCPUPercent: 70`, and `healthCheckPath: /v1/health`.
+- **Render instance pin + healthcheck.** `render.yaml` pins
+  `numInstances: 1` with `healthCheckPath: /v1/health` and configures no
+  autoscaling policy; scaling out needs the shared-store prerequisites
+  listed there, and the operator verifies the live settings. Each deploy
+  still runs the old and new process side by side briefly; see
+  [ADR 0072](../adr/0072-serving-cohort-coherence.md).
 - **Load test script.** `scripts/load_test.mjs` simulates 50 concurrent
   agents posting games; fails CI if p95 > 1s or any 5xx.
 
@@ -141,8 +144,9 @@ node scripts/load_test.mjs --agents 50 --games-per-agent 20
 ```
 
 Target: p95 < 1000ms, zero 5xx. Watch Render's metrics during the
-run — if CPU pegs at 100% with one instance, autoscaling should kick
-in within 2 min.
+run. The blueprint pins the API to one instance with no autoscaling
+policy, so CPU pegged at 100% calls for a larger instance, not more
+instances.
 
 ## Suggested order
 
