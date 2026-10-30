@@ -1,9 +1,10 @@
-# Opponent region and identity writes: local verification, release pending
+# Opponent region and identity writes: delivered in PR822
 
-The opponent region stamp and the opponent identity heal are locally verified as
-closed count-neutral writer families. PR821's squash `de2031ad` is merged into
-this branch without changing its tree; its own exact-head CI, deployment and
-production acceptance are pending. This is an internal API prerequisite; the
+The opponent region stamp and the opponent identity heal are delivered as closed
+count-neutral writer families. PR822 merged as `27b9aeb0` with the exact CI-tested
+tree, its exact-head CI passed, and both production deployments succeeded for
+that commit. Signed-in read-only acceptance was not performed because no browser
+session was signed in. This is an internal API prerequisite; the
 faster-dashboards parent remains partial and caches remain off.
 
 ## Source boundary
@@ -83,3 +84,17 @@ links the immutable source, results, review and mutation evidence. The ledger
 stays at 197 items: 124 completed, 53 partial, 20 open, 73 remaining. No cache
 flag, dependency, asset, provider or production state changes are part of this
 slice.
+
+## Delivery
+
+PR822 squash-merged as `27b9aeb0db1707a116bd30a58ad980daa12524cd` on parent `de2031adcf4cc7a0cfe3e18cfae0ff0a3891b49e`. Its tree
+`fc4db7722abf95eeb9763193d3a109d76431f05b` equals the CI-tested head `786ae112798680b919500ff5834dbc79ae879cd9`,
+and its application files equal the gate-tested source commit `5dc74235`.
+Exact-head CI passed whole API types, configured lint (757 warnings and no
+errors, the same as PR821) and 7,862 API cases in 524 suites, 159 cases and
+eight suites more than PR821. A duplicate run was cancelled by the workflow's
+concurrency rule. The API (Render) and website (Vercel production) deployment
+records both report success for that exact commit, and the public API health
+check reports the database read and write paths healthy. The
+[production receipt](validation/opponent-game-region-identity/production-27b9aeb0.json)
+records this evidence and its limits.

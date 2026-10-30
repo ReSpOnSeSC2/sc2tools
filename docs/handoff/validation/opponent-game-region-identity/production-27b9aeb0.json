@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "status": "DELIVERED_EXACT_SOURCE_DEPLOYED_SIGNED_IN_ACCEPTANCE_NOT_PERFORMED",
+  "pullRequest": 822,
+  "testedHead": "786ae112798680b919500ff5834dbc79ae879cd9",
+  "testedSourceCommit": "5dc7423504b0a6a13b901f3d386e947d1ba12513",
+  "mergedMain": "27b9aeb0db1707a116bd30a58ad980daa12524cd",
+  "mergedAt": "2026-10-30T14:19:53Z",
+  "parent": "de2031adcf4cc7a0cfe3e18cfae0ff0a3891b49e",
+  "tree": "fc4db7722abf95eeb9763193d3a109d76431f05b",
+  "treeEqualsTestedHead": true,
+  "applicationFilesEqualTestedSource": true,
+  "exactHeadCI": {
+    "run": 41064751806,
+    "job": 124093132644,
+    "apiPassed": 7862,
+    "existingSkippedTests": 9,
+    "suitesPassed": 524,
+    "existingSkippedSuite": 1,
+    "wholeAPITypes": "pass",
+    "configuredLint": "pass (757 warnings, 0 errors; equals the PR821 baseline)",
+    "headChecks": "API, Vercel and Vercel Preview Comments succeeded on the exact head.",
+    "deltaFromPr821": {
+      "tests": 159,
+      "suites": 8
+    },
+    "cancelledDuplicateRun": {
+      "run": 41064751867,
+      "reason": "Cancelled by the workflow concurrency rule after the push and the base retarget both triggered runs; it is not a failure."
+    }
+  },
+  "deployment": {
+    "api": {
+      "environment": "main - sc2tools-api",
+      "deploymentId": 7440593847,
+      "state": "success",
+      "at": "2026-10-30T14:21:09Z"
+    },
+    "web": {
+      "environment": "Production",
+      "deploymentId": 7440654042,
+      "state": "success",
+      "at": "2026-10-30T14:23:17Z"
+    },
+    "bothForExactMergedMain": true
+  },
+  "publicHealth": {
+    "api": "GET /v1/health returned 200 with status ok, mongoPing true and mongoWrite true at 2026-10-30T14:23:51Z.",
+    "web": "GET /api/ping returned 200."
+  },
+  "readOnlyAcceptance": {
+    "signedIn": false,
+    "performed": false,
+    "reason": "The built-in browser showed a Sign in link. No session was signed in, and none was created or attempted.",
+    "ownedTabsClosed": 1
+  },
+  "localProof": "The separate local-verification receipt retains the 3056-case / 214-file gate in four serial in-band chunks, whole API types, configured lint, the independent review, the mutation evidence and the retained failures.",
+  "limitations": [
+    "No production region stamp or identity heal was forced or instrumented. Local real-Mongo cases and exact-head API CI establish the implementation behavior.",
+    "No signed-in desktop acceptance, mobile, web build or browser-matrix proof, enabled-cache hit, savings, complete writer/fleet coverage or roadmap completion is claimed.",
+    "No private account details, DOM, images, provider identifiers or private URLs are copied here."
+  ],
+  "sourceReceiptSha256": "857b23c5db2acabadfb6fa2f8c3eea861ade78d2362e7d56471f856f42e6a55e"
+}
