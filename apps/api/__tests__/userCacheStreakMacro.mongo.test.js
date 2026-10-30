@@ -38,7 +38,7 @@ beforeEach(async () => {
   await db.users.insertMany([{ userId: "a", clerkUserId: "clerk-a", dataRev: 0 }, { userId: "b", clerkUserId: "clerk-b", dataRev: 0 }]);
 });
 
-// Writers each kind must see; the macro surface write changes no streak input.
+// Listed writers of inputs both kinds read; the macro surface write changes no streak input.
 const MUTATIONS = [
   ["ingest", () => services.games.upsert("a", game("two", { date: new Date("2026-02-01T12:00:00Z"), result: "Defeat", macroScore: 40 })), true],
   ["reupload", () => services.games.upsert("a", game("two", { date: new Date("2026-03-01T12:00:00Z"), macroScore: 90,
@@ -51,7 +51,7 @@ const MUTATIONS = [
   ["pending delete and tombstone", () => services.gameControls.deleteGame("a", "one"), true],
 ];
 
-test.each([["/v1/streak", "streak"], ["/v1/macro/report", "macro report"]])("%s retains owner bodies and every writer retires them", async (path, kind) => {
+test.each([["/v1/streak", "streak"], ["/v1/macro/report", "macro report"]])("%s retains owner bodies and each listed writer retires them", async (path, kind) => {
   await services.games.upsert("a", game("one"));
   await services.games.upsert("b", game("other", { result: "Defeat", macroScore: 1 }));
   let previous = await get(path);
@@ -67,4 +67,18 @@ test.each([["/v1/streak", "streak"], ["/v1/macro/report", "macro report"]])("%s 
     expect((await get(path, "a", fresh.headers.etag)).status).toBe(304);
     previous = fresh;
   }
+});
+
+// A failed payload purge stops the delete after its pending mark, before the tombstone.
+test.each(["/v1/streak", "/v1/macro/report"])("%s retires on the pending-delete mark alone", async path => {
+  await services.games.upsert("a", game("one"));
+  await services.games.upsert("a", game("two", { date: new Date("2026-02-01T12:00:00Z"), result: "Defeat", macroScore: 40 }));
+  const retained = await get(path);
+  expect(retained.status).toBe(200); expect((await get(path, "a", retained.headers.etag)).status).toBe(304);
+  const purge = jest.spyOn(services.gameControls, "purgePayloads").mockRejectedValueOnce(new Error("purge unavailable"));
+  try { await expect(services.gameControls.deleteGame("a", "two")).rejects.toThrow("purge unavailable"); } finally { purge.mockRestore(); }
+  expect((await db.games.findOne({ userId: "a", gameId: "two" }))._deleted).toBeUndefined();
+  const fresh = await get(path, "a", retained.headers.etag);
+  expect(fresh.status).toBe(200); expect(fresh.headers.etag).not.toBe(retained.headers.etag); expect(fresh.body).not.toEqual(retained.body);
+  expect((await get(path, "a", fresh.headers.etag)).status).toBe(304);
 });

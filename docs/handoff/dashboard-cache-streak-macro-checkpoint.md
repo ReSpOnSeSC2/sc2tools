@@ -9,6 +9,11 @@ first admission under the checklist in
 Each item is applied below with file:line evidence at this branch's head. API
 paths are relative to `apps/api/src/`.
 
+C1 is stacked on F1 ([PR #824](https://github.com/ReSpOnSeSC2/sc2tools/pull/824),
+unmerged at `c420f832`), which adds ADR 0072. Its admission checklist and
+shared-fleet audit meet the ledger's precondition for wider coverage
+(`docs/handoff/roadmap-progress-2026-10-28.json:1963`). C1 merges only after F1.
+
 `USER_CACHE_ENABLED` stays off. While it is off, both routes call their service
 and `res.json` as before (`routes/aggregations.js:26-28`;
 `middleware/userCache.js:109-111`). No provider setting, flag, activation,
@@ -26,22 +31,32 @@ latency, request reduction or savings is claimed.
   move.
 - Tests:
   - the route suite covers both kinds for 200 and 304, off parity, and owner
-    and filter isolation;
+    and filter isolation. One fixture requests all thirteen non-dependent
+    covered paths and checks that each keeps its own retained body, so a
+    reused kind string fails. Never-retained routes must answer 200;
   - the real-Mongo coverage suite runs the real streak and macro report
     services;
   - a new full-app real-Mongo test
     (`apps/api/__tests__/userCacheStreakMacro.mongo.test.js`) checks that each
-    writer listed under item 2 retires both retained bodies;
+    writer listed under item 2 retires both retained bodies, and that a delete
+    stopped after its pending mark, before the tombstone, retires them too;
   - the web tests pin positions 15 and 16 and rebuild both paths from 304s.
+- `CHANGELOG.md` gains a line under Dashboard cache coverage.
 
 ## Admission checklist
 
 1. **Owner games only.** Streak runs one aggregate on `games` that starts with
    `gamesMatchStage(userId, filters)` (`services/streak.js:51-65`). The macro
-   report runs two on `games`, both from the same match: a date-extremes
-   pre-pass that adds only `macroScore: { $type: "number" }`, and one `$facet`
-   (`services/macroReport.js:102-119,248-254`). Neither has a `$lookup`,
-   `$unionWith` or another collection.
+   report runs two on `games`, both built from `match = gamesMatchStage(userId,
+   filters)` (`services/macroReport.js:102`). The first is a date-extremes
+   pre-pass on `{ ...match, macroScore: { $type: "number" } }` (`:107-119`). Its
+   type test replaces any `macro_min`/`macro_max` range that `gamesMatchStage`
+   set (`util/parseQuery.js:288-295`), so for a bounded request it reads every
+   scored game that matches the other filters. The second is one `$facet` on the
+   unmodified `match` (`services/macroReport.js:248-254`). Both keep the owner,
+   deletion and exclusion clauses (`util/parseQuery.js:242-247`), and the parsed
+   bounds are part of the key (`middleware/userCache.js:257`). Neither kind has a
+   `$lookup`, `$unionWith` or another collection.
 2. **Fenced writers.** Streak reads `result` and `date`
    (`services/streak.js:55-61`). The macro report reads `macroScore`,
    `top3Leaks`, `result`, `date`, `opponent.race`, `myBuild` and `durationSec`
@@ -53,14 +68,17 @@ latency, request reduction or savings is claimed.
    (`util/parseQuery.js:309-315`). Filter fields are the same `gamesMatchStage`
    fields every covered kind reads. The new test checks that ingest, reupload,
    resumed quarantine, hide, unhide, the macro write
-   (`services/perGameCompute.js:476,498`) and pending delete each retire both
-   bodies (`apps/api/__tests__/userCacheStreakMacro.mongo.test.js:42-70`).
+   (`services/perGameCompute.js:476,498`) and a completed delete each retire both
+   bodies (`apps/api/__tests__/userCacheStreakMacro.mongo.test.js:42-70`). A
+   delete whose payload purge fails retires them through its pending mark alone
+   (`services/gameControls.js:121,124`;
+   `apps/api/__tests__/userCacheStreakMacro.mongo.test.js:72-84`).
 3. **No completed owner-data memo.** Both services keep only `db`
    (`services/streak.js:29-31`; `services/macroReport.js:83-85`), hold no memo
    and do not run through TrendsRequests.
 4. **No clock in the result.** Neither file calls `Date.now`, an
    argument-less `new Date()` or `$$NOW`. The macro report's trend split is the
-   midpoint of the scored games' own date span
+   midpoint of the date span of the scored games that match the other filters
    (`services/macroReport.js:339-346`), not a window from the current time.
 5. **Other collections only before admission.** Neither route reads anything
    before `send` beyond auth and `parseFilters(req.query)`
@@ -78,10 +96,11 @@ latency, request reduction or savings is claimed.
    build segments are capped at eight (`:53,200-201`), but the leak ledger has
    one row per distinct leak name (`:162-175,414-452`) and the matchup segments
    one per distinct first letter of the opponent's race (`:176-182`). The agent
-   stamps at most one leak per category per game (`:23-27`), so typical bodies
-   hold a few dozen rows, far below the 512 KiB entry cap
-   (`middleware/userCache.js:10`). A larger body goes out as an uncached 200
-   (`middleware/userCache.js:211-217`).
+   emits a small fixed set of leak names (`util/parseQuery.js:102-105`), so
+   typical bodies hold a few dozen rows. The macro recompute write does not
+   enforce that set (`routes/perGame.js:218-222`), so the 512 KiB entry cap is the
+   only enforced bound (`middleware/userCache.js:10`): a larger body goes out as
+   an uncached 200 (`:211-217`).
 9. **Callers.** Each method has one caller: `deps.macroReport.report`
    (`routes/aggregations.js:406`) and `deps.streak.current` (`:419`). Both use
    the app-level instances (`app.js:717-718,1780-1786`). A source search finds
@@ -104,25 +123,32 @@ latency, request reduction or savings is claimed.
     retained key has only the standard parts: owner, kind, parsed filters,
     empty options and the revision snapshot (`middleware/userCache.js:257`).
     The only unguarded path is HEAD, which keeps nothing (item 9). Both kinds
-    therefore inherit G1-G6 and the first-observation rule unchanged: G1-G3 stay
-    unmet, and G4's 600-second bound is the only bound on those gaps.
+    therefore inherit G1-G6 and the first-observation rule unchanged. G1-G3 stay
+    unmet. G4 is the only bound on the G1 and G2 gaps, and on G3 when the bump
+    fails: entries leave the cache 600 s after they are stored, and a body's
+    data can be older by the computation's duration, since neither kind adopts
+    a join.
 
 ## Verification
 
-Local checks ran at `83e53307` with application files equal to that commit
+Local checks ran at `1fecfca0`, whose application files equal `83e53307`
 ([receipt](validation/dashboard-cache-streak-macro/local-verification.json)):
 
 - **API.** Whole-API types pass. Configured lint has 757 warnings and 0
-  errors, the same as the F1 head, and the two changed source files add no
-  configured or strict message. Fifteen affected suites pass 290 of 290 cases,
-  11 of them new. They ran in band on cached MongoDB 7.0.14 with downloads
+  errors, the same as F1's head, and the two changed source files add no
+  configured or strict message. Fifteen affected suites pass 293 of 293 cases,
+  14 of them new. They ran in band on cached MongoDB 7.0.14 with downloads
   disabled, and no MongoDB process was left over.
 - **Web.** Whole-web types pass and the changed files lint clean. Nine
   conditional-API and KPI-strip test files pass 117 of 117 cases, 2 of them new.
-- **Mutation.** Four deliberate regressions each make the tests fail: streak
-  removed from the allowlist, the macro report answered with plain `res.json`,
-  `/v1/macro/report` missing from the web list, and the two new web positions
-  swapped.
+- **Mutation.** Seven deliberate regressions each make the intended tests fail:
+  streak removed from the allowlist, the macro report answered with plain
+  `res.json`, `/v1/macro/report` missing from the web list, the two new web
+  positions swapped, the pending-delete write left unfenced, the macro report
+  reusing the macro summary's kind, and the macro write left unfenced.
+- **Review.** An independent read-only review with a skeptic per finding found
+  no blocking issue. Its confirmed findings and the cheap suggestions are
+  addressed here.
 - **Route budgets** are checked by the exact-head web CI (`perf:budget`), not
   locally.
 
@@ -132,6 +158,15 @@ Local checks ran at `83e53307` with application files equal to that commit
   the fleet behaviour G1-G3 describe. This is source coverage only and is never
   activation evidence.
 - The macro report's size is not structurally bounded (item 8).
+- With the flag on, both kinds share the cache's existing admission
+  (`docs/engineeringexplanation.md:444-458`). The dashboard and the Macro tab
+  each make three covered reads against an owner's two compute permits, so one
+  read waits, and a wait over five seconds returns 503 `user_cache_busy`. No
+  latency effect is measured or claimed.
+- With `macro_min`/`macro_max`, the macro report's trend gate and split use every
+  scored game rather than only those in the range
+  (`services/macroReport.js:109,121-122,208`). This predates C1 and is unchanged
+  by it.
 - Exact-head CI, merge, deployment and production acceptance are recorded
   separately if and when they happen.
 

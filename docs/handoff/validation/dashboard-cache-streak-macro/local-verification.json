@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
   "slice": "C1-streak-macro-report",
-  "status": "LOCAL_TYPES_LINT_290_API_117_WEB_PASS_4_OF_4_MUTATIONS_NOT_RELEASED",
+  "status": "LOCAL_TYPES_LINT_293_API_117_WEB_PASS_7_OF_7_MUTATIONS_NOT_RELEASED",
   "source": {
-    "base": "82186babb48e0720ca73306026a811419980a6aa",
-    "baseQualification": "F1 head (PR824, draft and unmerged). C1 is stacked on it; F1 itself changes no application file.",
-    "testedCommit": "83e53307d096d6315bc6b9f91ef7f928a31e51c8",
-    "testedTree": "a8ecc31b20ca02e5ab32f68cdfe1561f4e487301",
+    "base": "c420f8327a16782c6c633ecec26d811a77ccedd7",
+    "baseQualification": "F1 head (PR824, draft and unmerged), merged into this branch at 95f4cd28. C1 merges only after F1. F1 changes no application file.",
+    "testedCommit": "1fecfca0848133fd5ae6dd0da3e4f67ef387521f",
     "applicationFiles": [
       "apps/api/src/middleware/userCache.js",
       "apps/api/src/routes/aggregations.js",
       "apps/web/lib/conditionalApiScope.tsx"
     ],
+    "applicationSourceCommit": "83e53307d096d6315bc6b9f91ef7f928a31e51c8",
     "testFiles": [
       "apps/api/__tests__/userCacheRoutes.test.js",
       "apps/api/__tests__/userCacheCoverage.mongo.test.js",
@@ -47,12 +47,13 @@
     "apiConfiguredLint": {
       "errors": 0,
       "warnings": 757,
-      "equalsF1Head": true
+      "equalsF1Head": true,
+      "f1HeadEvidence": "F1 CHECKS-04 (round-three tree committed as c420f832): 0 errors, 757 warnings"
     },
     "changedLegacyFilesAddedLintMessages": 0,
     "apiSuites": 15,
-    "apiCases": 290,
-    "newApiCases": 11,
+    "apiCases": 293,
+    "newApiCases": 14,
     "failed": 0,
     "pending": 0,
     "inBand": true,
@@ -64,11 +65,96 @@
     "webFiles": 9,
     "webCases": 117,
     "newWebCases": 2,
-    "mutationsKilled": "4/4"
+    "mutationsKilled": "7/7",
+    "mutations": [
+      {
+        "id": "C1-M1-streak-not-allowlisted",
+        "file": "apps/api/src/middleware/userCache.js",
+        "from": "\"oppStrategyMixOverTime\", \"streak\", \"macroReport\",",
+        "to": "\"oppStrategyMixOverTime\", \"macroReport\",",
+        "failing": [
+          "● /v1/streak retains owner bodies and each listed writer retires them",
+          "● current serves real aggregates and retires ingest, reupload, quarantine and unknown commits",
+          "● streak preserves200 DTOs and conditionally returns private empty304",
+          "● each non-dependent covered kind keeps its own retained body in one cache",
+          "● streak isolates filters and owners and retires committed/unknown results"
+        ]
+      },
+      {
+        "id": "C1-M2-macro-report-plain-json",
+        "file": "apps/api/src/routes/aggregations.js",
+        "from": "await send(req, res, userId, \"macroReport\", filters, {}, () => deps.macroReport.report(userId, filters));",
+        "to": "res.json(await deps.macroReport.report(userId, filters));",
+        "failing": [
+          "● /v1/macro/report retains owner bodies and each listed writer retires them",
+          "● report serves real aggregates and retires ingest, reupload, quarantine and unknown commits",
+          "● macroReport preserves200 DTOs and conditionally returns private empty304",
+          "● each non-dependent covered kind keeps its own retained body in one cache",
+          "● macroReport isolates filters and owners and retires committed/unknown results"
+        ]
+      },
+      {
+        "id": "C1-M3-web-path-missing",
+        "file": "apps/web/lib/conditionalApiScope.tsx",
+        "from": "\"/v1/build-vs-strategy\", \"/v1/streak\", \"/v1/macro/report\"];",
+        "to": "\"/v1/build-vs-strategy\", \"/v1/streak\"];",
+        "failing": []
+      },
+      {
+        "id": "C1-M4-web-positions-moved",
+        "file": "apps/web/lib/conditionalApiScope.tsx",
+        "from": "\"/v1/build-vs-strategy\", \"/v1/streak\", \"/v1/macro/report\"];",
+        "to": "\"/v1/build-vs-strategy\", \"/v1/macro/report\", \"/v1/streak\"];",
+        "failing": []
+      },
+      {
+        "id": "C1-M5-pending-delete-unfenced",
+        "file": "apps/api/src/services/gameControls.js",
+        "from": "await gameWrite(this.gdpr.userRevision, userId, () => this.gameStatsWrites.write(statsOwner, session => this.db.games.updateOne({ userId, gameId }, { $set: { excluded: true, _deletionPending: true",
+        "to": "await ((_revisions, _owner, work) => work())(null, userId, () => this.gameStatsWrites.write(statsOwner, session => this.db.games.updateOne({ userId, gameId }, { $set: { excluded: true, _deletionPending: true",
+        "failing": [
+          "● /v1/streak retires on the pending-delete mark alone",
+          "● /v1/macro/report retires on the pending-delete mark alone"
+        ]
+      },
+      {
+        "id": "C1-M6-macro-report-reuses-macro-summary-kind",
+        "file": "apps/api/src/routes/aggregations.js",
+        "from": "await send(req, res, userId, \"macroReport\", filters, {}, () => deps.macroReport.report(userId, filters));",
+        "to": "await send(req, res, userId, \"macroSummary\", filters, {}, () => deps.macroReport.report(userId, filters));",
+        "failing": [
+          "● each non-dependent covered kind keeps its own retained body in one cache"
+        ]
+      },
+      {
+        "id": "C1-M7-macro-write-unfenced",
+        "file": "apps/api/src/services/perGameCompute.js",
+        "from": "await gameWrite(this.userRevision, userId, () => this.gameStatsWrites.write(owner, mutation));",
+        "to": "await this.gameStatsWrites.write(owner, mutation);",
+        "failing": [
+          "● /v1/streak retains owner bodies and each listed writer retires them",
+          "● /v1/macro/report retains owner bodies and each listed writer retires them"
+        ]
+      }
+    ]
+  },
+  "independentReview": {
+    "workflow": "wf_11178303-7b4",
+    "agents": 15,
+    "blocking": 0,
+    "confirmedMinor": 8,
+    "partlyConfirmedLoweredToNit": 2,
+    "nits": 9,
+    "addressedIn": [
+      "1fecfca0 (tests)",
+      "this docs commit"
+    ]
   },
   "retained": [
-    "The pre-commit runs c1-dev-01 (3 suites, 51 cases) and c1-affected-01 (15 suites, 290 cases) used the uncommitted tree about two minutes before 83e53307 was committed. They are superseded by CHECKS-01, which re-ran at the commit with application files equal to it.",
-    "CHECKS-01's webVitest.files value (26/26) is vitest's JSON suite count, describe blocks included; the run executed 9 test files (checks-01/web-vitest.log).",
+    "The first local evidence (CHECKS-01, mutation-01 with 4 of 4 killed) bound 83e53307 before the review. It remains valid for the unchanged application files and is superseded by CHECKS-02 and mutation-02 at 1fecfca0.",
+    "The pre-commit dev runs c1-dev-01 (about five minutes before 83e53307) and c1-affected-01 (about two minutes before) used the uncommitted tree; they are not evidence.",
+    "CHECKS-01's webVitest.files value (26/26) was vitest's JSON suite count, describe blocks included; CHECKS-02 records 9 test files separately.",
+    "Web mutation logs print vitest failures, which the failing-line filter does not capture; the logs name the position test and the macro-report reconstruction test.",
     "Web types were checked with the incremental build info already in the worktree."
   ],
   "boundaries": [
@@ -82,24 +168,24 @@
       "bytes": 92680
     },
     {
-      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/CHECKS-01.json",
-      "sha256": "f3dc3bb7433f8d19576b82cccf3656e4fc12ee4849f449a7837684ba011b4fea",
-      "bytes": 2747
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/CHECKS-02.json",
+      "sha256": "277cbcf5b2858696ef754397fe34655ab27e66a64493dbb539241579bf6be6a7",
+      "bytes": 2754
     },
     {
-      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/checks-01/api-jest.json",
-      "sha256": "ba389fe51fffbe266c524e45c7e3bc19f3b6744c8a360db24a68e7928a47cbd1",
-      "bytes": 111902
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/checks-02/api-jest.json",
+      "sha256": "3619e89429baab423ac1782dcafbca619e71269e1166ddd426766b362e6b4dfb",
+      "bytes": 112858
     },
     {
-      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/checks-01/api-lint.json",
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/checks-02/api-lint.json",
       "sha256": "25bf3542fdc7eb429c449a438c097fc30222d76d9726803f76aec2e48aced996",
       "bytes": 7480367
     },
     {
-      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/checks-01/web-vitest.json",
-      "sha256": "88e89a2e7c9ed22cd52f181224a739b677052027ef890c8244f9e32424dcb72c",
-      "bytes": 42811
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/checks-02/web-vitest.json",
+      "sha256": "192f5a1358578250815cc2b00eb62be75d36085ab25cecfb5777f909515be6ff",
+      "bytes": 42844
     },
     {
       "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/checks-01/lint-no-added.txt",
@@ -107,9 +193,84 @@
       "bytes": 250
     },
     {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/mutation-02/MUTATION-RESULTS.json",
+      "sha256": "960bb79343d0e3e8614efd7f258ff26aa6c296369006f867c41aede32514582b",
+      "bytes": 5608
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/scripts/mutation-check-c1-02.mjs",
+      "sha256": "7094cf9d6bdaed50d7f779d2ca2b82fac2358436587c004adfc04f3b07e37cc1",
+      "bytes": 6166
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/scripts/final-checks-c1-01.mjs",
+      "sha256": "aeae38995a2875702a7729d1b680277e40df5fb7b620c3e7c7a4c86e85763753",
+      "bytes": 6494
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/CHECKS-01.json",
+      "sha256": "f3dc3bb7433f8d19576b82cccf3656e4fc12ee4849f449a7837684ba011b4fea",
+      "bytes": 2747
+    },
+    {
       "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/mutation-01/MUTATION-RESULTS.json",
       "sha256": "d0fd8a08e9e69b6fb96db3b8aa8c11b1f8f987a53f9214bb92fe25f260742429",
       "bytes": 957
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/scripts/mutation-check-c1-01.mjs",
+      "sha256": "b5b021678ee62c654982a688d12df78394fcfaff50f45b75a9b750f8391aeb67",
+      "bytes": 4564
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-f1-20261030/CHECKS-04.json",
+      "sha256": "877480d8abcc1b3661cff7e80380554c3657f2279b70a6f51f7db3c175f51dcc",
+      "bytes": 1097
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/mutation-02/C1-M1-streak-not-allowlisted.log",
+      "sha256": "6e392684560de9e6f2e387bb6cf82b1bbd64bd54dbaafbd636d4c7ecc5a2541d",
+      "bytes": 8073
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/mutation-02/C1-M2-macro-report-plain-json.log",
+      "sha256": "8a608a754e3fbe7bea40f3cb6322bb9916ab815e606ebc611d5796e5d5de135a",
+      "bytes": 8087
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/mutation-02/C1-M3-web-path-missing.log",
+      "sha256": "12dfb28e19c7d7070e94b04b262a90b1994b9c730caaba0e26a1f23057a94bbb",
+      "bytes": 5001
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/mutation-02/C1-M4-web-positions-moved.log",
+      "sha256": "b2328883125a90640c4a5c40d8a64d1e8732b877989d43277a92cc6fab0eb39e",
+      "bytes": 2856
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/mutation-02/C1-M5-pending-delete-unfenced.log",
+      "sha256": "07c3b19716ef598b457a20549c753ed72af6ad2794a150f0723240ea94d2e902",
+      "bytes": 3050
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/mutation-02/C1-M6-macro-report-reuses-macro-summary-kind.log",
+      "sha256": "2762f39d9cf17a362c0161b7eb7cb6e89f29c2ab604f2d2e5767e3c8f1890e3d",
+      "bytes": 1784
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/mutation-02/C1-M7-macro-write-unfenced.log",
+      "sha256": "856e3963da5b6690c0a15b66d7d6bdede5fb669f78b4fde6910ff658706e527e",
+      "bytes": 3318
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/mutation-02/baseline-api.log",
+      "sha256": "f9d9e762a8baa32b2fb574790628273ee58355521ebd18604d8e20a62dccfa11",
+      "bytes": 406
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c1-20261030/mutation-02/baseline-web.log",
+      "sha256": "61419bfc1227911ff4ede9c6eaf7a9192faf310c6a36c51cd2beddfe3847e13e",
+      "bytes": 805
     }
   ]
 }
