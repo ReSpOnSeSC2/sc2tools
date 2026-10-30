@@ -1,0 +1,374 @@
+{
+  "schemaVersion": 1,
+  "slice": "C3-random-summary",
+  "status": "LOCAL_TYPES_LINT_449_API_129_WEB_PASS_12_OF_12_MUTATIONS_NOT_RELEASED",
+  "source": {
+    "base": "6a50da6e",
+    "baseQualification": "C2's head (PR828, draft) after merging main through ca095617 (#827); it carries DA2 (PR826), C1 (PR825) and F1 (PR824). C3 merges after all four.",
+    "testedCommit": "10cdb0fd38fcbd47f70d7b275c1ccf8947770507",
+    "applicationFiles": [
+      "apps/api/src/middleware/userCache.js",
+      "apps/api/src/routes/aggregations.js",
+      "apps/api/src/services/aggregations.js",
+      "apps/api/src/services/types.d.ts",
+      "apps/web/lib/conditionalApiScope.tsx"
+    ],
+    "testFiles": [
+      "apps/api/__tests__/userCacheRandomSummary.mongo.test.js",
+      "apps/api/__tests__/userCacheRoutes.test.js",
+      "apps/api/__tests__/userCacheCoverage.mongo.test.js",
+      "apps/api/__tests__/randomSummaryCache.test.js",
+      "apps/web/lib/__tests__/conditionalApiScope.routes.test.ts",
+      "apps/web/lib/__tests__/clientApi.conditional.test.tsx"
+    ]
+  },
+  "admission": {
+    "kinds": [
+      "randomSummary"
+    ],
+    "paths": [
+      "/v1/random-summary"
+    ],
+    "webCapabilityPositions": [
+      19
+    ],
+    "coveredKindsBefore": 19,
+    "coveredKindsAfter": 20,
+    "checklist": "docs/handoff/dashboard-cache-random-summary-checkpoint.md",
+    "memo": "The 60-second TrendsRequests.cached() memo answers only when the route's switch is on (no enabled cache) and the filters are empty; an enabled cache uses only in-flight joins.",
+    "adrAmendments": [
+      "checklist preamble (item 3 may need the memo switch)",
+      "checklist item 3 (a completed memo is acceptable only when skipped whenever the cache is enabled)",
+      "cross-process table row for the cached() memo (answers only while the cache is off)",
+      "header tested source and kind count"
+    ],
+    "structurallyBoundedSize": true,
+    "unguardedCallers": {
+      "randomSummary": "HEAD, which under an enabled cache also skips the memo"
+    }
+  },
+  "actual": {
+    "apiTypesExit": 0,
+    "apiConfiguredLint": {
+      "errors": 0,
+      "warnings": 758
+    },
+    "changedFilesAddedLintMessages": 0,
+    "newTestStrictLint": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "apiSuites": 22,
+    "apiCases": 449,
+    "failed": 0,
+    "pending": 0,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "ownedMongodLeftover": 0,
+    "webTypesExit": 0,
+    "webLintExit": 0,
+    "webFiles": 10,
+    "webCases": 129,
+    "mutationsKilled": "12/12",
+    "mutations": [
+      {
+        "id": "C3-M1-not-allowlisted",
+        "file": "apps/api/src/middleware/userCache.js",
+        "from": "\"netMmrByOpponent\", \"randomSummary\", ...DEPENDENT_ROUTES]",
+        "to": "\"netMmrByOpponent\", ...DEPENDENT_ROUTES]",
+        "failing": [
+          "● a HEAD that finished before another process's write leaves nothing the first guarded GET can retain",
+          "● after another process's write, an observed owner's GET is retired and then reads fresh, never the old body",
+          "● filtered, unfiltered and race-filtered requests keep separate bodies and validators, and a local write retires each",
+          "● randomSummary serves real aggregates and retires ingest, reupload, quarantine and unknown commits",
+          "● randomSummary preserves200 DTOs and conditionally returns private empty304",
+          "● each non-dependent covered kind keeps its own retained body in one cache",
+          "● randomSummary isolates filters and owners and retires committed/unknown results"
+        ]
+      },
+      {
+        "id": "C3-M2-plain-json",
+        "file": "apps/api/src/routes/aggregations.js",
+        "from": "await send(req, res, userId, \"randomSummary\", filters, {}, () => deps.aggregations.randomSummary(userId, filters, { memo: !deps.userCache?.enabled }));",
+        "to": "await ((_q, response, _u, _k, _f, _o, work) => work().then(value => response.json(value)))(req, res, userId, \"randomSummary\", filters, {}, () => deps.aggregations.randomSummary(userId, filters, { memo: !deps.userCache?.enabled }));",
+        "failing": [
+          "● a HEAD that finished before another process's write leaves nothing the first guarded GET can retain",
+          "● after another process's write, an observed owner's GET is retired and then reads fresh, never the old body",
+          "● filtered, unfiltered and race-filtered requests keep separate bodies and validators, and a local write retires each",
+          "● randomSummary serves real aggregates and retires ingest, reupload, quarantine and unknown commits",
+          "● randomSummary preserves200 DTOs and conditionally returns private empty304",
+          "● each non-dependent covered kind keeps its own retained body in one cache",
+          "● randomSummary isolates filters and owners and retires committed/unknown results"
+        ]
+      },
+      {
+        "id": "C3-M3-memo-on-under-cache",
+        "file": "apps/api/src/routes/aggregations.js",
+        "from": "await send(req, res, userId, \"randomSummary\", filters, {}, () => deps.aggregations.randomSummary(userId, filters, { memo: !deps.userCache?.enabled }));",
+        "to": "await send(req, res, userId, \"randomSummary\", filters, {}, () => deps.aggregations.randomSummary(userId, filters, { memo: true }));",
+        "failing": [
+          "● a HEAD that finished before another process's write leaves nothing the first guarded GET can retain",
+          "● filtered, unfiltered and race-filtered requests keep separate bodies and validators, and a local write retires each",
+          "● random summary skips its completed memo exactly when the cache is enabled (enabled)"
+        ]
+      },
+      {
+        "id": "C3-M4-memo-off-without-cache",
+        "file": "apps/api/src/routes/aggregations.js",
+        "from": "await send(req, res, userId, \"randomSummary\", filters, {}, () => deps.aggregations.randomSummary(userId, filters, { memo: !deps.userCache?.enabled }));",
+        "to": "await send(req, res, userId, \"randomSummary\", filters, {}, () => deps.aggregations.randomSummary(userId, filters, { memo: false }));",
+        "failing": [
+          "● with the cache off, the unfiltered memo still shares one answer for its minute, race-only requests included",
+          "● random summary skips its completed memo exactly when the cache is enabled (off)",
+          "● random summary skips its completed memo exactly when the cache is enabled (legacy)"
+        ]
+      },
+      {
+        "id": "C3-M5-head-keeps-memo",
+        "file": "apps/api/src/routes/aggregations.js",
+        "from": "await send(req, res, userId, \"randomSummary\", filters, {}, () => deps.aggregations.randomSummary(userId, filters, { memo: !deps.userCache?.enabled }));",
+        "to": "await send(req, res, userId, \"randomSummary\", filters, {}, () => deps.aggregations.randomSummary(userId, filters, { memo: req.method !== \"GET\" || !deps.userCache?.enabled }));",
+        "failing": [
+          "● a HEAD that finished before another process's write leaves nothing the first guarded GET can retain",
+          "● random summary skips its completed memo exactly when the cache is enabled (enabled)"
+        ]
+      },
+      {
+        "id": "C3-M6-key-drops-filters",
+        "file": "apps/api/src/routes/aggregations.js",
+        "from": "await send(req, res, userId, \"randomSummary\", filters, {}, () => deps.aggregations.randomSummary(userId, filters, { memo: !deps.userCache?.enabled }));",
+        "to": "await send(req, res, userId, \"randomSummary\", {}, {}, () => deps.aggregations.randomSummary(userId, filters, { memo: !deps.userCache?.enabled }));",
+        "failing": [
+          "● filtered, unfiltered and race-filtered requests keep separate bodies and validators, and a local write retires each",
+          "● randomSummary isolates filters and owners and retires committed/unknown results"
+        ]
+      },
+      {
+        "id": "C3-M7-service-ignores-switch",
+        "file": "apps/api/src/services/aggregations.js",
+        "from": "return memo && Object.keys(f).length === 0",
+        "to": "return Object.keys(f).length === 0",
+        "failing": [
+          "● a HEAD that finished before another process's write leaves nothing the first guarded GET can retain",
+          "● filtered, unfiltered and race-filtered requests keep separate bodies and validators, and a local write retires each",
+          "● with the memo switched off, concurrent loads still join but completed answers are never reused"
+        ]
+      },
+      {
+        "id": "C3-M8-service-memoizes-filtered",
+        "file": "apps/api/src/services/aggregations.js",
+        "from": "return memo && Object.keys(f).length === 0",
+        "to": "return memo",
+        "failing": [
+          "● with the cache off, the unfiltered memo still shares one answer for its minute, race-only requests included",
+          "● all-history race metadata cache › keeps authenticated users isolated and filtered charts fresh"
+        ]
+      },
+      {
+        "id": "C3-M9-web-path-missing",
+        "file": "apps/web/lib/conditionalApiScope.tsx",
+        "from": "\"/v1/mmr-by-matchup/opponents\", \"/v1/random-summary\"];",
+        "to": "\"/v1/mmr-by-matchup/opponents\"];",
+        "failing": [
+          "× useApi actual SWR manual conditional integration > /v1/random-summary discovers capability with one ordinary read, retains the next200 and reconstructs304 86ms",
+          "× private response capability positions > preserves the original eleven, the four direct snapshot routes, streak and macro report, then the net-MMR pair and random summary 1ms",
+          "FAIL  lib/__tests__/clientApi.conditional.test.tsx > useApi actual SWR manual conditional integration > /v1/random-summary discovers capability with one ordinary read, retains the next200 and reconstructs304",
+          "FAIL  lib/__tests__/conditionalApiScope.routes.test.ts > private response capability positions > preserves the original eleven, the four direct snapshot routes, streak and macro report, then the net-MMR pair and random summary"
+        ]
+      },
+      {
+        "id": "C3-M10-web-position-moved",
+        "file": "apps/web/lib/conditionalApiScope.tsx",
+        "from": "\"/v1/mmr-by-matchup/opponents\", \"/v1/random-summary\"];",
+        "to": "\"/v1/random-summary\", \"/v1/mmr-by-matchup/opponents\"];",
+        "failing": [
+          "× private response capability positions > preserves the original eleven, the four direct snapshot routes, streak and macro report, then the net-MMR pair and random summary 5ms",
+          "FAIL  lib/__tests__/conditionalApiScope.routes.test.ts > private response capability positions > preserves the original eleven, the four direct snapshot routes, streak and macro report, then the net-MMR pair and random summary"
+        ]
+      },
+      {
+        "id": "C3-M11-join-key-drops-filters",
+        "file": "apps/api/src/services/aggregations.js",
+        "from": "const parts = [\"randomSummary\", userId, f];",
+        "to": "const parts = [\"randomSummary\", userId];",
+        "failing": [
+          "● with the memo switched off, concurrent filtered and unfiltered loads never share a computation"
+        ]
+      },
+      {
+        "id": "C3-M12-race-filter-blocks-memo",
+        "file": "apps/api/src/services/aggregations.js",
+        "from": "return memo && Object.keys(f).length === 0",
+        "to": "return memo && Object.keys(filters || {}).length === 0",
+        "failing": [
+          "● with the cache off, the unfiltered memo still shares one answer for its minute, race-only requests included"
+        ]
+      }
+    ]
+  },
+  "independentReview": {
+    "workflow": "wf_5fe2467f-e50",
+    "agents": 30,
+    "findings": 24,
+    "survivedSkeptic": 19,
+    "refuted": 5,
+    "blocking": 0,
+    "distinctConfirmed": {
+      "major": 1,
+      "minor": 7,
+      "nit": 3
+    },
+    "addressedIn": [
+      "10cdb0fd (tests)",
+      "this docs commit"
+    ],
+    "note": "The one major, reported by six reviewers, was a CHANGELOG sentence promising that a reused summary always matches the latest games, which ADR 0072's G1-G3 rule out; it now says reuse follows the same per-account revision checks as the other covered charts. The minors and nits made the real-Mongo suite run the production composition, pinned concurrent filtered and unfiltered isolation, race-only flag-off sharing and the race variant's retirement, and corrected the checkpoint's HEAD, caller, admission-frequency, recompute-cost and remaining-work wording."
+  },
+  "retained": [
+    "Mutation round one bound b555b34e before the independent review; it killed 10 of 10.",
+    "The first checkpoint draft continued bare test spans from the web list's citation and cited past the new suite's last line; both were corrected before review.",
+    "Configured lint counts 758 warnings, one more than C2's 757: main's new __tests__/opponentsRaceHistory.test.js (d8499c31, merged through ca095617) has one max-lines-per-function warning. The files C3 changes add none."
+  ],
+  "boundaries": [
+    "Stacked on unmerged C2, DA2, C1 and F1. Exact-head CI (including web-ci's route-budget check), merge, deployment and production acceptance remain pending.",
+    "USER_CACHE_ENABLED stays off. No activation, latency, request-reduction, savings or fleet proof; G1-G3 stay unmet as ADR 0072 records."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/opponent-game-region-identity-20261030/FASTER-DASHBOARDS-SCOPING-01.json",
+      "sha256": "3d57aa7955498824d9c396682dbd8a9b1e31aa7f0face074a500acbd84c513bf",
+      "bytes": 92680
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/CHECKS-01.json",
+      "sha256": "57b9b6b61004f7dc303c0a8e21ca0c9143f78bb1f9f3978fc306917a8a3ad5eb",
+      "bytes": 3149
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/checks-01/api-jest.json",
+      "sha256": "277988b3b39781e6ca85779a1c9ece33d32068628f8c7fd6b2bca02eeee57305",
+      "bytes": 172854
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/checks-01/api-lint.json",
+      "sha256": "5815f4de781476d3c6031ada053531a055e1e83a5bb578346a954ca1a60adde5",
+      "bytes": 7490196
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/checks-01/web-vitest.json",
+      "sha256": "64de45c9023df82fdd02be32a7f68033440d4ea3c2737ae548684187f0098312",
+      "bytes": 46857
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/checks-01/lint-no-added.txt",
+      "sha256": "916ae2335ff9197203217de0c4a3a5532cffefd0b80a2fe863ff77c6e42498d3",
+      "bytes": 1192
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/MUTATION-RESULTS.json",
+      "sha256": "d19c7585e5fe722a63e70b9457e260f70a64daca4f4db06b54bf6c21460454c2",
+      "bytes": 12133
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/scripts/final-checks-c3-01.mjs",
+      "sha256": "95880bbb5b32320d51a0347b10d51f5dc495b312712dde4e82935e0df55daf9d",
+      "bytes": 7119
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/scripts/lint-noadd-c3-01.mjs",
+      "sha256": "ca0887446d469ab882295e8281013687d2337353ed21fb2bd5ebf4233cd2a6c4",
+      "bytes": 2814
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/scripts/run-c3-jest.mjs",
+      "sha256": "27bf6aaabe8589ecedf66cbd679bdf83b535d26f9708d83bc252e707f82df522",
+      "bytes": 3893
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/scripts/mutation-check-c3-01.mjs",
+      "sha256": "3e4848aff86913deab8c97fa1aa1a428b8715353460e8a4d50f5b340412bb540",
+      "bytes": 6274
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/scripts/mutation-check-c3-02.mjs",
+      "sha256": "69294990f38329173b72edc0db4e9a5fe061ea2df161c090b4907735e2042c67",
+      "bytes": 6860
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/C3-M1-not-allowlisted.log",
+      "sha256": "ba6ff63292d139a0235ebc05c801085436a393ff16a7ad63baf06854794a4600",
+      "bytes": 11440
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/C3-M10-web-position-moved.log",
+      "sha256": "df529d872a100e2f0f8fec8cda7bcba36625184a821dc492d8d6b82de1f37ca1",
+      "bytes": 2690
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/C3-M11-join-key-drops-filters.log",
+      "sha256": "157ac8a4fff51a410c6e447b7c99033b7d2dbde2782bda868f3d63a0a7a739cf",
+      "bytes": 1848
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/C3-M12-race-filter-blocks-memo.log",
+      "sha256": "2ac4a97b590e9b53794a205ee99c01ee1c7e636f478f775e0bbc395b4636f473",
+      "bytes": 2403
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/C3-M2-plain-json.log",
+      "sha256": "36a07e823f2e06cc2b0a54a4d37834f448e9bcb6473fe4e98bc59efdcadb08f2",
+      "bytes": 11440
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/C3-M3-memo-on-under-cache.log",
+      "sha256": "ed2a4e5ae40e7ccd26fb4848021d740356bc55611afee25d541994a722eae76b",
+      "bytes": 4332
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/C3-M4-memo-off-without-cache.log",
+      "sha256": "6b25b5c9087c5e85f886d646a4a7f8bc8a4b91cf3ecde3273c84174d1f284fa5",
+      "bytes": 4870
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/C3-M5-head-keeps-memo.log",
+      "sha256": "5bc6dbcd62ae63561cf6a3c40a4eb39bd2185ee30503d9b59556d3806fcc58a8",
+      "bytes": 3140
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/C3-M6-key-drops-filters.log",
+      "sha256": "000199e06fa7cb4e12eac6a318e05ab3c9202a4415e8c0d04f0a7a795b354e95",
+      "bytes": 3777
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/C3-M7-service-ignores-switch.log",
+      "sha256": "9d16fc6cef35e75b4a7c4e725c96fb6a0ded1856195dee83bf0ca676a5c260e7",
+      "bytes": 4090
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/C3-M8-service-memoizes-filtered.log",
+      "sha256": "569627afc24dc0dccc2f573788154886b1f8f8d8c3246a0d36ad0107a7903090",
+      "bytes": 3007
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/C3-M9-web-path-missing.log",
+      "sha256": "63d5503ebde972d1b7ef854210d1585e8dd7c2bf8d48c9ac227e78800cd6ad6e",
+      "bytes": 4870
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/baseline-api.log",
+      "sha256": "631a77e91623963b0d9e0fdc9d1d19de66b28f42e8c7d31bf3712514e7ff2aa7",
+      "bytes": 503
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-02/baseline-web.log",
+      "sha256": "b9fa79e8d09c03c93d6a91421d0cf56ead847ce91c34e6ae58b5d84197eb46d9",
+      "bytes": 805
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c3-20261030/mutation-01/MUTATION-RESULTS.json",
+      "sha256": "2ec2c4b5f4126bfc600fd7e1c840484025ffac01056485d59b44722bf733e647",
+      "bytes": 10589
+    }
+  ]
+}
