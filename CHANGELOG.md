@@ -13,6 +13,7 @@ corresponding GitHub Release.
 
 ### Device credential write coordination
 
+- Bound how often the inactive retained-authentication path checks its authority record: after a check finds no usable grant, it waits 1.8 seconds before checking again. Device authentication still reads the database on every request, and the retained path stays off.
 - Keep ordinary account and agent requests usable while device-access changes wait for their coordination checks. The optional retained-authentication path remains inactive.
 - Coordinate device pairing, revocation and account erasure through durable database gates. These controls can take a few seconds to finish; uncertain writes keep their reuse scope blocked. Device authentication still reads the database on every request, and the proposed 60-second credential cache remains off.
 

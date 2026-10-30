@@ -1,0 +1,273 @@
+{
+  "schemaVersion": 1,
+  "slice": "DA2-lease-probe-suppression",
+  "status": "LOCAL_TYPES_LINT_231_DEVICE_AUTH_CASES_PASS_7_OF_7_MUTATIONS_NOT_RELEASED",
+  "source": {
+    "base": "72b9d960",
+    "baseQualification": "C1 head (PR825, draft and unmerged), which carries F1 round four (PR824, 6a730393). DA2 merges after both; the tested commit is the merge of that head into DA2.",
+    "testedCommit": "1dde734bb53c1cd0b89813c8329d9f2af2059f3b",
+    "applicationFiles": [
+      "apps/api/src/services/deviceAuthLease.js"
+    ],
+    "applicationChangeCommit": "a8d4a1e3",
+    "testFollowUpCommit": "2a92b201",
+    "mutationRunHead": "2a92b2016b3a2a9cf0ee5bd37dce31eaaa2256d4",
+    "testFiles": [
+      "apps/api/__tests__/deviceAuthLease.test.js",
+      "apps/api/__tests__/deviceAuthReuse.mongo.test.js",
+      "apps/api/__tests__/deviceRestAuthReadiness.mongo.test.js"
+    ],
+    "leaseSha256Lf": "00ea2a4c2e973243caf08d3b0ed66337e613c5ef3f5196b4697ec45706798762"
+  },
+  "behaviour": {
+    "holdOffMs": 1800,
+    "armedAt": "actual settlement of a probe that leaves no usable grant, re-armed after every failed probe",
+    "holdOffResult": "acquire() returns null with no dispatch and no wait; callers run the original lookup",
+    "validGrantStartsHoldOff": false,
+    "keeps": "a time only (probeAfter); no token, owner hash, row or authority value",
+    "adapterInjected": false,
+    "rateBound": "with continuous demand and no usable grant, at most one probe per probe duration plus 1.8 s per process"
+  },
+  "actual": {
+    "apiTypesExit": 0,
+    "apiConfiguredLint": {
+      "errors": 0,
+      "warnings": 757
+    },
+    "strictLeaseLint": {
+      "errors": 0,
+      "warnings": 0,
+      "rules": "complexity 10, max-lines-per-function 60"
+    },
+    "changedFilesAddedLintMessages": 0,
+    "leaseClassLines": 123,
+    "deviceAuthSuites": 16,
+    "deviceAuthCases": 231,
+    "failed": 0,
+    "pending": 0,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "ownedMongodLeftover": 0,
+    "mutationsKilled": "7/7",
+    "mutations": [
+      {
+        "id": "D1-no-hold-off-check",
+        "edits": [
+          {
+            "from": "this.grant = null; if (!this.probe && now < this.probeAfter) return null;",
+            "to": "this.grant = null;"
+          }
+        ],
+        "failing": [
+          "deviceAuthReuse.mongo.test.js :: missing or recreated prepared authority never auto-activates and unknown grant ACK never publishes",
+          "deviceAuthLease.test.js :: a prepared settlement holds off new probes for one lease, then exactly one probe follows",
+          "deviceAuthLease.test.js :: a missing settlement holds off new probes for one lease, then exactly one probe follows",
+          "deviceAuthLease.test.js :: a error settlement holds off new probes for one lease, then exactly one probe follows",
+          "deviceAuthLease.test.js :: a unknown ACK settlement holds off new probes for one lease, then exactly one probe follows",
+          "deviceAuthLease.test.js :: a probe retired by its caller's deadline starts the hold-off only at its actual settlement",
+          "deviceAuthLease.test.js :: a persistently prepared authority re-arms the hold-off after every failed probe",
+          "deviceAuthLease.test.js :: a persistently missing authority re-arms the hold-off after every failed probe"
+        ]
+      },
+      {
+        "id": "D2-hold-off-ends-at-probe-deadline",
+        "edits": [
+          {
+            "from": "this.probeAfter = now + DEVICE_AUTH_LEASE_MS;",
+            "to": "this.probeAfter = task.deadline;"
+          }
+        ],
+        "failing": [
+          "deviceAuthLease.test.js :: a probe retired by its caller's deadline starts the hold-off only at its actual settlement"
+        ]
+      },
+      {
+        "id": "D3-hold-off-after-valid-grant",
+        "edits": [
+          {
+            "from": "if (!grant && now !== null) this.probeAfter",
+            "to": "if (now !== null) this.probeAfter"
+          }
+        ],
+        "failing": [
+          "deviceAuthLease.test.js :: a denyAll grant is still kept for its lease and starts no hold-off"
+        ]
+      },
+      {
+        "id": "D4-hold-off-inclusive-end",
+        "edits": [
+          {
+            "from": "now < this.probeAfter) return null;",
+            "to": "now <= this.probeAfter) return null;"
+          }
+        ],
+        "failing": [
+          "deviceAuthLease.test.js :: unknown grant ACK does not authorize even if metadata may have committed",
+          "deviceAuthLease.test.js :: a prepared settlement holds off new probes for one lease, then exactly one probe follows",
+          "deviceAuthLease.test.js :: a missing settlement holds off new probes for one lease, then exactly one probe follows",
+          "deviceAuthLease.test.js :: a error settlement holds off new probes for one lease, then exactly one probe follows",
+          "deviceAuthLease.test.js :: a unknown ACK settlement holds off new probes for one lease, then exactly one probe follows",
+          "deviceAuthLease.test.js :: a probe retired by its caller's deadline starts the hold-off only at its actual settlement",
+          "deviceAuthLease.test.js :: a persistently prepared authority re-arms the hold-off after every failed probe",
+          "deviceAuthLease.test.js :: a persistently missing authority re-arms the hold-off after every failed probe",
+          "deviceAuthReuse.mongo.test.js :: missing or recreated prepared authority never auto-activates and unknown grant ACK never publishes"
+        ]
+      },
+      {
+        "id": "D5-late-valid-result-not-held",
+        "edits": [
+          {
+            "from": "if (!grant && now !== null) this.probeAfter",
+            "to": "if (!candidate && now !== null) this.probeAfter"
+          }
+        ],
+        "failing": [
+          "deviceAuthLease.test.js :: a probe retired by its caller's deadline starts the hold-off only at its actual settlement"
+        ]
+      },
+      {
+        "id": "D6-hold-off-armed-only-once",
+        "edits": [
+          {
+            "from": "if (!grant && now !== null) this.probeAfter",
+            "to": "if (!grant && now !== null && this.probeAfter === -Infinity) this.probeAfter"
+          }
+        ],
+        "failing": [
+          "deviceAuthLease.test.js :: a persistently prepared authority re-arms the hold-off after every failed probe",
+          "deviceAuthLease.test.js :: a persistently missing authority re-arms the hold-off after every failed probe",
+          "deviceAuthReuse.mongo.test.js :: missing or recreated prepared authority never auto-activates and unknown grant ACK never publishes"
+        ]
+      },
+      {
+        "id": "D7-hold-off-armed-by-callers",
+        "edits": [
+          {
+            "from": "const grant = this.current(candidate); if (!grant && now !== null) this.probeAfter = now + DEVICE_AUTH_LEASE_MS;",
+            "to": "const grant = this.current(candidate);"
+          },
+          {
+            "from": "if (task.retired || task.waiters >= DEVICE_AUTH_WAITERS) return null;",
+            "to": "if (task.retired || task.waiters >= DEVICE_AUTH_WAITERS) { this.probeAfter = now + DEVICE_AUTH_LEASE_MS; return null; }"
+          },
+          {
+            "from": "try { return await beforeDeviceAuthDeadline(task.promise, task.deadline, () => this.now(), () => { task.retired = true; this.grant = null; }); }",
+            "to": "try { const value = await beforeDeviceAuthDeadline(task.promise, task.deadline, () => this.now(), () => { task.retired = true; this.grant = null; }); if (!value) this.probeAfter = (this.now() ?? now) + DEVICE_AUTH_LEASE_MS; return value; }"
+          }
+        ],
+        "failing": [
+          "deviceAuthLease.test.js :: a probe retired by its caller's deadline starts the hold-off only at its actual settlement"
+        ]
+      }
+    ]
+  },
+  "independentReview": {
+    "workflow": "wf_58967c16-eb4",
+    "agents": 20,
+    "blocking": 0,
+    "codeDefects": 0,
+    "addressed": "re-arm and settlement-timing tests (2a92b201); ADR 0072 rows, design note and checkpoint wording (docs commit)"
+  },
+  "retained": [
+    "mutation-01 (5 of 5 killed) ran on the working tree just before a8d4a1e3 was committed; its lease hash equals that commit's, but it recorded no failing test names. It is superseded by mutation-02, which ran at 2a92b201; the tested merge commit adds only C1 and F1 files and leaves the lease and its four test files unchanged.",
+    "da2-dev-01 (16 suites, 229 cases) ran before the denyAll test gained its 100 ms settle; it is not evidence for the tested commit.",
+    "In the real-Mongo suites the hold-off check is not what fails when removed (D1): those tests prove that each step still probes, and the in-window check against a prepared row. The unit suite proves the hold-off itself."
+  ],
+  "boundaries": [
+    "Stacked on unmerged C1 and F1. Exact-head CI, merge, deployment and production acceptance remain pending.",
+    "The adapter stays uninjected; no activation, latency, load or savings claim. ADR 0071:47-48 stays true only while it is uninjected; the wiring slice owns the bounded-rate decision."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/opponent-game-region-identity-20261030/FASTER-DASHBOARDS-SCOPING-01.json",
+      "sha256": "3d57aa7955498824d9c396682dbd8a9b1e31aa7f0face074a500acbd84c513bf",
+      "bytes": 92680
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/device-auth-mongo-lease-design-20261028.json",
+      "sha256": "d7f9770a918f48672fc77856c35e666e8769ca8bb34f953da9e6837d3ca15ec2",
+      "bytes": 39022
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/CHECKS-01.json",
+      "sha256": "78a0552a94f66e3ba38edd2a3cef01e899964b94a6684d89386b5e862499e08d",
+      "bytes": 3237
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/checks-01/suites-jest.json",
+      "sha256": "fcf140c0a99fe468511376691229c002bb895f06436325d070cd3b3f0a9ca837",
+      "bytes": 88708
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/checks-01/api-lint.json",
+      "sha256": "177ec3b48d35b2f49250efc51b9a612bf76e281e8be4c1e0645ec51b2844b61a",
+      "bytes": 7481389
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/mutation-02/MUTATION-RESULTS.json",
+      "sha256": "b9804953864d05aaa4b1e42e2872a32460a11f877cdbbfb374e73f2b8be7d2dc",
+      "bytes": 9040
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/scripts/mutation-check-da2-02.mjs",
+      "sha256": "8714ddef2a1b52fa125e3f34fb712a9bca5aeb2e8ac8a8781be8f0788f219c9e",
+      "bytes": 6398
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/scripts/final-checks-da2-01.mjs",
+      "sha256": "7c5cbcbbe426290ae8e0b387c0316be08fa6dfc7ea2f358a6b6e243c4b6b2b41",
+      "bytes": 7170
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/mutation-01/MUTATION-RESULTS.json",
+      "sha256": "9cb31fb0205c822f41fbb4664e84d895c01f274e2d031311c6e091bc84debe41",
+      "bytes": 1870
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/scripts/mutation-check-da2-01.mjs",
+      "sha256": "1189c46eb32cade64e464521a45614fc22cec52ed15d144d06f0e7a44d313631",
+      "bytes": 4632
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/mutation-02/D0-baseline.log",
+      "sha256": "81da8c68b4be1b2bda7811ed25a5db752adbf5b5bf9bc61ab843d231a3fe4c0c",
+      "bytes": 4703
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/mutation-02/D1-no-hold-off-check.log",
+      "sha256": "506ddea559a8f202a1d508285d1d254ce2e5bdeeb34bf408b35bce5ce692e275",
+      "bytes": 18483
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/mutation-02/D2-hold-off-ends-at-probe-deadline.log",
+      "sha256": "36104daffe4b7c3bd1b50c28cf881d611fb77cf5c2dd6da8d077725810d0ea6b",
+      "bytes": 6546
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/mutation-02/D3-hold-off-after-valid-grant.log",
+      "sha256": "5df2e3020ad458a54cbd6b3693883fcd80ced4a1ef1b9641b6b151d0fb94fb1d",
+      "bytes": 6032
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/mutation-02/D4-hold-off-inclusive-end.log",
+      "sha256": "7c6107858921bc5df5d58a763b6fa29d094fb2687b0594e3bea1d74ffd244097",
+      "bytes": 17761
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/mutation-02/D5-late-valid-result-not-held.log",
+      "sha256": "0ff02f82c58b3c02e34da9b9bdc4cc63bc3b6d2fdb888ae917d2912737ef51e0",
+      "bytes": 6541
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/mutation-02/D6-hold-off-armed-only-once.log",
+      "sha256": "22a6349d400d6e843bd17aab61095cf0decf191eef97c35d821facd5a3284efd",
+      "bytes": 8996
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da2-20261030/mutation-02/D7-hold-off-armed-by-callers.log",
+      "sha256": "858add530c8d84feb3c3cd8937091a6510fe1188b549a31dddec15b6c1b24b63",
+      "bytes": 6539
+    }
+  ]
+}
