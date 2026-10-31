@@ -6,7 +6,7 @@ no receipt and activates nothing. `USER_CACHE_ENABLED` stays off and
 faster-dashboards remains partial.
 
 Source paths are relative to `apps/api/src/` unless they start with `apps/` or
-`docs/`. Line numbers were checked at slice G1's tested source (`868c3aff`).
+`docs/`. Line numbers were checked at slice G1's tested source (`cc8e358c`).
 The ADR was added at application source `27b9aeb0`. C1 through C4 changed the
 cited allowlist lines in place and edited route and service lines without
 changing line counts (C4's route and curve helpers follow the cited lines), and DA2
