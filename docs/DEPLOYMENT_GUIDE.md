@@ -1,13 +1,15 @@
 # SC2Tools — Cloud Deployment Guide
 
-> **Reality check (2026-07):** production currently runs on Render's
-> **starter** plan (see `apps/api/render.yaml` and
-> `cloud/community-builds/render.yaml`) with a free-tier Atlas cluster —
-> NOT the M10 dedicated cluster this guide prescribes. The
-> `api-keepalive.yml` workflow exists solely to keep the starter
-> instance awake. The M10 sizing below is the target once donations
-> cover it; until then treat the M10 references as aspirational, and do
-> not assume M10-only index/perf headroom in code.
+> **Production (October 2026):** the API runs on Render's **starter**
+> plan, one instance (`apps/api/render.yaml`). The accepted database
+> architecture is a dedicated Atlas M10 cluster with Cloud Backup
+> ([ADR 0073](adr/0073-database-backups-atlas-cloud-backup.md)); the
+> production API's public backup summary shows a readable Cloud Backup
+> policy, and Admin → Infrastructure shows the live cluster tier. Check
+> the tier there before relying on M10-only index or performance
+> headroom. The `api-keepalive.yml` workflow exists solely to keep the
+> starter instance awake. A July 2026 version of this note described a
+> free-tier Atlas cluster, which has no Cloud Backup.
 
 The keepalive workflow targets the Render API only. Do not add Vercel page
 warmups to its five-minute schedule: those requests consume the website's
@@ -366,23 +368,28 @@ If the owner later configures revalidation, set these values together:
 The signed JSON body is `{ts,scope:"community"}` using the existing guides
 raw-body HMAC header/protocol, with a separate scope and secret. The receiver
 accepts a five-minute clock window, at most 4 KiB and two seconds of body
-reading. It invalidates the Community tag/layout and sitemap. The sender has a
+reading. It revalidates the `community` tag, the `/community`, `/players` and
+`/p` layouts, and `/sitemap.xml`. The sender has a
 five-second deadline, one active request and one coalesced pending notification;
 it logs only a status or fixed error label. Unset API values make sending a
-no-op. Unset web secret returns 503 and keeps public Community reads and
-user-derived social cards uncached. Configure both runtimes before relying on
-fast refresh; a web-only secret cannot establish working delivery.
+no-op. An unset web secret makes the receiver return 503. Configure both
+runtimes before relying on purge delivery; a web-only secret cannot establish
+working delivery.
 
-With configuration present, general Community pages use a 300-second tagged
-data cache (`community`, plus a validated per-build tag). Publish/update,
+Community pages are not cached even with configuration present. Since public
+player pages (PR #758), their reads carry current publication capabilities that
+a best-effort purge cannot keep fresh after a profile opt-out, so the web fetches
+them with no revalidation and no tags (`apps/web/lib/communityCache.ts`; ADR
+0074), and Community social cards render uncached. The API sends `no-store` on
+decorated Community reads (the build list, build detail and arcade universe)
+and on author profiles; only the content-only `/v1/community/sitemap` sends
+`public, s-maxage=60, stale-while-revalidate=600`. Publish/update,
 unpublish, moderation, rounded vote-score changes, admin edits and game
 visibility/deletion/restore/GDPR changes notify the receiver. Unknown mutation
-outcomes invalidate conservatively. Delivery is best effort: a failed or
-unavailable purge can leave a general list/build cached until its normal
-refresh, so the UI makes no unconditional "within seconds" promise. A failed
-timed background refresh retains successful tagged data for the last-good
-detail content. An uncached failure uses the unavailable/retry boundary; a
-confirmed missing resource takes the existing not-found path.
+outcomes invalidate conservatively. Delivery is best effort, so the UI makes no
+unconditional "within seconds" promise. A failed read uses the
+unavailable/retry boundary; a confirmed missing resource takes the existing
+not-found path.
 
 Community's existing loading boundaries may already have streamed HTTP 200
 when a child resource is found missing; Next then sends its 404 fallback and
@@ -390,9 +397,10 @@ noindex without the old content. Cache work preserves that behavior, not a raw
 HTTP404 improvement. The API still answers strict 404/no-store on a missing,
 removed or below-floor resource.
 
-Successful general public API responses use `public, s-maxage=60,
-stale-while-revalidate=600`; owner/admin data, missing resources and errors stay
-`private, no-store`. The web site-stats proxy uses 15/60 seconds on success and
+Since PR #758, decorated Community API reads and author profiles send
+`no-store`, and only the content-only `/v1/community/sitemap` sends `public,
+s-maxage=60, stale-while-revalidate=600`; owner/admin data, missing resources
+and errors stay `private, no-store`. The web site-stats proxy uses 15/60 seconds on success and
 no-store on errors, with an uncached upstream request.
 
 Opponent data is the deliberate exception: API, data fetch and page rendering
