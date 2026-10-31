@@ -193,6 +193,31 @@ describe("AnalysisGamesProvider retention", () => {
     expect(harness.apiCall).toHaveBeenCalledTimes(2);
   });
 
+  it("stamps when the corpus last came from the server, and clears it while updating or after a failed update", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_793_000_000_000);
+    try {
+      providerEnabled = false;
+      const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+      expect(result.current.syncedAt).toBeNull();
+
+      act(() => result.current.load());
+      expect(result.current.syncedAt).toBeNull();
+      await waitFor(() => expect(result.current.items).toHaveLength(3));
+      expect(result.current.syncedAt).toBe(1_793_000_000_000);
+
+      // Refresh keeps the games on screen; a failure keeps them too, with no time.
+      harness.apiCall.mockRejectedValueOnce(new Error("Service unavailable"));
+      act(() => result.current.load());
+      expect(result.current.syncedAt).toBeNull();
+      expect(result.current.items).toHaveLength(3);
+      await waitFor(() => expect(result.current.error).not.toBeNull());
+      expect(result.current.syncedAt).toBeNull();
+      expect(result.current.items).toHaveLength(3);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   it("lets Daily Pulse activate the shared corpus on demand", async () => {
     providerEnabled = false;
     const { result } = renderHook(() => useAnalysisGames(), { wrapper });
@@ -465,11 +490,12 @@ describe("AnalysisGamesProvider device copy", () => {
     }));
     const second = renderHook(() => useAnalysisGames(), { wrapper });
     act(() => second.result.current.load());
-    // The stored copy shows before the network answers.
+    // The stored copy shows before the network answers, still updating.
     await waitFor(() => {
       expect(shown(second.result.current.items)).toEqual(["s-a", "s-b", "s-c"]);
     });
     expect(second.result.current.isLoading).toBe(false);
+    expect(second.result.current.syncedAt).toBeNull();
     await waitFor(() => expect(answer).toBeTypeOf("function"));
     const next = { ...MARKS, watermark: "2026-10-31T11:00:00.000Z" };
     await act(async () => {
@@ -482,6 +508,7 @@ describe("AnalysisGamesProvider device copy", () => {
     await waitFor(() => {
       expect(shown(second.result.current.items)).toEqual(["new", "s-a", "s-c"]);
     });
+    expect(second.result.current.syncedAt).toEqual(expect.any(Number));
     expect(requested()).toEqual(["/v1/games/analysis-corpus/changes"]);
     expect(await deviceCopy("user-a")).toEqual({
       marks: next,

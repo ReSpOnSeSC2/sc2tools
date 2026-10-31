@@ -28,7 +28,7 @@ const article: HelpArticle = {
     "session",
     "retry",
   ],
-  updated: "2026-10-27",
+  updated: "2026-10-31",
   body: [
     {
       type: "paragraph",
@@ -68,7 +68,7 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "A strip of short insights picked from your own games, with a fresh mix every day: yesterday's session, a streak, how close you are to your MMR peak, a build on the rise, a nemesis, a map edge, a milestone. Open a card to jump to the section with the full story. Press the strip's header to open or close it; the choice is remembered on this device.",
     },
-    { type: "paragraph", text: "Choose **Show insights** to load the replay sample when prompted; no insight count is shown before it is known. On a computer, **Previous insight** and **Next insight** move one card at a time, with an n-of-N position. Focus the strip and use Left or Right arrows; phones keep swipe. Motion follows your reduced-motion preference. Build cards open Builds with that name searched, map cards focus and open that map, and a known nemesis opens its dossier. Your applicable global filters stay in those links." },
+    { type: "paragraph", text: "The first time, choose **Load my history**. It's kept on this device, so Daily Pulse, Season Recap and Arcade open at once next time and only download new games ([Your history on this device](/help/history-on-this-device)). The line under the cards shows when it last updated; **Refresh** checks now. No insight count is shown before your history loads. On a computer, **Previous insight** and **Next insight** move one card at a time, with an n-of-N position. Focus the strip and use Left or Right arrows; phones keep swipe. Motion follows your reduced-motion preference. Build cards open Builds with that name searched, map cards focus and open that map, and a known nemesis opens its dossier. Your applicable global filters stay in those links." },
     { type: "heading", text: "Ladder Pulse", anchor: "ladder-pulse" },
     {
       type: "list",
@@ -99,7 +99,7 @@ const article: HelpArticle = {
       text: "Prefer to land on another section? Pick it under **Default tab** in [Settings → Misc](/settings?tab=misc). It applies when you first open the dashboard in a browser session. Clicking **Today** or its app shortcut always opens Today.",
     },
   ],
-  related: ["analyzer-filters", "dashboard-and-analyzer", "reading-the-charts", "game-page"],
+  related: ["analyzer-filters", "dashboard-and-analyzer", "reading-the-charts", "game-page", "history-on-this-device"],
 };
 
 export default article;

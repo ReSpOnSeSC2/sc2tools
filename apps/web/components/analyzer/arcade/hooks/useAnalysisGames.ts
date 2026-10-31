@@ -46,6 +46,11 @@ export type AnalysisGamesResult = {
   hitCorpusLimit: boolean;
   /** True when this account's corpus is kept on this device. */
   onDevice: boolean;
+  /**
+   * When the corpus on screen last came from the server (ms since the epoch); null while it loads or updates, and
+   * after a failed update, which keeps the corpus already on screen.
+   */
+  syncedAt: number | null;
   /** Whether a consumer has explicitly asked for the expensive corpus. */
   isActive: boolean;
   /** Activate the corpus, or retry it after a failed request. */
@@ -78,6 +83,7 @@ function emptyAnalysisState(
     pagesFetched: 0,
     hitCorpusLimit: false,
     onDevice: false,
+    syncedAt: null,
   };
 }
 
@@ -94,13 +100,16 @@ function reloadingState(
         ...previous,
         isLoading: previous.pagesFetched === 0 && !previous.onDevice,
         error: null,
+        syncedAt: null,
       }
     : emptyAnalysisState(accountKey, true);
 }
 
+/** `syncedAt` is null for a corpus that is not final yet: a stored copy before its changes, a snapshot before its save. */
 function syncedState(
   accountKey: string,
   synced: CorpusSnapshot & { onDevice: boolean },
+  syncedAt: number | null = Date.now(),
 ): AccountBoundAnalysisState {
   return {
     accountKey,
@@ -110,6 +119,7 @@ function syncedState(
     pagesFetched: synced.pagesFetched,
     hitCorpusLimit: synced.hitCorpusLimit,
     onDevice: synced.onDevice,
+    syncedAt,
   };
 }
 
@@ -325,11 +335,11 @@ export function AnalysisGamesProvider({
                 setState((previous) =>
                   previous.accountKey === accountKey && previous.items.length > 0
                     ? previous
-                    : syncedState(accountKey, stored));
+                    : syncedState(accountKey, stored, null));
               },
               onSnapshot: (snapshot) => {
                 if (cancelled) return;
-                setState(syncedState(accountKey, { ...snapshot, onDevice: false }));
+                setState(syncedState(accountKey, { ...snapshot, onDevice: false }, null));
               },
               signal: controller.signal,
               maxRows: ANALYSIS_GAMES_CORPUS_MAX,

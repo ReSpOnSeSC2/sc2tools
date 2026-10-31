@@ -7,6 +7,7 @@ import {
   mergeDeviceDelta,
   openDeviceCorpus,
   readDeviceCorpus,
+  readDeviceSummary,
   resetDeviceCorpus,
   saveDeviceSnapshot,
 } from "../deviceStore";
@@ -181,6 +182,51 @@ describe("device corpus storage", () => {
       await edit((tx) => { tx.objectStore("accounts").put({ accountKey: "user-a", savedAt: "", ...record }); });
       expect(await view(db)).toBe("unreadable");
     }
+    db.close();
+  });
+});
+
+describe("readDeviceSummary", () => {
+  // The bytes of each stored row, in the order the account's rows are read.
+  async function rowSizes(db: IDBDatabase) {
+    const box = await idbTransactionOn(db, "games", "readonly", (tx) => {
+      const out: { values: unknown[] } = { values: [] };
+      const all = tx.objectStore("games").getAll();
+      all.onsuccess = () => { out.values = all.result; };
+      return out;
+    });
+    return box.values.map((value) => new TextEncoder().encode(JSON.stringify(value)).length);
+  }
+
+  it("counts one account's games and estimates their size from evenly spaced rows", async () => {
+    const db = await stored(new IDBFactory());
+    expect(await readDeviceSummary(db, "user-a")).toEqual({ kind: "absent" });
+    await resetDeviceCorpus(db, "user-a");
+    expect(await readDeviceSummary(db, "user-a")).toEqual({ kind: "kept" });
+    await saveDeviceSnapshot(db, "user-a", [], MARKS, 10);
+    expect(await readDeviceSummary(db, "user-a")).toEqual({ kind: "stored", count: 0, bytes: 0 });
+
+    // Ids that sort by length, so each row read is larger than the one before.
+    await saveDeviceSnapshot(db, "user-a", Array.from({ length: 9 }, (_, index) => game(`a${"x".repeat(index)}`)), MARKS, 10);
+    const sizes = await rowSizes(db);
+    expect(await readDeviceSummary(db, "user-a")).toEqual({ kind: "stored", count: 9, bytes: sizes.reduce((sum, size) => sum + size, 0) });
+    expect(await readDeviceSummary(db, "user-a", 3)).toEqual({
+      kind: "stored",
+      count: 9,
+      bytes: Math.round(((sizes[0] + sizes[3] + sizes[6]) / 3) * 9),
+    });
+    expect(await readDeviceSummary(db, "user-b")).toEqual({ kind: "absent" });
+    db.close();
+  });
+
+  it("reports a record that does not check out, or games it cannot find, as unreadable", async () => {
+    const db = await stored(new IDBFactory());
+    await saveDeviceSnapshot(db, "user-a", [game("a1"), game("a2")], MARKS, 10);
+    const edit = (work: (tx: IDBTransaction) => void) => idbTransactionOn(db, ["accounts", "games"], "readwrite", work);
+    await edit((tx) => { tx.objectStore("games").clear(); });
+    expect(await readDeviceSummary(db, "user-a")).toEqual({ kind: "unreadable" });
+    await edit((tx) => { tx.objectStore("accounts").put({ accountKey: "user-a", savedAt: "", marks: MARKS, count: 2, schema: 99 }); });
+    expect(await readDeviceSummary(db, "user-a")).toEqual({ kind: "unreadable" });
     db.close();
   });
 });

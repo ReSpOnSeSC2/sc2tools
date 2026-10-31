@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { SettingsBackups } from "../SettingsBackups";
 import { ToastProvider } from "@/components/ui/Toast";
+import { loadLazyHelpLink } from "@/components/help/__tests__/loadLazyHelpLink";
 
 const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
@@ -22,6 +23,8 @@ vi.mock("@/lib/clientApi", () => ({
   apiCall: (...args: unknown[]) => apiCallMock(...args),
   API_BASE: "https://api.example.test",
 }));
+
+beforeAll(loadLazyHelpLink, 20_000);
 
 afterEach(() => {
   cleanup();
@@ -59,7 +62,7 @@ describe("SettingsBackups copy", () => {
   it("describes streamed retention and export without unverified daily-backup promises", () => {
     renderBackups([]);
 
-    for (const id of ["replay-archive", "snapshots", "repair-data", "delete-history", "gdpr"]) {
+    for (const id of ["replay-archive", "snapshots", "repair-data", "device-history", "delete-history", "gdpr"]) {
       expect(document.querySelectorAll(`[id="${id}"]`)).toHaveLength(1);
       expect(document.getElementById(id)?.tagName).toBe("SECTION");
     }

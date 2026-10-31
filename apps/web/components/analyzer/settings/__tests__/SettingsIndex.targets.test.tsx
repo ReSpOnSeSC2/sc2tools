@@ -1,8 +1,9 @@
 import { cleanup, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import type { ReactNode } from "react";
 import { ToastProvider } from "@/components/ui/Toast";
+import { loadLazyHelpLink } from "@/components/help/__tests__/loadLazyHelpLink";
 import { SettingsContextProvider } from "../SettingsContext";
 import { SETTINGS_SECTIONS } from "@/lib/settingsIndex";
 import { SettingsFoundation } from "../SettingsFoundation";
@@ -23,6 +24,8 @@ vi.mock("@/lib/clientApi", async original => ({
   apiCall: (...args: unknown[]) => { fixture.write(...args); throw new Error("Target navigation cannot mutate"); },
 }));
 vi.mock("@/components/onboarding/useReleaseInfo", () => ({ useReleaseInfo: () => ({ data: { ok: true, latest: "0.24.7" }, isLoading: false, mutate: fixture.mutate }) }));
+
+beforeAll(loadLazyHelpLink, 20_000);
 
 beforeEach(() => {
   fixture.write.mockReset(); fixture.mutate.mockReset();
@@ -75,7 +78,7 @@ describe("actual Settings section owners", () => {
       expect(definition.closest("dl")).toBe(list);
     });
   });
-  it("renders all six actual Backups owners including its lazy Hidden games Section", async () => {
+  it("renders all seven actual Backups owners including its lazy Hidden games Section", async () => {
     mount(<SettingsBackups />);
     await waitFor(() => expect(document.getElementById("hidden-games")).toBeTruthy());
     expectTargets(SETTINGS_SECTIONS.backups.map(section => section.id));

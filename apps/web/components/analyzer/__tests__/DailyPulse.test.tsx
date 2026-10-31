@@ -17,7 +17,9 @@ let analysisGames: ArcadeGame[] = [];
 let analysisLoading = true;
 let analysisActive = true;
 let analysisError: { status: number; message: string } | null = null;
+let analysisSyncedAt: number | null = null;
 const loadAnalysis = vi.fn();
+const keepAnalysis = vi.fn();
 const releaseAnalysis = vi.fn();
 
 vi.mock("@/lib/clientApi", () => ({
@@ -36,8 +38,11 @@ vi.mock("@/components/analyzer/arcade/hooks/useAnalysisGames", () => ({
     error: analysisError,
     pagesFetched: analysisLoading ? 0 : 1,
     hitCorpusLimit: false,
+    onDevice: false,
+    syncedAt: analysisSyncedAt,
     isActive: analysisActive,
     load: loadAnalysis,
+    keepOnDevice: keepAnalysis,
     release: releaseAnalysis,
   }),
 }));
@@ -58,7 +63,9 @@ beforeEach(() => {
   analysisLoading = true;
   analysisActive = true;
   analysisError = null;
+  analysisSyncedAt = null;
   loadAnalysis.mockReset();
+  keepAnalysis.mockReset();
   releaseAnalysis.mockReset();
   window.localStorage.clear();
 });
@@ -84,6 +91,7 @@ function primeGames(
 ) {
   analysisGames = items;
   analysisLoading = false;
+  analysisSyncedAt = Date.now() - 2 * 60_000;
   apiData.set("/v1/seasons", seasons);
 }
 
@@ -121,7 +129,7 @@ describe("DailyPulse", () => {
     ).toBeNull();
   });
 
-  it("keeps full replay history dormant until Daily Pulse is requested", () => {
+  it("keeps full replay history dormant until Daily Pulse is requested, then keeps it on this device", () => {
     analysisActive = false;
     analysisLoading = false;
     render(<DailyPulse />);
@@ -132,9 +140,37 @@ describe("DailyPulse", () => {
       screen.getByText("See today’s insights from your replays: streaks, rising builds, nemesis sightings"),
     ).toBeTruthy();
     expect(screen.queryByText(/\d+ of \d+/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Show insights" }));
+    expect(screen.getByText(/Load your history once — kept on this device\./)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "How it works" }).getAttribute("href")).toBe("/help/history-on-this-device");
+    expect(keepAnalysis).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Load my history" }));
+    expect(keepAnalysis).toHaveBeenCalledTimes(1);
     expect(loadAnalysis).toHaveBeenCalledTimes(1);
     expect(window.localStorage.getItem("analyzer.pulse.collapsed")).toBe("0");
+  });
+
+  it("says when the history under the cards last updated, and refreshes it", async () => {
+    primeGames(corpusWithSession());
+    render(<DailyPulse />);
+    expect(screen.getByText("You banked a winning session")).toBeTruthy();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh" }));
+    expect(screen.getByText("Updated").parentElement?.textContent).toBe("Updated 2m ago");
+    expect(screen.getByText("3 games")).toBeTruthy();
+    expect(loadAnalysis).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the cards on screen when an update fails, with Try again under them", async () => {
+    primeGames(corpusWithSession());
+    analysisSyncedAt = null;
+    analysisError = { status: 503, message: "Busy" };
+    render(<DailyPulse />);
+
+    expect(screen.getByText("You banked a winning session")).toBeTruthy();
+    expect(screen.queryByText("Replay insights couldn’t load")).toBeNull();
+    expect(await screen.findByText("Couldn’t update")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(loadAnalysis).toHaveBeenCalledTimes(1);
   });
 
   it("restores a stored open choice and reloads the real corpus after remount", async () => {

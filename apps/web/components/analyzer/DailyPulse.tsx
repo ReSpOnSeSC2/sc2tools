@@ -21,6 +21,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, ChevronDown, Loader2 } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
@@ -31,6 +32,13 @@ import {
 import { useAnalysisGames } from "@/components/analyzer/arcade/hooks/useAnalysisGames";
 import { useDailySeed } from "@/components/analyzer/arcade/hooks/useDailySeed";
 import type { TabId } from "@/components/analyzer/tabs";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+
+// The footer loads on demand, outside the dashboard's first load; a chunk that cannot load renders nothing.
+const DailyPulseFooter = dynamic(
+  () => import("./DailyPulseFooter").then((module) => module.DailyPulseFooter, () => () => null),
+  { ssr: false },
+);
 
 interface ApiSeasons {
   mapPool?: string[];
@@ -201,21 +209,26 @@ export function DailyPulse({
   // preference instead renders the expanded shell immediately and restores
   // the live corpus behind an honest loading state.
   if (!gamesRes.isActive && intent !== "open") {
-    return <DailyPulseGate onLoad={loadPulse} />;
+    return <DailyPulseGate onLoad={() => { gamesRes.keepOnDevice(); loadPulse(); }} />;
   }
 
   return (
     <DailyPulseFrame collapsed={false} onToggle={toggle}>
       {!gamesRes.isActive || gamesRes.isLoading ? (
         <DailyPulseStatus />
-      ) : gamesRes.error ? (
+      ) : gamesRes.error && gamesRes.items.length === 0 ? (
         <DailyPulseStatus failed onRetry={loadPulse} />
-      ) : selection.cards.length > 0 ? (
-        <PulseCarousel cards={selection.cards} onNavigate={onNavigate} onOpenOpponent={onOpenOpponent} hrefForCard={hrefForCard} />
       ) : (
-        <p className="px-1 py-1 text-xs text-text-dim">
-          No replay insights yet. More games will unlock your daily pulse.
-        </p>
+        <>
+          {selection.cards.length > 0 ? (
+            <PulseCarousel cards={selection.cards} onNavigate={onNavigate} onOpenOpponent={onOpenOpponent} hrefForCard={hrefForCard} />
+          ) : (
+            <p className="px-1 py-1 text-xs text-text-dim">
+              No replay insights yet. More games will unlock your daily pulse.
+            </p>
+          )}
+          <DailyPulseFooter games={gamesRes} accountKey={seed.userId} />
+        </>
       )}
     </DailyPulseFrame>
   );
@@ -300,6 +313,10 @@ function DailyPulseGate({ onLoad }: { onLoad: () => void }) {
         <div className="min-w-0 flex-1 basis-56">
           <h2 className="text-caption font-semibold text-text">Daily Pulse</h2>
           <p className="mt-1 text-caption text-text-muted">See today’s insights from your replays: streaks, rising builds, nemesis sightings</p>
+          <p className="mt-1 text-micro text-text-dim">
+            Load your history once — kept on this device.{" "}
+            <LazyHelpLink slug="history-on-this-device">How it works</LazyHelpLink>
+          </p>
         </div>
         <button
         type="button"
@@ -307,7 +324,7 @@ function DailyPulseGate({ onLoad }: { onLoad: () => void }) {
         aria-expanded={false}
         className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 text-caption font-semibold text-accent transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
       >
-        Show insights <ArrowRight aria-hidden className="h-4 w-4" />
+        Load my history <ArrowRight aria-hidden className="h-4 w-4" />
         </button>
       </div>
     </section>

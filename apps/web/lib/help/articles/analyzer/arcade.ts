@@ -94,7 +94,7 @@ const article: HelpArticle = {
       text: "**Unit Profile** reads the detailed unit history from up to your latest 1,000 eligible games separately. It shows **Loading your unit history** while that read is in progress. If the read fails, use **Retry unit history**; this does not mean you need to play more games. Other Arcade modes remain available. A completed read still needs enough real unit records to build a fair question.",
     },
   ],
-  related: ["today", "builds", "opponents", "trends"],
+  related: ["today", "builds", "opponents", "trends", "history-on-this-device"],
 };
 
 export default article;
