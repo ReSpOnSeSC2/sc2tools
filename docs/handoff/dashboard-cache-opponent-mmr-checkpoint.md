@@ -150,6 +150,13 @@ are fixed:
 - **Low.** The flag-off options check used `toEqual`, which ignores undefined
   members; it is strict now.
 
+Exact-head CI on the fixed branch then failed one suite outside the local set:
+`apps/api/__tests__/deviceCredentialWriterInventory.test.js` counted only
+`mutate` and `communityMutation` as wrappers that hand back their work's
+promise, so erasure's device-token delete inside `gameWrite` looked unsettled.
+`gameWrite` returns that promise too (`util/userRevision.js:163`), so it joins
+the list. The change is test-only, and the suite passes locally.
+
 ## Verification
 
 Local checks ran at `c7b5ef93`, C5 with G1's review fixes merged in and its own
