@@ -123,7 +123,7 @@ export function InstallOptions() {
       </summary>
       <div className="space-y-3 border-t border-border px-4 py-4 text-caption text-text-muted sm:px-5">
         <p>The installer offers <strong>Start SC2 Tools when Windows starts</strong> and <strong>Create desktop shortcut</strong>. Both start on for a first install; silent updates keep your choices.</p>
-        <p>Change <strong>Run on Windows startup</strong> later in the desktop Settings. The app and installer share one switch, including migration from older Startup shortcuts.</p>
+        <p>Change <strong>Run SC2 Tools Agent on Windows startup</strong> later in the desktop Settings. The app and installer share one switch, including migration from older Startup shortcuts.</p>
         <p>Uninstall keeps pairing, settings and logs unless you explicitly select the local-data removal checkbox. Your original StarCraft II replay folders and cloud games are kept.</p>
         <p>{smartScreenNote} A matching SHA-256 confirms file integrity.</p>
         <Link href="/help/desktop-app-install" className="inline-block text-accent-cyan underline underline-offset-2">Installation and uninstall guide</Link>
