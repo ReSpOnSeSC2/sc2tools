@@ -2,9 +2,10 @@
  * A localStorage note naming the account whose game history this browser keeps on the device. It lets the analysis
  * corpus provider decide at once, without loading the device store or touching IndexedDB, that an account has no
  * device copy, so those accounts load exactly as before. IndexedDB stays the source of truth: a note that names a
- * missing copy costs one probe, and the sync corrects the note when it learns otherwise. The reverse never holds: a
- * copy is kept only while the note names it, since the note is how a sign-out or another account finds the copy to
- * clear it (components/chrome/DeviceHistoryGuard). The clearing code itself lives in ./deviceClear, loaded on demand.
+ * missing copy costs one probe, after which the sync clears it. The reverse never holds: a copy is kept only while the
+ * note names it, since the note is how a sign-out or another account finds the copy to clear it
+ * (components/chrome/DeviceHistoryGuard). So the note only goes in a full clear (./deviceClear, loaded on demand),
+ * which moves the clear mark too.
  *
  * Example:
  *   if (mayHaveDeviceCopy(accountKey)) await import("./analysisCorpusSync");

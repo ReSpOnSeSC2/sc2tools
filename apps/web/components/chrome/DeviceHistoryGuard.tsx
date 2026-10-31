@@ -14,6 +14,11 @@ export function DeviceHistoryGuard() {
 
   useEffect(() => {
     if (!isLoaded) return;
+    if (readNote() === undefined) {
+      // No copy is kept while the note cannot be read (the sync deletes what it finds), so one from before goes too.
+      deleteDatabase();
+      return;
+    }
     const owner = isSignedIn && userId ? userId : null;
     if (!notedForAnother(owner)) return;
     void import("@/lib/analysisCorpus/deviceClear")
@@ -30,14 +35,19 @@ export function DeviceHistoryGuard() {
   return null;
 }
 
-/** True when the note names a copy that is not `owner`'s. A note that cannot be read names none: no copy is kept. */
-function notedForAnother(owner: string | null): boolean {
+/** The account the note names, null for none, or undefined when storage refuses the read. */
+function readNote(): string | null | undefined {
   try {
-    const noted = window.localStorage.getItem(DEVICE_NOTE_KEY);
-    return noted !== null && noted !== owner;
+    return window.localStorage.getItem(DEVICE_NOTE_KEY);
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+/** True when the note names a copy that is not `owner`'s. */
+function notedForAnother(owner: string | null): boolean {
+  const noted = readNote();
+  return typeof noted === "string" && noted !== owner;
 }
 
 /** The fallback for forgetDeviceCopy (lib/analysisCorpus/deviceClear): forget the note, move the mark, delete. */
@@ -48,6 +58,10 @@ function clearWithoutModule(): void {
   } catch {
     // Storage is refused or full; the delete below still removes the copy.
   }
+  deleteDatabase();
+}
+
+function deleteDatabase(): void {
   try {
     globalThis.indexedDB?.deleteDatabase(DEVICE_CORPUS_DB_NAME);
   } catch {

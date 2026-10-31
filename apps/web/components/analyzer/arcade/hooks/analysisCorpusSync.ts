@@ -33,9 +33,11 @@ import type { AnalysisApiGame, RawAnalysisSnapshot } from "./useAnalysisGames";
  * full, the corpus still loads, in memory only.
  *
  * A copy exists only under a note naming its account, since the note is how a
- * sign-out or another account finds the copy to clear it: a first keep clears
+ * sign-out or another account finds the copy to clear it. A first keep clears
  * any copy not noted for this account, then notes the account before creating
- * anything, and a browser that cannot keep the note keeps no copy at all.
+ * anything; a browser that cannot keep the note keeps no copy at all; and the
+ * note only ever goes in a full clear, which also moves the clear mark, so a
+ * keep running in another tab stops rather than finish under no note.
  * Nothing is written to the device once the caller's run is cancelled, or once
  * anything cleared the copy (sign-out, another account, Delete history) after
  * this sync started; a sync that sees such a clear reads the corpus again, in
@@ -112,7 +114,7 @@ export async function syncAnalysisCorpus(input: CorpusSyncInput): Promise<Corpus
 }
 
 async function syncWithDevice(input: CorpusSyncInput, current: WriteGuard): Promise<CorpusSync> {
-  const device = await openDevice(input);
+  const device = await openDevice(input, current);
   // A copy that may be out of date, and that could not be dropped, is left on the device.
   let stale = false;
   try {
@@ -153,18 +155,39 @@ function memoryOnly(raw: RawAnalysisSnapshot): CorpusSync {
   return { ...checkedSnapshot(raw), onDevice: false, kept: false };
 }
 
+/** True while this sync may still act on the device: its run goes on and nothing has cleared the copy since it began. */
+function stillCurrent(current: WriteGuard): boolean {
+  try {
+    current();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** The device copy this sync uses, or null when it stays in memory. */
 async function openDevice(
   input: CorpusSyncInput,
+  current: WriteGuard,
 ): Promise<{ db: IDBDatabase; stored: StoredCorpus | null } | null> {
   const factory = defaultIndexedDb();
+  if (!factory) return null;
   // An account asking to keep its history is noted before anything is created, so a clear in any tab (sign-out,
   // another account) finds the copy for as long as it can exist. A note that does not hold keeps it in memory.
-  if (!factory || (input.keepOnDevice && !noteDeviceCopy(input.accountKey))) return null;
-  // A note naming an account whose database is gone is forgotten, so its later loads skip the device again.
-  const forget = () => { if (mayHaveDeviceCopy(input.accountKey)) noteDeviceCopy(null); };
+  const fresh = input.keepOnDevice && !mayHaveDeviceCopy(input.accountKey);
+  if (input.keepOnDevice && !noteDeviceCopy(input.accountKey)) return null;
+  // A note naming this account's missing copy goes in a full clear, which moves the mark: a first keep that another tab
+  // has started (noted, nothing saved yet) then stops instead of saving rows that no note names. A sync that is no
+  // longer current leaves it alone, since a newer keep may have written that note.
+  const forget = () => {
+    if (stillCurrent(current) && mayHaveDeviceCopy(input.accountKey)) forgetDeviceCopy(factory);
+  };
   const db = await openDeviceCorpus(factory, { create: input.keepOnDevice, onAbsent: forget }).catch(() => null);
-  if (!db) return null;
+  if (!db) {
+    // A keep that cannot open the device takes back the note it just wrote, so later loads skip the probe.
+    if (fresh) forget();
+    return null;
+  }
   // A read that fails says nothing about whose copy is here, so only an account that asked to keep one replaces it.
   const stored = await readDeviceCorpus<AnalysisApiGame>(db, input.accountKey, input.maxRows).catch(() => null);
   if ((stored === null || stored.kind === "absent") && !input.keepOnDevice) {
@@ -215,9 +238,12 @@ async function storeSnapshot(
   const saved = !snapshot.hitCorpusLimit && snapshot.marks !== null
     && await saveDeviceSnapshot(db, input.accountKey, snapshot.items, snapshot.marks, input.maxRows)
       .then(() => true, () => false);
-  // The note already names this account, so what is left stays findable, unless a clear meanwhile took the copy.
+  // The note names this account until a clear removes it, and every clear moves the mark.
   current();
-  return saved ? "saved" : (await dropCopy(db, input.accountKey)) ? "dropped" : "stale";
+  if (saved) return "saved";
+  const dropped = await dropCopy(db, input.accountKey);
+  current();
+  return dropped ? "dropped" : "stale";
 }
 
 function dropCopy(db: IDBDatabase, accountKey: string): Promise<boolean> {

@@ -107,13 +107,13 @@ describe("DeviceHistoryGuard", () => {
     expect([forget.loads, (await factory.databases()).length]).toEqual([0, 1]);
   });
 
-  it("does nothing when the note cannot be read, since then no copy is kept", async () => {
+  it("deletes a copy left from before when the note cannot be read, since no copy is kept without one", async () => {
+    await keep("user-a");
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new DOMException("denied", "SecurityError");
     });
-    Object.assign(auth, { isSignedIn: false, userId: null });
     render(<DeviceHistoryGuard />);
-    await settle();
+    expect(await untilNoDatabases()).toEqual([]);
     expect(forget.loads).toBe(0);
   });
 
@@ -127,18 +127,38 @@ describe("DeviceHistoryGuard", () => {
     expect([forget.calls, mayHaveDeviceCopy("user-b")]).toEqual([0, true]);
   });
 
-  // Last: it replaces the clearing module for every later import in this file.
+  // The last two replace the clearing module for every later import in this file.
   it("still removes the copy when the clearing code cannot load", async () => {
     await keep("user-a");
     Object.assign(auth, { isSignedIn: false, userId: null });
     const mark = window.localStorage.getItem(DEVICE_CLEAR_KEY);
-    vi.resetModules();
-    vi.doMock("@/lib/analysisCorpus/deviceClear", () => {
-      throw new Error("The chunk was replaced by a deploy");
-    });
+    failClearingModule();
     render(<DeviceHistoryGuard />);
     await waitFor(() => expect(mayHaveDeviceCopy("user-a")).toBe(false));
     expect([forget.loads, window.localStorage.getItem(DEVICE_CLEAR_KEY) === mark]).toEqual([0, false]);
     expect(await untilNoDatabases()).toEqual([]);
   });
+
+  it("keeps a copy that this account noted while the clearing code failed to load", async () => {
+    await keep("user-a");
+    auth.userId = "user-b";
+    const failures = failClearingModule();
+    render(<DeviceHistoryGuard />);
+    // Another tab starts keeping user-b's history before the failed load settles.
+    noteDeviceCopy("user-b");
+    await vi.waitFor(() => expect(failures.count).toBe(1));
+    for (let tick = 0; tick < 5; tick += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    expect([mayHaveDeviceCopy("user-b"), (await factory.databases()).length]).toEqual([true, 1]);
+  });
 });
+
+/** Make the guard's next import of the clearing code fail, as a chunk a deploy replaced would. */
+function failClearingModule() {
+  const failures = { count: 0 };
+  vi.resetModules();
+  vi.doMock("@/lib/analysisCorpus/deviceClear", () => {
+    failures.count += 1;
+    throw new Error("The chunk was replaced by a deploy");
+  });
+  return failures;
+}

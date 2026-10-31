@@ -71,6 +71,12 @@ export function SettingsBackups() {
     await refreshCaches();
   }
 
+  // A wipe or restore that failed without a definite rejection may have finished anyway, and a retry may never get as
+  // far as refreshHistory (a wipe's count is then 0); only a definite rejection keeps the copy on this device.
+  function forgetUnlessRejected(error: unknown) {
+    if (mayHaveApplied(error)) forgetDeviceCopy();
+  }
+
   async function exportData() {
     if (exporting) return false;
     setExporting(true);
@@ -130,9 +136,7 @@ export function SettingsBackups() {
       setWipeSince("");
       setWipeUntil("");
     } catch (err) {
-      // A wipe that may have finished anyway (no answer, or a server error) leaves the copy on this device out of date
-      // too, and a retry then counts no games and never gets this far; only a definite rejection keeps the copy.
-      if (mayHaveApplied(err)) forgetDeviceCopy();
+      forgetUnlessRejected(err);
       const message =
         (err as ClientApiError | undefined)?.message ?? "Please try again.";
       toast.error("Couldn't wipe game history", { description: message });
@@ -148,7 +152,7 @@ export function SettingsBackups() {
       <SettingsSectionsReady />
       <ReplayArchiveStatusCard />
 
-      <SnapshotManager onRestored={refreshHistory} />
+      <SnapshotManager onRestored={refreshHistory} onRestoreFailed={forgetUnlessRejected} />
       <DataRepairCard onStarted={refreshCaches} />
 
       <HiddenGames />

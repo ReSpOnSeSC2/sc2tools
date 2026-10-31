@@ -96,6 +96,29 @@ describe("SettingsBackups restore", () => {
     );
     expect(screen.queryByText("Restore queued")).toBeNull();
   });
+
+  it("clears the copy kept on this device when a restore may have finished, never after a rejection", async () => {
+    const restoreFails = (failure: unknown) => apiCallMock.mockImplementation(async (_token, path: string) => {
+      if (path.endsWith("/preview")) return { games: { kept: 11842, removed: 2, added: 1 }, customBuilds: 4, opponentNotes: 3, overlayTokens: 2, currentRevision: "a".repeat(24) };
+      throw failure;
+    });
+    const attempt = async () => {
+      renderBackups();
+      fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+      const dialog = screen.getByRole("dialog");
+      await within(dialog).findByText("Build orders and replay files for 11,842 games are kept.");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Restore" }));
+      await screen.findByText("Couldn't complete snapshot action");
+      const cleared = forgetDeviceCopy.mock.calls.length;
+      cleanup();
+      forgetDeviceCopy.mockClear();
+      return cleared;
+    };
+    restoreFails({ status: 502, message: "Bad gateway" });
+    expect(await attempt()).toBe(1);
+    restoreFails({ code: "backup_preview_changed", status: 409, message: "backup_preview_changed" });
+    expect(await attempt()).toBe(0);
+  });
 });
 
 describe("SettingsBackups game history", () => {
@@ -139,6 +162,10 @@ describe("SettingsBackups game history", () => {
     expect(await confirm("Couldn't wipe game history")).toBe(1);
     wipe({ status: 502, message: "Bad gateway" });
     expect(await confirm("Couldn't wipe game history")).toBe(1);
+    wipe({ status: 500, message: "Internal error" });
+    expect(await confirm("Couldn't wipe game history")).toBe(1);
+    wipe({ status: 400, message: "Bad range" });
+    expect(await confirm("Couldn't wipe game history")).toBe(0);
     wipe();
     expect(await confirm("Deleted 5 games")).toBe(1);
   });
