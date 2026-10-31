@@ -7,6 +7,7 @@ const { randomToken, sha256 } = require("../src/util/hash");
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
 const { createBackupStore } = require("./helpers/userBackupsStore");
+const { stamped, original } = require("./helpers/corpusStamp");
 let mongo, db, app, services, store;
 const game = () => ({ userId: "a", gameId: "game", date: new Date(), result: "Victory", myRace: "Protoss", map: "Site Delta LE", durationSec: 600 });
 beforeAll(async () => {
@@ -54,7 +55,8 @@ test("restore's committed insert followed by failure retires the partial result"
 test("a visibility acknowledgement failure and a tombstone failure still retire", async () => {
   const error = new Error("unknown visibility"), update = db.games.updateOne.bind(db.games);
   let spy = jest.spyOn(db.games, "updateOne").mockImplementation(async (...args) => {
-    const value = await update(...args); if (args[1].$set?.excluded) throw error; return value;
+    const value = await update(...args), own = Array.isArray(args[1]) ? original(args[1])[0] : args[1];
+    if (own?.$set?.excluded) throw error; return value;
   });
   let before = await services.userRevision.snapshot("a");
   await expect(services.gameControls.setExcluded("a", "game", { excluded: true, reason: "friend_played" })).rejects.toBe(error);

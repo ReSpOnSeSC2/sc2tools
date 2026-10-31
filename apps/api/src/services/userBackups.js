@@ -1,7 +1,7 @@
 "use strict";
 const { gameWrite } = require("../util/userRevision");
 const { gameStatsWritesFor } = require("./gameStatsWrites");
-
+const { rowWithUpdatedAt } = require("../util/corpusUpdatedAt");
 const { createHash, randomUUID } = require("crypto");
 const { BSON } = require("mongodb");
 const { USER_SCOPED_COLLECTIONS, chartInputFence } = require("./gdpr");
@@ -276,7 +276,7 @@ class UserBackupsService {
           if (dbKey === "games") this.gdpr.notifyGamesChanged?.(userId);
           /** @type {any[]} */ let rows = []; let bytes = 0;
           const flush = async () => {
-            const batch = rows; rows = []; bytes = 0;
+            const batch = dbKey === "games" ? rows.map(row => rowWithUpdatedAt(row)) : rows; rows = []; bytes = 0;
             await fence.assert();
             // The immutable staged batch can be retried by Mongo. No cursor,
             // notification, storage request or fence renewal is in callback.

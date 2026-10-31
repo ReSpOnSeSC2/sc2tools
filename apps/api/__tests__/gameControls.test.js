@@ -89,7 +89,7 @@ test("single delete removes payloads, revokes grants, and retains only an owner-
   const response = await call("delete", gamePath()).send({ confirmation: "DELETE GAME" });
   expect(response.status).toBe(200); expect(response.body).toMatchObject({ gameId: ID, deleted: true });
   const marker = await h.db.games.findOne({ userId: owner, gameId: ID });
-  expect(Object.keys(marker).sort()).toEqual(["_deleted", "_id", "_schemaVersion", "deletedAt", "excluded", "gameId", "userId"].sort());
+  expect(Object.keys(marker).sort()).toEqual(["_deleted", "_id", "_schemaVersion", "deletedAt", "excluded", "gameId", "updatedAt", "userId"].sort());
   expect(marker).toMatchObject({ _deleted: true, excluded: true });
   expect(await h.db.gameDetails.findOne({ userId: owner, gameId: ID })).toBeNull();
   expect(await h.db.gameDetails.findOne({ userId: other, gameId: ID })).not.toBeNull();

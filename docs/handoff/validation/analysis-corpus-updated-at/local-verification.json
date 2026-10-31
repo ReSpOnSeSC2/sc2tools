@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "slice": "AC1-corpus-updated-at",
+  "item": {
+    "id": "analysis-corpus-local-cache",
+    "ordinal": 75
+  },
+  "status": "LOCAL_TYPES_LINT_1603_API_PASS_10_OF_10_MUTATIONS_REVIEWED_NOT_RELEASED",
+  "requirement": "Stamp updatedAt on every semantic writer and add the userId/updatedAt index through the existing migration workflow.",
+  "source": {
+    "base": "55378835 (main)",
+    "testedCommit": "7c0fc2a61fa67f8b7b4e41a3540f4b08ea2ac601",
+    "mutationCommit": "7c0fc2a61fa67f8b7b4e41a3540f4b08ea2ac601",
+    "applicationFiles": [
+      "apps/api/src/util/corpusUpdatedAt.js",
+      "apps/api/src/services/games.js",
+      "apps/api/src/services/gameControls.js",
+      "apps/api/src/services/buildIntentAttribution.js",
+      "apps/api/src/services/gameStatsBuildStateNeutral.js",
+      "apps/api/src/services/gameStatsCountNeutral.js",
+      "apps/api/src/services/gameStatsCustomBuildEof.js",
+      "apps/api/src/services/gameStatsCustomBuildIngestTag.js",
+      "apps/api/src/services/gameStatsOpponentGame.js",
+      "apps/api/src/services/gameStatsPulseNeutral.js",
+      "apps/api/src/services/userBackups.js",
+      "apps/api/src/db/corpusIndexes.js",
+      "apps/api/src/db/connect.js"
+    ]
+  },
+  "stamp": {
+    "helper": "apps/api/src/util/corpusUpdatedAt.js",
+    "field": "updatedAt",
+    "semantic": "A write is semantic when it can change a field of ANALYSIS_GAME_PROJECTION or the row's corpus membership (_deleted, _deletionPending, excluded, isResumedFromReplay).",
+    "changeAware": "Pipeline updates, and $set/$unset updates converted to literal pipeline stages, move updatedAt only when a served field or membership flag changes; an unchanged row stays byte-identical.",
+    "always": "Updates with other operators (the ingest upsert's $setOnInsert form) and inserted or replacement rows always stamp.",
+    "clock": "The API process clock when the write is issued; readers keep an overlap window."
+  },
+  "writers": {
+    "stamped": 15,
+    "hardDeletes": 2,
+    "reviewedNonSemantic": 34,
+    "inventory": "apps/api/__tests__/gamesUpdatedAtInventory.test.js",
+    "restore": "Restored games rows are stamped before the retryable insert.",
+    "outOfBand": [
+      "db/migrations/2026-09-30-rename-8-pool-builds.js (semantic; a re-run needs a corpus refresh)"
+    ]
+  },
+  "index": {
+    "name": "games_user_updated_at",
+    "key": {
+      "userId": 1,
+      "updatedAt": 1,
+      "_id": 1
+    },
+    "partialFilterExpression": {
+      "updatedAt": {
+        "$exists": true
+      }
+    },
+    "workflow": "Its own background producer (apps/api/src/db/corpusIndexes.js), started by ensureIndexes without holding boot and outside the guide builds GuideStats waits on."
+  },
+  "actual": {
+    "apiTypesExit": 0,
+    "apiConfiguredLint": {
+      "errors": 0,
+      "warnings": 765
+    },
+    "changedFilesAddedLintMessages": 0,
+    "newFilesStrictLintMessages": 0,
+    "apiSuites": 96,
+    "apiCases": 1603,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "ownedMongodLeftover": 0,
+    "mutationsKilled": "10/10",
+    "mutations": [
+      "AC1-M1-reupload-unstamped",
+      "AC1-M2-hide-unstamped",
+      "AC1-M3-tombstone-unstamped",
+      "AC1-M4-quarantine-unstamped",
+      "AC1-M5-restore-unstamped",
+      "AC1-M6-stamp-ignores-change",
+      "AC1-M7-corpus-misses-character-id",
+      "AC1-M8-converted-values-not-literal",
+      "AC1-M9-index-not-partial",
+      "AC1-M10-pulse-mmr-unstamped"
+    ]
+  },
+  "independentReview": {
+    "reviewers": 1,
+    "reviewedCommit": "37a0713bc6b121b76000b91d5daa2696e572e547",
+    "findings": {
+      "high": 0,
+      "medium": 0,
+      "low": 9,
+      "info": 1
+    },
+    "fixed": [
+      "The corpus stamp index left the guide background builds, whose readiness GuideStats waits on, for its own producer (db/corpusIndexes.js).",
+      "The index key gained _id so a delta reader can page rows that one bulk write stamped alike without a second full build.",
+      "withUpdatedAt refuses numeric path segments, overlapping paths and an empty update, and skips an empty $unset stage.",
+      "Real-Mongo cases cover a no-op write on a never-stamped row and a macro change and no-change.",
+      "The checkpoint's counts are corrected: 34 reviewed calls, 12 updated exact-command suites, and the quarantine insert exception."
+    ],
+    "documented": [
+      "Info: newly added fields land in update order rather than MongoDB's order; served field order is unchanged.",
+      "The inventory sees handles named games or gamesCollection; restore's dynamic handle has its own assertion.",
+      "The ingest upsert's operator form stamps every reupload, so the delta after a Full Resync carries the whole history.",
+      "Check-ins, ingest tags, end-of-file reclassification and renames are covered by exact-command tests; renames also have real-Mongo idempotency tests."
+    ],
+    "fixCommit": "7c0fc2a6",
+    "note": "One read-only reviewer covered missed writers, the operator-to-pipeline conversion, change detection, restore, the index, tests and the checkpoint."
+  },
+  "boundaries": [
+    "Nothing reads the stamp yet; AC2 adds the changed-since read, tombstones and corpusVersion. The item stays partial.",
+    "Hard deletes and out-of-band migrations are not stamped; a pre-AC1 process writes unstamped during a deploy overlap.",
+    "Exact-head CI, merge, deployment and production acceptance remain pending. No latency, request-reduction or savings claim."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac1-20261031/CHECKS-02.json",
+      "sha256": "d521a2999b4dcf872966513c2ed24bcdae513e596afba849ea3d8261c494f7b0",
+      "bytes": 2546
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac1-20261031/checks-02/steps.txt",
+      "sha256": "0a35e88f4344ee8bebf83358573f6e27d4def1ad6c2af580d3b9a3f46d2239f1",
+      "bytes": 30
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac1-20261031/checks-02/api-jest-summary.json",
+      "sha256": "663ce090cad17f66080e3fa18fade53795ea960a051a18cdf32b9d828f586817",
+      "bytes": 247
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac1-20261031/checks-02/api-lint.json",
+      "sha256": "9c9601fe442604068f3cb808a04a325fc36e1cb12fc0633f4f36db9eb84c7646",
+      "bytes": 7610109
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac1-20261031/checks-02/api-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac1-20261031/checks-02/lint-no-added.txt",
+      "sha256": "023554731eb2fdd2be13a206ce5d63f577a2dca454da21ec57e3bb9ceacfe91a",
+      "bytes": 1953
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac1-20261031/dev/checks-02-api-jest.json",
+      "sha256": "91da316b7de07bfa83a13bb464c9a7c0db834ace11746445960e4a3fe8dd32c6",
+      "bytes": 611251
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac1-20261031/mutation-02/MUTATION-RESULTS.json",
+      "sha256": "cc6e936b449415ebaaeb98efe40a3057fe4ae4c445838f0ee01b78795cf2da0a",
+      "bytes": 7906
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac1-20261031/suites-03.txt",
+      "sha256": "bb4f369e08a3778123a682ecd74c37231bf035dd75ebb5f96c9b6fbd3f9fc7a4",
+      "bytes": 3991
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac1-20261031/scripts/final-checks-ac1-02.sh",
+      "sha256": "1e6eb9e38be826d6910e69316712224a574fee3650db86bc4d812ac6831d9cc7",
+      "bytes": 1991
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac1-20261031/scripts/mutation-check-ac1-02.mjs",
+      "sha256": "4b98e6f1d2b7d4fd1ad38cfb5f10ab73f9bf425b7700cfad9b4d235a16a96b15",
+      "bytes": 6181
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac1-20261031/scripts/run-ac1-jest.mjs",
+      "sha256": "6b25a519346f04401d1cde0f62645f2a0800a3a92980b23dae82712948552439",
+      "bytes": 3897
+    }
+  ]
+}

@@ -98,7 +98,7 @@ latency, request reduction or savings is claimed.
    delete holds the mutation fence and snapshots refuse a fenced owner
    (`services/gameControls.js:101,138`; `util/userRevision.js:125`). So the
    tombstone's own fence rests on inspection, as does restore's, which
-   `apps/api/__tests__/userRevisionDestructiveWriters.test.js:39-53` also covers.
+   `apps/api/__tests__/userRevisionDestructiveWriters.test.js:40-54` also covers.
    Unfenced in-process writes touch only fields neither kind reads, such as
    `_cleanupRequired` (`services/gameControls.js:136`). The out-of-band 8-pool
    rename changes display-filter fields only and stays a G1 gap

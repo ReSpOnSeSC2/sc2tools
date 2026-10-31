@@ -8,6 +8,7 @@ const { GameStatsWrites, MAX_ACTIVE, writeOpponentGameIdentityRepair } = require
 const { issueOpponentIdentityRepair } = require("../src/services/gameStatsOpponentGame");
 const { takeRepairLivenessIssuer } = require("../src/services/gdprRepairLiveness");
 const { PROTOCOL_VERSION, MAINTENANCE_VERSION } = require("../src/services/gameStatsMaintenance");
+const { stamped, original } = require("./helpers/corpusStamp");
 
 const userId = "opponent-writes-owner", played = new Date("2026-10-20T12:00:00Z");
 const region = () => ({ kind: "opponentGameRegion", gameId: "g1", region: "EU" });
@@ -222,7 +223,7 @@ test("repair claim and retirement use exactly the fenced authority and never car
   await writeOpponentGameIdentityRepair(compat.writer, cr.context, identity());
   expect(compat.users.updateOne.mock.calls[0]).toEqual([fenced(cr), RETIRE, { upsert: false }]);
   expect(compat.games.updateMany.mock.calls[0]).toEqual([{ userId, "opponent.pulseId": "p1" },
-    { $set: { "opponent.region": "EU", "opponent.pulseCharacterId": "77" } }, { upsert: false }]);
+    stamped({ $set: { "opponent.region": "EU", "opponent.pulseCharacterId": "77" } }), { upsert: false }]);
 });
 
 test("generic write() never accepts an issued repair mutation", async () => {
