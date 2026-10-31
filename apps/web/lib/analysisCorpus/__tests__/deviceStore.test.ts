@@ -52,6 +52,16 @@ describe("openDeviceCorpus", () => {
     expect((await factory.databases()).map((db) => db.name)).toEqual([DEVICE_CORPUS_DB_NAME]);
   });
 
+  it("records its owner's choice in the upgrade that creates the database, and only then", async () => {
+    const factory = new IDBFactory();
+    const created = await openDeviceCorpus(factory, { create: true, owner: "user-a" });
+    expect(await view(created!)).toBe("kept");
+    created!.close();
+    const existing = await openDeviceCorpus(factory, { create: true, owner: "user-b" });
+    expect([await view(existing!, "user-b"), await view(existing!)]).toEqual(["absent", "kept"]);
+    existing!.close();
+  });
+
   it("gives up on an open that hangs past the deadline, and closes the connection if it arrives late", async () => {
     const request = {} as IDBOpenDBRequest & { result: unknown };
     const late = { close: vi.fn(), onversionchange: null };

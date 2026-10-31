@@ -16,15 +16,15 @@ function refuse(method: "getItem" | "setItem", name: string) {
 }
 
 describe("the device note", () => {
-  it("names one account and forgets it with null", () => {
+  it("names one account at a time", () => {
     expect([deviceNote(), mayHaveDeviceCopy("user-a")]).toEqual([null, false]);
     expect(noteDeviceCopy("user-a")).toBe(true);
     expect([deviceNote(), mayHaveDeviceCopy("user-a"), mayHaveDeviceCopy("user-b")]).toEqual(["user-a", true, false]);
-    expect(noteDeviceCopy(null)).toBe(true);
-    expect([deviceNote(), mayHaveDeviceCopy("user-a")]).toEqual([null, false]);
+    expect(noteDeviceCopy("user-b")).toBe(true);
+    expect([mayHaveDeviceCopy("user-a"), mayHaveDeviceCopy("user-b")]).toEqual([false, true]);
   });
 
-  it("fails closed on a refused write, unless the note already reads as asked", () => {
+  it("fails closed on a refused write, unless the note already names that account", () => {
     noteDeviceCopy("user-a");
     refuse("setItem", "QuotaExceededError");
     expect([noteDeviceCopy("user-a"), noteDeviceCopy("user-b"), deviceNote()]).toEqual([true, false, "user-a"]);
@@ -32,7 +32,6 @@ describe("the device note", () => {
 
   it("fails closed when the note cannot be read, while only a probe can tell what is kept", () => {
     refuse("getItem", "SecurityError");
-    expect([deviceNote(), mayHaveDeviceCopy("user-a"), noteDeviceCopy("user-a"), noteDeviceCopy(null)])
-      .toEqual([undefined, true, false, false]);
+    expect([deviceNote(), mayHaveDeviceCopy("user-a"), noteDeviceCopy("user-a")]).toEqual([undefined, true, false]);
   });
 });

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAuth, useClerk } from "@clerk/nextjs";
-import { forgetDeviceCopy } from "@/lib/analysisCorpus/deviceClear";
+import { forgetDeviceCopy, mayHaveApplied } from "@/lib/analysisCorpus/deviceClear";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -48,7 +48,9 @@ export default function AccountDeleteDialog({ onClose, onExport }: { onClose: ()
         forgetDeviceCopy();
       }
       await signOut({ redirectUrl: "/goodbye" });
-    } catch {
+    } catch (failure) {
+      // An erasure that failed without a definite rejection may have gone through, so the copy here goes too.
+      if (!dataDeleted && mayHaveApplied(failure)) forgetDeviceCopy();
       setError(dataDeleted ? "Your data was deleted. Signing out failed; retry signing out." : "Could not finish. Your account may have been partially cleared; retry to complete deletion.");
     } finally { setBusy(false); }
   }

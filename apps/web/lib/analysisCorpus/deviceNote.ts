@@ -28,18 +28,18 @@ export function mayHaveDeviceCopy(accountKey: string): boolean {
 }
 
 /**
- * Name the account this browser keeps history for, or forget it with null. True only when the note reads back as
- * asked, so a refused write (storage full) or a note that cannot be read fails closed and no copy is kept on its word.
+ * Name the account this browser keeps history for. True only when the note reads back as asked, so a refused write
+ * (storage full) or a note that cannot be read fails closed and no copy is kept on its word. There is no way to forget
+ * the note here: that only happens in a full clear (./deviceClear), which moves the clear mark too.
  *
  * Example:
  *   if (!noteDeviceCopy(accountKey)) keepInMemory();
  */
-export function noteDeviceCopy(accountKey: string | null): boolean {
+export function noteDeviceCopy(accountKey: string): boolean {
   try {
-    if (accountKey) window.localStorage.setItem(DEVICE_NOTE_KEY, accountKey);
-    else window.localStorage.removeItem(DEVICE_NOTE_KEY);
+    window.localStorage.setItem(DEVICE_NOTE_KEY, accountKey);
   } catch {
-    // A refused write still stands when the note already reads as asked (storage full, the same account).
+    // A refused write still stands when the note already names this account (storage full).
   }
   return deviceNote() === accountKey;
 }

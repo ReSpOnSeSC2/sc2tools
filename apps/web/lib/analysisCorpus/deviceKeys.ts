@@ -11,3 +11,6 @@ export const DEVICE_NOTE_KEY = "sc2tools.analysisCorpus.deviceAccount";
 
 /** A localStorage mark that every clear moves, so a sync that started before it (in any tab) writes nothing after it. */
 export const DEVICE_CLEAR_KEY = "sc2tools.analysisCorpus.clearMark";
+
+/** The clear mark of a clear whose database delete has not been seen to finish; the guard issues it again. */
+export const DEVICE_DELETE_OWED_KEY = "sc2tools.analysisCorpus.deleteOwed";

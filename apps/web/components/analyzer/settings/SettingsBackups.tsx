@@ -9,7 +9,7 @@ import {
   Download,
   Trash2,
 } from "lucide-react";
-import { forgetDeviceCopy } from "@/lib/analysisCorpus/deviceClear";
+import { forgetDeviceCopy, mayHaveApplied } from "@/lib/analysisCorpus/deviceClear";
 import { apiCall, API_BASE, type ClientApiError } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
@@ -247,10 +247,4 @@ export function SettingsBackups() {
       />
     </div>
   );
-}
-
-/** A request that failed without a definite rejection (no answer, or a server error) may still have taken effect. */
-function mayHaveApplied(error: unknown): boolean {
-  const status = (error as Partial<ClientApiError> | undefined)?.status;
-  return !(typeof status === "number" && status >= 400 && status < 500);
 }

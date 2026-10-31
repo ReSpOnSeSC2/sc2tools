@@ -62,10 +62,13 @@ export type CorpusSync = CorpusSnapshot & {
 
 type StoredCorpus = CorpusSync & { marks: CorpusMarks };
 
-/** Throws before a device write once the run is cancelled, or with DeviceCleared once anything cleared the copy. */
+/** Throws before a device write once the run is cancelled, or with DeviceCleared once the copy is no longer this sync's. */
 type WriteGuard = () => void;
 
-/** The clear mark moved after this sync started: the copy is being deleted, and what was read may be out of date. */
+/**
+ * The copy is no longer this sync's: a clear moved the mark (the copy is being deleted, and what was read may be out of
+ * date), or another account's keep took the note.
+ */
 class DeviceCleared extends Error {}
 
 export type CorpusSyncInput = {
@@ -102,7 +105,7 @@ export async function syncAnalysisCorpus(input: CorpusSyncInput): Promise<Corpus
   const mark = deviceClearMark();
   const current: WriteGuard = () => {
     input.signal.throwIfAborted();
-    if (deviceClearMark() !== mark) throw new DeviceCleared();
+    if (deviceClearMark() !== mark || deviceNote() !== input.accountKey) throw new DeviceCleared();
   };
   try {
     return await syncWithDevice(input, current);
@@ -155,7 +158,7 @@ function memoryOnly(raw: RawAnalysisSnapshot): CorpusSync {
   return { ...checkedSnapshot(raw), onDevice: false, kept: false };
 }
 
-/** True while this sync may still act on the device: its run goes on and nothing has cleared the copy since it began. */
+/** True while this sync may still act on the device: its run goes on, and the copy is still its own (see current). */
 function stillCurrent(current: WriteGuard): boolean {
   try {
     current();
@@ -176,13 +179,13 @@ async function openDevice(
   // another account) finds the copy for as long as it can exist. A note that does not hold keeps it in memory.
   const fresh = input.keepOnDevice && !mayHaveDeviceCopy(input.accountKey);
   if (input.keepOnDevice && !noteDeviceCopy(input.accountKey)) return null;
-  // A note naming this account's missing copy goes in a full clear, which moves the mark: a first keep that another tab
-  // has started (noted, nothing saved yet) then stops instead of saving rows that no note names. A sync that is no
-  // longer current leaves it alone, since a newer keep may have written that note.
+  // A note naming this account's missing copy goes in a full clear, which moves the mark, so nothing can go on writing
+  // under a note that is gone. A sync that is no longer current leaves the note alone: a newer keep may have written it.
   const forget = () => {
-    if (stillCurrent(current) && mayHaveDeviceCopy(input.accountKey)) forgetDeviceCopy(factory);
+    if (stillCurrent(current)) forgetDeviceCopy(factory);
   };
-  const db = await openDeviceCorpus(factory, { create: input.keepOnDevice, onAbsent: forget }).catch(() => null);
+  const db = await openDeviceCorpus(factory, { create: input.keepOnDevice, owner: input.accountKey, onAbsent: forget })
+    .catch(() => null);
   if (!db) {
     // A keep that cannot open the device takes back the note it just wrote, so later loads skip the probe.
     if (fresh) forget();

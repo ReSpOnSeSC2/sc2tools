@@ -8,7 +8,10 @@ const apiCallMock = vi.fn();
 const mutateMock = vi.fn(async () => undefined);
 const forgetDeviceCopy = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/analysisCorpus/deviceClear", () => ({ forgetDeviceCopy }));
+vi.mock("@/lib/analysisCorpus/deviceClear", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/analysisCorpus/deviceClear")>()),
+  forgetDeviceCopy,
+}));
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: async () => "test-token", isLoaded: true, isSignedIn: true }),
@@ -116,8 +119,15 @@ describe("SettingsBackups restore", () => {
     };
     restoreFails({ status: 502, message: "Bad gateway" });
     expect(await attempt()).toBe(1);
+    restoreFails(new TypeError("Failed to fetch"));
+    expect(await attempt()).toBe(1);
     restoreFails({ code: "backup_preview_changed", status: 409, message: "backup_preview_changed" });
     expect(await attempt()).toBe(0);
+    // Offline, the request never left, so nothing changed on the server.
+    const offline = vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
+    restoreFails(new TypeError("Failed to fetch"));
+    expect(await attempt()).toBe(0);
+    offline.mockRestore();
   });
 });
 
