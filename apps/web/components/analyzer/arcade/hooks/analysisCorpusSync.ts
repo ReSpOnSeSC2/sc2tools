@@ -139,9 +139,8 @@ async function syncWithDevice(input: CorpusSyncInput, run: SyncRun): Promise<Cor
       current();
       stale = !(await dropCopy(device.db, input.accountKey));
     } else if (device && input.keepOnDevice) {
-      // A keep holding no usable copy of its own drops whatever is there first, so another account's rows cannot
-      // outlive a delete that failed under this account's note.
-      current();
+      // A keep holding no usable copy of its own drops whatever is there first (checked just above), so another
+      // account's rows cannot outlive a delete that failed under this account's note.
       stale = !(await dropCopy(device.db, input.accountKey));
     }
     const snapshot = checkedSnapshot(await input.readSnapshot());

@@ -428,6 +428,18 @@ describe("syncAnalysisCorpus", () => {
     expect(await untilNoDatabases()).toEqual([]);
   });
 
+  it("leaves no record behind when a keep that a clear stopped is also cancelled", async () => {
+    const run = new AbortController();
+    whileOpening(() => {
+      // A sign-out in another tab clears the copy, and this tab's run is cancelled with it.
+      forgetDeviceCopy(leaveDatabase());
+      run.abort();
+    });
+    const sync = input(null, { rows: ["s1"] }, { keepOnDevice: true, signal: run.signal });
+    await expect(syncAnalysisCorpus(sync)).rejects.toMatchObject({ name: "AbortError" });
+    expect(await untilNoDatabases()).toEqual([]);
+  });
+
   it("writes nothing once another account's keep takes the note, and reads again in memory", async () => {
     // user-b starts keeping in another tab; its clear came before this sync read the mark, so only the note moves.
     whileOpening(() => noteDeviceCopy("user-b"));
