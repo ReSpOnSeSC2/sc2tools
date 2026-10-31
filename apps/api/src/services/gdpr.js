@@ -1065,7 +1065,7 @@ class GdprService {
    * @returns {Promise<number>} count of opponent rows deleted before rebuild
    */
   async rebuildOpponentsForUser(userId) {
-    const dropped = await this.db.opponents.deleteMany({ userId });
+    const dropped = await gameWrite(this.userRevision, userId, () => this.db.opponents.deleteMany({ userId }));
     const buckets = await this._competitiveOpponentBuckets(userId);
     if (buckets.size > 0) {
       const docs = [];
@@ -1109,7 +1109,7 @@ class GdprService {
         stampVersion(doc, COLLECTIONS.OPPONENTS);
         docs.push(doc);
       }
-      await this.db.opponents.insertMany(docs, { ordered: false });
+      await gameWrite(this.userRevision, userId, () => this.db.opponents.insertMany(docs, { ordered: false }));
     }
     return dropped.deletedCount || 0;
   }
@@ -1119,8 +1119,8 @@ class GdprService {
   async recountOpponent(userId, pulseId) {
     const buckets = await this._competitiveOpponentBuckets(userId, pulseId);
     const bucket = buckets.get(pulseId);
-    if (!bucket) { await this.db.opponents.deleteOne({ userId, pulseId }); return; }
-    await this.db.opponents.updateOne({ userId, pulseId }, { $set: stampVersion({ ...bucket }, COLLECTIONS.OPPONENTS) }, { upsert: true });
+    if (!bucket) { await gameWrite(this.userRevision, userId, () => this.db.opponents.deleteOne({ userId, pulseId })); return; }
+    await gameWrite(this.userRevision, userId, () => this.db.opponents.updateOne({ userId, pulseId }, { $set: stampVersion({ ...bucket }, COLLECTIONS.OPPONENTS) }, { upsert: true }));
   }
 
   /**

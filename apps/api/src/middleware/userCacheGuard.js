@@ -12,7 +12,7 @@
 const QUARANTINE_MS = 420000;
 /** Names the in-process writer set (`gameWrite` and `UserRevision.run` placements) this cohort runs. Bump it in the same
  * pull request as any change to a covered input's writers, so a receipt can tell cohorts with different writers apart. */
-const WRITER_SET_VERSION = "2026-10-30.1";
+const WRITER_SET_VERSION = "2026-10-30.2";
 
 /** @param {import('./userCache').UserCache|null|undefined} cache */
 function beginChartCacheShutdown(cache) {

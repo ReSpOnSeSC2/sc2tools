@@ -77,15 +77,22 @@ const OPP_MMR_TRUST_MAX_AGE_DAYS = 365;
 
 /**
  * The cutoff date before which a current/last-known opponent MMR is no
- * longer trusted as game-time MMR. Pure function of "now" so the
- * histogram + drilldown + width probe all share one boundary per
- * request.
+ * longer trusted as game-time MMR. Pure function of the UTC day of "now",
+ * so the histogram, drilldown and width probe share one boundary per
+ * request, and a cached body keyed by the floor stays exact all day.
  *
  * @param {number} [now]
  * @returns {Date}
  */
 function oppMmrTrustFloor(now = Date.now()) {
-  return new Date(now - OPP_MMR_TRUST_MAX_AGE_DAYS * DAY_MS);
+  return new Date(Math.floor(now / DAY_MS) * DAY_MS - OPP_MMR_TRUST_MAX_AGE_DAYS * DAY_MS);
+}
+
+/** The route's keyed floor (an ISO date) when valid, otherwise today's.
+ * @param {unknown} keyed @returns {Date} */
+function keyedTrustFloor(keyed) {
+  const at = typeof keyed === "string" ? new Date(keyed) : null;
+  return at && !Number.isNaN(at.getTime()) ? at : oppMmrTrustFloor();
 }
 
 /**
@@ -140,11 +147,11 @@ function asOppMmrBucketWidth(raw) {
  * @param {Deps} deps
  * @param {string} userId
  * @param {object} filters
- * @param {{ bucketWidth?: unknown }} [opts]
+ * @param {{ bucketWidth?: unknown, trustFloor?: string }} [opts]
  */
 async function oppMmrBuckets(deps, userId, filters, opts = {}) {
   const match = deps.gamesMatchStage(userId, filters);
-  const trustFloor = oppMmrTrustFloor();
+  const trustFloor = keyedTrustFloor(opts.trustFloor);
   const width = await resolveOppMmrBucketWidth(deps, match, opts.bucketWidth, trustFloor);
   const facet = await deps.games
     .aggregate(oppMmrPipeline(deps, match, width, trustFloor))
@@ -456,7 +463,7 @@ function shapeOppMmrBuckets(facet, width) {
  * @param {Deps} deps
  * @param {string} userId
  * @param {object} filters
- * @param {{ lo?: number, hi?: number }} [opts] Band edges; anything
+ * @param {{ lo?: number, hi?: number, trustFloor?: string }} [opts] Band edges; anything
  *   non-finite (missing/undefined) fails the guard below and yields
  *   the empty response.
  */
@@ -467,7 +474,7 @@ async function oppMmrBucketGames(deps, userId, filters, opts = {}) {
     return { ok: true, lo: null, hi: null, total: 0, count: 0, games: [] };
   }
   const match = deps.gamesMatchStage(userId, filters);
-  const trustFloor = oppMmrTrustFloor();
+  const trustFloor = keyedTrustFloor(opts.trustFloor);
   const pipeline = [
     { $match: match },
     { $addFields: { _bucket: deps.bucketSwitch() } },

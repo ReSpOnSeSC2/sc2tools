@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { parseFilters, parseFiniteInt } = require("../util/parseQuery");
-const { asOppMmrBucketWidth } = require("../services/trendsOppMmr");
+const { asOppMmrBucketWidth, oppMmrTrustFloor } = require("../services/trendsOppMmr");
 const { parseExplorerOptions } = require("../services/trendsExplorer");
 
 /**
@@ -244,10 +244,10 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      const bucketWidth = parseOppMmrBucketWidth(req.query.bucket_width);
-      res.json(
-        await deps.aggregations.oppMmrBuckets(userId, filters, { bucketWidth }),
-      );
+      // The day-truncated trust floor keys the body, so a cached answer never outlives its floor.
+      const options = { bucketWidth: parseOppMmrBucketWidth(req.query.bucket_width), trustFloor: oppMmrTrustFloor().toISOString() };
+      await send(req, res, userId, "oppMmrBuckets", filters, options,
+        () => deps.aggregations.oppMmrBuckets(userId, filters, options));
     } catch (err) {
       next(err);
     }
@@ -262,9 +262,9 @@ function buildAggregationsRouter(deps) {
       const filters = parseFilters(req.query);
       const lo = parseFiniteInt(req.query.lo);
       const hi = parseFiniteInt(req.query.hi);
-      res.json(
-        await deps.aggregations.oppMmrBucketGames(userId, filters, { lo, hi }),
-      );
+      const options = { lo, hi, trustFloor: oppMmrTrustFloor().toISOString() };
+      await send(req, res, userId, "oppMmrBucketGames", filters, options,
+        () => deps.aggregations.oppMmrBucketGames(userId, filters, options));
     } catch (err) {
       next(err);
     }

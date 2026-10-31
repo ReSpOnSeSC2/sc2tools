@@ -84,7 +84,7 @@ describe("useApi actual SWR manual conditional integration", () => {
     const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => mode === "legacy OFF"
       ? new Response('{"value":"baseline"}', { headers: { etag: 'W/"native"' } }) : response("baseline"));
     vi.stubGlobal("fetch", fetcher);
-    const view = fixture(mode !== "outside provider").render(mode === "nonallowlisted" ? "/v1/opp-mmr-buckets#1" : path);
+    const view = fixture(mode !== "outside provider").render(mode === "nonallowlisted" ? "/v1/games-list#1" : path);
     await waitFor(() => expect(view.result.current.data?.value).toBe("baseline"));
     await act(async () => { await view.result.current.mutate(); });
     expect(fetcher).toHaveBeenCalledTimes(2);
