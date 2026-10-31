@@ -103,6 +103,14 @@ test("the startup cohort record names only the revision, flag, writer set and qu
   expect(() => startChartCacheQuarantine(fixture().cache, { info: () => { throw new Error("log down"); } })).not.toThrow();
 });
 
+test("admission decides before the snapshot: a request whose snapshot outlasts the quarantine end is not retained", async () => {
+  const f = fixture(); startChartCacheQuarantine(f.cache, undefined, 1000);
+  let release; f.users.findOne.mockImplementationOnce(() => new Promise(resolve => { release = () => resolve({ userId: "a", dataRev: 0 }); }));
+  const pending = get(f, 'W/"none"').then(res => res);
+  await until(() => !!release); f.advance(1000); release();
+  uncached(await pending); expect(f.cache.completed.size).toBe(0);
+});
+
 test("the server retires the chart cache before shutdown's first await and starts the quarantine at listen", () => {
   const lines = fs.readFileSync(path.join(__dirname, "../src/server.js"), "utf8").split(/\r?\n/);
   const start = lines.findIndex(line => line.includes('"shutdown_start"'));
