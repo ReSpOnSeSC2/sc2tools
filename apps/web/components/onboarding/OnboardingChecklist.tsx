@@ -177,7 +177,7 @@ export function OnboardingChecklist({
           }
           action={
             pairDone ? null : (
-              <LinkButton href="/devices" size="sm">Open Devices</LinkButton>
+              <LinkButton href="/devices" size="sm" className="min-h-11">Open Devices</LinkButton>
             )
           }
           expanded={pairExpanded}
@@ -328,7 +328,7 @@ function DownloadAction({
   browserImportEnabled: boolean;
 }) {
   const download = downloadDone ? null : (
-    <LinkButton href="/download" size="sm" onClick={onDownload} iconLeft={<Download className="h-4 w-4" aria-hidden />}>
+    <LinkButton href="/download" size="sm" className="min-h-11" onClick={onDownload} iconLeft={<Download className="h-4 w-4" aria-hidden />}>
       Download
     </LinkButton>
   );
@@ -346,4 +346,3 @@ function DownloadAction({
     </div>
   );
 }
-

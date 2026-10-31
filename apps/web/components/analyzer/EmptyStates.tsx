@@ -141,7 +141,8 @@ function ChoiceCard({
         <h3 className="text-body font-semibold">{title}</h3>
       </div>
       <p className="flex-1 text-caption text-text-muted">{body}</p>
-      <LinkButton href={href} variant={variant}>
+      {/* A long label wraps; the pill keeps a 44px minimum and grows with it. */}
+      <LinkButton href={href} variant={variant} className="!h-auto min-h-11 py-2 text-center">
         {cta}
       </LinkButton>
     </li>
@@ -288,4 +289,3 @@ export function NoBuildOrder({
     />
   );
 }
-
