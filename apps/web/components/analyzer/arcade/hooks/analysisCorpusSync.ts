@@ -6,14 +6,16 @@ import {
   type CorpusMarks,
 } from "@/lib/analysisCorpus/changes";
 import {
+  deleteDeviceCorpus,
   mergeDeviceDelta,
   openDeviceCorpus,
   readDeviceCorpus,
   resetDeviceCorpus,
   saveDeviceSnapshot,
 } from "@/lib/analysisCorpus/deviceStore";
+import { mayHaveDeviceCopy, noteDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
 import { defaultIndexedDb } from "@/lib/instant/idb";
-import type { AnalysisApiGame, AnalysisGamesPage } from "./useAnalysisGames";
+import type { AnalysisApiGame, RawAnalysisSnapshot } from "./useAnalysisGames";
 
 /**
  * One sync of the signed-in account's analysis corpus, loaded on demand by
@@ -23,14 +25,16 @@ import type { AnalysisApiGame, AnalysisGamesPage } from "./useAnalysisGames";
  * keep one) this is the plain snapshot read it always was. With one, the
  * stored rows show first, a changed-since read brings them up to date, and
  * the rows and new marks are written back in one transaction. Whatever only a
- * snapshot can resolve falls back to one, which then replaces the device copy;
- * a copy a snapshot could not replace is dropped (keeping the account's
- * choice), so it is never shown again. Device storage is best effort: when
- * IndexedDB is missing, refused, slow or full, the corpus still loads, in
- * memory only.
+ * snapshot can resolve falls back to one, which then replaces the device copy.
+ * A copy that needs a snapshot is dropped before the snapshot is read, keeping
+ * the account's choice, so it never shows again even if the snapshot fails;
+ * a copy that can be neither replaced nor dropped goes with its database.
+ * Device storage is best effort: when IndexedDB is missing, refused, slow or
+ * full, the corpus still loads, in memory only. Nothing is written to the
+ * device once the caller's run is cancelled.
  */
 
-/** One full snapshot read, with the marks its first page carried (null from a server that sends none). */
+/** One full snapshot read, with its checked marks (null when the server sent none, or pages disagreed). */
 export type CorpusSnapshot = {
   items: AnalysisApiGame[];
   pagesFetched: number;
@@ -38,8 +42,13 @@ export type CorpusSnapshot = {
   marks: CorpusMarks | null;
 };
 
-/** The corpus one sync produced, and whether this account's copy is kept on this device. */
-export type CorpusSync = CorpusSnapshot & { onDevice: boolean };
+/** The corpus one sync produced. */
+export type CorpusSync = CorpusSnapshot & {
+  /** The corpus shown is the copy stored on this device. */
+  onDevice: boolean;
+  /** This device records the account's choice to keep its history here (with or without a usable copy). */
+  kept: boolean;
+};
 
 type StoredCorpus = CorpusSync & { marks: CorpusMarks };
 
@@ -48,10 +57,13 @@ export type CorpusSyncInput = {
   /** The account asked to keep its history on this device (the one-time history gate). */
   keepOnDevice: boolean;
   fetchPage: (path: string) => Promise<unknown>;
-  /** The snapshot page URL after `previousPage`, or null when the snapshot is complete. */
-  pageKey: (pageIndex: number, previousPage: AnalysisGamesPage | null) => string | null;
+  readSnapshot: () => Promise<RawAnalysisSnapshot>;
   /** Called with the stored copy before it is brought up to date, so it can show at once. */
   onStored: (stored: CorpusSync) => void;
+  /** Called with a fetched snapshot before it is stored, so it shows without waiting on the save. */
+  onSnapshot: (snapshot: CorpusSnapshot) => void;
+  /** The caller's run; once it is aborted, nothing more is written to the device. */
+  signal: AbortSignal;
   maxRows: number;
   pageSize: number;
   maxPages: number;
@@ -59,55 +71,44 @@ export type CorpusSyncInput = {
 
 /**
  * Example:
- *   const synced = await syncAnalysisCorpus({ accountKey, keepOnDevice: false, fetchPage, pageKey, onStored,
- *     maxRows: 20_000, pageSize: 2000, maxPages: 10 });
+ *   const synced = await syncAnalysisCorpus({ accountKey, keepOnDevice: false, fetchPage, readSnapshot, onStored,
+ *     onSnapshot, signal, maxRows: 20_000, pageSize: 2000, maxPages: 10 });
  */
 export async function syncAnalysisCorpus(input: CorpusSyncInput): Promise<CorpusSync> {
   const device = await openDevice(input);
+  // A copy that may be out of date, and that could not be dropped, is left on the device.
+  let stale = false;
   try {
     if (device?.stored) {
       input.onStored(device.stored);
       const updated = await applyChanges(device.db, device.stored, input);
       if (updated) return updated;
+      input.signal.throwIfAborted();
+      stale = !(await dropCopy(device.db, input.accountKey));
     }
-    const snapshot = await readSnapshot(input);
-    const onDevice = device ? await storeSnapshot(device.db, snapshot, input) : false;
-    return { ...snapshot, onDevice };
+    const snapshot = checkedSnapshot(await input.readSnapshot());
+    if (!device) return { ...snapshot, onDevice: false, kept: false };
+    input.onSnapshot(snapshot);
+    input.signal.throwIfAborted();
+    // The store replaces or drops whatever copy was there, so its outcome alone decides what is left.
+    const stored = await storeSnapshot(device.db, snapshot, input);
+    stale = stored === "stale";
+    return { ...snapshot, onDevice: stored === "saved", kept: stored !== "stale" };
   } finally {
     device?.db.close();
+    if (stale) {
+      deleteDeviceCorpus(defaultIndexedDb());
+      noteDeviceCopy(null);
+    }
   }
 }
 
-/**
- * Read the bounded snapshot newest first, page by page, up to the corpus
- * ceiling. The first page's corpus version and watermark come back too.
- */
-async function readSnapshot(input: CorpusSyncInput): Promise<CorpusSnapshot> {
-  const items: AnalysisApiGame[] = [];
-  let previousPage: AnalysisGamesPage | null = null;
-  let pagesFetched = 0;
-  let hitCorpusLimit = false;
-  let marks: CorpusMarks | null = null;
-
-  for (let pageIndex = 0; pageIndex < input.maxPages; pageIndex += 1) {
-    const path = input.pageKey(pageIndex, previousPage);
-    if (!path) break;
-    const page = (await input.fetchPage(path)) as AnalysisGamesPage;
-    if (pageIndex === 0) marks = snapshotMarks(page);
-    const pageItems = Array.isArray(page?.items) ? page.items : [];
-    const remaining = input.maxRows - items.length;
-    items.push(...pageItems.slice(0, remaining));
-    pagesFetched += 1;
-    previousPage = page;
-
-    if (items.length >= input.maxRows) {
-      hitCorpusLimit = pageItems.length > remaining || Boolean(page.nextCursor);
-      break;
-    }
-    if (!page.nextCursor) break;
-    if (pageIndex === input.maxPages - 1) hitCorpusLimit = true;
-  }
-  return { items, pagesFetched, hitCorpusLimit, marks };
+/** Marks from the first page, kept only when every page came from the same corpus epoch. */
+function checkedSnapshot(raw: RawAnalysisSnapshot): CorpusSnapshot {
+  const marks = snapshotMarks(raw.firstPage);
+  // Pages served under another epoch (a deploy that changed the corpus rules) cannot be kept as one copy.
+  const oneEpoch = marks !== null && raw.pageEpochs.every((epoch) => epoch === marks.corpusEpoch);
+  return { items: raw.items, pagesFetched: raw.pagesFetched, hitCorpusLimit: raw.hitCorpusLimit, marks: oneEpoch ? marks : null };
 }
 
 /** The device copy this sync uses, or null when it stays in memory. */
@@ -120,12 +121,17 @@ async function openDevice(
   const stored = await readDeviceCorpus<AnalysisApiGame>(db, input.accountKey, input.maxRows).catch(() => null);
   if ((stored === null || stored.kind === "absent") && !input.keepOnDevice) {
     // Nothing kept for this account, and it has not asked to keep any: memory only, as before.
+    if (stored?.kind === "absent" && mayHaveDeviceCopy(input.accountKey)) noteDeviceCopy(null);
     db.close();
     return null;
   }
+  if (stored?.kind === "stored" || stored?.kind === "kept") noteDeviceCopy(input.accountKey);
   if (stored?.kind !== "stored") return { db, stored: null };
   const items = newestFirst(stored.rows);
-  return { db, stored: { items, pagesFetched: 0, hitCorpusLimit: false, marks: stored.marks, onDevice: true } };
+  return {
+    db,
+    stored: { items, pagesFetched: 0, hitCorpusLimit: false, marks: stored.marks, onDevice: true, kept: true },
+  };
 }
 
 async function applyChanges(
@@ -140,22 +146,30 @@ async function applyChanges(
   if (!delta) return null;
   const items = mergeCorpusChanges(stored.items, delta.changes);
   if (items.length > input.maxRows) return null;
+  input.signal.throwIfAborted();
   // Best effort: when another tab moved the copy first, or the write fails, this tab still shows its merged corpus.
   await mergeDeviceDelta(db, input.accountKey, stored.marks, delta.changes, delta.marks, input.maxRows)
     .catch(() => false);
-  return { items, pagesFetched: delta.pages, hitCorpusLimit: false, marks: delta.marks, onDevice: true };
+  return { items, pagesFetched: delta.pages, hitCorpusLimit: false, marks: delta.marks, onDevice: true, kept: true };
 }
 
+/** "saved"; "dropped" (no usable copy, the account's choice kept); or "stale" (neither worked). */
 async function storeSnapshot(
   db: IDBDatabase,
   snapshot: CorpusSnapshot,
   input: CorpusSyncInput,
-): Promise<boolean> {
-  // Past the ceiling, or without marks (a server from before changed-since reads), a copy could not be brought up to
-  // date exactly. A save that fails (storage full) rolls back to the copy this snapshot was meant to replace.
+): Promise<"saved" | "dropped" | "stale"> {
+  // Past the ceiling, or without marks (a server from before changed-since reads, or pages from two epochs), a copy
+  // could not be brought up to date exactly. A save that fails (storage full) rolls back to the copy it replaced.
   const saved = !snapshot.hitCorpusLimit && snapshot.marks !== null
     && await saveDeviceSnapshot(db, input.accountKey, snapshot.items, snapshot.marks, input.maxRows)
       .then(() => true, () => false);
-  if (!saved) await resetDeviceCorpus(db, input.accountKey).catch(() => undefined);
-  return saved;
+  const outcome = saved ? "saved" : (await dropCopy(db, input.accountKey)) ? "dropped" : "stale";
+  // The device now records this account's choice, with or without a usable copy.
+  if (outcome !== "stale") noteDeviceCopy(input.accountKey);
+  return outcome;
+}
+
+function dropCopy(db: IDBDatabase, accountKey: string): Promise<boolean> {
+  return resetDeviceCorpus(db, accountKey).then(() => true, () => false);
 }

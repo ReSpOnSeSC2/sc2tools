@@ -2,6 +2,7 @@ import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { noteDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
 import {
   openDeviceCorpus,
   readDeviceCorpus,
@@ -37,6 +38,22 @@ vi.mock("@/lib/clientApi", () => ({
   apiCall: harness.apiCall,
 }));
 
+// Lets a test hold one account's device read until the account has switched.
+const deviceGate = vi.hoisted(() => ({
+  hold: null as null | ((accountKey: string) => Promise<void> | undefined),
+}));
+
+vi.mock("@/lib/analysisCorpus/deviceStore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/analysisCorpus/deviceStore")>();
+  return {
+    ...actual,
+    readDeviceCorpus: async (...args: Parameters<typeof actual.readDeviceCorpus>) => {
+      await deviceGate.hold?.(args[1]);
+      return actual.readDeviceCorpus(...args);
+    },
+  };
+});
+
 import {
   ANALYSIS_GAMES_CORPUS_MAX,
   ANALYSIS_GAMES_MAX_PAGES,
@@ -60,6 +77,8 @@ beforeEach(() => {
   harness.isSignedIn = true;
   harness.userId = "user-a";
   harness.apiCall.mockReset();
+  deviceGate.hold = null;
+  window.localStorage.clear();
   providerEnabled = true;
   harness.apiCall.mockImplementation(async (_getToken, path: string) => {
     const cursor = new URL(path, "https://example.test").searchParams.get(
@@ -289,6 +308,20 @@ describe("AnalysisGamesProvider retention", () => {
     });
   });
 
+  it("still loads the corpus in memory when the sync chunk cannot load", async () => {
+    vi.doMock("../hooks/analysisCorpusSync", () => {
+      throw new Error("Loading chunk failed");
+    });
+    try {
+      const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+      await waitFor(() => expect(result.current.items).toHaveLength(3));
+      expect([result.current.error, result.current.onDevice]).toEqual([null, false]);
+      expect(harness.apiCall).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.doUnmock("../hooks/analysisCorpusSync");
+    }
+  });
+
   it("replaces one flat corpus across revisions without retaining old pages", async () => {
     const { result, rerender } = renderHook(() => useAnalysisGames(), {
       wrapper,
@@ -356,7 +389,8 @@ describe("AnalysisGamesProvider device copy", () => {
     vi.unstubAllGlobals();
   });
 
-  // Snapshot pages carry marks; the changes route answers with `changes`.
+  // The first snapshot page carries the marks and every page the epoch, as the
+  // API sends them; the changes route answers with `changes`.
   function serve(
     changes: (path: string) => unknown,
     marks: Record<string, unknown> = MARKS,
@@ -370,7 +404,7 @@ describe("AnalysisGamesProvider device copy", () => {
       );
       const prefix = harness.userId === "user-a" ? "s" : "b";
       return cursor
-        ? { items: [game(`${prefix}-c`)], nextCursor: null }
+        ? { items: [game(`${prefix}-c`)], nextCursor: null, corpusEpoch: marks.corpusEpoch }
         : {
             items: [game(`${prefix}-a`), game(`${prefix}-b`)],
             nextCursor: "next",
@@ -398,6 +432,7 @@ describe("AnalysisGamesProvider device copy", () => {
     const db = await openDeviceCorpus(factory, { create: true });
     await saveDeviceSnapshot(db!, accountKey, ids.map(game), MARKS, 100);
     db!.close();
+    noteDeviceCopy(accountKey);
   }
 
   it("keeps history on this device only when asked, then shows it first and syncs only changes", async () => {
@@ -516,6 +551,55 @@ describe("AnalysisGamesProvider device copy", () => {
     });
     expect(result.current.onDevice).toBe(false);
     expect(await deviceCopy("user-b")).toBe("absent");
+    // User A's cancelled run wrote nothing after the switch.
+    expect(await deviceCopy("user-a")).toEqual({ marks: MARKS, ids: ["a-stored"] });
+  });
+
+  it("never lets user A's late stored copy replace user B's corpus", async () => {
+    await keepCopy("user-a", ["a-stored"]);
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let heldForA = false;
+    deviceGate.hold = (accountKey) => {
+      if (accountKey !== "user-a") return undefined;
+      heldForA = true;
+      return held;
+    };
+    serve(() => null);
+    const { result, rerender } = renderHook(() => useAnalysisGames(), {
+      wrapper: wrapperFor(true),
+    });
+    await waitFor(() => expect(heldForA).toBe(true));
+
+    harness.userId = "user-b";
+    rerender();
+    await waitFor(() => {
+      expect(shown(result.current.items)).toEqual(["b-a", "b-b", "b-c"]);
+    });
+    await act(async () => {
+      release?.();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(shown(result.current.items)).toEqual(["b-a", "b-b", "b-c"]);
+  });
+
+  it("keeps the request to store history until the device records it", async () => {
+    vi.stubGlobal("indexedDB", undefined);
+    serve(() => null);
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.keepOnDevice());
+    await waitFor(() => expect(result.current.items).toHaveLength(3));
+    expect(result.current.onDevice).toBe(false);
+
+    vi.stubGlobal("indexedDB", factory);
+    act(() => result.current.load());
+    await waitFor(() => expect(result.current.onDevice).toBe(true));
+    expect(await deviceCopy("user-a")).toEqual({
+      marks: MARKS,
+      ids: ["s-a", "s-b", "s-c"],
+    });
   });
 
   it("does not recreate a copy that another tab cleared after it was kept", async () => {

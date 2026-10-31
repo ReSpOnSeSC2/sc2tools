@@ -165,6 +165,22 @@ export function resetDeviceCorpus(db: IDBDatabase, accountKey: string): Promise<
 }
 
 /**
+ * Delete the whole device copy, the last resort when a copy can be neither replaced nor reset. Other tabs' connections
+ * step aside on versionchange, and the request finishes once they have; nothing waits for it.
+ *
+ * Example:
+ *   deleteDeviceCorpus(defaultIndexedDb());
+ */
+export function deleteDeviceCorpus(factory: IDBFactory | undefined): void {
+  try {
+    const request = factory?.deleteDatabase(DEVICE_CORPUS_DB_NAME);
+    if (request) request.onerror = (event) => event.preventDefault();
+  } catch {
+    // Storage is refused for this document: there is nothing to delete.
+  }
+}
+
+/**
  * Merge a delta into the stored corpus and move its marks to `to`, in one transaction. Resolves false and writes
  * nothing when the stored marks are no longer `from` (another tab moved them) or the merge would pass `maxRows`.
  *

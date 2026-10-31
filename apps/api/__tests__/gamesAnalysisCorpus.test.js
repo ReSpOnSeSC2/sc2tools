@@ -416,6 +416,7 @@ describe("GET /games/analysis-corpus", () => {
     expect(res.body).toEqual({
       items: [{ gameId: "g1" }],
       nextCursor: "next",
+      corpusEpoch: CORPUS_EPOCH,
     });
     expect(listAnalysisCorpus).toHaveBeenCalledWith(
       "u-route",

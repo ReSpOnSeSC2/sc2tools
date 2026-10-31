@@ -53,7 +53,7 @@ test("the snapshot's first page carries the version and watermark, and a delta r
   const first = (await get("analysis-corpus", { limit: "1" }).expect(200)).body;
   expect(first).toMatchObject({ corpusVersion: 0, corpusEpoch: CORPUS_EPOCH, watermark: expect.any(String), nextCursor: expect.any(String) });
   const second = (await get("analysis-corpus", { limit: "1", cursor: first.nextCursor }).expect(200)).body;
-  expect([second.items.length, "watermark" in second, "corpusVersion" in second, "corpusEpoch" in second]).toEqual([1, false, false, false]);
+  expect([second.items.length, "watermark" in second, "corpusVersion" in second, second.corpusEpoch]).toEqual([1, false, false, CORPUS_EPOCH]);
   const delta = (await changes(snapshot.watermark, 0).expect(200)).body;
   expect([delta.corpusVersion, delta.corpusEpoch]).toEqual([0, CORPUS_EPOCH]); expect(delta.nextCursor).toBeNull();
   expect(delta.items.map(item => item.gameId).sort()).toEqual(["g1", "g2"]);

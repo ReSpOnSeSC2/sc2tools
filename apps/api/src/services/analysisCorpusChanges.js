@@ -24,7 +24,8 @@ const STAMP_FLOOR_GUARD_MS = 7 * 60 * 1000;
 const FUTURE_SKEW_MS = 60 * 1000;
 const MEMBERSHIP = Object.freeze({ updatedAt: 1, _deleted: 1, _deletionPending: 1, excluded: 1, isResumedFromReplay: 1 });
 const PROJECTION = Object.freeze({ ...ANALYSIS_GAME_PROJECTION, ...MEMBERSHIP });
-// Raise for a corpus rule change the epoch's digest cannot see, such as a helper the serializer calls.
+// Raise for a corpus rule change the epoch's digest cannot see: a helper the serializer calls, or the snapshot cursor's
+// helpers in games.js (decodeAnalysisCursor, analysisCursorLowerBranches and friends), which pick the rows after page 1.
 const CORPUS_RULES_REVISION = 1;
 // What a corpus row holds and which games belong: the projection, the membership filters, the serializer and the two
 // reads. It moves whenever they do, so a device copy built under other rules takes a snapshot.
