@@ -194,6 +194,30 @@ class DeviceCredentialWrites {
     const readiness = this.readiness?.stopAndDrain();
     await Promise.allSettled([readiness, ...this.pending]);
   }
+
+  /** Owner-run rollback primitive, never wired to a route, endpoint or flag. It compare-and-sets the exact authority
+   * incarnation to the non-granting "prepared" mode with a fresh generation, then drains the old lease bound before
+   * reporting. It never sets "active" and never touches pending or denyAll. A mismatch changes nothing; an unknown
+   * write outcome is reported as possibly disabled and still drains; a written record that fails verification drains, then throws.
+   * @param {{incarnation:string}} expected
+   * @returns {Promise<{outcome:'disabled'|'possibly-disabled'|'refused', generation?:string}>} */
+  async disable(expected) {
+    const incarnation = expected?.incarnation;
+    if (typeof incarnation !== "string" || !UUID.test(incarnation)) throw failure("device_credential_disable_invalid");
+    let row;
+    try {
+      row = await this.collection.findOneAndUpdate({ ...this.#authority(), incarnation },
+        { $set: { mode: "prepared", generation: randomUUID() } }, { ...WRITE_OPTIONS, returnDocument: "after" });
+    } catch (error) {
+      this.logger?.warn?.({ err: error }, "device credential disable outcome unknown; draining");
+      await this.#drainLeaseBound();
+      return { outcome: "possibly-disabled" };
+    }
+    if (!row) return { outcome: "refused" };
+    await this.#drainLeaseBound(); // The write landed, so old grants drain even when the returned record fails verification.
+    if (!validAuthority(row) || row.mode !== "prepared") throw failure("device_credential_disable_unverified");
+    return { outcome: "disabled", generation: row.generation };
+  }
 }
 
 /** @param {DeviceCredentialWrites} service */
