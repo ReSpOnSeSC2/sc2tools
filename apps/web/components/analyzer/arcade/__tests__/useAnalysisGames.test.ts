@@ -1,6 +1,13 @@
 import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { noteDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
+import {
+  openDeviceCorpus,
+  readDeviceCorpus,
+  saveDeviceSnapshot,
+} from "@/lib/analysisCorpus/deviceStore";
 
 const harness = vi.hoisted(() => ({
   dbRev: 0,
@@ -31,6 +38,25 @@ vi.mock("@/lib/clientApi", () => ({
   apiCall: harness.apiCall,
 }));
 
+// Lets a test hold one account's device read until the account has switched.
+const deviceGate = vi.hoisted(() => ({
+  hold: null as null | ((accountKey: string) => Promise<void> | undefined),
+  afterRead: null as null | ((accountKey: string) => void),
+}));
+
+vi.mock("@/lib/analysisCorpus/deviceStore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/analysisCorpus/deviceStore")>();
+  return {
+    ...actual,
+    readDeviceCorpus: async (...args: Parameters<typeof actual.readDeviceCorpus>) => {
+      await deviceGate.hold?.(args[1]);
+      const stored = await actual.readDeviceCorpus(...args);
+      deviceGate.afterRead?.(args[1]);
+      return stored;
+    },
+  };
+});
+
 import {
   ANALYSIS_GAMES_CORPUS_MAX,
   ANALYSIS_GAMES_MAX_PAGES,
@@ -54,6 +80,9 @@ beforeEach(() => {
   harness.isSignedIn = true;
   harness.userId = "user-a";
   harness.apiCall.mockReset();
+  deviceGate.hold = null;
+  deviceGate.afterRead = null;
+  window.localStorage.clear();
   providerEnabled = true;
   harness.apiCall.mockImplementation(async (_getToken, path: string) => {
     const cursor = new URL(path, "https://example.test").searchParams.get(
@@ -270,6 +299,9 @@ describe("AnalysisGamesProvider retention", () => {
     expect(result.current.items).toEqual([]);
     expect(result.current.isLoading).toBe(true);
 
+    // User B's first page starts after the device-copy probe.
+    await waitFor(() => expect(harness.apiCall).toHaveBeenCalledTimes(3));
+    expect(result.current.items).toEqual([]);
     await act(async () => {
       resolveUserB({ items: [game("user-b-game")], nextCursor: null });
     });
@@ -278,6 +310,22 @@ describe("AnalysisGamesProvider retention", () => {
         "user-b-game",
       ]);
     });
+  });
+
+  it("still loads the corpus in memory when the sync chunk cannot load", async () => {
+    vi.doMock("../hooks/analysisCorpusSync", () => {
+      throw new Error("Loading chunk failed");
+    });
+    // A noted account loads the sync chunk; here that load fails.
+    noteDeviceCopy("user-a");
+    try {
+      const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+      await waitFor(() => expect(result.current.items).toHaveLength(3));
+      expect([result.current.error, result.current.onDevice]).toEqual([null, false]);
+      expect(harness.apiCall).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.doUnmock("../hooks/analysisCorpusSync");
+    }
   });
 
   it("replaces one flat corpus across revisions without retaining old pages", async () => {
@@ -324,5 +372,338 @@ describe("AnalysisGamesProvider retention", () => {
     expect(harness.apiCall).toHaveBeenCalledTimes(6);
     expect(result.current.pagesFetched).toBe(2);
     expect(result.current.items).toHaveLength(3);
+  });
+});
+
+describe("AnalysisGamesProvider device copy", () => {
+  const EPOCH = "1.0123456789abcdef";
+  const MARKS = { corpusVersion: 1, watermark: "2026-10-31T10:00:00.000Z", corpusEpoch: EPOCH };
+  let factory: IDBFactory;
+  const wrapperFor = (enabled: boolean) =>
+    function DeviceCopyProvider({ children }: { children: ReactNode }) {
+      const providerProps = { enabled, refreshQuietMs: 0, children };
+      return createElement(AnalysisGamesProvider, providerProps);
+    };
+  const wrapper = wrapperFor(false);
+
+  beforeEach(() => {
+    factory = new IDBFactory();
+    vi.stubGlobal("indexedDB", factory);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // The first snapshot page carries the marks and every page the epoch, as the
+  // API sends them; the changes route answers with `changes`.
+  function serve(
+    changes: (path: string) => unknown,
+    marks: Record<string, unknown> = MARKS,
+    cursorEpoch: unknown = marks.corpusEpoch,
+  ) {
+    harness.apiCall.mockImplementation(async (_getToken, path: string) => {
+      if (path.startsWith("/v1/games/analysis-corpus/changes")) {
+        return await changes(path);
+      }
+      const cursor = new URL(path, "https://example.test").searchParams.get(
+        "cursor",
+      );
+      const prefix = harness.userId === "user-a" ? "s" : "b";
+      return cursor
+        ? { items: [game(`${prefix}-c`)], nextCursor: null, corpusEpoch: cursorEpoch }
+        : {
+            items: [game(`${prefix}-a`), game(`${prefix}-b`)],
+            nextCursor: "next",
+            ...marks,
+          };
+    });
+  }
+
+  const requested = () =>
+    harness.apiCall.mock.calls.map(([, path]) => String(path).split("?")[0]);
+  const shown = (items: Array<{ gameId: string }>) =>
+    items.map((row) => row.gameId).sort();
+
+  async function deviceCopy(accountKey: string) {
+    const db = await openDeviceCorpus(factory, { create: false });
+    if (!db) return null;
+    const copy = await readDeviceCorpus<{ gameId: string }>(db, accountKey, 100);
+    db.close();
+    return copy.kind === "stored"
+      ? { marks: copy.marks, ids: shown(copy.rows) }
+      : copy.kind;
+  }
+
+  async function keepCopy(accountKey: string, ids: string[]) {
+    const db = await openDeviceCorpus(factory, { create: true });
+    await saveDeviceSnapshot(db!, accountKey, ids.map(game), MARKS, 100);
+    db!.close();
+    noteDeviceCopy(accountKey);
+  }
+
+  it("keeps history on this device only when asked, then shows it first and syncs only changes", async () => {
+    serve(() => null);
+    const first = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => first.result.current.load());
+    await waitFor(() => expect(first.result.current.items).toHaveLength(3));
+    expect(first.result.current.onDevice).toBe(false);
+    expect(await factory.databases()).toEqual([]);
+
+    act(() => first.result.current.keepOnDevice());
+    await waitFor(() => expect(first.result.current.onDevice).toBe(true));
+    expect(await deviceCopy("user-a")).toEqual({
+      marks: MARKS,
+      ids: ["s-a", "s-b", "s-c"],
+    });
+    first.unmount();
+
+    let answer: ((page: unknown) => void) | undefined;
+    harness.apiCall.mockClear();
+    serve(() => new Promise((resolve) => {
+      answer = resolve;
+    }));
+    const second = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => second.result.current.load());
+    // The stored copy shows before the network answers.
+    await waitFor(() => {
+      expect(shown(second.result.current.items)).toEqual(["s-a", "s-b", "s-c"]);
+    });
+    expect(second.result.current.isLoading).toBe(false);
+    await waitFor(() => expect(answer).toBeTypeOf("function"));
+    const next = { ...MARKS, watermark: "2026-10-31T11:00:00.000Z" };
+    await act(async () => {
+      answer?.({
+        items: [{ gameId: "s-b", removed: true }, game("new")],
+        nextCursor: null,
+        ...next,
+      });
+    });
+    await waitFor(() => {
+      expect(shown(second.result.current.items)).toEqual(["new", "s-a", "s-c"]);
+    });
+    expect(requested()).toEqual(["/v1/games/analysis-corpus/changes"]);
+    expect(await deviceCopy("user-a")).toEqual({
+      marks: next,
+      ids: ["new", "s-a", "s-c"],
+    });
+  });
+
+  it("falls back to a snapshot when the server asks for one, and replaces the stored copy", async () => {
+    await keepCopy("user-a", ["old"]);
+    const fresh = {
+      corpusVersion: 2,
+      watermark: "2026-10-31T12:00:00.000Z",
+      corpusEpoch: EPOCH,
+    };
+    serve(
+      () => ({ snapshotRequired: "corpus_version", corpusVersion: 2, corpusEpoch: EPOCH }),
+      fresh,
+    );
+
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.load());
+    await waitFor(() => {
+      expect(shown(result.current.items)).toEqual(["s-a", "s-b", "s-c"]);
+    });
+    expect(result.current.onDevice).toBe(true);
+    expect(requested()).toEqual([
+      "/v1/games/analysis-corpus/changes",
+      "/v1/games/analysis-corpus",
+      "/v1/games/analysis-corpus",
+    ]);
+    expect(await deviceCopy("user-a")).toEqual({
+      marks: fresh,
+      ids: ["s-a", "s-b", "s-c"],
+    });
+  });
+
+  it("never shows another account's stored copy, and leaves this account in memory", async () => {
+    await keepCopy("user-b", ["b-only"]);
+    serve(() => null);
+
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.load());
+    await waitFor(() => {
+      expect(shown(result.current.items)).toEqual(["s-a", "s-b", "s-c"]);
+    });
+    expect(result.current.onDevice).toBe(false);
+    expect(requested()).toEqual([
+      "/v1/games/analysis-corpus",
+      "/v1/games/analysis-corpus",
+    ]);
+    expect(await deviceCopy("user-a")).toBe("absent");
+  });
+
+  it("hides user A's stored copy at once when the account switches mid-sync", async () => {
+    await keepCopy("user-a", ["a-stored"]);
+    let answerA: ((page: unknown) => void) | undefined;
+    serve(() => new Promise((resolve) => {
+      answerA = resolve;
+    }));
+    const { result, rerender } = renderHook(() => useAnalysisGames(), {
+      wrapper: wrapperFor(true),
+    });
+    await waitFor(() => expect(shown(result.current.items)).toEqual(["a-stored"]));
+    await waitFor(() => expect(answerA).toBeTypeOf("function"));
+
+    harness.userId = "user-b";
+    rerender();
+    expect(result.current.items).toEqual([]);
+    await act(async () => {
+      answerA?.({ items: [game("a-late")], nextCursor: null, ...MARKS });
+    });
+    await waitFor(() => {
+      expect(shown(result.current.items)).toEqual(["b-a", "b-b", "b-c"]);
+    });
+    expect(result.current.onDevice).toBe(false);
+    expect(await deviceCopy("user-b")).toBe("absent");
+    // User A's cancelled run wrote nothing after the switch.
+    expect(await deviceCopy("user-a")).toEqual({ marks: MARKS, ids: ["a-stored"] });
+  });
+
+  it("never lets user A's late stored copy replace user B's corpus", async () => {
+    await keepCopy("user-a", ["a-stored"]);
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let heldForA = false;
+    deviceGate.hold = (accountKey) => {
+      if (accountKey !== "user-a") return undefined;
+      heldForA = true;
+      return held;
+    };
+    let readForA: (() => void) | undefined;
+    const readDone = new Promise<void>((resolve) => {
+      readForA = resolve;
+    });
+    deviceGate.afterRead = (accountKey) => {
+      if (accountKey === "user-a") readForA?.();
+    };
+    serve(() => null);
+    const { result, rerender } = renderHook(() => useAnalysisGames(), {
+      wrapper: wrapperFor(true),
+    });
+    await waitFor(() => expect(heldForA).toBe(true));
+
+    harness.userId = "user-b";
+    rerender();
+    await waitFor(() => {
+      expect(shown(result.current.items)).toEqual(["b-a", "b-b", "b-c"]);
+    });
+    // Once user A's read has returned, a macrotask lets its stored copy reach onStored.
+    await act(async () => {
+      release?.();
+      await readDone;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(shown(result.current.items)).toEqual(["b-a", "b-b", "b-c"]);
+  });
+
+  it("never lets user A's late snapshot replace user B's corpus", async () => {
+    await keepCopy("user-a", ["a-stored"]);
+    const fresh = { corpusVersion: 2, watermark: "2026-10-31T12:00:00.000Z", corpusEpoch: EPOCH };
+    let releaseFirst: (() => void) | undefined;
+    let releaseSecond: (() => void) | undefined;
+    const firstHeld = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const secondHeld = new Promise<void>((resolve) => { releaseSecond = resolve; });
+    let secondRequested = false;
+    harness.apiCall.mockImplementation(async (_getToken, path: string) => {
+      if (path.startsWith("/v1/games/analysis-corpus/changes")) {
+        return { snapshotRequired: "corpus_version", corpusVersion: 2, corpusEpoch: EPOCH };
+      }
+      const cursor = new URL(path, "https://example.test").searchParams.get("cursor");
+      if (cursor) {
+        // User A's second page is held until user B's corpus is on screen.
+        if (cursor === "a-next") {
+          secondRequested = true;
+          await secondHeld;
+        }
+        return { items: [game(`${cursor[0]}-c`)], nextCursor: null, corpusEpoch: EPOCH };
+      }
+      const prefix = harness.userId === "user-a" ? "a" : "b";
+      if (prefix === "a") await firstHeld;
+      return { items: [game(`${prefix}-a`), game(`${prefix}-b`)], nextCursor: `${prefix}-next`, ...fresh };
+    });
+    const { result, rerender } = renderHook(() => useAnalysisGames(), {
+      wrapper: wrapperFor(true),
+    });
+    await waitFor(() => expect(shown(result.current.items)).toEqual(["a-stored"]));
+
+    harness.userId = "user-b";
+    rerender();
+    await waitFor(() => {
+      expect(shown(result.current.items)).toEqual(["b-a", "b-b", "b-c"]);
+    });
+    // Each release is followed by a macrotask, after which user A's microtask chain has run.
+    await act(async () => {
+      releaseFirst?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(secondRequested).toBe(true);
+    await act(async () => {
+      releaseSecond?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(shown(result.current.items)).toEqual(["b-a", "b-b", "b-c"]);
+  });
+
+  it("keeps the request to store history until the device records it", async () => {
+    vi.stubGlobal("indexedDB", undefined);
+    serve(() => null);
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.keepOnDevice());
+    await waitFor(() => expect(result.current.items).toHaveLength(3));
+    expect(result.current.onDevice).toBe(false);
+
+    vi.stubGlobal("indexedDB", factory);
+    act(() => result.current.load());
+    await waitFor(() => expect(result.current.onDevice).toBe(true));
+    expect(await deviceCopy("user-a")).toEqual({
+      marks: MARKS,
+      ids: ["s-a", "s-b", "s-c"],
+    });
+  });
+
+  it("never keeps a snapshot whose pages came from two corpus epochs, and finds the kept choice again", async () => {
+    serve(() => null, MARKS, "2.fedcba9876543210");
+    const first = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => first.result.current.keepOnDevice());
+    await waitFor(() => expect(first.result.current.items).toHaveLength(3));
+    await waitFor(async () => expect(await deviceCopy("user-a")).toBe("kept"));
+    expect(first.result.current.onDevice).toBe(false);
+    first.unmount();
+
+    // A later visit, with no keep request, finds the choice and stores a uniform snapshot.
+    serve(() => null);
+    const second = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => second.result.current.load());
+    await waitFor(() => expect(second.result.current.onDevice).toBe(true));
+    expect(await deviceCopy("user-a")).toEqual({
+      marks: MARKS,
+      ids: ["s-a", "s-b", "s-c"],
+    });
+  });
+
+  it("does not recreate a copy that another tab cleared after it was kept", async () => {
+    serve(() => ({ items: [], nextCursor: null, ...MARKS }));
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.keepOnDevice());
+    await waitFor(() => expect(result.current.onDevice).toBe(true));
+
+    await new Promise<void>((resolve, reject) => {
+      const request = factory.deleteDatabase("sc2tools-analysis-corpus");
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+    harness.apiCall.mockClear();
+    act(() => result.current.load());
+    await waitFor(() => expect(result.current.onDevice).toBe(false));
+    expect(requested()).toEqual([
+      "/v1/games/analysis-corpus",
+      "/v1/games/analysis-corpus",
+    ]);
+    expect(await factory.databases()).toEqual([]);
   });
 });
