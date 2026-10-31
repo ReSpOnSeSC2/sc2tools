@@ -14,6 +14,7 @@ import { useAuth } from "@clerk/nextjs";
 import { apiCall, type ClientApiError } from "@/lib/clientApi";
 import { useFilters } from "@/lib/filterContext";
 import type { ArcadeGame } from "../types";
+import type { CorpusSync } from "./analysisCorpusSync";
 
 /**
  * Wire row returned by the strict API analysis projection. Historic rows may
@@ -41,17 +42,24 @@ export type AnalysisGamesResult = {
   pagesFetched: number;
   /** True only when the established 20,000-game product ceiling was hit. */
   hitCorpusLimit: boolean;
+  /** True when this account's corpus is kept on this device. */
+  onDevice: boolean;
   /** Whether a consumer has explicitly asked for the expensive corpus. */
   isActive: boolean;
   /** Activate the corpus, or retry it after a failed request. */
   load: () => void;
+  /**
+   * Activate the corpus and keep it on this device from now on: later loads
+   * show it at once and sync only changes (the one-time history gate).
+   */
+  keepOnDevice: () => void;
   /** Release a Daily Pulse request; Arcade can independently keep it active. */
   release: () => void;
 };
 
 type AccountBoundAnalysisState = Omit<
   AnalysisGamesResult,
-  "isActive" | "load" | "release"
+  "isActive" | "load" | "keepOnDevice" | "release"
 > & {
   accountKey: string | null;
 };
@@ -67,6 +75,39 @@ function emptyAnalysisState(
     error: null,
     pagesFetched: 0,
     hitCorpusLimit: false,
+    onDevice: false,
+  };
+}
+
+/**
+ * On refresh, keep rendering the last complete corpus until its replacement
+ * is ready; only a first load (nothing fetched or stored yet) reports loading.
+ */
+function reloadingState(
+  previous: AccountBoundAnalysisState,
+  accountKey: string,
+): AccountBoundAnalysisState {
+  return previous.accountKey === accountKey
+    ? {
+        ...previous,
+        isLoading: previous.pagesFetched === 0 && !previous.onDevice,
+        error: null,
+      }
+    : emptyAnalysisState(accountKey, true);
+}
+
+function syncedState(
+  accountKey: string,
+  synced: CorpusSync,
+): AccountBoundAnalysisState {
+  return {
+    accountKey,
+    items: synced.items,
+    isLoading: false,
+    error: null,
+    pagesFetched: synced.pagesFetched,
+    hitCorpusLimit: synced.hitCorpusLimit,
+    onDevice: synced.onDevice,
   };
 }
 
@@ -119,6 +160,10 @@ export function useSettledAnalysisRevision(
  * compact corpus after every refresh on a mobile tab. This provider loads
  * pages sequentially and replaces one flat array only after the next snapshot
  * succeeds, releasing all prior pages/keys for garbage collection.
+ *
+ * Once an account asks to keep its history on this device (`keepOnDevice`),
+ * the stored copy shows first and each load reads only what changed since it
+ * (see analysisCorpusSync). Every other account reads snapshots as before.
  */
 export function AnalysisGamesProvider({
   children,
@@ -138,9 +183,14 @@ export function AnalysisGamesProvider({
     null,
   );
   const [manualRevision, setManualRevision] = useState(0);
+  const [keepRequestedFor, setKeepRequestedFor] = useState<string | null>(
+    null,
+  );
   const active = enabledBySurface
     || (accountKey !== null && requestedForAccount === accountKey);
   const enabled = active && accountKey !== null;
+  const keepOnDeviceRequested = accountKey !== null
+    && keepRequestedFor === accountKey;
   const [state, setState] = useState<AccountBoundAnalysisState>(() =>
     emptyAnalysisState(accountKey),
   );
@@ -149,16 +199,15 @@ export function AnalysisGamesProvider({
     if (!accountKey) return;
     // Keep the compact Daily Pulse gate visible as a loading state on the
     // very render that follows the click; the fetch effect starts afterward.
-    setState((previous) => previous.accountKey === accountKey
-      ? {
-          ...previous,
-          isLoading: previous.pagesFetched === 0,
-          error: null,
-        }
-      : emptyAnalysisState(accountKey, true));
+    setState((previous) => reloadingState(previous, accountKey));
     setRequestedForAccount(accountKey);
     setManualRevision((value) => value + 1);
   }, [accountKey]);
+  const keepOnDevice = useCallback(() => {
+    if (!accountKey) return;
+    setKeepRequestedFor(accountKey);
+    load();
+  }, [accountKey, load]);
   const release = useCallback(() => setRequestedForAccount(null), []);
 
   useEffect(() => {
@@ -177,61 +226,38 @@ export function AnalysisGamesProvider({
 
     const controller = new AbortController();
     let cancelled = false;
-    // On refresh, keep rendering the last complete snapshot until its
-    // replacement is ready. Initial load still reports loading to consumers.
-    setState((previous) => previous.accountKey === accountKey
-      ? {
-          ...previous,
-          isLoading: previous.pagesFetched === 0,
-          error: null,
-        }
-      : emptyAnalysisState(accountKey, true));
+    setState((previous) => reloadingState(previous, accountKey));
 
     void (async () => {
       try {
-        const items: AnalysisApiGame[] = [];
-        let previousPage: AnalysisGamesPage | null = null;
-        let pagesFetched = 0;
-        let hitCorpusLimit = false;
-
-        for (
-          let pageIndex = 0;
-          pageIndex < ANALYSIS_GAMES_MAX_PAGES;
-          pageIndex += 1
-        ) {
-          const path = analysisGamesPageKey(pageIndex, previousPage, true);
-          if (!path) break;
-          const page = await apiCall<AnalysisGamesPage>(getToken, path, {
-            signal: controller.signal,
-          });
-          const pageItems = Array.isArray(page?.items) ? page.items : [];
-          const remaining = ANALYSIS_GAMES_CORPUS_MAX - items.length;
-          items.push(...pageItems.slice(0, remaining));
-          pagesFetched += 1;
-          previousPage = page;
-
-          if (items.length >= ANALYSIS_GAMES_CORPUS_MAX) {
-            hitCorpusLimit =
-              pageItems.length > remaining || Boolean(page.nextCursor);
-            break;
-          }
-          if (!page.nextCursor) break;
-          if (pageIndex === ANALYSIS_GAMES_MAX_PAGES - 1) {
-            hitCorpusLimit = true;
-          }
-        }
+        // Loaded on demand, so the sync and device store stay out of the
+        // dashboard's first-load JavaScript.
+        const { syncAnalysisCorpus } = await import("./analysisCorpusSync");
+        const synced = await syncAnalysisCorpus({
+          accountKey,
+          keepOnDevice: keepOnDeviceRequested,
+          fetchPage: (path) =>
+            apiCall<unknown>(getToken, path, { signal: controller.signal }),
+          pageKey: (pageIndex, previousPage) =>
+            analysisGamesPageKey(pageIndex, previousPage, true),
+          onStored: (stored) => {
+            if (cancelled) return;
+            // History kept on this device shows at once wherever this
+            // account's corpus is not on screen yet.
+            setState((previous) =>
+              previous.accountKey === accountKey && previous.items.length > 0
+                ? previous
+                : syncedState(accountKey, stored));
+          },
+          maxRows: ANALYSIS_GAMES_CORPUS_MAX,
+          pageSize: ANALYSIS_GAMES_PAGE_SIZE,
+          maxPages: ANALYSIS_GAMES_MAX_PAGES,
+        });
 
         if (cancelled) return;
         // One replacement assignment is the retention guarantee: old pages
         // and old flat arrays are not kept in an application-wide cache.
-        setState({
-          accountKey,
-          items,
-          isLoading: false,
-          error: null,
-          pagesFetched,
-          hitCorpusLimit,
-        });
+        setState(syncedState(accountKey, synced));
       } catch (err) {
         if (cancelled || isAbortError(err)) return;
         setState((previous) => previous.accountKey === accountKey
@@ -254,6 +280,7 @@ export function AnalysisGamesProvider({
     enabled,
     getToken,
     isLoaded,
+    keepOnDeviceRequested,
     manualRevision,
     settledRevision,
   ]);
@@ -265,9 +292,9 @@ export function AnalysisGamesProvider({
       const visibleState = state.accountKey === accountKey
         ? state
         : emptyAnalysisState(accountKey, enabled);
-      return { ...visibleState, isActive: active, load, release };
+      return { ...visibleState, isActive: active, load, keepOnDevice, release };
     },
-    [accountKey, active, enabled, load, release, state],
+    [accountKey, active, enabled, keepOnDevice, load, release, state],
   );
   return createElement(AnalysisGamesContext.Provider, { value }, children);
 }

@@ -1,6 +1,12 @@
 import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  openDeviceCorpus,
+  readDeviceCorpus,
+  saveDeviceSnapshot,
+} from "@/lib/analysisCorpus/deviceStore";
 
 const harness = vi.hoisted(() => ({
   dbRev: 0,
@@ -270,6 +276,9 @@ describe("AnalysisGamesProvider retention", () => {
     expect(result.current.items).toEqual([]);
     expect(result.current.isLoading).toBe(true);
 
+    // User B's first page starts after the device-copy probe.
+    await waitFor(() => expect(harness.apiCall).toHaveBeenCalledTimes(3));
+    expect(result.current.items).toEqual([]);
     await act(async () => {
       resolveUserB({ items: [game("user-b-game")], nextCursor: null });
     });
@@ -324,5 +333,143 @@ describe("AnalysisGamesProvider retention", () => {
     expect(harness.apiCall).toHaveBeenCalledTimes(6);
     expect(result.current.pagesFetched).toBe(2);
     expect(result.current.items).toHaveLength(3);
+  });
+});
+
+describe("AnalysisGamesProvider device copy", () => {
+  const MARKS = { corpusVersion: 1, watermark: "2026-10-31T10:00:00.000Z" };
+  let factory: IDBFactory;
+  const wrapper = ({ children }: { children: ReactNode }) => {
+    const providerProps = { enabled: false, refreshQuietMs: 0, children };
+    return createElement(AnalysisGamesProvider, providerProps);
+  };
+
+  beforeEach(() => {
+    factory = new IDBFactory();
+    vi.stubGlobal("indexedDB", factory);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Snapshot pages carry marks; the changes route answers with `changes`.
+  function serve(changes: (path: string) => unknown, marks = MARKS) {
+    harness.apiCall.mockImplementation(async (_getToken, path: string) => {
+      if (path.startsWith("/v1/games/analysis-corpus/changes")) {
+        return await changes(path);
+      }
+      const cursor = new URL(path, "https://example.test").searchParams.get(
+        "cursor",
+      );
+      return cursor
+        ? { items: [game("s-c")], nextCursor: null }
+        : { items: [game("s-a"), game("s-b")], nextCursor: "next", ...marks };
+    });
+  }
+
+  const requested = () =>
+    harness.apiCall.mock.calls.map(([, path]) => String(path).split("?")[0]);
+  const shown = (items: Array<{ gameId: string }>) =>
+    items.map((row) => row.gameId).sort();
+
+  async function deviceCopy(accountKey: string) {
+    const db = await openDeviceCorpus(factory, { create: false });
+    if (!db) return null;
+    const copy = await readDeviceCorpus<{ gameId: string }>(db, accountKey, 100);
+    db.close();
+    return copy.kind === "stored"
+      ? { marks: copy.marks, ids: shown(copy.rows) }
+      : copy.kind;
+  }
+
+  it("keeps history on this device only when asked, then shows it first and syncs only changes", async () => {
+    serve(() => null);
+    const first = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => first.result.current.load());
+    await waitFor(() => expect(first.result.current.items).toHaveLength(3));
+    expect(first.result.current.onDevice).toBe(false);
+    expect(await factory.databases()).toEqual([]);
+
+    act(() => first.result.current.keepOnDevice());
+    await waitFor(() => expect(first.result.current.onDevice).toBe(true));
+    expect(await deviceCopy("user-a")).toEqual({
+      marks: MARKS,
+      ids: ["s-a", "s-b", "s-c"],
+    });
+    first.unmount();
+
+    let answer: ((page: unknown) => void) | undefined;
+    harness.apiCall.mockClear();
+    serve(() => new Promise((resolve) => {
+      answer = resolve;
+    }));
+    const second = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => second.result.current.load());
+    // The stored copy shows before the network answers.
+    await waitFor(() => {
+      expect(shown(second.result.current.items)).toEqual(["s-a", "s-b", "s-c"]);
+    });
+    expect(second.result.current.isLoading).toBe(false);
+    await waitFor(() => expect(answer).toBeTypeOf("function"));
+    const next = { corpusVersion: 1, watermark: "2026-10-31T11:00:00.000Z" };
+    await act(async () => {
+      answer?.({
+        items: [{ gameId: "s-b", removed: true }, game("new")],
+        nextCursor: null,
+        ...next,
+      });
+    });
+    await waitFor(() => {
+      expect(shown(second.result.current.items)).toEqual(["new", "s-a", "s-c"]);
+    });
+    expect(requested()).toEqual(["/v1/games/analysis-corpus/changes"]);
+    expect(await deviceCopy("user-a")).toEqual({
+      marks: next,
+      ids: ["new", "s-a", "s-c"],
+    });
+  });
+
+  it("falls back to a snapshot when the server asks for one, and replaces the stored copy", async () => {
+    const db = await openDeviceCorpus(factory, { create: true });
+    await saveDeviceSnapshot(db!, "user-a", [game("old")], MARKS, 100);
+    db!.close();
+    const fresh = { corpusVersion: 2, watermark: "2026-10-31T12:00:00.000Z" };
+    serve(() => ({ snapshotRequired: "corpus_version", corpusVersion: 2 }), fresh);
+
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.load());
+    await waitFor(() => {
+      expect(shown(result.current.items)).toEqual(["s-a", "s-b", "s-c"]);
+    });
+    expect(result.current.onDevice).toBe(true);
+    expect(requested()).toEqual([
+      "/v1/games/analysis-corpus/changes",
+      "/v1/games/analysis-corpus",
+      "/v1/games/analysis-corpus",
+    ]);
+    expect(await deviceCopy("user-a")).toEqual({
+      marks: fresh,
+      ids: ["s-a", "s-b", "s-c"],
+    });
+  });
+
+  it("never shows another account's stored copy, and leaves this account in memory", async () => {
+    const db = await openDeviceCorpus(factory, { create: true });
+    await saveDeviceSnapshot(db!, "user-b", [game("b-only")], MARKS, 100);
+    db!.close();
+    serve(() => null);
+
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.load());
+    await waitFor(() => {
+      expect(shown(result.current.items)).toEqual(["s-a", "s-b", "s-c"]);
+    });
+    expect(result.current.onDevice).toBe(false);
+    expect(requested()).toEqual([
+      "/v1/games/analysis-corpus",
+      "/v1/games/analysis-corpus",
+    ]);
+    expect(await deviceCopy("user-a")).toBe("absent");
   });
 });

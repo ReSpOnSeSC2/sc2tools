@@ -175,6 +175,24 @@ export function idbTransaction<R>(
   mode: IDBTransactionMode,
   work: (tx: IDBTransaction) => R,
 ): Promise<R> {
+  return idbTransactionOn(db, stores, mode, work);
+}
+
+/**
+ * `idbTransaction` for another database, whose store names the caller
+ * checks (the device copy of the analysis corpus uses it).
+ *
+ * Example:
+ *   await idbTransactionOn(db, ["accounts", "games"], "readwrite", (tx) => {
+ *     tx.objectStore("games").clear();
+ *   });
+ */
+export function idbTransactionOn<R>(
+  db: IDBDatabase,
+  stores: string | string[],
+  mode: IDBTransactionMode,
+  work: (tx: IDBTransaction) => R,
+): Promise<R> {
   return new Promise<R>((resolve, reject) => {
     let tx: IDBTransaction;
     try {
