@@ -4,7 +4,7 @@ const { gameStatsWritesFor } = require("./gameStatsWrites");
 
 const { createHash, randomUUID } = require("crypto");
 const { BSON } = require("mongodb");
-const { USER_SCOPED_COLLECTIONS } = require("./gdpr");
+const { USER_SCOPED_COLLECTIONS, chartInputFence } = require("./gdpr");
 const { stampVersion } = require("../db/schemaVersioning");
 const { COLLECTIONS } = require("../config/constants");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
@@ -270,7 +270,7 @@ class UserBackupsService {
           continue;
         }
         if (dbKey === "games") contributionChanged = true;
-        await gameWrite(dbKey === "games" ? this.userRevision : null, userId, async () => {
+        await gameWrite(chartInputFence(this.userRevision, dbKey), userId, async () => {
           if (dbKey === "games") await this.gameStatsWrites.deleteMany(statsOwner, liveBackupGamesMatch(userId), { fenceId: fence.id, assert: fence.assert });
           else await collection.deleteMany({ userId });
           if (dbKey === "games") this.gdpr.notifyGamesChanged?.(userId);
