@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -183,14 +184,12 @@ export function AnalysisGamesProvider({
     null,
   );
   const [manualRevision, setManualRevision] = useState(0);
-  const [keepRequestedFor, setKeepRequestedFor] = useState<string | null>(
-    null,
-  );
+  // Asked to keep history on this device, until a stored copy carries the
+  // choice; after that, a copy another tab cleared is not recreated here.
+  const keepRequestedFor = useRef<string | null>(null);
   const active = enabledBySurface
     || (accountKey !== null && requestedForAccount === accountKey);
   const enabled = active && accountKey !== null;
-  const keepOnDeviceRequested = accountKey !== null
-    && keepRequestedFor === accountKey;
   const [state, setState] = useState<AccountBoundAnalysisState>(() =>
     emptyAnalysisState(accountKey),
   );
@@ -205,7 +204,7 @@ export function AnalysisGamesProvider({
   }, [accountKey]);
   const keepOnDevice = useCallback(() => {
     if (!accountKey) return;
-    setKeepRequestedFor(accountKey);
+    keepRequestedFor.current = accountKey;
     load();
   }, [accountKey, load]);
   const release = useCallback(() => setRequestedForAccount(null), []);
@@ -235,7 +234,7 @@ export function AnalysisGamesProvider({
         const { syncAnalysisCorpus } = await import("./analysisCorpusSync");
         const synced = await syncAnalysisCorpus({
           accountKey,
-          keepOnDevice: keepOnDeviceRequested,
+          keepOnDevice: keepRequestedFor.current === accountKey,
           fetchPage: (path) =>
             apiCall<unknown>(getToken, path, { signal: controller.signal }),
           pageKey: (pageIndex, previousPage) =>
@@ -255,6 +254,9 @@ export function AnalysisGamesProvider({
         });
 
         if (cancelled) return;
+        if (synced.onDevice && keepRequestedFor.current === accountKey) {
+          keepRequestedFor.current = null;
+        }
         // One replacement assignment is the retention guarantee: old pages
         // and old flat arrays are not kept in an application-wide cache.
         setState(syncedState(accountKey, synced));
@@ -280,7 +282,6 @@ export function AnalysisGamesProvider({
     enabled,
     getToken,
     isLoaded,
-    keepOnDeviceRequested,
     manualRevision,
     settledRevision,
   ]);

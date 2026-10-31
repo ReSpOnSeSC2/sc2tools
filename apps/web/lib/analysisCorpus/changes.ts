@@ -2,9 +2,9 @@
  * Changed-since reads of the analysis corpus (`GET /v1/games/analysis-corpus/changes`): read every page after a
  * snapshot's or the last delta's marks, then merge the changes into the rows held so far.
  *
- * Whatever only a snapshot can resolve reads as null: the server asked for one (a changed corpus version, or a
- * watermark from before change stamps), the server predates the route (404 during a rolling deploy), the version
- * moved between pages, a page was malformed, or the delta ran longer than a snapshot would.
+ * Whatever only a snapshot can resolve reads as null: the server asked for one (a changed corpus version, corpus rules
+ * from another epoch, or a watermark from before change stamps), the server predates the route (404 during a rolling
+ * deploy), the version or epoch moved between pages, a page was malformed, or the delta ran longer than a snapshot.
  *
  * Example:
  *   const delta = await readCorpusChanges(fetchPage, marks, { limit: 2000, maxPages: 10 });
@@ -13,8 +13,11 @@
 
 export const CORPUS_CHANGES_PATH = "/v1/games/analysis-corpus/changes";
 
-/** The corpus version and watermark a snapshot's first page or a delta's last page hands back. */
-export type CorpusMarks = { corpusVersion: number; watermark: string };
+/**
+ * What a snapshot's first page or a delta's last page hands back: the owner's corpus version, the epoch of the corpus
+ * rules the rows were built under, and the watermark to ask from next.
+ */
+export type CorpusMarks = { corpusVersion: number; watermark: string; corpusEpoch: string };
 
 export type CorpusRow = { gameId: string };
 
@@ -36,17 +39,17 @@ export function isRemoval<T extends CorpusRow>(
 }
 
 /**
- * The marks on a snapshot's first page, or null from a server that sends none.
+ * The marks on a snapshot's first page, or null from a server that sends none (or none complete).
  *
  * Example:
- *   snapshotMarks({ items: [], corpusVersion: 2, watermark: "2026-10-31T00:00:00.000Z" });
+ *   snapshotMarks({ items: [], corpusVersion: 2, watermark: "2026-10-31T00:00:00.000Z", corpusEpoch: "1.0a1b" });
  */
 export function snapshotMarks(page: unknown): CorpusMarks | null {
   const marks = page as Partial<CorpusMarks> | null;
   if (!marks || typeof marks !== "object") return null;
-  const { corpusVersion, watermark } = marks;
-  return isVersion(corpusVersion) && isWatermark(watermark)
-    ? { corpusVersion, watermark }
+  const { corpusVersion, watermark, corpusEpoch } = marks;
+  return isVersion(corpusVersion) && isWatermark(watermark) && isEpoch(corpusEpoch)
+    ? { corpusVersion, watermark, corpusEpoch }
     : null;
 }
 
@@ -54,7 +57,7 @@ export function snapshotMarks(page: unknown): CorpusMarks | null {
  * Build one changes URL; the cursor stays opaque to the browser.
  *
  * Example:
- *   changesPath({ corpusVersion: 0, watermark: "2026-10-31T00:00:00.000Z" }, 2000);
+ *   changesPath({ corpusVersion: 0, watermark: "2026-10-31T00:00:00.000Z", corpusEpoch: "1.0a1b" }, 2000);
  */
 export function changesPath(
   marks: CorpusMarks,
@@ -64,6 +67,7 @@ export function changesPath(
   const query = new URLSearchParams({
     since: marks.watermark,
     corpus_version: String(marks.corpusVersion),
+    corpus_epoch: marks.corpusEpoch,
     limit: String(limit),
   });
   if (cursor) query.set("cursor", cursor);
@@ -95,7 +99,7 @@ export async function readCorpusChanges<T extends CorpusRow>(
       continue;
     }
     if (!isWatermark(watermark)) return null;
-    return { changes, marks: { corpusVersion: marks.corpusVersion, watermark }, pages: page };
+    return { changes, marks: { ...marks, watermark }, pages: page };
   }
   // More pages than a full snapshot takes: the snapshot is the cheaper read.
   return null;
@@ -150,9 +154,15 @@ function pageItems<T extends CorpusRow>(
   body: unknown,
   marks: CorpusMarks,
 ): CorpusChange<T>[] | null {
-  const page = body as { corpusVersion?: unknown; items?: unknown; snapshotRequired?: unknown } | null;
+  const page = body as {
+    corpusVersion?: unknown;
+    corpusEpoch?: unknown;
+    items?: unknown;
+    snapshotRequired?: unknown;
+  } | null;
   if (!page || typeof page !== "object" || page.snapshotRequired !== undefined) return null;
-  if (page.corpusVersion !== marks.corpusVersion || !Array.isArray(page.items)) return null;
+  if (page.corpusVersion !== marks.corpusVersion || page.corpusEpoch !== marks.corpusEpoch) return null;
+  if (!Array.isArray(page.items)) return null;
   return page.items.every(isChange) ? (page.items as CorpusChange<T>[]) : null;
 }
 
@@ -166,6 +176,10 @@ function isVersion(value: unknown): value is number {
 
 function isWatermark(value: unknown): value is string {
   return typeof value === "string" && !Number.isNaN(Date.parse(value));
+}
+
+function isEpoch(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-z.]{1,64}$/.test(value);
 }
 
 function dateValue(date: unknown): number {

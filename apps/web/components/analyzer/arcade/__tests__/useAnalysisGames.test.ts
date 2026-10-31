@@ -337,12 +337,15 @@ describe("AnalysisGamesProvider retention", () => {
 });
 
 describe("AnalysisGamesProvider device copy", () => {
-  const MARKS = { corpusVersion: 1, watermark: "2026-10-31T10:00:00.000Z" };
+  const EPOCH = "1.0123456789abcdef";
+  const MARKS = { corpusVersion: 1, watermark: "2026-10-31T10:00:00.000Z", corpusEpoch: EPOCH };
   let factory: IDBFactory;
-  const wrapper = ({ children }: { children: ReactNode }) => {
-    const providerProps = { enabled: false, refreshQuietMs: 0, children };
-    return createElement(AnalysisGamesProvider, providerProps);
-  };
+  const wrapperFor = (enabled: boolean) =>
+    function DeviceCopyProvider({ children }: { children: ReactNode }) {
+      const providerProps = { enabled, refreshQuietMs: 0, children };
+      return createElement(AnalysisGamesProvider, providerProps);
+    };
+  const wrapper = wrapperFor(false);
 
   beforeEach(() => {
     factory = new IDBFactory();
@@ -354,7 +357,10 @@ describe("AnalysisGamesProvider device copy", () => {
   });
 
   // Snapshot pages carry marks; the changes route answers with `changes`.
-  function serve(changes: (path: string) => unknown, marks = MARKS) {
+  function serve(
+    changes: (path: string) => unknown,
+    marks: Record<string, unknown> = MARKS,
+  ) {
     harness.apiCall.mockImplementation(async (_getToken, path: string) => {
       if (path.startsWith("/v1/games/analysis-corpus/changes")) {
         return await changes(path);
@@ -362,9 +368,14 @@ describe("AnalysisGamesProvider device copy", () => {
       const cursor = new URL(path, "https://example.test").searchParams.get(
         "cursor",
       );
+      const prefix = harness.userId === "user-a" ? "s" : "b";
       return cursor
-        ? { items: [game("s-c")], nextCursor: null }
-        : { items: [game("s-a"), game("s-b")], nextCursor: "next", ...marks };
+        ? { items: [game(`${prefix}-c`)], nextCursor: null }
+        : {
+            items: [game(`${prefix}-a`), game(`${prefix}-b`)],
+            nextCursor: "next",
+            ...marks,
+          };
     });
   }
 
@@ -381,6 +392,12 @@ describe("AnalysisGamesProvider device copy", () => {
     return copy.kind === "stored"
       ? { marks: copy.marks, ids: shown(copy.rows) }
       : copy.kind;
+  }
+
+  async function keepCopy(accountKey: string, ids: string[]) {
+    const db = await openDeviceCorpus(factory, { create: true });
+    await saveDeviceSnapshot(db!, accountKey, ids.map(game), MARKS, 100);
+    db!.close();
   }
 
   it("keeps history on this device only when asked, then shows it first and syncs only changes", async () => {
@@ -412,7 +429,7 @@ describe("AnalysisGamesProvider device copy", () => {
     });
     expect(second.result.current.isLoading).toBe(false);
     await waitFor(() => expect(answer).toBeTypeOf("function"));
-    const next = { corpusVersion: 1, watermark: "2026-10-31T11:00:00.000Z" };
+    const next = { ...MARKS, watermark: "2026-10-31T11:00:00.000Z" };
     await act(async () => {
       answer?.({
         items: [{ gameId: "s-b", removed: true }, game("new")],
@@ -431,11 +448,16 @@ describe("AnalysisGamesProvider device copy", () => {
   });
 
   it("falls back to a snapshot when the server asks for one, and replaces the stored copy", async () => {
-    const db = await openDeviceCorpus(factory, { create: true });
-    await saveDeviceSnapshot(db!, "user-a", [game("old")], MARKS, 100);
-    db!.close();
-    const fresh = { corpusVersion: 2, watermark: "2026-10-31T12:00:00.000Z" };
-    serve(() => ({ snapshotRequired: "corpus_version", corpusVersion: 2 }), fresh);
+    await keepCopy("user-a", ["old"]);
+    const fresh = {
+      corpusVersion: 2,
+      watermark: "2026-10-31T12:00:00.000Z",
+      corpusEpoch: EPOCH,
+    };
+    serve(
+      () => ({ snapshotRequired: "corpus_version", corpusVersion: 2, corpusEpoch: EPOCH }),
+      fresh,
+    );
 
     const { result } = renderHook(() => useAnalysisGames(), { wrapper });
     act(() => result.current.load());
@@ -455,9 +477,7 @@ describe("AnalysisGamesProvider device copy", () => {
   });
 
   it("never shows another account's stored copy, and leaves this account in memory", async () => {
-    const db = await openDeviceCorpus(factory, { create: true });
-    await saveDeviceSnapshot(db!, "user-b", [game("b-only")], MARKS, 100);
-    db!.close();
+    await keepCopy("user-b", ["b-only"]);
     serve(() => null);
 
     const { result } = renderHook(() => useAnalysisGames(), { wrapper });
@@ -471,5 +491,51 @@ describe("AnalysisGamesProvider device copy", () => {
       "/v1/games/analysis-corpus",
     ]);
     expect(await deviceCopy("user-a")).toBe("absent");
+  });
+
+  it("hides user A's stored copy at once when the account switches mid-sync", async () => {
+    await keepCopy("user-a", ["a-stored"]);
+    let answerA: ((page: unknown) => void) | undefined;
+    serve(() => new Promise((resolve) => {
+      answerA = resolve;
+    }));
+    const { result, rerender } = renderHook(() => useAnalysisGames(), {
+      wrapper: wrapperFor(true),
+    });
+    await waitFor(() => expect(shown(result.current.items)).toEqual(["a-stored"]));
+    await waitFor(() => expect(answerA).toBeTypeOf("function"));
+
+    harness.userId = "user-b";
+    rerender();
+    expect(result.current.items).toEqual([]);
+    await act(async () => {
+      answerA?.({ items: [game("a-late")], nextCursor: null, ...MARKS });
+    });
+    await waitFor(() => {
+      expect(shown(result.current.items)).toEqual(["b-a", "b-b", "b-c"]);
+    });
+    expect(result.current.onDevice).toBe(false);
+    expect(await deviceCopy("user-b")).toBe("absent");
+  });
+
+  it("does not recreate a copy that another tab cleared after it was kept", async () => {
+    serve(() => ({ items: [], nextCursor: null, ...MARKS }));
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.keepOnDevice());
+    await waitFor(() => expect(result.current.onDevice).toBe(true));
+
+    await new Promise<void>((resolve, reject) => {
+      const request = factory.deleteDatabase("sc2tools-analysis-corpus");
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+    harness.apiCall.mockClear();
+    act(() => result.current.load());
+    await waitFor(() => expect(result.current.onDevice).toBe(false));
+    expect(requested()).toEqual([
+      "/v1/games/analysis-corpus",
+      "/v1/games/analysis-corpus",
+    ]);
+    expect(await factory.databases()).toEqual([]);
   });
 });

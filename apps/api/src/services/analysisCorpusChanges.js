@@ -7,9 +7,12 @@
 // row, so history wipes and restores bump the owner's `corpusVersion`, and a client on another version must take a new
 // snapshot. `dataRev` is not a change feed. Stamps are taken when a write is issued, so the returned watermark trails
 // the first page by OVERLAP_MS, which covers commit lag and clock skew; rows near the watermark may come back twice.
+// Every answer also carries the corpus epoch (slice AC3): a copy built under other corpus rules is replaced by a
+// snapshot, never updated row by row.
+const crypto = require("crypto");
 const { ObjectId } = require("mongodb");
-const { ANALYSIS_GAME_PROJECTION, serializeAnalysisGame } = require("./games");
-const { isStatsGame } = require("../util/gameVisibility");
+const { ANALYSIS_GAME_PROJECTION, GamesService, serializeAnalysisGame } = require("./games");
+const { STATS_GAME_MATCH, isLiveGame, isStatsGame } = require("../util/gameVisibility");
 const { LIMITS } = require("../config/constants");
 
 const OVERLAP_MS = 5 * 60 * 1000;
@@ -21,6 +24,12 @@ const STAMP_FLOOR_GUARD_MS = 7 * 60 * 1000;
 const FUTURE_SKEW_MS = 60 * 1000;
 const MEMBERSHIP = Object.freeze({ updatedAt: 1, _deleted: 1, _deletionPending: 1, excluded: 1, isResumedFromReplay: 1 });
 const PROJECTION = Object.freeze({ ...ANALYSIS_GAME_PROJECTION, ...MEMBERSHIP });
+// Raise for a corpus rule change the epoch's digest cannot see, such as a helper the serializer calls.
+const CORPUS_RULES_REVISION = 1;
+// What a corpus row holds and which games belong: the projection, the membership filters, the serializer and the two
+// reads. It moves whenever they do, so a device copy built under other rules takes a snapshot.
+const CORPUS_EPOCH = corpusEpoch(CORPUS_RULES_REVISION, [ANALYSIS_GAME_PROJECTION, STATS_GAME_MATCH, MEMBERSHIP],
+  [serializeAnalysisGame, isLiveGame, isStatsGame, changeItem, GamesService.prototype.listAnalysisCorpus]);
 
 class AnalysisCorpusChanges {
   /** @param {import('../db/connect').DbContext} db @param {{now?: () => number}} [opts] */
@@ -52,30 +61,29 @@ class AnalysisCorpusChanges {
     return this.floor;
   }
 
-  /** What a snapshot's first page tells the client to keep: its corpus version and the watermark to ask from next.
-   * Taken before the page is read, so the watermark never passes a row the snapshot missed.
-   * @param {string} userId @returns {Promise<{corpusVersion: number, watermark: string}>} */
+  /** What a snapshot's first page tells the client to keep: its corpus version and epoch, and the watermark to ask from
+   * next. Taken before the page is read, so the watermark never passes a row the snapshot missed.
+   * @param {string} userId @returns {Promise<{corpusVersion: number, watermark: string, corpusEpoch: string}>} */
   async snapshotMarks(userId) {
-    return { corpusVersion: await this.corpusVersion(userId), watermark: new Date(this.now() - OVERLAP_MS).toISOString() };
+    return { corpusVersion: await this.corpusVersion(userId), watermark: new Date(this.now() - OVERLAP_MS).toISOString(),
+      corpusEpoch: CORPUS_EPOCH };
   }
 
   /** Validates a changes query before it takes the corpus lane or touches the database.
    * @param {Record<string, unknown>} query */
   parse(query) {
     return { since: parseSince(query.since, this.now()), clientVersion: parseVersion(query.corpus_version),
-      cursor: decodeChangesCursor(query.cursor), limit: clampLimit(Number.parseInt(String(query.limit ?? ""), 10)) };
+      clientEpoch: parseEpoch(query.corpus_epoch), cursor: decodeChangesCursor(query.cursor),
+      limit: clampLimit(Number.parseInt(String(query.limit ?? ""), 10)) };
   }
 
   /** One page of rows stamped after `since`, oldest stamp first.
    * @param {string} userId @param {ReturnType<AnalysisCorpusChanges['parse']>} input @param {AbortSignal} [signal] */
   async listChanges(userId, input, signal) {
-    const { since, clientVersion, cursor, limit } = input;
+    const { since, cursor, limit } = input;
     const [version, floor] = await Promise.all([this.corpusVersion(userId), this.stampFloor()]);
-    if (clientVersion !== version) return { snapshotRequired: "corpus_version", corpusVersion: version };
-    // A snapshot taken at or after deltasFrom has a watermark on or past the floor.
-    if (since.getTime() < floor.getTime()) {
-      return { snapshotRequired: "before_stamps", corpusVersion: version, deltasFrom: new Date(floor.getTime() + OVERLAP_MS).toISOString() };
-    }
+    const refusal = snapshotRequired(input, version, floor);
+    if (refusal) return refusal;
     const start = cursor ? cursor.start : this.now();
     /** @type {Record<string, any>} */
     const filter = { userId, updatedAt: { $gt: since } };
@@ -88,8 +96,31 @@ class AnalysisCorpusChanges {
       nextCursor: more && last ? encodeChangesCursor(start, last.updatedAt, last._id) : null,
       watermark: more ? null : new Date(Math.max(since.getTime(), start - OVERLAP_MS)).toISOString(),
       corpusVersion: version,
+      corpusEpoch: CORPUS_EPOCH,
     };
   }
+}
+
+/** The answer that sends a client to a snapshot, or null when its marks can be brought up to date.
+ * @param {{since: Date, clientVersion: number, clientEpoch: string}} input @param {number} version @param {Date} floor */
+function snapshotRequired({ since, clientVersion, clientEpoch }, version, floor) {
+  const marks = { corpusVersion: version, corpusEpoch: CORPUS_EPOCH };
+  if (clientEpoch !== CORPUS_EPOCH) return { snapshotRequired: "corpus_epoch", ...marks };
+  if (clientVersion !== version) return { snapshotRequired: "corpus_version", ...marks };
+  // A snapshot taken at or after deltasFrom has a watermark on or past the floor.
+  if (since.getTime() < floor.getTime()) {
+    return { snapshotRequired: "before_stamps", ...marks, deltasFrom: new Date(floor.getTime() + OVERLAP_MS).toISOString() };
+  }
+  return null;
+}
+
+/** A short digest of the corpus rules and the code that applies them, so the epoch moves whenever they do.
+ * @param {number} revision @param {unknown[]} rules @param {Function[]} code @returns {string} */
+function corpusEpoch(revision, rules, code) {
+  const digest = crypto.createHash("sha256").update(JSON.stringify(rules));
+  // Line endings depend on the checkout, not the rules.
+  for (const fn of code) digest.update(`\n${fn.toString().replace(/\r\n/g, "\n")}`);
+  return `${revision}.${digest.digest("hex").slice(0, 16)}`;
 }
 
 /** @param {Record<string, any>} row */
@@ -120,6 +151,12 @@ function parseVersion(raw) {
   const version = typeof raw === "string" && /^\d{1,15}$/.test(raw) ? Number(raw) : typeof raw === "number" ? raw : Number.NaN;
   if (!Number.isSafeInteger(version) || version < 0) throw badRequest("corpus_version must be the snapshot's corpusVersion");
   return version;
+}
+
+/** @param {unknown} raw @returns {string} */
+function parseEpoch(raw) {
+  if (typeof raw !== "string" || !/^[0-9a-z.]{1,64}$/.test(raw)) throw badRequest("corpus_epoch must be the snapshot's corpusEpoch");
+  return raw;
 }
 
 /** @param {unknown} raw @returns {number} */
@@ -157,4 +194,4 @@ function changesCursorFields(parsed) {
 /** @param {string} message */
 function badRequest(message) { return Object.assign(new Error(message), { status: 400, code: "bad_request" }); }
 
-module.exports = { AnalysisCorpusChanges, OVERLAP_MS, STAMP_FLOOR_ID, STAMP_FLOOR_GUARD_MS };
+module.exports = { AnalysisCorpusChanges, CORPUS_EPOCH, OVERLAP_MS, STAMP_FLOOR_ID, STAMP_FLOOR_GUARD_MS, corpusEpoch };

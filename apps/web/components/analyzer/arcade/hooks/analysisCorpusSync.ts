@@ -6,12 +6,11 @@ import {
   type CorpusMarks,
 } from "@/lib/analysisCorpus/changes";
 import {
-  clearDeviceCorpus,
   mergeDeviceDelta,
   openDeviceCorpus,
   readDeviceCorpus,
+  resetDeviceCorpus,
   saveDeviceSnapshot,
-  type DeviceCorpus,
 } from "@/lib/analysisCorpus/deviceStore";
 import { defaultIndexedDb } from "@/lib/instant/idb";
 import type { AnalysisApiGame, AnalysisGamesPage } from "./useAnalysisGames";
@@ -24,9 +23,11 @@ import type { AnalysisApiGame, AnalysisGamesPage } from "./useAnalysisGames";
  * keep one) this is the plain snapshot read it always was. With one, the
  * stored rows show first, a changed-since read brings them up to date, and
  * the rows and new marks are written back in one transaction. Whatever only a
- * snapshot can resolve falls back to one, which then replaces the device copy.
- * Device storage is best effort: when IndexedDB is missing, refused or full,
- * the corpus still loads, in memory only.
+ * snapshot can resolve falls back to one, which then replaces the device copy;
+ * a copy a snapshot could not replace is dropped (keeping the account's
+ * choice), so it is never shown again. Device storage is best effort: when
+ * IndexedDB is missing, refused, slow or full, the corpus still loads, in
+ * memory only.
  */
 
 /** One full snapshot read, with the marks its first page carried (null from a server that sends none). */
@@ -55,8 +56,6 @@ export type CorpusSyncInput = {
   pageSize: number;
   maxPages: number;
 };
-
-const UNREADABLE: DeviceCorpus<AnalysisApiGame> = { kind: "unreadable" };
 
 /**
  * Example:
@@ -117,14 +116,14 @@ async function openDevice(
 ): Promise<{ db: IDBDatabase; stored: StoredCorpus | null } | null> {
   const db = await openDeviceCorpus(defaultIndexedDb(), { create: input.keepOnDevice }).catch(() => null);
   if (!db) return null;
-  const stored = await readDeviceCorpus<AnalysisApiGame>(db, input.accountKey, input.maxRows)
-    .catch(() => UNREADABLE);
-  if (stored.kind === "absent" && !input.keepOnDevice) {
+  // A read that fails says nothing about whose copy is here, so only an account that asked to keep one replaces it.
+  const stored = await readDeviceCorpus<AnalysisApiGame>(db, input.accountKey, input.maxRows).catch(() => null);
+  if ((stored === null || stored.kind === "absent") && !input.keepOnDevice) {
     // Nothing kept for this account, and it has not asked to keep any: memory only, as before.
     db.close();
     return null;
   }
-  if (stored.kind !== "stored") return { db, stored: null };
+  if (stored?.kind !== "stored") return { db, stored: null };
   const items = newestFirst(stored.rows);
   return { db, stored: { items, pagesFetched: 0, hitCorpusLimit: false, marks: stored.marks, onDevice: true } };
 }
@@ -152,13 +151,11 @@ async function storeSnapshot(
   snapshot: CorpusSnapshot,
   input: CorpusSyncInput,
 ): Promise<boolean> {
-  if (snapshot.hitCorpusLimit) {
-    // Past the ceiling a copy could not be brought up to date exactly, so none is kept.
-    await clearDeviceCorpus(db).catch(() => undefined);
-    return false;
-  }
-  // A server from before changed-since reads sends no marks; the stored copy and its own marks stay valid.
-  if (!snapshot.marks) return false;
-  return saveDeviceSnapshot(db, input.accountKey, snapshot.items, snapshot.marks, input.maxRows)
-    .then(() => true, () => false);
+  // Past the ceiling, or without marks (a server from before changed-since reads), a copy could not be brought up to
+  // date exactly. A save that fails (storage full) rolls back to the copy this snapshot was meant to replace.
+  const saved = !snapshot.hitCorpusLimit && snapshot.marks !== null
+    && await saveDeviceSnapshot(db, input.accountKey, snapshot.items, snapshot.marks, input.maxRows)
+      .then(() => true, () => false);
+  if (!saved) await resetDeviceCorpus(db, input.accountKey).catch(() => undefined);
+  return saved;
 }
