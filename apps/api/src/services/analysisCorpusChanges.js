@@ -29,8 +29,11 @@ const PROJECTION = Object.freeze({ ...ANALYSIS_GAME_PROJECTION, ...MEMBERSHIP })
 const CORPUS_RULES_REVISION = 1;
 // What a corpus row holds and which games belong: the projection, the membership filters, the serializer and the two
 // reads. It moves whenever they do, so a device copy built under other rules takes a snapshot.
-const CORPUS_EPOCH = corpusEpoch(CORPUS_RULES_REVISION, [ANALYSIS_GAME_PROJECTION, STATS_GAME_MATCH, MEMBERSHIP],
-  [serializeAnalysisGame, isLiveGame, isStatsGame, changeItem, GamesService.prototype.listAnalysisCorpus]);
+const CORPUS_EPOCH_INPUTS = Object.freeze({
+  rules: Object.freeze([ANALYSIS_GAME_PROJECTION, STATS_GAME_MATCH, MEMBERSHIP]),
+  code: Object.freeze([serializeAnalysisGame, isLiveGame, isStatsGame, changeItem, GamesService.prototype.listAnalysisCorpus]),
+});
+const CORPUS_EPOCH = corpusEpoch(CORPUS_RULES_REVISION, CORPUS_EPOCH_INPUTS.rules, CORPUS_EPOCH_INPUTS.code);
 
 class AnalysisCorpusChanges {
   /** @param {import('../db/connect').DbContext} db @param {{now?: () => number}} [opts] */
@@ -116,7 +119,7 @@ function snapshotRequired({ since, clientVersion, clientEpoch }, version, floor)
 }
 
 /** A short digest of the corpus rules and the code that applies them, so the epoch moves whenever they do.
- * @param {number} revision @param {unknown[]} rules @param {Function[]} code @returns {string} */
+ * @param {number} revision @param {readonly unknown[]} rules @param {readonly Function[]} code @returns {string} */
 function corpusEpoch(revision, rules, code) {
   const digest = crypto.createHash("sha256").update(JSON.stringify(rules));
   // Line endings depend on the checkout, not the rules.
@@ -195,4 +198,4 @@ function changesCursorFields(parsed) {
 /** @param {string} message */
 function badRequest(message) { return Object.assign(new Error(message), { status: 400, code: "bad_request" }); }
 
-module.exports = { AnalysisCorpusChanges, CORPUS_EPOCH, OVERLAP_MS, STAMP_FLOOR_ID, STAMP_FLOOR_GUARD_MS, corpusEpoch };
+module.exports = { AnalysisCorpusChanges, CORPUS_EPOCH, CORPUS_EPOCH_INPUTS, OVERLAP_MS, STAMP_FLOOR_ID, STAMP_FLOOR_GUARD_MS, corpusEpoch };

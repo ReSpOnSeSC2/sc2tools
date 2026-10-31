@@ -20,16 +20,18 @@ export function mayHaveDeviceCopy(accountKey: string): boolean {
 }
 
 /**
- * Name the account this browser keeps history for, or forget it with null.
+ * Name the account this browser keeps history for, or forget it with null. Returns false when a named account still
+ * would not be probed: the write was refused while reads work (storage full), so the copy could never be found.
  *
  * Example:
- *   noteDeviceCopy(accountKey);
+ *   if (!noteDeviceCopy(accountKey)) dropTheCopy();
  */
-export function noteDeviceCopy(accountKey: string | null): void {
+export function noteDeviceCopy(accountKey: string | null): boolean {
   try {
     if (accountKey) window.localStorage.setItem(DEVICE_NOTE_KEY, accountKey);
     else window.localStorage.removeItem(DEVICE_NOTE_KEY);
   } catch {
-    // Storage is refused: the provider probes instead.
+    // A refused write is harmless while reads are refused too: then the provider always probes.
   }
+  return accountKey === null || mayHaveDeviceCopy(accountKey);
 }

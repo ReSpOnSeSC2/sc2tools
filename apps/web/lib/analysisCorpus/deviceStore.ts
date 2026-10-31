@@ -41,15 +41,20 @@ type AccountRecord = { accountKey: string; schema: number; marks: CorpusMarks | 
 
 /**
  * Open the device corpus, or resolve null when IndexedDB is missing, refused or slower than `deadlineMs`; a
- * connection that arrives after the deadline is closed. With `create: false` it only probes, and resolves null without
- * creating anything when nothing was ever stored.
+ * connection that arrives after the deadline is closed. With `create: false` it only probes: when nothing was ever
+ * stored it creates nothing, calls `onAbsent` and resolves null.
  *
  * Example:
  *   const db = await openDeviceCorpus(defaultIndexedDb(), { create: true });
  */
 export function openDeviceCorpus(
   factory: IDBFactory | undefined,
-  { create, deadlineMs = DEVICE_CORPUS_OPEN_DEADLINE_MS }: { create: boolean; deadlineMs?: number },
+  { create, deadlineMs = DEVICE_CORPUS_OPEN_DEADLINE_MS, onAbsent }: {
+    create: boolean;
+    deadlineMs?: number;
+    /** Called when the probe finds no database at all (not when IndexedDB is refused or slow). */
+    onAbsent?: () => void;
+  },
 ): Promise<IDBDatabase | null> {
   if (!factory) return Promise.resolve(null);
   return new Promise((resolve, reject) => {
@@ -91,7 +96,14 @@ export function openDeviceCorpus(
     };
     request.onerror = (event) => {
       event.preventDefault();
-      settle(() => (absent ? resolve(null) : reject(request.error ?? new Error("device corpus open failed"))));
+      settle(() => {
+        if (!absent) {
+          reject(request.error ?? new Error("device corpus open failed"));
+          return;
+        }
+        onAbsent?.();
+        resolve(null);
+      });
     };
   });
 }

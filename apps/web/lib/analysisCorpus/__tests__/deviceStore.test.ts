@@ -37,14 +37,17 @@ async function view(db: IDBDatabase, accountKey = "user-a", maxRows = 10) {
 describe("openDeviceCorpus", () => {
   it("probes without creating anything, and has nothing to open without IndexedDB", async () => {
     const factory = new IDBFactory();
-    await expect(openDeviceCorpus(factory, { create: false })).resolves.toBeNull();
+    const onAbsent = vi.fn();
+    await expect(openDeviceCorpus(factory, { create: false, onAbsent })).resolves.toBeNull();
+    expect(onAbsent).toHaveBeenCalledTimes(1);
     // A probe that had created the database would let a second probe open it.
     await expect(openDeviceCorpus(factory, { create: false })).resolves.toBeNull();
     expect(await factory.databases()).toEqual([]);
     await expect(openDeviceCorpus(undefined, { create: true })).resolves.toBeNull();
 
     (await stored(factory)).close();
-    const probed = await openDeviceCorpus(factory, { create: false });
+    const probed = await openDeviceCorpus(factory, { create: false, onAbsent });
+    expect(onAbsent).toHaveBeenCalledTimes(1);
     expect([...(probed?.objectStoreNames ?? [])].sort()).toEqual(["accounts", "games"]);
     probed?.close();
     expect((await factory.databases()).map((db) => db.name)).toEqual([DEVICE_CORPUS_DB_NAME]);
@@ -73,6 +76,9 @@ describe("device corpus storage", () => {
     expect(await view(db)).toBe("absent");
     expect(await view(db, "user-b")).toEqual({ marks: NEXT, rows: ["b1:Victory"] });
     await expect(saveDeviceSnapshot(db, "user-b", [game("x"), game("y")], MARKS, 1)).rejects.toThrow();
+    await saveDeviceSnapshot(db, "user-b", [game("x"), game("y")], MARKS, 2);
+    expect(await view(db, "user-b", 2)).toEqual({ marks: MARKS, rows: ["x:Victory", "y:Victory"] });
+    await saveDeviceSnapshot(db, "user-b", [game("b1")], NEXT, 10);
     expect(await view(db, "user-b")).toEqual({ marks: NEXT, rows: ["b1:Victory"] });
     db.close();
   });

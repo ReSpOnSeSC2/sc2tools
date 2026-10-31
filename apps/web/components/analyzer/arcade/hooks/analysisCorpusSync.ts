@@ -103,11 +103,12 @@ export async function syncAnalysisCorpus(input: CorpusSyncInput): Promise<Corpus
   }
 }
 
-/** Marks from the first page, kept only when every page came from the same corpus epoch. */
+/** Marks from the first page, kept only when every fetched page came from the same corpus epoch. */
 function checkedSnapshot(raw: RawAnalysisSnapshot): CorpusSnapshot {
   const marks = snapshotMarks(raw.firstPage);
   // Pages served under another epoch (a deploy that changed the corpus rules) cannot be kept as one copy.
-  const oneEpoch = marks !== null && raw.pageEpochs.every((epoch) => epoch === marks.corpusEpoch);
+  const oneEpoch = marks !== null && raw.pageEpochs.length === raw.pagesFetched
+    && raw.pageEpochs.every((epoch) => epoch === marks.corpusEpoch);
   return { items: raw.items, pagesFetched: raw.pagesFetched, hitCorpusLimit: raw.hitCorpusLimit, marks: oneEpoch ? marks : null };
 }
 
@@ -115,13 +116,15 @@ function checkedSnapshot(raw: RawAnalysisSnapshot): CorpusSnapshot {
 async function openDevice(
   input: CorpusSyncInput,
 ): Promise<{ db: IDBDatabase; stored: StoredCorpus | null } | null> {
-  const db = await openDeviceCorpus(defaultIndexedDb(), { create: input.keepOnDevice }).catch(() => null);
+  // A note naming an account whose database is gone is forgotten, so its later loads skip the device again.
+  const forget = () => { if (mayHaveDeviceCopy(input.accountKey)) noteDeviceCopy(null); };
+  const db = await openDeviceCorpus(defaultIndexedDb(), { create: input.keepOnDevice, onAbsent: forget }).catch(() => null);
   if (!db) return null;
   // A read that fails says nothing about whose copy is here, so only an account that asked to keep one replaces it.
   const stored = await readDeviceCorpus<AnalysisApiGame>(db, input.accountKey, input.maxRows).catch(() => null);
   if ((stored === null || stored.kind === "absent") && !input.keepOnDevice) {
     // Nothing kept for this account, and it has not asked to keep any: memory only, as before.
-    if (stored?.kind === "absent" && mayHaveDeviceCopy(input.accountKey)) noteDeviceCopy(null);
+    if (stored?.kind === "absent") forget();
     db.close();
     return null;
   }
@@ -164,10 +167,11 @@ async function storeSnapshot(
   const saved = !snapshot.hitCorpusLimit && snapshot.marks !== null
     && await saveDeviceSnapshot(db, input.accountKey, snapshot.items, snapshot.marks, input.maxRows)
       .then(() => true, () => false);
+  if (!saved) input.signal.throwIfAborted();
   const outcome = saved ? "saved" : (await dropCopy(db, input.accountKey)) ? "dropped" : "stale";
-  // The device now records this account's choice, with or without a usable copy.
-  if (outcome !== "stale") noteDeviceCopy(input.accountKey);
-  return outcome;
+  // The device now records this account's choice, with or without a usable copy. A choice this browser cannot note
+  // would never be found again, so that copy goes rather than stay orphaned.
+  return outcome === "stale" || noteDeviceCopy(input.accountKey) ? outcome : "stale";
 }
 
 function dropCopy(db: IDBDatabase, accountKey: string): Promise<boolean> {

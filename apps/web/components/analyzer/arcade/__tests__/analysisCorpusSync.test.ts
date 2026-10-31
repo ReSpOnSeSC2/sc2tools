@@ -1,6 +1,7 @@
 import { IDBDatabase as FakeIDBDatabase, IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { idbTransactionOn } from "@/lib/instant/idb";
+import { mayHaveDeviceCopy, noteDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
 import {
   openDeviceCorpus,
   readDeviceCorpus,
@@ -18,9 +19,25 @@ const NEXT = { ...MARKS, watermark: "2026-10-31T11:00:00.000Z" };
 const REFUSED = { snapshotRequired: "corpus_version", corpusVersion: 2, corpusEpoch: EPOCH };
 let factory: IDBFactory;
 
+// Lets a test hold a device save while it checks what already happened.
+const saveGate = vi.hoisted(() => ({ hold: null as null | (() => Promise<void>) }));
+
+vi.mock("@/lib/analysisCorpus/deviceStore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/analysisCorpus/deviceStore")>();
+  return {
+    ...actual,
+    saveDeviceSnapshot: async (...args: Parameters<typeof actual.saveDeviceSnapshot>) => {
+      await saveGate.hold?.();
+      return actual.saveDeviceSnapshot(...args);
+    },
+  };
+});
+
 beforeEach(() => {
   factory = new IDBFactory();
   vi.stubGlobal("indexedDB", factory);
+  window.localStorage.clear();
+  saveGate.hold = null;
 });
 
 afterEach(() => {
@@ -59,9 +76,12 @@ function input(
 }
 
 async function keep(rows: Array<string | AnalysisApiGame>, marks = MARKS, accountKey = "user-a") {
+  const hold = saveGate.hold;
+  saveGate.hold = null;
   const db = await openDeviceCorpus(factory, { create: true });
   await saveDeviceSnapshot(db!, accountKey, rows.map((row) => (typeof row === "string" ? game(row) : row)), marks, 100);
   db!.close();
+  saveGate.hold = hold;
 }
 
 async function copy(accountKey = "user-a") {
@@ -83,6 +103,12 @@ describe("syncAnalysisCorpus", () => {
     const synced = await syncAnalysisCorpus(sync);
     expect([synced.onDevice, synced.kept, ids(synced.items)]).toEqual([false, false, ["a"]]);
     expect(sync.onSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("creates nothing on the device for an account that did not ask to keep a copy", async () => {
+    const synced = await syncAnalysisCorpus(input(null, { rows: ["a"] }));
+    expect([synced.onDevice, synced.kept, ids(synced.items)]).toEqual([false, false, ["a"]]);
+    expect(await factory.databases()).toEqual([]);
   });
 
   it("shows the stored copy newest first before bringing it up to date", async () => {
@@ -140,10 +166,16 @@ describe("syncAnalysisCorpus", () => {
     expect(await copy()).toEqual({ marks: MARKS, ids: ["s2"] });
   });
 
-  it("never keeps a snapshot whose pages came from two corpus epochs", async () => {
+  it("never keeps a snapshot whose pages came from two corpus epochs, or did not all report one", async () => {
     const synced = await syncAnalysisCorpus(input(null, { rows: ["s1", "s2"], pageEpochs: [EPOCH, "2.fedcba9876543210"] },
       { keepOnDevice: true }));
     expect([synced.onDevice, synced.marks, synced.kept]).toEqual([false, null, true]);
+    expect(await copy()).toBe("kept");
+    const short = input(null, { rows: ["s1", "s2"], pageEpochs: [EPOCH] }, { keepOnDevice: true });
+    short.readSnapshot.mockImplementation(async () => ({
+      items: [game("s1"), game("s2")], pagesFetched: 2, hitCorpusLimit: false, firstPage: MARKS, pageEpochs: [EPOCH],
+    }));
+    expect((await syncAnalysisCorpus(short)).marks).toBeNull();
     expect(await copy()).toBe("kept");
   });
 
@@ -193,8 +225,99 @@ describe("syncAnalysisCorpus", () => {
     expect(await copy()).toEqual({ marks: MARKS, ids: ["a", "b"] });
   });
 
+  it("forgets a note that names a database which is gone", async () => {
+    noteDeviceCopy("user-a");
+    const synced = await syncAnalysisCorpus(input(null, { rows: ["a"] }));
+    expect([synced.onDevice, mayHaveDeviceCopy("user-a")]).toEqual([false, false]);
+    expect(await factory.databases()).toEqual([]);
+  });
+
+  it("stops before dropping a refused copy once its run is cancelled", async () => {
+    await keep(["a"]);
+    const run = new AbortController();
+    const sync = input(null, {}, { signal: run.signal });
+    sync.fetchPage.mockImplementation(async () => {
+      run.abort();
+      return REFUSED;
+    });
+    await expect(syncAnalysisCorpus(sync)).rejects.toMatchObject({ name: "AbortError" });
+    expect(sync.readSnapshot).not.toHaveBeenCalled();
+    expect(await copy()).toEqual({ marks: MARKS, ids: ["a"] });
+  });
+
+  it("stops before saving a snapshot once its run is cancelled", async () => {
+    const run = new AbortController();
+    const sync = input(null, { rows: ["s1"] }, { keepOnDevice: true, signal: run.signal });
+    const read = sync.readSnapshot.getMockImplementation()!;
+    sync.readSnapshot.mockImplementation(async () => {
+      run.abort();
+      return read();
+    });
+    await expect(syncAnalysisCorpus(sync)).rejects.toMatchObject({ name: "AbortError" });
+    expect(await copy()).toBe("absent");
+  });
+
+  it("stops before a failed save's drop once its run is cancelled", async () => {
+    await keep(["b-only"], MARKS, "user-b");
+    const run = new AbortController();
+    let release: (() => void) | undefined;
+    saveGate.hold = () => new Promise<void>((resolve) => { release = resolve; });
+    const unstorable = { ...game("a1"), detail: () => undefined } as unknown as AnalysisApiGame;
+    const pending = syncAnalysisCorpus(input(null, { rows: [unstorable] }, { keepOnDevice: true, signal: run.signal }));
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    run.abort();
+    release?.();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(await copy("user-b")).toEqual({ marks: MARKS, ids: ["b-only"] });
+  });
+
+  it("deletes the database when a refused copy can be neither dropped nor replaced and its snapshot fails", async () => {
+    await keep(["pre-wipe"]);
+    const transaction = FakeIDBDatabase.prototype.transaction;
+    vi.spyOn(FakeIDBDatabase.prototype, "transaction").mockImplementation(function (this: IDBDatabase, ...args) {
+      if (args[1] === "readwrite") throw new Error("storage full");
+      return transaction.apply(this, args as Parameters<typeof transaction>);
+    });
+    const busy = Object.assign(new Error("busy"), { status: 503 });
+    await expect(syncAnalysisCorpus(input(REFUSED, busy))).rejects.toBe(busy);
+    vi.restoreAllMocks();
+    for (let tries = 0; tries < 50 && (await factory.databases()).length > 0; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(await factory.databases()).toEqual([]);
+  });
+
+  it("shows a fetched snapshot while its save is still running", async () => {
+    let release: (() => void) | undefined;
+    saveGate.hold = () => new Promise<void>((resolve) => { release = resolve; });
+    const sync = input(null, { rows: ["s1"] }, { keepOnDevice: true });
+    const pending = syncAnalysisCorpus(sync);
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    expect(ids(sync.onSnapshot.mock.calls[0]?.[0]?.items ?? [])).toEqual(["s1"]);
+    release?.();
+    expect((await pending).onDevice).toBe(true);
+    expect(await copy()).toEqual({ marks: MARKS, ids: ["s1"] });
+  });
+
+  it("keeps no copy that this browser cannot note", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("full", "QuotaExceededError");
+    });
+    const synced = await syncAnalysisCorpus(input(null, { rows: ["s1"] }, { keepOnDevice: true }));
+    expect([synced.onDevice, synced.kept]).toEqual([false, false]);
+    vi.restoreAllMocks();
+    for (let tries = 0; tries < 50 && (await factory.databases()).length > 0; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(await factory.databases()).toEqual([]);
+  });
+
   it("never lets a failed read replace another account's copy unless this account asked to keep one", async () => {
     await keep(["b-only"], MARKS, "user-b");
+    const plain = await syncAnalysisCorpus(input(null, { rows: ["a1"] }));
+    expect([plain.onDevice, plain.kept]).toEqual([false, false]);
+    expect(await copy("user-b")).toEqual({ marks: MARKS, ids: ["b-only"] });
+
     const failRead = () => vi.spyOn(FakeIDBDatabase.prototype, "transaction").mockImplementationOnce(() => {
       throw new Error("read failed");
     });
