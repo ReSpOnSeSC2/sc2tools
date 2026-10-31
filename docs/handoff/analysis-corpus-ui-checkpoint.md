@@ -186,6 +186,12 @@ same tree). The receipt is
   - All 1,052 web test files pass with one isolated worker at a time:
     10,308 cases, with 1 skipped by the suites themselves.
 - **API.** Unchanged by AC5.
+- **After the receipt.** CI at the PR's first head failed one case:
+  `DailyPulse.carousel.test.tsx` drove the carousel's observer before React
+  had run the effect that creates it, which the on-demand selection made
+  possible (cards now render outside `act()`). The next commit only makes
+  that test wait for the observer; no application source changed, and CI at
+  the PR's final head is the merge gate.
 - **Mutation.** 25 of 25 deliberate regressions are killed in AC5's suites.
   They ran at `e682311e`, before the privacy disclosure; every file they mutate
   or run is byte-identical at the tested commit, and the receipt checks that.

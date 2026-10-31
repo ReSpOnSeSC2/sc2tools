@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DailyPulse } from "../DailyPulse";
 import { dailyPulseHref } from "@/lib/dailyPulseNavigation";
@@ -23,6 +23,8 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 it("updates live position through IntersectionObserver and scrolls one card with reduced motion and keyboard", async () => {
   render(<DailyPulse hrefForCard={card => dailyPulseHref(card, "filters=1&race=P")} />);
   const root = await screen.findByRole("region", { name: "Daily Pulse insights" });
+  // The cards render once the selection loads, outside act(); wait for the carousel's observer effect too.
+  await waitFor(() => expect(observed).toHaveLength(4));
   Object.defineProperties(root, { clientWidth: { value: 500 }, scrollWidth: { value: 1168 } });
   const scrollTo = vi.fn(({ left }: ScrollToOptions) => { root.scrollLeft = Math.min(668, left ?? 0); fireEvent.scroll(root); }); Object.defineProperty(root, "scrollTo", { value: scrollTo, configurable: true });
   observed.forEach((el, index) => { Object.defineProperty(el, "offsetLeft", { value: index * 292 }); el.getBoundingClientRect = () => ({ left: index * 292 - root.scrollLeft }) as DOMRect; });
