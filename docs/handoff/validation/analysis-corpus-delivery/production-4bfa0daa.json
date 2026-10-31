@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "status": "DELIVERED_EXACT_SOURCE_DEPLOYED_SIGNED_IN_ACCEPTANCE_NOT_PERFORMED",
+  "pullRequests": [
+    {
+      "number": 840,
+      "slice": "AC1: stamp updatedAt on every analysis-corpus games writer and add the userId/updatedAt index",
+      "testedHead": "8d595bcacf02364783c3d373cb99cd6486c35635",
+      "mergeCommit": "901be4608bf6f433586ce02b4d0cf12788a5b0be",
+      "mergedAt": "2026-10-31T15:53:35Z",
+      "exactHeadChecks": {
+        "Lint + typecheck + test (apps/api)": {
+          "conclusion": "success",
+          "run": 41193545733,
+          "job": 124515041135
+        },
+        "Vercel": {
+          "conclusion": "success"
+        },
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        }
+      }
+    },
+    {
+      "number": 841,
+      "slice": "AC2: changed-since reads of the analysis corpus with removals, a corpus version and an epoch",
+      "testedHead": "aa1b7330f4ba4a77064ac0e8d9e80a76e3b737a5",
+      "mergeCommit": "d496e3eae088d8688a87a98e286114d2e5f0d577",
+      "mergedAt": "2026-10-31T15:53:55Z",
+      "exactHeadChecks": {
+        "Lint + typecheck + test (apps/api)": {
+          "conclusion": "success",
+          "run": 41193569504,
+          "job": 124515112240
+        },
+        "Vercel": {
+          "conclusion": "success"
+        },
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        }
+      }
+    },
+    {
+      "number": 842,
+      "slice": "AC3: keep the analysis corpus on the device (bounded IndexedDB storage, atomic delta merge, snapshot fallback)",
+      "testedHead": "4e779f16a3d100bef6faa6d94a9248897f02e51f",
+      "mergeCommit": "1c7c197448671860f5333853c0440a3a0392ccca",
+      "mergedAt": "2026-10-31T15:54:17Z",
+      "exactHeadChecks": {
+        "Lint + typecheck + test (apps/api)": {
+          "conclusion": "success",
+          "run": 41193733114,
+          "job": 124515594649
+        },
+        "Pytest (apps/replay-engine)": {
+          "conclusion": "success",
+          "run": 41193733067,
+          "job": 124515594532
+        },
+        "Lint + typecheck + test (apps/web)": {
+          "conclusion": "success",
+          "run": 41193733011,
+          "job": 124515594309
+        },
+        "Agent core tests (Windows)": {
+          "conclusion": "success",
+          "run": 41193733067,
+          "job": 124515594621
+        },
+        "Responsive e2e smoke (public pages)": {
+          "conclusion": "success",
+          "run": 41193733011,
+          "job": 124515594157
+        },
+        "Agent ui tests (Windows)": {
+          "conclusion": "success",
+          "run": 41193733067,
+          "job": 124515594685
+        },
+        "Instant Analysis parity (CPython + Pyodide)": {
+          "conclusion": "success",
+          "run": 41193733067,
+          "job": 124515594625
+        },
+        "Pytest (apps/agent, Windows)": {
+          "conclusion": "success",
+          "run": 41193733067,
+          "job": 124521974868
+        },
+        "Vercel": {
+          "conclusion": "success"
+        },
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        }
+      }
+    },
+    {
+      "number": 844,
+      "slice": "AC4: clear the analysis corpus kept on the device on sign-out, account switch, Delete history, restore and account deletion",
+      "testedHead": "8a34b7def8e7596196c6ec09fbe9c49b4d06e6fa",
+      "mergeCommit": "1d2353ccc489fb0abc1a80f8cac50786e33f65bb",
+      "mergedAt": "2026-10-31T19:33:41Z",
+      "exactHeadChecks": {
+        "Lint + typecheck + test (apps/web)": {
+          "conclusion": "success",
+          "run": 41229376919,
+          "job": 124620145915
+        },
+        "Responsive e2e smoke (public pages)": {
+          "conclusion": "success",
+          "run": 41229376919,
+          "job": 124620145688
+        },
+        "Vercel": {
+          "conclusion": "success"
+        },
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        }
+      }
+    },
+    {
+      "number": 848,
+      "slice": "AC5: the history-on-this-device UI (one-time gate, update and keep footer, Settings count, size and Clear, Help)",
+      "testedHead": "b3250b3df0a3a5f6ff9aa002ed8a0d1a5c6641e6",
+      "mergeCommit": "1fe7dc8ad2b99a2192d43ff4086222131f273f98",
+      "mergedAt": "2026-10-31T22:31:54Z",
+      "exactHeadChecks": {
+        "Lint + typecheck + test (apps/web)": {
+          "conclusion": "success",
+          "run": 41245656705,
+          "job": 124668476859
+        },
+        "Responsive e2e smoke (public pages)": {
+          "conclusion": "success",
+          "run": 41245656705,
+          "job": 124668476947
+        },
+        "Vercel": {
+          "conclusion": "success"
+        },
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        }
+      }
+    }
+  ],
+  "mergeMethod": "Merge commits under the owner's request to merge all PRs, once each PR was green and reviewed. AC1 to AC3 merged as a stack, AC4 and AC5 on top after main moved; each tested head stays reachable from main.",
+  "mergedMain": "4bfa0daad1e31034fe6943bda93fec4ce7d233fd",
+  "tree": "0b5d5401dc09ce6c95fc0ba57da930ee0fc802d7",
+  "treeEqualsTopTestedHead": false,
+  "mainCI": {
+    "commit": "4bfa0daad1e31034fe6943bda93fec4ce7d233fd",
+    "workflows": {
+      "version-check": {
+        "run": 41249935739,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "data-integrity": {
+        "run": 41249935867,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "community-builds-ci": {
+        "run": 41249935714,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "api-ci": {
+        "run": 41249935756,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "python-tests": {
+        "run": 41249935691,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "web-ci": {
+        "run": 41249935733,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    }
+  },
+  "deployment": {
+    "api": {
+      "environment": "main - sc2tools-api",
+      "deploymentId": 7465505536,
+      "state": "success",
+      "at": "2026-10-31T22:51:12Z",
+      "sha": "4bfa0daad1e31034fe6943bda93fec4ce7d233fd"
+    },
+    "web": {
+      "environment": "Production",
+      "deploymentId": 7465530572,
+      "state": "success",
+      "at": "2026-10-31T22:52:49Z",
+      "sha": "4bfa0daad1e31034fe6943bda93fec4ce7d233fd"
+    },
+    "bothForExactMergedMain": true
+  },
+  "publicHealth": {
+    "api": "GET https://api.sc2tools.com/v1/health at 2026-10-31T23:27:14Z, latest main - sc2tools-api deployment 4bfa0daa: 200, status ok, mongoPing and mongoWrite true",
+    "web": "GET https://sc2tools.com/api/ping at 2026-10-31T23:27:15Z, latest Production deployment 4bfa0daa: 200, status ok"
+  },
+  "readOnlyAcceptance": {
+    "signedIn": false,
+    "performed": false,
+    "reason": "The built-in browser had no signed-in session: /app redirected to the account sign-in page, and no sign-in was attempted. Signed out, the public privacy page read 'Last updated October 31, 2026' and carried the Daily Pulse device-copy disclosure merged with AC5.",
+    "ownedTabsClosed": 1
+  },
+  "localProof": "Each slice keeps its local gate in its receipt under docs/handoff/validation: analysis-corpus-updated-at, analysis-corpus-changes, analysis-corpus-device-store, analysis-corpus-clearing and analysis-corpus-ui.",
+  "limitations": [
+    "No signed-in desktop or mobile acceptance in a real browser, no screen-reader or browser-matrix check, and no Firefox or Safari check of IndexedDB behaviour.",
+    "The userId/updatedAt index builds in the background at API boot; its presence in production was not read.",
+    "No latency, request-reduction or savings claim. USER_CACHE_ENABLED stays off.",
+    "No private account details, DOM, images, provider identifiers or private URLs are copied here."
+  ]
+}
