@@ -118,6 +118,12 @@ write is issued:
 - Updated: twelve exact-command suites now expect the stamped form through
   `apps/api/__tests__/helpers/corpusStamp.js`, and the game-controls suite's
   tombstone key list includes `updatedAt`.
+- After review, CI on the pull request found a thirteenth suite.
+  `apps/api/__tests__/perGameCompute.test.js` asserted the macro write's
+  top-level `$set`, which the stamp turns into an update pipeline. It reaches the
+  writer through `gameStatsWrites`, so the local selection (suites that name a
+  stamped writer) missed it. It now reads the caller's stages through the same
+  helper, and requires the score while forbidding the breakdown.
 
 ## Verification
 
