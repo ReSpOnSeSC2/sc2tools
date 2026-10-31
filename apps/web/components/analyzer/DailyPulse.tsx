@@ -20,11 +20,11 @@
  * state so the loaded corpus can still be collapsed and released.
  */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, ChevronDown, Loader2 } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
-import { selectDailyPulse, type PulseCard, type PulseTone } from "@/lib/dailyPulse";
+import type { PulseCard, PulseTone } from "@/lib/dailyPulse";
 import {
   normaliseGame,
 } from "@/components/analyzer/arcade/hooks/useArcadeData";
@@ -145,14 +145,18 @@ export function DailyPulse({
     [seasonsRes.data],
   );
 
+  const selector = usePulseSelector(gamesActive);
+  const selectDailyPulse = selector.select;
   const selection = useMemo(
     () =>
-      selectDailyPulse(seed.day, games, {
-        userId: seed.userId,
-        tz: seed.tz,
-        mapPool,
-      }),
-    [seed.day, seed.userId, seed.tz, games, mapPool],
+      selectDailyPulse
+        ? selectDailyPulse(seed.day, games, {
+            userId: seed.userId,
+            tz: seed.tz,
+            mapPool,
+          })
+        : null,
+    [selectDailyPulse, seed.day, seed.userId, seed.tz, games, mapPool],
   );
 
   // The absence of a stored choice keeps the expensive corpus dormant. Once
@@ -210,6 +214,10 @@ export function DailyPulse({
         <DailyPulseStatus />
       ) : gamesRes.error ? (
         <DailyPulseStatus failed onRetry={loadPulse} />
+      ) : selector.failed ? (
+        <DailyPulseStatus failed onRetry={selector.retry} />
+      ) : !selection ? (
+        <DailyPulseStatus />
       ) : selection.cards.length > 0 ? (
         <PulseCarousel cards={selection.cards} onNavigate={onNavigate} onOpenOpponent={onOpenOpponent} hrefForCard={hrefForCard} />
       ) : (
@@ -219,6 +227,42 @@ export function DailyPulse({
       )}
     </DailyPulseFrame>
   );
+}
+
+type SelectDailyPulse = typeof import("@/lib/dailyPulse").selectDailyPulse;
+
+/** Kept once loaded, so a later Daily Pulse on this page shows its cards at once. */
+let loadedSelector: SelectDailyPulse | null = null;
+
+/**
+ * Daily Pulse's card selection, loaded once the history is asked for. It is most of Daily Pulse's code and only runs on
+ * a loaded history, so it stays out of the dashboard's first-load JavaScript and loads while the history does.
+ */
+function usePulseSelector(needed: boolean): { select: SelectDailyPulse | null; failed: boolean; retry: () => void } {
+  const [select, setSelect] = useState<SelectDailyPulse | null>(() => loadedSelector);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!needed || select) return;
+    let live = true;
+    import("@/lib/dailyPulse").then(
+      (module) => {
+        loadedSelector = module.selectDailyPulse;
+        if (live) setSelect(() => module.selectDailyPulse);
+      },
+      () => {
+        if (live) setFailed(true);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [needed, select, attempt]);
+  const retry = useCallback(() => {
+    setFailed(false);
+    setAttempt((value) => value + 1);
+  }, []);
+  return { select, failed, retry };
 }
 
 function DailyPulseFrame({

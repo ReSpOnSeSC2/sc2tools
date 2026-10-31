@@ -1,17 +1,34 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Modal, ModalActions } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
 import { apiCall } from "@/lib/clientApi";
 import { CommunityOwnerMenu } from "./CommunityOwnerMenu";
+import type { CommunityRemoveDialogProps, ConfirmationStep } from "./CommunityRemoveDialog";
 import { useOwnerBuilds } from "./useOwnerBuilds";
 
-type ConfirmationStep = "closed" | "review" | "final";
+type RemoveDialogProps = CommunityRemoveDialogProps & { onUnavailable: () => void };
+
+const loadRemoveDialog = () => import("./CommunityRemoveDialog");
+
+// The removal dialog (and the dialog code under it) loads once an owner's controls show, outside Community's
+// first-load JavaScript. A chunk that cannot load says so instead of leaving Remove doing nothing.
+const CommunityRemoveDialog = dynamic<RemoveDialogProps>(
+  () => loadRemoveDialog().then((module) => module.CommunityRemoveDialog, () => RemoveDialogUnavailable),
+  { ssr: false },
+);
+
+function RemoveDialogUnavailable({ step, onUnavailable }: RemoveDialogProps) {
+  useEffect(() => {
+    if (step !== "closed") onUnavailable();
+  }, [step, onUnavailable]);
+  return null;
+}
 
 export interface CommunityBuildOwnerControlsProps {
   slug: string;
@@ -41,6 +58,8 @@ export function CommunityBuildOwnerControls({
   const { toast } = useToast();
   const { data: ownerStats } = useOwnerBuilds();
   const [step, setStep] = useState<ConfirmationStep>("closed");
+  // Mounted on first open and kept, so the dialog opens and closes (and returns focus) as one Modal.
+  const [dialogMounted, setDialogMounted] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +74,7 @@ export function CommunityBuildOwnerControls({
     setAcknowledged(false);
     setError(null);
     setStep("review");
+    setDialogMounted(true);
   }
 
   const close = useCallback(() => {
@@ -64,10 +84,20 @@ export function CommunityBuildOwnerControls({
     setStep("closed");
   }, [removing]);
 
+  const dialogUnavailable = useCallback(() => {
+    setStep("closed");
+    toast.error("Couldn’t open the removal dialog", { description: "Reload the page and try again." });
+  }, [toast]);
+
   // Anonymous rows intentionally omit ownerUserId. Membership in this
   // authenticated owner-only list keeps the control working without putting
   // a stable identity key back into the public response.
   const owned = ownerStats?.items?.find((row) => row.slug === slug);
+  const isOwner = Boolean(owned);
+  // An owner sees these controls before choosing Remove, so the dialog is usually ready by then.
+  useEffect(() => {
+    if (isOwner) void loadRemoveDialog().catch(() => undefined);
+  }, [isOwner]);
   if (!owned) return null;
 
   function continueToFinal() {
@@ -123,109 +153,26 @@ export function CommunityBuildOwnerControls({
         Remove{compact ? "" : " from Community"}
       </Button>}
 
-      <Modal
-        open={step !== "closed"}
-        onClose={close}
-        title={
-          step === "review"
-            ? `Remove “${title}” from Community?`
-            : "Final confirmation"
-        }
-        description={
-          step === "review"
-            ? "First confirmation: review exactly what will change."
-            : "Second confirmation: approve the removal before it is submitted."
-        }
-        size="sm"
-        hideClose={removing}
-        disableScrimClose={removing}
-        footer={
-          <ModalActions className="w-full justify-end">
-            {step === "review" ? (
-              <>
-                <Button type="button" variant="secondary" onClick={close}>
-                  Keep published
-                </Button>
-                <Button
-                  type="button"
-                  variant="danger"
-                  onClick={continueToFinal}
-                >
-                  Continue
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setAcknowledged(false);
-                    setError(null);
-                    setStep("review");
-                  }}
-                  disabled={removing}
-                >
-                  Go back
-                </Button>
-                <Button
-                  type="button"
-                  variant="danger"
-                  onClick={removeFromCommunity}
-                  loading={removing}
-                  disabled={!acknowledged}
-                >
-                  Remove from Community
-                </Button>
-              </>
-            )}
-          </ModalActions>
-        }
-      >
-        {step === "review" ? (
-          <div className="space-y-3">
-            <div className="flex items-start gap-3 rounded-xl border border-warning/40 bg-warning/10 p-3 text-caption text-text-muted">
-              <AlertTriangle
-                className="mt-0.5 h-5 w-5 flex-none text-warning"
-                aria-hidden
-              />
-              <p>
-                The public page, votes, and Community search result will be
-                hidden. Anyone using its public link will no longer see it.
-              </p>
-            </div>
-            <p className="text-caption text-text-muted">
-              Your private build, rules, notes, and replay matches stay safely
-              in your build library. You can publish the build again later.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <label className="flex min-h-[52px] cursor-pointer items-start gap-3 rounded-xl border border-danger/40 bg-danger/10 p-3">
-              <input
-                ref={finalAcknowledgementRef}
-                type="checkbox"
-                checked={acknowledged}
-                onChange={(event) => setAcknowledged(event.target.checked)}
-                disabled={removing}
-                className="mt-0.5 h-5 w-5 flex-none accent-[var(--danger)]"
-              />
-              <span className="text-caption text-text">
-                I understand this will remove <strong>“{title}”</strong> from
-                the public Community section.
-              </span>
-            </label>
-            {error ? (
-              <div
-                role="alert"
-                className="rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-caption text-danger"
-              >
-                {error}
-              </div>
-            ) : null}
-          </div>
-        )}
-      </Modal>
+      {dialogMounted ? (
+        <CommunityRemoveDialog
+          step={step}
+          title={title}
+          acknowledged={acknowledged}
+          removing={removing}
+          error={error}
+          finalAcknowledgementRef={finalAcknowledgementRef}
+          onClose={close}
+          onContinue={continueToFinal}
+          onBack={() => {
+            setAcknowledged(false);
+            setError(null);
+            setStep("review");
+          }}
+          onAcknowledge={setAcknowledged}
+          onRemove={removeFromCommunity}
+          onUnavailable={dialogUnavailable}
+        />
+      ) : null}
     </>
   );
 }
