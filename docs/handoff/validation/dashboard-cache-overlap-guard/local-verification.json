@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "slice": "G1-overlap-guard",
+  "status": "LOCAL_TYPES_LINT_587_API_CASES_PASS_8_OF_8_MUTATIONS_NOT_RELEASED",
+  "source": {
+    "base": "ee59760d (DA4, PR #833)",
+    "sourceCommit": "ae51d7b93f73c73d018e82482bd0a00f6f2da7a2",
+    "testedCommit": "868c3affda649482e0d2b682fca38283f520cdf5",
+    "mutationRound": "mutation-02, on the G1 bytes committed in the source commit",
+    "applicationFiles": [
+      "apps/api/src/middleware/userCacheGuard.js",
+      "apps/api/src/middleware/userCache.js",
+      "apps/api/src/server.js"
+    ],
+    "testFiles": [
+      "apps/api/__tests__/userCacheGuard.test.js"
+    ]
+  },
+  "guard": {
+    "shutdownStartRetirement": "server.js:418, before shutdown's first await",
+    "quarantineMs": 420000,
+    "quarantineStart": "listen callback (server.js:218)",
+    "quarantineEnd": "first admission after the end runs every UserRevision invalidator with null; epoch and tokens kept",
+    "startupRecord": "chart_cache_cohort_start: sourceRevision, userCacheEnabled, writerSetVersion, quarantineMs, quarantineEndsAt; flag-on processes only",
+    "writerSetVersion": "2026-10-30.1",
+    "flagOff": "every entry point is a no-op",
+    "acceptedResidual": "Background writers are not held until healthy; accepted for source only, and the activation review must accept it again or a later slice must hold them."
+  },
+  "actual": {
+    "apiTypesExit": 0,
+    "apiConfiguredLint": {
+      "errors": 0,
+      "warnings": 758
+    },
+    "changedFilesAddedLintMessages": 0,
+    "newFilesStrictLintMessages": 0,
+    "apiSuites": 35,
+    "apiCases": 587,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "ownedMongodLeftover": 0,
+    "mutationsKilled": "8/8",
+    "mutations": [
+      "G1-M1-shutdown-keeps-entries",
+      "G1-M2-no-validator-strip",
+      "G1-M3-retains-while-closing",
+      "G1-M4-ignores-quarantine",
+      "G1-M5-end-keeps-inner-state",
+      "G1-M6-key-ignores-decision",
+      "G1-M7-shutdown-unwired",
+      "G1-M8-acts-with-flag-off"
+    ]
+  },
+  "retained": [
+    "Round one placed the quarantine decision as a ternary in send, raising its strict complexity from 31 to 32; the decision now passes into the key helper and round two re-ran all eight mutations."
+  ],
+  "boundaries": [
+    "Single-process tests: no real rolling deploy, provider health or signal timing, or shutdown bound; those are receipt observations.",
+    "Exact-head CI, merge, deployment and production acceptance remain pending.",
+    "USER_CACHE_ENABLED stays off; G1-G3 stay unmet. No activation, latency, request-reduction or savings claim."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/CHECKS-01.json",
+      "sha256": "8876842f0a538204086c3c8daa69069dc04d28b313eea6c4a97e49be6e0360f5",
+      "bytes": 918
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/checks-01/steps.txt",
+      "sha256": "0a35e88f4344ee8bebf83358573f6e27d4def1ad6c2af580d3b9a3f46d2239f1",
+      "bytes": 30
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/checks-01/api-jest-summary.json",
+      "sha256": "959557d6932d9e9ba64a52d51cb46542dc1d20760559bb65415c975afde6803e",
+      "bytes": 239
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/checks-01/api-lint.json",
+      "sha256": "3bdbe0a95055844afe475f7634a92bd0226a516e90f30c56f35102343fbb4ff3",
+      "bytes": 7494552
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/checks-01/api-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/checks-01/lint-no-added.txt",
+      "sha256": "343961d750973550f9c954894c6210654f69d7937a1ec0c2c524a79f005bd54e",
+      "bytes": 420
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/dev/final-01-jest.json",
+      "sha256": "3dfc2b2dc1f93bdd76d7c4b32524d50d1eae9c8a64af96774224a5484d514041",
+      "bytes": 227323
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/mutation-02/MUTATION-RESULTS.json",
+      "sha256": "4c62d6d37b7b3755fe01b7f69c3d6f3c7c7f24c4e12d78b6723c9083c24deb17",
+      "bytes": 4924
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/scripts/mutation-check-g1-02.mjs",
+      "sha256": "6c808318eaa46f2d39d425ac76394808016598ac5db217f3af32afa837762488",
+      "bytes": 4965
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/scripts/final-checks-g1-01.sh",
+      "sha256": "0b29d545b29362540754c7a03ba5b2b6eb3c83efd3dca2d5bfac0d2524595bd3",
+      "bytes": 2180
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/scripts/run-g1-jest.mjs",
+      "sha256": "b2cb2aa50368ee17ef54f0c129ae49ec41a88cb85de28ed8315be1b6ee20c59f",
+      "bytes": 3892
+    }
+  ]
+}
