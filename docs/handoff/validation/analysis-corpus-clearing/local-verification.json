@@ -1,0 +1,536 @@
+{
+  "schemaVersion": 1,
+  "slice": "AC4-clearing",
+  "item": {
+    "id": "analysis-corpus-local-cache",
+    "ordinal": 75
+  },
+  "status": "LOCAL_WEB_1045_FILES_PASS_59_OF_59_MUTATIONS_REVIEWED_VERIFIED_DORMANT_NOT_RELEASED",
+  "requirement": "Clear disk on sign-out, account switch and Delete history; retire stale owner/version work.",
+  "source": {
+    "base": "4e779f16 (AC3, PR #842)",
+    "testedCommit": "3c36f05d915a45b6e1a1e12f1b040d20cc25543c",
+    "mutationCommit": "3c36f05d915a45b6e1a1e12f1b040d20cc25543c",
+    "buildCommit": "3c36f05d915a45b6e1a1e12f1b040d20cc25543c",
+    "applicationFiles": [
+      "apps/web/lib/analysisCorpus/deviceKeys.ts",
+      "apps/web/lib/analysisCorpus/deviceNote.ts",
+      "apps/web/lib/analysisCorpus/deviceClear.ts",
+      "apps/web/lib/analysisCorpus/deviceStore.ts",
+      "apps/web/components/analyzer/arcade/hooks/analysisCorpusSync.ts",
+      "apps/web/components/chrome/DeviceHistoryGuard.tsx",
+      "apps/web/app/AppShell.tsx",
+      "apps/web/components/analyzer/settings/SettingsBackups.tsx",
+      "apps/web/components/analyzer/settings/SnapshotManager.tsx",
+      "apps/web/components/analyzer/settings/AccountDeleteDialog.tsx"
+    ],
+    "testFiles": [
+      "apps/web/lib/analysisCorpus/__tests__/deviceNote.test.ts",
+      "apps/web/lib/analysisCorpus/__tests__/deviceClear.test.ts",
+      "apps/web/lib/analysisCorpus/__tests__/deviceStore.test.ts",
+      "apps/web/components/analyzer/arcade/__tests__/analysisCorpusSync.test.ts",
+      "apps/web/components/chrome/__tests__/DeviceHistoryGuard.test.tsx",
+      "apps/web/components/analyzer/settings/__tests__/SettingsBackups.test.tsx",
+      "apps/web/components/analyzer/settings/__tests__/AccountDeleteDialog.test.tsx",
+      "apps/web/app/AppShell.test.tsx"
+    ]
+  },
+  "design": {
+    "guard": "DeviceHistoryGuard, mounted in both Clerk branches of AppShell, reads localStorage once Clerk loads: a note naming another account, or any account while signed out, or a delete still owed, loads the clearing code (or an inline fallback) and clears; it reads the note again before clearing, and an unreadable note deletes the database.",
+    "clear": "forgetDeviceCopy forgets the note, queues the database's delete, then moves the clear mark, each in its own try, and records the delete as owed until it succeeds or a later successful open shows it finished.",
+    "explicitClears": "Delete history and restore clear after success, or after any failure but a 4xx (the request may have gone through); account deletion clears after confirmed erasure or an unknown outcome, before sign-out; a data repair does not clear.",
+    "noteOwnsCopy": "A first keep clears any copy not noted for it, notes the account before creating the database, and records its choice in the creating upgrade; a keep with no usable copy of its own drops whatever is there before its snapshot; every device write requires the clear mark unchanged and the note still naming the account; only a full clear removes the note; a browser that cannot keep or read the note keeps no copy.",
+    "staleWork": "A sync whose copy is no longer its own writes nothing more and reads the corpus again in memory; a stopped or cancelled sync that finds the note gone clears again; a probe that finds its account's copy missing clears in full only while still current; a copy that can be neither replaced nor dropped is deleted only while still owned.",
+    "dormancy": "No copy exists until AC5's one-time gate calls keepOnDevice; until then signed-in pages read one or two localStorage keys, and Settings' clears find nothing.",
+    "bundle": "The clearing code is its own module, loaded only by the guard's dynamic import, the settings chunks and the sync chunk; useAnalysisGames still imports only the note's read."
+  },
+  "actual": {
+    "apiUntouched": true,
+    "webTypesExit": 0,
+    "webConfiguredLint": {
+      "errors": 0,
+      "warnings": 190
+    },
+    "uiLint": "pass",
+    "webTestFiles": 1045,
+    "webCasesPassed": 10245,
+    "webCasesSkipped": 1,
+    "webOneIsolatedWorker": true,
+    "changedFilesAddedLintMessages": 0,
+    "newFilesLintMessages": 0,
+    "mutationsKilled": "59/59",
+    "mutations": [
+      "AC4-M1-guard-keeps-signed-out-copy",
+      "AC4-M2-guard-ignores-switch",
+      "AC4-M3-guard-clears-owner",
+      "AC4-M4-guard-clears-without-note",
+      "AC4-M5-guard-ignores-owed-delete",
+      "AC4-M6-guard-ignores-owed-under-a-note",
+      "AC4-M7-guard-before-clerk-loads",
+      "AC4-M8-guard-keeps-copy-of-unreadable-note",
+      "AC4-M9-guard-clears-without-rereading",
+      "AC4-M10-guard-no-fallback",
+      "AC4-M11-guard-fallback-without-rereading",
+      "AC4-M12-guard-missing-from-app-chrome",
+      "AC4-M13-guard-missing-from-site-shell",
+      "AC4-M14-forget-keeps-mark",
+      "AC4-M15-forget-keeps-note",
+      "AC4-M16-forget-marks-before-delete",
+      "AC4-M17-forget-keeps-database",
+      "AC4-M18-forget-owes-nothing",
+      "AC4-M19-forget-owes-a-refused-delete",
+      "AC4-M20-owed-delete-never-settles",
+      "AC4-M21-owed-delete-settles-another-clear",
+      "AC4-M22-failed-delete-settles",
+      "AC4-M22b-offline-counts-as-not-sent",
+      "AC4-M23-rejection-clears-copy",
+      "AC4-M24-server-error-500-keeps-copy",
+      "AC4-M25-bad-request-400-clears-copy",
+      "AC4-M26-note-fails-open",
+      "AC4-M27-creating-upgrade-records-no-owner",
+      "AC4-M28-sync-ignores-clear-mark",
+      "AC4-M29-sync-ignores-note",
+      "AC4-M29b-stale-forget-ignores-ownership",
+      "AC4-M29c-open-settles-nothing",
+      "AC4-M29d-stopped-keep-leaves-its-record",
+      "AC4-M29e-failed-read-clears-own-copy",
+      "AC4-M29f-cleanup-only-after-device-cleared",
+      "AC4-M29g-keep-keeps-what-it-did-not-write",
+      "AC4-M30-sync-throws-on-clear",
+      "AC4-M31-sync-keep-noted-after-create",
+      "AC4-M32-sync-keep-open-names-no-owner",
+      "AC4-M33-sync-keeps-another-accounts-copy",
+      "AC4-M34-sync-keeps-a-copy-noted-for-nobody",
+      "AC4-M35-sync-clears-its-own-copy-to-keep",
+      "AC4-M36-sync-uses-unreadable-note",
+      "AC4-M37-stale-probe-still-clears",
+      "AC4-M38-failed-keep-open-keeps-note",
+      "AC4-M39-sync-shows-copy-cleared-while-opening",
+      "AC4-M40-sync-merges-after-clear",
+      "AC4-M41-sync-trusts-merge-after-clear",
+      "AC4-M42-sync-drops-after-clear",
+      "AC4-M43-sync-trusts-save-after-clear",
+      "AC4-M44-sync-trusts-drop-after-clear",
+      "AC4-M45-sync-checks-only-a-drop-that-worked",
+      "AC4-M46-wipe-or-restore-keeps-copy",
+      "AC4-M47-repair-clears-copy",
+      "AC4-M48-unknown-wipe-keeps-copy",
+      "AC4-M49-unknown-restore-keeps-copy",
+      "AC4-M50-restore-failure-not-reported",
+      "AC4-M51-erasure-keeps-copy",
+      "AC4-M52-unknown-erasure-keeps-copy"
+    ],
+    "earlierMutationRuns": [
+      {
+        "head": "31a09daa1711831f4a406b51d05029e2d93462ee",
+        "killed": "40/41",
+        "survivor": "AC4-M27-sync-shows-copy-cleared-while-opening",
+        "cause": "three sync tests asserted on vi.fn calls after vi.restoreAllMocks(), which clears their history in Vitest 2; fixed before the final run"
+      },
+      {
+        "head": "0022a49e783c5de021c8614313d868025f3abf41",
+        "killed": "58/59",
+        "survivor": "AC4-M34-sync-keeps-a-copy-noted-for-nobody",
+        "cause": "nothing pinned the first-keep clear for a copy noted for nobody, which only a keep cancelled before its own drop depends on; fixed before the final run"
+      }
+    ],
+    "firstLoadKbLocal": {
+      "/": {
+        "ac3": 183.4,
+        "ac4": 183.5,
+        "delta": 0.1,
+        "budget": 215.0
+      },
+      "/app": {
+        "ac3": 240.5,
+        "ac4": 240.6,
+        "delta": 0.1,
+        "budget": 240.0
+      },
+      "/app/game/[gameId]": {
+        "ac3": 319.2,
+        "ac4": 319.3,
+        "delta": 0.1,
+        "budget": 440.0
+      },
+      "/app/opponents": {
+        "ac3": 138.6,
+        "ac4": 138.7,
+        "delta": 0.1,
+        "budget": 180.0
+      },
+      "/builds": {
+        "ac3": 204.0,
+        "ac4": 204.1,
+        "delta": 0.1,
+        "budget": 270.0
+      },
+      "/community": {
+        "ac3": 190.6,
+        "ac4": 190.7,
+        "delta": 0.1,
+        "budget": 190.0
+      },
+      "/dock/[token]": {
+        "ac3": 218.4,
+        "ac4": 218.5,
+        "delta": 0.1,
+        "budget": 225.0
+      }
+    },
+    "firstLoadNote": "Local builds run 1.2 kB larger than CI's on /app (AC3: 240.5 locally, 239.3 in CI run 41193733011). AC4 adds 0.1 kB to /app and 0.1 kB to 6 other routes, so CI is projected near 239.4 of 240 kB on /app and 189.5 of 190 kB on /community."
+  },
+  "independentReview": {
+    "reviewers": "Five independent read-only verification workflows, each with read-only lenses and a critic that checked every finding against the code.",
+    "passes": [
+      {
+        "pass": 1,
+        "reviewedCommit": "645e85185906deee7de86d79b8b9ae826fc6d1a6",
+        "record": "verification-01.json",
+        "lenses": [
+          "clearing",
+          "privacy",
+          "tests"
+        ],
+        "findings": {
+          "high": 0,
+          "medium": 3,
+          "low": 9,
+          "info": 1
+        },
+        "fixCommits": [
+          "6bd21dd0d939bd120c17d373ad6655d6790a0cbf"
+        ]
+      },
+      {
+        "pass": 2,
+        "reviewedCommit": "6bd21dd0d939bd120c17d373ad6655d6790a0cbf",
+        "record": "verification-02.json",
+        "lenses": [
+          "Privacy and clearing",
+          "Sync semantics and regressions: analysisCorpusSync.ts",
+          "tests and bundle"
+        ],
+        "findings": {
+          "high": 1,
+          "medium": 0,
+          "low": 8,
+          "info": 0
+        },
+        "fixCommits": [
+          "31a09daa1711831f4a406b51d05029e2d93462ee"
+        ]
+      },
+      {
+        "pass": 3,
+        "reviewedCommit": "31a09daa1711831f4a406b51d05029e2d93462ee",
+        "record": "verification-03.json",
+        "lenses": [
+          "multi-tab races",
+          "over-clearing, liveness and regressions",
+          "tests"
+        ],
+        "findings": {
+          "high": 0,
+          "medium": 2,
+          "low": 9,
+          "info": 1
+        },
+        "fixCommits": [
+          "13aa404813ab0011d9797ad423a52163d3f49d2f"
+        ]
+      },
+      {
+        "pass": 4,
+        "reviewedCommit": "13aa404813ab0011d9797ad423a52163d3f49d2f",
+        "record": "verification-04.json",
+        "lenses": [
+          "The new mechanisms in 13aa4048 and their races: the note test in current(), the ",
+          "tests"
+        ],
+        "findings": {
+          "high": 0,
+          "medium": 1,
+          "low": 6,
+          "info": 4
+        },
+        "fixCommits": [
+          "b2bb333a5c1c60e8464153e5b4c56aa83110fea3"
+        ]
+      },
+      {
+        "pass": 5,
+        "reviewedCommit": "b2bb333a5c1c60e8464153e5b4c56aa83110fea3",
+        "record": "verification-05.json",
+        "lenses": [
+          "Logic and races of the five changes in b2bb333a",
+          "Tests for b2bb333a"
+        ],
+        "findings": {
+          "high": 0,
+          "medium": 0,
+          "low": 6,
+          "info": 1
+        },
+        "fixCommits": [
+          "2e123355fd20563feb6c4c940ec46136c56909e9",
+          "0022a49e783c5de021c8614313d868025f3abf41"
+        ]
+      }
+    ],
+    "mutationFinding": "The mutation run at 31a09daa killed 40 of 41; the survivor showed that three sync tests asserted on vi.fn calls after vi.restoreAllMocks(), which clears their history in Vitest 2. Fixed in 13aa4048.",
+    "fixed": [
+      "Note first, failing closed, and the clearing code out of /app's first load (pass 1).",
+      "A probe's note removal is a full clear that moves the mark (pass 2, high).",
+      "Every device write checks the note; a keep's creating upgrade records its choice; delete before mark; owed deletes (pass 3).",
+      "Only a 4xx keeps the copy after a failed wipe, restore or erasure; the stale-copy delete only while owned; owed deletes settled on a successful open; the record a stopped keep left is cleared (pass 4).",
+      "A keep drops whatever it did not write; a clear after any stopped run; the remaining tests (pass 5)."
+    ],
+    "documented": [
+      "A local wipe or restore forgets the keep choice; AC5's gate has to offer keeping again.",
+      "A page load in another tab during a first keep's few-millisecond clear window can cancel the keep, which retries.",
+      "A stale copy is deleted even if another tab of the same account refreshed it meanwhile (fail-safe).",
+      "Real-browser IndexedDB and localStorage timing, and Clerk's cross-tab sign-out timing, were not verified."
+    ],
+    "note": "The reviews read code only; the checks, the mutation runs and the builds ran the code."
+  },
+  "verificationWorkflows": [
+    {
+      "reviewedRange": "4e779f16..645e8518",
+      "lenses": [
+        "clearing",
+        "privacy",
+        "tests"
+      ],
+      "verdict": "AC4 meets most of its requirement, but three medium findings should be fixed before merge. The parts that work: the clears after Delete history, restore and account deletion run only after the request succeeds, and before sign-out. The guard sits in both Clerk branches and handles sign-out, session expiry and account switches whenever a note names the copy. The clear mark stops syncs already in flight from writing data. Reads stay scoped to one account, so no path shows one account's history to another. The guard, however, only acts on the note, and two blind spots can keep one account's history on disk after sign-out or under another account. The first is the save during a first keep: rows are written before the note, and the late note write is unchecked. The second is browsers that refuse localStorage but allow IndexedDB. Both are dormant until AC5, and both can be fixed in code that loads on demand: write the note first, and make noteDeviceCopy fail closed. Separately, the clearing helpers landed in /app's first-load chunk (+246 B gzip measured), despite the design saying they load on demand. Splitting them out of deviceNote recovers most of that and leaves room for AC5. The low findings can follow; the shared try block in forgetDeviceCopy and the clear on repair start come first.",
+      "findings": 13,
+      "unverified": [
+        "Real browsers. Every clearing test runs on fake-indexeddb and jsdom. Nobody checked the order of the delete after versionchange, deletes blocked by frozen or background tabs, or Firefox and Safari.",
+        "Clerk. Nobody checked how quickly a sign-out or a multi-session switch reaches other tabs. Nobody checked whether brief signed-out states (pending session tasks, failed token refreshes) could clear the owner's own copy by mistake.",
+        "CI perf:budget for the stacked AC1-AC4 branch. Local builds already exceed the /app, /community and /guides budgets at the AC3 base (240.5, 190.6 and 175.1 kB), so only CI can decide. The guard adds about 106 B gzip to app/layout, which check-perf-budget.mjs does not count (it counts page entries only), although users load it on every route.",
+        "Copies on other devices after Delete history, restore or account deletion done elsewhere. They depend on the next sync's version check, or on a sign-out.",
+        "Neither the lenses nor I ran any tests or mutations (this was a read-only review). Claims that a mutant survives come from reading the code."
+      ]
+    },
+    {
+      "reviewedRange": "645e8518..6bd21dd0 (in 4e779f16..6bd21dd0)",
+      "lenses": [
+        "Privacy and clearing",
+        "Sync semantics and regressions: analysisCorpusSync.ts",
+        "tests and bundle"
+      ],
+      "verdict": "AC4 at 6bd21dd0 does not yet meet its invariant, so it should not merge as is. Most of the fix commit is correct, and I checked each part against the code: the note is written before the database is created (analysisCorpusSync.ts:163, in the same synchronous task as factory.open); noteDeviceCopy fails closed (deviceNote.ts:43); a note that cannot be read deletes any database and reads in memory (analysisCorpusSync.ts:94-97); clearing loads on demand, with the guard re-reading the note and falling back inline if the chunk fails; current() runs before onStored and onSnapshot and after the merge and the save; DeviceCleared re-reads in memory; and the wipe, restore, delete and repair calls are wired correctly. The problem is that 6bd21dd0 removed the re-note after a save and on a found copy, while the probe still removes the note without moving the clear mark (analysisCorpusSync.ts:165/166/172). A sync that is not keeping, running in a second tab of the same account, can therefore erase the note during a first keep. The keep then saves the full history under no note, and no sign-out or account switch will ever find it. All three lenses found this and I confirmed it. It is dormant until AC5 calls keepOnDevice, but it breaks exactly the guarantee this slice exists to provide, and 645e8518 did not have it. Must change before merge: make the probe's note removal a real clear (forgetDeviceCopy), or otherwise ensure an in-flight keep cannot finish after its note is removed; correct the comments at analysisCorpusSync.ts:35-38 and :218, which are now false; and add a test that runs two syncs at once. Nothing at medium. The lows below (restore parity on unclear failures, the guard and unreadable notes, the drop branch's missing check after its write, the note left behind when a keep's open fails, and four test gaps) can follow.",
+      "findings": 9,
+      "unverified": [
+        "No tests, builds, mutation runs or perf:budget were run, by me or by any lens (read-only review). Claims that a test fails or passes under a given mutation come from reading the code.",
+        "Real-browser IndexedDB behavior: deleteDatabase queueing behind versionchange closes, frozen or back-forward-cached tabs holding connections, and whether a blocked delete survives the issuing page's unload or the browser closing. A lost delete would leave rows with no note, which no guard finds. The handoff itself notes this was never checked outside fake-indexeddb and jsdom.",
+        "How quickly a localStorage write in one tab becomes visible in other tabs (Chrome, Firefox, Safari). This affects how promptly current() and the guard's note read see another tab's clear or note.",
+        "How quickly Clerk tells other tabs about a sign-out or a session switch, and whether a brief signed-out state can clear the owner's copy (the handoff lists this as a limitation).",
+        "Bundle size at 6bd21dd0: the worktree's .next build predates the commit, so the guard and deviceKeys cost in the root-layout chunk is an estimate.",
+        "AC5 behavior (when keepOnDevice is called, and whether it retries), which decides how often the high-severity race and the note left after a failed open would happen in practice.",
+        "Server side: whether wipe and restore emit games:changed. The handoff says they do not, which makes the drop-branch staleness last until the next load."
+      ]
+    },
+    {
+      "reviewedRange": "6bd21dd0..31a09daa (in 4e779f16..31a09daa)",
+      "lenses": [
+        "multi-tab races",
+        "over-clearing, liveness and regressions",
+        "tests"
+      ],
+      "verdict": "AC4 at 31a09daa meets its clearing requirement in source. The guard clears the copy on sign-out and account switch, with its re-checks and the fallback for a chunk that fails to load. Settings clears it after a wipe or restore that succeeded or may have. Account deletion clears it after confirmed erasure. Stale owner and version work stops on the abort signal, or on a moved clear mark, before every device write. The second verification's high (rows saved under no note after a probe removed only the note) is fixed: no source code calls noteDeviceCopy(null) any more, and every note removal in source goes through a full clear. No high-severity issue remains in single-account flows.\n\nThe invariant is not airtight, though. (1) A first keep for another account can overwrite the note without moving the mark. Two first keeps for different accounts running at once can then leave one account's rows under the other account's note. The race is narrow and needs two accounts active in one browser. Adding `deviceNote() === input.accountKey` to the WriteGuard closes it. That should go in before merge, with a two-account test and a corrected guard-test fixture. (2) 31a09daa's probe full clear trades the old privacy bug for a liveness bug. A probe in a second tab of the same account cancels a first keep. In one ordering it also throws away the keep choice after the keep has reported kept:true, which contradicts the checkpoint. It is dormant until AC5 and cheap to fix: write the kept record before a probe can see an empty database, or leave the note alone when the database exists without a record. Fix it now or make it an AC5 entry criterion, and correct the checkpoint either way.\n\nAlso before merge, pin the take-back and onAbsent full clears in tests: the mutants that bring back the original high pass today. Everything else is low and can follow: deletes that are not durable, account deletion with an unknown outcome, the order of mark and delete in a clear, clearing when offline, the keep choice a local wipe forgets, the remaining test gaps, and the noteDeviceCopy(null) API.",
+      "findings": 12,
+      "unverified": [
+        "Nothing was run (read-only review): no tests, builds or mutation runs. Whether a mutant survives was judged by reading the tests.",
+        "How localStorage behaves across tabs in real browsers. Chromium updates each renderer's cache asynchronously, and Firefox takes a snapshot per task. All three lenses assumed atomic per-call shared storage, and the real width of the race windows in findings 1, 2 and 7 depends on this.",
+        "Whether Clerk multi-session is enabled for this app. It is a dashboard setting, and nothing in apps/web calls setActive or lists sessions. Also unmeasured: how quickly other tabs learn of a session switch or sign-out. Both decide whether finding 1 is reachable.",
+        "Whether a blocked deleteDatabase still completes after browser exit, after the requesting tab closes, or with a frozen tab holding a connection (Chrome's freezing and BFCache eviction on versionchange). This decides how reachable finding 3 is.",
+        "Real IndexedDB scheduling: a readonly transaction served ahead of a later readwrite, versionchange delivery, and close-pending semantics. Finding 2's ordering (b) depends on these, and the tests run fake-indexeddb under jsdom.",
+        "Firefox and Safari behaviour, and whether Clerk's pending session tasks make useAuth briefly report signed out, which would make the guard clear the owner's copy."
+      ]
+    },
+    {
+      "reviewedRange": "31a09daa..13aa4048 (in 4e779f16..13aa4048)",
+      "lenses": [
+        "The new mechanisms in 13aa4048 and their races: the note test in current(), the owner record written in the creating upg",
+        "tests"
+      ],
+      "verdict": "AC4 at 13aa4048 fixes both medium findings from the third verification. First, the note test in current() (analysisCorpusSync.ts:108) stops the losing first keep at its first check after opening, in every realistic interleaving. Every device write is issued synchronously right after a current() call, and both keeps write their notes before either open completes. Second, the owner record written in the creating upgrade (deviceStore.ts:94) means a probe for the same account reads \"kept\" and stores its snapshot beside the keep instead of full-clearing it. The owed delete, the delete-before-mark order, and noteDeviceCopy accepting only an account all hold up. There is no high finding. However, 13aa4048 adds one medium regression. mayHaveApplied (deviceClear.ts:68) reads navigator.onLine when the failure is caught, not when the request is sent. So a Delete history or restore that the server committed, but whose answer was lost to a dropped connection, now keeps the device copy; 31a09daa cleared it. The new erasure clear has the same hole, and the tests pin the wrong assumption. This must change before merge: sample onLine before sending or drop the clause, and add a test where onLine goes false after the request is sent. Three narrow holes remain in the invariant, all low. (1) The stale-copy forget in finally also runs after DeviceCleared, so it can wipe a newer keep after that keep returned kept:true. (2) The guard skips an owed delete whenever a note stands. Another account's rows can therefore survive a browser exit under the new account's note; they are on disk only and are cleared at that account's next corpus load or sign-out. (3) A stopped keep's owner record outlives the clear that stopped it; this is an account id and a keep choice, with no game rows. Fix the medium and the finally gate in this slice. The guard hole, the owner-record hole and the test gaps can be fixed here or recorded before AC5 starts calling keepOnDevice.",
+      "findings": 11,
+      "unverified": [
+        "Real-browser IndexedDB behaviour, which the races assume (already known and accepted): first-in-first-out order of delete and open requests across tabs and processes; whether a frozen or bfcached tab can block a delete indefinitely; whether a delete or open issued by a page continues after that page unloads; and when navigator.onLine flips relative to a fetch failure.",
+        "Tests were not run (read-only review). The mutant-survival claims (owed token, failed read under the account's own note, 'only then', fallback order, !dataDeleted) come from reading the suites, not from executing mutants.",
+        "Whether Clerk lets two tabs of one browser be signed in as different accounts at the same time. The cross-account first-keep race, and the residual window of its note check, assume this.",
+        "Server side: only the corpusUpdatedAt.js comment and bump at lines 46-51 were read, to confirm that wipe and restore bump corpusVersion. Not checked: whether erasure ends the Clerk session promptly (identityDeletionPending), or whether other hard deletes (such as delete_game) bump the version.",
+        "AC5 is not built, so it is unknown whether its gate offers keeping again after a keep lost silently (the stale-forget and guard findings)."
+      ]
+    },
+    {
+      "reviewedRange": "13aa4048..b2bb333a (in 4e779f16..b2bb333a)",
+      "lenses": [
+        "Logic and races of the five changes in b2bb333a",
+        "Tests for b2bb333a"
+      ],
+      "verdict": "AC4 at b2bb333a meets its requirement. Sign-out, account switch, Delete history, restore (on success, and on any failure except a 4xx) and account deletion all clear the device copy. With deletes that succeed and no frozen tabs, the invariant holds. Every clear removes the note, queues its delete before it moves the mark, and records that delete as owed. Every device write sits behind current(). The five changes are consistent with that: mayHaveApplied now clears on everything but a 4xx; owns() correctly spares a newer keep; settleDelete matches only the start mark, and that mark's delete was queued before the open; the guard's owed rule and the catch's note-null forget behave as described. High: none. Medium: none. Everything left is low, and each issue needs a failure mode. (1) settleDelete treats a delete that errored as done, which contradicts three comments. If the first snapshot then fails or the run is aborted, another account's rows (never shown) can sit under the keeping account's note with nothing owed. This is not a regression. (2) The catch's record cleanup is skipped when the stopped keep is also aborted. (3) A stale run can still delete a copy of the same account that another tab just refreshed. This is fail-safe and predates the commit. Nothing blocks merge. Before merge, fix the misleading comments and add three tests: the aborted stale run's forget; settleDelete tied to the start mark; the delete still owed after an open that misses the deadline in test 603. The code fixes (a keep drops a foreign copy itself; an aborted run with no note forgets) can land with AC5, since the slice stays dormant until then.",
+      "findings": 7,
+      "unverified": [
+        "No test and no mutant was run (the review was read-only). Which mutants survive and whether the two slow tests are deterministic were judged by reading the suite and the installed sources: fake-indexeddb 6.2.5 (per-name FIFO connection queue, deletes that poll with setImmediate) and vitest 2.1.9 (restoreAllMocks restores vi.fn mocks too).",
+        "Real-browser ordering is unchecked: whether a deleteDatabase issued before a localStorage mark write is always queued ahead of an open in another tab that has already seen that mark. That premise underlies both 'queued before the mark moves' and settleDelete.",
+        "How often deleteDatabase errors while a following open succeeds in real browsers (for example Windows file locks, or Safari). This decides how reachable the first finding is.",
+        "Whether a pending delete survives its page or the browser closing. If it is lost, an open in the next session would settle it wrongly. The guard should win that race on the same page, because its deviceClear import resolves before the sync chunk that depends on deviceClear, but that ordering depends on the bundler and was not checked.",
+        "The timing of Clerk's cross-tab sign-out relative to a keep in flight, which the second finding depends on.",
+        "AC5's UI does not exist yet, so every keep path is exercised only by unit tests."
+      ]
+    }
+  ],
+  "boundaries": [
+    "Dormant until AC5's gate calls keepOnDevice; nothing in production creates a copy before then.",
+    "A local wipe or restore forgets the keep choice with the copy; AC5's gate has to offer keeping again.",
+    "The clearing tests run on fake-indexeddb and jsdom; real-browser IndexedDB ordering, blocked deletes on page close, localStorage timing across tabs, and Firefox and Safari were not checked.",
+    "Clerk's cross-tab sign-out timing and any brief signed-out states were not measured.",
+    "The first-load budget was checked with a local production build using the public flags CI sets; CI's own build remains the gate.",
+    "Exact-head CI, merge, deployment and production acceptance remain pending. No latency, request-reduction or savings claim."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/CHECKS-06.json",
+      "sha256": "24ee37cffd7ab14bd3ecb4d927b25a43aa9ae7597b0db7391616765690d07824",
+      "bytes": 2178
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/checks-06/steps.txt",
+      "sha256": "f3e24ccf1a6581d3dec40f21e5f17c4b5f35c63c60af9bea48641a7f8634fbb5",
+      "bytes": 77
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/checks-06/api-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/checks-06/web-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/checks-06/web-lint.json",
+      "sha256": "9bb33f15f11f990c7402012e5b55b5cf81991b4fd5672950a2b23d81af2f4b86",
+      "bytes": 2460787
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/checks-06/web-lint-no-added.txt",
+      "sha256": "395daf27eaaf6c030deae9bbcc6492a8ebcc74fb3f4bcbeb48b1b6363b5f45f3",
+      "bytes": 1508
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/checks-06/ui-lint.log",
+      "sha256": "8aa2f7fc9a344a4aadc602f15712387b9dfd68e14b4cb1fff5780e177ab7b535",
+      "bytes": 3889
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/checks-06/web-vitest-summary.json",
+      "sha256": "76dda9e1292bbfff5a9bce357fbedd4750802f84a8b991162bd70d22e2c1ac8e",
+      "bytes": 174
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/dev/checks-06-web-vitest.json",
+      "sha256": "6e2ba5d911f4648a3e0fed9e801dac9c123807d4cf1c2bad998a5819d85ae28d",
+      "bytes": 3274950
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/mutation-03/MUTATION-RESULTS.json",
+      "sha256": "b4ae4ca74106db3b78c4509b781815e7d3ed00e86af91726bd4264eb9f282336",
+      "bytes": 59526
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/mutation-01/MUTATION-RESULTS.json",
+      "sha256": "b39ebae87b8024c2a20259620ae73eed42350425b8a23722be54885d2d14711e",
+      "bytes": 38405
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/mutation-02/MUTATION-RESULTS.json",
+      "sha256": "f34eeafda032347abf1d46f33d1bfbe0c6db10720d891fcb241bf64ebdaa0b9b",
+      "bytes": 58882
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/final-checks-ac4-02.sh",
+      "sha256": "91a1ef11134f39e571b19fd8e193b798b3f88718c0a89078be7077111d5e1858",
+      "bytes": 2720
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/mutation-check-ac4-01.mjs",
+      "sha256": "e22097468e5332de4cc5a3affcaac763238a711bb85a83405731cd72d14d0d55",
+      "bytes": 12219
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/mutation-check-ac4-02.mjs",
+      "sha256": "1912d89ed6e9b1008ebcd11fc1e7edebb0a4f1ed46f466702eeb66e7342af8a4",
+      "bytes": 15560
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/run-ac4-vitest.mjs",
+      "sha256": "11bb54c77dae51c59949bfe610062b1135694fa9fcbf9b27972208ed8e4d46ad",
+      "bytes": 3493
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/lint-noadd-web.mjs",
+      "sha256": "e029ad91a12bd7b5fa296f657bebc1daa863cc4362fa0af2acdca06106a3acf2",
+      "bytes": 2863
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/build-budget-ac4-01.sh",
+      "sha256": "2899fc6d3c25f0c6855ed2f8c7cd84c914da287c4552cf376219e72ca46e37dd",
+      "bytes": 1699
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/build-03/steps.txt",
+      "sha256": "f1643b0f51f7754b2a0f0297bd3b79b7e3485458d5c7c2e1ffc216fed68caea1",
+      "bytes": 17
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/build-03/perf-budget.log",
+      "sha256": "3db3dea362bcfead3ccb80f22a4c5d575b8637c2e726415ba4514b14789c8fbe",
+      "bytes": 1580
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/build-03-head.txt",
+      "sha256": "dbde4231e201d2f2a29a7a49814b3fdc8848d7420f8c96d489574bd1e26a3a23",
+      "bytes": 41
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/build-01/perf-budget.log",
+      "sha256": "b13791934e4899d3bb1411978d0b40e24998f07ed504e11136f358b66797ae3f",
+      "bytes": 1580
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/review-01.json",
+      "sha256": "9f9159ce14d6482e6be2d1fe1c95082da286b468116f350b61d319b2de96bd8d",
+      "bytes": 3872
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/verification-01.json",
+      "sha256": "39f273469f683a3e14c3c6f23067a8db9fef213c80801823660118a9df70241f",
+      "bytes": 33759
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/verification-02.json",
+      "sha256": "eafb08b73a284ed625c000bd55ebc6799ec9a6dd9b8618ce7851ac7f7dc4243a",
+      "bytes": 46211
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/verification-03.json",
+      "sha256": "30dd777bd33eabf2ead9edb4a259343e6d45ef8bede8c6bc60064c091c50a799",
+      "bytes": 50183
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/verification-04.json",
+      "sha256": "5857a5bf5038b530e7644079b9eb248614031ddfd7753299bbe5c8cf91c4007e",
+      "bytes": 39276
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac4-20261031/verification-05.json",
+      "sha256": "c852b6529e34044ec5ee3c87ccfe889e63d4f0828cecda1b28d3a8b4eaf2a336",
+      "bytes": 29159
+    }
+  ]
+}
