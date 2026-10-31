@@ -190,9 +190,10 @@ configuration process; the card changes no setting or provider connection.
 
 Optional coverage includes the overview summary, macro summary, MMR progression,
 build/strategy mix, the original six personal charts, the four strength-adjusted
-responses (each keyed to the calibration snapshot that computed it), the current
-streak, the Macro report, net MMR by matchup with its opponent drill-down, and the
-random-race summary behind the matchup picker. It does not cover every dashboard
+responses and the matchup win-rate-over-time chart (each keyed to the calibration
+snapshot that computed it), the current streak, the Macro report, net MMR by
+matchup with its opponent drill-down, and the random-race summary behind the
+matchup picker. It does not cover every dashboard
 request: Doctor, the Opponents list and profile, build stats and other mixed
 responses have additional dependencies. The cache remains off, with no measured
 performance or cost saving claimed.
