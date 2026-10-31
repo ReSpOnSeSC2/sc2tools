@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { useAuth } from "@clerk/nextjs";
 import { Check, Download, Play } from "lucide-react";
 import { apiCall } from "@/lib/clientApi";
-import { Button } from "@/components/ui/Button";
+import { Button, LinkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ImportProgressCard } from "@/components/imports/ImportProgressCard";
 import { useImportStatus } from "@/components/imports/useImportStatus";
@@ -177,7 +177,7 @@ export function OnboardingChecklist({
           }
           action={
             pairDone ? null : (
-              <CtaLink href="/devices">Open Devices</CtaLink>
+              <LinkButton href="/devices" size="sm">Open Devices</LinkButton>
             )
           }
           expanded={pairExpanded}
@@ -328,10 +328,9 @@ function DownloadAction({
   browserImportEnabled: boolean;
 }) {
   const download = downloadDone ? null : (
-    <CtaLink href="/download" onClick={onDownload}>
-      <Download className="h-4 w-4" aria-hidden />
+    <LinkButton href="/download" size="sm" onClick={onDownload} iconLeft={<Download className="h-4 w-4" aria-hidden />}>
       Download
-    </CtaLink>
+    </LinkButton>
   );
   // Flag off: exactly the original markup, no wrapper.
   if (!browserImportEnabled) return download;
@@ -348,22 +347,3 @@ function DownloadAction({
   );
 }
 
-function CtaLink({
-  href,
-  onClick,
-  children,
-}: {
-  href: string;
-  onClick?: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      onClick={onClick}
-      className="inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-lg bg-accent px-3 text-caption font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-    >
-      {children}
-    </Link>
-  );
-}

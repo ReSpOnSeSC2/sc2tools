@@ -9,7 +9,7 @@ import {
   Globe,
   Layers,
 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Button, LinkButton } from "@/components/ui/Button";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { GlowHalo } from "@/components/ui/GlowHalo";
 import { longLabelFor } from "@/lib/datePresets";
@@ -64,13 +64,12 @@ export function NoGamesYet({
           }
           action={
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <CtaLink href="/download" variant="primary">
-                <Download className="h-4 w-4" aria-hidden />
+              <LinkButton href="/download" variant="primary" iconLeft={<Download className="h-4 w-4" aria-hidden />}>
                 Download agent
-              </CtaLink>
-              <CtaLink href="/devices" variant="secondary">
+              </LinkButton>
+              <LinkButton href="/devices" variant="secondary">
                 Open Devices
-              </CtaLink>
+              </LinkButton>
             </div>
           }
         />
@@ -142,9 +141,9 @@ function ChoiceCard({
         <h3 className="text-body font-semibold">{title}</h3>
       </div>
       <p className="flex-1 text-caption text-text-muted">{body}</p>
-      <CtaLink href={href} variant={variant}>
+      <LinkButton href={href} variant={variant}>
         {cta}
-      </CtaLink>
+      </LinkButton>
     </li>
   );
 }
@@ -290,28 +289,3 @@ export function NoBuildOrder({
   );
 }
 
-interface CtaLinkProps {
-  href: string;
-  variant: "primary" | "secondary";
-  children: ReactNode;
-}
-
-function CtaLink({ href, variant, children }: CtaLinkProps) {
-  const variantClass =
-    variant === "primary"
-      ? "bg-accent text-white hover:bg-accent-hover"
-      : "bg-bg-elevated text-text border border-border hover:bg-bg-subtle hover:border-border-strong";
-  return (
-    <Link
-      href={href}
-      className={[
-        "inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-lg px-4 text-body font-semibold",
-        "transition-colors duration-100",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-        variantClass,
-      ].join(" ")}
-    >
-      {children}
-    </Link>
-  );
-}
