@@ -376,16 +376,19 @@ no-op. Unset web secret returns 503 and keeps public Community reads and
 user-derived social cards uncached. Configure both runtimes before relying on
 fast refresh; a web-only secret cannot establish working delivery.
 
-With configuration present, general Community pages use a 300-second tagged
-data cache (`community`, plus a validated per-build tag). Publish/update,
+Community pages are not cached even with configuration present. Since public
+player pages (PR #758), their reads carry current publication capabilities that
+a best-effort purge cannot keep fresh after a profile opt-out, so the web fetches
+them with no revalidation and no tags (`apps/web/lib/communityCache.ts`; ADR
+0074). The receiver still revalidates the Community tag and the `/community`
+and `/players` layouts, and the API still sends `public, s-maxage=60,
+stale-while-revalidate=600` on public Community reads. Publish/update,
 unpublish, moderation, rounded vote-score changes, admin edits and game
 visibility/deletion/restore/GDPR changes notify the receiver. Unknown mutation
-outcomes invalidate conservatively. Delivery is best effort: a failed or
-unavailable purge can leave a general list/build cached until its normal
-refresh, so the UI makes no unconditional "within seconds" promise. A failed
-timed background refresh retains successful tagged data for the last-good
-detail content. An uncached failure uses the unavailable/retry boundary; a
-confirmed missing resource takes the existing not-found path.
+outcomes invalidate conservatively. Delivery is best effort, so the UI makes no
+unconditional "within seconds" promise. A failed read uses the
+unavailable/retry boundary; a confirmed missing resource takes the existing
+not-found path.
 
 Community's existing loading boundaries may already have streamed HTTP 200
 when a child resource is found missing; Next then sends its 404 fallback and

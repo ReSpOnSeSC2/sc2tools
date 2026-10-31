@@ -27,9 +27,9 @@ project runs; it does not complete the item.
   architecture" and, separately, for actual schedule, retention, freshness
   and restore-drill evidence
   (`docs/handoff/roadmap-progress-2026-10-28.json:479-482`).
-- **A stale note.** `docs/DEPLOYMENT_GUIDE.md:3-10` still carries a July 2026
-  "reality check" saying production runs a free-tier Atlas cluster. This ADR
-  replaces it.
+- **A stale note.** `docs/DEPLOYMENT_GUIDE.md` carried a July 2026 "reality
+  check" saying production runs a free-tier Atlas cluster. This ADR replaces
+  it (`docs/DEPLOYMENT_GUIDE.md:3-13`).
 
 ## Decision
 
