@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { parseFilters, parseFiniteInt } = require("../util/parseQuery");
-const { asOppMmrBucketWidth, oppMmrTrustFloor } = require("../services/trendsOppMmr");
+const { asOppMmrBucketWidth, oppMmrTrustDayFloor } = require("../services/trendsOppMmr");
 const { parseExplorerOptions } = require("../services/trendsExplorer");
 
 /**
@@ -244,8 +244,8 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      // The day-truncated trust floor keys the body, so a cached answer never outlives its floor.
-      const options = { bucketWidth: parseOppMmrBucketWidth(req.query.bucket_width), trustFloor: oppMmrTrustFloor().toISOString() };
+      // With the cache on, the day's trust floor keys the body and drives it exactly; the off path keeps its clock read.
+      const options = { bucketWidth: parseOppMmrBucketWidth(req.query.bucket_width), ...cacheTrustFloor(deps) };
       await send(req, res, userId, "oppMmrBuckets", filters, options,
         () => deps.aggregations.oppMmrBuckets(userId, filters, options));
     } catch (err) {
@@ -262,7 +262,7 @@ function buildAggregationsRouter(deps) {
       const filters = parseFilters(req.query);
       const lo = parseFiniteInt(req.query.lo);
       const hi = parseFiniteInt(req.query.hi);
-      const options = { lo, hi, trustFloor: oppMmrTrustFloor().toISOString() };
+      const options = { lo, hi, ...cacheTrustFloor(deps) };
       await send(req, res, userId, "oppMmrBucketGames", filters, options,
         () => deps.aggregations.oppMmrBucketGames(userId, filters, options));
     } catch (err) {
@@ -523,6 +523,12 @@ function parseSortOrder(raw) {
  */
 function parseOppMmrBucketWidth(raw) {
   return asOppMmrBucketWidth(raw) ?? "auto";
+}
+
+/** The opponent-MMR pair's keyed trust floor, added only while the cache is enabled (ADR 0072, item 4).
+ * @param {any} deps @returns {{ trustFloor?: string }} */
+function cacheTrustFloor(deps) {
+  return deps.userCache?.enabled ? { trustFloor: oppMmrTrustDayFloor().toISOString() } : {};
 }
 
 /** @param {number} status @param {string} code */

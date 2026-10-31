@@ -77,18 +77,30 @@ const OPP_MMR_TRUST_MAX_AGE_DAYS = 365;
 
 /**
  * The cutoff date before which a current/last-known opponent MMR is no
- * longer trusted as game-time MMR. Pure function of the UTC day of "now",
- * so the histogram, drilldown and width probe share one boundary per
- * request, and a cached body keyed by the floor stays exact all day.
+ * longer trusted as game-time MMR. Pure function of "now" so the
+ * histogram + drilldown + width probe all share one boundary per
+ * request.
  *
  * @param {number} [now]
  * @returns {Date}
  */
 function oppMmrTrustFloor(now = Date.now()) {
-  return new Date(Math.floor(now / DAY_MS) * DAY_MS - OPP_MMR_TRUST_MAX_AGE_DAYS * DAY_MS);
+  return new Date(now - OPP_MMR_TRUST_MAX_AGE_DAYS * DAY_MS);
 }
 
-/** The route's keyed floor (an ISO date) when valid, otherwise today's.
+/**
+ * The cache path's floor: the same horizon back from the start of the UTC
+ * day, so it moves once a day and can key a retained body exactly. The
+ * flag-off path keeps the continuous floor above.
+ *
+ * @param {number} [now]
+ * @returns {Date}
+ */
+function oppMmrTrustDayFloor(now = Date.now()) {
+  return oppMmrTrustFloor(Math.floor(now / DAY_MS) * DAY_MS);
+}
+
+/** The route's keyed floor (an ISO date) when valid, otherwise the continuous floor.
  * @param {unknown} keyed @returns {Date} */
 function keyedTrustFloor(keyed) {
   const at = typeof keyed === "string" ? new Date(keyed) : null;
@@ -535,6 +547,7 @@ module.exports = {
   oppMmrBuckets,
   oppMmrBucketGames,
   oppMmrTrustFloor,
+  oppMmrTrustDayFloor,
   asOppMmrBucketWidth,
   OPP_MMR_BUCKET_WIDTHS,
   OPP_MMR_AUTO_WIDTH_CUTOFF,

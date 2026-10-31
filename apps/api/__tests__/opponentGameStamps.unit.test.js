@@ -286,7 +286,7 @@ test("a busy or stopped writer refuses only the game writes while every backfill
 test("a legacy numeric opponents pulseId has its heal vetoed with the warning", async () => {
   const h = harness({ rows: [{ pulseId: 12345, toonHandle: TOON }] });
   expect(await h.service.backfillPulseCharacterId(userId, { limit: 5 })).toEqual({ scanned: 1, resolved: 1, updated: 1, skipped: 0 });
-  expect(h.games.updateMany).not.toHaveBeenCalled(); expect(h.revisions.run).not.toHaveBeenCalled();
+  expect(h.games.updateMany).not.toHaveBeenCalled(); expect(h.revisions.run.mock.calls.map(call => call[0])).toEqual([userId]); // the fenced opponents row (C5)
   expect(h.logger.warn.mock.calls).toEqual([[{ err: expect.objectContaining({ code: "game_stats_neutral_operation_invalid" }), userId, pulseId: 12345 },
     "opponent_pulse_backfill_game_identity_failed"]]);
 });

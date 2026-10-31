@@ -1068,7 +1068,7 @@ class GdprService {
     const dropped = await gameWrite(this.userRevision, userId, () => this.db.opponents.deleteMany({ userId }));
     const buckets = await this._competitiveOpponentBuckets(userId);
     if (buckets.size > 0) {
-      const docs = [];
+      const docs = /** @type {Array<Record<string, any>>} */ ([]);
       for (const b of buckets.values()) {
         /** @type {{
          *   userId: string,

@@ -13,8 +13,8 @@ const ROUTES = [["timeseries", "/timeseries"], ["dayHourHeatmap", "/timeseries/d
   ["oppStrategyMixOverTime", "/timeseries/opp-strategies"]];
 // Owner-game kinds served by their own services rather than AggregationsService.
 const PLAIN = [["streak", "/streak"], ["macroReport", "/macro/report"]];
-// Net-MMR kinds, whose routes pass exactly the service's options; random summary also gets the memo switch.
-const NET = [["netMmrByMatchup", "/mmr-by-matchup"], ["netMmrByOpponent", "/mmr-by-matchup/opponents"]], RANDOM = [["randomSummary", "/random-summary"]];
+// Net-MMR kinds, whose routes pass exactly the service's options; random summary also gets the memo switch, and the opponent-MMR pair the day's trust floor.
+const NET = [["netMmrByMatchup", "/mmr-by-matchup"], ["netMmrByOpponent", "/mmr-by-matchup/opponents"]], RANDOM = [["randomSummary", "/random-summary"]], OPP = [["oppMmrBuckets", "/opp-mmr-buckets"], ["oppMmrBucketGames", "/opp-mmr-buckets/games"]];
 function fixture(enabled = true, legacy = false, capture) {
   const rows = new Map([ ["a", { userId: "a", clerkUserId: "clerk-a", dataRev: 0 }], ["b", { userId: "b", dataRev: 0 }] ]);
   let deleted = false, revoked = false;
@@ -23,7 +23,7 @@ function fixture(enabled = true, legacy = false, capture) {
   const revisions = new UserRevision(users, { enabled, isDeleted: async () => deleted });
   const cache = new UserCache(revisions, { enabled }); const aggregations = {};
   for (const method of [...ROUTES.map(([name]) => name), ...PLAIN.map(([name]) => name), "matchups", "maps", "mapMatchups", "buildVsStrategy",
-    "matchupTimeseries", "oppMmrBuckets", "randomSummary", "explorer", "distinctMaps", "netMmrByMatchup", "netMmrByOpponent", "gamesList"]) {
+    "matchupTimeseries", "oppMmrBuckets", "oppMmrBucketGames", "randomSummary", "explorer", "distinctMaps", "netMmrByMatchup", "netMmrByOpponent", "gamesList"]) {
     aggregations[method] = jest.fn(async (owner, ...input) => ({ owner, method, input, points: [{ date: new Date(0), missing: null }] }));
   }
   aggregations.resolveMomentumPolicy = async (_owner, gap) => ({ sessionGapMinutes: gap ?? 90, sessionPolicyGeneration: 0, lease: null });
@@ -89,18 +89,18 @@ test("a committed or unknown mutation forces new aggregation without socket emis
   await expect(f.revisions.run("a", async () => { throw error; })).rejects.toBe(error);
   await get(f.app, "/timeseries"); expect(f.aggregations.timeseries).toHaveBeenCalledTimes(3);
 });
-test.each(["/matchups", "/maps", "/maps/matchups", "/build-vs-strategy", "/timeseries/matchups", "/opp-mmr-buckets",
+test.each(["/matchups", "/maps", "/maps/matchups", "/build-vs-strategy", "/timeseries/matchups",
   "/trends/explorer/periods", "/games-list", "/maps/diagnostic"])("%s without captured dependencies or explicit coverage never enters retention", async (path) => {
   const f = fixture(); expect((await get(f.app, path)).status).toBe(200); expect((await get(f.app, path)).status).toBe(200);
   expect(f.users.findOne).not.toHaveBeenCalled(); expect(f.cache.completed.size).toBe(0);
 });
 test("each non-dependent covered kind keeps its own retained body in one cache", async () => {
   const f = fixture();
-  for (const [method, path] of [...ROUTES, ...PLAIN, ...NET, ...RANDOM]) expect([path, (await get(f.app, path)).body.method]).toEqual([path, method]);
-  expect(f.cache.completed.size).toBe(ROUTES.length + PLAIN.length + NET.length + RANDOM.length);
+  for (const [method, path] of [...ROUTES, ...PLAIN, ...NET, ...RANDOM, ...OPP]) expect([path, (await get(f.app, path)).body.method]).toEqual([path, method]);
+  expect(f.cache.completed.size).toBe(ROUTES.length + PLAIN.length + NET.length + RANDOM.length + OPP.length);
 });
 
-test.each([...ROUTES.slice(6), ...PLAIN, ...NET, ...RANDOM])("%s isolates filters and owners and retires committed/unknown results", async (method, path) => {
+test.each([...ROUTES.slice(6), ...PLAIN, ...NET, ...RANDOM, ...OPP])("%s isolates filters and owners and retires committed/unknown results", async (method, path) => {
   const f = fixture();
   const first = await get(f.app, path), tag = first.headers.etag;
   for (const [query, owner] of [["?race=Z", "a"], ["", "b"]]) {
