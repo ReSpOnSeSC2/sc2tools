@@ -61,7 +61,8 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const conditionalResources = [path, "/v1/summary", "/v1/macro/summary", "/v1/timeseries/mmr",
     "/v1/timeseries/my-builds", "/v1/timeseries/opp-strategies",
-    "/v1/matchups", "/v1/maps", "/v1/maps/matchups", "/v1/build-vs-strategy"];
+    "/v1/matchups", "/v1/maps", "/v1/maps/matchups", "/v1/build-vs-strategy", "/v1/streak", "/v1/macro/report",
+    "/v1/mmr-by-matchup", "/v1/mmr-by-matchup/opponents", "/v1/random-summary", "/v1/timeseries/matchups"];
 
 describe("useApi actual SWR manual conditional integration", () => {
   it.each(conditionalResources)("%s discovers capability with one ordinary read, retains the next200 and reconstructs304", async resource => {
@@ -83,7 +84,7 @@ describe("useApi actual SWR manual conditional integration", () => {
     const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => mode === "legacy OFF"
       ? new Response('{"value":"baseline"}', { headers: { etag: 'W/"native"' } }) : response("baseline"));
     vi.stubGlobal("fetch", fetcher);
-    const view = fixture(mode !== "outside provider").render(mode === "nonallowlisted" ? "/v1/timeseries/matchups#1" : path);
+    const view = fixture(mode !== "outside provider").render(mode === "nonallowlisted" ? "/v1/games-list#1" : path);
     await waitFor(() => expect(view.result.current.data?.value).toBe("baseline"));
     await act(async () => { await view.result.current.mutate(); });
     expect(fetcher).toHaveBeenCalledTimes(2);

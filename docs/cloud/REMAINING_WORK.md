@@ -284,10 +284,10 @@ to `apps/web/components/analyzer/` as proper TypeScript ES modules.
 
 ## F — Realtime push ✅ done
 
-- [x] **Sticky-session config in Render.** [`apps/api/render.yaml`](../../apps/api/render.yaml)
-  sets `sessionAffinity: true`. Doc note added to
-  [`SETUP_CLOUD.md`](SETUP_CLOUD.md) so you know to verify the toggle
-  if you ever scale to 2+ instances.
+- [x] **Sticky-session note.** [`apps/api/render.yaml`](../../apps/api/render.yaml)
+  pins one instance and cannot express session affinity, so none is set.
+  [`SETUP_CLOUD.md`](SETUP_CLOUD.md) says to enable the dashboard toggle
+  before any scale-out.
 - [x] **Socket.io reconnect UX.** [`SyncStatus.tsx`](../../apps/web/components/SyncStatus.tsx)
   now tracks four connection states (connecting / connected /
   reconnecting / offline). The dot goes amber on disconnect and
@@ -431,11 +431,13 @@ Code-side shipped in this drop; account-side runbook lives in
   set the DSN, and source-maps upload during `next build`. The
   Express error handler forwards 5xx to Sentry; bootstrap errors in
   `server.js` likewise.
-- [x] **Render autoscaling + healthcheck.** `apps/api/render.yaml` now
-  sets `numInstances: 1`, `minInstances: 1`, `maxInstances: 3`,
-  `targetCPUPercent: 70`. `healthCheckPath: /v1/health` was already in
-  place. Combined with `sessionAffinity: true` for Socket.io sticky
-  sessions.
+- [x] **Render instance pin + healthcheck.** `apps/api/render.yaml` pins
+  `numInstances: 1` with `healthCheckPath: /v1/health`, because the
+  realtime layer keeps its state in one process. The blueprint configures
+  no autoscaling policy, and Render's Blueprint schema cannot express
+  session affinity; the operator verifies the live settings. Each deploy
+  still runs the old and new
+  process side by side briefly; see [ADR 0072](../adr/0072-serving-cohort-coherence.md).
 - [x] **Privacy policy + ToS** at [`/legal/privacy`](../../apps/web/app/legal/privacy/page.tsx)
   and [`/legal/terms`](../../apps/web/app/legal/terms/page.tsx). Footer
   links them site-wide.

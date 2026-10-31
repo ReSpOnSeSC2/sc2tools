@@ -13,6 +13,7 @@ corresponding GitHub Release.
 
 ### Device credential write coordination
 
+- Bound how often the inactive retained-authentication path checks its authority record: after a check finds no usable grant, it waits 1.8 seconds before checking again. Device authentication still reads the database on every request, and the retained path stays off.
 - Keep ordinary account and agent requests usable while device-access changes wait for their coordination checks. The optional retained-authentication path remains inactive.
 - Coordinate device pairing, revocation and account erasure through durable database gates. These controls can take a few seconds to finish; uncertain writes keep their reuse scope blocked. Device authentication still reads the database on every request, and the proposed 60-second credential cache remains off.
 
@@ -35,6 +36,11 @@ corresponding GitHub Release.
 
 ### Dashboard cache coverage
 
+- Extend optional private revalidation to the matchup win-rate-over-time chart, keyed to the same benchmark snapshot that calculates its rating windows. The cache remains off; the chart keeps its normal behavior while it is off.
+- Extend optional private revalidation to the opponent-MMR histogram and its games drill-down. Every in-app write to a player's opponent records, backup restores and account deletion included, now retires that player's cached charts. The cache remains off; both charts keep their normal behavior while it is off.
+- Extend optional private revalidation to the random-race summary behind the matchup picker. With the cache on, the summary no longer keeps its own one-minute answer; reuse follows the same per-account revision checks as the other covered charts. The cache remains off; the summary keeps its normal behavior while it is off.
+- Extend optional private revalidation to net MMR by matchup and its opponent drill-down. The cache remains off; these routes keep their normal behavior while it is off.
+- Extend optional private revalidation to the dashboard's current streak and the Macro tab's report. The cache remains off; these routes keep their normal behavior while it is off.
 - Prepare optional private revalidation for Matchups, Maps, Maps by matchup and Build versus strategy using the exact benchmark snapshot that calculates each response. Reuse respects the benchmark's existing one-minute memo. The cache remains off; other mixed-dependency responses remain outside this slice.
 - Extend optional private revalidation to the dashboard summary, macro summary, MMR progression and build/strategy mix charts. The cache remains off; these routes keep their normal behavior while it is off.
 

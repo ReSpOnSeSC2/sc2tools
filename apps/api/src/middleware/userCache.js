@@ -1,12 +1,12 @@
 "use strict";
 
-const { requestKey } = require("../services/trendsRequests");
+const { requestKey } = require("../services/trendsRequests"); const { retentionOpen } = require("./userCacheGuard");
 const { createHmac, randomBytes } = require("node:crypto");
 const TAG_BYTES = 72;
 // Mixed routes require their exact captured global-curve dependency as well.
-const DEPENDENT_ROUTES = new Set(["matchups", "maps", "mapMatchups", "buildVsStrategy"]);
+const DEPENDENT_ROUTES = new Set(["matchups", "maps", "mapMatchups", "buildVsStrategy", "matchupTimeseries"]);
 const ALLOWED_ROUTES = new Set(["timeseries", "dayHourHeatmap", "lengthBuckets", "activityCalendar", "momentum", "mapTrend",
-  "summary", "macroSummary", "mmrProgression", "myBuildMixOverTime", "oppStrategyMixOverTime", ...DEPENDENT_ROUTES]);
+  "summary", "macroSummary", "mmrProgression", "myBuildMixOverTime", "oppStrategyMixOverTime", "streak", "macroReport", "netMmrByMatchup", "netMmrByOpponent", "randomSummary", "oppMmrBuckets", "oppMmrBucketGames", ...DEPENDENT_ROUTES]);
 const LIMITS = Object.freeze({ bytes: 64 * 1024 * 1024, entryBytes: 512 * 1024,
   keyBytes: 16 * 1024, entries: 512, ttlMs: 600000, active: 4, ownerActive: 2,
   waiting: 32, subscribers: 16, responses: 64, queueMs: 5000, responseMs: 30000 });
@@ -25,7 +25,7 @@ class UserCache {
     /** @type {Map<string,any>} */ this.pending = new Map();
     /** @type {any[]} */ this.queue = [];
     /** @type {Map<string,number>} */ this.ownerActive = new Map();
-    this.bytes = 0; this.reserved = 0; this.active = 0; this.waiting = 0; this.responses = 0; this.preparing = 0; this.serial = 0;
+    this.bytes = 0; this.reserved = 0; this.active = 0; this.waiting = 0; this.responses = 0; this.preparing = 0; this.serial = 0; this.closing = false; this.quarantineUntil = -Infinity; this.quarantineEnded = true;
     /** @type {Record<string,number>} */
     this.stats = { hit: 0, miss: 0, join: 0, eviction: 0, expiry: 0, oversize: 0, bypass: 0, rejected: 0, late_fill: 0 };
     this.tagSalt = this.enabled ? randomBytes(32) : null;
@@ -114,11 +114,11 @@ class UserCache {
     try {
       const selected = typeof dependency === "function" ? await prepareDependency(this, dependency) : dependency;
       if (responseUnavailable(sub, res)) return;
-      Object.assign(sub, { dependency: selected });
+      Object.assign(sub, { dependency: selected }); const open = retentionOpen(this);
       const snapshot = await this.revisions.snapshot(owner);
       if (responseUnavailable(sub, res)) return;
       if (!this.revisions.sameGeneration(snapshot)) throw this.retired();
-      const key = boundedCapturedKey(this, owner, route, filters, options, snapshot, dependent, selected);
+      const key = boundedCapturedKey(this, owner, route, filters, options, snapshot, dependent, selected, open);
       let entry = key ? this.completed.get(key) : null;
       if (entry && key && entry.expiresAt <= this.now()) { this.evict(key, "expiry"); entry = null; }
       if (entry && key) {
@@ -164,7 +164,7 @@ class UserCache {
     sub.responseTimer = setTimeout(() => res.destroy(), this.limits.responseMs); sub.responseTimer.unref?.();
     // Both guards run after every await; only synchronous header/body writes follow.
     sub.publishGuard?.();
-    packet = dependencyPacket(this, packet, sub);
+    packet = dependencyPacket(this, packet, sub); if (this.closing) packet = { body: packet.body, etag: null };
     if (packet.etag) {
       res.set("Cache-Control", "private, no-cache").set("ETag", packet.etag).vary("Authorization");
       if (matchesValidator(sub.ifNoneMatch, packet.etag)) {
@@ -251,9 +251,9 @@ function responseUnavailable(sub, res) { return !sub.active || res.destroyed; }
  * @param {UserCache} cache @param {string} owner @param {string} route
  * @param {object} filters @param {object} options @param {any} snapshot
  * @param {boolean} dependent
- * @param {import('../services/strengthCurveSnapshots').CurveDependency|null|undefined} selected */
-function boundedCapturedKey(cache, owner, route, filters, options, snapshot, dependent, selected) {
-  const stable = cache.revisions.current(snapshot);
+ * @param {import('../services/strengthCurveSnapshots').CurveDependency|null|undefined} selected @param {boolean} open */
+function boundedCapturedKey(cache, owner, route, filters, options, snapshot, dependent, selected, open) {
+  const stable = open && cache.revisions.current(snapshot);
   const parts = [owner, route, filters, options, snapshot.rev, snapshot.epoch, snapshot.token.id];
   if (dependent) parts.push(selected?.keyPart);
   const encoded = stable && (!dependent || dependencyCurrent(selected)) ? requestKey(parts) : null;
@@ -261,7 +261,7 @@ function boundedCapturedKey(cache, owner, route, filters, options, snapshot, dep
 }
 /** @param {UserCache} cache @param {any} task @param {any} latest */
 function retainTask(cache, task, latest) {
-  return !!task.cacheKey && cache.revisions.current(task.snapshot) && cache.revisions.current(latest)
+  return !cache.closing && !!task.cacheKey && cache.revisions.current(task.snapshot) && cache.revisions.current(latest)
     && (!task.dependent || dependencyCurrent(task.dependency));
 }
 /** @param {UserCache} cache @param {any} task */

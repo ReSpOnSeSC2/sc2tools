@@ -1,5 +1,5 @@
 "use strict";
-const { gameStatsWritesFor } = require("./gameStatsWrites");
+const { gameStatsWritesFor } = require("./gameStatsWrites"); const { gameWrite } = require("../util/userRevision");
 const { snapshotStampGame, regionStampPossible, gameStampAdmission, backfillStampAdmission, stampOpponentGameRegion,
   healOpponentGameIdentity } = require("./opponentGameStamps");
 
@@ -2082,7 +2082,7 @@ class OpponentsService {
       const key = `openings.${sanitizeKey(game.opening)}`;
       inc[key] = 1;
     }
-    await this.db.opponents.updateOne(
+    await gameWrite(this.userRevision, userId, () => this.db.opponents.updateOne(
       { userId, pulseId: game.pulseId },
       {
         $setOnInsert: setOnInsert,
@@ -2091,7 +2091,7 @@ class OpponentsService {
         $inc: inc,
       },
       { upsert: true },
-    );
+    ));
     if (pulseCharIdChange) {
       this.logger.info(
         {
@@ -2197,14 +2197,14 @@ class OpponentsService {
           corrected[openingPath] = decrementFloorExpr(`$${openingPath}`, 1);
         }
 
-        await this.db.opponents.updateOne(
+        await gameWrite(this.userRevision, userId, () => this.db.opponents.updateOne(
           {
             userId,
             pulseId,
             _resumeReplayCounterRepairIds: { $ne: gameId },
           },
           [{ $set: corrected }],
-        );
+        ));
       }
 
       // Marking the game after the atomic opponent update makes an ambiguous
@@ -2294,9 +2294,9 @@ class OpponentsService {
         }),
       ]);
       if (!newest) {
-        await this.db.opponents.deleteOne(
+        await gameWrite(this.userRevision, userId, () => this.db.opponents.deleteOne(
           { userId, pulseId, gameCount: { $lte: 0 } },
-        );
+        ));
       } else {
         const newestAt = newest.date instanceof Date
           ? newest.date
@@ -2312,19 +2312,19 @@ class OpponentsService {
             );
           }
           if (newest?.opponent?.race) latestDerived.race = newest.opponent.race;
-          await this.db.opponents.updateOne(
+          await gameWrite(this.userRevision, userId, () => this.db.opponents.updateOne(
             { userId, pulseId, lastSeen: { $in: boundary.dates } },
             { $set: latestDerived },
-          );
+          ));
         }
         const oldestAt = oldest?.date instanceof Date
           ? oldest.date
           : new Date(oldest?.date);
         if (!Number.isNaN(oldestAt.getTime())) {
-          await this.db.opponents.updateOne(
+          await gameWrite(this.userRevision, userId, () => this.db.opponents.updateOne(
             { userId, pulseId, firstSeen: { $in: boundary.dates } },
             { $set: { firstSeen: oldestAt } },
-          );
+          ));
         }
       }
 
@@ -2492,10 +2492,10 @@ class OpponentsService {
     // ingest path's ``created`` check already determined this was
     // not a new-game ingest and any earlier insert was lost; the
     // admin "Rebuild opponents" tool reconstructs from games.
-    const res = await this.db.opponents.updateOne(
+    const res = await gameWrite(this.userRevision, userId, () => this.db.opponents.updateOne(
       { userId, pulseId: game.pulseId },
       { $set: set },
-    );
+    ));
     if (pulseCharIdChange) {
       this.logger.info(
         {
@@ -2933,10 +2933,10 @@ class OpponentsService {
           }
         }
       }
-      const res = await this.db.opponents.updateOne(
+      const res = await gameWrite(this.userRevision, userId, () => this.db.opponents.updateOne(
         { userId, pulseId: row.pulseId },
         { $set: set },
-      );
+      ));
       if (res.modifiedCount > 0) updated += 1;
       if (typeof pulseCharacterId === "string" && pulseCharacterId.length > 0) {
         this.logger.info(
@@ -3081,10 +3081,10 @@ class OpponentsService {
           );
         }
       }
-      const res = await this.db.opponents.updateOne(
+      const res = await gameWrite(this.userRevision, userId, () => this.db.opponents.updateOne(
         { userId, pulseId: row.pulseId },
         { $set: set },
-      );
+      ));
       if (res.modifiedCount > 0) updated += 1;
     }
     return { scanned: rows.length, revealed, updated };
@@ -3384,7 +3384,7 @@ class OpponentsService {
       if (pulseFetched.region) set.region = pulseFetched.region;
     }
 
-    await this.db.opponents.updateOne({ userId, pulseId }, { $set: set });
+    await gameWrite(this.userRevision, userId, () => this.db.opponents.updateOne({ userId, pulseId }, { $set: set }));
 
     // Step 3 — heal stable game identity metadata only. A manual admin
     // retry may refresh the opponent profile's current MMR, but it must

@@ -11,7 +11,7 @@ const pino = /** @type {any} */ (pinoModule).default || pinoModule;
 
 const { loadConfig } = require("./config/loader");
 const { connect } = require("./db/connect");
-const { buildApp } = require("./app");
+const { buildApp } = require("./app"); const { beginChartCacheShutdown, startChartCacheQuarantine } = require("./middleware/userCacheGuard");
 const { PROTOCOL_VERSION, MAINTENANCE_VERSION } = require("./services/gameStatsMaintenance");
 const { attachSocketAuth } = require("./socket/auth");
 const { buildKeepaliveWorker } = require("./services/keepalive");
@@ -217,7 +217,7 @@ async function main() {
     registry: runtimeCapacityRegistry,
   });
   httpServer.listen(config.port, () => {
-    logger.info({ port: config.port }, "listening");
+    logger.info({ port: config.port }, "listening"); startChartCacheQuarantine(/** @type {any} */ (services).userCache, logger);
     runtimeCapacity.start();
     /** @type {any} */ (services).platformIntegrations.start();
     // start() is inert unless the independent server owner gate is true.
@@ -417,7 +417,7 @@ async function main() {
 
   /** @param {string} signal */
   async function shutdown(signal) {
-    logger.info({ signal }, "shutdown_start");
+    logger.info({ signal }, "shutdown_start"); beginChartCacheShutdown(/** @type {any} */ (services).userCache);
     // Optional REST reuse is not injected in this prerequisite release. If
     // present, synchronously retire tickets before any shutdown awaits.
     const restAuthDrain = /** @type {any} */ (services).pairings.restAuthReuse?.stopAndDrain();

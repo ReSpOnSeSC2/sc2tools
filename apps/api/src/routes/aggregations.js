@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { parseFilters, parseFiniteInt } = require("../util/parseQuery");
-const { asOppMmrBucketWidth } = require("../services/trendsOppMmr");
+const { asOppMmrBucketWidth, oppMmrTrustDayFloor } = require("../services/trendsOppMmr");
 const { parseExplorerOptions } = require("../services/trendsExplorer");
 
 /**
@@ -107,7 +107,7 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.aggregations.randomSummary(userId, filters));
+      await send(req, res, userId, "randomSummary", filters, {}, () => deps.aggregations.randomSummary(userId, filters, { memo: !deps.userCache?.enabled }));
     } catch (err) {
       next(err);
     }
@@ -147,13 +147,13 @@ function buildAggregationsRouter(deps) {
           ? intervalRaw
           : "week";
       const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
-      res.json(
-        await deps.aggregations.matchupTimeseries(
-          userId,
-          { interval, tz, groupByOwnRace: req.query.group_by === "matchup" },
-          filters,
-        ),
-      );
+      // Exactly the service's options, so every chart input is in the key; with the
+      // cache on, one captured curve proof keys the body and calculates its rating windows.
+      const options = { interval, tz, groupByOwnRace: req.query.group_by === "matchup" };
+      await sendCurveDependent(deps, send, req, res, userId, "matchupTimeseries", filters, options,
+        (snapshot) => snapshot
+          ? deps.aggregations.matchupTimeseries(userId, options, filters, snapshot)
+          : deps.aggregations.matchupTimeseries(userId, options, filters));
     } catch (err) {
       next(err);
     }
@@ -244,10 +244,10 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      const bucketWidth = parseOppMmrBucketWidth(req.query.bucket_width);
-      res.json(
-        await deps.aggregations.oppMmrBuckets(userId, filters, { bucketWidth }),
-      );
+      // With the cache on, the day's trust floor keys the body and drives it exactly; the off path keeps its clock read.
+      const options = { bucketWidth: parseOppMmrBucketWidth(req.query.bucket_width), ...cacheTrustFloor(deps) };
+      await send(req, res, userId, "oppMmrBuckets", filters, options,
+        () => deps.aggregations.oppMmrBuckets(userId, filters, options));
     } catch (err) {
       next(err);
     }
@@ -262,9 +262,9 @@ function buildAggregationsRouter(deps) {
       const filters = parseFilters(req.query);
       const lo = parseFiniteInt(req.query.lo);
       const hi = parseFiniteInt(req.query.hi);
-      res.json(
-        await deps.aggregations.oppMmrBucketGames(userId, filters, { lo, hi }),
-      );
+      const options = { lo, hi, ...cacheTrustFloor(deps) };
+      await send(req, res, userId, "oppMmrBucketGames", filters, options,
+        () => deps.aggregations.oppMmrBucketGames(userId, filters, options));
     } catch (err) {
       next(err);
     }
@@ -338,9 +338,9 @@ function buildAggregationsRouter(deps) {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
       const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
-      res.json(
-        await deps.aggregations.netMmrByMatchup(userId, filters, { tz, groupByOwnRace: req.query.group_by === "matchup" }),
-      );
+      const options = { tz, groupByOwnRace: req.query.group_by === "matchup" };
+      await send(req, res, userId, "netMmrByMatchup", filters, options,
+        () => deps.aggregations.netMmrByMatchup(userId, filters, options));
     } catch (err) {
       next(err);
     }
@@ -364,18 +364,18 @@ function buildAggregationsRouter(deps) {
       const order = parseSortOrder(req.query.order);
       const limit = parseFiniteInt(req.query.limit);
       const offset = parseFiniteInt(req.query.offset);
-      res.json(
-        await deps.aggregations.netMmrByOpponent(userId, filters, {
-          opponentRace,
-          myRace,
-          search,
-          minPairs,
-          sort,
-          order,
-          limit,
-          offset,
-        }),
-      );
+      // Exactly the service's options, so every input that changes the drill-down is in the key.
+      const options = {
+        opponentRace,
+        myRace,
+        search,
+        minPairs,
+        sort,
+        order,
+        limit,
+        offset,
+      };
+      await send(req, res, userId, "netMmrByOpponent", filters, options, () => deps.aggregations.netMmrByOpponent(userId, filters, options));
     } catch (err) {
       next(err);
     }
@@ -403,7 +403,7 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.macroReport.report(userId, filters));
+      await send(req, res, userId, "macroReport", filters, {}, () => deps.macroReport.report(userId, filters));
     } catch (err) {
       next(err);
     }
@@ -416,7 +416,7 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.streak.current(userId, filters));
+      await send(req, res, userId, "streak", filters, {}, () => deps.streak.current(userId, filters));
     } catch (err) {
       next(err);
     }
@@ -456,12 +456,21 @@ function buildAggregationsRouter(deps) {
  * @param {any} req @param {any} res @param {string} owner
  * @param {'matchups'|'maps'|'mapMatchups'|'buildVsStrategy'} method @param {object} filters */
 async function sendStrength(deps, send, req, res, owner, method, filters) {
-  if (!deps.userCache?.enabled || !deps.aggregations.captureStrengthCurve) return res.json(await deps.aggregations[method](owner, filters));
+  return sendCurveDependent(deps, send, req, res, owner, method, filters, {},
+    (snapshot) => snapshot ? deps.aggregations[method](owner, filters, snapshot) : deps.aggregations[method](owner, filters));
+}
+
+/** A kind whose calculation reads the global MMR curve. With the cache on, one captured proof keys the body and drives
+ * the calculation; HEAD and the off path keep the original per-request curve read.
+ * @param {Parameters<typeof buildAggregationsRouter>[0]} deps @param {any} send
+ * @param {any} req @param {any} res @param {string} owner @param {string} kind @param {object} filters
+ * @param {object} options exactly the options object the call passes to the service
+ * @param {(snapshot?: import('../services/strengthCurveSnapshots').CurveSnapshot) => Promise<any>} call */
+async function sendCurveDependent(deps, send, req, res, owner, kind, filters, options, call) {
+  if (!deps.userCache?.enabled || !deps.aggregations.captureStrengthCurve) return res.json(await call());
   /** @type {import('../services/strengthCurveSnapshots').CurveSnapshot|null|undefined} */ let snapshot;
   const capture = async () => { snapshot = await deps.aggregations.captureStrengthCurve?.(); return snapshot?.dependency ?? null; };
-  return send(req, res, owner, method, filters, {},
-    () => snapshot ? deps.aggregations[method](owner, filters, snapshot) : deps.aggregations[method](owner, filters),
-    () => {}, capture);
+  return send(req, res, owner, kind, filters, options, () => call(snapshot || undefined), () => {}, capture);
 }
 
 /** @param {import('express').Request} req */
@@ -514,6 +523,12 @@ function parseSortOrder(raw) {
  */
 function parseOppMmrBucketWidth(raw) {
   return asOppMmrBucketWidth(raw) ?? "auto";
+}
+
+/** The opponent-MMR pair's keyed trust floor, added only while the cache is enabled (ADR 0072, item 4).
+ * @param {any} deps @returns {{ trustFloor?: string }} */
+function cacheTrustFloor(deps) {
+  return deps.userCache?.enabled ? { trustFloor: oppMmrTrustDayFloor().toISOString() } : {};
 }
 
 /** @param {number} status @param {string} code */

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "slice": "R1-activation-review",
+  "status": "PREPARED_NOT_SCHEDULED_NO_PRODUCTION_READ",
+  "runbook": {
+    "path": "docs/runbooks/chart-cache-activation-review.md",
+    "lfSha256": "6ffdca2895da2ed1b5e50f71a3e8352759a0b82464c7d7c6c4be409a4a6fcafa",
+    "checkedAtSource": "9802bc8a1aa06549108890164914ef11be5ed0aa",
+    "lineCitations": [
+      "config/loader.js:151",
+      "apps/api/render.yaml:19",
+      "apps/api/render.yaml:31",
+      "server.js:205-207",
+      "server.js:289",
+      "middleware/userCacheGuard.js:13-15"
+    ]
+  },
+  "scope": [
+    "Owner decisions to accept in writing: G1-G3 unmet, unheld background writers, the end-of-quarantine session effect, the 420 s quarantine, the daily trust floor, out-of-band barriers.",
+    "A fill-in receipt with every chart-cache row of ADR 0072's Activation receipts, plus the writer-set version and inventory test.",
+    "The flag-on procedure with its 120 s predecessor observation, and the flag-off rollback."
+  ],
+  "notDone": [
+    "No production, provider or dashboard read was made.",
+    "USER_CACHE_ENABLED was not changed; nothing was activated or scheduled.",
+    "Device-auth activation is out of scope; its gates stay unmet."
+  ]
+}

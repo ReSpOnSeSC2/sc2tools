@@ -4,6 +4,7 @@ const { randomUUID } = require("crypto");
 const { Timestamp } = require("mongodb");
 const { deviceAuthOwnerHash } = require("../src/services/deviceAuthAuthority");
 const { deferred, until, authFixture } = require("./helpers/deviceAuthFixture");
+afterEach(() => jest.useRealTimers());
 
 test("grant is one actual primary majority nonce write with an owned causal session and command floor", async () => {
   const f = authFixture(), grant = await f.lease.acquire();
@@ -72,7 +73,73 @@ test("unknown grant ACK does not authorize even if metadata may have committed",
     await original(command, options); throw new Error("lost ACK");
   });
   expect(await f.lease.acquire()).toBeNull(); expect(f.lease.current()).toBeNull();
-  const grant = await f.lease.acquire(); expect(grant).not.toBeNull();
+  f.clock.mono = 1800; const grant = await f.lease.acquire(); expect(grant).not.toBeNull();
+  expect(f.command).toHaveBeenCalledTimes(2); await f.cache.stopAndDrain();
+});
+
+test.each(["prepared", "missing", "error", "unknown ACK"])(
+  "a %s settlement holds off new probes for one lease, then exactly one probe follows", async kind => {
+    const f = authFixture(), original = f.command.getMockImplementation(), hash = "a".repeat(64);
+    f.command.mockImplementationOnce(async (/** @type {any} */ command, /** @type {any} */ options) => {
+      if (kind === "error") throw new Error("primary unavailable");
+      const reply = await original(command, options);
+      if (kind === "prepared") reply.value.mode = "prepared";
+      if (kind === "missing") { reply.lastErrorObject.n = 0; reply.value = null; }
+      if (kind === "unknown ACK") throw new Error("lost ACK");
+      return reply;
+    });
+    f.clock.mono = 5; expect(await f.lease.acquire()).toBeNull();
+    f.clock.mono = 1804; const held = await Promise.all(Array.from({ length: 20 }, () => f.lease.acquire()));
+    expect(held.every(grant => grant === null)).toBe(true); expect(await f.cache.prepare(hash)).toBeNull();
+    expect(f.lease.probe).toBeNull(); expect(f.command).toHaveBeenCalledTimes(1); expect(f.read).not.toHaveBeenCalled();
+    f.clock.mono = 1805; const grant = await f.lease.acquire(); expect(grant).not.toBeNull();
+    expect(await f.lease.acquire()).toBe(grant); expect(f.command).toHaveBeenCalledTimes(2); await f.cache.stopAndDrain();
+  },
+);
+
+test("a probe retired by its caller's deadline starts the hold-off only at its actual settlement", async () => {
+  jest.useFakeTimers(); const f = authFixture(), gate = deferred(), original = f.command.getMockImplementation();
+  f.command.mockImplementationOnce(async (/** @type {any} */ command, /** @type {any} */ options) => {
+    await gate.promise; return original(command, options);
+  });
+  const pending = f.lease.acquire(); f.clock.mono = 1800; await jest.advanceTimersByTimeAsync(1800);
+  expect(await pending).toBeNull(); expect(f.lease.probe.retired).toBe(true);
+  // A refused caller and the settlement happen at different times, so only settlement timing ends the hold-off at 6800.
+  f.clock.mono = 3000; expect(await f.lease.acquire()).toBeNull(); expect(f.command).toHaveBeenCalledTimes(1);
+  f.clock.mono = 5000; gate.resolve(); await until(() => f.lease.probe === null);
+  f.clock.mono = 6799; expect(await f.lease.acquire()).toBeNull(); expect(f.command).toHaveBeenCalledTimes(1);
+  f.clock.mono = 6800; expect(await f.lease.acquire()).not.toBeNull(); expect(f.command).toHaveBeenCalledTimes(2);
+  await f.cache.stopAndDrain();
+});
+
+test.each(["prepared", "missing"])("a persistently %s authority re-arms the hold-off after every failed probe", async kind => {
+  const f = authFixture(), original = f.command.getMockImplementation(), hash = "a".repeat(64);
+  f.command.mockImplementation(async (/** @type {any} */ command, /** @type {any} */ options) => {
+    const reply = await original(command, options);
+    if (kind === "prepared") reply.value.mode = "prepared";
+    if (kind === "missing") { reply.lastErrorObject.n = 0; reply.value = null; }
+    return reply;
+  });
+  f.clock.mono = 5; expect(await f.lease.acquire()).toBeNull(); expect(f.command).toHaveBeenCalledTimes(1);
+  f.clock.mono = 1805; expect(await f.lease.acquire()).toBeNull(); expect(f.command).toHaveBeenCalledTimes(2);
+  for (const at of [1805, 2500, 3604]) {
+    f.clock.mono = at; expect(await f.lease.acquire()).toBeNull(); expect(await f.cache.prepare(hash)).toBeNull();
+  }
+  expect(f.command).toHaveBeenCalledTimes(2); expect(f.read).not.toHaveBeenCalled();
+  f.clock.mono = 3605; expect(await f.lease.acquire()).toBeNull(); expect(f.command).toHaveBeenCalledTimes(3);
+  await f.cache.stopAndDrain();
+});
+
+test("a denyAll grant is still kept for its lease and starts no hold-off", async () => {
+  const f = authFixture(), hash = "a".repeat(64), original = f.command.getMockImplementation(); f.row.denyAll = true;
+  // The probe settles 100 ms after its start, so a hold-off would outlast the grant.
+  f.command.mockImplementationOnce(async (/** @type {any} */ command, /** @type {any} */ options) => {
+    f.clock.mono = 100; return original(command, options);
+  });
+  const grant = await f.lease.acquire(); expect(grant.denyAll).toBe(true);
+  expect(await f.lease.acquire()).toBe(grant); expect(await f.cache.prepare(hash)).toBeNull();
+  expect(f.command).toHaveBeenCalledTimes(1); expect(f.read).not.toHaveBeenCalled();
+  f.clock.mono = 1800; f.row.denyAll = false; expect((await f.lease.acquire()).denyAll).toBe(false);
   expect(f.command).toHaveBeenCalledTimes(2); await f.cache.stopAndDrain();
 });
 

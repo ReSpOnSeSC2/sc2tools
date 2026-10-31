@@ -344,20 +344,20 @@ class AggregationsService {
   /**
    * Random-race tracker. Always returns the cross-race breakdown
    * regardless of `filters.race` (matches legacy semantics).
-   *
    * @param {string} userId
    * @param {object} filters
+   * @param {{memo?: boolean}} [opts] false skips the one-minute completed memo
    */
-  async randomSummary(userId, filters) {
+  async randomSummary(userId, filters, { memo = true } = {}) {
     /** @type {Record<string, any>} */
     const f = { ...(filters || {}) };
     delete f.race;
     delete f.groupByRacePlayed;
     const work = () => this._randomSummaryOnce(userId, f);
-    // MatchupPicker needs only the all-history race metadata. Share/cache that
-    // result for one minute across tabs; filtered race charts still read fresh.
+    // MatchupPicker needs only the all-history race metadata. Without the chart cache, share it for
+    // one minute across tabs; under the cache, and for filtered charts, only in-flight joins.
     const parts = ["randomSummary", userId, f];
-    return Object.keys(f).length === 0
+    return memo && Object.keys(f).length === 0
       ? this.trendsRequests.cached(parts, work, 60000)
       : this.trendsRequests.run(parts, work);
   }
@@ -672,14 +672,14 @@ class AggregationsService {
   // know about the singleton service.
 
   /**
-   * Implementation in ``./trendsAggregations.js``.
+   * Implementation in ``./trendsAggregations.js``. Work under a captured curve proof never joins in-flight chart work.
    * @param {string} userId
    * @param {{interval?: 'day'|'week'|'month', tz?: string, groupByOwnRace?: boolean}} opts
-   * @param {object} filters
+   * @param {object} filters @param {import('./strengthCurveSnapshots').CurveSnapshot} [snapshot]
    */
-  async matchupTimeseries(userId, opts, filters) {
-    return this.trendsRequests.run(["matchupTimeseries", userId, filters, opts], () =>
-      trendsAgg.matchupTimeseries(this._trendsDeps(), userId, opts, filters));
+  async matchupTimeseries(userId, opts, filters, snapshot) {
+    const work = () => trendsAgg.matchupTimeseries(this._trendsDeps(), userId, opts, filters, snapshot);
+    return snapshot ? work() : this.trendsRequests.run(["matchupTimeseries", userId, filters, opts], work);
   }
 
   /**

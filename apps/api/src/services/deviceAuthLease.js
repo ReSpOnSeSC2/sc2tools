@@ -17,7 +17,7 @@ class DeviceAuthLease {
   constructor(collection, client, options = {}) {
     this.collection = collection; this.client = client;
     this.clock = options.now || (() => performance.now()); this.last = -Infinity;
-    this.stopped = false; this.poisoned = false;
+    this.stopped = false; this.poisoned = false; this.probeAfter = -Infinity;
     /** @type {any} */ this.grant = null;
     /** @type {any} */ this.probe = null;
     /** @type {Set<Promise<any>>} */ this.reads = new Set();
@@ -47,7 +47,7 @@ class DeviceAuthLease {
   async acquire() {
     const now = this.now(); if (this.stopped || now === null) return null;
     const current = this.current(); if (current) return current;
-    this.grant = null;
+    this.grant = null; if (!this.probe && now < this.probeAfter) return null;
     let task = this.probe;
     if (!task) {
       task = { id: {}, deadline: now + DEVICE_AUTH_LEASE_MS, waiters: 0, retired: false, promise: null };
@@ -91,7 +91,10 @@ class DeviceAuthLease {
   #publish(task, candidate) {
     const now = this.now();
     if (!this.stopped && !task.retired && this.probe === task && now !== null && now < task.deadline) this.grant = candidate;
-    return this.current(candidate);
+    // A settlement without a usable grant holds off the next probe for one
+    // lease. Only this time is kept, never a token or authority result.
+    const grant = this.current(candidate); if (!grant && now !== null) this.probeAfter = now + DEVICE_AUTH_LEASE_MS;
+    return grant;
   }
 
   /** One fresh causal session per cold load; the caller still owns the entire

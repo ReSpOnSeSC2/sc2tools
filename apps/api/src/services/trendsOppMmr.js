@@ -89,6 +89,25 @@ function oppMmrTrustFloor(now = Date.now()) {
 }
 
 /**
+ * The cache path's floor: the same horizon back from the start of the UTC
+ * day, so it moves once a day and can key a retained body exactly. The
+ * flag-off path keeps the continuous floor above.
+ *
+ * @param {number} [now]
+ * @returns {Date}
+ */
+function oppMmrTrustDayFloor(now = Date.now()) {
+  return oppMmrTrustFloor(Math.floor(now / DAY_MS) * DAY_MS);
+}
+
+/** The route's keyed floor (an ISO date) when valid, otherwise the continuous floor.
+ * @param {unknown} keyed @returns {Date} */
+function keyedTrustFloor(keyed) {
+  const at = typeof keyed === "string" ? new Date(keyed) : null;
+  return at && !Number.isNaN(at.getTime()) ? at : oppMmrTrustFloor();
+}
+
+/**
  * Narrow an arbitrary caller-supplied value to a supported bucket
  * width.
  *
@@ -140,11 +159,11 @@ function asOppMmrBucketWidth(raw) {
  * @param {Deps} deps
  * @param {string} userId
  * @param {object} filters
- * @param {{ bucketWidth?: unknown }} [opts]
+ * @param {{ bucketWidth?: unknown, trustFloor?: string }} [opts]
  */
 async function oppMmrBuckets(deps, userId, filters, opts = {}) {
   const match = deps.gamesMatchStage(userId, filters);
-  const trustFloor = oppMmrTrustFloor();
+  const trustFloor = keyedTrustFloor(opts.trustFloor);
   const width = await resolveOppMmrBucketWidth(deps, match, opts.bucketWidth, trustFloor);
   const facet = await deps.games
     .aggregate(oppMmrPipeline(deps, match, width, trustFloor))
@@ -456,7 +475,7 @@ function shapeOppMmrBuckets(facet, width) {
  * @param {Deps} deps
  * @param {string} userId
  * @param {object} filters
- * @param {{ lo?: number, hi?: number }} [opts] Band edges; anything
+ * @param {{ lo?: number, hi?: number, trustFloor?: string }} [opts] Band edges; anything
  *   non-finite (missing/undefined) fails the guard below and yields
  *   the empty response.
  */
@@ -467,7 +486,7 @@ async function oppMmrBucketGames(deps, userId, filters, opts = {}) {
     return { ok: true, lo: null, hi: null, total: 0, count: 0, games: [] };
   }
   const match = deps.gamesMatchStage(userId, filters);
-  const trustFloor = oppMmrTrustFloor();
+  const trustFloor = keyedTrustFloor(opts.trustFloor);
   const pipeline = [
     { $match: match },
     { $addFields: { _bucket: deps.bucketSwitch() } },
@@ -528,6 +547,7 @@ module.exports = {
   oppMmrBuckets,
   oppMmrBucketGames,
   oppMmrTrustFloor,
+  oppMmrTrustDayFloor,
   asOppMmrBucketWidth,
   OPP_MMR_BUCKET_WIDTHS,
   OPP_MMR_AUTO_WIDTH_CUTOFF,

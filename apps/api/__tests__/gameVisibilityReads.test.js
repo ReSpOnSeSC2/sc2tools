@@ -105,7 +105,7 @@ test("a delayed opponent date overlay cannot overwrite an intervening visibility
   const held = new Promise((resolve) => { resume = resolve; });
   const queried = new Promise((resolve) => { started = resolve; });
   const aggregate = jest.spyOn(db.games, "aggregate").mockReturnValue({
-    async *[Symbol.asyncIterator]() { started(); await held; yield { _id: pulseId, latestDate: snapshot }; },
+    async *[Symbol.asyncIterator]() { started(); await held; yield { _id: pulseId, latestDate: snapshot, latestRace: null, races: [] }; },
   });
   try {
     const response = [{ pulseId, lastSeen: before }];

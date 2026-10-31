@@ -11,20 +11,27 @@ const ROUTES = [["timeseries", "/timeseries"], ["dayHourHeatmap", "/timeseries/d
   ["summary", "/summary"], ["macroSummary", "/macro/summary"],
   ["mmrProgression", "/timeseries/mmr"], ["myBuildMixOverTime", "/timeseries/my-builds"],
   ["oppStrategyMixOverTime", "/timeseries/opp-strategies"]];
-function fixture(enabled = true, legacy = false) {
+// Owner-game kinds served by their own services rather than AggregationsService.
+const PLAIN = [["streak", "/streak"], ["macroReport", "/macro/report"]];
+// Net-MMR kinds, whose routes pass exactly the service's options; random summary also gets the memo switch, and the opponent-MMR pair the day's trust floor.
+const NET = [["netMmrByMatchup", "/mmr-by-matchup"], ["netMmrByOpponent", "/mmr-by-matchup/opponents"]], RANDOM = [["randomSummary", "/random-summary"]], OPP = [["oppMmrBuckets", "/opp-mmr-buckets"], ["oppMmrBucketGames", "/opp-mmr-buckets/games"]];
+function fixture(enabled = true, legacy = false, capture) {
   const rows = new Map([ ["a", { userId: "a", clerkUserId: "clerk-a", dataRev: 0 }], ["b", { userId: "b", dataRev: 0 }] ]);
   let deleted = false, revoked = false;
   const users = { findOne: jest.fn(async ({ userId }) => rows.get(userId)),
     findOneAndUpdate: jest.fn(async ({ userId }) => { const row = rows.get(userId); if (!row) return null; row.dataRev += 1; return row; }) };
   const revisions = new UserRevision(users, { enabled, isDeleted: async () => deleted });
   const cache = new UserCache(revisions, { enabled }); const aggregations = {};
-  for (const method of [...ROUTES.map(([name]) => name), "matchups", "maps", "mapMatchups", "buildVsStrategy", "matchupTimeseries", "oppMmrBuckets", "randomSummary", "explorer"]) {
+  for (const method of [...ROUTES.map(([name]) => name), ...PLAIN.map(([name]) => name), "matchups", "maps", "mapMatchups", "buildVsStrategy",
+    "matchupTimeseries", "oppMmrBuckets", "oppMmrBucketGames", "randomSummary", "explorer", "distinctMaps", "netMmrByMatchup", "netMmrByOpponent", "gamesList"]) {
     aggregations[method] = jest.fn(async (owner, ...input) => ({ owner, method, input, points: [{ date: new Date(0), missing: null }] }));
   }
   aggregations.resolveMomentumPolicy = async (_owner, gap) => ({ sessionGapMinutes: gap ?? 90, sessionPolicyGeneration: 0, lease: null });
-  aggregations.assertSessionPolicy = () => {};
+  aggregations.assertSessionPolicy = () => {}; if (capture) aggregations.captureStrengthCurve = jest.fn(capture);
   const app = express();
-  app.use(buildAggregationsRouter({ aggregations, userCache: legacy ? undefined : cache,
+  const streak = { current: (...input) => aggregations.streak(...input) };
+  const macroReport = { report: (...input) => aggregations.macroReport(...input) };
+  app.use(buildAggregationsRouter({ aggregations, streak, macroReport, userCache: legacy ? undefined : cache,
     auth: (req, res, next) => {
       if (!req.headers.authorization || revoked) { res.status(401).json({ error: { code: "unauthorized" } }); return; }
       req.auth = { userId: req.headers.authorization === "Bearer b" ? "b" : "a", source: "device" }; next();
@@ -33,7 +40,7 @@ function fixture(enabled = true, legacy = false) {
   return { app, users, rows, cache, revisions, aggregations, setDeleted: () => { deleted = true; }, revoke: () => { revoked = true; } };
 }
 const get = (app, path, owner = "a") => request(app).get(path).set("authorization", `Bearer ${owner}`);
-test.each(ROUTES)("%s preserves200 DTOs and conditionally returns private empty304", async (method, path) => {
+test.each([...ROUTES, ...PLAIN, ...NET, ...RANDOM])("%s preserves200 DTOs and conditionally returns private empty304", async (method, path) => {
   const f = fixture(); const first = await get(f.app, path); const second = await get(f.app, path);
   expect(second.status).toBe(200); expect(second.body).toEqual(first.body);
   expect(second.headers["cache-control"]).toBe("private, no-cache"); expect(second.headers.etag).toMatch(/^W\/"uc1-[0-9a-f]{64}"$/);
@@ -46,7 +53,7 @@ test.each(ROUTES)("%s preserves200 DTOs and conditionally returns private empty3
 });
 test("off is byte/header/status-identical to the old router and makes zero revision commands", async () => {
   const old = fixture(false, true), off = fixture(false);
-  for (const [, path] of ROUTES) {
+  for (const [, path] of [...ROUTES, ...PLAIN, ...NET, ...RANDOM]) {
     const a = await get(old.app, path), b = await get(off.app, path);
     expect([b.status, b.text, b.headers["cache-control"], b.headers.etag, b.headers["content-type"]])
       .toEqual([a.status, a.text, a.headers["cache-control"], a.headers.etag, a.headers["content-type"]]);
@@ -82,12 +89,18 @@ test("a committed or unknown mutation forces new aggregation without socket emis
   await expect(f.revisions.run("a", async () => { throw error; })).rejects.toBe(error);
   await get(f.app, "/timeseries"); expect(f.aggregations.timeseries).toHaveBeenCalledTimes(3);
 });
-test.each(["/matchups", "/maps", "/maps/matchups", "/build-vs-strategy", "/timeseries/matchups", "/opp-mmr-buckets", "/random-summary", "/trends/explorer/periods"])("%s without captured dependencies or explicit coverage never enters retention", async (path) => {
-  const f = fixture(); await get(f.app, path); await get(f.app, path);
+test.each(["/matchups", "/maps", "/maps/matchups", "/build-vs-strategy", "/timeseries/matchups",
+  "/trends/explorer/periods", "/games-list", "/maps/diagnostic"])("%s without captured dependencies or explicit coverage never enters retention", async (path) => {
+  const f = fixture(); expect((await get(f.app, path)).status).toBe(200); expect((await get(f.app, path)).status).toBe(200);
   expect(f.users.findOne).not.toHaveBeenCalled(); expect(f.cache.completed.size).toBe(0);
 });
+test("each non-dependent covered kind keeps its own retained body in one cache", async () => {
+  const f = fixture();
+  for (const [method, path] of [...ROUTES, ...PLAIN, ...NET, ...RANDOM, ...OPP]) expect([path, (await get(f.app, path)).body.method]).toEqual([path, method]);
+  expect(f.cache.completed.size).toBe(ROUTES.length + PLAIN.length + NET.length + RANDOM.length + OPP.length);
+});
 
-test.each(ROUTES.slice(6))("%s isolates filters and owners and retires committed/unknown results", async (method, path) => {
+test.each([...ROUTES.slice(6), ...PLAIN, ...NET, ...RANDOM, ...OPP])("%s isolates filters and owners and retires committed/unknown results", async (method, path) => {
   const f = fixture();
   const first = await get(f.app, path), tag = first.headers.etag;
   for (const [query, owner] of [["?race=Z", "a"], ["", "b"]]) {
@@ -100,6 +113,22 @@ test.each(ROUTES.slice(6))("%s isolates filters and owners and retires committed
   await expect(f.revisions.run("a", async () => { throw new Error("unknown write"); })).rejects.toThrow("unknown write");
   expect((await get(f.app, path).set("If-None-Match", changed.headers.etag)).status).toBe(200);
   expect(f.aggregations[method]).toHaveBeenCalledTimes(5);
+});
+
+test.each([
+  ["netMmrByMatchup", "/mmr-by-matchup", ["", "?group_by=matchup", "?tz=Europe%2FBerlin", "?group_by=matchup&tz=Europe%2FBerlin"]],
+  ["netMmrByOpponent", "/mmr-by-matchup/opponents", ["", "?opp_race=Z", "?oppRace=T", "?my_race=P", "?search=abc", "?min_pairs=3",
+    "?sort=net", "?sort=net&order=asc", "?limit=10", "?offset=5"]],
+])("%s gives each route option its own key and keys the very options object the service receives", async (method, path, queries) => {
+  const f = fixture(), sent = jest.spyOn(f.cache, "send");
+  for (const query of queries) {
+    expect((await get(f.app, path + query)).status).toBe(200); expect((await get(f.app, path + query)).status).toBe(200);
+  }
+  expect(f.aggregations[method]).toHaveBeenCalledTimes(queries.length);
+  const options = f.aggregations[method].mock.calls.map(([, , opts]) => opts);
+  expect(new Set(options.map(opts => JSON.stringify(opts))).size).toBe(queries.length);
+  // A key built from a narrower copy (a clamped limit, a truncated zone) would let two bodies share one entry.
+  for (const opts of options) expect(sent.mock.calls.some(call => call[5] === opts)).toBe(true);
 });
 
 test.each(ROUTES.slice(8))("%s keys every chart option after route normalization", async (method, path) => {
@@ -151,5 +180,70 @@ test("cache OFF preserves legacy conditional status/body/header behavior too", a
   const bc = await get(off.app, "/timeseries").set("If-None-Match", b.headers.etag);
   expect([bc.status, bc.text, bc.headers.etag, bc.headers["cache-control"]])
     .toEqual([ac.status, ac.text, ac.headers.etag, ac.headers["cache-control"]]);
+  expect(off.users.findOne).not.toHaveBeenCalled();
+});
+
+test.each([["enabled", true, false, false], ["off", false, false, true], ["legacy", false, true, true]])(
+  "random summary skips its completed memo exactly when the cache is enabled (%s)", async (_mode, enabled, legacy, memo) => {
+    const f = fixture(enabled, legacy);
+    expect((await get(f.app, "/random-summary?map=x")).status).toBe(200);
+    // HEAD bypasses the guard (middleware/userCache.js:109-111), so it must not seed the memo either.
+    expect((await request(f.app).head("/random-summary").set("authorization", "Bearer a")).status).toBe(200);
+    expect(f.aggregations.randomSummary.mock.calls.map(([, , opts]) => opts)).toEqual([{ memo }, { memo }]);
+  });
+
+// Curve-dependent kinds with the arity of their proof-less call: a captured proof keys and calculates the body.
+const DEPENDENT = [["matchups", "/matchups", 2], ["maps", "/maps", 2], ["mapMatchups", "/maps/matchups", 2],
+  ["buildVsStrategy", "/build-vs-strategy", 2], ["matchupTimeseries", "/timeseries/matchups", 3]];
+function curveProofs() {
+  const state = { keyPart: "strength1:one", current: true };
+  const capture = async () => ({ curve: { proof: state.keyPart },
+    dependency: { keyPart: state.keyPart, expiresAt: Date.now() + 60000, isCurrent: () => state.current } });
+  return { state, capture };
+}
+test.each(DEPENDENT)("%s keys and calculates with one captured proof, and a retired proof is a 200/no-store baseline, never a 304", async (method, path, at) => {
+  const proofs = curveProofs(), f = fixture(true, false, proofs.capture);
+  const first = await get(f.app, path);
+  expect(first.status).toBe(200); expect(first.headers["cache-control"]).toBe("private, no-cache"); expect(first.headers.etag).toMatch(/^W\/"uc1-/);
+  expect((await get(f.app, path).set("If-None-Match", first.headers.etag)).status).toBe(304);
+  expect(f.aggregations[method]).toHaveBeenCalledTimes(1);
+  // The service receives the very snapshot the cache captured, after its proof-less arguments.
+  expect(f.aggregations[method].mock.calls[0][at]).toBe(await f.aggregations.captureStrengthCurve.mock.results[0].value);
+  proofs.state.keyPart = "strength1:two";
+  const next = await get(f.app, path).set("If-None-Match", first.headers.etag);
+  expect(next.status).toBe(200); expect(next.headers.etag).not.toBe(first.headers.etag); expect(f.aggregations[method]).toHaveBeenCalledTimes(2);
+  proofs.state.current = false;
+  const retired = await get(f.app, path).set("If-None-Match", next.headers.etag);
+  expect(retired.status).toBe(200); expect(retired.headers["cache-control"]).toBe("private, no-store"); expect(retired.headers.etag).toBeUndefined();
+});
+test("matchup time series gives each chart option its own key and keys the very options object the service receives", async () => {
+  const f = fixture(true, false, curveProofs().capture), sent = jest.spyOn(f.cache, "send");
+  const queries = ["", "?interval=day", "?interval=month", "?interval=month&tz=Europe%2FBerlin", "?group_by=matchup", "?interval=junk"];
+  for (const query of queries) {
+    expect((await get(f.app, `/timeseries/matchups${query}`)).status).toBe(200);
+    expect((await get(f.app, `/timeseries/matchups${query}`)).status).toBe(200);
+  }
+  // An unknown interval is normalized to the default week, so it shares the first query's entry.
+  expect(f.aggregations.matchupTimeseries).toHaveBeenCalledTimes(5);
+  const options = f.aggregations.matchupTimeseries.mock.calls.map(([, opts]) => opts);
+  expect(new Set(options.map(opts => JSON.stringify(opts))).size).toBe(5);
+  for (const opts of options) expect(sent.mock.calls.some(call => call[5] === opts)).toBe(true);
+});
+test("a HEAD with the cache enabled never captures a proof and keeps each service's original arguments", async () => {
+  const f = fixture(true, false, curveProofs().capture);
+  for (const [method, path, at] of DEPENDENT) {
+    expect((await request(f.app).head(path).set("authorization", "Bearer a")).status).toBe(200);
+    expect(f.aggregations[method].mock.calls[0]).toHaveLength(at);
+  }
+  expect(f.aggregations.captureStrengthCurve).not.toHaveBeenCalled(); expect(f.cache.completed.size).toBe(0);
+});
+test.each(DEPENDENT)("%s off is identical to the old router, never captures and keeps the service's original arguments", async (method, path, at) => {
+  const old = fixture(false, true, curveProofs().capture), off = fixture(false, false, curveProofs().capture);
+  const a = await get(old.app, path), b = await get(off.app, path);
+  expect([b.status, b.text, b.headers["cache-control"], b.headers.etag, b.headers["content-type"]])
+    .toEqual([a.status, a.text, a.headers["cache-control"], a.headers.etag, a.headers["content-type"]]);
+  for (const f of [old, off]) {
+    expect(f.aggregations.captureStrengthCurve).not.toHaveBeenCalled(); expect(f.aggregations[method].mock.calls[0]).toHaveLength(at);
+  }
   expect(off.users.findOne).not.toHaveBeenCalled();
 });
