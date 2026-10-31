@@ -46,7 +46,7 @@ const READ_METHODS = new Set(["find", "findOne", "countDocuments", "estimatedDoc
 const DB_LEVEL = new Set(["dropCollection", "renameCollection", "command", "runCommand", "dropDatabase", "bulkWrite"]);
 const RISKY_READS = new Set(["aggregate", "createIndex", "createIndexes"]);
 // Callback wrappers that hand back the promise of the work they run.
-const WRAPPERS = new Set(["mutate", "communityMutation"]);
+const WRAPPERS = new Set(["mutate", "communityMutation", "gameWrite"]);
 const BLOCK_SCOPES = new Set([ts.SyntaxKind.Block, ts.SyntaxKind.CaseBlock, ts.SyntaxKind.CatchClause,
   ts.SyntaxKind.ForStatement, ts.SyntaxKind.ForInStatement, ts.SyntaxKind.ForOfStatement]);
 const PATTERN_PARTS = new Set([ts.SyntaxKind.ObjectLiteralExpression, ts.SyntaxKind.ArrayLiteralExpression,

@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "slice": "C5-opponent-mmr",
+  "status": "LOCAL_TYPES_LINT_1025_API_109_WEB_PASS_14_OF_14_MUTATIONS_REVIEWED_NOT_RELEASED",
+  "supersedes": {
+    "receiptSha256": "78db26651e0a3db00bfa85e233f1e4b550e8a2d4749a3fc24fc508775582c1c1",
+    "testedCommit": "04072fc04493d643d470761418d1c008ef7e1185",
+    "reason": "Independent review: snapshot restore and account erasure wrote opponents through dynamic collection handles outside the owner's fence, unseen by the inventory test; the docs overclaimed, two citations were off and the flag-off options check ignored undefined members."
+  },
+  "source": {
+    "base": "48b16c61 (G1, PR #834)",
+    "testedCommit": "c7b5ef93f5ac04b7b6e739a5505964accad3e9ea",
+    "mutationCommit": "c7b5ef93f5ac04b7b6e739a5505964accad3e9ea",
+    "reviewFixes": [
+      "c7b5ef93 fences opponents in snapshot restore and account erasure through the shared chartInputFence, extends the inventory test to collection-list loops and dynamic handles, adds the real-Mongo restore and erasure case and makes the flag-off options check strict"
+    ],
+    "applicationFiles": [
+      "apps/api/src/services/opponents.js",
+      "apps/api/src/services/gdpr.js",
+      "apps/api/src/services/userBackups.js",
+      "apps/api/src/services/trendsOppMmr.js",
+      "apps/api/src/routes/aggregations.js",
+      "apps/api/src/middleware/userCache.js",
+      "apps/api/src/middleware/userCacheGuard.js",
+      "apps/web/lib/conditionalApiScope.tsx"
+    ]
+  },
+  "admission": {
+    "kinds": [
+      "oppMmrBuckets",
+      "oppMmrBucketGames"
+    ],
+    "paths": [
+      "/v1/opp-mmr-buckets",
+      "/v1/opp-mmr-buckets/games"
+    ],
+    "webCapabilityPositions": [
+      21,
+      22
+    ],
+    "coveredKinds": [
+      21,
+      23
+    ],
+    "dependentKinds": [
+      5,
+      5
+    ],
+    "writerFences": {
+      "services/opponents.js": 9,
+      "services/gdpr.js": 4,
+      "collectionListLoops": [
+        "services/userBackups.js snapshot restore over RESTORABLE (delete and insert)",
+        "services/gdpr.js account erasure over USER_SCOPED_COLLECTIONS (delete)"
+      ],
+      "loopFence": "chartInputFence (services/gdpr.js:1599-1602) selects the owner's fence for games and opponents.",
+      "outOfBand": [
+        "db/migrations/2026-05-12-heal-opponent-current-name.js"
+      ]
+    },
+    "writerSetVersion": "2026-10-30.2",
+    "trustFloor": "Cache path only: the UTC day's 365-day floor is an option, so it keys the body and drives the computation; the flag-off path passes no floor and keeps the continuous one.",
+    "adrAmendments": [
+      "item 1: the owner-scoped opponents $lookup",
+      "item 4: a clock value only through the key on the cache path"
+    ],
+    "structurallyBoundedSize": {
+      "oppMmrBuckets": true,
+      "oppMmrBucketGames": false
+    },
+    "checklist": "docs/handoff/dashboard-cache-opponent-mmr-checkpoint.md"
+  },
+  "actual": {
+    "apiTypesExit": 0,
+    "apiConfiguredLint": {
+      "errors": 0,
+      "warnings": 758
+    },
+    "changedFilesAddedLintMessages": 0,
+    "strictImprovements": [
+      "buildAggregationsRouter length 349 -> 348",
+      "UserBackupsService.restore complexity 19 -> 18"
+    ],
+    "apiSuites": 73,
+    "apiCases": 1025,
+    "webFiles": 8,
+    "webCases": 109,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "ownedMongodLeftover": 0,
+    "mutationsKilled": "14/14",
+    "mutations": [
+      "C5-M1-record-game-unfenced",
+      "C5-M2-recount-upsert-unfenced",
+      "C5-M3-rebuild-insert-unfenced",
+      "C5-M4-retry-unfenced",
+      "C5-M5-day-floor-not-truncated",
+      "C5-M6-keyed-floor-ignored",
+      "C5-M7-floor-on-the-off-path",
+      "C5-M8-drilldown-key-lacks-floor",
+      "C5-M9-histogram-bypasses-cache",
+      "C5-M10-drilldown-not-allowlisted",
+      "C5-M11-restore-opponents-unfenced",
+      "C5-M12-erasure-opponents-unfenced",
+      "C5-M13-off-path-undefined-floor",
+      "C5-M14-fence-helper-drops-opponents"
+    ]
+  },
+  "independentReview": {
+    "reviewers": 1,
+    "findings": {
+      "high": 0,
+      "medium": 1,
+      "low": 2
+    },
+    "fixed": 3,
+    "note": "One read-only reviewer on 9802bc8a. The medium finding (unfenced restore and erasure writes) was checked against the code before the fix; the fix is small, so it was not re-reviewed."
+  },
+  "citationUpdates": [
+    "The checkpoint cites apps/api/__tests__/userCacheOppMmr.mongo.test.js:60-79 (was 53-80).",
+    "Checklist item 9 cites services/adminGlobalTrends.js:113,125,174-177 and services/aggregations.js:44 (was :21,136): the per-call service is built at :113 and :174-177, and both methods are called at :125.",
+    "ADR 0072 line 9 names c7b5ef93; item 1 and the G1 row cite the restore and erasure fences and the new test lines."
+  ],
+  "citationDrift": "citation-drift-01.py from 9802bc8a to c7b5ef93 over every docs/*.md: 822 citations, 4 in-place content changes inside cited ranges (the restore line, the erasure line twice, the strict off-path check); each citing sentence was re-read and stays accurate.",
+  "retained": [
+    "Round one truncated the trust floor on every path, which changed the flag-off response at the one-day boundary (ADR 0072 item 10); 882d82d8 limits the keyed floor to the cache path.",
+    "Round one's checks also found two TypeScript errors (a closure-captured array lost its inferred type) and three tests that still expected the bucket route to be uncovered; all are fixed before the first tested commit.",
+    "The review fix keeps _deleteAll's strict complexity at 57 by selecting the fence in a helper; an inline ternary there would have added a lint message."
+  ],
+  "boundaries": [
+    "Exact-head CI, merge, deployment and production acceptance remain pending.",
+    "USER_CACHE_ENABLED stays off. No activation, latency, request-reduction, savings or fleet proof; G1-G3 stay unmet."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/CHECKS-04.json",
+      "sha256": "0babcf5cbf2a21ef884f180870005c7f2404cbdca9fa5e1c9881450a40f6c5bd",
+      "bytes": 2156
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/checks-04/steps.txt",
+      "sha256": "f3653751d56cdbe81e99b42f28a30d3ecd8c02c0243243017a559031a597483b",
+      "bytes": 66
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/checks-04/api-jest-summary.json",
+      "sha256": "5c04f3dbf15c1c4eaa30c2bab5f23f7d0fcfee24f9aaf16d040ec8f359d31da5",
+      "bytes": 247
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/checks-04/api-lint.json",
+      "sha256": "45cf1a4d136f8fe46f1147ff1d49a5afb8ba2803110b5f04b56067b3e7a40dc7",
+      "bytes": 7498326
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/checks-04/api-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/checks-04/lint-no-added.txt",
+      "sha256": "7c2f6e253293ba96e6d10365ee3d499283b82fcdbfae0fa785dfaf5d91b91253",
+      "bytes": 1507
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/checks-04/web-vitest.json",
+      "sha256": "77f03291420a10de0525ffcdc25160a1df2a7123f2b96043de21187bd8ff9390",
+      "bytes": 40947
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/dev/checks-04-api-jest.json",
+      "sha256": "dffa9c9ce05cabd6a1c875eca50d4afea5d2e6ea678682f984742cad078baf18",
+      "bytes": 407151
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/mutation-02/MUTATION-RESULTS.json",
+      "sha256": "9698b9bee8c1b49c65a29eff0bce1a5600375fe466033bc158b9ed6590e2daed",
+      "bytes": 12125
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/scripts/mutation-check-c5-02.mjs",
+      "sha256": "6720c21100030a232ae9ec7ed434830c18cf33b192b2f9f71be044d59c1f5d95",
+      "bytes": 7731
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/scripts/final-checks-c5-04.sh",
+      "sha256": "22fd7eddb6822c053e2a8de5cdc6d37e8f0968b76e2783a5b6c3962595acc862",
+      "bytes": 4339
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/scripts/run-c5-jest.mjs",
+      "sha256": "1fb47449154e5e04924745a60f1cd695a3a6135c9a2cc6c409b0f348b13f6643",
+      "bytes": 3892
+    }
+  ]
+}

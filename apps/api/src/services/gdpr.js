@@ -449,7 +449,7 @@ class GdprService {
           return coll.deleteMany({ userId });
         }
         return this.gameStatsWrites.deleteMany(gdprFence.owner, { userId }, { fenceId: gdprFence.id, assert: gdprFence.assert });
-      }, () => true, true) : await coll.deleteMany({ userId });
+      }, () => true, true) : await gameWrite(chartInputFence(this.userRevision, key), userId, () => coll.deleteMany({ userId }));
       if (key === "deviceTokens" && res.acknowledged === false) throw new Error("device_credential_write_unacknowledged");
       counts[key] = res.deletedCount || 0;
     }
@@ -1065,10 +1065,10 @@ class GdprService {
    * @returns {Promise<number>} count of opponent rows deleted before rebuild
    */
   async rebuildOpponentsForUser(userId) {
-    const dropped = await this.db.opponents.deleteMany({ userId });
+    const dropped = await gameWrite(this.userRevision, userId, () => this.db.opponents.deleteMany({ userId }));
     const buckets = await this._competitiveOpponentBuckets(userId);
     if (buckets.size > 0) {
-      const docs = [];
+      const docs = /** @type {Array<Record<string, any>>} */ ([]);
       for (const b of buckets.values()) {
         /** @type {{
          *   userId: string,
@@ -1109,7 +1109,7 @@ class GdprService {
         stampVersion(doc, COLLECTIONS.OPPONENTS);
         docs.push(doc);
       }
-      await this.db.opponents.insertMany(docs, { ordered: false });
+      await gameWrite(this.userRevision, userId, () => this.db.opponents.insertMany(docs, { ordered: false }));
     }
     return dropped.deletedCount || 0;
   }
@@ -1119,8 +1119,8 @@ class GdprService {
   async recountOpponent(userId, pulseId) {
     const buckets = await this._competitiveOpponentBuckets(userId, pulseId);
     const bucket = buckets.get(pulseId);
-    if (!bucket) { await this.db.opponents.deleteOne({ userId, pulseId }); return; }
-    await this.db.opponents.updateOne({ userId, pulseId }, { $set: stampVersion({ ...bucket }, COLLECTIONS.OPPONENTS) }, { upsert: true });
+    if (!bucket) { await gameWrite(this.userRevision, userId, () => this.db.opponents.deleteOne({ userId, pulseId })); return; }
+    await gameWrite(this.userRevision, userId, () => this.db.opponents.updateOne({ userId, pulseId }, { $set: stampVersion({ ...bucket }, COLLECTIONS.OPPONENTS) }, { upsert: true }));
   }
 
   /**
@@ -1596,9 +1596,15 @@ function exportedCoachingCalendar(calendar, userId) {
   return { role: "coach", calendar: exported };
 }
 
+/** Restore and erasure write whole per-user collections through dynamic handles. The owner's fence covers the ones a
+ * retained chart body reads (ADR 0072), so those bulk writes retire the owner's bodies.
+ * @param {import("../util/userRevision").UserRevision|null} revisions @param {string} key */
+function chartInputFence(revisions, key) { return key === "games" || key === "opponents" ? revisions : null; }
+
 module.exports = {
   GdprService,
   USER_SCOPED_COLLECTIONS,
   PURGE_ONLY_COLLECTIONS,
   GDPR_CLASSIFICATION,
+  chartInputFence,
 };
