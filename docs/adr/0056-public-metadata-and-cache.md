@@ -1,6 +1,8 @@
 # 0056 — Public metadata and share images
 
-Status: accepted for metadata and bounded public cache revalidation.
+Status: accepted for metadata and bounded public cache revalidation. Its cache
+contract (Follow-up boundary) is superseded by ADR 0074: since PR #758, Community
+pages and decorated Community API reads are uncached.
 
 ## Context
 
