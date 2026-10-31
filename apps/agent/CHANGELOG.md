@@ -15,6 +15,11 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 - Cancel pending readouts when the match, linked account or voice permissions
   change. Check native voice availability before claiming playback so an
   unavailable Windows speech engine leaves OBS free to read the report.
+- Open the import help article from "Import help" on the import card and from
+  "Help" on skipped lines; in 0.24.7 both opened nothing.
+- Say why a card preview in Settings > Build check-in cannot open: In-game
+  assistance is off, the app is not paired, or Companion is still connecting.
+  It no longer claims the current check-in is already open for every refusal.
 
 ## 0.24.7
 

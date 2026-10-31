@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.24.8
+
+- Use the opponent's current regional season and active race for MMR, and announce one automatic scouting report per game across Companion and OBS, cancelling pending readouts when the match, account or voice permissions change.
+- Open the import help article from the import card and skipped lines again, and explain why a Build check-in card preview cannot open. The install help article and download page now name the startup switch as the app does: Run SC2 Tools Agent on Windows startup.
+
 ### Device credential write coordination
 
 - Bound how often the inactive retained-authentication path checks its authority record: after a check finds no usable grant, it waits 1.8 seconds before checking again. Device authentication still reads the database on every request, and the retained path stays off.
