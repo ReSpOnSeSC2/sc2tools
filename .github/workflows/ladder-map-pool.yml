@@ -10,6 +10,8 @@ name: ladder-map-pool
 #   * live-pool — Liquipedia is unreachable, or changed its page
 #     template so the parser finds no 1v1 maps. Production would keep
 #     serving the old pool and log ``ladderMapPool_no_maps_parsed``.
+#     An HTTP 429 only warns: Liquipedia's limiter has blocked the
+#     runner's (shared) IP, which says nothing about the page.
 #   * production — /v1/seasons isn't serving a Liquipedia pool from the
 #     last 48 h (two missed refreshes), i.e. production's refresh is
 #     failing and it's on the persisted seed or the hardcoded fallback.
@@ -55,16 +57,29 @@ jobs:
         with:
           node-version: '22'
       - name: Fetch + parse the live pool, update the seed if it changed
+        id: pool
         # No npm ci: the script and the service only use Node built-ins.
-        # Three tries a minute apart, because Liquipedia rate-limits its
-        # API and one transient 429 shouldn't fail the run. A template
-        # change fails all three.
+        # Three tries a minute apart, so one network blip or outage
+        # doesn't fail the run; a template change fails all three.
+        # Exit 2 is Liquipedia's 429 "Rate Limited" page: its limiter has
+        # temporarily blocked this runner's IP, which GitHub-hosted
+        # runners share, so it's usually someone else's traffic. Retrying
+        # from the same address only extends the block, and it says
+        # nothing about the page, so the run warns and skips the seed PR.
+        # The production job still checks the pool production serves.
         run: |
           set -euo pipefail
           SUMMARY="$RUNNER_TEMP/pool-summary.md"
           for attempt in 1 2 3; do
-            if node apps/api/scripts/refresh-ladder-map-pool.js --summary "$SUMMARY"; then
+            code=0
+            node apps/api/scripts/refresh-ladder-map-pool.js --summary "$SUMMARY" || code=$?
+            if [ "$code" -eq 0 ]; then
               cat "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
+              echo "checked=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$code" -eq 2 ]; then
+              echo "::warning::Liquipedia rate-limited this runner's IP (HTTP 429), so the live pool wasn't checked this run. The production job still checks the pool production serves."
               exit 0
             fi
             if [ "$attempt" -lt 3 ]; then sleep 60; fi
@@ -72,7 +87,7 @@ jobs:
           exit 1
       - name: Open or update the seed PR
         # main only, so a manual run on another branch just checks.
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && steps.pool.outputs.checked == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

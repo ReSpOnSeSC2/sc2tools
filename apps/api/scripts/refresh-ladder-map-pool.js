@@ -21,6 +21,10 @@
  *   1  Liquipedia unreachable, or the page parsed to no 1v1 maps — if
  *      the page loads in a browser, Liquipedia changed its template and
  *      parseLadderMaps (src/services/ladderMapPool.js) needs updating
+ *   2  Liquipedia answered HTTP 429: its rate limiter has temporarily
+ *      blocked this IP address (a "Rate Limited" page, not API data).
+ *      That says nothing about the page or the parser, and retrying
+ *      from the same address only extends the block
  *
  * Usage
  * -----
@@ -124,15 +128,36 @@ async function run(opts = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "ladder-map-pool-"));
   const fetchedPath = path.join(tmpDir, "ladder-map-pool.json");
   try {
+    // Remember the last HTTP status, so a 429 IP block (exit 2) is told
+    // apart from an outage or a template change (exit 1).
+    /** @type {number | null} */
+    let lastStatus = null;
+    const baseFetch = opts.fetchImpl || globalThis.fetch;
+    /** @type {typeof globalThis.fetch} */
+    const fetchImpl = async (input, init) => {
+      const res = await baseFetch(input, init);
+      lastStatus = res.status;
+      return res;
+    };
     // A temp persistPath, so the seed is only written when the lists
     // changed — in the service's own on-disk format, copied below.
     const svc = new LadderMapPoolService({
-      fetchImpl: opts.fetchImpl,
+      fetchImpl,
       persistPath: fetchedPath,
       logger: /** @type {any} */ (opts.logger || STDERR_LOGGER),
     });
     const live = await svc.refresh();
     if (live.source !== "liquipedia" || live.maps.length === 0) {
+      if (lastStatus === 429) {
+        console.error(
+          "Liquipedia answered HTTP 429: its rate limiter has temporarily "
+            + "blocked this IP address. That is not a template change. On "
+            + "GitHub-hosted runners the address is shared, so the block "
+            + "usually comes from other traffic; retrying from the same "
+            + "address only extends it.",
+        );
+        return { code: 2, changed: false, summary: null };
+      }
       console.error(
         "Liquipedia fetch failed or parsed to no 1v1 maps (see above). "
           + "If the page loads in a browser, update parseLadderMaps in "
