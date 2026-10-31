@@ -1,7 +1,7 @@
 "use strict";
 const { gameWrite } = require("../util/userRevision");
 const { gameStatsWritesFor } = require("./gameStatsWrites");
-const { rowWithUpdatedAt } = require("../util/corpusUpdatedAt");
+const { rowWithUpdatedAt, withCorpusRemoval } = require("../util/corpusUpdatedAt");
 const { createHash, randomUUID } = require("crypto");
 const { BSON } = require("mongodb");
 const { USER_SCOPED_COLLECTIONS, chartInputFence } = require("./gdpr");
@@ -271,7 +271,7 @@ class UserBackupsService {
         }
         if (dbKey === "games") contributionChanged = true;
         await gameWrite(chartInputFence(this.userRevision, dbKey), userId, async () => {
-          if (dbKey === "games") await this.gameStatsWrites.deleteMany(statsOwner, liveBackupGamesMatch(userId), { fenceId: fence.id, assert: fence.assert });
+          if (dbKey === "games") await withCorpusRemoval(this.db, userId, () => this.gameStatsWrites.deleteMany(statsOwner, liveBackupGamesMatch(userId), { fenceId: fence.id, assert: fence.assert }));
           else await collection.deleteMany({ userId });
           if (dbKey === "games") this.gdpr.notifyGamesChanged?.(userId);
           /** @type {any[]} */ let rows = []; let bytes = 0;

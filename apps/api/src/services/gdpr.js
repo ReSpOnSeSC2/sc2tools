@@ -6,7 +6,7 @@ const { takeRepairLivenessIssuer } = require("./gdprRepairLiveness");
 
 // Only genuine opponents-repair claims below issue deny-only liveness handles.
 const repairLiveness = takeRepairLivenessIssuer();
-
+const { withCorpusRemoval } = require("../util/corpusUpdatedAt");
 const { randomUUID } = require("crypto");
 const { stampVersion } = require("../db/schemaVersioning");
 const { COLLECTIONS } = require("../config/constants");
@@ -924,9 +924,9 @@ class GdprService {
 
     await gdprFence.assert();
     const statsOwner = await this.gameStatsWrites.forFence(userId, gdprFence);
-    const gamesRes = await this.communityMutation(userId, () => this.gameStatsWrites.deleteMany(statsOwner, gamesDeleteFilter, {
+    const gamesRes = await withCorpusRemoval(this.db, userId, () => this.communityMutation(userId, () => this.gameStatsWrites.deleteMany(statsOwner, gamesDeleteFilter, {
       fenceId: gdprFence.id, assert: gdprFence.assert,
-    }), value => (value.deletedCount || 0) > 0, true);
+    }), value => (value.deletedCount || 0) > 0, true));
     const guideSamplesDeleted = await this._deleteWipedGuideSamples(userId, guideGameIds);
     // Every example of the handle goes (not just the wiped range): the
     // nightly run re-picks examples from the surviving games.

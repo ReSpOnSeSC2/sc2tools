@@ -2235,4 +2235,4 @@ function sanitizeTopLeakArray(value) {
   return out.length > 0 ? out : undefined;
 }
 
-module.exports = { GamesService, ANALYSIS_GAME_PROJECTION };
+module.exports = { GamesService, ANALYSIS_GAME_PROJECTION, serializeAnalysisGame };

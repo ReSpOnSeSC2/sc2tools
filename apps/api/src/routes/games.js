@@ -22,6 +22,7 @@ const {
   admitBrowserBatch,
   recordBrowserBatch,
 } = require("./gamesIngestPolicy");
+const { AnalysisCorpusChanges } = require("../services/analysisCorpusChanges");
 
 const ANALYSIS_CORPUS_MAX_CONCURRENT = 1;
 const ANALYSIS_CORPUS_MAX_WAITERS = 6;
@@ -88,6 +89,67 @@ function tagIngestedCustomBuild(customBuilds, userId, game, spatial, expectedRev
 }
 
 /**
+ * One admitted, abort-aware analysis-corpus page. The snapshot and the changed-since read share the single memory
+ * permit, so a delta never adds a second retained page beside a snapshot.
+ * @param {ReturnType<typeof createAnalysisCorpusAdmission>} analysisCorpusAdmission
+ * @param {(userId: string, query: Record<string, any>, signal: AbortSignal) => Promise<unknown>} load
+ * @returns {import("express").RequestHandler}
+ */
+function analysisCorpusPage(analysisCorpusAdmission, load) {
+  return async (req, res, next) => {
+    const requestAbort = analysisCorpusRequestAbort(req, res);
+    /** @type {(() => void) | null} */
+    let release = null;
+    /** @type {{ markComputeSettled: () => void } | null} */
+    let permitGuard = null;
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      release = await analysisCorpusAdmission.acquire(requestAbort.signal);
+      if (!release) {
+        if (!requestAbort.signal.aborted && !res.headersSent) {
+          res.set("Retry-After", String(ANALYSIS_CORPUS_RETRY_AFTER_SEC));
+          res.status(503).json({ error: { code: "analysis_corpus_busy" } });
+        }
+        return;
+      }
+      // A disconnect can race with the admission hand-off: the waiter is
+      // resolved, then the socket closes before the response-lifetime guard
+      // installs its listeners. Never strand the sole corpus permit in that
+      // window.
+      if (
+        requestAbort.signal.aborted
+        || res.destroyed
+        || res.writableEnded
+      ) {
+        release();
+        release = null;
+        return;
+      }
+      // Keep the memory permit until Node has handed the serialized page to
+      // the response stream (or the connection closes). Releasing immediately
+      // after `res.json()` allows a slow client to retain one large JSON buffer
+      // while the next request allocates another. The timeout prevents a
+      // stalled authenticated client from monopolizing the only corpus lane.
+      permitGuard = holdAnalysisCorpusPermit(res, release);
+      release = null;
+      const result = await load(auth.userId, req.query, requestAbort.signal);
+      if (!requestAbort.signal.aborted && !res.headersSent) res.json(result);
+    } catch (err) {
+      if (requestAbort.signal.aborted || isAbortError(err)) return;
+      next(err);
+    } finally {
+      // A closed socket aborts the Mongo query, but cancellation is not
+      // instantaneous. Do not hand the sole memory permit to another request
+      // until this page's computation has actually unwound as well.
+      if (permitGuard) permitGuard.markComputeSettled();
+      if (release) release();
+      requestAbort.cleanup();
+    }
+  };
+}
+
+/**
  * /v1/games — list, get, exists, ingest from the agent or a browser.
  *
  * Ingest accepts either a single game object or `{games: [...]}` for
@@ -150,6 +212,7 @@ function tagIngestedCustomBuild(customBuilds, userId, game, spatial, expectedRev
  *   testOnlyAllowMissingReplayIngestAdmission?: boolean,
  *   runtimeCapacityRegistry?: import('../services/runtimeCapacity').RuntimeCapacityRegistry,
  *   weeklyBackup?: (userId: string) => Promise<void>,
+ *   corpusChanges?: import('../services/analysisCorpusChanges').AnalysisCorpusChanges,
  * }} deps
  */
 function buildGamesRouter(deps) {
@@ -230,64 +293,16 @@ function buildGamesRouter(deps) {
    * has a small per-page ceiling; the opaque cursor safely continues through
    * identical replay timestamps.
    */
-  router.get("/games/analysis-corpus", async (req, res, next) => {
-    const requestAbort = analysisCorpusRequestAbort(req, res);
-    /** @type {(() => void) | null} */
-    let release = null;
-    /** @type {{ markComputeSettled: () => void } | null} */
-    let permitGuard = null;
-    try {
-      const auth = req.auth;
-      if (!auth) throw new Error("auth_required");
-      release = await analysisCorpusAdmission.acquire(requestAbort.signal);
-      if (!release) {
-        if (!requestAbort.signal.aborted && !res.headersSent) {
-          res.set("Retry-After", String(ANALYSIS_CORPUS_RETRY_AFTER_SEC));
-          res.status(503).json({ error: { code: "analysis_corpus_busy" } });
-        }
-        return;
-      }
-      // A disconnect can race with the admission hand-off: the waiter is
-      // resolved, then the socket closes before the response-lifetime guard
-      // installs its listeners. Never strand the sole corpus permit in that
-      // window.
-      if (
-        requestAbort.signal.aborted
-        || res.destroyed
-        || res.writableEnded
-      ) {
-        release();
-        release = null;
-        return;
-      }
-      // Keep the memory permit until Node has handed the serialized page to
-      // the response stream (or the connection closes). Releasing immediately
-      // after `res.json()` allows a slow client to retain one large JSON buffer
-      // while the next request allocates another. The timeout prevents a
-      // stalled authenticated client from monopolizing the only corpus lane.
-      permitGuard = holdAnalysisCorpusPermit(res, release);
-      release = null;
-      const result = await deps.games.listAnalysisCorpus(auth.userId, {
-        limit: parseLimit(req.query.limit),
-        cursor:
-          typeof req.query.cursor === "string"
-            ? req.query.cursor
-            : undefined,
-        signal: requestAbort.signal,
-      });
-      if (!requestAbort.signal.aborted && !res.headersSent) res.json(result);
-    } catch (err) {
-      if (requestAbort.signal.aborted || isAbortError(err)) return;
-      next(err);
-    } finally {
-      // A closed socket aborts the Mongo query, but cancellation is not
-      // instantaneous. Do not hand the sole memory permit to another request
-      // until this page's computation has actually unwound as well.
-      if (permitGuard) permitGuard.markComputeSettled();
-      if (release) release();
-      requestAbort.cleanup();
-    }
-  });
+  const corpusChanges = deps.corpusChanges || new AnalysisCorpusChanges(deps.games.db);
+  router.get("/games/analysis-corpus", analysisCorpusPage(analysisCorpusAdmission, async (userId, query, signal) => {
+    const cursor = typeof query.cursor === "string" ? query.cursor : undefined;
+    // The first page tells the client which corpus version and watermark to keep for changed-since reads.
+    const marks = cursor ? {} : await corpusChanges.snapshotMarks(userId);
+    return { ...(await deps.games.listAnalysisCorpus(userId, { limit: parseLimit(query.limit), cursor, signal })), ...marks };
+  }));
+  router.get("/games/analysis-corpus/changes", analysisCorpusPage(analysisCorpusAdmission, (userId, query, signal) =>
+    corpusChanges.listChanges(userId, { since: query.since, corpusVersion: query.corpus_version, cursor: query.cursor,
+      limit: parseLimit(query.limit), signal })));
 
   /**
    * Resolve timestamped Twitch / YouTube VOD links for a game or a
