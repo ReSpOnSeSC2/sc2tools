@@ -10,7 +10,7 @@ Source paths are relative to `apps/api/src/` unless they start with `apps/` or
 The ADR was added at application source `27b9aeb0`. C1 through C4 changed the
 cited allowlist lines in place and edited route and service lines without
 changing line counts (C4's route and curve helpers follow the cited lines), and DA2
-added lease lines after the cited ones, so every citation still resolves.
+added lease lines after the cited ones, so every citation still resolves. DA3 adds only tests.
 
 ## Context
 
@@ -462,7 +462,7 @@ authentication authority.
 | Serving cohort qualified, pre-readiness actors retired, same incarnation bound | Unmet (`docs/adr/0071-device-credential-readiness.md:51-55`) |
 | Clock rate and suspension behavior verified | Unmet; the constants are proposed (`docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:89-91`; `docs/adr/0071-device-credential-readiness.md:56-57`) |
 | Primary change and election behavior verified | Unmet (`docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:89-91`) |
-| Separate-process evidence | Unmet (`docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:89-91`) |
+| Separate-process evidence | Met in source for one revocation regression on one replica-set member, unwired: separate reader and writer processes, the reader's event loop blocked past the lease, and the held ticket, its second consume and the original lookup all refused after the writer's acknowledgement (`apps/api/__tests__/deviceAuthSeparateProcess.mongo.test.js:104-121`; `docs/handoff/device-auth-separate-process-checkpoint.md`). Election, clock-rate, suspension and multi-host behavior stay unmet under their own rows |
 | Durable disable and rollback primitive | Unmet; the rollback rule requires one (`docs/adr/0071-device-credential-readiness.md:59-60`; `docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:114`). The source has no deliberate disable: `denyAll` is set only by pending overflow or a missing owner scope (`services/deviceCredentialWrites.js:87-89,98`), and nothing exposes a way to set it (`:23-25`; `services/deviceAuthLease.js:12-13`) |
 | Authorized repair that mints a fresh incarnation | Unmet; the only source path that mints one recreates a missing record (`services/deviceCredentialPreparation.js:38-45`), which this ADR forbids as a repair |
 | Failed-probe suppression | Met in source as a bounded rate, unwired. A probe that settles without a usable grant holds off new probes for one lease, timed from its actual settlement and re-armed after every failed probe; until then `acquire()` returns no grant with no dispatch and no wait, and a valid grant, `denyAll` included, starts no hold-off (`services/deviceAuthLease.js:20,50,94-96`; `apps/api/__tests__/deviceAuthLease.test.js:80-144`). It bounds the probes but does not remove them: under continuous demand an injected adapter facing a prepared, missing or unreachable record still sends at most one majority/journal `findAndModify` (a nonce write only when a row matches) per probe duration plus 1.8 s per process, and the caller that starts it, with up to 15 coalesced callers, can wait up to about 1.8 s. ADR 0071's statement that prepared metadata adds no grant probes therefore holds only while the adapter stays uninjected (`docs/adr/0071-device-credential-readiness.md:47-48`). Before step 2 under Activation receipts, the wiring slice must either accept this bounded rate in ADR 0071 and this row, or send no probes while the record is prepared |
