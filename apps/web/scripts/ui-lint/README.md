@@ -8,8 +8,13 @@ are excluded. Existing TypeScript supplies the parser; no dependency is added.
 The rules reject new native confirm/prompt uses; dialog/alertdialog roles outside
 `components/ui`; outline removal without a width ring in the same static class
 string; arbitrary text sizes below 12px (including rem at the 16px base); literal
-hex colors outside the explicit chart/overlay list in `rules.mjs`; and manually
-styled link buttons described in the design-system roadmap. The hex exception
+hex colors outside the explicit chart/overlay list in `rules.mjs`; manually
+styled link buttons described in the design-system roadmap; and native `title`
+tooltips on table headers under `components/analyzer`, which never appear on
+touch or keyboard. That last rule covers a `title` on a `th`, on `SortableTh`
+(direct, aliased or namespace imports from its canonical module) and on any
+element written inside a `th`; explain a header with `InfoTip`, SortableTh's
+`info` slot, or visible or screen-reader text instead. The hex exception
 does not waive any focus, text, dialog or button rule. No filename-contains-chart
 or blanket ignore-comment exception exists.
 

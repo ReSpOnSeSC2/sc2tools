@@ -4,6 +4,7 @@ import { useMemo, type ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { InfoTip } from "@/components/ui/InfoTip";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import {
   computeEffectiveRace,
@@ -15,6 +16,10 @@ import {
 import type { GameSummary } from "./types";
 import { formatApm } from "@/lib/apm";
 import { RECOMPUTE_ANALYSIS_HINT } from "@/lib/analysisRecompute";
+
+/** Labels hold their help control inside the ``dt``, so each row keeps
+ * exactly one ``dt`` and one ``dd``. */
+const DT_CLASS = "flex items-center gap-1 text-micro uppercase tracking-wider text-text-dim";
 
 export interface MechanicsPanelProps {
   error?: unknown;
@@ -37,8 +42,10 @@ export interface MechanicsPanelProps {
  * MechanicsPanel — the community-vocabulary macro stats for one game:
  * SQ (Spending Quotient), supply-blocked time + windows, the race
  * mechanic (injects / chronos / MULEs) actual-vs-expected with a small
- * bar, and mineral float. Labels are race-aware via lib/macro's
- * RaceMeta so a Zerg game says "Injects" and a Terran game "MULEs".
+ * bar, and float spikes. Labels are race-aware via lib/macro's RaceMeta
+ * so a Zerg game says "Inject Efficiency" and a Terran game "MULE
+ * Efficiency". Each label carries its glossary InfoTip, which loads the
+ * definition only when opened.
  *
  * Degrades: with no breakdown at all it shows an explanatory empty
  * state; individual stats hide when their fields are absent (slim /
@@ -76,22 +83,27 @@ export function MechanicsPanel({
         ? breakdown.macro_score
         : null;
 
-  const supplyBlockedSec = useMemo(() => {
+  // ``credited`` is false when an older window without blocked_sec added
+  // its whole span: the glossary defines credited seconds, not spans.
+  const { seconds: supplyBlockedSec, credited: supplyCredited } = useMemo(() => {
     const windows = raw?.supply_block_windows;
     if (Array.isArray(windows) && windows.length > 0) {
       let total = 0;
+      let credited = true;
       for (const w of windows) {
         if (typeof w?.start !== "number" || typeof w?.end !== "number") continue;
-        total +=
-          typeof w.blocked_sec === "number"
-            ? w.blocked_sec
-            : Math.max(0, w.end - w.start);
+        if (typeof w.blocked_sec === "number") {
+          total += w.blocked_sec;
+        } else {
+          total += Math.max(0, w.end - w.start);
+          credited = false;
+        }
       }
-      if (total > 0) return Math.round(total);
+      if (total > 0) return { seconds: Math.round(total), credited };
     }
     return typeof raw?.supply_blocked_seconds === "number"
-      ? Math.round(raw.supply_blocked_seconds)
-      : null;
+      ? { seconds: Math.round(raw.supply_blocked_seconds), credited: true }
+      : { seconds: null, credited: true };
   }, [raw]);
 
   const supplyWindows = Array.isArray(raw?.supply_block_windows)
@@ -173,11 +185,13 @@ export function MechanicsPanel({
         <dl className="grid grid-cols-2 gap-3">
           <MechanicStat
             label="Macro score"
+            info={<InfoTip termId="macro-score" label="Macro score" />}
             value={macroScore !== null ? Math.round(macroScore) : "—"}
             valueClass={macroScoreToneClassName ?? scoreToneTextClass(macroScore)}
           />
           <MechanicStat
             label="SQ (Spending Quotient)"
+            info={<InfoTip termId="spending-quotient" label="SQ (Spending Quotient)" />}
             value={sq !== null ? Math.round(sq) : "—"}
             hint={sqTier ? `${sqTier}-tier spending` : undefined}
           />
@@ -187,8 +201,9 @@ export function MechanicsPanel({
         <ApmStat mine={apm.mine} opponent={apm.opponent} />
 
         <div>
-          <dt className="text-micro uppercase tracking-wider text-text-dim">
+          <dt className={DT_CLASS}>
             Supply blocked
+            {supplyCredited ? <InfoTip termId="supply-blocked" label="Supply blocked" /> : null}
           </dt>
           <dd className="mt-1">
             <span
@@ -238,8 +253,9 @@ export function MechanicsPanel({
 
         {creepTotal !== null ? (
           <div data-testid="creep-tumor-stat">
-            <dt className="text-micro uppercase tracking-wider text-text-dim">
+            <dt className={DT_CLASS}>
               Creep tumors
+              <InfoTip termId="creep-tumors" label="Creep tumors" />
             </dt>
             <dd className="mt-1">
               <span className="text-lg font-semibold tabular-nums text-text">
@@ -263,23 +279,22 @@ export function MechanicsPanel({
         ) : null}
 
         <div>
-          <dt className="text-micro uppercase tracking-wider text-text-dim">
-            Mineral float
+          <dt className={DT_CLASS}>
+            Float spikes
+            <InfoTip termId="float-spikes" label="Float spikes" />
           </dt>
           <dd className="mt-1 text-caption text-text-muted">
             {floatSpikes === null ? (
               "—"
             ) : floatSpikes === 0 ? (
-              <span className="text-success">
-                No float spikes — the bank stayed spent.
-              </span>
+              <span className="text-success">No float spikes recorded.</span>
             ) : (
               <>
                 <span className="font-semibold tabular-nums text-warning">
                   {floatSpikes}
                 </span>{" "}
-                sample{floatSpikes === 1 ? "" : "s"} with 800+ minerals banked
-                after 4:00.
+                sample{floatSpikes === 1 ? "" : "s"} with more than 800
+                minerals banked from 4:00.
               </>
             )}
           </dd>
@@ -292,19 +307,22 @@ export function MechanicsPanel({
 
 function MechanicStat({
   label,
+  info,
   value,
   valueClass,
   hint,
 }: {
   label: string;
+  info: ReactNode;
   value: string | number;
   valueClass?: string;
   hint?: string;
 }) {
   return (
     <div>
-      <dt className="text-micro uppercase tracking-wider text-text-dim">
+      <dt className={DT_CLASS}>
         {label}
+        {info}
       </dt>
       <dd className="mt-1">
         <span
@@ -343,8 +361,9 @@ function MechanicBar({
     e <= 0 ? "bg-success" : ratio >= 0.85 ? "bg-success" : ratio >= 0.6 ? "bg-warning" : "bg-danger";
   return (
     <div>
-      <dt className="text-micro uppercase tracking-wider text-text-dim">
+      <dt className={DT_CLASS}>
         {title}
+        <InfoTip termId="mechanic-efficiency" label={title} />
       </dt>
       <dd className="mt-1 space-y-1.5">
         <div className="flex items-baseline justify-between gap-2 text-caption">
@@ -394,11 +413,9 @@ function trustedApm(
 function ApmStat({ mine, opponent }: { mine: number | null; opponent: number | null }) {
   return (
     <div data-testid="apm-stat">
-      <dt
-        className="text-micro uppercase tracking-wider text-text-dim"
-        title="Actions per minute, counted like StarCraft II's in-game APM: every command, selection and control-group action, averaged over the game."
-      >
+      <dt className={DT_CLASS}>
         APM
+        <InfoTip termId="apm" label="APM" />
       </dt>
       <dd className="mt-1">
         <span className="text-lg font-semibold tabular-nums text-text">{formatApm(mine)}</span>

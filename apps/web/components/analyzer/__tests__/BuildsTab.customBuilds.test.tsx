@@ -86,6 +86,25 @@ describe("Builds tab filtered custom build integration", () => {
     expect(within(standard).queryByText(/check-in/)).toBeNull();
   });
 
+  it("explains WR, W/L split and counted check-ins without opening the build", async () => {
+    harness.rows[0] = { ...harness.rows[0], checkins: 2 };
+    render(<BuildsTab />);
+    const table = within(screen.getByRole("table"));
+    // Header names stay exact; each help control is its own button.
+    expect(table.getByRole("columnheader", { name: "WR" })).toBeTruthy();
+    expect(table.getByRole("columnheader", { name: "W/L split" })).toBeTruthy();
+    expect(table.getByRole("button", { name: "About WR" })).toBeTruthy();
+    expect(table.getByRole("button", { name: "About W/L split" })).toBeTruthy();
+    const custom = table.getByRole("row", { name: /Custom gateway opener/ });
+    expect(within(custom).getByText("incl. 2 check-ins").closest("[title]")).toBeNull();
+    fireEvent.click(within(custom).getByRole("button", { name: "About Counted check-ins" }));
+    const tip = await screen.findByRole("dialog", { name: "About Counted check-ins" });
+    fireEvent.click(await within(tip).findByText("Games assigned here only because a check-in changed their detected build identity."));
+    expect(screen.queryByRole("dialog", { name: "Custom gateway opener" })).toBeNull();
+    fireEvent.click(custom);
+    expect(screen.getByRole("dialog", { name: "Custom gateway opener" })).toBeTruthy();
+  });
+
   it("applies search, minimum games and sorting equally to both build types", () => {
     harness.rows.push(
       { name: "Custom rare opener", total: 1, wins: 1, losses: 0, winRate: 1 },

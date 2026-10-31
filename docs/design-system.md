@@ -481,7 +481,10 @@ Current automated checks include:
   lint checks.
 - `npm run ui:lint` checks normalized file/rule signatures and occurrence counts;
   new and stale debt fail. The narrow before-paint browser metadata token
-  exception is documented in `apps/web/scripts/ui-lint/README.md`.
+  exception is documented in `apps/web/scripts/ui-lint/README.md`. It also
+  rejects new native `title` tooltips on analyzer table headers, which never
+  appear on touch or keyboard: explain a header or metric label with
+  `InfoTip`, SortableTh's `info` slot or `Term` instead.
 
 The server-gated `/admin/design` gallery demonstrates actual controls and local
 states with synthetic values. A current explicit admin response is required

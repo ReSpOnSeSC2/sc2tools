@@ -275,6 +275,13 @@
       "example": "\"text-[0.625rem] uppercase tracking-wider text-text-dim\""
     },
     {
+      "file": "components/analyzer/OpponentRaceMmr.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "89132856eb4f8e6ccaaaa151ea3af3747912d1a53778d12fe12bbc48503c67e0",
+      "count": 1,
+      "example": "<th className=\"py-2 pr-3 text-right font-semibold\" title=\"Games played this ladder season (live from SC2Pulse)\">"
+    },
+    {
       "file": "components/analyzer/PlayerChannelLinks.tsx",
       "rule": "hex-outside-visualization",
       "signature": "28229fc4262833855e47921c9211ee17fe8f3d2d3142682e98fff0ce9af68649",
@@ -294,6 +301,13 @@
       "signature": "2ff7eeb4721eea6607d4dad1c74ca2e4fd471115e609862f3921743e9871256b",
       "count": 1,
       "example": "\"w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none\""
+    },
+    {
+      "file": "components/analyzer/StrengthAdjusted.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "e7162296a70d29005be8973b0b6330efaaa870c6059ff0418d4f0d5922bce832",
+      "count": 1,
+      "example": "<Link href=\"/help/vs-expected\" aria-label=\"About vs expected\" title=\"How strength-adjusted wins and performance ratings work\" className=\"inline-flex min-h-11 min-w-11 items-center "
     },
     {
       "file": "components/analyzer/TrendsTab.tsx",
@@ -441,6 +455,27 @@
       "signature": "ac1d76d4abd9a0b17d6561c39db53dc3a4437a78fdf66c29584a031a4ba71e6c",
       "count": 1,
       "example": "\"absolute left-1/2 top-0.5 -translate-x-1/2 whitespace-nowrap text-[10px] tabular-nums\""
+    },
+    {
+      "file": "components/analyzer/charts/NetMmrRaceOpponentsModal.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "7b0cce90f16b2cf224b6cc92e8684337316395a085e1106d124e98abaf62e76e",
+      "count": 1,
+      "example": "<th scope=\"col\" className=\"px-2 py-2 text-right font-semibold\" title=\"Gross MMR lost in defeats\">"
+    },
+    {
+      "file": "components/analyzer/charts/NetMmrRaceOpponentsModal.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "e44c5a5a6626177446210230b3c236371811ac421849d88a700543f24a002b5f",
+      "count": 1,
+      "example": "<th scope=\"col\" className=\"px-2 py-2 text-right font-semibold\" title=\"Gross MMR gained from wins\">"
+    },
+    {
+      "file": "components/analyzer/charts/OppMmrBucketGamesModal.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "710d511f1409b1ea5fe4493ff56c0f62c701e781331624175db411b8543ded86",
+      "count": 1,
+      "example": "<th scope=\"row\" className=\"max-w-40 truncate px-3 py-2 font-medium text-text\" title={game.playerName || game.playerId}>"
     },
     {
       "file": "components/analyzer/charts/TimeOfDayHeatmap.tsx",
@@ -751,6 +786,27 @@
       "example": "\"#e05656\""
     },
     {
+      "file": "components/analyzer/h2h/BuildMatrix.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "48687f6d95111f9704380a55df2365b808eb2b6557e605a61b5080592719cc56",
+      "count": 1,
+      "example": "<span className=\"block max-w-[140px] truncate text-text-muted\" title={opp}>"
+    },
+    {
+      "file": "components/analyzer/h2h/BuildMatrix.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "aba9667cc431793e28dfa58552411ee2784ba57748b62e3c6cc07d6c8fe4fe4c",
+      "count": 1,
+      "example": "<th scope=\"row\" className=\"sticky left-0 bg-bg-elevated/40 px-3 py-1 text-left text-text\" title={my}>"
+    },
+    {
+      "file": "components/analyzer/h2h/MapPeriodHeatmap.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "801e6a5b6188196e8481c81682de717dc9fde6bddd1e7c5ce561465511e2206c",
+      "count": 1,
+      "example": "<span className=\"ml-auto rounded-full border border-border px-1.5 text-micro uppercase tracking-wider text-text-dim\" title=\"Low sample (< 2 games)\">"
+    },
+    {
       "file": "components/analyzer/h2h/shared/raceAccent.ts",
       "rule": "hex-outside-visualization",
       "signature": "38d47f1a0609a754b4aef9d15a2f8a9a12ce0247c15fddea05216d75669ff942",
@@ -779,6 +835,13 @@
       "example": "\"#a78bfa\""
     },
     {
+      "file": "components/analyzer/macro/CasualtySnapshot.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "a17fe54c92c16ea6d9fc413639d761569bb017ffe9123bb57f1735336baa351d",
+      "count": 1,
+      "example": "<span className=\"truncate\" title={player.name}>"
+    },
+    {
       "file": "components/analyzer/macro/MacroBreakdownPanel.tsx",
       "rule": "dialog-outside-ui",
       "signature": "4f2bc9ebc7a78fa3d55a653824933dc30d0c4bdb6e87a6b41820d513ef5abe43",
@@ -791,6 +854,41 @@
       "signature": "3074b286d65868b2bb5f2d0ccddb8af59ee86f7c5df128e84d1e953d7d4653d8",
       "count": 1,
       "example": "\"min-w-0 outline-none\""
+    },
+    {
+      "file": "components/analyzer/macro/TimelineControls.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "e7ab990e63a5210620ac4f174acc8138c018938956eb5d6b4f0319d580c4a3d1",
+      "count": 1,
+      "example": "<th key={m.key} scope=\"col\" title={m.title} className=\"border-l border-border px-1 pb-0.5 pt-1.5 align-bottom text-micro font-semibold text-text-muted sm:px-3\">"
+    },
+    {
+      "file": "components/analyzer/mmr/BuildMatchupHeatmap.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "37f97b595701c8bfeea389b896d2e351a8c9c81065d181ab49a42059d0c6c29d",
+      "count": 1,
+      "example": "<th className=\"sticky left-0 z-10 max-w-[12rem] border-b border-border bg-bg-surface px-2 py-2 text-left text-text\" title={b} scope=\"row\">"
+    },
+    {
+      "file": "components/analyzer/mmr/BuildMatchupHeatmap.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "efb4197adb53976502f5b8a3a972de6290b0843eb1e5efb39901d4e8023f9d1c",
+      "count": 1,
+      "example": "<th key={s} className=\"border-b border-border px-2 py-2 text-left align-bottom text-text-dim\" style={{ minWidth: \"5.5rem\", maxWidth: \"9rem\" }} title={s}>"
+    },
+    {
+      "file": "components/analyzer/opponents/OpponentHistory.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "117e0a403cd77f79d6f17ca85bcc6925c2f69d1cde1cfe04d6b0f5120f378bea",
+      "count": 1,
+      "example": "<SortableTh col=\"losses\" label=\"L\" title=\"Losses\" {...sort} compact align=\"right\"/>"
+    },
+    {
+      "file": "components/analyzer/opponents/OpponentHistory.tsx",
+      "rule": "analyzer-header-title",
+      "signature": "7fd473fc101faad5e938f721fb5e5f6c88444d6f359a4933bc1ab62b6b490db7",
+      "count": 1,
+      "example": "<SortableTh col=\"wins\" label=\"W\" title=\"Wins\" {...sort} compact align=\"right\"/>"
     },
     {
       "file": "components/analyzer/replays/ReplayList.tsx",
