@@ -52,8 +52,8 @@ function read(key: string): string | null | undefined {
 
 /**
  * True when the note names a copy that is not `owner`'s, or when an earlier clear's delete is still owed: it was never
- * seen to finish (a frozen tab held it, or the browser closed first), since any sync that opened the device after it
- * would have settled it.
+ * seen to finish (a frozen tab held it, or the browser closed first), since a sync that opened the device after it would
+ * have settled it.
  */
 function mustClear(owner: string | null): boolean {
   if (typeof read(DEVICE_DELETE_OWED_KEY) === "string") return true;

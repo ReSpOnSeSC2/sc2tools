@@ -29,8 +29,9 @@ export function deviceClearMark(): string | null {
 /**
  * Remove this browser's copy of the analysis corpus: forget the note, queue the database's delete, then move the clear
  * mark, each step in its own try. Other tabs' connections step aside on versionchange, and the delete finishes once
- * they have; nothing waits for it. Until it is seen to finish, the delete is recorded as owed, so the guard issues it
- * again on a later page if it never does (a frozen tab held it, or the browser closed first).
+ * they have; nothing waits for it. Until it succeeds, or a later open shows it finished, the delete is recorded as
+ * owed, so the guard issues it again on a later page if it never does (a frozen tab held it, or the browser closed
+ * first).
  *
  * Example:
  *   forgetDeviceCopy(); // after Delete history succeeds
@@ -57,8 +58,9 @@ export function forgetDeviceCopy(factory: IDBFactory | undefined = globalIndexed
 }
 
 /**
- * Record that the delete queued by the clear that set `mark` is done: it finished, or an open queued after it has
- * succeeded. A newer clear's owed delete stays owed.
+ * Record that the delete queued by the clear that set `mark` is done: it succeeded, or an open queued after it
+ * succeeded, which shows it finished (a delete that errored then left what the opening sync drops itself, since a
+ * keep with no copy of its own drops whatever is there). A newer clear's owed delete stays owed.
  *
  * Example:
  *   settleDelete(markReadBeforeThisOpen);
@@ -91,7 +93,7 @@ function queueDelete(factory: IDBFactory | undefined, mark: string): boolean {
   try {
     const request = factory?.deleteDatabase(DEVICE_CORPUS_DB_NAME);
     if (!request) return false;
-    // A delete that fails stays owed, so the guard issues it again.
+    // A delete that fails stays owed until the guard issues it again, or a later open settles it.
     request.onerror = (event) => event.preventDefault();
     request.onsuccess = () => settleDelete(mark);
     return true;

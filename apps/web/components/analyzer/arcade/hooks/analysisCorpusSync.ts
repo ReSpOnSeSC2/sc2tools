@@ -115,9 +115,10 @@ export async function syncAnalysisCorpus(input: CorpusSyncInput): Promise<Corpus
   try {
     return await syncWithDevice(input, { mark, current, owns });
   } catch (error) {
-    if (!(error instanceof DeviceCleared)) throw error;
-    // A clear that stopped a keep after its open recreated the database left that account's record there: it goes.
+    // A clear that stopped this sync (or came before its cancellation) may have run before its open recreated the
+    // database, leaving the account's record there with no note: it goes too.
     if (deviceNote() === null) forgetDeviceCopy(defaultIndexedDb());
+    if (!(error instanceof DeviceCleared)) throw error;
     // What this sync read before the clear (Delete history or restore in another tab) may be out of date.
     return memoryOnly(await input.readSnapshot());
   }
@@ -135,6 +136,11 @@ async function syncWithDevice(input: CorpusSyncInput, run: SyncRun): Promise<Cor
       input.onStored(device.stored);
       const updated = await applyChanges(device.db, device.stored, input, current);
       if (updated) return updated;
+      current();
+      stale = !(await dropCopy(device.db, input.accountKey));
+    } else if (device && input.keepOnDevice) {
+      // A keep holding no usable copy of its own drops whatever is there first, so another account's rows cannot
+      // outlive a delete that failed under this account's note.
       current();
       stale = !(await dropCopy(device.db, input.accountKey));
     }
