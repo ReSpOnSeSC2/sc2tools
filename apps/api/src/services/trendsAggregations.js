@@ -31,9 +31,9 @@ const { strengthPipeline, matchupRatingStages, shapeMatchupRating } = require(".
  * }} deps
  * @param {string} userId
  * @param {{interval?: 'day'|'week'|'month', tz?: string, groupByOwnRace?: boolean}} opts
- * @param {object} filters
+ * @param {object} filters @param {import('./strengthCurveSnapshots').CurveSnapshot} [snapshot] a captured curve proof
  */
-async function matchupTimeseries(deps, userId, opts, filters) {
+async function matchupTimeseries(deps, userId, opts, filters, snapshot) {
   const requestedInterval = deps.pickInterval(opts && opts.interval);
   const timezone = deps.pickTimezone(opts && opts.tz);
   const groupByOwnRace = opts?.groupByOwnRace === true;
@@ -42,7 +42,7 @@ async function matchupTimeseries(deps, userId, opts, filters) {
   const interval = typeof deps.fitInterval === "function"
     ? await deps.fitInterval(match, requestedInterval)
     : requestedInterval;
-  const curve = await deps.mmrExpectation?.curve() || null;
+  const curve = await matchupCurve(deps, snapshot);
   const pipeline = [
       { $match: match },
       { $addFields: { _bucket: deps.bucketSwitch() } },
@@ -451,6 +451,13 @@ async function activityCalendar(deps, userId, opts, filters) {
       winRate: r.total ? r.wins / r.total : 0,
     })),
   };
+}
+
+/** A captured proof's curve when one is supplied (a null curve stays Elo), otherwise the memo's current curve.
+ * @param {{mmrExpectation?: Pick<import('./mmrExpectation').MmrExpectationService,'curve'>}} deps
+ * @param {import('./strengthCurveSnapshots').CurveSnapshot} [snapshot] */
+async function matchupCurve(deps, snapshot) {
+  return snapshot ? snapshot.curve : await deps.mmrExpectation?.curve() || null;
 }
 
 module.exports = {

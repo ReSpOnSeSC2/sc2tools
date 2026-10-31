@@ -147,13 +147,13 @@ function buildAggregationsRouter(deps) {
           ? intervalRaw
           : "week";
       const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
-      res.json(
-        await deps.aggregations.matchupTimeseries(
-          userId,
-          { interval, tz, groupByOwnRace: req.query.group_by === "matchup" },
-          filters,
-        ),
-      );
+      // Exactly the service's options, so every chart input is in the key; with the
+      // cache on, one captured curve proof keys the body and calculates its rating windows.
+      const options = { interval, tz, groupByOwnRace: req.query.group_by === "matchup" };
+      await sendCurveDependent(deps, send, req, res, userId, "matchupTimeseries", filters, options,
+        (snapshot) => snapshot
+          ? deps.aggregations.matchupTimeseries(userId, options, filters, snapshot)
+          : deps.aggregations.matchupTimeseries(userId, options, filters));
     } catch (err) {
       next(err);
     }
@@ -456,12 +456,21 @@ function buildAggregationsRouter(deps) {
  * @param {any} req @param {any} res @param {string} owner
  * @param {'matchups'|'maps'|'mapMatchups'|'buildVsStrategy'} method @param {object} filters */
 async function sendStrength(deps, send, req, res, owner, method, filters) {
-  if (!deps.userCache?.enabled || !deps.aggregations.captureStrengthCurve) return res.json(await deps.aggregations[method](owner, filters));
+  return sendCurveDependent(deps, send, req, res, owner, method, filters, {},
+    (snapshot) => snapshot ? deps.aggregations[method](owner, filters, snapshot) : deps.aggregations[method](owner, filters));
+}
+
+/** A kind whose calculation reads the global MMR curve. With the cache on, one captured proof keys the body and drives
+ * the calculation; HEAD and the off path keep the original per-request curve read.
+ * @param {Parameters<typeof buildAggregationsRouter>[0]} deps @param {any} send
+ * @param {any} req @param {any} res @param {string} owner @param {string} kind @param {object} filters
+ * @param {object} options exactly the options object the call passes to the service
+ * @param {(snapshot?: import('../services/strengthCurveSnapshots').CurveSnapshot) => Promise<any>} call */
+async function sendCurveDependent(deps, send, req, res, owner, kind, filters, options, call) {
+  if (!deps.userCache?.enabled || !deps.aggregations.captureStrengthCurve) return res.json(await call());
   /** @type {import('../services/strengthCurveSnapshots').CurveSnapshot|null|undefined} */ let snapshot;
   const capture = async () => { snapshot = await deps.aggregations.captureStrengthCurve?.(); return snapshot?.dependency ?? null; };
-  return send(req, res, owner, method, filters, {},
-    () => snapshot ? deps.aggregations[method](owner, filters, snapshot) : deps.aggregations[method](owner, filters),
-    () => {}, capture);
+  return send(req, res, owner, kind, filters, options, () => call(snapshot || undefined), () => {}, capture);
 }
 
 /** @param {import('express').Request} req */

@@ -4,7 +4,7 @@ const { requestKey } = require("../services/trendsRequests");
 const { createHmac, randomBytes } = require("node:crypto");
 const TAG_BYTES = 72;
 // Mixed routes require their exact captured global-curve dependency as well.
-const DEPENDENT_ROUTES = new Set(["matchups", "maps", "mapMatchups", "buildVsStrategy"]);
+const DEPENDENT_ROUTES = new Set(["matchups", "maps", "mapMatchups", "buildVsStrategy", "matchupTimeseries"]);
 const ALLOWED_ROUTES = new Set(["timeseries", "dayHourHeatmap", "lengthBuckets", "activityCalendar", "momentum", "mapTrend",
   "summary", "macroSummary", "mmrProgression", "myBuildMixOverTime", "oppStrategyMixOverTime", "streak", "macroReport", "netMmrByMatchup", "netMmrByOpponent", "randomSummary", ...DEPENDENT_ROUTES]);
 const LIMITS = Object.freeze({ bytes: 64 * 1024 * 1024, entryBytes: 512 * 1024,
