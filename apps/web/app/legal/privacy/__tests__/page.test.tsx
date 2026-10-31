@@ -22,6 +22,19 @@ describe("privacy policy backups", () => {
     expect(section!.querySelector('a[href="/settings?tab=backups"]')).not.toBeNull();
   });
 
+  it("discloses the game history Daily Pulse can keep in this browser, what it holds and when it goes", () => {
+    render(<PrivacyPage />);
+    const section = screen.getByRole("heading", { name: "Data stored in your browser" }).closest("section");
+    const text = section?.textContent ?? "";
+    expect(text).toMatch(/Load my history or\s+Keep on this device in Daily Pulse, this browser also\s+keeps a copy of your game history/);
+    expect(text).toMatch(/only for accounts\s+with up to 20,000 games/);
+    expect(text).toMatch(/Battle\.net character\s+ID and SC2Pulse IDs/);
+    expect(text).toMatch(/it is not sent back to us/);
+    expect(text).toMatch(/removed when you sign out or another account signs in/);
+    expect(text).toMatch(/Deleting your account removes it from each browser/);
+    expect(section?.querySelectorAll('a[href="/settings?tab=backups"]').length).toBe(2);
+  });
+
   it("points the deletion promise at the backup expiry", () => {
     render(<PrivacyPage />);
     const rights = screen.getByRole("heading", { name: "Your rights" }).closest("section");
