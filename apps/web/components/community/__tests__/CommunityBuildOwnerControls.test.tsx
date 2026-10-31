@@ -96,7 +96,7 @@ describe("CommunityBuildOwnerControls", () => {
     fireEvent.keyDown(menu, { key: "End" }); expect(document.activeElement).toBe(remove);
     fireEvent.keyDown(menu, { key: "Escape" }); expect(screen.queryByRole("menu")).toBeNull(); expect(document.activeElement).toBe(trigger);
     fireEvent.click(trigger); fireEvent.click(screen.getByRole("menuitem", { name: "Remove from Community…" }));
-    expect(screen.getByRole("heading", { name: "Remove “Blink Pressure” from Community?" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Remove “Blink Pressure” from Community?" })).toBeTruthy();
     expect(harness.apiCall).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Keep published" }));
     await waitFor(() => expect(document.activeElement).toBe(trigger));
@@ -114,8 +114,9 @@ describe("CommunityBuildOwnerControls", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Remove from Community" }),
     );
+    // The dialog loads on demand.
     expect(
-      screen.getByRole("heading", {
+      await screen.findByRole("heading", {
         name: "Remove “Blink Pressure” from Community?",
       }),
     ).not.toBeNull();
@@ -169,7 +170,7 @@ describe("CommunityBuildOwnerControls", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Remove from Community" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", {
@@ -199,7 +200,7 @@ describe("CommunityBuildOwnerControls", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Remove from Community" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", {

@@ -20,9 +20,9 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-it("updates live position through IntersectionObserver and scrolls one card with reduced motion and keyboard", () => {
+it("updates live position through IntersectionObserver and scrolls one card with reduced motion and keyboard", async () => {
   render(<DailyPulse hrefForCard={card => dailyPulseHref(card, "filters=1&race=P")} />);
-  const root = screen.getByRole("region", { name: "Daily Pulse insights" });
+  const root = await screen.findByRole("region", { name: "Daily Pulse insights" });
   Object.defineProperties(root, { clientWidth: { value: 500 }, scrollWidth: { value: 1168 } });
   const scrollTo = vi.fn(({ left }: ScrollToOptions) => { root.scrollLeft = Math.min(668, left ?? 0); fireEvent.scroll(root); }); Object.defineProperty(root, "scrollTo", { value: scrollTo, configurable: true });
   observed.forEach((el, index) => { Object.defineProperty(el, "offsetLeft", { value: index * 292 }); el.getBoundingClientRect = () => ({ left: index * 292 - root.scrollLeft }) as DOMRect; });
@@ -39,9 +39,9 @@ it("updates live position through IntersectionObserver and scrolls one card with
   cleanup(); expect(disconnect).toHaveBeenCalled();
 });
 
-it("renders real contextual links with focus rings and leaves card keyboard events alone", () => {
+it("renders real contextual links with focus rings and leaves card keyboard events alone", async () => {
   render(<DailyPulse hrefForCard={card => dailyPulseHref(card, "filters=1&race=P")} />);
-  const build = screen.getByRole("link", { name: /Rising build/ });
+  const build = await screen.findByRole("link", { name: /Rising build/ });
   expect(build.getAttribute("href")).toBe("/app/builds?filters=1&race=P&q=Forge+expand");
   expect(build.className).toContain("focus-visible:ring-2");
   expect(screen.getByRole("link", { name: /Map edge/ }).getAttribute("href")).toContain("focus=Sanctuary+III+LE");
