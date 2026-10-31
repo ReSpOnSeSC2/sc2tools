@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { lockBodyScroll } from "@/lib/bodyScrollLock";
 import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
+import { useVisualViewport } from "@/lib/useVisualViewport";
 import { OverlayLayerProvider, useOverlayLayer } from "./OverlayLayer";
 
 /**
@@ -104,6 +105,7 @@ export function Modal({
   const titleId = useId();
   const descId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const viewport = useVisualViewport(open && placement !== "responsive" && !portalContainer);
   useFocusTrap({ open, containerRef: dialogRef, onClose, initialFocusRef, returnFocusRef });
 
   // Body scroll lock + Esc + focus management
@@ -131,7 +133,10 @@ export function Modal({
   return createPortal(
     <OverlayLayerProvider value={layer}>
     <div
-      style={{ zIndex: layer }}
+      style={{ zIndex: layer, ...(viewport ? {
+        left: viewport.left, top: viewport.top, width: viewport.width, height: viewport.height,
+        right: "auto", bottom: "auto",
+      } : {}) }}
       className={[
         "fixed inset-0 z-50 flex",
         placement === "right" ? "items-stretch justify-end" : placement === "bottom" ? "items-end justify-center" : [
@@ -158,6 +163,10 @@ export function Modal({
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
+        style={viewport ? {
+          maxHeight: viewport.height * (placement === "bottom" ? 0.9 : 1),
+          ...(placement === "right" ? { height: viewport.height } : {}),
+        } : undefined}
         className={[
           "relative w-full min-w-0 bg-bg-surface text-text border border-border shadow-[var(--shadow-card)]",
           "overflow-hidden flex flex-col",
@@ -182,7 +191,7 @@ export function Modal({
           placement === "right" ? SIDE_SIZE_CLASSES[size] : SIZE_CLASSES[size],
         ].join(" ")}
       >
-        <header role="presentation" className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+        <header role="presentation" className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div className="min-w-0 flex-1 space-y-1">
             <h2 id={titleId} className="text-h4 font-semibold text-text">
               {title}
@@ -204,9 +213,9 @@ export function Modal({
             </button>
           )}
         </header>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-4">{children}</div>
         {footer ? (
-          <footer role="presentation" className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-bg-elevated/30 px-5 py-3">
+          <footer role="presentation" className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border bg-bg-elevated/30 px-5 py-3">
             {footer}
           </footer>
         ) : null}

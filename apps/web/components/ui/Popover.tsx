@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 import { isTopFocusLayer } from "@/lib/a11y/focusScopes";
 import { popoverPlacement } from "@/lib/a11y/popoverPlacement";
+import { useVisualViewport } from "@/lib/useVisualViewport";
 import { OverlayLayerProvider, useOverlayLayer } from "./OverlayLayer";
 
 export interface PopoverProps {
@@ -30,6 +31,7 @@ export interface PopoverProps {
 export function Popover({ open, onClose, anchorRef, label, id, children, initialFocusRef,
   autoFocus = true, portalContainer, width = 352, className = "" }: PopoverProps) {
   const layer = useOverlayLayer();
+  const viewport = useVisualViewport(open && !portalContainer);
   const panelRef = useRef<HTMLDivElement>(null);
   const restore = useRef<true | "if-lost">(true);
   const [host, setHost] = useState<Element | null>(null);
@@ -47,7 +49,7 @@ export function Popover({ open, onClose, anchorRef, label, id, children, initial
       const panel = panelRef.current;
       if (!anchor || !panel) return;
       setPosition(popoverPlacement(anchor.getBoundingClientRect(), panel.scrollHeight || panel.getBoundingClientRect().height,
-        { width: window.innerWidth, height: window.innerHeight }, width));
+        viewport ?? { width: window.innerWidth, height: window.innerHeight }, width));
     };
     update();
     window.addEventListener("resize", update);
@@ -55,7 +57,7 @@ export function Popover({ open, onClose, anchorRef, label, id, children, initial
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
     if (panelRef.current) observer?.observe(panelRef.current);
     return () => { window.removeEventListener("resize", update); window.removeEventListener("scroll", update, true); observer?.disconnect(); };
-  }, [open, host, anchorRef, width]);
+  }, [open, host, anchorRef, width, viewport]);
   useFocusTrap({ open: open && !!host && !!position, containerRef: panelRef, onClose,
     initialFocusRef, returnFocusRef: anchorRef, trapFocus: false, autoFocus,
     restoreFocus: () => restore.current });

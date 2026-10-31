@@ -16,3 +16,12 @@ it("fits narrow viewports and flips above a low trigger", () => {
   const tiny = popoverPlacement({ left: 0, right: 44, top: 0, bottom: 44 }, 50, { width: 20, height: 20 });
   expect(tiny.width).toBe(0); expect(tiny.maxHeight).toBe(0); expect(tiny.left).toBe(10); expect(tiny.top).toBe(10);
 });
+
+it.each([-200, 100, 900])("keeps panels inside an offset visual viewport with an anchor at %s", top => {
+  const viewport = { left: 60, top: 90, width: 260, height: 400 };
+  const panel = popoverPlacement({ left: 250, right: 294, top, bottom: top + 44 }, 800, viewport);
+  expect(panel.left).toBeGreaterThanOrEqual(76);
+  expect(panel.left + panel.width).toBeLessThanOrEqual(304);
+  expect(panel.top).toBeGreaterThanOrEqual(106);
+  expect(panel.top + panel.maxHeight).toBeLessThanOrEqual(474);
+});
