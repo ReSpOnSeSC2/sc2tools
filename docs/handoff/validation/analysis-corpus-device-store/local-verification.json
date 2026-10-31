@@ -1,0 +1,393 @@
+{
+  "schemaVersion": 1,
+  "slice": "AC3-device-store",
+  "item": {
+    "id": "analysis-corpus-local-cache",
+    "ordinal": 75
+  },
+  "status": "LOCAL_API_2213_WEB_1042_FILES_PASS_51_OF_51_MUTATIONS_REVIEWED_VERIFIED_DORMANT_NOT_RELEASED",
+  "requirement": "Implement bounded IndexedDB account/version storage, atomic watermark/delta merge and snapshot fallback.",
+  "source": {
+    "base": "37ea2ce4 (AC2, PR #841)",
+    "testedCommit": "208598afb54a6b50668168e668576215040655da",
+    "mutationCommits": [
+      "208598afb54a6b50668168e668576215040655da",
+      "208598afb54a6b50668168e668576215040655da"
+    ],
+    "applicationFiles": [
+      "apps/web/lib/analysisCorpus/deviceStore.ts",
+      "apps/web/lib/analysisCorpus/changes.ts",
+      "apps/web/components/analyzer/arcade/hooks/analysisCorpusSync.ts",
+      "apps/web/components/analyzer/arcade/hooks/useAnalysisGames.ts",
+      "apps/web/lib/analysisCorpus/deviceNote.ts",
+      "apps/web/lib/instant/idb.ts",
+      "apps/api/src/services/analysisCorpusChanges.js",
+      "apps/api/src/routes/games.js"
+    ],
+    "testFiles": [
+      "apps/web/lib/analysisCorpus/__tests__/deviceStore.test.ts",
+      "apps/web/lib/analysisCorpus/__tests__/changes.test.ts",
+      "apps/web/components/analyzer/arcade/__tests__/analysisCorpusSync.test.ts",
+      "apps/web/components/analyzer/arcade/__tests__/useAnalysisGames.test.ts",
+      "apps/api/__tests__/analysisCorpusChanges.mongo.test.js",
+      "apps/api/__tests__/gamesAnalysisCorpus.test.js",
+      "apps/api/__tests__/analysisCorpusEpoch.test.js"
+    ]
+  },
+  "design": {
+    "database": "sc2tools-analysis-corpus v1: accounts (keyPath accountKey: the choice to keep history here, with marks {corpusVersion, corpusEpoch, watermark} or none, count, savedAt, schema) and games (keyPath [accountKey, gameId], index accountKey: one strict row each)",
+    "bound": "One account at a time and at most 20,000 rows; a snapshot past the ceiling is not kept.",
+    "snapshotWrite": "One readwrite transaction clears both stores and writes the rows and the account record.",
+    "deltaMerge": "One readwrite transaction applies puts and removals in order and moves the marks, only while the stored marks (version, watermark and epoch) equal the delta's starting marks, rolled back past the row limit.",
+    "fallback": "snapshotRequired (corpus_epoch, corpus_version, before_stamps), a 404 from a server without the route, a version or epoch that moves between pages, a malformed page, a delta longer than a snapshot, a merged corpus past the limit, or a copy that is kept-empty or unreadable.",
+    "staleCopy": "A copy that a fallback snapshot cannot replace (a failed save, a snapshot without marks, the ceiling) is dropped while the account's choice is kept.",
+    "epoch": "The API derives corpusEpoch from the analysis projection, the membership filters, the serializer and both corpus reads (with a manual revision for changes it cannot see), returns it with the snapshot marks and every changes answer, and answers snapshotRequired corpus_epoch to another epoch.",
+    "isolation": "A failed read leaves the device alone unless this account asked to keep a copy; rows and the account record are both checked against the account.",
+    "deadline": "An open slower than 3 s loads in memory; a connection that arrives late is closed.",
+    "dormancy": "A copy is created only for an account that called keepOnDevice; nothing in the UI does yet (AC5). Other accounts read snapshots as before, after a probe that creates nothing (verified in Chromium 152).",
+    "bundle": "The sync and the device store load through a dynamic import, outside the /app route's first-load JavaScript."
+  },
+  "actual": {
+    "apiTypesExit": 0,
+    "apiConfiguredLint": {
+      "errors": 0,
+      "warnings": 765
+    },
+    "apiSuites": 145,
+    "apiCases": 2213,
+    "webTypesExit": 0,
+    "webConfiguredLint": {
+      "errors": 0,
+      "warnings": 190
+    },
+    "uiLint": "pass",
+    "webTestFiles": 1042,
+    "webCasesPassed": 10191,
+    "webCasesSkipped": 1,
+    "webOneIsolatedWorker": true,
+    "changedFilesAddedLintMessages": 0,
+    "newFilesLintMessages": 0,
+    "mutationsKilled": "51/51",
+    "mutations": [
+      "AC3-M1-probe-creates",
+      "AC3-M2-read-error-replaces",
+      "AC3-M3-unrequested-account-stored",
+      "AC3-M4-stored-copy-not-shown-first",
+      "AC3-M5-refused-copy-kept",
+      "AC3-M6-stale-copy-survives",
+      "AC3-M7-mixed-epoch-kept",
+      "AC3-M8-snapshot-shown-after-save",
+      "AC3-M9-writes-after-cancel",
+      "AC3-M10-merge-limit-off-by-one",
+      "AC3-M11-stored-order-lost",
+      "AC3-M12-note-not-kept",
+      "AC3-M13-probe-keeps-database",
+      "AC3-M14-deadline-ignored",
+      "AC3-M15-late-connection-kept",
+      "AC3-M16-stale-marks-merged",
+      "AC3-M17-epoch-left-out-of-guard",
+      "AC3-M18-limit-not-rolled-back",
+      "AC3-M19-store-limit-off-by-one",
+      "AC3-M20-other-account-kept",
+      "AC3-M21-reset-forgets-choice",
+      "AC3-M22-delete-skipped",
+      "AC3-M23-removals-ignored",
+      "AC3-M24-missing-route-thrown",
+      "AC3-M25-version-move-accepted",
+      "AC3-M26-epoch-move-accepted",
+      "AC3-M27-watermark-not-moved",
+      "AC3-M28-partial-marks-accepted",
+      "AC3-M29-note-ignored",
+      "AC3-M30-chunk-failure-fatal",
+      "AC3-M31-late-stored-copy-shown",
+      "AC3-M32-keep-cleared-without-copy",
+      "AC3-M33-page-epochs-unrecorded",
+      "AC3-M34-note-always-matches",
+      "AC3-M35-absent-note-kept",
+      "AC3-M36-absence-unreported",
+      "AC3-M37-drop-after-cancel",
+      "AC3-M38-unnoted-copy-kept",
+      "AC3-M39-page-epoch-count-unchecked",
+      "AC3-M40-late-snapshot-shown",
+      "AC3-M41-failed-drop-ignored",
+      "AC3-M42-save-limit-off-by-one",
+      "AC3-M43-note-write-unchecked",
+      "AC3-A1-epoch-not-checked",
+      "AC3-A2-epoch-ignores-code",
+      "AC3-A3-epoch-not-required",
+      "AC3-A4-epoch-missing-from-pages",
+      "AC3-A5-epoch-missing-from-marks",
+      "AC3-A6-cursor-pages-without-epoch",
+      "AC3-A7-epoch-ignores-rules",
+      "AC3-A8-epoch-inputs-drop-snapshot-read"
+    ],
+    "browserProbe": {
+      "first": "absent",
+      "afterFirst": [],
+      "second": "absent",
+      "afterSecond": [],
+      "leftAfterCleanup": []
+    },
+    "browser": "Chrome/152.0.7977.167 (the desktop app's built-in browser)",
+    "firstLoadKbLocal": {
+      "/app": {
+        "base": 240.0,
+        "ac3": 240.5,
+        "delta": 0.5,
+        "budget": 240.0
+      },
+      "/settings": {
+        "base": 193.9,
+        "ac3": 194.0,
+        "delta": 0.1,
+        "budget": 260.0
+      },
+      "/try": {
+        "base": 219.5,
+        "ac3": 219.6,
+        "delta": 0.1,
+        "budget": 240.0
+      }
+    },
+    "firstLoadNote": "Local builds run larger than CI's: the base's /app is 240.0 kB locally against 238.8 kB in main's CI build (run 41170255576), and /community and /guides exceed their budgets locally at the base too. AC3 adds 0.5 kB to /app and 0.1 kB to /settings and /try, so CI is projected near 239.3 of 240 kB on /app."
+  },
+  "independentReview": {
+    "reviewers": 1,
+    "reviewedCommit": "d4803497f9889d4ff2ffc1ad10c7e4835e6ab3ac",
+    "findings": {
+      "high": 0,
+      "medium": 2,
+      "low": 3,
+      "info": 2
+    },
+    "fixed": [
+      "Medium: a fallback snapshot that could not be stored left the copy that only a snapshot could fix, shown first on every load. A copy that needs a snapshot is now dropped before the snapshot is read and again if it cannot be replaced, keeping the account's choice; a copy that can be neither replaced nor dropped goes with its database.",
+      "Medium (latent): nothing invalidated device copies when the API changes what a corpus row holds or which games belong. The API now derives a corpus epoch from the projection, the membership filters, the serializer and both corpus reads, returns it with the snapshot marks, every snapshot page and every changes answer, and answers snapshotRequired corpus_epoch to another epoch; a snapshot whose pages disagree is never stored.",
+      "Low: a failed read was treated as this account's corrupt copy, so an account that never opted in could replace another account's copy. It now loads in memory unless the account asked to keep a copy.",
+      "Low: opening IndexedDB had no deadline. An open slower than 3 s now loads in memory and a late connection is closed.",
+      "Low: tests did not prove their claims. Tests now cover in-order changes within a delta, two merges racing from the same marks, the deadline, a failed save, a failed read, a mid-sync account switch and a copy cleared by another tab; the no-create probe was checked in Chromium 152."
+    ],
+    "documented": [
+      "Info: device rows are ordered by date with ties by game id, snapshots by the database's order; the consumers re-sort where order matters.",
+      "Info: the keep request lived in each tab's memory; it is now cleared once the device records the account's choice, so a tab does not recreate a copy another tab cleared."
+    ],
+    "fixCommits": [
+      "08429854",
+      "53eabe5f"
+    ],
+    "note": "One read-only reviewer reviewed d4803497. Two verification workflows of read-only lenses and a completeness critic then checked the fixes (verification-01.json for 08429854, verification-02.json for 53eabe5f)."
+  },
+  "verificationWorkflows": [
+    {
+      "lenses": [
+        "protocol",
+        "store",
+        "provider",
+        "tests"
+      ],
+      "verdict": "Findings 1, 3, 4 and 5 are resolved. A copy that cannot be replaced is reset to a 'kept' record that is never shown (analysisCorpusSync.ts:149-161, tests :106-135). A failed read stays in memory unless the account asked to keep a copy (:120-125, test :137-151). Opening has a 3 s deadline, and a connection that arrives late is closed (deviceStore.ts:64-91, test :52-60). The order, compare-and-swap, probe and fallback tests now exercise what they claim. Finding 2 holds for deltas but not for multi-page snapshots; that gap is the medium finding. Nothing blocks AC3 while device storage stays dormant. Fix the medium finding before AC5 turns storage on, ideally in this slice, since it completes finding 2.",
+      "findings": 8,
+      "unverified": [
+        "The no-create probe in Firefox and Safari: only real Chromium was checked.",
+        "A QuotaExceededError at commit: the failed-save test uses a synchronous DataCloneError. If the reset also fails at quota, finding 1 comes back.",
+        "Reads and writes have no deadline, and a fetched snapshot is not shown until its save of up to 20,000 rows finishes.",
+        "Bundle size, typecheck and test results: nothing was run.",
+        "The AC3 handoff doc is untracked and repeats the 'never shown again' claim."
+      ]
+    },
+    {
+      "lenses": [
+        "protocol",
+        "lifecycle",
+        "tests"
+      ],
+      "verdict": "A, B and C are resolved. D is resolved except for finding 2 and the partial epoch test. A: games.js:304 adds the epoch to every cursor page (tested at gamesAnalysisCorpus.test.js:419 and mongo :56), and checkedSnapshot (analysisCorpusSync.ts:107-112) keeps the marks only when every page's epoch matches, so AC2 pages and mixed epochs end as 'kept'. B: a refused copy is reset before readSnapshot (:86-87), and the finally block (:97-102) deletes the database when neither the save nor the reset works. C: with no note and no keep request, nothing is awaited before the first request (useAnalysisGames.ts:311-313), and a failed import falls back to the static snapshot read. D: abort checks at :86/:92/:149, onSnapshot runs first, the keep request is cleared on kept, there is a cancel check after the import, and the limit, order and onStored mutants are killed. Checked and sound: no cross-account display, both bounds hold, only the owner or the account that asked to keep can delete, and the epoch is deterministic. The two medium test findings are confirmed but downgraded to low, because the shipped code is correct and the feature is dormant. Nothing blocks.",
+      "findings": 8,
+      "unverified": [
+        "First-load size: not built. A rough gzip of the hook plus deviceNote, with comments stripped but not minified, is +0.78 kB over 37ea2ce4. Minified it is likely about 0.5 kB, which fits the 1.2 kB headroom, but only a build can confirm.",
+        "Test, tsc and lint results; none were run.",
+        "Real-browser IndexedDB behaviour (blocked deletes across tabs, quota errors, eviction); only fake-indexeddb was exercised.",
+        "No tracked doc records that cursor pages now carry corpusEpoch."
+      ]
+    }
+  ],
+  "boundaries": [
+    "Dormant until AC5's gate calls keepOnDevice; no device copy is created in production before then.",
+    "Clearing on sign-out, account switch and Delete history is AC4.",
+    "The first-load budget was checked with a local production build using the public flags CI sets; CI's own build remains the gate.",
+    "The no-create probe was checked in Chromium only, not in Firefox or Safari.",
+    "Exact-head CI, merge, deployment and production acceptance remain pending. No latency, request-reduction or savings claim."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/CHECKS-03.json",
+      "sha256": "c5240417b1d98bd281f6ccd0bd07433a114f40c7a2ff8396f92ffdf095826401",
+      "bytes": 2566
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/checks-03/steps.txt",
+      "sha256": "02d03f1d106cc61f188dee7bbefbc98799e91f4ae5902465e79a76ae22075dd4",
+      "bytes": 107
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/checks-03/api-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/checks-03/api-lint.json",
+      "sha256": "1db66f169c8a51dce93ef31d3476d535975a37f48d15c09c389b56b24f1b828d",
+      "bytes": 7611276
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/checks-03/api-lint-no-added.txt",
+      "sha256": "cce3ce9445ee919bb16b15f76549ee7de9bce3ca9bc89a356faf8ec84ea60d08",
+      "bytes": 711
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/checks-03/api-jest-summary.json",
+      "sha256": "38abb1b05a64af2ce18dfd9fe523f899740c72516a0b6a17e48f8910b2931242",
+      "bytes": 249
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/dev/checks-03-api-jest.json",
+      "sha256": "14a17cf05fd44a021129d448b07b751184e4ae0a8848ff4d4eeecfbe5780f7c7",
+      "bytes": 856561
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/checks-03/web-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/checks-03/web-lint.json",
+      "sha256": "34765f1908e4e5fbdb3a6a29530e00dab1ee78e1676e0748c9dda66a8824b83b",
+      "bytes": 2458375
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/checks-03/web-lint-no-added.txt",
+      "sha256": "3e6e8a6c9adce9f6dbc13c9debad1b7e2bc9175cbd624c997f65df6ff1c8cb20",
+      "bytes": 828
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/checks-03/ui-lint.log",
+      "sha256": "ee2ddf89762c8bd6039ad10393cb891cdc28b45a0900e8256de6c02e54a1f76f",
+      "bytes": 3891
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/checks-03/web-vitest-summary.json",
+      "sha256": "dcbe013280ea4a68d9582fac1d876951d301df794590698f3e4cc18ee0e312cf",
+      "bytes": 176
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/dev/checks-03-web-vitest.json",
+      "sha256": "3b754acb2fb9831ba9e0892b3de133e6574c384e8aff22d796b4efb5d7a33919",
+      "bytes": 3257160
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/mutation-01/MUTATION-RESULTS.json",
+      "sha256": "1244f922c94aec75df9c485e503a753408b3a87f2add8065cfd583292981031d",
+      "bytes": 41625
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/mutation-api-01/MUTATION-RESULTS.json",
+      "sha256": "63be4d3e2f19ff551105ad66d44d82f1686e488cd3a528d8feb8f2ebdb12abc8",
+      "bytes": 5847
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/suites-api-03.txt",
+      "sha256": "599637735198ae32fe87beb714aa635d90240a02065a46b2be94e9bec94ba373",
+      "bytes": 5735
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/browser-probe-01.json",
+      "sha256": "aad432bccc56692a97002361e84162c374fd73a81cb9502e807e122e3e271c3b",
+      "bytes": 557
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/final-checks-ac3-03.sh",
+      "sha256": "7f9e8f8acc585f9302c9d314d59c4d6daee2540d55b478a373e9394d5bcf98a9",
+      "bytes": 3165
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/mutation-check-ac3-01.mjs",
+      "sha256": "fb677f18ba4c07b9c1d512fd5770378c6a4ee2f0510ca197b139a14a67114be6",
+      "bytes": 12317
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/mutation-check-ac3-api-01.mjs",
+      "sha256": "5c0be235557f16170e54e5e7529ba020d376667ce6a1939aac117e2aa4c0c219",
+      "bytes": 6371
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/run-ac3-vitest-03.mjs",
+      "sha256": "4e1149a39b3c3f53d7f1f8001c344385e72b9bfd88e5e8a8e088ddbee278c945",
+      "bytes": 3470
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/run-ac3-jest.mjs",
+      "sha256": "a9504a52b07d23cf6228a438e8c08295e6cf494fa2bc2f696fb93c8d8e2e3863",
+      "bytes": 3909
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/lint-noadd-web.mjs",
+      "sha256": "e029ad91a12bd7b5fa296f657bebc1daa863cc4362fa0af2acdca06106a3acf2",
+      "bytes": 2863
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/lint-noadd-slice.mjs",
+      "sha256": "0657478231b6ff402c3d97cdf9fe02b538d85b7072fb3fc0531938979aa86de7",
+      "bytes": 3227
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/review-01.json",
+      "sha256": "ad9d1f09d7772d9829c6d863d31bb05e9c8ebd0ca23ef9bd732ff127cef2d0b3",
+      "bytes": 2200
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/build-01/steps.txt",
+      "sha256": "f1643b0f51f7754b2a0f0297bd3b79b7e3485458d5c7c2e1ffc216fed68caea1",
+      "bytes": 17
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/build-01/perf-budget.log",
+      "sha256": "b13791934e4899d3bb1411978d0b40e24998f07ed504e11136f358b66797ae3f",
+      "bytes": 1580
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/build-base-01/steps.txt",
+      "sha256": "f1643b0f51f7754b2a0f0297bd3b79b7e3485458d5c7c2e1ffc216fed68caea1",
+      "bytes": 17
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/build-base-01/perf-budget.log",
+      "sha256": "53e5dd3dd951f09166568d02ef0a96d9ecf5c8d3da7818ba2b60607368074972",
+      "bytes": 1517
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/build-base-01/head.txt",
+      "sha256": "b365d70f9b01c3da98280e5c045336904c8830dab13c8d85ad42eb37501db7a8",
+      "bytes": 41
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/build-budget-ac3-01.sh",
+      "sha256": "6610f96782234d09f726386bfc62c1af4726d8e68d2424a9b91626a1915e8d8a",
+      "bytes": 1661
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/build-budget-base-01.sh",
+      "sha256": "70877a002b8a5f06ca08e0cb8593218e6f917ebfa6788df66cfc53067ffdb190",
+      "bytes": 1637
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/verification-01.json",
+      "sha256": "3a0ba823673efc1a6dc2eabe4cd399a909424d7d0826b8ac782e374a2f479ac3",
+      "bytes": 30299
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac3-20261031/verification-02.json",
+      "sha256": "0f5fe736193eca6f0d62e11491648713d58ed530a9042f1db199f7fbc5dfb98d",
+      "bytes": 28524
+    }
+  ]
+}

@@ -11,28 +11,31 @@ it reads, and merges after it. API paths are relative to `apps/api/src/`.
 No web client uses the new route yet; AC3 adds the device store. No flag,
 provider setting or infrastructure changes. The item stays partial.
 
+AC3 later added a corpus epoch to both routes, and its citations here follow AC3's
+line moves; see `docs/handoff/analysis-corpus-device-store-checkpoint.md`.
+
 ## The protocol
 
 1. **Snapshot.** The first page of `GET /v1/games/analysis-corpus` now also
    carries `corpusVersion` and `watermark`. Both are read before the page itself,
    so the watermark never passes a row the snapshot missed
-   (`routes/games.js:300-306`; `services/analysisCorpusChanges.js:58-60`). Later
+   (`routes/games.js:300-306`; `services/analysisCorpusChanges.js:71-74`). Later
    pages answer as before.
 2. **Delta.** `GET /v1/games/analysis-corpus/changes?since=<watermark>&corpus_version=<n>`
    returns the owner's games stamped after `since`, oldest stamp first. Pages
    follow an opaque `(updatedAt, _id)` cursor
-   (`services/analysisCorpusChanges.js:71-92`; `routes/games.js:307-308`), and the
+   (`services/analysisCorpusChanges.js:86-105`; `routes/games.js:307-308`), and the
    `_id` tiebreak keeps rows that one bulk write stamped alike in order. The
    query is validated before it takes the single corpus lane, and a `since` more
    than 60 s ahead of this server is refused
-   (`services/analysisCorpusChanges.js:64-67,110-116`).
+   (`services/analysisCorpusChanges.js:78-82,145-151`).
 3. **Items.** A corpus row comes back exactly as a snapshot item. A row that left
    the corpus comes back as `{gameId, removed: true}`. That covers tombstoned,
    pending-deletion, hidden and resumed-replay-quarantined rows
-   (`services/analysisCorpusChanges.js:96-101`).
+   (`services/analysisCorpusChanges.js:131-136`).
 4. **Watermark.** The final page returns
    `watermark = max(since, first page time - 5 min)`
-   (`services/analysisCorpusChanges.js:15,89`). Stamps use the issuing process's
+   (`services/analysisCorpusChanges.js:18,101`). Stamps use the issuing process's
    clock when the write starts, and an owner transaction commits well inside five
    minutes, so a row stamped before the watermark has already committed. Rows near
    the watermark can come back twice; applying an item twice is harmless.
@@ -64,13 +67,13 @@ A process from before AC1 writes unstamped rows during a rolling deploy, for at
 most 300 s after the new process listens (ADR 0072, G1). So:
 - **Creation.** When the service is built at boot, it creates a durable
   `siteConfig` floor 7 minutes ahead if none exists. Concurrent boots agree,
-  because the upsert matches on `_id` (`services/analysisCorpusChanges.js:18-19,27-53`).
+  because the upsert matches on `_id` (`services/analysisCorpusChanges.js:21-22,40-66`).
 - **Caching.** The floor never moves, so each process caches it, and a failed read
   is retried by the next request.
 - **Older watermarks.** A watermark before the floor needs a snapshot. The answer's
   `deltasFrom = floor + 5 min` says when a snapshot's watermark reaches past the
   floor, so a client need not loop on snapshots before then
-  (`services/analysisCorpusChanges.js:77`).
+  (`services/analysisCorpusChanges.js:116`).
 
 The floor is created at this slice's first deploy, so it is long past when AC3's
 client first asks for changes.
@@ -89,24 +92,24 @@ snapshot. Moving the snapshot handler out of `buildGamesRouter` shortens it from
 through the full app:
 - The first snapshot page carries the version and watermark, and later pages do
   not. A delta returns stamped rows identical to snapshot items, with a watermark
-  trailing by the overlap (`apps/api/__tests__/analysisCorpusChanges.mongo.test.js:46-63`).
-- Rows that one bulk write stamped alike all page through (`:65-77`).
+  trailing by the overlap (`apps/api/__tests__/analysisCorpusChanges.mongo.test.js:47-64`).
+- Rows that one bulk write stamped alike all page through (`:66-78`).
 - Hidden, deleted and quarantined rows come back as removals, and pages follow a
-  cursor to a watermark (`:79-96`).
+  cursor to a watermark (`:80-97`).
 - A wipe and a restore bump the version, so an older client must take a snapshot
-  (`:98-107`).
+  (`:99-108`).
 - Two booting processes agree on one floor, and an older watermark is told when
-  deltas start (`:109-118`).
+  deltas start (`:110-119`).
 - A wipe that fails partway, and an erasure that fails after its games delete,
-  still bump the version twice (`:120-130`).
+  still bump the version twice (`:121-131`).
 - A write that commits just after a pass, stamped before the pass ended, comes
-  back from the returned watermark (`:132-138`).
+  back from the returned watermark (`:133-139`).
 - Another owner's rows never appear. Malformed input is refused, including a
-  `since` in the future (`:140-149`).
+  `since` in the future (`:141-152`).
 
 A route test with a mocked page load shows that a delta waits for a snapshot
 page's corpus permit, and that a malformed changes query is refused while the
-lane is still held (`apps/api/__tests__/gamesAnalysisCorpus.test.js:459-506`).
+lane is still held (`apps/api/__tests__/gamesAnalysisCorpus.test.js:460-508`).
 The device-credential writer inventory now also counts `withCorpusRemoval` among
 the wrappers that hand back their work's promise.
 
