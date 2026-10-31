@@ -125,6 +125,68 @@ describe("PulseDirectoryService", () => {
     expect(await directory.getFreshMmr({ toonHandle: TOON })).toBeNull();
   });
 
+  test("refreshing the race table preserves current MMR instead of promoting its top race", async () => {
+    await directory.recordMmr({ toonHandle: TOON, mmr: 4800, region: "NA" });
+    now += 1000;
+    await directory.recordMmr({
+      toonHandle: TOON,
+      races: [{ race: "Protoss", mmr: 5800, games: 50, region: "NA" }],
+    });
+
+    const row = await directory.getFreshMmr({ toonHandle: TOON });
+    expect(row.mmr).toBe(4800);
+    expect(row.races[0].mmr).toBe(5800);
+    const stored = await db.pulseAccounts.findOne({ toonHandle: TOON });
+    expect(stored.mmrFetchedAt.getTime()).toBe(now - 1000);
+    expect(stored.racesFetchedAt.getTime()).toBe(now);
+  });
+
+  test("a race-table refresh cannot make expired current MMR fresh again", async () => {
+    await directory.recordMmr({ toonHandle: TOON, mmr: 5800, leagueId: 5 });
+    now += 60 * 60 * 1000 + 1;
+    await directory.recordMmr({
+      toonHandle: TOON,
+      races: [{ race: "Zerg", mmr: 4800, games: 50 }],
+    });
+
+    const row = await directory.getFreshMmr({ toonHandle: TOON });
+    expect(row.mmr).toBeNull();
+    expect(row.leagueId).toBeNull();
+    expect(row.races).toHaveLength(1);
+  });
+
+  test("a current-MMR refresh cannot make an expired race table fresh again", async () => {
+    await directory.recordMmr({
+      toonHandle: TOON,
+      races: [{ race: "Protoss", mmr: 5800, games: 50 }],
+    });
+    now += 60 * 60 * 1000 + 1;
+    await directory.recordMmr({ toonHandle: TOON, mmr: 4800 });
+
+    const row = await directory.getFreshMmr({ toonHandle: TOON });
+    expect(row.mmr).toBe(4800);
+    expect(row.races).toEqual([]);
+  });
+
+  test("legacy scalar values cannot be reused until a current-team lookup refreshes them", async () => {
+    await db.pulseAccounts.insertOne({
+      toonHandle: TOON,
+      mmr: 5800,
+      mmrFetchedAt: new Date(now),
+      races: [{ race: "Protoss", mmr: 5800, games: 50 }],
+    });
+    expect(await directory.getFreshMmr({ toonHandle: TOON })).toBeNull();
+
+    await directory.recordMmr({
+      toonHandle: TOON,
+      races: [{ race: "Zerg", mmr: 4800, games: 20 }],
+    });
+    expect((await directory.getFreshMmr({ toonHandle: TOON })).mmr).toBeNull();
+
+    await directory.recordMmr({ toonHandle: TOON, mmr: 4800 });
+    expect((await directory.getFreshMmr({ toonHandle: TOON })).mmr).toBe(4800);
+  });
+
   test("recordMmr drops malformed race rows and rejects empty payloads", async () => {
     const wrote = await directory.recordMmr({
       toonHandle: TOON,

@@ -15,8 +15,8 @@ Resolution flow when the bridge feeds us an in-game opponent:
 
 1. ``character/search?term=<name>`` returns 0..N candidates. We trim to
    the user's race-aware preference and (optionally) region.
-2. For each shortlisted candidate fetch their current 1v1 team. The
-   one with the most-recent ``lastPlayed`` and matching race wins.
+2. Fetch the selected candidate's current regional season and 1v1
+   teams. Prefer the in-game race, then the most-recent ``lastPlayed``.
 3. Build an ``OpponentProfile`` with confidence ∈ [0, 1] reflecting
    how clean the disambiguation was (1.0 = unique name, .65 = best of
    N tied on region, .4 = no race agreement, etc.).
@@ -42,6 +42,7 @@ import logging
 import threading
 import time
 from collections import OrderedDict
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -95,6 +96,26 @@ def _canon_race(raw: Optional[str]) -> Optional[str]:
     if not raw:
         return None
     return _RACE_CANONICAL.get(raw.strip().casefold())
+
+
+def _region_code(raw: Any) -> Optional[int]:
+    if isinstance(raw, int) and raw in PULSE_REGION_CODE_TO_LABEL:
+        return raw
+    if isinstance(raw, str):
+        return PULSE_REGION_LABEL_TO_CODE.get(raw.upper())
+    return None
+
+
+def _last_played_timestamp(raw: Any) -> float:
+    if not isinstance(raw, str) or not raw:
+        return 0.0
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.timestamp()
+    except (ValueError, OverflowError, OSError):
+        return 0.0
 
 
 def _league_label(value: Any) -> Optional[str]:
@@ -304,10 +325,10 @@ class PulseClient:
         self._retries = max(1, retry_attempts)
         self._backoff = retry_base_sec
         self._sleep = sleep
-        # Season ID is stable for ~3 months; cache it lazily on first
-        # lookup so we don't hit ``/season/list/all`` for every name
-        # query. ``None`` = not yet fetched, ``0`` = fetched but failed.
-        self._season_id: Optional[int] = None
+        # Seasons can differ by region. Refresh with the profile cache
+        # so an agent left running over a rollover stops using old teams.
+        self._season_ids: Dict[Optional[int], int] = {}
+        self._season_expires_at = 0.0
 
     # ------------------------------------------------------------------
     # Public API
@@ -419,7 +440,7 @@ class PulseClient:
             )
         best_score, best = scored[0]
         confidence = self._confidence_for(best_score, scored)
-        team_info = self._fetch_team_for(best)
+        team_info = self._fetch_team_for(best, race=race)
         return self._build_profile(
             name=name,
             region=region,
@@ -446,7 +467,7 @@ class PulseClient:
         return data[:10]
 
     def _fetch_team_for(
-        self, candidate: Dict[str, Any],
+        self, candidate: Dict[str, Any], *, race: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         ch = _pick_hit_character(candidate)
         cid = ch.get("id")
@@ -455,7 +476,8 @@ class PulseClient:
                 cid = int(cid)
             except (TypeError, ValueError):
                 return None
-        season = self._ensure_season()
+        region_code = _region_code(ch.get("region"))
+        season = self._ensure_season(region_code)
         if not season:
             # Without a season we can still produce a team-less profile.
             return None
@@ -468,42 +490,61 @@ class PulseClient:
         data = self._get_with_retry(url, params=params)
         if not isinstance(data, list) or not data:
             return None
-        # Highest rating wins among the candidate's 1v1 teams (one per
-        # race). Pulse returns one entry per (queue, race) team the
-        # character has touched this season.
+        # Pulse returns one team per race. The most recently played
+        # current-season team is the current rating, even after a drop.
+        # Season numbers collide between regions, so reject rows from
+        # another region instead of accidentally displaying its old peak.
         best = None
-        best_rating = -1
+        best_key = (-1, -1.0, -1)
+        target_race = _canon_race(race)
         for t in data:
+            if not isinstance(t, dict):
+                continue
+            team_region = _region_code(t.get("region"))
+            if region_code is not None and team_region is not None and team_region != region_code:
+                continue
             try:
                 r = int(t.get("rating") or -1)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 continue
-            if r > best_rating:
-                best_rating = r
+            if r <= 0:
+                continue
+            race_match = int(
+                target_race is not None
+                and _candidate_top_race(_pick_hit_member(t)) == target_race
+            )
+            key = (race_match, _last_played_timestamp(t.get("lastPlayed")), r)
+            if key > best_key:
+                best_key = key
                 best = t
         return best
 
-    def _ensure_season(self) -> Optional[int]:
-        if self._season_id is not None:
-            return self._season_id or None
+    def _ensure_season(self, region_code: Optional[int] = None) -> Optional[int]:
+        if time.monotonic() < self._season_expires_at:
+            if region_code is None and self._season_ids:
+                return max(self._season_ids.values())
+            return self._season_ids.get(region_code) or self._season_ids.get(None)
         url = f"{self._api_root}/season/list/all"
         data = self._get_with_retry(url)
         if not isinstance(data, list):
-            self._season_id = 0
             return None
-        ids: List[int] = []
+        by_region: Dict[Optional[int], int] = {}
         for season in data:
             if not isinstance(season, dict):
                 continue
             try:
-                ids.append(int(season.get("battlenetId")))
+                season_id = int(season.get("battlenetId"))
             except (TypeError, ValueError):
                 continue
-        if not ids:
-            self._season_id = 0
+            season_region = _region_code(season.get("region"))
+            by_region[season_region] = max(by_region.get(season_region, 0), season_id)
+        if not by_region:
             return None
-        self._season_id = max(ids)
-        return self._season_id
+        self._season_ids = by_region
+        self._season_expires_at = time.monotonic() + DEFAULT_CACHE_TTL_SEC
+        if region_code is None:
+            return max(by_region.values())
+        return by_region.get(region_code) or by_region.get(None)
 
     def _get_with_retry(
         self,
@@ -686,13 +727,8 @@ class PulseClient:
             except (TypeError, ValueError):
                 played = None
             recent_count: Optional[int] = played if played else None
-            members = team.get("members") if isinstance(team, dict) else None
-            if isinstance(members, list) and members:
-                m0 = members[0] if isinstance(members[0], dict) else {}
-                # Member-level top race overrides the candidate-level
-                # one when present — the team is queue-scoped so it's
-                # more reliable for "what race they pick in 1v1."
-                top_race = _candidate_top_race(m0) or top_race
+            # Read the race from the same current team as its MMR.
+            top_race = _candidate_top_race(_pick_hit_member(team)) or top_race
         else:
             recent_count = None
         return OpponentProfile(

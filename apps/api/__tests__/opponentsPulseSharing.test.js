@@ -129,6 +129,36 @@ describe("cross-user SC2Pulse sharing via the directory", () => {
     expect(calls.getRaceBreakdown).toBe(1);
   });
 
+  test.each([false, true])("highest-race breakdown cannot replace current MMR (current cached: %s)", async (hasCurrentMmr) => {
+    const { pulse, calls } = makeFakePulse();
+    pulse.getCurrentMmrForAny = jest.fn(async () => ({ mmr: 4800, region: "NA" }));
+    const directory = new PulseDirectoryService(db);
+    const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
+      pulseMmr: pulse,
+      pulseDirectory: directory,
+    });
+    await db.opponents.insertOne({
+      userId: "userA", pulseId: TOON, toonHandle: TOON,
+      pulseCharacterId: "267727", region: "NA",
+    });
+    if (hasCurrentMmr) {
+      await directory.recordMmr({
+        toonHandle: TOON, pulseCharacterId: "267727", mmr: 4800, region: "NA",
+      });
+    }
+
+    const breakdown = await opponents.getPulseRaceBreakdown("userA", TOON);
+    expect(breakdown.topMmr).toBe(5200);
+    expect(calls.getRaceBreakdown).toBe(1);
+    const shared = await directory.getFreshMmr({ toonHandle: TOON });
+    expect(shared.mmr).toBe(hasCurrentMmr ? 4800 : null);
+    expect(shared.races).toHaveLength(2);
+
+    const nextEncounter = await opponents.recordGame("userB", game({ gameId: "b1", race: "Z" }));
+    expect(nextEncounter.mmr).toBe(4800);
+    expect(pulse.getCurrentMmrForAny).toHaveBeenCalledTimes(hasCurrentMmr ? 0 : 1);
+  });
+
   test("admin Retry forces a fresh pull and refreshes the shared cache for everyone", async () => {
     const directory = new PulseDirectoryService(db);
     // A peer's slightly-stale value is already cached (within TTL).

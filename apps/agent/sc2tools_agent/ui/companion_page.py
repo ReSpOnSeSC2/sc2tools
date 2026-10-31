@@ -721,7 +721,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             voice.toggled.connect(lambda value: self.set_preference("scoutingReadAloud", value))
             self.preference_checks["scoutingReadAloud"] = voice
             controls_layout.addWidget(voice)
-            controls_layout.addWidget(label("Uses your Windows system voice without OBS. Reads current opponent information and notes marked for readout. Keep only one scouting voice enabled if you also use OBS.", "Muted"))
+            controls_layout.addWidget(label("Uses your Windows system voice without OBS. Automatic scouting plays once per game across Companion and OBS. Use Read report now to repeat it.", "Muted"))
             voice_actions = QtWidgets.QHBoxLayout()
             self.read_report_button = QtWidgets.QPushButton("Read report now")
             self.read_report_button.setEnabled(False)
@@ -1889,6 +1889,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 return
             self._requests.pop(channel, None)
             payload = response["payload"]
+            if channel == "scouting_voice_claim":
+                self._finish_scouting_voice_claim(response)
+                return
             if channel == "session_setup":
                 self.session_setup_button.setText("Connect Session stats…")
                 result = response.get("result")
@@ -2218,9 +2221,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._render_information_layout()
             self._update_speech()
 
-        def _update_speech(self):
-            if not hasattr(self, "scouting_speech"):
-                return
+        def _scouting_speech_context(self):
             active, context = self.live_context()
             envelope = self._snapshot.get("liveGame") or {}
             game_key = envelope.get("gameKey")
@@ -2232,8 +2233,14 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             if team:
                 enemy_key = self.team_roster_state.selected_key
                 game_key = game_key + ":team:" + enemy_key + ":identity:" + str(self.team_roster_state.bindings.get(enemy_key) or "unmatched")
+            return permitted, current, context, envelope, game_key, team
+
+        def _update_speech(self):
+            if not hasattr(self, "scouting_speech"):
+                return
+            permitted, current, context, envelope, game_key, team = self._scouting_speech_context()
             self.read_report_button.setEnabled(permitted and current)
-            self.voice_shortcut.setToolTip("Desktop scouting voice. Turn off to stop reading immediately. OBS speech is a separate setting." if permitted else
+            self.voice_shortcut.setToolTip("Desktop scouting voice. Automatic reports play once across Companion and OBS. Turn off to stop reading immediately." if permitted else
                                            "Desktop scouting voice is off or hidden by the master switch or active mode. Open Assistance to change it.")
             if not permitted or not current:
                 if self._speech_game_key is not None or self._speech_pending_key is not None:
@@ -2242,7 +2249,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                                           "Spoken scouting is hidden by the master switch or active mode." if not permitted else
                                           "Waiting for a fresh human opponent or confirmed team enemy. Browsing history does not trigger speech.")
                 return
-            if self._speech_game_key is not None and self._speech_game_key != game_key:
+            if ((self._speech_game_key is not None and self._speech_game_key != game_key)
+                    or (self._speech_pending_key is not None and self._speech_pending_key != game_key)):
                 self._stop_report()
             if envelope.get("phase") not in {"match_started", "match_in_progress"}:
                 self.voice_status.setText("Spoken scouting is ready for the game to start.")
@@ -2256,10 +2264,34 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 if not enriched and time.monotonic() - self._speech_pending_at < 6:
                     self.voice_status.setText("Preparing the scouting report · waiting briefly for your opponent history.")
                     return
+                if not isinstance(self._account_key, str) or not self._account_key:
+                    self.voice_status.setText("Refresh your linked account before reading the scouting report.")
+                    return
                 self._spoken_game_keys = (self._spoken_game_keys + [game_key])[-128:]
-                self._speech_pending_key = None
-                self._speech_pending_at = None
+                if not self.scouting_speech.prepare():
+                    self._speech_pending_key = None
+                    self._speech_pending_at = None
+                    return
+                self.voice_status.setText("Checking automatic scouting playback…")
+                self._job("scouting_voice_claim", {"action": "claim_scouting_voice", "gameKey": envelope.get("gameKey"),
+                                                   "accountKey": self._account_key, "speechKey": game_key})
+
+        def _finish_scouting_voice_claim(self, response):
+            payload = response["payload"]
+            permitted, current, context, envelope, game_key, _team = self._scouting_speech_context()
+            if (not permitted or not current or payload.get("accountKey") != self._account_key
+                    or payload.get("gameKey") != envelope.get("gameKey") or payload.get("speechKey") != game_key
+                    or self._speech_pending_key != game_key
+                    or envelope.get("phase") not in {"match_started", "match_in_progress"}):
+                return
+            self._speech_pending_key = None
+            self._speech_pending_at = None
+            if response.get("error"):
+                self.voice_status.setText("Automatic playback could not be checked. Use Read report now to hear the report.")
+            elif response.get("result", {}).get("granted") is True:
                 self._speak_report(context, game_key)
+            else:
+                self.voice_status.setText("Automatic scouting was already handled for this game. Use Read report now to repeat it.")
 
         def _speak_report(self, context, game_key):
             from .companion_speech import build_scouting_report
@@ -2267,17 +2299,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self._speech_game_key = game_key
 
         def _read_report_now(self):
-            active, context = self.live_context()
-            envelope = self._snapshot.get("liveGame") or {}
-            opponent = context if context.get("teamHybrid") else envelope.get("opponent") or {}
-            game_key = envelope.get("gameKey")
-            identity_ready = any(isinstance(value, str) and value.strip() for value in (opponent.get("revealedName"), opponent.get("name")))
-            allowed = self.assistance_enabled() and self._preferences["scoutingReadAloud"] and self.mode_gates()["scoutingReadAloud"]
-            team = bool(context.get("teamHybrid") and self.team_roster_state.ready)
-            if allowed and active and identity_ready and isinstance(game_key, str) and game_key.strip() and (verified_one_on_one(self._snapshot) or team):
-                if team:
-                    enemy_key = self.team_roster_state.selected_key
-                    game_key = game_key + ":team:" + enemy_key + ":identity:" + str(self.team_roster_state.bindings.get(enemy_key) or "unmatched")
+            permitted, current, context, _envelope, game_key, _team = self._scouting_speech_context()
+            if permitted and current:
+                self._requests.pop("scouting_voice_claim", None)
                 if game_key not in self._spoken_game_keys:
                     self._spoken_game_keys = (self._spoken_game_keys + [game_key])[-128:]
                 self._speech_pending_key = None
@@ -2285,6 +2309,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self._speak_report(context, game_key)
 
         def _stop_report(self):
+            self._requests.pop("scouting_voice_claim", None)
             if hasattr(self, "scouting_speech"):
                 self.scouting_speech.stop()
             if self._speech_pending_key is not None and self._speech_pending_key not in self._spoken_game_keys:
@@ -2496,9 +2521,20 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self.refresh()
                 self.build_selectors.refresh()
 
+        def assistance_off_reason(self):
+            # Pairing is only known from a healthy snapshot, so connecting is reported first.
+            if self._closed:
+                return "closed"
+            if not self._snapshot_healthy:
+                return "connecting"
+            if not self._paired:
+                return "unpaired"
+            if not self._preferences["overlaysEnabled"]:
+                return "assistance_off"
+            return None
+
         def assistance_enabled(self):
-            return bool(not self._closed and self._paired and self._snapshot_healthy
-                        and self._preferences["overlaysEnabled"])
+            return self.assistance_off_reason() is None
 
         def dispatch_build_checkin(self, method, args=()):
             if not self._closed:

@@ -2,6 +2,7 @@
 const { withEndedGameControl } = require("./liveGameEndedControl");
 
 const { buildScoutingBrief, scoutingDeviceRoom } = require("./agentScouting");
+const { ScoutingVoiceClaims, validScoutingVoiceGameKey } = require("./scoutingVoiceClaims");
 
 /**
  * In-memory pub/sub for the Live Game Bridge — fans out the agent's
@@ -84,6 +85,15 @@ function historyOpponentName(envelope) {
   return normalizeOpponentName(historyRecord.oppName);
 }
 
+/** Team opponents are selected in the Companion from the live human roster.
+ * This only allows a playback claim; it never infers enemy identity.
+ * @param {Record<string, unknown>} envelope */
+function hasHumanTeamRoster(envelope) {
+  const players = envelope.players;
+  return Array.isArray(players) && players.length >= 3 && players.length <= 16
+    && players.every(player => player?.type === "user" && normalizeOpponentName(player.name));
+}
+
 class LiveGameBroker {
   /**
    * @param {{
@@ -118,6 +128,7 @@ class LiveGameBroker {
     // the last opponent.
     /** @type {Map<string, string>} */
     this._currentGameKey = new Map();
+    this._scoutingVoiceClaims = new ScoutingVoiceClaims();
     // Agent transports intentionally use more than one HTTP worker, so
     // request completion order is not guaranteed. Keep the newest real
     // source timestamp per user and reject an older envelope before it can
@@ -541,6 +552,18 @@ class LiveGameBroker {
     return this._currentGameKey.get(userId) || null;
   }
 
+  /** One automatic scouting reader across Companion and every Browser Source.
+   * Claim synchronously after authorization, immediately before playback.
+   * @param {string} userId @param {unknown} gameKey @returns {boolean} */
+  claimScoutingVoice(userId, gameKey) {
+    if (!userId || !validScoutingVoiceGameKey(gameKey)) return false;
+    const envelope = this.latest(userId);
+    if (!envelope || envelope.gameKey !== gameKey || envelope.isReplay || envelope.synthetic === true
+      || !["match_started", "match_in_progress"].includes(String(envelope.phase))
+      || (!directOpponentName(envelope) && !hasHumanTeamRoster(envelope))) return false;
+    return this._scoutingVoiceClaims.claim(userId, gameKey);
+  }
+
   /**
    * Return the snapshot the overlay socket should replay on connect /
    * resync. When the latest cached envelope is past ``match_loading``
@@ -636,6 +659,7 @@ class LiveGameBroker {
     this._latest.clear();
     this._latestOverlayLive.clear();
     this._currentGameKey.clear();
+    this._scoutingVoiceClaims.clear();
     this._capturedAtWatermarks.clear();
     this._publishRevision.clear();
   }

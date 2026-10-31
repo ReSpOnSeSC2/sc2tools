@@ -9,6 +9,7 @@ def run_voice_check(tmp_path, body):
     setup = '''
 from copy import deepcopy
 import time
+import threading
 from sc2tools_agent.companion_modes import default_modes
 from sc2tools_agent.ui.companion_page import build_companion_page
 
@@ -20,9 +21,16 @@ class FakeSpeech(QtCore.QObject):
         self.attempts = []
         self.events = []
         self.accept = True
+        self.ready = True
         self.active = False
         self.stops = 0
         self.shutdowns = 0
+
+    def prepare(self):
+        assert QtCore.QThread.currentThread() == self.thread(), "Prepare the native engine on its UI thread"
+        if not self.ready:
+            self.statusChanged.emit("System voice unavailable")
+        return self.ready
 
     def speak(self, text):
         self.attempts.append(text)
@@ -55,7 +63,17 @@ def handler(payload):
     state["calls"].append(deepcopy(payload))
     action = payload["action"]
     if action == "snapshot":
-        return {"paired": True, "preferences": deepcopy(state["preferences"]), "modes": deepcopy(state["modes"]), "liveGame": None}
+        return {"paired": True, "accountKey": "test-account", "preferences": deepcopy(state["preferences"]), "modes": deepcopy(state["modes"]), "liveGame": None}
+    if action == "claim_scouting_voice":
+        assert QtCore.QThread.currentThread() != app.thread(), "Voice claims must run off the UI thread"
+        release = state.get("claim_release")
+        if release is not None:
+            state["claim_started"].set()
+            assert release.wait(3), "Test did not release the pending voice claim"
+        if state.get("claim_error"):
+            raise ValueError("Claim connection unavailable")
+        state["claim_returned"] = True
+        return {"granted": state.get("claim_granted", True)}
     if action == "preferences":
         state["preferences"] = deepcopy(payload["preferences"])
         return {"preferences": deepcopy(state["preferences"])}
@@ -80,6 +98,8 @@ page = build_companion_page(None, handler=handler, QtCore=QtCore, QtGui=QtGui, Q
 page.timer.stop()
 wait_for(lambda: page._paired and not page._requests)
 speaker = factories[0]
+claim_responses = []
+page.completed.connect(lambda response: claim_responses.append(response) if response.get("channel") == "scouting_voice_claim" else None)
 assert len(factories) == 1
 assert speaker.parent() is page
 
@@ -99,9 +119,11 @@ def put_game(phase="match_started", key="game-a", name="Current opponent"):
     page._snapshot_healthy = True
     return envelope
 
-def render():
+def render(wait_for_claim=True):
     page._update_overlays()
     app.processEvents()
+    if wait_for_claim:
+        wait_for(lambda: "scouting_voice_claim" not in page._requests)
 '''
     script = setup + "\ntry:\n" + textwrap.indent(textwrap.dedent(body), "    ")
     script += "\nfinally:\n    page.shutdown()\n    page.deleteLater()\n    app.processEvents()\n"
@@ -410,9 +432,101 @@ def test_team_voice_waits_for_bound_history_then_reads_opted_in_notes_before_dea
         page._team_details["enemy-z-owned"] = {"name": "Enemy Z", "totals": {"wins": 2, "losses": 1},
                                                "notes": "Late-arriving opted-in scouting note", "notesReadAloud": True}
         page._team_selection_changed()
+        wait_for(lambda: "scouting_voice_claim" not in page._requests)
         assert len(speaker.attempts) == 1
         assert "Late-arriving opted-in scouting note" in speaker.attempts[0]
         assert ":identity:enemy-z-owned" in page._speech_game_key
         render()
+        assert len(speaker.attempts) == 1
+    ''')
+
+
+def test_denied_automatic_claim_stays_silent_and_manual_repeat_bypasses_claim(tmp_path):
+    run_voice_check(tmp_path, '''
+        enable_voice()
+        state["claim_granted"] = False
+        put_game()
+        render()
+        assert not speaker.attempts
+        assert "already handled" in page.voice_status.text()
+        claims = [call for call in state["calls"] if call["action"] == "claim_scouting_voice"]
+        assert len(claims) == 1
+        assert claims[0]["gameKey"] == "game-a"
+        assert claims[0]["accountKey"] == "test-account"
+        render()
+        page.read_report_button.click()
+        assert len(speaker.attempts) == 1
+        assert len([call for call in state["calls"] if call["action"] == "claim_scouting_voice"]) == 1
+    ''')
+
+
+def test_failed_automatic_claim_never_falls_back_to_a_duplicate_voice(tmp_path):
+    run_voice_check(tmp_path, '''
+        enable_voice()
+        state["claim_error"] = True
+        put_game()
+        render()
+        assert not speaker.attempts
+        assert "could not be checked" in page.voice_status.text()
+        render()
+        assert len([call for call in state["calls"] if call["action"] == "claim_scouting_voice"]) == 1
+        page.read_report_button.click()
+        assert len(speaker.attempts) == 1
+    ''')
+
+
+def test_unavailable_native_voice_does_not_consume_the_browser_report_claim(tmp_path):
+    run_voice_check(tmp_path, '''
+        enable_voice()
+        speaker.ready = False
+        put_game()
+        render()
+        assert not speaker.attempts
+        assert page.voice_status.text() == "System voice unavailable"
+        assert not [call for call in state["calls"] if call["action"] == "claim_scouting_voice"]
+        render()
+        assert not [call for call in state["calls"] if call["action"] == "claim_scouting_voice"]
+        speaker.ready = True
+        page.read_report_button.click()
+        assert len(speaker.attempts) == 1
+    ''')
+
+
+@pytest.mark.parametrize("cancel", [
+    "page.stop_report_button.click()",
+    "page._preferences['scoutingReadAloud'] = False; render(wait_for_claim=False)",
+    "page._account_key = 'another-account'",
+    "put_game(key='next-game', name='Next opponent')",
+    "page._snapshot['liveGame']['phase'] = 'match_ended'",
+    "page.shutdown()",
+])
+def test_late_automatic_claim_cannot_speak_after_permission_or_context_changes(tmp_path, cancel):
+    run_voice_check(tmp_path, f'''
+        enable_voice()
+        state["claim_release"] = threading.Event()
+        state["claim_started"] = threading.Event()
+        put_game()
+        render(wait_for_claim=False)
+        assert state["claim_started"].wait(1)
+        assert not speaker.attempts
+        {cancel}
+        state["claim_release"].set()
+        wait_for(lambda: state.get("claim_returned") if page._closed else len(claim_responses) == 1)
+        assert not speaker.attempts
+    ''')
+
+
+def test_manual_repeat_cancels_an_inflight_automatic_claim(tmp_path):
+    run_voice_check(tmp_path, '''
+        enable_voice()
+        state["claim_release"] = threading.Event()
+        state["claim_started"] = threading.Event()
+        put_game()
+        render(wait_for_claim=False)
+        assert state["claim_started"].wait(1)
+        page.read_report_button.click()
+        assert len(speaker.attempts) == 1
+        state["claim_release"].set()
+        wait_for(lambda: len(claim_responses) == 1)
         assert len(speaker.attempts) == 1
     ''')

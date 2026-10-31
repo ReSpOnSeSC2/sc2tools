@@ -3512,13 +3512,12 @@ class OpponentsService {
       } catch {
         races = [];
       }
-      // Write-through so the next viewer reuses this breakdown.
+      // Share the breakdown without replacing current MMR with the
+      // highest-rated race. Current MMR is selected by the live team lookup.
       if (this.pulseDirectory && races.length > 0) {
         await this._directoryRecordMmr({
           pulseCharacterId: charId,
           toonHandle: toon,
-          mmr: races[0].mmr,
-          region: races[0].region,
           races,
         });
       }

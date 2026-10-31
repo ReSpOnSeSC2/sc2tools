@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "slice": "agent-0.24.7-acceptance",
+  "status": "PREPARED_NOT_RUN_NO_LAUNCH_NO_ACCEPTANCE",
+  "release": {
+    "tag": "agent-v0.24.7",
+    "commit": "ae21f7a284176112021cdcb80781ca7613fc5032",
+    "agentSourceUnchangedOnMain": true,
+    "checkedAtMain": "55378835e6f0640a2da148da13a1ace0f008d541",
+    "updaterUnchangedSince": "agent-v0.24.6",
+    "agentSourceChangedSince0246": [
+      "sc2tools_agent/__init__.py",
+      "sc2tools_agent/build_checkin/scouting.py",
+      "sc2tools_agent/live/obs_layout.py",
+      "sc2tools_agent/ui/companion_page.py",
+      "sc2tools_agent/ui/gui.py",
+      "sc2tools_agent/ui/overlay_input.py"
+    ]
+  },
+  "items": [
+    14,
+    15,
+    16,
+    17,
+    18,
+    36,
+    37,
+    48,
+    51,
+    56,
+    62,
+    184,
+    185,
+    186,
+    187
+  ],
+  "checklist": {
+    "path": "docs/runbooks/agent-0.24.7-acceptance.md",
+    "lfSha256": "bc00cb77d941b7859f392c983f1e5ef3624d3c20544a7a00323c517c9aa5c3f5",
+    "lineCitations": 732,
+    "citationProblems": 0,
+    "citationRecord": "C:/SC2TOOLS/.cache/agent-0247-acceptance-20261031/citations-02/checklist.txt",
+    "citationRecordSha256": "d72ee2fdc053bd04efbbaf37c1cadad11543ab01c72fd3019315c5cfcdde850c",
+    "steps": 71,
+    "ownerMinutes": 528,
+    "sittings": [
+      "Sitting 1: update to 0.24.7 (do this first)",
+      "Sitting 2: desktop drills",
+      "Sitting 3: installer on a disposable Windows profile",
+      "Sitting 4: OBS (48, 51 and 56)",
+      "Sitting 5: live games"
+    ]
+  },
+  "augmentMatrix": {
+    "path": "docs/handoff/agent-0.24.7-augment-matrix.md",
+    "lfSha256": "fd3c011e65358d63fe33cef089cd8784f1c5513a4366e779c086ef0dd77b6669",
+    "lineCitations": 177,
+    "citationProblems": 0,
+    "citationRecord": "C:/SC2TOOLS/.cache/agent-0247-acceptance-20261031/citations-02/augmentMatrix.txt",
+    "citationRecordSha256": "3ec6a5098a8cbd4660093a7a020c2afe75ad73015ec23311641b56eb498f8a88",
+    "rows": 39,
+    "statuses": {
+      "shipped": 33,
+      "partial": 6
+    }
+  },
+  "knownIssues": [
+    "0.24.7's 'Import help' and Skipped 'Help' open nothing: help topic desktop-app-import is missing from the agent's allowlist.",
+    "A card preview that cannot open says 'Your current check-in is already open.', including when In-game assistance is off.",
+    "The website names the startup switch 'Run on Windows startup'; the app says 'Run SC2 Tools Agent on Windows startup'."
+  ],
+  "verification": {
+    "verifiers": 4,
+    "verifierRecord": "C:/SC2TOOLS/.cache/agent-0247-acceptance-20261031/verifiers-01.json",
+    "verifierRecordSha256": "1f4672a9d3670c185cc46b96217f176339587601c69f41b321aa85bdc0d70f4e",
+    "draftedStepsCorrected": 64,
+    "independentReview": {
+      "reviewers": 1,
+      "findings": {
+        "high": 1,
+        "medium": 6,
+        "low": 8
+      },
+      "fixed": 15,
+      "note": "One read-only reviewer on the generated docs; every finding is applied as an asserted override in agent-0247-docs-02.py."
+    }
+  },
+  "scope": [
+    "Fifteen desktop items shipped in agent 0.24.7 that need only the owner's installed acceptance; item 17 covers installer behaviour only.",
+    "Five sittings: the in-app update first, desktop drills, the installer on a disposable profile, one OBS sitting and live games.",
+    "Hand-backs are named screenshots or short agent.log excerpts, never agent.json or the whole folder."
+  ],
+  "notDone": [
+    "Nothing was run: no StarCraft or desktop-app launch, no installer run, no production read, and no item is accepted.",
+    "The ledger is unchanged; the acceptance receipt and any promotion come after the owner's session.",
+    "Item 17's signing decision and the signed-build criterion stay separate owner steps."
+  ]
+}

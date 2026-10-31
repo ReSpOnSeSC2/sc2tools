@@ -55,6 +55,7 @@ import {
 import { OverlaySetupCard, OverlayCheckBadge } from "@/components/overlay/OverlaySetupCard";
 import { ReconnectDot } from "@/components/overlay/ReconnectDot";
 import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
+import { useScoutingVoiceClaim } from "@/components/overlay/useScoutingVoiceClaim";
 import {
   OpponentWidget,
   MatchResultWidget,
@@ -320,6 +321,7 @@ function ConnectedOverlayWidgetClient({
   // `voice-readout.js` which was only included from scouting.html.
   const pausedHere = gameWidgetsPaused && isGameWidget(widget);
   const enableVoiceHere = widget === "scouting" && !pausedHere;
+  const claimScoutingVoice = useScoutingVoiceClaim(socketRef);
   const voice = useVoiceReadout(
     enableVoiceHere ? shownLive : null,
     enableVoiceHere ? voicePrefs : null,
@@ -328,6 +330,7 @@ function ConnectedOverlayWidgetClient({
     // before the post-game replay-derived ``LiveGamePayload`` would
     // have been able to fire it minutes later.
     enableVoiceHere ? liveGame : null,
+    claimScoutingVoice,
   );
 
   // Hiding the randomizer must retain its consumed match identities and

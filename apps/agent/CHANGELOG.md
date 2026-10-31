@@ -2,6 +2,25 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.24.8
+
+### Fixed
+- Use the opponent's current regional season and active race when selecting
+  MMR. Prefer recent activity over a higher older team, and refresh season
+  information across rollovers instead of keeping an old rating indefinitely.
+- Play one automatic scouting report per game across Companion and connected
+  OBS Browser Sources, preventing the same opponent MMR and scouting facts
+  from being announced in two voices. Read report now remains available for
+  deliberate repeats.
+- Cancel pending readouts when the match, linked account or voice permissions
+  change. Check native voice availability before claiming playback so an
+  unavailable Windows speech engine leaves OBS free to read the report.
+- Open the import help article from "Import help" on the import card and from
+  "Help" on skipped lines; in 0.24.7 both opened nothing.
+- Say why a card preview in Settings > Build check-in cannot open: In-game
+  assistance is off, the app is not paired, or Companion is still connecting.
+  It no longer claims the current check-in is already open for every refusal.
+
 ## 0.24.7
 
 ### Fixed

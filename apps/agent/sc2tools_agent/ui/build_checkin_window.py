@@ -104,6 +104,8 @@ class BuildCheckinHost:
     (``AgentState.build_checkin_card_positions``); ``on_moved(kind, x,
     y)`` persists a new one. ``window_factory(kind, host)`` builds a card
     window; the default imports the Qt cards lazily.
+    ``assistance_reason()`` says why In-game assistance is off (the
+    Companion page's code), so a refused preview can explain itself.
     """
 
     def __init__(
@@ -116,6 +118,7 @@ class BuildCheckinHost:
         window_factory: Optional[Callable[[str, "BuildCheckinHost"], Any]] = None,
         preview_race: Optional[Callable[[], Optional[str]]] = None,
         on_reset_positions: Optional[Callable[[], None]] = None,
+        assistance_reason: Optional[Callable[[], Optional[str]]] = None,
     ) -> None:
         self._controller = controller
         self._positions: Dict[str, Point] = {}
@@ -133,6 +136,7 @@ class BuildCheckinHost:
         self._closed = False
         self._preview_race = preview_race or (lambda: None)
         self._on_reset_positions = on_reset_positions
+        self._assistance_reason = assistance_reason or (lambda: None)
 
     # ---------------------------------------------------------- dispatch
 
@@ -262,18 +266,26 @@ class BuildCheckinHost:
         except Exception:  # noqa: BLE001
             log.exception("build_checkin_action_failed action=%s", action)
 
-    def show_preview(self, kind: str) -> bool:
-        """Show an inert local sample; an actual visible card has priority."""
-        if self._closed or not self._panels_enabled or kind not in (LOADING, POSTGAME):
-            return False
+    def show_preview(self, kind: str) -> Optional[str]:
+        """Show an inert local sample; an actual visible card has priority.
+
+        Returns ``None`` once the sample is up, else why it was refused:
+        ``card_open``, ``unavailable`` or the Companion page's reason that
+        In-game assistance is off (``connecting``, ``unpaired``,
+        ``assistance_off``, ``closed``).
+        """
+        if self._closed or kind not in (LOADING, POSTGAME):
+            return "unavailable"
+        if not self._panels_enabled:
+            return self._assistance_reason() or "assistance_off"
         if any(window.isVisible() and not getattr(window, "is_preview", False)
                for window in self._windows.values()):
-            return False
+            return "card_open"
         from ..build_checkin.preview import sample_loading_model, sample_postgame_model
         self._dismiss_previews()
         factory = sample_loading_model if kind == LOADING else sample_postgame_model
         self.window(kind).show_model(factory(self._preview_race()), preview=True)
-        return True
+        return None
 
     def _dismiss_previews(self) -> None:
         for window in self._windows.values():

@@ -214,13 +214,14 @@ their owner, and older unowned tasks require an owned-game check before resuming
 of pinned panels. **Assistance → Read scouting report aloud in Companion** is
 the same saved switch; **Read report now** repeats the current live report and
 **Stop reading** cancels it. This uses the Windows system voice without OBS.
-Automatic reports require a fresh human 1v1 game and read at most once per game
-in this agent session. They wait briefly for opponent history before falling back
+Automatic reports require a fresh human 1v1 game or a confirmed live team enemy
+and play once per game across Companion and connected OBS Browser Sources.
+The first reader ready to speak handles the automatic report. They wait briefly for opponent history before falling back
 to the known profile if enrichment is unavailable. Browsing history never triggers speech. Only notes marked
 for readout are included. Master-off, a disallowing preset, stale telemetry, or
 quitting stops speech; enable the per-mode speech gate under Customize mode if
-needed. OBS voice preferences remain separate—keep only one scouting voice
-enabled to avoid hearing both. Missing native speech engines show an error
+needed. OBS and native voice choices remain separate; **Read report now** can
+repeat a report deliberately, including for another confirmed team enemy. Missing native speech engines show an error
 instead of silently claiming playback.
 
 ## Main window - what is where

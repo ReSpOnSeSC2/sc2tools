@@ -12,7 +12,11 @@ from sc2tools_agent.build_checkin.models import CheckinPrefs
 from sc2tools_agent.build_checkin.preview import sample_loading_model, sample_postgame_model
 from sc2tools_agent.ui import win32_window
 from sc2tools_agent.ui.build_checkin_window import BuildCheckinHost, LOADING, POSTGAME, default_card_position, rect_of
-from sc2tools_agent.ui.build_checkin_settings import CheckinSettingsGroup
+from sc2tools_agent.ui.build_checkin_settings import (
+    PREVIEW_ASSISTANCE_OFF, PREVIEW_CARD_OPEN, PREVIEW_CONNECTING, PREVIEW_UNAVAILABLE, PREVIEW_UNPAIRED,
+    CheckinSettingsGroup,
+)
+from tests._gui_offscreen import run_gui_check
 from tests.test_build_checkin_ui_cards import Recorder, loading_model, postgame_model, FEATURED, MORE
 
 
@@ -64,7 +68,7 @@ def test_fixed_sample_models_reuse_scouting_and_last_known_race():
 ])
 def test_preview_actions_close_locally_without_controller_api_or_browser(native, kind, action):
     host, recorder, *_ = native
-    assert host.show_preview(kind)
+    assert host.show_preview(kind) is None
     window = host.window(kind)
     assert window.preview_chip.isVisible() and window.preview_chip.text() == "Preview - nothing is saved"
     assert window._preview_timer.interval() == 90_000
@@ -109,7 +113,7 @@ def test_preview_escape_and_timeout_are_local_and_real_card_replaces_immediately
     assert not window.preview_chip.isVisible() and not window._preview_timer.isActive()
     window._preview_timer.timeout.emit()  # stale queued timeout cannot hide a real card
     assert window.isVisible()
-    assert not host.show_preview(LOADING) and window.model is real
+    assert host.show_preview(LOADING) == "card_open" and window.model is real
 
 
 def test_preview_drag_is_remembered_and_generic_reset_moves_visible_card(native, app):
@@ -147,6 +151,56 @@ def test_settings_controls_work_when_checkins_are_off_and_feedback_expires(app, 
     assert group.positions_status.text() == ""
     group.queue_link.click(); assert reset == [True, "queue"] and recorder.calls == []
     group.deleteLater(); app.processEvents()
+
+
+def test_settings_preview_hint_names_each_refusal_and_clears_after_a_preview(app):
+    replies = iter(["assistance_off", "unpaired", "connecting", "card_open", "unavailable", None])
+    group = CheckinSettingsGroup(controller=lambda: None, available=True, on_preview=lambda _kind: next(replies))
+    note = group.preview_hint.text()
+    for expected in (PREVIEW_ASSISTANCE_OFF, PREVIEW_UNPAIRED, PREVIEW_CONNECTING, PREVIEW_CARD_OPEN,
+                     PREVIEW_UNAVAILABLE, note):
+        group.preview_loading.click()
+        assert group.preview_hint.text() == expected
+    group.deleteLater(); app.processEvents()
+
+
+def test_main_window_preview_explains_the_companion_assistance_state(tmp_path):
+    run_gui_check(tmp_path, '''
+        from sc2tools_agent.ui import win32_window
+        from sc2tools_agent.ui.build_checkin_settings import PREVIEW_ASSISTANCE_OFF, PREVIEW_CONNECTING, PREVIEW_UNPAIRED
+        for name in ("exclude_from_capture", "keep_topmost", "foreground_window", "find_sc2_window", "monitor_of_window", "restore_foreground"):
+            setattr(win32_window, name, lambda *_: None)
+        snapshot = {"paired": True, "accountKey": "owner", "liveGame": None, "live": None, "preferences": {}}
+        def handler(request):
+            if request["action"] == "snapshot":
+                return dict(snapshot)
+            return {"items": [], "preferences": request.get("preferences", {})}
+        def settle(done):
+            deadline = QtCore.QDeadlineTimer(5000)
+            while not done() and not deadline.hasExpired():
+                QtTest.QTest.qWait(10)
+            assert done()
+        ui, win = make_window(on_companion_action=handler)
+        companion, settings, host = win._companion_page, win._checkin_settings, win._checkin_host
+        companion.timer.stop()
+        settings.preview_loading.click()
+        assert settings.preview_hint.text() == PREVIEW_CONNECTING
+        settle(lambda: companion._snapshot_healthy)
+        # In-game assistance starts off, so the default first preview names that switch.
+        settings.preview_loading.click()
+        assert settings.preview_hint.text() == PREVIEW_ASSISTANCE_OFF
+        snapshot["paired"] = False
+        companion.refresh(); settle(lambda: not companion._paired)
+        companion.refresh(); settle(lambda: companion._snapshot_healthy)
+        settings.preview_postgame.click()
+        assert settings.preview_hint.text() == PREVIEW_UNPAIRED
+        snapshot["paired"] = True
+        companion.refresh(); settle(lambda: companion._paired)
+        companion.set_preference("overlaysEnabled", True)
+        settings.preview_loading.click()
+        assert host.window("loading").is_preview and settings.preview_hint.text() == settings._preview_note()
+        host.close(); companion.shutdown()
+    ''')
 
 
 def test_search_enter_selects_top_filtered_match_then_ctrl_enter_confirms(native, app):

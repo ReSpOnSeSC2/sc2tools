@@ -6,6 +6,7 @@ const { updatePlaybackJob } = require("../services/replayPlaybackJobs");
 const { scoutingDeviceRoom } = require("../services/agentScouting");
 const { overlayHandshakeDescriptor } = require("../services/overlayPresence");
 const { captureSessionPublication } = require("../services/sessionPublication");
+const { attachScoutingVoiceClaim } = require("./scoutingVoice");
 
 /** Min interval (ms) between accepted ``overlay:resync`` requests on
  * one socket. Tighter than 2 s would let a misbehaving client trigger
@@ -71,6 +72,8 @@ const ROLL_REPORT_WINDOW_MS = 60_000;
  *     Rate-limited to once per 2 s per socket.
  *   * ``overlay:heartbeat`` — periodic 30 s ping from the client.
  *     The cloud responds with the broker's current gameKey.
+ *   * ``overlay:claimScoutingVoice`` — an acknowledged, current-game claim
+ *     shared with native Companion so only one automatic reader speaks.
  *   * ``overlay:randomizer:rolled`` — ``{ gameKey, buildId }`` reported by
  *     the randomizer widget at spin time; handed to ``onRandomizerRolled``
  *     (which validates everything) at most 10 times a minute per socket.
@@ -90,6 +93,7 @@ const ROLL_REPORT_WINDOW_MS = 60_000;
  *   }>,
  *   sessionPublicationGuard?: (userId: string) => (() => void) | null,
  *   resolveVoicePrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
+ *   claimScoutingVoice?: (userId: string, gameKey: string) => boolean,
  *   resolveRandomizerPrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveGhostPrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveStudioState?: (token: string) => Promise<Record<string, unknown> | null>,
@@ -219,6 +223,7 @@ function attachSocketAuth(io, opts) {
 
   io.on("connection", (socket) => {
     if (socket.data.kind === "overlay") {
+      attachScoutingVoiceClaim(socket, opts);
       socket.data.overlayConnectedAt = Date.now();
       const t = socket.data.overlayToken;
       const u = socket.data.overlayUserId;

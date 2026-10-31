@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from types import SimpleNamespace
 
 import pytest
@@ -12,6 +13,54 @@ from sc2tools_agent.state import AgentState, load_state, save_state
 
 def response(payload, status=200):
     return SimpleNamespace(status_code=status, json=lambda: payload)
+
+
+def test_scouting_voice_claim_uses_account_bound_current_game_endpoint():
+    calls = []
+    connection = ("https://api.example.test", "paired-device-token")
+    owner = hashlib.sha256((connection[0] + "\0" + connection[1]).encode("utf-8")).hexdigest()
+    client = CompanionClient(lambda: connection, transport=lambda *args, **kwargs: (
+        calls.append((args, kwargs)) or response({"granted": False})
+    ))
+
+    assert client.action({"action": "claim_scouting_voice", "accountKey": owner,
+                          "gameKey": "current-game", "speechKey": "local-context"}) == {"granted": False}
+    assert calls[0][0] == ("POST", "https://api.example.test/v1/me/live/scouting-voice/claim")
+    assert calls[0][1]["json"] == {"gameKey": "current-game"}
+
+
+@pytest.mark.parametrize("game_key", [None, "", " ", " game", "game\n", "x" * 201, 1])
+def test_scouting_voice_claim_rejects_invalid_game_before_network(game_key):
+    connection = ("https://api.example.test", "paired-device-token")
+    owner = hashlib.sha256((connection[0] + "\0" + connection[1]).encode("utf-8")).hexdigest()
+    calls = []
+    client = CompanionClient(lambda: connection, transport=lambda *args, **kwargs: calls.append(args))
+    with pytest.raises(CompanionError, match="current game"):
+        client.action({"action": "claim_scouting_voice", "accountKey": owner, "gameKey": game_key})
+    assert not calls
+
+
+@pytest.mark.parametrize("owner", [None, "previous-account"])
+def test_scouting_voice_claim_rejects_stale_account_before_network(owner):
+    calls = []
+    client = CompanionClient(lambda: ("https://api.example.test", "paired-device-token"),
+                             transport=lambda *args, **kwargs: calls.append(args))
+    with pytest.raises(CompanionError, match="linked account changed"):
+        client.action({"action": "claim_scouting_voice", "accountKey": owner, "gameKey": "current-game"})
+    assert not calls
+
+
+def test_scouting_voice_claim_rejects_account_rotation_while_request_is_pending():
+    connection = ["https://api.example.test", "old-account"]
+    owner = hashlib.sha256((connection[0] + "\0" + connection[1]).encode("utf-8")).hexdigest()
+
+    def transport(*args, **kwargs):
+        connection[1] = "new-account"
+        return response({"granted": True})
+
+    client = CompanionClient(lambda: connection, transport=transport)
+    with pytest.raises(CompanionError, match="pairing changed"):
+        client.action({"action": "claim_scouting_voice", "accountKey": owner, "gameKey": "current-game"})
 
 
 def test_pairing_is_reused_and_credentials_are_not_returned():

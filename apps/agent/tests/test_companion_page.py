@@ -654,3 +654,22 @@ def test_compact_identity_uses_fresh_direct_opponent_fields_without_inference(co
     page._render_information_layout()
     assert page.compact_card.identity == {"name": "—", "race": "—", "mmr": "—"}
     assert page.compact_card.name_label.full_text == "Waiting for next match"
+
+
+def test_assistance_off_reason_follows_the_switch_pairing_snapshot_and_shutdown(companion):
+    page, state, app = companion
+    assert page.assistance_off_reason() is None and page.assistance_enabled()
+    page.set_preference("overlaysEnabled", False)
+    assert page.assistance_off_reason() == "assistance_off" and not page.assistance_enabled()
+    state["snapshot"]["paired"] = False
+    page.refresh(); wait_until(app, lambda: not page._paired)
+    # Unpairing clears the library, so the next snapshot is what confirms it.
+    assert page.assistance_off_reason() == "connecting"
+    page.refresh(); wait_until(app, lambda: page._snapshot_healthy)
+    assert page.assistance_off_reason() == "unpaired"
+    state["snapshot_error"] = True
+    page.refresh(); wait_until(app, lambda: not page._snapshot_healthy)
+    # A failed snapshot leaves pairing unknown, so the page reports connecting instead.
+    assert page.assistance_off_reason() == "connecting"
+    page.shutdown()
+    assert page.assistance_off_reason() == "closed"

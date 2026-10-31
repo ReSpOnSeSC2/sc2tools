@@ -188,6 +188,13 @@ interface LiveGameUtterState {
 
 type LiveGameStates = Map<string, LiveGameUtterState>;
 
+interface VoiceUtterance {
+  text: string;
+  scoutingGameKey?: string;
+  claimGranted?: boolean;
+  dispatched?: boolean;
+}
+
 /**
  * Drop every per-gameKey entry and cancel any pending fallback
  * timers. Shared by the idle/menu reset branch and the unmount
@@ -239,11 +246,12 @@ export function useVoiceReadout(
   live: LiveGamePayload | null,
   prefs: VoicePrefs | null,
   liveGame?: LiveGameEnvelope | null,
+  claimScoutingVoice?: (gameKey: string) => Promise<boolean>,
 ): VoiceReadout {
   const [gestureGranted, setGestureGranted] = useState<boolean>(() =>
     readPersistedUnlock(),
   );
-  const [pendingUtterance, setPendingUtterance] = useState<string | null>(null);
+  const [pendingUtterance, setPendingUtterance] = useState<VoiceUtterance | null>(null);
 
   // Per-trigger dedupe keys. Scouting and matchEnd dedupe independently
   // so a single payload that has both shapes (e.g. an isTest fire that
@@ -283,6 +291,21 @@ export function useVoiceReadout(
   const lastLiveGameKeyRef = useRef<string | null>(null);
 
   const enabled = !!prefs && prefs.enabled !== false;
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+  const usesLiveEnvelopes = useRef(false);
+  if (liveGame) usesLiveEnvelopes.current = true;
+  const automaticStartReady = !!live?.isTest || (liveGameStartKey !== null && (!usesLiveEnvelopes.current || !!liveGame));
+  const sourceGameKey = liveGame ? envelopeGameKey : payloadGameKey;
+  const canonicalGameKeyRef = useRef<{ trigger: string; key: string } | null>(null);
+  if (sourceGameKey && liveGameStartKey?.startsWith("game:")) {
+    canonicalGameKeyRef.current = { trigger: liveGameStartKey, key: sourceGameKey };
+  }
+  const rawScoutingGameKey = sourceGameKey || (
+    canonicalGameKeyRef.current?.trigger === liveGameStartKey ? canonicalGameKeyRef.current?.key : undefined
+  );
+  const activeScoutingGameKeyRef = useRef<string | undefined>(undefined);
+  activeScoutingGameKeyRef.current = automaticStartReady ? rawScoutingGameKey : undefined;
   const debug = useDebugFlag(prefs?.debug);
 
   const log = useCallback(
@@ -303,6 +326,15 @@ export function useVoiceReadout(
   // catalog update.
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
   const speakRequestRef = useRef(0);
+  const activeSpeechRequest = useRef<VoiceUtterance | null>(null);
+  const speechTimers = useRef(new Set<number>());
+  const scheduleSpeech = useCallback((callback: () => void, delay: number) => {
+    const id = window.setTimeout(() => {
+      speechTimers.current.delete(id);
+      callback();
+    }, delay);
+    speechTimers.current.add(id);
+  }, []);
   useEffect(() => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     const synth = window.speechSynthesis;
@@ -350,28 +382,28 @@ export function useVoiceReadout(
   }, []);
 
   const speak = useCallback(
-    (text: string) => {
+    (request: VoiceUtterance) => {
       if (typeof window === "undefined" || !window.speechSynthesis) return;
-      const sanitized = sanitizeForSpeech(text);
+      if (!enabledRef.current) return;
+      const sanitized = sanitizeForSpeech(request.text);
       if (!sanitized) {
         log("skip speak: empty after sanitize");
         return;
       }
       const synth = window.speechSynthesis;
-      try {
-        synth.cancel();
-      } catch {
-        // Some browsers throw on cancel before any utterance has played.
-      }
       const requestId = ++speakRequestRef.current;
+      activeSpeechRequest.current = request;
       const wish = {
         name: prefs?.voice,
         lang: prefs?.voiceLang,
         gender: prefs?.voiceGender,
       };
       const wantedVoice = prefs?.voice;
+      const currentRequest = () => requestId === speakRequestRef.current
+        && enabledRef.current
+        && (!request.scoutingGameKey || activeScoutingGameKeyRef.current === request.scoutingGameKey);
       const dispatch = (attempt = 0) => {
-        if (requestId !== speakRequestRef.current) return;
+        if (!currentRequest()) return;
         const resolution = resolvePreferredVoice(synth, voicesRef, wish);
         const match = resolution.voice;
         const catalogEmpty = resolution.reason === "catalogEmpty";
@@ -391,7 +423,7 @@ export function useVoiceReadout(
           && attempt < VOICE_CATALOG_MAX_ATTEMPTS
         ) {
           log("waiting for voice catalog (empty); wanted:", wantedVoice);
-          window.setTimeout(
+          scheduleSpeech(
             () => dispatch(attempt + 1),
             VOICE_CATALOG_RETRY_MS,
           );
@@ -441,19 +473,37 @@ export function useVoiceReadout(
             // dropping the line silently.
             clearPersistedUnlock();
             setGestureGranted(false);
-            setPendingUtterance(sanitized);
+            setPendingUtterance({ ...request, text: sanitized });
           }
         };
-        try {
-          synth.speak(utt);
-        } catch {
-          /* best-effort */
+        const play = () => {
+          if (!currentRequest()) return;
+          try { synth.cancel(); } catch { /* Some engines reject cancel before their first utterance. */ }
+          try {
+            request.dispatched = true;
+            synth.speak(utt);
+          } catch {
+            /* best-effort */
+          }
+        };
+        // Claim only after gesture, configured delay, and voice loading.
+        // An unopened/blocked Browser Source must not silence a ready reader.
+        if (request.scoutingGameKey && claimScoutingVoice && !request.claimGranted) {
+          try {
+            void claimScoutingVoice(request.scoutingGameKey).then(granted => {
+              if (!granted || !currentRequest()) return;
+              request.claimGranted = true;
+              play();
+            }).catch(() => { /* Fail closed: another reader may already own this match. */ });
+          } catch { /* A disconnected reader must not bypass ownership. */ }
+        } else {
+          play();
         }
       };
       const delay = clamp(prefs?.delayMs ?? DEFAULTS.delayMs, 0, 5000);
       log("speak:", JSON.stringify(sanitized), "delay=" + delay);
       if (delay > 0) {
-        window.setTimeout(() => dispatch(), delay);
+        scheduleSpeech(() => dispatch(), delay);
       } else {
         dispatch();
       }
@@ -466,20 +516,23 @@ export function useVoiceReadout(
       prefs?.voiceGender,
       prefs?.volume,
       prefs?.delayMs,
+      claimScoutingVoice,
+      scheduleSpeech,
       log,
     ],
   );
 
   const enqueueOrSpeak = useCallback(
-    (text: string) => {
+    (text: string, scoutingGameKey?: string) => {
       if (!text) return;
+      const request = { text, scoutingGameKey };
       if (gestureGranted) {
-        speak(text);
+        speak(request);
       } else {
         // Hold the most recent utterance only — old payloads aren't
         // worth speaking once the streamer eventually clicks.
         log("queue (waiting for gesture):", text);
-        setPendingUtterance(text);
+        setPendingUtterance(request);
       }
     },
     [gestureGranted, speak, log],
@@ -500,6 +553,7 @@ export function useVoiceReadout(
     const isFreshPreGame = !!opp && !live?.result;
     if (lastOppRef.current && isFreshPreGame && opp !== lastOppRef.current) {
       log("opponent changed (pre-game):", lastOppRef.current, "→", opp);
+      speakRequestRef.current += 1;
       try {
         window.speechSynthesis?.cancel();
       } catch {
@@ -526,7 +580,8 @@ export function useVoiceReadout(
     // a legacy payload can trigger scouting. Both sources share match
     // consumption so switching sources cannot repeat the readout.
     const hasOpp = !!live.oppName && !live.result
-      && liveGameStartKey !== null && !staleScoutingPayload;
+      && automaticStartReady && !staleScoutingPayload
+      && (!claimScoutingVoice || live.isTest || !!rawScoutingGameKey);
     const realGameKey = liveGameStartKey?.startsWith("game:")
       && liveGameStartKey !== "game:unkeyed" ? liveGameStartKey : null;
     const matchConsumed = realGameKey !== null
@@ -543,6 +598,7 @@ export function useVoiceReadout(
         consumedLiveGameKeys.current.add(realGameKey);
       }
     }
+    const scoutingGameKey = lines.length > 0 && !live.isTest ? rawScoutingGameKey : undefined;
 
     if (
       events.matchEnd
@@ -565,11 +621,33 @@ export function useVoiceReadout(
     const text = lines.join(" ").trim();
     if (text) {
       log("payload triggered readout:", JSON.stringify(text));
-      enqueueOrSpeak(text);
+      enqueueOrSpeak(text, scoutingGameKey);
     } else {
       log("payload produced no readout", { hasOpp, result: live.result });
     }
-  }, [live, liveGameStartKey, staleScoutingPayload, enabled, prefs, enqueueOrSpeak, log]);
+  }, [live, liveGameStartKey, automaticStartReady, rawScoutingGameKey, claimScoutingVoice, staleScoutingPayload, enabled, prefs, enqueueOrSpeak, log]);
+
+  const cancelAutomaticReadout = useCallback(() => {
+    const releaseUnspoken = (request: VoiceUtterance) => {
+      const known = canonicalGameKeyRef.current;
+      if (known && !request.dispatched && request.scoutingGameKey === known.key) {
+        consumedLiveGameKeys.current.delete(known.trigger);
+      }
+    };
+    if (activeSpeechRequest.current?.scoutingGameKey) {
+      releaseUnspoken(activeSpeechRequest.current);
+      speakRequestRef.current += 1;
+      activeSpeechRequest.current = null;
+      for (const id of speechTimers.current) window.clearTimeout(id);
+      speechTimers.current.clear();
+      try { window.speechSynthesis?.cancel(); } catch { /* best-effort */ }
+    }
+    setPendingUtterance(current => {
+      if (!current?.scoutingGameKey) return current;
+      releaseUnspoken(current);
+      return null;
+    });
+  }, []);
 
   // Live-envelope match transitions: wipe per-gameKey state AND the
   // post-game fingerprint refs whenever the bridge clears a previously-
@@ -599,12 +677,13 @@ export function useVoiceReadout(
       // previously seen a non-null envelope. Initial mount with no
       // envelope is a no-op — nothing to wipe and, crucially, no
       // dedup keys to invalidate behind the payload effect's back.
-      if (hadLiveGameRef.current) wipe();
+      if (hadLiveGameRef.current) { wipe(); cancelAutomaticReadout(); }
       hadLiveGameRef.current = false;
       lastLiveGameKeyRef.current = null;
       return;
     }
     hadLiveGameRef.current = true;
+    if (liveGame.phase !== "match_started" && liveGame.phase !== "match_in_progress") cancelAutomaticReadout();
     const lgKey = liveGame.gameKey ?? null;
     const prevKey = lastLiveGameKeyRef.current;
     if (lgKey !== null && prevKey !== null && lgKey !== prevKey) {
@@ -613,7 +692,7 @@ export function useVoiceReadout(
       wipe();
     }
     if (lgKey !== null) lastLiveGameKeyRef.current = lgKey;
-  }, [liveGame, fingerprints]);
+  }, [liveGame, fingerprints, cancelAutomaticReadout]);
 
   // Pre-game / in-game readout, driven by the desktop agent's
   // ``LiveGameEnvelope`` rather than the post-game ``LiveGamePayload``.
@@ -647,6 +726,9 @@ export function useVoiceReadout(
       clearAllLiveGameTimers(states);
       return;
     }
+    // Production readers need a canonical identity for shared ownership.
+    // Keep waiting on a keyless partial rather than claiming a local alias.
+    if (claimScoutingVoice && !rawScoutingGameKey) return;
     const oppName = liveGame.opponent?.name?.trim();
     if (!oppName) {
       cancelPendingLiveGameTimers(states);
@@ -708,7 +790,7 @@ export function useVoiceReadout(
       const text = lines.join(" ").trim();
       if (text) {
         log("liveGame triggered readout:", JSON.stringify(text));
-        enqueueOrSpeak(text);
+        enqueueOrSpeak(text, rawScoutingGameKey);
       }
     };
     // Keep the fallback deadline fixed while letting newer partials
@@ -748,7 +830,7 @@ export function useVoiceReadout(
         }
       }, waitMs);
     }
-  }, [liveGame, liveGameStartKey, live, staleScoutingPayload, enabled, prefs, enqueueOrSpeak, log]);
+  }, [liveGame, liveGameStartKey, rawScoutingGameKey, claimScoutingVoice, live, staleScoutingPayload, enabled, prefs, enqueueOrSpeak, log]);
 
   // Drain pending live-game timers on unmount so a Browser Source
   // refresh doesn't leave orphaned setTimeouts attached to a torn-down
@@ -772,13 +854,22 @@ export function useVoiceReadout(
   useEffect(() => {
     if (!gestureGranted) return;
     if (!pendingUtterance) return;
-    const text = pendingUtterance;
+    const request = pendingUtterance;
     setPendingUtterance(null);
-    log("replaying queued utterance:", text);
+    log("replaying queued utterance:", request.text);
     // Speak on a microtask so the gesture state flip lands first; the
     // autoplay gate has to see the activation before the speak() call.
-    window.setTimeout(() => speak(text), 0);
-  }, [gestureGranted, pendingUtterance, speak, log]);
+    scheduleSpeech(() => speak(request), 0);
+  }, [gestureGranted, pendingUtterance, speak, scheduleSpeech, log]);
+
+  useEffect(() => {
+    if (enabled) return;
+    speakRequestRef.current += 1;
+    for (const id of speechTimers.current) window.clearTimeout(id);
+    speechTimers.current.clear();
+    setPendingUtterance(null);
+    try { window.speechSynthesis?.cancel(); } catch { /* best-effort */ }
+  }, [enabled]);
 
   // Document-wide gesture listener — mirrors the legacy SPA's
   // `voice-readout.js` UX where ANY click / keydown / touch on the page
@@ -809,11 +900,14 @@ export function useVoiceReadout(
   // Cancel any in-flight utterance when the host unmounts so a
   // Browser Source refresh doesn't leave an orphaned voice queue.
   useEffect(() => {
+    const timers = speechTimers.current;
     return () => {
-      if (typeof window === "undefined" || !window.speechSynthesis) return;
+      if (typeof window === "undefined") return;
       speakRequestRef.current += 1;
+      for (const id of timers) window.clearTimeout(id);
+      timers.clear();
       try {
-        window.speechSynthesis.cancel();
+        window.speechSynthesis?.cancel();
       } catch {
         // best-effort
       }
