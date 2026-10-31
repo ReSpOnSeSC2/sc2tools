@@ -1,0 +1,302 @@
+{
+  "schemaVersion": 1,
+  "slice": "AC5-ui",
+  "item": {
+    "id": "analysis-corpus-local-cache",
+    "ordinal": 75
+  },
+  "status": "LOCAL_WEB_1052_FILES_PASS_25_OF_25_MUTATIONS_REVIEWED_NOT_RELEASED",
+  "requirement": "Add one-time history gate, count/refresh footer, Backups & data local bytes/Clear controls and history-on-this-device Help.",
+  "source": {
+    "base": "58c373fd4d6254e66cd360109a48e066afcd70e4 (the first-load fix, PR #847, on main 1d2353cc with AC4, PR #844)",
+    "testedCommit": "7e5c390a3f5b923bde4004bd4e7d773a8f7f7d59",
+    "mutationCommit": "e682311e181d04be5101fee079a81ab38293322f",
+    "buildCommit": "7e5c390a3f5b923bde4004bd4e7d773a8f7f7d59",
+    "applicationFiles": [
+      "apps/web/components/analyzer/DailyPulse.tsx",
+      "apps/web/components/analyzer/DailyPulseFooter.tsx",
+      "apps/web/components/analyzer/arcade/hooks/useAnalysisGames.ts",
+      "apps/web/components/analyzer/arcade/surfaces/DailyEmptyState.tsx",
+      "apps/web/components/analyzer/settings/DeviceHistorySection.tsx",
+      "apps/web/components/analyzer/settings/SettingsBackups.tsx",
+      "apps/web/components/help/LazyHelpLink.tsx",
+      "apps/web/lib/analysisCorpus/deviceStore.ts",
+      "apps/web/lib/settingsIndex.ts",
+      "apps/web/lib/help/articles/account-data/history-on-this-device.ts",
+      "apps/web/lib/help/articles/analyzer/today.ts",
+      "apps/web/lib/help/articles/analyzer/arcade.ts",
+      "apps/web/lib/help/articles/account-data/backups-and-export.ts",
+      "apps/web/lib/help/articles/index.generated.ts"
+    ],
+    "testFiles": [
+      "apps/web/components/analyzer/__tests__/DailyPulse.test.tsx",
+      "apps/web/components/analyzer/__tests__/DailyPulseFooter.test.tsx",
+      "apps/web/components/analyzer/arcade/__tests__/useAnalysisGames.test.ts",
+      "apps/web/components/analyzer/settings/__tests__/DeviceHistorySection.test.tsx",
+      "apps/web/lib/analysisCorpus/__tests__/deviceStore.test.ts",
+      "apps/web/components/analyzer/settings/__tests__/SettingsBackups.test.tsx",
+      "apps/web/components/analyzer/settings/__tests__/ReplayArchiveStatusCard.test.tsx",
+      "apps/web/components/analyzer/settings/__tests__/SettingsIndex.targets.test.tsx",
+      "apps/web/components/help/__tests__/loadLazyHelpLink.tsx",
+      "apps/web/tests/e2e/settings-search.spec.ts"
+    ]
+  },
+  "design": {
+    "gate": "Daily Pulse's one-time gate asks to keep the history on this device (keepOnDevice) and opens Daily Pulse; the full history stays dormant until then.",
+    "footer": "DailyPulseFooter, loaded on demand, shows when the history on screen last came from the server (syncedAt), Updating or Couldn't update, the game count and whether it is kept here, Refresh (held while updating, Try again after a failure), a keep offer for an account the browser does not keep (following other tabs through storage events), and notes for the corpus limit and refused storage.",
+    "syncedAt": "useAnalysisGames stamps syncedAt only after a finished load or sync; a stored copy before its changes, a snapshot before its save, a reload in progress and a failed update leave it null, and a failed update keeps the games on screen.",
+    "settings": "DeviceHistorySection reads the count and an estimated size (readDeviceSummary: the account record's count and up to 64 evenly spaced rows' JSON sizes in one read-only transaction) only when the device note names the signed-in account, never creates the database, drops a result the note no longer backs, re-reads after a wipe or restore, and clears with forgetDeviceCopy without touching the account.",
+    "help": "A Help article covers what is kept, updates, when history is not kept, seeing and clearing it, and shared computers; Today, Arcade and Backups & export link it, as do the gate and Arcade's warm-up card.",
+    "testsAndReact": "Tests that render Settings > Backups & data load LazyHelpLink's chunk first: with four suspended boundaries on that page, React 19.0's rotating retry lanes are never marked suspended, so a synchronous act() re-renders forever (an inspector trace showed the retry lanes cycling with no state updates); in a browser the retries are separate tasks and stop when the chunk arrives."
+  },
+  "actual": {
+    "apiUntouched": true,
+    "webTypesExit": 0,
+    "webConfiguredLint": {
+      "errors": 0,
+      "warnings": 190
+    },
+    "uiLint": "pass",
+    "webTestFiles": 1052,
+    "webCasesPassed": 10308,
+    "webCasesSkipped": 1,
+    "webOneIsolatedWorker": true,
+    "changedFilesAddedLintMessages": 0,
+    "newFilesLintMessages": 0,
+    "mutationsKilled": "25/25",
+    "mutations": [
+      "AC5-M1-gate-skips-keep",
+      "AC5-M2-failed-update-hides-cards",
+      "AC5-M3-final-sync-unstamped",
+      "AC5-M4-update-keeps-old-time",
+      "AC5-M5-stored-copy-stamped",
+      "AC5-M6-footer-holds-try-again",
+      "AC5-M7-footer-offers-keep-when-kept",
+      "AC5-M8-footer-trusts-unreadable-note",
+      "AC5-M9-section-opens-other-account",
+      "AC5-M10-section-creates-database",
+      "AC5-M11-section-shows-late-read",
+      "AC5-M12-summary-reads-first-rows",
+      "AC5-M13-keep-before-sign-in-dropped",
+      "AC5-M14-early-keep-survives-signed-out",
+      "AC5-M15-keep-failure-unreported",
+      "AC5-M16-footer-on-device-for-unkept",
+      "AC5-M17-footer-refresh-while-updating",
+      "AC5-M18-footer-chunk-failure-silent",
+      "AC5-M19-section-shows-last-account",
+      "AC5-M20-kept-copy-unstored-unreported",
+      "AC5-M21-corpus-limit-counted-as-failure",
+      "AC5-M22-footer-hides-failure-for-kept-account",
+      "AC5-M23-footer-keep-outcome-silent",
+      "AC5-M24-footer-repeats-kept-every-visit",
+      "AC5-M25-footer-fallback-unmounts"
+    ],
+    "mutationFilesIdenticalAtTestedCommit": [
+      "apps/web/components/analyzer/DailyPulse.tsx",
+      "apps/web/components/analyzer/DailyPulseFooter.tsx",
+      "apps/web/components/analyzer/__tests__/DailyPulse.footerFallback.test.tsx",
+      "apps/web/components/analyzer/__tests__/DailyPulse.test.tsx",
+      "apps/web/components/analyzer/__tests__/DailyPulseFooter.test.tsx",
+      "apps/web/components/analyzer/arcade/__tests__/useAnalysisGames.test.ts",
+      "apps/web/components/analyzer/arcade/hooks/useAnalysisGames.ts",
+      "apps/web/components/analyzer/settings/DeviceHistorySection.tsx",
+      "apps/web/components/analyzer/settings/__tests__/DeviceHistorySection.test.tsx",
+      "apps/web/components/analyzer/settings/__tests__/SettingsBackups.test.tsx",
+      "apps/web/lib/analysisCorpus/__tests__/deviceStore.test.ts",
+      "apps/web/lib/analysisCorpus/deviceStore.ts"
+    ],
+    "firstLoadKbLocal": {
+      "/app": {
+        "base": 231.8,
+        "ac5": 232.2,
+        "delta": 0.4,
+        "budget": 240.0
+      },
+      "/community": {
+        "base": 187.6,
+        "ac5": 187.7,
+        "delta": 0.1,
+        "budget": 190.0
+      },
+      "/dock/[token]": {
+        "base": 218.5,
+        "ac5": 218.6,
+        "delta": 0.1,
+        "budget": 225.0
+      },
+      "/help": {
+        "base": 156.3,
+        "ac5": 156.4,
+        "delta": 0.1,
+        "budget": 185.0
+      },
+      "/settings": {
+        "base": 195.0,
+        "ac5": 195.1,
+        "delta": 0.1,
+        "budget": 260.0
+      }
+    },
+    "firstLoadNote": "/app is 232.2 kB of first-load JavaScript (gzip), against 231.8 kB for the same local build of 58c373fd (PR #847's head, whose tree main has after merging it), so AC5 adds 0.4 kB there. 4 other routes change (/community +0.1, /dock/[token] +0.1, /help +0.1, /settings +0.1): the new Help article's entry in the article index and the Settings search field. Every other route is unchanged. Local builds run about 1.2 kB larger than CI's on /app (AC3: 240.5 kB locally, 239.3 kB in CI), and the routes the local check flags (/guides/[matchup]/[build]) are flagged in the base build too; CI's own build remains the gate."
+  },
+  "reviews": [
+    {
+      "findings": 13,
+      "bySeverity": {
+        "high": 0,
+        "medium": 3,
+        "low": 10
+      },
+      "verdicts": {
+        "confirmed": 7,
+        "partly": 6,
+        "refuted": 0
+      },
+      "blocksMerge": true
+    },
+    {
+      "findings": 4,
+      "bySeverity": {
+        "high": 0,
+        "medium": 0,
+        "low": 4
+      },
+      "verdicts": {
+        "confirmed": 3,
+        "partly": 0,
+        "refuted": 1
+      },
+      "blocksMerge": false
+    }
+  ],
+  "boundaries": [
+    "The tests run on fake-indexeddb and jsdom; the gate, footer and Settings section were not checked in a real browser, on a phone, or in Firefox and Safari.",
+    "The size is an estimate from up to 64 sampled rows' JSON, not the browser's own storage overhead.",
+    "A copy on another device is not shown or cleared here.",
+    "Updated reflects this tab's last finished load; another tab's sync does not move it.",
+    "The first-load budget was checked with local production builds using the public flags CI sets; CI's own build remains the gate.",
+    "Exact-head CI, merge, deployment and production acceptance remain pending. No latency, request-reduction or savings claim."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/CHECKS-02.json",
+      "sha256": "4d72a09116362bf8a578486699feb55cfbc9f26b1fdb73a3577482639f2af0a5",
+      "bytes": 3060
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/checks-02/steps.txt",
+      "sha256": "f3e24ccf1a6581d3dec40f21e5f17c4b5f35c63c60af9bea48641a7f8634fbb5",
+      "bytes": 77
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/checks-02/api-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/checks-02/web-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/checks-02/web-lint.json",
+      "sha256": "a09d532b6dff43e67856802104149699da3f90d191240678b3f3937c0b7fca9d",
+      "bytes": 2473810
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/checks-02/web-lint-no-added.txt",
+      "sha256": "cf3350fbf7e1ac4add89a4b735728dbc435d001c58d743f7d23c42571db5c569",
+      "bytes": 2309
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/checks-02/ui-lint.log",
+      "sha256": "d498073a9b7a0c5bcbf61ceb1bc36808b7c92a72fdbcc520548c00455e1536bf",
+      "bytes": 3890
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/checks-02/web-vitest-summary.json",
+      "sha256": "9ee9a644d7e073c7b7efbc0a2e4ab97f7b36fd82205278f88163056834f280a8",
+      "bytes": 176
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/dev/checks-02-web-vitest.json",
+      "sha256": "3e4a40d16818413cc4ee6df45660700868cf06f9a839455e45c3af2300607144",
+      "bytes": 3296529
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/mutation-01/MUTATION-RESULTS.json",
+      "sha256": "20960b1c4875eb6ae41d8847f39a669cba6be99ece72aa230538f3184435211f",
+      "bytes": 23161
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/final-checks-ac5-02.sh",
+      "sha256": "bb644a48565b74a24c9855497584c7321ffaca291b78c59e8b15ba52e3488c2e",
+      "bytes": 3304
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/mutation-check-ac5-01.mjs",
+      "sha256": "aa1321d03df647752f6c060c2d0c4ce45cebfc1f6527843085620801614569b7",
+      "bytes": 10141
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/run-ac5-vitest.mjs",
+      "sha256": "413afd2386d1a78ef28e69383066cd36ba4347bebfadc3238924462d1630b463",
+      "bytes": 3490
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/lint-noadd-web.mjs",
+      "sha256": "e029ad91a12bd7b5fa296f657bebc1daa863cc4362fa0af2acdca06106a3acf2",
+      "bytes": 2863
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/build-budget-ac5-01.sh",
+      "sha256": "c1b09d8e8a11b6c0b3483f89775231aaf66112ff237c038ec710850599917fa1",
+      "bytes": 1699
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/build-budget-ac5-mainbase-02.sh",
+      "sha256": "a130ca0734961da900fa883747d2163acb304ab94eb3060dfa31b2576c23ae0b",
+      "bytes": 1823
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/build-02/steps.txt",
+      "sha256": "f1643b0f51f7754b2a0f0297bd3b79b7e3485458d5c7c2e1ffc216fed68caea1",
+      "bytes": 17
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/build-02/perf-budget.log",
+      "sha256": "d34ccc4f223abfc61c10e59a151e9d4002da243328632013fe42e3931636b45f",
+      "bytes": 1454
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/build-02-head.txt",
+      "sha256": "df867f9671a06661892bfc40c2a2dc9647b463613dd6c5b7b6d68b561971b63a",
+      "bytes": 41
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/build-mainbase-02/steps.txt",
+      "sha256": "f1643b0f51f7754b2a0f0297bd3b79b7e3485458d5c7c2e1ffc216fed68caea1",
+      "bytes": 17
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/build-mainbase-02/perf-budget.log",
+      "sha256": "1ec966ab399d3954629a750f60b4d88332092c43825f552c237d509749d51060",
+      "bytes": 1454
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/build-mainbase-02-head.txt",
+      "sha256": "23f8cd623b1f1944a47da7538d2b80cc4a75d2906f3e921556a30612a611ec42",
+      "bytes": 41
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/review-01.json",
+      "sha256": "888b35c29a0bf1899d438919f46ec36436dde7524db39bfc4a34a6cf05eac21f",
+      "bytes": 38151
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac5-20261031/review-02.json",
+      "sha256": "fddbf5ec6536d7f1cb521e4985f718894a6276b2db81fbc4eb0758384387ef24",
+      "bytes": 20919
+    }
+  ]
+}
