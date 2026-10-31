@@ -9,6 +9,7 @@ const { immutableCustomBuildEof, assertEofNotAborted } = require("../src/service
 const { neutralAuthority } = require("../src/services/gameStatsCountNeutral");
 const { commitReclassifyRunPipeline, removeReclassifyRunPipeline } = require("../src/services/customBuildReclassifyPipeline");
 const { CustomBuildsService } = require("../src/services/customBuilds");
+const { stamped, original } = require("./helpers/corpusStamp");
 const userId = "eof-owner", owner = { userId, id: new ObjectId(), epoch: uuid(), compatibility: false };
 const mutation = (extra = {}) => ({ kind: "customBuildEof", mode: "all", runId: uuid(), sequence: 9, ...extra });
 function held() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
@@ -58,7 +59,7 @@ test("same-session EOF uses fixed run/user selectors, exact job authority and a 
   expect(h.customBuildJobs.updateOne.mock.calls[0][2]).toEqual({ session: h.session });
   expect(h.games.updateMany).toHaveBeenCalledTimes(1);
   expect(h.games.updateMany).toHaveBeenCalledWith({ userId, "_customBuildReclassify.runId": input.runId },
-    commitReclassifyRunPipeline(input.runId, input.sequence), { session: h.session, upsert: false });
+    stamped(commitReclassifyRunPipeline(input.runId, input.sequence)), { session: h.session, upsert: false });
   expect(h.users.findOneAndUpdate.mock.calls[0][0]).toMatchObject({ _id: owner.id, gameStatsMutationEpoch: owner.epoch, _gdprMutation: { $exists: false } });
   expect(h.session.withTransaction.mock.calls[0][1].writeConcern).toMatchObject({ w: "majority", j: true });
 });

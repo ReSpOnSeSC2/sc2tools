@@ -1,6 +1,7 @@
 "use strict";
 const { BSON } = require("mongodb");
 const { isDeepStrictEqual } = require("util");
+const { withUpdatedAt } = require("../util/corpusUpdatedAt");
 const { BUILD_INTENT, COLLECTIONS } = require("../config/constants");
 const { expectedVersion } = require("../db/schemaVersioning");
 const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
@@ -86,8 +87,8 @@ function bindGuard(mutation) {
 function applyBuildState(db, owner, mutation, session) {
   const filter = buildStateFilter(owner.userId, mutation), options = { ...(session ? { session } : {}), upsert: false };
   return mutation.kind === "buildIntentDismiss"
-    ? db.games.updateMany(filter, mutation.pipeline, options)
-    : db.games.updateOne(filter, mutation.pipeline, options);
+    ? db.games.updateMany(filter, withUpdatedAt(mutation.pipeline), options)
+    : db.games.updateOne(filter, withUpdatedAt(mutation.pipeline), options);
 }
 function invalid() { return Object.assign(new Error("game_stats_neutral_operation_invalid"), { code: "game_stats_neutral_operation_invalid", status: 503 }); }
 module.exports = { immutableBuildState, applyBuildState, buildStateFilter };

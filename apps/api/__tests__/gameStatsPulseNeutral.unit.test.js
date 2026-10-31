@@ -6,6 +6,7 @@ const { statsReadFloorFor } = require("../src/services/gameStatsReadFloor");
 const { GameStatsWrites } = require("../src/services/gameStatsWrites");
 const { immutablePulseStamp, copyPulseId, MAX_ID_BYTES } = require("../src/services/gameStatsPulseNeutral");
 const { MAINTENANCE_VERSION, PROTOCOL_VERSION } = require("../src/services/gameStatsMaintenance");
+const { stamped, original } = require("./helpers/corpusStamp");
 const revision = "11111111-2222-4333-8444-555555555555", epoch = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const played = new Date("2026-10-20T12:00:00Z");
 function held() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
@@ -38,7 +39,7 @@ test.each([
   const name = field === "mmr" ? "opponent.mmr" : "opponent.leagueId";
   const marker = field === "mmr" ? "opponent.mmrLookupAttempted" : "opponent.leagueLookupAttempted";
   expect(h.db.games.updateOne).toHaveBeenCalledWith({ userId: "owner", _id: { $eq: id },
-    [name]: { $not: { $type: "number" } }, [marker]: { $ne: true } }, { $set: set }, { session: h.session, upsert: false });
+    [name]: { $not: { $type: "number" } }, [marker]: { $ne: true } }, stamped({ $set: set }), { session: h.session, upsert: false });
   expect(h.events).toEqual(["owner", "game", "save"]);
   expect(h.db.users.updateOne.mock.calls[0][1].$set.gameStats).toEqual({ total: 3, latest: played });
   expect(h.db.users.updateOne.mock.calls[0][1].$set.gameStatsMaintenance.revision).not.toBe(revision);
@@ -84,7 +85,7 @@ test("owner, BSON game identity and stamp value cannot rebind during a held floo
   expect(authority._id.toHexString()).toBe(ownerId); expect(authority.userId).toBe("owner");
   expect(authority.gameStatsMutationEpoch).toBe(epoch); expect(authority._gdprMutation).toEqual({ $exists: false });
   expect(call[0]._id.$eq.toHexString()).toBe(originalId); expect(call[0].userId).toBe("owner");
-  expect(call[1].$set["opponent.mmr"]).toBe(4100); expect(call[1].$set).not.toHaveProperty("opponent.leagueId");
+  expect(original(call[1])[0].$set["opponent.mmr"].$literal).toBe(4100); expect(original(call[1])[0].$set).not.toHaveProperty("opponent.leagueId");
   expect(h.db.users.updateOne.mock.calls[0][1].$set.gameStats).toEqual({ total: 3, latest: played });
 });
 

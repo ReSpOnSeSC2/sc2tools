@@ -1,6 +1,7 @@
 "use strict";
 const { BSON } = require("mongodb");
 const { isDeepStrictEqual } = require("util");
+const { withUpdatedAt } = require("../util/corpusUpdatedAt");
 const { MMR_FLOOR, MMR_CEILING } = require("../util/mmrBracketing");
 
 const MAX_ID_BYTES = 16 * 1024;
@@ -52,7 +53,7 @@ async function applyPulseStamp(db, owner, mutation, session) {
   if (mutation.field === "mmr" && mutation.value !== null) set["opponent.mmrSource"] = "pulse";
   const result = await db.games.updateOne({ userId: owner.userId, _id: { $eq: mutation.id },
     [field]: { $not: { $type: "number" } }, [marker]: { $ne: true } },
-  { $set: set }, { ...(session ? { session } : {}), upsert: false });
+  withUpdatedAt({ $set: set }), { ...(session ? { session } : {}), upsert: false });
   if (result.acknowledged !== true) throw Object.assign(new Error("game_stats_pulse_write_unacknowledged"), { status: 503 });
   return result;
 }

@@ -7,6 +7,10 @@ const {
   PerGameComputeService,
   MacroBackfillService,
 } = require("../src/services/perGameCompute");
+const { original } = require("./helpers/corpusStamp");
+
+/** Fields the caller's own stages set in a stamped games update (the change stamp issues a pipeline). */
+const setFields = (update) => original(update).flatMap((stage) => Object.keys(stage.$set ?? {}));
 
 describe("services/perGameCompute", () => {
   test("ownership-only polling reads a projected slim row without the detail store", async () => {
@@ -133,7 +137,7 @@ describe("services/perGameCompute", () => {
       });
       await service.writeMacroBreakdown("owner", "g", { macroScore: 74, breakdown: stored.macroBreakdown });
       expect(upsert).toHaveBeenCalledWith("owner", "g", date, { macroBreakdown: stored.macroBreakdown });
-      expect(updateOne.mock.calls[0][1].$set).not.toHaveProperty("macroBreakdown");
+      expect(setFields(updateOne.mock.calls[0][1]).filter((field) => field.startsWith("macro"))).toEqual(["macroScore"]);
     });
 
     test.each([null, [{ time: -1 }], Array(20001).fill(stored.macroBreakdown.casualty_events[0])])(

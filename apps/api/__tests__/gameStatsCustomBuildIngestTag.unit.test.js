@@ -8,6 +8,7 @@ const { GameStatsWrites } = require("../src/services/gameStatsWrites");
 const { CustomBuildsService } = require("../src/services/customBuilds");
 const { immutableCustomBuildIngestTag } = require("../src/services/gameStatsCustomBuildIngestTag");
 const { tagClassificationPipeline } = require("../src/services/buildIntentGuards");
+const { stamped, original } = require("./helpers/corpusStamp");
 const userId = "ingest-tag-owner";
 const decision = extra => ({ you: { mode: "set", name: "$Saved", slug: "saved" }, opponent: { mode: "keep" },
   payloadBuild: "Agent", payloadStrategy: "Enemy", policyBuild: null, policyStrategy: null, clearStaging: true, ...extra });
@@ -56,7 +57,7 @@ test.each([null, "", "revision-one"])("keeps the exact original pipeline and rev
   expect(h.events).toEqual(["owner", "game"]);
   expect(h.games.findOneAndUpdate).toHaveBeenCalledWith({ userId, gameId: "one",
     ...(expectedRevision === null ? {} : { _customBuildRevision: expectedRevision }) },
-  tagClassificationPipeline(input.decision), { projection: { _id: 1 }, upsert: false, session: h.session });
+  stamped(tagClassificationPipeline(input.decision)), { projection: { _id: 1 }, upsert: false, session: h.session });
   expect(h.session.withTransaction.mock.calls[0][1]).toMatchObject({ readConcern: { level: "snapshot" }, writeConcern: { w: "majority", j: true } });
   expect(h.session.endSession).toHaveBeenCalledTimes(1);
 });
@@ -75,7 +76,7 @@ test("copies the BSON owner, decision and empty options before a held floor", as
   floor.resolve(new Timestamp({ t: 12, i: 1 })); await task;
   expect(h.users.findOneAndUpdate.mock.calls[0][0]).toMatchObject({ _id: originalId, userId, gameStatsMutationEpoch: originalEpoch, _gdprMutation: { $exists: false } });
   expect(h.games.findOneAndUpdate.mock.calls[0][0]).toEqual({ userId, gameId: "one", _customBuildRevision: "revision-one" });
-  expect(h.games.findOneAndUpdate.mock.calls[0][1]).toEqual(tagClassificationPipeline(decision()));
+  expect(h.games.findOneAndUpdate.mock.calls[0][1]).toEqual(stamped(tagClassificationPipeline(decision())));
 });
 test("a stopped writer drains the real floor and cannot dispatch a late tag", async () => {
   const h = harness(), floor = held(); statsReadFloorFor.mockReturnValue(() => floor.promise);
@@ -112,8 +113,8 @@ test("a held classifier uses the initial owner, revision and agent labels", asyn
   release.resolve(); await task;
   expect(h.users.findOneAndUpdate.mock.calls[0][0]).toMatchObject({ _id: originalId, userId, gameStatsMutationEpoch: epoch });
   expect(h.games.findOneAndUpdate.mock.calls[0][0]).toEqual({ userId, gameId: "one", _customBuildRevision: "original" });
-  expect(h.games.findOneAndUpdate.mock.calls[0][1]).toEqual(tagClassificationPipeline(decision({
-    you: { mode: "unset" }, opponent: { mode: "unset" } })));
+  expect(h.games.findOneAndUpdate.mock.calls[0][1]).toEqual(stamped(tagClassificationPipeline(decision({
+    you: { mode: "unset" }, opponent: { mode: "unset" } }))));
 });
 test("a held policy read uses copied nested evidence and permits explicit undefined spatial", async () => {
   const h = harness(), entered = held(), release = held(), payload = game();
@@ -123,7 +124,7 @@ test("a held policy read uses copied nested evidence and permits explicit undefi
   const task = h.custom.tagSingleGame(userId, payload, { statsOwner: h.owner }); await entered.promise;
   payload.presetEvidence.you.baseline = "Rebound policy"; payload.opponent.race = "Terran"; payload.durationSec = 1;
   release.resolve({ entries: [] }); await task;
-  expect(h.games.findOneAndUpdate.mock.calls[0][1]).toEqual(tagClassificationPipeline(decision({ you: { mode: "unset" }, opponent: { mode: "unset" },
-    payloadBuild: "Original policy", payloadStrategy: "Original enemy policy", policyBuild: "Original policy", policyStrategy: "Original enemy policy" })));
+  expect(h.games.findOneAndUpdate.mock.calls[0][1]).toEqual(stamped(tagClassificationPipeline(decision({ you: { mode: "unset" }, opponent: { mode: "unset" },
+    payloadBuild: "Original policy", payloadStrategy: "Original enemy policy", policyBuild: "Original policy", policyStrategy: "Original enemy policy" }))));
   expect(h.custom.presetPolicies.current).toHaveBeenCalledTimes(1);
 });

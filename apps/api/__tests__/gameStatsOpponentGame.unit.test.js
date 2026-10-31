@@ -5,6 +5,7 @@ const { randomUUID: uuid } = require("crypto");
 const { takeRepairLivenessIssuer } = require("../src/services/gdprRepairLiveness");
 const { immutableNeutralMutation } = require("../src/services/gameStatsCountNeutral");
 const opponentGame = require("../src/services/gameStatsOpponentGame");
+const { stamped, original } = require("./helpers/corpusStamp");
 
 const { immutableOpponentGameMutation, applyOpponentGameMutation, issueOpponentIdentityRepair, issuedOpponentRepair,
   opponentRepairAuthority, applyOpponentGameIdentityRepair, repairContextOwner, OPPONENT_REPAIR_KIND } = opponentGame;
@@ -114,8 +115,9 @@ test.each([[{ pulseCharacterId: undefined }, { "opponent.region": "EU" }], [{ re
   const db = fakeDb(), owner = { userId, id: new ObjectId(), compatibility: false }, input = identity({ pulseId: "" });
   for (const key of Object.keys(drop)) delete input[key];
   await applyOpponentGameMutation(db, owner, immutableOpponentGameMutation(input));
-  expect(db.games.updateMany.mock.calls).toEqual([[{ userId, "opponent.pulseId": "" }, { $set: set }, { upsert: false }]]);
-  expect(JSON.stringify(db.games.updateMany.mock.calls)).not.toMatch(/mmr|league|LookupAttempted|_schemaVersion|date|"userId":"(?!opponent-game-owner)/);
+  expect(db.games.updateMany.mock.calls).toEqual([[{ userId, "opponent.pulseId": "" }, stamped({ $set: set }), { upsert: false }]]);
+  const [[filter, update, options]] = db.games.updateMany.mock.calls;
+  expect(JSON.stringify([filter, original(update), options])).not.toMatch(/mmr|league|LookupAttempted|_schemaVersion|date|"userId":"(?!opponent-game-owner)/);
   expect(db.games.updateOne).not.toHaveBeenCalled();
 });
 

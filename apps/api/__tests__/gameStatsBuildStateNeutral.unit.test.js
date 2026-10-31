@@ -12,6 +12,7 @@ const { applyOverridePipeline, clearOverridePipeline, mergeIntentPipeline, apply
 const { PROTOCOL_VERSION, MAINTENANCE_VERSION } = require("../src/services/gameStatsMaintenance");
 const { BUILD_INTENT, COLLECTIONS } = require("../src/config/constants");
 const { expectedVersion } = require("../src/db/schemaVersioning");
+const { stamped, original } = require("./helpers/corpusStamp");
 const played = new Date("2026-10-20T12:00:00Z"), epoch = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const owner = { userId: "owner", id: new ObjectId(), epoch, compatibility: false };
 const revision = "11111111-2222-4333-8444-555555555555";
@@ -52,7 +53,7 @@ test.each([
 ])("$mutation.kind owns its original filter/session and carries only atomic preimage stats", async ({ mutation, method, filter }) => {
   const h = harness(); await h.writer.write(owner, mutation);
   expect(h.events).toEqual(["owner", "game", "save"]);
-  expect(h.games[method]).toHaveBeenCalledWith(filter, mutation.pipeline, { session: h.session, upsert: false });
+  expect(h.games[method]).toHaveBeenCalledWith(filter, stamped(mutation.pipeline), { session: h.session, upsert: false });
   expect(h.users.findOneAndUpdate.mock.calls[0][2]).toMatchObject({ session: h.session, returnDocument: "before", upsert: false });
   const saved = h.users.updateOne.mock.calls[0][1].$set;
   expect(saved.gameStats).toEqual({ total: 5, latest: played }); expect(saved.gameStatsMaintenance.revision).not.toBe(revision);
@@ -99,7 +100,7 @@ test("owner/options/pipeline/date are copied before a held floor and bind cannot
   floor.resolve(new Timestamp({ t: 10, i: 7 })); await task;
   expect(h.users.findOneAndUpdate.mock.calls[0][0]).toEqual({ userId: owner.userId, _id: owner.id, gameStatsMutationEpoch: epoch, _gdprMutation: { $exists: false } });
   expect(h.games.updateOne.mock.calls[0][0]["buildIntent.updatedAt"]).toEqual(played);
-  expect(h.games.updateOne.mock.calls[0][1][0].$set.buildIntent.$mergeObjects[1].$literal.notes).toBe("$not an expression");
+  expect(original(h.games.updateOne.mock.calls[0][1])[0].$set.buildIntent.$mergeObjects[1].$literal.notes).toBe("$not an expression");
 });
 test("supplied cross-owner handle rejects before any owner read; supplied retired handle never recaptures", async () => {
   const h = harness(); await expect(capturedNeutralOwner(h.writer, "other", owner)).rejects.toThrow("game_stats_owner_unavailable");
@@ -122,7 +123,7 @@ test("PUT captures once before reads and preserves literal two-axis attribution 
   const body = { action: "confirm", buildKey: ref.key, notes: "$private", opponentBuildKey: ref.key };
   const task = h.state.put(owner.userId, "game", body, { source: "clerk" }); body.notes = "late"; body.buildKey = "late";
   expect(h.games.findOne).not.toHaveBeenCalled(); hold.resolve({ _id: owner.id, gameStatsMutationEpoch: epoch }); await task;
-  const pipeline = h.games.updateOne.mock.calls[0][1];
+  const pipeline = original(h.games.updateOne.mock.calls[0][1]);
   expect(pipeline).toHaveLength(3); expect(pipeline[1].$set.myBuild).toEqual({ $literal: ref.name });
   expect(pipeline[1].$set.buildIntent.$mergeObjects[1].$literal.notes).toBe("$private");
   expect(pipeline[2].$set["opponent.strategy"]).toEqual({ $literal: ref.name });

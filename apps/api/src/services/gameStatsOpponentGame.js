@@ -2,6 +2,7 @@
 
 const { dataFields } = require("./gameStatsCustomBuildEof");
 const { assertRepairLiveness, REPAIR_LIVENESS_KINDS } = require("./gdprRepairLiveness");
+const { withUpdatedAt } = require("../util/corpusUpdatedAt");
 
 const REGION_KIND = "opponentGameRegion", IDENTITY_KIND = "opponentGameIdentity";
 /** @type {"opponentGameIdentityRepair"} */
@@ -69,8 +70,9 @@ function validPatch(input) {
     && (!character || typeof input.pulseCharacterId === "string");
 }
 
-/** The original filters and $set paths, now with an explicit no-upsert option.
- * No MMR, league, marker, date, membership or schema field is written.
+/** The original filters and $set paths, now with an explicit no-upsert option; the identity write also carries the
+ * corpus change stamp, which moves only when the character id changes. No MMR, league, marker, game date,
+ * membership or schema field is written.
  * @param {import('../db/connect').DbContext} db @param {import('./gameStatsWrites').GameStatsOwner} owner
  * @param {Readonly<OpponentGameMutation>} mutation @param {import('mongodb').ClientSession|undefined} [session]
  * @returns {Promise<import('mongodb').UpdateResult>} */
@@ -81,7 +83,7 @@ function applyOpponentGameMutation(db, owner, mutation, session) {
       { $set: { "opponent.region": mutation.region } }, options);
   }
   return db.games.updateMany({ userId: owner.userId, "opponent.pulseId": mutation.pulseId },
-    { $set: identitySet(mutation) }, options);
+    withUpdatedAt({ $set: identitySet(mutation) }), options);
 }
 
 /** @param {Readonly<OpponentGameIdentityMutation>} mutation */
