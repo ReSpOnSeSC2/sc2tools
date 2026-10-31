@@ -13,16 +13,19 @@ What is and isn't backed up:
 
 - **Atlas Cloud Backup** snapshots the whole MongoDB cluster on the
   schedule set in Atlas (cluster → Backup → Backup Policy). That covers
-  every collection, including the in-app `user_backups` snapshots.
+  every collection, including the `user_backups` metadata rows, but not
+  the in-app snapshot archives, which are R2 objects (below).
 - **In-app snapshots** (`user_backups`, Settings → Backups & data) are
   private, streamed gzip NDJSON copies with metadata in Mongo. See
   [User snapshots](user-snapshots.md) for format, migration, retention and
   rollback compatibility. They don't hold replay-detail blobs
   (`buildLog`, `macroBreakdown`, `apmCurve`, `mapPlayback`) or original
   replay files.
-- **Cloudflare R2** (original replays, and replay details when
-  `GAME_DETAILS_STORE=r2`) is **not** backed up by either. Users rebuild
-  it by pressing Re-sync in the desktop app, from the replays on their PC.
+- **Cloudflare R2** (original replays, replay details when
+  `GAME_DETAILS_STORE=r2`, and the in-app snapshot archives) is **not**
+  backed up by either. Users rebuild replays and details by pressing
+  Re-sync in the desktop app, from the replays on their PC; a lost
+  snapshot archive cannot be rebuilt.
 
 ## Before you start
 

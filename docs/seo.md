@@ -20,8 +20,9 @@ When adding or changing a public, indexable page:
   After a production build, run `tests/e2e/public-seo.spec.ts` to check every
   current sitemap route. Inspect actual social PNGs and unchanged JS budgets.
 
-Community cache policy is documented in ADR 0056 and the deployment guide.
-General public reads may use the configured 300-second tag cache; private,
-missing and error responses remain uncached. Opponent pages always reach
+Community cache policy is documented in ADR 0074, which supersedes ADR 0056's
+cache contract, and the deployment guide. Community pages, their social cards
+and the decorated Community API reads are uncached, even with the purge
+configured; private, missing and error responses remain uncached. Opponent pages always reach
 current floor/removal admission and use no HTTP or rendered-page cache. Never
 add a long-lived cache there merely because a purge secret is present.

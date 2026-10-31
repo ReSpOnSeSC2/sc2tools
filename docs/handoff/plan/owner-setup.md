@@ -297,16 +297,18 @@ Keep `/v1/public/preview-replay`, its health route and the preview CLI wiring fo
   the sample instead of retaining stale data. No private replay should be used
   to build the public sample artifact.
 
-## Optional public Community cache (ADR 0056)
+## Optional public Community cache (ADR 0056, ADR 0074)
 
 No environment value, integration, collection, index, migration or provider is
 enabled by this change. API `COMMUNITY_REVALIDATE_URL` and the shared server-only
 `COMMUNITY_REVALIDATE_SECRET` in API/web are optional and must be configured
 together later by the owner. See `docs/DEPLOYMENT_GUIDE.md` for the exact signed
-protocol and local validation. Unset API configuration sends nothing; unset web
-secret keeps user-derived public reads/share cards uncached. General configured
-Community data uses300-second tags; best-effort purge has no guaranteed seconds
-to visibility. Opponent API/fetch/page always remain no-store, with a bounded
+protocol and local validation. Unset API configuration sends nothing; an unset
+web secret makes the receiver return 503. Since public player pages (PR #758),
+Community pages, their share cards and decorated Community API reads stay
+uncached even when the purge is configured (ADR 0074); the purge revalidates
+the Community tag, layouts and sitemap, and has no guaranteed seconds to
+visibility. Opponent API/fetch/page always remain no-store, with a bounded
 one-hour service LRU behind fresh floor/removal admission. No six-hour rendered
 opponent cache is enabled. Rollback is a source revert; no data conversion or
 production mutation is required.

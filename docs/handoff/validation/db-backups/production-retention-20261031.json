@@ -5,7 +5,7 @@
     "id": "db-offsite-backups",
     "ordinal": 12
   },
-  "status": "PRODUCTION_BACKUP_RETENTION_READ_FRESHNESS_AND_RESTORE_DRILL_NOT_ESTABLISHED",
+  "status": "PRODUCTION_BACKUP_POLICY_READABLE_ENABLED_FLAG_FRESHNESS_AND_RESTORE_DRILL_NOT_ESTABLISHED",
   "read": {
     "url": "https://api.sc2tools.com/v1/site/data-retention",
     "method": "GET",
@@ -39,8 +39,9 @@
       "checkedAt": "2026-10-31T21:35:26.961Z"
     }
   },
-  "meaning": "The production API's public summary of the Atlas Cloud Backup policy, read once without authentication. available:true means the read-only service account's policy read was current and returned retention rows; it shows Cloud Backup is on. It does not name each retention's frequency, the newest snapshot's age, or any restore.",
+  "meaning": "The production API's public summary of the Atlas Cloud Backup policy, read once without authentication. available:true means the read-only service account's policy read was current and returned retention rows, so Atlas returns a readable Cloud Backup policy for the configured cluster. It does not carry the cluster's Cloud Backup enabled flag, any snapshot, which frequency each retention belongs to, the cluster tier, or any restore.",
   "notEstablished": [
+    "the Cloud Backup enabled flag and the cluster tier (Admin, Infrastructure, signed-in admin)",
     "snapshot freshness (Admin, Infrastructure, signed-in admin)",
     "a successful restore drill (Atlas Project Owner)"
   ],
