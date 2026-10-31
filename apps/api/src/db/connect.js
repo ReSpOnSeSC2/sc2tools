@@ -15,7 +15,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   deviceCredentialReadiness: 'causal'|'writer-only-standalone'|'unavailable',
  *   db: import('mongodb').Db,
  *   backgroundIndexes?: import('./guideIndexes').BackgroundIndexBuilds,
- *   privateSearchIndexes?: import('./guideIndexes').BackgroundIndexBuilds,
+ *   privateSearchIndexes?: import('./guideIndexes').BackgroundIndexBuilds, corpusIndexes?: import('./guideIndexes').BackgroundIndexBuilds,
  *   users: import('mongodb').Collection,
  *   profiles: import('mongodb').Collection,
  *   opponents: import('mongodb').Collection,
@@ -748,13 +748,13 @@ async function ensureIndexes(ctx, opts = {}) {
   await ensureReviewIndexes(ctx);
   // Last, so the ``games`` collection exists and the long build never
   // competes with the awaited ones above.
-  const guides = startBackgroundIndexBuilds(ctx, opts.logger || null);
-  const search = startPrivateSearchIndex(ctx, opts.logger || null);
-  // GuideStats waits on this existing guide-only authority. The unrelated
-  // optional search build must not lengthen its bounded readiness wait.
-  ctx.backgroundIndexes = guides;
+  const logger = opts.logger || null, guides = startBackgroundIndexBuilds(ctx, logger);
+  const search = startPrivateSearchIndex(ctx, logger), corpus = require("./corpusIndexes").startCorpusStampIndex(ctx, logger);
+  // GuideStats waits on this existing guide-only authority. The unrelated optional
+  // search and corpus-stamp builds must not lengthen its bounded readiness wait.
+  ctx.backgroundIndexes = guides; ctx.corpusIndexes = corpus;
   ctx.privateSearchIndexes = search;
-  if (opts.awaitBackground) await Promise.all([guides.settled, search.settled]);
+  if (opts.awaitBackground) await Promise.all([guides.settled, search.settled, corpus.settled]);
   return guides;
 }
 

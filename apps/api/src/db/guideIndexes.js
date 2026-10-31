@@ -54,10 +54,6 @@ const { GUIDE_SAMPLE_TTL_SEC } = require("../config/guides");
  *     Its only reader, GuideStatsService.recompute, waits briefly for a
  *     build still in progress and otherwise fails fast; the job's next
  *     hourly check retries.
- *   - ``games_user_updated_at`` {userId, updatedAt}: the analysis-corpus
- *     change stamp (util/corpusUpdatedAt.js) that a delta reader pages by.
- *     Partial on rows that carry the stamp, so the first build scans the
- *     collection but indexes nothing, and the index grows with stamped writes.
  */
 const BACKGROUND_GAMES_INDEXES = Object.freeze([
   Object.freeze({
@@ -65,13 +61,6 @@ const BACKGROUND_GAMES_INDEXES = Object.freeze([
     options: {
       name: "guide_stats_build_opp_race",
       partialFilterExpression: { myBuild: { $type: "string" } },
-    },
-  }),
-  Object.freeze({
-    key: { userId: 1, updatedAt: 1 },
-    options: {
-      name: "games_user_updated_at",
-      partialFilterExpression: { updatedAt: { $exists: true } },
     },
   }),
 ]);

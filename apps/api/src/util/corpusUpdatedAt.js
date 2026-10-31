@@ -22,15 +22,22 @@ function stampWhenChanged(stages) {
 
 /** Adds the stamp to an aggregation-pipeline update, or to an operator update. A `$set`/`$unset` update becomes the
  * equivalent pipeline with literal values, so it stamps only on change; any other operator (an upsert's
- * `$setOnInsert`) stamps on every write. @param {Record<string, any>|Array<Record<string, any>>} update @returns {any} */
+ * `$setOnInsert`) stamps on every write. A pipeline would apply a numeric path segment to every array element and let
+ * a `$set` and an `$unset` of one path both run, where the operator form addresses one element or fails, so those
+ * shapes are refused. Converted paths must also have an object or missing parent, as every caller's do.
+ * @param {Record<string, any>|Array<Record<string, any>>} update @returns {any} */
 function withUpdatedAt(update) {
   if (Array.isArray(update)) return stampWhenChanged(update);
   if (!Object.keys(update).every(key => key === "$set" || key === "$unset")) {
     return { ...update, $set: { ...update.$set, updatedAt: new Date() } };
   }
-  const set = Object.entries(update.$set || {}).map(([field, value]) => [field, { $literal: value }]);
-  return stampWhenChanged([...(set.length ? [{ $set: Object.fromEntries(set) }] : []),
-    ...(update.$unset ? [{ $unset: Object.keys(update.$unset) }] : [])]);
+  const set = Object.entries(update.$set || {}), unset = Object.keys(update.$unset || {});
+  if (!set.length && !unset.length) throw new Error("corpus_stamp_empty_update");
+  const paths = [...set.map(([field]) => field), ...unset];
+  if (paths.some((path, index) => /(^|\.)\d+(\.|$)/.test(path) || paths.some((other, at) => at !== index
+    && (other === path || other.startsWith(`${path}.`))))) throw new Error("corpus_stamp_unsupported_update");
+  return stampWhenChanged([...(set.length ? [{ $set: Object.fromEntries(set.map(([field, value]) => [field, { $literal: value }])) }] : []),
+    ...(unset.length ? [{ $unset: unset }] : [])]);
 }
 
 /** Adds the stamp to an inserted or replacement document. @param {Record<string, any>} row @returns {any} */

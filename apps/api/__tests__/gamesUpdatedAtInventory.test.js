@@ -4,7 +4,8 @@
 // (util/corpusUpdatedAt.js), so a delta reader can page by it. The scan parses apps/api/src with the TypeScript compiler
 // and classifies each write call on a games handle: stamped (an argument calls the stamp helper), a hard delete (no
 // row is left to stamp) or reviewed below as unable to change the corpus. The inventory is exact, so a new writer
-// fails here until it is stamped or reviewed. Out-of-band migrations under db/migrations are not scanned.
+// fails here until it is stamped or reviewed. Writes through other handle names (restore's `collection`) have their own
+// assertion below; out-of-band migrations under db/migrations are not scanned.
 const fs = require("node:fs");
 const path = require("node:path");
 const ts = require("typescript");
@@ -124,4 +125,10 @@ test("the stamp follows the corpus fields, converts $set/$unset updates literall
   expect(rowWithUpdatedAt(row)).toEqual({ ...row, updatedAt: expect.any(Date) });
   expect([operator, pipeline.length, upsert.$set, row]).toEqual([{ $set: { macroScore: 80, top3Leaks: [{ name: "$idle" }] },
     $unset: { macroBreakdown: "" } }, 1, { result: "Victory" }, { userId: "a", gameId: "g", _deleted: true }]);
+  expect(withUpdatedAt({ $set: { result: "Defeat" }, $unset: {} }).slice(1, -2)).toEqual([{ $set: { result: { $literal: "Defeat" } } }]);
+  for (const [shape, code] of [[{}, "corpus_stamp_empty_update"], [{ $set: {}, $unset: {} }, "corpus_stamp_empty_update"],
+    [{ $set: { "top3Leaks.0.amount": 1 } }, "corpus_stamp_unsupported_update"], [{ $set: { excluded: true }, $unset: { excluded: "" } }, "corpus_stamp_unsupported_update"],
+    [{ $set: { opponent: {} }, $unset: { "opponent.mmr": "" } }, "corpus_stamp_unsupported_update"]]) {
+    expect(() => withUpdatedAt(shape)).toThrow(code);
+  }
 });

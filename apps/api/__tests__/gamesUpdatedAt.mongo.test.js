@@ -10,6 +10,7 @@ const { buildApp } = require("../src/app");
 const { createBackupStore } = require("./helpers/userBackupsStore");
 const { applyOpponentGameMutation } = require("../src/services/gameStatsOpponentGame");
 const { applyPulseStamp } = require("../src/services/gameStatsPulseNeutral");
+const { applyMacroSurface } = require("../src/services/gameStatsCountNeutral");
 
 let mongo, db, services;
 const OLD = new Date("2020-01-01T00:00:00Z");
@@ -96,9 +97,23 @@ test("an unchanged corpus keeps the stamp and reports no modification, and a $-l
   expect([renamed.opponent.displayName, fresh(renamed.updatedAt, since), "_corpusBefore" in renamed]).toEqual(["$myRace", true, false]);
 });
 
+test("a write that changes no corpus field leaves a never-stamped row unstamped, and a macro change stamps once", async () => {
+  await services.games.upsert("a", game("g1")); await db.games.updateOne({ userId: "a", gameId: "g1" }, { $unset: { updatedAt: "" } });
+  const owner = { userId: "a" }, region = { kind: "opponentGameIdentity", pulseId: "p1", region: "EU" };
+  expect((await applyOpponentGameMutation(db, owner, region)).modifiedCount).toBe(1);
+  expect((await applyOpponentGameMutation(db, owner, region)).modifiedCount).toBe(0);
+  expect("updatedAt" in (await row("g1"))).toBe(false);
+  const macro = { gameId: "g1", macroScore: 71, top3Leaks: [{ name: "idle", amount: 2 }] }, since = new Date();
+  await applyMacroSurface(db, owner, macro);
+  expect(fresh((await row("g1")).updatedAt, since)).toBe(true);
+  await pin("g1");
+  expect((await applyMacroSurface(db, owner, macro)).modifiedCount).toBe(0);
+  expect((await row("g1")).updatedAt).toEqual(OLD);
+});
+
 test("the partial change-stamp index exists and serves a changed-since read", async () => {
   const index = (await db.games.indexes()).find(spec => spec.name === "games_user_updated_at");
-  expect(index).toMatchObject({ key: { userId: 1, updatedAt: 1 }, partialFilterExpression: { updatedAt: { $exists: true } } });
+  expect(index).toMatchObject({ key: { userId: 1, updatedAt: 1, _id: 1 }, partialFilterExpression: { updatedAt: { $exists: true } } });
   await services.games.upsert("a", game("g1")); await services.games.upsert("a", game("g2")); await pin("g2");
   const query = { userId: "a", updatedAt: { $gt: new Date(Date.now() - 60000) } };
   // A hint on a partial index the query cannot use is refused, so this also proves the read is eligible.
