@@ -17,8 +17,9 @@
  */
 import { idbTransactionOn } from "@/lib/instant/idb";
 import { isRemoval, type CorpusChange, type CorpusMarks, type CorpusRow } from "./changes";
+import { DEVICE_CORPUS_DB_NAME } from "./deviceKeys";
 
-export const DEVICE_CORPUS_DB_NAME = "sc2tools-analysis-corpus";
+export { DEVICE_CORPUS_DB_NAME };
 const DEVICE_CORPUS_DB_VERSION = 1;
 const DEVICE_CORPUS_SCHEMA = 1;
 /** A healthy open takes milliseconds; past this the corpus loads in memory rather than waiting on storage. */
@@ -42,15 +43,19 @@ type AccountRecord = { accountKey: string; schema: number; marks: CorpusMarks | 
 /**
  * Open the device corpus, or resolve null when IndexedDB is missing, refused or slower than `deadlineMs`; a
  * connection that arrives after the deadline is closed. With `create: false` it only probes: when nothing was ever
- * stored it creates nothing, calls `onAbsent` and resolves null.
+ * stored it creates nothing, calls `onAbsent` and resolves null. A database created for an `owner` records that
+ * account's choice to keep its history here in the same upgrade, so no other connection ever finds it without one: a
+ * probe in another tab reads "kept" while the first snapshot is still on its way, never "absent".
  *
  * Example:
- *   const db = await openDeviceCorpus(defaultIndexedDb(), { create: true });
+ *   const db = await openDeviceCorpus(defaultIndexedDb(), { create: true, owner: accountKey });
  */
 export function openDeviceCorpus(
   factory: IDBFactory | undefined,
-  { create, deadlineMs = DEVICE_CORPUS_OPEN_DEADLINE_MS, onAbsent }: {
+  { create, owner, deadlineMs = DEVICE_CORPUS_OPEN_DEADLINE_MS, onAbsent }: {
     create: boolean;
+    /** With `create`: the account a newly created database is for. */
+    owner?: string;
     deadlineMs?: number;
     /** Called when the probe finds no database at all (not when IndexedDB is refused or slow). */
     onAbsent?: () => void;
@@ -86,6 +91,7 @@ export function openDeviceCorpus(
         return;
       }
       createSchema(request.result);
+      if (owner && event.oldVersion === 0) request.transaction?.objectStore(ACCOUNTS).put(accountRecordFor(owner, null, 0));
     };
     request.onsuccess = () => {
       const db = request.result;
@@ -174,22 +180,6 @@ export function resetDeviceCorpus(db: IDBDatabase, accountKey: string): Promise<
     accounts.clear();
     accounts.put(accountRecordFor(accountKey, null, 0));
   });
-}
-
-/**
- * Delete the whole device copy, the last resort when a copy can be neither replaced nor reset. Other tabs' connections
- * step aside on versionchange, and the request finishes once they have; nothing waits for it.
- *
- * Example:
- *   deleteDeviceCorpus(defaultIndexedDb());
- */
-export function deleteDeviceCorpus(factory: IDBFactory | undefined): void {
-  try {
-    const request = factory?.deleteDatabase(DEVICE_CORPUS_DB_NAME);
-    if (request) request.onerror = (event) => event.preventDefault();
-  } catch {
-    // Storage is refused for this document: there is nothing to delete.
-  }
 }
 
 /**

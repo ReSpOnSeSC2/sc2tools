@@ -22,7 +22,7 @@ import { toClientApiError } from "@/lib/requestErrors";
 type Backup = { id: string; label?: string; createdAt: string; sizeBytes: number; type: "manual" | "auto" | "pre_action"; counts?: Record<string, number> };
 type Preview = { games: { kept: number; removed: number; added: number }; customBuilds: number; opponentNotes: number; overlayTokens: number; currentRevision: string };
 
-export function SnapshotManager({ onRestored }: { onRestored: () => Promise<void> }) {
+export function SnapshotManager({ onRestored, onRestoreFailed }: { onRestored: () => Promise<void>; onRestoreFailed?: (error: unknown) => void }) {
   const { getToken } = useAuth(); const tokenRef = useRef(getToken); tokenRef.current = getToken;
   const backups = useApi<{ items: Backup[] }>("/v1/me/backups"); const { toast } = useToast();
   const [busy, setBusy] = useState(""); const [target, setTarget] = useState<Backup | null>(null);
@@ -46,7 +46,7 @@ export function SnapshotManager({ onRestored }: { onRestored: () => Promise<void
     await action("restore", async () => {
       let result: { counts: { games: number } };
       try { result = await apiCall(getToken, `/v1/me/backups/${encodeURIComponent(target.id)}/restore`, { method: "POST", body: JSON.stringify({ currentRevision: preview.currentRevision }) }); }
-      catch (error) { if (toClientApiError(error).code === "backup_preview_changed") { setPreview(null); setAttempt((value) => value + 1); } throw error; }
+      catch (error) { onRestoreFailed?.(error); if (toClientApiError(error).code === "backup_preview_changed") { setPreview(null); setAttempt((value) => value + 1); } throw error; }
       await Promise.allSettled([backups.mutate(), onRestored()]); setTarget(null);
       toast.success(`Restored ${result.counts.games.toLocaleString()} games`, { description: "Existing build orders and replay files for games in both lists were kept." });
     });

@@ -4,7 +4,6 @@ import { idbTransactionOn } from "@/lib/instant/idb";
 import type { CorpusMarks } from "../changes";
 import {
   DEVICE_CORPUS_DB_NAME,
-  deleteDeviceCorpus,
   mergeDeviceDelta,
   openDeviceCorpus,
   readDeviceCorpus,
@@ -51,6 +50,25 @@ describe("openDeviceCorpus", () => {
     expect([...(probed?.objectStoreNames ?? [])].sort()).toEqual(["accounts", "games"]);
     probed?.close();
     expect((await factory.databases()).map((db) => db.name)).toEqual([DEVICE_CORPUS_DB_NAME]);
+  });
+
+  it("records an owner only in an upgrade from no database at all", () => {
+    const transaction = { objectStore: vi.fn() };
+    const request = { result: { objectStoreNames: { contains: () => true } }, transaction } as unknown as IDBOpenDBRequest;
+    const factory = { open: vi.fn(() => request) } as unknown as IDBFactory;
+    void openDeviceCorpus(factory, { create: true, owner: "user-a", deadlineMs: 10 });
+    request.onupgradeneeded!.call(request, { oldVersion: 1 } as IDBVersionChangeEvent);
+    expect(transaction.objectStore).not.toHaveBeenCalled();
+  });
+
+  it("records its owner's choice in the upgrade that creates the database, and only then", async () => {
+    const factory = new IDBFactory();
+    const created = await openDeviceCorpus(factory, { create: true, owner: "user-a" });
+    expect(await view(created!)).toBe("kept");
+    created!.close();
+    const existing = await openDeviceCorpus(factory, { create: true, owner: "user-b" });
+    expect([await view(existing!, "user-b"), await view(existing!)]).toEqual(["absent", "kept"]);
+    existing!.close();
   });
 
   it("gives up on an open that hangs past the deadline, and closes the connection if it arrives late", async () => {
@@ -116,19 +134,6 @@ describe("device corpus storage", () => {
     await expect(mergeDeviceDelta(db, "user-a", MARKS, [game("a3")], NEXT, 3)).resolves.toBe(true);
     expect(await view(db, "user-a", 3)).toEqual({ marks: NEXT, rows: ["a1:Victory", "a2:Victory", "a3:Victory"] });
     db.close();
-  });
-
-  it("deletes the whole copy as a last resort, and does nothing without IndexedDB", async () => {
-    const factory = new IDBFactory();
-    const db = await stored(factory);
-    await saveDeviceSnapshot(db, "user-a", [game("a1")], MARKS, 10);
-    db.close();
-    expect(() => deleteDeviceCorpus(undefined)).not.toThrow();
-    deleteDeviceCorpus(factory);
-    for (let tries = 0; tries < 50 && (await factory.databases()).length > 0; tries += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    expect(await factory.databases()).toEqual([]);
   });
 
   it("lets exactly one of two merges from the same marks write", async () => {

@@ -6,6 +6,12 @@ import { ToastProvider } from "@/components/ui/Toast";
 const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
 const mutateMock = vi.fn(async () => undefined);
+const forgetDeviceCopy = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/analysisCorpus/deviceClear", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/analysisCorpus/deviceClear")>()),
+  forgetDeviceCopy,
+}));
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: async () => "test-token", isLoaded: true, isSignedIn: true }),
@@ -22,6 +28,7 @@ afterEach(() => {
   useApiMock.mockReset();
   apiCallMock.mockReset();
   mutateMock.mockClear();
+  forgetDeviceCopy.mockClear();
 });
 
 const SNAPSHOT = {
@@ -83,12 +90,44 @@ describe("SettingsBackups restore", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Restore" }));
     await waitFor(() => expect(screen.getByText("Restored 3,402 games")).toBeTruthy());
+    // The restored history replaces any copy kept on this device.
+    expect(forgetDeviceCopy).toHaveBeenCalledTimes(1);
     expect(apiCallMock).toHaveBeenCalledWith(
       expect.any(Function),
       `/v1/me/backups/${SNAPSHOT.id}/restore`,
       { method: "POST", body: JSON.stringify({ currentRevision: "a".repeat(24) }) },
     );
     expect(screen.queryByText("Restore queued")).toBeNull();
+  });
+
+  it("clears the copy kept on this device when a restore may have finished, never after a rejection", async () => {
+    const restoreFails = (failure: unknown) => apiCallMock.mockImplementation(async (_token, path: string) => {
+      if (path.endsWith("/preview")) return { games: { kept: 11842, removed: 2, added: 1 }, customBuilds: 4, opponentNotes: 3, overlayTokens: 2, currentRevision: "a".repeat(24) };
+      throw failure;
+    });
+    const attempt = async () => {
+      renderBackups();
+      fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+      const dialog = screen.getByRole("dialog");
+      await within(dialog).findByText("Build orders and replay files for 11,842 games are kept.");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Restore" }));
+      await screen.findByText("Couldn't complete snapshot action");
+      const cleared = forgetDeviceCopy.mock.calls.length;
+      cleanup();
+      forgetDeviceCopy.mockClear();
+      return cleared;
+    };
+    restoreFails({ status: 502, message: "Bad gateway" });
+    expect(await attempt()).toBe(1);
+    restoreFails(new TypeError("Failed to fetch"));
+    expect(await attempt()).toBe(1);
+    restoreFails({ code: "backup_preview_changed", status: 409, message: "backup_preview_changed" });
+    expect(await attempt()).toBe(0);
+    // Offline by the time the failure arrives: the restore may have gone through before the connection dropped.
+    const offline = vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
+    restoreFails(new TypeError("Failed to fetch"));
+    expect(await attempt()).toBe(1);
+    offline.mockRestore();
   });
 });
 
@@ -107,6 +146,38 @@ describe("SettingsBackups game history", () => {
     expect(JSON.parse(apiCallMock.mock.calls[0][2].body)).toEqual({ dryRun: true });
     fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), { target: { value: "DELETE" } });
     expect(screen.getByRole("button", { name: "Delete games" }).hasAttribute("disabled")).toBe(true);
+  });
+  it("clears game history kept on this device after a wipe that finished or may have, never after a rejection", async () => {
+    const wipe = (failure?: unknown) => apiCallMock.mockImplementation(async (_token, _path: string, init: { body: string }) => {
+      if (JSON.parse(init.body).dryRun) return { dryRun: true, counts: { games: 5 } };
+      if (failure) throw failure;
+      return { deleted: true, counts: { games: 5, opponents: 0, macroJobs: 0 } };
+    });
+    const confirm = async (outcome: string) => {
+      renderBackups([]);
+      fireEvent.click(screen.getByRole("button", { name: "Delete all games" }));
+      await screen.findByText(/This deletes all 5 games/);
+      fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), { target: { value: "DELETE" } });
+      fireEvent.click(screen.getByRole("button", { name: "Delete games" }));
+      await screen.findByText(outcome);
+      const cleared = forgetDeviceCopy.mock.calls.length;
+      cleanup();
+      forgetDeviceCopy.mockClear();
+      return cleared;
+    };
+    wipe({ status: 409, message: "A wipe is already running" });
+    expect(await confirm("Couldn't wipe game history")).toBe(0);
+    // No answer at all, or a server error: the wipe may have finished.
+    wipe(new TypeError("Failed to fetch"));
+    expect(await confirm("Couldn't wipe game history")).toBe(1);
+    wipe({ status: 502, message: "Bad gateway" });
+    expect(await confirm("Couldn't wipe game history")).toBe(1);
+    wipe({ status: 500, message: "Internal error" });
+    expect(await confirm("Couldn't wipe game history")).toBe(1);
+    wipe({ status: 400, message: "Bad range" });
+    expect(await confirm("Couldn't wipe game history")).toBe(0);
+    wipe();
+    expect(await confirm("Deleted 5 games")).toBe(1);
   });
 });
 
@@ -162,5 +233,7 @@ describe("snapshot safeguards", () => {
     fireEvent.click(screen.getByRole("button", { name: "Recount opponent records" }));
     await screen.findByText("Repair started");
     expect(apiCallMock).toHaveBeenLastCalledWith(expect.any(Function), "/v1/me/repair/opponents", { method: "POST", body: "{}" });
+    // A repair neither deletes nor restores history, so the copy kept on this device stays.
+    expect(forgetDeviceCopy).not.toHaveBeenCalled();
   });
 });

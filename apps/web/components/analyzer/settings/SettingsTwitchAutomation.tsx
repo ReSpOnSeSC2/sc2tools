@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useState } from "react";
+import { useLayoutEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
@@ -17,8 +17,9 @@ export function SettingsTwitchAutomation() {
 function Editor({ model }: { model: ReturnType<typeof useTwitchAutomationSettings> }) {
   const id = useId(), { status, busy, error, message } = model;
   const [draft, setDraft] = useState<TwitchAutomationPreferences>(DEFAULT_TWITCH_AUTOMATION), [dirty, setDirty] = useState(false);
-  useEffect(() => { if (status && !dirty) setDraft(status.preferences); }, [status, dirty]);
-  useEffect(() => { if (message === "Twitch automation preferences saved.") setDirty(false); }, [message]);
+  // Settle server preferences before a newly enabled control can accept input.
+  useLayoutEffect(() => { if (status && !dirty) setDraft(status.preferences); }, [status, dirty]);
+  useLayoutEffect(() => { if (message === "Twitch automation preferences saved.") setDirty(false); }, [message]);
   const change = (patch: Partial<TwitchAutomationPreferences>) => { setDraft(previous => ({ ...previous, ...patch })); setDirty(true); };
   const baseReady = status?.serverEnabled === true && status.eligible === true;
   const predictionReady = baseReady && status.predictionPermission, markerReady = baseReady && status.markerPermission;

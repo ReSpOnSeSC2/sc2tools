@@ -9,6 +9,7 @@ import {
   Download,
   Trash2,
 } from "lucide-react";
+import { forgetDeviceCopy, mayHaveApplied } from "@/lib/analysisCorpus/deviceClear";
 import { apiCall, API_BASE, type ClientApiError } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
@@ -57,11 +58,23 @@ export function SettingsBackups() {
     return () => { cancelled = true; };
   }, [pendingWipe, rangeKey]);
 
-  async function refreshHistory() {
+  async function refreshCaches() {
     try { await refresh((key) => {
       const path = Array.isArray(key) ? key.find((part) => typeof part === "string" && part.startsWith("/v1/")) : key;
       return typeof path === "string" && /^\/v1\/(?:me(?:\?|$|\/(?:doctor|backups|replay-archive-status))|games|opponents|timeseries|streak|matchups|builds|macro|maps|trends|strategies|dashboard)/.test(path);
-    }); } catch { /* A refresh failure must not turn a completed wipe or restore into a reported failure. */ }
+    }); } catch { /* A refresh failure must not turn a completed wipe, restore or repair into a reported failure. */ }
+  }
+
+  async function refreshHistory() {
+    // A wipe or restore leaves any game history kept on this device out of date; it goes, and the next load re-reads.
+    forgetDeviceCopy();
+    await refreshCaches();
+  }
+
+  // A wipe or restore that failed without a definite rejection may have finished anyway, and a retry may never get as
+  // far as refreshHistory (a wipe's count is then 0); only a definite rejection keeps the copy on this device.
+  function forgetUnlessRejected(error: unknown) {
+    if (mayHaveApplied(error)) forgetDeviceCopy();
   }
 
   async function exportData() {
@@ -123,6 +136,7 @@ export function SettingsBackups() {
       setWipeSince("");
       setWipeUntil("");
     } catch (err) {
+      forgetUnlessRejected(err);
       const message =
         (err as ClientApiError | undefined)?.message ?? "Please try again.";
       toast.error("Couldn't wipe game history", { description: message });
@@ -138,8 +152,8 @@ export function SettingsBackups() {
       <SettingsSectionsReady />
       <ReplayArchiveStatusCard />
 
-      <SnapshotManager onRestored={refreshHistory} />
-      <DataRepairCard onStarted={refreshHistory} />
+      <SnapshotManager onRestored={refreshHistory} onRestoreFailed={forgetUnlessRejected} />
+      <DataRepairCard onStarted={refreshCaches} />
 
       <HiddenGames />
 

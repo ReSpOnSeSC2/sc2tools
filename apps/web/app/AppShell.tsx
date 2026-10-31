@@ -17,6 +17,7 @@ import { AppChrome } from "@/components/chrome/AppChrome";
 import { isAppSurfacePath } from "@/components/chrome/appNav";
 import { SiteStats } from "@/components/chrome/SiteStats";
 import { SitePresence } from "@/components/chrome/SitePresence";
+import { DeviceHistoryGuard } from "@/components/chrome/DeviceHistoryGuard";
 import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 import { CommandSearchProvider } from "@/components/chrome/CommandSearchProvider";
 
@@ -81,6 +82,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             Skip to content
           </a>
           <SitePresence />
+          <DeviceHistoryGuard />
           <AppChrome>{children}</AppChrome>
           <CookieBanner />
           {analyticsAllowed ? <GoogleAnalytics /> : null}
@@ -105,6 +107,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </a>
         <Header />
         <SitePresence />
+        <DeviceHistoryGuard />
         <SiteStats />
         <main id="main-content" tabIndex={-1} className={MAIN_CLASS}>
           {children}
