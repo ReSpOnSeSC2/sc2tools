@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "status": "DELIVERED_EXACT_SOURCE_DEPLOYED_SIGNED_IN_ACCEPTANCE_NOT_PERFORMED",
+  "pullRequests": [
+    {
+      "number": 831,
+      "slice": "C4: matchup win-rate-over-time chart in the default-off chart cache, keyed by one captured MMR-curve proof",
+      "testedHead": "62fe50f0878642aeb8184dfc5235fb7120b5cf0d",
+      "mergeCommit": "619d8f7fee4e0a54628b7addea24a376b7c09b10",
+      "mergedAt": "2026-10-31T04:24:02Z",
+      "exactHeadChecks": {
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        },
+        "Lint + typecheck + test (apps/api)": {
+          "conclusion": "success",
+          "run": 41166130465,
+          "job": 124433982709
+        },
+        "Lint + typecheck + test (apps/web)": {
+          "conclusion": "success",
+          "run": 41166130435,
+          "job": 124433982871
+        },
+        "Responsive e2e smoke (public pages)": {
+          "conclusion": "success",
+          "run": 41166130435,
+          "job": 124433983023
+        },
+        "Vercel": {
+          "conclusion": "success"
+        }
+      }
+    },
+    {
+      "number": 832,
+      "slice": "DA3: separate-process device-auth revocation regression (tests only)",
+      "testedHead": "93fc140afe08f5941194add49acff885c7ee97a6",
+      "mergeCommit": "fe6b3d1fa26893ec0db76a7ccb2600a780bf58ba",
+      "mergedAt": "2026-10-31T04:24:37Z",
+      "exactHeadChecks": {
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        },
+        "Lint + typecheck + test (apps/api)": {
+          "conclusion": "success",
+          "run": 41166139397,
+          "job": 124434010933
+        },
+        "Vercel": {
+          "conclusion": "success"
+        }
+      }
+    },
+    {
+      "number": 833,
+      "slice": "DA4: owner-run durable device-auth retention disable primitive and script (never invoked)",
+      "testedHead": "e33dcff70329e75aa1d29ef571baeb1771d3314c",
+      "mergeCommit": "261fa04d752dda7eeae008e3816041437c124d11",
+      "mergedAt": "2026-10-31T04:25:02Z",
+      "exactHeadChecks": {
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        },
+        "Lint + typecheck + test (apps/api)": {
+          "conclusion": "success",
+          "run": 41166143697,
+          "job": 124434024331
+        },
+        "Vercel": {
+          "conclusion": "success"
+        }
+      }
+    },
+    {
+      "number": 834,
+      "slice": "G1: rolling-overlap guard for the default-off chart cache",
+      "testedHead": "3cde65e1311167470dccc14bcac3ee39b3cfbba7",
+      "mergeCommit": "d7b925d5a3901c9e26e51497ed71d151b5bb9af8",
+      "mergedAt": "2026-10-31T04:25:24Z",
+      "exactHeadChecks": {
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        },
+        "Lint + typecheck + test (apps/api)": {
+          "conclusion": "success",
+          "run": 41166148071,
+          "job": 124434038044
+        },
+        "Vercel": {
+          "conclusion": "success"
+        }
+      }
+    },
+    {
+      "number": 836,
+      "slice": "C5: opponent-MMR histogram and drill-down in the default-off chart cache, every in-process opponents writer fenced",
+      "testedHead": "5bf50dd5474beacfdc7ae87e5979447ba696c603",
+      "mergeCommit": "c6e7110b1b0ab967adbf28c7ad5d05ffd223c553",
+      "mergedAt": "2026-10-31T04:51:15Z",
+      "exactHeadChecks": {
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        },
+        "Lint + typecheck + test (apps/web)": {
+          "conclusion": "success",
+          "run": 41168378461,
+          "job": 124440775284
+        },
+        "Responsive e2e smoke (public pages)": {
+          "conclusion": "success",
+          "run": 41168378461,
+          "job": 124440775113
+        },
+        "Lint + typecheck + test (apps/api)": {
+          "conclusion": "success",
+          "run": 41168378472,
+          "job": 124440775095
+        },
+        "Vercel": {
+          "conclusion": "success"
+        }
+      }
+    },
+    {
+      "number": 837,
+      "slice": "R1: owner chart-cache activation-review runbook (docs only)",
+      "testedHead": "0fdb57e253f25264d9b2b355fd16a1f25cc95431",
+      "mergeCommit": "55378835e6f0640a2da148da13a1ace0f008d541",
+      "mergedAt": "2026-10-31T04:51:37Z",
+      "exactHeadChecks": {
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        },
+        "Vercel": {
+          "conclusion": "success"
+        }
+      }
+    }
+  ],
+  "mergeMethod": "Merge commits, bottom-up, under the owner's approval for this stack once each PR was green and reviewed. Each branch contained the one below it, so each merge landed the tree its exact-head CI tested; the stack's tested commits stay reachable from main.",
+  "mergedMain": "55378835e6f0640a2da148da13a1ace0f008d541",
+  "tree": "bcf29bd8fa99be044ae4cd39f227a5e4c59f2e88",
+  "treeEqualsTopTestedHead": true,
+  "mainCI": {
+    "commit": "55378835e6f0640a2da148da13a1ace0f008d541",
+    "workflows": {
+      "web-ci": {
+        "run": 41170255576,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "api-ci": {
+        "run": 41170255575,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "community-builds-ci": {
+        "run": 41170255636,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "data-integrity": {
+        "run": 41170255572,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "version-check": {
+        "run": 41170255582,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "python-tests": {
+        "run": 41170255664,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    }
+  },
+  "deployment": {
+    "api": {
+      "environment": "main - sc2tools-api",
+      "deploymentId": 7454343614,
+      "state": "success",
+      "at": "2026-10-31T04:52:21Z",
+      "sha": "55378835e6f0640a2da148da13a1ace0f008d541"
+    },
+    "web": {
+      "environment": "Production",
+      "deploymentId": 7454398825,
+      "state": "success",
+      "at": "2026-10-31T04:58:49Z",
+      "sha": "55378835e6f0640a2da148da13a1ace0f008d541"
+    },
+    "bothForExactMergedMain": true
+  },
+  "publicHealth": {
+    "api": "GET /v1/health on the production API returned 200 with status ok, mongoPing true and mongoWrite true at 2026-10-31T05:25:43Z.",
+    "web": "GET /api/ping on the production site returned 200 at 2026-10-31T05:25:44Z."
+  },
+  "readOnlyAcceptance": {
+    "signedIn": false,
+    "performed": false,
+    "reason": "The built-in browser showed Sign in links on the production home page. No session was signed in, and none was created or attempted.",
+    "ownedTabsClosed": 1
+  },
+  "localProof": "Each slice keeps its local gate in its receipt under docs/handoff/validation: dashboard-cache-matchup-timeseries, device-auth-separate-process, device-auth-disable, dashboard-cache-overlap-guard, dashboard-cache-opponent-mmr (superseding receipt) and chart-cache-activation-review (prepared).",
+  "limitations": [
+    "USER_CACHE_ENABLED stays off in production, so this delivery activates nothing; the overlap guard and both chart admissions are inert, and no cache hit, latency, request reduction or savings is proved.",
+    "The device-auth adapter stays uninjected, and the disable script was never run.",
+    "The activation review is prepared, not performed; its owner decisions remain open.",
+    "No signed-in desktop or mobile acceptance, browser matrix, fleet or rolling-overlap proof.",
+    "No private account details, DOM, images, provider identifiers or private URLs are copied here."
+  ]
+}
