@@ -215,7 +215,7 @@ export function DailyPulse({
       ) : gamesRes.error ? (
         <DailyPulseStatus failed onRetry={loadPulse} />
       ) : selector.failed ? (
-        <DailyPulseStatus failed onRetry={selector.retry} />
+        <DailyPulseStatus failed onRetry={selector.retry} reload={selector.reloadNeeded} />
       ) : !selection ? (
         <DailyPulseStatus />
       ) : selection.cards.length > 0 ? (
@@ -236,15 +236,22 @@ let loadedSelector: SelectDailyPulse | null = null;
 
 /**
  * Daily Pulse's card selection, loaded once the history is asked for. It is most of Daily Pulse's code and only runs on
- * a loaded history, so it stays out of the dashboard's first-load JavaScript and loads while the history does.
+ * a loaded history, so it stays out of the dashboard's first-load JavaScript and loads while the history does. Each
+ * attempt clears an earlier failure; when Try again fails too, the chunk is likely gone (a deploy), so only a reload helps.
  */
-function usePulseSelector(needed: boolean): { select: SelectDailyPulse | null; failed: boolean; retry: () => void } {
+function usePulseSelector(needed: boolean): {
+  select: SelectDailyPulse | null;
+  failed: boolean;
+  reloadNeeded: boolean;
+  retry: () => void;
+} {
   const [select, setSelect] = useState<SelectDailyPulse | null>(() => loadedSelector);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!needed || select) return;
     let live = true;
+    setFailed(false);
     import("@/lib/dailyPulse").then(
       (module) => {
         loadedSelector = module.selectDailyPulse;
@@ -258,11 +265,8 @@ function usePulseSelector(needed: boolean): { select: SelectDailyPulse | null; f
       live = false;
     };
   }, [needed, select, attempt]);
-  const retry = useCallback(() => {
-    setFailed(false);
-    setAttempt((value) => value + 1);
-  }, []);
-  return { select, failed, retry };
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  return { select, failed, reloadNeeded: failed && attempt > 0, retry };
 }
 
 function DailyPulseFrame({
@@ -361,22 +365,25 @@ function DailyPulseGate({ onLoad }: { onLoad: () => void }) {
 function DailyPulseStatus({
   failed = false,
   onRetry,
+  reload = false,
 }: {
   failed?: boolean;
   onRetry?: () => void;
+  /** Try again already failed: offer a reload instead. */
+  reload?: boolean;
 }) {
   if (failed) {
     return (
       <div className="flex min-h-[44px] flex-wrap items-center justify-between gap-3 px-1 py-1">
         <span className="text-xs text-text-dim">
-          Replay insights couldn’t load
+          {reload ? "Replay insights couldn’t load. Reload the page to try again." : "Replay insights couldn’t load"}
         </span>
         <button
           type="button"
-          onClick={onRetry}
+          onClick={reload ? () => window.location.reload() : onRetry}
           className="inline-flex min-h-11 items-center justify-center rounded-full border border-line bg-bg-surface px-3 text-micro font-semibold text-accent transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          Try again
+          {reload ? "Reload page" : "Try again"}
         </button>
       </div>
     );

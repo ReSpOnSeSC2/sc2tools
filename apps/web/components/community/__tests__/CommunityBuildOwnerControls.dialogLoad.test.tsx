@@ -4,6 +4,7 @@ import { CommunityBuildOwnerControls } from "../CommunityBuildOwnerControls";
 
 const harness = vi.hoisted(() => ({
   dialogLoads: 0,
+  owned: [] as Array<{ slug: string; sourceSlug: string }>,
   apiCall: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
@@ -25,7 +26,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/clientApi", () => ({
   apiCall: harness.apiCall,
-  useApi: () => ({ data: { items: [{ slug: "blink-pressure", sourceSlug: "private-blink" }] } }),
+  useApi: () => ({ data: { items: harness.owned } }),
 }));
 
 vi.mock("@/components/ui/Toast", () => ({
@@ -35,17 +36,28 @@ vi.mock("@/components/ui/Toast", () => ({
 afterEach(() => cleanup());
 
 describe("CommunityBuildOwnerControls' removal dialog, loaded on demand", () => {
-  test("starts loading once an owner's controls show, and says so when it cannot open", async () => {
+  test("is never loaded for someone else's build", async () => {
+    harness.owned = [];
+    const { container } = render(<CommunityBuildOwnerControls slug="blink-pressure" title="Blink Pressure" />);
+    expect(container.innerHTML).toBe("");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(harness.dialogLoads).toBe(0);
+  });
+
+  test("starts loading once an owner's controls show, and says so each time it cannot open", async () => {
+    harness.owned = [{ slug: "blink-pressure", sourceSlug: "private-blink" }];
     render(<CommunityBuildOwnerControls slug="blink-pressure" title="Blink Pressure" />);
     // Loaded before Remove is chosen, so the dialog is usually ready by then.
     await waitFor(() => expect(harness.dialogLoads).toBeGreaterThan(0));
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove from Community" }));
-    await waitFor(() =>
-      expect(harness.error).toHaveBeenCalledWith("Couldn’t open the removal dialog", {
-        description: "Reload the page and try again.",
-      }),
-    );
+    const remove = screen.getByRole("button", { name: "Remove from Community" });
+    fireEvent.click(remove);
+    await waitFor(() => expect(harness.error).toHaveBeenCalledTimes(1));
+    expect(harness.error).toHaveBeenCalledWith("Couldn’t open the removal dialog", {
+      description: "Reload the page and try again.",
+    });
+    fireEvent.click(remove);
+    await waitFor(() => expect(harness.error).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(harness.apiCall).not.toHaveBeenCalled();
   });

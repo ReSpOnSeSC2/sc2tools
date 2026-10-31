@@ -58,7 +58,8 @@ export function CommunityBuildOwnerControls({
   const { toast } = useToast();
   const { data: ownerStats } = useOwnerBuilds();
   const [step, setStep] = useState<ConfirmationStep>("closed");
-  // Mounted on first open and kept, so the dialog opens and closes (and returns focus) as one Modal.
+  // Mounted (closed) once its code arrives, or on first open, and kept, so the dialog opens and closes (and returns
+  // focus) as one Modal.
   const [dialogMounted, setDialogMounted] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -94,9 +95,20 @@ export function CommunityBuildOwnerControls({
   // a stable identity key back into the public response.
   const owned = ownerStats?.items?.find((row) => row.slug === slug);
   const isOwner = Boolean(owned);
-  // An owner sees these controls before choosing Remove, so the dialog is usually ready by then.
+  // An owner sees these controls before choosing Remove, so the dialog loads and mounts, closed, by then. The lazy
+  // component's one-time suspension happens here rather than on the click, so the first Remove opens at once.
   useEffect(() => {
-    if (isOwner) void loadRemoveDialog().catch(() => undefined);
+    if (!isOwner) return;
+    let live = true;
+    loadRemoveDialog().then(
+      () => {
+        if (live) setDialogMounted(true);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
   }, [isOwner]);
   if (!owned) return null;
 
