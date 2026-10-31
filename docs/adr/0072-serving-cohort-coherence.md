@@ -6,11 +6,11 @@ no receipt and activates nothing. `USER_CACHE_ENABLED` stays off and
 faster-dashboards remains partial.
 
 Source paths are relative to `apps/api/src/` unless they start with `apps/` or
-`docs/`. Line numbers were checked at slice C5's tested source (`04072fc0`).
+`docs/`. Line numbers were checked at slice C5's tested source (`c7b5ef93`).
 The ADR was added at application source `27b9aeb0`. C1 through C4 changed the
 cited allowlist lines in place and edited route and service lines without
 changing line counts (C4's route and curve helpers follow the cited lines), and DA2
-added lease lines after the cited ones, so every citation still resolves. DA3 adds only tests. DA4 inserts the disable method above the writer helper, whose citations now read 224-228. G1 appends its hooks to cited cache and server lines without changing line counts. C5 widens the cited allowlist, capability and writer-set lines in place and adds route and service lines only after the cited ones.
+added lease lines after the cited ones, so every citation still resolves. DA3 adds only tests. DA4 inserts the disable method above the writer helper, whose citations now read 224-228. G1 appends its hooks to cited cache and server lines without changing line counts. C5 widens the cited allowlist, capability and writer-set lines in place and adds route and service lines only after the cited ones; its review fix changes the cited restore and erasure lines in place and appends the fence helper after every cited line.
 
 ## Context
 
@@ -139,7 +139,7 @@ process during an overlap stays authorized on the new process until it restarts.
 
 | | Guarantee | Today | Evidence |
 | --- | --- | --- | --- |
-| G1 | Every writer of a covered input invalidates retained bodies | Met only inside one flag-on process running the current writer set. Unmet for flag-off processes, older writer sets during an overlap, out-of-band migrations, manual edits and raw restores | In-process writers call `gameWrite` (`util/userRevision.js:163`; `docs/engineeringexplanation.md:408-412`), every opponents-collection writer included, which an exact inventory test enforces (`apps/api/__tests__/opponentsWriterFence.test.js:21-25`); flag-off processes skip revision work (`util/userRevision.js:55,102`); `db/migrations/2026-09-30-rename-8-pool-builds.js:50,115-119` rewrites build and strategy labels with a plain `updateMany` |
+| G1 | Every writer of a covered input invalidates retained bodies | Met only inside one flag-on process running the current writer set. Unmet for flag-off processes, older writer sets during an overlap, out-of-band migrations, manual edits and raw restores | In-process writers call `gameWrite` (`util/userRevision.js:163`; `docs/engineeringexplanation.md:408-412`), every opponents-collection writer included, snapshot restore's and account erasure's collection loops through the shared chart-input fence (`services/userBackups.js:273`; `services/gdpr.js:452,1599-1602`), which exact inventory tests enforce (`apps/api/__tests__/opponentsWriterFence.test.js:21-25,53-79`); flag-off processes skip revision work (`util/userRevision.js:55,102`); `db/migrations/2026-09-30-rename-8-pool-builds.js:50,115-119` rewrites build and strategy labels with a plain `updateMany` |
 | G2 | Revision uncertainty is visible across the fleet | Unmet | A failed, unknown or skipped bump marks only the local owner dirty (`util/userRevision.js:69,86-88`) |
 | G3 | In-flight writes are visible across processes | Unmet | The bump runs after the semantic write and outside its transaction (`util/userRevision.js:61-85`); until a peer reads it, the peer can serve or 304 the prior body |
 | G4 | Staleness has a time bound | Met per process | Entries leave the cache 600 s after they are stored (`middleware/userCache.js:11,123,222-223,269`), and curve-dependent entries with their proof (`:268-270`). A body's data can be older by the computation's duration and the age of an adopted join: under 30 s per join, and under 60 s when an adopted chart join itself adopted the shared `dateRange` probe. Chart pipelines set no deadline beyond the 30-second Mongo socket timeout per round trip (`db/connect.js:103`; `config/constants.js:288`). This is the only bound on the G1 and G2 gaps, and on G3 when the bump fails |
@@ -210,7 +210,7 @@ keep the original read (matchup time series, slice C4).
    owner, deletion and exclusion clauses stay; those fields' writers are fenced
    (`services/perGameCompute.js:498`;
    `apps/api/__tests__/userCacheStreakMacro.mongo.test.js:42-70`). There is no
-   `$lookup`, `$unionWith` or other collection, with one exception: the opponent-MMR pair's `$lookup` reads only the owner's own `opponents` rows, by `userId` and `pulseId` equality (`services/trendsOppMmr.js:261-284`), and every in-process writer of that collection is fenced and inventoried (slice C5; `apps/api/__tests__/opponentsWriterFence.test.js:21-25`). A captured proof's memo read
+   `$lookup`, `$unionWith` or other collection, with one exception: the opponent-MMR pair's `$lookup` reads only the owner's own `opponents` rows, by `userId` and `pulseId` equality (`services/trendsOppMmr.js:261-284`), and every in-process writer of that collection is fenced and inventoried, snapshot restore's and account erasure's collection loops included (slice C5; `apps/api/__tests__/opponentsWriterFence.test.js:21-25,53-79`; `apps/api/__tests__/userCacheOppMmr.mongo.test.js:84-103`). A captured proof's memo read
    happens before the key is formed (`middleware/userCache.js:115,274-278`), so
    it is not a read in the computation.
 2. **Fenced writers.** Every field it reads, filter fields included, is written

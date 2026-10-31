@@ -77,3 +77,27 @@ test.each(PATHS)("%s retains owner bodies, every fenced opponents write retires 
     previous = fresh;
   }
 });
+
+// Restore and erasure write opponents through their collection-list loops' dynamic handles. Each write must run inside
+// the owner's fence, and the owner's dataRev must move before the next list key (opponentNotes) is touched. Erasure runs
+// last because it records the owner's identity as deleted.
+test.each([
+  ["snapshot restore", async () => { const saved = await services.gdpr.snapshot("a"); return () => services.gdpr.restoreSnapshot("a", saved.id); }],
+  ["account erasure", async () => () => services.gdpr.deleteAll("a")],
+])("%s writes the owner's opponents rows inside the owner's fence and bumps the owner's dataRev", async (name, prepare) => {
+  const operation = await prepare(), writes = [], dataRev = async () => (await db.users.findOne({ userId: "a" })).dataRev;
+  let next = null;
+  for (const method of ["deleteMany", "insertMany"]) {
+    const original = db.opponents[method].bind(db.opponents);
+    jest.spyOn(db.opponents, method).mockImplementation(async (...args) => {
+      writes.push({ method, active: services.userRevision.owners.get("a")?.active ?? 0, dataRev: await dataRev() });
+      return original(...args);
+    });
+  }
+  const notes = db.opponentNotes.deleteMany.bind(db.opponentNotes);
+  jest.spyOn(db.opponentNotes, "deleteMany").mockImplementation(async (...args) => { next ??= await dataRev(); return notes(...args); });
+  try { await operation(); } finally { jest.restoreAllMocks(); }
+  expect([name, writes.map(write => write.method)]).toEqual([name, name === "snapshot restore" ? ["deleteMany", "insertMany"] : ["deleteMany"]]);
+  expect([name, writes.filter(write => write.active < 1)]).toEqual([name, []]);
+  expect([name, next > writes[0].dataRev]).toEqual([name, true]);
+});

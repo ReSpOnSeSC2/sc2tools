@@ -77,5 +77,5 @@ test.each(ROUTES)("%s with the cache off passes no floor and answers plain JSON"
   const f = fixture(false);
   const response = await request(f.app).get(path);
   expect(response.status).toBe(200); expect(response.headers["cache-control"]).toBeUndefined();
-  expect(f.aggregations[kind].mock.calls[0][2]).toEqual(base);
+  expect(f.aggregations[kind].mock.calls[0][2]).toStrictEqual(base);
 });

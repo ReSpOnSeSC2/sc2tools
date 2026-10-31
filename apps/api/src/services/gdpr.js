@@ -449,7 +449,7 @@ class GdprService {
           return coll.deleteMany({ userId });
         }
         return this.gameStatsWrites.deleteMany(gdprFence.owner, { userId }, { fenceId: gdprFence.id, assert: gdprFence.assert });
-      }, () => true, true) : await coll.deleteMany({ userId });
+      }, () => true, true) : await gameWrite(chartInputFence(this.userRevision, key), userId, () => coll.deleteMany({ userId }));
       if (key === "deviceTokens" && res.acknowledged === false) throw new Error("device_credential_write_unacknowledged");
       counts[key] = res.deletedCount || 0;
     }
@@ -1596,9 +1596,15 @@ function exportedCoachingCalendar(calendar, userId) {
   return { role: "coach", calendar: exported };
 }
 
+/** Restore and erasure write whole per-user collections through dynamic handles. The owner's fence covers the ones a
+ * retained chart body reads (ADR 0072), so those bulk writes retire the owner's bodies.
+ * @param {import("../util/userRevision").UserRevision|null} revisions @param {string} key */
+function chartInputFence(revisions, key) { return key === "games" || key === "opponents" ? revisions : null; }
+
 module.exports = {
   GdprService,
   USER_SCOPED_COLLECTIONS,
   PURGE_ONLY_COLLECTIONS,
   GDPR_CLASSIFICATION,
+  chartInputFence,
 };
