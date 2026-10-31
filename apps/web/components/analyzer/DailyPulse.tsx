@@ -332,18 +332,24 @@ function DailyPulseGate({ onLoad }: { onLoad: () => void }) {
   );
 }
 
-/** What the footer leaves when its chunk cannot load: a failed update's Try again, and nothing otherwise. */
+/**
+ * What the footer leaves when its chunk cannot load: the update status and Refresh, or Try again after a failure. It
+ * stays mounted under the cards, so the button keeps focus through a retry.
+ */
 function FooterFallback({ games }: { games: AnalysisGamesResult; accountKey: string }) {
-  if (!games.error) return null;
+  const updating = games.syncedAt === null && !games.error;
   return (
     <p className="mt-2 flex flex-wrap items-center gap-x-3 border-t border-border px-1 pt-2 text-micro text-text-dim">
-      <span role="status">Couldn’t update</span>
+      <span role="status">{games.error ? "Couldn’t update" : updating ? "Updating…" : "Updated"}</span>
       <button
         type="button"
-        onClick={games.load}
-        className="inline-flex min-h-11 items-center rounded-full border border-line px-3 font-semibold text-accent transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        onClick={() => {
+          if (!updating) games.load();
+        }}
+        aria-disabled={updating}
+        className="inline-flex min-h-11 items-center rounded-full border border-line px-3 font-semibold text-accent transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
       >
-        Try again
+        {games.error ? "Try again" : "Refresh"}
       </button>
     </p>
   );

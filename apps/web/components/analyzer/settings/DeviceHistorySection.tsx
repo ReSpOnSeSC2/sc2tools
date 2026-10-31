@@ -120,7 +120,7 @@ function rowText(row: Row): string {
     case "stored":
       return `Games stored on this device: ${row.count.toLocaleString()} (${sizeText(row.bytes)})`;
     case "kept":
-      return "Your history is set to be kept here, but no games are stored. Accounts with more than 20,000 games aren’t kept.";
+      return "Your history is set to be kept here, but no games are stored. That happens for accounts with more than 20,000 games, or when this browser is short of space.";
     case "none":
       return "No games are stored on this device.";
     case "blocked":

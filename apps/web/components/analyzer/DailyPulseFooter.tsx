@@ -15,7 +15,8 @@ const PILL =
  * The line under the Daily Pulse cards: when the history on screen last updated, how many games it holds and whether
  * they are kept on this device, with Refresh. For an account this browser does not keep (after Clear, Delete history
  * or a restore, or for anyone who opened Daily Pulse before it could keep history), it offers to keep it here, and it
- * says when keeping it failed. DailyPulse loads it on demand, so none of it is in the dashboard's first-load JavaScript.
+ * says when this browser could not store it. DailyPulse loads it on demand, so none of it is in the dashboard's
+ * first-load JavaScript.
  *
  * Example:
  *   <DailyPulseFooter games={useAnalysisGames()} accountKey={userId} />
@@ -24,11 +25,13 @@ export function DailyPulseFooter({ games, accountKey }: { games: AnalysisGamesRe
   const note = useSyncExternalStore(subscribeToStorage, deviceNote, () => null);
   const now = useMinuteClock();
   const status = useRef<HTMLSpanElement>(null);
+  const [keepAsked, setKeepAsked] = useState(false);
   const kept = note === accountKey;
   const canStore = note !== undefined && Boolean(defaultIndexedDb());
   const updating = games.syncedAt === null && !games.error;
   const count = games.items.length;
   const offerKeep = !updating && !games.error && !kept && canStore && !games.hitCorpusLimit;
+  const keptHere = !updating && !games.error && games.onDevice && kept;
   const countText = games.hitCorpusLimit
     ? `Latest ${ANALYSIS_GAMES_CORPUS_MAX.toLocaleString()} games`
     : `${count.toLocaleString()} ${count === 1 ? "game" : "games"}${games.onDevice && kept ? " on this device" : ""}`;
@@ -36,14 +39,18 @@ export function DailyPulseFooter({ games, accountKey }: { games: AnalysisGamesRe
     ? `Too many games to keep on this device (over ${ANALYSIS_GAMES_CORPUS_MAX.toLocaleString()}), so they load each visit.`
     : !canStore
       ? "This browser isn’t letting us store data, so your history loads each visit."
-      : offerKeep && games.keepFailed
-        ? "Couldn’t keep your history in this browser, so it loads each visit."
+      : games.keepFailed
+        ? "Couldn’t store your history in this browser this time."
         : null;
+  // One region that stays mounted, so screen readers hear what a keep came to: why nothing is kept here, or, after
+  // Keep, that it worked (the count already says so on screen).
+  const announcement = explanation ?? (keepAsked && keptHere ? "Your history is kept on this device." : null);
   // Refresh stays focusable while an update runs, and Keep hands focus to the status it changes.
   const refresh = () => {
     if (!updating) games.load();
   };
   const keep = () => {
+    setKeepAsked(true);
     games.keepOnDevice();
     status.current?.focus();
   };
@@ -71,7 +78,9 @@ export function DailyPulseFooter({ games, accountKey }: { games: AnalysisGamesRe
           Keep on this device
         </button>
       ) : null}
-      {explanation ? <p className="basis-full">{explanation}</p> : null}
+      <p aria-live="polite" className={explanation ? "basis-full" : "sr-only"}>
+        {announcement}
+      </p>
     </div>
   );
 }

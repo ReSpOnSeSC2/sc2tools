@@ -1,11 +1,12 @@
 /**
  * Test helper: load LazyHelpLink's HelpLink chunk before rendering a page that shows several of them at once.
  *
- * React 19.0 retries each suspended boundary on one of four rotating retry lanes. Settings > Backups & data suspends
- * four boundaries on the first render (three help links and the HiddenGames chunk), so the retries keep landing on
- * lanes that are still pending and React never marks them suspended. Inside a synchronous render() the chunk cannot
- * finish loading, so act() re-renders forever. In a browser the loop ends when the chunk arrives. Once loaded, the
- * links render without suspending.
+ * Tests run react-dom 19.0.0, which retries each suspended boundary on one of four rotating retry lanes. Settings >
+ * Backups & data suspends several help links around its first render, so the retries keep landing on lanes that are
+ * still pending and are never marked suspended. Inside a synchronous render() the chunk cannot finish loading, so act()
+ * re-renders forever. Production runs Next's own React build (a 19.2 canary); measured outside act() while a lazy chunk
+ * loaded, it committed three to five times in 1.6 seconds and did not cycle. Once loaded, the links render without
+ * suspending.
  *
  * Example:
  *   beforeAll(loadLazyHelpLink, 20_000);

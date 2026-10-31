@@ -30,6 +30,8 @@ function footer(result: AnalysisGamesResult) {
 }
 
 const keepButton = () => screen.queryByRole("button", { name: "Keep on this device" });
+// The region screen readers hear when a keep's outcome changes; it stays mounted.
+const outcome = () => document.querySelector<HTMLElement>('[aria-live="polite"]');
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
@@ -93,11 +95,41 @@ describe("DailyPulseFooter", () => {
   it("says when keeping the history failed, and offers to try again", () => {
     const result = games({ keepFailed: true });
     footer(result);
-    expect(screen.getByText("Couldn’t keep your history in this browser, so it loads each visit.")).toBeTruthy();
+    expect(outcome()?.textContent).toBe("Couldn’t store your history in this browser this time.");
     fireEvent.click(keepButton()!);
     expect(result.keepOnDevice).toHaveBeenCalledTimes(1);
     // Keep goes away while it works; focus moves to the status it changes.
     expect(document.activeElement).toBe(screen.getByRole("status"));
+  });
+
+  it("says when this browser could not store a kept account's copy, without offering Keep", () => {
+    noteDeviceCopy("user-a");
+    footer(games({ keepFailed: true }));
+    expect(outcome()?.textContent).toBe("Couldn’t store your history in this browser this time.");
+    expect(keepButton()).toBeNull();
+  });
+
+  it("tells screen readers when a keep worked", () => {
+    noteDeviceCopy("user-b");
+    const view = footer(games());
+    expect(outcome()?.textContent).toBe("");
+    fireEvent.click(keepButton()!);
+
+    view.rerender(<DailyPulseFooter games={games({ syncedAt: null })} accountKey="user-a" />);
+    expect(outcome()?.textContent).toBe("");
+    act(() => {
+      noteDeviceCopy("user-a");
+      window.dispatchEvent(new StorageEvent("storage"));
+    });
+    view.rerender(<DailyPulseFooter games={games({ onDevice: true, syncedAt: NOW })} accountKey="user-a" />);
+    expect(outcome()?.textContent).toBe("Your history is kept on this device.");
+    expect(screen.getByText("3 games on this device")).toBeTruthy();
+  });
+
+  it("does not repeat that the history is kept on an ordinary visit", () => {
+    noteDeviceCopy("user-a");
+    footer(games({ onDevice: true }));
+    expect(outcome()?.textContent).toBe("");
   });
 
   it("keeps the games on screen after a failed update and offers Try again", () => {
@@ -128,7 +160,7 @@ describe("DailyPulseFooter", () => {
   it("explains why history isn't kept here: too many games, or a browser that refuses storage", () => {
     const view = footer(games({ hitCorpusLimit: true }));
     expect(screen.getByText("Latest 20,000 games")).toBeTruthy();
-    expect(screen.getByText("Too many games to keep on this device (over 20,000), so they load each visit.")).toBeTruthy();
+    expect(outcome()?.textContent).toBe("Too many games to keep on this device (over 20,000), so they load each visit.");
     expect(keepButton()).toBeNull();
     view.unmount();
 

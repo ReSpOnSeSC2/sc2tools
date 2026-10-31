@@ -137,7 +137,7 @@ describe("DeviceHistorySection", () => {
     const db = await openDeviceCorpus(factory, { create: false });
     await resetDeviceCorpus(db!, "user-a");
     const view = section();
-    await waitFor(() => expect(row().textContent).toBe("Your history is set to be kept here, but no games are stored. Accounts with more than 20,000 games aren’t kept."));
+    await waitFor(() => expect(row().textContent).toBe("Your history is set to be kept here, but no games are stored. That happens for accounts with more than 20,000 games, or when this browser is short of space."));
     expect(clearButton()).toBeTruthy();
     view.unmount();
 

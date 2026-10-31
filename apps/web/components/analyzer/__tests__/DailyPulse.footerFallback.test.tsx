@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { DailyPulse } from "../DailyPulse";
 
 let analysisError: { status: number; message: string } | null = null;
+let analysisSyncedAt: number | null = null;
 const loadAnalysis = vi.fn();
 const GAMES = ["2026-07-17T18:00:00Z", "2026-07-17T19:00:00Z", "2026-07-17T20:00:00Z"].map((date, index) => ({
   gameId: `g${index}`,
@@ -30,7 +31,7 @@ vi.mock("@/components/analyzer/arcade/hooks/useAnalysisGames", () => ({
     pagesFetched: 1,
     hitCorpusLimit: false,
     onDevice: false,
-    syncedAt: null,
+    syncedAt: analysisSyncedAt,
     keepFailed: false,
     isActive: true,
     load: loadAnalysis,
@@ -46,19 +47,31 @@ vi.mock("@/components/analyzer/arcade/hooks/useDailySeed", () => ({
 afterEach(cleanup);
 
 describe("DailyPulse without its footer chunk", () => {
-  it("still offers Try again after a failed update, and nothing otherwise", async () => {
+  it("still offers Try again after a failed update, keeping focus on it through the retry", async () => {
     analysisError = { status: 503, message: "Busy" };
     const view = render(<DailyPulse />);
     expect(screen.getByText("You banked a winning session")).toBeTruthy();
-    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
-    expect(loadAnalysis).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Couldn’t update")).toBeTruthy();
+    const retry = await screen.findByRole("button", { name: "Try again" });
+    expect(screen.getByRole("status").textContent).toBe("Couldn’t update");
     expect(screen.queryByText("Replay insights couldn’t load")).toBeNull();
+    retry.focus();
+    fireEvent.click(retry);
+    expect(loadAnalysis).toHaveBeenCalledTimes(1);
 
+    // The retry runs: the same button stays, held, with focus.
     analysisError = null;
     view.rerender(<DailyPulse />);
+    expect(screen.getByRole("status").textContent).toBe("Updating…");
+    const refresh = screen.getByRole("button", { name: "Refresh" });
+    expect(refresh).toBe(retry);
+    expect(refresh.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(refresh);
+    fireEvent.click(refresh);
+    expect(loadAnalysis).toHaveBeenCalledTimes(1);
+
+    analysisSyncedAt = Date.now();
+    view.rerender(<DailyPulse />);
+    expect(screen.getByRole("status").textContent).toBe("Updated");
     expect(screen.getByText("You banked a winning session")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
-    expect(screen.queryByText("Couldn’t update")).toBeNull();
   });
 });

@@ -558,6 +558,45 @@ describe("AnalysisGamesProvider device copy", () => {
     expect(result.current.keepFailed).toBe(true);
   });
 
+  it("says when this account's copy could not be stored, on the keep and on each later load until it can be", async () => {
+    serve(() => null);
+    // The browser is out of space for the rows; the small reset record still fits.
+    deviceGate.holdSave = () => Promise.reject(new DOMException("full", "QuotaExceededError"));
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.keepOnDevice());
+    await waitFor(() => expect(result.current.syncedAt).not.toBeNull());
+    expect(result.current.items).toHaveLength(3);
+    expect(result.current.onDevice).toBe(false);
+    expect(result.current.keepFailed).toBe(true);
+    expect(await deviceCopy("user-a")).toBe("kept");
+
+    act(() => result.current.load());
+    await waitFor(() => expect(result.current.syncedAt).not.toBeNull());
+    expect(result.current.keepFailed).toBe(true);
+
+    deviceGate.holdSave = null;
+    act(() => result.current.load());
+    await waitFor(() => expect(result.current.onDevice).toBe(true));
+    expect(result.current.keepFailed).toBe(false);
+  });
+
+  it("does not count a keep over the 20,000-game limit as a failure", async () => {
+    // Every page says there is more, so the snapshot stops at its page limit: the corpus ceiling.
+    let page = 0;
+    harness.apiCall.mockImplementation(async (_getToken, path: string) => {
+      if (path.startsWith("/v1/games/analysis-corpus/changes")) return null;
+      page += 1;
+      const first = !new URL(path, "https://example.test").searchParams.get("cursor");
+      return { items: [game(`limit-${page}`)], nextCursor: `next-${page}`, ...(first ? MARKS : { corpusEpoch: EPOCH }) };
+    });
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.keepOnDevice());
+    await waitFor(() => expect(result.current.syncedAt).not.toBeNull());
+    expect(result.current.hitCorpusLimit).toBe(true);
+    expect(result.current.onDevice).toBe(false);
+    expect(result.current.keepFailed).toBe(false);
+  });
+
   it("keeps history for the account that loads next when asked before sign-in finished loading", async () => {
     serve(() => null);
     harness.isLoaded = false;

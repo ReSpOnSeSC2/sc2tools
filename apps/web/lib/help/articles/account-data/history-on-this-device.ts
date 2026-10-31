@@ -36,7 +36,7 @@ const article: HelpArticle = {
         "Your browser blocks site data, or a private window doesn't allow it.",
         "It was cleared here (Clear, Delete history or a restore), or you opened Daily Pulse before it could keep history. Choose **Keep on this device** under the cards.",
         "Your browser removed site data to free space. Choose **Keep on this device** under the cards to keep it again.",
-        "This browser couldn't store it. The line under the cards says so, and **Keep on this device** tries again.",
+        "This browser couldn't store it, for example when it's short of space. The line under the cards says so; the next visit tries again, or choose **Keep on this device** when it appears.",
       ],
     },
     { type: "heading", text: "See or clear it", anchor: "clear" },

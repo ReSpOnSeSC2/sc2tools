@@ -52,8 +52,9 @@ export type AnalysisGamesResult = {
    */
   syncedAt: number | null;
   /**
-   * True when the last finished load was asked to keep the history on this device and could not (storage refused or
-   * failed); the next load asks again.
+   * True when the last finished load should have left the history on this device and did not: a keep it was asked
+   * for could not start (storage refused or failed), or this account keeps its history here but its copy could not be
+   * stored (for example a full browser). Over the 20,000-game limit is not a failure. The next load tries again.
    */
   keepFailed: boolean;
   /** Whether a consumer has explicitly asked for the expensive corpus. */
@@ -379,7 +380,12 @@ export function AnalysisGamesProvider({
         }
         // One replacement assignment is the retention guarantee: old pages
         // and old flat arrays are not kept in an application-wide cache.
-        setState(syncedState(accountKey, synced, Date.now(), keepOnDevice && !synced.kept));
+        setState(syncedState(
+          accountKey,
+          synced,
+          Date.now(),
+          (keepOnDevice || synced.kept) && !synced.onDevice && !synced.hitCorpusLimit,
+        ));
       } catch (err) {
         if (cancelled || isAbortError(err)) return;
         setState((previous) => previous.accountKey === accountKey
