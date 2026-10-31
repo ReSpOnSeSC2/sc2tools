@@ -6,14 +6,18 @@ import {
   type CorpusMarks,
 } from "@/lib/analysisCorpus/changes";
 import {
-  deleteDeviceCorpus,
   mergeDeviceDelta,
   openDeviceCorpus,
   readDeviceCorpus,
   resetDeviceCorpus,
   saveDeviceSnapshot,
 } from "@/lib/analysisCorpus/deviceStore";
-import { mayHaveDeviceCopy, noteDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
+import {
+  deviceClearMark,
+  forgetDeviceCopy,
+  mayHaveDeviceCopy,
+  noteDeviceCopy,
+} from "@/lib/analysisCorpus/deviceNote";
 import { defaultIndexedDb } from "@/lib/instant/idb";
 import type { AnalysisApiGame, RawAnalysisSnapshot } from "./useAnalysisGames";
 
@@ -31,7 +35,8 @@ import type { AnalysisApiGame, RawAnalysisSnapshot } from "./useAnalysisGames";
  * a copy that can be neither replaced nor dropped goes with its database.
  * Device storage is best effort: when IndexedDB is missing, refused, slow or
  * full, the corpus still loads, in memory only. Nothing is written to the
- * device once the caller's run is cancelled.
+ * device once the caller's run is cancelled, or once anything cleared the copy
+ * (sign-out, another account, Delete history) after this sync started.
  */
 
 /** One full snapshot read, with its checked marks (null when the server sent none, or pages disagreed). */
@@ -51,6 +56,9 @@ export type CorpusSync = CorpusSnapshot & {
 };
 
 type StoredCorpus = CorpusSync & { marks: CorpusMarks };
+
+/** Throws before a device write once the run is cancelled or the copy was cleared after `mark` was read. */
+type WriteGuard = () => void;
 
 export type CorpusSyncInput = {
   accountKey: string;
@@ -75,31 +83,33 @@ export type CorpusSyncInput = {
  *     onSnapshot, signal, maxRows: 20_000, pageSize: 2000, maxPages: 10 });
  */
 export async function syncAnalysisCorpus(input: CorpusSyncInput): Promise<CorpusSync> {
+  const mark = deviceClearMark();
+  const current: WriteGuard = () => {
+    input.signal.throwIfAborted();
+    if (deviceClearMark() !== mark) throw new DOMException("The device copy was cleared", "AbortError");
+  };
   const device = await openDevice(input);
   // A copy that may be out of date, and that could not be dropped, is left on the device.
   let stale = false;
   try {
     if (device?.stored) {
       input.onStored(device.stored);
-      const updated = await applyChanges(device.db, device.stored, input);
+      const updated = await applyChanges(device.db, device.stored, input, current);
       if (updated) return updated;
-      input.signal.throwIfAborted();
+      current();
       stale = !(await dropCopy(device.db, input.accountKey));
     }
     const snapshot = checkedSnapshot(await input.readSnapshot());
     if (!device) return { ...snapshot, onDevice: false, kept: false };
     input.onSnapshot(snapshot);
-    input.signal.throwIfAborted();
+    current();
     // The store replaces or drops whatever copy was there, so its outcome alone decides what is left.
-    const stored = await storeSnapshot(device.db, snapshot, input);
+    const stored = await storeSnapshot(device.db, snapshot, input, current);
     stale = stored === "stale";
     return { ...snapshot, onDevice: stored === "saved", kept: stored !== "stale" };
   } finally {
     device?.db.close();
-    if (stale) {
-      deleteDeviceCorpus(defaultIndexedDb());
-      noteDeviceCopy(null);
-    }
+    if (stale) forgetDeviceCopy(defaultIndexedDb());
   }
 }
 
@@ -141,6 +151,7 @@ async function applyChanges(
   db: IDBDatabase,
   stored: StoredCorpus,
   input: CorpusSyncInput,
+  current: WriteGuard,
 ): Promise<CorpusSync | null> {
   const delta = await readCorpusChanges<AnalysisApiGame>(input.fetchPage, stored.marks, {
     limit: input.pageSize,
@@ -149,7 +160,7 @@ async function applyChanges(
   if (!delta) return null;
   const items = mergeCorpusChanges(stored.items, delta.changes);
   if (items.length > input.maxRows) return null;
-  input.signal.throwIfAborted();
+  current();
   // Best effort: when another tab moved the copy first, or the write fails, this tab still shows its merged corpus.
   await mergeDeviceDelta(db, input.accountKey, stored.marks, delta.changes, delta.marks, input.maxRows)
     .catch(() => false);
@@ -161,13 +172,14 @@ async function storeSnapshot(
   db: IDBDatabase,
   snapshot: CorpusSnapshot,
   input: CorpusSyncInput,
+  current: WriteGuard,
 ): Promise<"saved" | "dropped" | "stale"> {
   // Past the ceiling, or without marks (a server from before changed-since reads, or pages from two epochs), a copy
   // could not be brought up to date exactly. A save that fails (storage full) rolls back to the copy it replaced.
   const saved = !snapshot.hitCorpusLimit && snapshot.marks !== null
     && await saveDeviceSnapshot(db, input.accountKey, snapshot.items, snapshot.marks, input.maxRows)
       .then(() => true, () => false);
-  if (!saved) input.signal.throwIfAborted();
+  if (!saved) current();
   const outcome = saved ? "saved" : (await dropCopy(db, input.accountKey)) ? "dropped" : "stale";
   // The device now records this account's choice, with or without a usable copy. A choice this browser cannot note
   // would never be found again, so that copy goes rather than stay orphaned.

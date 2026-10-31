@@ -6,6 +6,9 @@ import { ToastProvider } from "@/components/ui/Toast";
 const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
 const mutateMock = vi.fn(async () => undefined);
+const forgetDeviceCopy = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/analysisCorpus/deviceNote", () => ({ forgetDeviceCopy }));
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: async () => "test-token", isLoaded: true, isSignedIn: true }),
@@ -22,6 +25,7 @@ afterEach(() => {
   useApiMock.mockReset();
   apiCallMock.mockReset();
   mutateMock.mockClear();
+  forgetDeviceCopy.mockClear();
 });
 
 const SNAPSHOT = {
@@ -83,6 +87,8 @@ describe("SettingsBackups restore", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Restore" }));
     await waitFor(() => expect(screen.getByText("Restored 3,402 games")).toBeTruthy());
+    // The restored history replaces any copy kept on this device.
+    expect(forgetDeviceCopy).toHaveBeenCalledTimes(1);
     expect(apiCallMock).toHaveBeenCalledWith(
       expect.any(Function),
       `/v1/me/backups/${SNAPSHOT.id}/restore`,
@@ -107,6 +113,31 @@ describe("SettingsBackups game history", () => {
     expect(JSON.parse(apiCallMock.mock.calls[0][2].body)).toEqual({ dryRun: true });
     fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), { target: { value: "DELETE" } });
     expect(screen.getByRole("button", { name: "Delete games" }).hasAttribute("disabled")).toBe(true);
+  });
+  it("clears game history kept on this device only after a wipe succeeds", async () => {
+    const wipe = (failure?: Error) => apiCallMock.mockImplementation(async (_token, _path: string, init: { body: string }) => {
+      if (JSON.parse(init.body).dryRun) return { dryRun: true, counts: { games: 5 } };
+      if (failure) throw failure;
+      return { deleted: true, counts: { games: 5, opponents: 0, macroJobs: 0 } };
+    });
+    const confirm = async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Delete all games" }));
+      await screen.findByText(/This deletes all 5 games/);
+      fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), { target: { value: "DELETE" } });
+      fireEvent.click(screen.getByRole("button", { name: "Delete games" }));
+    };
+    wipe(Object.assign(new Error("Server busy"), { message: "Server busy" }));
+    renderBackups([]);
+    await confirm();
+    await screen.findByText("Couldn't wipe game history");
+    expect(forgetDeviceCopy).not.toHaveBeenCalled();
+    cleanup();
+
+    wipe();
+    renderBackups([]);
+    await confirm();
+    await screen.findByText("Deleted 5 games");
+    expect(forgetDeviceCopy).toHaveBeenCalledTimes(1);
   });
 });
 

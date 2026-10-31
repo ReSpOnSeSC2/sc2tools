@@ -1,7 +1,7 @@
 import { IDBDatabase as FakeIDBDatabase, IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { idbTransactionOn } from "@/lib/instant/idb";
-import { mayHaveDeviceCopy, noteDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
+import { forgetDeviceCopy, mayHaveDeviceCopy, noteDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
 import {
   openDeviceCorpus,
   readDeviceCorpus,
@@ -306,6 +306,38 @@ describe("syncAnalysisCorpus", () => {
     const synced = await syncAnalysisCorpus(input(null, { rows: ["s1"] }, { keepOnDevice: true }));
     expect([synced.onDevice, synced.kept]).toEqual([false, false]);
     vi.restoreAllMocks();
+    for (let tries = 0; tries < 50 && (await factory.databases()).length > 0; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(await factory.databases()).toEqual([]);
+  });
+
+  it("writes nothing once the copy is cleared during a changes read", async () => {
+    await keep(["a", "b"]);
+    noteDeviceCopy("user-a");
+    const sync = input(null);
+    sync.fetchPage.mockImplementation(async () => {
+      // Another tab signs out, or Delete history succeeds, while this read is in flight.
+      forgetDeviceCopy(factory);
+      return { items: [{ gameId: "b", removed: true }], nextCursor: null, ...NEXT };
+    });
+    await expect(syncAnalysisCorpus(sync)).rejects.toMatchObject({ name: "AbortError" });
+    expect(mayHaveDeviceCopy("user-a")).toBe(false);
+    for (let tries = 0; tries < 50 && (await factory.databases()).length > 0; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(await factory.databases()).toEqual([]);
+  });
+
+  it("writes nothing once the copy is cleared while a snapshot loads", async () => {
+    const sync = input(null, { rows: ["s1"] }, { keepOnDevice: true });
+    const read = sync.readSnapshot.getMockImplementation()!;
+    sync.readSnapshot.mockImplementation(async () => {
+      forgetDeviceCopy(factory);
+      return read();
+    });
+    await expect(syncAnalysisCorpus(sync)).rejects.toMatchObject({ name: "AbortError" });
+    expect(mayHaveDeviceCopy("user-a")).toBe(false);
     for (let tries = 0; tries < 50 && (await factory.databases()).length > 0; tries += 1) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }

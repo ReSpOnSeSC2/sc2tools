@@ -4,7 +4,6 @@ import { idbTransactionOn } from "@/lib/instant/idb";
 import type { CorpusMarks } from "../changes";
 import {
   DEVICE_CORPUS_DB_NAME,
-  deleteDeviceCorpus,
   mergeDeviceDelta,
   openDeviceCorpus,
   readDeviceCorpus,
@@ -116,19 +115,6 @@ describe("device corpus storage", () => {
     await expect(mergeDeviceDelta(db, "user-a", MARKS, [game("a3")], NEXT, 3)).resolves.toBe(true);
     expect(await view(db, "user-a", 3)).toEqual({ marks: NEXT, rows: ["a1:Victory", "a2:Victory", "a3:Victory"] });
     db.close();
-  });
-
-  it("deletes the whole copy as a last resort, and does nothing without IndexedDB", async () => {
-    const factory = new IDBFactory();
-    const db = await stored(factory);
-    await saveDeviceSnapshot(db, "user-a", [game("a1")], MARKS, 10);
-    db.close();
-    expect(() => deleteDeviceCorpus(undefined)).not.toThrow();
-    deleteDeviceCorpus(factory);
-    for (let tries = 0; tries < 50 && (await factory.databases()).length > 0; tries += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    expect(await factory.databases()).toEqual([]);
   });
 
   it("lets exactly one of two merges from the same marks write", async () => {

@@ -9,6 +9,7 @@ import {
   Download,
   Trash2,
 } from "lucide-react";
+import { forgetDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
 import { apiCall, API_BASE, type ClientApiError } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
@@ -58,6 +59,8 @@ export function SettingsBackups() {
   }, [pendingWipe, rangeKey]);
 
   async function refreshHistory() {
+    // A wipe or restore leaves any game history kept on this device out of date; it goes, and the next load re-reads.
+    forgetDeviceCopy();
     try { await refresh((key) => {
       const path = Array.isArray(key) ? key.find((part) => typeof part === "string" && part.startsWith("/v1/")) : key;
       return typeof path === "string" && /^\/v1\/(?:me(?:\?|$|\/(?:doctor|backups|replay-archive-status))|games|opponents|timeseries|streak|matchups|builds|macro|maps|trends|strategies|dashboard)/.test(path);

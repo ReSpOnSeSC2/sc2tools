@@ -3,6 +3,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import AccountDeleteDialog from "../AccountDeleteDialog";
 
 const apiCall = vi.fn(), signOut = vi.fn(), mutate = vi.fn();
+const forgetDeviceCopy = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/analysisCorpus/deviceNote", () => ({ forgetDeviceCopy }));
 const state = { inventory: { data: { removed: { games: 12, devices: 2 }, anonymized: { reviewComments: 3 }, countedAt: "2026-10-23" } as unknown, error: null as unknown, mutate } };
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "session" }), useClerk: () => ({ signOut }) }));
 vi.mock("@/lib/clientApi", () => ({ apiCall: (...args: unknown[]) => apiCall(...args), useApi: () => state.inventory, API_BASE: "https://fixture.local" }));
@@ -36,6 +38,9 @@ describe("account erasure dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete account permanently" }));
     await waitFor(() => expect(signOut).toHaveBeenCalledWith({ redirectUrl: "/goodbye" }));
     expect(apiCall).toHaveBeenCalledWith(expect.any(Function), "/v1/me", { method: "DELETE" });
+    // The erased account's history left this device before sign-out.
+    expect(forgetDeviceCopy).toHaveBeenCalledTimes(1);
+    expect(forgetDeviceCopy.mock.invocationCallOrder[0]).toBeLessThan(signOut.mock.invocationCallOrder[0]);
   });
   it("blocks confirmation while inventory failed, with an explicit retry", () => {
     state.inventory.data = null; state.inventory.error = { status: 503 };
@@ -47,7 +52,7 @@ describe("account erasure dialog", () => {
   it("preserves DELETE and retries deletion after a purge error without signing out early", async () => {
     apiCall.mockRejectedValueOnce(new Error("offline")); open(); finalStep();
     fireEvent.click(screen.getByRole("button", { name: "Delete account permanently" }));
-    await screen.findByRole("alert"); expect(signOut).not.toHaveBeenCalled();
+    await screen.findByRole("alert"); expect(signOut).not.toHaveBeenCalled(); expect(forgetDeviceCopy).not.toHaveBeenCalled();
     expect(screen.getByLabelText<HTMLInputElement>("Type DELETE to confirm").value).toBe("DELETE");
     apiCall.mockResolvedValueOnce({ deleted: true }); signOut.mockResolvedValueOnce(undefined);
     fireEvent.click(screen.getByRole("button", { name: "Delete account permanently" }));

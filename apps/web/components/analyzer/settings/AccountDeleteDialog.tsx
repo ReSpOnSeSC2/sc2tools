@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth, useClerk } from "@clerk/nextjs";
+import { forgetDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -43,6 +44,8 @@ export default function AccountDeleteDialog({ onClose, onExport }: { onClose: ()
           if (error?.status !== 401 || error.code !== "account_deleted") throw failure;
         }
         setDeleted(true); dataDeleted = true;
+        // The erased account's history leaves this device too, even if signing out fails.
+        forgetDeviceCopy();
       }
       await signOut({ redirectUrl: "/goodbye" });
     } catch {

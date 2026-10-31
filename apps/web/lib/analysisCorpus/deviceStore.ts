@@ -17,8 +17,9 @@
  */
 import { idbTransactionOn } from "@/lib/instant/idb";
 import { isRemoval, type CorpusChange, type CorpusMarks, type CorpusRow } from "./changes";
+import { DEVICE_CORPUS_DB_NAME } from "./deviceKeys";
 
-export const DEVICE_CORPUS_DB_NAME = "sc2tools-analysis-corpus";
+export { DEVICE_CORPUS_DB_NAME };
 const DEVICE_CORPUS_DB_VERSION = 1;
 const DEVICE_CORPUS_SCHEMA = 1;
 /** A healthy open takes milliseconds; past this the corpus loads in memory rather than waiting on storage. */
@@ -174,22 +175,6 @@ export function resetDeviceCorpus(db: IDBDatabase, accountKey: string): Promise<
     accounts.clear();
     accounts.put(accountRecordFor(accountKey, null, 0));
   });
-}
-
-/**
- * Delete the whole device copy, the last resort when a copy can be neither replaced nor reset. Other tabs' connections
- * step aside on versionchange, and the request finishes once they have; nothing waits for it.
- *
- * Example:
- *   deleteDeviceCorpus(defaultIndexedDb());
- */
-export function deleteDeviceCorpus(factory: IDBFactory | undefined): void {
-  try {
-    const request = factory?.deleteDatabase(DEVICE_CORPUS_DB_NAME);
-    if (request) request.onerror = (event) => event.preventDefault();
-  } catch {
-    // Storage is refused for this document: there is nothing to delete.
-  }
 }
 
 /**
