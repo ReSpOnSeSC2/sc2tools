@@ -416,7 +416,7 @@ permit after invalidation. None of the twenty-three covered responses reads the 
 `isLadderMap`/`isLadderMapV` stamp, replay or playback storage markers, the
 opponent build-order write lease, moment receipts, reclassification staging
 markers or resumed-replay repair markers (the `isResumedFromReplay` quarantine
-flag is an input), so writes limited to those fields cannot change their inputs. The opponent-MMR pair also reads the owner's `opponents` rows, so every opponents-collection writer is fenced the same way; with the cache on, its trust floor moves once per UTC day so the floor can key the body, while the flag-off path keeps its continuous floor.
+flag is an input), so writes limited to those fields cannot change their inputs. The opponent-MMR pair also reads the owner's `opponents` rows, so every opponents-collection writer is fenced the same way, snapshot restore's and account erasure's collection loops included; with the cache on, its trust floor moves once per UTC day so the floor can key the body, while the flag-off path keeps its continuous floor.
 
 An existing user's absent `dataRev` seeds as zero; a guarded `$inc` creates it on
 the first semantic change. There is no revision upsert or automatic legacy-data
