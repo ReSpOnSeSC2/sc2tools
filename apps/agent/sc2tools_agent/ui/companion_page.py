@@ -2496,9 +2496,20 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self.refresh()
                 self.build_selectors.refresh()
 
+        def assistance_off_reason(self):
+            # Pairing is only known from a healthy snapshot, so connecting is reported first.
+            if self._closed:
+                return "closed"
+            if not self._snapshot_healthy:
+                return "connecting"
+            if not self._paired:
+                return "unpaired"
+            if not self._preferences["overlaysEnabled"]:
+                return "assistance_off"
+            return None
+
         def assistance_enabled(self):
-            return bool(not self._closed and self._paired and self._snapshot_healthy
-                        and self._preferences["overlaysEnabled"])
+            return self.assistance_off_reason() is None
 
         def dispatch_build_checkin(self, method, args=()):
             if not self._closed:

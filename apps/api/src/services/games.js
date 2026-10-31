@@ -2,7 +2,7 @@
 const { gameWrite } = require("../util/userRevision");
 const { gameStatsWritesFor, sessionArgs } = require("./gameStatsWrites");
 const { LIVE_GAME_MATCH, STATS_GAME_MATCH } = require("../util/gameVisibility");
-
+const { withUpdatedAt } = require("../util/corpusUpdatedAt");
 const crypto = require("crypto");
 const { sanitizePlaySignature } = require("../validation/playSignature");
 const { ObjectId } = require("mongodb");
@@ -484,7 +484,7 @@ class GamesService {
                 { "_opponentBuildOrderWriteLease.leaseUntil": { $exists: false } },
               ],
             },
-            update,
+            withUpdatedAt(update),
             ...sessionArgs(session),
           );
           if (updated.matchedCount > 0 || updated.upsertedCount > 0) return { result: updated, excluded: current?.excluded === true };
@@ -496,7 +496,7 @@ class GamesService {
           if (!existing) {
             const inserted = await this.db.games.updateOne(
               { userId, gameId: game.gameId },
-              update,
+              withUpdatedAt(update),
               { upsert: true, ...(session ? { session } : {}) },
             );
             return { result: inserted, excluded: false };
@@ -614,7 +614,7 @@ class GamesService {
           gameId: { $in: gameIds },
           isResumedFromReplay: { $ne: true },
         },
-        {
+        withUpdatedAt({
           $set: {
             isResumedFromReplay: true,
             _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
@@ -634,7 +634,7 @@ class GamesService {
             resumedReplayMmrRepairedAt: "",
             resumedReplayBoundaryRepairedAt: "",
           },
-        },
+        }),
         ...sessionArgs(session),
       );
 
@@ -2235,4 +2235,4 @@ function sanitizeTopLeakArray(value) {
   return out.length > 0 ? out : undefined;
 }
 
-module.exports = { GamesService };
+module.exports = { GamesService, ANALYSIS_GAME_PROJECTION, serializeAnalysisGame };

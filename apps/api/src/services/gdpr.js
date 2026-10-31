@@ -6,7 +6,7 @@ const { takeRepairLivenessIssuer } = require("./gdprRepairLiveness");
 
 // Only genuine opponents-repair claims below issue deny-only liveness handles.
 const repairLiveness = takeRepairLivenessIssuer();
-
+const { withCorpusRemoval } = require("../util/corpusUpdatedAt");
 const { randomUUID } = require("crypto");
 const { stampVersion } = require("../db/schemaVersioning");
 const { COLLECTIONS } = require("../config/constants");
@@ -441,7 +441,7 @@ class GdprService {
       if (!coll) continue;
       // Full erasure retires all owner snapshots, including already-empty
       // history; partial range wipes below still optimize known no-op deletes.
-      const res = key === "games" ? await this.communityMutation(userId, async () => {
+      const res = key === "games" ? await withCorpusRemoval(this.db, userId, () => this.communityMutation(userId, async () => {
         if (!gdprFence.owner) {
           // Already-missing-owner idempotent erasure is destructive only; it
           // creates no revision/owner and cannot ever qualify retained stats.
@@ -449,7 +449,7 @@ class GdprService {
           return coll.deleteMany({ userId });
         }
         return this.gameStatsWrites.deleteMany(gdprFence.owner, { userId }, { fenceId: gdprFence.id, assert: gdprFence.assert });
-      }, () => true, true) : await gameWrite(chartInputFence(this.userRevision, key), userId, () => coll.deleteMany({ userId }));
+      }, () => true, true)) : await gameWrite(chartInputFence(this.userRevision, key), userId, () => coll.deleteMany({ userId }));
       if (key === "deviceTokens" && res.acknowledged === false) throw new Error("device_credential_write_unacknowledged");
       counts[key] = res.deletedCount || 0;
     }
@@ -924,9 +924,9 @@ class GdprService {
 
     await gdprFence.assert();
     const statsOwner = await this.gameStatsWrites.forFence(userId, gdprFence);
-    const gamesRes = await this.communityMutation(userId, () => this.gameStatsWrites.deleteMany(statsOwner, gamesDeleteFilter, {
+    const gamesRes = await withCorpusRemoval(this.db, userId, () => this.communityMutation(userId, () => this.gameStatsWrites.deleteMany(statsOwner, gamesDeleteFilter, {
       fenceId: gdprFence.id, assert: gdprFence.assert,
-    }), value => (value.deletedCount || 0) > 0, true);
+    }), value => (value.deletedCount || 0) > 0, true));
     const guideSamplesDeleted = await this._deleteWipedGuideSamples(userId, guideGameIds);
     // Every example of the handle goes (not just the wiped range): the
     // nightly run re-picks examples from the surviving games.

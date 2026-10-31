@@ -32,6 +32,19 @@ HINT_UNSUPPORTED = "Your sc2tools server doesn't support build check-ins yet."
 HINT_READY = "Check-in choices are saved to your account. Scouting visibility is saved on this PC."
 HINT_SAVE_FAILED = "Couldn't save that change. Check your connection and try again."
 
+PREVIEW_CARD_OPEN = "Your current check-in is already open."
+PREVIEW_ASSISTANCE_OFF = "Turn on In-game assistance in Companion → Assistance to preview cards."
+PREVIEW_UNPAIRED = "Pair your agent on Dashboard to preview cards."
+PREVIEW_CONNECTING = "Companion is still connecting. Try the preview again in a moment."
+PREVIEW_UNAVAILABLE = "Card previews aren't available right now."
+PREVIEW_REFUSALS = {
+    "card_open": PREVIEW_CARD_OPEN,
+    "assistance_off": PREVIEW_ASSISTANCE_OFF,
+    "unpaired": PREVIEW_UNPAIRED,
+    "connecting": PREVIEW_CONNECTING,
+}
+"""Copy for each reason ``BuildCheckinHost.show_preview`` refuses; others get ``PREVIEW_UNAVAILABLE``."""
+
 INTRO = (
     "Game-screen prompts start off. Enable only the prompts you want. "
     "Tell sc2tools which build you were going for. A game where the plan "
@@ -45,7 +58,9 @@ RECHECK_MS = 4000
 
 class CheckinSettingsGroup(QtWidgets.QFrame):
     """The Settings card. ``controller()`` returns the bound controller
-    or ``None``; ``available`` is ``False`` under ``--no-live``."""
+    or ``None``; ``available`` is ``False`` under ``--no-live``.
+    ``on_preview(kind)`` returns ``None`` once a sample card is up, else
+    a refusal reason (``PREVIEW_REFUSALS``)."""
 
     def __init__(
         self,
@@ -55,7 +70,7 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         clock: Callable[[], float] = time.monotonic,
         parent: Optional[QtWidgets.QWidget] = None,
         on_help: Optional[Callable[[], None]] = None,
-        on_preview: Optional[Callable[[str], Any]] = None,
+        on_preview: Optional[Callable[[str], Optional[str]]] = None,
         on_reset_positions: Optional[Callable[[], None]] = None,
         on_open_queue: Optional[Callable[[], None]] = None,
     ) -> None:
@@ -166,8 +181,14 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         self._paint(None)
 
     def _preview(self, kind: str) -> None:
-        if self._on_preview is not None and self._on_preview(kind) is False:
-            self.preview_hint.setText("Your current check-in is already open.")
+        if self._on_preview is None:
+            return
+        refused = self._on_preview(kind)
+        self.preview_hint.setText(PREVIEW_REFUSALS.get(refused, PREVIEW_UNAVAILABLE) if refused else self._preview_note())
+
+    def _preview_note(self) -> str:
+        off = self._prefs is not None and not getattr(self._prefs, "enabled", False)
+        return "Check-ins are off; this is only a preview" if off else "Previews do not save a build or contact the server. Dragging remembers the card position."
 
     def _reset_positions(self) -> None:
         if self._on_reset_positions is not None:
@@ -239,8 +260,7 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
             "ready": HINT_READY,
         }[state]
         self.hint.setText(hint)
-        off = prefs is not None and not getattr(prefs, "enabled", False)
-        self.preview_hint.setText("Check-ins are off; this is only a preview" if off else "Previews do not save a build or contact the server. Dragging remembers the card position.")
+        self.preview_hint.setText(self._preview_note())
 
     # ------------------------------------------------------ player out
 
@@ -298,4 +318,10 @@ __all__ = [
     "HINT_READY",
     "HINT_SAVE_FAILED",
     "HINT_UNSUPPORTED",
+    "PREVIEW_ASSISTANCE_OFF",
+    "PREVIEW_CARD_OPEN",
+    "PREVIEW_CONNECTING",
+    "PREVIEW_REFUSALS",
+    "PREVIEW_UNAVAILABLE",
+    "PREVIEW_UNPAIRED",
 ]

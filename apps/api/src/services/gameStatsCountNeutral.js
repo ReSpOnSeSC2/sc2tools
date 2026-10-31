@@ -1,6 +1,7 @@
 "use strict";
 const { BSON } = require("mongodb");
 const { isDeepStrictEqual } = require("util");
+const { withUpdatedAt } = require("../util/corpusUpdatedAt");
 const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
@@ -133,7 +134,7 @@ function applyMacroSurface(db, owner, mutation, session) {
   if (Array.isArray(mutation.top3Leaks)) set.top3Leaks = mutation.top3Leaks;
   stampVersion(set, COLLECTIONS.GAMES);
   return db.games.updateOne({ userId: owner.userId, gameId: mutation.gameId, ...LIVE_GAME_MATCH },
-    { $set: set, $unset: { macroBreakdown: "" } }, { ...(session ? { session } : {}), upsert: false });
+    withUpdatedAt({ $set: set, $unset: { macroBreakdown: "" } }), { ...(session ? { session } : {}), upsert: false });
 }
 
 /** Internal body used only by the admitted writer's closed named operations.

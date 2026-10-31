@@ -7,7 +7,7 @@ const article: HelpArticle = {
   "category": "desktop-app",
   "audience": "all",
   "order": 7,
-  "updated": "2026-10-23",
+  "updated": "2026-10-31",
   "keywords": [
     "install",
     "installer",
@@ -31,7 +31,7 @@ const article: HelpArticle = {
     },
     {
       "type": "paragraph",
-      "text": "Change **Run on Windows startup** later in the desktop app’s Settings. The installer and app share one per-user Windows Run entry. Starting with Windows opens SC2 Tools quietly in the tray. Older Startup-folder shortcuts are recognized and migrated, so the setting reflects whether the app actually starts. Silent automatic updates keep your existing start-up and desktop-shortcut choices."
+      "text": "Change **Run SC2 Tools Agent on Windows startup** later in the desktop app’s Settings. The installer and app share one per-user Windows Run entry. Starting with Windows opens SC2 Tools quietly in the tray. Older Startup-folder shortcuts are recognized and migrated, so the setting reflects whether the app actually starts. Silent automatic updates keep your existing start-up and desktop-shortcut choices."
     },
     {
       "type": "paragraph",

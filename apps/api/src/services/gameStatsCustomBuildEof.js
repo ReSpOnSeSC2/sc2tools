@@ -2,6 +2,7 @@
 
 const { BSON } = require("mongodb");
 const { isDeepStrictEqual } = require("util");
+const { withUpdatedAt } = require("../util/corpusUpdatedAt");
 const { commitReclassifyRunPipeline, RECLASSIFY_LEASE_MS } = require("./customBuildReclassifyPipeline");
 const { OPPONENT_BUILD_ORDER_WRITE_LEASE_FIELD, opponentBuildOrderWriteInProgressError } = require("./opponentBuildOrderFence");
 
@@ -143,7 +144,7 @@ async function applyCustomBuildEof(db, owner, mutation, session) {
   assertEofNotAborted(mutation);
   const result = await db.games.updateMany(
     { userId: owner.userId, "_customBuildReclassify.runId": mutation.runId },
-    commitReclassifyRunPipeline(mutation.runId, mutation.sequence),
+    withUpdatedAt(commitReclassifyRunPipeline(mutation.runId, mutation.sequence)),
     { ...(session ? { session } : {}), upsert: false },
   );
   if (result.acknowledged !== true) throw failure("custom_build_eof_unacknowledged");

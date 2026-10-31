@@ -9,6 +9,7 @@ const { immutableMacroSurface } = require("../src/services/gameStatsCountNeutral
 const { MAINTENANCE_VERSION, PROTOCOL_VERSION } = require("../src/services/gameStatsMaintenance");
 const { expectedVersion } = require("../src/db/schemaVersioning");
 const { COLLECTIONS } = require("../src/config/constants");
+const { stamped, original } = require("./helpers/corpusStamp");
 const revision = "11111111-2222-4333-8444-555555555555", epoch = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const played = new Date("2026-10-20T12:00:00Z");
 const owner = { userId: "owner", id: new ObjectId(), epoch, compatibility: false };
@@ -51,7 +52,7 @@ test("named macro operation carries only atomic preimage stats under its new UUI
   expect(h.users.updateOne.mock.calls[0][0].gameStatsRevision).toBe(saved.gameStatsMaintenance.revision);
   expect(h.users.updateOne.mock.calls[0][2]).toEqual({ session: h.session, upsert: false });
   expect(h.games.updateOne).toHaveBeenCalledWith({ userId: owner.userId, gameId: "game", _deleted: { $ne: true }, _deletionPending: { $ne: true } },
-    { $set: { macroScore: 74, top3Leaks: [{ name: "idle", amount: 2 }], _schemaVersion: expectedVersion(COLLECTIONS.GAMES) }, $unset: { macroBreakdown: "" } },
+    stamped({ $set: { macroScore: 74, top3Leaks: [{ name: "idle", amount: 2 }], _schemaVersion: expectedVersion(COLLECTIONS.GAMES) }, $unset: { macroBreakdown: "" } }),
     { session: h.session, upsert: false });
   expect(h.games.countDocuments).not.toHaveBeenCalled(); expect(h.games.find).not.toHaveBeenCalled();
   expect(h.session.advanceOperationTime).toHaveBeenCalledWith(new Timestamp({ t: 10, i: 7 }));
@@ -105,7 +106,7 @@ test("named operation snapshots nested data before a held floor", async () => {
   const input = mutation(), task = h.writer.write(owner, input);
   input.top3Leaks[0].amount = 999; input.top3Leaks.push({ name: "late", amount: 9 });
   expect(h.writer.pending.size).toBe(1); floor.resolve(new Timestamp({ t: 10, i: 7 })); await task;
-  expect(h.games.updateOne.mock.calls[0][1].$set.top3Leaks).toEqual([{ name: "idle", amount: 2 }]);
+  expect(original(h.games.updateOne.mock.calls[0][1])[0].$set.top3Leaks.$literal).toEqual([{ name: "idle", amount: 2 }]);
 });
 test("named operation cannot rebind owner or add a fence during a held floor", async () => {
   const captured = { ...owner, id: new ObjectId() }, row = tuple(); row._id = new ObjectId(captured.id); row.gameStatsMaintenance.ownerId = new ObjectId(captured.id);
@@ -148,7 +149,7 @@ test("PerGame copies macro payload before held owner read and keeps details afte
   const task = service.writeMacroBreakdown(owner.userId, "game", payload);
   payload.top3Leaks[0].amount = 999; payload.top3Leaks.push({ name: "late", amount: 9 });
   expect(h.games.updateOne).not.toHaveBeenCalled(); capture.resolve({ _id: owner.id, gameStatsMutationEpoch: epoch }); await task;
-  expect(h.games.updateOne.mock.calls[0][1].$set.top3Leaks).toEqual([{ name: "idle", amount: 2 }]);
+  expect(original(h.games.updateOne.mock.calls[0][1])[0].$set.top3Leaks.$literal).toEqual([{ name: "idle", amount: 2 }]);
   expect(h.events).toEqual(["owner", "game", "save", "details"]);
   expect(upsert).toHaveBeenCalledTimes(1); expect(upsert).toHaveBeenCalledWith(owner.userId, "game", played, { macroBreakdown: payload.breakdown });
   expect(h.games.findOne).toHaveBeenCalledWith({ userId: owner.userId, gameId: "game", _deleted: { $ne: true }, _deletionPending: { $ne: true } }, { projection: { _id: 0, date: 1 } });

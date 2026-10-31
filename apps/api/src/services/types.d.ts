@@ -300,6 +300,7 @@ export interface OpponentsService {
 }
 
 export interface GamesService {
+  db: import("../db/connect").DbContext;
   gameStatsWrites?: Pick<import("./gameStatsWrites").GameStatsWrites, "capture">;
   neighbors: import("./games").GamesService["neighbors"];
   list(

@@ -14,6 +14,7 @@
 
 const { COLLECTIONS } = require("../config/constants");
 const { expectedVersion } = require("../db/schemaVersioning");
+const { withUpdatedAt } = require("../util/corpusUpdatedAt");
 const {
   OVERRIDE_ACTIVE_EXPR,
   OPP_OVERRIDE_ACTIVE_EXPR,
@@ -160,7 +161,7 @@ async function renameCustomOverrides(games, userId, slug, newName) {
       "buildIntent.build.source": "custom",
       "buildIntent.build.slug": slug,
     },
-    [{
+    withUpdatedAt([{
       $set: {
         myBuild: name,
         "buildIntent.build.name": name,
@@ -172,7 +173,7 @@ async function renameCustomOverrides(games, userId, slug, newName) {
           ],
         },
       },
-    }],
+    }]),
   );
   return res.modifiedCount || 0;
 }
@@ -329,7 +330,7 @@ async function renameCustomOpponentOverrides(games, userId, slug, newName) {
       "buildIntent.opponent.build.source": "custom",
       "buildIntent.opponent.build.slug": slug,
     },
-    [{
+    withUpdatedAt([{
       $set: {
         "opponent.strategy": name,
         "buildIntent.opponent.build.name": name,
@@ -341,7 +342,7 @@ async function renameCustomOpponentOverrides(games, userId, slug, newName) {
           ],
         },
       },
-    }],
+    }]),
   );
   return res.modifiedCount || 0;
 }

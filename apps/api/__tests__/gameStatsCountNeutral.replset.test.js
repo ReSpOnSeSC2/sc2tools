@@ -12,6 +12,7 @@ const { PROTOCOL_VERSION, MAINTENANCE_VERSION } = require("../src/services/gameS
 const { immutableMacroSurface, carryUnchangedGameStats } = require("../src/services/gameStatsCountNeutral");
 const { statsReadFloorFor } = require("../src/services/gameStatsReadFloor");
 const { readyStatsFromOwnerRow } = require("../src/services/maintainedGameStatsRead");
+const { stamped, original } = require("./helpers/corpusStamp");
 let mongo, mongoChild, db, dbB, clientB, writer, writerB, games, perGame;
 const userId = "neutral-owner", played = new Date("2026-10-20T12:00:00Z"), commands = [];
 const change = () => ({ kind: "macroSurface", gameId: "game", macroScore: 74, top3Leaks: [{ name: "idle", amount: 2 }] });
@@ -66,7 +67,7 @@ test("macro carries exact Mongo stats without stats reads, using one owner/game/
   expect(claim.readConcern.afterClusterTime).toBeDefined();
   expect(update.lsid).toEqual(claim.lsid); expect(update.txnNumber).toEqual(claim.txnNumber); expect(update.autocommit).toBe(false);
   expect(update.updates).toHaveLength(1); expect(update.updates[0]).toMatchObject({ q: { userId, gameId: "game", _deleted: { $ne: true }, _deletionPending: { $ne: true } }, upsert: false });
-  expect(Object.keys(update.updates[0].u.$set).sort()).toEqual(["_schemaVersion", "macroScore", "top3Leaks"]);
+  expect(Object.keys(original(update.updates[0].u)[0].$set).sort()).toEqual(["_schemaVersion", "macroScore", "top3Leaks"]);
   expect(commit.writeConcern).toMatchObject({ w: "majority", j: true });
 });
 

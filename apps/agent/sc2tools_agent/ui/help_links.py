@@ -7,6 +7,7 @@ AGENT_HELP_SLUGS = (
     "obs-auto-scene-switching", "build-check-in", "desktop-app-activity-log",
     "pairing-troubleshooting", "desktop-app-sync-problems",
     "desktop-app-tray", "desktop-app-performance", "desktop-app-updates", "desktop-app-status",
+    "desktop-app-import",
 )
 
 
