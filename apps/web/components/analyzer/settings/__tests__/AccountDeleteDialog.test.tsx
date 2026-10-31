@@ -72,6 +72,8 @@ describe("account erasure dialog", () => {
     apiCall.mockResolvedValueOnce({ deleted: true }); signOut.mockRejectedValueOnce(new Error("offline")); open(); finalStep();
     fireEvent.click(screen.getByRole("button", { name: "Delete account permanently" }));
     await screen.findByText("Your data was deleted. Signing out failed; retry signing out.");
+    // Cleared once, after the erasure; the failed sign-out clears nothing more.
+    expect(forgetDeviceCopy).toHaveBeenCalledTimes(1);
     signOut.mockResolvedValueOnce(undefined);
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Retry signing out" }));
     await waitFor(() => expect(signOut).toHaveBeenCalledTimes(2)); expect(apiCall).toHaveBeenCalledTimes(1);

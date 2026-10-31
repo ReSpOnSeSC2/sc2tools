@@ -123,10 +123,10 @@ describe("SettingsBackups restore", () => {
     expect(await attempt()).toBe(1);
     restoreFails({ code: "backup_preview_changed", status: 409, message: "backup_preview_changed" });
     expect(await attempt()).toBe(0);
-    // Offline, the request never left, so nothing changed on the server.
+    // Offline by the time the failure arrives: the restore may have gone through before the connection dropped.
     const offline = vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
     restoreFails(new TypeError("Failed to fetch"));
-    expect(await attempt()).toBe(0);
+    expect(await attempt()).toBe(1);
     offline.mockRestore();
   });
 });

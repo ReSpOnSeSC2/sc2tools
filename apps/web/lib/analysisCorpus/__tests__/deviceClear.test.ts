@@ -23,14 +23,17 @@ async function untilNoDatabases(factory: IDBFactory) {
   return factory.databases();
 }
 
-/** A factory whose delete is queued and never finishes, recording the clear mark at the moment it is queued. */
+/** A factory whose deletes are queued and finish only when a test fires them, recording the clear mark at each one. */
 function stalledFactory() {
   const marksAtDelete: Array<string | null> = [];
+  const requests: IDBOpenDBRequest[] = [];
   const deleteDatabase = vi.fn(() => {
     marksAtDelete.push(deviceClearMark());
-    return {} as IDBOpenDBRequest;
+    const request = {} as IDBOpenDBRequest;
+    requests.push(request);
+    return request;
   });
-  return { factory: { deleteDatabase } as unknown as IDBFactory, deleteDatabase, marksAtDelete };
+  return { factory: { deleteDatabase } as unknown as IDBFactory, deleteDatabase, marksAtDelete, requests };
 }
 
 describe("forgetDeviceCopy", () => {
@@ -52,6 +55,33 @@ describe("forgetDeviceCopy", () => {
     expect(deviceClearMark()).not.toBe(first);
   });
 
+  it("lets a finished delete settle only its own clear, not a newer one still owed", async () => {
+    const factory = new IDBFactory();
+    const deleteDatabase = factory.deleteDatabase.bind(factory);
+    let finished: Promise<void> | undefined;
+    vi.spyOn(factory, "deleteDatabase").mockImplementationOnce((name: string) => {
+      const request = deleteDatabase(name);
+      finished = new Promise((resolve) => request.addEventListener("success", () => resolve()));
+      return request;
+    });
+    forgetDeviceCopy(factory);
+    forgetDeviceCopy(stalledFactory().factory);
+    const newer = deviceClearMark();
+    await finished;
+    expect(owed()).toBe(newer);
+  });
+
+  it("keeps a delete owed when it fails, and settles it when it succeeds", () => {
+    const stalled = stalledFactory();
+    forgetDeviceCopy(stalled.factory);
+    const mark = deviceClearMark();
+    const [request] = stalled.requests;
+    request.onerror!.call(request, { preventDefault: vi.fn() } as unknown as Event);
+    expect(owed()).toBe(mark);
+    request.onsuccess!.call(request, new Event("success"));
+    expect(owed()).toBeNull();
+  });
+
   it("queues the delete before the mark moves, and keeps it owed while it has not finished", () => {
     const before = deviceClearMark();
     const stalled = stalledFactory();
@@ -71,26 +101,31 @@ describe("forgetDeviceCopy", () => {
   });
 
   it("owes nothing and does nothing harmful without IndexedDB or storage", () => {
-    expect(() => forgetDeviceCopy(undefined)).not.toThrow();
+    vi.stubGlobal("indexedDB", undefined);
+    expect(() => forgetDeviceCopy()).not.toThrow();
+    vi.unstubAllGlobals();
     const refused = { deleteDatabase: vi.fn(() => { throw new DOMException("denied", "SecurityError"); }) } as unknown as IDBFactory;
     forgetDeviceCopy(refused);
     expect(owed()).toBeNull();
-    for (const method of ["getItem", "setItem", "removeItem"] as const) {
-      vi.spyOn(Storage.prototype, method).mockImplementation(() => {
+    const before = deviceClearMark();
+    const spies = (["getItem", "setItem", "removeItem"] as const).map((method) => vi.spyOn(Storage.prototype, method)
+      .mockImplementation(() => {
         throw new DOMException("denied", "SecurityError");
-      });
-    }
+      }));
     expect(() => forgetDeviceCopy(refused)).not.toThrow();
-    expect(deviceClearMark()).toBeNull();
+    for (const spy of spies) spy.mockRestore();
+    // With storage refused nothing was written: the mark is where the last clear left it.
+    expect(deviceClearMark()).toBe(before);
   });
 });
 
 describe("mayHaveApplied", () => {
-  it("counts only a definite rejection, or a browser that was offline, as a request that changed nothing", () => {
+  it("counts only a definite rejection as a request that changed nothing", () => {
     const failures = [{ status: 400 }, { status: 404 }, { status: 409 }, { status: 499 }, { status: 500 }, { status: 502 },
       { status: 0 }, new TypeError("Failed to fetch"), new Error("offline"), undefined, null];
     expect(failures.map(mayHaveApplied)).toEqual([false, false, false, false, true, true, true, true, true, true, true]);
+    // Offline by the time the failure arrives: the request may have left before the connection dropped.
     vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
-    expect(mayHaveApplied(new TypeError("Failed to fetch"))).toBe(false);
+    expect(mayHaveApplied(new TypeError("Failed to fetch"))).toBe(true);
   });
 });

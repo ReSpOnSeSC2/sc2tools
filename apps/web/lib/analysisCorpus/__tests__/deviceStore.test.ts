@@ -52,6 +52,15 @@ describe("openDeviceCorpus", () => {
     expect((await factory.databases()).map((db) => db.name)).toEqual([DEVICE_CORPUS_DB_NAME]);
   });
 
+  it("records an owner only in an upgrade from no database at all", () => {
+    const transaction = { objectStore: vi.fn() };
+    const request = { result: { objectStoreNames: { contains: () => true } }, transaction } as unknown as IDBOpenDBRequest;
+    const factory = { open: vi.fn(() => request) } as unknown as IDBFactory;
+    void openDeviceCorpus(factory, { create: true, owner: "user-a", deadlineMs: 10 });
+    request.onupgradeneeded!.call(request, { oldVersion: 1 } as IDBVersionChangeEvent);
+    expect(transaction.objectStore).not.toHaveBeenCalled();
+  });
+
   it("records its owner's choice in the upgrade that creates the database, and only then", async () => {
     const factory = new IDBFactory();
     const created = await openDeviceCorpus(factory, { create: true, owner: "user-a" });

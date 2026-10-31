@@ -51,13 +51,14 @@ function read(key: string): string | null | undefined {
 }
 
 /**
- * True when the note names a copy that is not `owner`'s, or when no note stands while an earlier clear's delete is
- * still owed (it never finished: a frozen tab held it, or the browser closed first).
+ * True when the note names a copy that is not `owner`'s, or when an earlier clear's delete is still owed: it was never
+ * seen to finish (a frozen tab held it, or the browser closed first), since any sync that opened the device after it
+ * would have settled it.
  */
 function mustClear(owner: string | null): boolean {
+  if (typeof read(DEVICE_DELETE_OWED_KEY) === "string") return true;
   const noted = read(DEVICE_NOTE_KEY);
-  if (typeof noted === "string") return noted !== owner;
-  return noted === null && typeof read(DEVICE_DELETE_OWED_KEY) === "string";
+  return typeof noted === "string" && noted !== owner;
 }
 
 /** The fallback for forgetDeviceCopy (lib/analysisCorpus/deviceClear); a later page settles the delete it owes. */

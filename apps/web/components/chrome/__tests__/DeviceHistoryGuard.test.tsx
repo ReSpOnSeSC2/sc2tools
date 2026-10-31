@@ -118,12 +118,12 @@ describe("DeviceHistoryGuard", () => {
     await waitFor(() => expect(window.localStorage.getItem(DEVICE_DELETE_OWED_KEY)).toBeNull());
   });
 
-  it("leaves an owed delete alone while the signed-in account's note stands, since a keep came after it", async () => {
+  it("issues an owed delete again under the signed-in account's note too, since any later open would have settled it", async () => {
     await rows("user-a");
     window.localStorage.setItem(DEVICE_DELETE_OWED_KEY, "an-earlier-clear");
     render(<DeviceHistoryGuard />);
-    await settle();
-    expect([forget.loads, (await factory.databases()).length]).toEqual([0, 1]);
+    await waitFor(() => expect(forget.calls).toBe(1));
+    expect(await untilNoDatabases()).toEqual([]);
   });
 
   it("deletes a copy left from before when the note cannot be read, since no copy is kept without one", async () => {
@@ -146,17 +146,36 @@ describe("DeviceHistoryGuard", () => {
     expect([forget.calls, mayHaveDeviceCopy("user-b")]).toEqual([0, true]);
   });
 
-  // The last two replace the clearing module for every later import in this file.
-  it("still removes the copy when the clearing code cannot load, and owes its delete to a later page", async () => {
+  // The last three replace the clearing module for every later import in this file.
+  it("still removes the copy when the clearing code cannot load, deleting before the mark moves and owing the delete", async () => {
     await rows("user-a");
     Object.assign(auth, { isSignedIn: false, userId: null });
     const mark = window.localStorage.getItem(DEVICE_CLEAR_KEY);
+    const deleteDatabase = factory.deleteDatabase.bind(factory);
+    const marksAtDelete: Array<string | null> = [];
+    vi.spyOn(factory, "deleteDatabase").mockImplementation((name: string) => {
+      marksAtDelete.push(window.localStorage.getItem(DEVICE_CLEAR_KEY));
+      return deleteDatabase(name);
+    });
     failClearingModule();
     render(<DeviceHistoryGuard />);
     await waitFor(() => expect(mayHaveDeviceCopy("user-a")).toBe(false));
     const moved = window.localStorage.getItem(DEVICE_CLEAR_KEY);
-    expect([forget.loads, moved === mark, window.localStorage.getItem(DEVICE_DELETE_OWED_KEY) === moved]).toEqual([0, false, true]);
+    expect([forget.loads, moved === mark, window.localStorage.getItem(DEVICE_DELETE_OWED_KEY) === moved, marksAtDelete])
+      .toEqual([0, false, true, [mark]]);
     expect(await untilNoDatabases()).toEqual([]);
+  });
+
+  it("owes nothing when the fallback's delete is refused", async () => {
+    noteDeviceCopy("user-a");
+    Object.assign(auth, { isSignedIn: false, userId: null });
+    vi.spyOn(factory, "deleteDatabase").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+    failClearingModule();
+    render(<DeviceHistoryGuard />);
+    await waitFor(() => expect(mayHaveDeviceCopy("user-a")).toBe(false));
+    expect(window.localStorage.getItem(DEVICE_DELETE_OWED_KEY)).toBeNull();
   });
 
   it("keeps a copy that this account noted while the clearing code failed to load", async () => {

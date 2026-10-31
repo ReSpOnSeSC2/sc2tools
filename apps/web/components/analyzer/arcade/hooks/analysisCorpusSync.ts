@@ -12,7 +12,7 @@ import {
   resetDeviceCorpus,
   saveDeviceSnapshot,
 } from "@/lib/analysisCorpus/deviceStore";
-import { deviceClearMark, forgetDeviceCopy } from "@/lib/analysisCorpus/deviceClear";
+import { deviceClearMark, forgetDeviceCopy, settleDelete } from "@/lib/analysisCorpus/deviceClear";
 import { deviceNote, mayHaveDeviceCopy, noteDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
 import { defaultIndexedDb } from "@/lib/instant/idb";
 import type { AnalysisApiGame, RawAnalysisSnapshot } from "./useAnalysisGames";
@@ -65,6 +65,9 @@ type StoredCorpus = CorpusSync & { marks: CorpusMarks };
 /** Throws before a device write once the run is cancelled, or with DeviceCleared once the copy is no longer this sync's. */
 type WriteGuard = () => void;
 
+/** One sync's hold on the device: the clear mark it began with, its write guard, and whether the copy is still its own. */
+type SyncRun = { mark: string | null; current: WriteGuard; owns: () => boolean };
+
 /**
  * The copy is no longer this sync's: a clear moved the mark (the copy is being deleted, and what was read may be out of
  * date), or another account's keep took the note.
@@ -103,21 +106,26 @@ export async function syncAnalysisCorpus(input: CorpusSyncInput): Promise<Corpus
   // A first keep clears any copy not noted for this account, so no other account's rows ever sit under its note.
   if (input.keepOnDevice && noted !== input.accountKey) forgetDeviceCopy(defaultIndexedDb());
   const mark = deviceClearMark();
+  // The copy stays this sync's while nothing has cleared it and no other account's keep has taken the note.
+  const owns = () => deviceClearMark() === mark && deviceNote() === input.accountKey;
   const current: WriteGuard = () => {
     input.signal.throwIfAborted();
-    if (deviceClearMark() !== mark || deviceNote() !== input.accountKey) throw new DeviceCleared();
+    if (!owns()) throw new DeviceCleared();
   };
   try {
-    return await syncWithDevice(input, current);
+    return await syncWithDevice(input, { mark, current, owns });
   } catch (error) {
     if (!(error instanceof DeviceCleared)) throw error;
+    // A clear that stopped a keep after its open recreated the database left that account's record there: it goes.
+    if (deviceNote() === null) forgetDeviceCopy(defaultIndexedDb());
     // What this sync read before the clear (Delete history or restore in another tab) may be out of date.
     return memoryOnly(await input.readSnapshot());
   }
 }
 
-async function syncWithDevice(input: CorpusSyncInput, current: WriteGuard): Promise<CorpusSync> {
-  const device = await openDevice(input, current);
+async function syncWithDevice(input: CorpusSyncInput, run: SyncRun): Promise<CorpusSync> {
+  const { current } = run;
+  const device = await openDevice(input, run);
   // A copy that may be out of date, and that could not be dropped, is left on the device.
   let stale = false;
   try {
@@ -140,7 +148,8 @@ async function syncWithDevice(input: CorpusSyncInput, current: WriteGuard): Prom
     return { ...snapshot, onDevice: stored === "saved", kept: stored !== "stale" };
   } finally {
     device?.db.close();
-    if (stale) forgetDeviceCopy(defaultIndexedDb());
+    // A copy no longer this sync's was deleted by whatever moved the mark or took the note, and may be a newer keep.
+    if (stale && run.owns()) forgetDeviceCopy(defaultIndexedDb());
   }
 }
 
@@ -171,7 +180,7 @@ function stillCurrent(current: WriteGuard): boolean {
 /** The device copy this sync uses, or null when it stays in memory. */
 async function openDevice(
   input: CorpusSyncInput,
-  current: WriteGuard,
+  { mark, current }: SyncRun,
 ): Promise<{ db: IDBDatabase; stored: StoredCorpus | null } | null> {
   const factory = defaultIndexedDb();
   if (!factory) return null;
@@ -191,6 +200,8 @@ async function openDevice(
     if (fresh) forget();
     return null;
   }
+  // Every delete queued before this open has finished, including one owed since before this sync began.
+  settleDelete(mark);
   // A read that fails says nothing about whose copy is here, so only an account that asked to keep one replaces it.
   const stored = await readDeviceCorpus<AnalysisApiGame>(db, input.accountKey, input.maxRows).catch(() => null);
   if ((stored === null || stored.kind === "absent") && !input.keepOnDevice) {

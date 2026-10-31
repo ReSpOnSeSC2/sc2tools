@@ -57,15 +57,31 @@ export function forgetDeviceCopy(factory: IDBFactory | undefined = globalIndexed
 }
 
 /**
+ * Record that the delete queued by the clear that set `mark` is done: it finished, or an open queued after it has
+ * succeeded. A newer clear's owed delete stays owed.
+ *
+ * Example:
+ *   settleDelete(markReadBeforeThisOpen);
+ */
+export function settleDelete(mark: string | null): void {
+  try {
+    if (mark !== null && window.localStorage.getItem(DEVICE_DELETE_OWED_KEY) === mark) {
+      window.localStorage.removeItem(DEVICE_DELETE_OWED_KEY);
+    }
+  } catch {
+    // Storage is refused: nothing was recorded as owed.
+  }
+}
+
+/**
  * Whether a wipe, restore or account deletion that failed may have gone through anyway, so the copy here must go: true
- * unless the server rejected it outright (a 4xx) or the browser was offline, so the request never left. A lost answer,
- * a timeout or a server error (5xx) can all follow a request that went through.
+ * unless the server rejected it outright (a 4xx). A lost answer, a timeout or a server error (5xx) can all follow a
+ * request that went through, and being offline when the failure arrives does not show the request never left.
  *
  * Example:
  *   catch (error) { if (mayHaveApplied(error)) forgetDeviceCopy(); }
  */
 export function mayHaveApplied(error: unknown): boolean {
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
   const status = (error as { status?: unknown } | null | undefined)?.status;
   return !(typeof status === "number" && status >= 400 && status < 500);
 }
@@ -75,14 +91,9 @@ function queueDelete(factory: IDBFactory | undefined, mark: string): boolean {
   try {
     const request = factory?.deleteDatabase(DEVICE_CORPUS_DB_NAME);
     if (!request) return false;
+    // A delete that fails stays owed, so the guard issues it again.
     request.onerror = (event) => event.preventDefault();
-    request.onsuccess = () => {
-      try {
-        if (window.localStorage.getItem(DEVICE_DELETE_OWED_KEY) === mark) window.localStorage.removeItem(DEVICE_DELETE_OWED_KEY);
-      } catch {
-        // Storage is refused: nothing was recorded as owed.
-      }
-    };
+    request.onsuccess = () => settleDelete(mark);
     return true;
   } catch {
     // IndexedDB is refused for this document: there is nothing to delete.
