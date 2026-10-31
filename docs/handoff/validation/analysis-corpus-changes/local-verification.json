@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "slice": "AC2-corpus-changes",
+  "item": {
+    "id": "analysis-corpus-local-cache",
+    "ordinal": 75
+  },
+  "status": "LOCAL_TYPES_LINT_1623_API_PASS_15_OF_15_MUTATIONS_REVIEWED_NOT_RELEASED",
+  "requirement": "Define/implement changed_since,cursor,removed tombstones/exclusions and corpusVersion; dataRev is explicitly not a durable change feed.",
+  "source": {
+    "base": "e8e7cfdc (AC1, PR #840)",
+    "testedCommit": "8be5c842bcba6062dd1250591967f433c6a2a549",
+    "mutationCommit": "8be5c842bcba6062dd1250591967f433c6a2a549",
+    "applicationFiles": [
+      "apps/api/src/services/analysisCorpusChanges.js",
+      "apps/api/src/routes/games.js",
+      "apps/api/src/services/gdpr.js",
+      "apps/api/src/services/userBackups.js",
+      "apps/api/src/util/corpusUpdatedAt.js",
+      "apps/api/src/services/games.js",
+      "apps/api/src/services/types.d.ts"
+    ],
+    "testFiles": [
+      "apps/api/__tests__/analysisCorpusChanges.mongo.test.js",
+      "apps/api/__tests__/gamesAnalysisCorpus.test.js",
+      "apps/api/__tests__/deviceCredentialWriterInventory.test.js"
+    ]
+  },
+  "protocol": {
+    "route": "GET /v1/games/analysis-corpus/changes?since=<watermark>&corpus_version=<n>&cursor=&limit=",
+    "order": "(updatedAt, _id) ascending with an opaque cursor; page limit as the snapshot's",
+    "items": "A corpus row exactly as a snapshot item; a row that left the corpus as {gameId, removed: true}.",
+    "watermark": "max(since, first page time - 5 min) on the final page; rows near it may repeat.",
+    "snapshotRequired": [
+      "corpus_version",
+      "before_stamps"
+    ],
+    "snapshotMarks": "The snapshot's first page carries corpusVersion and its watermark, read before the page.",
+    "corpusVersion": "users.corpusVersion, bumped before and after the hard delete in the history wipe, in restore and in account erasure, and again when the delete throws partway.",
+    "stampFloor": "A durable siteConfig floor created when the service is built at boot, 7 minutes ahead, and cached per process; a before_stamps answer carries deltasFrom = floor + 5 min.",
+    "validation": "The query is validated before the single corpus lane is taken; a since more than 60 s ahead is refused.",
+    "dataRev": "Not used."
+  },
+  "actual": {
+    "apiTypesExit": 0,
+    "apiConfiguredLint": {
+      "errors": 0,
+      "warnings": 765
+    },
+    "changedFilesAddedLintMessages": 0,
+    "newFilesStrictLintMessages": 0,
+    "strictImprovements": [
+      "buildGamesRouter length 668 -> 633",
+      "the corpus page handler's complexity 16 -> 15"
+    ],
+    "apiSuites": 99,
+    "apiCases": 1623,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "ownedMongodLeftover": 0,
+    "mutationsKilled": "15/15",
+    "mutations": [
+      "AC2-M1-departed-rows-served",
+      "AC2-M2-quarantine-not-removed",
+      "AC2-M3-wipe-keeps-version",
+      "AC2-M4-restore-keeps-version",
+      "AC2-M5-single-bump",
+      "AC2-M11-failure-keeps-version",
+      "AC2-M12-erasure-keeps-version",
+      "AC2-M6-version-not-checked",
+      "AC2-M7-floor-not-checked",
+      "AC2-M8-cursor-without-tiebreak",
+      "AC2-M9-watermark-without-overlap",
+      "AC2-M10-marks-on-every-page",
+      "AC2-M13-future-since-accepted",
+      "AC2-M14-delta-own-lane",
+      "AC2-M15-validated-after-admission"
+    ]
+  },
+  "independentReview": {
+    "reviewers": 1,
+    "reviewedCommit": "3cf5e38813e191cc0f8053ee0c74009c16fc196d",
+    "findings": {
+      "high": 0,
+      "medium": 2,
+      "lowMedium": 1,
+      "low": 3,
+      "info": 1
+    },
+    "fixed": [
+      "Medium: withCorpusRemoval skipped the second version bump whenever the delete threw partway, and a batched delete can throw after earlier batches committed. It now bumps on that path too and reports the delete's error (util/corpusUpdatedAt.js:50-57).",
+      "Medium: the stamp floor was created by the first changes request, so for about 12 minutes after AC3's launch every delta would have needed a snapshot that could not yet succeed. The floor is now created when the service is built at boot and cached in-process, and a before_stamps answer carries deltasFrom (services/analysisCorpusChanges.js:27-53,77).",
+      "Low-medium: account erasure's games delete did not bump the version, so an erasure that failed after it left the device's rows at an unchanged version. It now runs inside withCorpusRemoval (services/gdpr.js:444-452).",
+      "Low: a changes query was validated after it took the single corpus lane. It is now validated first (routes/games.js:110).",
+      "Low: a since in the future froze the watermark. One more than 60 s ahead is refused (services/analysisCorpusChanges.js:110-116)."
+    ],
+    "documented": [
+      "Low: a rollback below AC1 leaves the floor in the past while unstamped rows land. The checkpoint says to raise the floor before rolling forward again.",
+      "Info: during a rolling deploy, a process from before AC2 answers 404 on /changes and sends first snapshot pages without marks. AC3 must treat both as snapshot only.",
+      "A process crash between a hard delete and its second bump, with a snapshot taken in that window, can still leave that device stale until its next snapshot."
+    ],
+    "testGapsClosed": [
+      "A wipe that throws after deleting, and an erasure that throws after its games delete, still bump twice.",
+      "A row stamped before a pass ended but committed after it comes back from the returned watermark.",
+      "Concurrent first stamp-floor reads agree on one floor.",
+      "A since in the future is refused.",
+      "A delta waits for the snapshot's corpus permit, and malformed input is refused while the lane is held."
+    ],
+    "notAdopted": [
+      "An owner-bound version token: re-provisioning after a successful erasure creates a new random owner id (services/users.js:74), so a reset version cannot be read as the old account's continuity.",
+      "Separate abort tests for the delta route: both routes run through one page handler, the admission queue and permit hold it uses have unit tests, and the delta route's use of the shared lane now has a route test."
+    ],
+    "fixCommit": "bba25caa",
+    "testCommit": "8be5c842",
+    "note": "One read-only reviewer covered missed changes, the stamp floor, the route refactor, owner scoping and test gaps. Owner scoping was clean."
+  },
+  "boundaries": [
+    "No web client uses the route yet; AC3 adds the device store. The item stays partial.",
+    "A process crash between a hard delete and its second version bump, with a snapshot in that window, can leave that device stale until its next snapshot.",
+    "During a rolling deploy a process from before AC2 answers 404 on /changes and sends first snapshot pages without marks; AC3 must treat both as snapshot only.",
+    "A rollback below AC1 needs the floor raised to the redeploy time plus 7 minutes before rolling forward again.",
+    "Exact-head CI, merge, deployment and production acceptance remain pending. No latency, request-reduction or savings claim."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac2-20261031/CHECKS-03.json",
+      "sha256": "a52d172bed5f555537a5af168ab6eb4b59bd3d62adbcf1cff3ac9f7c50782d4b",
+      "bytes": 1972
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac2-20261031/checks-03/steps.txt",
+      "sha256": "0a35e88f4344ee8bebf83358573f6e27d4def1ad6c2af580d3b9a3f46d2239f1",
+      "bytes": 30
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac2-20261031/checks-03/api-jest-summary.json",
+      "sha256": "a692063e811155feed8777d204b1cc82a8d5b77ce8f411835f47f8b73d4bfe39",
+      "bytes": 247
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac2-20261031/checks-03/api-lint.json",
+      "sha256": "4a5484ffd9df0cff08e2d06ffed5d9180a7500192724eb69ec8dff4374134887",
+      "bytes": 7614356
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac2-20261031/checks-03/api-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac2-20261031/checks-03/lint-no-added.txt",
+      "sha256": "1962bc9dcea3e6c12b6230a0b0117cffcad0042bbb4f38b51017595201fa2a39",
+      "bytes": 1457
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac2-20261031/dev/checks-03-api-jest.json",
+      "sha256": "4106059c10f326e6e5ce3a6fa211801f12e9b533dbea653890aeb58359ec8f41",
+      "bytes": 620154
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac2-20261031/mutation-03/MUTATION-RESULTS.json",
+      "sha256": "79406ed5238a1a8494a5da4e458af0e3ac1678dbea7c7d22bd8bbdc3ed1d7df0",
+      "bytes": 9966
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac2-20261031/suites-01.txt",
+      "sha256": "7512308bea9c8d5b35f7f4594cea8b9668895d0388652b32c4d5d8a60ace308f",
+      "bytes": 4070
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac2-20261031/scripts/final-checks-ac2-02.sh",
+      "sha256": "b2175580c896e75e1808fe71f434cc219d1af48bf0b7d328c5a8af7666f0e4f5",
+      "bytes": 1782
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac2-20261031/scripts/mutation-check-ac2-03.mjs",
+      "sha256": "07e868b76c9356b82f22a9cce3989323150461db79e0840cff11db8702cbb882",
+      "bytes": 7750
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac2-20261031/scripts/run-ac2-jest.mjs",
+      "sha256": "896c4b16276394e68ac979cabd32dd2a293abe95f50d3f58f28387907eaaad0d",
+      "bytes": 3898
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/analysis-corpus-ac2-20261031/review-01.json",
+      "sha256": "0bfda1e4aba07f9255a4a84668944082bfb4c898e77faed57a540d7178ed112e",
+      "bytes": 2926
+    }
+  ]
+}

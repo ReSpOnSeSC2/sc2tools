@@ -43,4 +43,17 @@ function withUpdatedAt(update) {
 /** Adds the stamp to an inserted or replacement document. @param {Record<string, any>} row @returns {any} */
 function rowWithUpdatedAt(row) { return { ...row, updatedAt: new Date() }; }
 
-module.exports = { withUpdatedAt, rowWithUpdatedAt, CORPUS_FIELDS };
+/** Hard deletes leave no row for a changed-since read (services/analysisCorpusChanges.js), so a history wipe or a
+ * restore bumps the owner's corpus version before and after the work: a snapshot taken while it runs is refused too.
+ * @template T @param {{users: import('mongodb').Collection}} db @param {string} userId @param {() => Promise<T>} work
+ * @returns {Promise<T>} */
+async function withCorpusRemoval(db, userId, work) {
+  const bump = () => db.users.updateOne({ userId }, { $inc: { corpusVersion: 1 } });
+  await bump();
+  // A delete that fails partway bumps again too, then reports its own error.
+  const result = await work().catch(async error => { await bump().catch(() => undefined); throw error; });
+  await bump();
+  return result;
+}
+
+module.exports = { withUpdatedAt, rowWithUpdatedAt, withCorpusRemoval, CORPUS_FIELDS };

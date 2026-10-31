@@ -13,6 +13,7 @@ const {
   holdAnalysisCorpusPermit,
 } = require("../src/routes/games");
 const { GamesService } = require("../src/services/games");
+const { AnalysisCorpusChanges } = require("../src/services/analysisCorpusChanges");
 const { LIMITS } = require("../src/config/constants");
 
 // A single lifecycle-backed Mongo fixture covers projection, cursor and cap
@@ -424,5 +425,82 @@ describe("GET /games/analysis-corpus", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+});
+
+// Bounded waits, so a regression fails the test instead of stranding the only
+// corpus lane.
+const settle = (promise) => Promise.race([
+  promise,
+  new Promise((resolve) => setTimeout(() => resolve("pending"), 1000)),
+]);
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+function corpusRouteApp(deps) {
+  const app = express();
+  app.use(
+    buildGamesRouter({
+      auth: (req, _res, next) => {
+        req.auth = { userId: "u-route" };
+        next();
+      },
+      opponents: { refreshMetadata: jest.fn() },
+      ...deps,
+    }),
+  );
+  return app;
+}
+
+describe("GET /games/analysis-corpus/changes", () => {
+  test("waits for the snapshot's corpus permit, and malformed input never queues", async () => {
+    const entered = deferred();
+    const blocked = deferred();
+    const parsed = deferred();
+    const real = new AnalysisCorpusChanges(null);
+    const corpusChanges = {
+      parse: (query) => {
+        const input = real.parse(query);
+        parsed.resolve(true);
+        return input;
+      },
+      listChanges: jest.fn().mockResolvedValue({
+        items: [],
+        nextCursor: null,
+        watermark: "2026-10-31T00:00:00.000Z",
+        corpusVersion: 0,
+      }),
+    };
+    const listAnalysisCorpus = jest.fn(async () => {
+      entered.resolve(true);
+      await blocked.promise;
+      return { items: [], nextCursor: null };
+    });
+    const app = corpusRouteApp({ games: { listAnalysisCorpus }, corpusChanges });
+    const changes = (query) => request(app).get("/games/analysis-corpus/changes").query(query);
+    const since = new Date(Date.now() - 60_000).toISOString();
+
+    const snapshot = request(app).get("/games/analysis-corpus").query({ cursor: "opaque" }).then((res) => res);
+    let delta;
+    try {
+      expect(await settle(entered.promise)).toBe(true);
+      delta = changes({ since, corpus_version: "0" }).then((res) => res);
+      expect(await settle(parsed.promise)).toBe(true);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(corpusChanges.listChanges).not.toHaveBeenCalled();
+      // Refused while the lane is still held: validation never waits behind it.
+      const malformed = changes({ since: "yesterday", corpus_version: "0" }).then((res) => res.status);
+      expect(await settle(malformed)).toBe(400);
+    } finally {
+      blocked.resolve();
+    }
+
+    expect((await snapshot).status).toBe(200);
+    expect((await delta).status).toBe(200);
+    expect(corpusChanges.listChanges).toHaveBeenCalledTimes(1);
   });
 });
