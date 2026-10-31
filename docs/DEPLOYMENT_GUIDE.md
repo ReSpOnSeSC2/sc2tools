@@ -1,13 +1,16 @@
 # SC2Tools — Cloud Deployment Guide
 
-> **Reality check (2026-07):** production currently runs on Render's
-> **starter** plan (see `apps/api/render.yaml` and
-> `cloud/community-builds/render.yaml`) with a free-tier Atlas cluster —
-> NOT the M10 dedicated cluster this guide prescribes. The
-> `api-keepalive.yml` workflow exists solely to keep the starter
-> instance awake. The M10 sizing below is the target once donations
-> cover it; until then treat the M10 references as aspirational, and do
-> not assume M10-only index/perf headroom in code.
+> **Production (October 2026):** the API runs on Render's **starter**
+> plan, one instance (see `apps/api/render.yaml` and
+> `cloud/community-builds/render.yaml`). The accepted database
+> architecture is a dedicated Atlas M10 cluster with Cloud Backup
+> ([ADR 0073](adr/0073-database-backups-atlas-cloud-backup.md)); the
+> production API's public backup summary shows a readable Cloud Backup
+> policy, and Admin → Infrastructure shows the live cluster tier. Check
+> the tier there before relying on M10-only index or performance
+> headroom. The `api-keepalive.yml` workflow exists solely to keep the
+> starter instance awake. A July 2026 version of this note described a
+> free-tier Atlas cluster, which has no Cloud Backup.
 
 The keepalive workflow targets the Render API only. Do not add Vercel page
 warmups to its five-minute schedule: those requests consume the website's

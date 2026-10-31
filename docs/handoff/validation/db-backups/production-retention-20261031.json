@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "slice": "B1-backup-reconciliation",
+  "item": {
+    "id": "db-offsite-backups",
+    "ordinal": 12
+  },
+  "status": "PRODUCTION_BACKUP_RETENTION_READ_FRESHNESS_AND_RESTORE_DRILL_NOT_ESTABLISHED",
+  "read": {
+    "url": "https://api.sc2tools.com/v1/site/data-retention",
+    "method": "GET",
+    "requestedAtUtc": "2026-10-31T21:39:27+00:00",
+    "status": 200,
+    "bodySha256": "861401e096b1db2cbb6ec633d99ced342273d3511e8a909b5710f16743afc972",
+    "body": {
+      "available": true,
+      "retention": [
+        {
+          "unit": "days",
+          "value": 7
+        },
+        {
+          "unit": "days",
+          "value": 7
+        },
+        {
+          "unit": "weeks",
+          "value": 4
+        },
+        {
+          "unit": "months",
+          "value": 12
+        },
+        {
+          "unit": "years",
+          "value": 1
+        }
+      ],
+      "checkedAt": "2026-10-31T21:35:26.961Z"
+    }
+  },
+  "meaning": "The production API's public summary of the Atlas Cloud Backup policy, read once without authentication. available:true means the read-only service account's policy read was current and returned retention rows; it shows Cloud Backup is on. It does not name each retention's frequency, the newest snapshot's age, or any restore.",
+  "notEstablished": [
+    "snapshot freshness (Admin, Infrastructure, signed-in admin)",
+    "a successful restore drill (Atlas Project Owner)"
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/db-backups-20261031/retention-01.json",
+      "sha256": "67c8971051814c65f6140af84dd3bd77accbdfaef0f3bd2b4b2f66f83b5f6881"
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-tools/db-backups-retention-01.py",
+      "sha256": "62e7e25ebe7efeb84fd54c43c5f8924a4f6bb72c46f57b11a0b497f8263cd829"
+    }
+  ]
+}
