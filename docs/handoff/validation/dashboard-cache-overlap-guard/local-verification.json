@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "slice": "G1-overlap-guard",
+  "status": "LOCAL_TYPES_LINT_589_API_CASES_PASS_9_OF_9_MUTATIONS_REVIEWED_NOT_RELEASED",
+  "supersedes": {
+    "receiptSha256": "90ae88f403621121f326e198503217255c9d152dfeb5cdda185410222b8d9964",
+    "testedCommit": "868c3affda649482e0d2b682fca38283f520cdf5",
+    "reason": "Independent review: the end-of-quarantine retirement also retires session-policy leases, so the claim that no admitted request is refused was wrong; two test gaps."
+  },
+  "source": {
+    "base": "26a31f4c (DA4, PR #833)",
+    "testedCommit": "cc8e358c68f6fe81e67ca77b57bfe69fb9b8663b",
+    "mutationCommit": "cc8e358c68f6fe81e67ca77b57bfe69fb9b8663b",
+    "reviewFixes": [
+      "7d1c2500 corrects the guard header, pins admission-before-snapshot and adds the real-app suite",
+      "77ae50e4 corrects ADR 0072's follow-on guard wording and the checkpoint"
+    ],
+    "applicationFiles": [
+      "apps/api/src/middleware/userCacheGuard.js",
+      "apps/api/src/middleware/userCache.js",
+      "apps/api/src/server.js"
+    ],
+    "testFiles": [
+      "apps/api/__tests__/userCacheGuard.test.js",
+      "apps/api/__tests__/userCacheGuardApp.mongo.test.js"
+    ]
+  },
+  "guard": {
+    "shutdownStartRetirement": "server.js:418, before shutdown's first await",
+    "quarantineMs": 420000,
+    "quarantineStart": "listen callback (server.js:218)",
+    "quarantineEnd": "first admission after the end runs the app's full local retirement once (session-policy leases included); UserRevision's epoch and tokens are kept",
+    "sessionEffect": "A session-policy request in flight at that instant can fail once with 409 session_policy_changed, or a 500 where SESSION_RESOLUTION_STALE is uncaught, as after any full local retirement.",
+    "startupRecord": "chart_cache_cohort_start: sourceRevision, userCacheEnabled, writerSetVersion, quarantineMs, quarantineEndsAt; flag-on processes only",
+    "writerSetVersion": "2026-10-30.1",
+    "flagOff": "every entry point is a no-op",
+    "acceptedResidual": "Background writers are not held until healthy; accepted for source only, and the activation review must accept it again or a later slice must hold them."
+  },
+  "actual": {
+    "apiTypesExit": 0,
+    "apiConfiguredLint": {
+      "errors": 0,
+      "warnings": 758
+    },
+    "changedFilesAddedLintMessages": 0,
+    "newFilesStrictLintMessages": 0,
+    "apiSuites": 36,
+    "apiCases": 589,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "ownedMongodLeftover": 0,
+    "mutationsKilled": "9/9",
+    "mutations": [
+      "G1-M1-shutdown-keeps-entries",
+      "G1-M2-no-validator-strip",
+      "G1-M3-retains-while-closing",
+      "G1-M4-ignores-quarantine",
+      "G1-M5-end-keeps-inner-state",
+      "G1-M6-key-ignores-decision",
+      "G1-M7-shutdown-unwired",
+      "G1-M9-decides-after-snapshot",
+      "G1-M8-acts-with-flag-off"
+    ]
+  },
+  "independentReview": {
+    "reviewers": 1,
+    "findingsForThisSlice": 4,
+    "fixedInCode": 2,
+    "documented": 2,
+    "note": "Fixed: the session-lease claim (docs plus a real-app test) and the admission-order test gap. Documented as limitations: the wall-clock quarantine and default-open retention outside server.js."
+  },
+  "retained": [
+    "Round one placed the quarantine decision as a ternary in send, raising its strict complexity from 31 to 32; the decision passes into the key helper since round two."
+  ],
+  "boundaries": [
+    "Single-process tests: no real rolling deploy, provider health or signal timing, or shutdown bound; those are receipt observations.",
+    "Exact-head CI, merge, deployment and production acceptance remain pending.",
+    "USER_CACHE_ENABLED stays off; G1-G3 stay unmet. No activation, latency, request-reduction or savings claim."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/CHECKS-02.json",
+      "sha256": "4443ee7a0ab41c2dad34396c2f9899523e7e23383a00fb872728224774c9d8d7",
+      "bytes": 928
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/checks-02/steps.txt",
+      "sha256": "0a35e88f4344ee8bebf83358573f6e27d4def1ad6c2af580d3b9a3f46d2239f1",
+      "bytes": 30
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/checks-02/api-jest-summary.json",
+      "sha256": "57e20069a3adb4e7c6c8a2b4df23547b63fa9363d9914de6f31e4050eb912b87",
+      "bytes": 239
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/checks-02/api-lint.json",
+      "sha256": "aa5a4e501ead0dda902ffca3a6c8e2be5d598d52899781a3c062ed2a95905706",
+      "bytes": 7494830
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/checks-02/api-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/checks-02/lint-no-added.txt",
+      "sha256": "4e8ff5b515eef1c1cd7858e0bde3e3f7f760daa8cf73eb1bf095abaf359578ac",
+      "bytes": 485
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/dev/final-02-jest.json",
+      "sha256": "0e868a90eb5ee7c1c37140c1f23a3a13fa9bc8969f4f4d9a316efe6abb8c591c",
+      "bytes": 228373
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/mutation-03/MUTATION-RESULTS.json",
+      "sha256": "9d2230eb1a79c49416fb6a6349310d01d5a928d47be13fc901c281c3c51f8069",
+      "bytes": 6398
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/scripts/mutation-check-g1-03.mjs",
+      "sha256": "a1f39308aab934d8e7cebba7d5eebe8a78da86646f47891855ac0dcbaa30f79d",
+      "bytes": 5574
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/scripts/final-checks-g1-02.sh",
+      "sha256": "c45070dfadccc081594f819afcedeb07032175f453b6f881499b49a6514ee094",
+      "bytes": 2248
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-g1-20261030/scripts/run-g1-jest.mjs",
+      "sha256": "b2cb2aa50368ee17ef54f0c129ae49ec41a88cb85de28ed8315be1b6ee20c59f",
+      "bytes": 3892
+    }
+  ]
+}

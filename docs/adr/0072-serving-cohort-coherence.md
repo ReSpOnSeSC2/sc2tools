@@ -6,11 +6,11 @@ no receipt and activates nothing. `USER_CACHE_ENABLED` stays off and
 faster-dashboards remains partial.
 
 Source paths are relative to `apps/api/src/` unless they start with `apps/` or
-`docs/`. Line numbers were checked at slice DA4's tested source (`90126ee2`).
+`docs/`. Line numbers were checked at slice G1's tested source (`cc8e358c`).
 The ADR was added at application source `27b9aeb0`. C1 through C4 changed the
 cited allowlist lines in place and edited route and service lines without
 changing line counts (C4's route and curve helpers follow the cited lines), and DA2
-added lease lines after the cited ones, so every citation still resolves. DA3 adds only tests. DA4 inserts the disable method above the writer helper, whose citations now read 224-228.
+added lease lines after the cited ones, so every citation still resolves. DA3 adds only tests. DA4 inserts the disable method above the writer helper, whose citations now read 224-228. G1 appends its hooks to cited cache and server lines without changing line counts.
 
 ## Context
 
@@ -516,7 +516,7 @@ protocol, mode, capability and incarnation digest
 (`services/deviceCredentialReadiness.js:100-108`); a failed check logs no
 revision. The digest names the durable record, not a process. Shutdown logs
 `shutdown_start` (`server.js:418`), `device_credential_writers_drained` (`:478`),
-`game_stats_writers_drained` (`:483`) and `shutdown_complete` (`:485`). The flag
+`game_stats_writers_drained` (`:483`) and `shutdown_complete` (`:485`). From G1, a flag-on process also logs `chart_cache_cohort_start` at listen (`:218`); otherwise the flag
 value is never logged. The admin tile reports Off, Not reported or Enabled for
 whichever process answers (`util/adminCacheHealth.js:15-33`). No durable record
 names serving processes.
@@ -531,7 +531,7 @@ names serving processes.
 | Out-of-band freeze: none is running or scheduled, and none ran since the predecessor retired | Both | Owner attestation |
 | Writer set: the review re-derives the writers of every covered input at the serving revision and cites them. Each in-process writer runs inside `gameWrite` with the app-level `UserRevision` passed in (`util/userRevision.js:163` runs the work unfenced without one) or inside `UserRevision.run`; this is item 2's first clause only. Any other writer is named as a G1 gap under the freeze, and an unfenced in-process writer fails the receipt | Chart cache | Repository review |
 | Configured flag value and the admin tile reading | Chart cache | Owner-run dashboard read and the tile |
-| Overlap guard deployed with its residual window accepted, or the full retention window accepted, for activation and every later overlap while the flag is on | Chart cache | Repository and review |
+| Overlap guard deployed with its residual window accepted, or the full retention window accepted, for activation and every later overlap while the flag is on. G1 ships the guard in source; its residual, including the unheld background writers, still needs this acceptance | Chart cache | Repository and review |
 | Writer set: the serving revision contains every writer in the actor table, and the inventory test passes there | Device auth | Repository |
 | Authority record: protocol, namespace, incarnation, generation, mode, pending and `denyAll` at a causal majority read | Device auth | Owner-run read |
 | Readiness digest equals the read record's incarnation digest | Device auth | Log and read |
@@ -552,11 +552,11 @@ activation, overlap is safe only among protocol-v1 actors (design line 250).
 
 ## Follow-on guard
 
-Decided for the chart cache: the overlap guard slice has three parts. It needs no
+Decided for the chart cache, and implemented in source by slice G1 (`middleware/userCacheGuard.js:1-49`), where every entry point is a no-op while the flag is off: the overlap guard has three parts. It needs no
 new infrastructure and stays default-off.
 
 - **Shutdown-start retirement.** A process stops serving and storing retained
-  bodies when SIGTERM arrives.
+  bodies when SIGTERM arrives. G1 does this before shutdown's first await (`server.js:418`; `middleware/userCacheGuard.js:17-22`): it drops every entry; a request admitted after the signal takes no key, nothing is stored afterwards, and work answered after the signal carries no validator (`middleware/userCache.js:117,121,167,256,264`). A request admitted just before the signal can still join work that began after it, which is safe because that work starts after both were admitted.
 - **Admission-time quarantine.** A new process retains a body only if its snapshot
   was taken after its quarantine ended and no inner join or memo it used began
   before that point. At quarantine end it performs one full local retirement, as
@@ -566,9 +566,9 @@ new infrastructure and stays default-off.
   becoming healthy until the platform signals its predecessor. A process cannot
   observe that signal, so the slice derives the start conservatively and
   justifies any margin, and its receipt observes the predecessor's
-  `shutdown_start` relative to the new process's startup line.
+  `shutdown_start` relative to the new process's startup line. G1 starts the quarantine at listen and holds it for 420 s, the 300-second bound plus a 120-second margin for the health check and the platform's signal (`server.js:218`; `middleware/userCacheGuard.js:10-12`). Admission decides before its snapshot. The first request admitted after the end runs every `UserRevision` invalidator with null, as `retire(null)` does, but keeps `UserRevision`'s epoch and tokens, because nothing admitted during quarantine is retained (`middleware/userCacheGuard.js:36-47`; `middleware/userCache.js:117-121`). The app's invalidator also clears the session-policy lease map and discards pending session-gate work (`app.js:1011-1019`), so a session-policy request in flight at that instant can fail once: with 409 `session_policy_changed`, or with a 500 where a gate computation's `SESSION_RESOLUTION_STALE` is not caught, as after any full local retirement (`apps/api/__tests__/userCacheGuardApp.mongo.test.js:34-49`). A receipt must observe the predecessor's `shutdown_start` within 120 s of the successor's startup line.
 - **Startup cohort record.** A log line carries the revision, flag value and
-  quarantine end.
+  quarantine end. G1 logs `chart_cache_cohort_start` at listen with the source revision, the flag, `WRITER_SET_VERSION` and the quarantine end; only a flag-on process logs it (`middleware/userCacheGuard.js:13-15,24-34`).
 
 The guard leaves a residual window that the review must accept explicitly. Until
 its SIGTERM, and within the G4 window, a flag-on predecessor keeps serving
@@ -596,7 +596,7 @@ assumed bound. A successor that never becomes healthy triggers no signal, and it
 boot writes can leave the predecessor stale, in the cases above, for the whole G4
 window. The guard slice
 must hold the successor's background writers until it is healthy, or its review
-must accept this. A durable cohort registration in `jobLocks` is deferred, and is reconsidered only
+must accept this. G1 does not hold them. Its review accepts this residual in source only; before activation the owner's review must accept it again, or a later slice must hold the writers. A durable cohort registration in `jobLocks` is deferred, and is reconsidered only
 if either provider bound cannot be qualified. A pub/sub broadcast is excluded as
 new infrastructure (`apps/api/render.yaml:20-30`).
 
@@ -604,7 +604,7 @@ new infrastructure (`apps/api/render.yaml:20-30`).
 
 Update this ADR in the same pull request, with fresh citations, when a change:
 
-- adds or removes a covered response kind or a writer of a covered input;
+- adds or removes a covered response kind or a writer of a covered input (a writer change also bumps `WRITER_SET_VERSION`, `middleware/userCacheGuard.js:13-15`);
 - adds a process-local cache that answers for durable state read by a covered
   kind or a device-credential path;
 - adds, moves or reclassifies a device-credential writer or reader path;
