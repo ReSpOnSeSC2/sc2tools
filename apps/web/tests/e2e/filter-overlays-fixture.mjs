@@ -20,7 +20,7 @@ return <main className="mx-auto max-w-5xl space-y-4 p-4">
 
 const adapters = {
   "@clerk/nextjs": 'export const useAuth=()=>({isLoaded:true,isSignedIn:true,userId:"filter-fixture-owner"});',
-  "@/lib/clientApi": 'const response={data:undefined,isLoading:false,error:null};export const useApi=()=>response;',
+  "@/lib/clientApi": 'const empty={data:undefined,isLoading:false,error:null};const responses=Object.fromEntries(Object.entries(window.__filterFixtureApiData??{}).map(([key,data])=>[key,{...empty,data}]));export const useApi=(key)=>responses[key.split("#")[0]]??empty;',
   "@/components/help/LazyHelpLink": 'import React from "react";export const LazyHelpLink=({children,slug})=><a href={"/help/"+slug}>{children}</a>;',
   "./AnalyzerViewsButton": 'import React from "react";export const AnalyzerViewsButton=()=> <button className="min-h-11 px-3">Views</button>;',
 };
@@ -51,13 +51,15 @@ function fixtureAssets() {
 }
 
 /** Real filter consumers, primitives, Tailwind tokens and committed fonts.
- * Clerk, empty API responses, Help links and the unrelated saved-view launcher
+ * Clerk, synthetic API responses, Help links and the unrelated saved-view launcher
  * are explicit adapters. No account, storage, clipboard or server is used.
  * @param {import('@playwright/test').Page} page
  * @param {'light'|'dark'} theme
+ * @param {{apiData?: Record<string, unknown>}} [options]
  */
-export async function openFilterOverlaysFixture(page, theme) {
+export async function openFilterOverlaysFixture(page, theme, options = {}) {
   const { script, css, fonts } = await fixtureAssets();
+  await page.addInitScript(data => { window.__filterFixtureApiData = data; }, options.apiData ?? {});
   const errors = [], unexpectedRequests = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.route("**/*", async route => {

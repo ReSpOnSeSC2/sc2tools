@@ -79,7 +79,7 @@ export function FilterSheet({
           </>
         }
       >
-        <div className="analyzer-filter-sheet flex flex-col items-start gap-5">
+        <div className="analyzer-filter-sheet flex w-full min-w-0 flex-col items-start gap-5 [&>*]:min-w-0 [&>*]:max-w-full">
           {children}
         </div>
       </Sheet>

@@ -16,20 +16,24 @@ export function notificationPanelPlacement(
 export function popoverPlacement(
   anchor: { left: number; right: number; top: number; bottom: number },
   panelHeight: number,
-  viewport: { width: number; height: number },
+  viewport: { width: number; height: number; left?: number; top?: number },
   preferredWidth = PANEL_WIDTH,
 ) {
   const horizontalGutter = Math.min(GUTTER, Math.max(0, viewport.width / 2));
   const verticalGutter = Math.min(GUTTER, Math.max(0, viewport.height / 2));
   const width = Math.max(0, Math.min(preferredWidth, viewport.width - horizontalGutter * 2));
-  const left = Math.max(horizontalGutter, Math.min(anchor.right - width, viewport.width - horizontalGutter - width));
-  const below = Math.max(0, viewport.height - verticalGutter - anchor.bottom - 8);
-  const above = Math.max(0, anchor.top - 8 - verticalGutter);
+  const viewportLeft = viewport.left ?? 0;
+  const viewportTop = viewport.top ?? 0;
+  const viewportRight = viewportLeft + viewport.width;
+  const viewportBottom = viewportTop + viewport.height;
+  const left = Math.max(viewportLeft + horizontalGutter, Math.min(anchor.right - width, viewportRight - horizontalGutter - width));
+  const below = Math.max(0, viewportBottom - verticalGutter - anchor.bottom - 8);
+  const above = Math.max(0, anchor.top - 8 - viewportTop - verticalGutter);
   const flipped = panelHeight > below && above > below;
   const maxHeight = Math.min(flipped ? above : below, viewport.height - verticalGutter * 2);
-  const top = Math.max(verticalGutter, Math.min(
+  const top = Math.max(viewportTop + verticalGutter, Math.min(
     flipped ? anchor.top - 8 - Math.min(panelHeight, maxHeight) : anchor.bottom + 8,
-    viewport.height - verticalGutter - Math.min(panelHeight, maxHeight),
+    viewportBottom - verticalGutter - Math.min(panelHeight, maxHeight),
   ));
   return { left, top, width, maxHeight };
 }

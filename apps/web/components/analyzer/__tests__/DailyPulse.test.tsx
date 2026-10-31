@@ -111,12 +111,12 @@ describe("DailyPulse", () => {
     expect(screen.getByText("Loading replay insights…")).toBeTruthy();
   });
 
-  it("keeps a release control when a loaded corpus has no eligible cards", () => {
+  it("keeps a release control when a loaded corpus has no eligible cards", async () => {
     primeGames([]);
     render(<DailyPulse />);
 
     expect(
-      screen.getByText(
+      await screen.findByText(
         "No replay insights yet. More games will unlock your daily pulse.",
       ),
     ).toBeTruthy();
@@ -153,7 +153,7 @@ describe("DailyPulse", () => {
   it("says when the history under the cards last updated, and refreshes it", async () => {
     primeGames(corpusWithSession());
     render(<DailyPulse />);
-    expect(screen.getByText("You banked a winning session")).toBeTruthy();
+    expect(await screen.findByText("You banked a winning session")).toBeTruthy();
 
     fireEvent.click(await screen.findByRole("button", { name: "Refresh" }));
     expect(screen.getByText("Updated").parentElement?.textContent).toBe("Updated 2m ago");
@@ -188,7 +188,7 @@ describe("DailyPulse", () => {
     analysisError = { status: 503, message: "Busy" };
     render(<DailyPulse />);
 
-    expect(screen.getByText("You banked a winning session")).toBeTruthy();
+    expect(await screen.findByText("You banked a winning session")).toBeTruthy();
     expect(screen.queryByText("Replay insights couldn’t load")).toBeNull();
     expect(await screen.findByText("Couldn’t update")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
@@ -206,7 +206,7 @@ describe("DailyPulse", () => {
     analysisActive = true;
     primeGames(corpusWithSession());
     view.rerender(<DailyPulse />);
-    expect(screen.getByText("You banked a winning session")).toBeTruthy();
+    expect(await screen.findByText("You banked a winning session")).toBeTruthy();
   });
 
   it("keeps an explicitly closed pulse dormant and exposes an accessible opener", () => {
@@ -234,35 +234,36 @@ describe("DailyPulse", () => {
     expect(loadAnalysis).toHaveBeenCalledTimes(1);
   });
 
-  it("renders the day's cards from real games", () => {
+  it("renders the day's cards from real games", async () => {
     primeGames(corpusWithSession());
     render(<DailyPulse />);
     expect(screen.getByText("Daily Pulse")).toBeTruthy();
     // Yesterday's 3-0 session is the top-weight timely card.
-    expect(screen.getByText("You banked a winning session")).toBeTruthy();
+    expect(await screen.findByText("You banked a winning session")).toBeTruthy();
     expect(
       screen.getByText(/You played 3 games yesterday, went 3–0/),
     ).toBeTruthy();
   });
 
-  it("deep-links a card into its analyzer tab", () => {
+  it("deep-links a card into its analyzer tab", async () => {
     primeGames(corpusWithSession());
     const onNavigate = vi.fn();
     render(<DailyPulse onNavigate={onNavigate} />);
-    fireEvent.click(screen.getByText("You banked a winning session"));
+    fireEvent.click(await screen.findByText("You banked a winning session"));
     expect(onNavigate).toHaveBeenCalledWith("trends");
   });
 
-  it("collapses and persists the choice", () => {
+  it("collapses and persists the choice", async () => {
     primeGames(corpusWithSession());
     render(<DailyPulse />);
+    await screen.findByText("You banked a winning session");
     fireEvent.click(screen.getByText("Daily Pulse"));
     expect(screen.queryByText("You banked a winning session")).toBeNull();
     expect(window.localStorage.getItem("analyzer.pulse.collapsed")).toBe("1");
     expect(releaseAnalysis).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the verified current pool only for Queue Thought map advice", () => {
+  it("uses the verified current pool only for Queue Thought map advice", async () => {
     const currentMapGames = Array.from({ length: 6 }, (_, index) =>
       game({
         date: `2026-07-${String(8 + index).padStart(2, "0")}T12:00:00Z`,
@@ -276,7 +277,7 @@ describe("DailyPulse", () => {
     });
     render(<DailyPulse />);
 
-    expect(screen.getByText("Sanctuary III LE is your happy place")).toBeTruthy();
+    expect(await screen.findByText("Sanctuary III LE is your happy place")).toBeTruthy();
     expect(screen.getByText(/100% over 6 recent games/)).toBeTruthy();
 
     cleanup();
@@ -285,6 +286,7 @@ describe("DailyPulse", () => {
       mapPoolSource: "fallback",
     });
     render(<DailyPulse />);
+    await waitFor(() => expect(screen.queryByText("Loading replay insights…")).toBeNull());
 
     expect(
       screen.queryByText("Sanctuary III LE is your happy place"),
@@ -297,6 +299,7 @@ describe("DailyPulse", () => {
       mapPoolFetchedAt: Date.now() - 9 * 24 * 60 * 60 * 1000,
     });
     render(<DailyPulse />);
+    await waitFor(() => expect(screen.queryByText("Loading replay insights…")).toBeNull());
 
     expect(
       screen.queryByText("Sanctuary III LE is your happy place"),

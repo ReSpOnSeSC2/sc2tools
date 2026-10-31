@@ -50,7 +50,7 @@ describe("DailyPulse without its footer chunk", () => {
   it("still offers Try again after a failed update, keeping focus on it through the retry", async () => {
     analysisError = { status: 503, message: "Busy" };
     const view = render(<DailyPulse />);
-    expect(screen.getByText("You banked a winning session")).toBeTruthy();
+    expect(await screen.findByText("You banked a winning session")).toBeTruthy();
     const retry = await screen.findByRole("button", { name: "Try again" });
     expect(screen.getByRole("status").textContent).toBe("Couldn’t update");
     expect(screen.queryByText("Replay insights couldn’t load")).toBeNull();
