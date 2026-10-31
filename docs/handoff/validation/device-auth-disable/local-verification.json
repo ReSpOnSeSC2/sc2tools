@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "slice": "DA4-durable-disable",
+  "status": "LOCAL_TYPES_LINT_179_DEVICE_AUTH_CASES_PASS_7_OF_7_MUTATIONS_NOT_RELEASED",
+  "source": {
+    "base": "3c561429 (DA3, PR #832)",
+    "testedCommit": "7f4c433ed329b193b6fc240e2f84b729549964d7",
+    "mutationCommit": "eca91b5602114458dbcabf6713b2ac1a0353cf28",
+    "mutationToTestedDiff": "C4's one JSDoc line in apps/api/src/services/aggregations.js.",
+    "applicationFiles": [
+      "apps/api/src/services/deviceCredentialWrites.js",
+      "apps/api/scripts/disable-device-auth-retention.js"
+    ],
+    "testFiles": [
+      "apps/api/__tests__/deviceCredentialDisable.mongo.test.js"
+    ]
+  },
+  "primitive": {
+    "method": "DeviceCredentialWrites.disable({ incarnation })",
+    "script": "apps/api/scripts/disable-device-auth-retention.js",
+    "write": "Exact-incarnation compare-and-set to mode 'prepared' with a fresh generation; majority, journaled.",
+    "keeps": [
+      "pending",
+      "denyAll"
+    ],
+    "drainMs": 2100,
+    "outcomes": {
+      "disabled": 0,
+      "refused": 1,
+      "usage": 2,
+      "possibly-disabled": 3
+    },
+    "reachableFrom": "Owner-run script only; no route, endpoint, flag or startup path.",
+    "everInvoked": false
+  },
+  "actual": {
+    "apiTypesExit": 0,
+    "apiConfiguredLint": {
+      "errors": 0,
+      "warnings": 758
+    },
+    "changedFileAddedLintMessages": 0,
+    "newFilesStrictLintMessages": 0,
+    "deviceAuthSuites": 15,
+    "deviceAuthCases": 179,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "ownedMongodLeftover": 0,
+    "mutationsKilled": "7/7",
+    "mutations": [
+      {
+        "id": "DA4-M1-sets-active",
+        "file": "apps/api/src/services/deviceCredentialWrites.js"
+      },
+      {
+        "id": "DA4-M2-keeps-generation",
+        "file": "apps/api/src/services/deviceCredentialWrites.js"
+      },
+      {
+        "id": "DA4-M3-clears-pending",
+        "file": "apps/api/src/services/deviceCredentialWrites.js"
+      },
+      {
+        "id": "DA4-M4-no-drain-after-success",
+        "file": "apps/api/src/services/deviceCredentialWrites.js"
+      },
+      {
+        "id": "DA4-M5-no-drain-after-unknown",
+        "file": "apps/api/src/services/deviceCredentialWrites.js"
+      },
+      {
+        "id": "DA4-M6-ignores-incarnation",
+        "file": "apps/api/src/services/deviceCredentialWrites.js"
+      },
+      {
+        "id": "DA4-M7-dry-run-writes",
+        "file": "apps/api/scripts/disable-device-auth-retention.js"
+      }
+    ]
+  },
+  "citationUpdates": [
+    "ADR 0072 cites prepareWriterAuthority at services/deviceCredentialWrites.js:224-228 (was 200-204) in two places."
+  ],
+  "boundaries": [
+    "Not a repair: a raw restore or manual edit of the authority record can rewind it; the authorized repair primitive stays unmet.",
+    "Exact-head CI, merge, deployment and production acceptance remain pending.",
+    "USER_CACHE_ENABLED stays off and the device-auth adapter stays uninjected; no activation, latency, load or savings claim."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/CHECKS-01.json",
+      "sha256": "2ffd9574d872a2eb52cc6b77212977bf9de5972e4556aa229931bb051291835a",
+      "bytes": 838
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/checks-01/api-lint.json",
+      "sha256": "3e337954fd96e4919f39dbcbcebb5b5bcfea403dc182d6a4f3864c2bed9130d5",
+      "bytes": 7494798
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/checks-01/api-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/checks-01/lint-no-added.txt",
+      "sha256": "5f2748208ddfdd6944632f1c49c327107a79267e2f88c8e002dc8d7911c05151",
+      "bytes": 367
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/dev/final-01-jest.json",
+      "sha256": "5f89fb290d9282db3532e0e1cda45c29fda3f35bf7d2dc579fc46f5e45d83eb7",
+      "bytes": 69692
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/dev/final-01.log",
+      "sha256": "d4ebfa4c92628e79f09f713f71f24684a258337f1539780d881130532c760a93",
+      "bytes": 13654
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/mutation-02/MUTATION-RESULTS.json",
+      "sha256": "3b449d37ec2d80945eaba26e8bae6012b9b3d67c803f5789f5543e68cc1c387a",
+      "bytes": 5165
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/scripts/mutation-check-da4-01.mjs",
+      "sha256": "1043bf312d8e5872b324390b2ffce7407435fda31e6825355d9f2ba1b554c1a6",
+      "bytes": 5140
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/scripts/run-da4-jest.mjs",
+      "sha256": "e009d5e6bb6575574bf362eead601f3706a991bb4a41e2e194c12d91b580486b",
+      "bytes": 3899
+    }
+  ]
+}

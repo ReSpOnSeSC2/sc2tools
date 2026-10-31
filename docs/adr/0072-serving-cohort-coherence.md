@@ -6,11 +6,11 @@ no receipt and activates nothing. `USER_CACHE_ENABLED` stays off and
 faster-dashboards remains partial.
 
 Source paths are relative to `apps/api/src/` unless they start with `apps/` or
-`docs/`. Line numbers were checked at slice C4's tested source (`000734b6`).
+`docs/`. Line numbers were checked at slice DA4's tested source (`7f4c433e`).
 The ADR was added at application source `27b9aeb0`. C1 through C4 changed the
 cited allowlist lines in place and edited route and service lines without
 changing line counts (C4's route and curve helpers follow the cited lines), and DA2
-added lease lines after the cited ones, so every citation still resolves. DA3 adds only tests.
+added lease lines after the cited ones, so every citation still resolves. DA3 adds only tests. DA4 inserts the disable method above the writer helper, whose citations now read 224-228.
 
 ## Context
 
@@ -405,7 +405,7 @@ Coherence holds only among protocol-v1 coordinated writers at or after
 `b8608d90` (PR813). They obtain acknowledged prepared authority and pin the
 readiness incarnation before dispatching credential work
 (`docs/adr/0071-device-credential-readiness.md:16-21`;
-`services/deviceCredentialWrites.js:95-96,200-204`). Writers from `df5cf875`
+`services/deviceCredentialWrites.js:95-96,224-228`). Writers from `df5cf875`
 (PR807), and the releases that shipped that writer unchanged until PR813, are
 pre-readiness actors. They gate and drain, and keep each operation on whatever
 valid record their begin step found, but never check an incarnation obtained by
@@ -438,8 +438,8 @@ While retention could be active, each of these needs its barrier first:
   recreates it, because that insert resets pending and `denyAll`
   (`services/deviceCredentialPreparation.js:38-45`).
 
-No durable disable or authorized repair primitive exists yet, so retention must
-not be activated before both ship.
+The durable disable primitive ships in source, owner-run and never invoked, but no authorized repair primitive exists yet, so retention must
+not be activated before the repair primitive ships too.
 
 Protocol changes keep `AUTHORITY_KEY` and the fail-closed filters
 (`services/deviceCredentialWrites.js:7,72-79`; `services/deviceAuthAuthority.js:11-17`).
@@ -457,13 +457,13 @@ authentication authority.
 | Gate | Today |
 | --- | --- |
 | Every credential writer coordinated on protocol v1 | Met in source since `df5cf875` (PR807); the inventory test checks placement lexically |
-| Every coordinated writer pins the readiness incarnation before dispatch | Met in source since `b8608d90` (`services/deviceCredentialWrites.js:95-96,200-204`); not checked by the inventory test |
+| Every coordinated writer pins the readiness incarnation before dispatch | Met in source since `b8608d90` (`services/deviceCredentialWrites.js:95-96,224-228`); not checked by the inventory test |
 | Prepared startup observed | Met for one attempt only (`docs/adr/0071-device-credential-readiness.md:5-9`) |
 | Serving cohort qualified, pre-readiness actors retired, same incarnation bound | Unmet (`docs/adr/0071-device-credential-readiness.md:51-55`) |
 | Clock rate and suspension behavior verified | Unmet; the constants are proposed (`docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:89-91`; `docs/adr/0071-device-credential-readiness.md:56-57`) |
 | Primary change and election behavior verified | Unmet (`docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:89-91`) |
 | Separate-process evidence | Met in source for one revocation regression on one replica-set member, unwired: separate reader and writer processes, the reader's event loop blocked past the lease, and the held ticket, its second consume and the original lookup all refused after the writer's acknowledgement (`apps/api/__tests__/deviceAuthSeparateProcess.mongo.test.js:104-121`; `docs/handoff/device-auth-separate-process-checkpoint.md`). Election, clock-rate, suspension and multi-host behavior stay unmet under their own rows |
-| Durable disable and rollback primitive | Unmet; the rollback rule requires one (`docs/adr/0071-device-credential-readiness.md:59-60`; `docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:114`). The source has no deliberate disable: `denyAll` is set only by pending overflow or a missing owner scope (`services/deviceCredentialWrites.js:87-89,98`), and nothing exposes a way to set it (`:23-25`; `services/deviceAuthLease.js:12-13`) |
+| Durable disable and rollback primitive | Met in source, owner-run and never invoked; the rollback rule requires one (`docs/adr/0071-device-credential-readiness.md:59-60`). `disable()` compare-and-sets the exact incarnation to the non-granting prepared mode with a fresh generation, keeps pending work and `denyAll`, and drains the 2.1 s old-lease bound before it reports, after an unknown write outcome too (`services/deviceCredentialWrites.js:198-220`). The owner script dry-runs by default and writes only with the exact incarnation and `--apply` (`apps/api/scripts/disable-device-auth-retention.js:22-36`); no route, endpoint or flag reaches either. After a disable no lease grants and a ticket prepared earlier cannot be consumed (`apps/api/__tests__/deviceCredentialDisable.mongo.test.js:61-75`). A raw restore or manual edit can rewind the record, so those still need the repair row, and nothing deliberately sets `denyAll` (`services/deviceCredentialWrites.js:87-89,98`) |
 | Authorized repair that mints a fresh incarnation | Unmet; the only source path that mints one recreates a missing record (`services/deviceCredentialPreparation.js:38-45`), which this ADR forbids as a repair |
 | Failed-probe suppression | Met in source as a bounded rate, unwired. A probe that settles without a usable grant holds off new probes for one lease, timed from its actual settlement and re-armed after every failed probe; until then `acquire()` returns no grant with no dispatch and no wait, and a valid grant, `denyAll` included, starts no hold-off (`services/deviceAuthLease.js:20,50,94-96`; `apps/api/__tests__/deviceAuthLease.test.js:80-144`). It bounds the probes but does not remove them: under continuous demand an injected adapter facing a prepared, missing or unreachable record still sends at most one majority/journal `findAndModify` (a nonce write only when a row matches) per probe duration plus 1.8 s per process, and the caller that starts it, with up to 15 coalesced callers, can wait up to about 1.8 s. ADR 0071's statement that prepared metadata adds no grant probes therefore holds only while the adapter stays uninjected (`docs/adr/0071-device-credential-readiness.md:47-48`). Before step 2 under Activation receipts, the wiring slice must either accept this bounded rate in ADR 0071 and this row, or send no probes while the record is prepared |
 | Reviewed activation CAS | Unmet (`docs/adr/0071-device-credential-readiness.md:49,56-57`; `services/deviceAuthLease.js:12-13`) |
@@ -481,8 +481,8 @@ under `apps/api/scripts`, manual database edits and raw restores.
   bodies live only in process memory (`config/loader.js:151`; `app.js:394-396`;
   `middleware/userCache.js:19-33`), so that deploy discards them. Turn the flag
   back on only with a fresh receipt.
-- **Device credentials.** Use the barriers under Scope. Until the disable and
-  authorized repair primitives exist, the only compliant state is that retention
+- **Device credentials.** Use the barriers under Scope. Until the authorized
+  repair primitive exists, the only compliant state is that retention
   is not active.
 
 ## Activation receipts
