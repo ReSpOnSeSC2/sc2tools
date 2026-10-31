@@ -13,8 +13,8 @@ The guard has three parts:
 - **Shutdown-start retirement.** At SIGTERM the process stops serving and
   storing retained bodies before shutdown's first await.
 - **Admission-time quarantine.** A new process retains nothing until 420 s
-  after it starts listening. The first request admitted after that clears
-  every inner join and reuse once.
+  after it starts listening. The first request admitted after that runs the
+  app's full local retirement once.
 - **Startup cohort record.** One log line at listen names the revision, the
   flag, the writer set and the quarantine end.
 
@@ -51,13 +51,27 @@ after it.
 - `server.js` starts the quarantine in the listen callback (`server.js:218`) and
   retires the cache on the `shutdown_start` line (`:418`).
 
-### Why the epoch and tokens are kept at quarantine end
+### What the end of the quarantine retires
 
-`retire(null)` also replaces the epoch and clears every token
-(`util/userRevision.js:28-39`). G1 runs only the invalidators. No request
-admitted during quarantine can retain a body or receive a validator, so
-retiring tokens would refuse admitted requests without making any response
-fresher.
+`retire(null)` replaces the epoch, clears every token and runs every
+invalidator with null (`util/userRevision.js:28-39`). G1 runs only the
+invalidators. No request admitted during quarantine can retain a body or get a
+validator, so keeping `UserRevision`'s epoch and tokens refuses no chart
+request.
+
+The app's invalidator is still a full local retirement (`app.js:1011-1019`). It
+clears the TrendsRequests joins and the owner revisions that session-policy
+leases are taken from, and it discards pending session-gate work. A
+session-policy read in flight at that instant can therefore fail once:
+
+- momentum, today's session, session history or a `/me` session read gets 409
+  `session_policy_changed`;
+- a gate computation fails with `SESSION_RESOLUTION_STALE`, which surfaces as a
+  500 where nothing catches it.
+
+Any full local retirement does the same, for example the one a revision-map
+overflow triggers. The real-app test pins this behavior. A reuse-only retirement
+would avoid it, and the activation review should weigh one.
 
 ### The 420-second bound
 
@@ -87,38 +101,44 @@ review must accept it again, or a later slice must hold those writers. ADR
 
 ## Tests
 
-`apps/api/__tests__/userCacheGuard.test.js` (new) has eight cases:
+`apps/api/__tests__/userCacheGuard.test.js` (new) has nine cases:
 
 - with the flag off, every entry point is a no-op
-  (`apps/api/__tests__/userCacheGuard.test.js:30-38`);
+  (`apps/api/__tests__/userCacheGuard.test.js:30-37`);
 - after shutdown starts, no request gets a retained body or a 304, and correct
-  200s continue (`:39-48`);
+  200s continue (`:39-47`);
 - work that finishes after shutdown starts is answered uncached for its
-  initiator and for a joined follower (`:49-59`);
+  initiator and for a joined follower (`:49-58`);
 - a body delivered just before shutdown starts is still answered without a
-  validator (`:60-66`);
+  validator (`:60-65`);
 - during quarantine nothing is retained or refused, the first request after it
-  clears inner state once, and retention then resumes (`:67-80`);
+  clears inner state once, and retention then resumes (`:67-79`);
 - a request admitted during quarantine is never retained, even when its work
-  ends after the quarantine (`:81-92`);
+  ends after the quarantine (`:81-91`);
 - the startup record carries only its five fields and never fails boot
-  (`:93-105`);
-- `server.js` places both hooks at the right lines (`:106-113`).
+  (`:93-104`);
+- admission decides before the snapshot: a request whose snapshot outlasts the
+  quarantine end is not retained (`:106-112`);
+- `server.js` places both hooks at the right lines (`:114-121`).
+
+`apps/api/__tests__/userCacheGuardApp.mongo.test.js` (new) runs the real app. The
+first request after the quarantine runs the app's invalidator, retires a
+session-policy lease taken before the end, and retention resumes
+(`apps/api/__tests__/userCacheGuardApp.mongo.test.js:34-49`).
 
 ## Verification
 
-Local checks ran at `868c3aff`, G1 with DA4 merged in. The receipt is
+Local checks ran at the G1 tested commit named in the receipt,
 `docs/handoff/validation/dashboard-cache-overlap-guard/local-verification.json`.
 
 - **API.** Whole-API types pass. Configured lint reports 758 warnings and 0
   errors, the same as C4. `userCache.js` and `server.js` add no configured or
   strict message; `send` keeps its complexity because the decision is passed
-  into the key helper. The new module and suite pass strict lint.
-- **Suites.** Thirty-five suites pass 587 of 587 cases in band, on cached
-  MongoDB 7.0.14 with downloads disabled. They are C4's thirty affected
-  suites, the guard suite and four `UserRevision` suites. No MongoDB process
-  was left over.
-- **Mutation.** 8 of 8 deliberate regressions are killed:
+  into the key helper. The new module and suites pass strict lint.
+- **Suites.** Thirty-six suites pass in band, on cached MongoDB 7.0.14 with
+  downloads disabled. They are C4's thirty affected suites, the two guard
+  suites and four `UserRevision` suites. No MongoDB process was left over.
+- **Mutation.** 9 of 9 deliberate regressions are killed:
   - shutdown keeps the entries;
   - no validator strip;
   - stores while closing;
@@ -126,13 +146,23 @@ Local checks ran at `868c3aff`, G1 with DA4 merged in. The receipt is
   - the end keeps inner state;
   - the key ignores the decision;
   - the shutdown hook is unwired;
-  - the guard acts with the flag off.
+  - the guard acts with the flag off;
+  - admission decides after the snapshot.
+- **Review.** One independent read-only reviewer found that the end-of-quarantine
+  retirement also retires session-policy leases, contradicting the earlier claim
+  that no admitted request is refused. The claim is corrected here, in the
+  module header and in ADR 0072, and the real-app test pins the behavior. It also
+  found the untested admission order and the overstated "takes no key" wording;
+  both are fixed.
 
 ## Limitations
 
-- Single-process tests. They do not show a real rolling deploy, the provider's
-  health or signal timing, or the 300-second shutdown bound. Those are receipt
-  observations.
+- These are single-process tests. A real rolling deploy, the provider's health
+  and signal timing, and the 300-second shutdown bound are observations for the
+  activation receipt.
+- The quarantine runs on the cache's wall clock, so a forward clock step at
+  boot shortens it. Retention is open by default: a process built without
+  `server.js` (tests and scripts) never starts a quarantine.
 - The guard narrows G1-G3 in ADR 0072; it does not meet them. Writes from a
   flag-off process, an older writer set, out-of-band writes and failed bumps
   are still visible to a peer only through expiry.

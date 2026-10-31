@@ -198,7 +198,7 @@ class DeviceCredentialWrites {
   /** Owner-run rollback primitive, never wired to a route, endpoint or flag. It compare-and-sets the exact authority
    * incarnation to the non-granting "prepared" mode with a fresh generation, then drains the old lease bound before
    * reporting. It never sets "active" and never touches pending or denyAll. A mismatch changes nothing; an unknown
-   * write outcome is reported as possibly disabled and still drains.
+   * write outcome is reported as possibly disabled and still drains; a written record that fails verification drains, then throws.
    * @param {{incarnation:string}} expected
    * @returns {Promise<{outcome:'disabled'|'possibly-disabled'|'refused', generation?:string}>} */
   async disable(expected) {
@@ -214,8 +214,8 @@ class DeviceCredentialWrites {
       return { outcome: "possibly-disabled" };
     }
     if (!row) return { outcome: "refused" };
+    await this.#drainLeaseBound(); // The write landed, so old grants drain even when the returned record fails verification.
     if (!validAuthority(row) || row.mode !== "prepared") throw failure("device_credential_disable_unverified");
-    await this.#drainLeaseBound();
     return { outcome: "disabled", generation: row.generation };
   }
 }

@@ -3,8 +3,8 @@
 // ADR 0072's overlap guard for the default-off chart cache. Every entry point is a no-op unless the cache is enabled.
 // - Shutdown-start retirement: at SIGTERM, before the first await, stop serving and storing retained bodies.
 // - Admission-time quarantine: from listen until QUARANTINE_MS has passed, retain nothing, so requests get uncached
-//   200 private, no-store responses. The first request admitted after it ends runs one full local retirement of inner
-//   joins and reuse before its snapshot, without retiring tokens or the epoch, so no admitted request is refused.
+//   200 private, no-store responses. The first request admitted after it ends runs the app's full local retirement
+//   once, before its snapshot, keeping the epoch and tokens; session-policy leases retire too (one 409 for work then).
 // - Startup cohort record: one log line with the revision, the flag, the writer-set version and the quarantine end.
 
 /** The predecessor's assumed 300-second shutdown bound, plus 120 s for this process to pass its health check and for
