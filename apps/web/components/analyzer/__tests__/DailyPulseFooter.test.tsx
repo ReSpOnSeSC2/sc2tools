@@ -16,6 +16,7 @@ function games(overrides: Partial<AnalysisGamesResult> = {}): AnalysisGamesResul
     hitCorpusLimit: false,
     onDevice: false,
     syncedAt: NOW - 5 * 60_000,
+    keepFailed: false,
     isActive: true,
     load: vi.fn(),
     keepOnDevice: vi.fn(),
@@ -71,11 +72,32 @@ describe("DailyPulseFooter", () => {
     expect(screen.getByText("1 game")).toBeTruthy();
   });
 
-  it("holds Refresh and offers nothing else while the history updates", () => {
-    footer(games({ syncedAt: null }));
+  it("holds Refresh, keeping it focusable, and offers nothing else while the history updates", () => {
+    const result = games({ syncedAt: null });
+    footer(result);
     expect(screen.getByRole("status").parentElement?.textContent).toBe("Updating…");
-    expect(screen.getByRole("button", { name: "Refresh" }).hasAttribute("disabled")).toBe(true);
+    const refresh = screen.getByRole("button", { name: "Refresh" });
+    expect(refresh.getAttribute("aria-disabled")).toBe("true");
+    expect(refresh.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(refresh);
+    expect(result.load).not.toHaveBeenCalled();
     expect(keepButton()).toBeNull();
+  });
+
+  it("says on this device only while this browser keeps the account's history", () => {
+    footer(games({ onDevice: true }));
+    expect(screen.getByText("3 games")).toBeTruthy();
+    expect(screen.queryByText("3 games on this device")).toBeNull();
+  });
+
+  it("says when keeping the history failed, and offers to try again", () => {
+    const result = games({ keepFailed: true });
+    footer(result);
+    expect(screen.getByText("Couldn’t keep your history in this browser, so it loads each visit.")).toBeTruthy();
+    fireEvent.click(keepButton()!);
+    expect(result.keepOnDevice).toHaveBeenCalledTimes(1);
+    // Keep goes away while it works; focus moves to the status it changes.
+    expect(document.activeElement).toBe(screen.getByRole("status"));
   });
 
   it("keeps the games on screen after a failed update and offers Try again", () => {
@@ -110,11 +132,13 @@ describe("DailyPulseFooter", () => {
     expect(keepButton()).toBeNull();
     view.unmount();
 
-    vi.stubGlobal("indexedDB", undefined);
-    const blocked = footer(games());
-    expect(screen.getByText("This browser isn’t letting us store data, so your history loads each visit.")).toBeTruthy();
-    expect(keepButton()).toBeNull();
-    blocked.unmount();
+    for (const missing of [undefined, null]) {
+      vi.stubGlobal("indexedDB", missing);
+      const blocked = footer(games());
+      expect(screen.getByText("This browser isn’t letting us store data, so your history loads each visit.")).toBeTruthy();
+      expect(keepButton()).toBeNull();
+      blocked.unmount();
+    }
 
     vi.stubGlobal("indexedDB", new IDBFactory());
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {

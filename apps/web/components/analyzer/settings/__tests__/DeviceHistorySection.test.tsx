@@ -64,6 +64,8 @@ describe("DeviceHistorySection", () => {
     fireEvent.click(clearButton()!);
     expect(row().textContent).toBe("No games are stored on this device.");
     expect(clearButton()).toBeNull();
+    // Clear goes away with the copy; the row that says so takes focus.
+    expect(document.activeElement).toBe(row());
     expect(screen.getByText("Cleared from this device")).toBeTruthy();
     expect(screen.getByText("Your games are still in your account.")).toBeTruthy();
     expect(deviceNote()).toBeNull();
@@ -93,9 +95,11 @@ describe("DeviceHistorySection", () => {
   it("waits for sign-in to load before checking", async () => {
     auth.isLoaded = false;
     await keepCopy("user-a", [game("a1")]);
+    const open = vi.spyOn(factory, "open");
     const view = section();
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(row().textContent).toBe("Checking this device…");
+    expect(open).not.toHaveBeenCalled();
 
     auth.isLoaded = true;
     view.rerender(
@@ -133,7 +137,7 @@ describe("DeviceHistorySection", () => {
     const db = await openDeviceCorpus(factory, { create: false });
     await resetDeviceCorpus(db!, "user-a");
     const view = section();
-    await waitFor(() => expect(row().textContent).toBe("Your history is set to be kept here, but no games are stored."));
+    await waitFor(() => expect(row().textContent).toBe("Your history is set to be kept here, but no games are stored. Accounts with more than 20,000 games aren’t kept."));
     expect(clearButton()).toBeTruthy();
     view.unmount();
 
@@ -144,6 +148,22 @@ describe("DeviceHistorySection", () => {
     section();
     await waitFor(() => expect(row().textContent).toBe("Couldn’t check this device."));
     expect(clearButton()).toBeTruthy();
+  });
+
+  it("never shows the last account's row after the account changes", async () => {
+    await keepCopy("user-a", [game("a1")]);
+    const view = section();
+    await waitFor(() => expect(row().textContent).toBe("Games stored on this device: 1 (under 0.1 MB)"));
+
+    auth.userId = "user-b";
+    view.rerender(
+      <ToastProvider>
+        <DeviceHistorySection revision={0} />
+      </ToastProvider>,
+    );
+    expect(row().textContent).toBe("Checking this device…");
+    await waitFor(() => expect(row().textContent).toBe("No games are stored on this device."));
+    expect(clearButton()).toBeNull();
   });
 
   it("reads again when the page restores a snapshot or wipes history", async () => {

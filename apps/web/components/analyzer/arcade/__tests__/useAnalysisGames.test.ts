@@ -42,6 +42,7 @@ vi.mock("@/lib/clientApi", () => ({
 const deviceGate = vi.hoisted(() => ({
   hold: null as null | ((accountKey: string) => Promise<void> | undefined),
   afterRead: null as null | ((accountKey: string) => void),
+  holdSave: null as null | (() => Promise<void>),
 }));
 
 vi.mock("@/lib/analysisCorpus/deviceStore", async (importOriginal) => {
@@ -53,6 +54,10 @@ vi.mock("@/lib/analysisCorpus/deviceStore", async (importOriginal) => {
       const stored = await actual.readDeviceCorpus(...args);
       deviceGate.afterRead?.(args[1]);
       return stored;
+    },
+    saveDeviceSnapshot: async (...args: Parameters<typeof actual.saveDeviceSnapshot>) => {
+      await deviceGate.holdSave?.();
+      return actual.saveDeviceSnapshot(...args);
     },
   };
 });
@@ -82,6 +87,7 @@ beforeEach(() => {
   harness.apiCall.mockReset();
   deviceGate.hold = null;
   deviceGate.afterRead = null;
+  deviceGate.holdSave = null;
   window.localStorage.clear();
   providerEnabled = true;
   harness.apiCall.mockImplementation(async (_getToken, path: string) => {
@@ -204,6 +210,7 @@ describe("AnalysisGamesProvider retention", () => {
       expect(result.current.syncedAt).toBeNull();
       await waitFor(() => expect(result.current.items).toHaveLength(3));
       expect(result.current.syncedAt).toBe(1_793_000_000_000);
+      expect(result.current.keepFailed).toBe(false);
 
       // Refresh keeps the games on screen; a failure keeps them too, with no time.
       harness.apiCall.mockRejectedValueOnce(new Error("Service unavailable"));
@@ -514,6 +521,78 @@ describe("AnalysisGamesProvider device copy", () => {
       marks: next,
       ids: ["new", "s-a", "s-c"],
     });
+  });
+
+  it("stamps a first keep's snapshot only once it is saved", async () => {
+    serve(() => null);
+    let release: (() => void) | undefined;
+    deviceGate.holdSave = () => new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.keepOnDevice());
+    await waitFor(() => expect(result.current.items).toHaveLength(3));
+    expect(result.current.syncedAt).toBeNull();
+    expect(result.current.onDevice).toBe(false);
+
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    await act(async () => release?.());
+    await waitFor(() => expect(result.current.onDevice).toBe(true));
+    expect(result.current.syncedAt).toEqual(expect.any(Number));
+    expect(result.current.keepFailed).toBe(false);
+  });
+
+  it("says when a keep could not be stored, and asks again on the next load", async () => {
+    serve(() => null);
+    vi.stubGlobal("indexedDB", undefined);
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.keepOnDevice());
+    await waitFor(() => expect(result.current.syncedAt).not.toBeNull());
+    expect(result.current.items).toHaveLength(3);
+    expect(result.current.onDevice).toBe(false);
+    expect(result.current.keepFailed).toBe(true);
+
+    act(() => result.current.load());
+    expect(result.current.keepFailed).toBe(false);
+    await waitFor(() => expect(result.current.syncedAt).not.toBeNull());
+    expect(result.current.keepFailed).toBe(true);
+  });
+
+  it("keeps history for the account that loads next when asked before sign-in finished loading", async () => {
+    serve(() => null);
+    harness.isLoaded = false;
+    harness.userId = null;
+    const view = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => view.result.current.keepOnDevice());
+    expect(harness.apiCall).not.toHaveBeenCalled();
+
+    harness.isLoaded = true;
+    harness.userId = "user-a";
+    view.rerender();
+    // Daily Pulse's restore effect loads once the account is known.
+    act(() => view.result.current.load());
+    await waitFor(() => expect(view.result.current.onDevice).toBe(true));
+    expect(await deviceCopy("user-a")).toEqual({ marks: MARKS, ids: ["s-a", "s-b", "s-c"] });
+  });
+
+  it("drops a keep asked for before sign-in loaded when nobody turns out to be signed in", async () => {
+    serve(() => null);
+    harness.isLoaded = false;
+    harness.userId = null;
+    const view = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => view.result.current.keepOnDevice());
+    harness.isLoaded = true;
+    harness.isSignedIn = false;
+    view.rerender();
+
+    harness.isSignedIn = true;
+    harness.userId = "user-a";
+    view.rerender();
+    act(() => view.result.current.load());
+    await waitFor(() => expect(view.result.current.syncedAt).not.toBeNull());
+    expect(view.result.current.onDevice).toBe(false);
+    expect(view.result.current.keepFailed).toBe(false);
+    expect(await factory.databases()).toEqual([]);
   });
 
   it("falls back to a snapshot when the server asks for one, and replaces the stored copy", async () => {

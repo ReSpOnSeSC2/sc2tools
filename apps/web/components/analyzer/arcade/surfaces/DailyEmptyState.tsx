@@ -41,7 +41,9 @@ export function DailyEmptyState({
           </a>
         </div>
         <p className="text-center text-caption">
-          <LazyHelpLink slug="history-on-this-device">Your history on this device</LazyHelpLink>
+          <LazyHelpLink slug="history-on-this-device" className="inline-flex min-h-11 items-center">
+            Your history on this device
+          </LazyHelpLink>
         </p>
       </section>
     </Card>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Trash2 } from "lucide-react";
 import { forgetDeviceCopy } from "@/lib/analysisCorpus/deviceClear";
@@ -27,24 +27,30 @@ type Row = { kind: "checking" } | { kind: "none" } | { kind: "blocked" } | Exclu
 export function DeviceHistorySection({ revision }: { revision: number }) {
   const { isLoaded, userId } = useAuth();
   const { toast } = useToast();
-  const [row, setRow] = useState<Row>({ kind: "checking" });
+  const owner = userId ?? null;
+  // Each row is read for one account, so another account's row never shows, even for a render.
+  const [read, setRead] = useState<{ owner: string | null; row: Row } | null>(null);
+  const row: Row = read && read.owner === owner ? read.row : { kind: "checking" };
+  const status = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     if (!isLoaded) return;
     let cancelled = false;
-    void readRow(userId ?? null).then((next) => {
+    void readRow(owner).then((next) => {
       // A clear, or another account's keep, while reading leaves nothing of this account's to show.
-      if (!cancelled) setRow(next.kind === "none" || next.kind === "blocked" || deviceNote() === userId ? next : { kind: "none" });
+      if (!cancelled) setRead({ owner, row: next.kind === "none" || next.kind === "blocked" || deviceNote() === owner ? next : { kind: "none" } });
     });
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, userId, revision]);
+  }, [isLoaded, owner, revision]);
 
   const clear = () => {
     forgetDeviceCopy();
-    setRow({ kind: "none" });
+    setRead({ owner, row: { kind: "none" } });
     toast.success("Cleared from this device", { description: "Your games are still in your account." });
+    // Clear goes away with the copy; the row that says so takes focus.
+    status.current?.focus();
   };
   const canClear = row.kind === "stored" || row.kind === "kept" || row.kind === "unreadable";
 
@@ -53,11 +59,18 @@ export function DeviceHistorySection({ revision }: { revision: number }) {
       id="device-history"
       className="scroll-mt-28"
       title="Games on this device"
-      description="Daily Pulse can keep your game history in this browser so it opens at once. Season Recap and Arcade use the same copy. Clearing it never deletes anything from your account."
+      description="Daily Pulse can keep a copy of your game history in this browser. Season Recap and Arcade use the same copy. Clearing it never deletes anything from your account."
     >
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p role="status" className="min-w-0 flex-1 basis-56 text-body-sm text-text">{rowText(row)}</p>
+          <p
+            ref={status}
+            tabIndex={-1}
+            role="status"
+            className="min-w-0 flex-1 basis-56 rounded text-body-sm text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            {rowText(row)}
+          </p>
           {canClear ? (
             <Button
               variant="secondary"
@@ -70,7 +83,9 @@ export function DeviceHistorySection({ revision }: { revision: number }) {
           ) : null}
         </div>
         <p className="mt-2 text-caption">
-          <LazyHelpLink slug="history-on-this-device">Your history on this device</LazyHelpLink>
+          <LazyHelpLink slug="history-on-this-device" className="inline-flex min-h-11 items-center">
+            Your history on this device
+          </LazyHelpLink>
         </p>
       </Card>
     </Section>
@@ -105,7 +120,7 @@ function rowText(row: Row): string {
     case "stored":
       return `Games stored on this device: ${row.count.toLocaleString()} (${sizeText(row.bytes)})`;
     case "kept":
-      return "Your history is set to be kept here, but no games are stored.";
+      return "Your history is set to be kept here, but no games are stored. Accounts with more than 20,000 games aren’t kept.";
     case "none":
       return "No games are stored on this device.";
     case "blocked":

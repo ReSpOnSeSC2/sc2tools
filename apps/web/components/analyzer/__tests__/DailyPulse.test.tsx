@@ -40,6 +40,7 @@ vi.mock("@/components/analyzer/arcade/hooks/useAnalysisGames", () => ({
     hitCorpusLimit: false,
     onDevice: false,
     syncedAt: analysisSyncedAt,
+    keepFailed: false,
     isActive: analysisActive,
     load: loadAnalysis,
     keepOnDevice: keepAnalysis,
@@ -140,7 +141,7 @@ describe("DailyPulse", () => {
       screen.getByText("See today’s insights from your replays: streaks, rising builds, nemesis sightings"),
     ).toBeTruthy();
     expect(screen.queryByText(/\d+ of \d+/)).toBeNull();
-    expect(screen.getByText(/Load your history once — kept on this device\./)).toBeTruthy();
+    expect(screen.getByText(/Loads your game history here\. This browser keeps a copy when it can\./)).toBeTruthy();
     expect(screen.getByRole("link", { name: "How it works" }).getAttribute("href")).toBe("/help/history-on-this-device");
     expect(keepAnalysis).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Load my history" }));
@@ -158,6 +159,27 @@ describe("DailyPulse", () => {
     expect(screen.getByText("Updated").parentElement?.textContent).toBe("Updated 2m ago");
     expect(screen.getByText("3 games")).toBeTruthy();
     expect(loadAnalysis).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the footer only once the history is on screen", async () => {
+    primeGames(corpusWithSession());
+    const loaded = render(<DailyPulse />);
+    // The footer's chunk has loaded once this resolves, so it would render at once below.
+    await screen.findByRole("button", { name: "Refresh" });
+    loaded.unmount();
+
+    analysisLoading = true;
+    analysisSyncedAt = null;
+    const loading = render(<DailyPulse />);
+    expect(screen.getByText("Loading replay insights…")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
+    loading.unmount();
+
+    analysisActive = false;
+    analysisLoading = false;
+    render(<DailyPulse />);
+    expect(screen.getByRole("button", { name: "Load my history" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
   });
 
   it("keeps the cards on screen when an update fails, with Try again under them", async () => {

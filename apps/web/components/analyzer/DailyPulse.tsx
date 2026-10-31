@@ -29,14 +29,15 @@ import { selectDailyPulse, type PulseCard, type PulseTone } from "@/lib/dailyPul
 import {
   normaliseGame,
 } from "@/components/analyzer/arcade/hooks/useArcadeData";
-import { useAnalysisGames } from "@/components/analyzer/arcade/hooks/useAnalysisGames";
+import { useAnalysisGames, type AnalysisGamesResult } from "@/components/analyzer/arcade/hooks/useAnalysisGames";
 import { useDailySeed } from "@/components/analyzer/arcade/hooks/useDailySeed";
 import type { TabId } from "@/components/analyzer/tabs";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 
-// The footer loads on demand, outside the dashboard's first load; a chunk that cannot load renders nothing.
+// The footer loads on demand, outside the dashboard's first load. If its chunk cannot load, FooterFallback still offers
+// Try again after a failed update, since the cards stay on screen after one.
 const DailyPulseFooter = dynamic(
-  () => import("./DailyPulseFooter").then((module) => module.DailyPulseFooter, () => () => null),
+  () => import("./DailyPulseFooter").then((module) => module.DailyPulseFooter, () => FooterFallback),
   { ssr: false },
 );
 
@@ -314,7 +315,7 @@ function DailyPulseGate({ onLoad }: { onLoad: () => void }) {
           <h2 className="text-caption font-semibold text-text">Daily Pulse</h2>
           <p className="mt-1 text-caption text-text-muted">See today’s insights from your replays: streaks, rising builds, nemesis sightings</p>
           <p className="mt-1 text-micro text-text-dim">
-            Load your history once — kept on this device.{" "}
+            Loads your game history here. This browser keeps a copy when it can.{" "}
             <LazyHelpLink slug="history-on-this-device">How it works</LazyHelpLink>
           </p>
         </div>
@@ -328,6 +329,23 @@ function DailyPulseGate({ onLoad }: { onLoad: () => void }) {
         </button>
       </div>
     </section>
+  );
+}
+
+/** What the footer leaves when its chunk cannot load: a failed update's Try again, and nothing otherwise. */
+function FooterFallback({ games }: { games: AnalysisGamesResult; accountKey: string }) {
+  if (!games.error) return null;
+  return (
+    <p className="mt-2 flex flex-wrap items-center gap-x-3 border-t border-border px-1 pt-2 text-micro text-text-dim">
+      <span role="status">Couldn’t update</span>
+      <button
+        type="button"
+        onClick={games.load}
+        className="inline-flex min-h-11 items-center rounded-full border border-line px-3 font-semibold text-accent transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        Try again
+      </button>
+    </p>
   );
 }
 
