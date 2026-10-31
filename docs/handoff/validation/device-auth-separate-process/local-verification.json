@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "slice": "DA3-separate-process-revocation",
+  "status": "LOCAL_TYPES_LINT_174_DEVICE_AUTH_CASES_PASS_3_OF_3_MUTATIONS_NOT_RELEASED",
+  "source": {
+    "base": "082e7a2f (C4, PR #831)",
+    "testedCommit": "6df0f4479a735eccc631a2c8b4fab12831c76b38",
+    "mutationCommit": "ef4d67c46c55e5ba13969a2183557557dbc86949",
+    "mutationNote": "Mutations ran at ef4d67c4 with the DA3 test files uncommitted; their sha256 equals the committed bytes.",
+    "testFiles": [
+      "apps/api/__tests__/deviceAuthSeparateProcess.mongo.test.js",
+      "apps/api/__tests__/helpers/deviceAuthProcessWorker.js"
+    ],
+    "applicationFiles": []
+  },
+  "shows": [
+    "A reader process whose event loop is blocked for at least 8000 ms, past the 1800 ms lease, admits no held ticket after a separate writer's acknowledged revoke.",
+    "The held ticket, a second consume and the original lookup all return null; the cached generation is unchanged.",
+    "The prepare read is majority with a causal floor; the post-revoke original lookup is a plain read; the authority record keeps no pending entries."
+  ],
+  "doesNotShow": [
+    "Election, primary change, host suspension, clock rate, multiple hosts or serving-process cutover (one member, one host).",
+    "Activation: the authority record is activated only in a synthetic test database; serving stays uninjected."
+  ],
+  "actual": {
+    "apiTypesExit": 0,
+    "apiConfiguredLint": {
+      "errors": 0,
+      "warnings": 758
+    },
+    "newFileLintMessages": 0,
+    "deviceAuthSuites": 14,
+    "deviceAuthCases": 174,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "ownedMongodLeftover": 0,
+    "childExitCodes": [
+      0,
+      0
+    ],
+    "mutationsKilled": "3/3",
+    "mutations": [
+      {
+        "id": "DA3-M1-consume-skips-eligibility",
+        "file": "apps/api/src/services/deviceAuthReuse.js"
+      },
+      {
+        "id": "DA3-M2-grant-never-expires",
+        "file": "apps/api/src/services/deviceAuthLease.js"
+      },
+      {
+        "id": "DA3-M3-revoke-writes-nothing",
+        "file": "apps/api/src/services/devicePairings.js"
+      }
+    ]
+  },
+  "retained": [
+    "Teardown logs one console.warn ECONNRESET while MongoMemoryReplSet stops after both children closed; the existing deviceAuthReuse.mongo suite logs the same warning at its own stop."
+  ],
+  "boundaries": [
+    "Exact-head CI, merge, deployment and production acceptance remain pending.",
+    "USER_CACHE_ENABLED stays off and the device-auth adapter stays uninjected; no activation, latency, load or savings claim."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da3-20261030/CHECKS-01.json",
+      "sha256": "e119be51adc0376d1a3aaf1dfedf519064e14b20b22b957bb33a4a1cc18fa370",
+      "bytes": 870
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da3-20261030/dev/final-01-jest.json",
+      "sha256": "a4853cdf81b56d7ebeb578d00f4f65a606b324dbfe935e7ebd203647a28d5539",
+      "bytes": 67543
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da3-20261030/dev/final-01.log",
+      "sha256": "2e7217198fb7b714b128cff3eeec78aa5af221e67667992139a96340afa3f76a",
+      "bytes": 11291
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da3-20261030/dev/final-lint.json",
+      "sha256": "7db0fcc3378e54f3e8f1ab9ecfda5f02f666d8b6b1e4e6be417090f3873f48c7",
+      "bytes": 7494235
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da3-20261030/dev/final-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da3-20261030/mutation-03/MUTATION-RESULTS.json",
+      "sha256": "49b80a35f149fa5951ae267c0b4b4e778bb88a18177bcaea67d6bfe6e24ca43b",
+      "bytes": 2232
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da3-20261030/scripts/mutation-check-da3-03.mjs",
+      "sha256": "0bcece26fbcfce1a6778d8bf4c8abab7fb8afd8bd41276388384e7369f4cbbc5",
+      "bytes": 4856
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da3-20261030/scripts/run-da3-jest.mjs",
+      "sha256": "7411608944add417794c6318df18455c96744347ccba390b3d49cf589e43239e",
+      "bytes": 3898
+    }
+  ]
+}

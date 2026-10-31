@@ -6,16 +6,16 @@ no receipt and activates nothing. `USER_CACHE_ENABLED` stays off and
 faster-dashboards remains partial.
 
 Source paths are relative to `apps/api/src/` unless they start with `apps/` or
-`docs/`. Line numbers were checked at slice C3's tested source (`10cdb0fd`).
-The ADR was added at application source `27b9aeb0`. C1, C2 and C3 changed the
-cited allowlist line in place and edited route and service lines without
-changing line counts, and DA2 added lease lines after the cited ones, so every
-citation still resolves.
+`docs/`. Line numbers were checked at slice DA4's tested source (`7f4c433e`).
+The ADR was added at application source `27b9aeb0`. C1 through C4 changed the
+cited allowlist lines in place and edited route and service lines without
+changing line counts (C4's route and curve helpers follow the cited lines), and DA2
+added lease lines after the cited ones, so every citation still resolves. DA3 adds only tests. DA4 inserts the disable method above the writer helper, whose citations now read 224-228.
 
 ## Context
 
 Two retained-state features are built but inactive: the default-off per-user
-chart cache, which covers twenty response kinds in source, and the uninjected
+chart cache, which covers twenty-one response kinds in source, and the uninjected
 retained device-auth REST adapter. Both keep their state in one process. The
 roadmap allows wider cache coverage only after "complete dependency/revocation
 and shared-fleet audits" (`docs/handoff/roadmap-progress-2026-10-28.json:1963`)
@@ -110,10 +110,10 @@ classes, and the last column bounds how long it can disagree with a peer:
 | `UserRevision` tokens, process epoch, owners, dirty and poisoned marks | `util/userRevision.js:11-21` | Local state | None; peers never see them, and the marks can only deny reuse locally |
 | `users.dataRev` | `util/userRevision.js:61-88,109-139` | Durable advisory | Re-read by every guarded request. A higher value retires; equality never proves freshness, and a first observation adopts it unchecked (`:126-131`). A flag-off process never bumps it (`:55,102`) |
 | `UserCache` entries and ETag salt | `middleware/userCache.js:10-12,19-33` | Local reuse | 600 s after storage (`:11,222-223,269`), plus the computation's duration and any adopted join age |
-| TrendsRequests in-flight joins | `services/trendsRequests.js:4-5,21-28,76-84` | Local reuse | 30 s; the join key carries no revision (`:79`), and covered and uncovered kinds share keys such as `dateRange` (`services/aggregations.js:634`) |
+| TrendsRequests in-flight joins | `services/trendsRequests.js:4-5,21-28,76-84` | Local reuse | 30 s; the join key carries no revision (`:79`). Covered kinds share the curve-independent `dateRange` key (`services/aggregations.js:634`) with unguarded HEAD and coaching callers, and work under a captured curve proof never joins the matchup time series key (`services/aggregations.js:680-683`) |
 | `cached()` completed memo (random summary only, and only while the chart cache is off) | `services/trendsRequests.js:42-67`; `services/aggregations.js:360-362`; `routes/aggregations.js:110` | Local reuse | 60 s. A cache-enabled process never fills or consults it, so no retained body can adopt it |
 | Momentum session-policy reuse gate | `services/sessionResolutionGate.js:14` | Local reuse | 15 s |
-| MMR curve memo and snapshot epoch | `services/mmrExpectation.js:10,84-89`; `services/strengthCurveSnapshots.js:13-27` | Local reuse | 60 s; dependent entries expire with their proof (`middleware/userCache.js:268-270`) |
+| MMR curve memo and snapshot epoch | `services/mmrExpectation.js:10,84-89`; `services/strengthCurveSnapshots.js:13-27` | Local reuse | 60 s; the five dependent kinds' entries expire with their proof (`middleware/userCache.js:268-270`), and their HEAD and flag-off requests keep the original memo reads |
 | Device touch dedupe and 30-second latestAgent reuse | `services/deviceLiveness.js:6,75-91,101-118` | Local reuse | 30 s; the minute touch filter itself is durable (`services/deviceAuthTokenRead.js:37-44`) |
 | Overlay-token resolve cache | `services/overlayTokens.js:60-61,88` | Local reuse | 10 s; a token revoked on a peer still resolves here until then, because a revoke evicts only the local entry |
 | `DeviceAuthReuse` and `DeviceAuthLease` grants (uninjected) | `services/deviceAuthLease.js:8,48-77`; `services/deviceAuthReuse.js:10-11,139-141` | Local lease | 1.8-second grant; 60-second entries need the current incarnation and generation |
@@ -161,10 +161,14 @@ and the session-policy reuse. Any caller that skips the guard can seed that stat
   keys `tz` raw, so an omitted or padded `tz` never matches
   (`routes/coaching.js:560-569,857-866`; `routes/aggregations.js:340-341`;
   `services/aggregations.js:749`; `services/trendsRequests.js:126,129`);
-- uncovered routes that share an inner key, such as the matchup time series
-  (`routes/aggregations.js:139-153`), whose `dateRange` probe
-  (`services/aggregations.js:634`) the covered timeseries, MMR progression and
-  map trend adopt (`services/aggregations.js:474`; `services/trendsInsights.js:92-93,806-807`);
+- the shared `dateRange` probe (`services/aggregations.js:631-645`), which the
+  covered timeseries, MMR progression, map trend and matchup time series adopt
+  (`services/aggregations.js:474`; `services/trendsInsights.js:92-93,806-807`;
+  `services/trendsAggregations.js:42-44`). Its key is the owner-scoped match
+  alone, with no interval, `tz` or curve, so a HEAD to any of those routes, or
+  coaching's MMR progression, seeds it for a guarded request with the same parsed
+  filters. It reads no global input. Apart from the unguarded callers listed here,
+  no uncovered kind shares an inner key with a covered kind;
 - session-policy reads without a known value, which share momentum's reuse key
   (`services/sessionPolicy.js:47-48,74`): `routes/me.js:235`, and the session list
   and detail (`routes/sessions.js:17,19`; `services/sessionHistory.js:92,99`).
@@ -183,7 +187,10 @@ at the pull request's head, and the pull request description states what items 8
 9 and 11 require. Admission wires an unchanged computation: items 1, 2 and 4
 already hold at the base, and so does item 3 unless the kind must stop using a
 completed memo whenever the cache is enabled, which leaves the calculation
-itself unchanged (random summary, slice C3).
+itself unchanged (random summary, slice C3). A kind with a global input meets
+items 1 and 6 only on its proof path: the computation takes the input from the
+captured proof, while paths that are never retained, HEAD and the flag-off path,
+keep the original read (matchup time series, slice C4).
 
 1. **Owner games only.** Every database read in the computation is on `games`,
    is scoped to the owner's `userId` and uses `gamesMatchStage(userId, filters)`
@@ -203,7 +210,9 @@ itself unchanged (random summary, slice C3).
    owner, deletion and exclusion clauses stay; those fields' writers are fenced
    (`services/perGameCompute.js:498`;
    `apps/api/__tests__/userCacheStreakMacro.mongo.test.js:42-70`). There is no
-   `$lookup`, `$unionWith` or other collection.
+   `$lookup`, `$unionWith` or other collection. A captured proof's memo read
+   happens before the key is formed (`middleware/userCache.js:115,274-278`), so
+   it is not a read in the computation.
 2. **Fenced writers.** Every field it reads, filter fields included, is written
    only inside `gameWrite` or `UserRevision.run` (`util/userRevision.js:98-106,163`),
    or, when a new kind is admitted, is already read by a covered kind on the same
@@ -219,7 +228,8 @@ itself unchanged (random summary, slice C3).
    its route passes `memo: false` under an enabled cache, so its 60-second
    `cached()` answers only while the cache is off (`routes/aggregations.js:110`;
    `services/aggregations.js:360-362`; `services/trendsRequests.js:42-67`). Item 6
-   governs a memo of a global input.
+   governs a memo of a global input and any in-flight join whose result depends
+   on one.
 4. **No clock in the result.** No value derived from the current time (`Date.now`,
    `new Date()`, `$$NOW` or a relative window) reaches a query, pipeline or
    response body. Timers that only age joins or expire reuse are exempt, such as
@@ -229,8 +239,12 @@ itself unchanged (random summary, slice C3).
    collection is allowed only when its result is part of the key and checked by
    a publish guard, as momentum's session policy is (`routes/aggregations.js:224-235`).
 6. **No unproved global input.** A global input needs a captured proof that drives
-   both the key and the calculation, as the four strength routes do
+   both the key and the calculation, as the five dependent kinds do
    (`services/strengthCurveSnapshots.js:43-47`; `middleware/userCache.js:268-270`).
+   Work that depends on the input either keys its join by the proof or skips the
+   join whenever a proof is supplied, as matchup time series does
+   (`services/aggregations.js:680-683`); a join that reads no global input, such
+   as `dateRange`, may stay shared.
 7. **Complete key.** Every request input is parsed before admission and passed as
    filters or options.
 8. **Size.** Typical bodies fit the 512 KiB entry cap (`middleware/userCache.js:10`),
@@ -391,7 +405,7 @@ Coherence holds only among protocol-v1 coordinated writers at or after
 `b8608d90` (PR813). They obtain acknowledged prepared authority and pin the
 readiness incarnation before dispatching credential work
 (`docs/adr/0071-device-credential-readiness.md:16-21`;
-`services/deviceCredentialWrites.js:95-96,200-204`). Writers from `df5cf875`
+`services/deviceCredentialWrites.js:95-96,224-228`). Writers from `df5cf875`
 (PR807), and the releases that shipped that writer unchanged until PR813, are
 pre-readiness actors. They gate and drain, and keep each operation on whatever
 valid record their begin step found, but never check an incarnation obtained by
@@ -424,8 +438,8 @@ While retention could be active, each of these needs its barrier first:
   recreates it, because that insert resets pending and `denyAll`
   (`services/deviceCredentialPreparation.js:38-45`).
 
-No durable disable or authorized repair primitive exists yet, so retention must
-not be activated before both ship.
+The durable disable primitive ships in source, owner-run and never invoked, but no authorized repair primitive exists yet, so retention must
+not be activated before the repair primitive ships too.
 
 Protocol changes keep `AUTHORITY_KEY` and the fail-closed filters
 (`services/deviceCredentialWrites.js:7,72-79`; `services/deviceAuthAuthority.js:11-17`).
@@ -443,13 +457,13 @@ authentication authority.
 | Gate | Today |
 | --- | --- |
 | Every credential writer coordinated on protocol v1 | Met in source since `df5cf875` (PR807); the inventory test checks placement lexically |
-| Every coordinated writer pins the readiness incarnation before dispatch | Met in source since `b8608d90` (`services/deviceCredentialWrites.js:95-96,200-204`); not checked by the inventory test |
+| Every coordinated writer pins the readiness incarnation before dispatch | Met in source since `b8608d90` (`services/deviceCredentialWrites.js:95-96,224-228`); not checked by the inventory test |
 | Prepared startup observed | Met for one attempt only (`docs/adr/0071-device-credential-readiness.md:5-9`) |
 | Serving cohort qualified, pre-readiness actors retired, same incarnation bound | Unmet (`docs/adr/0071-device-credential-readiness.md:51-55`) |
 | Clock rate and suspension behavior verified | Unmet; the constants are proposed (`docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:89-91`; `docs/adr/0071-device-credential-readiness.md:56-57`) |
 | Primary change and election behavior verified | Unmet (`docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:89-91`) |
-| Separate-process evidence | Unmet (`docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:89-91`) |
-| Durable disable and rollback primitive | Unmet; the rollback rule requires one (`docs/adr/0071-device-credential-readiness.md:59-60`; `docs/handoff/device-auth-rest-reuse-helpers-checkpoint.md:114`). The source has no deliberate disable: `denyAll` is set only by pending overflow or a missing owner scope (`services/deviceCredentialWrites.js:87-89,98`), and nothing exposes a way to set it (`:23-25`; `services/deviceAuthLease.js:12-13`) |
+| Separate-process evidence | Met in source for one revocation regression on one replica-set member, unwired: separate reader and writer processes, the reader's event loop blocked past the lease, and the held ticket, its second consume and the original lookup all refused after the writer's acknowledgement (`apps/api/__tests__/deviceAuthSeparateProcess.mongo.test.js:104-121`; `docs/handoff/device-auth-separate-process-checkpoint.md`). Election, clock-rate, suspension and multi-host behavior stay unmet under their own rows |
+| Durable disable and rollback primitive | Met in source, owner-run and never invoked; the rollback rule requires one (`docs/adr/0071-device-credential-readiness.md:59-60`). `disable()` compare-and-sets the exact incarnation to the non-granting prepared mode with a fresh generation, keeps pending work and `denyAll`, and drains the 2.1 s old-lease bound before it reports, after an unknown write outcome too (`services/deviceCredentialWrites.js:198-220`). The owner script dry-runs by default and writes only with the exact incarnation and `--apply` (`apps/api/scripts/disable-device-auth-retention.js:22-36`); no route, endpoint or flag reaches either. After a disable no lease grants and a ticket prepared earlier cannot be consumed (`apps/api/__tests__/deviceCredentialDisable.mongo.test.js:61-75`). A raw restore or manual edit can rewind the record, so those still need the repair row, and nothing deliberately sets `denyAll` (`services/deviceCredentialWrites.js:87-89,98`) |
 | Authorized repair that mints a fresh incarnation | Unmet; the only source path that mints one recreates a missing record (`services/deviceCredentialPreparation.js:38-45`), which this ADR forbids as a repair |
 | Failed-probe suppression | Met in source as a bounded rate, unwired. A probe that settles without a usable grant holds off new probes for one lease, timed from its actual settlement and re-armed after every failed probe; until then `acquire()` returns no grant with no dispatch and no wait, and a valid grant, `denyAll` included, starts no hold-off (`services/deviceAuthLease.js:20,50,94-96`; `apps/api/__tests__/deviceAuthLease.test.js:80-144`). It bounds the probes but does not remove them: under continuous demand an injected adapter facing a prepared, missing or unreachable record still sends at most one majority/journal `findAndModify` (a nonce write only when a row matches) per probe duration plus 1.8 s per process, and the caller that starts it, with up to 15 coalesced callers, can wait up to about 1.8 s. ADR 0071's statement that prepared metadata adds no grant probes therefore holds only while the adapter stays uninjected (`docs/adr/0071-device-credential-readiness.md:47-48`). Before step 2 under Activation receipts, the wiring slice must either accept this bounded rate in ADR 0071 and this row, or send no probes while the record is prepared |
 | Reviewed activation CAS | Unmet (`docs/adr/0071-device-credential-readiness.md:49,56-57`; `services/deviceAuthLease.js:12-13`) |
@@ -467,8 +481,8 @@ under `apps/api/scripts`, manual database edits and raw restores.
   bodies live only in process memory (`config/loader.js:151`; `app.js:394-396`;
   `middleware/userCache.js:19-33`), so that deploy discards them. Turn the flag
   back on only with a fresh receipt.
-- **Device credentials.** Use the barriers under Scope. Until the disable and
-  authorized repair primitives exist, the only compliant state is that retention
+- **Device credentials.** Use the barriers under Scope. Until the authorized
+  repair primitive exists, the only compliant state is that retention
   is not active.
 
 ## Activation receipts
