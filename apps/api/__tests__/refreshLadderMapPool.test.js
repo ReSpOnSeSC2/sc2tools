@@ -110,11 +110,15 @@ describe("run", () => {
     expect(await fs.readFile(seedPath, "utf8")).toBe(before);
   });
 
-  test("exits 1 without touching the seed when Liquipedia errors", async () => {
+  // 429 is Liquipedia's IP block, not an outage: its own exit code.
+  test.each([
+    [503, 1],
+    [429, 2],
+  ])("HTTP %i exits %i without touching the seed", async (status, code) => {
     const before = await writeSeed(seedPath, ["Alpha LE"], []);
-    const fetchImpl = jest.fn(async () => ({ ok: false, status: 429 }));
+    const fetchImpl = jest.fn(async () => ({ ok: false, status }));
     const out = await run({ seedPath, fetchImpl, logger: SILENT });
-    expect(out.code).toBe(1);
+    expect(out).toEqual({ code, changed: false, summary: null });
     expect(await fs.readFile(seedPath, "utf8")).toBe(before);
   });
 
