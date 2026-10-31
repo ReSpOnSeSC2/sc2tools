@@ -2,6 +2,7 @@
 
 const { BSON } = require("mongodb");
 const { isDeepStrictEqual } = require("util");
+const { withUpdatedAt } = require("../util/corpusUpdatedAt");
 const { tagClassificationPipeline } = require("./buildIntentGuards");
 
 /** @typedef {{you:Readonly<import('./buildIntentGuards').AxisOutcome>,
@@ -88,7 +89,7 @@ async function applyCustomBuildIngestTag(db, owner, mutation, session) {
   const written = await db.games.findOneAndUpdate(
     { userId: owner.userId, gameId: mutation.gameId,
       ...(mutation.expectedRevision !== null ? { _customBuildRevision: mutation.expectedRevision } : {}) },
-    tagClassificationPipeline(mutation.decision),
+    withUpdatedAt(tagClassificationPipeline(mutation.decision)),
     { projection: { _id: 1 }, upsert: false, ...(session ? { session } : {}) },
   );
   if (mutation.expectedRevision !== null && !written) {

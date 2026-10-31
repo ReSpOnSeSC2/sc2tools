@@ -12,6 +12,7 @@ const { gameStatsWritesFor } = require("../src/services/gameStatsWrites");
 const { gameStampAdmission } = require("../src/services/opponentGameStamps");
 const { PROTOCOL_VERSION, MAINTENANCE_VERSION } = require("../src/services/gameStatsMaintenance");
 const { readyStatsFromOwnerRow } = require("../src/services/maintainedGameStatsRead");
+const { stamped, original } = require("./helpers/corpusStamp");
 
 const logger = pino({ level: "silent" }), userId = "opponent-family-owner", played = new Date("2026-10-20T12:00:00Z"), commands = [];
 let mongo, mongoChild, db, writer, games;
@@ -71,7 +72,7 @@ beforeEach(async () => {
 });
 
 test.each([["region", () => region(), { q: { userId, gameId: "g1" }, u: { $set: { "opponent.region": "EU" } }, upsert: false }],
-  ["identity", () => identity(), { q: { userId, "opponent.pulseId": "p1" }, u: { $set: { "opponent.region": "EU", "opponent.pulseCharacterId": "77" } },
+  ["identity", () => identity(), { q: { userId, "opponent.pulseId": "p1" }, u: stamped({ $set: { "opponent.region": "EU", "opponent.pulseCharacterId": "77" } }),
     multi: true, upsert: false }]])("%s claims the owner first and sends one fixed game command in the same transaction", async (_name, input, statement) => {
   await seed(); const owner = await writer.capture(userId); commands.length = 0;
   await writer.write(owner, input());

@@ -43,8 +43,10 @@ function deferred() {
 const logged = (fn, msg) => fn.mock.calls.filter(([, m]) => m === msg);
 
 describe("startBackgroundIndexBuilds", () => {
-  test("builds exactly the guide games index the pipelines hint on", () => {
-    expect(BACKGROUND_GAMES_INDEXES.map((spec) => spec.options.name)).toEqual([GUIDE_GAMES_INDEX_NAME]);
+  test("builds exactly the guide games index the pipelines hint on, and the corpus change-stamp index", () => {
+    expect(BACKGROUND_GAMES_INDEXES.map((spec) => spec.options.name)).toEqual([GUIDE_GAMES_INDEX_NAME, "games_user_updated_at"]);
+    expect(BACKGROUND_GAMES_INDEXES[1]).toStrictEqual({ key: { userId: 1, updatedAt: 1 },
+      options: { name: "games_user_updated_at", partialFilterExpression: { updatedAt: { $exists: true } } } });
   });
 
   test("starts the build without waiting, with no client deadline, and logs success at info", async () => {

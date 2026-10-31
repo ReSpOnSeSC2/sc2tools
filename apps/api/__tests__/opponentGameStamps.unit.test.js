@@ -6,6 +6,7 @@ const { OpponentsService } = require("../src/services/opponents");
 const { MAX_ACTIVE } = require("../src/services/gameStatsWrites");
 const { immutableNeutralMutation } = require("../src/services/gameStatsCountNeutral");
 const { takeRepairLivenessIssuer } = require("../src/services/gdprRepairLiveness");
+const { stamped, original } = require("./helpers/corpusStamp");
 const { snapshotStampGame, regionStampPossible, gameStampAdmission, backfillStampAdmission, stampOpponentGameRegion,
   healOpponentGameIdentity } = require("../src/services/opponentGameStamps");
 
@@ -188,7 +189,7 @@ test("ordinary admissions write the branded descriptor; repair admissions use on
   await healOpponentGameIdentity(h.writer, h.revisions, userId, "p1", { region: "EU" }, repair);
   expect(write).not.toHaveBeenCalled();
   expect(h.users.updateOne.mock.calls[0][0]).toMatchObject({ "_gdprMutation.id": r.fenceId, "_gdprMutation.kind": "repair_opponents" });
-  expect(h.games.updateMany).toHaveBeenLastCalledWith({ userId, "opponent.pulseId": "p1" }, { $set: { "opponent.region": "EU" } }, { upsert: false });
+  expect(h.games.updateMany).toHaveBeenLastCalledWith({ userId, "opponent.pulseId": "p1" }, stamped({ $set: { "opponent.region": "EU" } }), { upsert: false });
 });
 
 test("helper no-ops return before admission is used, and helpers never capture", async () => {

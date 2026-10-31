@@ -8,6 +8,7 @@ const { PerGameComputeService } = require("../src/services/perGameCompute");
 const { BuildIntentGameState } = require("../src/services/buildIntentGameState");
 const { BuildIntentBind } = require("../src/services/buildIntentBind");
 const { applyOverridePipeline } = require("../src/services/buildIntentAttribution");
+const { original: ownStages } = require("./helpers/corpusStamp");
 let mongo, db, revisions;
 const row = () => ({ userId: "a", gameId: "game", date: new Date(), result: "Victory", myRace: "Protoss", map: "Site Delta LE", durationSec: 600,
   myBuild: "Unclassified", matchFormat: "1v1", opponent: { race: "Zerg" }, buildLog: ["[0:40] Gateway"] });
@@ -66,7 +67,7 @@ test.each(["reclassify", "reclassifyAll", "tagSingleGame"])("%s's unknown promot
       ? filter.gameId === "game"
       : typeof filter["_customBuildReclassify.runId"] === "string"
         && filter["_customBuildReclassify.runId"].length > 0
-        && Array.isArray(update) && Object.hasOwn(update[0]?.$set || {}, "myBuild"));
+        && Array.isArray(update) && Object.hasOwn(ownStages(update)[0]?.$set || {}, "myBuild"));
     if (!promotion || injections) return original(...args);
     injections += 1;
     expect(revisions.current(before)).toBe(false);
