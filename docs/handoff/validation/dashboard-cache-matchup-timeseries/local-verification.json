@@ -1,0 +1,244 @@
+{
+  "schemaVersion": 1,
+  "slice": "C4-matchup-timeseries",
+  "status": "LOCAL_TYPES_LINT_539_API_156_WEB_PASS_15_OF_15_MUTATIONS_NOT_RELEASED",
+  "source": {
+    "base": "2fabe343",
+    "testedCommit": "000734b65fce0c3b0f710b338a2c135303ed694e",
+    "mutationCommit": "ef4d67c46c55e5ba13969a2183557557dbc86949",
+    "mutationToTestedDiff": "One JSDoc line in apps/api/src/services/aggregations.js (review wording).",
+    "applicationFiles": [
+      "apps/api/src/middleware/userCache.js",
+      "apps/api/src/routes/aggregations.js",
+      "apps/api/src/services/aggregations.js",
+      "apps/api/src/services/trendsAggregations.js",
+      "apps/api/src/services/types.d.ts",
+      "apps/web/lib/conditionalApiScope.tsx"
+    ]
+  },
+  "admission": {
+    "kind": "matchupTimeseries",
+    "path": "/v1/timeseries/matchups",
+    "webCapabilityPosition": 20,
+    "coveredKinds": [
+      20,
+      21
+    ],
+    "dependentKinds": [
+      4,
+      5
+    ],
+    "innerSharing": "Work under a captured curve proof skips the chart join; the curve-independent date-range probe stays shared and owner-scoped.",
+    "structurallyBoundedSize": false,
+    "unguardedCallers": "HEAD and the date-range seeders; admin global trends runs on its own per-call service",
+    "checklist": "docs/handoff/dashboard-cache-matchup-timeseries-checkpoint.md"
+  },
+  "actual": {
+    "apiTypesExit": 0,
+    "apiConfiguredLint": {
+      "errors": 0,
+      "warnings": 758
+    },
+    "changedFilesAddedLintMessages": 0,
+    "strictImprovements": [
+      "buildAggregationsRouter length 351 -> 349",
+      "trendsAggregations.matchupTimeseries complexity 15 -> 13"
+    ],
+    "apiSuites": 30,
+    "apiCases": 539,
+    "webFiles": 15,
+    "webCases": 156,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "ownedMongodLeftover": 0,
+    "mutationsKilled": "15/15",
+    "mutations": [
+      {
+        "id": "C4-M1-allowed-not-dependent",
+        "failing": [
+          "FAIL __tests__/userCacheMatchupTimeseries.mongo.test.js (9.166 s)",
+          "● one captured curve drives the Mongo expectation and every rating pair even if the memo changes before work",
+          "● after a curve expire, the next request runs its own computation instead of joining the old one"
+        ]
+      },
+      {
+        "id": "C4-M2-not-covered",
+        "failing": [
+          "FAIL __tests__/userCacheMatchupTimeseries.mongo.test.js (21.083 s)",
+          "● daily matchups matches the original body under the captured curve, revalidates 304 and never reads the public curve",
+          "● default matches the original body under the captured curve, revalidates 304 and never reads the public curve"
+        ]
+      },
+      {
+        "id": "C4-M3-plain-json",
+        "failing": [
+          "FAIL __tests__/userCacheMatchupTimeseries.mongo.test.js (21.035 s)",
+          "● daily matchups matches the original body under the captured curve, revalidates 304 and never reads the public curve",
+          "● default matches the original body under the captured curve, revalidates 304 and never reads the public curve"
+        ]
+      },
+      {
+        "id": "C4-M4-key-options-copy",
+        "failing": [
+          "FAIL __tests__/userCacheRoutes.test.js",
+          "● matchup time series gives each chart option its own key and keys the very options object the service receives"
+        ]
+      },
+      {
+        "id": "C4-M5-service-ignores-proof",
+        "failing": [
+          "FAIL __tests__/userCacheMatchupTimeseries.mongo.test.js",
+          "● daily matchups matches the original body under the captured curve, revalidates 304 and never reads the public curve",
+          "● default matches the original body under the captured curve, revalidates 304 and never reads the public curve"
+        ]
+      },
+      {
+        "id": "C4-M6-shaping-reads-memo",
+        "failing": [
+          "FAIL __tests__/userCacheMatchupTimeseries.mongo.test.js",
+          "● daily matchups matches the original body under the captured curve, revalidates 304 and never reads the public curve",
+          "● default matches the original body under the captured curve, revalidates 304 and never reads the public curve"
+        ]
+      },
+      {
+        "id": "C4-M7-mongo-reads-memo",
+        "failing": [
+          "FAIL __tests__/userCacheMatchupTimeseries.mongo.test.js",
+          "● daily matchups matches the original body under the captured curve, revalidates 304 and never reads the public curve",
+          "● default matches the original body under the captured curve, revalidates 304 and never reads the public curve"
+        ]
+      },
+      {
+        "id": "C4-M8-elo-proof-falls-back",
+        "failing": [
+          "FAIL __tests__/matchupTimeseriesProof.test.js",
+          "● an Elo proof (no curve) stays Elo instead of falling back to the memo"
+        ]
+      },
+      {
+        "id": "C4-M9-proof-joins-chart-work",
+        "failing": [
+          "FAIL __tests__/matchupTimeseriesProof.test.js",
+          "● work under different proofs never shares a computation, while proof-less requests still join",
+          "● different proofs share the owner's curve-independent date-range probe, and another owner never does"
+        ]
+      },
+      {
+        "id": "C4-M10-eager-capture",
+        "failing": [
+          "FAIL __tests__/userCacheMatchupTimeseries.mongo.test.js",
+          "● a HEAD never captures a proof, and a GET under a newer curve never adopts the HEAD's in-flight computation",
+          "FAIL __tests__/userCacheRoutes.test.js"
+        ]
+      },
+      {
+        "id": "C4-M11-probe-loses-owner",
+        "failing": [
+          "FAIL __tests__/matchupTimeseriesProof.test.js",
+          "● different proofs share the owner's curve-independent date-range probe, and another owner never does"
+        ]
+      },
+      {
+        "id": "C4-M12-strength-drops-proof",
+        "failing": [
+          "FAIL __tests__/strengthCache.mongo.test.js",
+          "● matchups matches original real aggregates, revalidates304 and retires owner writes/unknown outcomes",
+          "● maps matches original real aggregates, revalidates304 and retires owner writes/unknown outcomes"
+        ]
+      },
+      {
+        "id": "C4-M13-off-arity-changes",
+        "failing": [
+          "FAIL __tests__/userCacheRoutes.test.js",
+          "● a HEAD with the cache enabled never captures a proof and keeps each service's original arguments",
+          "● matchupTimeseries off is identical to the old router, never captures and keeps the service's original arguments"
+        ]
+      },
+      {
+        "id": "C4-M14-web-path-missing",
+        "failing": [
+          "× useApi actual SWR manual conditional integration > /v1/timeseries/matchups discovers capability with one ordinary read, retains the next200 and reconstructs304 84ms",
+          "× private response capability positions > preserves the original eleven, the four direct snapshot routes, streak and macro report, then the net-MMR pair, random summary and matchup time series 1ms",
+          "FAIL  lib/__tests__/clientApi.conditional.test.tsx > useApi actual SWR manual conditional integration > /v1/timeseries/matchups discovers capability with one ordinary read, retains the next200 and reconstructs304"
+        ]
+      },
+      {
+        "id": "C4-M15-web-position-moved",
+        "failing": [
+          "× private response capability positions > preserves the original eleven, the four direct snapshot routes, streak and macro report, then the net-MMR pair, random summary and matchup time series 4ms",
+          "FAIL  lib/__tests__/conditionalApiScope.routes.test.ts > private response capability positions > preserves the original eleven, the four direct snapshot routes, streak and macro report, then the net-MMR pair, random summary and matchup time series"
+        ]
+      }
+    ]
+  },
+  "independentReview": {
+    "reviewers": 1,
+    "codeDefects": 0,
+    "minorDocFindings": 7,
+    "addressedIn": [
+      "000734b6 (comment)",
+      "this docs commit"
+    ],
+    "note": "A six-dimension workflow was stopped for cost; one read-only reviewer covered code, tests, ADR, checkpoint and delivery records against GitHub."
+  },
+  "retained": [
+    "Mutation round one hung after its first mutation: failing held-request tests kept Jest alive. ef4d67c4 releases held work after each test, and round two runs Jest with --forceExit and a per-run bound."
+  ],
+  "boundaries": [
+    "Exact-head CI, merge, deployment and production acceptance remain pending.",
+    "USER_CACHE_ENABLED stays off. No activation, latency, request-reduction, savings or fleet proof; G1-G3 stay unmet as ADR 0072 records."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c4-20261030/CHECKS-01.json",
+      "sha256": "5850dbfebf37a6d452a85966915bb895eb0323f1c704dcff82cf28178785a0fb",
+      "bytes": 3865
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c4-20261030/checks-01/api-jest.json",
+      "sha256": "2f9c06bcf887b2945b4152170e323050c0ef7e02459d861966aa27086ec2d081",
+      "bytes": 209603
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c4-20261030/checks-01/api-lint.json",
+      "sha256": "1713c4f2184283e7226ce5ea8fd993ef61ec89104b50926309b7b5268d7b31b8",
+      "bytes": 7492637
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c4-20261030/checks-01/web-vitest.json",
+      "sha256": "eb844c357283179fe5570eaf7be42ef0adab0a502f32b4237a2a1fb9c0334e4f",
+      "bytes": 57960
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c4-20261030/checks-01/lint-no-added.txt",
+      "sha256": "d752ac83051ea9bf0b33ee72ae8841d4e4ad8a0dd43c1e56e09a8b1176557c3d",
+      "bytes": 1986
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c4-20261030/mutation-02/MUTATION-RESULTS.json",
+      "sha256": "6a4b9d5ace2f464f3e1134ee13c79b39aa7b7fdc84fbe21e27cf426f24ff6a76",
+      "bytes": 21825
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c4-20261030/scripts/final-checks-c4-01.mjs",
+      "sha256": "b5e581448225666ed9489d63ddd04608b176a9c4a1309ea4d80c201e6efc71f5",
+      "bytes": 7608
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c4-20261030/scripts/mutation-check-c4-02.mjs",
+      "sha256": "113cd13c545927748d77b97e442215b244bc6fb7f77d6a10f3636bfb7b94594a",
+      "bytes": 8285
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c4-20261030/scripts/lint-noadd-c4-01.mjs",
+      "sha256": "00491f038906674ef7422e9e4312e26f2bcf0b3572c799a069f90a39f7559064",
+      "bytes": 2874
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c4-20261030/scripts/run-c4-jest.mjs",
+      "sha256": "16fe38d73f8f2ab74e78b8472e741bc83680caee57fd095c32d415f2c5fa7cab",
+      "bytes": 3897
+    }
+  ]
+}
