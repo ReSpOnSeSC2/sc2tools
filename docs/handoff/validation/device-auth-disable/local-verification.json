@@ -1,12 +1,20 @@
 {
   "schemaVersion": 1,
   "slice": "DA4-durable-disable",
-  "status": "LOCAL_TYPES_LINT_179_DEVICE_AUTH_CASES_PASS_7_OF_7_MUTATIONS_NOT_RELEASED",
+  "status": "LOCAL_TYPES_LINT_180_DEVICE_AUTH_CASES_PASS_11_OF_11_MUTATIONS_REVIEWED_NOT_RELEASED",
+  "supersedes": {
+    "receiptSha256": "240a96e5808422ef5940ac8a7f5dc6bd986ba9f83e429a2d7ccdbf2d7affbe66",
+    "testedCommit": "7f4c433ed329b193b6fc240e2f84b729549964d7",
+    "reason": "Independent review: an unverified written record skipped the drain and the script reported it as refused."
+  },
   "source": {
     "base": "3c561429 (DA3, PR #832)",
-    "testedCommit": "7f4c433ed329b193b6fc240e2f84b729549964d7",
-    "mutationCommit": "eca91b5602114458dbcabf6713b2ac1a0353cf28",
-    "mutationToTestedDiff": "C4's one JSDoc line in apps/api/src/services/aggregations.js.",
+    "testedCommit": "90126ee2fdb013fb29afcadf9de83cc2dec9a250",
+    "mutationCommit": "90126ee2fdb013fb29afcadf9de83cc2dec9a250",
+    "reviewFixes": [
+      "173bb37c drains before an unverified disable throws and maps every script outcome exactly",
+      "90126ee2 splits the script's write step for strict lint; behavior unchanged"
+    ],
     "applicationFiles": [
       "apps/api/src/services/deviceCredentialWrites.js",
       "apps/api/scripts/disable-device-auth-retention.js"
@@ -24,11 +32,16 @@
       "denyAll"
     ],
     "drainMs": 2100,
-    "outcomes": {
-      "disabled": 0,
-      "refused": 1,
-      "usage": 2,
-      "possibly-disabled": 3
+    "drainsAfter": [
+      "success",
+      "unknown write outcome",
+      "a written record that fails verification (then throws)"
+    ],
+    "exitCodes": {
+      "0": "dry run or disabled",
+      "1": "refused or failed before any write",
+      "2": "usage, invalid incarnation included",
+      "3": "outcome unknown after the write was attempted"
     },
     "reachableFrom": "Owner-run script only; no route, endpoint, flag or startup path.",
     "everInvoked": false
@@ -42,12 +55,12 @@
     "changedFileAddedLintMessages": 0,
     "newFilesStrictLintMessages": 0,
     "deviceAuthSuites": 15,
-    "deviceAuthCases": 179,
+    "deviceAuthCases": 180,
     "inBand": true,
     "cachedMongo": "7.0.14",
     "downloads": false,
     "ownedMongodLeftover": 0,
-    "mutationsKilled": "7/7",
+    "mutationsKilled": "11/11",
     "mutations": [
       {
         "id": "DA4-M1-sets-active",
@@ -62,7 +75,7 @@
         "file": "apps/api/src/services/deviceCredentialWrites.js"
       },
       {
-        "id": "DA4-M4-no-drain-after-success",
+        "id": "DA4-M4-no-drain-after-write",
         "file": "apps/api/src/services/deviceCredentialWrites.js"
       },
       {
@@ -76,11 +89,34 @@
       {
         "id": "DA4-M7-dry-run-writes",
         "file": "apps/api/scripts/disable-device-auth-retention.js"
+      },
+      {
+        "id": "DA4-M8-unverified-throws-before-drain",
+        "file": "apps/api/src/services/deviceCredentialWrites.js"
+      },
+      {
+        "id": "DA4-M9-drains-before-write",
+        "file": "apps/api/src/services/deviceCredentialWrites.js"
+      },
+      {
+        "id": "DA4-M10-post-write-failure-exits-refused",
+        "file": "apps/api/scripts/disable-device-auth-retention.js"
+      },
+      {
+        "id": "DA4-M11-apply-without-record-succeeds",
+        "file": "apps/api/scripts/disable-device-auth-retention.js"
       }
     ]
   },
+  "independentReview": {
+    "reviewers": 1,
+    "findingsForThisSlice": 3,
+    "fixed": 3,
+    "note": "One read-only reviewer covered DA3, DA4 and G1 together; its DA4 findings (unverified drain and exit code, script reporting, test gaps) are fixed."
+  },
   "citationUpdates": [
-    "ADR 0072 cites prepareWriterAuthority at services/deviceCredentialWrites.js:224-228 (was 200-204) in two places."
+    "ADR 0072 cites prepareWriterAuthority at services/deviceCredentialWrites.js:224-228 (was 200-204) in two places.",
+    "ADR 0072 cites the script at apps/api/scripts/disable-device-auth-retention.js:24-57."
   ],
   "boundaries": [
     "Not a repair: a raw restore or manual edit of the authority record can rewind it; the authorized repair primitive stays unmet.",
@@ -89,44 +125,59 @@
   ],
   "references": [
     {
-      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/CHECKS-01.json",
-      "sha256": "2ffd9574d872a2eb52cc6b77212977bf9de5972e4556aa229931bb051291835a",
-      "bytes": 838
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/CHECKS-02.json",
+      "sha256": "43548f83a684760c76ff2a8f1742c1fbffd30f472025fcf7556c5b6e672d9fef",
+      "bytes": 796
     },
     {
-      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/checks-01/api-lint.json",
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/checks-03/steps.txt",
+      "sha256": "0a35e88f4344ee8bebf83358573f6e27d4def1ad6c2af580d3b9a3f46d2239f1",
+      "bytes": 30
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/checks-03/api-jest-summary.json",
+      "sha256": "b596fa399c58bf27b26fa9d6edc67524ec6ba7df45268257a4c0573753372685",
+      "bytes": 239
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/checks-03/api-lint.json",
       "sha256": "3e337954fd96e4919f39dbcbcebb5b5bcfea403dc182d6a4f3864c2bed9130d5",
       "bytes": 7494798
     },
     {
-      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/checks-01/api-types.log",
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/checks-03/api-types.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0
     },
     {
-      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/checks-01/lint-no-added.txt",
-      "sha256": "5f2748208ddfdd6944632f1c49c327107a79267e2f88c8e002dc8d7911c05151",
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/checks-03/lint-no-added.txt",
+      "sha256": "fa0931bb36f38e9ff6f41fc36bce459faa588c3701f4250d4ca5a790d92ae790",
       "bytes": 367
     },
     {
-      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/dev/final-01-jest.json",
-      "sha256": "5f89fb290d9282db3532e0e1cda45c29fda3f35bf7d2dc579fc46f5e45d83eb7",
-      "bytes": 69692
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/dev/final-03-jest.json",
+      "sha256": "c323d04d400f9523e33ca85f323a5d36c46604592eee5e3a427ba9c5a84e670b",
+      "bytes": 70110
     },
     {
-      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/dev/final-01.log",
-      "sha256": "d4ebfa4c92628e79f09f713f71f24684a258337f1539780d881130532c760a93",
-      "bytes": 13654
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/dev/final-03.log",
+      "sha256": "6d6abaf0230e8a5ad6960f07d02ee5ac3797d701604a3cbd75e6dcc866c21f07",
+      "bytes": 13681
     },
     {
-      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/mutation-02/MUTATION-RESULTS.json",
-      "sha256": "3b449d37ec2d80945eaba26e8bae6012b9b3d67c803f5789f5543e68cc1c387a",
-      "bytes": 5165
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/mutation-04/MUTATION-RESULTS.json",
+      "sha256": "2e507d043f6ff23dc00fb39c792d713ea9e7a038bbbee36b302a760d61036d92",
+      "bytes": 8580
     },
     {
-      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/scripts/mutation-check-da4-01.mjs",
-      "sha256": "1043bf312d8e5872b324390b2ffce7407435fda31e6825355d9f2ba1b554c1a6",
-      "bytes": 5140
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/scripts/mutation-check-da4-02.mjs",
+      "sha256": "9d8642876cffcf86e7f6a6505d7f30d6c2c8e4db93f832367701164d208b40c4",
+      "bytes": 6341
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/scripts/final-checks-da4-03.sh",
+      "sha256": "3e7f29bed2520b5e3840cd6c9e62ea9db081c038fa6977859be8a782de498bd9",
+      "bytes": 1442
     },
     {
       "file": "C:/SC2TOOLS/.cache/faster-dashboards-da4-20261030/scripts/run-da4-jest.mjs",
