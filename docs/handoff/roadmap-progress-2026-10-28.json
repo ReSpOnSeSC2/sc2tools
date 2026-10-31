@@ -1958,9 +1958,9 @@
       "dependsOn": [
         "realtime-one-connection"
       ],
-      "implemented": "Owner revisions/default-off six-chart cache, ETag/304, deferred Trends, five-minute activity writes,30s latestAgent and minute device touches are merged. Read-only admin chart-cache health is delivered in PR798 with Off/Not reported/Enabled distinctions and no activation. PR801 extends safe owner-game cache coverage to11 response kinds while the chart flag stays off. PR804 fences all inventoried owner-game writers; PR805 eagerly maintains totals/latest in those transactions. Both are merged and actual protocol2 startup/Ready/Live is recorded. PR810 now deploys the maintenance2 retained-state boundary and single fresh owner/preferences/proof envelope for lighter /me and Doctor, with exact original Mongo fallback for unsupported BSON or unqualified state. Actual Ready/Live b8ef1b94 and scoped signed-in header/Doctor acceptance are recorded; the live query branch and savings were not instrumented. Revocation-coherent device-auth retention, its serving-cohort/cutover proof and common fleet/chart coherence remain unfinished. PR813 prepares credential writer readiness and an unwired retained REST adapter; it does not activate retained authentication. PR815 delivers closed count-neutral macro/build-decision writes; PR817 delivers owner-captured Pulse MMR/league stamps with exact required checks and scoped Ready/Live acceptance at6e663568. The current default-off source adds four direct strength responses using one immutable curve proof for key and calculation. Separate local 893 API/121 web cases, types/lint, all83 budgets and two transport cases are retained. PR818 then passed exact-head CI and scoped Live/Ready desktop acceptance at4cc33ba2 with the chart cache Off. The closed custom-build EOF writer prerequisite passed local 801/37/types/lint, then PR819 exact-head CI and scoped API Live/website Ready desktop acceptance at 5e48898a. The fresh-ingest tag writer then passed PR820 exact-head CI and scoped API Live/website Ready desktop acceptance at 059a168b. The closed custom-build definition save/rename writer passed local 1393/71/types/configured lint after retained type, lint and test-batch failures, then PR821 exact-head CI; it merged as de2031ad and both production deployments succeeded for that exact commit, while signed-in read-only acceptance was not performed. The opponent region-stamp and identity-heal writers are now closed count-neutral families with owner-first carry-or-retire and a deny-only fenced repair handle; they passed local 3056/214/types/configured lint, then PR822 exact-head CI, merged as 27b9aeb0, and both production deployments succeeded for that exact commit, while signed-in read-only acceptance was not performed. ADR 0072 now records the serving-cohort and rolling-overlap coherence contract, the source-coverage admission checklist and the receipt required before any activation; a fail-closed lexical source-inventory test checks the device-credential writers against its copy of the ADR's actor table. It changes no runtime behavior and activates nothing. Slice C1 then admits /v1/streak and /v1/macro/report under that checklist, so default-off source coverage is 17 response kinds; it passed local types, configured lint, 293 API and 117 web cases, 7/7 mutations and an independent review, and is not released. Slice DA2 then bounds the unwired device-auth lease's grant probes: a probe that settles without a usable grant holds off new probes for one 1.8-second lease from its settlement, re-armed after every failure; it passed local types, lint, 231 device-auth cases, 7/7 mutations and an independent review, and is not released. Probes are bounded, not removed, so ADR 0071's no-probe statement still depends on the adapter staying uninjected. Slice C2 then admits /v1/mmr-by-matchup and /v1/mmr-by-matchup/opponents, so default-off source coverage is 19 response kinds; ADR 0072's checklist items 1 and 2 are amended for the net-MMR full-history window and coaching's call is named as a first-observation source; it passed local types, configured lint, 433 API and 119 web cases, 11/11 mutations and an independent review, and is not released. Slice C3 then admits /v1/random-summary, whose one-minute completed memo now answers only while the cache is off, so default-off source coverage is 20 response kinds; ADR 0072's checklist item 3, its preamble and its cross-process table are amended; it passed local types, configured lint, 449 API and 129 web cases, 12/12 mutations and an independent review, and is not released. Wider writer/fleet proof remains unfinished. No cache activation or savings is claimed.",
+      "implemented": "Owner revisions/default-off six-chart cache, ETag/304, deferred Trends, five-minute activity writes,30s latestAgent and minute device touches are merged. Read-only admin chart-cache health is delivered in PR798 with Off/Not reported/Enabled distinctions and no activation. PR801 extends safe owner-game cache coverage to11 response kinds while the chart flag stays off. PR804 fences all inventoried owner-game writers; PR805 eagerly maintains totals/latest in those transactions. Both are merged and actual protocol2 startup/Ready/Live is recorded. PR810 now deploys the maintenance2 retained-state boundary and single fresh owner/preferences/proof envelope for lighter /me and Doctor, with exact original Mongo fallback for unsupported BSON or unqualified state. Actual Ready/Live b8ef1b94 and scoped signed-in header/Doctor acceptance are recorded; the live query branch and savings were not instrumented. Revocation-coherent device-auth retention, its serving-cohort/cutover proof and common fleet/chart coherence remain unfinished. PR813 prepares credential writer readiness and an unwired retained REST adapter; it does not activate retained authentication. PR815 delivers closed count-neutral macro/build-decision writes; PR817 delivers owner-captured Pulse MMR/league stamps with exact required checks and scoped Ready/Live acceptance at6e663568. The current default-off source adds four direct strength responses using one immutable curve proof for key and calculation. Separate local 893 API/121 web cases, types/lint, all83 budgets and two transport cases are retained. PR818 then passed exact-head CI and scoped Live/Ready desktop acceptance at4cc33ba2 with the chart cache Off. The closed custom-build EOF writer prerequisite passed local 801/37/types/lint, then PR819 exact-head CI and scoped API Live/website Ready desktop acceptance at 5e48898a. The fresh-ingest tag writer then passed PR820 exact-head CI and scoped API Live/website Ready desktop acceptance at 059a168b. The closed custom-build definition save/rename writer passed local 1393/71/types/configured lint after retained type, lint and test-batch failures, then PR821 exact-head CI; it merged as de2031ad and both production deployments succeeded for that exact commit, while signed-in read-only acceptance was not performed. The opponent region-stamp and identity-heal writers are now closed count-neutral families with owner-first carry-or-retire and a deny-only fenced repair handle; they passed local 3056/214/types/configured lint, then PR822 exact-head CI, merged as 27b9aeb0, and both production deployments succeeded for that exact commit, while signed-in read-only acceptance was not performed. ADR 0072 now records the serving-cohort and rolling-overlap coherence contract, the source-coverage admission checklist and the receipt required before any activation; a fail-closed lexical source-inventory test checks the device-credential writers against its copy of the ADR's actor table; it passed PR824 exact-head CI, merged as c790de3e, and is deployed in main 2fabe343. It changes no runtime behavior and activates nothing. Slice C1 then admits /v1/streak and /v1/macro/report under that checklist, so default-off source coverage is 17 response kinds; it passed local types, configured lint, 293 API and 117 web cases, 7/7 mutations and an independent review, then PR825 exact-head CI, merged as 4a4df22f, and both production deployments succeeded for main 2fabe343, which contains it; signed-in read-only acceptance was not performed. Slice DA2 then bounds the unwired device-auth lease's grant probes: a probe that settles without a usable grant holds off new probes for one 1.8-second lease from its settlement, re-armed after every failure; it passed local types, lint, 231 device-auth cases, 7/7 mutations and an independent review, then PR826 exact-head CI, merged as 294c24ab, and both production deployments succeeded for main 2fabe343, which contains it; the lease stays uninjected, and signed-in read-only acceptance was not performed. Probes are bounded, not removed, so ADR 0071's no-probe statement still depends on the adapter staying uninjected. Slice C2 then admits /v1/mmr-by-matchup and /v1/mmr-by-matchup/opponents, so default-off source coverage is 19 response kinds; ADR 0072's checklist items 1 and 2 are amended for the net-MMR full-history window and coaching's call is named as a first-observation source; it passed local types, configured lint, 433 API and 119 web cases, 11/11 mutations and an independent review, then PR828 exact-head CI, merged as d20bce90, and both production deployments succeeded for main 2fabe343, which contains it; signed-in read-only acceptance was not performed. Slice C3 then admits /v1/random-summary, whose one-minute completed memo now answers only while the cache is off, so default-off source coverage is 20 response kinds; ADR 0072's checklist item 3, its preamble and its cross-process table are amended; it passed local types, configured lint, 449 API and 129 web cases, 12/12 mutations and an independent review, then PR829 exact-head CI, merged as 2fabe343, and both production deployments succeeded for that exact commit; signed-in read-only acceptance was not performed. Slice C4 then admits /v1/timeseries/matchups as a curve-dependent kind: one captured MMR-curve proof keys the body and drives both the Mongo expectation and every rating window, and work under a proof skips the in-flight chart join, so default-off source coverage is 21 response kinds; ADR 0072's checklist preamble, items 1, 3 and 6 and its first-observation list are amended; it passed local types, configured lint, 539 API and 156 web cases, 15/15 mutations and an independent review, and is not released. Wider writer/fleet proof remains unfinished. No cache activation or savings is claimed.",
       "remainingRequirements": [
-        "Extend caching only after complete dependency/revocation and shared-fleet audits beyond the 20 source-covered response kinds; matchup time series and other mixed dependencies remain excluded.",
+        "Extend caching only after complete dependency/revocation and shared-fleet audits beyond the 21 source-covered response kinds; other mixed dependencies remain excluded.",
         "Implement bounded revocation-coherent60s device-auth reuse; current findTokenByHash still performs an authoritative lookup on every request.",
         "Keep USER_CACHE_ENABLED off and do not claim measured savings or complete this item from the status card alone.",
         "Device auth reuse needs an explicit serving-process/rolling-overlap revocation contract; metadata liveness reuse is not authentication authority. See device-auth-reuse-checkpoint.md."
@@ -2019,7 +2019,12 @@
         "apps/api/__tests__/userCacheNetMmr.mongo.test.js",
         "docs/handoff/dashboard-cache-random-summary-checkpoint.md",
         "docs/handoff/validation/dashboard-cache-random-summary/local-verification.json",
-        "apps/api/__tests__/userCacheRandomSummary.mongo.test.js"
+        "apps/api/__tests__/userCacheRandomSummary.mongo.test.js",
+        "docs/handoff/dashboard-cache-matchup-timeseries-checkpoint.md",
+        "docs/handoff/validation/dashboard-cache-matchup-timeseries/local-verification.json",
+        "apps/api/__tests__/userCacheMatchupTimeseries.mongo.test.js",
+        "apps/api/__tests__/matchupTimeseriesProof.test.js",
+        "docs/handoff/validation/faster-dashboards-delivery/production-2fabe343.json"
       ],
       "mergedPrs": [
         778,
@@ -2037,7 +2042,12 @@
         819,
         820,
         821,
-        822
+        822,
+        824,
+        825,
+        826,
+        828,
+        829
       ],
       "requirementSha256": "3a582d2301ebae22937707d3b214e1f4b0c57d1e9fa5218a9a345a1d622d0311"
     },
@@ -5312,8 +5322,8 @@
       "qualification": "Earlier scoped production2242 evidence remains unchanged. Current receipt closes only landing-demo-in-browser; current Unit owner correction has no separate197-item status change. No fresh proof of every ancestor."
     }
   ],
-  "latestImplementationRevision": "10cdb0fd38fcbd47f70d7b275c1ccf8947770507",
-  "latestProductionAcceptedRevision": "27b9aeb0db1707a116bd30a58ad980daa12524cd",
+  "latestImplementationRevision": "000734b65fce0c3b0f710b338a2c135303ed694e",
+  "latestProductionAcceptedRevision": "2fabe3430ca5efeb0aabec9b7b5983719bd2e0f9",
   "recentDeliveryReconciliation": {
     "date": "2026-10-28",
     "implementationRevision": "ccb5987e145968059097ecf440204c3972279ded",
@@ -5547,7 +5557,7 @@
       "released": false,
       "completedIds": [],
       "remainingCount": 73,
-      "qualification": "Local-only source coverage stacked on unmerged F1 (PR824); independent review addressed. Exact-head CI, route budgets, merge, deployment, activation and savings are not claimed."
+      "qualification": "Historical local-only boundary; subsequent PR825 delivery is recorded separately below."
     },
     "deviceAuthProbeHoldOffLocal": {
       "date": "2026-10-30",
@@ -5559,7 +5569,7 @@
       "released": false,
       "completedIds": [],
       "remainingCount": 73,
-      "qualification": "Local-only, unwired lease change stacked on unmerged C1 (PR825) and F1 (PR824); independent review addressed. Exact-head CI, merge, deployment, activation and savings are not claimed."
+      "qualification": "Historical local-only boundary; subsequent PR826 delivery is recorded separately below."
     },
     "netMmrPairCacheLocal": {
       "date": "2026-10-30",
@@ -5573,7 +5583,7 @@
       "released": false,
       "completedIds": [],
       "remainingCount": 73,
-      "qualification": "Local-only source coverage stacked on unmerged DA2 (PR826), C1 (PR825) and F1 (PR824); independent review addressed. Exact-head CI, route budgets, merge, deployment, activation and savings are not claimed."
+      "qualification": "Historical local-only boundary; subsequent PR828 delivery is recorded separately below."
     },
     "randomSummaryCacheLocal": {
       "date": "2026-10-30",
@@ -5587,8 +5597,52 @@
       "released": false,
       "completedIds": [],
       "remainingCount": 73,
-      "qualification": "Local-only source coverage stacked on unmerged C2 (PR828), DA2 (PR826), C1 (PR825) and F1 (PR824); independent review addressed. Exact-head CI, route budgets, merge, deployment, activation and savings are not claimed."
+      "qualification": "Historical local-only boundary; subsequent PR829 delivery is recorded separately below."
+    },
+    "fasterDashboardsStackDelivery": {
+      "date": "2026-10-30",
+      "mergedPrs": [
+        824,
+        825,
+        826,
+        828,
+        829
+      ],
+      "mergeCommits": {
+        "824": "c790de3ec394ce646f59c4a57faa6d448f6d2c45",
+        "825": "4a4df22fcf39702c09971009231fc58c3aa70c2e",
+        "826": "294c24ab5a87c90abab24ee5e5f18dbe389ebca9",
+        "828": "d20bce904ad7c6ef89925fad3b3785591dc07317",
+        "829": "2fabe3430ca5efeb0aabec9b7b5983719bd2e0f9"
+      },
+      "testedHeads": {
+        "824": "3c3ca1845ec52467565f6017d90337dc94b86bc9",
+        "825": "434719bf2cbc92c689f4f5eab16025fa8a1d6327",
+        "826": "9a487e1902c7c21b2999e49f396e5c411454ac99",
+        "828": "6a50da6e76a569133e949025fe68b00ef400e634",
+        "829": "cdd0162aded8a456b541c40004d0d213bac1e1f4"
+      },
+      "acceptedProductionRevision": "2fabe3430ca5efeb0aabec9b7b5983719bd2e0f9",
+      "receipt": "docs/handoff/validation/faster-dashboards-delivery/production-2fabe343.json",
+      "receiptSha256": "220485e0ea93c7457877b8ad67a1ea5bccc16acc5e174500806c73eac08af28e",
+      "completedIds": [],
+      "remainingCount": 73,
+      "qualification": "Exact-head CI for each PR, bottom-up merge commits on the owner's request, and exact-source API/web production deployments of main 2fabe343 with public health checks; signed-in read-only acceptance was not performed (no signed-in session). USER_CACHE_ENABLED stays off and the device-auth lease stays uninjected: no activation, cache hit, latency, savings or fleet proof."
+    },
+    "matchupTimeseriesCacheLocal": {
+      "date": "2026-10-30",
+      "testedCommit": "000734b65fce0c3b0f710b338a2c135303ed694e",
+      "localCases": 539,
+      "localFiles": 30,
+      "webCases": 156,
+      "webFiles": 15,
+      "receipt": "docs/handoff/validation/dashboard-cache-matchup-timeseries/local-verification.json",
+      "receiptSha256": "b37286d87f95dfd74617fbeab7acbe9ade6ee18bcc05fe277d3edc0913daded7",
+      "released": false,
+      "completedIds": [],
+      "remainingCount": 73,
+      "qualification": "Local-only source coverage based on main 2fabe343; independent review addressed. Exact-head CI, route budgets, merge, deployment, activation and savings are not claimed."
     }
   },
-  "latestImplementationRevisionQualification": "Slice C3 at 10cdb0fd (stacked on unmerged C2/PR828, DA2/PR826, C1/PR825 and F1/PR824) admits random summary to the default-off cache source and keeps its completed memo off the cache path; it is verified only by local types, configured lint, 449 API and 129 web cases, 12/12 mutations and an independent review, and is not released. Slice C2 at f9cc5ccc (stacked on unmerged DA2/PR826, C1/PR825 and F1/PR824) admits the net-MMR pair to the default-off cache source; it is verified only by local types, configured lint, 433 API and 119 web cases, 11/11 mutations and an independent review, and is not released. Slice DA2 at 1dde734b (stacked on unmerged C1/PR825 and F1/PR824) bounds the unwired device-auth lease's grant probes; it is verified only by local types, lint, 231 device-auth cases, 7/7 mutations and an independent review, and is not released. Slice C1 at 1fecfca0 (stacked on unmerged F1/PR824) admits /v1/streak and /v1/macro/report to the default-off cache source; it is verified only by local types, configured lint, 293 API and 117 web cases, 7/7 mutations and an independent review, and is not released. PR822/main 27b9aeb0 opponent region/identity delivery is verified by local 3056/214 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. PR821/main de2031ad custom-build definition delivery is verified by its own local 1393/71 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. Agent0.24.7 GitHub publication is complete under the approved unsigned exception; actual API and website update availability are verified, with installed0.24.6 showing update available. No installed0.24.7 uptake, signing, cache/auth activation, full writer/fleet proof, savings or fresh all197 audit is claimed."
+  "latestImplementationRevisionQualification": "Slice C4 at 000734b6 (based on main 2fabe343) admits matchup time series as a curve-dependent kind of the default-off cache source; it is verified only by local types, configured lint, 539 API and 156 web cases, 15/15 mutations and an independent review, and is not released. PR829/main 2fabe343 random-summary cache source delivery (C3, tested 10cdb0fd) is verified by local types, configured lint, 449 API and 129 web cases, 12/12 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343 with public health checks; signed-in read-only acceptance was not performed. PR828/main d20bce90 net-MMR pair cache source delivery (C2, tested f9cc5ccc) is verified by local types, configured lint, 433 API and 119 web cases, 11/11 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR826/main 294c24ab uninjected device-auth lease probe hold-off delivery (DA2, tested 1dde734b) is verified by local types, lint, 231 device-auth cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR825/main 4a4df22f streak and Macro report cache source delivery (C1, tested 1fecfca0) is verified by local types, configured lint, 293 API and 117 web cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR824/main c790de3e serving-cohort contract (ADR 0072) delivery changes no runtime behavior and is verified by exact-head API CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks. PR822/main 27b9aeb0 opponent region/identity delivery is verified by local 3056/214 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. PR821/main de2031ad custom-build definition delivery is verified by its own local 1393/71 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. Agent0.24.7 GitHub publication is complete under the approved unsigned exception; actual API and website update availability are verified, with installed0.24.6 showing update available. No installed0.24.7 uptake, signing, cache/auth activation, full writer/fleet proof, savings or fresh all197 audit is claimed."
 }

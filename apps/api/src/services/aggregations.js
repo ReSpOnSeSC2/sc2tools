@@ -672,7 +672,7 @@ class AggregationsService {
   // know about the singleton service.
 
   /**
-   * Implementation in ``./trendsAggregations.js``. Work under a captured curve proof never joins in-flight work.
+   * Implementation in ``./trendsAggregations.js``. Work under a captured curve proof never joins in-flight chart work.
    * @param {string} userId
    * @param {{interval?: 'day'|'week'|'month', tz?: string, groupByOwnRace?: boolean}} opts
    * @param {object} filters @param {import('./strengthCurveSnapshots').CurveSnapshot} [snapshot]

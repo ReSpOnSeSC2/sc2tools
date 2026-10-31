@@ -6,16 +6,16 @@ no receipt and activates nothing. `USER_CACHE_ENABLED` stays off and
 faster-dashboards remains partial.
 
 Source paths are relative to `apps/api/src/` unless they start with `apps/` or
-`docs/`. Line numbers were checked at slice C3's tested source (`10cdb0fd`).
-The ADR was added at application source `27b9aeb0`. C1, C2 and C3 changed the
-cited allowlist line in place and edited route and service lines without
-changing line counts, and DA2 added lease lines after the cited ones, so every
-citation still resolves.
+`docs/`. Line numbers were checked at slice C4's tested source (`000734b6`).
+The ADR was added at application source `27b9aeb0`. C1 through C4 changed the
+cited allowlist lines in place and edited route and service lines without
+changing line counts (C4's route and curve helpers follow the cited lines), and DA2
+added lease lines after the cited ones, so every citation still resolves.
 
 ## Context
 
 Two retained-state features are built but inactive: the default-off per-user
-chart cache, which covers twenty response kinds in source, and the uninjected
+chart cache, which covers twenty-one response kinds in source, and the uninjected
 retained device-auth REST adapter. Both keep their state in one process. The
 roadmap allows wider cache coverage only after "complete dependency/revocation
 and shared-fleet audits" (`docs/handoff/roadmap-progress-2026-10-28.json:1963`)
@@ -110,10 +110,10 @@ classes, and the last column bounds how long it can disagree with a peer:
 | `UserRevision` tokens, process epoch, owners, dirty and poisoned marks | `util/userRevision.js:11-21` | Local state | None; peers never see them, and the marks can only deny reuse locally |
 | `users.dataRev` | `util/userRevision.js:61-88,109-139` | Durable advisory | Re-read by every guarded request. A higher value retires; equality never proves freshness, and a first observation adopts it unchecked (`:126-131`). A flag-off process never bumps it (`:55,102`) |
 | `UserCache` entries and ETag salt | `middleware/userCache.js:10-12,19-33` | Local reuse | 600 s after storage (`:11,222-223,269`), plus the computation's duration and any adopted join age |
-| TrendsRequests in-flight joins | `services/trendsRequests.js:4-5,21-28,76-84` | Local reuse | 30 s; the join key carries no revision (`:79`), and covered and uncovered kinds share keys such as `dateRange` (`services/aggregations.js:634`) |
+| TrendsRequests in-flight joins | `services/trendsRequests.js:4-5,21-28,76-84` | Local reuse | 30 s; the join key carries no revision (`:79`). Covered kinds share the curve-independent `dateRange` key (`services/aggregations.js:634`) with unguarded HEAD and coaching callers, and work under a captured curve proof never joins the matchup time series key (`services/aggregations.js:680-683`) |
 | `cached()` completed memo (random summary only, and only while the chart cache is off) | `services/trendsRequests.js:42-67`; `services/aggregations.js:360-362`; `routes/aggregations.js:110` | Local reuse | 60 s. A cache-enabled process never fills or consults it, so no retained body can adopt it |
 | Momentum session-policy reuse gate | `services/sessionResolutionGate.js:14` | Local reuse | 15 s |
-| MMR curve memo and snapshot epoch | `services/mmrExpectation.js:10,84-89`; `services/strengthCurveSnapshots.js:13-27` | Local reuse | 60 s; dependent entries expire with their proof (`middleware/userCache.js:268-270`) |
+| MMR curve memo and snapshot epoch | `services/mmrExpectation.js:10,84-89`; `services/strengthCurveSnapshots.js:13-27` | Local reuse | 60 s; the five dependent kinds' entries expire with their proof (`middleware/userCache.js:268-270`), and their HEAD and flag-off requests keep the original memo reads |
 | Device touch dedupe and 30-second latestAgent reuse | `services/deviceLiveness.js:6,75-91,101-118` | Local reuse | 30 s; the minute touch filter itself is durable (`services/deviceAuthTokenRead.js:37-44`) |
 | Overlay-token resolve cache | `services/overlayTokens.js:60-61,88` | Local reuse | 10 s; a token revoked on a peer still resolves here until then, because a revoke evicts only the local entry |
 | `DeviceAuthReuse` and `DeviceAuthLease` grants (uninjected) | `services/deviceAuthLease.js:8,48-77`; `services/deviceAuthReuse.js:10-11,139-141` | Local lease | 1.8-second grant; 60-second entries need the current incarnation and generation |
@@ -161,10 +161,14 @@ and the session-policy reuse. Any caller that skips the guard can seed that stat
   keys `tz` raw, so an omitted or padded `tz` never matches
   (`routes/coaching.js:560-569,857-866`; `routes/aggregations.js:340-341`;
   `services/aggregations.js:749`; `services/trendsRequests.js:126,129`);
-- uncovered routes that share an inner key, such as the matchup time series
-  (`routes/aggregations.js:139-153`), whose `dateRange` probe
-  (`services/aggregations.js:634`) the covered timeseries, MMR progression and
-  map trend adopt (`services/aggregations.js:474`; `services/trendsInsights.js:92-93,806-807`);
+- the shared `dateRange` probe (`services/aggregations.js:631-645`), which the
+  covered timeseries, MMR progression, map trend and matchup time series adopt
+  (`services/aggregations.js:474`; `services/trendsInsights.js:92-93,806-807`;
+  `services/trendsAggregations.js:42-44`). Its key is the owner-scoped match
+  alone, with no interval, `tz` or curve, so a HEAD to any of those routes, or
+  coaching's MMR progression, seeds it for a guarded request with the same parsed
+  filters. It reads no global input. Apart from the unguarded callers listed here,
+  no uncovered kind shares an inner key with a covered kind;
 - session-policy reads without a known value, which share momentum's reuse key
   (`services/sessionPolicy.js:47-48,74`): `routes/me.js:235`, and the session list
   and detail (`routes/sessions.js:17,19`; `services/sessionHistory.js:92,99`).
@@ -183,7 +187,10 @@ at the pull request's head, and the pull request description states what items 8
 9 and 11 require. Admission wires an unchanged computation: items 1, 2 and 4
 already hold at the base, and so does item 3 unless the kind must stop using a
 completed memo whenever the cache is enabled, which leaves the calculation
-itself unchanged (random summary, slice C3).
+itself unchanged (random summary, slice C3). A kind with a global input meets
+items 1 and 6 only on its proof path: the computation takes the input from the
+captured proof, while paths that are never retained, HEAD and the flag-off path,
+keep the original read (matchup time series, slice C4).
 
 1. **Owner games only.** Every database read in the computation is on `games`,
    is scoped to the owner's `userId` and uses `gamesMatchStage(userId, filters)`
@@ -203,7 +210,9 @@ itself unchanged (random summary, slice C3).
    owner, deletion and exclusion clauses stay; those fields' writers are fenced
    (`services/perGameCompute.js:498`;
    `apps/api/__tests__/userCacheStreakMacro.mongo.test.js:42-70`). There is no
-   `$lookup`, `$unionWith` or other collection.
+   `$lookup`, `$unionWith` or other collection. A captured proof's memo read
+   happens before the key is formed (`middleware/userCache.js:115,274-278`), so
+   it is not a read in the computation.
 2. **Fenced writers.** Every field it reads, filter fields included, is written
    only inside `gameWrite` or `UserRevision.run` (`util/userRevision.js:98-106,163`),
    or, when a new kind is admitted, is already read by a covered kind on the same
@@ -219,7 +228,8 @@ itself unchanged (random summary, slice C3).
    its route passes `memo: false` under an enabled cache, so its 60-second
    `cached()` answers only while the cache is off (`routes/aggregations.js:110`;
    `services/aggregations.js:360-362`; `services/trendsRequests.js:42-67`). Item 6
-   governs a memo of a global input.
+   governs a memo of a global input and any in-flight join whose result depends
+   on one.
 4. **No clock in the result.** No value derived from the current time (`Date.now`,
    `new Date()`, `$$NOW` or a relative window) reaches a query, pipeline or
    response body. Timers that only age joins or expire reuse are exempt, such as
@@ -229,8 +239,12 @@ itself unchanged (random summary, slice C3).
    collection is allowed only when its result is part of the key and checked by
    a publish guard, as momentum's session policy is (`routes/aggregations.js:224-235`).
 6. **No unproved global input.** A global input needs a captured proof that drives
-   both the key and the calculation, as the four strength routes do
+   both the key and the calculation, as the five dependent kinds do
    (`services/strengthCurveSnapshots.js:43-47`; `middleware/userCache.js:268-270`).
+   Work that depends on the input either keys its join by the proof or skips the
+   join whenever a proof is supplied, as matchup time series does
+   (`services/aggregations.js:680-683`); a join that reads no global input, such
+   as `dateRange`, may stay shared.
 7. **Complete key.** Every request input is parsed before admission and passed as
    filters or options.
 8. **Size.** Typical bodies fit the 512 KiB entry cap (`middleware/userCache.js:10`),

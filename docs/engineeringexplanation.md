@@ -352,7 +352,7 @@ and verification limits.
 
 `USER_CACHE_ENABLED` enables the first chart-cache slice only when its value is
 the literal string `true`. The default and `.env.example` are false. While off,
-the twenty routes call their original services and `res.json` directly;
+the twenty-one routes call their original services and `res.json` directly;
 revision hooks add no database command, owner lookup, retained body, admission
 limit or new busy response. The flag is not changed by source preparation.
 
@@ -369,17 +369,17 @@ The allowlist is `/v1/timeseries`, `/v1/timeseries/day-hour`,
 `/v1/timeseries/mmr`, `/v1/timeseries/my-builds` and
 `/v1/timeseries/opp-strategies`, plus `/v1/matchups`, `/v1/maps`,
 `/v1/maps/matchups` and `/v1/build-vs-strategy`, plus `/v1/streak`,
-`/v1/macro/report`, `/v1/mmr-by-matchup`, `/v1/mmr-by-matchup/opponents` and `/v1/random-summary`.
-The same twenty paths participate in optional browser capability discovery
+`/v1/macro/report`, `/v1/mmr-by-matchup`, `/v1/mmr-by-matchup/opponents`, `/v1/random-summary` and `/v1/timeseries/matchups`.
+The same twenty-one paths participate in optional browser capability discovery
 and retained-body revalidation. Existing parsing, filters, calculations and
 history bounds stay in their original service methods. All global filters are dependencies: even a time chart's membership can change after an opponent MMR or region stamp.
-Doctor/health, the Opponents list, profile and notes routes, saved-build stats, Explorer, matchup time series,
+Doctor/health, the Opponents list, profile and notes routes, saved-build stats, Explorer,
 exports, streams and tokens are outside this allowlist. Random summary's one-minute completed memo answers only while the cache is off; with it on, the route asks for in-flight joins only.
 
-The four direct strength-adjusted routes require a captured global-curve proof
+The four direct strength-adjusted routes and matchup time series require a captured global-curve proof
 in addition to owner revision. Its immutable anchors, emitted sample/support
 counts, rules and memo identity drive both the key and the actual Mongo/JS
-calculation, including every race subgroup. The body expiry cannot outlive the
+calculation, including every race subgroup and every matchup rating pair. The body expiry cannot outlive the
 existing 60-second curve memo. Reads preserve the original lazy aggregate-document
 lookup and Elo fallback; they never rebuild the corpus. A recompute attempt and
 its outcome retire retention epochs. A held load keeps its pre-IO origin even
@@ -393,8 +393,8 @@ response leases can separately hold a bounded proof. Lazy capture starts after
 response admission; up to 64 preparations remain charged until actual curve IO
 settles, even when all of their responses abort. Byte accounting is not a
 limit on the entire Node/Mongo heap. The original queue and compute limits stay
-unchanged. Matchup time series remains excluded until its inner work-sharing key
-can consume the same proof.
+unchanged. Matchup time series never shares in-flight work under a proof; only its
+curve-independent date-range probe stays shared.
 
 This source coverage does not authorize activation. Advisory `dataRev` is not a
 durable feed, and an uncertain revision write can poison only its own process.
@@ -412,7 +412,7 @@ TrendsRequests joins. This applies without Socket.io and after unknown write
 outcomes, swallowed metadata errors, partial restores and later detail failures.
 Reclassification retires at promotion, not at every staging page. Custom-build
 rename fencing spans transaction commit. Active work retains its admission
-permit after invalidation. None of the twenty covered responses reads the legacy
+permit after invalidation. None of the twenty-one covered responses reads the legacy
 `isLadderMap`/`isLadderMapV` stamp, replay or playback storage markers, the
 opponent build-order write lease, moment receipts, reclassification staging
 markers or resumed-replay repair markers (the `isResumedFromReplay` quarantine
@@ -467,7 +467,7 @@ cache. Dirty, active, invalid-revision and oversized bypass bodies stay 200 with
 `private, no-store`. OFF preserves the original Express JSON/freshness behavior.
 CORS exposes ETag without changing allowed origins or authentication.
 
-Only the twenty allowlisted useApi paths can discover the explicit enabled-cache
+Only the twenty-one allowlisted useApi paths can discover the explicit enabled-cache
 capability and start a background dynamic import. Before that module is ready,
 after import failure, or outside the AppChrome conditional provider, useApi makes
 one ordinary request. No eager retained-body engine or import wait is added to

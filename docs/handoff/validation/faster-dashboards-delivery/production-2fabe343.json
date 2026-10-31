@@ -1,0 +1,225 @@
+{
+  "schemaVersion": 1,
+  "status": "DELIVERED_EXACT_SOURCE_DEPLOYED_SIGNED_IN_ACCEPTANCE_NOT_PERFORMED",
+  "pullRequests": [
+    {
+      "number": 824,
+      "slice": "F1: serving-cohort coherence contract (ADR 0072), its source-inventory test and PR822 delivery docs",
+      "testedHead": "3c3ca1845ec52467565f6017d90337dc94b86bc9",
+      "mergeCommit": "c790de3ec394ce646f59c4a57faa6d448f6d2c45",
+      "mergedAt": "2026-10-30T20:39:37Z",
+      "exactHeadChecks": {
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        },
+        "Lint + typecheck + test (apps/api)": {
+          "conclusion": "success",
+          "run": 41116670576,
+          "job": 124272566112
+        },
+        "Vercel": {
+          "conclusion": "success"
+        }
+      }
+    },
+    {
+      "number": 825,
+      "slice": "C1: streak and Macro report in the default-off chart cache",
+      "testedHead": "434719bf2cbc92c689f4f5eab16025fa8a1d6327",
+      "mergeCommit": "4a4df22fcf39702c09971009231fc58c3aa70c2e",
+      "mergedAt": "2026-10-30T20:39:55Z",
+      "exactHeadChecks": {
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        },
+        "Lint + typecheck + test (apps/api)": {
+          "conclusion": "success",
+          "run": 41116675857,
+          "job": 124272584941
+        },
+        "Responsive e2e smoke (public pages)": {
+          "conclusion": "success",
+          "run": 41116675675,
+          "job": 124272583760
+        },
+        "Lint + typecheck + test (apps/web)": {
+          "conclusion": "success",
+          "run": 41116675675,
+          "job": 124272584468
+        },
+        "Vercel": {
+          "conclusion": "success"
+        }
+      }
+    },
+    {
+      "number": 826,
+      "slice": "DA2: failed-probe hold-off in the uninjected device-auth lease",
+      "testedHead": "9a487e1902c7c21b2999e49f396e5c411454ac99",
+      "mergeCommit": "294c24ab5a87c90abab24ee5e5f18dbe389ebca9",
+      "mergedAt": "2026-10-30T20:40:12Z",
+      "exactHeadChecks": {
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        },
+        "Lint + typecheck + test (apps/api)": {
+          "conclusion": "success",
+          "run": 41116682129,
+          "job": 124272606879
+        },
+        "Responsive e2e smoke (public pages)": {
+          "conclusion": "success",
+          "run": 41116682259,
+          "job": 124272607594
+        },
+        "Lint + typecheck + test (apps/web)": {
+          "conclusion": "success",
+          "run": 41116682259,
+          "job": 124272607002
+        },
+        "Vercel": {
+          "conclusion": "success"
+        }
+      }
+    },
+    {
+      "number": 828,
+      "slice": "C2: net MMR by matchup and its opponent drill-down in the default-off chart cache",
+      "testedHead": "6a50da6e76a569133e949025fe68b00ef400e634",
+      "mergeCommit": "d20bce904ad7c6ef89925fad3b3785591dc07317",
+      "mergedAt": "2026-10-30T20:40:28Z",
+      "exactHeadChecks": {
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        },
+        "Responsive e2e smoke (public pages)": {
+          "conclusion": "success",
+          "run": 41117031460,
+          "job": 124273825777
+        },
+        "Lint + typecheck + test (apps/api)": {
+          "conclusion": "success",
+          "run": 41117031492,
+          "job": 124273825952
+        },
+        "Lint + typecheck + test (apps/web)": {
+          "conclusion": "success",
+          "run": 41117031460,
+          "job": 124273826051
+        },
+        "Vercel": {
+          "conclusion": "success"
+        }
+      }
+    },
+    {
+      "number": 829,
+      "slice": "C3: random summary in the default-off chart cache, memo skipped on the cache path",
+      "testedHead": "cdd0162aded8a456b541c40004d0d213bac1e1f4",
+      "mergeCommit": "2fabe3430ca5efeb0aabec9b7b5983719bd2e0f9",
+      "mergedAt": "2026-10-30T21:28:22Z",
+      "exactHeadChecks": {
+        "Vercel Preview Comments": {
+          "conclusion": "success"
+        },
+        "Lint + typecheck + test (apps/web)": {
+          "conclusion": "success",
+          "run": 41124141097,
+          "job": 124298149854
+        },
+        "Responsive e2e smoke (public pages)": {
+          "conclusion": "success",
+          "run": 41124141097,
+          "job": 124298149548
+        },
+        "Lint + typecheck + test (apps/api)": {
+          "conclusion": "success",
+          "run": 41124141142,
+          "job": 124298149645
+        },
+        "Vercel": {
+          "conclusion": "success"
+        }
+      }
+    }
+  ],
+  "mergeMethod": "Merge commits, bottom-up, on the owner's explicit request. Each branch contained the one below it, so each merge landed the tree its exact-head CI tested; the stack's tested commits stay reachable from main.",
+  "mergedMain": "2fabe3430ca5efeb0aabec9b7b5983719bd2e0f9",
+  "tree": "863c0b6f0aad777203203422c7188a4fb9c3532e",
+  "treeEqualsTopTestedHead": true,
+  "mainCI": {
+    "commit": "2fabe3430ca5efeb0aabec9b7b5983719bd2e0f9",
+    "workflows": {
+      "api-keepalive": {
+        "run": 41131616883,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "community-builds-ci": {
+        "run": 41131297114,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "data-integrity": {
+        "run": 41131297154,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "version-check": {
+        "run": 41131297143,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "python-tests": {
+        "run": 41131297212,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      "web-ci": {
+        "run": 41131297140,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "api-ci": {
+        "run": 41131297096,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    },
+    "pythonTestsNote": "python-tests was already red on main before this stack (apps/replay-engine MagicMock objects missing load_replay); this stack does not touch the replay engine."
+  },
+  "deployment": {
+    "api": {
+      "environment": "main - sc2tools-api",
+      "deploymentId": 7449213842,
+      "state": "success",
+      "at": "2026-10-30T21:29:13Z",
+      "sha": "2fabe3430ca5efeb0aabec9b7b5983719bd2e0f9"
+    },
+    "web": {
+      "environment": "Production",
+      "deploymentId": 7449295914,
+      "state": "success",
+      "at": "2026-10-30T21:33:20Z",
+      "sha": "2fabe3430ca5efeb0aabec9b7b5983719bd2e0f9"
+    },
+    "bothForExactMergedMain": true
+  },
+  "publicHealth": {
+    "api": "GET /v1/health on the production API returned 200 with status ok, mongoPing true and mongoWrite true at 2026-10-30T21:53:32Z.",
+    "web": "GET /api/ping on the production site returned 200 at 2026-10-30T21:53:33Z."
+  },
+  "readOnlyAcceptance": {
+    "signedIn": false,
+    "performed": false,
+    "reason": "The built-in browser showed Sign in links on the production home page. No session was signed in, and none was created or attempted.",
+    "ownedTabsClosed": 1
+  },
+  "localProof": "Each slice's local-verification receipt keeps its local gate: docs/handoff/validation/dashboard-cache-streak-macro, device-auth-probe-hold-off, dashboard-cache-net-mmr and dashboard-cache-random-summary. F1 has no checkpoint; its checks are recorded in PR #824's description.",
+  "limitations": [
+    "USER_CACHE_ENABLED stays off in production, so this delivery activates nothing and proves no cache hit, latency, request reduction or savings.",
+    "The device-auth lease and its failed-probe hold-off (DA2) stay uninjected; no production probe rate is measured.",
+    "No signed-in desktop or mobile acceptance, browser matrix, fleet or rolling-overlap proof.",
+    "No private account details, DOM, images, provider identifiers or private URLs are copied here."
+  ]
+}
