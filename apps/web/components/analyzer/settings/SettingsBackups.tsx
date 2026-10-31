@@ -9,7 +9,7 @@ import {
   Download,
   Trash2,
 } from "lucide-react";
-import { forgetDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
+import { forgetDeviceCopy } from "@/lib/analysisCorpus/deviceClear";
 import { apiCall, API_BASE, type ClientApiError } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
@@ -58,13 +58,17 @@ export function SettingsBackups() {
     return () => { cancelled = true; };
   }, [pendingWipe, rangeKey]);
 
-  async function refreshHistory() {
-    // A wipe or restore leaves any game history kept on this device out of date; it goes, and the next load re-reads.
-    forgetDeviceCopy();
+  async function refreshCaches() {
     try { await refresh((key) => {
       const path = Array.isArray(key) ? key.find((part) => typeof part === "string" && part.startsWith("/v1/")) : key;
       return typeof path === "string" && /^\/v1\/(?:me(?:\?|$|\/(?:doctor|backups|replay-archive-status))|games|opponents|timeseries|streak|matchups|builds|macro|maps|trends|strategies|dashboard)/.test(path);
-    }); } catch { /* A refresh failure must not turn a completed wipe or restore into a reported failure. */ }
+    }); } catch { /* A refresh failure must not turn a completed wipe, restore or repair into a reported failure. */ }
+  }
+
+  async function refreshHistory() {
+    // A wipe or restore leaves any game history kept on this device out of date; it goes, and the next load re-reads.
+    forgetDeviceCopy();
+    await refreshCaches();
   }
 
   async function exportData() {
@@ -126,6 +130,9 @@ export function SettingsBackups() {
       setWipeSince("");
       setWipeUntil("");
     } catch (err) {
+      // A wipe that may have finished anyway (no answer, or a server error) leaves the copy on this device out of date
+      // too, and a retry then counts no games and never gets this far; only a definite rejection keeps the copy.
+      if (mayHaveApplied(err)) forgetDeviceCopy();
       const message =
         (err as ClientApiError | undefined)?.message ?? "Please try again.";
       toast.error("Couldn't wipe game history", { description: message });
@@ -142,7 +149,7 @@ export function SettingsBackups() {
       <ReplayArchiveStatusCard />
 
       <SnapshotManager onRestored={refreshHistory} />
-      <DataRepairCard onStarted={refreshHistory} />
+      <DataRepairCard onStarted={refreshCaches} />
 
       <HiddenGames />
 
@@ -236,4 +243,10 @@ export function SettingsBackups() {
       />
     </div>
   );
+}
+
+/** A request that failed without a definite rejection (no answer, or a server error) may still have taken effect. */
+function mayHaveApplied(error: unknown): boolean {
+  const status = (error as Partial<ClientApiError> | undefined)?.status;
+  return !(typeof status === "number" && status >= 400 && status < 500);
 }

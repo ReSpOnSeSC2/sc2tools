@@ -1,7 +1,8 @@
 import { IDBDatabase as FakeIDBDatabase, IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { idbTransactionOn } from "@/lib/instant/idb";
-import { forgetDeviceCopy, mayHaveDeviceCopy, noteDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
+import { forgetDeviceCopy } from "@/lib/analysisCorpus/deviceClear";
+import { mayHaveDeviceCopy, noteDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
 import {
   openDeviceCorpus,
   readDeviceCorpus,
@@ -96,12 +97,31 @@ async function copy(accountKey = "user-a") {
 
 const ids = (rows: Array<{ gameId: string }>) => rows.map((row) => row.gameId);
 
+/** Stands in for another tab's clear: the delete is left out, so a test can see what was written after the clear. */
+const leaveDatabase = () => ({ deleteDatabase: vi.fn() }) as unknown as IDBFactory;
+
+/** Another tab clears the copy while this sync opens the device. */
+function clearWhileOpening() {
+  const open = factory.open.bind(factory);
+  vi.spyOn(factory, "open").mockImplementation((...args: Parameters<IDBFactory["open"]>) => {
+    forgetDeviceCopy(leaveDatabase());
+    return open(...args);
+  });
+}
+
+async function untilNoDatabases() {
+  for (let tries = 0; tries < 50 && (await factory.databases()).length > 0; tries += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return factory.databases();
+}
+
 describe("syncAnalysisCorpus", () => {
   it("loads in memory only when IndexedDB is unavailable, even when asked to keep a copy", async () => {
     vi.stubGlobal("indexedDB", undefined);
     const sync = input(null, { rows: ["a"] }, { keepOnDevice: true });
     const synced = await syncAnalysisCorpus(sync);
-    expect([synced.onDevice, synced.kept, ids(synced.items)]).toEqual([false, false, ["a"]]);
+    expect([synced.onDevice, synced.kept, ids(synced.items), mayHaveDeviceCopy("user-a")]).toEqual([false, false, ["a"], false]);
     expect(sync.onSnapshot).not.toHaveBeenCalled();
   });
 
@@ -207,10 +227,7 @@ describe("syncAnalysisCorpus", () => {
     const synced = await syncAnalysisCorpus(input(REFUSED, { rows: ["post-wipe"] }));
     vi.restoreAllMocks();
     expect([synced.onDevice, synced.kept]).toEqual([false, false]);
-    for (let tries = 0; tries < 50 && (await factory.databases()).length > 0; tries += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    expect(await factory.databases()).toEqual([]);
+    expect(await untilNoDatabases()).toEqual([]);
   });
 
   it("writes nothing to the device once its run is cancelled", async () => {
@@ -258,7 +275,6 @@ describe("syncAnalysisCorpus", () => {
   });
 
   it("stops before a failed save's drop once its run is cancelled", async () => {
-    await keep(["b-only"], MARKS, "user-b");
     const run = new AbortController();
     let release: (() => void) | undefined;
     saveGate.hold = () => new Promise<void>((resolve) => { release = resolve; });
@@ -268,7 +284,8 @@ describe("syncAnalysisCorpus", () => {
     run.abort();
     release?.();
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
-    expect(await copy("user-b")).toEqual({ marks: MARKS, ids: ["b-only"] });
+    // A drop would have recorded the account's choice ("kept"); nothing was written.
+    expect(await copy()).toBe("absent");
   });
 
   it("deletes the database when a refused copy can be neither dropped nor replaced and its snapshot fails", async () => {
@@ -281,67 +298,116 @@ describe("syncAnalysisCorpus", () => {
     const busy = Object.assign(new Error("busy"), { status: 503 });
     await expect(syncAnalysisCorpus(input(REFUSED, busy))).rejects.toBe(busy);
     vi.restoreAllMocks();
-    for (let tries = 0; tries < 50 && (await factory.databases()).length > 0; tries += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    expect(await factory.databases()).toEqual([]);
+    expect(await untilNoDatabases()).toEqual([]);
   });
 
-  it("shows a fetched snapshot while its save is still running", async () => {
+  it("shows a fetched snapshot while its first save is still running, with the account already noted", async () => {
     let release: (() => void) | undefined;
     saveGate.hold = () => new Promise<void>((resolve) => { release = resolve; });
     const sync = input(null, { rows: ["s1"] }, { keepOnDevice: true });
     const pending = syncAnalysisCorpus(sync);
     await vi.waitFor(() => expect(release).toBeTypeOf("function"));
-    expect(ids(sync.onSnapshot.mock.calls[0]?.[0]?.items ?? [])).toEqual(["s1"]);
+    // A sign-out in another tab now finds the copy through the note, before any of its rows exist.
+    expect([ids(sync.onSnapshot.mock.calls[0]?.[0]?.items ?? []), mayHaveDeviceCopy("user-a")]).toEqual([["s1"], true]);
     release?.();
     expect((await pending).onDevice).toBe(true);
     expect(await copy()).toEqual({ marks: MARKS, ids: ["s1"] });
   });
 
-  it("keeps no copy that this browser cannot note", async () => {
+  it("creates nothing for a keep that this browser cannot note", async () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new DOMException("full", "QuotaExceededError");
     });
+    const open = vi.spyOn(factory, "open");
     const synced = await syncAnalysisCorpus(input(null, { rows: ["s1"] }, { keepOnDevice: true }));
-    expect([synced.onDevice, synced.kept]).toEqual([false, false]);
-    vi.restoreAllMocks();
-    for (let tries = 0; tries < 50 && (await factory.databases()).length > 0; tries += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    expect(await factory.databases()).toEqual([]);
+    expect([synced.onDevice, synced.kept, ids(synced.items), open.mock.calls.length]).toEqual([false, false, ["s1"], 0]);
   });
 
-  it("writes nothing once the copy is cleared during a changes read", async () => {
+  it.each([
+    ["a delta", { items: [{ gameId: "b", removed: true }], nextCursor: null, ...NEXT }],
+    ["a refusal", REFUSED],
+  ])("writes nothing once the copy is cleared during a changes read that returns %s, and reads again", async (_, answer) => {
     await keep(["a", "b"]);
     noteDeviceCopy("user-a");
-    const sync = input(null);
+    const sync = input(null, { rows: ["after-wipe"] });
     sync.fetchPage.mockImplementation(async () => {
-      // Another tab signs out, or Delete history succeeds, while this read is in flight.
-      forgetDeviceCopy(factory);
-      return { items: [{ gameId: "b", removed: true }], nextCursor: null, ...NEXT };
+      // Delete history succeeds in another tab while this read is in flight.
+      forgetDeviceCopy(leaveDatabase());
+      return answer;
     });
-    await expect(syncAnalysisCorpus(sync)).rejects.toMatchObject({ name: "AbortError" });
-    expect(mayHaveDeviceCopy("user-a")).toBe(false);
-    for (let tries = 0; tries < 50 && (await factory.databases()).length > 0; tries += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    expect(await factory.databases()).toEqual([]);
+    const synced = await syncAnalysisCorpus(sync);
+    expect([synced.onDevice, synced.kept, ids(synced.items), mayHaveDeviceCopy("user-a")])
+      .toEqual([false, false, ["after-wipe"], false]);
+    expect(await copy()).toEqual({ marks: MARKS, ids: ["a", "b"] });
   });
 
-  it("writes nothing once the copy is cleared while a snapshot loads", async () => {
+  it("writes nothing once the copy is cleared while a snapshot loads, and reads again", async () => {
     const sync = input(null, { rows: ["s1"] }, { keepOnDevice: true });
     const read = sync.readSnapshot.getMockImplementation()!;
-    sync.readSnapshot.mockImplementation(async () => {
-      forgetDeviceCopy(factory);
+    sync.readSnapshot.mockImplementationOnce(async () => {
+      forgetDeviceCopy(leaveDatabase());
       return read();
     });
-    await expect(syncAnalysisCorpus(sync)).rejects.toMatchObject({ name: "AbortError" });
-    expect(mayHaveDeviceCopy("user-a")).toBe(false);
-    for (let tries = 0; tries < 50 && (await factory.databases()).length > 0; tries += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
+    const synced = await syncAnalysisCorpus(sync);
+    expect([synced.onDevice, synced.kept, sync.readSnapshot.mock.calls.length, sync.onSnapshot.mock.calls.length])
+      .toEqual([false, false, 2, 0]);
+    expect(await copy()).toBe("absent");
+  });
+
+  it("reads again in memory when the copy is cleared during its save", async () => {
+    let release: (() => void) | undefined;
+    saveGate.hold = () => new Promise<void>((resolve) => { release = resolve; });
+    const sync = input(null, { rows: ["s1"] }, { keepOnDevice: true });
+    const pending = syncAnalysisCorpus(sync);
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    forgetDeviceCopy(leaveDatabase());
+    release?.();
+    const synced = await pending;
+    expect([synced.onDevice, synced.kept, sync.readSnapshot.mock.calls.length]).toEqual([false, false, 2]);
+  });
+
+  it("shows nothing of a stored copy that is cleared while the device opens", async () => {
+    await keep(["a"]);
+    noteDeviceCopy("user-a");
+    clearWhileOpening();
+    const sync = input(null, { rows: ["fresh"] });
+    const synced = await syncAnalysisCorpus(sync);
+    vi.restoreAllMocks();
+    expect([synced.onDevice, ids(synced.items), sync.onStored.mock.calls.length]).toEqual([false, ["fresh"], 0]);
+    expect(await copy()).toEqual({ marks: MARKS, ids: ["a"] });
+  });
+
+  it("saves nothing when a first keep is cleared while the device opens", async () => {
+    clearWhileOpening();
+    const sync = input(null, { rows: ["s1"] }, { keepOnDevice: true });
+    const synced = await syncAnalysisCorpus(sync);
+    vi.restoreAllMocks();
+    expect([synced.onDevice, synced.kept, sync.onSnapshot.mock.calls.length]).toEqual([false, false, 0]);
+    expect(await copy()).toBe("absent");
+  });
+
+  it("clears another account's copy before this account starts keeping one", async () => {
+    await keep(["b-only"], MARKS, "user-b");
+    noteDeviceCopy("user-b");
+    const busy = Object.assign(new Error("busy"), { status: 503 });
+    await expect(syncAnalysisCorpus(input(null, busy, { keepOnDevice: true }))).rejects.toBe(busy);
+    // The snapshot failed, yet none of user-b's rows sit under the note that now names user-a.
+    expect([mayHaveDeviceCopy("user-a"), await copy("user-b")]).toEqual([true, "absent"]);
+  });
+
+  it("keeps nothing here while the note cannot be read, and removes a copy kept before", async () => {
+    await keep(["a"]);
+    for (const method of ["getItem", "setItem"] as const) {
+      vi.spyOn(Storage.prototype, method).mockImplementation(() => {
+        throw new DOMException("denied", "SecurityError");
+      });
     }
-    expect(await factory.databases()).toEqual([]);
+    const sync = input(null, { rows: ["s1"] }, { keepOnDevice: true });
+    const synced = await syncAnalysisCorpus(sync);
+    vi.restoreAllMocks();
+    expect([synced.onDevice, synced.kept, ids(synced.items), sync.onStored.mock.calls.length])
+      .toEqual([false, false, ["s1"], 0]);
+    expect(await untilNoDatabases()).toEqual([]);
   });
 
   it("never lets a failed read replace another account's copy unless this account asked to keep one", async () => {
@@ -350,9 +416,18 @@ describe("syncAnalysisCorpus", () => {
     expect([plain.onDevice, plain.kept]).toEqual([false, false]);
     expect(await copy("user-b")).toEqual({ marks: MARKS, ids: ["b-only"] });
 
-    const failRead = () => vi.spyOn(FakeIDBDatabase.prototype, "transaction").mockImplementationOnce(() => {
-      throw new Error("read failed");
-    });
+    // The copy's next read fails; opening (and creating) the database still works.
+    const transaction = FakeIDBDatabase.prototype.transaction;
+    const failRead = () => {
+      let failed = false;
+      vi.spyOn(FakeIDBDatabase.prototype, "transaction").mockImplementation(function (this: IDBDatabase, ...args) {
+        if (args[1] === "readonly" && !failed) {
+          failed = true;
+          throw new Error("read failed");
+        }
+        return transaction.apply(this, args as Parameters<typeof transaction>);
+      });
+    };
     failRead();
     const synced = await syncAnalysisCorpus(input(null, { rows: ["a1"] }));
     expect([synced.onDevice, ids(synced.items)]).toEqual([false, ["a1"]]);

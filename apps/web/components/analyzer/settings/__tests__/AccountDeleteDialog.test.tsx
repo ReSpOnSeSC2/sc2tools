@@ -4,7 +4,7 @@ import AccountDeleteDialog from "../AccountDeleteDialog";
 
 const apiCall = vi.fn(), signOut = vi.fn(), mutate = vi.fn();
 const forgetDeviceCopy = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/analysisCorpus/deviceNote", () => ({ forgetDeviceCopy }));
+vi.mock("@/lib/analysisCorpus/deviceClear", () => ({ forgetDeviceCopy }));
 const state = { inventory: { data: { removed: { games: 12, devices: 2 }, anonymized: { reviewComments: 3 }, countedAt: "2026-10-23" } as unknown, error: null as unknown, mutate } };
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "session" }), useClerk: () => ({ signOut }) }));
 vi.mock("@/lib/clientApi", () => ({ apiCall: (...args: unknown[]) => apiCall(...args), useApi: () => state.inventory, API_BASE: "https://fixture.local" }));
@@ -71,5 +71,7 @@ describe("account erasure dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete account permanently" }));
     await waitFor(() => expect(signOut).toHaveBeenCalledWith({ redirectUrl: "/goodbye" }));
     expect(screen.queryByRole("alert")).toBeNull();
+    expect(forgetDeviceCopy).toHaveBeenCalledTimes(1);
+    expect(forgetDeviceCopy.mock.invocationCallOrder[0]).toBeLessThan(signOut.mock.invocationCallOrder[0]);
   });
 });

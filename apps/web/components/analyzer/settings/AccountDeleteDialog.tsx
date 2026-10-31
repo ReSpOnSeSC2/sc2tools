@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAuth, useClerk } from "@clerk/nextjs";
-import { forgetDeviceCopy } from "@/lib/analysisCorpus/deviceNote";
+import { forgetDeviceCopy } from "@/lib/analysisCorpus/deviceClear";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";

@@ -48,6 +48,10 @@ vi.mock("@/components/chrome/SitePresence", () => ({
   SitePresence: () => <div data-testid="site-presence" />,
 }));
 
+vi.mock("@/components/chrome/DeviceHistoryGuard", () => ({
+  DeviceHistoryGuard: () => <div data-testid="device-history-guard" />,
+}));
+
 vi.mock("@/components/CookieBanner", () => ({
   CookieBanner: () => <div data-testid="cookie-banner" />,
 }));
@@ -105,6 +109,7 @@ describe("token-auth broadcast routes", () => {
     expect(screen.queryByTestId("service-worker")).toBeNull();
     expect(screen.queryByTestId("site-stats")).toBeNull();
     expect(screen.queryByTestId("site-presence")).toBeNull();
+    expect(screen.queryByTestId("device-history-guard")).toBeNull();
     expect(screen.getByTestId("route-content").closest("main")).toBeTruthy();
   });
 });
@@ -113,7 +118,7 @@ it("renders status without auth, realtime, analytics, background traffic or site
   renderAt("/status");
   expect(screen.getByTestId("route-content")).toBeTruthy();
   expect(route.clerkRenders).not.toHaveBeenCalled();
-  for (const id of ["clerk-provider", "realtime-provider", "toast-provider", "site-header", "site-footer", "app-chrome", "cookie-banner", "google-analytics", "service-worker", "site-stats", "site-presence"]) {
+  for (const id of ["clerk-provider", "realtime-provider", "toast-provider", "site-header", "site-footer", "app-chrome", "cookie-banner", "google-analytics", "service-worker", "site-stats", "site-presence", "device-history-guard"]) {
     expect(screen.queryByTestId(id)).toBeNull();
   }
 });
@@ -148,6 +153,7 @@ describe("app chrome routes", () => {
       // marketing header/footer never render alongside it.
       expect(screen.getByTestId("app-chrome")).toBeTruthy();
       expect(screen.getByTestId("site-presence")).toBeTruthy();
+      expect(screen.getByTestId("device-history-guard")).toBeTruthy();
       expect(screen.queryByTestId("site-header")).toBeNull();
       expect(screen.queryByTestId("site-footer")).toBeNull();
     },
@@ -200,6 +206,7 @@ describe("normal and protected routes", () => {
       expect(screen.getByTestId("site-footer")).toBeTruthy();
       expect(screen.getByTestId("site-stats")).toBeTruthy();
       expect(screen.getByTestId("site-presence")).toBeTruthy();
+      expect(screen.getByTestId("device-history-guard")).toBeTruthy();
       expect(screen.getByTestId("cookie-banner")).toBeTruthy();
       expect(screen.getByTestId("google-analytics")).toBeTruthy();
       expect(screen.getByTestId("service-worker")).toBeTruthy();
