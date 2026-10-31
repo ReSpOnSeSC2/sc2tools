@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import {
   normalizeReplayArchiveStatus,
@@ -6,6 +6,7 @@ import {
 } from "../ReplayArchiveStatusCard";
 import { SettingsBackups } from "../SettingsBackups";
 import { ToastProvider } from "@/components/ui/Toast";
+import { loadLazyHelpLink } from "@/components/help/__tests__/loadLazyHelpLink";
 
 const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
@@ -20,6 +21,8 @@ vi.mock("@/lib/clientApi", () => ({
   apiCall: (...args: unknown[]) => apiCallMock(...args),
   API_BASE: "https://api.example.test",
 }));
+
+beforeAll(loadLazyHelpLink, 20_000);
 
 afterEach(() => {
   cleanup();

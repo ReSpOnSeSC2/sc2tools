@@ -20,7 +20,7 @@ const results = (page: Page) => page.getByRole("listbox", { name: "Find a settin
 const nav = (page: Page) => page.getByRole("navigation", { name: "On this page", exact: true });
 const confirm = (page: Page) => page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true });
 const profileIds = ["profile-details", "pulse-ids", "player-channels", "public-profile"];
-const backupsIds = ["replay-archive", "snapshots", "repair-data", "hidden-games", "delete-history", "gdpr"];
+const backupsIds = ["replay-archive", "snapshots", "repair-data", "hidden-games", "device-history", "delete-history", "gdpr"];
 const randomizerIds = ["build-randomizer", "catalog-builds", "custom-builds", "gateway-draw", "sound-effects", "randomizer-preview"];
 
 async function choose(page: Page, query: string) {

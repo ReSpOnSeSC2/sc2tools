@@ -79,7 +79,7 @@ const article: HelpArticle = {
       ],
     },
   ],
-  related: ["deleting-game-history", "repair-my-data", "delete-account"],
+  related: ["deleting-game-history", "repair-my-data", "delete-account", "history-on-this-device"],
   order: 20,
 };
 

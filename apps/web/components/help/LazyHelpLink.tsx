@@ -21,6 +21,9 @@ const HelpLink = lazy(() =>
  *
  * The fallback cannot read the article's title: give inline links their
  * text as children.
+ *
+ * Tests that render a page with several of these at once load the chunk
+ * first (components/help/__tests__/loadLazyHelpLink.tsx explains why).
  */
 export function LazyHelpLink({ slug, anchor, children, variant = "inline", className = "", onOpen }: HelpLinkProps) {
   const href = anchor ? `/help/${slug}#${anchor}` : `/help/${slug}`;

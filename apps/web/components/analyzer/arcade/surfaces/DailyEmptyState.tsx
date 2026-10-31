@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, EmptyState } from "@/components/ui/Card";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 
 /**
  * DailyEmptyState — the unified warm-up card shown in the Today
@@ -39,6 +40,11 @@ export function DailyEmptyState({
             Open the analyzer →
           </a>
         </div>
+        <p className="text-center text-caption">
+          <LazyHelpLink slug="history-on-this-device" className="inline-flex min-h-11 items-center">
+            Your history on this device
+          </LazyHelpLink>
+        </p>
       </section>
     </Card>
   );

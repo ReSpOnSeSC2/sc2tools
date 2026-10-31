@@ -46,13 +46,26 @@ export type AnalysisGamesResult = {
   hitCorpusLimit: boolean;
   /** True when this account's corpus is kept on this device. */
   onDevice: boolean;
+  /**
+   * When the corpus on screen last came from the server (ms since the epoch); null while it loads or updates, and
+   * after a failed update, which keeps the corpus already on screen.
+   */
+  syncedAt: number | null;
+  /**
+   * True when the last finished load should have left the history on this device and did not: a keep it was asked
+   * for could not start (storage refused or failed), or this account keeps its history here but its copy could not be
+   * stored (for example a full browser). Over the 20,000-game limit is not a failure. The next load tries again.
+   */
+  keepFailed: boolean;
   /** Whether a consumer has explicitly asked for the expensive corpus. */
   isActive: boolean;
   /** Activate the corpus, or retry it after a failed request. */
   load: () => void;
   /**
    * Activate the corpus and keep it on this device from now on: later loads
-   * show it at once and sync only changes (the one-time history gate).
+   * show the stored copy first, then read what changed since it (the one-time
+   * history gate). Asked before Clerk names the account, it applies to the
+   * account that loads here next.
    */
   keepOnDevice: () => void;
   /** Release a Daily Pulse request; Arcade can independently keep it active. */
@@ -78,6 +91,8 @@ function emptyAnalysisState(
     pagesFetched: 0,
     hitCorpusLimit: false,
     onDevice: false,
+    syncedAt: null,
+    keepFailed: false,
   };
 }
 
@@ -94,13 +109,18 @@ function reloadingState(
         ...previous,
         isLoading: previous.pagesFetched === 0 && !previous.onDevice,
         error: null,
+        syncedAt: null,
+        keepFailed: false,
       }
     : emptyAnalysisState(accountKey, true);
 }
 
+/** `syncedAt` is null for a corpus that is not final yet: a stored copy before its changes, a snapshot before its save. */
 function syncedState(
   accountKey: string,
   synced: CorpusSnapshot & { onDevice: boolean },
+  syncedAt: number | null = Date.now(),
+  keepFailed = false,
 ): AccountBoundAnalysisState {
   return {
     accountKey,
@@ -110,6 +130,8 @@ function syncedState(
     pagesFetched: synced.pagesFetched,
     hitCorpusLimit: synced.hitCorpusLimit,
     onDevice: synced.onDevice,
+    syncedAt,
+    keepFailed,
   };
 }
 
@@ -257,6 +279,9 @@ export function AnalysisGamesProvider({
   // Asked to keep history on this device, until the device records the
   // choice; after that, a copy another tab cleared is not recreated here.
   const keepRequestedFor = useRef<string | null>(null);
+  // Asked to keep history before Clerk named the account: it applies to the
+  // account that loads here next, and to no one once Clerk finds nobody signed in.
+  const keepPending = useRef(false);
   const active = enabledBySurface
     || (accountKey !== null && requestedForAccount === accountKey);
   const enabled = active && accountKey !== null;
@@ -273,11 +298,18 @@ export function AnalysisGamesProvider({
     setManualRevision((value) => value + 1);
   }, [accountKey]);
   const keepOnDevice = useCallback(() => {
-    if (!accountKey) return;
+    if (!accountKey) {
+      keepPending.current = true;
+      return;
+    }
     keepRequestedFor.current = accountKey;
     load();
   }, [accountKey, load]);
   const release = useCallback(() => setRequestedForAccount(null), []);
+
+  useEffect(() => {
+    if (isLoaded && !accountKey) keepPending.current = false;
+  }, [isLoaded, accountKey]);
 
   useEffect(() => {
     if (!active) {
@@ -302,6 +334,10 @@ export function AnalysisGamesProvider({
         const fetchPage = (path: string) =>
           apiCall<unknown>(getToken, path, { signal: controller.signal });
         const readSnapshot = () => readAnalysisSnapshot(fetchPage);
+        if (keepPending.current) {
+          keepPending.current = false;
+          keepRequestedFor.current = accountKey;
+        }
         const keepOnDevice = keepRequestedFor.current === accountKey;
         // Only an account that asked to keep its history here, or that this
         // browser notes as keeping it, loads the sync and device store (on
@@ -325,11 +361,11 @@ export function AnalysisGamesProvider({
                 setState((previous) =>
                   previous.accountKey === accountKey && previous.items.length > 0
                     ? previous
-                    : syncedState(accountKey, stored));
+                    : syncedState(accountKey, stored, null));
               },
               onSnapshot: (snapshot) => {
                 if (cancelled) return;
-                setState(syncedState(accountKey, { ...snapshot, onDevice: false }));
+                setState(syncedState(accountKey, { ...snapshot, onDevice: false }, null));
               },
               signal: controller.signal,
               maxRows: ANALYSIS_GAMES_CORPUS_MAX,
@@ -344,7 +380,12 @@ export function AnalysisGamesProvider({
         }
         // One replacement assignment is the retention guarantee: old pages
         // and old flat arrays are not kept in an application-wide cache.
-        setState(syncedState(accountKey, synced));
+        setState(syncedState(
+          accountKey,
+          synced,
+          Date.now(),
+          (keepOnDevice || synced.kept) && !synced.onDevice && !synced.hitCorpusLimit,
+        ));
       } catch (err) {
         if (cancelled || isAbortError(err)) return;
         setState((previous) => previous.accountKey === accountKey

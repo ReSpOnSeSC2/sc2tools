@@ -42,6 +42,7 @@ vi.mock("@/lib/clientApi", () => ({
 const deviceGate = vi.hoisted(() => ({
   hold: null as null | ((accountKey: string) => Promise<void> | undefined),
   afterRead: null as null | ((accountKey: string) => void),
+  holdSave: null as null | (() => Promise<void>),
 }));
 
 vi.mock("@/lib/analysisCorpus/deviceStore", async (importOriginal) => {
@@ -53,6 +54,10 @@ vi.mock("@/lib/analysisCorpus/deviceStore", async (importOriginal) => {
       const stored = await actual.readDeviceCorpus(...args);
       deviceGate.afterRead?.(args[1]);
       return stored;
+    },
+    saveDeviceSnapshot: async (...args: Parameters<typeof actual.saveDeviceSnapshot>) => {
+      await deviceGate.holdSave?.();
+      return actual.saveDeviceSnapshot(...args);
     },
   };
 });
@@ -82,6 +87,7 @@ beforeEach(() => {
   harness.apiCall.mockReset();
   deviceGate.hold = null;
   deviceGate.afterRead = null;
+  deviceGate.holdSave = null;
   window.localStorage.clear();
   providerEnabled = true;
   harness.apiCall.mockImplementation(async (_getToken, path: string) => {
@@ -191,6 +197,32 @@ describe("AnalysisGamesProvider retention", () => {
     await waitFor(() => expect(result.current.items).toHaveLength(3));
     expect(result.current.isActive).toBe(true);
     expect(harness.apiCall).toHaveBeenCalledTimes(2);
+  });
+
+  it("stamps when the corpus last came from the server, and clears it while updating or after a failed update", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_793_000_000_000);
+    try {
+      providerEnabled = false;
+      const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+      expect(result.current.syncedAt).toBeNull();
+
+      act(() => result.current.load());
+      expect(result.current.syncedAt).toBeNull();
+      await waitFor(() => expect(result.current.items).toHaveLength(3));
+      expect(result.current.syncedAt).toBe(1_793_000_000_000);
+      expect(result.current.keepFailed).toBe(false);
+
+      // Refresh keeps the games on screen; a failure keeps them too, with no time.
+      harness.apiCall.mockRejectedValueOnce(new Error("Service unavailable"));
+      act(() => result.current.load());
+      expect(result.current.syncedAt).toBeNull();
+      expect(result.current.items).toHaveLength(3);
+      await waitFor(() => expect(result.current.error).not.toBeNull());
+      expect(result.current.syncedAt).toBeNull();
+      expect(result.current.items).toHaveLength(3);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("lets Daily Pulse activate the shared corpus on demand", async () => {
@@ -465,11 +497,12 @@ describe("AnalysisGamesProvider device copy", () => {
     }));
     const second = renderHook(() => useAnalysisGames(), { wrapper });
     act(() => second.result.current.load());
-    // The stored copy shows before the network answers.
+    // The stored copy shows before the network answers, still updating.
     await waitFor(() => {
       expect(shown(second.result.current.items)).toEqual(["s-a", "s-b", "s-c"]);
     });
     expect(second.result.current.isLoading).toBe(false);
+    expect(second.result.current.syncedAt).toBeNull();
     await waitFor(() => expect(answer).toBeTypeOf("function"));
     const next = { ...MARKS, watermark: "2026-10-31T11:00:00.000Z" };
     await act(async () => {
@@ -482,11 +515,123 @@ describe("AnalysisGamesProvider device copy", () => {
     await waitFor(() => {
       expect(shown(second.result.current.items)).toEqual(["new", "s-a", "s-c"]);
     });
+    expect(second.result.current.syncedAt).toEqual(expect.any(Number));
     expect(requested()).toEqual(["/v1/games/analysis-corpus/changes"]);
     expect(await deviceCopy("user-a")).toEqual({
       marks: next,
       ids: ["new", "s-a", "s-c"],
     });
+  });
+
+  it("stamps a first keep's snapshot only once it is saved", async () => {
+    serve(() => null);
+    let release: (() => void) | undefined;
+    deviceGate.holdSave = () => new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.keepOnDevice());
+    await waitFor(() => expect(result.current.items).toHaveLength(3));
+    expect(result.current.syncedAt).toBeNull();
+    expect(result.current.onDevice).toBe(false);
+
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    await act(async () => release?.());
+    await waitFor(() => expect(result.current.onDevice).toBe(true));
+    expect(result.current.syncedAt).toEqual(expect.any(Number));
+    expect(result.current.keepFailed).toBe(false);
+  });
+
+  it("says when a keep could not be stored, and asks again on the next load", async () => {
+    serve(() => null);
+    vi.stubGlobal("indexedDB", undefined);
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.keepOnDevice());
+    await waitFor(() => expect(result.current.syncedAt).not.toBeNull());
+    expect(result.current.items).toHaveLength(3);
+    expect(result.current.onDevice).toBe(false);
+    expect(result.current.keepFailed).toBe(true);
+
+    act(() => result.current.load());
+    expect(result.current.keepFailed).toBe(false);
+    await waitFor(() => expect(result.current.syncedAt).not.toBeNull());
+    expect(result.current.keepFailed).toBe(true);
+  });
+
+  it("says when this account's copy could not be stored, on the keep and on each later load until it can be", async () => {
+    serve(() => null);
+    // The browser is out of space for the rows; the small reset record still fits.
+    deviceGate.holdSave = () => Promise.reject(new DOMException("full", "QuotaExceededError"));
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.keepOnDevice());
+    await waitFor(() => expect(result.current.syncedAt).not.toBeNull());
+    expect(result.current.items).toHaveLength(3);
+    expect(result.current.onDevice).toBe(false);
+    expect(result.current.keepFailed).toBe(true);
+    expect(await deviceCopy("user-a")).toBe("kept");
+
+    act(() => result.current.load());
+    await waitFor(() => expect(result.current.syncedAt).not.toBeNull());
+    expect(result.current.keepFailed).toBe(true);
+
+    deviceGate.holdSave = null;
+    act(() => result.current.load());
+    await waitFor(() => expect(result.current.onDevice).toBe(true));
+    expect(result.current.keepFailed).toBe(false);
+  });
+
+  it("does not count a keep over the 20,000-game limit as a failure", async () => {
+    // Every page says there is more, so the snapshot stops at its page limit: the corpus ceiling.
+    let page = 0;
+    harness.apiCall.mockImplementation(async (_getToken, path: string) => {
+      if (path.startsWith("/v1/games/analysis-corpus/changes")) return null;
+      page += 1;
+      const first = !new URL(path, "https://example.test").searchParams.get("cursor");
+      return { items: [game(`limit-${page}`)], nextCursor: `next-${page}`, ...(first ? MARKS : { corpusEpoch: EPOCH }) };
+    });
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => result.current.keepOnDevice());
+    await waitFor(() => expect(result.current.syncedAt).not.toBeNull());
+    expect(result.current.hitCorpusLimit).toBe(true);
+    expect(result.current.onDevice).toBe(false);
+    expect(result.current.keepFailed).toBe(false);
+  });
+
+  it("keeps history for the account that loads next when asked before sign-in finished loading", async () => {
+    serve(() => null);
+    harness.isLoaded = false;
+    harness.userId = null;
+    const view = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => view.result.current.keepOnDevice());
+    expect(harness.apiCall).not.toHaveBeenCalled();
+
+    harness.isLoaded = true;
+    harness.userId = "user-a";
+    view.rerender();
+    // Daily Pulse's restore effect loads once the account is known.
+    act(() => view.result.current.load());
+    await waitFor(() => expect(view.result.current.onDevice).toBe(true));
+    expect(await deviceCopy("user-a")).toEqual({ marks: MARKS, ids: ["s-a", "s-b", "s-c"] });
+  });
+
+  it("drops a keep asked for before sign-in loaded when nobody turns out to be signed in", async () => {
+    serve(() => null);
+    harness.isLoaded = false;
+    harness.userId = null;
+    const view = renderHook(() => useAnalysisGames(), { wrapper });
+    act(() => view.result.current.keepOnDevice());
+    harness.isLoaded = true;
+    harness.isSignedIn = false;
+    view.rerender();
+
+    harness.isSignedIn = true;
+    harness.userId = "user-a";
+    view.rerender();
+    act(() => view.result.current.load());
+    await waitFor(() => expect(view.result.current.syncedAt).not.toBeNull());
+    expect(view.result.current.onDevice).toBe(false);
+    expect(view.result.current.keepFailed).toBe(false);
+    expect(await factory.databases()).toEqual([]);
   });
 
   it("falls back to a snapshot when the server asks for one, and replaces the stored copy", async () => {

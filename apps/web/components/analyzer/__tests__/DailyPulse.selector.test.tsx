@@ -33,8 +33,12 @@ vi.mock("@/components/analyzer/arcade/hooks/useAnalysisGames", () => ({
     error: null,
     pagesFetched: analysisLoading ? 0 : 1,
     hitCorpusLimit: false,
+    onDevice: false,
+    syncedAt: analysisLoading ? null : 1_793_000_000_000,
+    keepFailed: false,
     isActive: analysisActive,
     load: loadAnalysis,
+    keepOnDevice: vi.fn(),
     release: vi.fn(),
   }),
 }));
@@ -53,7 +57,7 @@ const idle = () => new Promise((resolve) => setTimeout(resolve, 20));
 describe("DailyPulse's card selection, loaded on demand", () => {
   it("is never loaded behind the gate or while Daily Pulse is closed", async () => {
     render(<DailyPulse />);
-    expect(screen.getByRole("button", { name: "Show insights" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Load my history" })).toBeTruthy();
     await idle();
     cleanup();
 

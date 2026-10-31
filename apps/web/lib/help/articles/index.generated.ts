@@ -10,6 +10,7 @@ import accountData_deleteAccount from "./account-data/delete-account";
 import accountData_deletingGameHistory from "./account-data/deleting-game-history";
 import accountData_exportCsv from "./account-data/export-csv";
 import accountData_hideOrDeleteAGame from "./account-data/hide-or-delete-a-game";
+import accountData_historyOnThisDevice from "./account-data/history-on-this-device";
 import accountData_notifications from "./account-data/notifications";
 import accountData_playerChannels from "./account-data/player-channels";
 import accountData_privacyCookies from "./account-data/privacy-cookies";
@@ -109,6 +110,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   accountData_deletingGameHistory,
   accountData_exportCsv,
   accountData_hideOrDeleteAGame,
+  accountData_historyOnThisDevice,
   accountData_notifications,
   accountData_playerChannels,
   accountData_privacyCookies,

@@ -20,6 +20,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ReplayArchiveStatusCard } from "./ReplayArchiveStatusCard";
 import { SnapshotManager } from "./SnapshotManager";
 import { DataRepairCard } from "./DataRepairCard";
+import { DeviceHistorySection } from "./DeviceHistorySection";
 import { SettingsSectionsReady } from "./SettingsSectionNav";
 
 const AccountDeleteDialog = dynamic(() => import("./AccountDeleteDialog"), { ssr: false });
@@ -37,6 +38,8 @@ export function SettingsBackups() {
   const [wipeUntil, setWipeUntil] = useState("");
   const [pendingWipe, setPendingWipe] = useState(false);
   const [wiping, setWiping] = useState(false);
+  // Moves after this page clears the games kept on this device, so their row reads again.
+  const [deviceRevision, setDeviceRevision] = useState(0);
   const [count, setCount] = useState<number | null>(null);
   const [counting, setCounting] = useState(false);
   const [countFailed, setCountFailed] = useState(false);
@@ -68,13 +71,16 @@ export function SettingsBackups() {
   async function refreshHistory() {
     // A wipe or restore leaves any game history kept on this device out of date; it goes, and the next load re-reads.
     forgetDeviceCopy();
+    setDeviceRevision((value) => value + 1);
     await refreshCaches();
   }
 
   // A wipe or restore that failed without a definite rejection may have finished anyway, and a retry may never get as
   // far as refreshHistory (a wipe's count is then 0); only a definite rejection keeps the copy on this device.
   function forgetUnlessRejected(error: unknown) {
-    if (mayHaveApplied(error)) forgetDeviceCopy();
+    if (!mayHaveApplied(error)) return;
+    forgetDeviceCopy();
+    setDeviceRevision((value) => value + 1);
   }
 
   async function exportData() {
@@ -156,6 +162,8 @@ export function SettingsBackups() {
       <DataRepairCard onStarted={refreshCaches} />
 
       <HiddenGames />
+
+      <DeviceHistorySection revision={deviceRevision} />
 
       <Section
         id="delete-history" className="scroll-mt-28"

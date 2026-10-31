@@ -141,6 +141,50 @@ export async function readDeviceCorpus<T extends CorpusRow>(
   return account.marks ? { kind: "stored", marks: account.marks, rows } : { kind: "kept" };
 }
 
+/** What Settings shows for this account's copy: its record and game count, with an estimated size in bytes. */
+export type DeviceSummary =
+  | { kind: "absent" }
+  | { kind: "kept" }
+  | { kind: "unreadable" }
+  | { kind: "stored"; count: number; bytes: number };
+
+/**
+ * How many games this account keeps here and roughly how much space they take, without reading every row: the
+ * account record holds the count, and up to `sample` evenly spaced rows give an average size. Reads only.
+ *
+ * Example:
+ *   const summary = await readDeviceSummary(db, accountKey);
+ *   if (summary.kind === "stored") show(summary.count, summary.bytes);
+ */
+export async function readDeviceSummary(db: IDBDatabase, accountKey: string, sample = 64): Promise<DeviceSummary> {
+  const box = await idbTransactionOn(db, [ACCOUNTS, GAMES], "readonly", (tx) => {
+    const out: { account?: unknown; sizes: number[] } = { sizes: [] };
+    const account = tx.objectStore(ACCOUNTS).get(accountKey);
+    account.onsuccess = () => {
+      out.account = account.result;
+      const record = accountRecord(account.result, accountKey);
+      if (!record || record.count === 0) return;
+      const step = Math.max(1, Math.floor(record.count / sample));
+      const cursor = tx.objectStore(GAMES).index(BY_ACCOUNT).openCursor(accountKey);
+      cursor.onsuccess = () => {
+        const current = cursor.result;
+        if (!current || out.sizes.length >= sample) return;
+        out.sizes.push(new TextEncoder().encode(JSON.stringify(current.value)).length);
+        current.advance(step);
+      };
+    };
+    return out;
+  });
+  if (box.account === undefined) return { kind: "absent" };
+  const record = accountRecord(box.account, accountKey);
+  if (!record) return { kind: "unreadable" };
+  if (!record.marks) return { kind: "kept" };
+  if (record.count === 0) return { kind: "stored", count: 0, bytes: 0 };
+  if (box.sizes.length === 0) return { kind: "unreadable" };
+  const average = box.sizes.reduce((sum, size) => sum + size, 0) / box.sizes.length;
+  return { kind: "stored", count: record.count, bytes: Math.round(average * record.count) };
+}
+
 /**
  * Replace everything on this device with one account's snapshot and its marks, in one transaction.
  *

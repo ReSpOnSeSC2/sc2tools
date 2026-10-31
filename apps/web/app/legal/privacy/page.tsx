@@ -23,7 +23,7 @@ export const metadata = pageMetadata({
     "How SC2 Tools processes replay data, connected streaming accounts, and private StarCraft II replay files.",
 });
 
-const LAST_UPDATED = "2026-10-23";
+const LAST_UPDATED = "2026-10-31";
 /** Settings tab with export, history deletion and account deletion. */
 const DATA_SETTINGS_HREF = "/settings?tab=backups";
 const LIST_CLASS = "list-disc space-y-2 pl-6";
@@ -356,6 +356,27 @@ function BrowserStoredData() {
         browser settings to remove all of it. This does not delete games you
         already saved to your account. To delete those, use{" "}
         <DataSettingsLink />.
+      </p>
+      <p>
+        If you choose <strong>Load my history</strong> or{" "}
+        <strong>Keep on this device</strong> in Daily Pulse, this browser also
+        keeps a copy of your game history in its IndexedDB storage, so Daily
+        Pulse, Season Recap and Arcade can show it first on your next visit
+        before checking your account for changes. It is kept only for accounts
+        with up to 20,000 games, as one row per game: the date, result, map and
+        length; your race, MMR, build, macro score and Battle.net character ID;
+        and each opponent&apos;s name, race, MMR, strategy, Battle.net character
+        ID and SC2Pulse IDs. It is a copy of games already in your account, and
+        it is not sent back to us.
+      </p>
+      <p>
+        It is removed when you sign out or another account signs in on this
+        browser, and when you choose <strong>Clear</strong> under Games on this
+        device in <DataSettingsLink />. Deleting your game history or restoring
+        a snapshot removes it in the browser where you do it; other browsers
+        replace theirs the next time they load your history, or remove it when
+        they sign out. Deleting your account removes it from each browser once
+        that browser sees you are signed out.
       </p>
     </PolicySection>
   );
