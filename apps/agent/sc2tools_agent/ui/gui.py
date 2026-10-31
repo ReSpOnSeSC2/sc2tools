@@ -1028,6 +1028,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 settings=self._checkin_settings,
                 preview_race=ui._build_checkin_preview_race,
                 on_reset_positions=ui._on_build_checkin_reset,
+                assistance_reason=self._companion_page.assistance_off_reason,
             )
             if callable(ui._on_companion_action):
                 self._companion_page.assistanceChanged.connect(self._checkin_host.set_panels_enabled)

@@ -74,6 +74,7 @@ def test_log_search_copy_follow_and_help_navigation(tmp_path):
             if button.objectName() == "helpLink": button.click()
         sidebar = next(button for button in win.findChildren(QtWidgets.QPushButton) if button.text() == "Help & support")
         sidebar.click()
+        next(button for button in win.findChildren(QtWidgets.QPushButton) if button.text() == "Import help").click()
         from sc2tools_agent.ui.help_links import AGENT_HELP_SLUGS
         # Pairing and sync-error help are contextual actions on their cards.
         win._pairing_card.help.click()

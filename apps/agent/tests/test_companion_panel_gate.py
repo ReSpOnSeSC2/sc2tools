@@ -1,5 +1,7 @@
 from dataclasses import replace
 
+import pytest
+
 from sc2tools_agent.build_checkin.models import LoadingCardModel, PostgameCardModel
 from sc2tools_agent.ui.build_checkin_window import BuildCheckinHost
 from tests.test_build_checkin_ui_core import FakeWindow
@@ -63,3 +65,17 @@ def test_preset_gates_each_selector_without_losing_the_pending_model():
     view.set_panels_enabled(False)
     view.set_feature_gates({"preGameSelector": False, "postGameSelector": True})
     assert not view.existing_window("postgame").visible
+
+
+def test_refused_preview_names_why_assistance_is_off_without_opening_a_card():
+    reasons = iter(["unpaired", None])
+    view = BuildCheckinHost(controller=lambda: None, assistance_reason=lambda: next(reasons),
+                            window_factory=lambda kind, owner: pytest.fail("a refused preview opened a card"))
+    view.set_panels_enabled(False)
+    assert view.show_preview("loading") == "unpaired"
+    # No reason from the Companion page still means its master switch is off.
+    assert view.show_preview("postgame") == "assistance_off"
+    view.set_panels_enabled(True)
+    assert view.show_preview("future-hud") == "unavailable"
+    view.close()
+    assert view.show_preview("loading") == "unavailable"
