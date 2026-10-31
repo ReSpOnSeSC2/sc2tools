@@ -469,6 +469,16 @@ describe("syncAnalysisCorpus", () => {
     expect([mayHaveDeviceCopy("user-a"), await copy("user-b")]).toEqual([true, "absent"]);
   });
 
+  it("removes a copy noted for nobody even when its keep is cancelled before dropping anything", async () => {
+    await keep(["b-only"], MARKS, "user-b");
+    window.localStorage.removeItem(DEVICE_NOTE_KEY);
+    const run = new AbortController();
+    whileOpening(() => run.abort());
+    await expect(syncAnalysisCorpus(input(null, { rows: ["a1"] }, { keepOnDevice: true, signal: run.signal })))
+      .rejects.toMatchObject({ name: "AbortError" });
+    expect(await copy("user-b")).toBe("absent");
+  });
+
   it("lets a probe in another tab store beside a first keep, so the keep's choice and its note survive", async () => {
     let release: (() => void) | undefined;
     const keeping = input(null, { rows: ["s1"] }, { keepOnDevice: true });
