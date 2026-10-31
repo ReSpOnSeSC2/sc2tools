@@ -157,6 +157,8 @@ async function main() {
     sessionPublicationGuard: (userId) => services.games.sessionPublicationGuard?.(userId) ?? null,
     resolveVoicePrefs: (userId) =>
       /** @type {any} */ (services).users.getPreferences(userId, "voice"),
+    claimScoutingVoice: (userId, gameKey) =>
+      /** @type {any} */ (services).liveGameBroker.claimScoutingVoice(userId, gameKey),
     resolveRandomizerPrefs: (userId) =>
       /** @type {any} */ (services).buildIntents.overlayRandomizerConfig(userId),
     resolveGhostPrefs: (userId) => /** @type {any} */ (services).ghostConfig.get(userId),

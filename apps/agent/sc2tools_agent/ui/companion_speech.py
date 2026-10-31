@@ -72,7 +72,7 @@ def _system_engine(parent):
 
 
 def build_scouting_speech(parent, *, QtCore, engine_factory=None):
-    """Create an idle QObject; the first explicit speak initializes system audio.
+    """Create an idle QObject; prepare or speak initializes system audio.
 
     ``available()`` is None before initialization, True for a healthy initialized
     engine, and False after an error or shutdown. Tests can inject a factory that
@@ -184,6 +184,14 @@ def build_scouting_speech(parent, *, QtCore, engine_factory=None):
             except Exception as error:
                 return self._fail(error)
 
+        def prepare(self):
+            """Check the native engine without playing or interrupting speech."""
+            if self._closed:
+                return False
+            if QtCore.QThread.currentThread() != self.thread():
+                return self._fail("Request scouting speech from the Companion window")
+            return self._ensure_engine()
+
         def speak(self, text):
             if self._closed:
                 return False
@@ -191,9 +199,7 @@ def build_scouting_speech(parent, *, QtCore, engine_factory=None):
             if not text:
                 self._set_status("No scouting text to read.")
                 return False
-            if QtCore.QThread.currentThread() != self.thread():
-                return self._fail("Request scouting speech from the Companion window")
-            if not self._ensure_engine() or not self._stop_engine():
+            if not self.prepare() or not self._stop_engine():
                 return False
             try:
                 self._set_status("Starting native scouting report…")

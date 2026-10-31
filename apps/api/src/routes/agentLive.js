@@ -1,6 +1,7 @@
 "use strict";
 
 const express = require("express");
+const { validScoutingVoiceGameKey } = require("../services/scoutingVoiceClaims");
 
 const PREDICTION_ACTIVE_PHASES = new Set([
   "match_loading",
@@ -191,6 +192,20 @@ function buildAgentLiveRouter(deps) {
  */
 function buildMeLiveRouter(deps) {
   const router = express.Router();
+
+  router.post("/me/live/scouting-voice/claim", deps.auth, (req, res) => {
+    if (!req.auth) {
+      res.status(401).json({ error: { code: "auth_required" } });
+      return;
+    }
+    res.set("Cache-Control", "private, no-store");
+    const gameKey = req.body?.gameKey;
+    if (!validScoutingVoiceGameKey(gameKey)) {
+      res.status(400).json({ error: { code: "invalid_game_key" } });
+      return;
+    }
+    res.json({ granted: deps.broker.claimScoutingVoice(req.auth.userId, gameKey) });
+  });
 
   router.get("/me/live/snapshot", deps.auth, (req, res) => {
     const auth = req.auth;

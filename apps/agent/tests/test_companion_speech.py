@@ -152,6 +152,17 @@ def test_explicit_speech_uses_actual_voice_and_cancels_previous_report(fake_spee
     assert "stopped" in statuses[-1]
 
 
+def test_prepare_checks_engine_without_playing_or_stopping_a_report(fake_speech):
+    speech, engines, app, QtCore, State = fake_speech
+    assert speech.prepare()
+    assert speech.available() is True
+    assert len(engines) == 1
+    assert engines[0].calls == []
+    engines[0].fail("No available audio output")
+    assert not speech.prepare()
+    assert engines[0].calls == []
+
+
 def test_speech_bounds_direct_text_and_reports_engine_errors(fake_speech):
     speech, engines, app, QtCore, State = fake_speech
     assert speech.speak("Words " * 1000 + "\x00")

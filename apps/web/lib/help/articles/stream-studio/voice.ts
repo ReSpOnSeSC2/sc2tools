@@ -26,7 +26,7 @@ const article: HelpArticle = {
     "voice blocked",
     "opponent notes aloud",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-31",
   body: [
     {
       type: "paragraph",
@@ -43,6 +43,7 @@ const article: HelpArticle = {
         "Press **Save changes**, then make sure the **Scouting tells** widget, or the all-in-one overlay, is in OBS. That's the source that speaks; see [OBS overlay setup](/help/obs-overlay-setup).",
       ],
     },
+    { type: "paragraph", text: "Automatic game-start scouting plays once per game across your connected Browser Sources and desktop Companion. The first reader ready to speak handles the report using its saved voice. In Companion, Read report now repeats the current report when you request it." },
     { type: "heading", text: "Read your opponent notes aloud", anchor: "notes" },
     {
       type: "paragraph",

@@ -27,8 +27,9 @@ class FakeSocket {
     this.handlers.set(event, handler); if (event === "overlay:multichat") handler({ gameWidgetsPaused: false });
   }
 
-  emit(event: string, payload?: unknown) {
+  emit(event: string, payload?: unknown, acknowledge?: (reply: { granted: boolean }) => void) {
     this.emitted.push({ event, payload });
+    if (event === "overlay:claimScoutingVoice") acknowledge?.({ granted: true });
   }
 
   disconnect() {
@@ -138,7 +139,7 @@ describe("OverlayClient — voice readout on the all-in-one URL", () => {
     vi.useRealTimers();
   });
 
-  it("speaks the scouting line once the enriched loading envelope confirms match start", () => {
+  it("speaks the scouting line once the enriched loading envelope confirms match start", async () => {
     render(<OverlayClient token="tok-1" />);
     expect(activeSocket).not.toBeNull();
     const socket = activeSocket as FakeSocket;
@@ -181,10 +182,11 @@ describe("OverlayClient — voice readout on the all-in-one URL", () => {
     // only need to cover the 300 ms default speak delay. 2 s gives
     // plenty of margin while staying short of the hook's 8 s keep-
     // alive interval so the fake-timer loop terminates cleanly.
-    act(() => {
-      vi.advanceTimersByTime(2000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
     });
 
+    expect(socket.emitted).toContainEqual({ event: "overlay:claimScoutingVoice", payload: { gameKey: "key-1" } });
     expect(cap.speak).toHaveBeenCalledTimes(1);
     const text = cap.utterances[0]?.text || "";
     expect(text).toContain("Facing Maru, Terran.");
@@ -193,7 +195,7 @@ describe("OverlayClient — voice readout on the all-in-one URL", () => {
     expect(text.trim().endsWith("Good luck.")).toBe(true);
   });
 
-  it("keeps sample speech independent and does not repeat the real scouting line after Stop", () => {
+  it("keeps sample speech independent and does not repeat the real scouting line after Stop", async () => {
     render(<OverlayClient token="tok-1" />);
     const socket = activeSocket as FakeSocket;
     act(() => {
@@ -202,6 +204,7 @@ describe("OverlayClient — voice readout on the all-in-one URL", () => {
         opponent: { name: "RealOpponent", race: "Terran", profile: { mmr: 4200 } }, streamerHistory: { oppName: "RealOpponent", headToHead: { wins: 0, losses: 0 } } });
       vi.advanceTimersByTime(2000);
     });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     expect(cap.speak).toHaveBeenCalledTimes(1);
     act(() => socket.fire("overlay:live", { isTest: true, testNonce: "voice-sample", testWidget: "scouting", oppName: "TestOpponent", oppRace: "Zerg" }));
     act(() => vi.advanceTimersByTime(2000));
@@ -211,7 +214,7 @@ describe("OverlayClient — voice readout on the all-in-one URL", () => {
     expect(cap.speak).toHaveBeenCalledTimes(2);
   });
 
-  it("speaks 'First meeting.' when the cloud confirms a zero-zero record", () => {
+  it("speaks 'First meeting.' when the cloud confirms a zero-zero record", async () => {
     render(<OverlayClient token="tok-1" />);
     const socket = activeSocket as FakeSocket;
     act(() => {
@@ -244,8 +247,8 @@ describe("OverlayClient — voice readout on the all-in-one URL", () => {
     // only need to cover the 300 ms default speak delay. 2 s gives
     // plenty of margin while staying short of the hook's 8 s keep-
     // alive interval so the fake-timer loop terminates cleanly.
-    act(() => {
-      vi.advanceTimersByTime(2000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
     });
     expect(cap.speak).toHaveBeenCalledTimes(1);
     const text = cap.utterances[0]?.text || "";

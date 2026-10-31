@@ -11,6 +11,8 @@ import json
 from typing import Any, List, Optional
 from unittest.mock import MagicMock
 
+import pytest
+
 from sc2tools_agent.live.pulse_lookup import (
     DEFAULT_API_ROOT,
     DEFAULT_QUEUE,
@@ -649,3 +651,117 @@ def test_candidate_label_uses_picked_character_for_modern_shape() -> None:
     assert label != "? (?)"
     assert "(US)" in label
     assert "Player" in label
+
+
+def _current_team(rating: int, played: str, *, race: str = "terran", region: int = 1) -> dict:
+    return {
+        "rating": rating,
+        "lastPlayed": played,
+        "region": region,
+        "league": 4,
+        "members": [{f"{race}GamesPlayed": 20}],
+    }
+
+
+def test_resolve_uses_latest_rating_even_when_an_older_team_is_higher() -> None:
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 70, "region": 1}]))
+    session.queue("/character/search", _ok([{
+        "character": {"id": 1, "name": "Current#1", "region": 1},
+    }]))
+    session.queue("/group/team", _ok([
+        _current_team(5500, "2026-10-01T10:00:00Z"),
+        _current_team(4100, "2026-10-30T10:00:00Z"),
+    ]))
+
+    profile = _make_client(session).resolve(name="Current", region="NA")
+
+    assert profile is not None
+    assert profile.mmr == 4100
+
+
+@pytest.mark.parametrize("race_hint, team_race", [("Terr", "terran"), ("Random", "random")])
+def test_resolve_prefers_current_game_race_over_a_higher_other_race(
+    race_hint: str, team_race: str,
+) -> None:
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 70, "region": 1}]))
+    session.queue("/character/search", _ok([{
+        "character": {"id": 1, "name": "Offrace#1", "region": 1},
+        "protossGamesPlayed": 500,
+    }]))
+    session.queue("/group/team", _ok([
+        _current_team(5500, "2026-10-30T10:00:00Z", race="protoss"),
+        _current_team(4000, "2026-10-29T10:00:00Z", race=team_race),
+        _current_team(4300, "2026-10-31T10:00:00Z", race="zerg"),
+    ]))
+
+    profile = _make_client(session).resolve(name="Offrace", region="NA", race=race_hint)
+
+    assert profile is not None
+    assert profile.mmr == 4000
+    assert profile.top_race == {"terran": "Terran", "random": "Random"}[team_race]
+
+
+def test_resolve_falls_back_to_latest_team_when_game_race_has_no_ladder() -> None:
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 70, "region": 1}]))
+    session.queue("/character/search", _ok([{
+        "character": {"id": 1, "name": "RandomMain#1", "region": 1},
+    }]))
+    session.queue("/group/team", _ok([
+        _current_team(5500, "invalid-date", race="protoss"),
+        _current_team(4200, "2026-10-30T10:00:00Z", race="random"),
+    ]))
+
+    profile = _make_client(session).resolve(name="RandomMain", region="NA", race="Terran")
+
+    assert profile is not None
+    assert profile.mmr == 4200
+    assert profile.top_race == "Random"
+
+
+def test_resolve_uses_regional_season_and_rejects_cross_region_historical_peak() -> None:
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([
+        {"battlenetId": 70, "region": 1},
+        {"battlenetId": 54, "region": 5},
+        {"battlenetId": 53, "region": 5},
+    ]))
+    session.queue("/character/search", _ok([{
+        "character": {"id": 1, "name": "Regional#1", "region": 5},
+    }]))
+    session.queue("/group/team", _ok([
+        _current_team(5900, "2026-10-31T10:00:00Z", region=1),
+        _current_team(4100, "2026-10-30T10:00:00Z", region=5),
+    ]))
+
+    profile = _make_client(session).resolve(name="Regional", region="CN", race="Terran")
+
+    assert profile is not None
+    assert profile.mmr == 4100
+    team_calls = [params for url, params in session.calls if url.endswith("/group/team")]
+    assert team_calls[0]["season"] == "54"
+
+
+def test_season_cache_refreshes_after_rollover(monkeypatch) -> None:
+    now = [1000.0]
+    monkeypatch.setattr("sc2tools_agent.live.pulse_lookup.time.monotonic", lambda: now[0])
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 69, "region": 1}]))
+    session.queue("/season/list/all", _ok([{"battlenetId": 70, "region": 1}]))
+    client = _make_client(session)
+
+    assert client._ensure_season(1) == 69
+    now[0] += 301.0
+    assert client._ensure_season(1) == 70
+
+
+def test_failed_season_fetch_does_not_disable_mmr_until_agent_restart() -> None:
+    session = _StubSession()
+    session.queue("/season/list/all", _bad(404))
+    session.queue("/season/list/all", _ok([{"battlenetId": 70, "region": 1}]))
+    client = _make_client(session)
+
+    assert client._ensure_season(1) is None
+    assert client._ensure_season(1) == 70

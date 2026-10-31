@@ -128,6 +128,19 @@ class CompanionClient:
                     "preferences": preferences, **modes}
         if action in {"randomizer_state", "randomizer_settings", "randomizer_roll"}:
             return self._randomizer_action(request)
+        if action == "claim_scouting_voice":
+            connection = tuple(self._connection_provider())
+            expected_owner = request.get("accountKey")
+            if (not isinstance(expected_owner, str) or not connection[1]
+                    or expected_owner != hashlib.sha256((connection[0] + "\0" + connection[1]).encode("utf-8")).hexdigest()):
+                raise CompanionError("Your linked account changed. Refresh the scouting report and try again.")
+            game_key = request.get("gameKey")
+            if (not isinstance(game_key, str) or not game_key.strip() or game_key != game_key.strip()
+                    or len(game_key) > 200
+                    or any(ord(character) < 32 or ord(character) == 127 for character in game_key)):
+                raise CompanionError("Refresh the current game before reading its scouting report.")
+            return self._request("POST", "/v1/me/live/scouting-voice/claim", body={"gameKey": game_key},
+                                 expected_connection=connection)
         if action in {"game_build_order", "game_summary"}:
             connection = tuple(self._connection_provider())
             expected_owner = request.get("accountKey")

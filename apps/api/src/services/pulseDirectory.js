@@ -48,6 +48,9 @@ const RESOLUTION_TTL_MS = 24 * 60 * 60 * 1000;
 // ladder rating barely moves within an hour and opponent profiles are
 // opened far more often than that.
 const MMR_TTL_MS = 60 * 60 * 1000;
+// Earlier writers also stored the highest-rated race in the scalar slot.
+// Only values written under the current-team contract are safe to reuse.
+const CURRENT_MMR_VERSION = 1;
 
 const NOOP_LOGGER = {
   info: () => {},
@@ -169,8 +172,10 @@ class PulseDirectoryService {
   }
 
   /**
-   * Return fresh live ladder data (collapsed MMR + per-race breakdown)
-   * for an opponent if cached within the MMR TTL, else null. Looks up
+   * Return fresh live ladder data (current MMR + per-race breakdown)
+   * for an opponent, masking each independently when its TTL expires.
+   * A race-table refresh cannot renew the scalar rating, or vice versa.
+   * Returns null when neither is fresh. Looks up
    * by toon handle first (the natural key); falls back to the sparse
    * ``pulseCharacterId`` index when only the numeric id is known.
    *
@@ -195,19 +200,27 @@ class PulseDirectoryService {
           leagueId: 1,
           races: 1,
           mmrFetchedAt: 1,
+          racesFetchedAt: 1,
+          currentMmrVersion: 1,
         },
       });
       if (!row) return null;
-      const fetchedAt =
+      const mmrFetchedAt =
         row.mmrFetchedAt instanceof Date ? row.mmrFetchedAt.getTime() : null;
-      if (fetchedAt === null) return null;
-      if (this.now() - fetchedAt >= this.mmrTtlMs) return null;
+      const racesFetchedAt =
+        row.racesFetchedAt instanceof Date ? row.racesFetchedAt.getTime() : null;
+      const now = this.now();
+      const mmrFresh = row.currentMmrVersion === CURRENT_MMR_VERSION
+        && mmrFetchedAt !== null && now - mmrFetchedAt < this.mmrTtlMs;
+      const racesFresh = racesFetchedAt !== null
+        && now - racesFetchedAt < this.mmrTtlMs;
+      if (!mmrFresh && !racesFresh) return null;
       return {
-        mmr: typeof row.mmr === "number" ? row.mmr : null,
+        mmr: mmrFresh && typeof row.mmr === "number" ? row.mmr : null,
         region: typeof row.region === "string" ? row.region : null,
-        leagueId: typeof row.leagueId === "number" ? row.leagueId : null,
-        races: Array.isArray(row.races) ? row.races : [],
-        fetchedAt,
+        leagueId: mmrFresh && typeof row.leagueId === "number" ? row.leagueId : null,
+        races: racesFresh && Array.isArray(row.races) ? row.races : [],
+        fetchedAt: Math.max(mmrFresh ? Number(mmrFetchedAt) : 0, racesFresh ? Number(racesFetchedAt) : 0),
       };
     } catch (err) {
       this.logger.warn({ err }, "pulse_directory_mmr_read_failed");
@@ -247,13 +260,20 @@ class PulseDirectoryService {
     if (mmr === null && races.length === 0) return false;
     const now = new Date(this.now());
     /** @type {Record<string, any>} */
-    const set = { mmrFetchedAt: now, updatedAt: now };
-    if (mmr !== null) set.mmr = mmr;
-    if (races.length > 0) set.races = races;
+    const set = { updatedAt: now };
+    if (mmr !== null) {
+      set.mmr = mmr;
+      set.mmrFetchedAt = now;
+      set.currentMmrVersion = CURRENT_MMR_VERSION;
+    }
+    if (races.length > 0) {
+      set.races = races;
+      set.racesFetchedAt = now;
+    }
     if (cid) set.pulseCharacterId = cid;
-    const region = cleanRegion(args.region) || (races[0] ? races[0].region : null);
+    const region = cleanRegion(args.region);
     if (region) set.region = region;
-    if (args && typeof args.leagueId === "number") set.leagueId = args.leagueId;
+    if (mmr !== null && typeof args.leagueId === "number") set.leagueId = args.leagueId;
     // Prefer the toon handle as the document key so resolution and MMR
     // collapse onto a single row; fall back to a character-id key for
     // the rare toon-less path.

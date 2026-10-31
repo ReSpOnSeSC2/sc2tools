@@ -40,6 +40,7 @@ import {
   type VoicePrefs,
 } from "@/components/overlay/useVoiceReadout";
 import { useClearStalePostGameOnGameKeyChange } from "@/components/overlay/useClearStalePostGameOnGameKeyChange";
+import { useScoutingVoiceClaim } from "@/components/overlay/useScoutingVoiceClaim";
 import {
   useGameStartTriggerKey,
   useScoutingStartTriggerKey,
@@ -221,6 +222,7 @@ function ConnectedOverlayClient({
   // ``?w=scouting`` source. Any other ``?w=`` filter explicitly opts out
   // — those are sibling Browser Sources that share the room.
   const enableVoiceHere = !gameWidgetsPaused && (singleWidget === null || singleWidget === "scouting");
+  const claimScoutingVoice = useScoutingVoiceClaim(socketRef);
   const voice = useVoiceReadout(
     enableVoiceHere ? testLayer.targets("scouting") ? testLayer.live : live : null,
     enableVoiceHere ? voicePrefs : null,
@@ -230,6 +232,7 @@ function ConnectedOverlayClient({
     // readout whether they wired the all-in-one URL or the dedicated
     // scouting Browser Source.
     enableVoiceHere ? liveGame : null,
+    claimScoutingVoice,
   );
 
   // Pre-warm the reveal AudioContext whenever this overlay could render
