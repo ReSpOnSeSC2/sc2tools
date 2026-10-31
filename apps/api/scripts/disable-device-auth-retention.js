@@ -30,9 +30,18 @@ async function main(argv, db, log = line => { process.stdout.write(`${line}\n`);
   log(`Database ${db.databaseName}.`);
   const row = await collection.findOne({ _id: AUTHORITY_KEY });
   if (!row) { log("No credential authority record exists in this database; there is nothing to disable."); return apply ? 1 : 0; }
-  log(`Authority incarnation ${row.incarnation}: mode ${row.mode}, denyAll ${row.denyAll}, ${Array.isArray(row.pending) ? row.pending.length : "?"} pending.`);
+  log(`Authority incarnation ${row.incarnation}: mode ${row.mode}, denyAll ${row.denyAll}, ${pendingCount(row)} pending.`);
   if (!apply) { log("Dry run; nothing written. Pass --incarnation <the incarnation above> --apply to disable."); return 0; }
   if (!incarnation) { log("--apply needs --incarnation <uuid>."); return 2; }
+  return disableAndReport(collection, incarnation, log);
+}
+
+/** @param {any} row */
+function pendingCount(row) { return Array.isArray(row.pending) ? row.pending.length : "?"; }
+
+/** Run the disable and map its outcome to an exit code.
+ * @param {any} collection @param {string} incarnation @param {(line: string) => void} log */
+async function disableAndReport(collection, incarnation, log) {
   const logger = { warn: (/** @type {any} */ fields, /** @type {string} */ message) => log(`${message}: ${fields?.err?.message ?? "no detail"}`) };
   try {
     const result = await new DeviceCredentialWrites(collection, { logger }).disable({ incarnation });
@@ -57,7 +66,7 @@ if (require.main === module) {
   const uri = process.env.MONGODB_URI, dbName = process.env.MONGODB_DB || "sc2tools_saas";
   if (!uri) { console.error("MONGODB_URI is required."); process.exitCode = 2; }
   else {
-    console.log(`Host ${hostOf(uri)}.`);
+    process.stdout.write(`Host ${hostOf(uri)}.\n`);
     const client = new MongoClient(uri);
     client.connect().then(() => main(process.argv.slice(2), client.db(dbName)))
       .then(code => { process.exitCode = code; }, error => { console.error(`Failed before any write: ${error.message}`); process.exitCode = 1; })
