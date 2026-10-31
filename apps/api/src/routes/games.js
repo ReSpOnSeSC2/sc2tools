@@ -22,7 +22,7 @@ const {
   admitBrowserBatch,
   recordBrowserBatch,
 } = require("./gamesIngestPolicy");
-const { AnalysisCorpusChanges } = require("../services/analysisCorpusChanges");
+const { AnalysisCorpusChanges, CORPUS_EPOCH } = require("../services/analysisCorpusChanges");
 
 const ANALYSIS_CORPUS_MAX_CONCURRENT = 1;
 const ANALYSIS_CORPUS_MAX_WAITERS = 6;
@@ -300,8 +300,8 @@ function buildGamesRouter(deps) {
   router.get("/games/analysis-corpus", analysisCorpusPage(analysisCorpusAdmission,
     query => ({ limit: parseLimit(query.limit), cursor: typeof query.cursor === "string" ? query.cursor : undefined }),
     async (userId, input, signal) => {
-      // The first page tells the client which corpus version and watermark to keep for changed-since reads.
-      const marks = input.cursor ? {} : await corpusChanges.snapshotMarks(userId);
+      // The first page carries the marks for changed-since reads; every page carries the epoch, so no copy mixes rules.
+      const marks = input.cursor ? { corpusEpoch: CORPUS_EPOCH } : await corpusChanges.snapshotMarks(userId);
       return { ...(await deps.games.listAnalysisCorpus(userId, { ...input, signal })), ...marks };
     }));
   router.get("/games/analysis-corpus/changes", analysisCorpusPage(analysisCorpusAdmission, query => corpusChanges.parse(query),

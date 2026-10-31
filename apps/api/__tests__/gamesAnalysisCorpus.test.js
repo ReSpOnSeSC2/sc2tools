@@ -13,7 +13,7 @@ const {
   holdAnalysisCorpusPermit,
 } = require("../src/routes/games");
 const { GamesService } = require("../src/services/games");
-const { AnalysisCorpusChanges } = require("../src/services/analysisCorpusChanges");
+const { AnalysisCorpusChanges, CORPUS_EPOCH } = require("../src/services/analysisCorpusChanges");
 const { LIMITS } = require("../src/config/constants");
 
 // A single lifecycle-backed Mongo fixture covers projection, cursor and cap
@@ -416,6 +416,7 @@ describe("GET /games/analysis-corpus", () => {
     expect(res.body).toEqual({
       items: [{ gameId: "g1" }],
       nextCursor: "next",
+      corpusEpoch: CORPUS_EPOCH,
     });
     expect(listAnalysisCorpus).toHaveBeenCalledWith(
       "u-route",
@@ -488,7 +489,8 @@ describe("GET /games/analysis-corpus/changes", () => {
     let delta;
     try {
       expect(await settle(entered.promise)).toBe(true);
-      delta = changes({ since, corpus_version: "0" }).then((res) => res);
+      delta = changes({ since, corpus_version: "0", corpus_epoch: CORPUS_EPOCH })
+        .then((res) => res);
       expect(await settle(parsed.promise)).toBe(true);
       await new Promise((resolve) => setImmediate(resolve));
       expect(corpusChanges.listChanges).not.toHaveBeenCalled();

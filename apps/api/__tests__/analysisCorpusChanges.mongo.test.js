@@ -9,7 +9,7 @@ const { MongoMemoryServer } = require("mongodb-memory-server");
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
 const { createBackupStore } = require("./helpers/userBackupsStore");
-const { AnalysisCorpusChanges, STAMP_FLOOR_ID, OVERLAP_MS } = require("../src/services/analysisCorpusChanges");
+const { AnalysisCorpusChanges, CORPUS_EPOCH, STAMP_FLOOR_ID, OVERLAP_MS, corpusEpoch } = require("../src/services/analysisCorpusChanges");
 
 jest.mock("@clerk/backend", () => ({
   verifyToken: jest.fn(async token => {
@@ -26,7 +26,8 @@ const config = { port: 0, nodeEnv: "test", logLevel: "silent", mongoUri: "", mon
 const game = (gameId, overrides = {}) => ({ gameId, date: new Date(Date.now() - 3600000), result: "Victory", myRace: "Protoss",
   map: "Site Delta LE", durationSec: 600, opponent: { race: "Zerg", pulseId: "p1", displayName: "Opponent" }, ...overrides });
 const get = (path, query = {}, owner = "a") => request(app).get(`/v1/games/${path}`).query(query).set("Authorization", `Bearer owner-${owner}`);
-const changes = (since, version, extra = {}) => get("analysis-corpus/changes", { since, corpus_version: String(version), ...extra });
+const changes = (since, version, extra = {}) =>
+  get("analysis-corpus/changes", { since, corpus_version: String(version), corpus_epoch: CORPUS_EPOCH, ...extra });
 
 beforeAll(async () => {
   mongo = await MongoMemoryServer.create(); db = await connect({ uri: mongo.getUri(), dbName: "corpus_changes" });
@@ -47,14 +48,14 @@ test("the snapshot's first page carries the version and watermark, and a delta r
   await services.games.upsert("a", game("g1")); await services.games.upsert("a", game("g2", { result: "Defeat" }));
   await services.games.upsert("b", game("other"));
   const before = Date.now(), snapshot = (await get("analysis-corpus").expect(200)).body;
-  expect(snapshot.corpusVersion).toBe(0);
+  expect([snapshot.corpusVersion, snapshot.corpusEpoch]).toEqual([0, CORPUS_EPOCH]);
   expect(Math.abs(new Date(snapshot.watermark).getTime() - (before - OVERLAP_MS))).toBeLessThan(5000);
   const first = (await get("analysis-corpus", { limit: "1" }).expect(200)).body;
-  expect(first).toMatchObject({ corpusVersion: 0, watermark: expect.any(String), nextCursor: expect.any(String) });
+  expect(first).toMatchObject({ corpusVersion: 0, corpusEpoch: CORPUS_EPOCH, watermark: expect.any(String), nextCursor: expect.any(String) });
   const second = (await get("analysis-corpus", { limit: "1", cursor: first.nextCursor }).expect(200)).body;
-  expect([second.items.length, "watermark" in second, "corpusVersion" in second]).toEqual([1, false, false]);
+  expect([second.items.length, "watermark" in second, "corpusVersion" in second, second.corpusEpoch]).toEqual([1, false, false, CORPUS_EPOCH]);
   const delta = (await changes(snapshot.watermark, 0).expect(200)).body;
-  expect(delta.corpusVersion).toBe(0); expect(delta.nextCursor).toBeNull();
+  expect([delta.corpusVersion, delta.corpusEpoch]).toEqual([0, CORPUS_EPOCH]); expect(delta.nextCursor).toBeNull();
   expect(delta.items.map(item => item.gameId).sort()).toEqual(["g1", "g2"]);
   const byId = Object.fromEntries(snapshot.items.map(item => [item.gameId, item]));
   for (const item of delta.items) expect(item).toEqual(byId[item.gameId]);
@@ -99,7 +100,7 @@ test("a history wipe and a restore bump the corpus version, so an older client m
   await services.games.upsert("a", game("g1"));
   const { watermark } = (await get("analysis-corpus").expect(200)).body, saved = await services.gdpr.snapshot("a");
   await services.gdpr.wipeGames("a");
-  expect((await changes(watermark, 0).expect(200)).body).toEqual({ snapshotRequired: "corpus_version", corpusVersion: 2 });
+  expect((await changes(watermark, 0).expect(200)).body).toEqual({ snapshotRequired: "corpus_version", corpusVersion: 2, corpusEpoch: CORPUS_EPOCH });
   await services.gdpr.restoreSnapshot("a", saved.id);
   const after = (await get("analysis-corpus").expect(200)).body;
   expect(after.corpusVersion).toBe(4); expect(after.items.map(item => item.gameId)).toEqual(["g1"]);
@@ -112,8 +113,8 @@ test("booting processes agree on one stamp floor, and an older watermark is told
   const [a, b] = await Promise.all([first.stampFloor(), second.stampFloor()]);
   expect(a).toEqual(b); expect(a.getTime()).toBeGreaterThan(Date.now());
   expect((await db.siteConfig.findOne({ _id: STAMP_FLOOR_ID })).since).toEqual(a);
-  const old = first.parse({ since: new Date(Date.now() - 60000).toISOString(), corpus_version: "0" });
-  expect(await first.listChanges("a", old)).toEqual({ snapshotRequired: "before_stamps", corpusVersion: 0,
+  const old = first.parse({ since: new Date(Date.now() - 60000).toISOString(), corpus_version: "0", corpus_epoch: CORPUS_EPOCH });
+  expect(await first.listChanges("a", old)).toEqual({ snapshotRequired: "before_stamps", corpusVersion: 0, corpusEpoch: CORPUS_EPOCH,
     deltasFrom: new Date(a.getTime() + OVERLAP_MS).toISOString() });
 });
 
@@ -142,8 +143,24 @@ test("another owner's changes never appear, and malformed inputs are refused", a
   const since = new Date(Date.now() - 600000).toISOString();
   expect((await changes(since, 0).expect(200)).body.items.map(item => item.gameId)).toEqual(["mine"]);
   const future = new Date(Date.now() + 3600000).toISOString();
-  for (const query of [{ since: "yesterday", corpus_version: "0" }, { since }, { since, corpus_version: "-1" },
-    { since, corpus_version: "0", cursor: "not-a-cursor" }, { since: future, corpus_version: "0" }]) {
+  const epoch = CORPUS_EPOCH;
+  for (const query of [{ since: "yesterday", corpus_version: "0", corpus_epoch: epoch }, { since, corpus_epoch: epoch },
+    { since, corpus_version: "-1", corpus_epoch: epoch }, { since, corpus_version: "0" }, { since, corpus_version: "0", corpus_epoch: "1 x" },
+    { since, corpus_version: "0", corpus_epoch: epoch, cursor: "not-a-cursor" }, { since: future, corpus_version: "0", corpus_epoch: epoch }]) {
     expect((await get("analysis-corpus/changes", query).expect(400)).body.error.code).toBe("bad_request");
   }
+});
+
+test("the corpus epoch moves with the corpus rules, and a copy from another epoch needs a snapshot", async () => {
+  // Jest re-prints test code, so the same function object stands in for unchanged code.
+  const serialize = (row) => row, copy = (row) => ({ ...row }), rules = [{ gameId: 1 }];
+  const base = corpusEpoch(1, rules, [serialize]);
+  expect(base).toMatch(/^1\.[0-9a-f]{16}$/); expect(CORPUS_EPOCH).toMatch(/^1\.[0-9a-f]{16}$/);
+  expect(corpusEpoch(1, [{ gameId: 1 }], [serialize])).toBe(base);
+  for (const other of [corpusEpoch(2, rules, [serialize]), corpusEpoch(1, [{ gameId: 1, map: 1 }], [serialize]),
+    corpusEpoch(1, rules, [copy])]) expect(other).not.toBe(base);
+  await services.games.upsert("a", game("g1"));
+  const since = new Date(Date.now() - 600000).toISOString();
+  expect((await changes(since, 0, { corpus_epoch: "0.stale" }).expect(200)).body)
+    .toEqual({ snapshotRequired: "corpus_epoch", corpusVersion: 0, corpusEpoch: CORPUS_EPOCH });
 });
