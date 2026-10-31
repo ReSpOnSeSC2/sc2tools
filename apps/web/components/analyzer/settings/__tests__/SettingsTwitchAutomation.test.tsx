@@ -1,10 +1,11 @@
-import { StrictMode } from "react";
+import { StrictMode, useLayoutEffect } from "react";
 import Link from "next/link";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsTwitchAutomation } from "../SettingsTwitchAutomation";
 import { LazyTwitchAutomationSettings } from "../LazyTwitchAutomationSettings";
-import { DEFAULT_TWITCH_AUTOMATION } from "@/lib/twitchAutomation";
+import { DEFAULT_TWITCH_AUTOMATION, twitchStatus } from "@/lib/twitchAutomation";
+import * as twitchSettings from "../useTwitchAutomationSettings";
 const auth = vi.hoisted(() => ({ value: { userId: "A" as string | null, isLoaded: true, isSignedIn: true, getToken: vi.fn<() => Promise<string | null>>() } }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => auth.value }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: ({ children }: { children: React.ReactNode }) => <Link href="/help/viewer-engagement#twitch-predictions">{children}</Link> }));
@@ -18,17 +19,62 @@ beforeEach(() => {
   window.history.replaceState(null, "", "/settings?tab=overlay&section=chat");
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
-async function loaded() { await waitFor(() => expect(screen.getByRole("button", { name: "Refresh status" }).hasAttribute("disabled")).toBe(false)); }
+async function loaded() { await waitFor(() => {
+  expect(screen.queryByText("Checking Twitch status…")).toBeNull();
+  expect(screen.getByRole("button", { name: "Refresh status" }).hasAttribute("disabled")).toBe(false);
+}); }
 const marker = () => screen.getByRole("switch", { name: "Add a stream marker at each game start" });
 
 describe("Twitch automation explicit settings", () => {
   it("starts both choices off and only writes after an explicit valid Save", async () => {
     render(<SettingsTwitchAutomation />); await loaded(); expect(marker().getAttribute("aria-checked")).toBe("false");
+    expect(marker().hasAttribute("disabled")).toBe(false);
     expect(fetcher.mock.calls.every(call => call[1]?.method !== "PUT")).toBe(true); fireEvent.click(marker());
+    expect(marker().getAttribute("aria-checked")).toBe("true");
     fireEvent.change(screen.getByLabelText("Prediction window (30–300 seconds)"), { target: { value: "29" } }); expect(screen.getByRole("button", { name: "Save Twitch automation" }).hasAttribute("disabled")).toBe(true);
     fireEvent.change(screen.getByLabelText("Prediction window (30–300 seconds)"), { target: { value: "120" } }); fireEvent.click(screen.getByRole("button", { name: "Save Twitch automation" }));
     await screen.findByText("Twitch automation preferences saved."); const call = fetcher.mock.calls.find(call => call[1]?.method === "PUT");
     expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ markersEnabled: true, predictionsEnabled: false, windowSec: 120 });
+  });
+  it("preserves an edit made as soon as loaded controls become available", () => {
+    const model: ReturnType<typeof twitchSettings.useTwitchAutomationSettings> = { owner: "A", status: null, busy: true, error: "", message: "",
+      refresh: vi.fn(async () => {}), save: vi.fn(async () => {}), connect: vi.fn(async () => {}) };
+    vi.spyOn(twitchSettings, "useTwitchAutomationSettings").mockImplementation(() => model);
+    function FirstReadyInteraction({ available }: { available: boolean }) {
+      // Parent layout work runs after the editor's commit but before passive
+      // effects. Exercise the earliest enabled interaction without a sleep.
+      useLayoutEffect(() => {
+        if (available) { expect(marker().hasAttribute("disabled")).toBe(false); marker().click(); }
+      }, [available]);
+      return <SettingsTwitchAutomation />;
+    }
+    const view = render(<FirstReadyInteraction available={false} />);
+    model.status = twitchStatus(ready); model.busy = false;
+    view.rerender(<FirstReadyInteraction available />);
+    expect(marker().getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Save Twitch automation" }));
+    expect(model.save).toHaveBeenCalledWith(expect.objectContaining({ markersEnabled: true }));
+  });
+  it("preserves the next edit made as soon as a Save completes", () => {
+    const model: ReturnType<typeof twitchSettings.useTwitchAutomationSettings> = { owner: "A", status: twitchStatus(ready), busy: false, error: "", message: "",
+      refresh: vi.fn(async () => {}), save: vi.fn(async () => {}), connect: vi.fn(async () => {}) };
+    vi.spyOn(twitchSettings, "useTwitchAutomationSettings").mockImplementation(() => model);
+    function FirstSavedInteraction({ acknowledged }: { acknowledged: boolean }) {
+      useLayoutEffect(() => {
+        if (acknowledged) { expect(marker().hasAttribute("disabled")).toBe(false); marker().click(); }
+      }, [acknowledged]);
+      return <SettingsTwitchAutomation />;
+    }
+    const view = render(<FirstSavedInteraction acknowledged={false} />);
+    fireEvent.click(marker()); fireEvent.click(screen.getByRole("button", { name: "Save Twitch automation" }));
+    expect(model.save).toHaveBeenCalledWith(expect.objectContaining({ markersEnabled: true }));
+    model.busy = true; view.rerender(<FirstSavedInteraction acknowledged={false} />);
+    model.status = twitchStatus({ ...ready, preferences: { ...DEFAULT_TWITCH_AUTOMATION, markersEnabled: true } });
+    model.busy = false; model.message = "Twitch automation preferences saved.";
+    view.rerender(<FirstSavedInteraction acknowledged />);
+    expect(marker().getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "Save Twitch automation" }));
+    expect(model.save).toHaveBeenLastCalledWith(expect.objectContaining({ markersEnabled: false }));
   });
   it("shows server-off and ranked-unknown capability honestly, with connection/enablement disabled", async () => {
     fetcher.mockResolvedValue(json({ ...ready, serverEnabled: false, eligible: null, reason: "server_not_enabled" })); render(<SettingsTwitchAutomation />); await loaded();
