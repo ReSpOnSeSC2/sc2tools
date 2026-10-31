@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "slice": "C5-opponent-mmr",
+  "status": "LOCAL_TYPES_LINT_907_API_109_WEB_PASS_10_OF_10_MUTATIONS_NOT_RELEASED",
+  "source": {
+    "base": "48b16c61 (G1, PR #834)",
+    "testedCommit": "04072fc04493d643d470761418d1c008ef7e1185",
+    "mutationCommit": "04072fc04493d643d470761418d1c008ef7e1185",
+    "applicationFiles": [
+      "apps/api/src/services/opponents.js",
+      "apps/api/src/services/gdpr.js",
+      "apps/api/src/services/trendsOppMmr.js",
+      "apps/api/src/routes/aggregations.js",
+      "apps/api/src/middleware/userCache.js",
+      "apps/api/src/middleware/userCacheGuard.js",
+      "apps/web/lib/conditionalApiScope.tsx"
+    ]
+  },
+  "admission": {
+    "kinds": [
+      "oppMmrBuckets",
+      "oppMmrBucketGames"
+    ],
+    "paths": [
+      "/v1/opp-mmr-buckets",
+      "/v1/opp-mmr-buckets/games"
+    ],
+    "webCapabilityPositions": [
+      21,
+      22
+    ],
+    "coveredKinds": [
+      21,
+      23
+    ],
+    "dependentKinds": [
+      5,
+      5
+    ],
+    "writerFences": {
+      "services/opponents.js": 9,
+      "services/gdpr.js": 4,
+      "outOfBand": [
+        "db/migrations/2026-05-12-heal-opponent-current-name.js"
+      ]
+    },
+    "writerSetVersion": "2026-10-30.2",
+    "trustFloor": "Cache path only: the UTC day's 365-day floor is an option, so it keys the body and drives the computation; the flag-off path passes no floor and keeps the continuous one.",
+    "adrAmendments": [
+      "item 1: the owner-scoped opponents $lookup",
+      "item 4: a clock value only through the key on the cache path"
+    ],
+    "structurallyBoundedSize": {
+      "oppMmrBuckets": true,
+      "oppMmrBucketGames": false
+    },
+    "checklist": "docs/handoff/dashboard-cache-opponent-mmr-checkpoint.md"
+  },
+  "actual": {
+    "apiTypesExit": 0,
+    "apiConfiguredLint": {
+      "errors": 0,
+      "warnings": 758
+    },
+    "changedFilesAddedLintMessages": 0,
+    "strictImprovements": [
+      "buildAggregationsRouter length 349 -> 348"
+    ],
+    "apiSuites": 67,
+    "apiCases": 907,
+    "webFiles": 8,
+    "webCases": 109,
+    "inBand": true,
+    "cachedMongo": "7.0.14",
+    "downloads": false,
+    "ownedMongodLeftover": 0,
+    "mutationsKilled": "10/10",
+    "mutations": [
+      "C5-M1-record-game-unfenced",
+      "C5-M2-recount-upsert-unfenced",
+      "C5-M3-rebuild-insert-unfenced",
+      "C5-M4-retry-unfenced",
+      "C5-M5-day-floor-not-truncated",
+      "C5-M6-keyed-floor-ignored",
+      "C5-M7-floor-on-the-off-path",
+      "C5-M8-drilldown-key-lacks-floor",
+      "C5-M9-histogram-bypasses-cache",
+      "C5-M10-drilldown-not-allowlisted"
+    ]
+  },
+  "retained": [
+    "Round one truncated the trust floor on every path, which changed the flag-off response at the one-day boundary (ADR 0072 item 10); 882d82d8 limits the keyed floor to the cache path.",
+    "Round one's checks also found two TypeScript errors (a closure-captured array lost its inferred type) and three tests that still expected the bucket route to be uncovered; all are fixed before the tested commit."
+  ],
+  "boundaries": [
+    "Exact-head CI, merge, deployment and production acceptance remain pending.",
+    "USER_CACHE_ENABLED stays off. No activation, latency, request-reduction, savings or fleet proof; G1-G3 stay unmet."
+  ],
+  "references": [
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/CHECKS-03.json",
+      "sha256": "b033d1282df03ed114ed4a632733922b336146e8b62e47430f960776458d41ff",
+      "bytes": 1910
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/checks-03/steps.txt",
+      "sha256": "f3653751d56cdbe81e99b42f28a30d3ecd8c02c0243243017a559031a597483b",
+      "bytes": 66
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/checks-03/api-jest-summary.json",
+      "sha256": "2ed4bcda87e089b5da9cd9a1d53cd5efbd1cb6010ffbfd3d7494a01b92ba2578",
+      "bytes": 245
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/checks-03/api-lint.json",
+      "sha256": "bb0dff897aea0f177b1f72c63ebfba4968259fd8dd01fc2586c6e6f791a02b56",
+      "bytes": 7497792
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/checks-03/api-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/checks-03/lint-no-added.txt",
+      "sha256": "90fe06f01e7f6af078c7dc88ec5a84d35c10bbd7dc253642f26168ee1603f46d",
+      "bytes": 1279
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/checks-03/web-vitest.json",
+      "sha256": "c4fb429e9068b5b6ec13bde70624b8f979190ca49432d9385d569f0fcc18bb59",
+      "bytes": 40929
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/dev/checks-03-api-jest.json",
+      "sha256": "9879cc80c920d4e4862f35b57a4ef6920ef9dd562ed378c9101ba01f93a41fac",
+      "bytes": 360783
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/mutation-01/MUTATION-RESULTS.json",
+      "sha256": "a91a097a4a3647f30821576ea95ef42ff35c934734d341bf9da1968a6f0b3df0",
+      "bytes": 9001
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/scripts/mutation-check-c5-01.mjs",
+      "sha256": "cf414a513e6c78a56151ee2f0d5dba672dc7ac09050c6fcf0cfaa982a80a42c2",
+      "bytes": 6468
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/scripts/final-checks-c5-02.sh",
+      "sha256": "c19cb3bd8d749ed50ada6121a3a56688ca4cb40cd8f2d0db1c3601b7e0dbb367",
+      "bytes": 4163
+    },
+    {
+      "file": "C:/SC2TOOLS/.cache/faster-dashboards-c5-20261030/scripts/run-c5-jest.mjs",
+      "sha256": "1fb47449154e5e04924745a60f1cd695a3a6135c9a2cc6c409b0f348b13f6643",
+      "bytes": 3892
+    }
+  ]
+}

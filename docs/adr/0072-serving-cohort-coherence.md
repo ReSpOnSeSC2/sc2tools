@@ -6,16 +6,16 @@ no receipt and activates nothing. `USER_CACHE_ENABLED` stays off and
 faster-dashboards remains partial.
 
 Source paths are relative to `apps/api/src/` unless they start with `apps/` or
-`docs/`. Line numbers were checked at slice G1's tested source (`cc8e358c`).
+`docs/`. Line numbers were checked at slice C5's tested source (`04072fc0`).
 The ADR was added at application source `27b9aeb0`. C1 through C4 changed the
 cited allowlist lines in place and edited route and service lines without
 changing line counts (C4's route and curve helpers follow the cited lines), and DA2
-added lease lines after the cited ones, so every citation still resolves. DA3 adds only tests. DA4 inserts the disable method above the writer helper, whose citations now read 224-228. G1 appends its hooks to cited cache and server lines without changing line counts.
+added lease lines after the cited ones, so every citation still resolves. DA3 adds only tests. DA4 inserts the disable method above the writer helper, whose citations now read 224-228. G1 appends its hooks to cited cache and server lines without changing line counts. C5 widens the cited allowlist, capability and writer-set lines in place and adds route and service lines only after the cited ones.
 
 ## Context
 
 Two retained-state features are built but inactive: the default-off per-user
-chart cache, which covers twenty-one response kinds in source, and the uninjected
+chart cache, which covers twenty-three response kinds in source, and the uninjected
 retained device-auth REST adapter. Both keep their state in one process. The
 roadmap allows wider cache coverage only after "complete dependency/revocation
 and shared-fleet audits" (`docs/handoff/roadmap-progress-2026-10-28.json:1963`)
@@ -139,7 +139,7 @@ process during an overlap stays authorized on the new process until it restarts.
 
 | | Guarantee | Today | Evidence |
 | --- | --- | --- | --- |
-| G1 | Every writer of a covered input invalidates retained bodies | Met only inside one flag-on process running the current writer set. Unmet for flag-off processes, older writer sets during an overlap, out-of-band migrations, manual edits and raw restores | In-process writers call `gameWrite` (`util/userRevision.js:163`; `docs/engineeringexplanation.md:408-412`); flag-off processes skip revision work (`util/userRevision.js:55,102`); `db/migrations/2026-09-30-rename-8-pool-builds.js:50,115-119` rewrites build and strategy labels with a plain `updateMany` |
+| G1 | Every writer of a covered input invalidates retained bodies | Met only inside one flag-on process running the current writer set. Unmet for flag-off processes, older writer sets during an overlap, out-of-band migrations, manual edits and raw restores | In-process writers call `gameWrite` (`util/userRevision.js:163`; `docs/engineeringexplanation.md:408-412`), every opponents-collection writer included, which an exact inventory test enforces (`apps/api/__tests__/opponentsWriterFence.test.js:21-25`); flag-off processes skip revision work (`util/userRevision.js:55,102`); `db/migrations/2026-09-30-rename-8-pool-builds.js:50,115-119` rewrites build and strategy labels with a plain `updateMany` |
 | G2 | Revision uncertainty is visible across the fleet | Unmet | A failed, unknown or skipped bump marks only the local owner dirty (`util/userRevision.js:69,86-88`) |
 | G3 | In-flight writes are visible across processes | Unmet | The bump runs after the semantic write and outside its transaction (`util/userRevision.js:61-85`); until a peer reads it, the peer can serve or 304 the prior body |
 | G4 | Staleness has a time bound | Met per process | Entries leave the cache 600 s after they are stored (`middleware/userCache.js:11,123,222-223,269`), and curve-dependent entries with their proof (`:268-270`). A body's data can be older by the computation's duration and the age of an adopted join: under 30 s per join, and under 60 s when an adopted chart join itself adopted the shared `dateRange` probe. Chart pipelines set no deadline beyond the 30-second Mongo socket timeout per round trip (`db/connect.js:103`; `config/constants.js:288`). This is the only bound on the G1 and G2 gaps, and on G3 when the bump fails |
@@ -210,7 +210,7 @@ keep the original read (matchup time series, slice C4).
    owner, deletion and exclusion clauses stay; those fields' writers are fenced
    (`services/perGameCompute.js:498`;
    `apps/api/__tests__/userCacheStreakMacro.mongo.test.js:42-70`). There is no
-   `$lookup`, `$unionWith` or other collection. A captured proof's memo read
+   `$lookup`, `$unionWith` or other collection, with one exception: the opponent-MMR pair's `$lookup` reads only the owner's own `opponents` rows, by `userId` and `pulseId` equality (`services/trendsOppMmr.js:261-284`), and every in-process writer of that collection is fenced and inventoried (slice C5; `apps/api/__tests__/opponentsWriterFence.test.js:21-25`). A captured proof's memo read
    happens before the key is formed (`middleware/userCache.js:115,274-278`), so
    it is not a read in the computation.
 2. **Fenced writers.** Every field it reads, filter fields included, is written
@@ -234,7 +234,7 @@ keep the original read (matchup time series, slice C4).
    `new Date()`, `$$NOW` or a relative window) reaches a query, pipeline or
    response body. Timers that only age joins or expire reuse are exempt, such as
    TrendsRequests join aging (`services/trendsRequests.js:75-78`) and the curve
-   memo's expiry behind item 6 (`services/mmrExpectation.js:84-89`).
+   memo's expiry behind item 6 (`services/mmrExpectation.js:84-89`). A clock value may reach the computation only through the key: with the cache enabled the route computes it once, truncated to the UTC day, and passes it as an option the computation uses exactly, while the flag-off path keeps its original read (the opponent-MMR trust floor, slice C5; `routes/aggregations.js:248,265,528-532`; `services/trendsOppMmr.js:87-108`).
 5. **Other collections only before admission.** A route-level read of another
    collection is allowed only when its result is part of the key and checked by
    a publish guard, as momentum's session policy is (`routes/aggregations.js:224-235`).
@@ -473,7 +473,7 @@ authentication authority.
 While `USER_CACHE_ENABLED` is on in any serving process, or retained device auth
 could be active, out-of-band writers are forbidden unless a named barrier runs
 first. Out-of-band means anything outside the inventoried in-process writers:
-migrations such as `db/migrations/2026-09-30-rename-8-pool-builds.js`, scripts
+migrations such as `db/migrations/2026-09-30-rename-8-pool-builds.js` and the opponents heal `db/migrations/2026-05-12-heal-opponent-current-name.js`, scripts
 under `apps/api/scripts`, manual database edits and raw restores.
 
 - **Chart cache.** Deploy with the flag off and let the old process retire under

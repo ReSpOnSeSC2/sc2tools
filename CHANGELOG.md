@@ -37,6 +37,7 @@ corresponding GitHub Release.
 ### Dashboard cache coverage
 
 - Extend optional private revalidation to the matchup win-rate-over-time chart, keyed to the same benchmark snapshot that calculates its rating windows. The cache remains off; the chart keeps its normal behavior while it is off.
+- Extend optional private revalidation to the opponent-MMR histogram and its games drill-down. Every write to a player's opponent records now retires that player's cached charts. The cache remains off; both charts keep their normal behavior while it is off.
 - Extend optional private revalidation to the random-race summary behind the matchup picker. With the cache on, the summary no longer keeps its own one-minute answer; reuse follows the same per-account revision checks as the other covered charts. The cache remains off; the summary keeps its normal behavior while it is off.
 - Extend optional private revalidation to net MMR by matchup and its opponent drill-down. The cache remains off; these routes keep their normal behavior while it is off.
 - Extend optional private revalidation to the dashboard's current streak and the Macro tab's report. The cache remains off; these routes keep their normal behavior while it is off.
