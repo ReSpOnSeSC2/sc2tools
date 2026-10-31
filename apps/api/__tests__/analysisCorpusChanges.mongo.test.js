@@ -9,7 +9,7 @@ const { MongoMemoryServer } = require("mongodb-memory-server");
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
 const { createBackupStore } = require("./helpers/userBackupsStore");
-const { STAMP_FLOOR_ID, OVERLAP_MS } = require("../src/services/analysisCorpusChanges");
+const { AnalysisCorpusChanges, STAMP_FLOOR_ID, OVERLAP_MS } = require("../src/services/analysisCorpusChanges");
 
 jest.mock("@clerk/backend", () => ({
   verifyToken: jest.fn(async token => {
@@ -30,6 +30,8 @@ const changes = (since, version, extra = {}) => get("analysis-corpus/changes", {
 
 beforeAll(async () => {
   mongo = await MongoMemoryServer.create(); db = await connect({ uri: mongo.getUri(), dbName: "corpus_changes" });
+  // The app reads and caches the stamp floor when it builds its routes, as a booting process does.
+  await db.siteConfig.insertOne({ _id: STAMP_FLOOR_ID, since: new Date(0) });
   ({ app, services } = buildApp({ db, userBackupsStore: createBackupStore(), logger: pino({ level: "silent" }),
     clerkClient: { deleteUser: async () => {} }, config }));
 });
@@ -104,22 +106,44 @@ test("a history wipe and a restore bump the corpus version, so an older client m
   expect((await changes(after.watermark, 4).expect(200)).body.snapshotRequired).toBeUndefined();
 });
 
-test("a watermark from before change stamps needs a snapshot, and the floor is created once", async () => {
+test("booting processes agree on one stamp floor, and an older watermark is told when deltas start", async () => {
   await db.siteConfig.deleteMany({ _id: STAMP_FLOOR_ID });
-  const old = new Date(Date.now() - 60000).toISOString();
-  expect((await changes(old, 0).expect(200)).body).toEqual({ snapshotRequired: "before_stamps", corpusVersion: 0 });
-  const floor = (await db.siteConfig.findOne({ _id: STAMP_FLOOR_ID })).since;
-  expect(floor.getTime()).toBeGreaterThan(Date.now());
-  await changes(old, 0).expect(200);
-  expect((await db.siteConfig.findOne({ _id: STAMP_FLOOR_ID })).since).toEqual(floor);
+  const first = new AnalysisCorpusChanges(db), second = new AnalysisCorpusChanges(db);
+  const [a, b] = await Promise.all([first.stampFloor(), second.stampFloor()]);
+  expect(a).toEqual(b); expect(a.getTime()).toBeGreaterThan(Date.now());
+  expect((await db.siteConfig.findOne({ _id: STAMP_FLOOR_ID })).since).toEqual(a);
+  const old = first.parse({ since: new Date(Date.now() - 60000).toISOString(), corpus_version: "0" });
+  expect(await first.listChanges("a", old)).toEqual({ snapshotRequired: "before_stamps", corpusVersion: 0,
+    deltasFrom: new Date(a.getTime() + OVERLAP_MS).toISOString() });
+});
+
+test("a wipe that fails partway and an erasure that fails after its games delete still bump the version twice", async () => {
+  await services.games.upsert("a", game("g1"));
+  const failure = new Error("partway"), deleteMany = db.games.deleteMany.bind(db.games);
+  const spy = jest.spyOn(db.games, "deleteMany").mockImplementationOnce(async (...args) => { await deleteMany(...args); throw failure; });
+  await expect(services.gdpr.wipeGames("a")).rejects.toBe(failure); spy.mockRestore();
+  expect((await db.users.findOne({ userId: "a" })).corpusVersion).toBe(2);
+  await services.games.upsert("a", game("g2"));
+  const store = jest.spyOn(services.gdpr.gameDetails, "deleteAllForUser").mockRejectedValueOnce(new Error("store down"));
+  await expect(services.gdpr.deleteAll("a")).rejects.toThrow("store down"); store.mockRestore();
+  expect((await db.users.findOne({ userId: "a" })).corpusVersion).toBe(4);
+});
+
+test("a write that commits just after a pass, stamped before it ended, comes back from the returned watermark", async () => {
+  await services.games.upsert("a", game("g1"));
+  const since = new Date(Date.now() - 600000).toISOString(), pass = (await changes(since, 0).expect(200)).body;
+  await services.games.upsert("a", game("late"));
+  await db.games.updateOne({ userId: "a", gameId: "late" }, { $set: { updatedAt: new Date(Date.now() - 60000) } });
+  expect((await changes(pass.watermark, 0).expect(200)).body.items.map(item => item.gameId)).toContain("late");
 });
 
 test("another owner's changes never appear, and malformed inputs are refused", async () => {
   await services.games.upsert("b", game("other")); await services.games.upsert("a", game("mine"));
   const since = new Date(Date.now() - 600000).toISOString();
   expect((await changes(since, 0).expect(200)).body.items.map(item => item.gameId)).toEqual(["mine"]);
+  const future = new Date(Date.now() + 3600000).toISOString();
   for (const query of [{ since: "yesterday", corpus_version: "0" }, { since }, { since, corpus_version: "-1" },
-    { since, corpus_version: "0", cursor: "not-a-cursor" }]) {
+    { since, corpus_version: "0", cursor: "not-a-cursor" }, { since: future, corpus_version: "0" }]) {
     expect((await get("analysis-corpus/changes", query).expect(400)).body.error.code).toBe("bad_request");
   }
 });

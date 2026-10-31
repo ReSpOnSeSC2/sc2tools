@@ -50,7 +50,8 @@ function rowWithUpdatedAt(row) { return { ...row, updatedAt: new Date() }; }
 async function withCorpusRemoval(db, userId, work) {
   const bump = () => db.users.updateOne({ userId }, { $inc: { corpusVersion: 1 } });
   await bump();
-  const result = await work();
+  // A delete that fails partway bumps again too, then reports its own error.
+  const result = await work().catch(async error => { await bump().catch(() => undefined); throw error; });
   await bump();
   return result;
 }

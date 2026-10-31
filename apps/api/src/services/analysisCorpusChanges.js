@@ -17,6 +17,8 @@ const OVERLAP_MS = 5 * 60 * 1000;
 // new process listens, ADR 0072 G1). Watermarks before this durable floor cannot be trusted, so they need a snapshot.
 const STAMP_FLOOR_ID = "analysisCorpusStampFloor";
 const STAMP_FLOOR_GUARD_MS = 7 * 60 * 1000;
+// A watermark comes from this server's clock; allow other processes' skew, but refuse a watermark from the future.
+const FUTURE_SKEW_MS = 60 * 1000;
 const MEMBERSHIP = Object.freeze({ updatedAt: 1, _deleted: 1, _deletionPending: 1, excluded: 1, isResumedFromReplay: 1 });
 const PROJECTION = Object.freeze({ ...ANALYSIS_GAME_PROJECTION, ...MEMBERSHIP });
 
@@ -25,6 +27,9 @@ class AnalysisCorpusChanges {
   constructor(db, opts = {}) {
     this.db = db;
     this.now = opts.now || Date.now;
+    /** @type {Promise<Date>|null} */ this.floor = null;
+    // Created at boot, so the floor is long past when a client first asks for changes.
+    if (db?.siteConfig) this.stampFloor().catch(() => undefined);
   }
 
   /** @param {string} userId @returns {Promise<number>} */
@@ -34,13 +39,17 @@ class AnalysisCorpusChanges {
     return Number.isSafeInteger(version) ? version : 0;
   }
 
-  /** The first caller creates the floor; later ones read it. @returns {Promise<Date>} */
-  async stampFloor() {
-    const row = await this.db.siteConfig.findOneAndUpdate({ _id: /** @type {any} */ (STAMP_FLOOR_ID) },
-      { $setOnInsert: { since: new Date(this.now() + STAMP_FLOOR_GUARD_MS) } },
-      { upsert: true, returnDocument: "after", projection: { _id: 0, since: 1 } });
-    const since = row?.since;
-    return since instanceof Date ? since : new Date(this.now() + STAMP_FLOOR_GUARD_MS);
+  /** The first process to boot creates the floor and later ones read it; it never moves, so it is cached here, and a
+   * failed read is retried by the next request. @returns {Promise<Date>} */
+  stampFloor() {
+    if (!this.floor) {
+      const floor = this.db.siteConfig.findOneAndUpdate({ _id: /** @type {any} */ (STAMP_FLOOR_ID) },
+        { $setOnInsert: { since: new Date(this.now() + STAMP_FLOOR_GUARD_MS) } },
+        { upsert: true, returnDocument: "after", projection: { _id: 0, since: 1 } }).then(row => floorDate(row?.since));
+      floor.catch(() => { if (this.floor === floor) this.floor = null; });
+      this.floor = floor;
+    }
+    return this.floor;
   }
 
   /** What a snapshot's first page tells the client to keep: its corpus version and the watermark to ask from next.
@@ -50,19 +59,28 @@ class AnalysisCorpusChanges {
     return { corpusVersion: await this.corpusVersion(userId), watermark: new Date(this.now() - OVERLAP_MS).toISOString() };
   }
 
+  /** Validates a changes query before it takes the corpus lane or touches the database.
+   * @param {Record<string, unknown>} query */
+  parse(query) {
+    return { since: parseSince(query.since, this.now()), clientVersion: parseVersion(query.corpus_version),
+      cursor: decodeChangesCursor(query.cursor), limit: clampLimit(Number.parseInt(String(query.limit ?? ""), 10)) };
+  }
+
   /** One page of rows stamped after `since`, oldest stamp first.
-   * @param {string} userId
-   * @param {{since?: unknown, corpusVersion?: unknown, cursor?: unknown, limit?: number, signal?: AbortSignal}} opts */
-  async listChanges(userId, opts) {
-    const since = parseSince(opts.since), clientVersion = parseVersion(opts.corpusVersion), cursor = decodeChangesCursor(opts.cursor);
+   * @param {string} userId @param {ReturnType<AnalysisCorpusChanges['parse']>} input @param {AbortSignal} [signal] */
+  async listChanges(userId, input, signal) {
+    const { since, clientVersion, cursor, limit } = input;
     const [version, floor] = await Promise.all([this.corpusVersion(userId), this.stampFloor()]);
     if (clientVersion !== version) return { snapshotRequired: "corpus_version", corpusVersion: version };
-    if (since.getTime() < floor.getTime()) return { snapshotRequired: "before_stamps", corpusVersion: version };
-    const limit = clampLimit(opts.limit), start = cursor ? cursor.start : this.now();
+    // A snapshot taken at or after deltasFrom has a watermark on or past the floor.
+    if (since.getTime() < floor.getTime()) {
+      return { snapshotRequired: "before_stamps", corpusVersion: version, deltasFrom: new Date(floor.getTime() + OVERLAP_MS).toISOString() };
+    }
+    const start = cursor ? cursor.start : this.now();
     /** @type {Record<string, any>} */
     const filter = { userId, updatedAt: { $gt: since } };
     if (cursor) filter.$or = [{ updatedAt: { $gt: cursor.updatedAt } }, { updatedAt: cursor.updatedAt, _id: { $gt: cursor.id } }];
-    const rows = await this.db.games.find(filter, { projection: PROJECTION, ...(opts.signal ? { signal: opts.signal } : {}) })
+    const rows = await this.db.games.find(filter, { projection: PROJECTION, ...(signal ? { signal } : {}) })
       .sort({ updatedAt: 1, _id: 1 }).limit(limit + 1).toArray();
     const page = rows.slice(0, limit), last = page.at(-1), more = rows.length > limit;
     return {
@@ -82,10 +100,18 @@ function changeItem(row) {
   return serializeAnalysisGame(corpus);
 }
 
-/** @param {unknown} raw @returns {Date} */
-function parseSince(raw) {
+/** @param {unknown} value @returns {Date} */
+function floorDate(value) {
+  if (!(value instanceof Date)) throw new Error("analysis_corpus_stamp_floor_unavailable");
+  return value;
+}
+
+/** @param {unknown} raw @param {number} now @returns {Date} */
+function parseSince(raw, now) {
   const date = typeof raw === "string" && raw.length <= 40 ? new Date(raw) : new Date(Number.NaN);
-  if (Number.isNaN(date.getTime())) throw badRequest("since must be a watermark from the snapshot or a previous delta");
+  if (Number.isNaN(date.getTime()) || date.getTime() > now + FUTURE_SKEW_MS) {
+    throw badRequest("since must be a watermark from the snapshot or a previous delta");
+  }
   return date;
 }
 

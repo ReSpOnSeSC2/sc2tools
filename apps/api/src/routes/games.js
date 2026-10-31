@@ -92,10 +92,11 @@ function tagIngestedCustomBuild(customBuilds, userId, game, spatial, expectedRev
  * One admitted, abort-aware analysis-corpus page. The snapshot and the changed-since read share the single memory
  * permit, so a delta never adds a second retained page beside a snapshot.
  * @param {ReturnType<typeof createAnalysisCorpusAdmission>} analysisCorpusAdmission
- * @param {(userId: string, query: Record<string, any>, signal: AbortSignal) => Promise<unknown>} load
+ * @param {(query: Record<string, any>) => any} prepare validates the query before the permit is taken
+ * @param {(userId: string, input: any, signal: AbortSignal) => Promise<unknown>} load
  * @returns {import("express").RequestHandler}
  */
-function analysisCorpusPage(analysisCorpusAdmission, load) {
+function analysisCorpusPage(analysisCorpusAdmission, prepare, load) {
   return async (req, res, next) => {
     const requestAbort = analysisCorpusRequestAbort(req, res);
     /** @type {(() => void) | null} */
@@ -105,6 +106,8 @@ function analysisCorpusPage(analysisCorpusAdmission, load) {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
+      // Malformed input is refused before it can take the single corpus lane.
+      const input = prepare(req.query);
       release = await analysisCorpusAdmission.acquire(requestAbort.signal);
       if (!release) {
         if (!requestAbort.signal.aborted && !res.headersSent) {
@@ -133,7 +136,7 @@ function analysisCorpusPage(analysisCorpusAdmission, load) {
       // stalled authenticated client from monopolizing the only corpus lane.
       permitGuard = holdAnalysisCorpusPermit(res, release);
       release = null;
-      const result = await load(auth.userId, req.query, requestAbort.signal);
+      const result = await load(auth.userId, input, requestAbort.signal);
       if (!requestAbort.signal.aborted && !res.headersSent) res.json(result);
     } catch (err) {
       if (requestAbort.signal.aborted || isAbortError(err)) return;
@@ -294,15 +297,15 @@ function buildGamesRouter(deps) {
    * identical replay timestamps.
    */
   const corpusChanges = deps.corpusChanges || new AnalysisCorpusChanges(deps.games.db);
-  router.get("/games/analysis-corpus", analysisCorpusPage(analysisCorpusAdmission, async (userId, query, signal) => {
-    const cursor = typeof query.cursor === "string" ? query.cursor : undefined;
-    // The first page tells the client which corpus version and watermark to keep for changed-since reads.
-    const marks = cursor ? {} : await corpusChanges.snapshotMarks(userId);
-    return { ...(await deps.games.listAnalysisCorpus(userId, { limit: parseLimit(query.limit), cursor, signal })), ...marks };
-  }));
-  router.get("/games/analysis-corpus/changes", analysisCorpusPage(analysisCorpusAdmission, (userId, query, signal) =>
-    corpusChanges.listChanges(userId, { since: query.since, corpusVersion: query.corpus_version, cursor: query.cursor,
-      limit: parseLimit(query.limit), signal })));
+  router.get("/games/analysis-corpus", analysisCorpusPage(analysisCorpusAdmission,
+    query => ({ limit: parseLimit(query.limit), cursor: typeof query.cursor === "string" ? query.cursor : undefined }),
+    async (userId, input, signal) => {
+      // The first page tells the client which corpus version and watermark to keep for changed-since reads.
+      const marks = input.cursor ? {} : await corpusChanges.snapshotMarks(userId);
+      return { ...(await deps.games.listAnalysisCorpus(userId, { ...input, signal })), ...marks };
+    }));
+  router.get("/games/analysis-corpus/changes", analysisCorpusPage(analysisCorpusAdmission, query => corpusChanges.parse(query),
+    (userId, input, signal) => corpusChanges.listChanges(userId, input, signal)));
 
   /**
    * Resolve timestamped Twitch / YouTube VOD links for a game or a
