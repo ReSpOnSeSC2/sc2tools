@@ -13,9 +13,7 @@ describe("private response capability positions", () => {
     expect([conditionalRoute("/v1/mmr-by-matchup?group_by=matchup#2"), conditionalRoute("/v1/mmr-by-matchup/opponents?opp_race=Z")])
       .toEqual([17, 18]);
     expect(conditionalRoute("/v1/random-summary?map=x#1")).toBe(19);
-    expect(conditionalRoute("/v1/timeseries/matchups?interval=day&tz=UTC&group_by=matchup#3")).toBe(20);
-    expect([conditionalRoute("/v1/opp-mmr-buckets?bucket_width=100#4"), conditionalRoute("/v1/opp-mmr-buckets/games?lo=4300&hi=4400")])
-      .toEqual([21, 22]);
+    expect(conditionalRoute("/v1/timeseries/matchups?interval=day&tz=UTC&group_by=matchup#3")).toBe(20); expect([conditionalRoute("/v1/opp-mmr-buckets?bucket_width=100#4"), conditionalRoute("/v1/opp-mmr-buckets/games?lo=4300&hi=4400")]).toEqual([21, 22]);
     ["/v1/admin/global-trends/timeseries/matchups", "/v1/admin/global-trends/opp-mmr-buckets", "/v1/games-list", "/v1/me/doctor", "/v1/opponents", "/v1/custom-builds/stats"]
       .forEach(path => expect(conditionalRoute(path)).toBe(-1));
   });
