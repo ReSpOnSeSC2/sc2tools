@@ -67,7 +67,7 @@ test("starts a word after any non-letter in any script, ignoring case, and survi
   expect(await slugs("тосс")).toEqual(["build-b2"]);
   expect(await slugs("über")).toEqual(["build-b3"]);
   expect(await slugs("berfall")).toEqual([]);
-  expect(await slugs("Stargate Opener")).toEqual([]);
+  expect(await slugs(`Stargate${String.fromCharCode(0x2028)}Opener`)).toEqual([]);
 });
 
 test("refuses anything but view, a valid q and a 1-8 limit", async () => {
