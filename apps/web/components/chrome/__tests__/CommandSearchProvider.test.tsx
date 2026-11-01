@@ -7,7 +7,7 @@ import { COMMAND_SEARCH_RECENT_KEY } from "@/lib/commandSearchRecent";
 import type { SettingsTabId } from "@/lib/settingsRegistry";
 import { SettingsShell } from "@/components/analyzer/settings/SettingsShell";
 import { usePublishDirty } from "@/components/analyzer/settings/SettingsContext";
-import { CommandSearchProvider, type CommandFrame } from "../CommandSearchProvider";
+import { CommandSearchProvider, RECENT_STORAGE_KEY, type CommandFrame } from "../CommandSearchProvider";
 import {
   useCommandChrome, useCommandSearch, useCommandSettings,
   type CommandNavigation, type CommandOpening, type CommandSearchContextValue,
@@ -138,12 +138,23 @@ describe("actual provider lazy boundary", () => {
     expect(localStorage.getItem(COMMAND_SEARCH_RECENT_KEY)).not.toMatch(/private|tab=games/);
   });
 
-  it("clears the signed-out viewer's Recent after the visits queued before it", async () => {
+  it("clears at sign-out at once, and a visit still loading never writes it back", async () => {
     const view = render(tree());
     await waitFor(() => expect(localStorage.getItem(COMMAND_SEARCH_RECENT_KEY)).not.toBeNull());
     path("/app/opponents/1-S2-1-267727"); view.rerender(tree());
     fixture.signedIn = false; view.rerender(tree());
-    await waitFor(() => expect(localStorage.getItem(COMMAND_SEARCH_RECENT_KEY)).toBeNull());
+    expect(localStorage.getItem(COMMAND_SEARCH_RECENT_KEY)).toBeNull();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(localStorage.getItem(COMMAND_SEARCH_RECENT_KEY)).toBeNull();
+  });
+
+  it("clears only the signed-out viewer's envelope, with the Recent module's key", () => {
+    expect(RECENT_STORAGE_KEY).toBe(COMMAND_SEARCH_RECENT_KEY);
+    const other = JSON.stringify({ version: 2, viewer: "user_b", entries: [{ kind: "page", id: "today" }] });
+    const view = render(tree());
+    localStorage.setItem(COMMAND_SEARCH_RECENT_KEY, other);
+    fixture.signedIn = false; view.rerender(tree());
+    expect(localStorage.getItem(COMMAND_SEARCH_RECENT_KEY)).toBe(other);
   });
 });
 
