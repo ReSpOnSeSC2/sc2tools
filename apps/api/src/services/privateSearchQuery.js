@@ -7,6 +7,7 @@ const HINTS = Object.freeze({ opponents: "b2_probe_owner_id_v1",
 /** @typedef {import("mongodb").Document} Expression */
 /** @typedef {{collection:string,pipeline:Expression[],options:import('mongodb').AggregateOptions,
  * kind:string,sourceOwnerMaximum:number,sourceLimit:number,resultLimit:number,visibleLimit:number}} SearchShape */
+const { BSONRegExp } = require("mongodb");
 const { hasControls, hasUnpairedSurrogates } = require("./privateSearchText");
 const { validId: validIdentifier } = require("./privateSearchText");
 const OWNER_ROWS = 4096;
@@ -21,8 +22,10 @@ const CONTROL = "[\\x00-\\x1f\\x7f-\\x9f]"; // Full Unicode Cc: C0 plus C1.
 const ASTRAL = "[\\x{10000}-\\x{10FFFF}]";
 /** @param {string} value */
 const escaped = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// A JavaScript RegExp reaches the server as its `source`, which spells a line
+// separator as \u that PCRE rejects; a BSONRegExp pattern arrives as written.
 /** @param {string} query */
-const prefix = query => new RegExp("^" + escaped(query), "i");
+const prefix = query => new BSONRegExp("^" + escaped(query), "i");
 /** @param {unknown} value */
 const literal = value => ({ $literal: value });
 /** @param {string} field @param {string} type */
