@@ -29,6 +29,7 @@ describe("static recent destination envelope", () => {
     recordCommandSearchRecent("viewer-a", "opponents", allowed, storage);
     // A marketing page lists only some destinations: reading there hides, never erases.
     expect(readCommandSearchRecent("viewer-a", ["community", "help"], storage)).toEqual([]);
+    expect(readCommandSearchRecent("viewer-a", ["today", "help"], storage)).toEqual(["today"]);
     expect(JSON.parse(storage.raw()!).ids).toEqual(["opponents", "today"]);
     expect(recordCommandSearchRecent("viewer-a", "help", ["community", "help"], storage)).toEqual(["help", "opponents", "today"]);
     expect(readCommandSearchRecent("viewer-a", allowed, storage)).toEqual(["help", "opponents", "today"]);

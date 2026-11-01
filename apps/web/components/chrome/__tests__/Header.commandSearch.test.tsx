@@ -44,6 +44,22 @@ it("registers the header links under app keys at once, then the app's own sectio
   expect(registered.at(-1)).toBe(registered.at(-2));
 });
 
+it("never shows one account's app list to the next account while the new list loads", async () => {
+  state.me = { isAdmin: true };
+  const registered: CommandChrome[] = [];
+  const contextFor = (ownerKey: string) => ({ ownerKey, open: vi.fn(), registerSettings: () => () => undefined,
+    registerChrome: (config: CommandChrome) => { registered.push(config); return () => undefined; } });
+  const view = render(<CommandSearchContext.Provider value={contextFor("admin_a")}><Header /></CommandSearchContext.Provider>);
+  await waitFor(() => expect(keys(registered.at(-1))).toContain("admin"));
+  state.me = { isAdmin: false };
+  view.rerender(<CommandSearchContext.Provider value={contextFor("member_b")}><Header /></CommandSearchContext.Provider>);
+  // Until member_b's own list arrives, the header's links stand in; admin_a's Admin row never carries over.
+  expect(keys(registered.at(-1))).not.toContain("admin");
+  expect(keys(registered.at(-1))).not.toContain("today");
+  await waitFor(() => expect(keys(registered.at(-1))).toContain("today"));
+  expect(keys(registered.at(-1))).not.toContain("admin");
+});
+
 it("keeps a visitor on the header's public links, without loading the app's list", async () => {
   state.audience = "out";
   const { registered } = renderWith(null);
