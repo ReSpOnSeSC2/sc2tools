@@ -13,6 +13,10 @@ describe("public /search query", () => {
   it.each([[undefined], [["a", "b"]], [""], ["   "]])("reads a missing, repeated or blank q as empty %#", raw => {
     expect(parsePublicSearchQuery(raw)).toEqual({ kind: "empty" });
   });
+  it.each([["\u0301\u0301"], [" \u0300 "]])("reads a query that folds to nothing as empty, with no page link %#", raw => {
+    expect(parsePublicSearchQuery(raw)).toEqual({ kind: "empty" });
+    expect(publicSearchHref(raw)).toBeNull();
+  });
   it.each([["a\u0000b"], ["tab\tquery"], ["a\ud800b"], [`${"a".repeat(100)}\n`]])("refuses controls and lone surrogates %#", raw => {
     expect(parsePublicSearchQuery(raw)).toEqual({ kind: "invalid" });
   });

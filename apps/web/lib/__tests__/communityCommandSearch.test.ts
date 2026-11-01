@@ -64,6 +64,17 @@ describe("signed-out Community quick search wire", () => {
     vi.stubGlobal("fetch", vi.fn<typeof fetch>(async () => make(communityCommandUrl("zerg"))));
     await expect(requestCommunityCommandSearch("zerg", new AbortController().signal)).rejects.toMatchObject({ code });
   });
+  it("stops reading a streamed body past 32 KiB when no length is declared", async () => {
+    const url = communityCommandUrl("zerg"), chunk = new Uint8Array(16 * 1024).fill(0x20);
+    let pulls = 0;
+    const streamed = new Response(new ReadableStream<Uint8Array>({ pull(controller) { pulls += 1; controller.enqueue(chunk); } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    Object.defineProperty(streamed, "url", { value: url });
+    expect(streamed.headers.get("content-length")).toBeNull();
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async () => streamed));
+    await expect(requestCommunityCommandSearch("zerg", new AbortController().signal)).rejects.toMatchObject({ code: "response_too_large" });
+    expect(pulls).toBeLessThanOrEqual(4);
+  });
   it("sends nothing for an invalid query", async () => {
     const fetching = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetching);
     await expect(requestCommunityCommandSearch("z", new AbortController().signal)).rejects.toMatchObject({ code: "invalid_query" });

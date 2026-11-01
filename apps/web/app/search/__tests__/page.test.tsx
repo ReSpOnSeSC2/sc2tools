@@ -16,6 +16,7 @@ vi.mock("@/lib/guides/api", () => ({
 vi.mock("next/navigation", () => ({ notFound: mocks.notFound }));
 
 import SearchPage, { dynamic, metadata } from "@/app/search/page";
+import { createCommandGuideCatalog } from "@/lib/commandGuideSearch";
 
 async function show(q?: string | string[]) {
   render(await SearchPage({ searchParams: Promise.resolve(q === undefined ? {} : { q }) }));
@@ -65,6 +66,14 @@ describe("/search", () => {
     expect(screen.queryByText(/No published guides match/)).toBeNull();
   });
 
+  it("shows at most 30 rows a group and says when there are more", async () => {
+    mocks.published = new Set(createCommandGuideCatalog({ publishedPaths: null }).map(row => row.id.slice("guide:".length)));
+    await show("protoss");
+    const openers = screen.getByRole("region", { name: "Openers" });
+    expect(within(openers).getAllByRole("link")).toHaveLength(30);
+    expect(within(openers).getByText("More matches in Openers. Add a matchup or another word.")).toBeTruthy();
+  });
+
   it("says when nothing published matches", async () => {
     await show("zzzz-nothing");
     expect(screen.getByRole("status").textContent).toContain("No published guides match.");
@@ -72,7 +81,7 @@ describe("/search", () => {
   });
 
   it.each([
-    [undefined, null], [["a", "b"], null], ["a".repeat(81), "Searches can be up to 80 characters."],
+    [undefined, null], [["a", "b"], null], ["\u0301", null], ["a".repeat(81), "Searches can be up to 80 characters."],
     ["bad\u0000query", "This search can't be used. Use letters, numbers and spaces."],
   ])("reads no guides for an empty, repeated, too long or invalid search %#", async (q, message) => {
     await show(q);

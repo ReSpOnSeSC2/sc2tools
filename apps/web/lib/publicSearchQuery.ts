@@ -1,6 +1,8 @@
 // The public guide results page (ADR 0069, 2026-11-01 amendment): /search?q=,
 // 1-80 code points with no control character or unpaired surrogate. Pure, for
 // the server page, the lazy palette and its activation policy.
+import { normalizeCommandQuery } from "./commandSearch";
+
 export const PUBLIC_SEARCH_PATH = "/search";
 export const PUBLIC_SEARCH_QUERY_MAX = 80;
 
@@ -27,7 +29,8 @@ export function parsePublicSearchQuery(raw: unknown): PublicSearchQuery {
   if (typeof raw !== "string") return { kind: "empty" };
   if (/\p{Cc}/u.test(raw) || unpairedSurrogate(raw)) return { kind: "invalid" };
   const points = Array.from(raw.trim());
-  if (!points.length) return { kind: "empty" };
+  // A query that folds to nothing (only combining marks, say) would match every guide.
+  if (!points.length || !normalizeCommandQuery(points.join(""))) return { kind: "empty" };
   return points.length > PUBLIC_SEARCH_QUERY_MAX
     ? { kind: "too_long", prefill: points.slice(0, PUBLIC_SEARCH_QUERY_MAX).join("") }
     : { kind: "ok", query: points.join("") };

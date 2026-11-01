@@ -1,6 +1,6 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { communityCommandUrl } from "../communityCommandSearch";
+import { COMMUNITY_COMMAND_DEBOUNCE_MS, COMMUNITY_COMMAND_TIMEOUT_MS, communityCommandUrl } from "../communityCommandSearch";
 import { useCommunityCommandSearch, type CommunityCommandSearchOptions } from "../useCommunityCommandSearch";
 
 const fetching = vi.fn<typeof fetch>();
@@ -16,7 +16,7 @@ beforeEach(() => {
   fetching.mockReset().mockImplementation(async input => answer(String(input)));
   vi.stubGlobal("fetch", fetching);
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("Community builds for signed-out viewers", () => {
   it("sends one request after an explicit edit settles, and none for the opening query", async () => {
@@ -52,6 +52,18 @@ describe("Community builds for signed-out viewers", () => {
     await waitFor(() => expect(view.result.current.phase).toBe("ready"));
     await act(async () => release(answer(communityCommandUrl("zerg"), ["stale"])));
     expect(view.result.current.items.map(item => item.id)).toEqual(["community:build-a1"]);
+  });
+
+  it("gives up after five seconds and reports a failure", async () => {
+    vi.useFakeTimers();
+    fetching.mockImplementationOnce(() => new Promise<Response>(() => {}));
+    const view = renderHook(() => useCommunityCommandSearch(OPTIONS));
+    await act(async () => { await vi.advanceTimersByTimeAsync(COMMUNITY_COMMAND_DEBOUNCE_MS); });
+    expect(fetching).toHaveBeenCalledOnce(); expect(view.result.current.phase).toBe("loading");
+    await act(async () => { await vi.advanceTimersByTimeAsync(COMMUNITY_COMMAND_TIMEOUT_MS - 1); });
+    expect(view.result.current.phase).toBe("loading");
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(view.result.current.phase).toBe("error"); expect(fetching.mock.calls[0][1]?.signal?.aborted).toBe(true);
   });
 
   it("waits for Retry after a failure", async () => {
