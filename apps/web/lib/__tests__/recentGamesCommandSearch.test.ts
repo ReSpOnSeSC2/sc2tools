@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { API_BASE } from "../clientApi";
 import { commandPrivateHref } from "../commandSearchActivation";
 import { PrivateCommandSearchError } from "../privateCommandSearch";
@@ -6,9 +6,12 @@ import {
   decodeRecentGames, recentGameChoices, recentGamesQuery, recentGamesUrl, requestRecentGames,
 } from "../recentGamesCommandSearch";
 
+// Rows show the viewer's own day. 01:30 UTC on Oct 30 is still the evening of Oct 29 in Los Angeles.
+const zone = vi.hoisted(() => { const previous = process.env.TZ; process.env.TZ = "America/Los_Angeles"; return previous; });
+afterAll(() => { if (zone === undefined) delete process.env.TZ; else process.env.TZ = zone; });
 const BASE = API_BASE.replace(/\/+$/, "");
 function row(gameId: string, overrides: Record<string, unknown> = {}) {
-  return { gameId, date: "2026-10-29T12:00:00.000Z", result: "Victory", map: "Alcyone LE", durationSec: 612,
+  return { gameId, date: "2026-10-30T01:30:00.000Z", result: "Victory", map: "Alcyone LE", durationSec: 612,
     myBuild: "Blink", matchup: "PvT", opponent: { displayName: "Rival", race: "Terran", pulseId: "1-S2-1-9" },
     replayAvailable: true, streams: [], ...overrides };
 }
@@ -42,7 +45,7 @@ describe("recent games decoder", () => {
   it("picks only what a row needs and keeps the server's order", () => {
     const decoded = decodeRecentGames(page([row("g-2"), row("g-1", { result: "Defeat", opponent: null, matchup: null, date: null })]));
     expect(decoded).toEqual({ hasMore: false, items: [
-      { gameId: "g-2", date: "2026-10-29T12:00:00.000Z", result: "Win", map: "Alcyone LE", matchup: "PvT", opponent: "Rival" },
+      { gameId: "g-2", date: "2026-10-30T01:30:00.000Z", result: "Win", map: "Alcyone LE", matchup: "PvT", opponent: "Rival" },
       { gameId: "g-1", date: null, result: "Loss", map: "Alcyone LE", matchup: null, opponent: null },
     ] });
     expect(JSON.stringify(decoded)).not.toMatch(/owner-id|1-S2-1-9|Blink/);
