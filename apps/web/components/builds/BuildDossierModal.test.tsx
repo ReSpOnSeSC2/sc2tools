@@ -26,8 +26,12 @@ describe("Build dossier shared dialog", () => {
     expect(screen.getByText("Recorded description")).toBeTruthy(); expect(screen.getByText("Private scouting note")).toBeTruthy();
     expect(screen.getByText("From opponent")).toBeTruthy(); expect(screen.getByText("Published")).toBeTruthy();
     expect(h.props).toMatchObject({ apiPath: "/v1/custom-builds/private%20opener/matches", slug: build.slug, phasePerspective: "opponent" });
-    const controls = within(dialog).getAllByRole("button").map(node => node.textContent);
-    expect(controls.slice(1, 5)).toEqual(["Practice", "Edit", "Update listing", "Delete"]);
+    // Buttons and links in document order: Edit, Publish, Full page, Delete, each a 44 px target.
+    const controls = [...dialog.querySelectorAll<HTMLElement>("button, a")];
+    const practice = controls.findIndex(node => node.textContent === "Practice");
+    const actions4 = controls.slice(practice + 1, practice + 5);
+    expect(actions4.map(node => node.textContent)).toEqual(["Edit", "Update listing", "Full page", "Delete"]);
+    for (const node of actions4) expect(node.className.split(/\s+/)).toContain("min-h-11");
     fireEvent.click(screen.getByRole("button", { name: "Edit rules" })); expect(actions.onEdit).toHaveBeenLastCalledWith(build.slug, "preview");
     fireEvent.click(screen.getByRole("button", { name: "Edit definition" })); expect(actions.onEdit).toHaveBeenLastCalledWith(build.slug);
     fireEvent.click(screen.getByRole("button", { name: "Update listing" })); expect(actions.onPublish).toHaveBeenCalledWith(build.slug);

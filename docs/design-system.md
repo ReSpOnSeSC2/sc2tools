@@ -308,9 +308,11 @@ phone actions that need it. Give icon-only actions an accessible name.
 Every variant and size is a pill: `rounded-full`, in the display face, and all
 but `ghost` wear the 2px `line` border with the hard offset shadow that collapses
 on press (`hard-press`). Do not hand-write that recipe, or a `rounded-md` accent
-link, on a link: the UI lint rejects new copies. For a link that is not a
-`next/link` (an external `<a>`, `AuthContextLink`), pass
-`buttonClassName({ variant, size })` as its class instead.
+link, on a link. The UI lint rejects new pill copies anywhere outside
+`components/ui`, and new `rounded-md` or `rounded-lg` accent links under `app/`
+and `components/landing/`. For a link that is not a `next/link` (an external
+`<a>`, `AuthContextLink`), pass `buttonClassName({ variant, size })` as its
+class instead.
 
 Which one to use:
 
@@ -318,7 +320,7 @@ Which one to use:
 | --- | --- |
 | An action on this page (save, open a dialog, retry) | `Button` |
 | Navigation that looks like a button | `LinkButton` |
-| A button-styled external link, auth link or a server-component link | `buttonClassName` on that element |
+| A button-styled external link or auth link, or a server-component link that should not import the client Button module | `buttonClassName` on that element (`LinkButton` also works in a server component when it gets no event handlers) |
 | An inline text link inside copy | A plain `Link` with the text-link classes |
 
 `IconButton` requires `aria-label` and supplies a 44px target. `CopyButton` and
