@@ -302,9 +302,15 @@ function MatchupChips({ counts, selected, onSelect }: {
   </div>;
 }
 
-/** Spread on a wrapper: clicks on its help control, or inside the portalled
- * popover, stay out of the clickable row that opens the build editor. */
-const STAY_IN_CELL = { onClick: (event: MouseEvent<HTMLElement>) => event.stopPropagation() };
+/** Spread on a wrapper: clicks on its help control, or inside the popover
+ * portalled outside it, stay out of the clickable row that opens the build
+ * editor; a click on the note's own text still opens it. */
+const STAY_IN_CELL = {
+  onClick: (event: MouseEvent<HTMLElement>) => {
+    const target = event.target as Element;
+    if (target.closest("button") || !event.currentTarget.contains(target)) event.stopPropagation();
+  },
+};
 
 /** "incl. N check-ins" — games counted only because of a confirmed check-in. */
 function CheckinsNote({ count, inline = false }: { count?: number; inline?: boolean }) {

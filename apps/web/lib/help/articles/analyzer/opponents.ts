@@ -56,7 +56,7 @@ const article: HelpArticle = {
         ["Download latest replay", "Download your latest matching game against this opponent after choosing the button. Replay unavailable means its original replay is not archived."],
         ["Last result, Last map, Last game length", "The result, map and duration of your latest matching game. Global filters apply."],
         ["Average game length", "The mean duration across matching games with a measured length. The measured count is shown; missing length is not zero."],
-        ["My build, Opponent build", "Build labels from the latest matching game. Planned labels are marked separately."],
+        ["My build, Opponent build", "Build labels from the latest matching game. Planned marks your own check-in; Corrected marks an opponent build you corrected."],
         ["Opponent build order, Last recorded build order date", "Open a game with a known recorded opponent order. Latest known marks incomplete coverage; Inspect recorded game lets you check it. Not indexed means no date can be established yet, rather than no order ever existing."],
         ["My latest macro breakdown, My latest macro leaks", "Open your macro analysis for the latest matching game, or read up to three recorded leak names."],
         ["My average macro score", "Your mean score across matching games with a measured macro score, with its sample count. A real zero stays zero."],

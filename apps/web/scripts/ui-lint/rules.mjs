@@ -169,10 +169,12 @@ export function analyzeSource(file, text) {
   const { isShadowed } = bindings;
   const insideUi = file.startsWith("components/ui/");
   const insideAnalyzer = file.startsWith("components/analyzer/");
-  // A title anywhere inside a header cell is hover-only text on that header.
+  // A title anywhere inside a header cell is hover-only text on that header,
+  // including JSX passed to a header tag's prop, such as SortableTh's info slot.
   const insideHeaderCell = (element) => {
     for (let at = element.parent; at; at = at.parent) {
       if (ts.isJsxElement(at) && at.openingElement.tagName.getText(source) === "th") return true;
+      if (ts.isJsxAttribute(at) && headerTags.has(at.parent.parent.tagName.getText(source))) return true;
     }
     return false;
   };

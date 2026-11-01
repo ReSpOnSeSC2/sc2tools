@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FiltersContext, type AnalyzerFilters } from "@/lib/filterContext";
 import type { StrengthFields } from "@/lib/strengthAdjusted";
@@ -92,16 +92,23 @@ describe("Builds tab filtered custom build integration", () => {
     const table = within(screen.getByRole("table"));
     // Header names stay exact; each help control is its own button.
     expect(table.getByRole("columnheader", { name: "WR" })).toBeTruthy();
-    expect(table.getByRole("columnheader", { name: "W/L split" })).toBeTruthy();
-    expect(table.getByRole("button", { name: "About WR" })).toBeTruthy();
-    expect(table.getByRole("button", { name: "About W/L split" })).toBeTruthy();
+    // jsdom leaves a header button's name out either way; browsers may not, so the cell names itself.
+    expect(table.getByRole("columnheader", { name: "W/L split" }).getAttribute("aria-label")).toBe("W/L split");
+    for (const [name, term] of [["About WR", "build-stats-win-rate"], ["About W/L split", "build-record"]]) {
+      fireEvent.click(table.getByRole("button", { name }));
+      const opened = await screen.findByRole("dialog", { name });
+      expect((await within(opened).findByRole("link", { name: "Learn more" })).getAttribute("href")).toBe(`/help/glossary#${term}`);
+      fireEvent.keyDown(opened, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("dialog", { name })).toBeNull());
+    }
     const custom = table.getByRole("row", { name: /Custom gateway opener/ });
     expect(within(custom).getByText("incl. 2 check-ins").closest("[title]")).toBeNull();
     fireEvent.click(within(custom).getByRole("button", { name: "About Counted check-ins" }));
     const tip = await screen.findByRole("dialog", { name: "About Counted check-ins" });
     fireEvent.click(await within(tip).findByText("Games assigned here only because a check-in changed their detected build identity."));
     expect(screen.queryByRole("dialog", { name: "Custom gateway opener" })).toBeNull();
-    fireEvent.click(custom);
+    // The note's own text is part of the row and still opens the build.
+    fireEvent.click(within(custom).getByText("incl. 2 check-ins"));
     expect(screen.getByRole("dialog", { name: "Custom gateway opener" })).toBeTruthy();
   });
 

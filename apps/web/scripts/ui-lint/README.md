@@ -13,8 +13,9 @@ styled link buttons described in the design-system roadmap; and native `title`
 tooltips on table headers under `components/analyzer`, which never appear on
 touch or keyboard. That last rule covers a `title` on a `th`, on `SortableTh`
 (direct, aliased or namespace imports from its canonical module) and on any
-element written inside a `th`; explain a header with `InfoTip`, SortableTh's
-`info` slot, or visible or screen-reader text instead. The hex exception
+element written inside a `th` or passed to SortableTh's `info` slot; explain a
+header with `InfoTip`, that slot, or visible or screen-reader text instead.
+Titles passed through JSX spread attributes are not resolved. The hex exception
 does not waive any focus, text, dialog or button rule. No filename-contains-chart
 or blanket ignore-comment exception exists.
 

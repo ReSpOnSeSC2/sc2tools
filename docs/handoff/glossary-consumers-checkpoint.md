@@ -29,8 +29,8 @@ headers and the Macro KPI row. This slice does the rest. Paths are under
 
 - **`title-token`.** The web app has no stream-title editor: the desktop app
   edits titles, and the tokens are documented only in the
-  `desktop-stream-titles` help article, which is the term's own Learn more
-  target. The Twitch Prediction title variables and the chat-command
+  `desktop-stream-titles` help article, which is the term's in-context help
+  target ("Read Title token in context"). The Twitch Prediction title variables and the chat-command
   variables mean different things. There is no consumer to wire.
 - **Builds library cards and the custom-build dossier.** Their win rate and
   record are lifetime counts for the build, with decided games as the
@@ -63,4 +63,10 @@ headers and the Macro KPI row. This slice does the rest. Paths are under
   caption.
 - The UI lint rule tests pass (24), and `ui:lint` passes with only the 14 new
   allowances. Lint reports nothing on the changed files; whole-web types pass.
+- A 13-mutation check caught 12 regressions; the one survivor (the W/L split
+  header's `aria-label`, whose absence jsdom's name computation cannot see) is
+  now asserted directly. One independent review's verified findings are fixed:
+  the check-ins note's own text opens the editor again, a title inside
+  SortableTh's `info` slot is flagged, and each new header and overlay tip is
+  checked against its glossary term.
 - No real-browser check.

@@ -147,6 +147,8 @@ test("SortableTh titles are caught through direct, aliased and namespace names",
       <Sort.SortableTh col="total" label="G" title="Games" /></>;`;
   assert.deepEqual(rules(source, "components/analyzer/Example.tsx"), ["analyzer-header-title", "analyzer-header-title", "analyzer-header-title"]);
   assert.deepEqual(rules(`<Th col="wins" label="W" title="Wins" />`, "components/analyzer/Example.tsx"), []);
+  assert.deepEqual(rules(`<SortableTh col="wr" label="WR" info={<Link href="/help/x" title="How WR is computed">?</Link>} />`,
+    "components/analyzer/Example.tsx"), ["analyzer-header-title"]);
 });
 
 test("help controls, visible text and titles outside header cells stay valid", () => {
