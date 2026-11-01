@@ -3,6 +3,7 @@
 const {
   isPrivateSearchPath, isPrivateSearchRequest, isPrivateSearchFailure,
 } = require("./privateSearchBoundary");
+const { isSearchQueryUrl, requestCarriesSearchQuery } = require("./searchQueryPrivacy");
 const PRIVATE_SEARCH_TAG = "sc2tools.private_search";
 
 /** @param {unknown} value @param {string} key @returns {unknown} */
@@ -21,9 +22,17 @@ function privateTransaction(value) {
   return isPrivateSearchPath(path);
 }
 
+/** Private quick search, or a request URL whose query carries typed search text.
+ * @param {unknown} request @returns {boolean} */
+function privateRequest(request) {
+  const url = ownData(request, "url");
+  return isPrivateSearchPath(url) || requestCarriesSearchQuery(url, ownData(request, "query_string"));
+}
+
 /**
  * Drop the whole known-private event, not only its exception message.
  * Example: shouldDropPrivateSearchEvent({request:{url:"/v1/search/quick"}}) === true.
+ * Typed search in a replay-library or Community quick-search URL is private too.
  * Missing URL is covered by the request-local constant tag or original safe error.
  * @param {unknown} event @param {unknown} [hint] @returns {boolean}
  */
@@ -31,11 +40,9 @@ function shouldDropPrivateSearchEvent(event, hint) {
   if (isPrivateSearchFailure(ownData(hint, "originalException"))) return true;
   const tag = ownData(ownData(event, "tags"), PRIVATE_SEARCH_TAG);
   if (tag === "1" || tag === true) return true;
-  const request = ownData(event, "request");
-  if (isPrivateSearchPath(ownData(request, "url"))) return true;
+  if (privateRequest(ownData(event, "request"))) return true;
   const metadata = ownData(event, "sdkProcessingMetadata");
-  const normalized = ownData(metadata, "normalizedRequest");
-  return isPrivateSearchPath(ownData(normalized, "url"))
+  return privateRequest(ownData(metadata, "normalizedRequest"))
     || privateTransaction(ownData(event, "transaction"));
 }
 
@@ -58,24 +65,27 @@ function privateSearchSentryCallbacks() {
 
 /**
  * Pass to the existing SDK Http integration before app/parser creation.
- * Avoids pre-parser body capture and incoming server spans for this route only.
+ * Avoids pre-parser body capture for this route, and incoming server spans for
+ * it and for request URLs whose query carries typed search text.
  * Example: sdk.httpIntegration(privateSearchHttpOptions()) during optional init.
  */
 function privateSearchHttpOptions() {
   return {
     ignoreIncomingRequestBody: isPrivateSearchPath,
-    ignoreIncomingRequests: isPrivateSearchPath,
+    /** @param {string} urlPath the path and query string */
+    ignoreIncomingRequests: urlPath => isPrivateSearchPath(urlPath) || isSearchQueryUrl(urlPath),
   };
 }
 
 /** Run the actual private request chain in its own SDK scope. No shared
- * request/query state is retained and no SDK is initialized here.
+ * request/query state is retained and no SDK is initialized here. A request
+ * whose URL carries typed search text gets the same scope.
  * @param {{originalUrl?:unknown,url?:unknown}} req
  * @param {()=>void} next
  * @param {Pick<typeof import('@sentry/node'), 'withIsolationScope'|'suppressTracing'>|false} sdk
  */
 function runPrivateSearchScope(req, next, sdk) {
-  if (!sdk || !isPrivateSearchRequest(req)) { next(); return; }
+  if (!sdk || !(isPrivateSearchRequest(req) || isSearchQueryUrl(req.originalUrl || req.url))) { next(); return; }
   sdk.withIsolationScope(scope => {
     scope.setTag(PRIVATE_SEARCH_TAG, "1");
     sdk.suppressTracing(next);

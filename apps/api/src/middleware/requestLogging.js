@@ -1,6 +1,7 @@
 "use strict";
 
 const { isPrivateSearchPath, privateSearchLogUrl } = require("./privateSearchBoundary");
+const { isSearchQueryUrl, redactSearchQuery } = require("./searchQueryPrivacy");
 
 // Request logs are operational telemetry, not a copy of the incoming
 // request.  In particular, Clerk/device bearer tokens and overlay tokens are
@@ -70,11 +71,13 @@ function sanitiseRequestUrl(value) {
         parsed.searchParams.set(key, "[redacted]");
       }
     }
+    redactSearchQuery(parsed);
     redacted = `${parsed.pathname}${parsed.search}`;
   } catch {
     // A malformed URL must not break request logging. The path credential
     // replacement above still ran, which covers every credential-bearing API
-    // route currently mounted by the service.
+    // route currently mounted by the service. A search route keeps its path only.
+    if (isSearchQueryUrl(redacted)) return redacted.split(/[?#]/u, 1)[0];
   }
   return redacted;
 }

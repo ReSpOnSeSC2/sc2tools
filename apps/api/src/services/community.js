@@ -19,6 +19,7 @@ const {
   matchupFromRaces,
 } = require("./communityBuildSnapshot");
 const { communitySitemap } = require("./communitySitemap");
+const { quickSearchCommunityBuilds } = require("./communityQuickSearch");
 const { communityListFilter } = require("./communityListFilters");
 const { CommunityOpponentCache } = require("./communityOpponentCache");
 const { listOwnerBuilds } = require("./communityOwnerBuilds");
@@ -1308,6 +1309,18 @@ class CommunityService {
    */
   async sitemap(options = {}) {
     return communitySitemap(this.db.communityBuilds, options);
+  }
+
+  /**
+   * The signed-out quick-search palette's Community builds
+   * (services/communityQuickSearch.js): at most eight slim rows, no count.
+   *
+   * @param {string} query
+   * @param {{limit?: number}} [options]
+   * @returns {ReturnType<typeof quickSearchCommunityBuilds>}
+   */
+  async quickSearchPublic(query, options = {}) {
+    return quickSearchCommunityBuilds(this.db.communityBuilds, query, options);
   }
 
   /**
