@@ -94,7 +94,7 @@ Two recorders are outside the app: the hosting provider's and its edge's request
 - Rows link only to /community/builds/<validated slug>.
 - Signed-in viewers never send it; their library search stays the private POST.
 
-The API serves view=quick with an escaped, case-insensitive word-start match on title and author name.
+The API serves view=quick with an escaped, case-insensitive word-start match on title and author name. A word starts at the beginning or after any character that is not a letter or digit in any script.
 
 - It returns at most eight slim rows, {slug, title, matchup, authorName, votes}, and hasMore, with no count.
 - It runs under maxTimeMS 300, sends no-store, and is limited to 120 requests per minute per IP.

@@ -27,6 +27,9 @@ beforeAll(async () => {
     build("build-a6", "\u0007\u0007", 40, { authorName: "Stargate author" }),
     build("build-a7", "Stargate\u0001Phoenix", 1, { authorName: "  " }),
     build("build-a8", "1+1 Stargate", 2),
+    build("build-b1", "Протосс через врата", 500),
+    build("build-b2", "Тосс ранний", 5),
+    build("build-b3", "Überfall Zerg", 7),
   ]);
 }, 60_000);
 afterAll(async () => { if (h) await h.close(); });
@@ -57,6 +60,14 @@ test("treats the query literally and keeps the limit with hasMore", async () => 
   const page = await quick({ q: "stargate", limit: "2" }).expect(200);
   expect(page.body.items.map(item => item.slug)).toEqual(["old.slug", "build-a2"]);
   expect(page.body.hasMore).toBe(true);
+});
+
+test("starts a word after any non-letter in any script, ignoring case, and survives a line separator", async () => {
+  const slugs = async q => (await quick({ q }).expect(200)).body.items.map(item => item.slug);
+  expect(await slugs("тосс")).toEqual(["build-b2"]);
+  expect(await slugs("über")).toEqual(["build-b3"]);
+  expect(await slugs("berfall")).toEqual([]);
+  expect(await slugs("Stargate Opener")).toEqual([]);
 });
 
 test("refuses anything but view, a valid q and a 1-8 limit", async () => {
