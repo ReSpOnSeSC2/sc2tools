@@ -16,7 +16,7 @@ def dot_color(view):
     if view.status == AgentStatus.WATCHING:
         return palette.BLUE if view.update_pending else palette.GREEN
     return {AgentStatus.SYNCING: palette.CYAN, AgentStatus.ERROR: palette.RED,
-            AgentStatus.PAUSED: palette.AMBER, AgentStatus.NEEDS_PAIRING: palette.AMBER,
+            AgentStatus.PAUSED: palette.GREY, AgentStatus.NEEDS_PAIRING: palette.AMBER,
             AgentStatus.UNLINKED: palette.AMBER, AgentStatus.NEEDS_ATTENTION: palette.AMBER}.get(view.status)
 
 

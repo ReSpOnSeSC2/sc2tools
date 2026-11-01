@@ -14,7 +14,7 @@ def test_padding_preserves_nontransparent_aspect_and_status_colors():
     bounds=result.getbbox(); ratio=(bounds[2]-bounds[0])/(bounds[3]-bounds[1])
     assert abs(ratio/(1347/1133)-1)<.03
     colors={AgentStatus.WATCHING:palette.GREEN,AgentStatus.SYNCING:palette.CYAN,
-        AgentStatus.PAUSED:palette.AMBER,AgentStatus.NEEDS_PAIRING:palette.AMBER,
+        AgentStatus.PAUSED:palette.GREY,AgentStatus.NEEDS_PAIRING:palette.AMBER,
         AgentStatus.UNLINKED:palette.AMBER,AgentStatus.NEEDS_ATTENTION:palette.AMBER,
         AgentStatus.ERROR:palette.RED,AgentStatus.STARTING:None,AgentStatus.CONNECTING:None}
     for status,color in colors.items():
