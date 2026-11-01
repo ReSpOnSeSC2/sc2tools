@@ -114,3 +114,13 @@ describe("fixed internal command destinations", () => {
     "retains admitted destination %s", href => expect(isCommandSearchHref(href)).toBe(true),
   );
 });
+
+describe("search limits for the results page", () => {
+  it("keeps the palette defaults and lets the /search page list more of each group", () => {
+    const items = Array.from({ length: 40 }, (_, index) => item(`guide:${index}`, `Stargate ${index}`, { group: "guide-openers", href: `/guides/pvz/b${index}` }));
+    expect(searchCommands(items, "stargate")[0].items).toHaveLength(COMMAND_RESULTS_PER_GROUP);
+    expect(searchCommands(items, "stargate", ["guide-openers"], { perGroup: 31, total: 93 })[0].items).toHaveLength(31);
+    expect(searchCommands(items, "stargate", undefined, { perGroup: 500 })[0].items).toHaveLength(40);
+    expect(searchCommands(items, "stargate", undefined, { perGroup: 0, total: -1 })[0].items).toHaveLength(COMMAND_RESULTS_PER_GROUP);
+  });
+});

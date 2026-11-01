@@ -359,3 +359,50 @@ describe("personal maps and recent games", () => {
     expect(screen.queryByRole("button", { name: "Retry your library search" })).toBeNull();
   });
 });
+
+describe("public discovery in the palette", () => {
+  const guides = () => createCommandGuideCatalog({ publishedPaths: new Set(["/guides/pvz/counter/12-pool"]) });
+  const community = (overrides: Partial<NonNullable<CommandPaletteProps["community"]>> = {}) => ({
+    phase: "ready" as const, hasMore: false, onRetry: vi.fn(),
+    items: [{ id: "community:build-a1", group: "community-builds" as const, label: "Stargate into Carriers", matchup: "PvZ",
+      description: "Community build by Author", href: "/community/builds/build-a1" }], ...overrides });
+
+  it("offers See all guide results once a published guide matches, and selects it like any row", async () => {
+    const select = vi.fn();
+    await open({ signedIn: false, initialQuery: "12 pool", guideItems: guides(), searchPageHref: "/search?q=12%20pool", onSelect: select });
+    const row = within(screen.getByRole("group", { name: "More" })).getByRole("option", { name: /^See all guide results/ });
+    fireEvent.click(row);
+    expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: "search:all", href: "/search?q=12%20pool" }));
+  });
+
+  it("never offers the results page when no published guide matches", async () => {
+    await open({ signedIn: false, initialQuery: "carrier pvz", guideItems: guides(), searchPageHref: "/search?q=carrier%20pvz" });
+    expect(screen.queryByRole("option", { name: /^See all guide results/ })).toBeNull();
+  });
+
+  it("lists Community builds for a signed-out viewer with their matchup and author", async () => {
+    const select = vi.fn();
+    await open({ signedIn: false, initialQuery: "stargate", community: community({ hasMore: true }), onSelect: select });
+    const group = screen.getByRole("group", { name: "Community builds" });
+    const row = within(group).getByRole("option", { name: /^Stargate into Carriers/ });
+    expect(row.textContent).toContain("PvZ"); expect(row.textContent).toContain("Community build by Author");
+    expect(screen.getByText("More matches on Community builds.")).toBeTruthy();
+    expect(within(screen.getByRole("group", { name: "More" })).getByRole("option", { name: "Open Community builds" })).toBeTruthy();
+    fireEvent.click(row);
+    expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: "community:build-a1", href: "/community/builds/build-a1" }));
+  });
+
+  it("explains searching and failure, offers Retry, and never shows Community rows signed in", async () => {
+    const pending = await open({ signedIn: false, initialQuery: "stargate", community: community({ phase: "loading", items: [] }) });
+    expect(screen.getByRole("status").textContent).toContain("Searching community builds…");
+    pending.unmount();
+    const failed = community({ phase: "error", items: [] });
+    const view = await open({ signedIn: false, initialQuery: "zzzz-none", community: failed });
+    expect(screen.getByRole("status").textContent).toContain("No page or guide matches yet.");
+    fireEvent.click(screen.getByRole("button", { name: "Retry community builds" }));
+    expect(failed.onRetry).toHaveBeenCalledOnce();
+    view.unmount();
+    await open({ signedIn: true, initialQuery: "stargate", community: community() });
+    expect(screen.queryByRole("group", { name: "Community builds" })).toBeNull();
+  });
+});

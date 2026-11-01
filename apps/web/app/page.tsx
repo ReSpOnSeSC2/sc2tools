@@ -16,8 +16,9 @@ export const metadata: Metadata = {
 };
 
 /**
- * Organization + WebSite structured data. Helps Google build the brand
- * knowledge panel and surface a sitelinks search box for "sc2tools".
+ * Organization + WebSite structured data for the brand knowledge panel and
+ * the site name. No SearchAction: Google retired the sitelinks search box in
+ * November 2024, and the /search page is noindex (ADR 0069, 2026-11-01 amendment).
  */
 const ORGANIZATION_JSON_LD = {
   "@context": "https://schema.org",

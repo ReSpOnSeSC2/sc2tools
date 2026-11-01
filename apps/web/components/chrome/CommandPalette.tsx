@@ -5,8 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import {
-  COMMAND_QUERY_MAX_CHARS, COMMAND_RESULTS_MAX, searchCommands, type CommandSearchGroupId,
-  type CommandSearchItem,
+  COMMAND_GUIDE_GROUPS, COMMAND_QUERY_MAX_CHARS, COMMAND_RESULTS_MAX, searchCommands, type CommandSearchItem,
 } from "@/lib/commandSearch";
 import { createCommandCatalog, type CommandCatalogOptions } from "@/lib/commandSearchCatalog";
 import type {
@@ -31,10 +30,18 @@ export type CommandPalettePrivateState = {
   onRetry: () => void; onSelect: (choice: PrivateCommandChoice) => boolean;
 };
 
+/** Community builds for a signed-out viewer; rows come from the runtime's anonymous request. */
+export type CommandPaletteCommunityState = {
+  phase: "idle" | "debouncing" | "loading" | "ready" | "error"; items: readonly CommandSearchItem[];
+  hasMore: boolean; onRetry: () => void;
+};
 export type CommandPaletteProps = CommandCatalogOptions & {
   initialQuery?: string;
   controlledQuery?: { value: string; onChange: (value: string) => void };
   privateSearch?: CommandPalettePrivateState;
+  community?: CommandPaletteCommunityState;
+  /** The /search page for this query, offered once a guide matches. */
+  searchPageHref?: string | null;
   scope?: "all" | "guides";
   guideItems: readonly CommandSearchItem[];
   guidesStatus: "loading" | "ready" | "unavailable";
@@ -52,7 +59,6 @@ type Activate = (id: string) => void;
 type KeyboardState = {
   enabled: readonly PaletteItem[]; activeId: string | null; onActive: Activate; onChoose: Choose;
 };
-const GUIDE_GROUPS: readonly CommandSearchGroupId[] = ["guide-openers", "guide-counters", "guide-maps"];
 const SHORTCUTS: CommandSearchItem = {
   id: "action:shortcuts", group: "actions", label: "Keyboard shortcuts", action: "shortcuts",
 };
@@ -160,21 +166,25 @@ function privateStatus(state: CommandPalettePrivateState) {
   };
 }
 
-function PaletteStatus({ count, enabled, query, status, onRetry, id, privateSearch }: {
+function PaletteStatus({ count, enabled, query, status, onRetry, id, privateSearch, community }: {
   count: number; enabled: number; query: string; status: CommandPaletteProps["guidesStatus"];
-  onRetry: () => void; id: string; privateSearch?: CommandPalettePrivateState;
+  onRetry: () => void; id: string; privateSearch?: CommandPalettePrivateState; community?: CommandPaletteCommunityState;
 }) {
   const own = privateSearch?.validQuery ? privateStatus(privateSearch) : null;
   const privatePending = !!own?.pending, privateIncomplete = !!own?.incomplete, privateUnavailable = !!own?.unavailable;
+  const communityPending = community?.phase === "debouncing" || community?.phase === "loading";
+  const communityFailed = community?.phase === "error";
   const result = count ? `${count} results, ${enabled} available.`
     : privateSearch && (!privateSearch.validQuery || privatePending || privateIncomplete) ? "No public matches."
-      : query.trim() ? "No matching results. Try another word." : "No results available.";
+      : communityPending || communityFailed ? "No page or guide matches yet."
+        : query.trim() ? "No matching results. Try another word." : "No results available.";
   const guides = status === "loading" ? " Loading guide availability."
     : status === "unavailable" ? " Guide availability is unavailable." : "";
   return <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
     <p id={id} role="status" aria-live="polite" aria-atomic="true" className="text-caption text-text-muted">
       {result}{guides}{privateSearch && !privateSearch.validQuery ? " Enter at least 2 valid characters to search your library."
         : privatePending ? " Searching your library…" : privateUnavailable ? " Some library results are unavailable." : ""}
+      {communityPending ? " Searching community builds…" : communityFailed ? " Community builds are unavailable." : ""}
     </p>
     {status === "unavailable" ? <button type="button" onClick={onRetry}
       className="min-h-11 rounded-md px-3 text-caption font-semibold text-accent underline
@@ -184,7 +194,19 @@ function PaletteStatus({ count, enabled, query, status, onRetry, id, privateSear
     {privateUnavailable ? <button type="button" onClick={privateSearch!.onRetry}
       className="min-h-11 rounded-md px-3 text-caption font-semibold text-accent underline
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Retry your library search</button> : null}
+    {communityFailed ? <button type="button" onClick={community!.onRetry}
+      className="min-h-11 rounded-md px-3 text-caption font-semibold text-accent underline
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Retry community builds</button> : null}
   </div>;
+}
+
+const OPEN_COMMUNITY: CommandSearchItem = { id: "action:community-builds", group: "actions", label: "Open Community builds", href: "/community" };
+function communityGroup(state?: CommandPaletteCommunityState): PaletteGroup | null {
+  if (!state || state.phase === "idle") return null;
+  const detail = state.phase === "error" ? "Community builds are unavailable right now."
+    : state.phase !== "ready" ? "Searching community builds…"
+      : !state.items.length ? "No matching community builds." : state.hasMore ? "More matches on Community builds." : undefined;
+  return { id: "community-builds", label: "Community builds", items: state.phase === "ready" ? state.items : [], detail };
 }
 
 const PRIVATE_GROUPS = [
@@ -253,8 +275,8 @@ function PaletteFooter({ onChoose }: { onChoose: Choose }) {
 
 /** Lazy mounted dialog; its caller owns navigation, guards and handoffs.
  * Example: <CommandPalette {...catalogOptions} guideItems={guides} onSelect={select} {...callbacks} />. */
-export function CommandPalette({ navigation, settingsTabs, signedIn, initialQuery = "", controlledQuery, privateSearch, scope = "all",
-  guideItems, guidesStatus, onRetryGuides, onClose, onSelect, returnFocusRef }: CommandPaletteProps) {
+export function CommandPalette({ navigation, settingsTabs, signedIn, initialQuery = "", controlledQuery, privateSearch, community,
+  searchPageHref, scope = "all", guideItems, guidesStatus, onRetryGuides, onClose, onSelect, returnFocusRef }: CommandPaletteProps) {
   const base = useId(), input = useRef<HTMLInputElement>(null), list = useRef<HTMLDivElement>(null);
   const selected = useRef(false);
   const [localQuery, setQuery] = useState(() => boundedDraft(initialQuery));
@@ -263,20 +285,29 @@ export function CommandPalette({ navigation, settingsTabs, signedIn, initialQuer
   const catalog = useMemo(() => createCommandCatalog({ navigation, settingsTabs, signedIn }),
     [navigation, settingsTabs, signedIn]);
   const publicGroups = useMemo(() => searchCommands([...catalog, ...guideItems], query,
-    scope === "guides" ? GUIDE_GROUPS : undefined), [catalog, guideItems, query, scope]);
+    scope === "guides" ? COMMAND_GUIDE_GROUPS : undefined), [catalog, guideItems, query, scope]);
   const personal = scope === "all" && signedIn ? privateSearch : undefined;
   const ownGroups = privateGroups(personal);
   const libraries = personal ? personal.games ? [...LIBRARY_ITEMS, GAMES_LIBRARY] : LIBRARY_ITEMS : [];
+  const publicCommunity = signedIn ? null : communityGroup(community), withCommunity = publicCommunity ? [publicCommunity] : [];
+  const guideMatch = publicGroups.some(group => COMMAND_GUIDE_GROUPS.includes(group.id) && group.items.some(canChoose));
+  const more: CommandSearchItem[] = [
+    ...(publicCommunity && (community?.phase === "error" || community?.hasMore) ? [OPEN_COMMUNITY] : []),
+    ...(searchPageHref && guideMatch ? [{ id: "search:all", group: "actions" as const, label: "See all guide results",
+      description: "Published guides for this search on one page", href: searchPageHref }] : []),
+  ];
   // Reserve every server row and the fixed library actions first. Only static
-  // public rows are clipped; private rows are never normalized or re-scored.
-  let remaining = COMMAND_RESULTS_MAX - ownGroups.reduce((count, group) => count + group.items.length, 0) - libraries.length;
+  // public rows are clipped; private and Community rows are never normalized or re-scored.
+  let remaining = COMMAND_RESULTS_MAX - [...ownGroups, ...withCommunity].reduce((count, group) => count + group.items.length, 0)
+    - libraries.length - more.length;
   const groups: PaletteGroup[] = publicGroups.flatMap(group => {
     const items = group.items.slice(0, Math.max(0, remaining)); remaining -= items.length;
     return items.length ? [{ ...group, items }] : [];
   });
-  groups.push(...ownGroups);
+  groups.push(...ownGroups, ...withCommunity);
   const matchingRows = groups.flatMap(group => group.items);
   if (libraries.length) groups.push({ id: "your-library", label: "Your library", items: libraries });
+  if (more.length) groups.push({ id: "more", label: "More", items: more });
   const rows = groups.flatMap(group => group.items), enabled = rows.filter(canChoose);
   const active = enabled.find(item => item.id === activeId) ?? enabled[0];
   const activeDomId = active ? optionId(base, active.id) : undefined;
@@ -304,7 +335,7 @@ export function CommandPalette({ navigation, settingsTabs, signedIn, initialQuer
         }}
         onKeyDown={event => handlePaletteKey(event, { enabled, activeId, onActive: setActiveId, onChoose: choose })} />
       <PaletteStatus count={matchingRows.length} enabled={matchingRows.filter(canChoose).length} query={query} status={guidesStatus}
-        onRetry={onRetryGuides} id={`${base}-status`} privateSearch={personal} />
+        onRetry={onRetryGuides} id={`${base}-status`} privateSearch={personal} community={signedIn ? undefined : community} />
       <div ref={list} id={`${base}-list`} role="listbox" aria-label="Search results"
         className="relative max-h-[45dvh] min-w-0 space-y-1 overflow-y-auto overscroll-contain rounded-md">
         {groups.map(group => <ResultGroup key={group.id} group={group} base={base} activeId={active?.id ?? null}

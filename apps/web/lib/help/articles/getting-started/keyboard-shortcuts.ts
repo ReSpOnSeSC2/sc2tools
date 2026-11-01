@@ -35,7 +35,9 @@ const article: HelpArticle = {
       "Your race comes first in a matchup: **PvZ** means Protoss against Zerg; **ZvP** means Zerg against Protoss. You can also type **Protoss vs Zerg**. Include another matchup to change the guide search's starting matchup.",
       "A published guide can be opened. **Not enough games yet** means that guide is not ready to publish; its result stays visible but cannot be opened.",
       "**Guide availability unavailable** means Search could not check which guides are ready. Select **Retry guide availability** to check again. The other Search groups remain usable.",
+      "Select **See all guide results** to open every published guide for your search on one [results page](/search). Without JavaScript, the **Find a guide** form opens that page directly. The results page is not listed by search engines.",
     ] },
+    { type: "paragraph", text: "When you are not signed in, typing in the main Search also looks up **Community builds** whose title or author name has a word starting with your search, most votes first. Select **Open Community builds** for the full directory. Signed in, Search looks in your own library instead." },
     { type: "heading", text: "Keyboard reference", anchor: "keyboard-reference" },
     { type: "table", head: ["Key", "What it does"], rows: [
       ["Ctrl K / ⌘ K", "Open Search outside an editing field."],

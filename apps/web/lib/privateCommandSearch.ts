@@ -251,8 +251,9 @@ export function abortable<T>(promise: Promise<T>, signal: AbortSignal, late?: (v
     if (signal.aborted) cancel();
   });
 }
-/** Reads at most PRIVATE_COMMAND_SEARCH_BYTES of strict UTF-8 JSON, checking currency at every await. */
-export async function boundedJson(response: Response, signal: AbortSignal, assertCurrent: () => void): Promise<unknown> {
+/** Reads at most `maxBytes` (default PRIVATE_COMMAND_SEARCH_BYTES) of strict UTF-8 JSON, checking currency at every await. */
+export async function boundedJson(response: Response, signal: AbortSignal, assertCurrent: () => void,
+  maxBytes = PRIVATE_COMMAND_SEARCH_BYTES): Promise<unknown> {
   if (!response.body) return invalid();
   const reader = response.body.getReader(), decoder = new TextDecoder("utf-8", { fatal: true });
   const parts: string[] = []; let bytes = 0, consumed = false;
@@ -270,7 +271,7 @@ export async function boundedJson(response: Response, signal: AbortSignal, asser
       const brand = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), Symbol.toStringTag)?.get;
       if (!ArrayBuffer.isView(next.value) || brand?.call(next.value) !== "Uint8Array") return invalid();
       bytes += next.value.byteLength;
-      if (bytes > PRIVATE_COMMAND_SEARCH_BYTES) throw new PrivateCommandSearchError("response_too_large");
+      if (bytes > maxBytes) throw new PrivateCommandSearchError("response_too_large");
       parts.push(decoder.decode(next.value, { stream: true }));
     }
     parts.push(decoder.decode());
