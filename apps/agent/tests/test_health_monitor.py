@@ -298,6 +298,32 @@ def test_pushes_from_many_threads_never_lose_facts():
     assert row(seen[-1], "identity").sentence.startswith(f"{health.MAX_FAILURE_TIMES} games from the last week")
 
 
+def test_a_slow_older_recompute_never_overwrites_a_newer_snapshot(monkeypatch):
+    watched, clock, scheduler, seen = monitor()
+    watched.set_pairing(True)
+    watched.set_pending(1)
+    (_delay, older), = scheduler.calls
+    scheduler.calls.clear()
+    entered, release, real = threading.Event(), threading.Event(), health.evaluate
+
+    def slow(current, now):
+        if current.pending == 1:
+            entered.set()
+            release.wait(5)
+        return real(current, now)
+
+    monkeypatch.setattr(health, "evaluate", slow)
+    thread = threading.Thread(target=older)
+    thread.start()
+    assert entered.wait(5)
+    clock.now += 1
+    watched.set_pending(2)
+    scheduler.run()  # the newer recompute delivers first
+    release.set()
+    thread.join(5)  # the older one finishes last and must be dropped
+    assert seen[-1] == watched.snapshot() and row(seen[-1], "uploads").sentence == "Uploading 2 replays."
+
+
 def test_refresh_expires_old_failures_without_new_facts():
     watched, clock, scheduler, seen = monitor()
     watched.set_pairing(True)
