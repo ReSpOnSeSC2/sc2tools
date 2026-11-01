@@ -32,6 +32,12 @@ it("shows scoped game values and independently dated orders without fetching on 
   expect(screen.queryByText("View recorded order")).toBeNull();
   expect(calls.download).not.toHaveBeenCalled();
 });
+it("labels an applied opponent correction Corrected and your own check-in Planned", () => {
+  const latestGame = { ...row.latestGame!, buildPlanned: true, oppStrategyPlanned: true };
+  render(<table><tbody><tr><OpponentDetailCells row={{ ...row, latestGame }} columns={columns} /></tr></tbody></table>);
+  expect(screen.getByText("My actual build").parentElement?.textContent).toBe("My actual buildPlanned");
+  expect(screen.getByText("Opponent actual build").parentElement?.textContent).toBe("Opponent actual buildCorrected");
+});
 it("downloads only on explicit click and does not open the dossier row", async () => {
   calls.download.mockResolvedValue({ url: "https://synthetic.invalid/replay", filename: "synthetic.SC2Replay" });
   const rowOpen = vi.fn(), click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});

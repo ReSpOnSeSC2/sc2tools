@@ -252,7 +252,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
   },
   {
     id: "session", name: "Session record", group: "results",
-    summary: "A persistent scorecard for today's games and current MMR.",
+    summary: "A persistent scorecard for your current session's games and current MMR.",
     explanation: "The session HUD shows wins and losses, available region and MMR, and elapsed time when the session has a start time. It can include a small streak chip from two consecutive wins or losses. It reads the cloud's session summary, so it can appear as soon as the source connects without waiting for a new result. Confirm Start new session in Stream Dock → Game to count games from now and set a new clip timestamp mark. The sticky Dock header keeps W–L and available MMR change visible while you scroll.",
     example: { headline: "Session record · illustrative", lines: ["4W · 2L · 47m", "NA 4,200 · W2"] },
     appears: "When the overlay receives its session summary; stays visible as the session updates.",

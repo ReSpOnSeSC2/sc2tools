@@ -30,6 +30,22 @@ it("groups and searches real widget cards, filters enabled items, and keeps unkn
   expect(card.querySelector("code")!.textContent).not.toContain(token.token);
   fireEvent.click(within(card).getByRole("switch", { name: "Enable Session record" })); expect(props.onToggleWidget).toHaveBeenCalledWith("session", false);
 });
+it("explains Session record and Best answer beside their headings with their own terms", async () => {
+  const view = render(<WidgetList {...props} />);
+  const session = view.container.querySelector('[data-widget-id="session"]') as HTMLElement;
+  const best = view.container.querySelector('[data-widget-id="best-answer"]') as HTMLElement;
+  expect(within(session).getByRole("heading", { name: /^Session record$/ })).toBeTruthy();
+  expect(within(session).getByRole("button", { name: "About Session record" }).closest("h4")).toBeNull();
+  expect(within(session).getByText("A persistent scorecard for your current session's games and current MMR.")).toBeTruthy();
+  expect(within(view.container.querySelector('[data-widget-id="series"]') as HTMLElement).queryByRole("button", { name: /^About / })).toBeNull();
+  for (const [card, name, term] of [[session, "About Session record", "overlay-session"], [best, "About Best answer", "best-answer"]] as const) {
+    fireEvent.click(within(card).getByRole("button", { name }));
+    const opened = await screen.findByRole("dialog", { name });
+    expect((await within(opened).findByRole("link", { name: "Learn more" })).getAttribute("href")).toBe(`/help/glossary#${term}`);
+    fireEvent.keyDown(opened, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name })).toBeNull());
+  }
+});
 it("retains theme and Ghost data when adding the documented OBS URL-drop parameters", () => {
   const parsed = new URL(obsWidgetDropUrl("https://example.invalid/overlay/synthetic/widget/ghost-build?theme=abc#ghost=private", "Ghost", 640, 900));
   expect(parsed.searchParams.get("theme")).toBe("abc"); expect(parsed.searchParams.get("layer-height")).toBe("900"); expect(parsed.hash).toBe("#ghost=private");

@@ -150,19 +150,34 @@ export function analyzeSource(file, text) {
   // AuthContextLink still renders an anchor. Passing its classes through a
   // context-aware wrapper must not hide existing or new hand-rolled CTA debt.
   const linkTags = new Set(["a", "Link", "AuthContextLink"]);
+  // SortableTh renders a table header cell and passes its title to the sort button.
+  const headerTags = new Set(["th", "SortableTh"]);
+  const canonicalTags = [["@/components/auth/AuthContextLink", "AuthContextLink", linkTags], ["@/components/ui/SortableTh", "SortableTh", headerTags]];
   for (const statement of source.statements) {
-    if (!ts.isImportDeclaration(statement) || !isLiteral(statement.moduleSpecifier)
-      || statement.moduleSpecifier.text !== "@/components/auth/AuthContextLink") continue;
+    if (!ts.isImportDeclaration(statement) || !isLiteral(statement.moduleSpecifier)) continue;
+    const canonical = canonicalTags.find(([module]) => module === statement.moduleSpecifier.text);
+    if (!canonical) continue;
+    const [, exported, tags] = canonical;
     const bindings = statement.importClause?.namedBindings;
     if (bindings && ts.isNamedImports(bindings)) {
       for (const binding of bindings.elements) {
-        if ((binding.propertyName ?? binding.name).text === "AuthContextLink") linkTags.add(binding.name.text);
+        if ((binding.propertyName ?? binding.name).text === exported) tags.add(binding.name.text);
       }
-    } else if (bindings && ts.isNamespaceImport(bindings)) linkTags.add(`${bindings.name.text}.AuthContextLink`);
+    } else if (bindings && ts.isNamespaceImport(bindings)) tags.add(`${bindings.name.text}.${exported}`);
   }
   const bindings = declaredBindings(source);
   const { isShadowed } = bindings;
   const insideUi = file.startsWith("components/ui/");
+  const insideAnalyzer = file.startsWith("components/analyzer/");
+  // A title anywhere inside a header cell is hover-only text on that header,
+  // including JSX passed to a header tag's prop, such as SortableTh's info slot.
+  const insideHeaderCell = (element) => {
+    for (let at = element.parent; at; at = at.parent) {
+      if (ts.isJsxElement(at) && at.openingElement.tagName.getText(source) === "th") return true;
+      if (ts.isJsxAttribute(at) && headerTags.has(at.parent.parent.tagName.getText(source))) return true;
+    }
+    return false;
+  };
   const hexAllowed = HEX_ALLOWLIST.prefixes.some((prefix) => file.startsWith(prefix)) || HEX_ALLOWLIST.files.includes(file);
   const found = [];
   function report(rule, node) {
@@ -191,6 +206,10 @@ export function analyzeSource(file, text) {
     if (ts.isJsxAttribute(node) && node.name.getText(source) === "role" && !insideUi) {
       const value = stringValues(node.initializer, bindings);
       if (value.includes("dialog") || value.includes("alertdialog")) report("dialog-outside-ui", node.parent.parent);
+    }
+    if (ts.isJsxAttribute(node) && node.name.getText(source) === "title" && insideAnalyzer) {
+      const element = node.parent.parent;
+      if (headerTags.has(element.tagName.getText(source)) || insideHeaderCell(element)) report("analyzer-header-title", element);
     }
     if (ts.isPropertyAssignment(node) && propertyName(node.name) === "role" && !insideUi
       && stringValues(node.initializer, bindings).some((value) => value === "dialog" || value === "alertdialog")) report("dialog-outside-ui", node.parent);
@@ -230,7 +249,7 @@ export function aggregateViolations(violations) {
 
 export function validateBaseline(entries) {
   const known = new Set(["native-confirm-prompt", "dialog-outside-ui", "focus-without-ring", "small-arbitrary-text",
-    "hex-outside-visualization", "handrolled-link-button", "handrolled-accent-link"]);
+    "hex-outside-visualization", "handrolled-link-button", "handrolled-accent-link", "analyzer-header-title"]);
   const seen = new Set();
   if (!Array.isArray(entries)) throw new Error("ui-lint: baseline entries must be an array");
   for (const entry of entries) {

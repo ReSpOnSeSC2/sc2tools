@@ -31,7 +31,7 @@ function DetailValue({ row, column }: { row: Opp; column: OpponentColumnKey }) {
     case "avgGameLength": return row.duration?.samples ? <span title={`${row.duration.samples} games with a recorded duration`}>{opponentGameLength(row.duration.averageSec)}<span className="block text-micro text-text-dim">{row.duration.samples.toLocaleString()} measured</span></span> : "—";
     case "map": return game?.map || "—";
     case "myBuild": return game?.myBuild ? <span>{game.myBuild}{game.buildPlanned ? <span className="block text-micro text-text-dim">Planned</span> : null}</span> : "—";
-    case "opponentBuild": return game?.oppStrategy ? <span>{game.oppStrategy}{game.oppStrategyPlanned ? <span className="block text-micro text-text-dim">Planned</span> : null}</span> : "—";
+    case "opponentBuild": return game?.oppStrategy ? <span>{game.oppStrategy}{game.oppStrategyPlanned ? <span className="block text-micro text-text-dim">Corrected</span> : null}</span> : "—";
     case "macroBreakdown": return game ? gameLink(game.gameId, "#macro", numeric(game.macroScore) ? `${Math.round(game.macroScore)}/100 · Details` : "View breakdown", `Open your macro breakdown for the latest game vs ${name}`) : "—";
     case "topMacroLeaks": return game?.top3Leaks?.length ? game.top3Leaks.slice(0, 3).join(" · ") : "—";
     case "avgMacroScore": return row.macro?.samples && numeric(row.macro.average) ? <span>{Math.round(row.macro.average)}/100<span className="block text-micro text-text-dim">{row.macro.samples.toLocaleString()} measured</span></span> : "—";

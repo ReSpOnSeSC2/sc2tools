@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type MouseEvent } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Download, RefreshCcw } from "lucide-react";
 import { apiCall, useApi } from "@/lib/clientApi";
@@ -16,6 +16,8 @@ import { checkinsText } from "@/lib/buildIntent";
 import { Card, Skeleton, WrBar } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
 import { usePersistentSort, SortableTh } from "@/components/ui/SortableTh";
+import { InfoTip } from "@/components/ui/InfoTip";
+import { Term } from "@/components/ui/Term";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
 import { BuildEditorModal } from "./BuildEditorModal";
@@ -198,21 +200,26 @@ export function BuildsTab({ search: controlledSearch, onSearchChange }: { search
                   numeric cols don't grab equal shares of leftover space
                   and push WR off the right edge — see StrategiesTabBuildVs
                   for the same treatment. */}
-              <table className={`w-full ${showPlan ? "min-w-[46rem]" : "min-w-[40rem]"} table-fixed text-sm`}>
+              {/* WR and W/L split are wider than their values so each
+                  header fits its 44px help button beside the label. */}
+              <table className={`w-full ${showPlan ? "min-w-[50rem]" : "min-w-[44rem]"} table-fixed text-sm`}>
                 <colgroup>
                   <col />
                   <col style={{ width: "3.5rem" }} />
                   <col style={{ width: "3.5rem" }} />
                   <col style={{ width: "4.5rem" }} />
-                  <col style={{ width: "4.5rem" }} />
+                  <col style={{ width: "7rem" }} />
                   {showPlan ? <col style={{ width: "6rem" }} /> : null}
                   <col style={{ width: "8rem" }} />
-                  <col style={{ width: "8rem" }} />
+                  <col style={{ width: "9.5rem" }} />
                 </colgroup>
                 <thead className="bg-bg-elevated">
                   <tr>
                     {columns.map(column => column.strength ? <StrengthHeader key={String(column.key)} sort={sort} />
-                      : column.sortKey ? <SortableTh key={String(column.key)} col={column.sortKey} label={column.label} {...sort} align={column.sortKey === "name" ? "left" : "right"} />
+                      : column.sortKey ? <SortableTh key={String(column.key)} col={column.sortKey} label={column.label} {...sort} align={column.sortKey === "name" ? "left" : "right"}
+                        info={column.key === "winRate" ? <InfoTip termId="build-stats-win-rate" label={column.label} /> : undefined} />
+                      : column.key === "wlSplit" ? <th key={String(column.key)} aria-label={column.label} className="px-3 py-1 text-left text-micro uppercase text-text-dim">
+                        <span className="flex items-center gap-1">{column.label}<InfoTip termId="build-record" label={column.label} /></span></th>
                       : <th key={String(column.key)} className="px-3 py-2 text-left text-micro uppercase text-text-dim">{column.label}</th>)}
                   </tr>
                 </thead>
@@ -295,6 +302,16 @@ function MatchupChips({ counts, selected, onSelect }: {
   </div>;
 }
 
+/** Spread on a wrapper: clicks on its help control, or inside the popover
+ * portalled outside it, stay out of the clickable row that opens the build
+ * editor; a click on the note's own text still opens it. */
+const STAY_IN_CELL = {
+  onClick: (event: MouseEvent<HTMLElement>) => {
+    const target = event.target as Element;
+    if (target.closest("button") || !event.currentTarget.contains(target)) event.stopPropagation();
+  },
+};
+
 /** "incl. N check-ins" — games counted only because of a confirmed check-in. */
 function CheckinsNote({ count, inline = false }: { count?: number; inline?: boolean }) {
   const text = checkinsText(count);
@@ -303,11 +320,11 @@ function CheckinsNote({ count, inline = false }: { count?: number; inline?: bool
     <span
       className={[
         "text-micro text-text-dim",
-        inline ? "ml-2" : "block",
+        inline ? "ml-2 inline-flex" : "flex",
       ].join(" ")}
-      title="Games you checked in to this build that the replay classified as something else"
+      {...STAY_IN_CELL}
     >
-      {text}
+      <Term id="counted-checkins" label="Counted check-ins">{text}</Term>
     </span>
   );
 }

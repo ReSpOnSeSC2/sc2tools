@@ -122,6 +122,54 @@ test("context-aware auth anchors retain link debt through direct, aliased and na
   assert.equal(compareBaseline(aggregateViolations(otherFile), baseline).added.length, 1);
 });
 
+test("native titles on analyzer header cells are caught, including row headers, expressions and nested elements", () => {
+  const file = "components/analyzer/Example.tsx";
+  assert.deepEqual(rules(`<th scope="col" title="Gross MMR gained from wins">Taken</th>`, file), ["analyzer-header-title"]);
+  assert.deepEqual(rules(`<th scope="row" title={name}>{name}</th>`, file), ["analyzer-header-title"]);
+  assert.deepEqual(rules(`<th title="Empty" />`, file), ["analyzer-header-title"]);
+  assert.deepEqual(rules(`<th><span className="truncate" title={opp}>{opp}</span></th>`, file), ["analyzer-header-title"]);
+  assert.deepEqual(rules(`<th>{rows.map((row) => <Badge key={row.id} title={row.hint}>{row.label}</Badge>)}</th>`, file), ["analyzer-header-title"]);
+});
+
+test("header titles are only checked under components/analyzer, whatever other exceptions apply", () => {
+  const source = `<th title="Wins">W</th>`;
+  assert.deepEqual(rules(source, "components/analyzer/charts/NetMmrRaceOpponentsModal.tsx"), ["analyzer-header-title"]);
+  assert.deepEqual(rules(source, "components/example.tsx"), []);
+  assert.deepEqual(rules(source, "app/community/opponents/page.tsx"), []);
+  assert.deepEqual(rules(`<th title="Wins" className="outline-none">W</th>`, "components/analyzer/Example.tsx"),
+    ["analyzer-header-title", "focus-without-ring"]);
+});
+
+test("SortableTh titles are caught through direct, aliased and namespace names", () => {
+  const source = `import { SortableTh as Th } from '@/components/ui/SortableTh';
+    import * as Sort from '@/components/ui/SortableTh';
+    const head = <><SortableTh col="wins" label="W" title="Wins" /><Th col="losses" label="L" title="Losses" />
+      <Sort.SortableTh col="total" label="G" title="Games" /></>;`;
+  assert.deepEqual(rules(source, "components/analyzer/Example.tsx"), ["analyzer-header-title", "analyzer-header-title", "analyzer-header-title"]);
+  assert.deepEqual(rules(`<Th col="wins" label="W" title="Wins" />`, "components/analyzer/Example.tsx"), []);
+  assert.deepEqual(rules(`<SortableTh col="wr" label="WR" info={<Link href="/help/x" title="How WR is computed">?</Link>} />`,
+    "components/analyzer/Example.tsx"), ["analyzer-header-title"]);
+});
+
+test("help controls, visible text and titles outside header cells stay valid", () => {
+  const file = "components/analyzer/Example.tsx";
+  assert.deepEqual(rules(`<SortableTh col="winRate" label="WR" info={<InfoTip termId="build-stats-win-rate" label="WR" />} />`, file), []);
+  assert.deepEqual(rules(`<th aria-label="W/L split"><span>W/L split<InfoTip termId="build-record" label="W/L split" /></span></th>`, file), []);
+  assert.deepEqual(rules(`<th><span className="sr-only">Wins</span><span aria-hidden>W</span></th>`, file), []);
+  assert.deepEqual(rules(`<tr><td title="Recorded check-ins">2</td></tr>`, file), []);
+  assert.deepEqual(rules(`<dt title="Actions per minute">APM</dt>`, file), []);
+});
+
+test("header-title allowances are counted per file and accepted by baseline validation", () => {
+  const file = "components/analyzer/Example.tsx";
+  const one = analyze(`<th title="Wins">W</th>`, file);
+  const baseline = aggregateViolations(one);
+  assert.doesNotThrow(() => validateBaseline(baseline));
+  assert.equal(compareBaseline(aggregateViolations([...one, ...one]), baseline).added.length, 1);
+  assert.equal(compareBaseline(aggregateViolations(analyze(`<th title="Wins">W</th>`, "components/analyzer/Other.tsx")), baseline).added.length, 1);
+  assert.notEqual(analyze(`<th title="Losses">L</th>`, file)[0].signature, one[0].signature);
+});
+
 test("signatures ignore comments, line numbers, formatting and literal quote style", () => {
   const first = analyze(`window.confirm("Delete?");`)[0];
   const second = analyze(`\n\n // comment\n window . confirm ( 'Delete?' ) ;`)[0];

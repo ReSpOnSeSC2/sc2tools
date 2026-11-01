@@ -10,6 +10,7 @@ import { type GhostBuildConfig } from "@/lib/ghostBuild";
 import { appendGhostVoiceToUrl, GHOST_VOICE_STORAGE_KEY } from "@/lib/ghostVoice";
 import { Toggle } from "@/components/ui/Toggle";
 import { Badge } from "@/components/ui/Badge";
+import { InfoTip } from "@/components/ui/InfoTip";
 import { UrlRow } from "./OverlayUrlRow";
 import { WIDGETS } from "./overlayWidgetMeta";
 import type { OverlayProfile } from "@/lib/overlayProfile";
@@ -72,7 +73,7 @@ export function WidgetList({ token, origin, theme, ghostConfig, busy, onToggleWi
         const { width, height } = guide.recommendedSize, dropUrl = obsWidgetDropUrl(url, guide.name, width, height);
         return <article key={guide.id} data-widget-id={guide.id} className={`min-w-0 rounded-xl border bg-bg-surface p-3 ${highlight === guide.id ? "border-accent ring-2 ring-accent" : "border-border"}`}>
           <Image src={`/images/widget-examples/${guide.id}.webp`} alt={`${guide.name} illustrative example`} width={1400} height={900} sizes="(min-width:1280px) 40vw, 85vw" className="mb-3 aspect-[14/9] w-full rounded-lg object-cover" />
-          <div className="flex flex-wrap items-start justify-between gap-2"><h4 className="text-body font-semibold">{guide.name}</h4>{metadata.urlArmed ? <Badge variant="cyan">Practice enabled</Badge> : <Toggle checked={isOn} disabled={busy} onChange={on => onToggleWidget(guide.id, on)} label={`Enable ${guide.name}`} />}</div>
+          <div className="flex flex-wrap items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-1"><h4 className="text-body font-semibold">{guide.name}</h4>{guide.id === "best-answer" ? <InfoTip termId="best-answer" label={guide.name} /> : guide.id === "session" ? <InfoTip termId="overlay-session" label={guide.name} /> : null}</div>{metadata.urlArmed ? <Badge variant="cyan">Practice enabled</Badge> : <Toggle checked={isOn} disabled={busy} onChange={on => onToggleWidget(guide.id, on)} label={`Enable ${guide.name}`} />}</div>
           <p className="mt-2 break-words text-caption text-text-muted">{guide.summary}</p><div className="my-2 flex flex-wrap items-center justify-between gap-2"><p className="font-mono text-caption tabular-nums">Recommended {width} × {height}</p>{onDurationChange ? <OverlayWidgetDisplay id={guide.id} name={guide.name} durationSec={profile?.widgetOptions[guide.id]?.durationSec} disabled={profileSaving} onChange={seconds => onDurationChange(guide.id, seconds)} /> : null}</div>
           <WidgetPresenceBadge widget={guide.id} enabled={isOn} />
           {guide.id === "ghost-build" ? <div className="my-3 space-y-2 text-caption text-text-muted"><p>{Object.keys(ghostConfig.slots).length}/9 matchups assigned. Account assignments update this permanent URL automatically.</p><label className="flex items-center gap-2"><input type="checkbox" checked={ghostVoice} onChange={event => { const on = event.target.checked; setGhostVoice(on); try { localStorage.setItem(GHOST_VOICE_STORAGE_KEY, on ? "1" : "0"); } catch { /* Still works this visit. */ } }} />Voice coach (copy again after changing)</label></div> : null}
