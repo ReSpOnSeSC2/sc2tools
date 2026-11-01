@@ -171,3 +171,74 @@ describe("authenticated replay-library routes", () => {
     expect(built.users.setReplaySharing).toHaveBeenCalledTimes(1);
   });
 });
+
+/** A replay library that serves only quick search's recent games. */
+const recentLibrary = (impl) => ({
+  list: jest.fn(async () => { throw new Error("list must not run"); }),
+  listRecent: jest.fn(impl || (async () => ({
+    items: [{ gameId: "g-1", map: "Alcyone LE", opponent: { displayName: "Rival" } }],
+    sourceGames: [{ gameId: "g-1", opponent: { toonHandle: "private-opponent-handle" } }],
+    nextCursor: null,
+    hasMore: false,
+  }))),
+});
+
+describe("quick search's recent games (ADR 0069 amendment)", () => {
+  test("window=recent reads the latest games and enrich=none makes no VOD or SC2Pulse lookup", async () => {
+    const built = testApp({ replayLibrary: recentLibrary() });
+    const res = await request(built.app)
+      .get("/v1/replays?search=Rival&limit=5&sort=date_desc&enrich=none&window=recent")
+      .set("Authorization", "Bearer test")
+      .expect(200);
+    expect(built.replayLibrary.listRecent).toHaveBeenCalledWith(
+      "owner-id",
+      expect.objectContaining({ search: "Rival", limit: "5", sort: "date_desc" }),
+    );
+    expect(built.replayLibrary.list).not.toHaveBeenCalled();
+    expect(built.gameVods.resolveForGames).not.toHaveBeenCalled();
+    expect(res.body.items).toEqual([expect.objectContaining({ gameId: "g-1", streams: [] })]);
+    expect(res.body.page).toEqual({ nextCursor: null, hasMore: false });
+    expect(JSON.stringify(res.body)).not.toContain("private-opponent-handle");
+  });
+
+  test("only the exact strings opt in, so the default path still enriches", async () => {
+    const built = testApp();
+    for (const query of ["enrich=NONE&window=Recent", "enrich[]=none&window[]=recent", "enrich=&window="]) {
+      await request(built.app).get(`/v1/replays?${query}`).set("Authorization", "Bearer test").expect(200);
+    }
+    expect(built.replayLibrary.list).toHaveBeenCalledTimes(3);
+    expect(built.gameVods.resolveForGames).toHaveBeenCalledTimes(3);
+  });
+
+  test("window=recent refuses a cursor or an oldest-first sort before reading", async () => {
+    const built = testApp({ replayLibrary: recentLibrary() });
+    for (const query of ["cursor=abc", "cursor=", "sort=date_asc"]) {
+      const res = await request(built.app)
+        .get(`/v1/replays?window=recent&search=Rival&${query}`)
+        .set("Authorization", "Bearer test")
+        .expect(400);
+      expect(res.body.error.code).toBe("bad_request");
+    }
+    expect(built.replayLibrary.listRecent).not.toHaveBeenCalled();
+  });
+
+  test("a failed read answers a fixed code, never the database message", async () => {
+    const deadline = testApp({ replayLibrary: recentLibrary(async () => {
+      throw Object.assign(new Error("operation on /Rival/i exceeded time limit"), { code: 50, codeName: "MaxTimeMSExpired" });
+    }) });
+    const late = await request(deadline.app)
+      .get("/v1/replays?window=recent&enrich=none&search=Rival")
+      .set("Authorization", "Bearer test")
+      .expect(503);
+    expect(late.body.error.code).toBe("replay_search_deadline");
+    expect(JSON.stringify(late.body)).not.toContain("Rival");
+
+    const broken = testApp({ replayLibrary: recentLibrary(async () => { throw new Error("cannot read /Rival/i"); }) });
+    const failed = await request(broken.app)
+      .get("/v1/replays?window=recent&enrich=none&search=Rival")
+      .set("Authorization", "Bearer test")
+      .expect(503);
+    expect(failed.body.error.code).toBe("replay_search_unavailable");
+    expect(JSON.stringify(failed.body)).not.toContain("Rival");
+  });
+});

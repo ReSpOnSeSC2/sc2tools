@@ -3,6 +3,9 @@
 const express = require("express");
 const { parseFilters } = require("../util/parseQuery");
 
+// enrich=none answers without VOD, channel or SC2Pulse lookups (ADR 0069, 2026-11-01 amendment).
+const NO_VODS = Object.freeze({ configuredPlatforms: [], linksByGameId: Object.freeze({}) });
+
 /**
  * Authenticated replay-library and sharing-control routes. Authentication is
  * applied per route so this router can later host the explicitly shared read
@@ -59,16 +62,12 @@ function buildReplaysRouter(deps) {
   router.get("/replays", deps.auth, async (req, res, next) => {
     try {
       const auth = requireAuth(req);
-      const query = parseReplayListQuery(req.query);
+      const query = parseReplayListQuery(req.query), mode = replayListMode(req.query);
       const [page, profile] = await Promise.all([
-        deps.replayLibrary.list(auth.userId, query),
+        listReplays(deps.replayLibrary, auth.userId, query, mode),
         deps.users.getProfile(auth.userId),
       ]);
-      const vods = await resolveVods(
-        deps.gameVods,
-        auth.userId,
-        page.sourceGames,
-      );
+      const vods = mode.enrich === "none" ? NO_VODS : await resolveVods(deps.gameVods, auth.userId, page.sourceGames);
       privateNoStore(res);
       res.json({
         profile: playerProfile(
@@ -107,6 +106,43 @@ function parseReplayListQuery(raw) {
     matchup: firstQueryValue(query.matchup),
     sort: firstQueryValue(query.sort),
   };
+}
+
+/**
+ * Quick search's read options. Only the exact strings opt in; anything else,
+ * arrays included, keeps the route's default behaviour.
+ * Example: replayListMode({ window: "recent", enrich: "none" }).
+ * @param {Record<string, unknown>} raw
+ * @returns {{window: "recent"|"all", enrich: "none"|"default"}}
+ */
+function replayListMode(raw) {
+  const query = raw && typeof raw === "object" ? raw : {};
+  return {
+    window: query.window === "recent" ? "recent" : "all",
+    enrich: query.enrich === "none" ? "none" : "default",
+  };
+}
+
+/**
+ * window=recent reads one newest-first page of the latest games. Its failures
+ * become fixed errors: a database message can echo the search filter.
+ * @param {import('../services/replayLibrary').ReplayLibraryService} replayLibrary
+ * @param {string} userId
+ * @param {ReturnType<typeof parseReplayListQuery>} query
+ * @param {ReturnType<typeof replayListMode>} mode
+ */
+async function listReplays(replayLibrary, userId, query, mode) {
+  if (mode.window !== "recent") return replayLibrary.list(userId, query);
+  if (query.cursor !== undefined || query.sort === "date_asc") {
+    throw httpError(400, "bad_request", "window=recent reads one newest-first page.");
+  }
+  try {
+    return await replayLibrary.listRecent(userId, query);
+  } catch (err) {
+    const failure = /** @type {{code?: unknown, codeName?: unknown}} */ (err || {});
+    const deadline = failure.code === 50 || failure.codeName === "MaxTimeMSExpired";
+    throw httpError(503, deadline ? "replay_search_deadline" : "replay_search_unavailable", "Recent games are unavailable.");
+  }
 }
 
 /** @param {unknown} value */
@@ -194,6 +230,7 @@ module.exports = {
   buildReplaysRouter,
   _internals: {
     parseReplayListQuery,
+    replayListMode,
     pageEnvelope,
     linksFor,
   },

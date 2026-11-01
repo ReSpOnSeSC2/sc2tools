@@ -1,7 +1,7 @@
 "use strict";
 
-const express = require("express");
 const rateLimitModule = require("express-rate-limit");
+const { buildCommunityQuickSearchRouter } = require("./communityQuickSearch");
 const PUBLIC_COMMUNITY_CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=600";
 
 const rateLimit =
@@ -46,7 +46,8 @@ const rateLimit =
  * }} deps
  */
 function buildCommunityRouter(deps) {
-  const router = express.Router();
+  // The quick-search route answers only view=quick and passes everything else on.
+  const router = buildCommunityQuickSearchRouter(deps.community);
   // Profile capabilities must be admitted on every read, independently of a
   // best-effort purge. Content-only legacy routers retain their shared cache.
   const buildCacheControl = deps.publicPlayers ? "no-store" : PUBLIC_COMMUNITY_CACHE_CONTROL;

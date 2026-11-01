@@ -4,6 +4,7 @@ const { MongoClient } = require("mongodb");
 const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
 const { ensureGuideIndexes, startBackgroundIndexBuilds } = require("./guideIndexes");
 const { PRIVATE_SEARCH_COMMENT } = require("../services/privateSearchReader");
+const { COMMUNITY_SEARCH_COMMENT, REPLAY_SEARCH_COMMENT } = require("../middleware/searchQueryPrivacy");
 const { startPrivateSearchIndex } = require("./privateSearchIndexes");
 const { PROTOCOL_VERSION, MAINTENANCE_VERSION } = require("../services/gameStatsMaintenance");
 const { credentialReadinessCapability } = require("../services/deviceCredentialTopology");
@@ -204,6 +205,9 @@ const SLOW_QUERY_IGNORED_COMMANDS = new Set([
   "getParameter",
 ]);
 
+// Reads whose filter or pipeline holds typed search text: their failures log a code only.
+const PRIVATE_COMMENTS = new Set([PRIVATE_SEARCH_COMMENT, REPLAY_SEARCH_COMMENT, COMMUNITY_SEARCH_COMMENT]);
+
 /**
  * Wire the driver's command-monitoring events into a slow-query log.
  * ``commandStarted`` carries the command document (whose first key's
@@ -231,7 +235,7 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
     targets.set(
       ev.requestId,
       { collection: typeof target === "string" ? target : "",
-        private: ev.command?.comment === PRIVATE_SEARCH_COMMENT },
+        private: PRIVATE_COMMENTS.has(ev.command?.comment) },
     );
     // Bound the map so a burst of long-running commands can't grow it
     // unchecked if a terminal event is ever missed.

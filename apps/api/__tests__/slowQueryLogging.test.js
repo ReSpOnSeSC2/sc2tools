@@ -137,3 +137,18 @@ describe("attachSlowQueryLogging", () => {
     expect(JSON.stringify(logger.warns)).not.toContain("private-name");
   });
 });
+
+describe("attachSlowQueryLogging and typed search (ADR 0069 amendment)", () => {
+  test.each([
+    ["aggregate", "games", "sc2tools-replay-search-v1"],
+    ["find", "games", "sc2tools-replay-search-v1"],
+    ["aggregate", "communityBuilds", "sc2tools-community-search-v1"],
+  ])("a failed %s on %s marked as a typed search keeps only a fixed code", (commandName, collection, comment) => {
+    const client = new EventEmitter(), logger = makeLogger();
+    attachSlowQueryLogging(client, logger, 100);
+    client.emit("commandStarted", { requestId: 7, commandName, command: { [commandName]: collection, comment, filter: { map: /typed-text/i } } });
+    client.emit("commandFailed", { requestId: 7, commandName, duration: 10, failure: new Error("bad regex /typed-text/i") });
+    expect(logger.warns).toEqual([{ msg: "mongo_command_failed",
+      fields: { commandName, collection, durationMs: 10, code: "mongo_command_failed" } }]);
+  });
+});

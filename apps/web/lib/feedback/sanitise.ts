@@ -16,6 +16,11 @@ const TOKEN_PAGE_SEGMENT = /^\/(overlay|dock)\/[^/?#]+/iu;
 const SENSITIVE_QUERY_KEY = /(authorization|credential|key|secret|signature|token)/iu;
 const OAUTH_CALLBACK_PATH = /^\/v1\/integrations\/(?:twitch|kick|youtube)\/callback\/?$/iu;
 const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set(["code", "state", "error", "error_description", "error_uri"]);
+// Typed search text: quick search's recent games and signed-out Community search (ADR 0069 amendment).
+const SEARCH_QUERY_ROUTES = [
+  { path: /^\/v1\/replays\/?$/iu, key: /^search(?:\[|$)/iu },
+  { path: /^\/v1\/community\/builds\/?$/iu, key: /^q(?:\[|$)/iu },
+];
 
 /** Longest stored page path; mirrors the API's cap. */
 export const PAGE_PATH_MAX = 200;
@@ -34,7 +39,8 @@ function cap(value: string, max: number): string {
  * a usable path.
  *
  * Example: `sanitiseRequestPath("https://api.sc2tools.com/v1/multichat/abc/config?token=x&limit=5")`
- * → "/v1/multichat/[redacted]/config?token=%5Bredacted%5D&limit=5".
+ * → "/v1/multichat/[redacted]/config?token=%5Bredacted%5D&limit=5"; typed search text in
+ * "/v1/replays?search=…" and "/v1/community/builds?q=…" is redacted the same way.
  */
 export function sanitiseRequestPath(raw: string): string {
   let parsed: URL;
@@ -48,8 +54,10 @@ export function sanitiseRequestPath(raw: string): string {
   if (/^\/v1\/search\/quick\/?$/iu.test(parsed.pathname)) return "/v1/search/quick";
   const path = parsed.pathname.replace(CREDENTIAL_PATH_SEGMENT, "/$1/[redacted]");
   const isOauthCallback = OAUTH_CALLBACK_PATH.test(parsed.pathname);
+  const searchKey = SEARCH_QUERY_ROUTES.find(route => route.path.test(parsed.pathname))?.key;
   for (const key of new Set(parsed.searchParams.keys())) {
-    if (SENSITIVE_QUERY_KEY.test(key) || (isOauthCallback && OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS.has(key.toLowerCase()))) {
+    if (SENSITIVE_QUERY_KEY.test(key) || searchKey?.test(key)
+      || (isOauthCallback && OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS.has(key.toLowerCase()))) {
       parsed.searchParams.set(key, "[redacted]");
     }
   }

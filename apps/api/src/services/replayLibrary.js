@@ -18,6 +18,7 @@ const {
   opponentDetectorLabelMatch,
   ownerBuildFlags,
 } = require("./buildIntentReaders");
+const { REPLAY_SEARCH_COMMENT } = require("../middleware/searchQueryPrivacy");
 
 // A replay-library page is a human-facing table, not an analysis corpus.
 // A modest default keeps first paint quick; the hard ceiling prevents a
@@ -25,6 +26,12 @@ const {
 const REPLAY_LIBRARY_LIST_DEFAULT = 50;
 const REPLAY_LIBRARY_LIST_LIMIT = 100;
 const REPLAY_LIBRARY_SEARCH_MAX_CHARS = 100;
+// Quick search's recent-games read examines only the owner's newest games, on
+// the {userId, date, _id} index that boot builds, under a deadline (ADR 0069,
+// 2026-11-01 amendment). Hidden rows count toward the window.
+const REPLAY_LIBRARY_RECENT_WINDOW = 1000;
+const REPLAY_LIBRARY_RECENT_DEADLINE_MS = 1000;
+const REPLAY_LIBRARY_RECENT_INDEX = Object.freeze({ userId: 1, date: -1, _id: -1 });
 
 const RACE_LETTERS = new Set(["P", "T", "Z", "R"]);
 // Every region label the global filter accepts, PTR included, so a
@@ -145,7 +152,7 @@ class ReplayLibraryService {
     const match = cursor ? { $and: [summaryMatch, { $or: replayCursorContinuationBranches(cursor) }] } : summaryMatch;
     /** @type {[Array<Record<string, any>>, Record<string, any>]} */
     const [rows, overview] = await Promise.all([this.db.games
-      .find(match, { projection: REPLAY_LIBRARY_PROJECTION })
+      .find(match, { projection: REPLAY_LIBRARY_PROJECTION, ...searchComment(opts.search, view) })
       .sort(
         sort === "date_asc"
           ? { date: 1, _id: 1 }
@@ -165,6 +172,46 @@ class ReplayLibraryService {
       hasMore,
       sourceGames: page.map((row) => serializeReplayVodSource(row, view)),
       ...overview,
+    };
+  }
+
+  /**
+   * Quick search's recent games: the owner's newest REPLAY_LIBRARY_RECENT_WINDOW
+   * games, newest first, then the owner view's usual filters, result, matchup and
+   * search, at most `limit` rows. One page only: no cursor, summary or sort.
+   * Example: listRecent(userId, { search: "Alcyone", limit: 5 }).
+   *
+   * @param {string} userId
+   * @param {{
+   *   filters?: import('../util/parseQuery').GlobalFilters,
+   *   result?: unknown, matchup?: unknown, search?: unknown, limit?: unknown,
+   * }} [opts]
+   * @returns {Promise<{items: Array<Record<string, any>>, nextCursor: null, hasMore: boolean, sourceGames: Array<Record<string, any>>}>}
+   */
+  async listRecent(userId, opts = {}) {
+    const ownerId = cleanOwnerId(userId);
+    if (!ownerId) return { items: [], nextCursor: null, hasMore: false, sourceGames: [] };
+    const limit = clampListLimit(opts.limit);
+    /** @type {Array<Record<string, any>>} */
+    const rows = await this.db.games.aggregate([
+      { $match: { userId: ownerId } },
+      { $sort: { date: -1, _id: -1 } },
+      { $limit: REPLAY_LIBRARY_RECENT_WINDOW },
+      { $match: buildReplayLibraryMatch(ownerId, { ...opts, view: "owner" }) },
+      { $limit: limit + 1 },
+      { $project: REPLAY_LIBRARY_PROJECTION },
+    ], {
+      hint: REPLAY_LIBRARY_RECENT_INDEX,
+      maxTimeMS: REPLAY_LIBRARY_RECENT_DEADLINE_MS,
+      allowDiskUse: false,
+      comment: REPLAY_SEARCH_COMMENT,
+    }).toArray();
+    const page = rows.slice(0, limit);
+    return {
+      items: page.map((row) => serializeReplayLibraryGame(row)),
+      nextCursor: null,
+      hasMore: rows.length > limit,
+      sourceGames: page.map((row) => serializeReplayVodSource(row)),
     };
   }
 
@@ -378,6 +425,15 @@ function replaySearchClause(raw, view = "owner") {
         : { "opponent.strategy": pattern },
     ],
   };
+}
+
+/**
+ * Marks a read whose filter holds typed search text, so its failure logs a code only.
+ * @param {unknown} search @param {ReplayLibraryView} view
+ * @returns {{comment?: string}}
+ */
+function searchComment(search, view) {
+  return replaySearchClause(search, view) ? { comment: REPLAY_SEARCH_COMMENT } : {};
 }
 
 /**
@@ -643,6 +699,8 @@ module.exports = {
   REPLAY_LIBRARY_LIST_DEFAULT,
   REPLAY_LIBRARY_LIST_LIMIT,
   REPLAY_LIBRARY_PROJECTION,
+  REPLAY_LIBRARY_RECENT_WINDOW,
+  REPLAY_LIBRARY_RECENT_DEADLINE_MS,
   _internals: {
     sanitizeGlobalFilters,
     serializeReplayLibraryGame,

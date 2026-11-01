@@ -2,6 +2,7 @@
 
 const sentry = require("../util/sentry");
 const { sanitiseRequestUrl } = require("./requestLogging");
+const { isSearchQueryUrl } = require("./searchQueryPrivacy");
 
 /**
  * Build a 4-arg Express error handler that logs structured fields and
@@ -16,7 +17,7 @@ function buildErrorHandler(logger) {
     const code = err && err.code ? String(err.code) : codeFromStatus(status);
     logger.error(
       {
-        err,
+        err: isSearchQueryUrl(req.originalUrl || req.url) ? searchSafeError(err) : err,
         reqId: req.id,
         method: req.method,
         // Same redaction as request logs: tokens and live game keys in
@@ -44,6 +45,19 @@ function buildErrorHandler(logger) {
         requestId: req.id,
       },
     });
+  };
+}
+
+/**
+ * A request whose URL carries typed search text logs its error's kind only:
+ * a database message can echo the search filter.
+ * @param {any} err
+ */
+function searchSafeError(err) {
+  return {
+    type: typeof err?.name === "string" ? err.name : undefined,
+    code: typeof err?.code === "string" || Number.isInteger(err?.code) ? err.code : undefined,
+    codeName: typeof err?.codeName === "string" ? err.codeName : undefined,
   };
 }
 

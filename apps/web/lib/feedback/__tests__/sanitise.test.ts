@@ -24,6 +24,12 @@ describe("sanitiseRequestPath", () => {
     ["/v1/search/quick?q=private-name&unknown=private-build#private-map", "/v1/search/quick"],
     ["https://api.sc2tools.com/V1/SEARCH/QUICK/?anything=private-name", "/v1/search/quick"],
     ["/v1/search/quick/other?limit=5", "/v1/search/quick/other?limit=5"],
+    // Typed search text: the same rows as the API's __tests__/searchQueryPrivacy.test.js.
+    ["/v1/replays?search=Rival&limit=5&sort=date_desc&enrich=none&window=recent",
+      "/v1/replays?search=%5Bredacted%5D&limit=5&sort=date_desc&enrich=none&window=recent"],
+    ["/v1/replays?search[]=Rival&limit=5", "/v1/replays?search%5B%5D=%5Bredacted%5D&limit=5"],
+    ["/v1/community/builds?view=quick&q=Stargate&limit=8", "/v1/community/builds?view=quick&q=%5Bredacted%5D&limit=8"],
+    ["/v1/replays/g-1?search=keep", "/v1/replays/g-1?search=keep"],
   ])("redacts credentials but keeps the route: %s", (input, expected) => {
     expect(sanitiseRequestPath(input)).toBe(expected);
   });
