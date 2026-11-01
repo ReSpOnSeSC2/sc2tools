@@ -128,13 +128,22 @@ describe("actual provider lazy boundary", () => {
     expect(current.navigation).toEqual(navigation);
   });
 
-  it("records only exact admitted static routes, never a dossier URL or query", () => {
+  it("records exact admitted static routes and dossiers by toon-handle pulse ID, never other URL text or a query", async () => {
+    const entries = () => JSON.parse(localStorage.getItem(COMMAND_SEARCH_RECENT_KEY) ?? "null")?.entries;
     const view = render(tree());
-    expect(JSON.parse(localStorage.getItem(COMMAND_SEARCH_RECENT_KEY)!).ids).toEqual(["today"]);
+    await waitFor(() => expect(entries()).toEqual([{ kind: "page", id: "today" }]));
     path("/app/opponents/1-S2-1-private"); view.rerender(tree());
-    const raw = localStorage.getItem(COMMAND_SEARCH_RECENT_KEY)!;
-    expect(JSON.parse(raw).ids).toEqual(["today"]);
-    expect(raw).not.toContain("1-S2-1-private");
+    path("/app/opponents/1-S2-1-267727?tab=games"); view.rerender(tree());
+    await waitFor(() => expect(entries()).toEqual([{ kind: "opponent", pulseId: "1-S2-1-267727" }, { kind: "page", id: "today" }]));
+    expect(localStorage.getItem(COMMAND_SEARCH_RECENT_KEY)).not.toMatch(/private|tab=games/);
+  });
+
+  it("clears the signed-out viewer's Recent after the visits queued before it", async () => {
+    const view = render(tree());
+    await waitFor(() => expect(localStorage.getItem(COMMAND_SEARCH_RECENT_KEY)).not.toBeNull());
+    path("/app/opponents/1-S2-1-267727"); view.rerender(tree());
+    fixture.signedIn = false; view.rerender(tree());
+    await waitFor(() => expect(localStorage.getItem(COMMAND_SEARCH_RECENT_KEY)).toBeNull());
   });
 });
 

@@ -8,7 +8,6 @@ import {
 import { isCommandSearchHref, type CommandPrivateTarget } from "@/lib/commandSearchTarget";
 import type { CommandActivationPolicy } from "@/lib/commandSearchActivation";
 import type { PrivateCommandSelectionDraft } from "@/lib/usePrivateCommandSearch";
-import { clearCommandSearchRecent, recordCommandSearchRecent } from "@/lib/commandSearchRecent";
 import { hasActiveFocusScope } from "@/lib/a11y/focusScopes";
 import { useCommandSearchShortcuts } from "@/lib/useCommandSearchShortcuts";
 import type { CommandSearchItem } from "@/lib/commandSearch";
@@ -53,6 +52,22 @@ function useRegistration<T>() {
   return { value, current, register };
 }
 
+type RecentStorage = typeof import("@/lib/commandSearchRecent");
+let recentModule: Promise<RecentStorage> | null = null;
+/** Recent storage loads on the first visit it records, outside every route's first load. One
+ * shared promise runs writes in the order they were queued, so a sign-out's clear follows
+ * earlier visits. A failed load records nothing and is tried again on the next visit. */
+function withRecent(run: (recent: RecentStorage) => void): void {
+  const loading = recentModule ??= import("@/lib/commandSearchRecent");
+  loading.then(run, () => { if (recentModule === loading) recentModule = null; });
+}
+const DOSSIER_PATH = /^\/app\/opponents\/([^/]+)$/;
+function dossierSegment(path: string): string | null {
+  const segment = DOSSIER_PATH.exec(path)?.[1];
+  if (!segment) return null;
+  try { return decodeURIComponent(segment); } catch { return null; }
+}
+
 function useVisitedCommands(viewer: Viewer, path: string, chrome: CommandChrome | null) {
   const lifetime = useMemo(() => ({ viewer, path, chrome }), [viewer, path, chrome]);
   const latest = useRef<typeof lifetime | null>(null);
@@ -60,13 +75,17 @@ function useVisitedCommands(viewer: Viewer, path: string, chrome: CommandChrome 
   const previous = useRef(viewer.key);
   useEffect(() => {
     if (latest.current !== lifetime) return;
-    if (previous.current && !viewer.key) clearCommandSearchRecent(previous.current);
+    const signedOut = previous.current && !viewer.key ? previous.current : null;
+    if (signedOut) withRecent(recent => recent.clearCommandSearchRecent(signedOut));
     previous.current = viewer.key;
     if (!viewer.key || chrome?.ownerKey !== viewer.key) return;
-    const here = path + window.location.search;
+    const here = path + window.location.search, key = viewer.key, allowed = chrome.navigation.map(row => row.key);
     const entry = chrome.navigation.find(row => row.href === here)
       ?? chrome.navigation.find(row => row.href === path);
-    if (entry) recordCommandSearchRecent(viewer.key, entry.key, chrome.navigation.map(row => row.key));
+    // A dossier is recorded when its own page opens, by a toon-handle pulse ID only.
+    const dossier = entry ? null : dossierSegment(path);
+    if (entry) withRecent(recent => recent.recordCommandSearchRecent(key, entry.key, allowed));
+    else if (dossier) withRecent(recent => recent.recordCommandSearchRecentOpponent(key, dossier, allowed));
   }, [viewer, path, chrome, lifetime]);
 }
 

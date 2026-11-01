@@ -8,7 +8,9 @@ import { visibleSettingsTabs, type SettingsTabId } from "@/lib/settingsRegistry"
 import { guidesEnabled } from "@/lib/guides/flags";
 import { loadCommandGuideMetadata, type CommandGuideMetadata } from "@/lib/commandGuideMetadata";
 import { commandGuideQueryMatchup, createCommandGuideCatalog } from "@/lib/commandGuideSearch";
-import { readCommandSearchRecent } from "@/lib/commandSearchRecent";
+import { readCommandSearchRecentEntries } from "@/lib/commandSearchRecent";
+import { commandPrivateHref } from "@/lib/commandSearchActivation";
+import type { CommandPrivateTarget } from "@/lib/commandSearchTarget";
 import { COMMAND_GO_KEYS } from "@/lib/useCommandSearchShortcuts";
 import { COMMAND_QUERY_MAX_CHARS, type CommandSearchItem } from "@/lib/commandSearch";
 import { privateCommandQuery, type PrivateCommandChoice } from "@/lib/privateCommandSearch";
@@ -66,12 +68,30 @@ function PaletteRuntime({ frame, navigation, settingsTabs, allowDefaultSettings,
   const privateSearch = usePrivateCommandSearch(owned), games = useRecentGamesCommandSearch(owned), maps = usePrivateMapSearch(owned);
   const draft = (choice: PrivateCommandChoice) => choice.group === "games" ? games.selectionDraft(choice)
     : choice.group === "maps" && maps.phase !== "idle" ? maps.selectionDraft(choice) : privateSearch.selectionDraft(choice);
-  const recents = useMemo(() => readCommandSearchRecent(frame.owner.key, navigation.map(row => row.key))
-    .flatMap(id => {
-      const entry = navigation.find(row => row.key === id);
-      return entry ? [{ id: `recent:${entry.key}`, group: "recent" as const, label: entry.label,
-        description: entry.description, href: entry.href }] : [];
-    }), [frame.owner, navigation]);
+  // Recent lists pages and opened dossiers in visit order. A dossier row stores no name: it reads
+  // "Opponent dossier" and opens through the same guarded handoff as a private result.
+  const recent = useMemo(() => {
+    const keys = navigation.map(row => row.key), dossiers = new Map<string, Extract<CommandPrivateTarget, { kind: "opponent" }>>();
+    const items = readCommandSearchRecentEntries(frame.owner.key, keys).flatMap((entry): CommandSearchItem[] => {
+      if (entry.kind === "page") {
+        const row = navigation.find(nav => nav.key === entry.id);
+        return row ? [{ id: `recent:${row.key}`, group: "recent", label: row.label, description: row.description, href: row.href }] : [];
+      }
+      const target = Object.freeze({ kind: "opponent" as const, pulseId: entry.pulseId }), href = commandPrivateHref(target);
+      if (!href) return [];
+      const id = `recent:opponent:${entry.pulseId}`;
+      dossiers.set(id, target);
+      return [{ id, group: "recent", label: "Opponent dossier", description: `Pulse ID ${entry.pulseId}`, href }];
+    });
+    return { keys, items, dossiers };
+  }, [frame.owner, navigation]);
+  const selectRecent = (item: CommandSearchItem) => {
+    const target = recent.dossiers.get(item.id);
+    if (!target || !item.href) return onSelect(item);
+    const stored = () => readCommandSearchRecentEntries(frame.owner.key, recent.keys)
+      .some(entry => entry.kind === "opponent" && entry.pulseId === target.pulseId);
+    return onPrivateSelect(Object.freeze({ target, href: item.href, isCurrent: stored }), query.epoch);
+  };
   return <CommandPalette navigation={navigation} signedIn={Boolean(frame.owner.key)}
     settingsTabs={settingsTabs ?? (frame.owner.key && allowDefaultSettings ? visibleSettingsTabs() : [])}
     controlledQuery={{ value: query.value, onChange: value => {
@@ -94,8 +114,8 @@ function PaletteRuntime({ frame, navigation, settingsTabs, allowDefaultSettings,
         return !!selected && onPrivateSelect(selected, query.epoch);
       },
     } : undefined}
-    scope={frame.scope} guideItems={[...recents, ...guides.items]}
-    guidesStatus={guides.status} onRetryGuides={guides.retry} onClose={onClose} onSelect={onSelect}
+    scope={frame.scope} guideItems={[...recent.items, ...guides.items]}
+    guidesStatus={guides.status} onRetryGuides={guides.retry} onClose={onClose} onSelect={selectRecent}
     returnFocusRef={returnFocusRef} />;
 }
 

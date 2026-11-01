@@ -136,6 +136,21 @@ describe("real lazy private search consumer and guarded navigation", () => {
     fireEvent.click(screen.getByRole("option", { name: "Open Maps" }));
     await waitFor(() => expect(h.push).toHaveBeenCalledWith("/app/maps"));
   });
+  it("opens a Recent dossier through the guarded handoff, and not once it has left storage", async () => {
+    const stored = JSON.stringify({ version: 2, viewer: "A", entries: [{ kind: "opponent", pulseId: "1-S2-1-9" }, { kind: "page", id: "maps" }] });
+    localStorage.setItem(COMMAND_SEARCH_RECENT_KEY, stored);
+    const view = render(tree()); await open({ query: "" });
+    const row = await screen.findByRole("option", { name: /^Opponent dossier/ });
+    expect(row.textContent).toContain("Pulse ID 1-S2-1-9"); expect(fetching).not.toHaveBeenCalled();
+    fireEvent.click(row);
+    await waitFor(() => expect(h.push).toHaveBeenCalledWith("/app/opponents/1-S2-1-9"));
+    view.unmount(); h.push.mockReset(); localStorage.setItem(COMMAND_SEARCH_RECENT_KEY, stored);
+    render(tree()); await open({ query: "" });
+    const stale = await screen.findByRole("option", { name: /^Opponent dossier/ });
+    localStorage.removeItem(COMMAND_SEARCH_RECENT_KEY); fireEvent.click(stale);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(h.push).not.toHaveBeenCalled();
+  });
   it("uses the actual Settings dirty guard for Stay then a fresh private Discard", async () => {
     h.path = "/settings"; window.history.replaceState(null, "", "/settings"); render(tree(true));
     const input = screen.getByRole("textbox", { name: "profile draft" }) as HTMLInputElement;

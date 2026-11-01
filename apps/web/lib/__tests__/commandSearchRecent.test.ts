@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  COMMAND_SEARCH_RECENT_KEY, clearCommandSearchRecent, readCommandSearchRecent, recordCommandSearchRecent,
-  type CommandRecentStorage,
+  COMMAND_SEARCH_RECENT_KEY, clearCommandSearchRecent, isDossierPulseId, readCommandSearchRecent, readCommandSearchRecentEntries,
+  recordCommandSearchRecent, recordCommandSearchRecentOpponent, type CommandRecentStorage,
 } from "../commandSearchRecent";
 
 const allowed = ["today", "opponents", "trends", "builds", "sessions", "settings", "devices", "help", "community"];
@@ -19,6 +19,10 @@ function memoryStorage(initial: string | null = null) {
 function envelope(viewer: string, ids: unknown) {
   return JSON.stringify({ version: 1, viewer, ids });
 }
+const pages = (...ids: string[]) => ids.map(id => ({ kind: "page", id }));
+function envelope2(viewer: string, entries: unknown) {
+  return JSON.stringify({ version: 2, viewer, entries });
+}
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -30,19 +34,19 @@ describe("static recent destination envelope", () => {
     // A marketing page lists only some destinations: reading there hides, never erases.
     expect(readCommandSearchRecent("viewer-a", ["community", "help"], storage)).toEqual([]);
     expect(readCommandSearchRecent("viewer-a", ["today", "help"], storage)).toEqual(["today"]);
-    expect(JSON.parse(storage.raw()!).ids).toEqual(["opponents", "today"]);
+    expect(JSON.parse(storage.raw()!).entries).toEqual(pages("opponents", "today"));
     expect(recordCommandSearchRecent("viewer-a", "help", ["community", "help"], storage)).toEqual(["help", "opponents", "today"]);
     expect(readCommandSearchRecent("viewer-a", allowed, storage)).toEqual(["help", "opponents", "today"]);
     expect(readCommandSearchRecent("viewer-b", allowed, storage)).toEqual([]);
   });
-  it("writes only version/viewer/static IDs at the exact key, and moves a repeat to the front", () => {
+  it("writes only version/viewer/static entries at the exact key, and moves a repeat to the front", () => {
     const storage = memoryStorage();
     expect(recordCommandSearchRecent("viewer-a", "today", allowed, storage)).toEqual(["today"]);
     recordCommandSearchRecent("viewer-a", "opponents", allowed, storage);
     expect(recordCommandSearchRecent("viewer-a", "today", allowed, storage)).toEqual(["today", "opponents"]);
     expect(storage.setItem).toHaveBeenLastCalledWith(COMMAND_SEARCH_RECENT_KEY,
-      JSON.stringify({ version: 1, viewer: "viewer-a", ids: ["today", "opponents"] }));
-    expect(Object.keys(JSON.parse(storage.raw()!)).sort()).toEqual(["ids", "version", "viewer"]);
+      JSON.stringify({ version: 2, viewer: "viewer-a", entries: pages("today", "opponents") }));
+    expect(Object.keys(JSON.parse(storage.raw()!)).sort()).toEqual(["entries", "version", "viewer"]);
     expect(readCommandSearchRecent("viewer-a", allowed, storage)).toEqual(["today", "opponents"]);
   });
 
@@ -50,7 +54,7 @@ describe("static recent destination envelope", () => {
     const storage = memoryStorage();
     for (const id of allowed) recordCommandSearchRecent("viewer-a", id, allowed, storage);
     expect(readCommandSearchRecent("viewer-a", allowed, storage)).toEqual([...allowed].reverse().slice(0, 8));
-    expect(JSON.parse(storage.raw()!).ids).toHaveLength(8);
+    expect(JSON.parse(storage.raw()!).entries).toHaveLength(8);
   });
 
   it("returns a fresh array without module-level owner or result cache", () => {
@@ -140,7 +144,70 @@ describe("corrupt or unsafe stored history", () => {
   it("replaces corrupt input with a fresh admitted visit, without retaining unsafe fields", () => {
     const storage = memoryStorage(JSON.stringify({ version: 1, viewer: "viewer-a", ids: ["/app"], token: "secret" }));
     expect(recordCommandSearchRecent("viewer-a", "today", allowed, storage)).toEqual(["today"]);
-    expect(storage.raw()).toBe(envelope("viewer-a", ["today"]));
+    expect(storage.raw()).toBe(envelope2("viewer-a", pages("today")));
+  });
+});
+
+describe("opponent dossiers in Recent (version 2)", () => {
+  it("records a dossier by its toon-handle pulse ID only, newest first beside pages", () => {
+    const storage = memoryStorage();
+    recordCommandSearchRecent("viewer-a", "today", allowed, storage);
+    expect(recordCommandSearchRecentOpponent("viewer-a", "1-S2-1-267727", allowed, storage)).toBe(true);
+    expect(readCommandSearchRecentEntries("viewer-a", allowed, storage)).toEqual([
+      { kind: "opponent", pulseId: "1-S2-1-267727" }, { kind: "page", id: "today" }]);
+    expect(readCommandSearchRecent("viewer-a", allowed, storage)).toEqual(["today"]);
+    expect(storage.raw()).toBe(envelope2("viewer-a", [{ kind: "opponent", pulseId: "1-S2-1-267727" }, ...pages("today")]));
+  });
+  it.each(["Rival", "1-S2-1-private", "1-S2-1-1/../settings", "1-S2-1-1\n", `1-S2-1-${"9".repeat(60)}`, "<b>1-S2-1-1</b>"])(
+    "stores nothing for a dossier ID that is not a toon handle %#", pulseId => {
+      const storage = memoryStorage();
+      expect(recordCommandSearchRecentOpponent("viewer-a", pulseId, allowed, storage)).toBe(false);
+      expect(storage.setItem).not.toHaveBeenCalled();
+      expect(isDossierPulseId(pulseId)).toBe(false);
+    });
+  it("records and shows dossiers only where the navigation lists Opponents, keeping them stored elsewhere", () => {
+    const storage = memoryStorage();
+    expect(recordCommandSearchRecentOpponent("viewer-a", "2-S2-1-5", ["today", "help"], storage)).toBe(false);
+    recordCommandSearchRecentOpponent("viewer-a", "2-S2-1-5", allowed, storage);
+    expect(readCommandSearchRecentEntries("viewer-a", ["today", "help"], storage)).toEqual([]);
+    recordCommandSearchRecent("viewer-a", "help", ["today", "help"], storage);
+    expect(readCommandSearchRecentEntries("viewer-a", allowed, storage)).toEqual([
+      { kind: "page", id: "help" }, { kind: "opponent", pulseId: "2-S2-1-5" }]);
+  });
+  it("moves a repeat to the front and keeps eight entries across both kinds", () => {
+    const storage = memoryStorage();
+    for (let index = 0; index < 6; index += 1) recordCommandSearchRecentOpponent("viewer-a", `1-S2-1-${index}`, allowed, storage);
+    for (const id of ["today", "trends", "builds"]) recordCommandSearchRecent("viewer-a", id, allowed, storage);
+    recordCommandSearchRecentOpponent("viewer-a", "1-S2-1-3", allowed, storage);
+    expect(readCommandSearchRecentEntries("viewer-a", allowed, storage).map(entry => entry.kind === "page" ? entry.id : entry.pulseId))
+      .toEqual(["1-S2-1-3", "builds", "trends", "today", "1-S2-1-5", "1-S2-1-4", "1-S2-1-2", "1-S2-1-1"]);
+  });
+  it("still reads a version-1 envelope and upgrades it on the next visit", () => {
+    const storage = memoryStorage(envelope("viewer-a", ["today", "trends"]));
+    expect(readCommandSearchRecentEntries("viewer-a", allowed, storage)).toEqual(pages("today", "trends"));
+    expect(storage.setItem).not.toHaveBeenCalled();
+    recordCommandSearchRecentOpponent("viewer-a", "1-S2-1-9", allowed, storage);
+    expect(JSON.parse(storage.raw()!)).toEqual({ version: 2, viewer: "viewer-a",
+      entries: [{ kind: "opponent", pulseId: "1-S2-1-9" }, ...pages("today", "trends")] });
+  });
+  it("clears either version on sign-out", () => {
+    for (const raw of [envelope("viewer-a", ["today"]), envelope2("viewer-a", [{ kind: "opponent", pulseId: "1-S2-1-9" }])]) {
+      const storage = memoryStorage(raw);
+      expect(clearCommandSearchRecent("viewer-a", storage)).toBe(true);
+      expect(storage.raw()).toBeNull();
+    }
+  });
+  it.each([
+    envelope2("viewer-a", [{ kind: "opponent", pulseId: "Rival" }]),
+    envelope2("viewer-a", [{ kind: "opponent", pulseId: "1-S2-1-9", name: "Rival" }]),
+    envelope2("viewer-a", [{ kind: "page", id: "today" }, { kind: "page", id: "today" }]),
+    envelope2("viewer-a", [{ kind: "opponent", pulseId: "1-S2-1-9" }, { kind: "opponent", pulseId: "1-S2-1-9" }]),
+    envelope2("viewer-a", [{ kind: "query", text: "Rival" }]),
+    envelope2("viewer-a", pages(...Array.from({ length: 9 }, (_, index) => `page-${index}`))),
+    JSON.stringify({ version: 2, viewer: "viewer-a", entries: pages("today"), ids: ["today"] }),
+    JSON.stringify({ version: 3, viewer: "viewer-a", entries: pages("today") }),
+  ])("rejects a version-2 envelope with any bad, repeated or extra part %#", raw => {
+    expect(readCommandSearchRecentEntries("viewer-a", allowed, memoryStorage(raw))).toEqual([]);
   });
 });
 
