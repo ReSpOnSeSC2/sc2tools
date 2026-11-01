@@ -69,8 +69,7 @@ Two recorders are outside the app: the hosting provider's and its edge's request
 
 - Each entry is {kind: "page", id} or {kind: "opponent", pulseId}, with at most eight in all, newest first.
 - Version 1 still decodes, and every write is version 2.
-- A pulse ID is 1-64 UTF-16 units with no control character or unpaired surrogate, and is never "." or "..". Private hrefs already use this rule.
-- A dossier is recorded only on its own page, after the owner-scoped dossier read returns that same ID. A crafted link or a missing dossier records nothing.
+- A dossier is recorded when its own page opens, and only when its pulse ID has the toon-handle form: digits, "-S2-", digits, "-", digits, at most 64 characters. Any other ID, or a crafted link's text, records nothing. A stored dossier that has since been removed opens the dossier's own not-found state.
 - No name, label, query, URL or time is stored. Rows read "Opponent dossier" with the pulse ID as detail, and open through the same guarded handoff as private results.
 - A page whose navigation lists no Opponents hides dossier entries but keeps them stored.
 - Sign-out removes the viewer's envelope of either version.
