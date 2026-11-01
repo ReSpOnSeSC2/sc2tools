@@ -1,6 +1,8 @@
 import type { CommandSearchItem } from "./commandSearch";
 import type { CommandChrome } from "@/components/chrome/CommandSearchContext";
 import { isCommandSearchHref } from "./commandSearchTarget";
+import { COMMUNITY_HREF } from "./communityCommandSearch";
+import { isPublicSearchHref } from "./publicSearchQuery";
 
 const LIBRARIES: Readonly<Record<string, string>> = {
   "library:opponents": "/app/opponents", "library:customBuilds": "/builds", "library:maps": "/app/maps",
@@ -32,6 +34,9 @@ export function commandPrivateHref(value: unknown): string | null {
 
 function admitsItem(item: CommandSearchItem, chrome: CommandChrome | null, ownerKey: string | null): boolean {
   if (item.disabled || (item.href && !isCommandSearchHref(item.href))) return false;
+  // The palette's one query-derived destination, re-derived exactly; Community rows only for a signed-out viewer.
+  if (item.id === "search:all") return isPublicSearchHref(item.href);
+  if (item.group === "community-builds") return !ownerKey && COMMUNITY_HREF.test(item.href ?? "");
   if (item.id.startsWith("library:")) return !!ownerKey && Object.hasOwn(LIBRARIES, item.id) && item.href === LIBRARIES[item.id];
   if (item.group === "navigation" || item.group === "recent") {
     return chrome?.ownerKey === ownerKey && chrome.navigation.some(row =>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { Modal } from "@/components/ui/Modal";
 import { ThemeDialog } from "@/components/ui/ThemeChoice";
 import { LazyReportIssueModal } from "@/components/feedback/LazyReportIssueModal";
@@ -18,6 +19,8 @@ import { recentGamesQuery } from "@/lib/recentGamesCommandSearch";
 import { usePrivateCommandSearch, type PrivateCommandSelectionDraft } from "@/lib/usePrivateCommandSearch";
 import { usePrivateMapSearch } from "@/lib/usePrivateMapSearch";
 import { useRecentGamesCommandSearch } from "@/lib/useRecentGamesCommandSearch";
+import { useCommunityCommandSearch } from "@/lib/useCommunityCommandSearch";
+import { publicSearchHref } from "@/lib/publicSearchQuery";
 import type { CommandFrame } from "./CommandSearchProvider";
 import type { CommandNavigation } from "./CommandSearchContext";
 import { CommandPalette } from "./CommandPalette";
@@ -66,6 +69,13 @@ function PaletteRuntime({ frame, navigation, settingsTabs, allowDefaultSettings,
   const owned = { open: true, scope: frame.scope ?? "all", query: query.value,
     ownerKey: frame.owner.key, openingEpoch: frame, routeEpoch: frame.route } as const;
   const privateSearch = usePrivateCommandSearch(owned), games = useRecentGamesCommandSearch(owned), maps = usePrivateMapSearch(owned);
+  // Public discovery: signed out means authentication has loaded with no user. Only an explicit edit
+  // sends Community's anonymous request, and only a guide query, or a viewer known to be signed out,
+  // gets the /search page link, so a signed-in private query never reaches a URL.
+  const auth = useAuth(), signedOut = auth.isLoaded && !auth.isSignedIn;
+  const community = useCommunityCommandSearch({ open: true, scope: frame.scope ?? "all", query: query.value,
+    typed: query.epoch !== frame, signedOut });
+  const searchPageHref = guidesEnabled() && (frame.scope === "guides" || signedOut) ? publicSearchHref(query.value) : null;
   const draft = (choice: PrivateCommandChoice) => choice.group === "games" ? games.selectionDraft(choice)
     : choice.group === "maps" && maps.phase !== "idle" ? maps.selectionDraft(choice) : privateSearch.selectionDraft(choice);
   // Recent lists pages and opened dossiers in visit order. A dossier row stores no name: it reads
@@ -114,6 +124,9 @@ function PaletteRuntime({ frame, navigation, settingsTabs, allowDefaultSettings,
         return !!selected && onPrivateSelect(selected, query.epoch);
       },
     } : undefined}
+    community={signedOut && !frame.owner.key ? { phase: community.phase, items: community.items, hasMore: community.hasMore,
+      onRetry: community.retry } : undefined}
+    searchPageHref={searchPageHref}
     scope={frame.scope} guideItems={[...recent.items, ...guides.items]}
     guidesStatus={guides.status} onRetryGuides={guides.retry} onClose={onClose} onSelect={selectRecent}
     returnFocusRef={returnFocusRef} />;
