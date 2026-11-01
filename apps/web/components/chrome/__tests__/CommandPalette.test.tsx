@@ -137,6 +137,19 @@ describe("private groups remain literal, distinct and bounded", () => {
     }
     expect(screen.getByRole("group", { name: "Your library" }).querySelectorAll('[role="option"]')).toHaveLength(3);
   });
+  it("never reports false no matches when maps are deferred and nothing else matches", async () => {
+    const data = decodePrivateCommandSearch({ version: 2, groups: {
+      opponents: { status: "ready", items: [], hasMore: false },
+      customBuilds: { status: "ready", items: [], hasMore: false },
+      maps: { status: "unavailable", items: [], hasMore: null, reason: "deferred" },
+    } });
+    await open({ initialQuery: "unknown-public-term", privateSearch: { ...personal(), data, choices: privateCommandChoices(data) } });
+    const status = screen.getByRole("status").textContent ?? "";
+    expect(status).toContain("No public matches.");
+    expect(status).not.toContain("No matching results");
+    expect(status).not.toContain("Some library results are unavailable.");
+    expect(screen.queryByRole("button", { name: "Retry your library search" })).toBeNull();
+  });
   it("announces unavailable groups and explicit retry/library actions rather than false no matches", async () => {
     const data = decodePrivateCommandSearch({ version: 2, groups: {
       opponents: { status: "unavailable", items: [], hasMore: null, reason: "retired" },

@@ -111,6 +111,19 @@ const railHrefs = () =>
   ).map((a) => a.getAttribute("href"));
 
 describe("AppChrome navigation", () => {
+  it("registers one stable quick-search config, not a new one per render", () => {
+    const registered: unknown[] = [];
+    const withSearch = () => <CommandSearchContext.Provider value={{ ownerKey: "clerk_u1", open: vi.fn(),
+      registerChrome: (config) => { registered.push(config); return () => undefined; }, registerSettings: () => () => undefined }}>
+      <AppChrome>Content</AppChrome></CommandSearchContext.Provider>;
+    const view = render(withSearch());
+    const count = registered.length;
+    fireEvent.click(screen.getByRole("button", { name: /More/ }));
+    expect(registered.length).toBe(count);
+    view.rerender(withSearch());
+    expect(registered.length).toBe(count + 1);
+    expect(registered.at(-1)).toBe(registered.at(-2));
+  });
   it("gives signed-out phones a search button, because visitors have no More sheet", () => {
     const open = vi.fn();
     const withSearch = (ownerKey: string | null) => <CommandSearchContext.Provider value={{ ownerKey, open,

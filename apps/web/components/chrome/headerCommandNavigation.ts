@@ -4,8 +4,8 @@ import { admittedNavEntries } from "./appNav";
 /**
  * The signed-in header's quick-search destinations: the app's own
  * NAV_ENTRIES with the app chrome's gates and keys, plus Help. Coaching
- * stays out, because the header makes no role probe. Loaded on demand,
- * so the app's navigation never joins the marketing pages' first load.
+ * stays out, because the header makes no role probe. (AppShell already
+ * loads the app chrome and appNav on every route.)
  *
  * Example: `signedInCommandNavigation({ isAdmin: false, reviews: true, guides: true })`
  * starts with Today and the analyzer sections and ends with Help.

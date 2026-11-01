@@ -133,11 +133,14 @@ function PaletteStatus({ count, enabled, query, status, onRetry, id, privateSear
   onRetry: () => void; id: string; privateSearch?: CommandPalettePrivateState;
 }) {
   const privatePending = privateSearch?.validQuery && ["debouncing", "loading"].includes(privateSearch.phase);
-  // "deferred" is a lasting product state (maps are not in quick search yet), not a failure to retry.
-  const privateUnavailable = privateSearch?.phase === "error" || (privateSearch?.data
-    && Object.values(privateSearch.data.groups).some(group => group.status === "unavailable" && group.reason !== "deferred"));
+  // Any unavailable group (deferred included) means the library was not fully searched, so an empty
+  // result is "No public matches". Only a failure offers Retry: "deferred" is a lasting product state.
+  const groups = privateSearch?.data ? Object.values(privateSearch.data.groups) : [];
+  const privateIncomplete = privateSearch?.phase === "error" || groups.some(group => group.status === "unavailable");
+  const privateUnavailable = privateSearch?.phase === "error"
+    || groups.some(group => group.status === "unavailable" && group.reason !== "deferred");
   const result = count ? `${count} results, ${enabled} available.`
-    : privateSearch && (!privateSearch.validQuery || privatePending || privateUnavailable) ? "No public matches."
+    : privateSearch && (!privateSearch.validQuery || privatePending || privateIncomplete) ? "No public matches."
       : query.trim() ? "No matching results. Try another word." : "No results available.";
   const guides = status === "loading" ? " Loading guide availability."
     : status === "unavailable" ? " Guide availability is unavailable." : "";

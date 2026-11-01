@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { CommandSearchContext, type CommandChrome } from "../CommandSearchContext";
@@ -31,11 +31,10 @@ const keys = (config: CommandChrome | undefined) => config?.navigation.map((row)
 
 afterEach(() => { cleanup(); state.audience = "in"; state.me = undefined; });
 
-it("registers the header links under app keys at once, then the app's own sections for a signed-in viewer", async () => {
+it("registers the app's own sections for a signed-in viewer, and re-registers only when its inputs change", () => {
   const { registered, view } = renderWith("user_a");
-  expect(keys(registered[0])).toContain("builds-library");
-  expect(keys(registered[0])).not.toContain("today");
-  await waitFor(() => expect(keys(registered.at(-1))).toEqual(expect.arrayContaining(["today", "opponents", "sessions", "help"])));
+  expect(keys(registered[0])).toEqual(expect.arrayContaining(["today", "opponents", "sessions", "builds-library", "help"]));
+  expect(keys(registered[0])).not.toContain("coaching");
   const count = registered.length;
   view.rerender(<CommandSearchContext.Provider value={{ ownerKey: "user_a", open: vi.fn(), registerSettings: () => () => undefined,
     registerChrome: (config: CommandChrome) => { registered.push(config); return () => undefined; } }}><Header /></CommandSearchContext.Provider>);
@@ -44,26 +43,22 @@ it("registers the header links under app keys at once, then the app's own sectio
   expect(registered.at(-1)).toBe(registered.at(-2));
 });
 
-it("never shows one account's app list to the next account while the new list loads", async () => {
+it("gives the next account its own list at once when the account switches", () => {
   state.me = { isAdmin: true };
   const registered: CommandChrome[] = [];
   const contextFor = (ownerKey: string) => ({ ownerKey, open: vi.fn(), registerSettings: () => () => undefined,
     registerChrome: (config: CommandChrome) => { registered.push(config); return () => undefined; } });
   const view = render(<CommandSearchContext.Provider value={contextFor("admin_a")}><Header /></CommandSearchContext.Provider>);
-  await waitFor(() => expect(keys(registered.at(-1))).toContain("admin"));
+  expect(keys(registered.at(-1))).toEqual(expect.arrayContaining(["admin", "today"]));
   state.me = { isAdmin: false };
   view.rerender(<CommandSearchContext.Provider value={contextFor("member_b")}><Header /></CommandSearchContext.Provider>);
-  // Until member_b's own list arrives, the header's links stand in; admin_a's Admin row never carries over.
-  expect(keys(registered.at(-1))).not.toContain("admin");
-  expect(keys(registered.at(-1))).not.toContain("today");
-  await waitFor(() => expect(keys(registered.at(-1))).toContain("today"));
+  expect(keys(registered.at(-1))).toContain("today");
   expect(keys(registered.at(-1))).not.toContain("admin");
 });
 
-it("keeps a visitor on the header's public links, without loading the app's list", async () => {
+it("keeps a visitor on the header's public links", () => {
   state.audience = "out";
   const { registered } = renderWith(null);
   expect(keys(registered[0])).toEqual(expect.arrayContaining(["stream-studio-page", "community", "help", "download"]));
-  await new Promise((resolve) => setTimeout(resolve, 20));
   expect(registered.every((config) => !keys(config).includes("today"))).toBe(true);
 });

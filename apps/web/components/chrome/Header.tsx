@@ -18,7 +18,7 @@ import { reviewsVisible } from "@/lib/reviews";
 import { guidesEnabled } from "@/lib/guides/flags";
 import { getInstantImportMode } from "@/lib/instant/flag";
 import { headerLinkCommands, headerNavLinks } from "./headerNav";
-import type { CommandNavigation } from "./CommandSearchContext";
+import { signedInCommandNavigation } from "./headerCommandNavigation";
 import { LogoMark } from "./LogoMark";
 import { useCommandChrome, useCommandSearch } from "./CommandSearchContext";
 import { CommandSearchButton } from "./CommandSearchButton";
@@ -64,24 +64,14 @@ export function Header() {
     tryPage: getInstantImportMode() === "all",
   }), [isAdmin]);
   const commandSearch = useCommandSearch(), commandOwner = commandSearch?.ownerKey ?? null, signedIn = Boolean(commandOwner);
-  // Signed in, the app's own sections (Today, Opponents, ...) arrive on
-  // demand; until then, and for visitors, the header's links stand in.
-  const [appNavigation, setAppNavigation] = useState<{ key: string; rows: CommandNavigation[] } | null>(null);
-  const appKey = `${commandOwner}:${isAdmin === true}`;
-  useEffect(() => {
-    if (!commandOwner) return;
-    let live = true;
-    void import("./headerCommandNavigation").then(({ signedInCommandNavigation }) => {
-      if (live) setAppNavigation({ key: appKey, rows: signedInCommandNavigation({
-        isAdmin: isAdmin === true, reviews: reviewsVisible(isAdmin), guides: guidesEnabled() }) });
-    }).catch(() => { /* The header's own links remain. */ });
-    return () => { live = false; };
-  }, [commandOwner, isAdmin, appKey]);
-  const linkCommands = useMemo(() => headerLinkCommands(navLinks, { signedIn, isAdmin: isAdmin === true }), [navLinks, signedIn, isAdmin]);
-  // Registered once per change, not per render: each registration records Recent.
+  // Signed in, the app's own sections (Today, Opponents, ...); for visitors,
+  // the header's public links. Registered once per change, not per render:
+  // each registration records Recent.
   const commandChrome = useMemo(() => ({ ownerKey: commandOwner, defaultSettingsAvailable: signedIn,
-    navigation: commandOwner && appNavigation?.key === appKey ? appNavigation.rows : linkCommands }),
-  [commandOwner, signedIn, appNavigation, appKey, linkCommands]);
+    navigation: commandOwner
+      ? signedInCommandNavigation({ isAdmin: isAdmin === true, reviews: reviewsVisible(isAdmin), guides: guidesEnabled() })
+      : headerLinkCommands(navLinks, { signedIn: false, isAdmin: false }) }),
+  [commandOwner, signedIn, isAdmin, navLinks]);
   useCommandChrome(commandChrome);
 
   useEffect(() => {
