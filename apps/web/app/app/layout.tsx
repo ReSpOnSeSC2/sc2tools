@@ -6,6 +6,7 @@ import {
   type DashboardMe,
 } from "@/components/dashboard/AnalyzerFrame";
 import { Card } from "@/components/ui/Card";
+import { buttonClassName } from "@/components/ui/buttonStyles";
 
 /**
  * /app layout — the analyzer's own concerns. The surrounding chrome
@@ -47,7 +48,7 @@ async function AnalyzerWithMe({ children }: { children: ReactNode }) {
             </p>
             <a
               href={signedOut ? "/sign-in" : "/app"}
-              className="hard-press mt-5 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-2 border-line bg-accent px-5 font-display text-body font-bold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+              className={buttonClassName({ variant: "primary", className: "mt-5" })}
             >
               <RefreshCcw className="h-4 w-4" aria-hidden />
               {signedOut ? "Continue to sign in" : "Try again"}

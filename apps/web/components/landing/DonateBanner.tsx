@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { LinkButton } from "@/components/ui/Button";
 import { ArrowRight, Heart } from "lucide-react";
 import {
   FIXED_MONTHLY_FALLBACK_USD,
@@ -111,13 +111,10 @@ export function DonateBanner({ costs }: { costs: InfrastructureCosts | null }) {
             </p>
           )}
         </div>
-        <Link
-          href="/donate"
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-accent px-5 text-body-lg font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:self-center"
-        >
+        <LinkButton href="/donate" size="lg" className="md:self-center"
+          iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>
           See the full cost breakdown
-          <ArrowRight className="h-5 w-5" aria-hidden />
-        </Link>
+        </LinkButton>
       </div>
     </section>
   );

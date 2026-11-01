@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useInstallState } from "@/lib/pwa/install";
+import { Button } from "@/components/ui/Button";
 import { InstallInstructions } from "./InstallInstructions";
 import { Download, MoreVertical, X } from "lucide-react";
 
@@ -238,36 +239,15 @@ function InstallBanner({
         </button>
       </div>
       <div className="space-y-2 border-t border-border/60 px-4 py-3">
-        <button
-          type="button"
-          onClick={handleCta}
-          disabled={prompting}
-          aria-busy={prompting}
-          className={[
-            "inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg",
-            "bg-accent text-body-lg font-semibold text-white",
-            "hover:bg-accent-hover",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-            "disabled:cursor-not-allowed disabled:opacity-70",
-          ].join(" ")}
-        >
-          <Download className="h-5 w-5" aria-hidden />
+        <Button fullWidth onClick={handleCta} disabled={prompting} aria-busy={prompting || undefined}
+          iconLeft={<Download className="h-5 w-5" aria-hidden />}>
           {copy.ctaLabel}
-        </button>
+        </Button>
         {platform === "android" && canPromptNatively && status !== "prompting" ? (
-          <button
-            type="button"
-            onClick={onOpenFallback}
-            className={[
-              "inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg",
-              "text-caption font-medium text-text-muted",
-              "hover:bg-bg-subtle hover:text-text",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-            ].join(" ")}
-          >
-            <MoreVertical className="h-3.5 w-3.5" aria-hidden />
+          <Button variant="ghost" size="sm" fullWidth onClick={onOpenFallback}
+            iconLeft={<MoreVertical className="h-3.5 w-3.5" aria-hidden />}>
             Or install via Chrome menu
-          </button>
+          </Button>
         ) : null}
         {copy.hint ? (
           <p className="px-1 text-caption text-text-muted">{copy.hint}</p>

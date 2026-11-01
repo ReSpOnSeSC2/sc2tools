@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { MobileNav } from "../MobileNav";
 import { Modal } from "@/components/ui/Modal";
+import { buttonClassName } from "@/components/ui/buttonStyles";
 import { lockBodyScroll } from "@/lib/bodyScrollLock";
 const clerk = vi.hoisted(() => ({ signedIn: false }));
 vi.mock("next/link", () => ({ default: ({ children, href, onClick, ...props }: AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} href={href} onClick={event => { event.preventDefault(); onClick?.(event); }}>{children}</a> }));
@@ -104,8 +105,11 @@ it.each([false, true])("keeps the current audience's existing call to action (si
     expect(within(dialog).getByRole("link", { name: "Open app" }).getAttribute("href")).toBe("/app");
     expect(within(dialog).queryByRole("link", { name: "Sign in" })).toBeNull();
   } else {
-    expect(within(dialog).getByRole("link", { name: "Sign in" })).toBeTruthy();
-    expect(within(dialog).getByRole("link", { name: "Get started" })).toBeTruthy();
+    // The auth links wear the shared pill recipe, as Header's do.
+    expect(within(dialog).getByRole("link", { name: "Sign in" }).className)
+      .toBe(buttonClassName({ variant: "secondary", size: "lg", fullWidth: true }));
+    expect(within(dialog).getByRole("link", { name: "Get started" }).className)
+      .toBe(buttonClassName({ variant: "primary", size: "lg", fullWidth: true }));
     expect(within(dialog).queryByRole("link", { name: "Open app" })).toBeNull();
   }
 });

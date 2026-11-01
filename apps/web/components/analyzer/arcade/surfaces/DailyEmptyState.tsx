@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, EmptyState } from "@/components/ui/Card";
+import { LinkButton } from "@/components/ui/Button";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 
 /**
@@ -33,12 +34,9 @@ export function DailyEmptyState({
       <section aria-label={ariaLabel} className="space-y-3">
         <EmptyState title={title} sub={sub} />
         <div className="text-center">
-          <a
-            href={helperHref}
-            className="inline-flex min-h-[44px] items-center rounded-md bg-accent px-4 text-caption font-semibold uppercase tracking-wider text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
+          <LinkButton href={helperHref} size="sm" className="min-h-11">
             Open the analyzer →
-          </a>
+          </LinkButton>
         </div>
         <p className="text-center text-caption">
           <LazyHelpLink slug="history-on-this-device" className="inline-flex min-h-11 items-center">

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { CheckCircle2, Copy, Library, UserPlus } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Button, LinkButton } from "@/components/ui/Button";
 import { useToastOptional } from "@/components/ui/Toast";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { signInHref, signUpHref } from "@/lib/authLinks";
@@ -30,8 +30,6 @@ const VERSION_MAX_CHARS = 40;
 
 const SUCCESS_LINK_CLASS =
   "inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border-2 border-success/40 bg-success/10 px-4 text-body font-semibold text-success transition-colors hover:bg-success/15 hover:text-success focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
-const SECONDARY_LINK_CLASS =
-  "hard-press inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold tracking-tight text-text hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
 const TEXT_LINK_CLASS =
   "font-semibold text-accent-cyan underline-offset-2 hover:text-accent-cyan hover:underline";
 
@@ -147,10 +145,10 @@ export function SaveToLibraryButton(props: SaveToLibraryButtonProps) {
   if (isSignedIn && userId) return <SignedInSave key={`${userId}:${props.communitySlug}`} {...props} build={props.build} />;
   return (
         <div className="space-y-2">
-          <Link href={signUpHref(returnTo)} onClick={() => queuePendingIntent("save-build", { slug: props.communitySlug }, returnTo)} className={SECONDARY_LINK_CLASS}>
-            <UserPlus className="h-4 w-4" aria-hidden />
+          <LinkButton href={signUpHref(returnTo)} onClick={() => queuePendingIntent("save-build", { slug: props.communitySlug }, returnTo)}
+            variant="secondary" fullWidth iconLeft={<UserPlus className="h-4 w-4" aria-hidden />}>
             Sign up free to save this build
-          </Link>
+          </LinkButton>
           <p className="text-center text-micro text-text-muted">
             Have an account?{" "}
             <Link href={signInHref(returnTo)} onClick={() => queuePendingIntent("save-build", { slug: props.communitySlug }, returnTo)} className={TEXT_LINK_CLASS}>

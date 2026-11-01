@@ -1,6 +1,7 @@
 "use client";
 import type { ReactNode } from "react";
 import { Share, Plus, MoreVertical } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import type { InstallPlatform } from "@/lib/pwa/install";
 interface IosInstructionsSheetProps { onClose: () => void; }
@@ -24,7 +25,7 @@ function InstructionsSheet({ title, steps, footnote, onClose }: InstructionsShee
   return <Modal open title={title} onClose={onClose} mobileLayout="sheet" size="sm">
     <ol className="space-y-3 text-body text-text">{steps.map((step, index) => <li key={index} className="flex items-start gap-3"><span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent-cyan/40 bg-accent-cyan/10 font-mono text-caption font-semibold text-accent-cyan">{index + 1}</span><span className="flex-1">{step.body}</span></li>)}</ol>
     {footnote ? <p className="mt-4 rounded-lg border border-border bg-bg-elevated p-3 text-caption text-text-muted">{footnote}</p> : null}
-    <button type="button" onClick={onClose} className="mt-6 min-h-11 w-full rounded-lg bg-accent px-4 font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Got it</button>
+    <Button fullWidth className="mt-6" onClick={onClose}>Got it</Button>
   </Modal>;
 }
 

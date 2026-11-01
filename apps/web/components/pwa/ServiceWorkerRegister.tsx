@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { startInstallCapture } from "@/lib/pwa/install";
 import { RefreshCw } from "lucide-react";
+import { buttonClassName } from "@/components/ui/buttonStyles";
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -200,7 +201,7 @@ export function ServiceWorkerRegister() {
             target?.focus();
             setLater(true);
           }}
-          className="inline-flex min-h-[36px] items-center rounded-lg px-3 text-caption font-semibold text-text-muted transition-colors hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:opacity-60"
+          className={buttonClassName({ variant: "ghost", size: "sm" })}
         >
           Later
         </button>
@@ -215,7 +216,7 @@ export function ServiceWorkerRegister() {
             // anyway after a short grace period.
             window.setTimeout(() => window.location.reload(), 3000);
           }}
-          className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-accent px-3 text-caption font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:opacity-60"
+          className={buttonClassName({ variant: "primary", size: "sm" })}
         >
           <RefreshCw
             className={`h-3.5 w-3.5 ${applying ? "animate-spin" : ""}`}

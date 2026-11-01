@@ -26,7 +26,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { CloudUpload } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Button, LinkButton } from "@/components/ui/Button";
 import { API_BASE } from "@/lib/clientApi";
 import { trackInstantError, trackInstantSignupClick, trackInstantUploadDone } from "@/lib/instant/analytics";
 import { TRY_SIGN_IN_HREF, TRY_SIGN_UP_HREF } from "@/lib/instant/authRedirect";
@@ -225,17 +225,9 @@ const LINK_CLASS =
 function SignedOutActions() {
   return (
     <div className="space-y-2">
-      <Link
-        href={TRY_SIGN_UP_HREF}
-        onClick={() => trackInstantSignupClick()}
-        className={[
-          "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-2 border-line bg-accent px-5",
-          "font-semibold text-white hard-press hover:brightness-95",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-        ].join(" ")}
-      >
+      <LinkButton href={TRY_SIGN_UP_HREF} onClick={() => trackInstantSignupClick()}>
         Create a free account
-      </Link>
+      </LinkButton>
       <p className="text-caption text-text-muted">
         Already have an account?{" "}
         <Link href={TRY_SIGN_IN_HREF} className={["inline-flex min-h-[44px] items-center", LINK_CLASS].join(" ")}>

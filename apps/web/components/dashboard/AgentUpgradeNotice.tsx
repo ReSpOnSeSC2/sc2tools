@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { LinkButton } from "@/components/ui/Button";
 import { Download, ShieldAlert } from "lucide-react";
 import { AgentLiveUpsell } from "@/components/instant/AgentLiveUpsell";
 import { useReleaseInfo } from "@/components/onboarding/useReleaseInfo";
@@ -160,13 +160,10 @@ function AgentNoticeBanner({
             )}
           </div>
         </div>
-        <Link
-          href="/download"
-          className="hard-press inline-flex min-h-[44px] w-full flex-shrink-0 items-center justify-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 py-2 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:w-auto"
-        >
-          <Download className="h-4 w-4" aria-hidden />
+        <LinkButton href="/download" variant="secondary" size="sm" className="min-h-11 w-full flex-shrink-0 sm:w-auto"
+          iconLeft={<Download className="h-4 w-4" aria-hidden />}>
           {state.action}
-        </Link>
+        </LinkButton>
       </div>
     </section>
   );

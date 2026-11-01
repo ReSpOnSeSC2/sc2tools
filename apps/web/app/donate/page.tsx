@@ -18,6 +18,7 @@ import { CopyPaypalEmail } from "@/components/donate/CopyPaypalEmail";
 import type { LucideIcon } from "lucide-react";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { Badge, Card, GlowHalo, Section } from "@/components/ui";
+import { buttonClassName } from "@/components/ui/buttonStyles";
 import {
   FIXED_MONTHLY_FALLBACK_USD,
   formatAtlasDiskBytes,
@@ -160,7 +161,7 @@ function DonationCard({ channel }: { channel: DonationChannel }) {
           href={channel.href}
           target="_blank"
           rel="noopener"
-          className="mt-auto inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-accent px-4 text-body font-semibold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          className={buttonClassName({ variant: "primary", className: "mt-auto" })}
         >
           {channel.cta}
           <ExternalLink className="h-4 w-4" aria-hidden />

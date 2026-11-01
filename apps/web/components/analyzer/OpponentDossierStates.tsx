@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { UserX } from "lucide-react";
+import { LinkButton } from "@/components/ui/Button";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { SkeletonBar, SkeletonCard, SkeletonRegion } from "@/components/ui/Skeleton";
 import type { RequestErrorProps } from "@/components/ui/RequestError";
@@ -43,12 +43,9 @@ export function OpponentNotFound() {
         title="Not in your history"
         description="The link may be out of date, or the games against them were deleted."
         action={
-          <Link
-            href="/app/opponents"
-            className="hard-press inline-flex h-9 min-w-[44px] items-center justify-center rounded-full border-2 border-line bg-bg-surface px-4 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-          >
+          <LinkButton href="/app/opponents" variant="secondary" size="sm">
             Back to opponents
-          </Link>
+          </LinkButton>
         }
       />
     </div>

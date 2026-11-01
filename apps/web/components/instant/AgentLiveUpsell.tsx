@@ -17,7 +17,7 @@
  *   <AgentLiveUpsell variant="inline" dismissKey="sc2tools.instant.agentUpsell.today" />
  */
 import { useEffect, useId, useState } from "react";
-import Link from "next/link";
+import { LinkButton } from "@/components/ui/Button";
 import { Clapperboard, Download, MonitorPlay, Radar, RefreshCw, X } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
@@ -54,12 +54,6 @@ export const AGENT_LIVE_FEATURES = [
   },
 ] as const;
 
-const DOWNLOAD_LINK_CLASS = [
-  "hard-press inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5",
-  "font-display text-caption font-bold text-text hover:bg-bg-elevated",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-].join(" ");
-
 function isBoolean(value: unknown): value is boolean {
   return typeof value === "boolean";
 }
@@ -83,10 +77,10 @@ function DismissButton({ onDismiss }: { onDismiss: () => void }) {
 
 function DownloadLink({ label }: { label: string }) {
   return (
-    <Link href="/download" className={DOWNLOAD_LINK_CLASS}>
-      <Download className="h-4 w-4" aria-hidden />
+    <LinkButton href="/download" variant="secondary" size="sm" className="min-h-11"
+      iconLeft={<Download className="h-4 w-4" aria-hidden />}>
       {label}
-    </Link>
+    </LinkButton>
   );
 }
 
