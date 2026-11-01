@@ -10,13 +10,15 @@ const {
 } = require("../src/middleware/privateSearchTelemetry");
 
 describe("typed search in request URLs (ADR 0069 amendment)", () => {
-  // The web report sanitiser's test (lib/feedback/__tests__/sanitise.test.ts) shares the first four rows.
+  // The web report sanitiser's test (lib/feedback/__tests__/sanitise.test.ts) shares the first six rows.
   test.each([
     ["/v1/replays?search=Rival&limit=5&sort=date_desc&enrich=none&window=recent",
       "/v1/replays?search=%5Bredacted%5D&limit=5&sort=date_desc&enrich=none&window=recent"],
     ["/v1/replays?search[]=Rival&limit=5", "/v1/replays?search%5B%5D=%5Bredacted%5D&limit=5"],
     ["/v1/community/builds?view=quick&q=Stargate&limit=8", "/v1/community/builds?view=quick&q=%5Bredacted%5D&limit=8"],
     ["/v1/replays/g-1?search=keep", "/v1/replays/g-1?search=keep"],
+    ["/v1/replays?[search]=Rival&%5Bsearch%5D%5B0%5D=Bob&[search=keep", "/v1/replays?%5Bsearch%5D=%5Bredacted%5D&%5Bsearch%5D%5B0%5D=%5Bredacted%5D&%5Bsearch=keep"],
+    ["/v1/community/builds?view=quick&[q]=Stargate", "/v1/community/builds?view=quick&%5Bq%5D=%5Bredacted%5D"],
     ["https://api.example.test/V1/REPLAYS/?search[]=Rival&search[0]=Bob&limit=5",
       "/V1/REPLAYS/?search%5B%5D=%5Bredacted%5D&search%5B0%5D=%5Bredacted%5D&limit=5"],
     ["/v1/replays?se%61rch=Rival", "/v1/replays?search=%5Bredacted%5D"],

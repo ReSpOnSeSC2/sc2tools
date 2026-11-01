@@ -1,5 +1,6 @@
 "use strict";
 
+const { BSONRegExp } = require("mongodb");
 const { COMMUNITY_SEARCH_COMMENT } = require("../middleware/searchQueryPrivacy");
 const { boundedPublicString } = require("./communityBuildSnapshot");
 
@@ -38,8 +39,9 @@ function quickRow(row) {
 
 /**
  * Published builds whose title or author name has a word starting with `query`
- * (escaped, case-insensitive), most votes first. No index serves this match:
- * the rows examined are bounded by the published builds and the deadline.
+ * (escaped, case-insensitive), most votes first. A word starts at the beginning
+ * or after any character that is not a letter or digit in any script. No index
+ * serves this match: the rows examined are bounded by the published builds and the deadline.
  * Example: quickSearchCommunityBuilds(db.communityBuilds, "stargate", { limit: 8 }).
  * @param {import('mongodb').Collection} builds
  * @param {string} query already validated: 2-80 code points, no controls
@@ -49,7 +51,9 @@ function quickRow(row) {
 async function quickSearchCommunityBuilds(builds, query, opts = {}) {
   const limit = Math.min(Math.max(1, Math.trunc(Number(opts.limit) || COMMUNITY_QUICK_LIMIT)), COMMUNITY_QUICK_LIMIT);
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`(?:^|[^A-Za-z0-9])${escaped}`, "i");
+  // The server's PCRE reads this pattern exactly as written, in UTF mode. A JavaScript
+  // RegExp would arrive as its `source`, which spells a line separator as \u that PCRE rejects.
+  const pattern = new BSONRegExp(`(?:^|[^\\p{L}\\p{N}])${escaped}`, "i");
   const rows = await builds.aggregate([
     { $match: { removed: false, $or: [{ title: pattern }, { authorName: pattern }] } },
     { $sort: { votes: -1, publishedAt: -1, slug: 1 } },

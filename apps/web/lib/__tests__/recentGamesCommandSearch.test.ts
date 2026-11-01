@@ -8,7 +8,7 @@ import {
 
 const BASE = API_BASE.replace(/\/+$/, "");
 function row(gameId: string, overrides: Record<string, unknown> = {}) {
-  return { gameId, date: "2026-10-29T18:00:00.000Z", result: "Victory", map: "Alcyone LE", durationSec: 612,
+  return { gameId, date: "2026-10-29T12:00:00.000Z", result: "Victory", map: "Alcyone LE", durationSec: 612,
     myBuild: "Blink", matchup: "PvT", opponent: { displayName: "Rival", race: "Terran", pulseId: "1-S2-1-9" },
     replayAvailable: true, streams: [], ...overrides };
 }
@@ -42,7 +42,7 @@ describe("recent games decoder", () => {
   it("picks only what a row needs and keeps the server's order", () => {
     const decoded = decodeRecentGames(page([row("g-2"), row("g-1", { result: "Defeat", opponent: null, matchup: null, date: null })]));
     expect(decoded).toEqual({ hasMore: false, items: [
-      { gameId: "g-2", date: "2026-10-29T18:00:00.000Z", result: "Win", map: "Alcyone LE", matchup: "PvT", opponent: "Rival" },
+      { gameId: "g-2", date: "2026-10-29T12:00:00.000Z", result: "Win", map: "Alcyone LE", matchup: "PvT", opponent: "Rival" },
       { gameId: "g-1", date: null, result: "Loss", map: "Alcyone LE", matchup: null, opponent: null },
     ] });
     expect(JSON.stringify(decoded)).not.toMatch(/owner-id|1-S2-1-9|Blink/);

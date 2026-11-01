@@ -58,7 +58,7 @@ This is the one request URL that carries a private query. On /v1/replays:
 
 Two recorders are outside the app: the hosting provider's and its edge's request logs, and database slow-operation logs. Both can still hold the URL or the filter, as they already do for the Replays page's own search box. Moving recent games into the POST body would remove that exposure. It would need a version-3 response and capacity evidence, and it is not part of this amendment.
 
-**Personal maps.** The first valid private query of an opening reads the existing owner-scoped GET /v1/maps, unfiltered and without the query. It is the same request and the same in-memory entry Arcade uses, so it runs at most once per page session, with no revalidation and no automatic retry.
+**Personal maps.** The first valid private query of an opening reads the existing owner-scoped GET /v1/maps, unfiltered and without the query. A list Arcade already loaded in the page session is reused with no request. Otherwise the palette reads into its own in-memory entry, so closing it mid-read never cancels a read Arcade joined. It runs at most once per page session, with no revalidation and no automatic retry.
 
 - The browser admits at most 2,000 map rows. A larger list answers "too large for quick search".
 - Matching is a literal, anchored, case-insensitive prefix with Unicode simple case folding. Results are sorted most games first, at most eight, and link through privateCommandHref({kind: "map"}).
@@ -94,7 +94,7 @@ Two recorders are outside the app: the hosting provider's and its edge's request
 - Rows link only to /community/builds/<validated slug>.
 - Signed-in viewers never send it; their library search stays the private POST.
 
-The API serves view=quick with an escaped, case-insensitive word-start match on title and author name.
+The API serves view=quick with an escaped, case-insensitive word-start match on title and author name. A word starts at the beginning or after any character that is not a letter or digit in any script.
 
 - It returns at most eight slim rows, {slug, title, matchup, authorName, votes}, and hasMore, with no count.
 - It runs under maxTimeMS 300, sends no-store, and is limited to 120 requests per minute per IP.
