@@ -155,11 +155,12 @@ function privateStatus(state: CommandPalettePrivateState) {
   // result is "No public matches". Only a failure offers Retry: "deferred" is a lasting product state.
   const groups = state.data ? Object.entries(state.data.groups).filter(([key]) => !local || key !== "maps").map(([, group]) => group) : [];
   const localUnavailable = local?.phase === "ready" && local.group?.status === "unavailable";
-  const gamesFailed = !!games?.validQuery && games.phase === "error";
+  // Recent games skip a query the replay library would cut, so nothing there was searched.
+  const gamesFailed = !!games?.validQuery && games.phase === "error", gamesSkipped = !!games && !games.validQuery;
   return {
     pending: state.validQuery && (["debouncing", "loading"].includes(state.phase) || local?.phase === "loading"
       || (!!games?.validQuery && ["debouncing", "loading"].includes(games.phase))),
-    incomplete: state.phase === "error" || groups.some(group => group.status === "unavailable") || gamesFailed
+    incomplete: state.phase === "error" || groups.some(group => group.status === "unavailable") || gamesFailed || gamesSkipped
       || (!!local && (local.phase !== "ready" || localUnavailable || local.partial)),
     unavailable: state.phase === "error" || groups.some(group => group.status === "unavailable" && group.reason !== "deferred")
       || gamesFailed || local?.phase === "error" || localUnavailable,

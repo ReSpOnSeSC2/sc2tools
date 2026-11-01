@@ -11,12 +11,13 @@ vi.mock("@clerk/nextjs", () => ({ useAuth: () => h.auth }));
 import { API_BASE, useApi } from "../clientApi";
 import { usePrivateMapSearch } from "../usePrivateMapSearch";
 
-const MAPS = `${API_BASE}/v1/maps`;
+const MAPS = `${API_BASE}/v1/maps`, PALETTE = `${MAPS}#command-search`;
 const ROWS = [
   { name: "Alcyone LE", wins: 5, losses: 4, total: 9, winRate: 0.56 },
   { name: "Amphion LE", wins: 1, losses: 2, total: 3, winRate: 0.33 },
 ];
 const fetching = vi.fn<typeof fetch>();
+const urls = () => fetching.mock.calls.map(([input]) => String(input));
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value),
   { status, headers: { "content-type": "application/json" } });
 let cache = new Map();
@@ -45,7 +46,7 @@ describe("personal maps in quick search", () => {
     view.rerender({ query: "al" });
     expect(view.result.current.phase).toBe("loading");
     await waitFor(() => expect(view.result.current.phase).toBe("ready"));
-    expect(fetching).toHaveBeenCalledOnce(); expect(String(fetching.mock.calls[0][0])).toBe(MAPS);
+    expect(fetching).toHaveBeenCalledOnce(); expect(urls()).toEqual([PALETTE]);
     expect(view.result.current.choices.map(choice => choice.label)).toEqual(["Alcyone LE"]);
     view.rerender({ query: "am" }); await settle();
     expect(view.result.current.choices.map(choice => choice.href)).toEqual(["/app/maps?focus=Amphion%20LE"]);
@@ -77,6 +78,51 @@ describe("personal maps in quick search", () => {
     act(() => view.result.current.retry());
     await waitFor(() => expect(view.result.current.phase).toBe("ready"));
     expect(fetching).toHaveBeenCalledTimes(2);
+  });
+
+  it("never cancels a read Arcade joined: a palette closed mid-read leaves Arcade's own read alone", async () => {
+    let release!: (value: Response) => void;
+    fetching.mockImplementationOnce(() => new Promise<Response>(resolve => { release = resolve; }));
+    // Arcade's root mounts first, so it owns the shared SWR state the palette's root leaves behind.
+    const arcade = renderHook(({ on }: { on: boolean }) => useApi<unknown>(on ? "/v1/maps" : null),
+      { wrapper, initialProps: { on: false } });
+    const view = renderMaps({ query: "alc" });
+    await waitFor(() => expect(fetching).toHaveBeenCalledOnce());
+    arcade.rerender({ on: true });
+    // SWR re-renders only for fields read before an update, so read both now.
+    expect(arcade.result.current.data).toBeUndefined(); expect(arcade.result.current.error).toBeUndefined();
+    view.unmount();
+    await act(async () => release(json(ROWS)));
+    await waitFor(() => expect(arcade.result.current.data).toEqual(ROWS));
+    expect(arcade.result.current.error).toBeUndefined();
+    expect(urls()).toEqual([PALETTE, MAPS]);
+    // The closed palette's own entry stays clean, so the next opening reads again.
+    const next = renderMaps({ query: "alc" });
+    await waitFor(() => expect(next.result.current.phase).toBe("ready"));
+  });
+
+  it("starts its own read, with its own deadline, while Arcade's read is still pending", async () => {
+    fetching.mockImplementationOnce(() => new Promise<Response>(() => {}));
+    renderHook(() => useApi<unknown>("/v1/maps"), { wrapper });
+    await waitFor(() => expect(fetching).toHaveBeenCalledOnce());
+    const view = renderMaps({ query: "alc" });
+    await waitFor(() => expect(view.result.current.phase).toBe("ready"));
+    expect(urls()).toEqual([MAPS, PALETTE]);
+  });
+
+  it("re-reads a list too large for the browser once per Retry, never while that read is in flight", async () => {
+    const huge = Array.from({ length: 2_001 }, (_, index) => ({ name: `Map ${index} LE`, wins: 1, losses: 0, total: 1, winRate: 1 }));
+    fetching.mockImplementationOnce(async () => json(huge));
+    let hold!: (value: Response) => void;
+    fetching.mockImplementationOnce(() => new Promise<Response>(resolve => { hold = resolve; }));
+    const view = renderMaps({ query: "map" });
+    await waitFor(() => expect(view.result.current.group?.status).toBe("unavailable"));
+    act(() => view.result.current.retry());
+    await waitFor(() => expect(fetching).toHaveBeenCalledTimes(2));
+    act(() => view.result.current.retry()); act(() => view.result.current.retry());
+    await settle();
+    expect(fetching).toHaveBeenCalledTimes(2);
+    await act(async () => hold(json(huge)));
   });
 
   it("expires a selection draft when the query changes or the palette closes", async () => {
