@@ -114,3 +114,15 @@ describe("fixed internal command destinations", () => {
     "retains admitted destination %s", href => expect(isCommandSearchHref(href)).toBe(true),
   );
 });
+
+describe("Recent keeps visit order", () => {
+  it("lists Recent newest first as stored, never alphabetically, while other groups still rank", () => {
+    const recent = [item("recent:trends", "Trends", { group: "recent" }), item("recent:opponent:1-S2-1-9", "Opponent dossier", { group: "recent" }),
+      item("recent:builds", "Builds", { group: "recent" })];
+    const pages = [item("navigation:zeta", "Zeta"), item("navigation:alpha", "Alpha")];
+    const groups = searchCommands([...recent, ...pages], "");
+    expect(groups.find(group => group.id === "recent")?.items.map(entry => entry.id))
+      .toEqual(["recent:trends", "recent:opponent:1-S2-1-9", "recent:builds"]);
+    expect(groups.find(group => group.id === "navigation")?.items.map(entry => entry.label)).toEqual(["Alpha", "Zeta"]);
+  });
+});

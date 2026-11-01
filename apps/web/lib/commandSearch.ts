@@ -113,9 +113,13 @@ function rankedItems(items: readonly CommandSearchItem[], query: string) {
     if (item.href && !isCommandSearchHref(item.href)) return false;
     seen.add(item.id);
     return true;
-  }).map(item => ({ item, score: itemScore(item, query, queryTokens) }))
+  }).map((item, index) => ({ item, index, score: itemScore(item, query, queryTokens) }))
     .filter(result => result.score > 0)
-    .sort((left, right) => right.score - left.score
+    // Callers read one group at a time. Recent keeps its stored visit order, newest first;
+    // every other group ranks by score, then label.
+    .sort((left, right) => compareText(left.item.group, right.item.group)
+      || (left.item.group === "recent" ? left.index - right.index : 0)
+      || right.score - left.score
       || compareText(foldText(left.item.label), foldText(right.item.label))
       || compareText(left.item.id, right.item.id));
 }

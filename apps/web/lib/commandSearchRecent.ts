@@ -1,8 +1,13 @@
-/** Lightweight static destination history. No catalogs, auth, network or module-level owner state. */
+/** Per-viewer recent destinations: static pages and opponent dossiers. No catalogs, auth, network or module-level owner state. */
 export const COMMAND_SEARCH_RECENT_KEY = "sc2tools:palette-recent:v1";
 export const COMMAND_SEARCH_RECENT_MAX = 8;
+/** Dossier entries show, and record, only where the navigation lists this key. */
+export const COMMAND_SEARCH_RECENT_DOSSIERS = "opponents";
 export type CommandRecentStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
-type RecentEnvelope = { version: 1; viewer: string; ids: string[] };
+export type CommandRecentEntry = Readonly<{ kind: "page"; id: string } | { kind: "opponent"; pulseId: string }>;
+// Version 1 stored {version: 1, viewer, ids}; version 2 stores {version: 2, viewer, entries},
+// newest first, and every write is version 2 (ADR 0069, 2026-11-01 amendment).
+type RecentEnvelope = { viewer: string; entries: CommandRecentEntry[] };
 type RecentRead = { kind: "ok"; envelope: RecentEnvelope } | { kind: "missing" | "invalid" | "error" };
 const STORAGE_CHARS_MAX = 2_048;
 const ALLOWED_IDS_MAX = 128;
@@ -15,8 +20,21 @@ function staticId(id: unknown): id is string {
   return typeof id === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(id) && !/\s/.test(id);
 }
 
+/** Toon-handle pulse IDs only, so a crafted dossier link's text never reaches storage. Example: "1-S2-1-267727". */
+export function isDossierPulseId(value: unknown): value is string {
+  return typeof value === "string" && value.length <= 64 && /^\d+-S2-\d+-\d+$/.test(value);
+}
+
+function entryKey(entry: CommandRecentEntry): string {
+  return entry.kind === "page" ? `page:${entry.id}` : `opponent:${entry.pulseId}`;
+}
+
 function admittedIds(allowed: readonly string[]): ReadonlySet<string> {
   return new Set(allowed.length <= ALLOWED_IDS_MAX ? allowed.filter(staticId) : []);
+}
+
+function admits(entry: CommandRecentEntry, admitted: ReadonlySet<string>): boolean {
+  return admitted.has(entry.kind === "page" ? entry.id : COMMAND_SEARCH_RECENT_DOSSIERS);
 }
 
 function browserStorage(injected?: CommandRecentStorage): CommandRecentStorage | null {
@@ -25,19 +43,32 @@ function browserStorage(injected?: CommandRecentStorage): CommandRecentStorage |
   catch { return null; }
 }
 
-function storedIds(value: unknown): string[] | null {
+function decodeEntry(value: unknown): CommandRecentEntry | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>, keys = Object.keys(record).sort().join(",");
+  if (keys === "id,kind" && record.kind === "page" && staticId(record.id)) return { kind: "page", id: record.id };
+  if (keys === "kind,pulseId" && record.kind === "opponent" && isDossierPulseId(record.pulseId)) {
+    return { kind: "opponent", pulseId: record.pulseId };
+  }
+  return null;
+}
+
+/** Any bad, repeated or extra part rejects the whole list. */
+function storedEntries(value: unknown, version: 1 | 2): CommandRecentEntry[] | null {
   if (!Array.isArray(value) || value.length > COMMAND_SEARCH_RECENT_MAX) return null;
-  if (!value.every(staticId) || new Set(value).size !== value.length) return null;
-  return value;
+  const entries = value.map((item: unknown) => version === 2 ? decodeEntry(item)
+    : staticId(item) ? { kind: "page" as const, id: item } : null);
+  if (!entries.every((entry): entry is CommandRecentEntry => entry !== null)) return null;
+  return new Set(entries.map(entryKey)).size === entries.length ? entries : null;
 }
 
 function decodeEnvelope(value: unknown): RecentEnvelope | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  if (Object.keys(value).sort().join(",") !== "ids,version,viewer") return null;
-  const record = value as Record<string, unknown>;
-  if (record.version !== 1 || !validViewer(record.viewer)) return null;
-  const ids = storedIds(record.ids);
-  return ids ? { version: 1, viewer: record.viewer, ids } : null;
+  const record = value as Record<string, unknown>, keys = Object.keys(record).sort().join(",");
+  if (!validViewer(record.viewer)) return null;
+  const entries = record.version === 1 && keys === "ids,version,viewer" ? storedEntries(record.ids, 1)
+    : record.version === 2 && keys === "entries,version,viewer" ? storedEntries(record.entries, 2) : null;
+  return entries ? { viewer: record.viewer, entries } : null;
 }
 
 function readEnvelope(storage: CommandRecentStorage): RecentRead {
@@ -52,8 +83,23 @@ function readEnvelope(storage: CommandRecentStorage): RecentRead {
   } catch { return { kind: "invalid" }; }
 }
 
-function viewerIds(read: RecentRead, viewer: string): string[] {
-  return read.kind === "ok" && read.envelope.viewer === viewer ? [...read.envelope.ids] : [];
+function viewerEntries(read: RecentRead, viewer: string): CommandRecentEntry[] {
+  return read.kind === "ok" && read.envelope.viewer === viewer ? [...read.envelope.entries] : [];
+}
+
+const pageIds = (entries: readonly CommandRecentEntry[]) => entries.flatMap(entry => entry.kind === "page" ? [entry.id] : []);
+
+/** This viewer's admitted entries in visit order, newest first. Pages this navigation does not
+ * list, and dossiers where it lists no Opponents, stay stored but hidden. Never writes.
+ * Example: readCommandSearchRecentEntries(viewer, ["today", "opponents"]). */
+export function readCommandSearchRecentEntries(
+  viewer: string | null, allowed: readonly string[], storage?: CommandRecentStorage,
+): CommandRecentEntry[] {
+  if (!validViewer(viewer)) return [];
+  const target = browserStorage(storage);
+  if (!target) return [];
+  const admitted = admittedIds(allowed);
+  return viewerEntries(readEnvelope(target), viewer).filter(entry => admits(entry, admitted));
 }
 
 /** Reads only this viewer's admitted static NAV_ENTRY keys; keys this page does not admit stay stored.
@@ -61,35 +107,45 @@ function viewerIds(read: RecentRead, viewer: string): string[] {
 export function readCommandSearchRecent(
   viewer: string | null, allowed: readonly string[], storage?: CommandRecentStorage,
 ): string[] {
-  if (!validViewer(viewer)) return [];
-  const target = browserStorage(storage);
-  if (!target) return [];
-  const admitted = admittedIds(allowed);
-  return viewerIds(readEnvelope(target), viewer).filter(id => admitted.has(id));
+  return pageIds(readCommandSearchRecentEntries(viewer, allowed, storage));
 }
 
-/** Moves one admitted static key to the front, at most eight, keeping this
- * viewer's other stored keys even when the current page does not list them.
+/** Moves one admitted entry to the front, at most eight, keeping this viewer's other stored
+ * entries even when the current page does not list them. Null when nothing was written. */
+function recordEntry(viewer: string, entry: CommandRecentEntry, allowed: readonly string[],
+  storage?: CommandRecentStorage): CommandRecentEntry[] | null {
+  if (!admits(entry, admittedIds(allowed))) return null;
+  const target = browserStorage(storage);
+  if (!target) return null;
+  const read = readEnvelope(target);
+  if (read.kind === "error") return null;
+  const key = entryKey(entry);
+  const entries = [entry, ...viewerEntries(read, viewer).filter(value => entryKey(value) !== key)].slice(0, COMMAND_SEARCH_RECENT_MAX);
+  const raw = JSON.stringify({ version: 2, viewer, entries });
+  if (raw.length > STORAGE_CHARS_MAX) return null;
+  try { target.setItem(COMMAND_SEARCH_RECENT_KEY, raw); return entries; }
+  catch { return null; }
+}
+
+/** Records a visit to one admitted static key; returns this viewer's stored page keys.
  * Example: recordCommandSearchRecent(viewer, "today", ids). */
 export function recordCommandSearchRecent(
   viewer: string | null, id: string, allowed: readonly string[], storage?: CommandRecentStorage,
 ): string[] {
   if (!validViewer(viewer) || !staticId(id)) return [];
-  const admitted = admittedIds(allowed);
-  if (!admitted.has(id)) return [];
-  const target = browserStorage(storage);
-  if (!target) return [];
-  const read = readEnvelope(target);
-  if (read.kind === "error") return [];
-  const previous = viewerIds(read, viewer);
-  const ids = [id, ...previous.filter(value => value !== id)].slice(0, COMMAND_SEARCH_RECENT_MAX);
-  try {
-    target.setItem(COMMAND_SEARCH_RECENT_KEY, JSON.stringify({ version: 1, viewer, ids }));
-    return ids;
-  } catch { return []; }
+  return pageIds(recordEntry(viewer, { kind: "page", id }, allowed, storage) ?? []);
 }
 
-/** Removes only the current matching viewer envelope. Example: clearCommandSearchRecent(signedOutViewer). */
+/** Records an opened dossier by its pulse ID only, where the navigation lists Opponents.
+ * Example: recordCommandSearchRecentOpponent(viewer, "1-S2-1-267727", ids). */
+export function recordCommandSearchRecentOpponent(
+  viewer: string | null, pulseId: string, allowed: readonly string[], storage?: CommandRecentStorage,
+): boolean {
+  if (!validViewer(viewer) || !isDossierPulseId(pulseId)) return false;
+  return recordEntry(viewer, { kind: "opponent", pulseId }, allowed, storage) !== null;
+}
+
+/** Removes only the current matching viewer envelope, of either version. Example: clearCommandSearchRecent(signedOutViewer). */
 export function clearCommandSearchRecent(viewer: string | null, storage?: CommandRecentStorage): boolean {
   if (!validViewer(viewer)) return false;
   const target = browserStorage(storage);
