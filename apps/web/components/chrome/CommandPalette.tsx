@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
+import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -118,8 +119,9 @@ function ResultGroup({ group, base, activeId, onActive, onChoose }: {
         canChoose(item) ? "hover:bg-bg-elevated" : "cursor-default",
       ].join(" ")}>
       <span className="flex w-full min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="min-w-0 break-words text-body font-medium">{item.label}</span>
-        {item.matchup ? <span className="text-caption text-text-muted">{item.matchup}</span> : null}
+        {/* An unpublished guide stays listed, unlinked and greyed, with its reason. */}
+        <span className={`min-w-0 break-words text-body font-medium ${canChoose(item) ? "" : "text-text-muted"}`}>{item.label}</span>
+        {item.matchup ? <Badge size="sm">{item.matchup}</Badge> : null}
       </span>
       {item.description ? <span className="break-words text-caption text-text-muted">{item.description}</span> : null}
     </button>)}

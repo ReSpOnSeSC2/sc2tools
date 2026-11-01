@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCommandGuideCatalog } from "@/lib/commandGuideSearch";
@@ -198,6 +198,10 @@ describe("palette result focus and publication", () => {
       initialQuery: "12 pool pvz", onSelect: select });
     const options = screen.getAllByRole("option");
     expect(options.every(option => option.getAttribute("aria-disabled") === "true")).toBe(true);
+    // Unlinked rows stay listed but greyed; each carries its matchup as a badge.
+    const pool = options.find(option => option.textContent?.startsWith("12 Pool"))!;
+    expect(within(pool).getByText("12 Pool").className).toContain("text-text-muted");
+    expect(within(pool).getByText("PvZ").className).toContain("min-h-5");
     expect(input.getAttribute("aria-activedescendant")).toBeNull();
     fireEvent.keyDown(input, { key: "ArrowDown" }); fireEvent.keyDown(input, { key: "Enter" });
     fireEvent.pointerDown(options[0]); fireEvent.click(options[0]);
@@ -212,6 +216,7 @@ describe("palette result focus and publication", () => {
     const { input } = await open({ guideItems, scope: "guides", initialQuery: "12pool pvz", onSelect: select });
     const enabled = screen.getAllByRole("option").filter(option => option.getAttribute("aria-disabled") !== "true");
     expect(enabled).toHaveLength(1);
+    expect(within(enabled[0]).getByText("12 Pool").className).not.toContain("text-text-muted");
     fireEvent.keyDown(input, { key: "ArrowDown" });
     expect(input.getAttribute("aria-activedescendant")).toBe(enabled[0].id);
     fireEvent.keyDown(input, { key: "Enter" });

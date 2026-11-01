@@ -74,6 +74,14 @@ describe("public guide map metadata", () => {
     expect(JSON.stringify(rows)).not.toContain("DO NOT INDEX ME");
   });
 
+  it.each(["alcyone pvz", "PvZ alcyone"])("finds a map from a matchup-scoped query (%s), but never from the matchup alone", query => {
+    const catalog = createCommandGuideCatalog({ maps: [{ map: "Alcyone LE", slug: "alcyone-le" }], publishedPaths: new Set(["/guides/maps/alcyone-le"]) });
+    const found = searchCommands(catalog, query, ["guide-maps"]).flatMap(group => group.items);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ label: "Alcyone LE", href: "/guides/maps/alcyone-le", disabled: false });
+    expect(searchCommands(catalog, "pvz", ["guide-maps"]).flatMap(group => group.items)).toHaveLength(0);
+  });
+
   it("rejects duplicate/noncanonical/malformed maps instead of constructing candidate links", () => {
     const maps = [
       { map: "Alcyone LE", slug: "alcyone-le" }, { map: "Alcyone LE", slug: "alcyone-le" },

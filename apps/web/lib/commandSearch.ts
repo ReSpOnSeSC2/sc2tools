@@ -78,6 +78,8 @@ function tokenWeight(token: string, fields: readonly string[][]): number {
   return prefix < 0 ? 0 : [4, 2, 0.5][prefix];
 }
 
+const MATCHUP_TOKEN = /^[ptz]v[ptz]$/;
+
 function itemScore(item: CommandSearchItem, query: string, queryTokens: readonly string[]): number {
   if (!query) return 1;
   const label = foldText(item.label);
@@ -85,7 +87,10 @@ function itemScore(item: CommandSearchItem, query: string, queryTokens: readonly
   if (label === query) return 1_000;
   if (aliases.includes(query)) return 900;
   const fields = [tokens(label), tokens(aliases.join(" ")), tokens(item.description ?? "")];
-  const weights = queryTokens.map(token => tokenWeight(token, fields));
+  // A matchup word scopes guide rows; a map row has no matchup, so it skips
+  // that word (the matchup page's field prefills one) and still needs the rest.
+  const own = item.group.startsWith("guide-") && !item.matchup ? queryTokens.filter(token => !MATCHUP_TOKEN.test(token)) : queryTokens;
+  const weights = own.map(token => tokenWeight(token, fields));
   if (!weights.length || weights.includes(0)) return 0;
   return weights.reduce((sum, value) => sum + value, 0) + (label.startsWith(query) ? 20 : 0);
 }
