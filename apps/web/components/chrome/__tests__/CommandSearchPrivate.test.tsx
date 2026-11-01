@@ -28,7 +28,7 @@ vi.mock("next/navigation", async () => {
 // and DTO parsing are all real; no new selection/admission callbacks are mocked.
 vi.mock("@/lib/guides/flags", () => ({ guidesEnabled: () => false }));
 
-const BASE = API_BASE.replace(/\/+$/, ""), ENDPOINT = `${BASE}/v1/search/quick`, MAPS = `${BASE}/v1/maps`;
+const BASE = API_BASE.replace(/\/+$/, ""), ENDPOINT = `${BASE}/v1/search/quick`, MAPS = `${BASE}/v1/maps#command-search`;
 const fetching = vi.fn<typeof fetch>();
 const navigation = [
   { key: "today", href: "/app", label: "Today" }, { key: "opponents", href: "/app/opponents", label: "Opponents" },

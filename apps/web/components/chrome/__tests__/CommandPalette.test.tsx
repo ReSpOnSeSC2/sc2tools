@@ -348,8 +348,11 @@ describe("personal maps and recent games", () => {
     expect(screen.getByText("Recent games are unavailable. Try again or open Replays.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry your library search" }));
     failed.unmount();
-    await open({ initialQuery: "rival", privateSearch: { ...deferred(), maps: maps({ choices: [] }), games: games({ validQuery: false, choices: [] }) } });
+    await open({ initialQuery: "zzz-none", privateSearch: { ...deferred(), maps: maps({ choices: [],
+      group: { status: "ready", items: [], hasMore: false } }), games: games({ validQuery: false, choices: [] }) } });
     expect(screen.getByText("Use a shorter search to find games.")).toBeTruthy();
+    // Recent games did not search, so an empty result is not "No matching results".
+    expect(screen.getByRole("status").textContent).toContain("No public matches.");
   });
 
   it("reports no matches honestly once every source answered in full", async () => {

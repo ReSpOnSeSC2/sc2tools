@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { unstable_serialize, useSWRConfig } from "swr";
 import { useApi } from "./clientApi";
 import {
   PRIVATE_COMMAND_SEARCH_DEBOUNCE_MS, privateCommandQuery, type PrivateCommandChoice, type PrivateSearchGroup,
@@ -17,11 +18,14 @@ const EMPTY_CHOICES: readonly PrivateCommandChoice[] = Object.freeze([]);
 // Arcade's own read of the same list; no focus, reconnect or automatic retry.
 const CATALOG_READ = { revalidateIfStale: false, revalidateOnFocus: false, revalidateOnReconnect: false,
   shouldRetryOnError: false, keepPreviousData: false } as const;
+// The palette's own cache identity for the same GET /v1/maps; the hash is never sent.
+const PALETTE_CATALOG_PATH = `${PRIVATE_MAP_CATALOG_PATH}#command-search`;
 
 /**
  * Personal maps for the palette. The first valid private query of an opening,
- * after the debounce, reads the owner's GET /v1/maps once through the same
- * in-memory entry Arcade uses; typing afterwards only filters in the browser.
+ * after the debounce, reuses the list Arcade already loaded, or reads the
+ * owner's GET /v1/maps once into the palette's own in-memory entry; typing
+ * afterwards only filters in the browser.
  * Signed out, the Guides scope and a closed palette never read it.
  */
 export function usePrivateMapSearch(options: PrivateCommandSearchOptions) {
@@ -37,12 +41,18 @@ export function usePrivateMapSearch(options: PrivateCommandSearchOptions) {
     return () => clearTimeout(timer);
   }, [eligible, query, armedFor, options.openingEpoch]);
   const armed = eligible && armedFor !== null && armedFor === options.openingEpoch;
-  // A palette closed mid-read must not write its abort into Arcade's shared entry.
+  // Its own entry means closing the palette mid-read never cancels a read Arcade joined, and a palette
+  // opened during Arcade's read keeps its own deadline. Its aborted read pauses SWR, so the entry stays clean.
+  const { cache } = useSWRConfig();
+  const loaded: unknown = armed && owner
+    ? cache.get(unstable_serialize(["authenticated-api", owner, PRIVATE_MAP_CATALOG_PATH]))?.data : undefined;
   const retired = useRef(false);
   useLayoutEffect(() => { retired.current = false; return () => { retired.current = true; }; }, []);
   const config = useMemo(() => ({ ...CATALOG_READ, isPaused: () => retired.current }), []);
-  const catalog = useApi<unknown>(armed ? PRIVATE_MAP_CATALOG_PATH : null, config, { timeoutMs: PRIVATE_MAP_SEARCH_TIMEOUT_MS });
-  const decoded = useMemo(() => catalog.data === undefined ? null : decodePrivateMapCatalog(catalog.data), [catalog.data]);
+  const catalog = useApi<unknown>(armed && loaded === undefined ? PALETTE_CATALOG_PATH : null, config,
+    { timeoutMs: PRIVATE_MAP_SEARCH_TIMEOUT_MS });
+  const data = loaded ?? catalog.data;
+  const decoded = useMemo(() => data === undefined ? null : decodePrivateMapCatalog(data), [data]);
   const group = useMemo<PrivateSearchGroup<PrivateSearchMap> | null>(
     () => decoded && query ? privateMapSearchGroup(decoded, query) : null, [decoded, query]);
   const choices = useMemo(() => group ? privateMapChoices(group) : EMPTY_CHOICES, [group]);
@@ -59,8 +69,10 @@ export function usePrivateMapSearch(options: PrivateCommandSearchOptions) {
     partial: phase === "ready" && decoded?.status === "ready" && decoded.partial,
     choices: phase === "ready" ? choices : EMPTY_CHOICES,
     timedOut: phase === "error" && catalog.error?.code === "request_timeout",
-    /** Reads the list again after a failure or a list the browser could not admit. */
-    retry: () => { if (phase === "error" || (phase === "ready" && group?.status === "unavailable")) void catalog.mutate(); },
+    /** Reads the list again after a failure or a list the browser could not admit; never while a read is in flight. */
+    retry: () => {
+      if (!catalog.isValidating && (phase === "error" || (phase === "ready" && group?.status === "unavailable"))) void catalog.mutate();
+    },
     selectionDraft: (choice: PrivateCommandChoice): PrivateCommandSelectionDraft | null => {
       if (phase !== "ready" || !snapshot.active || !snapshot.choices.includes(choice)) return null;
       return Object.freeze({ target: choice.target, href: choice.href, isCurrent: () => snapshot.active });

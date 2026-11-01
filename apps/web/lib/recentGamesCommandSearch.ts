@@ -88,7 +88,8 @@ export function decodeRecentGames(value: unknown): RecentGamesResponse {
   return Object.freeze({ items: Object.freeze(games), hasMore });
 }
 
-const DATE = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+// The viewer's own calendar day, as the rest of the app shows game dates.
+const DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 /** Rows link to the game page built locally from each validated game id. */
 export function recentGameChoices(response: RecentGamesResponse): readonly PrivateCommandChoice[] {
