@@ -136,7 +136,7 @@ const BASE_LESSONS: ReadonlyArray<Lesson> = [
       },
       {
         title: "Keep the controls within reach",
-        body: <>Copy the <strong>Stream Dock</strong> URL from the Multi-platform chat section. Open it on a second screen, or in OBS Studio under <strong>Docks → Custom Browser Docks</strong>. Its sticky header keeps the scene, active opponent, session record and connection within reach as you scroll. Start with <strong>Game</strong> for Crystal Ball controls, a confirmed session reset and reversible game-widget hiding, then use the other panels for chat, polls and scenes. To show a feature on stream, add its corresponding widget Browser Source.</>,
+        body: <>Copy the <strong>Stream Dock</strong> URL from the Stream Dock section of that same tab. Open it on a second screen, or in OBS Studio under <strong>Docks → Custom Browser Docks</strong>. Its sticky header keeps the scene, active opponent, session record and connection within reach as you scroll. Start with <strong>Game</strong> for Crystal Ball controls, a confirmed session reset and reversible game-widget hiding, then use the other panels for chat, polls and scenes. To show a feature on stream, add its corresponding widget Browser Source.</>,
       },
       {
         title: "Choose one practice upgrade",

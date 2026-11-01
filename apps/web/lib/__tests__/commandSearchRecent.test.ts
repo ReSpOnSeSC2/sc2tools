@@ -23,6 +23,17 @@ function envelope(viewer: string, ids: unknown) {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("static recent destination envelope", () => {
+  it("hides keys a narrower page does not list, and keeps them when that page records a visit", () => {
+    const storage = memoryStorage();
+    recordCommandSearchRecent("viewer-a", "today", allowed, storage);
+    recordCommandSearchRecent("viewer-a", "opponents", allowed, storage);
+    // A marketing page lists only some destinations: reading there hides, never erases.
+    expect(readCommandSearchRecent("viewer-a", ["community", "help"], storage)).toEqual([]);
+    expect(JSON.parse(storage.raw()!).ids).toEqual(["opponents", "today"]);
+    expect(recordCommandSearchRecent("viewer-a", "help", ["community", "help"], storage)).toEqual(["help", "opponents", "today"]);
+    expect(readCommandSearchRecent("viewer-a", allowed, storage)).toEqual(["help", "opponents", "today"]);
+    expect(readCommandSearchRecent("viewer-b", allowed, storage)).toEqual([]);
+  });
   it("writes only version/viewer/static IDs at the exact key, and moves a repeat to the front", () => {
     const storage = memoryStorage();
     expect(recordCommandSearchRecent("viewer-a", "today", allowed, storage)).toEqual(["today"]);

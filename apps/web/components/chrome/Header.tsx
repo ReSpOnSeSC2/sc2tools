@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AuthContextLink } from "@/components/auth/AuthContextLink";
 import { usePathname } from "next/navigation";
@@ -17,7 +17,8 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { reviewsVisible } from "@/lib/reviews";
 import { guidesEnabled } from "@/lib/guides/flags";
 import { getInstantImportMode } from "@/lib/instant/flag";
-import { headerNavLinks } from "./headerNav";
+import { headerLinkCommands, headerNavLinks } from "./headerNav";
+import type { CommandNavigation } from "./CommandSearchContext";
 import { LogoMark } from "./LogoMark";
 import { useCommandChrome, useCommandSearch } from "./CommandSearchContext";
 import { CommandSearchButton } from "./CommandSearchButton";
@@ -55,18 +56,33 @@ export function Header() {
   // useApi gates on isSignedIn internally, so this fetch is a no-op
   // for signed-out visitors — they never see the Admin link anyway.
   const { data: me } = useApi<MeAdminProbe>("/v1/me");
-  const navLinks = headerNavLinks({
+  const isAdmin = me?.isAdmin;
+  const navLinks = useMemo(() => headerNavLinks({
     guides: guidesEnabled(),
-    reviews: reviewsVisible(me?.isAdmin),
-    isAdmin: me?.isAdmin === true,
+    reviews: reviewsVisible(isAdmin),
+    isAdmin: isAdmin === true,
     tryPage: getInstantImportMode() === "all",
-  });
-  const commandSearch = useCommandSearch(), signedIn = Boolean(commandSearch?.ownerKey);
-  useCommandChrome({ ownerKey: commandSearch?.ownerKey ?? null, navigation: navLinks.filter(link =>
-    link.auth === "any" || (link.auth === "in" && signedIn) || (link.auth === "out" && !signedIn)
-      || (link.auth === "admin" && signedIn && me?.isAdmin === true))
-    .map(link => ({ key: link.href.replace(/^\//, "").replace(/[^a-z0-9-]/g, "-"),
-      href: link.href, label: link.label })), defaultSettingsAvailable: signedIn });
+  }), [isAdmin]);
+  const commandSearch = useCommandSearch(), commandOwner = commandSearch?.ownerKey ?? null, signedIn = Boolean(commandOwner);
+  // Signed in, the app's own sections (Today, Opponents, ...) arrive on
+  // demand; until then, and for visitors, the header's links stand in.
+  const [appNavigation, setAppNavigation] = useState<{ key: string; rows: CommandNavigation[] } | null>(null);
+  const appKey = `${commandOwner}:${isAdmin === true}`;
+  useEffect(() => {
+    if (!commandOwner) return;
+    let live = true;
+    void import("./headerCommandNavigation").then(({ signedInCommandNavigation }) => {
+      if (live) setAppNavigation({ key: appKey, rows: signedInCommandNavigation({
+        isAdmin: isAdmin === true, reviews: reviewsVisible(isAdmin), guides: guidesEnabled() }) });
+    }).catch(() => { /* The header's own links remain. */ });
+    return () => { live = false; };
+  }, [commandOwner, isAdmin, appKey]);
+  const linkCommands = useMemo(() => headerLinkCommands(navLinks, { signedIn, isAdmin: isAdmin === true }), [navLinks, signedIn, isAdmin]);
+  // Registered once per change, not per render: each registration records Recent.
+  const commandChrome = useMemo(() => ({ ownerKey: commandOwner, defaultSettingsAvailable: signedIn,
+    navigation: commandOwner && appNavigation?.key === appKey ? appNavigation.rows : linkCommands }),
+  [commandOwner, signedIn, appNavigation, appKey, linkCommands]);
+  useCommandChrome(commandChrome);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4);

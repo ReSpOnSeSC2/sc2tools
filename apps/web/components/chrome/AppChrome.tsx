@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { AuthContextLink } from "@/components/auth/AuthContextLink";
 import { buttonClassName } from "@/components/ui/buttonStyles";
@@ -21,7 +21,7 @@ import { ConditionalApiProvider } from "@/lib/conditionalApiScope";
 import type { ReportType } from "@/lib/feedback/reportContext";
 import {
   MOBILE_TAB_KEYS,
-  NAV_ENTRIES,
+  admittedNavEntries,
   isAnalyzerPath,
   matchSurface,
   surfaceTitle,
@@ -170,20 +170,19 @@ function AppChromeShell({ children }: { children: ReactNode }) {
     coachingMe?.role === "coach" ||
     coachingMe?.role === "student";
 
-  const entries = NAV_ENTRIES.filter(
-    (e) =>
-      (!e.adminOnly || me?.isAdmin === true) &&
-      (!e.coachingOnly || hasCoachingAccess) &&
-      (!e.reviewsRollout || reviewsVisible(me?.isAdmin)) &&
-      (!e.guidesFlag || guidesEnabled()),
-  );
+  const isAdmin = me?.isAdmin;
+  const entries = useMemo(() => admittedNavEntries({
+    isAdmin: isAdmin === true, coaching: hasCoachingAccess, reviews: reviewsVisible(isAdmin), guides: guidesEnabled(),
+  }), [isAdmin, hasCoachingAccess]);
   const sections = entries.filter((e) => e.group === "section");
   const utilities = entries.filter((e) => e.group === "utility");
-  const publicEntries = entries.filter((e) => e.publicRoute);
-  const commandSearch = useCommandSearch();
-  useCommandChrome({ ownerKey: commandSearch?.ownerKey ?? null,
-    navigation: commandSearch?.ownerKey ? entries : publicEntries,
-    defaultSettingsAvailable: Boolean(commandSearch?.ownerKey) });
+  const publicEntries = useMemo(() => entries.filter((e) => e.publicRoute), [entries]);
+  const commandSearch = useCommandSearch(), commandOwner = commandSearch?.ownerKey ?? null;
+  // Registered once per change, not per render: each registration records Recent.
+  const commandChrome = useMemo(() => ({ ownerKey: commandOwner,
+    navigation: commandOwner ? entries : publicEntries,
+    defaultSettingsAvailable: Boolean(commandOwner) }), [commandOwner, entries, publicEntries]);
+  useCommandChrome(commandChrome);
   const mobileTabs = sections.filter((e) => MOBILE_TAB_KEYS.includes(e.key));
   const sheetEntries = entries.filter((e) => !MOBILE_TAB_KEYS.includes(e.key));
   const inTabBar = activeKey != null && MOBILE_TAB_KEYS.includes(activeKey);
@@ -297,6 +296,8 @@ function AppChromeShell({ children }: { children: ReactNode }) {
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <CommandSearchButton className="hidden md:inline-flex" />
+              {/* Signed in, phones search from the More sheet; visitors have no sheet. */}
+              <SignedOut><CommandSearchButton iconOnly className="inline-flex md:hidden" /></SignedOut>
               <SignedIn>
                 <BuildCheckInAlert compact />
                 <CoachingBookingAlert compact />

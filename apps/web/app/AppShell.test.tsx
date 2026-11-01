@@ -64,6 +64,9 @@ vi.mock("@/components/pwa/ServiceWorkerRegister", () => ({
   ServiceWorkerRegister: () => <div data-testid="service-worker" />,
 }));
 
+vi.mock("@/components/chrome/CommandSearchProvider", () => ({
+  CommandSearchProvider: ({ children }: { children: ReactNode }) => <div data-testid="command-search">{children}</div>,
+}));
 vi.mock("@/components/chrome/AppChrome", () => ({
   AppChrome: ({ children }: { children: ReactNode }) => (
     <div data-testid="app-chrome">{children}</div>
@@ -110,6 +113,7 @@ describe("token-auth broadcast routes", () => {
     expect(screen.queryByTestId("site-stats")).toBeNull();
     expect(screen.queryByTestId("site-presence")).toBeNull();
     expect(screen.queryByTestId("device-history-guard")).toBeNull();
+    expect(screen.queryByTestId("command-search")).toBeNull();
     expect(screen.getByTestId("route-content").closest("main")).toBeTruthy();
   });
 });
@@ -118,7 +122,7 @@ it("renders status without auth, realtime, analytics, background traffic or site
   renderAt("/status");
   expect(screen.getByTestId("route-content")).toBeTruthy();
   expect(route.clerkRenders).not.toHaveBeenCalled();
-  for (const id of ["clerk-provider", "realtime-provider", "toast-provider", "site-header", "site-footer", "app-chrome", "cookie-banner", "google-analytics", "service-worker", "site-stats", "site-presence", "device-history-guard"]) {
+  for (const id of ["clerk-provider", "realtime-provider", "toast-provider", "site-header", "site-footer", "app-chrome", "cookie-banner", "google-analytics", "service-worker", "site-stats", "site-presence", "device-history-guard", "command-search"]) {
     expect(screen.queryByTestId(id)).toBeNull();
   }
 });
@@ -154,6 +158,7 @@ describe("app chrome routes", () => {
       expect(screen.getByTestId("app-chrome")).toBeTruthy();
       expect(screen.getByTestId("site-presence")).toBeTruthy();
       expect(screen.getByTestId("device-history-guard")).toBeTruthy();
+      expect(screen.getByTestId("command-search")).toBeTruthy();
       expect(screen.queryByTestId("site-header")).toBeNull();
       expect(screen.queryByTestId("site-footer")).toBeNull();
     },

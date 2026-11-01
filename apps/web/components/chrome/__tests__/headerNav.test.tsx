@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { headerNavLinks } from "../headerNav";
+import { headerLinkCommands, headerNavLinks } from "../headerNav";
 
 const harness = vi.hoisted(() => ({
   me: undefined as { isAdmin?: boolean } | undefined,
@@ -183,3 +183,19 @@ describe("Header", () => {
     expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
   });
 });
+
+describe("headerLinkCommands", () => {
+  const options = { guides: true, reviews: true, isAdmin: false, tryPage: true };
+  it("keys each header link like the app's NAV_ENTRY for the same page", () => {
+    const signedIn = headerLinkCommands(headerNavLinks(options), { signedIn: true, isAdmin: false });
+    expect(signedIn.map((row) => [row.key, row.href])).toEqual([
+      ["builds-library", "/builds"], ["guides", "/guides"], ["community", "/community"], ["reviews", "/reviews"],
+      ["help", "/help"], ["settings", "/settings"],
+    ]);
+    const visitor = headerLinkCommands(headerNavLinks(options), { signedIn: false, isAdmin: false });
+    expect(visitor.map((row) => row.key)).toEqual(["try", "stream-studio-page", "guides", "community", "reviews", "help", "download"]);
+    const admin = headerLinkCommands(headerNavLinks({ ...options, isAdmin: true }), { signedIn: true, isAdmin: true });
+    expect(admin.at(-1)).toEqual({ key: "admin", href: "/admin", label: "Admin" });
+  });
+});
+

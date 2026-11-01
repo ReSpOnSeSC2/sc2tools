@@ -131,8 +131,9 @@ function PaletteStatus({ count, enabled, query, status, onRetry, id, privateSear
   onRetry: () => void; id: string; privateSearch?: CommandPalettePrivateState;
 }) {
   const privatePending = privateSearch?.validQuery && ["debouncing", "loading"].includes(privateSearch.phase);
+  // "deferred" is a lasting product state (maps are not in quick search yet), not a failure to retry.
   const privateUnavailable = privateSearch?.phase === "error" || (privateSearch?.data
-    && Object.values(privateSearch.data.groups).some(group => group.status === "unavailable"));
+    && Object.values(privateSearch.data.groups).some(group => group.status === "unavailable" && group.reason !== "deferred"));
   const result = count ? `${count} results, ${enabled} available.`
     : privateSearch && (!privateSearch.validQuery || privatePending || privateUnavailable) ? "No public matches."
       : query.trim() ? "No matching results. Try another word." : "No results available.";
@@ -161,7 +162,7 @@ const PRIVATE_GROUPS = [
 ] as const;
 const PRIVATE_REASONS: Record<PrivateSearchUnavailableReason, string> = {
   source_budget_exceeded: "This library is too large for quick search.", invalid_data: "Some library entries could not be searched.",
-  deferred: "Quick search is not available for this library yet.", missing_access_path: "Quick search is unavailable for this library.",
+  deferred: "Not in quick search yet. Open the full library to browse it.", missing_access_path: "Quick search is unavailable for this library.",
   deadline: "This library search took too long.", busy: "This library search is busy.", retired: "This library changed during search. Search again.",
 };
 const LIBRARY_ITEMS: readonly CommandSearchItem[] = [

@@ -79,7 +79,7 @@ describe("private groups remain literal, distinct and bounded", () => {
   it("keeps the active opponent identity through same-query Retry and a changed server order", async () => {
     const base = personal(2), select = vi.fn(() => true);
     const first = decodePrivateCommandSearch({ version: 2, groups: { ...base.data!.groups,
-      maps: { status: "unavailable", items: [], hasMore: null, reason: "deferred" } } });
+      maps: { status: "unavailable", items: [], hasMore: null, reason: "busy" } } });
     const reordered = decodePrivateCommandSearch({ version: 2, groups: { ...first.groups, opponents: {
       status: "ready", hasMore: false, items: [
         { ...first.groups.opponents.items[1], lastSeen: "2026-10-27T12:00:00.000Z" },
@@ -105,6 +105,15 @@ describe("private groups remain literal, distinct and bounded", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(select).toHaveBeenCalledWith(next.choices[0]);
     expect(next.choices[0].target).toEqual({ kind: "opponent", pulseId: "id1" });
+  });
+  it("shows deferred maps as a lasting state, without a library failure or Retry", async () => {
+    const base = personal(1);
+    const data = decodePrivateCommandSearch({ version: 2, groups: { ...base.data!.groups,
+      maps: { status: "unavailable", items: [], hasMore: null, reason: "deferred" } } });
+    render(<CommandPalette {...defaults} initialQuery="unrelated" privateSearch={{ ...base, data, choices: privateCommandChoices(data) }} />);
+    expect(await screen.findByText("Not in quick search yet. Open the full library to browse it.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Retry your library search" })).toBeNull();
+    expect(screen.getByRole("status").textContent).not.toContain("Some library results are unavailable.");
   });
   it("keeps all server rows in server order without public query scoring", async () => {
     const state = personal(8), select = vi.fn();
