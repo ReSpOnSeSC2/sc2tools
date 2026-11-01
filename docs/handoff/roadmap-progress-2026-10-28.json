@@ -7,8 +7,8 @@
   "canonicalSha256": "7736aa72eada3a1b6d71ac1570accdbb24dbc6634138e5445c0fd3ce7fc58b60",
   "programStatus": "active_incomplete",
   "counts": {
-    "completed": 125,
-    "partial": 52,
+    "completed": 128,
+    "partial": 49,
     "open": 20,
     "unknown": 0
   },
@@ -1822,23 +1822,21 @@
       "ordinal": 69,
       "id": "ui-primitives-and-dialogs",
       "wave": 5,
-      "status": "partial",
+      "status": "completed",
       "title": "One focus-trap hook, Sheet/Popover/LinkButton/IconButton/CopyButton/useConfirm, and a UI lint ratchet",
       "dependsOn": [
         "contrast-tokens-and-a11y-gate"
       ],
-      "implemented": "Shared focus/Sheet/Popover/copy/confirm controls, gallery/ratchet and multiple migrated consumers are merged. PR850 (merged as d36449ee) moves the last two local CtaLink components to LinkButton and reconciles the plan's list, its augments and the checkpoint's follow-ups: the literal list is done; the 2xl dossier modal with a 44px Full page link, a shared Wordmark and the remaining hand-written link CTAs (18 UI lint baseline allowances in 16 files plus four the lint does not catch) are not.",
-      "remainingRequirements": [
-        "Reconcile remaining native confirm/prompt and manual-CTA consumers against the full migration inventory; initial reusable-UI checkpoint explicitly did not complete the item.",
-        "Retain typed destructive approvals and existing ready-and-merged Notification focus while migrating."
-      ],
+      "implemented": "Shared focus/Sheet/Popover/copy/confirm controls, gallery/ratchet and multiple migrated consumers are merged. PR850 (merged as d36449ee) moves the last two local CtaLink components to LinkButton and reconciles the plan's list, its augments and the checkpoint's follow-ups: the literal list is done; the 2xl dossier modal with a 44px Full page link, a shared Wordmark and the remaining hand-written link CTAs (18 UI lint baseline allowances in 16 files plus four the lint does not catch) are not. PR856 (merged as 6709a314) finishes what PR850 left open: the build dossier keeps the max-w-4xl width the augment names and its actions run Edit, Publish, Full page, Delete as 44 px targets, a shared Wordmark serves the header, drawer, footer and rail, 17 of the 18 baselined hand-written link CTAs plus six the lint missed use LinkButton or buttonClassName with their allowances pruned, and the install sheet's CTAs use Button; the coaching alert chip keeps its context-bar size on purpose, and typed destructive approvals and the bell's focus are unchanged.",
+      "remainingRequirements": [],
       "evidence": [
         "docs/handoff/ui-primitives-checkpoint.md",
         "docs/handoff/ui-gallery-checkpoint.md",
         "docs/handoff/accessible-ui-integration-checkpoint.md",
         "docs/handoff/build-dialogs-checkpoint.md",
         "docs/handoff/more-sheet-checkpoint.md",
-        "docs/handoff/notification-popover-checkpoint.md"
+        "docs/handoff/notification-popover-checkpoint.md",
+        "docs/handoff/ui-primitives-reconciliation.md"
       ],
       "mergedPrs": [
         752,
@@ -1847,7 +1845,9 @@
         764,
         766,
         767,
-        769
+        769,
+        850,
+        856
       ],
       "requirementSha256": "6283e3893c2e1314b66217ac50277ad363859bdcd71beb775fcf03763c8918f1"
     },
@@ -1902,28 +1902,28 @@
       "ordinal": 72,
       "id": "find-anything",
       "wave": 5,
-      "status": "partial",
+      "status": "completed",
       "title": "Find anything: grouped Settings with search, and a Ctrl/Cmd+K quick search across the app and public guides",
       "dependsOn": [
         "settings-quickwins",
         "glossary-and-infotip"
       ],
-      "implemented": "Canonical Settings/search, global static/public-guide discovery and bounded private opponents/saved-build search are merged and latest private-search signed-in production acceptance passed.",
-      "remainingRequirements": [
-        "Personal Maps quick search is explicitly deferred.",
-        "Reconcile visible guide-search entry points, remaining original Settings/consumer augments and all published/unpublished discovery requirements before closing the whole item."
-      ],
+      "implemented": "Canonical Settings/search, global static/public-guide discovery and bounded private opponents/saved-build search are merged and latest private-search signed-in production acceptance passed. PR853 (merged as f114ffcb) fixes quick search where no new decision was needed: Recent keeps the keys a narrower page does not list, the marketing header registers the app's keys and, signed in, its gated destinations, signed-out phones get a search button, deferred personal maps read as a lasting state without Retry, a matchup-scoped guide query still finds maps, and unpublished guide rows are greyed with matchup badges. PR855 (merged as 60163c59) adds the API: GET /v1/replays window=recent reads only the latest 1,000 games within a one-second deadline with enrich=none, a typed search is redacted from request logs, Sentry and failed-read logs, and signed-out GET /v1/community/builds view=quick matches word starts in any script at 120 a minute per IP. PR857 (merged as 97e1871d) adds recent games and personal maps to private quick search, and browser Sentry scrubs request URLs; PR858 (merged as 4255d8ae) adds opened opponent dossiers to Recent by toon-handle pulse ID; PR859 (merged as 5820d569) adds the noindex /search guide results page, Find a guide without JavaScript, See all guide results and signed-out Community builds, and ADR 0069's amendment closes SearchAction.",
+      "remainingRequirements": [],
       "evidence": [
         "docs/handoff/settings-search-checkpoint.md",
         "docs/handoff/global-search-checkpoint.md",
         "docs/handoff/private-search-api-checkpoint.md",
-        "docs/handoff/private-search-web-checkpoint.md"
+        "docs/handoff/private-search-web-checkpoint.md",
+        "docs/handoff/find-anything-public-discovery-checkpoint.md"
       ],
       "mergedPrs": [
         780,
         793,
         794,
-        796
+        796,
+        855,
+        859
       ],
       "requirementSha256": "0f218071aca1d759c6d939e69c72bfd52c25bc3fd5bfd1e6d0020e831a00d42c"
     },
@@ -2080,19 +2080,13 @@
       "ordinal": 75,
       "id": "analysis-corpus-local-cache",
       "wave": 5,
-      "status": "partial",
+      "status": "completed",
       "title": "Instant Daily Pulse, Season Recap and Arcade: keep game history on this device and sync only changes",
       "dependsOn": [
         "replay-library-control"
       ],
-      "implemented": "Bounded strict full-snapshot corpus pages and account-bound20k in-memory provider exist. Slice AC1 stamps updatedAt on every in-process games writer that changes the served corpus, moving it only when a served field or membership flag changes so idempotent writes stay idempotent (15 stamped writers, 2 hard deletes and 34 reviewed calls under an exact TypeScript-AST inventory), and adds the partial {userId, updatedAt, _id} index through its own background producer in the boot index workflow; it passed local types, configured lint, 1603 API cases, 10/10 mutations and an addressed independent review, then PR840 exact-head CI, merged as 901be460, and both production deployments succeeded for main 4bfa0daa, which contains it; signed-in read-only acceptance was not performed. Slice AC2 serves changed-since reads of the analysis corpus: GET /v1/games/analysis-corpus/changes pages the owner's stamped games by an (updatedAt, _id) cursor, returns rows that left the corpus as removals and a final watermark trailing by a 5-minute overlap, bumps users.corpusVersion around the wipe, restore and erasure hard deletes (also when one fails partway), and requires a snapshot for a changed corpus version or a watermark before the boot-time stamp floor, while the snapshot's first page carries the version and watermark and both routes share the single corpus lane; it passed local types, configured lint, 1623 API cases, 15/15 mutations and an addressed independent review, then PR841 exact-head CI, merged as d496e3ea, and both production deployments succeeded for main 4bfa0daa, which contains it; signed-in read-only acceptance was not performed. Slice AC3 keeps the analysis corpus on the device for an account that asks (keepOnDevice): an IndexedDB copy of one account and at most 20,000 rows that a snapshot replaces, and a delta merges in one transaction that compares the corpus version, epoch and watermark and rolls back past the limit; whatever only a snapshot can fix falls back to one, a refused or unreplaceable copy is dropped (keeping the account's choice) and a stale one deleted, nothing is written after cancellation, a corpus epoch derived on the API from the corpus rules (on every snapshot page and changes answer) replaces copies built under other rules, and accounts without a copy load exactly as before; it passed local API and web types and lint, 2213 API and 10191 web cases, 51/51 mutations, an independent review and two verification workflows, then PR842 exact-head CI, merged as 1c7c1974, and both production deployments succeeded for main 4bfa0daa, which contains it; it was dormant until AC5's gate, and signed-in read-only acceptance was not performed. Slice AC4 clears the analysis corpus kept on the device: a guard on every signed-in surface removes a copy noted for another account or for nobody (signed out) and issues again a clear's delete that was never seen to finish; Delete history, restore and account deletion clear it after success or any failure but a 4xx, and a data repair does not; a clear forgets the note, queues the delete and then moves a clear mark that every device write checks together with the note, so stale owner and version work writes nothing more and reads again in memory; a first keep clears any copy not noted for it, notes itself before creating the database, records its choice in the creating upgrade and drops whatever it did not write, and a browser that cannot keep or read the note keeps no copy; it passed local web types and lint, 10245 web cases, 59/59 mutations and five verification workflows, then PR844 exact-head CI, merged as 1d2353cc, and both production deployments succeeded for main 4bfa0daa, which contains it; it was dormant until AC5's gate, and signed-in read-only acceptance was not performed. Slice AC5 adds the history-on-this-device UI: Daily Pulse's one-time gate asks to keep the history in this browser (a keep asked for before Clerk loads applies to the account that loads next); a footer loaded on demand says when the history last updated, how many games it holds and whether they are kept here, with Refresh, Try again after a failed update while the games stay on screen, Keep on this device and a note when keeping failed; Settings, Backups & data shows the signed-in account's game count and a size estimated from sampled rows, read without creating the database or touching another account's copy, with Clear; and a Help article describes what is kept, how it updates, when it is not kept and how to clear it, with no latency or download claims; it passed local web types and lint, 10308 web cases, 25/25 mutations and two review workflows, then PR848 exact-head CI, merged as 1fe7dc8a, and both production deployments succeeded for main 4bfa0daa, which contains it; signed-in read-only acceptance was not performed.",
-      "remainingRequirements": [
-        "Stamp updatedAt on every semantic writer and add the userId/updatedAt index through the existing migration workflow.",
-        "Define/implement changed_since,cursor,removed tombstones/exclusions and corpusVersion; dataRev is explicitly not a durable change feed.",
-        "Implement bounded IndexedDB account/version storage, atomic watermark/delta merge and snapshot fallback.",
-        "Clear disk on sign-out, account switch and Delete history; retire stale owner/version work.",
-        "Add one-time history gate, count/refresh footer, Backups & data local bytes/Clear controls and history-on-this-device Help."
-      ],
+      "implemented": "Bounded strict full-snapshot corpus pages and account-bound20k in-memory provider exist. Slice AC1 stamps updatedAt on every in-process games writer that changes the served corpus, moving it only when a served field or membership flag changes so idempotent writes stay idempotent (15 stamped writers, 2 hard deletes and 34 reviewed calls under an exact TypeScript-AST inventory), and adds the partial {userId, updatedAt, _id} index through its own background producer in the boot index workflow; it passed local types, configured lint, 1603 API cases, 10/10 mutations and an addressed independent review, then PR840 exact-head CI, merged as 901be460, and both production deployments succeeded for main 4bfa0daa, which contains it; signed-in read-only acceptance was not performed. Slice AC2 serves changed-since reads of the analysis corpus: GET /v1/games/analysis-corpus/changes pages the owner's stamped games by an (updatedAt, _id) cursor, returns rows that left the corpus as removals and a final watermark trailing by a 5-minute overlap, bumps users.corpusVersion around the wipe, restore and erasure hard deletes (also when one fails partway), and requires a snapshot for a changed corpus version or a watermark before the boot-time stamp floor, while the snapshot's first page carries the version and watermark and both routes share the single corpus lane; it passed local types, configured lint, 1623 API cases, 15/15 mutations and an addressed independent review, then PR841 exact-head CI, merged as d496e3ea, and both production deployments succeeded for main 4bfa0daa, which contains it; signed-in read-only acceptance was not performed. Slice AC3 keeps the analysis corpus on the device for an account that asks (keepOnDevice): an IndexedDB copy of one account and at most 20,000 rows that a snapshot replaces, and a delta merges in one transaction that compares the corpus version, epoch and watermark and rolls back past the limit; whatever only a snapshot can fix falls back to one, a refused or unreplaceable copy is dropped (keeping the account's choice) and a stale one deleted, nothing is written after cancellation, a corpus epoch derived on the API from the corpus rules (on every snapshot page and changes answer) replaces copies built under other rules, and accounts without a copy load exactly as before; it passed local API and web types and lint, 2213 API and 10191 web cases, 51/51 mutations, an independent review and two verification workflows, then PR842 exact-head CI, merged as 1c7c1974, and both production deployments succeeded for main 4bfa0daa, which contains it; it was dormant until AC5's gate, and signed-in read-only acceptance was not performed. Slice AC4 clears the analysis corpus kept on the device: a guard on every signed-in surface removes a copy noted for another account or for nobody (signed out) and issues again a clear's delete that was never seen to finish; Delete history, restore and account deletion clear it after success or any failure but a 4xx, and a data repair does not; a clear forgets the note, queues the delete and then moves a clear mark that every device write checks together with the note, so stale owner and version work writes nothing more and reads again in memory; a first keep clears any copy not noted for it, notes itself before creating the database, records its choice in the creating upgrade and drops whatever it did not write, and a browser that cannot keep or read the note keeps no copy; it passed local web types and lint, 10245 web cases, 59/59 mutations and five verification workflows, then PR844 exact-head CI, merged as 1d2353cc, and both production deployments succeeded for main 4bfa0daa, which contains it; it was dormant until AC5's gate, and signed-in read-only acceptance was not performed. Slice AC5 adds the history-on-this-device UI: Daily Pulse's one-time gate asks to keep the history in this browser (a keep asked for before Clerk loads applies to the account that loads next); a footer loaded on demand says when the history last updated, how many games it holds and whether they are kept here, with Refresh, Try again after a failed update while the games stay on screen, Keep on this device and a note when keeping failed; Settings, Backups & data shows the signed-in account's game count and a size estimated from sampled rows, read without creating the database or touching another account's copy, with Clear; and a Help article describes what is kept, how it updates, when it is not kept and how to clear it, with no latency or download claims; it passed local web types and lint, 10308 web cases, 25/25 mutations and two review workflows, then PR848 exact-head CI, merged as 1fe7dc8a, and both production deployments succeeded for main 4bfa0daa, which contains it; signed-in read-only acceptance was not performed. Reconciled on 2026-11-01 against the plan: AC1-AC5 together meet its API and web contract and the history-on-this-device Help article, so the item closes with no new source; no latency, request-reduction or savings claim is made, and signed-in read-only acceptance was not performed.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/api/src/routes/games.js",
         "apps/api/src/services/games.js",
@@ -5301,8 +5295,8 @@
     "validation/roadmap-audit/unknown-a.json",
     "validation/roadmap-audit/unknown-b.json"
   ],
-  "remainingCount": 72,
-  "remainingMeaning": "52 partial and20 open original roadmap items remain (72 total). Sizes vary; these are not72 equal releases. Only landing-demo-in-browser closes in this scoped delivery reconciliation; reader/cutover, native/provider/operational and all other delivery requirements remain explicit. glossary-and-infotip closed later, with PR852.",
+  "remainingCount": 69,
+  "remainingMeaning": "49 partial and20 open original roadmap items remain (69 total). Sizes vary; these are not69 equal releases. Only landing-demo-in-browser closes in this scoped delivery reconciliation; reader/cutover, native/provider/operational and all other delivery requirements remain explicit. glossary-and-infotip closed later, with PR852. find-anything closed with PR859, ui-primitives-and-dialogs with PR856, and analysis-corpus-local-cache on reconciliation of its delivered slices.",
   "historicalProductionEvidenceUpdates": [
     {
       "supersededByAcceptedRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
@@ -5947,6 +5941,168 @@
       ],
       "remainingCount": 72,
       "qualification": "Web source and its checkpoint: whole-web types, lint and ui:lint, 10316 web cases in 1052 files with one isolated worker at the first commit, 13/13 mutations and an independent review whose verified findings were fixed at the tested head, then exact-head CI and a merge commit. The item closes because its one remaining requirement is met; no production deployment or real-browser check is claimed."
+    },
+    "findAnythingPalette853": {
+      "date": "2026-11-01",
+      "mergedPrs": [
+        853
+      ],
+      "testedHead": "108fe28fcbd410644075f8d7917eef3ab58884ab",
+      "mergeCommit": "f114ffcb8f69b331093fd6b4e86f97450beb85a0",
+      "exactHeadChecks": {
+        "Lint + typecheck + test (apps/web)": "success",
+        "Responsive e2e smoke (public pages)": "success",
+        "Vercel": "success",
+        "Vercel Preview Comments": "success"
+      },
+      "mutations": "11/11",
+      "independentReviews": 1,
+      "verifiedFindingsFixed": 7,
+      "documentSha256": {
+        "docs/handoff/find-anything-palette-checkpoint.md": "6bf9b820ffc08d851246c1274556b4f7dad67645f5a9e585cd26af70d15d604e"
+      },
+      "completedIds": [],
+      "remainingCount": 72,
+      "qualification": "Web source and its checkpoint: related chrome, AppShell, quick-search and Stream Studio suites with one worker, lint on the changed files, a production build, 11/11 mutations at the tested head and one independent review whose 7 verified findings were fixed, then exact-head CI and a merge commit. The item stays partial: private quick search and public discovery remain. No production deployment or real-browser check is claimed."
+    },
+    "findAnythingComplete": {
+      "date": "2026-11-01",
+      "mergedPrs": [
+        855,
+        857,
+        858,
+        859
+      ],
+      "testedHeads": {
+        "855": "a2806f46e904c187956735f727f006927dea541e",
+        "857": "497cb05f91e4558bd4e95602cd9aa0f9224a6dac",
+        "858": "2729f689a75e712e4c4c36ad5b8a5ac6e5947c3a",
+        "859": "9d089ccb0808b125679a9b23b732bccae91731ae"
+      },
+      "mergeCommits": {
+        "855": "60163c599e792af6ba96a9e3afd5787c94b1360c",
+        "857": "97e1871d021e91231cea3532b22f1dbc8836133d",
+        "858": "4255d8ae9d1822e05f673d2d09dd140b95030899",
+        "859": "5820d569c9b234e21a06b8e64c8a95f15fe34c0e"
+      },
+      "exactHeadChecks": {
+        "855": {
+          "Lint + typecheck + test (apps/api)": "success",
+          "Lint + typecheck + test (apps/web)": "success",
+          "Responsive e2e smoke (public pages)": "success",
+          "Vercel": "success",
+          "Vercel Preview Comments": "success"
+        },
+        "857": {
+          "Lint + typecheck + test (apps/web)": "success",
+          "Responsive e2e smoke (public pages)": "success",
+          "Vercel": "success",
+          "Vercel Preview Comments": "success"
+        },
+        "858": {
+          "Lint + typecheck + test (apps/web)": "success",
+          "Responsive e2e smoke (public pages)": "success",
+          "Vercel": "success",
+          "Vercel Preview Comments": "success"
+        },
+        "859": {
+          "Lint + typecheck + test (apps/web)": "success",
+          "Responsive e2e smoke (public pages)": "success",
+          "Vercel": "success",
+          "Vercel Preview Comments": "success"
+        }
+      },
+      "mutations": {
+        "api": "12/12",
+        "web": "14/14"
+      },
+      "webMutationHead": "9d089ccb0808b125679a9b23b732bccae91731ae",
+      "documentSha256": {
+        "docs/adr/0069-global-search.md": "32cfa6d71d022b82d471ef2d5a1ac92d374c68c6b8c2af3ebebbf5f8d59600a9",
+        "docs/handoff/find-anything-search-api-checkpoint.md": "f466f5ebb0c8636809cdb4601ed7dbb1c4037f90288c76b1628ddb7d301c4c55",
+        "docs/handoff/find-anything-private-palette-checkpoint.md": "18173840cde240e0b9fa7971ca0209c64e9fd063c24432a28ac05d430fc9b366",
+        "docs/handoff/find-anything-dossier-recent-checkpoint.md": "a2be632f8b646c1870501415de63afe4a8a8398f5a733abba67ff345e6d85fea",
+        "docs/handoff/find-anything-public-discovery-checkpoint.md": "55eabb50b0402997226382fe98c2421dc9fcb0db47d186925b74677cca927dc7"
+      },
+      "completedIds": [
+        "find-anything"
+      ],
+      "remainingCount": 69,
+      "delivery": {
+        "mainRevision": "6709a314e96d14949686b5c4e66e93b2d9c754f8",
+        "mainChecks": {
+          "community-builds-ci": "success",
+          "data-integrity": "success",
+          "version-check": "success",
+          "python-tests": "success",
+          "api-ci": "success",
+          "web-ci": "success"
+        },
+        "deployments": {
+          "Production": "success",
+          "main - sc2tools-api": "success"
+        }
+      },
+      "qualification": "API and web source with ADR 0069's amendment and four checkpoints. The API passed 550 API cases and 12/12 mutations at its tested head; the web stack passed whole-web types, lint with no added message, ui:lint, the full web suite with one worker and 14/14 mutations at its top; each slice had an independent review and a verifier, whose confirmed findings were fixed; then exact-head CI and merge commits, bottom-up. Every workflow run for main 6709a314, which contains all four PRs, succeeded, and both production deployments of exactly that revision succeeded. No real-browser or signed-in check is claimed."
+    },
+    "uiPrimitivesComplete856": {
+      "date": "2026-11-01",
+      "mergedPrs": [
+        856
+      ],
+      "testedHead": "7d8b0a35db5657dac0a028db79500dfde1b0d353",
+      "mergeCommit": "6709a314e96d14949686b5c4e66e93b2d9c754f8",
+      "exactHeadChecks": {
+        "Lint + typecheck + test (apps/web)": "success",
+        "Responsive e2e smoke (public pages)": "success",
+        "Vercel": "success",
+        "Vercel Preview Comments": "success"
+      },
+      "mutations": "9/9",
+      "mutationHead": "7d8b0a35db5657dac0a028db79500dfde1b0d353",
+      "documentSha256": {
+        "docs/handoff/ui-primitives-reconciliation.md": "f88f189a36768b62be9e5ae5f5dd65a253a19fb1f9dee2ae5dd741283d3dce0b",
+        "docs/design-system.md": "14c57fe967a6fc13e6372f682f3858ee65601c19a4d8d1fc972068057fef33f3"
+      },
+      "completedIds": [
+        "ui-primitives-and-dialogs"
+      ],
+      "remainingCount": 69,
+      "reconciledBy": {
+        "850": "d36449eeb7d9dc1165cbd84f07b51b4b18ee05f5"
+      },
+      "delivery": {
+        "mainRevision": "6709a314e96d14949686b5c4e66e93b2d9c754f8",
+        "mainChecks": {
+          "community-builds-ci": "success",
+          "data-integrity": "success",
+          "version-check": "success",
+          "python-tests": "success",
+          "api-ci": "success",
+          "web-ci": "success"
+        },
+        "deployments": {
+          "Production": "success",
+          "main - sc2tools-api": "success"
+        }
+      },
+      "qualification": "Web source and docs: whole-web types, lint with no added message, ui:lint with the pruned baseline, the full web suite with one worker, mutations and an independent review with a verifier whose confirmed finding was fixed, then exact-head CI and a merge commit. Every workflow run for main 6709a314, which contains PR856, succeeded, and both production deployments of exactly that revision succeeded. No real-browser visual check is claimed."
+    },
+    "analysisCorpusComplete": {
+      "date": "2026-11-01",
+      "mergedPrs": [
+        840,
+        841,
+        842,
+        844,
+        848
+      ],
+      "productionRevision": "4bfa0daad1e31034fe6943bda93fec4ce7d233fd",
+      "completedIds": [
+        "analysis-corpus-local-cache"
+      ],
+      "remainingCount": 69,
+      "qualification": "Closed by reconciling the plan's item against the five delivered slices recorded in analysisCorpusDelivery (exact-head CI, merge commits and both production deployments of main 4bfa0daa). No new source; no latency, request-reduction or savings claim; signed-in read-only acceptance was not performed."
     }
   },
   "latestImplementationRevisionQualification": "PR848/main 1fe7dc8a history-on-this-device UI delivery (AC5, tested 7e5c390a) is verified by local web types and lint, 10308 web cases, 25/25 mutations and two review workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR844/main 1d2353cc device copy clearing delivery (AC4, tested 3c36f05d) is verified by local web types and lint, 10245 web cases, 59/59 mutations and five verification workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR842/main 1c7c1974 device-kept analysis corpus delivery (AC3, tested 208598af) is verified by local API and web types and lint, 2213 API and 10191 web cases, 51/51 mutations, an independent review and two verification workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR841/main d496e3ea analysis-corpus changed-since reads delivery (AC2, tested 8be5c842) is verified by local types, configured lint, 1623 API cases, 15/15 mutations and an addressed independent review, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR840/main 901be460 analysis-corpus updatedAt stamps and index delivery (AC1, tested 7c0fc2a6) is verified by local types, configured lint, 1603 API cases, 10/10 mutations and an addressed independent review, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR837/main 55378835 owner activation-review runbook delivery (R1, docs only, citations checked at 9802bc8a) made no production read and changed no flag; both production deployments succeeded for that exact commit. The latest implementation revision stays C5's c7b5ef93. PR836/main c6e7110b opponent-MMR cache source delivery (C5, tested c7b5ef93) is verified by local types, configured lint, 1025 API and 109 web cases, 14/14 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR834/main d7b925d5 default-off chart-cache overlap guard delivery (G1, tested cc8e358c) is verified by local types, configured lint, 589 API cases, 9/9 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR833/main 261fa04d owner-run durable device-auth disable primitive (never invoked) delivery (DA4, tested 90126ee2) is verified by local types, configured lint, 180 device-auth cases, 11/11 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR832/main fe6b3d1f separate-process device-auth revocation regression (no application source) delivery (DA3, tested 6df0f447) is verified by local types, configured lint, 174 device-auth cases, 3/3 mutations, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR831/main 619d8f7f matchup time-series cache source delivery (C4, tested 000734b6) is verified by local types, configured lint, 539 API and 156 web cases, 15/15 mutations, an independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR829/main 2fabe343 random-summary cache source delivery (C3, tested 10cdb0fd) is verified by local types, configured lint, 449 API and 129 web cases, 12/12 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343 with public health checks; signed-in read-only acceptance was not performed. PR828/main d20bce90 net-MMR pair cache source delivery (C2, tested f9cc5ccc) is verified by local types, configured lint, 433 API and 119 web cases, 11/11 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR826/main 294c24ab uninjected device-auth lease probe hold-off delivery (DA2, tested 1dde734b) is verified by local types, lint, 231 device-auth cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR825/main 4a4df22f streak and Macro report cache source delivery (C1, tested 1fecfca0) is verified by local types, configured lint, 293 API and 117 web cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR824/main c790de3e serving-cohort contract (ADR 0072) delivery changes no runtime behavior and is verified by exact-head API CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks. PR822/main 27b9aeb0 opponent region/identity delivery is verified by local 3056/214 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. PR821/main de2031ad custom-build definition delivery is verified by its own local 1393/71 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. Agent0.24.7 GitHub publication is complete under the approved unsigned exception; actual API and website update availability are verified, with installed0.24.6 showing update available. No installed0.24.7 uptake, signing, cache/auth activation, full writer/fleet proof, savings or fresh all197 audit is claimed."
