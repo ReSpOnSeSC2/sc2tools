@@ -6,6 +6,7 @@ import { ReportIssueLauncher } from "@/components/feedback/ReportIssueLauncher";
 import { guidesEnabled } from "@/lib/guides/flags";
 import { getInstantImportMode } from "@/lib/instant/flag";
 import { LogoMark } from "./LogoMark";
+import { Wordmark } from "./Wordmark";
 import { CookieSettingsButton } from "@/components/legal/CookieSettingsButton";
 
 /**
@@ -128,9 +129,7 @@ function BrandStrip() {
           size={32}
           className="motion-safe:transition-shadow motion-safe:duration-150 group-hover:shadow-[0_0_18px_var(--halo-cyan)]"
         />
-        <span className="text-h4 font-semibold tracking-tight text-text">
-          SC2 Tools
-        </span>
+        <Wordmark />
       </Link>
       <p className="mt-3 max-w-xs text-caption text-text-muted">
         Replay analysis, opponent intel, build coaching, and a complete Stream

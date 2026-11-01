@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { LinkButton } from "@/components/ui/Button";
 import { useReleaseInfo } from "@/components/onboarding/useReleaseInfo";
 import {
   FALLBACK_LATEST_AGENT_VERSION,
@@ -57,12 +57,9 @@ function DoctorWarning({ warning: w }: { warning: NonNullable<DoctorResp["warnin
     >
       <DoctorMessage warning={w} />
       {w.cta && (
-        <Link
-          href={w.cta.href}
-          className="hard-press inline-flex shrink-0 items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 py-[0.55rem] font-display text-xs font-bold text-text hover:bg-bg-elevated"
-        >
+        <LinkButton href={w.cta.href} variant="secondary" size="sm" className="shrink-0">
           {w.cta.label}
-        </Link>
+        </LinkButton>
       )}
     </li>
   );

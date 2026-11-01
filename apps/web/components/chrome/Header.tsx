@@ -20,6 +20,7 @@ import { getInstantImportMode } from "@/lib/instant/flag";
 import { headerLinkCommands, headerNavLinks } from "./headerNav";
 import { signedInCommandNavigation } from "./headerCommandNavigation";
 import { LogoMark } from "./LogoMark";
+import { Wordmark } from "./Wordmark";
 import { useCommandChrome, useCommandSearch } from "./CommandSearchContext";
 import { CommandSearchButton } from "./CommandSearchButton";
 
@@ -196,14 +197,7 @@ function Brand() {
         className="motion-safe:transition-shadow motion-safe:duration-150 group-hover:shadow-[0_0_18px_var(--halo-cyan)] group-focus-visible:shadow-[0_0_18px_var(--halo-cyan)]"
         priority
       />
-      {/* Display-face wordmark + a brand accent tick. */}
-      <span className="flex items-center gap-1.5 font-display text-h4 font-extrabold tracking-tight text-text motion-safe:transition-colors motion-safe:duration-150 group-hover:text-accent group-focus-visible:text-accent">
-        SC2&nbsp;Tools
-        <span
-          aria-hidden
-          className="h-1.5 w-1.5 rounded-full bg-accent"
-        />
-      </span>
+      <Wordmark className="motion-safe:transition-colors motion-safe:duration-150 group-hover:text-accent group-focus-visible:text-accent" />
     </Link>
   );
 }

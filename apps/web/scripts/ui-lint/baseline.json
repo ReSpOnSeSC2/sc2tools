@@ -16,13 +16,6 @@
   },
   "entries": [
     {
-      "file": "app/app/layout.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "17c8be93acae5b5fc51f343cc92714ae119f3f2f49f0c689ecb1e773cef8128a",
-      "count": 1,
-      "example": "<a href={signedOut ? \"/sign-in\" : \"/app\"} className=\"hard-press mt-5 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-2 border-line bg-accent px-5 fon"
-    },
-    {
       "file": "app/dock/layout.tsx",
       "rule": "hex-outside-visualization",
       "signature": "00e10787b30cbe7df6116f17536cc000ceb600c07543f3a2e69e83a2afb7b221",
@@ -35,13 +28,6 @@
       "signature": "a290ddfee4bd15d1ce6929fd433d7b245046a62e614a77b2ad3013121bd8408d",
       "count": 1,
       "example": "` html, body { background: #0b0e14 !important; } body > header, body > footer, body > main > footer { display: none !important; } [data-cookie-banner] { display: none !important; }"
-    },
-    {
-      "file": "app/donate/page.tsx",
-      "rule": "handrolled-accent-link",
-      "signature": "9598fcb83e92cc26a9a001e3ec0af9c70523ed0d99e3e42b6e514e62eaa98d5c",
-      "count": 1,
-      "example": "<a href={channel.href} target=\"_blank\" rel=\"noopener\" className=\"mt-auto inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-accent px-4 text-body font-semibold text-w"
     },
     {
       "file": "app/global-error.tsx",
@@ -184,13 +170,6 @@
       "example": "\"w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[120px]\""
     },
     {
-      "file": "components/analyzer/DoctorBanner.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "ce54e77315c77ee18a17258c96f650fc80fe1859301c294c7c3ec132d5e4814b",
-      "count": 1,
-      "example": "<Link href={w.cta.href} className=\"hard-press inline-flex shrink-0 items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 py-[0.55rem] font-display text-xs font-bo"
-    },
-    {
       "file": "components/analyzer/GameStreamLinks.tsx",
       "rule": "hex-outside-visualization",
       "signature": "85b03a89fb53989fbe10da5c438c19960c72a884f07c59948f01b4dd06f1d331",
@@ -238,13 +217,6 @@
       "signature": "975b9889e34cafa3dadb40fa3c1daa4c7718b12c11d29f5aef8904670b5ae154",
       "count": 1,
       "example": "\"#3ec07a\""
-    },
-    {
-      "file": "components/analyzer/OpponentDossierStates.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "0d41aebf6e22a5593cc9710b5ac9cbaf4d9c77f399dcf9186225f77a6ddb5c0a",
-      "count": 1,
-      "example": "<Link href=\"/app/opponents\" className=\"hard-press inline-flex h-9 min-w-[44px] items-center justify-center rounded-full border-2 border-line bg-bg-surface px-4 font-display text-ca"
     },
     {
       "file": "components/analyzer/OpponentIdentityCandidateEvidence.tsx",
@@ -954,20 +926,6 @@
       "example": "<div ref={panel} id={panelId} role=\"dialog\" aria-label={`Display for ${name}`} tabIndex={-1} className=\"fixed z-sheet space-y-2 overflow-y-auto rounded-lg border border-border bg-b"
     },
     {
-      "file": "components/analyzer/settings/ReplayArchiveStatusCard.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "08fcf6e0193046dea18d27c1f77a03acea786c9b2338941161af398c1c616da8",
-      "count": 1,
-      "example": "<Link href=\"/download\" className={[ \"hard-press inline-flex min-h-11 flex-shrink-0 items-center justify-center gap-2 rounded-full border-2 border-line px-4 font-display text-captio"
-    },
-    {
-      "file": "components/analyzer/settings/SettingsMisc.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "56efad99b2d3749c01957ed7af16e67d2d11e30e2873a134eda9840ce0e71ceb",
-      "count": 1,
-      "example": "<Link href=\"/welcome\" className={[ \"hard-press inline-flex min-h-11 flex-shrink-0 items-center justify-center gap-2 rounded-full border-2 border-line bg-bg-surface px-4 font-displa"
-    },
-    {
       "file": "components/analyzer/settings/SettingsMultiChat.tsx",
       "rule": "focus-without-ring",
       "signature": "30f406b96c98cc37553fb9d1bfc3841efe3d594d549d1c6a4edbc92a7684dd0b",
@@ -1164,25 +1122,11 @@
       "example": "\"flex min-h-11 w-full items-center gap-2 px-3 py-2.5 text-left text-caption focus-visible:outline-none focus-visible:bg-bg-elevated disabled:cursor-not-allowed disabled:opacity-60\""
     },
     {
-      "file": "components/builds/BuildDetailView.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "dc961b68536786c9c5cec7f65d869f6506ab21941f13e25fd56f49281ce25101",
-      "count": 1,
-      "example": "<Link href=\"/builds\" className=\"inline-flex min-h-[44px] items-center gap-2 hard-press rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold text-te"
-    },
-    {
       "file": "components/builds/BuildsLibrary.tsx",
       "rule": "focus-without-ring",
       "signature": "251f3858e5fd7cbd1f8a92ed0fab8423ad1d69ab737d8347d5ffbe14b6ed8d76",
       "count": 1,
       "example": "\"my-3 text-h3 font-semibold focus:outline-none\""
-    },
-    {
-      "file": "components/builds/BuildsLibrary.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "4d12d7f4e2feaf497c8849fa7a5f05c8700ba7304b52f10dd93bb6f00ea80926",
-      "count": 1,
-      "example": "<Link href=\"/definitions\" className=\"hard-press inline-flex min-h-[44px] items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold te"
     },
     {
       "file": "components/builds/editor/BuildEditorBasics.tsx",
@@ -1220,27 +1164,6 @@
       "example": "\"absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white\""
     },
     {
-      "file": "components/chrome/MobileNav.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "2d025be0d2125fadd454ae054722a33196b2ec39aaaf2ade2178ab84d83fe8c9",
-      "count": 1,
-      "example": "<AuthContextLink kind=\"sign-up\" onClick={onClose} className=\"hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-accent px-3 font-display t"
-    },
-    {
-      "file": "components/chrome/MobileNav.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "5a0aad75d8c7fc8b0c0da8f57fb208294eb425503cb33cf1eed23f5230adda65",
-      "count": 1,
-      "example": "<AuthContextLink kind=\"sign-in\" onClick={onClose} className=\"hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-bg-surface px-3 font-displ"
-    },
-    {
-      "file": "components/chrome/MobileNav.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "f9439b6585d2b4c7c133fe5926e0af8b951724bd8d0796154e0c9c3fe74cd33a",
-      "count": 1,
-      "example": "<Link href=\"/app\" onClick={onClose} className=\"hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-accent px-3 font-display text-body font-"
-    },
-    {
       "file": "components/community/CommunityOwnerMenu.tsx",
       "rule": "focus-without-ring",
       "signature": "78ed8173c3169916d0f16398b54e3996edd92aceadf49f01100ba9f62fc9e18e",
@@ -1253,20 +1176,6 @@
       "signature": "b28ea2a88ac0b1596a607f1f59ca44eab2f4c79ce692a3b380c3653db4844486",
       "count": 2,
       "example": "\"flex min-h-11 items-center rounded-md px-3 text-caption text-text hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none\""
-    },
-    {
-      "file": "components/community/SaveToLibraryButton.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "bec576b7180048dbbf44e37e77369fd8a16ef349da74b362e7daa8e2e6a0228f",
-      "count": 1,
-      "example": "<Link href={signUpHref(returnTo)} onClick={() => queuePendingIntent(\"save-build\", { slug: props.communitySlug }, returnTo)} className={SECONDARY_LINK_CLASS}>"
-    },
-    {
-      "file": "components/dashboard/AgentUpgradeNotice.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "db0821a9eee99015997401dd9fec653358a27b0edd6d71236c0589a277df38a0",
-      "count": 1,
-      "example": "<Link href=\"/download\" className=\"hard-press inline-flex min-h-[44px] w-full flex-shrink-0 items-center justify-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 py"
     },
     {
       "file": "components/definitions/DefinitionsCatalog.tsx",
@@ -1451,20 +1360,6 @@
       "example": "\"focus:outline-none\""
     },
     {
-      "file": "components/instant/AgentLiveUpsell.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "43e0a8b1793ad3a2df7765eadaa972fe9bbc38c18f1afc7a35f4c07ebe552499",
-      "count": 1,
-      "example": "<Link href=\"/download\" className={DOWNLOAD_LINK_CLASS}>"
-    },
-    {
-      "file": "components/instant/ImportSummary.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "e6255ce3603fc92491df06c4bad3e1d491cc97cb67bdae5363fbd7073b20c51e",
-      "count": 1,
-      "example": "<Link href=\"/app\" className={LINK_CLASS}>"
-    },
-    {
       "file": "components/instant/InstantReport.tsx",
       "rule": "focus-without-ring",
       "signature": "86366a9841e6ec51af9444b380f3e47fe9654c0dd21c14c104ebeaa793dc0606",
@@ -1479,13 +1374,6 @@
       "example": "\"font-display text-h3 text-text focus:outline-none\""
     },
     {
-      "file": "components/instant/TryResume.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "fded28a3b04226e8a44aa9ffc63b9f36f42a28409fb3379954e118c5349a7783",
-      "count": 1,
-      "example": "<Link href={TRY_SIGN_UP_HREF} onClick={() => trackInstantSignupClick()} className={[ \"inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-2 border-line b"
-    },
-    {
       "file": "components/landing/CompanionShowcase.tsx",
       "rule": "hex-outside-visualization",
       "signature": "2b6cdc76dee94b75655ba85b90e69e60bd775afbb91768891f8f6b61e8769cf1",
@@ -1498,13 +1386,6 @@
       "signature": "ad6a31b71e8a46f3639438666bed79a94f81523150bace149bab82ca85d1e4e4",
       "count": 1,
       "example": "\"overflow-hidden rounded-md border border-border-strong bg-[#10131f] shadow-hard\""
-    },
-    {
-      "file": "components/landing/DonateBanner.tsx",
-      "rule": "handrolled-accent-link",
-      "signature": "fa2c83cb600c1a8683676b5afd9dfa642c03cfbb94a1ae130604b198c36654ee",
-      "count": 1,
-      "example": "<Link href=\"/donate\" className=\"inline-flex h-12 items-center justify-center gap-2 rounded-md bg-accent px-5 text-body-lg font-semibold text-white transition-colors hover:bg-accent"
     },
     {
       "file": "components/landing/ProductShowcases.tsx",

@@ -302,8 +302,24 @@ without importing the client Button module.
 Both share `primary`, `secondary`, `ghost` and `danger` variants. Sizes are
 `sm` (36px high), `md` (44px, the default) and `lg` (48px), each with a minimum
 44px width. Small buttons therefore do **not** automatically provide a 44px-high
-touch target. Use a larger size or an explicit minimum height for phone actions
-that need it. Give icon-only actions an accessible name.
+touch target. Use a larger size or an explicit minimum height (`min-h-11`) for
+phone actions that need it. Give icon-only actions an accessible name.
+
+Every variant and size is a pill: `rounded-full`, in the display face, and all
+but `ghost` wear the 2px `line` border with the hard offset shadow that collapses
+on press (`hard-press`). Do not hand-write that recipe, or a `rounded-md` accent
+link, on a link: the UI lint rejects new copies. For a link that is not a
+`next/link` (an external `<a>`, `AuthContextLink`), pass
+`buttonClassName({ variant, size })` as its class instead.
+
+Which one to use:
+
+| You need | Use |
+| --- | --- |
+| An action on this page (save, open a dialog, retry) | `Button` |
+| Navigation that looks like a button | `LinkButton` |
+| A button-styled external link, auth link or a server-component link | `buttonClassName` on that element |
+| An inline text link inside copy | A plain `Link` with the text-link classes |
 
 `IconButton` requires `aria-label` and supplies a 44px target. `CopyButton` and
 `useCopy` copy only on explicit activation, bound the attempt to five seconds

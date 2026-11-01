@@ -72,3 +72,22 @@ augments' list:
   is a little narrower on phones.
 - Existing tests cover the links' names and destinations. No visual check in a
   real browser.
+
+## The second slice (November 1 UTC)
+
+This slice closes the augments and the manual link CTAs listed above. Paths are
+under `apps/web`.
+
+| Augment or link | Now |
+| --- | --- |
+| Dossier modal width | Kept at `xl`. The augment names its target as "'2xl' (today's max-w-4xl)", and the Modal's `xl` is `sm:max-w-4xl`; its `2xl` is `max-w-6xl`, wider than the augment means. The title stays "<build name> dossier", which carries the build name. |
+| Dossier actions | Ordered Edit, Publish, Full page, Delete, with the destructive action last before the overflow menu. Full page is a `LinkButton`. Each of the four is a 44 px target (`min-h-11`), up from 36 px buttons and a 32 px link. The close button was already 44 px. Focus return to the opening trigger and the phone bottom sheet are the Modal's defaults, and the existing test covers focus return. |
+| Shared wordmark | `components/chrome/Wordmark.tsx` (sizes `md` and `sm`, with the accent tick) is used by Header, MobileNav, Footer and the app rail. The Footer's semibold mark without a tick is gone. |
+| UI lint baseline (18 link CTAs in 16 files) | 17 now use `LinkButton`, or `buttonClassName` on the elements that are not `next/link`: the `<a>` in `app/app/layout.tsx`, the external `<a>` on the donate page, and MobileNav's two `AuthContextLink`s. `--prune-baseline` retired their 17 allowances (652 occurrences to 635). One allowance stays on purpose: `CoachingBookingAlert` is an h-8 alert chip sized to the app context bar's other h-8 controls (the augment's ThemeToggle `sm`), not a call to action. |
+| Links the lint does not catch | ModeRunner's and DailyEmptyState's accent `<a>` CTAs, CompanionShowcase's download link, ReplayDemo's "Skip the demo" and GuidesStrip's "Browse build guides" now use `LinkButton`. ServiceWorkerRegister's Later and Reload buttons take `buttonClassName` (ghost and primary). |
+| Not migrated | InstallPrompt's controls are `<button>`s with the install sheet's own layout, not link CTAs. `app/not-found.tsx` and `app/error.tsx` already use the shared classes, and AppChrome's signed-out links already use `buttonClassName`. |
+| `docs/design-system.md` | "Buttons and navigation" now describes the pill shape, the rule against hand-written copies, `buttonClassName` for non-`next/link` elements, and a small table of when to use Button, LinkButton, buttonClassName or a text link. |
+
+Typed destructive approvals and the notification bell's ready-and-merged focus
+are untouched. Migrated links move to the shared pill shape and sizes, so some
+grow slightly; no real-browser visual check was made.

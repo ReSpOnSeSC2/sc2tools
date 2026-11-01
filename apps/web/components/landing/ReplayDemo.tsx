@@ -216,13 +216,9 @@ function BrowserReplayDemo() {
                 className="sr-only"
                 onChange={(e) => { const file = e.currentTarget.files?.[0] ?? null; e.currentTarget.value = ""; setIntakeMessage(""); void onPick(file); }}
               />
-              <Link
-                href="/sign-up"
-                className="inline-flex h-12 min-w-[44px] items-center justify-center gap-2 rounded-lg border border-border bg-bg-elevated px-5 text-body-lg font-semibold text-text hover:bg-bg-subtle hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-              >
+              <LinkButton href="/sign-up" variant="secondary" size="lg" iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>
                 Skip the demo
-                <ArrowRight className="h-5 w-5" aria-hidden />
-              </Link>
+              </LinkButton>
             </div>
             <p className="text-caption text-text-dim">
               Runs in your browser — the replay never leaves your device.
