@@ -7,4 +7,5 @@ export type CommandPrivateTarget = Readonly<
   | { kind: "opponent"; pulseId: string }
   | { kind: "customBuild"; slug: string }
   | { kind: "map"; map: string }
+  | { kind: "game"; gameId: string }
 >;

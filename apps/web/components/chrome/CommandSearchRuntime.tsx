@@ -11,8 +11,11 @@ import { commandGuideQueryMatchup, createCommandGuideCatalog } from "@/lib/comma
 import { readCommandSearchRecent } from "@/lib/commandSearchRecent";
 import { COMMAND_GO_KEYS } from "@/lib/useCommandSearchShortcuts";
 import { COMMAND_QUERY_MAX_CHARS, type CommandSearchItem } from "@/lib/commandSearch";
-import { privateCommandQuery } from "@/lib/privateCommandSearch";
+import { privateCommandQuery, type PrivateCommandChoice } from "@/lib/privateCommandSearch";
+import { recentGamesQuery } from "@/lib/recentGamesCommandSearch";
 import { usePrivateCommandSearch, type PrivateCommandSelectionDraft } from "@/lib/usePrivateCommandSearch";
+import { usePrivateMapSearch } from "@/lib/usePrivateMapSearch";
+import { useRecentGamesCommandSearch } from "@/lib/useRecentGamesCommandSearch";
 import type { CommandFrame } from "./CommandSearchProvider";
 import type { CommandNavigation } from "./CommandSearchContext";
 import { CommandPalette } from "./CommandPalette";
@@ -58,8 +61,11 @@ function PaletteRuntime({ frame, navigation, settingsTabs, allowDefaultSettings,
     return { epoch: frame as object,
       value: Array.from(initial.slice(0, COMMAND_QUERY_MAX_CHARS * 2)).slice(0, COMMAND_QUERY_MAX_CHARS).join("") };
   });
-  const privateSearch = usePrivateCommandSearch({ open: true, scope: frame.scope ?? "all", query: query.value,
-    ownerKey: frame.owner.key, openingEpoch: frame, routeEpoch: frame.route });
+  const owned = { open: true, scope: frame.scope ?? "all", query: query.value,
+    ownerKey: frame.owner.key, openingEpoch: frame, routeEpoch: frame.route } as const;
+  const privateSearch = usePrivateCommandSearch(owned), games = useRecentGamesCommandSearch(owned), maps = usePrivateMapSearch(owned);
+  const draft = (choice: PrivateCommandChoice) => choice.group === "games" ? games.selectionDraft(choice)
+    : choice.group === "maps" && maps.phase !== "idle" ? maps.selectionDraft(choice) : privateSearch.selectionDraft(choice);
   const recents = useMemo(() => readCommandSearchRecent(frame.owner.key, navigation.map(row => row.key))
     .flatMap(id => {
       const entry = navigation.find(row => row.key === id);
@@ -73,10 +79,19 @@ function PaletteRuntime({ frame, navigation, settingsTabs, allowDefaultSettings,
     } }}
     privateSearch={frame.owner.key && frame.scope !== "guides" ? {
       phase: privateSearch.phase, data: privateSearch.data, choices: privateSearch.choices,
-      validQuery: privateCommandQuery(query.value) !== null, onRetry: privateSearch.retry,
+      validQuery: privateCommandQuery(query.value) !== null,
+      maps: { phase: maps.phase, group: maps.group, partial: maps.partial, timedOut: maps.timedOut, choices: maps.choices },
+      games: { phase: games.phase, validQuery: recentGamesQuery(query.value) !== null, hasMore: games.data?.hasMore === true,
+        timedOut: games.error?.code === "request_timeout", choices: games.choices },
+      onRetry: () => {
+        if (privateSearch.phase === "error" || Object.values(privateSearch.data?.groups ?? {})
+          .some(group => group.status === "unavailable" && group.reason !== "deferred")) privateSearch.retry();
+        if (games.phase === "error") games.retry();
+        maps.retry();
+      },
       onSelect: choice => {
-        const draft = privateSearch.selectionDraft(choice);
-        return !!draft && onPrivateSelect(draft, query.epoch);
+        const selected = draft(choice);
+        return !!selected && onPrivateSelect(selected, query.epoch);
       },
     } : undefined}
     scope={frame.scope} guideItems={[...recents, ...guides.items]}

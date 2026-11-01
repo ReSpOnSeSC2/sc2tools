@@ -35,12 +35,16 @@ export type PrivateCommandTarget = Readonly<
   | { kind: "opponent"; pulseId: string }
   | { kind: "customBuild"; slug: string }
   | { kind: "map"; map: string }
+  | { kind: "game"; gameId: string }
 >;
 export type PrivateCommandChoice = Readonly<{
-  group: "opponents" | "customBuilds" | "maps";
+  group: "opponents" | "customBuilds" | "maps" | "games";
   label: string;
   target: PrivateCommandTarget;
   href: string;
+  /** Recent games only: map, result and date, and the matchup badge. */
+  description?: string;
+  matchup?: string;
 }>;
 export type PrivateCommandSearchErrorCode =
   | "invalid_query" | "authentication_required" | "invalid_response"
@@ -55,7 +59,7 @@ export class PrivateCommandSearchError extends Error {
 const invalid = (): never => { throw new PrivateCommandSearchError("invalid_response"); };
 const abortError = () => new DOMException("Private search is no longer current.", "AbortError");
 
-function safeText(value: unknown, maximumUnits: number, allowEmpty = false): value is string {
+export function safeText(value: unknown, maximumUnits: number, allowEmpty = false): value is string {
   if (typeof value !== "string" || value.length > maximumUnits || (!allowEmpty && !value.length)
     || /\p{Cc}/u.test(value)) return false;
   for (const point of value) {
@@ -64,7 +68,7 @@ function safeText(value: unknown, maximumUnits: number, allowEmpty = false): val
   }
   return true;
 }
-function safeId(value: unknown, maximumUnits: number): value is string {
+export function safeId(value: unknown, maximumUnits: number): value is string {
   return safeText(value, maximumUnits) && value !== "." && value !== "..";
 }
 
@@ -199,6 +203,11 @@ export function privateCommandHref(value: PrivateCommandTarget): string {
     if (!safeId(target.slug, 120)) return invalid();
     return `/builds/${encodeURIComponent(target.slug)}`;
   }
+  if (kind.value === "game") {
+    const target = exactRecord(value, ["kind", "gameId"]);
+    if (!safeId(target.gameId, 200)) return invalid();
+    return `/app/game/${encodeURIComponent(target.gameId)}`;
+  }
   const target = exactRecord(value, ["kind", "map"]);
   if (target.kind !== "map" || !safeText(target.map, 200)) return invalid();
   return `/app/maps?focus=${encodeURIComponent(target.map)}`;
@@ -221,10 +230,10 @@ export function privateCommandChoices(response: PrivateCommandSearchResponse): r
   return Object.freeze(choices);
 }
 
-function cancelBody(response: Response): void {
+export function cancelBody(response: Response): void {
   try { void response.body?.cancel().catch(() => undefined); } catch { /* Already locked or retired. */ }
 }
-function abortable<T>(promise: Promise<T>, signal: AbortSignal, late?: (value: T) => void): Promise<T> {
+export function abortable<T>(promise: Promise<T>, signal: AbortSignal, late?: (value: T) => void): Promise<T> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const cancel = () => {
@@ -242,7 +251,8 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal, late?: (value: T
     if (signal.aborted) cancel();
   });
 }
-async function boundedJson(response: Response, signal: AbortSignal, assertCurrent: () => void): Promise<unknown> {
+/** Reads at most PRIVATE_COMMAND_SEARCH_BYTES of strict UTF-8 JSON, checking currency at every await. */
+export async function boundedJson(response: Response, signal: AbortSignal, assertCurrent: () => void): Promise<unknown> {
   if (!response.body) return invalid();
   const reader = response.body.getReader(), decoder = new TextDecoder("utf-8", { fatal: true });
   const parts: string[] = []; let bytes = 0, consumed = false;
@@ -272,10 +282,11 @@ async function boundedJson(response: Response, signal: AbortSignal, assertCurren
     try { reader.releaseLock(); } catch { /* A retired adapter can retain its read. */ }
   }
 }
-function endpoint(): string {
+/** The absolute URL of a fixed API path on a plain http(s) API base. */
+export function apiEndpoint(path: string): string {
   const base = new URL(API_BASE);
   if (!["http:", "https:"].includes(base.protocol) || base.username || base.password || base.search || base.hash) return invalid();
-  return new URL(`${API_BASE.replace(/\/+$/, "")}${PRIVATE_COMMAND_SEARCH_PATH}`).href;
+  return new URL(`${API_BASE.replace(/\/+$/, "")}${path}`).href;
 }
 
 /** Must run inside useOwnerRequestScope. The assertion additionally owns the
@@ -289,7 +300,7 @@ export async function requestPrivateCommandSearch(query: string, getToken: () =>
     const token = await getToken();
     assertCurrent();
     if (!token) throw new PrivateCommandSearchError("authentication_required");
-    const url = endpoint();
+    const url = apiEndpoint(PRIVATE_COMMAND_SEARCH_PATH);
     response = await abortable(fetch(url, {
       method: "POST", body: JSON.stringify({ q: query }),
       headers: { accept: "application/json", "content-type": "application/json", authorization: `Bearer ${token}` },

@@ -38,12 +38,19 @@ async function getSentry(): Promise<Sentry | null> {
 export async function initClientSentry(): Promise<void> {
   const s = await getSentry();
   if (!s) return;
+  // Request URLs lose typed search text and credentials first; without the
+  // scrubber, nothing is reported.
+  const privacy = await import("./sentryPrivacy").catch(() => null);
+  if (!privacy) return;
   s.init({
     dsn: DSN,
     tracesSampleRate: 0.1,
     replaysOnErrorSampleRate: 0.0,
     replaysSessionSampleRate: 0.0,
     environment: process.env.NEXT_PUBLIC_SC2TOOLS_ENV || "production",
+    beforeBreadcrumb: privacy.scrubBreadcrumb,
+    beforeSendSpan: privacy.scrubSpan,
+    beforeSendTransaction: privacy.scrubTransaction,
   });
 }
 

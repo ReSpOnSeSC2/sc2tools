@@ -4,6 +4,11 @@ import { isCommandSearchHref } from "./commandSearchTarget";
 
 const LIBRARIES: Readonly<Record<string, string>> = {
   "library:opponents": "/app/opponents", "library:customBuilds": "/builds", "library:maps": "/app/maps",
+  "library:games": "/app/replays",
+};
+const PRIVATE_FIELDS: Readonly<Record<string, readonly [field: string, maximum: number, route: string]>> = {
+  opponent: ["pulseId", 64, "/app/opponents/"], customBuild: ["slug", 120, "/builds/"],
+  map: ["map", 200, "/app/maps?focus="], game: ["gameId", 200, "/app/game/"],
 };
 
 /** Pure strict constructor loaded by the fixed Runtime import. A response can
@@ -14,16 +19,15 @@ export function commandPrivateHref(value: unknown): string | null {
   if (prototype !== null && prototype !== Object.prototype) return null;
   const kind = Object.getOwnPropertyDescriptor(value, "kind");
   if (!kind || !Object.hasOwn(kind, "value")) return null;
-  const field = kind.value === "opponent" ? "pulseId" : kind.value === "customBuild" ? "slug" : kind.value === "map" ? "map" : null;
-  if (!field) return null;
+  if (typeof kind.value !== "string" || !Object.hasOwn(PRIVATE_FIELDS, kind.value)) return null;
+  const [field, maximum, route] = PRIVATE_FIELDS[kind.value];
   const keys = Reflect.ownKeys(value), entry = Object.getOwnPropertyDescriptor(value, field);
   if (keys.length !== 2 || !keys.includes("kind") || !keys.includes(field) || !entry?.enumerable
     || !kind.enumerable || !Object.hasOwn(entry, "value")) return null;
-  const text: unknown = entry.value, maximum = field === "pulseId" ? 64 : field === "slug" ? 120 : 200;
+  const text: unknown = entry.value;
   if (typeof text !== "string" || !text.length || text.length > maximum || /[\p{Cc}\uD800-\uDFFF]/u.test(text)
     || (field !== "map" && (text === "." || text === ".."))) return null;
-  const encoded = encodeURIComponent(text);
-  return field === "pulseId" ? `/app/opponents/${encoded}` : field === "slug" ? `/builds/${encoded}` : `/app/maps?focus=${encoded}`;
+  return route + encodeURIComponent(text);
 }
 
 function admitsItem(item: CommandSearchItem, chrome: CommandChrome | null, ownerKey: string | null): boolean {

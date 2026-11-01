@@ -285,3 +285,77 @@ describe("palette status and ephemeral state", () => {
     } finally { storage.mockRestore(); }
   });
 });
+
+describe("personal maps and recent games", () => {
+  const deferred = () => {
+    const base = personal(0);
+    const data = decodePrivateCommandSearch({ version: 2, groups: { ...base.data!.groups,
+      maps: { status: "unavailable", items: [], hasMore: null, reason: "deferred" } } });
+    return { ...base, data, choices: privateCommandChoices(data) };
+  };
+  const mapChoice = (map: string) => ({ group: "maps" as const, label: map, target: { kind: "map" as const, map },
+    href: `/app/maps?focus=${encodeURIComponent(map)}` });
+  const gameChoice = (id: string) => ({ group: "games" as const, label: `Rival ${id}`, target: { kind: "game" as const, gameId: id },
+    href: `/app/game/${id}`, description: "Alcyone LE · Win · Oct 29, 2026", matchup: "PvT" });
+  const maps = (overrides: Partial<NonNullable<CommandPalettePrivateState["maps"]>> = {}) => ({
+    phase: "ready" as const, group: { status: "ready" as const, items: [{ map: "Alcyone LE" }], hasMore: false },
+    partial: false, timedOut: false, choices: [mapChoice("Alcyone LE")], ...overrides });
+  const games = (overrides: Partial<NonNullable<CommandPalettePrivateState["games"]>> = {}) => ({
+    phase: "ready" as const, validQuery: true, hasMore: false, timedOut: false, choices: [gameChoice("g1")], ...overrides });
+
+  it("lists recent games with their matchup and details, and opens Replays from the library", async () => {
+    const state = { ...deferred(), maps: maps(), games: games() };
+    await open({ initialQuery: "rival", privateSearch: state });
+    const group = screen.getByRole("group", { name: "Recent games" });
+    const row = within(group).getByRole("option");
+    expect(row.textContent).toContain("Rival g1"); expect(row.textContent).toContain("PvT");
+    expect(row.textContent).toContain("Alcyone LE · Win · Oct 29, 2026");
+    fireEvent.click(row);
+    expect(state.onSelect).toHaveBeenCalledWith(state.games.choices[0]);
+    expect(within(screen.getByRole("group", { name: "Your library" })).getByRole("option", { name: "Open Replays" })).toBeTruthy();
+  });
+
+  it("replaces the deferred maps group with the browser's own matches", async () => {
+    await open({ initialQuery: "alc", privateSearch: { ...deferred(), maps: maps(), games: games({ choices: [] }) } });
+    const group = screen.getByRole("group", { name: "Your maps" });
+    expect(within(group).getByRole("option", { name: "Alcyone LE" })).toBeTruthy();
+    expect(screen.queryByText("Not in quick search yet. Open the full library to browse it.")).toBeNull();
+    expect(screen.getByText("No matching games among your latest 1,000.")).toBeTruthy();
+  });
+
+  it.each([
+    [{ phase: "loading" as const, group: null, choices: [] }, "Loading your maps…", false],
+    [{ phase: "error" as const, group: null, choices: [], timedOut: true }, "Your maps took too long to load.", true],
+    [{ phase: "error" as const, group: null, choices: [] }, "Your maps could not load. Try again or open Maps.", true],
+    [{ group: { status: "unavailable" as const, items: [] as [], hasMore: null, reason: "source_budget_exceeded" as const }, choices: [] },
+      "This library is too large for quick search.", true],
+    [{ partial: true, choices: [], group: { status: "ready" as const, items: [], hasMore: false } },
+      "Some library entries could not be searched.", false],
+  ])("explains a map list that is not complete %#", async (overrides, text, retry) => {
+    await open({ initialQuery: "alc", privateSearch: { ...deferred(), maps: maps(overrides), games: games({ choices: [] }) } });
+    expect(screen.getByText(text)).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("No public matches.");
+    expect(!!screen.queryByRole("button", { name: "Retry your library search" })).toBe(retry);
+  });
+
+  it("says when games are still searching, failed or need a shorter search", async () => {
+    const view = await open({ initialQuery: "rival", privateSearch: { ...deferred(), maps: maps({ choices: [] }), games: games({ phase: "loading", choices: [] }) } });
+    expect(screen.getByText("Searching your latest games…")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("Searching your library…");
+    view.unmount();
+    const failed = await open({ initialQuery: "rival", privateSearch: { ...deferred(), maps: maps({ choices: [] }),
+      games: games({ phase: "error", choices: [] }) } });
+    expect(screen.getByText("Recent games are unavailable. Try again or open Replays.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry your library search" }));
+    failed.unmount();
+    await open({ initialQuery: "rival", privateSearch: { ...deferred(), maps: maps({ choices: [] }), games: games({ validQuery: false, choices: [] }) } });
+    expect(screen.getByText("Use a shorter search to find games.")).toBeTruthy();
+  });
+
+  it("reports no matches honestly once every source answered in full", async () => {
+    await open({ initialQuery: "zzz-none", privateSearch: { ...deferred(), maps: maps({ choices: [],
+      group: { status: "ready", items: [], hasMore: false } }), games: games({ choices: [] }) } });
+    expect(screen.getByRole("status").textContent).toContain("No matching results. Try another word.");
+    expect(screen.queryByRole("button", { name: "Retry your library search" })).toBeNull();
+  });
+});
