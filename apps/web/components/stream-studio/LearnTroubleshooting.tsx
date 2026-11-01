@@ -36,7 +36,7 @@ const PROBLEMS = [
   {
     title: "Chat is empty, or an alert isn't arriving",
     body: "Check your platform identifiers in Multi-platform chat and whether that channel is live. A sample chat test verifies layout, not a real platform connection. Event alerts also depend on the platform's available event connection and permissions; connecting chat alone does not guarantee every subscription, raid or gift event. Open the Stream Dock to inspect the feed and configuration.",
-    href: "/settings?tab=overlay", action: "Review chat setup",
+    href: "/settings?tab=chat#platforms", action: "Review chat setup",
   },
 ] as const;
 

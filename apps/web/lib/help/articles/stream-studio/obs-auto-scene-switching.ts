@@ -84,7 +84,7 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "Website Add uses the paired account's default overlay URL and recommended standalone size (the standalone Stats ticker is 1920 × 180). Existing same-token covers and alerts stay above a new source. Ghost Build's Add button stays disabled because coaching needs its assigned build URL; use **Copy** or **Drag into OBS** after assigning builds in Look. The builder's optional Ghost source starts unassigned and shows the same setup warning. For a particular token or theme, use Copy or Drag too. OBS passwords and overlay URLs are never sent in the website request.",
+      text: "Website Add uses the paired account's default overlay URL and recommended standalone size (the standalone Stats ticker is 1920 × 180). Existing same-token covers and alerts stay above a new source. Ghost Build's Add button stays disabled because coaching needs its assigned build URL; use **Copy** or **Drag into OBS** after assigning builds in Ghost Build coach. The builder's optional Ghost source starts unassigned and shows the same setup warning. For a particular token or theme, use Copy or Drag too. OBS passwords and overlay URLs are never sent in the website request.",
     },
     { type: "heading", text: "Two PCs", anchor: "two-pcs" },
     {

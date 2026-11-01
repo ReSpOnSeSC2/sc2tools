@@ -296,7 +296,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
       "Start a game in the assigned matchup and follow the timed steps; check the game's Ghost grade afterward.",
     ],
     check: "Test can show a placement or configuration preview, but a real matched game with the agent running verifies the game clock. Look for the armed status before you queue.",
-    troubleshooting: "Ghost is separate from All-in-one. Assignments are saved to your account. Move old browser assignments once in Look. Legacy fragment URLs work until an account configuration is present; an explicit empty account setup disarms old fragments too. Random opponents pause coaching for the entire game.",
+    troubleshooting: "Ghost is separate from All-in-one. Assignments are saved to your account. Move old browser assignments once in Ghost Build coach. Legacy fragment URLs work until an account configuration is present; an explicit empty account setup disarms old fragments too. Random opponents pause coaching for the entire game.",
     placement: "Use a readable practice corner with room for multiple step rows and the drift chip.",
     source: "dedicated", settingsHref: OVERLAY_SETTINGS, related: ["randomizer", "post-game", "build-profile"],
   },

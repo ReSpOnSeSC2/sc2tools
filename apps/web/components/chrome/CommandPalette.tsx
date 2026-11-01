@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
+import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -118,8 +119,9 @@ function ResultGroup({ group, base, activeId, onActive, onChoose }: {
         canChoose(item) ? "hover:bg-bg-elevated" : "cursor-default",
       ].join(" ")}>
       <span className="flex w-full min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="min-w-0 break-words text-body font-medium">{item.label}</span>
-        {item.matchup ? <span className="text-caption text-text-muted">{item.matchup}</span> : null}
+        {/* An unpublished guide stays listed, unlinked and greyed, with its reason. */}
+        <span className={`min-w-0 break-words text-body font-medium ${canChoose(item) ? "" : "text-text-muted"}`}>{item.label}</span>
+        {item.matchup ? <Badge size="sm">{item.matchup}</Badge> : null}
       </span>
       {item.description ? <span className="break-words text-caption text-text-muted">{item.description}</span> : null}
     </button>)}
@@ -131,10 +133,14 @@ function PaletteStatus({ count, enabled, query, status, onRetry, id, privateSear
   onRetry: () => void; id: string; privateSearch?: CommandPalettePrivateState;
 }) {
   const privatePending = privateSearch?.validQuery && ["debouncing", "loading"].includes(privateSearch.phase);
-  const privateUnavailable = privateSearch?.phase === "error" || (privateSearch?.data
-    && Object.values(privateSearch.data.groups).some(group => group.status === "unavailable"));
+  // Any unavailable group (deferred included) means the library was not fully searched, so an empty
+  // result is "No public matches". Only a failure offers Retry: "deferred" is a lasting product state.
+  const groups = privateSearch?.data ? Object.values(privateSearch.data.groups) : [];
+  const privateIncomplete = privateSearch?.phase === "error" || groups.some(group => group.status === "unavailable");
+  const privateUnavailable = privateSearch?.phase === "error"
+    || groups.some(group => group.status === "unavailable" && group.reason !== "deferred");
   const result = count ? `${count} results, ${enabled} available.`
-    : privateSearch && (!privateSearch.validQuery || privatePending || privateUnavailable) ? "No public matches."
+    : privateSearch && (!privateSearch.validQuery || privatePending || privateIncomplete) ? "No public matches."
       : query.trim() ? "No matching results. Try another word." : "No results available.";
   const guides = status === "loading" ? " Loading guide availability."
     : status === "unavailable" ? " Guide availability is unavailable." : "";
@@ -161,7 +167,7 @@ const PRIVATE_GROUPS = [
 ] as const;
 const PRIVATE_REASONS: Record<PrivateSearchUnavailableReason, string> = {
   source_budget_exceeded: "This library is too large for quick search.", invalid_data: "Some library entries could not be searched.",
-  deferred: "Quick search is not available for this library yet.", missing_access_path: "Quick search is unavailable for this library.",
+  deferred: "Not in quick search yet. Open the full library to browse it.", missing_access_path: "Quick search is unavailable for this library.",
   deadline: "This library search took too long.", busy: "This library search is busy.", retired: "This library changed during search. Search again.",
 };
 const LIBRARY_ITEMS: readonly CommandSearchItem[] = [

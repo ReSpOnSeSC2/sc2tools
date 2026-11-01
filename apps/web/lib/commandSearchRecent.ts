@@ -52,21 +52,24 @@ function readEnvelope(storage: CommandRecentStorage): RecentRead {
   } catch { return { kind: "invalid" }; }
 }
 
-function currentIds(read: RecentRead, viewer: string, allowed: ReadonlySet<string>): string[] {
-  if (read.kind !== "ok" || read.envelope.viewer !== viewer) return [];
-  return read.envelope.ids.every(id => allowed.has(id)) ? [...read.envelope.ids] : [];
+function viewerIds(read: RecentRead, viewer: string): string[] {
+  return read.kind === "ok" && read.envelope.viewer === viewer ? [...read.envelope.ids] : [];
 }
 
-/** Reads only this viewer's admitted static NAV_ENTRY keys. Example: readCommandSearchRecent(viewer, ["today"]). */
+/** Reads only this viewer's admitted static NAV_ENTRY keys; keys this page does not admit stay stored.
+ * Example: readCommandSearchRecent(viewer, ["today"]). */
 export function readCommandSearchRecent(
   viewer: string | null, allowed: readonly string[], storage?: CommandRecentStorage,
 ): string[] {
   if (!validViewer(viewer)) return [];
   const target = browserStorage(storage);
-  return target ? currentIds(readEnvelope(target), viewer, admittedIds(allowed)) : [];
+  if (!target) return [];
+  const admitted = admittedIds(allowed);
+  return viewerIds(readEnvelope(target), viewer).filter(id => admitted.has(id));
 }
 
-/** Moves one admitted static key to the front, at most eight.
+/** Moves one admitted static key to the front, at most eight, keeping this
+ * viewer's other stored keys even when the current page does not list them.
  * Example: recordCommandSearchRecent(viewer, "today", ids). */
 export function recordCommandSearchRecent(
   viewer: string | null, id: string, allowed: readonly string[], storage?: CommandRecentStorage,
@@ -78,7 +81,7 @@ export function recordCommandSearchRecent(
   if (!target) return [];
   const read = readEnvelope(target);
   if (read.kind === "error") return [];
-  const previous = currentIds(read, viewer, admitted);
+  const previous = viewerIds(read, viewer);
   const ids = [id, ...previous.filter(value => value !== id)].slice(0, COMMAND_SEARCH_RECENT_MAX);
   try {
     target.setItem(COMMAND_SEARCH_RECENT_KEY, JSON.stringify({ version: 1, viewer, ids }));

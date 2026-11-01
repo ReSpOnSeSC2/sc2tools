@@ -129,6 +129,21 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   ...UTILITY_ENTRIES,
 ];
 
+export type NavGates = { isAdmin: boolean; coaching: boolean; reviews: boolean; guides: boolean };
+
+/**
+ * The entries this viewer may open, gated the same way wherever they are
+ * listed (the app chrome, the marketing header's quick search).
+ *
+ * Example: `admittedNavEntries({ isAdmin: false, coaching: false, reviews: true, guides: true })`
+ * leaves out Coaching and Admin.
+ */
+export function admittedNavEntries(gates: NavGates): NavEntry[] {
+  return NAV_ENTRIES.filter((e) =>
+    (!e.adminOnly || gates.isAdmin) && (!e.coachingOnly || gates.coaching)
+    && (!e.reviewsRollout || gates.reviews) && (!e.guidesFlag || gates.guides));
+}
+
 /**
  * The entries whose pages render inside the app chrome. Shortcuts point
  * into one of these (Stream Studio is /settings), so they never claim a

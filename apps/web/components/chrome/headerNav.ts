@@ -1,4 +1,5 @@
 import type { MobileNavLink } from "./MobileNav";
+import type { CommandNavigation } from "./CommandSearchContext";
 
 /**
  * The marketing header's link list (desktop nav + MobileNav drawer),
@@ -59,4 +60,21 @@ export function headerNavLinks(options: HeaderNavOptions): readonly MobileNavLin
     SETTINGS_LINK,
     ...(options.isAdmin ? [ADMIN_NAV_LINK] : []),
   ];
+}
+
+// The app's NAV_ENTRY key for the same page; the app's "stream-studio"
+// opens the Overlay settings, not the public Stream Studio page.
+const COMMAND_KEYS: Readonly<Record<string, string>> = { "/builds": "builds-library", "/stream-studio": "stream-studio-page" };
+
+/**
+ * Quick-search destinations for the header links this viewer sees, keyed
+ * like the app's NAV_ENTRIES so a key names the same page everywhere.
+ *
+ * Example: `headerLinkCommands(headerNavLinks(options), { signedIn: true, isAdmin: false })`
+ * keys Build library as "builds-library".
+ */
+export function headerLinkCommands(links: readonly MobileNavLink[], viewer: { signedIn: boolean; isAdmin: boolean }): CommandNavigation[] {
+  return links.filter((link) => link.auth === "any" || (link.auth === "in" && viewer.signedIn)
+    || (link.auth === "out" && !viewer.signedIn) || (link.auth === "admin" && viewer.signedIn && viewer.isAdmin))
+    .map((link) => ({ key: COMMAND_KEYS[link.href] ?? link.href.slice(1), href: link.href, label: link.label }));
 }

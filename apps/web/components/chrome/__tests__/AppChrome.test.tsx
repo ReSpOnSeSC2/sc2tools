@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { AppChrome } from "../AppChrome";
+import { CommandSearchContext } from "../CommandSearchContext";
 import { lockBodyScroll } from "@/lib/bodyScrollLock";
 import { useChromeBreadcrumb } from "../ChromeContext";
 import { setTheme } from "@/lib/theme";
@@ -110,6 +111,34 @@ const railHrefs = () =>
   ).map((a) => a.getAttribute("href"));
 
 describe("AppChrome navigation", () => {
+  it("registers one stable quick-search config, not a new one per render", () => {
+    const registered: unknown[] = [];
+    const withSearch = () => <CommandSearchContext.Provider value={{ ownerKey: "clerk_u1", open: vi.fn(),
+      registerChrome: (config) => { registered.push(config); return () => undefined; }, registerSettings: () => () => undefined }}>
+      <AppChrome>Content</AppChrome></CommandSearchContext.Provider>;
+    const view = render(withSearch());
+    const count = registered.length;
+    fireEvent.click(screen.getByRole("button", { name: /More/ }));
+    expect(registered.length).toBe(count);
+    view.rerender(withSearch());
+    expect(registered.length).toBe(count + 1);
+    expect(registered.at(-1)).toBe(registered.at(-2));
+  });
+  it("gives signed-out phones a search button, because visitors have no More sheet", () => {
+    const open = vi.fn();
+    const withSearch = (ownerKey: string | null) => <CommandSearchContext.Provider value={{ ownerKey, open,
+      registerChrome: () => () => undefined, registerSettings: () => () => undefined }}><AppChrome>Content</AppChrome></CommandSearchContext.Provider>;
+    harness.signedIn = false;
+    const view = render(withSearch(null));
+    const phone = screen.getAllByRole("button", { name: "Search SC2 Tools" }).find((button) => button.className.includes("md:hidden"));
+    expect(phone).toBeTruthy();
+    fireEvent.click(phone!);
+    expect(open).toHaveBeenCalledWith({ returnFocus: phone });
+    view.unmount();
+    harness.signedIn = true;
+    render(withSearch("clerk_u1"));
+    expect(screen.getAllByRole("button", { name: "Search SC2 Tools" }).some((button) => button.className.includes("md:hidden"))).toBe(false);
+  });
   it("reserves navigation and account space while Clerk loads", () => {
     harness.loaded = false; render(<AppChrome>Content</AppChrome>);
     const rail = screen.getByRole("navigation", { name: "App navigation" });

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCommandGuideCatalog } from "@/lib/commandGuideSearch";
@@ -79,7 +79,7 @@ describe("private groups remain literal, distinct and bounded", () => {
   it("keeps the active opponent identity through same-query Retry and a changed server order", async () => {
     const base = personal(2), select = vi.fn(() => true);
     const first = decodePrivateCommandSearch({ version: 2, groups: { ...base.data!.groups,
-      maps: { status: "unavailable", items: [], hasMore: null, reason: "deferred" } } });
+      maps: { status: "unavailable", items: [], hasMore: null, reason: "busy" } } });
     const reordered = decodePrivateCommandSearch({ version: 2, groups: { ...first.groups, opponents: {
       status: "ready", hasMore: false, items: [
         { ...first.groups.opponents.items[1], lastSeen: "2026-10-27T12:00:00.000Z" },
@@ -106,6 +106,15 @@ describe("private groups remain literal, distinct and bounded", () => {
     expect(select).toHaveBeenCalledWith(next.choices[0]);
     expect(next.choices[0].target).toEqual({ kind: "opponent", pulseId: "id1" });
   });
+  it("shows deferred maps as a lasting state, without a library failure or Retry", async () => {
+    const base = personal(1);
+    const data = decodePrivateCommandSearch({ version: 2, groups: { ...base.data!.groups,
+      maps: { status: "unavailable", items: [], hasMore: null, reason: "deferred" } } });
+    render(<CommandPalette {...defaults} initialQuery="unrelated" privateSearch={{ ...base, data, choices: privateCommandChoices(data) }} />);
+    expect(await screen.findByText("Not in quick search yet. Open the full library to browse it.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Retry your library search" })).toBeNull();
+    expect(screen.getByRole("status").textContent).not.toContain("Some library results are unavailable.");
+  });
   it("keeps all server rows in server order without public query scoring", async () => {
     const state = personal(8), select = vi.fn();
     const { input } = await open({ initialQuery: "no-public-match-at-all", privateSearch: state, onSelect: select });
@@ -127,6 +136,19 @@ describe("private groups remain literal, distinct and bounded", () => {
       expect(screen.getByRole("group", { name }).querySelectorAll('[role="option"]')).toHaveLength(8);
     }
     expect(screen.getByRole("group", { name: "Your library" }).querySelectorAll('[role="option"]')).toHaveLength(3);
+  });
+  it("never reports false no matches when maps are deferred and nothing else matches", async () => {
+    const data = decodePrivateCommandSearch({ version: 2, groups: {
+      opponents: { status: "ready", items: [], hasMore: false },
+      customBuilds: { status: "ready", items: [], hasMore: false },
+      maps: { status: "unavailable", items: [], hasMore: null, reason: "deferred" },
+    } });
+    await open({ initialQuery: "unknown-public-term", privateSearch: { ...personal(), data, choices: privateCommandChoices(data) } });
+    const status = screen.getByRole("status").textContent ?? "";
+    expect(status).toContain("No public matches.");
+    expect(status).not.toContain("No matching results");
+    expect(status).not.toContain("Some library results are unavailable.");
+    expect(screen.queryByRole("button", { name: "Retry your library search" })).toBeNull();
   });
   it("announces unavailable groups and explicit retry/library actions rather than false no matches", async () => {
     const data = decodePrivateCommandSearch({ version: 2, groups: {
@@ -189,6 +211,10 @@ describe("palette result focus and publication", () => {
       initialQuery: "12 pool pvz", onSelect: select });
     const options = screen.getAllByRole("option");
     expect(options.every(option => option.getAttribute("aria-disabled") === "true")).toBe(true);
+    // Unlinked rows stay listed but greyed; each carries its matchup as a badge.
+    const pool = options.find(option => option.textContent?.startsWith("12 Pool"))!;
+    expect(within(pool).getByText("12 Pool").className).toContain("text-text-muted");
+    expect(within(pool).getByText("PvZ").className).toContain("min-h-5");
     expect(input.getAttribute("aria-activedescendant")).toBeNull();
     fireEvent.keyDown(input, { key: "ArrowDown" }); fireEvent.keyDown(input, { key: "Enter" });
     fireEvent.pointerDown(options[0]); fireEvent.click(options[0]);
@@ -203,6 +229,7 @@ describe("palette result focus and publication", () => {
     const { input } = await open({ guideItems, scope: "guides", initialQuery: "12pool pvz", onSelect: select });
     const enabled = screen.getAllByRole("option").filter(option => option.getAttribute("aria-disabled") !== "true");
     expect(enabled).toHaveLength(1);
+    expect(within(enabled[0]).getByText("12 Pool").className).not.toContain("text-text-muted");
     fireEvent.keyDown(input, { key: "ArrowDown" });
     expect(input.getAttribute("aria-activedescendant")).toBe(enabled[0].id);
     fireEvent.keyDown(input, { key: "Enter" });
