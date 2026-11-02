@@ -71,7 +71,7 @@ def monitor():
     ({}, "pairing", "ok", None),
     ({"paused": True}, "paused", "warn", "resume"),
     ({"connection": "offline", "pending": 12}, "cloud", "warn", "retry_now"),
-    ({"connection": "signed_out"}, "cloud", "warn", "link_pc"),
+    ({"connection": "signed_out"}, "cloud", "warn", "retry_now"),
     ({"heartbeat_failing_since": NOW - 200}, "cloud", "warn", None),
     ({"socket_connected": False}, "cloud", "info", None),
     ({}, "cloud", "ok", None),
@@ -108,8 +108,10 @@ def test_each_rule_level_action_and_help(changes, rule_id, level, action):
     assert (found.level, found.action) == (level, action) and found.level in health.LEVELS
     assert found.action is None or found.action in ACTIONS
     assert found.help_slug in AGENT_HELP_SLUGS
-    # Only connection problems point at the sync-problems article, as the card's "Why?" does today.
+    # Connection problems point at the sync-problems article and identity and upload rows at the
+    # missing-game one; the card gives those rows their own "?".
     assert (found.help_slug == "desktop-app-sync-problems") == (rule_id == "cloud" and level == "warn")
+    assert (found.help_slug == "my-game-didnt-show-up") == (rule_id in ("identity", "uploads"))
 
 
 def test_rule_sentences_are_plain_and_specific():
@@ -482,6 +484,22 @@ def test_multiplexer_pause_turns_the_health_tray_grey_for_every_sink():
     scheduler.run()
     assert one.on_health.call_args.args[0] == two.on_health.call_args.args[0]
     assert one.on_health.call_args.args[0].tray == "grey"
+
+
+def test_signed_out_offers_retry_until_the_unlink_is_confirmed():
+    sink = Mock()
+    ui, scheduler = _multiplexer(sink, facts=StatusFacts(paired=True, phase="ready", folders=[Path("2-S2-1-42")]))
+    ui.on_connection_state("signed_out", NOW - 60, NOW + 30, 5)
+    scheduler.run()
+
+    def actions():
+        return [(item.id, item.action) for item in sink.on_health.call_args.args[0].rows if item.action]
+
+    # Link again now would keep the rejected token, so the cloud row only retries.
+    assert actions() == [("cloud", "retry_now")]
+    ui.on_unlinked()  # the auth watchdog confirmed the revocation
+    scheduler.run()
+    assert actions() == [("pairing", "link_pc")]
 
 
 def test_relinking_clears_a_signed_out_hold():

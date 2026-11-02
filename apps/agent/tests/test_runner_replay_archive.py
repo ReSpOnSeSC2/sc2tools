@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import logging
+import threading
 from types import SimpleNamespace
 from typing import Any, Optional
+from unittest.mock import Mock
 
+from sc2tools_agent import runner
+from sc2tools_agent.health import HealthMonitor
 from sc2tools_agent.runner import (
     _handle_replay_archive_resync,
     _replay_archive_ack_allowed,
@@ -114,3 +118,45 @@ def test_archive_resync_without_live_queue_does_not_ack(
     _handle_replay_archive_resync(cfg, state, None)
 
     assert state.uploaded == {}
+
+
+def _cell_asking_for_resync(sink: Mock) -> Any:
+    cell = runner._RuntimeCell()
+    cell.ui = runner._Multiplexer(
+        sink, health=HealthMonitor(schedule=lambda _delay, callback: callback()),
+    )
+    cell.ui.on_replay_archive_status(12, 300)
+    return cell
+
+
+def _archive_rows(cell: Any) -> list:
+    return [row for row in cell.ui.health.snapshot().rows if row.id == "archive"]
+
+
+def test_starting_the_full_resync_clears_the_health_archive_row(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    cfg = SimpleNamespace(state_dir=tmp_path, api_base="https://api.test")
+    started = threading.Event()
+    cell = _cell_asking_for_resync(Mock())
+    assert _archive_rows(cell)[0].sentence.startswith("12 of your 300 saved games")
+    cell.import_ctl = SimpleNamespace(
+        maybe_start_auto_backfill=lambda **_kwargs: started.set(),
+    )
+    runner._request_desktop_resync(cfg, AgentState(), cell)
+    assert started.wait(2)
+    facts = cell.ui.health.facts()
+    assert (facts.archive_missing, facts.archive_total) == (0, 0)
+    assert _archive_rows(cell) == []
+
+    # A Re-sync that never started keeps asking for one.
+    failed, sink = threading.Event(), Mock()
+    sink.show_notice.side_effect = lambda _message: failed.set()
+    cell = _cell_asking_for_resync(sink)
+    monkeypatch.setattr(
+        runner, "_handle_replay_archive_resync", Mock(side_effect=OSError("disk full")),
+    )
+    runner._request_desktop_resync(cfg, AgentState(), cell)
+    assert failed.wait(2)
+    assert cell.ui.health.facts().archive_missing == 12 and _archive_rows(cell)

@@ -24,11 +24,13 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
+from unittest.mock import Mock
 
 import pytest
 
 from sc2tools_agent.config import AgentConfig
-from sc2tools_agent.runner import _handle_save_settings
+from sc2tools_agent.health import HealthMonitor
+from sc2tools_agent.runner import _Multiplexer, _handle_save_settings
 from sc2tools_agent.state import AgentState, load_state, save_state
 from sc2tools_agent.ui import SettingsPayload
 
@@ -887,3 +889,26 @@ def test_folder_change_only_calls_resync_once(tmp_path: Path) -> None:
         "expected exactly one request_full_resync call when both "
         f"folders and filter change — got {upload.resync_calls}"
     )
+
+
+def test_settings_folder_changes_reach_the_health_monitor(tmp_path: Path) -> None:
+    """Save, instant Remove and Auto-detect all show the new list through
+    the multiplexer, so the health card's folders row follows each one."""
+    detected, added = tmp_path / "2-S2-1-1" / "Replays", tmp_path / "1-S2-1-2" / "Replays"
+    for folder in (detected, added):
+        folder.mkdir(parents=True)
+    cfg = AgentConfig(api_base="http://localhost:0", state_dir=tmp_path / "state",
+                      replay_folder=detected, poll_interval_sec=10, parse_concurrency=1)
+    tray = Mock()
+    cell = SimpleNamespace(upload=_StubUpload(), watcher=None, tray=tray, gui=None)
+    cell.ui = _Multiplexer(Mock(), tray, health=HealthMonitor(schedule=lambda _delay, callback: callback()))
+    state = AgentState()
+    for payload, watched in [
+        (SettingsPayload(replay_folders=[detected, added]), [detected, added]),  # Save
+        (SettingsPayload(replay_folders=[detected], replay_folders_removed=[added]), [detected]),  # instant Remove
+        (SettingsPayload(replay_folders=[detected, added]), [detected, added]),  # Auto-detect
+    ]:
+        _handle_save_settings(cfg, state, payload, cell, logging.getLogger("test"))
+        assert cell.ui.health.facts().folders == tuple(str(folder) for folder in watched)
+        tray.set_replay_folders.assert_called_once_with(watched)  # once, through the multiplexer
+        tray.set_replay_folders.reset_mock()

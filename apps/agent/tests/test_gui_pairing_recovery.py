@@ -4,6 +4,9 @@ from tests._gui_offscreen import run_gui_check
 def test_pairing_states_controls_expiry_and_confirmation(tmp_path):
     run_gui_check(tmp_path, """
 from datetime import datetime, timedelta, timezone
+from unittest.mock import Mock
+from sc2tools_agent import runner
+from sc2tools_agent.health import HealthMonitor
 from sc2tools_agent.pairing.flow import PairingUiState
 opened=[]; clicked=[]
 gui.webbrowser.open=lambda url, **kwargs: opened.append(url)
@@ -11,6 +14,7 @@ ui, win=make_window(initial_paired=False,
     on_pairing_retry=lambda: clicked.append("retry"),
     on_pairing_refresh=lambda: clicked.append("refresh"),
     on_link_again=lambda: clicked.append("link"))
+mux=runner._Multiplexer(Mock(),None,ui,health=HealthMonitor(schedule=lambda delay,callback:callback()))
 win.show(); app.processEvents()
 card=win._pairing_card
 assert card.kind=="requesting" and card.spinner.isVisible()
@@ -27,10 +31,12 @@ assert not card.code_label.isVisible() and card.primary.text()=="Retry now"
 assert "we'll keep trying" in card.message.text()
 card.primary.click(); assert clicked[-1]=="retry"
 card.log.click(); assert win._stack.currentIndex()==2
-ui.on_unlinked(); app.processEvents()
+mux.on_unlinked(); app.processEvents()
 assert card.primary.text()=="Link again" and not win._paired
-assert win._status_badge.text()=="Unlinked"
-assert win._status_text.text()=="This PC was unlinked from your account"
+pairing=next(line for line in win._health_view.lines if line.row.id=="pairing")
+assert pairing.sentence.text()=="This PC was unlinked from your account."
+clicked.clear()
+pairing.action_button.click(); assert clicked==["link"]  # Link PC takes the pairing card's step
 card.primary.click(); assert clicked[-1]=="link"
 ui.on_pairing_state(PairingUiState("expired")); app.processEvents()
 assert card.primary.text()=="Get a new code" and not card.code
@@ -45,19 +51,24 @@ win.hide()
 def test_connection_banner_friendly_terminal_rows_and_help(tmp_path):
     run_gui_check(tmp_path, """
 import time
+from unittest.mock import Mock
+from sc2tools_agent import runner
 from sc2tools_agent.errors import classify
+from sc2tools_agent.health import HealthMonitor
 from sc2tools_agent.uploader.queue import TerminalUploadError
 opened=[]; retries=[]
 gui.webbrowser.open=lambda url, **kwargs: opened.append(url)
-ui,win=make_window(on_sync_retry=lambda:retries.append(True))
+ui,win=make_window(replay_folders=[base/"2-S2-1-42"],on_sync_retry=lambda:retries.append(True))
 win.show(); app.processEvents()
-ui.on_pending(312)
-ui.on_connection_state("offline",time.time(),time.time()+30,312)
+mux=runner._Multiplexer(Mock(),None,ui,health=HealthMonitor(schedule=lambda delay,callback:callback()))
+mux.on_pending(312)
+mux.on_connection_state("offline",time.time(),time.time()+30,312)
 app.processEvents()
-assert win._status_view.badge_text=="Needs attention"
-assert "312 replays waiting" in win._status_sub.text()
-win._status_action.click(); assert retries==[True]
-win._connection_help.click(); assert opened[-1].endswith("desktop-app-sync-problems?src=agent#offline")
+assert win._health_view.headline.text()=="1 thing needs attention"
+cloud=win._health_view.lines[0]
+assert cloud.sentence.text()=="Can't reach sc2tools.com, so 312 replays are waiting."
+cloud.action_button.click(); assert retries==[True]
+cloud.help_button.click(); assert opened[-1].endswith("desktop-app-sync-problems?src=agent#offline")
 error=classify(TerminalUploadError("game_payload_too_large: detail"))
 ui.on_upload_failed("game.SC2Replay",error); app.processEvents()
 model=win._recent_table.model()

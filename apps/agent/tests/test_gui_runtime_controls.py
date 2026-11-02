@@ -3,25 +3,30 @@ from tests._gui_offscreen import run_gui_check
 
 def test_status_is_truthful_boot_events_queue_and_errors_copy(tmp_path):
     run_gui_check(tmp_path,r"""
-import time
-from sc2tools_agent.status_model import AgentStatus
+from sc2tools_agent.health import HealthMonitor, classify_boot_error
+monitor=HealthMonitor(schedule=lambda delay,callback:callback())
 original=GuiUI.__init__
 def construct(self,*args,**kwargs):
     original(self,*args,**kwargs)
+    # The boot worker's order, before the window exists: the classified failure, then the phase.
+    monitor.subscribe(self.on_health)
+    monitor.set_boot_error(classify_boot_error(RuntimeError("Analyzer startup exploded\nmore detail")))
+    monitor.set_phase("boot_error")
     self.on_phase("boot_error","Analyzer startup exploded\nmore detail")
 GuiUI.__init__=construct
 ui,win=make_window(replay_folders=[base/"2-S2-1-42"])
 win.show(); app.processEvents()
-assert win._status_view.status==AgentStatus.ERROR
-assert win._status_sub.text()=="Analyzer startup exploded"
-assert "API:" not in win._status_sub.text()
-win._status_action.click(); assert win._stack.currentIndex()==2
+view=win._health_view
+assert view.headline.text()=="SC2 Tools couldn't start syncing"
+assert [line.sentence.text() for line in view.lines]==["Analyzer startup exploded"]
+assert view.lines[0].action_button.text()=="Restart agent" and win._status_copy.isVisible()
 (base/"agent.log").write_text("\n".join(f"2026-10-23T12:00:00 ERROR issue {i}" for i in range(30)),encoding="utf-8")
 win._copy_status_details()
 details=app.clipboard().text()
 assert "SC2 Tools test" in details and "issue 29" in details and "issue 0\n" not in details
+assert "Analyzer startup exploded\nmore detail" in details
 ui.on_status("watching for replays"); app.processEvents()
-assert win._status_view.status==AgentStatus.ERROR
+assert view.headline.text()=="SC2 Tools couldn't start syncing"
 win.hide()
 """)
 
@@ -29,20 +34,27 @@ win.hide()
 def test_unpaired_controls_and_shared_offline_card(tmp_path):
     run_gui_check(tmp_path,r"""
 import time
-from sc2tools_agent.status_model import AgentStatus
+from unittest.mock import Mock
+from sc2tools_agent import runner
+from sc2tools_agent.health import HealthMonitor
 retries=[]
-ui,win=make_window(initial_paired=False,on_sync_retry=lambda:retries.append(True))
+ui,win=make_window(initial_paired=False,replay_folders=[base/"2-S2-1-42"],on_sync_retry=lambda:retries.append(True))
 win.show();app.processEvents()
 assert not win._stats_row.isVisible()
 assert not win._pause_btn.isEnabled() and not win._resync_btn.isEnabled() and not win._choose_btn.isEnabled()
-ui.on_paired("u1"); ui.on_phase("ready"); ui.on_pending(312)
-ui.on_connection_state("offline",time.time(),time.time()+30,312)
+# The runner's fan-out: the window's own events and the health snapshot come from one place.
+mux=runner._Multiplexer(Mock(),None,ui,health=HealthMonitor(schedule=lambda delay,callback:callback()))
+mux.on_paired("u1"); mux.on_phase("ready"); mux.on_pending(312)
+mux.on_connection_state("offline",time.time(),time.time()+30,312)
 app.processEvents()
-assert win._status_view.status==AgentStatus.NEEDS_ATTENTION
-assert "312 replays waiting" in win._status_sub.text()
+view=win._health_view
+assert view.headline.text()=="1 thing needs attention"
+cloud=view.lines[0]
+assert cloud.sentence.text()=="Can't reach sc2tools.com, so 312 replays are waiting."
 assert not hasattr(win,"_connection_banner")
-win._status_action.click(); assert retries==[True]
-assert not win._sidebar_status.wordWrap() and win._sidebar_status.toolTip().startswith("● Needs attention")
+cloud.action_button.click(); assert retries==[True]
+assert not win._sidebar_status.wordWrap() and win._sidebar_status.toolTip().startswith("● 1 thing needs attention")
+assert win._stats_row.isVisible() and win._pause_btn.isEnabled()
 win.hide()
 """)
 
