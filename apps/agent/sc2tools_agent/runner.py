@@ -65,6 +65,8 @@ from .pairing import ensure_paired
 from .pairing.flow import PairingControls
 from .pairing.recovery import RuntimeRecovery
 from .errors import classify
+from .health import HealthMonitor, classify_boot_error
+from .recent_games import parse_time
 from .status_model import StatusFacts, ConnectionFacts, derive_status
 from .game_activity import GameActivityGate
 from .update_scheduler import UpdateScheduler
@@ -404,6 +406,7 @@ def _run_headless(
 
     ui = _Multiplexer(console, tray, facts=StatusFacts(paired=state.is_paired,
         paused=state.paused,folders=list(initial_replay_folders)))
+    _push_feature_facts(ui, state, no_live)
     ui.on_paused(state.paused, state.paused_until)
     _start_pause_expiry(cfg, state, lambda: upload, lambda: ui, stop_event)
     log.info("agent_ui_ready tray=%s log_dir=%s", bool(tray), log_dir)
@@ -464,6 +467,7 @@ def _run_headless(
         ),
         on_failure=lambda p, exc: _desktop_upload_failed(ui, import_ctl, p, exc),
         on_pending_changed=ui.on_pending,
+        on_archive_pending_changed=ui.health.set_archive_pending,
         on_game_synced=ui.on_game_synced,
     )
     recovery_cell.upload = upload
@@ -498,8 +502,8 @@ def _run_headless(
     updater = Updater(cfg=cfg,state=state,on_update_available=recovery_cell.update_scheduler.offer,
                       on_check=lambda release: _announce_updated_version(cfg,state,recovery_cell,release))
     recovery_cell.updater = updater
-    heartbeat = Heartbeat(api, on_success=recovery.connected,
-                          on_failure=recovery.watchdog.failure, state_dir=cfg.state_dir,
+    beat_ok, beat_failed = _health_heartbeat(ui, recovery.connected, recovery.watchdog.failure)
+    heartbeat = Heartbeat(api, on_success=beat_ok, on_failure=beat_failed, state_dir=cfg.state_dir,
                           on_overlay_tokens=_obs_token_rotation_controller(cfg, state, recovery_cell).heartbeat)
     recovery_cell.watcher = watcher
     recovery_cell.heartbeat = heartbeat
@@ -908,6 +912,7 @@ def _run_with_gui(
 
     multiplex = _Multiplexer(console, tray, gui)
     cell.ui = multiplex
+    _push_feature_facts(multiplex, state, no_live)
     active_filter=SyncFilter.from_state(preset=state.sync_filter_preset,since_iso=state.sync_filter_since,until_iso=state.sync_filter_until)
     multiplex.on_filter_label(active_filter.short_label() if active_filter.is_active() else "")
     multiplex.on_paused(state.paused, state.paused_until)
@@ -1051,6 +1056,7 @@ def _gui_boot_worker(
             ),
             on_failure=lambda p, exc: _desktop_upload_failed(ui, import_ctl, p, exc),
             on_pending_changed=ui.on_pending,
+            on_archive_pending_changed=ui.health.set_archive_pending,
             on_game_synced=ui.on_game_synced,
             # Late-bound: the build check-in starts with the live bridge.
             on_game_accepted=lambda *accepted: _handle_checkin_game_accepted(
@@ -1094,8 +1100,8 @@ def _gui_boot_worker(
             stop_event,_request_stop_for_update,log)
         updater = Updater(cfg=cfg,state=state,on_update_available=cell.update_scheduler.offer,
                           on_check=lambda release: _announce_updated_version(cfg,state,cell,release))
-        heartbeat = Heartbeat(api, on_success=recovery.connected,
-                              on_failure=recovery.watchdog.failure, state_dir=cfg.state_dir,
+        beat_ok, beat_failed = _health_heartbeat(ui, recovery.connected, recovery.watchdog.failure)
+        heartbeat = Heartbeat(api, on_success=beat_ok, on_failure=beat_failed, state_dir=cfg.state_dir,
                               on_overlay_tokens=_obs_token_rotation_controller(cfg, state, cell).heartbeat)
 
         cell.upload = upload
@@ -1259,6 +1265,8 @@ def _gui_boot_worker(
         log.info("agent_ready (gui worker) paused=%s", state.paused)
     except Exception as exc:  # noqa: BLE001
         log.exception("agent_boot_worker_failed")
+        # Classified first so the health snapshot never shows a generic boot row.
+        ui.health.set_boot_error(classify_boot_error(exc, state_dir=cfg.state_dir))
         ui.on_phase("boot_error", str(exc))
         ui.on_status(f"error: {exc}")
         capture_exception(exc)
@@ -1365,6 +1373,31 @@ def _desktop_replay_skipped(ui, import_ctl, path, reason):
     if ui._recent_history:
         ui._recent_history.skipped(path, reason or "parse_failed")
     import_ctl.on_replay_skipped(path, reason)
+
+
+def _health_heartbeat(ui, on_success, on_failure):
+    """Run the recovery hooks first, then record the heartbeat for health.
+
+    The auth watchdog always sees a failure. A success hook that raises is
+    reported by Heartbeat as a failure, so health records it the same way.
+    """
+    def success():
+        on_success()
+        ui.health.heartbeat_ok()
+
+    def failure(exc):
+        on_failure(exc)
+        ui.health.heartbeat_failed(classify(exc).kind)
+
+    return success, failure
+
+
+def _push_feature_facts(ui, state, no_live):
+    """Off features feed the health footer. Live contact isn't reported yet,
+    so only the off state of the live bridge is known here."""
+    ui.health.set_auto_update(state.auto_update_enabled)
+    if no_live:
+        ui.health.set_live(False)
 
 
 def _request_desktop_resync(cfg, state, cell):
@@ -1984,6 +2017,7 @@ def _handle_save_settings(
     if getattr(cell,"ui",None):
         active_filter=SyncFilter.from_state(preset=state.sync_filter_preset,since_iso=state.sync_filter_since,until_iso=state.sync_filter_until)
         cell.ui.on_filter_label(active_filter.short_label() if active_filter.is_active() else "")
+        cell.ui.health.set_auto_update(state.auto_update_enabled)
     log.info(
         "settings_saved api_base=%s log_level=%s autostart=%s minimised=%s "
         "folders_added=%d folders_excluded=%d filter=%s",
@@ -2017,7 +2051,8 @@ def _make_update_scheduler(cfg,state,cell,gate,stop_event,request_stop,log):
         request_stop()
     def notify(release,phase,detail):
         if getattr(cell,"ui",None):
-            cell.ui.on_update_available(release.latest)
+            cell.ui.on_update_available(release.latest,required=update_is_mandatory(release),
+                                        failed=phase=="failed")
         if cell.gui:
             cell.gui.show_update_state(release,phase,detail)
         if phase=="failed":
@@ -3462,7 +3497,7 @@ class _Multiplexer:
         console: ConsoleUI,
         tray: Optional[TrayUI] = None,
         gui: Optional[GuiUI] = None,
-        *, facts=None,
+        *, facts=None, health=None,
     ) -> None:
         self._status_lock = threading.RLock()
         initial_folders=getattr(gui,"_replay_folders",None)
@@ -3483,15 +3518,30 @@ class _Multiplexer:
             self._sinks.append(tray)
         if gui:
             self._sinks.append(gui)
+        # One health monitor next to the status facts. Subscribed before the
+        # seed pushes so the first snapshot reaches every sink.
+        self.health = health or HealthMonitor()
+        for sink in self._sinks:  # one subscriber per sink, so a failing sink never starves another
+            callback = getattr(sink, "on_health", None)
+            if callback:
+                self.health.subscribe(callback)
+        seeded = self._status_facts
+        self.health.set_phase(seeded.phase)
+        self.health.set_pairing(seeded.paired, unlinked=seeded.unlinked)
+        self.health.set_paused(seeded.paused, seeded.paused_until)
+        if seeded.folders is not None:
+            self.health.set_folders(seeded.folders)
 
     def refresh_status(self):
         self._change_status()
+        self.health.refresh()
 
-    def on_update_available(self, latest):
+    def on_update_available(self, latest, *, required=False, failed=False):
         for sink in self._sinks:
             callback=getattr(sink,"on_update_available",None)
             if callback: callback(latest)
         self._change_status(update_pending=latest)
+        self.health.set_update(latest, required=required, failed=failed)
 
     def _change_status(self, **changes):
         with self._status_lock:
@@ -3511,12 +3561,14 @@ class _Multiplexer:
         changes = {"phase":phase}
         if phase=="boot_error": changes["boot_error"]=detail
         self._change_status(**changes)
+        self.health.set_phase(phase)
 
     def on_analyzer_probe(self, ok, diag):
         for sink in self._sinks:
             callback = getattr(sink, "on_analyzer_probe", None)
             if callback: callback(ok, diag)
         self._change_status(analyzer_ok=ok, analyzer_diag=diag)
+        self.health.set_analyzer(ok, diag)
 
     def on_paused(self, paused, until=None):
         if self._import_ctl:
@@ -3525,19 +3577,23 @@ class _Multiplexer:
             callback = getattr(sink, "on_paused", None)
             if callback: callback(paused, until)
         self._change_status(paused=paused, paused_until=until)
+        self.health.set_paused(paused, until)
 
     def on_folders(self, folders):
         for sink in self._sinks:
             callback=getattr(sink,"set_replay_folders",None)
             if callback: callback(folders)
         self._change_status(folders=list(folders))
+        self.health.set_folders(folders)
 
     def on_filter_label(self, label):
         self._change_status(filter_label=label)
+        self.health.set_filter_label(label)
 
     def on_pairing_state(self, state) -> None:
         if state.kind in ("requesting", "showing"):
             self._change_status(unlinked=False, paired=False)
+            self.health.set_pairing(False)
         for sink in self._sinks:
             callback = getattr(sink, "on_pairing_state", None)
             if callback:
@@ -3545,6 +3601,7 @@ class _Multiplexer:
 
     def on_unlinked(self) -> None:
         self._change_status(unlinked=True, paired=False)
+        self.health.set_pairing(False, unlinked=True)
         if self._recent_history:
             self._recent_history.refresh()
         for sink in self._sinks:
@@ -3568,6 +3625,7 @@ class _Multiplexer:
                 self._notice(f"Sync is waiting for a connection. {waiting_count:,} replays are safely queued.")
                 self._offline_toasted = True
         self._change_status(connection=ConnectionFacts(kind,waiting_count,next_retry_at))
+        self.health.set_connection(kind, since, next_retry_at)
         for sink in self._sinks:
             callback = getattr(sink, "on_connection_state", None)
             if callback:
@@ -3585,6 +3643,8 @@ class _Multiplexer:
 
     def on_paired(self, user_id: str) -> None:
         self._change_status(paired=True, unlinked=False)
+        self.health.set_pairing(True)
+        self.health.set_connection("online")  # a new link retires the old token's signed-out hold
         if self._recent_history:
             self._recent_history.refresh()
         for s in self._sinks:
@@ -3596,6 +3656,7 @@ class _Multiplexer:
 
     def on_upload_success(self, name: str) -> None:
         self._change_status(last_upload_at=time.time())
+        self.health.upload_succeeded()
         if self._offline_since:
             self._recovered_count += 1
         for s in self._sinks:
@@ -3621,10 +3682,24 @@ class _Multiplexer:
             self._notice(f"{summary['result']} vs {summary.get('oppName') or 'Unknown opponent'}{race_copy} on {summary.get('map') or 'Unknown map'}")
 
     def on_recent_snapshot(self, snapshot):
+        self._push_recent(snapshot)
         for sink in self._sinks:
             callback = getattr(sink, "on_recent_snapshot", None)
             if callback:
                 callback(snapshot)
+
+    def _push_recent(self, snapshot):
+        """Skip counts, recent unresolved skips and the saved last upload, as the history thread sees them."""
+        groups = snapshot.get("skipped") or []
+        self.health.set_skipped({group.get("reason"): group.get("count", 0)
+                                 for group in groups if isinstance(group, dict)})
+        self.health.set_unresolved_skips(
+            at.timestamp() for item in snapshot.get("rows") or [] if isinstance(item, dict)
+            and item.get("status") == "skipped" and item.get("reason") == "player_unresolved"
+            and (at := parse_time(item.get("updatedAt"))) is not None)
+        last = parse_time((snapshot.get("facts") or {}).get("lastUploadAt"))
+        if last is not None:
+            self.health.upload_succeeded(last.timestamp())
 
     def on_import_progress(self, snapshot):
         for sink in self._sinks:
@@ -3637,12 +3712,14 @@ class _Multiplexer:
             with self._status_lock:
                 self._status_facts.terminal_failure_times.append(time.time())
             self._change_status(latest_failure_title=reason if isinstance(reason,str) else reason.title)
+            self.health.upload_failed()
         for s in self._sinks:
             s.on_upload_failed(name, reason)
 
     def on_pending(self, count: int) -> None:
         old=self._status_facts.connection
         self._change_status(pending_count=count, connection=ConnectionFacts(old.kind,count,old.next_retry_at))
+        self.health.set_pending(count)
         for s in self._sinks:
             s.on_pending(count)
 
@@ -3651,6 +3728,7 @@ class _Multiplexer:
         missing_games: int,
         total_games: int,
     ) -> None:
+        self.health.set_archive_status(missing_games, total_games)
         for sink in self._sinks:
             callback = getattr(sink, "on_replay_archive_status", None)
             if callable(callback):
