@@ -67,6 +67,7 @@ from .pairing.recovery import RuntimeRecovery
 from .errors import classify
 from .health import HealthMonitor, classify_boot_error
 from .recent_games import parse_time
+from .relaunch import AgentRelaunch, take_restart_marker
 from .status_model import StatusFacts, ConnectionFacts, derive_status
 from .game_activity import GameActivityGate
 from .update_scheduler import UpdateScheduler
@@ -113,6 +114,8 @@ def run_agent(argv: Optional[List[str]] = None) -> int:
     to use ``sys.argv[1:]``.
     """
     args = _parse_args(argv)
+    # Before _bootstrap edits the environment, so a restart reads fresh settings.
+    relaunch = AgentRelaunch(argv)
 
     # The state file may carry an API base override the user set in
     # the GUI Settings tab. Apply it BEFORE load_config() runs so
@@ -135,15 +138,19 @@ def run_agent(argv: Optional[List[str]] = None) -> int:
         return 0
 
     try:
-        return _run_locked_agent(cfg, args, argv)
+        return _run_locked_agent(cfg, args, argv, relaunch=relaunch)
     finally:
         instance_lock.release()
+        # Only now: a copy started while the lock was held would hand off to this one and exit.
+        relaunch.start_if_requested()
 
 
 def _run_locked_agent(
     cfg: AgentConfig,
     args: argparse.Namespace,
     argv: Optional[List[str]],
+    *,
+    relaunch: Optional[AgentRelaunch] = None,
 ) -> int:
     """Start agent services after the caller owns the instance lock."""
     log_dir = _configure_logging(cfg)
@@ -169,6 +176,7 @@ def _run_locked_agent(
                 start_minimized=args.start_minimized,
                 no_live=args.no_live,
                 no_obs=args.no_obs,
+                relaunch=relaunch,
             )
         return _run_headless(
             cfg, log_dir, no_live=args.no_live, no_obs=args.no_obs,
@@ -331,7 +339,10 @@ def _bootstrap(
     if needs_reload:
         cfg = load_config()
 
-    if state.start_minimized:
+    # Restart agent brings the window back, whatever the saved setting says. The
+    # marker is taken on every start, so it never outlives the one it was set for.
+    restarted = take_restart_marker()
+    if state.start_minimized and not restarted:
         args.start_minimized = True
 
     log_dir = (
@@ -665,6 +676,7 @@ def _run_with_gui(
     cfg: AgentConfig, log_dir: Path, *, start_minimized: bool,
     no_live: bool = False,
     no_obs: bool = False,
+    relaunch: Optional[AgentRelaunch] = None,
 ) -> int:
     """GUI path - Qt main loop on the main thread, agent on a worker."""
     log = logging.getLogger("sc2tools_agent")
@@ -856,6 +868,7 @@ def _run_with_gui(
             cfg, state, payload, cell, log,
         ),
         on_quit=request_stop,
+        on_restart_agent=(lambda: _restart_agent(relaunch, request_stop)) if relaunch else None,
         start_minimized=start_minimized,
         window_geometry=state.window_geometry,
         window_information_layout=state.window_information_layout,
@@ -1392,6 +1405,12 @@ def _health_heartbeat(ui, on_success, on_failure):
     return success, failure
 
 
+def _restart_agent(relaunch, request_stop):
+    """Restart agent: the usual shutdown, then run_agent starts a fresh copy."""
+    relaunch.request()
+    request_stop()
+
+
 def _push_feature_facts(ui, state, no_live):
     """Off features feed the health footer. Live contact isn't reported yet,
     so only the off state of the live bridge is known here."""
@@ -1408,6 +1427,8 @@ def _request_desktop_resync(cfg, state, cell):
     def run():
         try:
             _handle_replay_archive_resync(cfg, state, cell.upload)
+            if cell.ui and cell.upload is not None and _replay_archive_ack_allowed(state):
+                cell.ui.health.set_archive_status(0, 0)  # the asked-for full Re-sync has started
             if cell.watcher:
                 cell.watcher.request_immediate_sweep()
             if cell.recent_history:
@@ -1611,7 +1632,7 @@ def _handle_choose_folder(
 
 
 def _show_replay_folders(cell, folders: List[Path]) -> None:
-    """Show the watcher's new folder list in the tray and dashboard."""
+    """Show a new folder list in the tray, the dashboard and the health card."""
     if getattr(cell, "ui", None):
         cell.ui.on_folders(folders)
         return
@@ -1971,11 +1992,9 @@ def _handle_save_settings(
         raise
 
     if folders_changed:
-        folders = _discover_replay_folders(cfg, state)
-        if cell.tray:
-            cell.tray.set_replay_folders(folders)
-        if cell.gui:
-            cell.gui.set_replay_folders(folders)
+        # Save, instant Remove and Auto-detect all land here. The multiplexer
+        # updates every sink and the health card's folders row together.
+        _show_replay_folders(cell, _discover_replay_folders(cfg, state))
         # Force the live watcher to rediscover roots on its next
         # sweep so the new list takes effect without a restart. Skip
         # if the filter branch above already requested it — the

@@ -13,6 +13,7 @@ corresponding GitHub Release.
 
 ### Agent 0.24.8
 
+- Explain desktop sync health with one dashboard card, a next step and help for each problem, and Restart agent for startup failures. The tray now matches the card's green, amber, red and paused grey states.
 - Use the opponent's current regional season and active race for MMR, and announce one automatic scouting report per game across Companion and OBS, cancelling pending readouts when the match, account or voice permissions change.
 - Open the import help article from the import card and skipped lines again, and explain why a Build check-in card preview cannot open. The install help article and download page now name the startup switch as the app does: Run SC2 Tools Agent on Windows startup.
 

@@ -1,6 +1,8 @@
 """Aspect-preserving tray/window icons. Pillow is imported on demand."""
 from . import palette
-from ..status_model import AgentStatus
+
+# The palette colour for each HealthSnapshot.tray level.
+_TRAY_DOTS = {"green": palette.GREEN, "amber": palette.AMBER, "red": palette.RED, "grey": palette.GREY}
 
 
 def _square_pad(image):
@@ -12,12 +14,9 @@ def _square_pad(image):
     return result
 
 
-def dot_color(view):
-    if view.status == AgentStatus.WATCHING:
-        return palette.BLUE if view.update_pending else palette.GREEN
-    return {AgentStatus.SYNCING: palette.CYAN, AgentStatus.ERROR: palette.RED,
-            AgentStatus.PAUSED: palette.GREY, AgentStatus.NEEDS_PAIRING: palette.AMBER,
-            AgentStatus.UNLINKED: palette.AMBER, AgentStatus.NEEDS_ATTENTION: palette.AMBER}.get(view.status)
+def dot_color(tray_level):
+    """The dot for a snapshot's tray level; ``None`` while starting, so no dot."""
+    return _TRAY_DOTS.get(tray_level)
 
 
 def render_tray_image(base, dot):

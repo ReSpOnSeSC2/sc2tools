@@ -2,7 +2,7 @@
 
 Pystray draws a tiny indicator with a context menu:
 
-    Status: paired · 437 synced · 0 queued
+    Everything's working   (the status card's headline; the dot is its tray level)
     Last upload: foo.SC2Replay  (12:34:56)
     Watching: C:\\Users\\…\\Replays\\Multiplayer
     ─────────────────
@@ -79,7 +79,7 @@ class TrayUI:
         self._site_notices = TrayNotices(notify=self.show_notice, refresh=self._refresh)
         self._on_pause_for = on_pause_for
         self._on_install_update = on_install_update
-        self._status_view = None
+        self._health = None  # the newest HealthSnapshot, the one the window's status card shows
         self._icon_images = {}
         self._icon_color = object()
         self._base_icon = None
@@ -132,6 +132,8 @@ class TrayUI:
             self._tooltip(),
             menu=self._build_menu(pystray),
         )
+        # A headless run's first snapshot can arrive before the icon exists.
+        self._show_dot()
         threading.Thread(
             target=self._icon.run,
             name="sc2tools-tray",
@@ -200,9 +202,10 @@ class TrayUI:
             self._paused, self._paused_until = paused, until
         self._refresh()
 
-    def on_status_view(self, view):
+    def on_health(self, snapshot):
+        """Follow the window: the snapshot's headline titles the tray and its tray level picks the dot."""
         with self._lock:
-            self._status_view = view
+            self._health = snapshot
         self._refresh()
 
     def show_notice(self, message: str, *, title: str = "SC2 Tools Agent") -> None:
@@ -295,9 +298,9 @@ class TrayUI:
 
     def _title(self, _icon) -> str:
         with self._lock:
-            if self._status_view:
-                deadline = " · " + self._status_view.cause if self._paused_until and self._paused else ""
-                return f"{self._status_view.badge_text} · {self._status_view.headline}{deadline}"
+            if self._health is not None:
+                return self._health.headline
+            # Until the health monitor first reports.
             paused_marker = "Paused · " if self._paused else ""
             if self._paused and self._paused_until:
                 paused_marker = "Paused until " + datetime.fromtimestamp(self._paused_until).strftime("%H:%M") + " · "
@@ -437,24 +440,33 @@ class TrayUI:
     # ---------------- internal refresh ----------------
 
     def _tooltip(self) -> str:
-        return self._title(None)
+        with self._lock:
+            snapshot = self._health
+        return "SC2 Tools - " + snapshot.headline if snapshot is not None else self._title(None)
+
+    def _show_dot(self) -> None:
+        """Draw the snapshot's dot; the icon is only swapped when the colour changes."""
+        with self._lock:
+            snapshot = self._health
+        if snapshot is None:
+            return
+        color = dot_color(snapshot.tray)
+        if color != self._icon_color:
+            base = self._base_icon or self._load_icon_image()
+            if color not in self._icon_images:
+                self._icon_images[color] = render_tray_image(base, color)
+            self._icon.icon = self._icon_images[color]
+            self._icon_color = color
 
     def _refresh(self) -> None:
         if not self._icon:
             return
         if hasattr(self._icon, "title"):
             try:
-                self._icon.title = "SC2 Tools - " + self._status_view.headline if self._status_view else self._tooltip()
+                self._icon.title = self._tooltip()
             except Exception:  # noqa: BLE001
                 pass
-        if self._status_view:
-            color = dot_color(self._status_view)
-            if color != self._icon_color:
-                base = self._base_icon or self._load_icon_image()
-                if color not in self._icon_images:
-                    self._icon_images[color] = render_tray_image(base, color)
-                self._icon.icon = self._icon_images[color]
-                self._icon_color = color
+        self._show_dot()
         if hasattr(self._icon, "menu"):
             try:
                 import pystray

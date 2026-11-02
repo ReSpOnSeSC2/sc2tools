@@ -76,10 +76,16 @@ def test_log_search_copy_follow_and_help_navigation(tmp_path):
         sidebar.click()
         next(button for button in win.findChildren(QtWidgets.QPushButton) if button.text() == "Import help").click()
         from sc2tools_agent.ui.help_links import AGENT_HELP_SLUGS
-        # Pairing and sync-error help are contextual actions on their cards.
+        import time
+        from sc2tools_agent.health import HealthFacts, evaluate
+        # Pairing help is on its card; sync-problem and missing-game help on their status rows.
         win._pairing_card.help.click()
-        ui.on_connection_state("offline", 1, 1, 1); app.processEvents()
-        win._connection_help.click()
+        ui.on_connection_state("offline", 1, 1, 1)
+        ui.on_health(evaluate(HealthFacts(paired=True, connection="offline", unresolved_times=(time.time(),) * 3),
+                              time.time()))
+        app.processEvents()
+        for line in win._health_view.lines:
+            if line.help_button: line.help_button.click()
         assert {url.split("/help/")[1].split("?")[0] for url in opened} == set(AGENT_HELP_SLUGS)
         assert all(url.startswith("https://example.test/help/") and url.split("#")[0].endswith("?src=agent") for url in opened)
     ''')

@@ -31,7 +31,6 @@ import shutil
 import subprocess
 import sys
 import threading
-import time
 import webbrowser
 from collections import deque
 from datetime import datetime
@@ -48,7 +47,7 @@ log = logging.getLogger(__name__)
 from .qt_helpers import guard_value_widgets, validate_api_base, probe_api_health
 from .help_links import help_url, help_button, site_url
 from . import palette
-from ..status_model import StatusFacts, ConnectionFacts, AgentStatus, derive_status
+from ..health import GAMES_HELP, SYNC_HELP
 from ..config import _DEFAULT_API_BASE
 from ..config import PARSE_CONCURRENCY_USEFUL_MAX as _PARSE_CONCURRENCY_USEFUL_MAX  # noqa: E402
 
@@ -302,6 +301,7 @@ class GuiUI:
         on_check_updates: Callable[[], None],
         on_save_settings: Callable[[SettingsPayload], None],
         on_quit: Callable[[], None],
+        on_restart_agent: Optional[Callable[[], None]] = None,
         on_obs_probe: Optional[Callable[[str, int, str], dict]] = None,
         on_obs_build: Optional[Callable[[dict], dict]] = None,
         stream_status_provider: Optional[Callable[[], dict]] = None,
@@ -359,6 +359,10 @@ class GuiUI:
         self._ui_event_lock = threading.RLock()
         self._ui_ready = False
         self._ui_events = deque(maxlen=256)
+        # Health is latest-wins, outside the backlog: the newest snapshot and
+        # whether a paint for it is already queued.
+        self._health = None
+        self._health_queued = False
         self._window_geometry = window_geometry
         self._window_page = window_page
         self._on_window_state = on_window_state
@@ -397,6 +401,7 @@ class GuiUI:
         self._on_check_updates = on_check_updates
         self._on_save_settings = on_save_settings
         self._on_quit = on_quit
+        self._on_restart_agent = on_restart_agent or (lambda: None)
         # OBS helpers. Both block on a network round-trip, so the
         # window calls them from a worker thread and delivers the
         # result back over ``signals.obsProbeDone``. Optional: a build
@@ -477,8 +482,23 @@ class GuiUI:
     def on_analyzer_probe(self, ok, diag):
         self._dispatch("analyzerProbe", ok, diag)
 
-    def on_status_view(self, view):
-        self._dispatch("statusView", view)
+    def on_health(self, snapshot) -> None:
+        """Keep the newest snapshot; at most one paint waits for it.
+
+        Never queued in the pre-window backlog, so a burst of snapshots
+        can't push pairing or phase events out of it.
+        """
+        with self._ui_event_lock:
+            self._health = snapshot
+            if not self._ui_ready or self._signals is None or self._health_queued:
+                return
+            self._health_queued = True
+        self._signals.healthChanged.emit()
+
+    def _take_health(self):
+        with self._ui_event_lock:
+            self._health_queued = False
+            return self._health
 
     def on_paused(self, paused, until=None):
         self._dispatch("pauseChanged", paused, float(until or 0))
@@ -701,7 +721,8 @@ def _make_signals():
         # AutoConnection.
         phaseChanged = QtCore.Signal(str, str)
         analyzerProbe = QtCore.Signal(bool, str)
-        statusView = QtCore.Signal(object)
+        # A newer health snapshot is waiting; the window paints the newest.
+        healthChanged = QtCore.Signal()
         pauseChanged = QtCore.Signal(bool, float)
         transientNotice = QtCore.Signal(str)
         updateState = QtCore.Signal(object, str, str)
@@ -969,8 +990,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             self._status = "starting"
             self._paused = ui._initial_paused
-            self._status_facts = StatusFacts(paired=ui._initial_paired, paused=ui._initial_paused,
-                                             folders=list(ui._replay_folders), phase="connecting")
+            # Kept only for Copy details; the status card renders health snapshots.
+            self._boot_detail = ""
+            self._analyzer_diag = ""
             self._paired = ui._initial_paired
             self._window_information_layout = ui._window_information_layout
             self._user_id = ui._initial_user_id
@@ -985,12 +1007,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._recent: Deque[tuple[datetime, str, bool, str]] = deque(
                 maxlen=self.MAX_RECENT,
             )
-            # Active sync-filter chip on the status card. Sourced from
-            # ``_initial_settings`` at boot and refreshed every time
-            # the user clicks Save; never read from the live combo
-            # widget so an in-progress edit (typing a custom date,
-            # hovering the dropdown) doesn't briefly mislabel the chip
-            # before the user presses Save.
+            # The saved sync filter, which a replay-library Re-sync checks
+            # (the status card's filter row comes from health snapshots).
+            # Sourced from ``_initial_settings`` at boot and refreshed every
+            # time the user clicks Save; never read from the live combo
+            # widget, so an in-progress edit (typing a custom date,
+            # hovering the dropdown) can't count before the user presses Save.
             self._active_filter_label = self._compute_filter_label(
                 preset=ui._initial_settings.sync_filter_preset,
                 since_iso=ui._initial_settings.sync_filter_since,
@@ -1043,16 +1065,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._companion_page.hotkeyEnabledChanged.connect(self._set_assistance_hotkey)
                 QtWidgets.QApplication.instance().aboutToQuit.connect(self._assistance_hotkey.shutdown)
             self._wire_signals()
-            self._refresh_status_card()
+            self._refresh_controls()
             self._refresh_stats()
             self._refresh_pairing_card()
-            self._status_timer = QtCore.QTimer(self)
-            self._status_timer.setInterval(30000)
-            self._status_timer.timeout.connect(self._refresh_status_card)
-            self._status_timer.start()
-            self._retry_status_timer = QtCore.QTimer(self)
-            self._retry_status_timer.setInterval(1000)
-            self._retry_status_timer.timeout.connect(self._refresh_status_card)
             self._populate_settings()
             self._saved_api_base = self._api_input.text().strip().rstrip("/")
             self._loaded_restart_values = (
@@ -1077,6 +1092,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             self._refresh_capture_notice()
             ui._flush_ui_events()
+            self._render_health(ui._take_health() or self._health_view.snapshot)
             self._tail_log_now()
 
             # Periodic log tail. Watchdog FS events on Windows are
@@ -1340,9 +1356,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 download=lambda: webbrowser.open(site_url(ui._dashboard_url,"/download"),new=2),
                 help_button=help_button(QtWidgets,"Updates",lambda:self._open_help("desktop-app-updates")))
             v.addWidget(self._update_card)
-            # The shared status card owns offline/busy recovery.
+            # The status card owns offline/busy recovery; the kind picks its help anchor.
             self._connection_kind = "online"
-            self._connection_retry_at = 0.0
             v.addWidget(self._build_replay_archive_card())
             v.addWidget(self._build_pairing_card())
             self._stats_row = self._build_stats_row()
@@ -1402,36 +1417,24 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             card = QtWidgets.QFrame()
             card.setObjectName("card")
 
-            grid = QtWidgets.QGridLayout(card)
-            grid.setContentsMargins(20, 18, 20, 18)
-            grid.setHorizontalSpacing(14)
-            grid.setVerticalSpacing(8)
+            column = QtWidgets.QVBoxLayout(card)
+            column.setContentsMargins(20, 18, 20, 18)
+            column.setSpacing(8)
 
-            self._status_badge = QtWidgets.QLabel("Starting")
-            self._status_badge.setObjectName("badgeNeutral")
-            self._status_badge.setAlignment(QtCore.Qt.AlignCenter)
-            grid.addWidget(self._status_badge, 0, 0)
-
-            self._status_text = QtWidgets.QLabel("Initialising…")
-            self._status_text.setObjectName("h2")
-            self._status_text.setWordWrap(True)
-            self._status_text.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
-            grid.addWidget(self._status_text, 0, 1, 1, 2)
-
-            self._status_sub = QtWidgets.QLabel("")
-            self._status_sub.setObjectName("muted")
-            self._status_sub.setWordWrap(True)
-            self._status_sub.setTextInteractionFlags(
-                QtCore.Qt.TextSelectableByMouse,
+            # The newest health snapshot is the card's only source of status.
+            from .health_card import build_health_view
+            self._health_view = build_health_view(
+                card, QtCore=QtCore, QtWidgets=QtWidgets,
+                status_help=help_button(QtWidgets, "Status lights", lambda: self._open_help("desktop-app-status")),
+                run_action=self._run_health_action, open_row_help=self._open_row_help,
+                row_tooltip=self._health_row_tooltip,
             )
-            grid.addWidget(self._status_sub, 2, 0, 1, 4)
+            column.addWidget(self._health_view)
 
             self._update_badge = QtWidgets.QLabel("")
             self._update_badge.setObjectName("badgeWarn")
             self._update_badge.hide()
-            grid.addWidget(
-                self._update_badge, 1, 0, 1, 4, alignment=QtCore.Qt.AlignLeft,
-            )
+            column.addWidget(self._update_badge, 0, QtCore.Qt.AlignLeft)
 
             # Update-flow notice line — populated by the runner's
             # update handler ("installing now…", "auto-update off",
@@ -1442,7 +1445,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._update_notice.setObjectName("muted")
             self._update_notice.setWordWrap(True)
             self._update_notice.hide()
-            grid.addWidget(self._update_notice, 3, 0, 1, 4)
+            column.addWidget(self._update_notice)
             self._replay_capture_notice = QtWidgets.QLabel(
                 "Automatic replay capture is on. New and re-synced replays "
                 "are recorded with StarCraft II before upload. This can use "
@@ -1451,31 +1454,25 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._replay_capture_notice.setObjectName("muted")
             self._replay_capture_notice.setWordWrap(True)
             self._replay_capture_notice.hide()
-            grid.addWidget(self._replay_capture_notice, 4, 0, 1, 4)
+            column.addWidget(self._replay_capture_notice)
             self._notice_timer = QtCore.QTimer(self)
             self._notice_timer.setSingleShot(True)
             self._notice_timer.timeout.connect(self._clear_update_notice)
 
             self._status_card = card
-            grid.addWidget(help_button(QtWidgets, "Status lights", lambda: self._open_help("desktop-app-status")), 0, 3)
             from .qt_helpers import build_flow_layout
             actions = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets)
-            self._status_action = QtWidgets.QPushButton()
-            self._status_action.clicked.connect(self._run_status_action)
-            actions.addWidget(self._status_action)
+            # Shown for errors, next to a boot failure's Restart agent.
             self._status_copy = QtWidgets.QPushButton("Copy details")
             self._status_copy.clicked.connect(self._copy_status_details)
+            self._status_copy.hide()
             actions.addWidget(self._status_copy)
-            self._connection_help = QtWidgets.QPushButton("Why?")
-            self._connection_help.clicked.connect(lambda: self._open_help("desktop-app-sync-problems", self._connection_kind.replace("_", "-")))
-            self._connection_help.hide()
-            actions.addWidget(self._connection_help)
-            grid.addLayout(actions, 5, 0, 1, 4)
+            column.addLayout(actions)
             self._transient_notice = QtWidgets.QLabel()
             self._transient_notice.setTextFormat(QtCore.Qt.PlainText)
             self._transient_notice.setWordWrap(True)
             self._transient_notice.hide()
-            grid.addWidget(self._transient_notice, 6, 0, 1, 4)
+            column.addWidget(self._transient_notice)
             self._release_notes = ""
             self._whats_new_btn = QtWidgets.QPushButton("What's new")
             self._whats_new_btn.clicked.connect(self._show_release_notes)
@@ -1487,8 +1484,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._folder_undo_dash = QtWidgets.QPushButton("Undo folder change")
             self._folder_undo_dash.clicked.connect(self._undo_folder_change)
             self._folder_undo_dash.hide()
-            grid.addWidget(self._folder_undo_dash, 7, 0, 1, 4, alignment=QtCore.Qt.AlignLeft)
-            grid.setColumnStretch(1, 1)
+            column.addWidget(self._folder_undo_dash, 0, QtCore.Qt.AlignLeft)
             return card
 
         def _set_update_notice(self, message: str, *, sticky: bool) -> None:
@@ -1522,15 +1518,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _on_connection_state(self, kind, since, next_retry_at, waiting_count):
             self._connection_kind = kind
-            self._connection_retry_at = next_retry_at
-            if kind=="online": self._retry_status_timer.stop()
-            else: self._retry_status_timer.start()
-            self._status_facts.connection = ConnectionFacts(kind, waiting_count, next_retry_at)
-            self._refresh_status_card()
             self._request_stats_refresh()
-
-        def _paint_connection_banner(self):
-            self._refresh_status_card()
 
         def _build_stats_row(self) -> QtWidgets.QWidget:
             row = QtWidgets.QFrame()
@@ -1700,6 +1688,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             scroller.setWidgetResizable(True)
             scroller.setFrameShape(QtWidgets.QFrame.NoFrame)
             scroller.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+            self._settings_scroll = scroller
 
             page = QtWidgets.QWidget()
             v = QtWidgets.QVBoxLayout(page)
@@ -2362,6 +2351,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             """
             card = QtWidgets.QFrame()
             card.setObjectName("card")
+            self._obs_card = card
             outer = QtWidgets.QVBoxLayout(card)
             outer.setContentsMargins(20, 18, 20, 18)
             outer.setSpacing(12)
@@ -2703,7 +2693,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _wire_signals(self) -> None:
             signals.phaseChanged.connect(self._on_phase)
             signals.analyzerProbe.connect(self._on_analyzer_probe)
-            signals.statusView.connect(self._render_status_view)
+            signals.healthChanged.connect(self._paint_health)
             signals.pauseChanged.connect(self._on_paused)
             signals.transientNotice.connect(self._show_transient_notice)
             signals.updateState.connect(self._on_update_state)
@@ -2754,18 +2744,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._companion_page.dispatch_build_checkin(method, args)
 
         def _on_pairing_state(self, state):
-            if state.kind != "paired":
-                self._status_facts.unlinked = False
             self._pairing_card.apply(state)
-            self._refresh_status_card()
 
         def _on_unlinked(self):
-            self._status_facts.unlinked = True
             self._paired = False
             self._user_id = None
             self._on_recent_snapshot({"owner": None, "rows": [], "facts": {}, "today": {}, "skipped": []})
             self._pairing_card.apply("unlinked")
-            self._refresh_status_card()
+            self._refresh_controls()
             self._go_to_page("dashboard")
 
         def _on_pairing_code(self, code: str) -> None:
@@ -2773,7 +2759,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._status = f"Awaiting pairing — code {code}"
             self._pairing_code_label.setText(code)
             self._refresh_pairing_card()
-            self._refresh_status_card()
+            self._refresh_controls()
             # Bring window forward so the user actually sees the code.
             if not self.isVisible():
                 self.showNormal()
@@ -2781,19 +2767,17 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _on_paired(self, user_id: str) -> None:
             was_paired = self._paired
-            self._status_facts.unlinked = False
             self._paired = True
             self._user_id = user_id
             self._status = "paired"
             self._pairing_card.apply("paired")
-            self._refresh_status_card()
+            self._refresh_controls()
             if not was_paired:
                 self._go_to_page(self._preferred_paired_page())
             self._companion_page.refresh()
 
         def _on_status(self, status: str) -> None:
             self._status = status
-            self._refresh_status_card()
 
         def _query_synced_count(self, default: int) -> int:
             """Read the authoritative synced total from the provider.
@@ -2815,11 +2799,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._uploaded_count += 1
             # Pending count comes from the queue's authoritative callback.
             self._last_upload = (filename, datetime.now())
-            self._status_facts.last_upload_at = time.time()
             self._recent.appendleft(
                 (datetime.now(), filename, True, "Uploaded"),
             )
-            self._refresh_status_card()
             if not ui._recent_games_enabled:
                 self._paint_stats()
             self._request_stats_refresh()
@@ -2827,22 +2809,17 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._insert_recent(self._recent[0])
 
         def _on_upload_failed(self, filename: str, reason: str) -> None:
-            if getattr(reason, "counts_as_error", True):
-                self._status_facts.terminal_failure_times.append(time.time())
-                self._status_facts.latest_failure_title = reason if isinstance(reason, str) else reason.title
             self._recent.appendleft(
                 (datetime.now(), filename, False, reason or "Failed"),
             )
             if not ui._recent_games_enabled:
                 self._insert_recent(self._recent[0])
-            self._refresh_status_card()
 
         def _on_pending_changed(self, count: int) -> None:
             self._pending_count = int(count)
             if not ui._recent_games_enabled:
                 self._paint_stats()
             self._request_stats_refresh()
-            self._paint_connection_banner()
 
         def _on_game_synced(self, path, summary):
             if self._paired and summary.get("_owner", self._user_id) == self._user_id:
@@ -2966,18 +2943,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                         self._folder_list.addItem(raw)
             else:
                 self._sync_folder_list_widget(folders)
-            self._refresh_status_card()
+            # Same snapshot, fresh folder paths on the folders row's hover.
+            self._health_view.apply(self._health_view.snapshot)
 
         def _on_settings_status(self, status: str) -> None:
-            """Render the runner's post-Save toast in the Settings tab
-            and refresh the dashboard's status card so the filter chip
-            picks up the new state."""
+            """Render the runner's post-Save toast in the Settings tab.
+            The status card's filter row arrives with the next health
+            snapshot, which the same Save pushes."""
             self._save_ack = True
             self._show_settings_toast(status + self._settings_restart_notice, "success")
-            # Filter chip lives in ``_format_status_lines`` — repaint
-            # the status card so the user sees "Filter: Season 67"
-            # within the same tick as the toast.
-            self._refresh_status_card()
 
         def _sync_folder_list_widget(self, folders: List[str]) -> None:
             """Mirror the canonical folder list into the Settings list
@@ -3033,7 +3007,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._settings_save_pending = True
             self._settings_page.setEnabled(False)
             self._game_dashboard.season.setEnabled(False)
-            self._refresh_status_card()
+            self._refresh_controls()
             def persist():
                 error = None
                 try:
@@ -3051,7 +3025,6 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._pause_btn.setText(
                 "Resume syncing" if self._paused else "Pause syncing",
             )
-            self._refresh_status_card()
             try:
                 ui._on_pause(self._paused)
             except Exception:  # noqa: BLE001
@@ -3662,7 +3635,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._save_settings_btn.setText("Saving…")
             self._show_settings_toast("Saving settings…")
             self._settings_toast_timer.stop()
-            self._refresh_status_card()
+            self._refresh_controls()
 
             def persist():
                 error = None
@@ -3701,7 +3674,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 )
                 if not self._save_ack:
                     self._show_settings_toast("Saved." + self._settings_restart_notice, "success")
-            self._refresh_status_card()
+            self._refresh_controls()
 
         def _refresh_capture_notice(self) -> None:
             self._replay_capture_notice.setVisible(
@@ -3983,21 +3956,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         # ---- refresh helpers ----
 
         def _on_phase(self, phase, detail=""):
-            self._status_facts.phase = phase
             if phase == "boot_error":
-                self._status_facts.boot_error = detail
-            self._refresh_status_card()
+                self._boot_detail = detail
 
         def _on_analyzer_probe(self, ok, diag):
-            self._status_facts.analyzer_ok = ok
-            self._status_facts.analyzer_diag = diag
-            self._refresh_status_card()
+            self._analyzer_diag = diag
 
         def _on_paused(self, paused, until=0):
             self._paused = paused
-            self._status_facts.paused_until = until or None
             self._pause_btn.setText("Resume syncing" if paused else "Pause syncing")
-            self._refresh_status_card()
             self._request_stats_refresh()
 
         def _show_transient_notice(self, message):
@@ -4005,58 +3972,103 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._transient_notice.setVisible(bool(message))
             self._transient_timer.start(8000)
 
-        def _refresh_status_card(self):
-            facts = self._status_facts
-            facts.paired, facts.paused = self._paired, self._paused
-            facts.pending_count = self._pending_count
-            facts.folders = list(ui._replay_folders)
-            facts.filter_label = self._active_filter_label
-            facts.update_pending = self._update_pending
-            facts.terminal_failure_times[:] = [stamp for stamp in facts.terminal_failure_times if time.time()-stamp <= 600]
-            if facts.connection.kind != "online":
-                facts.connection = ConnectionFacts(facts.connection.kind, self._pending_count, facts.connection.next_retry_at)
-            self._render_status_view(derive_status(facts, time.time()))
+        def _refresh_controls(self):
+            """While unpaired, hide the totals and lock Pause, Re-sync and Add folder; a pending save locks them too."""
+            unpaired = not self._paired
+            self._stats_row.setVisible(not unpaired)
+            self._game_dashboard.setVisible(not unpaired)
+            for button in (self._pause_btn, self._resync_btn, self._choose_btn):
+                button.setEnabled(not unpaired and not self._settings_save_pending)
 
-        def _render_status_view(self, view):
-            self._status_view = view
-            self._status_badge.setText(view.badge_text)
-            badge = {"neutral":"badgeNeutral","ok":"badgeOk","info":"badgeInfo","warn":"badgeWarn","err":"badgeErr"}[view.tone]
-            self._status_badge.setObjectName(badge)
-            self._status_badge.style().unpolish(self._status_badge)
-            self._status_badge.style().polish(self._status_badge)
-            self._status_text.setText(view.headline)
-            self._status_sub.setText(view.cause)
-            paths = "\n".join(str(path) for path in ui._replay_folders)
-            self._status_text.setToolTip(paths if view.status==AgentStatus.WATCHING else view.headline)
-            full = f"● {view.badge_text} · {view.headline}"
-            self._sidebar_status.setToolTip(full)
+        # ---- status card: health snapshots ----
+
+        def _paint_health(self):
+            """Paint the newest snapshot, however many signals were queued for it."""
+            snapshot = ui._take_health()
+            if snapshot is not None:
+                self._render_health(snapshot)
+
+        def _render_health(self, snapshot):
+            self._health_view.apply(snapshot)
+            self._status_copy.setVisible(snapshot.level == "error")
+            full = f"● {snapshot.headline}"
+            problems = [row.sentence for row in snapshot.rows if row.level in ("warn", "error")]
+            self._sidebar_status.setToolTip("\n".join([full, *problems]))
             width = max(80, self._sidebar_status.width())
             self._sidebar_status.setText(self._sidebar_status.fontMetrics().elidedText(full, QtCore.Qt.ElideRight, width))
-            labels = {"retry":"Retry now","resume":"Resume","open_settings":"Manage" if view.status==AgentStatus.WATCHING else "Open Settings",
-                      "open_log":"Open log","pair_again":"Link again","view_failed":"View failed uploads"}
-            self._status_action.setText(labels.get(view.action,""))
-            self._status_action.setVisible(view.action is not None)
-            self._status_action.setEnabled(not self._settings_save_pending or view.action != "resume")
-            self._status_copy.setVisible(view.secondary_action=="copy_details")
-            self._connection_help.setVisible(view.status==AgentStatus.NEEDS_ATTENTION and self._connection_kind!="online")
-            needs_pairing = view.status in (AgentStatus.NEEDS_PAIRING, AgentStatus.UNLINKED)
-            if hasattr(self,"_stats_row"):
-                self._stats_row.setVisible(not needs_pairing)
-            if hasattr(self, "_game_dashboard"):
-                self._game_dashboard.setVisible(not needs_pairing)
-            for name in ("_pause_btn","_resync_btn","_choose_btn"):
-                button=getattr(self,name,None)
-                if button:
-                    button.setEnabled(not needs_pairing and not self._settings_save_pending)
 
-        def _run_status_action(self):
-            action = self._status_view.action
-            if action=="retry": ui._on_sync_retry()
-            elif action=="resume": ui._on_pause(False)
-            elif action=="open_settings": self._go_to_page("settings")
-            elif action=="open_log": self.show_log("errors")
-            elif action=="pair_again": ui._on_link_again()
-            elif action=="view_failed": self._go_to_page("recent")
+        def _health_actions(self):
+            return {
+                "link_pc": self._link_pc,
+                "retry_now": ui._on_sync_retry,
+                "add_folder": self._click_choose_folder,
+                "set_player_name": self._focus_player_name,
+                "resume": self._resume_sync,
+                "open_obs_settings": lambda: self._open_settings_at(self._obs_card),
+                "install_update": lambda: self._run_update_action(ui._on_install_update),
+                "restart_agent": self._confirm_restart,
+                "copy_details": self._copy_status_details,
+                "open_log": lambda: self.show_log("errors"),
+            }
+
+        def _run_health_action(self, action):
+            try:
+                self._health_actions()[action]()
+            except Exception:  # noqa: BLE001 - a failing action must not break the card
+                log.exception("gui_health_action_failed action=%s", action)
+
+        def _open_row_help(self, row):
+            """A row's own "?": the connection hold it explains, or why a game didn't arrive."""
+            if row.help_slug == SYNC_HELP:
+                kind = self._connection_kind
+                self._open_help("desktop-app-sync-problems", "" if kind == "online" else kind.replace("_", "-"))
+            elif row.help_slug == GAMES_HELP:
+                self._open_help("my-game-didnt-show-up")
+
+        def _health_row_tooltip(self, row):
+            """The folders row lists the watched paths on hover."""
+            return "\n".join(str(path) for path in ui._replay_folders) if row.id == "folders" else ""
+
+        def _link_pc(self):
+            """The pairing card knows the next linking step; otherwise start Link again."""
+            card = self._pairing_card
+            if not card.isHidden() and card.primary.isEnabled():
+                card.act()
+            else:
+                ui._on_link_again()
+
+        def _resume_sync(self):
+            if self._settings_save_pending:
+                self._show_transient_notice("Wait for the settings save to finish, then try again.")
+                return
+            ui._on_pause(False)
+
+        def _focus_player_name(self):
+            self._open_settings_at(self._handle_input)
+            self._handle_input.setFocus()
+            self._handle_input.selectAll()
+
+        def _open_settings_at(self, widget):
+            """Settings is one long scroll area: open it with ``widget`` near the top."""
+            self._go_to_page("settings")
+            scroll = self._settings_scroll
+            # Deferred until the page switch is laid out, so the offset is real.
+            QtCore.QTimer.singleShot(0, self, lambda: scroll.verticalScrollBar().setValue(
+                max(0, widget.mapTo(scroll.widget(), QtCore.QPoint(0, 0)).y() - 12)))
+
+        def _confirm_restart(self):
+            if self._settings_save_pending:
+                self._show_transient_notice("Wait for the settings save to finish, then try again.")
+                return
+            answer = QtWidgets.QMessageBox.question(
+                self,
+                "Restart SC2 Tools?",
+                "SC2 Tools will close and start again. This takes a few seconds.",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                QtWidgets.QMessageBox.No,
+            )
+            if answer == QtWidgets.QMessageBox.Yes:
+                ui._on_restart_agent()
 
         def _copy_status_details(self):
             lines=[]
@@ -4067,8 +4079,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 lines=lines[-20:]
             except OSError:
                 pass
-            details = f"SC2 Tools {ui._version}\nStatus: {self._status_view.status.value}\n"
-            details += self._status_facts.boot_error or self._status_facts.analyzer_diag
+            snapshot = self._health_view.snapshot
+            details = f"SC2 Tools {ui._version}\nStatus: {snapshot.headline}\n"
+            details += "".join(f"{row.level}: {row.sentence}\n" for row in snapshot.rows + snapshot.footer)
+            details += self._boot_detail or self._analyzer_diag
             if lines: details += "\n" + "\n".join(lines)
             QtWidgets.QApplication.clipboard().setText(details)
 

@@ -8,18 +8,35 @@ a bare environment.
 
 from __future__ import annotations
 
+from sc2tools_agent.health import HealthSnapshot
 from sc2tools_agent.ui.tray import TrayUI
 
 
 def test_synced_counter_seeds_from_provider() -> None:
-    """The tooltip's "N synced" must start from the authoritative
-    state-backed count, not 0, so a restart doesn't zero the stat."""
+    """Until the health monitor first reports, the tooltip's "N synced"
+    starts from the authoritative state-backed count, not 0, so a
+    restart doesn't zero the stat."""
     tray = TrayUI(
         dashboard_url="https://example.test",
         synced_count_provider=lambda: 437,
     )
     assert tray._uploaded == 437
     assert "437 synced" in tray._title(None)
+
+
+def test_title_is_the_windows_headline_once_health_reports() -> None:
+    """Once health reports, the title is the status card's headline,
+    so the tray and the window never disagree. The pause marker and
+    the upload counts no longer change it."""
+    tray = TrayUI(
+        dashboard_url="https://example.test",
+        synced_count_provider=lambda: 437,
+        initial_paused=True,
+    )
+    tray.on_health(HealthSnapshot("1 thing needs attention", 1, "warn", "grey"))
+    tray.on_upload_success("game.SC2Replay")
+    assert tray._title(None) == "1 thing needs attention"
+    assert tray._tooltip() == "SC2 Tools - 1 thing needs attention"
 
 
 def test_synced_counter_requeries_on_upload_success() -> None:

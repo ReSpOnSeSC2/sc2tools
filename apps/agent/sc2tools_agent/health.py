@@ -35,6 +35,7 @@ ACTIONS = frozenset({"link_pc", "retry_now", "add_folder", "set_player_name", "r
                      "open_obs_settings", "install_update", "restart_agent", "copy_details", "open_log"})
 STATUS_HELP = "desktop-app-status"
 SYNC_HELP = "desktop-app-sync-problems"
+GAMES_HELP = "my-game-didnt-show-up"  # identity and upload rows: why a game didn't arrive
 BOOT_HEADLINES = {
     "analyzer": "SC2 Tools couldn't load the replay analyzer",
     "state_dir": "SC2 Tools can't use its data folder",
@@ -200,9 +201,10 @@ def _cloud(facts, now):
     if facts.connection != "online" and not facts.paused:
         waiting = facts.pending
         tail = f", so {_plural(waiting, 'replay')} {'is' if waiting == 1 else 'are'} waiting" if waiting else ""
-        action = "link_pc" if facts.connection == "signed_out" else "retry_now"
+        # Signed out too: Link again would keep the rejected token. A retry lets the auth
+        # watchdog confirm the unlink; the pairing row then offers Link PC.
         return HealthRow("cloud", "warn", _CLOUD.get(facts.connection, _CLOUD["offline"]) + tail + ".",
-                         action, SYNC_HELP)
+                         "retry_now", SYNC_HELP)
     since = facts.heartbeat_failing_since
     if since is not None and now - since >= HEARTBEAT_GRACE_SEC:
         cause = _CLOUD["server_busy" if facts.error_kind == "server_busy" else "offline"]
@@ -241,13 +243,14 @@ def _identity(facts, now):
     unresolved = sum(0 <= now - stamp <= UNRESOLVED_WINDOW_SEC for stamp in facts.unresolved_times)
     if unresolved >= UNRESOLVED_WARN_AT:
         return HealthRow("identity", "warn", f"{unresolved:,} games from the last week were skipped because "
-                         "SC2 Tools couldn't tell which player was you.", "set_player_name")
+                         "SC2 Tools couldn't tell which player was you.", "set_player_name", GAMES_HELP)
     source = facts.identity_source
     if source is None:
         return None
     if source == "none":
-        return HealthRow("identity", "info", "SC2 Tools doesn't know your player name yet.", "set_player_name")
-    return HealthRow("identity", "ok", _IDENTITY.get(source, "Your player name is set."))
+        return HealthRow("identity", "info", "SC2 Tools doesn't know your player name yet.", "set_player_name",
+                         GAMES_HELP)
+    return HealthRow("identity", "ok", _IDENTITY.get(source, "Your player name is set."), help_slug=GAMES_HELP)
 
 
 def _analyzer(facts, now):
@@ -264,13 +267,14 @@ def _uploads(facts, now):
     if not _syncing(facts) or facts.paused or facts.connection != "online":
         return None
     if facts.pending:
-        return HealthRow("uploads", "info", f"Uploading {_plural(facts.pending, 'replay')}.")
+        return HealthRow("uploads", "info", f"Uploading {_plural(facts.pending, 'replay')}.", help_slug=GAMES_HELP)
     if facts.archive_pending:
-        return HealthRow("uploads", "info", f"Backing up {_plural(facts.archive_pending, 'replay file')}.")
+        return HealthRow("uploads", "info", f"Backing up {_plural(facts.archive_pending, 'replay file')}.",
+                         help_slug=GAMES_HELP)
     if facts.last_upload_at is not None:
-        return HealthRow("uploads", "ok", f"Last upload {_age(now - facts.last_upload_at)}.")
+        return HealthRow("uploads", "ok", f"Last upload {_age(now - facts.last_upload_at)}.", help_slug=GAMES_HELP)
     if not _starting(facts):
-        return HealthRow("uploads", "ok", "Waiting for your next game.")
+        return HealthRow("uploads", "ok", "Waiting for your next game.", help_slug=GAMES_HELP)
     return None
 
 
