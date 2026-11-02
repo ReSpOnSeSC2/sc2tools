@@ -21,6 +21,7 @@ const {
   stampIngestProvenance,
   admitBrowserBatch,
   recordBrowserBatch,
+  recordIngestRejections,
 } = require("./gamesIngestPolicy");
 const { AnalysisCorpusChanges, CORPUS_EPOCH } = require("../services/analysisCorpusChanges");
 
@@ -182,6 +183,7 @@ function analysisCorpusPage(analysisCorpusAdmission, prepare, load) {
  *   users?: {
  *     addPulseId: (userId: string, pulseId: string) => Promise<boolean>,
  *     repairLastKnownMmrAfterResumedReplay?: (userId: string) => Promise<boolean>,
+ *     recordIngestRejections?: (userId: string, counts: Record<string, number>) => Promise<unknown>,
  *   },
  *   customBuilds?: import('../services/types').CustomBuildsService,
  *   buildIntents?: import('../services/types').BuildIntentBinder,
@@ -1127,12 +1129,8 @@ function buildGamesRouter(deps) {
           }
         }
       }
-      await recordBrowserBatch(
-        req,
-        deps.browserIngestQuota,
-        browserAdmission,
-        accepted.length,
-      );
+      await recordBrowserBatch(req, deps.browserIngestQuota, browserAdmission, accepted.length);
+      await recordIngestRejections(req, deps.users, rejected);
       res.status(202).json({ accepted, rejected });
       if (accepted.length && deps.weeklyBackup) void deps.weeklyBackup(userId).catch((err) => req.log?.warn({ err, userId }, "weekly_backup_failed"));
     } catch (err) {

@@ -15,9 +15,13 @@ export const COMMAND_SEARCH_GROUPS = [
   { id: "guide-openers", label: "Openers" },
   { id: "guide-counters", label: "How to beat" },
   { id: "guide-maps", label: "Maps" },
+  // Filled by the signed-out Community request, never by the scorer.
+  { id: "community-builds", label: "Community builds" },
 ] as const;
 
 export type CommandSearchGroupId = (typeof COMMAND_SEARCH_GROUPS)[number]["id"];
+/** The public guide groups, for the Guides scope and the /search page. */
+export const COMMAND_GUIDE_GROUPS: readonly CommandSearchGroupId[] = ["guide-openers", "guide-counters", "guide-maps"];
 export type CommandSearchAction = "pair-device" | "report-problem" | "whats-new" | "toggle-theme" | "shortcuts";
 export type CommandSearchItem = {
   readonly id: string;
@@ -113,25 +117,36 @@ function rankedItems(items: readonly CommandSearchItem[], query: string) {
     if (item.href && !isCommandSearchHref(item.href)) return false;
     seen.add(item.id);
     return true;
-  }).map(item => ({ item, score: itemScore(item, query, queryTokens) }))
+  }).map((item, index) => ({ item, index, score: itemScore(item, query, queryTokens) }))
     .filter(result => result.score > 0)
-    .sort((left, right) => right.score - left.score
+    // Callers read one group at a time. Recent keeps its stored visit order, newest first;
+    // every other group ranks by score, then label.
+    .sort((left, right) => compareText(left.item.group, right.item.group)
+      || (left.item.group === "recent" ? left.index - right.index : 0)
+      || right.score - left.score
       || compareText(foldText(left.item.label), foldText(right.item.label))
       || compareText(left.item.id, right.item.id));
 }
 
-/** Deterministic local groups, at most 8 rows/group and 60 total. Example: searchCommands(items, "tts"). */
+/** Bounds for one search. The palette keeps the defaults; the /search page lists more of each group. */
+export type CommandSearchLimits = Readonly<{ perGroup?: number; total?: number }>;
+const bounded = (value: number | undefined, fallback: number, maximum: number) =>
+  Number.isSafeInteger(value) && value! >= 1 ? Math.min(value!, maximum) : fallback;
+
+/** Deterministic local groups, at most 8 rows/group and 60 total unless `limits` says otherwise.
+ * Example: searchCommands(items, "tts"). */
 export function searchCommands(
-  items: readonly CommandSearchItem[], query: string, groups?: readonly CommandSearchGroupId[],
+  items: readonly CommandSearchItem[], query: string, groups?: readonly CommandSearchGroupId[], limits: CommandSearchLimits = {},
 ): CommandSearchGroup[] {
   const ranked = rankedItems(items, normalizeCommandQuery(query));
   const allowed = groups ? new Set(groups) : null;
   const result: CommandSearchGroup[] = [];
-  let remaining = COMMAND_RESULTS_MAX;
+  const perGroup = bounded(limits.perGroup, COMMAND_RESULTS_PER_GROUP, 50);
+  let remaining = bounded(limits.total, COMMAND_RESULTS_MAX, 150);
   for (const group of COMMAND_SEARCH_GROUPS) {
     if (allowed && !allowed.has(group.id)) continue;
     const matches = ranked.filter(entry => entry.item.group === group.id)
-      .slice(0, Math.min(COMMAND_RESULTS_PER_GROUP, remaining)).map(entry => entry.item);
+      .slice(0, Math.min(perGroup, remaining)).map(entry => entry.item);
     if (matches.length) result.push({ ...group, items: matches });
     remaining -= matches.length;
   }

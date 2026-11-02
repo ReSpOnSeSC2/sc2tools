@@ -8,7 +8,6 @@ import {
 import { isCommandSearchHref, type CommandPrivateTarget } from "@/lib/commandSearchTarget";
 import type { CommandActivationPolicy } from "@/lib/commandSearchActivation";
 import type { PrivateCommandSelectionDraft } from "@/lib/usePrivateCommandSearch";
-import { clearCommandSearchRecent, recordCommandSearchRecent } from "@/lib/commandSearchRecent";
 import { hasActiveFocusScope } from "@/lib/a11y/focusScopes";
 import { useCommandSearchShortcuts } from "@/lib/useCommandSearchShortcuts";
 import type { CommandSearchItem } from "@/lib/commandSearch";
@@ -53,20 +52,53 @@ function useRegistration<T>() {
   return { value, current, register };
 }
 
+type RecentStorage = typeof import("@/lib/commandSearchRecent");
+let recentModule: Promise<RecentStorage> | null = null;
+/** Recent storage loads on the first visit it records, outside every route's first load. A
+ * failed load records nothing and is tried again on the next visit. */
+function withRecent(run: (recent: RecentStorage) => void): void {
+  const loading = recentModule ??= import("@/lib/commandSearchRecent");
+  loading.then(run, () => { if (recentModule === loading) recentModule = null; });
+}
+// lib/commandSearchRecent.ts's key; a test keeps the two equal.
+export const RECENT_STORAGE_KEY = "sc2tools:palette-recent:v1";
+/** Sign-out clears at once, without waiting for (or depending on) the Recent module, and only
+ * the signed-out viewer's envelope of either version. */
+function clearSignedOutRecent(viewer: string): void {
+  try {
+    const raw = window.localStorage.getItem(RECENT_STORAGE_KEY);
+    const stored: unknown = raw === null ? null : JSON.parse(raw);
+    if (stored && typeof stored === "object" && (stored as { viewer?: unknown }).viewer === viewer) {
+      window.localStorage.removeItem(RECENT_STORAGE_KEY);
+    }
+  } catch { /* Blocked storage holds nothing to clear; a corrupt envelope is never read. */ }
+}
+const DOSSIER_PATH = /^\/app\/opponents\/([^/]+)$/;
+function dossierSegment(path: string): string | null {
+  const segment = DOSSIER_PATH.exec(path)?.[1];
+  if (!segment) return null;
+  try { return decodeURIComponent(segment); } catch { return null; }
+}
+
 function useVisitedCommands(viewer: Viewer, path: string, chrome: CommandChrome | null) {
   const lifetime = useMemo(() => ({ viewer, path, chrome }), [viewer, path, chrome]);
   const latest = useRef<typeof lifetime | null>(null);
   useLayoutEffect(() => { latest.current = lifetime; return () => { latest.current = null; }; }, [lifetime]);
-  const previous = useRef(viewer.key);
+  const previous = useRef(viewer.key), current = useRef(viewer.key);
   useEffect(() => {
     if (latest.current !== lifetime) return;
-    if (previous.current && !viewer.key) clearCommandSearchRecent(previous.current);
+    current.current = viewer.key;
+    if (previous.current && !viewer.key) clearSignedOutRecent(previous.current);
     previous.current = viewer.key;
     if (!viewer.key || chrome?.ownerKey !== viewer.key) return;
-    const here = path + window.location.search;
+    const here = path + window.location.search, key = viewer.key, allowed = chrome.navigation.map(row => row.key);
     const entry = chrome.navigation.find(row => row.href === here)
       ?? chrome.navigation.find(row => row.href === path);
-    if (entry) recordCommandSearchRecent(viewer.key, entry.key, chrome.navigation.map(row => row.key));
+    // A dossier is recorded when its own page opens, by a toon-handle pulse ID only. A visit
+    // still loading when its viewer signs out or switches never writes.
+    const dossier = entry ? null : dossierSegment(path), still = () => current.current === key;
+    if (entry) withRecent(recent => { if (still()) recent.recordCommandSearchRecent(key, entry.key, allowed); });
+    else if (dossier) withRecent(recent => { if (still()) recent.recordCommandSearchRecentOpponent(key, dossier, allowed); });
   }, [viewer, path, chrome, lifetime]);
 }
 

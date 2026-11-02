@@ -4,9 +4,12 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { AuthContextLink } from "@/components/auth/AuthContextLink";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
+import { LinkButton } from "@/components/ui/Button";
+import { buttonClassName } from "@/components/ui/buttonStyles";
 import { Sheet } from "@/components/ui/Sheet";
 import { ThemeChoice } from "@/components/ui/ThemeChoice";
 import { LogoMark } from "./LogoMark";
+import { Wordmark } from "./Wordmark";
 import { NavAuthGate } from "./NavAuthGate";
 
 /**
@@ -73,10 +76,7 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
             className="flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface"
           >
             <LogoMark size={28} />
-            <span className="flex items-center gap-1.5 font-display text-h4 font-extrabold tracking-tight text-text">
-              SC2&nbsp;Tools
-              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
-            </span>
+            <Wordmark />
           </Link>
         <nav
           aria-label="Primary"
@@ -95,13 +95,9 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
           </ul>
           <SignedIn>
             <div className="mt-4 px-1">
-              <Link
-                href="/app"
-                onClick={onClose}
-                className="hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-accent px-3 font-display text-body font-bold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              >
+              <LinkButton href="/app" onClick={onClose} size="lg" fullWidth>
                 Open app
-              </Link>
+              </LinkButton>
             </div>
           </SignedIn>
           <SignedOut>
@@ -109,14 +105,14 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
               <AuthContextLink
                 kind="sign-in"
                 onClick={onClose}
-                className="hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-bg-surface px-3 font-display text-body font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className={buttonClassName({ variant: "secondary", size: "lg", fullWidth: true })}
               >
                 Sign in
               </AuthContextLink>
               <AuthContextLink
                 kind="sign-up"
                 onClick={onClose}
-                className="hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-accent px-3 font-display text-body font-bold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className={buttonClassName({ variant: "primary", size: "lg", fullWidth: true })}
               >
                 Get started
               </AuthContextLink>

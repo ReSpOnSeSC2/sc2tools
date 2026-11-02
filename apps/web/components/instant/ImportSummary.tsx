@@ -18,9 +18,8 @@
  *     onImportMore={session.reset} />
  */
 import { useEffect, useRef } from "react";
-import Link from "next/link";
 import { AlertTriangle, CheckCircle2, MinusCircle } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Button, LinkButton } from "@/components/ui";
 import { uploadsResumeText } from "@/lib/instant/displayUnits";
 import { summarizeFailures, type ErrorCopy, type FailureGroup } from "@/lib/instant/errorCopy";
 import type { BackupStopReason, BackupSummary } from "@/lib/instant/replayBackup";
@@ -184,12 +183,6 @@ export function FailureGroups({ groups }: { groups: ReadonlyArray<FailureGroup> 
   );
 }
 
-const LINK_CLASS = [
-  "inline-flex min-h-[44px] items-center justify-center rounded-full border-2 border-line bg-accent px-5",
-  "font-display text-body font-bold text-white hard-press hover:bg-accent-hover",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-].join(" ");
-
 function CountRows({ counts }: { counts: UploadCounts }) {
   const rows = summaryRows(counts);
   if (rows.length === 0) return null;
@@ -214,9 +207,9 @@ function SummaryActions({ counts, showDashboardLink, onImportMore }: {
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
       {showDashboardLink && hasGames ? (
-        <Link href="/app" className={LINK_CLASS}>
+        <LinkButton href="/app">
           Open your dashboard
-        </Link>
+        </LinkButton>
       ) : null}
       {onImportMore ? (
         <Button variant="secondary" onClick={onImportMore}>

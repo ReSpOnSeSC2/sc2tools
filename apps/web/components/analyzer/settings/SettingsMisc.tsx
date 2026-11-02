@@ -16,7 +16,7 @@ import {
   type ConsentState,
 } from "@/lib/analytics/consent";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, LinkButton } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { Field } from "@/components/ui/Field";
@@ -150,16 +150,15 @@ export function SettingsMisc() {
               title="Setup guide"
               description="Go through the first-run steps again: download the desktop app, pair it and import your replays. Your games and settings stay as they are."
               action={
-                <Link
+                <LinkButton
                   href="/welcome"
-                  className={[
-                    "hard-press inline-flex min-h-11 flex-shrink-0 items-center justify-center gap-2 rounded-full border-2 border-line bg-bg-surface px-4 font-display text-caption font-bold text-text hover:bg-bg-elevated",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-                  ].join(" ")}
+                  variant="secondary"
+                  size="sm"
+                  className="min-h-11 flex-shrink-0"
+                  iconRight={<ArrowRight className="h-4 w-4" aria-hidden />}
                 >
                   Run setup again
-                  <ArrowRight className="h-4 w-4" aria-hidden />
-                </Link>
+                </LinkButton>
               }
             />
             <RestoreSetupChecklist />

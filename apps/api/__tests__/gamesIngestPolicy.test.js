@@ -15,6 +15,7 @@ const {
   stampIngestProvenance,
   admitBrowserBatch,
   recordBrowserBatch,
+  recordIngestRejections,
 } = require("../src/routes/gamesIngestPolicy");
 
 const claimed = () => ({ gameId: "g1", ingestSource: "agent", engineVersion: "1.6.3" });
@@ -80,5 +81,42 @@ describe("browser cap bookkeeping", () => {
     const quota = { check: jest.fn(), record: jest.fn() };
     await recordBrowserBatch(browserReq(), quota, { blocked: false, day: "2026-09-27" }, 0);
     expect(quota.record).not.toHaveBeenCalled();
+  });
+});
+
+describe("ingest rejection counters", () => {
+  const deviceReq = (log) => ({ auth: { userId: "u1", source: "device" }, log });
+  const rejected = [
+    { gameId: "secret-game-id", errors: ["/opponent/displayName must be string"] },
+    { gameId: "g2", retryable: true, errors: ["upsert_failed: r2 down"] },
+  ];
+
+  test("one call per batch with closed codes; retryable-only batches make none", async () => {
+    const users = { recordIngestRejections: jest.fn(async () => {}) };
+    await recordIngestRejections(deviceReq(), users, rejected);
+    expect(users.recordIngestRejections).toHaveBeenCalledTimes(1);
+    expect(users.recordIngestRejections).toHaveBeenCalledWith("u1", { validation_failed: 1 });
+    await recordIngestRejections(deviceReq(), users, [rejected[1]]);
+    await recordIngestRejections(deviceReq(), users, []);
+    expect(users.recordIngestRejections).toHaveBeenCalledTimes(1);
+  });
+
+  test("older or narrow users services, browser imports and anonymous requests are a no-op", async () => {
+    await expect(recordIngestRejections(deviceReq(), undefined, rejected)).resolves.toBeUndefined();
+    await expect(recordIngestRejections(deviceReq(), { addPulseId: jest.fn() }, rejected)).resolves.toBeUndefined();
+    const users = { recordIngestRejections: jest.fn() };
+    await recordIngestRejections({}, users, rejected);
+    await recordIngestRejections({ auth: { userId: "u1", source: "clerk" } }, users, rejected);
+    expect(users.recordIngestRejections).not.toHaveBeenCalled();
+  });
+
+  test("a failed counter write is logged with codes and counts only, without escaping", async () => {
+    const warn = jest.fn();
+    const users = { recordIngestRejections: jest.fn(async () => { throw new Error("mongo_down"); }) };
+    await expect(recordIngestRejections(deviceReq({ warn }), users, rejected)).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][1]).toBe("ingest_rejection_stats_failed");
+    expect(warn.mock.calls[0][0]).toMatchObject({ userId: "u1", counts: { validation_failed: 1 } });
+    expect(JSON.stringify(warn.mock.calls[0][0].counts)).not.toMatch(/secret-game-id|displayName/);
   });
 });

@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Plus, Library, BookOpen, RefreshCw } from "lucide-react";
-import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { activeBuildFilters, buildFiltersQuery, readBuildFilters } from "./buildLibraryFilters";
-import { Button } from "@/components/ui/Button";
+import { Button, LinkButton } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -432,13 +431,9 @@ function BuildsLibraryInner() {
         description="Custom openers synced across devices. Save them privately, share them publicly, and match your replays automatically."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link
-              href="/definitions"
-              className="hard-press inline-flex min-h-[44px] items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-            >
-              <BookOpen className="h-4 w-4" aria-hidden />
+            <LinkButton href="/definitions" variant="secondary" iconLeft={<BookOpen className="h-4 w-4" aria-hidden />}>
               Definitions
-            </Link>
+            </LinkButton>
             {libraryCount > 0 ? (
               <Button
                 variant="secondary"

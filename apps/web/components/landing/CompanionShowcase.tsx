@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Download, SlidersHorizontal, Star } from "lucide-react";
+import { LinkButton } from "@/components/ui/Button";
 
 const PANELS = [
   {
@@ -58,9 +59,9 @@ export function CompanionShowcase() {
           <p className="mt-3 text-caption text-text-muted">Save your own Ladder, Customs, Teams, Practice and Review presets. Customize each feature locally, with an optional Ctrl+Shift+F10 master shortcut. Hybrid adds confirmed enemy selection for team scouting; automatic check-ins and randomizer draws remain 1v1-only.</p>
           <p role="note" aria-label="Companion availability" className="mt-4 rounded-sm border border-warning/40 bg-bg-surface p-3 text-caption text-text-muted"><strong className="font-semibold text-text">Use Agent 0.24.2 or later for these controls.</strong> Update from the shared Agent menu or download the Windows installer. Session requires pairing and an available SC2 Tools connection. Team scouting also needs fresh live SC2 telemetry; unknown history and MMR stay unavailable.</p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <Link href="/download" className="inline-flex min-h-11 items-center gap-2 rounded-sm bg-accent px-4 py-2 text-caption font-bold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
-              <Download className="h-4 w-4" aria-hidden />Download current stable agent
-            </Link>
+            <LinkButton href="/download" size="sm" className="min-h-11" iconLeft={<Download className="h-4 w-4" aria-hidden />}>
+              Download current stable agent
+            </LinkButton>
             <Link href="/help/desktop-companion" className="inline-flex min-h-11 items-center gap-2 text-caption font-semibold text-text underline-offset-4 hover:underline">
               Explore Companion<ArrowRight className="h-4 w-4" aria-hidden />
             </Link>

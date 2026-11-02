@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { LinkButton } from "@/components/ui/Button";
 import { guidesEnabled } from "@/lib/guides/flags";
 import { GUIDE_MATCHUPS, GUIDES_BASE_PATH, guideMatchupPath } from "@/lib/guides/slugs";
 
@@ -23,13 +24,9 @@ export function GuidesStrip() {
         <p className="mt-2 max-w-2xl text-caption text-text-muted">
           Every opener ranked by its real ladder win rate, with key timings, army snapshots and build-order videos.
         </p>
-        <Link
-          href={GUIDES_BASE_PATH}
-          className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-md border-2 border-line bg-bg-elevated px-4 text-body font-semibold text-text transition-colors duration-100 hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-        >
+        <LinkButton href={GUIDES_BASE_PATH} variant="secondary" className="mt-4" iconRight={<ArrowRight className="h-4 w-4" aria-hidden />}>
           Browse build guides
-          <ArrowRight className="h-4 w-4" aria-hidden />
-        </Link>
+        </LinkButton>
       </div>
       <ul className="grid grid-cols-3 gap-2" aria-label="Build guides by matchup">
         {GUIDE_MATCHUPS.map((matchup) => (

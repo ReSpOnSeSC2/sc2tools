@@ -13,7 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, LinkButton } from "@/components/ui/Button";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/Icon";
@@ -301,13 +301,9 @@ function NotFoundView({ slug }: { slug: string }) {
           sub={`No build matched the slug “${slug}”. It may have been deleted on another device.`}
         />
         <div className="mt-3 flex justify-center">
-          <Link
-            href="/builds"
-            className="inline-flex min-h-[44px] items-center gap-2 hard-press rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-          >
-            <Library className="h-4 w-4" aria-hidden />
+          <LinkButton href="/builds" variant="secondary" iconLeft={<Library className="h-4 w-4" aria-hidden />}>
             Back to library
-          </Link>
+          </LinkButton>
         </div>
       </Card>
     </div>

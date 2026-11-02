@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Card, EmptyState } from "@/components/ui/Card";
+import { LinkButton } from "@/components/ui/Button";
 import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
 import { useDailySeed } from "./hooks/useDailySeed";
 import { useArcadeData } from "./hooks/useArcadeData";
@@ -253,12 +254,9 @@ function ModeRunnerView({ mode, isDaily, onPlayedFresh, forceMode = false, dataS
         <EmptyState title="Not enough data yet" sub={question.reason} />
         {question.cta ? (
           <div className="text-center">
-            <a
-              href={question.cta.href}
-              className="inline-flex min-h-[44px] items-center rounded-md bg-accent px-4 text-caption font-semibold uppercase tracking-wider text-bg hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
+            <LinkButton href={question.cta.href} size="sm" className="min-h-11">
               {question.cta.label}
-            </a>
+            </LinkButton>
           </div>
         ) : null}
       </Card>

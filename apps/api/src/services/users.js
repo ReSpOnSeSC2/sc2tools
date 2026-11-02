@@ -12,6 +12,7 @@ const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("./twi
 const { PLAYER_SLUG_RE, PLAYER_UUID_RE, createPlayerSlug } = require("../util/publicPlayerConfig");
 const { ACTIVATION_QUERY_MAX_TIME_MS, activationTimestamp, activationUnavailable } = require("./activation");
 const { readyStatsFromOwnerRow, OWNER_STATS_PROJECTION } = require("./maintainedGameStatsRead");
+const { ingestRejectionUpdate, ingestStatsDto } = require("./ingestRejections");
 
 const REPLAY_SHARE_ID_RE = /^[A-Za-z0-9_-]{32}$/;
 const REPLAY_SHARE_SLUG_MAX_LENGTH = 64;
@@ -274,13 +275,23 @@ class UsersService {
 
   /** Internal Doctor envelope; the public profile getter retains its DTO.
    * Keep the original profile errors before attempting candidate validation.
+   * The same read carries the ingest rejection window for Sync health.
    * @param {string} userId */
   async getDoctorSnapshot(userId) {
     const doc = await this.db.users.findOne({ userId }, { readPreference: "primary",
-      projection: { ...PROFILE_PROJECTION, ...OWNER_STATS_PROJECTION, "preferences.replayArchive": 1 } });
+      projection: { ...PROFILE_PROJECTION, ...OWNER_STATS_PROJECTION, "preferences.replayArchive": 1, ingestStats: 1 } });
     return { profile: profileDto(doc),
       statsCandidate: readyStatsFromOwnerRow(doc, userId, this.db.gameStatsTransactions),
-      replayArchivePrefs: (doc && doc.preferences && doc.preferences.replayArchive) || {} };
+      replayArchivePrefs: (doc && doc.preferences && doc.preferences.replayArchive) || {},
+      ingestStats: ingestStatsDto(doc) };
+  }
+
+  /** Best-effort ingest rejection counters (services/ingestRejections.js): one
+   * pipeline update per batch, never an upsert, so a missing owner is a no-op.
+   * @param {string} userId @param {Record<string, number>} counts */
+  async recordIngestRejections(userId, counts) {
+    const update = ingestRejectionUpdate(counts, new Date());
+    if (update) await this.db.users.updateOne({ userId }, update, { upsert: false });
   }
 
   /**

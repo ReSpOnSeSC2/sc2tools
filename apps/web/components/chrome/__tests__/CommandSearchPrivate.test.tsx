@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useLayoutEffect, useMemo, useState } from "react";
+import { SWRConfig } from "swr";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { API_BASE } from "@/lib/clientApi";
 import { COMMAND_SEARCH_RECENT_KEY } from "@/lib/commandSearchRecent";
@@ -27,7 +28,7 @@ vi.mock("next/navigation", async () => {
 // and DTO parsing are all real; no new selection/admission callbacks are mocked.
 vi.mock("@/lib/guides/flags", () => ({ guidesEnabled: () => false }));
 
-const ENDPOINT = `${API_BASE.replace(/\/+$/, "")}/v1/search/quick`;
+const BASE = API_BASE.replace(/\/+$/, ""), ENDPOINT = `${BASE}/v1/search/quick`, MAPS = `${BASE}/v1/maps#command-search`;
 const fetching = vi.fn<typeof fetch>();
 const navigation = [
   { key: "today", href: "/app", label: "Today" }, { key: "opponents", href: "/app/opponents", label: "Opponents" },
@@ -45,10 +46,22 @@ function payload() {
     maps: { status: "ready", hasMore: false, items: [{ map: "Literal own map LE" }] },
   } };
 }
-function response(value: unknown = payload()) {
+function response(value: unknown = payload(), url = ENDPOINT) {
   const result = new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } });
-  Object.defineProperty(result, "url", { value: ENDPOINT }); return result;
+  Object.defineProperty(result, "url", { value: url }); return result;
 }
+const GAMES = { items: [{ gameId: "own game/1", date: null, result: "Victory", map: "Alcyone LE", matchup: "PvT",
+  opponent: { displayName: "Literal own game rival" }, streams: [] }], page: { nextCursor: null, hasMore: false } };
+let mapRows: unknown = [{ name: "Literal own map LE", total: 3 }, { name: "Unrelated LE", total: 9 }];
+/** The private POST, recent games and the map list, each answered by its own URL. */
+async function route(input: RequestInfo | URL): Promise<Response> {
+  const url = String(input);
+  if (url === ENDPOINT) return response();
+  if (url.startsWith(`${BASE}/v1/replays?`)) return response(GAMES, url);
+  if (url === MAPS) return response(mapRows, url);
+  throw new Error("unexpected request");
+}
+const calls = (url: string) => fetching.mock.calls.filter(([input]) => String(input) === url || String(input).startsWith(`${url}?`));
 function Draft({ id }: { id: SettingsTabId }) {
   const [value, setValue] = useState("saved"); usePublishDirty(id, value !== "saved");
   return <input aria-label={`${id} draft`} value={value} onChange={event => setValue(event.target.value)} />;
@@ -60,7 +73,10 @@ function Host({ settings = false }: { settings?: boolean }) {
   return <><button type="button" onClick={() => context.open({ query: "Literal own" })}>Open real search</button>
     {settings ? <SettingsShell ownerKey={context.ownerKey} initialTab="profile" renderTab={id => <Draft id={id} />} /> : null}</>;
 }
-function tree(settings = false) { return <CommandSearchProvider><Host settings={settings} /></CommandSearchProvider>; }
+// Each render gets its own SWR cache, so a map list read in one test never answers another.
+function tree(settings = false) {
+  return <SWRConfig value={{ provider: () => new Map() }}><CommandSearchProvider><Host settings={settings} /></CommandSearchProvider></SWRConfig>;
+}
 async function open(options: CommandOpening = { query: "Literal own" }) {
   act(() => h.open!(options));
   return screen.findByRole("combobox", { name: options.scope === "guides" ? "Find a guide" : "Search" });
@@ -74,7 +90,8 @@ beforeEach(() => {
   h.auth.userId = "A"; h.auth.isLoaded = true; h.auth.isSignedIn = true;
   h.auth.getToken.mockReset().mockResolvedValue("A-token");
   window.history.replaceState(null, "", "/app"); localStorage.clear();
-  fetching.mockReset().mockImplementation(async () => response()); vi.stubGlobal("fetch", fetching);
+  mapRows = [{ name: "Literal own map LE", total: 3 }, { name: "Unrelated LE", total: 9 }];
+  fetching.mockReset().mockImplementation(route); vi.stubGlobal("fetch", fetching);
 });
 afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -82,9 +99,13 @@ describe("real lazy private search consumer and guarded navigation", () => {
   it("does nothing closed, then sends only literal body q while keeping IDs/query out of static recents", async () => {
     render(tree()); expect(fetching).not.toHaveBeenCalled(); expect(h.auth.getToken).not.toHaveBeenCalled();
     const input = await open({ query: "É  [a].*" }); await ready();
-    expect((input as HTMLInputElement).value).toBe("É  [a].*"); expect(fetching).toHaveBeenCalledOnce();
-    expect(fetching.mock.calls[0][0]).toBe(ENDPOINT);
-    expect(fetching.mock.calls[0][1]?.body).toBe(JSON.stringify({ q: "É  [a].*" }));
+    expect((input as HTMLInputElement).value).toBe("É  [a].*"); expect(calls(ENDPOINT)).toHaveLength(1);
+    expect(calls(ENDPOINT)[0][1]?.body).toBe(JSON.stringify({ q: "É  [a].*" }));
+    // Recent games carry the literal query as `search` only; the map list never carries it.
+    await waitFor(() => expect(calls(`${BASE}/v1/replays`)).toHaveLength(1));
+    const games = new URL(String(calls(`${BASE}/v1/replays`)[0][0]));
+    expect([...games.searchParams]).toEqual([["search", "É  [a].*"], ["limit", "5"], ["sort", "date_desc"], ["enrich", "none"], ["window", "recent"]]);
+    await waitFor(() => expect(calls(MAPS)).toHaveLength(1)); expect(calls(MAPS)[0][0]).toBe(MAPS);
     expect(window.location.search).toBe("");
     expect(localStorage.getItem(COMMAND_SEARCH_RECENT_KEY)).not.toMatch(/owner\/pulse|owner build|Literal|É/);
   });
@@ -92,9 +113,10 @@ describe("real lazy private search consumer and guarded navigation", () => {
     ["Literal own opponent", "/app/opponents/owner%2Fpulse"],
     ["Literal own build", "/builds/owner%20build"],
     ["Literal own map LE", "/app/maps?focus=Literal%20own%20map%20LE"],
+    ["Literal own game rival", "/app/game/own%20game%2F1"],
   ])("transfers %s before real Modal unmount and navigates exactly once", async (label, href) => {
     render(tree()); await open(); await ready();
-    const row = screen.getByRole("option", { name: label }); fireEvent.click(row); fireEvent.click(row);
+    const row = await screen.findByRole("option", { name: new RegExp(`^${label}`) }); fireEvent.click(row); fireEvent.click(row);
     await waitFor(() => expect(h.push).toHaveBeenCalledOnce()); expect(h.push).toHaveBeenCalledWith(href);
     expect(screen.queryByRole("combobox", { name: "Search" })).toBeNull();
   });
@@ -106,14 +128,28 @@ describe("real lazy private search consumer and guarded navigation", () => {
     expect(fetching).not.toHaveBeenCalled(); expect(h.auth.getToken).not.toHaveBeenCalled();
     expect(screen.queryByRole("group", { name: "Your opponents" })).toBeNull();
   });
-  it("keeps an unavailable map category separate and opens its full library through the provider", async () => {
-    const data = payload();
-    fetching.mockImplementation(async () => response({ ...data, groups: { ...data.groups,
-      maps: { status: "unavailable", items: [], hasMore: null, reason: "source_budget_exceeded" } } }));
+  it("keeps an unavailable map list separate and opens its full library through the provider", async () => {
+    mapRows = Array.from({ length: 2001 }, (_, index) => ({ name: `Literal own map ${index}`, total: 1 }));
     render(tree()); await open(); await ready();
-    expect(screen.getByText("This library is too large for quick search.")).toBeTruthy();
+    expect(await screen.findByText("This library is too large for quick search.")).toBeTruthy();
+    expect(screen.getByRole("option", { name: /^Literal own game rival/ })).toBeTruthy();
     fireEvent.click(screen.getByRole("option", { name: "Open Maps" }));
     await waitFor(() => expect(h.push).toHaveBeenCalledWith("/app/maps"));
+  });
+  it("opens a Recent dossier through the guarded handoff, and not once it has left storage", async () => {
+    const stored = JSON.stringify({ version: 2, viewer: "A", entries: [{ kind: "opponent", pulseId: "1-S2-1-9" }, { kind: "page", id: "maps" }] });
+    localStorage.setItem(COMMAND_SEARCH_RECENT_KEY, stored);
+    const view = render(tree()); await open({ query: "" });
+    const row = await screen.findByRole("option", { name: /^Opponent dossier/ });
+    expect(row.textContent).toContain("Pulse ID 1-S2-1-9"); expect(fetching).not.toHaveBeenCalled();
+    fireEvent.click(row);
+    await waitFor(() => expect(h.push).toHaveBeenCalledWith("/app/opponents/1-S2-1-9"));
+    view.unmount(); h.push.mockReset(); localStorage.setItem(COMMAND_SEARCH_RECENT_KEY, stored);
+    render(tree()); await open({ query: "" });
+    const stale = await screen.findByRole("option", { name: /^Opponent dossier/ });
+    localStorage.removeItem(COMMAND_SEARCH_RECENT_KEY); fireEvent.click(stale);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(h.push).not.toHaveBeenCalled();
   });
   it("uses the actual Settings dirty guard for Stay then a fresh private Discard", async () => {
     h.path = "/settings"; window.history.replaceState(null, "", "/settings"); render(tree(true));
@@ -140,9 +176,10 @@ describe("real lazy private search consumer and guarded navigation", () => {
   });
   it("retires a held real request through committed same-path query A→B→A", async () => {
     let release!: (value: Response) => void;
-    fetching.mockReturnValueOnce(new Promise<Response>(resolve => { release = resolve; }));
-    render(tree()); await open(); await waitFor(() => expect(fetching).toHaveBeenCalledOnce());
-    const signal = fetching.mock.calls[0][1]?.signal;
+    const held = new Promise<Response>(resolve => { release = resolve; });
+    fetching.mockImplementation(input => String(input) === ENDPOINT ? held : route(input));
+    render(tree()); await open(); await waitFor(() => expect(calls(ENDPOINT)).toHaveLength(1));
+    const signal = calls(ENDPOINT)[0][1]?.signal;
     act(() => queryEntry("?view=B")); act(() => queryEntry(""));
     expect(screen.queryByRole("combobox", { name: "Search" })).toBeNull();
     await act(async () => release(response()));

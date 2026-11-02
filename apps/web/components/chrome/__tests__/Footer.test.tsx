@@ -55,6 +55,15 @@ describe("Footer resources", () => {
   });
 });
 
+describe("Footer brand", () => {
+  it("shows the shared wordmark, with its accent tick, in the home link", () => {
+    render(<Footer />);
+    const home = screen.getByRole("link", { name: "SC2 Tools — home" });
+    expect(home.textContent).toContain("SC2\u00a0Tools");
+    expect(home.querySelector("span[aria-hidden].rounded-full.bg-accent")).not.toBeNull();
+  });
+});
+
 describe("Footer audiences", () => {
   it("never sends a visitor to a sign-in wall", () => {
     render(<Footer />);

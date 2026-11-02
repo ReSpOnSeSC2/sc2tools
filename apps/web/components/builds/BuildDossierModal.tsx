@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { ExternalLink, Pencil, Send, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, LinkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
@@ -83,11 +82,13 @@ export function BuildDossierModal({
                 </p>
               ) : null}
             </div>
+            {/* Edit · Publish · Full page · Delete, destructive last; every action is a 44 px target. */}
             <div className="flex flex-wrap items-center gap-2">
               <PracticeButton build={build} privateBuild />
               <Button
                 size="sm"
                 variant="secondary"
+                className="min-h-11"
                 onClick={() => onEdit(build.slug)}
                 iconLeft={<Pencil className="h-4 w-4" aria-hidden />}
               >
@@ -96,28 +97,32 @@ export function BuildDossierModal({
               <Button
                 size="sm"
                 variant="secondary"
+                className="min-h-11"
                 onClick={() => onPublish(build.slug)}
                 iconLeft={<Send className="h-4 w-4" aria-hidden />}
               >
                 {build.isPublic ? "Update listing" : "Publish…"}
               </Button>
+              <LinkButton
+                href={`/builds/${encodeURIComponent(build.slug)}`}
+                size="sm"
+                variant="ghost"
+                className="min-h-11"
+                title="Open the full-page view"
+                onClick={onClose}
+                iconRight={<ExternalLink className="h-3.5 w-3.5" aria-hidden />}
+              >
+                Full page
+              </LinkButton>
               <Button
                 size="sm"
                 variant="danger"
+                className="min-h-11"
                 onClick={() => onDelete(build.slug)}
                 iconLeft={<Trash2 className="h-4 w-4" aria-hidden />}
               >
                 Delete
               </Button>
-              <Link
-                href={`/builds/${encodeURIComponent(build.slug)}`}
-                className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2 text-caption text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                title="Open the full-page view"
-                onClick={onClose}
-              >
-                Full page
-                <ExternalLink className="h-3 w-3" aria-hidden />
-              </Link>
               <BuildKebab slug={build.slug} name={build.name} isPublic={!!build.isPublic} onEdit={onEdit} onPublish={onPublish} onDelete={onDelete} onDuplicate={onDuplicate} onReclassify={onReclassify} onChanged={onChanged} />
             </div>
           </div>

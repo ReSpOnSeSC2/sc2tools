@@ -41,6 +41,7 @@ import { useChromeBottomInset } from "./chromeInsets";
 import { ChromeProvider, useChromeContext } from "./ChromeContext";
 import { NavProgress, startNavProgress } from "./NavProgress";
 import { LogoMark } from "./LogoMark";
+import { Wordmark } from "./Wordmark";
 import { WhatsNewButton } from "@/components/announcements/WhatsNewButton";
 import { useCommandChrome, useCommandSearch } from "./CommandSearchContext";
 import { CommandSearchButton } from "./CommandSearchButton";
@@ -218,7 +219,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             className="mb-1 flex h-11 items-center gap-3 rounded-lg px-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <LogoMark size={30} className="shrink-0" priority />
-            <RailLabel>SC2&nbsp;Tools</RailLabel>
+            <RailLabel><Wordmark size="sm" /></RailLabel>
           </Link>
 
           <ClerkLoading><div aria-hidden className="space-y-1">{Array.from({ length: 8 }, (_, index) => <div key={index} className="flex h-10 items-center px-2.5"><span className="h-[18px] w-[18px] rounded bg-bg-elevated motion-safe:animate-pulse" /></div>)}</div></ClerkLoading>

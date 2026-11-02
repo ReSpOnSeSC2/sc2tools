@@ -19,32 +19,41 @@ type Sentry = {
   captureException: (err: unknown) => string;
 };
 
-let cached: Sentry | null = null;
+let client: Promise<Sentry | null> | null = null;
 
-async function getSentry(): Promise<Sentry | null> {
-  if (cached) return cached;
-  if (!DSN) return null;
-  try {
-    // Dynamic import so missing dep doesn't crash builds.
-    // @ts-ignore — no types when the package isn't installed
-    const mod = await import("@sentry/nextjs");
-    cached = mod as unknown as Sentry;
-    return cached;
-  } catch {
-    return null;
-  }
+/**
+ * The initialized client SDK, or null when there is no DSN or a chunk fails.
+ * The SDK and the request-URL scrubber load together and init runs before
+ * anything can report, so no event is captured unscrubbed or before init.
+ */
+function clientSentry(): Promise<Sentry | null> {
+  client ??= (async () => {
+    if (!DSN) return null;
+    try {
+      // Dynamic import so missing dep doesn't crash builds.
+      // @ts-ignore — no types when the package isn't installed
+      const [mod, privacy] = await Promise.all([import("@sentry/nextjs"), import("./sentryPrivacy")]);
+      const s = mod as unknown as Sentry;
+      s.init({
+        dsn: DSN,
+        tracesSampleRate: 0.1,
+        replaysOnErrorSampleRate: 0.0,
+        replaysSessionSampleRate: 0.0,
+        environment: process.env.NEXT_PUBLIC_SC2TOOLS_ENV || "production",
+        beforeBreadcrumb: privacy.scrubBreadcrumb,
+        beforeSendSpan: privacy.scrubSpan,
+        beforeSendTransaction: privacy.scrubTransaction,
+      });
+      return s;
+    } catch {
+      return null;
+    }
+  })();
+  return client;
 }
 
 export async function initClientSentry(): Promise<void> {
-  const s = await getSentry();
-  if (!s) return;
-  s.init({
-    dsn: DSN,
-    tracesSampleRate: 0.1,
-    replaysOnErrorSampleRate: 0.0,
-    replaysSessionSampleRate: 0.0,
-    environment: process.env.NEXT_PUBLIC_SC2TOOLS_ENV || "production",
-  });
+  await clientSentry();
 }
 
 /**
@@ -53,7 +62,7 @@ export async function initClientSentry(): Promise<void> {
  * is off (no DSN) and the error only went to the console.
  */
 export async function captureException(err: unknown): Promise<string | null> {
-  const s = await getSentry();
+  const s = await clientSentry();
   if (s) {
     const eventId = s.captureException(err);
     return typeof eventId === "string" && eventId ? eventId : null;

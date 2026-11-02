@@ -9,6 +9,7 @@ const { DeviceLiveness } = require("./deviceLiveness");
 const { deviceCredentialWritesFor } = require("./deviceCredentialWrites");
 const { readDeviceTokenCore, readDeviceAuthSnapshot } = require("./deviceAuthTokenRead");
 const { deviceRestAuthFor } = require("./deviceRestAuth");
+const { sanitizeSyncReport, syncReportFields } = require("./syncReport");
 
 const PAIRING_TTL_MS = LIMITS.PAIRING_CODE_TTL_SEC * 1000;
 // One API instance serves the ten-minute code lifetime. A restart safely turns
@@ -269,7 +270,9 @@ class DevicePairingsService {
    * seeing the bearer-token hash. Hostname/os/version come from the
    * agent's most recent heartbeat — when the agent hasn't checked in
    * yet, those fields are absent and the UI falls back to whatever
-   * pieces are present.
+   * pieces are present. `sync`/`syncReportedAt` are the latest sanitized
+   * sync report, present only once a current agent has sent one; it names
+   * other players, so only the owner's routes may return it whole.
    *
    * @param {string} userId
    * @returns {Promise<Array<{
@@ -282,6 +285,8 @@ class DevicePairingsService {
    *   agentVersion?: string,
    *   agentOs?: string,
    *   agentOsRelease?: string,
+   *   sync?: import('./types').SyncReport,
+   *   syncReportedAt?: Date,
    * }>>}
    */
   async listDevices(userId) {
@@ -291,7 +296,7 @@ class DevicePairingsService {
         // Explicit public fields keep pairing codes and future private auth
         // metadata out of the web response as well as the bearer-token hash.
         { projection: { _id: 1, userId: 1, createdAt: 1, lastSeenAt: 1,
-          hostname: 1, label: 1, agentVersion: 1, agentOs: 1, agentOsRelease: 1 } },
+          hostname: 1, label: 1, agentVersion: 1, agentOs: 1, agentOsRelease: 1, sync: 1, syncReportedAt: 1 } },
       )
       .sort({ lastSeenAt: -1 })
       .toArray();
@@ -396,9 +401,15 @@ class DevicePairingsService {
    * `req.auth`. We trust the body's metadata since the bearer was
    * verified, but we cap field lengths defensively.
    *
+   * A current agent also sends `sync` (services/syncReport.js). It is
+   * stored only after sanitizing, never over a newer stored report, and a
+   * rejected block leaves the rest of the heartbeat intact: the response
+   * then says `syncAccepted: false`. Older agents send no `sync` and get
+   * the unchanged write and response.
+   *
    * @param {string} userId
    * @param {string} tokenHash
-   * @param {{version?: string, os?: string, osRelease?: string, hostname?: string}} body
+   * @param {{version?: string, os?: string, osRelease?: string, hostname?: string, sync?: unknown}} body
    */
   async recordHeartbeat(userId, tokenHash, body) {
     const now = new Date(this.liveness.now());
@@ -424,9 +435,12 @@ class DevicePairingsService {
     const fields = Object.fromEntries(Object.entries(update).map(([key, value]) => [key, { $literal: value }]));
     const lastSeenAt = { $cond: [{ $eq: [{ $type: "$lastSeenAt" }, "date"] },
       { $max: ["$lastSeenAt", { $literal: now }] }, { $literal: now }] };
+    const syncReport = body && typeof body === "object" && Object.hasOwn(body, "sync")
+      ? sanitizeSyncReport(body.sync, now.getTime()) : null;
+    const { sync, syncReportedAt } = syncReportFields(syncReport ? syncReport.report : null, now);
     const device = await this.liveness.mutate(userId, () => this.db.deviceTokens.findOneAndUpdate(
       { userId, tokenHash, revokedAt: null },
-      [{ $set: { ...fields, lastSeenAt } }],
+      [{ $set: { ...fields, lastSeenAt, sync, syncReportedAt } }],
       {
         returnDocument: "after",
         projection: { _id: 1, userId: 1, createdAt: 1, agentVersion: 1,
@@ -454,7 +468,7 @@ class DevicePairingsService {
       try { await this.onHeartbeat(userId, body); }
       catch (err) { this.logger?.warn({ err }, "agent_update_notification_failed"); }
     }
-    return { receivedAt: now };
+    return { receivedAt: now, ...(syncReport ? { syncAccepted: syncReport.report !== null } : {}) };
   }
 }
 

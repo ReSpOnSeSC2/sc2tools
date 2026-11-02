@@ -10,17 +10,21 @@
  *   - stamps ``ingestSource`` from the authenticated credential and keeps
  *     ``engineVersion`` only for browser uploads;
  *   - enforces the per-user daily browser-ingest cap (Clerk sessions only)
- *     before a batch is processed, and bills accepted games afterwards.
+ *     before a batch is processed, and bills accepted games afterwards;
+ *   - counts the desktop agent's non-retryable rejections on the owner row
+ *     for Sync health (services/ingestRejections.js).
  *
  * Kept out of routes/games.js so the ingest handler only gains call sites.
  */
 
 const { INGEST_PROVENANCE } = require("../config/constants");
+const { rejectionCounts } = require("../services/ingestRejections");
 
 /**
  * @typedef {{ userId: string, source?: string } | undefined} IngestAuth
  * @typedef {{ blocked: boolean, day?: string }} BrowserBatchAdmission
  * @typedef {Pick<import('../services/browserIngestQuota').BrowserIngestQuotaService, 'check' | 'record'>} BrowserIngestQuota
+ * @typedef {{ recordIngestRejections?: (userId: string, counts: Record<string, number>) => Promise<unknown> }} IngestRejectionStats
  */
 
 /**
@@ -132,9 +136,36 @@ async function recordBrowserBatch(req, quota, admission, acceptedCount) {
   }
 }
 
+/**
+ * Count this batch's non-retryable rejections once, after the ingest loop.
+ * Only device-token (desktop agent) uploads count: Sync health is about the
+ * agent, and the browser importer already shows its own per-file failures.
+ * Never throws and never changes the 202 response: a counter failure is
+ * logged with codes and counts only, and the upload result stands.
+ *
+ * Example:
+ *   await recordIngestRejections(req, deps.users, rejected);
+ *
+ * @param {import('express').Request} req
+ * @param {IngestRejectionStats | undefined} users
+ * @param {Array<{ retryable?: unknown, errors?: unknown }>} rejected
+ */
+async function recordIngestRejections(req, users, rejected) {
+  const auth = /** @type {IngestAuth} */ (req.auth);
+  if (!auth || !auth.userId || auth.source !== "device" || !users || typeof users.recordIngestRejections !== "function") return;
+  const counts = rejectionCounts(rejected);
+  if (!Object.keys(counts).length) return;
+  try {
+    await users.recordIngestRejections(auth.userId, counts);
+  } catch (err) {
+    if (req.log) req.log.warn({ err, userId: auth.userId, counts }, "ingest_rejection_stats_failed");
+  }
+}
+
 module.exports = {
   isBrowserSession,
   stampIngestProvenance,
   admitBrowserBatch,
   recordBrowserBatch,
+  recordIngestRejections,
 };

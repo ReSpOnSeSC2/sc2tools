@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { LinkButton } from "@/components/ui/Button";
 import {
   AlertTriangle,
   Cloud,
@@ -161,19 +161,15 @@ function ArchiveStatus({ status }: { status: ReplayArchiveStatus }) {
               ) : null}
             </div>
           </div>
-          <Link
+          <LinkButton
             href="/download"
-            className={[
-              "hard-press inline-flex min-h-11 flex-shrink-0 items-center justify-center gap-2 rounded-full border-2 border-line px-4 font-display text-caption font-bold",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-              status.requiresResync
-                ? "bg-accent text-white hover:bg-accent-hover"
-                : "bg-bg-surface text-text hover:bg-bg-elevated",
-            ].join(" ")}
+            variant={status.requiresResync ? "primary" : "secondary"}
+            size="sm"
+            className="min-h-11 flex-shrink-0"
+            iconLeft={<Download className="h-4 w-4" aria-hidden />}
           >
-            <Download className="h-4 w-4" aria-hidden />
             {presentation.actionLabel}
-          </Link>
+          </LinkButton>
         </div>
 
         <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
