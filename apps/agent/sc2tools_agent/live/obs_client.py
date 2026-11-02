@@ -152,6 +152,7 @@ class ObsClient:
         self._raw: Any = None
         self._events: Any = None
         self._lock = threading.RLock()
+        self._connection_generation = object()
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
@@ -183,15 +184,12 @@ class ObsClient:
     def shutdown(self) -> None:
         self._stop.set()
         with self._lock:
-            for handle in (self._events, self._raw):
-                if handle is None:
-                    continue
-                try:
-                    handle.disconnect()
-                except Exception:  # noqa: BLE001 — teardown is best-effort
-                    pass
-            self._raw = None
-            self._events = None
+            self._connection_generation = object()
+            handles = self._events, self._raw
+            self._raw = self._events = None
+            self._scene_names = []
+        for handle in handles:
+            self._close_handle(handle)
         self._notify_state()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
@@ -273,44 +271,63 @@ class ObsClient:
 
     def _attempt_connect(self, *, raise_on_error: bool) -> bool:
         started = time.monotonic()
+        with self._lock:
+            settings = self._host, self._port, self._password, self._timeout
+            if self._stop.is_set():
+                return False
+            generation = self._connection_generation = object()
         try:
             raw = self._connect_factory(
-                host=self._host,
-                port=self._port,
-                password=self._password,
-                timeout=self._timeout,
+                host=settings[0], port=settings[1], password=settings[2], timeout=settings[3],
             )
         except Exception as exc:  # noqa: BLE001
-            self._record_connect_failure(exc)
+            with self._lock:
+                current = generation is self._connection_generation and not self._stop.is_set()
+                if current:
+                    self._record_connect_failure(exc, notify=False)
+            if not current:
+                return False
+            self._notify_state()
             if raise_on_error:
                 raise self._classify(exc) from exc
             return False
 
         with self._lock:
-            self._raw = raw
+            current = generation is self._connection_generation and not self._stop.is_set()
+            previous = self._raw
+            if current:
+                self._raw = raw
+                self._consecutive_failures = 0
+                self._auth_failed = False
+                self._last_error = None
+        if not current:
+            if raw is not previous:
+                self._close_handle(raw)
+            return False
+        if previous is not raw:
+            self._close_handle(previous)
         METRICS.observe_ms(
             "obs.connect.latency", (time.monotonic() - started) * 1000.0,
         )
         METRICS.incr("obs.connect.ok")
-        self._consecutive_failures = 0
-        self._auth_failed = False
-        self._last_error = None
+        if not self._connection_current(raw, generation):
+            return False
         self._notify_state()
         _log.info(
             "obs_connected host=%s port=%s", self._host, self._port,
         )
 
         try:
-            self.refresh_scenes()
+            self.refresh_scenes(_connection=(raw, generation))
         except Exception:  # noqa: BLE001
             _log.debug("obs_scene_list_refresh_failed", exc_info=True)
-        if not self.is_connected:
+        if not self._connection_current(raw, generation):
             return False
 
         if self._subscribe_events:
-            self._attach_events()
+            self._attach_events(_connection=(raw, generation))
 
-        if self._on_connected is not None:
+        if self._connection_current(raw, generation) and self._on_connected is not None:
             try:
                 self._on_connected()
             except Exception:  # noqa: BLE001
@@ -319,9 +336,32 @@ class ObsClient:
         # socket is already unusable and clear ``_raw``. Report that as a
         # failed attempt so the connection loop applies its normal exponential
         # backoff instead of spinning through immediate reconnects.
-        return self.is_connected
+        return self._connection_current(raw, generation)
 
-    def _attach_events(self) -> None:
+    @staticmethod
+    def _close_handle(handle):
+        if handle is not None:
+            try:
+                handle.disconnect()
+            except Exception:
+                pass
+
+    def _connection_current(self, raw, generation):
+        with self._lock:
+            return (raw is not None and self._raw is raw and generation is self._connection_generation
+                and not self._stop.is_set())
+
+    def connection_scope(self):
+        """Private opaque admission metadata for a connection callback."""
+        with self._lock:
+            return self._connection_generation if self._raw is not None and not self._stop.is_set() else None
+
+    def is_connection_current(self, scope):
+        with self._lock:
+            return (scope is not None and scope is self._connection_generation
+                and self._raw is not None and not self._stop.is_set())
+
+    def _attach_events(self, *, _connection=None) -> None:
         """Open the event socket for manual-override detection.
 
         Strictly best-effort. Losing it costs us the ability to notice
@@ -330,18 +370,26 @@ class ObsClient:
         """
         if self._on_program_scene_changed is None:
             return
+        with self._lock:
+            raw, generation = _connection or (self._raw, self._connection_generation)
+            if not self._connection_current(raw, generation):
+                return
+            settings = self._host, self._port, self._password, self._timeout
         try:
             events = self._event_factory(
-                host=self._host,
-                port=self._port,
-                password=self._password,
-                timeout=self._timeout,
+                host=settings[0], port=settings[1], password=settings[2], timeout=settings[3],
             )
         except Exception:  # noqa: BLE001
             _log.debug("obs_event_client_unavailable", exc_info=True)
             return
+        if not self._connection_current(raw, generation):
+            self._close_handle(events)
+            return
 
         def _on_current_program_scene_changed(data: Any) -> None:
+            with self._lock:
+                if self._events is not events or not self._connection_current(raw, generation):
+                    return
             name = getattr(data, "scene_name", None) or getattr(
                 data, "sceneName", None,
             )
@@ -362,22 +410,28 @@ class ObsClient:
                 pass
             return
         with self._lock:
+            current = self._connection_current(raw, generation)
             previous_events = self._events
-            self._events = events
+            if current:
+                self._events = events
+        if not current:
+            self._close_handle(events)
+            return
         if previous_events is not None and previous_events is not events:
             try:
                 previous_events.disconnect()
             except Exception:  # noqa: BLE001 — teardown is best-effort
                 pass
 
-    def _record_connect_failure(self, exc: BaseException) -> None:
+    def _record_connect_failure(self, exc: BaseException, *, notify=True) -> None:
         classified = self._classify(exc)
         self._last_error = str(exc) or type(exc).__name__
         with self._lock:
             self._raw = None
         if isinstance(classified, ObsAuthFailed):
             self._auth_failed = True
-            self._notify_state()
+            if notify:
+                self._notify_state()
             METRICS.incr("obs.connect.auth_failed")
             _log.warning(
                 "obs_connect_failed host=%s port=%s reason=auth_failed",
@@ -386,7 +440,8 @@ class ObsClient:
             )
             return
 
-        self._notify_state()
+        if notify:
+            self._notify_state()
         METRICS.incr("obs.connect.refused")
         self._consecutive_failures += 1
         # Quiet until it looks like a real problem rather than "OBS
@@ -439,6 +494,7 @@ class ObsClient:
         takes effect without restarting the agent.
         """
         with self._lock:
+            self._connection_generation = object()
             if host is not None:
                 self._host = host
             if port is not None:
@@ -447,6 +503,9 @@ class ObsClient:
                 self._password = password
             raw, self._raw = self._raw, None
             events, self._events = self._events, None
+            self._scene_names = []
+            self._auth_failed = False
+            self._consecutive_failures = 0
         for handle in (events, raw):
             if handle is None:
                 continue
@@ -454,8 +513,6 @@ class ObsClient:
                 handle.disconnect()
             except Exception:  # noqa: BLE001
                 pass
-        self._auth_failed = False
-        self._consecutive_failures = 0
         self._notify_state()
 
     # ------------------------------------------------------------------
@@ -465,9 +522,12 @@ class ObsClient:
     # detected in exactly one place.
     # ------------------------------------------------------------------
 
-    def _call(self, method: str, *args: Any, **kwargs: Any) -> Any:
+    def _call(self, method: str, *args: Any, _connection=None, **kwargs: Any) -> Any:
         with self._lock:
             raw = self._raw
+            generation = self._connection_generation
+            if _connection is not None and (raw is not _connection[0] or generation is not _connection[1]):
+                raise ObsUnavailable("OBS connection changed")
         if raw is None:
             raise ObsUnavailable("OBS is not connected")
         fn = getattr(raw, method, None)
@@ -477,7 +537,10 @@ class ObsClient:
                 "the installed obsws-python is too old",
             )
         try:
-            return fn(*args, **kwargs)
+            result = fn(*args, **kwargs)
+            if not self._connection_current(raw, generation):
+                raise ObsUnavailable("OBS connection changed")
+            return result
         except Exception as exc:  # noqa: BLE001
             # Any request failure is treated as a lost connection. The
             # connect loop will re-establish it; the alternative
@@ -487,7 +550,7 @@ class ObsClient:
                 # A reconfigure/reconnect may have installed a newer handle
                 # while this request was in flight. Only clear and close the
                 # connection that actually failed.
-                failed_current_connection = self._raw is raw
+                failed_current_connection = self._raw is raw and self._connection_generation is generation
                 if failed_current_connection:
                     self._raw = None
             if failed_current_connection:
@@ -507,14 +570,16 @@ class ObsClient:
             "websocket_version": getattr(resp, "obs_web_socket_version", None),
         }
 
-    def refresh_scenes(self) -> List[str]:
+    def refresh_scenes(self, *, _connection=None) -> List[str]:
         """Re-read the scene list and cache it.
 
         OBS returns scenes in reverse display order; we keep its order
         rather than sorting, so a GUI dropdown reads the same way the
         user's Scenes panel does.
         """
-        resp = self._call("get_scene_list")
+        with self._lock:
+            connection = _connection or (self._raw, self._connection_generation)
+        resp = self._call("get_scene_list", _connection=connection)
         raw_scenes = getattr(resp, "scenes", None) or []
         names: List[str] = []
         for scene in raw_scenes:
@@ -528,6 +593,8 @@ class ObsClient:
             if name:
                 names.append(str(name))
         with self._lock:
+            if not self._connection_current(*connection):
+                raise ObsUnavailable("OBS connection changed")
             self._scene_names = names
         return list(names)
 

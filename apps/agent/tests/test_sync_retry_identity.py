@@ -7,7 +7,10 @@ import threading
 import pytest
 
 from sc2tools_agent import replay_pipeline as pipeline, watcher, runner
-from sc2tools_agent.state import AgentState, _STATE_SAVE_LOCK
+from sc2tools_agent.state import (AgentState, _STATE_SAVE_LOCK, save_state, load_state,
+    commit_state_credentials, credential_revision)
+from sc2tools_agent.agent_credentials import CredentialIntent
+from .test_agent_state_credentials import synthetic_state_io
 from sc2tools_agent.sync_retry import replay_ticket, publish_owned_toons, publish_local_hint
 from sc2tools_agent.health import HealthFacts
 from sc2tools_agent.sync_report import SyncReportTracker
@@ -280,20 +283,39 @@ def test_capture_reparse_keeps_owned_toon_perspective_without_enabling_capture(t
     assert instance._upload._q.get_nowait()[2].game.my_toon_handle == OWN
 
 
-def test_queued_a_settings_edit_cannot_publish_after_b_or_aba_repair(tmp_path):
+def test_queued_a_settings_edit_cannot_publish_after_b_or_aba_repair(tmp_path, synthetic_state_io):
     from sc2tools_agent.player_handle import read_settings_hint, write_cache, read_cache
     from sc2tools_agent.sync_retry import settings_identity_origin
     from tests.test_runner_save_settings import _cell
     state = AgentState(user_id="a", device_token="a-token")
+    save_state(tmp_path, state)
+    initial_revision = credential_revision(state, "device")
     origin = settings_identity_origin(state)
     payload = runner.SettingsPayload(player_handle="A pending edit", player_handle_origin=origin)
     write_cache(tmp_path, "B current", owner="b", source="settings")
-    with _STATE_SAVE_LOCK: state.user_id, state.device_token, state._owner_epoch = "b", "b-token", object()
+    with _STATE_SAVE_LOCK:
+        state._owner_epoch = epoch_b = object()
+        state._owned_toons = None
+        commit_state_credentials(tmp_path, state, device=CredentialIntent("set", "b-token"),
+            expected_device_revision=credential_revision(state, "device"), expected_owner_epoch=epoch_b,
+            device_owner=("b", state.paired_at))
     runner._handle_save_settings(_cfg(tmp_path), state, payload, _cell(), Mock())
     assert read_settings_hint(tmp_path, "b") == "B current" and read_cache(tmp_path) == "B current"
-    with _STATE_SAVE_LOCK: state.user_id, state.device_token, state._owner_epoch = "a", "a-token", object()
+    assert load_state(tmp_path).device_token == "b-token" and credential_revision(state, "device") == initial_revision + 1
+    with _STATE_SAVE_LOCK:
+        state._owner_epoch = epoch_a = object()
+        state._owned_toons = None
+        commit_state_credentials(tmp_path, state, device=CredentialIntent("set", "a-token"),
+            expected_device_revision=credential_revision(state, "device"), expected_owner_epoch=epoch_a,
+            device_owner=("a", state.paired_at))
     runner._handle_save_settings(_cfg(tmp_path), state, payload, _cell(), Mock())
     assert read_settings_hint(tmp_path, "a") is None and read_cache(tmp_path) == "B current"
+    assert origin[1] is not epoch_b and epoch_b is not epoch_a and origin[1] is not epoch_a
+    loaded = load_state(tmp_path)
+    assert (loaded.user_id, loaded.device_token) == ("a", "a-token")
+    assert credential_revision(state, "device") == initial_revision + 2
+    raw = (tmp_path / "agent.json").read_bytes()
+    assert b"a-token" not in raw and b"b-token" not in raw
 
 
 def test_explicit_clear_requests_guarded_profile_recovery_and_keeps_exact_ids(tmp_path):

@@ -11,10 +11,11 @@ import hashlib
 import hmac
 import json
 import re
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 from urllib.parse import quote
 
 import requests
@@ -128,6 +129,27 @@ class ApiClient:
 
     base_url: str
     device_token: Optional[str] = None
+    _auth_retired: threading.Event = field(default_factory=threading.Event, init=False, repr=False, compare=False)
+    _auth_guard: Optional[Callable[[], bool]] = field(default=None, kw_only=True, repr=False, compare=False)
+
+    def retire_authentication(self) -> None:
+        """Irreversibly stop new authenticated attempts on this exact client."""
+        self._auth_retired.set()
+
+    def _require_authentication(self) -> None:
+        if self._auth_retired.is_set():
+            raise DeviceUnauthorized(401, "agent_device_retired")
+        if self._auth_guard is not None:
+            allowed = False
+            try:
+                allowed = self._auth_guard() is True
+            except Exception:
+                pass
+            if not allowed:
+                self.retire_authentication()
+                raise DeviceUnauthorized(401, "agent_device_retired")
+        if not self.device_token:
+            raise PermissionError("agent_not_paired")
 
     # ---------------- Pairing flow ----------------
     def start_pairing(self) -> Dict[str, Any]:
@@ -335,8 +357,7 @@ class ApiClient:
         Parsed-stat syncing must continue in those cases. Transport and
         retryable object-store failures raise so the queue tries again.
         """
-        if not self.device_token:
-            raise PermissionError("agent_not_paired")
+        self._require_authentication()
         path = Path(file_path)
         try:
             if not path.is_file():
@@ -352,6 +373,7 @@ class ApiClient:
             md5 = hashlib.md5(usedforsecurity=False)
             with path.open("rb") as fh:
                 for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                    self._require_authentication()
                     digest.update(chunk)
                     md5.update(chunk)
         except OSError as exc:
@@ -415,10 +437,12 @@ class ApiClient:
 
         last_exc: Optional[Exception] = None
         for attempt in range(DEFAULT_RETRIES):
+            self._require_authentication()
             try:
                 # Re-open on every attempt.  Retrying a consumed file
                 # handle would silently PUT a zero-byte object.
                 with path.open("rb") as fh:
+                    self._require_authentication()
                     response = requests.put(
                         upload_url,
                         data=fh,
@@ -441,6 +465,7 @@ class ApiClient:
                 _backoff(attempt)
                 continue
 
+            self._require_authentication()
             if 200 <= response.status_code < 300:
                 break
             if response.status_code in (408, 429) or response.status_code >= 500:
@@ -809,8 +834,7 @@ class ApiClient:
         url = f"{self.base_url}{path}"
         headers = {"user-agent": _USER_AGENT, "accept": "application/json"}
         if auth:
-            if not self.device_token:
-                raise PermissionError("agent_not_paired")
+            self._require_authentication()
             headers["authorization"] = f"Bearer {self.device_token}"
 
         request_body = {"json": body if body is not None else None}
@@ -829,6 +853,8 @@ class ApiClient:
         last_exc: Optional[Exception] = None
         for attempt in range(attempts):
             final_attempt = attempt + 1 >= attempts
+            if auth:
+                self._require_authentication()
             try:
                 response = requests.request(
                     method,
@@ -847,6 +873,8 @@ class ApiClient:
                 _backoff(attempt)
                 continue
 
+            if auth:
+                self._require_authentication()
             if response.status_code == 202 and allow_202:
                 return _safe_json(response)
             if 200 <= response.status_code < 300:

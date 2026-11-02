@@ -255,11 +255,15 @@ class UploadQueue:
         ] = None,
         on_game_synced: Optional[Callable[[Path, Dict[str, Any]], None]] = None,
         on_support_error: Optional[Callable] = None,
+        on_auth_outcome: Optional[Callable] = None,
+        on_owned_outcome: Optional[Callable] = None,
     ) -> None:
         self._connection_callback = on_connection_state or (lambda *_args: None)
         self._on_auth_failure = on_auth_failure or (lambda _exc: None)
         self._on_auth_success = on_auth_success or (lambda: None)
         self._on_support_error = on_support_error
+        self._on_auth_outcome = on_auth_outcome
+        self._on_owned_outcome = on_owned_outcome
         self._retry_wake = threading.Event()
         self._connection_lock = threading.Lock()
         self._connection_failures = 0
@@ -973,7 +977,7 @@ class UploadQueue:
                     with self._archive_lock:
                         self._archive_scheduled.discard(task.key)
                     continue
-                self._on_auth_failure(exc)
+                self._notify_auth_outcome(context, exc)
                 # A non-poisoning checkpoint error is still lane-wide: until
                 # acknowledgements work, uploading another file can only
                 # repeat bytes without making durable progress. Back off the
@@ -1113,6 +1117,16 @@ class UploadQueue:
         self.retry_now()
         self._archive_wake.set()
 
+    def hold_auth_if_current(self, held: bool, *, api, epoch) -> bool:
+        """Retire one admission without taking the queue lock under STATE."""
+        with self._lock, _STATE_SAVE_LOCK:
+            if self._api is not api or getattr(self._state, "_owner_epoch", None) is not epoch:
+                return False
+            self._auth_held = held
+        self._retry_wake.set()
+        self._archive_wake.set()
+        return True
+
     def replace_api(self, api: ApiClient) -> None:
         with _STATE_SAVE_LOCK:
             self._api = api
@@ -1149,7 +1163,40 @@ class UploadQueue:
         with _STATE_SAVE_LOCK:
             return (context.api is self._api and context.generation == self._api_generation
                     and context.owner == self._state.user_id and context.token == self._state.device_token
+                    and context.owner_epoch is getattr(self._state, "_owner_epoch", None)
                     and getattr(context.api, "device_token", context.token) == context.token)
+
+    def _notify_auth_outcome(self, context, exc=None):
+        if context is not None and not self._upload_context_current(context):
+            return False
+        try:
+            if self._on_auth_outcome is not None and context is not None:
+                if self._on_auth_outcome(context, exc) is False:
+                    return False
+            if context is not None and not self._upload_context_current(context):
+                return False
+            if exc is None:
+                self._on_auth_success()
+            else:
+                self._on_auth_failure(exc)
+        except Exception:
+            log.warning("upload_auth_context_unavailable")
+        return context is None or self._upload_context_current(context)
+
+    def _notify_outcome(self, context, path, exc=None):
+        if not self._upload_context_current(context):
+            return
+        if self._on_owned_outcome is not None:
+            try:
+                self._on_owned_outcome(context, path, exc)
+            except Exception:
+                log.warning("upload_owned_outcome_unavailable")
+        if not self._upload_context_current(context):
+            return
+        if exc is None:
+            self._on_success(path)
+        else:
+            self._on_failure(path, exc)
 
     def _require_upload_context(self, context):
         if not self._upload_context_current(context):
@@ -1232,12 +1279,10 @@ class UploadQueue:
         self.retry_now()
         return list(chosen)
 
-    def _defer_connection(self, exc: Exception) -> None:
+    def _defer_connection(self, exc: Exception, *, context=None) -> None:
         error = classify(exc)
-        try:
-            self._on_auth_failure(exc)
-        except Exception:
-            log.exception("upload_auth_callback_failed")
+        if self._notify_auth_outcome(context, exc) is False:
+            return
         with self._connection_lock:
             self._connection_failures += 1
             self._connection_since = self._connection_since or time.time()
@@ -1297,6 +1342,7 @@ class UploadQueue:
         dropped — both so the next sweep skips re-parsing the dropped
         files and so a crash mid-drop doesn't leak the change.
         """
+        context = self._upload_context()
         sync_filter = SyncFilter.from_state(
             preset=getattr(self._state, "sync_filter_preset", None),
             since_iso=getattr(self._state, "sync_filter_since", None),
@@ -1369,7 +1415,7 @@ class UploadQueue:
             # doesn't hold up the next state mutation.
             for job in dropped_jobs:
                 try:
-                    self._on_failure(job.file_path, err)
+                    self._notify_outcome(context, job.file_path, err)
                 except Exception:  # noqa: BLE001
                     log.exception(
                         "drain_filter_on_failure_callback_failed %s",
@@ -1581,7 +1627,7 @@ class UploadQueue:
                     "upload_batch_deferred size=%d retry_after=%.3f",
                     len(retry_jobs), exc.retry_after_seconds,
                 )
-                self._defer_connection(exc)
+                self._defer_connection(exc, context=context)
                 for job in retry_jobs:
                     self._retry_q.put_nowait(self._queue_item(job))
             except _ServerRejectedError as exc:
@@ -1618,7 +1664,7 @@ class UploadQueue:
                     log.exception(
                         "upload_rejection_state_save_failed; retaining"
                     )
-                    self._defer_connection(persist_exc)
+                    self._defer_connection(persist_exc, context=context)
                     for job in batch:
                         self._retry_q.put_nowait(self._queue_item(job))
                 else:
@@ -1629,7 +1675,7 @@ class UploadQueue:
                         if not self._upload_context_current(context):
                             break
                         try:
-                            self._on_failure(job.file_path, exc)
+                            self._notify_outcome(context, job.file_path, exc)
                         except Exception:  # noqa: BLE001
                             log.exception(
                                 "upload_failure_callback_failed %s",
@@ -1647,7 +1693,7 @@ class UploadQueue:
                 retry_jobs = [job for job in batch if self.is_pending(job.file_path)]
                 if retry_jobs:
                     self._report_support_error(context, exc)
-                    self._defer_connection(exc)
+                    self._defer_connection(exc, context=context)
                     for job in retry_jobs:
                         self._retry_q.put_nowait(self._queue_item(job))
             finally:
@@ -1725,7 +1771,7 @@ class UploadQueue:
                 self._notify_pending()
                 for job in filtered_out:
                     try:
-                        self._on_failure(job.file_path, err)
+                        self._notify_outcome(context, job.file_path, err)
                     except Exception:  # noqa: BLE001
                         log.exception(
                             "filter_on_failure_callback_failed %s",
@@ -1776,7 +1822,7 @@ class UploadQueue:
             self._notify_pending()
             for job in invalid_jobs:
                 try:
-                    self._on_failure(job.file_path, err)
+                    self._notify_outcome(context, job.file_path, err)
                 except Exception:  # noqa: BLE001
                     log.exception(
                         "upload_failure_callback_failed %s",
@@ -1810,10 +1856,8 @@ class UploadQueue:
                 self._require_upload_context(context)
                 raise
             self._require_upload_context(context)
-        try:
-            self._on_auth_success()
-        except Exception:
-            log.exception("upload_auth_success_callback_failed")
+        if self._notify_auth_outcome(context) is False:
+            raise _UploadSessionChanged(context)
         accepted = result.get("accepted") or []
         rejected = result.get("rejected") or []
 
@@ -1964,7 +2008,7 @@ class UploadQueue:
             if not self._upload_context_current(context):
                 break
             try:
-                self._on_success(job.file_path)
+                self._notify_outcome(context, job.file_path)
             except Exception:  # noqa: BLE001
                 log.exception(
                     "upload_success_callback_failed %s",
@@ -1976,7 +2020,7 @@ class UploadQueue:
             log.error("upload_rejected %s: %s", job.file_path.name, err_msg)
             try:
                 self._report_support_error(context, _ServerRejectedError(err_msg))
-                self._on_failure(job.file_path, _ServerRejectedError(err_msg))
+                self._notify_outcome(context, job.file_path, _ServerRejectedError(err_msg))
             except Exception:  # noqa: BLE001
                 log.exception(
                     "upload_failure_callback_failed %s",
@@ -2204,8 +2248,8 @@ class UploadQueue:
                 self._pending_paths.discard(path_str)
                 self._pending_owners.pop(path_str, None)
             self._notify_pending()
-            self._on_failure(
-                job.file_path,
+            self._notify_outcome(
+                context, job.file_path,
                 _FilteredOutError(f"Outside sync window {label}"),
             )
             return
@@ -2283,7 +2327,7 @@ class UploadQueue:
         self._notify_game_synced(job, accepted_row, summary_owner, context=context)
         try:
             if self._upload_context_current(context):
-                self._on_success(job.file_path)
+                self._notify_outcome(context, job.file_path)
         finally:
             # See the batched path above: success sinks decrement first,
             # then this authoritative count corrects any local estimate.

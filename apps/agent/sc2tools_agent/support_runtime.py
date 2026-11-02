@@ -14,7 +14,7 @@ import threading
 import time
 
 from . import __version__
-from .state import _STATE_SAVE_LOCK
+from .state import _STATE_SAVE_LOCK, credential_scope, credential_status
 from .sync_retry import replay_ticket
 from .support_diagnostics import (
     CHECK_CODES, ERROR_CODES, ROW_IDS, DiagnosticRow, DiagnosticSnapshot, collect_diagnostics,
@@ -68,10 +68,11 @@ class SupportResult:
 
 class _Scope:
     # Default object repr deliberately does not expose any private field.
-    def __init__(self, ticket, api, socket, binding, fingerprint, copied, obs, services):
+    def __init__(self, ticket, api, socket, binding, fingerprint, copied, obs, services, obs_status):
         self.ticket, self.api, self.socket, self.binding = ticket, api, socket, binding
         self.fingerprint, self.copied, self.obs = fingerprint, copied, obs
         self.services = services
+        self.obs_status = obs_status
 
     def same(self, other):
         return (self.ticket.owner == other.ticket.owner and self.ticket.token == other.ticket.token
@@ -107,12 +108,13 @@ class SupportService:
                 self.state.sync_filter_preset, self.state.sync_filter_since, self.state.sync_filter_until,
                 tuple(self.state.replay_folders_override[:128]), tuple(self.state.replay_folders_excluded[:128]),
                 self.state.obs_scene_switch_enabled, self.cell.no_obs,
-                getattr(api, "base_url", None), getattr(api, "device_token", None))
+                getattr(api, "base_url", None), getattr(api, "device_token", None), credential_scope(self.state))
             services = self.cell.upload, self.cell.watcher, self.cell.ui
+            obs_status = credential_status(self.state, "obs")
         # These may consult external metadata/env; never hold either lock here.
         binding = socket.support_scope(ticket.token) if socket is not None else None
         obs = self.obs_connection()
-        return _Scope(ticket, api, socket, binding, fingerprint, copied, obs, services)
+        return _Scope(ticket, api, socket, binding, fingerprint, copied, obs, services, obs_status)
 
     def _scope_current(self, scope):
         if self.stop_event.is_set():
@@ -138,10 +140,22 @@ class SupportService:
 
     def cancel(self):
         with self._lock:
-            self._nonce += 1
-            self._scope, self._review, self._snapshot = None, None, None
-            self._history.clear()
+            self._cancel_locked()
         # The actual worker slot deliberately remains occupied until finally.
+
+    def _cancel_locked(self):
+        self._nonce += 1
+        self._scope, self._review, self._snapshot = None, None, None
+        self._history.clear()
+
+    def invalidate_for_epoch(self, expected_epoch):
+        with self._lock:
+            # Admission is locked; a newer owner cannot install a review here
+            # while this scalar lifetime check invalidates the older review.
+            if expected_epoch is None or getattr(self.state, "_owner_epoch", None) is not expected_epoch:
+                return False
+            self._cancel_locked()
+            return True
 
     invalidate = cancel
 
@@ -382,6 +396,8 @@ class SupportService:
                     is_current=current, is_cancelled=cancelled, deadline=deadline, clock=self.clock)
             if row_id == "obs":
                 enabled = self.state.obs_scene_switch_enabled is True and not self.cell.no_obs
+                if enabled and scope.obs_status not in ("available", "cleared", "missing") and not scope.obs[2]:
+                    return ProbeResult(DiagnosticRow("obs", "unavailable", "unavailable", "open_settings"))
                 return obs_probe(enabled, scope.obs, is_current=current, is_cancelled=cancelled, deadline=deadline, clock=self.clock)
             return sync_probe(facts, raw.get("pending"))
         except Exception:

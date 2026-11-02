@@ -434,6 +434,7 @@ class ReplayWatcher:
         state: AgentState,
         upload: UploadQueue,
         on_replay_skipped: Optional[Callable[[Path, Optional[str]], None]] = None,
+        on_owned_skipped: Optional[Callable] = None,
         on_capture_notice: Optional[Callable[[str], None]] = None,
         activity_gate=None,
         on_roots_changed: Optional[Callable[[list[Path]], None]] = None,
@@ -448,6 +449,7 @@ class ReplayWatcher:
         # the cloud's import-progress breakdown; everything else can leave
         # it unset.
         self._on_replay_skipped = on_replay_skipped
+        self._on_owned_skipped = on_owned_skipped
         self._on_unresolved = on_unresolved
         self._on_capture_notice = on_capture_notice
         # Told the new folder list whenever a sweep starts or stops
@@ -739,8 +741,10 @@ class ReplayWatcher:
             self._state.uploaded[key] = marker
             return True
 
-    def _notify_skipped(self, path: Path, reason: Optional[str]) -> None:
+    def _notify_skipped(self, path: Path, reason: Optional[str], *, ticket=None) -> None:
         """Invoke the optional skip observer; never let it break parsing."""
+        if ticket is not None and not self._ticket_current(ticket):
+            return
         if reason == "playback_budget_exceeded":
             # A recording's upload monitor reads durable state. No upload is
             # submitted for this terminal result, so there may be no later
@@ -749,6 +753,13 @@ class ReplayWatcher:
                 save_state(self._cfg.state_dir, self._state)
             except Exception:  # noqa: BLE001
                 log.exception("playback_budget_result_save_failed path=%s", path.name)
+        if ticket is not None and self._on_owned_skipped is not None:
+            try:
+                self._on_owned_skipped(ticket, path, reason)
+            except Exception:
+                log.warning("replay_owned_skip_unavailable")
+        if ticket is not None and not self._ticket_current(ticket):
+            return
         cb = self._on_replay_skipped
         if cb is None:
             return
@@ -1443,7 +1454,7 @@ class ReplayWatcher:
                 reason = payload.get("reason") if isinstance(payload, dict) else payload if isinstance(payload, str) else None
                 if not self._mark_replay(path_str, f"skipped:{reason}" if reason else "skipped", ticket):
                     return
-                self._notify_skipped(path, reason)
+                self._notify_skipped(path, reason, ticket=ticket)
                 if reason == "player_unresolved" and isinstance(payload, dict):
                     self._notify_unresolved(path, payload.get("unresolved", ()), ticket)
                 if self._analyzer_unavailable:
@@ -1461,7 +1472,7 @@ class ReplayWatcher:
                 )
                 if not self._mark_replay(path_str, f"skipped:{SKIP_ANALYSIS_FAILED}", ticket):
                     return
-                self._notify_skipped(path, SKIP_ANALYSIS_FAILED)
+                self._notify_skipped(path, SKIP_ANALYSIS_FAILED, ticket=ticket)
             elif kind == "analyzer_error":
                 # Throttled — same logic as the in-thread handler.
                 now = time.monotonic()
@@ -1508,7 +1519,7 @@ class ReplayWatcher:
             signature[0] if signature else "unreadable",
         )
         if self._mark_replay(key, f"skipped:{SKIP_FILE_UNSTABLE}", ticket):
-            self._notify_skipped(path, SKIP_FILE_UNSTABLE)
+            self._notify_skipped(path, SKIP_FILE_UNSTABLE, ticket=ticket)
 
     def _clear_settle_failure(self, path: Path) -> None:
         with self._settle_failures_lock:
@@ -1730,7 +1741,7 @@ class ReplayWatcher:
                 # don't re-attempt every sweep.
                 if not self._mark_replay(path, f"skipped:{skip_reason}" if skip_reason else "skipped", ticket):
                     return
-                self._notify_skipped(path, skip_reason)
+                self._notify_skipped(path, skip_reason, ticket=ticket)
                 if skip_reason == "player_unresolved":
                     self._notify_unresolved(path, candidates, ticket)
                 return

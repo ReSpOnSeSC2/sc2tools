@@ -10,12 +10,31 @@ from pathlib import Path
 import pytest
 
 import sc2tools_agent.state as state_module
+from sc2tools_agent.agent_credentials import CredentialStorageError
+from sc2tools_agent.instance_lock import AgentInstanceLock
 from sc2tools_agent.state import (
     AgentState,
     count_synced,
     load_state,
     save_state,
+    migrate_legacy_state,
 )
+from tests.test_agent_state_credentials import FiniteFileStorage, set_device, synthetic_state_io
+
+
+@pytest.fixture(autouse=True)
+def _portable_secure_state_io(synthetic_state_io):
+    """Use explicit owned-temp IO/lookup crypto; never depend on native DPAPI."""
+    return synthetic_state_io
+
+
+def _migrate_owned_state(directory):
+    guard = AgentInstanceLock(directory)
+    assert guard.acquire()
+    try:
+        return migrate_legacy_state(directory, guard)
+    finally:
+        guard.release()
 
 
 def test_window_preferences_roundtrip_and_reject_junk(tmp_path):
@@ -30,6 +49,7 @@ def test_window_preferences_roundtrip_and_reject_junk(tmp_path):
         }), encoding="utf-8")
         loaded = load_state(tmp_path)
         assert loaded.window_geometry is None and loaded.window_page is None
+    (tmp_path / "agent.json").unlink()  # A separate fresh-save normalization case, not implicit legacy migration.
     save_state(tmp_path, AgentState(window_geometry="invalid!", window_page="unknown"))
     assert load_state(tmp_path).window_geometry is None
 
@@ -77,14 +97,18 @@ def test_save_then_load_roundtrips(tmp_path: Path) -> None:
 
 
 def test_save_writes_atomically(tmp_path: Path) -> None:
-    s = AgentState(device_token="abc")
+    token = "atomic-secret-fixture-value"
+    s = AgentState(device_token=token)
     save_state(tmp_path, s)
     target = tmp_path / "agent.json"
     assert target.exists()
     leftover = list(tmp_path.glob("agent.*.tmp"))
     assert leftover == []
     raw = json.loads(target.read_text(encoding="utf-8"))
-    assert raw["device_token"] == "abc"
+    assert "device_token" not in raw and "obs_password" not in raw
+    assert raw["credentials"]["device"]["revision"] == 1
+    assert token.encode() not in target.read_bytes()
+    assert load_state(tmp_path).device_token == token
 
 
 def test_load_state_recovers_from_corrupt_file(tmp_path: Path) -> None:
@@ -128,14 +152,16 @@ def test_blank_string_overrides_load_as_none(tmp_path: Path) -> None:
     )
 
     loaded = load_state(tmp_path)
-    assert loaded.device_token == "t-abc"
+    assert loaded.device_token is None
     assert loaded.api_base_override is None
     assert loaded.log_level_override is None
+    migrated = _migrate_owned_state(tmp_path)
+    assert migrated.device_token == "t-abc"
+    assert migrated.api_base_override is None and migrated.log_level_override is None
 
 
 def test_unknown_keys_are_ignored(tmp_path: Path) -> None:
-    """A future agent version might add new state fields. Older agents
-    should drop them silently rather than crash."""
+    """Unknown stored fields stay out of runtime attributes and survive migration."""
     (tmp_path / "agent.json").write_text(
         json.dumps(
             {
@@ -147,7 +173,12 @@ def test_unknown_keys_are_ignored(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     loaded = load_state(tmp_path)
-    assert loaded.device_token == "t-abc"
+    assert loaded.device_token is None
+    assert not hasattr(loaded, "future_field_xyz") and not hasattr(loaded, "another_unknown")
+    migrated = _migrate_owned_state(tmp_path)
+    assert migrated.device_token == "t-abc"
+    stored = json.loads((tmp_path / "agent.json").read_bytes())
+    assert stored["future_field_xyz"] is True and stored["another_unknown"] == [1, 2, 3]
 
 
 # ---------------- Multi-folder override migration ------------------------
@@ -514,9 +545,10 @@ def test_concurrent_saves_cannot_replace_a_newer_settings_snapshot(
     stale_done = threading.Event()
     newer_done = threading.Event()
     errors = []
-    real_dump = state_module.json.dump
+    real_replace = FiniteFileStorage.replace_pointer
 
-    def controlled_dump(payload, stream, **kwargs) -> None:
+    def controlled_replace(storage, expected, encoded) -> None:
+        payload = json.loads(encoded)
         if (
             payload["obs_scene_switch_enabled"] is True
             and not stale_dump_started.is_set()
@@ -524,9 +556,9 @@ def test_concurrent_saves_cannot_replace_a_newer_settings_snapshot(
             stale_dump_started.set()
             if not release_stale_dump.wait(2.0):
                 raise TimeoutError("test did not release the stale save")
-        real_dump(payload, stream, **kwargs)
+        real_replace(storage, expected, encoded)
 
-    monkeypatch.setattr(state_module.json, "dump", controlled_dump)
+    monkeypatch.setattr(FiniteFileStorage, "replace_pointer", controlled_replace)
 
     def persist(done: threading.Event) -> None:
         try:
@@ -580,7 +612,10 @@ def test_replay_capture_is_off_for_fresh_and_existing_installs(tmp_path: Path) -
     )
     migrated = load_state(tmp_path)
     assert migrated.replay_capture_enabled is False
-    assert migrated.device_token == "paired"
+    assert migrated.device_token is None
+    assert migrated.uploaded == {"game": "done"}
+    migrated = _migrate_owned_state(tmp_path)
+    assert migrated.device_token == "paired" and migrated.replay_capture_enabled is False
     assert migrated.uploaded == {"game": "done"}
 
 
@@ -726,7 +761,8 @@ def test_windows_reader_retries_same_fsynced_atomic_snapshot(tmp_path, monkeypat
         replace(source, target)
     monkeypatch.setattr(module.os, "replace", briefly_locked)
     monkeypatch.setattr(module.time, "sleep", sleeps.append)
-    save_state(tmp_path, AgentState(device_token="new"))
+    current = load_state(tmp_path)
+    set_device(tmp_path, current, "new")
     assert load_state(tmp_path).device_token == "new"
     assert sleeps == [.01, .02]
     assert len({source for source, _ in calls}) == 1
@@ -744,8 +780,9 @@ def test_permanent_windows_replace_failure_preserves_target_and_cleans_temp(tmp_
         raise error
     monkeypatch.setattr(module.os, "replace", locked)
     monkeypatch.setattr(module.time, "sleep", lambda _: None)
-    with pytest.raises(PermissionError):
-        save_state(tmp_path, AgentState(device_token="new"))
+    current = load_state(tmp_path)
+    with pytest.raises(CredentialStorageError, match="write_failed"):
+        set_device(tmp_path, current, "new")
     assert len(calls) == 6
     assert load_state(tmp_path).device_token == "old"
     assert not list(tmp_path.glob("agent.*.tmp"))
@@ -758,7 +795,7 @@ def test_unrelated_replace_permission_error_is_not_retried(tmp_path, monkeypatch
         calls.append(args)
         raise PermissionError("read-only filesystem")
     monkeypatch.setattr(module.os, "replace", denied)
-    with pytest.raises(PermissionError):
+    with pytest.raises(CredentialStorageError, match="write_failed"):
         save_state(tmp_path, AgentState())
     assert len(calls) == 1
     assert not list(tmp_path.glob("agent.*.tmp"))

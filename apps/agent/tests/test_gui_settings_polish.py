@@ -51,10 +51,13 @@ def test_api_reset_validation_and_restart_fields(tmp_path):
         win._click_save_settings()
         wait_saved(win)
         assert "Log level, Import speed and API address change after you restart" in win._settings_status.text()
-        ui._on_save_settings = lambda payload: (_ for _ in ()).throw(ValueError("disk unavailable"))
+        ui._on_save_settings = lambda payload: (_ for _ in ()).throw(ValueError("disk unavailable https://private.example/?token=private-token C:/private/person/agent.json"))
         win._click_save_settings()
         wait_saved(win)
-        assert win._settings_status.text() == "Couldn't save settings: disk unavailable"
+        assert win._settings_status.text() == "Couldn't save settings: The settings write did not finish. Restart the app if this continues."
+        assert "disk unavailable" not in win._settings_status.text()
+        assert "private.example" not in win._settings_status.text() and "private-token" not in win._settings_status.text()
+        assert "C:/private" not in win._settings_status.text()
     ''')
 
 
@@ -82,9 +85,17 @@ def test_api_health_worker_and_changed_text_result(tmp_path):
 def test_filter_save_keeps_qt_responsive_until_real_durable_commit(tmp_path):
     run_gui_check(tmp_path,r'''
 import logging,threading
-from sc2tools_agent import runner,replay_finder
+from tests.test_agent_state_credentials import FiniteFileStorage
+from tests.test_agent_credentials import SyntheticCrypto
+from sc2tools_agent import runner,replay_finder,state as state_module
 from sc2tools_agent.config import AgentConfig
 from sc2tools_agent.state import AgentState,load_state,_STATE_SAVE_LOCK
+test_storage, test_crypto = FiniteFileStorage(base), SyntheticCrypto()
+def test_backends(directory,storage=None,crypto=None,*,create=False):
+    assert Path(directory)==base
+    if create:test_storage.ensure_state_directory()
+    return test_storage if storage is None else storage, test_crypto if crypto is None else crypto
+state_module._credential_backends=test_backends
 replay_finder.candidate_documents_dirs=lambda:iter(())
 runner.autostart.set_enabled=lambda _enabled:True
 state=AgentState(device_token="t",user_id="u1",uploaded={"old":"filtered"})
@@ -129,6 +140,11 @@ finally:
 wait_saved(win)
 assert load_state(base).sync_filter_preset=="season:67"
 assert load_state(base).uploaded=={}
+import json
+pointer=(base/"agent.json").read_bytes()
+assert "device_token" not in json.loads(pointer) and "obs_password" not in json.loads(pointer)
+assert b'"device_token":"t"' not in pointer
+assert load_state(base).device_token=="t"
 assert win._settings_status.text().startswith("Saved.")
 assert win._save_settings_btn.isEnabled()
 win.hide()

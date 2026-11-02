@@ -11,6 +11,7 @@ from sc2tools_agent import relaunch, runner
 from sc2tools_agent.config import AgentConfig
 from sc2tools_agent.relaunch import AgentRelaunch, relaunch_command
 from sc2tools_agent.state import AgentState, save_state
+from tests.test_agent_state_credentials import synthetic_state_io
 
 
 def test_frozen_runs_restart_the_exe_and_source_runs_the_module():
@@ -71,20 +72,22 @@ def test_run_agent_starts_the_new_copy_only_after_releasing_the_lock(monkeypatch
     popen = Mock(side_effect=lambda command, **options: events.append("spawned"))
     monkeypatch.setattr(runner, "_bootstrap", bootstrap)
     monkeypatch.setattr(runner, "AgentInstanceLock", lambda _path: lock)
+    monkeypatch.setattr(runner, "migrate_legacy_state", lambda _path, _guard: events.append("migrated"))
     monkeypatch.setattr(runner, "_run_locked_agent", locked)
     monkeypatch.setattr(relaunch.subprocess, "Popen", popen)
     assert runner.run_agent(["--no-live", "--start-minimized"]) == 0
-    assert events == ["agent stopped", "lock released", "spawned"]
+    assert events == ["migrated", "agent stopped", "lock released", "spawned"]
     assert popen.call_args.args[0][-1] == "--no-live" and "--start-minimized" not in popen.call_args.args[0]
     assert "SC2TOOLS_API_BASE" not in popen.call_args.kwargs["env"]
 
 
-def test_a_restarted_copy_shows_its_window_though_start_minimized_is_saved(monkeypatch, tmp_path):
+def test_a_restarted_copy_shows_its_window_though_start_minimized_is_saved(monkeypatch, tmp_path, synthetic_state_io):
     monkeypatch.setenv("SC2TOOLS_STATE_DIR", str(tmp_path))  # never the real state folder
     save_state(tmp_path, AgentState(start_minimized=True))
     restart = AgentRelaunch(["--no-live", "--start-minimized"], frozen=False)
     started = []
     monkeypatch.setattr(runner, "AgentInstanceLock", lambda _path: Mock(**{"acquire.return_value": True}))
+    monkeypatch.setattr(runner, "migrate_legacy_state", lambda _path, _guard: None)
     monkeypatch.setattr(runner, "_run_locked_agent",
                         lambda _cfg, args, _argv, **_kwargs: started.append(args.start_minimized) or 0)
     # The new copy: the relaunch command line and environment, through the real _bootstrap.

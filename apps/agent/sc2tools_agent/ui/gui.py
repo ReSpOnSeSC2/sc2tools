@@ -164,6 +164,9 @@ class SettingsPayload:
         "obs_host",
         "obs_port",
         "obs_password",
+        "obs_password_intent",
+        "obs_credential_revision",
+        "obs_credential_status",
         "obs_scene_map",
         "obs_switch_debounce_sec",
         "obs_switch_on_replays",
@@ -198,6 +201,9 @@ class SettingsPayload:
         obs_host: Optional[str] = None,
         obs_port: Optional[int] = None,
         obs_password: Optional[str] = None,
+        obs_password_intent=None,
+        obs_credential_revision=None,
+        obs_credential_status=None,
         obs_scene_map: Optional[dict] = None,
         obs_switch_debounce_sec: Optional[float] = None,
         obs_switch_on_replays: Optional[bool] = None,
@@ -255,6 +261,9 @@ class SettingsPayload:
         self.obs_host = obs_host
         self.obs_port = obs_port
         self.obs_password = obs_password
+        self.obs_password_intent = obs_password_intent
+        self.obs_credential_revision = obs_credential_revision
+        self.obs_credential_status = obs_credential_status
         # Phase -> scene name. An empty value means "don't switch for
         # this phase"; the full dict replaces whatever was stored.
         self.obs_scene_map = obs_scene_map
@@ -306,6 +315,10 @@ class GuiUI:
         on_quit: Callable[[], None],
         on_restart_agent: Optional[Callable[[], None]] = None,
         on_obs_probe: Optional[Callable[[str, int, str], dict]] = None,
+        on_obs_probe_candidate=None,
+        obs_credential_provider=None,
+        auth_epoch_guard=None,
+        initial_auth_epoch=None,
         on_obs_build: Optional[Callable[[dict], dict]] = None,
         stream_status_provider: Optional[Callable[[], dict]] = None,
         on_stream_action: Optional[Callable[[dict], dict]] = None,
@@ -415,6 +428,10 @@ class GuiUI:
         # without the OBS dependency installed leaves them None and
         # the panel degrades to "unavailable".
         self._on_obs_probe = on_obs_probe
+        self._on_obs_probe_candidate = on_obs_probe_candidate
+        self._obs_credential_provider = obs_credential_provider
+        self._auth_epoch_guard = auth_epoch_guard
+        self._initial_auth_epoch = initial_auth_epoch
         self._on_obs_build = on_obs_build
         self._stream_status_provider = stream_status_provider
         self._on_stream_action = on_stream_action
@@ -552,23 +569,67 @@ class GuiUI:
         self._dispatch("transientNotice", message)
 
     def on_pairing_state(self, state) -> None:
+        if not self._epoch_current(getattr(state, "owner_epoch", None)):
+            return
         self._dispatch("pairingState", state)
 
+    def _epoch_current(self, epoch):
+        if self._auth_epoch_guard is None:
+            return True
+        try:
+            return self._auth_epoch_guard(epoch) is True
+        except Exception:
+            return False
+
+    def _obs_credential_metadata(self):
+        if self._obs_credential_provider is None:
+            initial = self._initial_settings
+            revision = initial.obs_credential_revision
+            status = initial.obs_credential_status
+            if revision is None:
+                revision = 0
+            if status is None:
+                status = "available" if type(initial.obs_password) is str and initial.obs_password else "cleared"
+            return revision, status, False
+        try:
+            value = self._obs_credential_provider()
+            if (type(value) is tuple and len(value) == 3 and (value[0] is None or type(value[0]) is int and value[0] >= 0)
+                and type(value[1]) is str and value[1] in ("available", "cleared", "missing", "unreadable", "legacy", "retired")
+                and type(value[2]) is bool):
+                return value
+        except Exception:
+            pass
+        return None, "unreadable", False
+
     def on_unlinked(self) -> None:
+        if self._auth_epoch_guard is not None:
+            return
         with self._ui_event_lock:
             self._support_latest = None
         self._dispatch("unlinked")
+
+    def on_unlinked_current(self, epoch) -> None:
+        if self._epoch_current(epoch):
+            self._dispatch("unlinkedCurrent", epoch)
 
     def on_connection_state(self, kind, since, next_retry_at, waiting_count) -> None:
         self._dispatch("connectionState", kind, since, next_retry_at, waiting_count)
 
     def show_pairing_code(self, code: str) -> None:
+        if self._auth_epoch_guard is not None:
+            return  # Guarded showing-state carries this code and its epoch.
         self._dispatch("pairingCode", code)
 
     def on_paired(self, user_id: str) -> None:
+        if self._auth_epoch_guard is not None:
+            return
         with self._ui_event_lock:
             self._support_latest = None
         self._dispatch("paired", user_id)
+
+    def on_paired_current(self, user_id, epoch) -> None:
+        if type(user_id) is str and self._epoch_current(epoch):
+            self._dispatch("pairedCurrent", user_id, epoch)
 
     def on_status(self, status: str) -> None:
         self._dispatch("status", status)
@@ -583,7 +644,13 @@ class GuiUI:
         self._dispatch("recentSnapshot", snapshot)
 
     def on_import_progress(self, snapshot) -> None:
+        if self._auth_epoch_guard is not None:
+            return
         self._dispatch("importProgress", snapshot)
+
+    def on_import_progress_current(self, snapshot, epoch) -> None:
+        if self._epoch_current(epoch):
+            self._dispatch("importProgressCurrent", snapshot, epoch)
 
     def on_upload_failed(self, filename: str, reason: str) -> None:
         self._dispatch("uploadFailed", filename, reason)
@@ -776,14 +843,17 @@ def _make_signals():
         checkUpdatesRequested = QtCore.Signal()
         pairingState = QtCore.Signal(object)
         unlinked = QtCore.Signal()
+        unlinkedCurrent = QtCore.Signal(object)
         connectionState = QtCore.Signal(str, float, float, int)
         pairingCode = QtCore.Signal(str)
         paired = QtCore.Signal(str)
+        pairedCurrent = QtCore.Signal(str, object)
         status = QtCore.Signal(str)
         uploadSuccess = QtCore.Signal(str)
         gameSynced = QtCore.Signal(str, object)
         recentSnapshot = QtCore.Signal(object)
         importProgress = QtCore.Signal(object)
+        importProgressCurrent = QtCore.Signal(object, object)
         uploadFailed = QtCore.Signal(str, object)
         pendingChanged = QtCore.Signal(int)
         updateAvailable = QtCore.Signal(str)
@@ -1037,6 +1107,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._boot_detail = ""
             self._analyzer_diag = ""
             self._paired = ui._initial_paired
+            self._visible_auth_epoch = ui._initial_auth_epoch
             self._window_information_layout = ui._window_information_layout
             self._user_id = ui._initial_user_id
             self._uploaded_count = 0 if ui._recent_games_enabled else self._query_synced_count(default=0)
@@ -2349,8 +2420,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._obs_host_input.setText(str(initial.obs_host))
             if initial.obs_port:
                 self._obs_port_input.setValue(int(initial.obs_port))
-            if initial.obs_password:
-                self._obs_password_input.setText(str(initial.obs_password))
+            # Saved credentials stay in the private runtime, never in a widget.
+            self._obs_password_input.clear()
+            self._obs_password_operation = "keep"
+            self._obs_edit_revision = None
+            self._obs_form_serial = 0
+            self._obs_job = None
+            self._refresh_obs_credential_status()
             if initial.obs_switch_debounce_sec is not None:
                 self._obs_debounce_spin.setValue(
                     float(initial.obs_switch_debounce_sec),
@@ -2482,6 +2558,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "from OBS → Tools → WebSocket Server Settings",
             )
             conn.addRow("Password", self._obs_password_input)
+            self._obs_password_input.textEdited.connect(self._on_obs_password_edited)
+            self._obs_clear_password = QtWidgets.QCheckBox("Remove saved password")
+            self._obs_clear_password.toggled.connect(self._on_obs_clear_password)
+            conn.addRow("", self._obs_clear_password)
+            self._obs_credential_status = QtWidgets.QLabel("")
+            self._obs_credential_status.setWordWrap(True)
+            self._obs_credential_status.setObjectName("muted")
+            conn.addRow("Saved password", self._obs_credential_status)
+            self._obs_host_input.textEdited.connect(self._obs_connection_edited)
+            self._obs_port_input.valueChanged.connect(self._obs_connection_edited)
             outer.addLayout(conn)
 
             btns = QtWidgets.QHBoxLayout()
@@ -2581,46 +2667,111 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._obs_password_input.text(),
             )
 
-        def _run_obs_job(self, kind: str, fn) -> None:
+        def _refresh_obs_credential_status(self):
+            _revision, status, override = ui._obs_credential_metadata()
+            text = {"available": "Saved securely for this Windows user.",
+                "cleared": "No saved password.", "missing": "No saved password.",
+                "unreadable": "Saved password is unavailable. Re-enter it or explicitly remove it.",
+                "legacy": "Secure storage is unavailable. Restart the app.",
+                "retired": "Saved password is unavailable."}.get(status, "Saved password is unavailable.")
+            if override:
+                text += " An environment password overrides the saved value for this run."
+            self._obs_credential_status.setText(text)
+
+        def _obs_connection_edited(self, *_args):
+            self._obs_form_serial = getattr(self, "_obs_form_serial", 0) + 1
+            self._obs_build_btn.setEnabled(False)
+
+        def _on_obs_password_edited(self, _text):
+            self._obs_edit_revision = ui._obs_credential_metadata()[0]
+            self._obs_password_operation = "set" if self._obs_password_input.text() else "clear"
+            self._obs_clear_password.blockSignals(True)
+            self._obs_clear_password.setChecked(self._obs_password_operation == "clear")
+            self._obs_clear_password.blockSignals(False)
+            self._obs_connection_edited()
+
+        def _on_obs_clear_password(self, checked):
+            self._obs_edit_revision = ui._obs_credential_metadata()[0]
+            self._obs_password_operation = "clear" if checked else "keep"
+            self._obs_password_input.clear()
+            self._obs_connection_edited()
+
+        def _obs_candidate(self):
+            operation = self._obs_password_operation
+            revision = self._obs_edit_revision if operation != "keep" else ui._obs_credential_metadata()[0]
+            return operation, revision, self._obs_password_input.text() if operation == "set" else None
+
+        def _obs_form_current(self, revision, serial, epoch=None):
+            return (revision is not None and ui._obs_credential_metadata()[0] == revision
+                and self._obs_form_serial == serial and (epoch is None or ui._epoch_current(epoch)))
+
+        def _run_obs_job(self, kind: str, fn, *, revision=None, serial=None, epoch=None) -> None:
             """Run a blocking OBS round-trip off the GUI thread.
 
             A connect attempt can sit for several seconds; doing it
             inline would freeze the window and look like a crash.
             """
+            if self._obs_job is not None:
+                return  # Cancellation/edits never admit a second live worker.
+            nonce = object()
+            revision = ui._obs_credential_metadata()[0] if revision is None else revision
+            serial = self._obs_form_serial if serial is None else serial
+            self._obs_job = (nonce, revision, serial, epoch)
             self._obs_test_btn.setEnabled(False)
             self._obs_build_btn.setEnabled(False)
+            started = threading.Event()
 
             def _worker() -> None:
+                started.set()
                 try:
-                    result = fn()
-                except Exception as exc:  # noqa: BLE001
-                    result = {"ok": False, "message": str(exc)}
-                result = dict(result or {})
+                    result = dict(fn() or {})
+                except Exception:  # noqa: BLE001
+                    result = {"ok": False, "message": "The OBS operation could not finish. Check its connection settings and try again."}
                 result["kind"] = kind
+                result["_job_nonce"] = nonce
                 signals.obsProbeDone.emit(result)
 
-            threading.Thread(
-                target=_worker, name=f"sc2tools-obs-{kind}", daemon=True,
-            ).start()
+            try:
+                worker = threading.Thread(target=_worker, name=f"sc2tools-obs-{kind}", daemon=True)
+                worker.start()
+            except Exception:
+                if not started.is_set() and ("worker" not in locals() or worker.ident is None):
+                    if self._obs_job is not None and self._obs_job[0] is nonce:
+                        self._obs_job = None
+                        self._obs_test_btn.setEnabled(True)
+                        self._obs_status.setText("The OBS operation could not start. Try again.")
+                # An entered worker retains the reservation until queued settlement.
 
         def _click_obs_test(self) -> None:
-            if ui._on_obs_probe is None:
+            if self._obs_job is not None:
+                return
+            if ui._on_obs_probe is None and ui._on_obs_probe_candidate is None:
                 self._obs_status.setText(
                     "OBS support unavailable in this build.",
                 )
                 return
             host, port, password = self._obs_conn_fields()
+            operation, revision, password = self._obs_candidate()
+            serial = self._obs_form_serial
+            if not self._obs_form_current(revision, serial):
+                self._obs_status.setText("Saved credentials changed. Re-enter the password and try again.")
+                return
             self._obs_status.setText("Connecting…")
+            callback = (lambda: ui._on_obs_probe_candidate(host, port, password, operation, revision)) if ui._on_obs_probe_candidate else (lambda: ui._on_obs_probe(host, port, password or ""))
             self._run_obs_job(
-                "probe", lambda: ui._on_obs_probe(host, port, password),
+                "probe", callback, revision=revision, serial=serial,
             )
 
         def _click_obs_build(self) -> None:
-            if ui._on_obs_build is None:
+            if ui._on_obs_build is None or self._obs_job is not None:
                 return
             webcam = self._obs_sources.get("webcam", [])
             game = self._obs_sources.get("game", [])
             host, port, password = self._obs_conn_fields()
+            operation, revision, password = self._obs_candidate()
+            serial, epoch = self._obs_form_serial, self._visible_auth_epoch
+            if not self._obs_form_current(revision, serial, epoch) or (ui._auth_epoch_guard is not None and epoch is None):
+                return
 
             confirm = _ObsBuildDialog(
                 parent=self,
@@ -2631,10 +2782,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             if not confirm.exec():
                 return
+            if not self._obs_form_current(revision, serial, epoch):
+                self._obs_status.setText("Settings changed while the dialog was open. Test the connection again.")
+                return
             request = {
                 "host": host,
                 "port": port,
                 "password": password,
+                "password_intent": operation,
+                "credential_revision": revision,
+                "owner_epoch": epoch,
                 "webcam_source": confirm.webcam(),
                 "game_source": confirm.game(),
                 "rebuild": confirm.rebuild(),
@@ -2651,9 +2808,22 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 if self._obs_needs_manual_update
                 else "Building scenes…"
             )
-            self._run_obs_job("build", lambda: ui._on_obs_build(request))
+            self._run_obs_job("build", lambda: ui._on_obs_build(request), revision=revision, serial=serial, epoch=epoch)
 
         def _on_obs_probe_done(self, result: dict) -> None:
+            nonce = result.get("_job_nonce")
+            if nonce is not None:
+                job = self._obs_job
+                if job is None or job[0] is not nonce:
+                    return
+                self._obs_job = None  # Only settlement releases the reservation.
+                self._obs_test_btn.setEnabled(True)
+                if not self._obs_form_current(job[1], job[2], job[3]):
+                    self._obs_build_btn.setEnabled(False)
+                    self._obs_status.setText("Settings changed. Test the connection again.")
+                    return
+            elif ui._obs_credential_provider is not None:
+                return
             self._obs_test_btn.setEnabled(True)
             ok = bool(result.get("ok"))
             self._obs_status.setText(str(result.get("message") or ""))
@@ -2760,16 +2930,19 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             signals.chooseFolderRequested.connect(self._click_choose_folder)
             signals.resyncRequested.connect(self._click_archive_resync)
             signals.checkUpdatesRequested.connect(self._click_check_updates)
-            signals.pairingState.connect(self._on_pairing_state)
+            signals.pairingState.connect(self._on_pairing_state, QtCore.Qt.QueuedConnection)
             signals.unlinked.connect(self._on_unlinked)
+            signals.unlinkedCurrent.connect(self._on_unlinked_current, QtCore.Qt.QueuedConnection)
             signals.connectionState.connect(self._on_connection_state)
             signals.pairingCode.connect(self._on_pairing_code)
             signals.paired.connect(self._on_paired)
+            signals.pairedCurrent.connect(self._on_paired_current, QtCore.Qt.QueuedConnection)
             signals.status.connect(self._on_status)
             signals.uploadSuccess.connect(self._on_upload_success)
             signals.gameSynced.connect(self._on_game_synced)
             signals.recentSnapshot.connect(self._on_recent_snapshot)
             signals.importProgress.connect(self._on_import_progress)
+            signals.importProgressCurrent.connect(self._on_import_progress_current, QtCore.Qt.QueuedConnection)
             signals.uploadFailed.connect(self._on_upload_failed)
             signals.pendingChanged.connect(self._on_pending_changed)
             signals.updateAvailable.connect(self._on_update_available)
@@ -2802,7 +2975,31 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._companion_page.dispatch_build_checkin(method, args)
 
         def _on_pairing_state(self, state):
+            if not ui._epoch_current(getattr(state, "owner_epoch", None)):
+                return
             self._pairing_card.apply(state)
+            self._accept_auth_epoch(getattr(state, "owner_epoch", None))
+            if state.kind in ("requesting", "showing"):
+                self._paired = False
+                self._refresh_controls()
+            if state.kind == "showing":
+                self._pairing_code_label.setText(state.code)
+
+        def _accept_auth_epoch(self, epoch):
+            if self._visible_auth_epoch is not epoch:
+                self._visible_auth_epoch = epoch
+                self._import_progress = {"phase": "idle"}
+                self._request_stats_refresh()
+
+        def _on_unlinked_current(self, epoch):
+            if ui._epoch_current(epoch):
+                self._accept_auth_epoch(epoch)
+                self._on_unlinked()
+
+        def _on_paired_current(self, user_id, epoch):
+            if ui._epoch_current(epoch):
+                self._accept_auth_epoch(epoch)
+                self._on_paired(user_id)
 
         def _on_unlinked(self):
             self._help_page.clear()
@@ -2817,6 +3014,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._go_to_page("dashboard")
 
         def _on_pairing_code(self, code: str) -> None:
+            if ui._auth_epoch_guard is not None:
+                return
             self._paired = False
             self._status = f"Awaiting pairing — code {code}"
             self._pairing_code_label.setText(code)
@@ -2905,6 +3104,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _on_import_progress(self, snapshot):
             self._import_progress = snapshot
             self._request_stats_refresh()
+
+        def _on_import_progress_current(self, snapshot, epoch):
+            if ui._epoch_current(epoch):
+                self._accept_auth_epoch(epoch)
+                self._on_import_progress(snapshot)
 
         def _show_recent_problems(self):
             self._go_to_page("recent")
@@ -3660,6 +3864,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if checked_upload_conc <= 0:
                 checked_upload_conc = self._upload_conc_last_saved
             handle_origin = self._handle_edit_origin
+            obs_operation, obs_revision, obs_password = self._obs_candidate()
+            if obs_operation != "keep" and not self._obs_form_current(obs_revision, self._obs_form_serial):
+                self._show_settings_toast("Saved OBS credentials changed. Re-enter the password before saving.", "error")
+                return
             payload = SettingsPayload(
                 player_handle_origin=handle_origin,
                 background_import_speed=self._speed_combo.currentData(),
@@ -3689,7 +3897,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 obs_scene_switch_enabled=self._obs_enable_check.isChecked(),
                 obs_host=self._obs_host_input.text().strip() or "127.0.0.1",
                 obs_port=int(self._obs_port_input.value()),
-                obs_password=self._obs_password_input.text(),
+                obs_password=obs_password,
+                obs_password_intent=obs_operation,
+                obs_credential_revision=obs_revision,
                 obs_scene_map=self._obs_scene_map_from_form(),
                 obs_switch_debounce_sec=float(
                     self._obs_debounce_spin.value(),
@@ -3714,9 +3924,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 error = None
                 try:
                     ui._on_save_settings(payload)
-                except Exception as exc:  # noqa: BLE001
-                    log.exception("gui_save_settings_failed")
-                    error = str(exc) or type(exc).__name__
+                except Exception:  # noqa: BLE001
+                    log.warning("gui_save_settings_unavailable")
+                    error = "The settings write did not finish. Restart the app if this continues."
                 try:
                     signals.settingsSaveDone.emit(context, error)
                 except RuntimeError:
@@ -3740,6 +3950,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._folders_dirty = context["dirty"]
                 self._show_settings_toast(f"Couldn't save settings: {error}", "error")
             else:
+                self._obs_password_input.clear()
+                self._obs_clear_password.blockSignals(True)
+                self._obs_clear_password.setChecked(False)
+                self._obs_clear_password.blockSignals(False)
+                self._obs_password_operation = "keep"
+                self._obs_edit_revision = None
+                self._obs_connection_edited()
+                self._refresh_obs_credential_status()
                 self._saved_api_base = context["api_base"]
                 self._handle_input.setModified(False)
                 preset = context["preset"]

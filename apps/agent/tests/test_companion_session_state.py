@@ -6,7 +6,9 @@ import json
 import pytest
 
 from sc2tools_agent import runner
-from sc2tools_agent.state import AgentState, load_state, save_state
+from sc2tools_agent.state import AgentState, load_state, save_state, migrate_legacy_state, credential_status
+from sc2tools_agent.instance_lock import AgentInstanceLock
+from .test_agent_state_credentials import synthetic_state_io
 
 
 def test_session_panel_defaults_off_and_roundtrip_preserves_existing_state(tmp_path):
@@ -23,12 +25,30 @@ def test_session_panel_defaults_off_and_roundtrip_preserves_existing_state(tmp_p
 
 
 @pytest.mark.parametrize("value", [None, 0, 1, "true", "false", [], {}])
-def test_session_preference_requires_a_real_boolean(tmp_path, value):
-    (tmp_path / "agent.json").write_text(json.dumps({"companion_session_enabled": value}), encoding="utf-8")
-    assert load_state(tmp_path).companion_session_enabled is False
-    state = AgentState(companion_session_enabled=value)
+def test_session_preference_requires_a_real_boolean(tmp_path, value, synthetic_state_io):
+    target = tmp_path / "agent.json"
+    target.write_text(json.dumps({"companion_session_enabled": value}), encoding="utf-8")
+    original = target.read_bytes()
+    loaded = load_state(tmp_path)
+    assert loaded.companion_session_enabled is False
+    assert loaded.device_token is None and loaded.obs_password is None
+    assert credential_status(loaded, "device") == "legacy" and target.read_bytes() == original
+    guard = AgentInstanceLock(tmp_path)
+    assert guard.acquire()
+    try:
+        state = migrate_legacy_state(tmp_path, guard)
+    finally:
+        guard.release()
+    assert state.companion_session_enabled is False
+    state.companion_session_enabled = value
     save_state(tmp_path, state)
     assert json.loads((tmp_path / "agent.json").read_text(encoding="utf-8"))["companion_session_enabled"] is False
+    assert state.companion_session_enabled is value
+    document = json.loads(target.read_bytes())
+    assert "device_token" not in document and "obs_password" not in document
+    reloaded = load_state(tmp_path)
+    assert reloaded.companion_session_enabled is False
+    assert credential_status(reloaded, "device") == credential_status(reloaded, "obs") == "cleared"
 
 
 @pytest.mark.parametrize("error", [OSError("read-only state"), RuntimeError("serialization failed")])

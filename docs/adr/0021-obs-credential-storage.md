@@ -1,106 +1,88 @@
-# ADR 0021 — The obs-websocket password lives in agent.json
+# ADR 0021 — Windows CurrentUser storage for agent credentials
 
-Status: Accepted
-Date: 2026-08-02
+Status: Supersedes the plaintext decision of 2026-08-02; source integration for item 77C
+Date: 2026-11-02
 Owner: desktop agent
-
-## Context
-
-Automatic OBS scene switching
-([docs/obs-auto-scene-switching.md](../obs-auto-scene-switching.md))
-needs the obs-websocket server password. That is a credential, and
-[ADR 0013](0013-two-config-files.md) has an explicit rule about
-credentials:
-
-> **Is it a credential (token, password)?** -> `.env`. Never JSON.
-
-We are not following that rule here. This ADR records why, so the
-divergence is a decision rather than an oversight someone "fixes" later
-and breaks setup for every non-technical user.
-
-## The problem with `.env` for this field
-
-ADR 0013 was written about the **legacy** self-hosted product
-(`reveal-sc2-opponent-main` + `stream-overlay-backend`). That product
-was started from a terminal by a user who already had a `.env` open.
-
-The cloud agent is not that. It is a Windows `.exe` installed by an
-NSIS installer, launched from the Start menu, and configured entirely
-through a PySide6 Settings tab. Its users are streamers, not
-developers. Telling them to locate an install directory, create a
-dotfile, and restart the agent — to enable a feature whose entire
-selling point is that it removes manual work — is not a real option.
-
-Every credential-shaped field the cloud agent already has is on the
-same footing, and the precedent is already set in the opposite
-direction: `AgentState.device_token` is a **live bearer token** that
-authenticates every upload to the cloud API, and it has been stored in
-`%LOCALAPPDATA%\sc2tools\agent.json` since the agent shipped. Putting
-`obs_password` anywhere else would be inconsistent without being safer.
-
-## What the password actually protects
-
-Worth being concrete about the blast radius, because it is small:
-
-* It authenticates to a **localhost** (or LAN) service on the user's
-  own machine.
-* obs-websocket's capability surface is "control OBS": switch scenes,
-  start/stop the stream, move sources. Unpleasant, not catastrophic.
-* An attacker who can read `agent.json` already has read access to the
-  user's `%LOCALAPPDATA%`, which means they already have the device
-  token — a *cloud* credential that is strictly more valuable — plus
-  every replay on the machine.
-
-There is no threat model in which the OBS password is the weakest link
-in that directory.
 
 ## Decision
 
-Store `obs_password` in `AgentState`, alongside `device_token`, in
-`%LOCALAPPDATA%\sc2tools\agent.json`.
+The desktop agent protects its device token and saved obs-websocket password
+with Windows CurrentUser DPAPI. It keeps immutable encrypted generations in
+`credentials-v1` beside `agent.json`. The state document contains versioned
+references and independent slot revisions, together with the existing nonsecret
+settings and upload history. It contains neither plaintext credential. OAuth
+credentials retain their existing secret-store format and API.
 
-Required mitigations, all implemented:
+The earlier decision stored both secrets in `agent.json` for a GUI-configured
+Windows installation. Both now move together. There is no plaintext, keyring,
+or obfuscation fallback when native storage or decryption is unavailable.
 
-1. **Sentry redaction.** `crash_reporter._is_pii_key` gained
-   `password` / `passwd` / `secret` fragments. The fragment is
-   deliberately broad so it catches `obs_password` and anything a
-   future subsystem names similarly without needing another entry.
-2. **Never logged.** The connection log line carries host and port
-   only. `obs_connect_failed ... reason=auth_failed` says a password
-   was rejected, never which one.
-3. **Env override for anyone who wants it.**
-   `SC2TOOLS_OBS_PASSWORD` takes precedence over the state file, so a
-   power user (or a shared/kiosk machine) can keep it out of JSON
-   entirely.
-4. **Masked in the UI.** The Settings field uses
-   `QLineEdit.Password` echo mode.
+## Transaction and startup order
 
-## Alternatives considered
+Ordinary state loading is read-only. It does not create directories, migrate
+legacy fields, select an orphan generation, or replace an unreadable selected
+value with a default. Missing, explicitly cleared and unreadable slots are
+distinct private statuses.
 
-**Windows Credential Manager via `keyring`.** Genuinely more secure at
-rest, and the right answer if the credential were more valuable. Costs
-a new dependency plus its PyInstaller hidden-imports and backend
-plumbing, for a localhost service password sitting in the same
-directory as a cloud bearer token. Not proportionate. Revisit if the
-agent ever stores something that actually warrants OS-level protection
-— at which point `device_token` should move first.
+Normal startup acquires the actual matching `AgentInstanceLock`, then explicitly
+migrates legacy state before constructing any API, pairing, streaming, support
+or GUI consumer. Migration encrypts and verifies both legacy secrets before
+replacing the complete state document last. A failure before publication leaves
+the original bytes intact and prevents consumer startup. Failure messages use
+fixed text without native exceptions, credential values or paths.
 
-**Obfuscating the value in JSON.** Rejected outright. Reversible
-encoding with the key in the same binary is security theatre; it makes
-the file harder to support without making it harder to read.
+All state writers retain the existing reentrant serialization. A credential
+change declares KEEP, SET or CLEAR and supplies its captured slot revision.
+Device changes also supply the current owner epoch and exact candidate owner
+metadata. KEEP preserves the selected reference even if decryption failed;
+CLEAR selects null without decrypting the old value. Generation writes are
+exclusive, complete, flushed and verified. Pointer replacement checks the exact
+previous full document and physical store identity. A definite retry reuses
+its prepared ciphertext. An uncertain replacement is reread; an indeterminate
+outcome blocks ordinary writes instead of rolling back a potentially committed
+choice. No automatic orphan deletion is part of this change.
 
-**Not storing it — prompt each launch.** Defeats the point of an agent
-that runs minimised from login.
+Only a known commit publishes the candidate to the shared state. API/socket
+activation and OBS reconfiguration follow outside state and queue locks. A
+later reconnect failure cannot undo or misreport the committed choice. Runtime
+owner epochs and retained authenticated clients retire monotonically, including
+when a revoked device token could not be durably cleared. In that case the
+current run stops using it, while a restart is not promised to be unlinked.
 
-## Consequences
+## OBS settings and environment precedence
 
-* ADR 0013's "never JSON" rule now has one documented exception, scoped
-  to the cloud agent's own state file. It still holds for the legacy
-  product's config files, which is what it was written about.
-* Anyone adding a *new* credential to the agent should read this ADR
-  and the blast-radius argument above, not just copy the precedent. A
-  credential that reaches beyond the user's own machine deserves the
-  `keyring` conversation.
-* If `device_token` ever moves to OS-level storage, `obs_password`
-  should move with it — the argument here is explicitly "no worse than
-  the token next to it."
+The saved password never prefills a widget. An untouched field means KEEP;
+typing a replacement means SET; “Remove saved password” means CLEAR. Dirty
+forms retain their captured OBS revision and reject a stale save. The OBS slot
+belongs to this installation, so a cloud relink does not rewrite it.
+
+`SC2TOOLS_OBS_PASSWORD` remains an effective runtime override. It is never
+migrated or saved, and an explicit saved CLEAR does not remove that environment
+override. An unreadable saved slot without an override cannot silently connect
+without authentication. A known cleared or first-run missing slot can use an
+explicitly configured unauthenticated local OBS server.
+
+Test connection uses a disposable candidate client. It does not save settings
+or reconfigure the shared client. Its original revision is checked around OBS
+operations and at queued GUI delivery. Scene-build confirmation also retains
+the captured account epoch, so a modal dialog cannot approve a newer account.
+
+## Backup, recovery and downgrade
+
+A consistent backup requires `agent.json` and its selected files under
+`credentials-v1` together, after the agent has stopped. Copying a state document
+alone loses its encrypted values; copying an encrypted file alone does not
+select it. DPAPI recovery requires the same Windows user protection context;
+these files are not a portable credential export. Nonsecret replay files and
+upload history keep their existing format.
+
+If a selected OBS password cannot be decrypted, re-enter it or explicitly remove
+it in Settings. Device recovery uses Link again. Unreadable references remain
+preserved until an explicit current transaction replaces or clears them.
+
+An older binary cannot use the new encrypted selection. It may treat the app as
+unpaired and write plaintext on a new pairing, or replace newer state metadata.
+Do not run it concurrently. Stop the agent and retain a complete matching backup
+before a deliberate downgrade; relinking alone does not make an old binary
+understand the encrypted format. Signed native packaging, installed upgrade and
+downgrade acceptance remain separate owner-run release checks.
