@@ -185,6 +185,7 @@ describe("Devices line", () => {
     expect(deviceSyncSummary({ syncReportedAt: ago(5 * 60_000), sync: { pending: 4, lastErrorCode: "x" } }, now)).toMatchObject({ stale: false, tone: "error" });
     expect(deviceSyncSummary({ syncReportedAt: ago(5 * 60_000 + 1), sync: { pending: 4, lastErrorCode: "x" } }, now)).toMatchObject({ stale: true, tone: "info", label: "Uploads are failing" });
     expect(deviceSyncSummary({ sync: { pending: 1 } }, now)).toMatchObject({ stale: true });
+    expect(deviceSyncSummary({ syncReportedAt: ago(-1), sync: { pending: 1 } }, now)).toMatchObject({ stale: true, tone: "info" });
   });
 });
 

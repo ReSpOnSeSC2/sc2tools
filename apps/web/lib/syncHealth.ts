@@ -342,7 +342,8 @@ export function deviceSyncSummary(device: { sync?: SyncReport | null; syncReport
     skipped > 0 ? `${skipped.toLocaleString("en-US")} skipped` : "",
     countOf(sync.filtered) > 0 ? `${countOf(sync.filtered).toLocaleString("en-US")} outside sync range` : "",
   ].filter(Boolean);
-  const stale = !(now - Date.parse(device.syncReportedAt ?? "") <= SYNC_REPORT_FRESH_MS);
+  const age = now - Date.parse(device.syncReportedAt ?? "");
+  const stale = !(age >= 0 && age <= SYNC_REPORT_FRESH_MS);
   return { tone: stale ? "info" : worst?.tone ?? "ok", label: worst?.title ?? "Syncing", details,
     ...(sync.lastUploadAt ? { lastUploadAt: sync.lastUploadAt } : {}),
     ...(device.syncReportedAt ? { reportedAt: device.syncReportedAt } : {}), stale };

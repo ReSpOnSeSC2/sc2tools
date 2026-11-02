@@ -53,6 +53,7 @@ export function SyncHealthCard() {
       names={item.code === "replays_skipped_unresolved" ? unresolvedNamesFor(data, item.deviceId) : undefined}
       onReport={() => setReporting(true)} />)}</ul> : null}
     <OtherSkippedReplays data={data} />
+    {health.error ? <p role="alert" className="mt-3 text-caption text-danger">Couldn&apos;t refresh sync health. The last check is still shown; press Check again to retry.</p> : null}
     <div className="mt-3 flex flex-wrap items-center gap-3">
       <Button variant="ghost" size="sm" loading={health.isValidating} onClick={() => { void health.mutate(); }}>Check again</Button>
       <span className="text-caption text-text-muted">Checked {fmtAgo(data.checkedAt)}</span>

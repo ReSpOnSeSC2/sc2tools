@@ -23,6 +23,8 @@ export function SyncHealthSummary({ onNavigate }: { onNavigate: () => void }) {
   const items = syncHealthItems(health.data);
   const status = syncHealthStatus(health.data, items);
   return <div className="space-y-1">
+    {health.error ? <p role="alert" className="text-text-muted">Couldn&apos;t refresh sync health. These are the last checked details.{" "}
+      <Button variant="ghost" size="sm" onClick={() => { void health.mutate(); }}>Retry</Button></p> : null}
     <p className="font-semibold">Sync health: {status.title}</p>
     {status.sentence ? <p className="text-text-muted">{status.sentence}</p> : null}
     {items.length ? <ul className="space-y-1">{items.slice(0, SHOWN).map((item) => <li key={item.key} className="flex items-start gap-2">

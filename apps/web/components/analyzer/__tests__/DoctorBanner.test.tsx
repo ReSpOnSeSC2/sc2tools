@@ -55,6 +55,9 @@ describe("DoctorBanner replay archive prompt", () => {
       warnings: [{ id: "replay_archive_incomplete" }],
     })).toBe(30_000);
     expect(options.refreshInterval({ warnings: [] })).toBe(0);
+    expect(options.refreshInterval({ warnings: [{ id: "agent_upload_failing" }] })).toBe(30_000);
+    expect(options.refreshInterval({ warnings: [{ id: "agent_paused" }] })).toBe(30_000);
+    expect(options.refreshInterval({ warnings: [{ id: "no_profile" }] })).toBe(0);
   });
 
   it("stays out of the way after the archive is complete", () => {

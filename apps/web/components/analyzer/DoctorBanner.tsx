@@ -8,7 +8,7 @@ import {
   inactiveAgentMessage,
 } from "@/lib/agentNotice";
 import { useApi } from "@/lib/clientApi";
-import { doctorHelp } from "@/lib/syncHealth";
+import { doctorHelp, isSyncHealthCode } from "@/lib/syncHealth";
 
 export type DoctorResp = {
   ok: boolean;
@@ -37,13 +37,12 @@ export function DoctorBanner() {
 
 /** Shared SWR key for the dashboard warning and Settings setup overview. */
 export function useDoctor() {
-  // A full re-sync can begin while this page is open. Poll lightly so the
-  // one-time notice disappears after the latest agent acknowledges that the
-  // all-time scan started, without requiring a dashboard refresh.
+  // Refresh while a fixable warning is visible, so a desktop action clears
+  // it without requiring a dashboard reload. Healthy pages do not poll.
   return useApi<DoctorResp>("/v1/me/doctor", {
     refreshInterval: (latest) =>
       latest?.warnings?.some(
-        (warning) => warning.id === "replay_archive_incomplete",
+        (warning) => warning.id === "replay_archive_incomplete" || isSyncHealthCode(warning.id),
       )
         ? 30_000
         : 0,
