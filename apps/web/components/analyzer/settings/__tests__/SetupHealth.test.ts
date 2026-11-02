@@ -31,6 +31,23 @@ describe("setup health from independent sources", () => {
     expect(rows.find((row) => row.id === "archive")?.message).toBe("Re-sync your files");
     expect(rows.find((row) => row.id === "future_check")?.cta?.label).toBe("Repair");
   });
+  it("titles the Sync health warnings and points each at its own help section", () => {
+    const input = sources();
+    const rows = setupHealthRows({ ...input, doctor: { mutate: vi.fn(), data: { ok: false, warnings: [
+      { id: "agent_upload_failing", severity: "error", message: "The desktop app can't upload 4 games.", helpSlug: "desktop-app-status" },
+      { id: "agent_paused", severity: "info", message: "Syncing is paused in the desktop app.", helpSlug: "desktop-app-status" },
+      { id: "replays_skipped_unresolved", severity: "warn", message: "7 replays were skipped.", cta: { label: "Set up profile", href: "/settings?tab=profile" }, helpSlug: "my-game-didnt-show-up" },
+      { id: "future_check", severity: "warn", message: "Future issue", helpSlug: "setup-health" },
+      { id: "plain_check", severity: "warn", message: "Plain issue" },
+    ] } } });
+    expect(rows.find((row) => row.id === "agent_upload_failing")).toMatchObject({ title: "Uploads are failing", tone: "warn", help: { slug: "my-game-didnt-show-up", anchor: "sync-upload-failing" } });
+    expect(rows.find((row) => row.id === "agent_paused")).toMatchObject({ title: "Syncing is paused", tone: "info", help: { anchor: "sync-paused" } });
+    expect(rows.find((row) => row.id === "replays_skipped_unresolved")).toMatchObject({ title: "Player not recognized", cta: { href: "/settings?tab=profile" }, help: { anchor: "sync-player-unresolved" } });
+    expect(rows.find((row) => row.id === "future_check")).toMatchObject({ title: "Setup check", help: { slug: "setup-health" } });
+    expect(rows.find((row) => row.id === "future_check")?.help?.anchor).toBeUndefined();
+    expect(rows.find((row) => row.id === "plain_check")).toMatchObject({ title: "Setup check" });
+    expect(rows.find((row) => row.id === "plain_check")?.help).toBeUndefined();
+  });
   it("contains failures to their sources and treats optional streaming honestly", () => {
     const input = sources();
     const rows = setupHealthRows({ ...input, release: { ...input.release, error: new Error("offline") } });

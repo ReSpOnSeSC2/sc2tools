@@ -32,6 +32,7 @@ beforeEach(() => {
   fixture.data = {
     "/v1/me": { userId: "synthetic-owner", email: "fixture@example.invalid", agentPaired: false, games: { total: 0, latest: null }, onboarding: { goals: ["play"] } },
     "/v1/me/doctor": { warnings: [] },
+    "/v1/me/sync-health": { checkedAt: "2026-10-26T12:00:00.000Z", reported: false, rows: [], devices: [], rejections: null },
     "/v1/me/backups": { items: [] },
     "/v1/me/replay-archive-status": { enabled: false, totalGames: 0, archivedGames: 0, missingGames: 0, archiveComplete: true, backfillVersion: 0, resyncRequestedAt: null, requiresResync: false },
     "/v1/games/hidden": { items: [], nextCursor: null },
@@ -54,7 +55,7 @@ function expectTargets(ids: readonly string[]) {
 }
 
 describe("actual Settings section owners", () => {
-  it("renders Account's native setup health and two summary Sections exactly once", () => {
+  it("renders Account's native setup health, the Sync health shell and two summary Sections exactly once", () => {
     mount(<SettingsFoundation />); expectTargets(SETTINGS_SECTIONS.account.map(section => section.id));
     const list = document.querySelector("#account-summary dl");
     expect(list).not.toBeNull();

@@ -56,6 +56,35 @@ describe("Devices page cards", () => {
     expect(screen.getByText("Online")).toBeTruthy();
   });
 
+  it("shows each PC's own sync report as counts and state, and nothing for a PC that never reported", () => {
+    const reportedAt = new Date().toISOString();
+    h.data.items = [
+      device({ hostname: "GAMING-PC", syncReportedAt: reportedAt, sync: { pending: 4, lastErrorCode: "network_timeout", foldersWatched: 2, filtered: 12,
+        skipped: { player_unresolved: 3, ai_game: 2 }, unresolvedNames: [{ name: "RivalName", toonHandle: "1-S2-1-424242", count: 3 }] } }),
+      device({ deviceId: "device-2", hostname: "LAPTOP", syncReportedAt: reportedAt, sync: { pending: 0, foldersWatched: 1, lastUploadAt: new Date(Date.now() - 5 * 60_000).toISOString() } }),
+      device({ deviceId: "device-3", hostname: "OLD-PC" }),
+    ];
+    render(<DevicesPanel />);
+    const card = (name: string) => within(screen.getByRole("heading", { name }).closest("section")!);
+    expect(card("GAMING-PC").getByText("Uploads are failing").className).toContain("text-danger");
+    expect(card("GAMING-PC").getByText("2 folders · 4 waiting · 5 skipped · 12 outside sync range")).toBeTruthy();
+    expect(card("GAMING-PC").getByRole("link", { name: "Open Sync health" }).getAttribute("href")).toBe("/settings?tab=account#sync-health");
+    expect(card("LAPTOP").getByText("Syncing").className).toContain("text-success");
+    expect(card("LAPTOP").getByText("1 folder · 0 waiting · last upload 5m ago")).toBeTruthy();
+    expect(card("LAPTOP").queryByRole("link", { name: "Open Sync health" })).toBeNull();
+    expect(card("OLD-PC").queryByText(/Sync health/)).toBeNull();
+    // A report's player names and toon handles stay off the Devices page.
+    expect(document.body.textContent).not.toMatch(/RivalName|1-S2-1-424242/);
+  });
+
+  it("mutes an old report and dates it, since the PC may have changed since", () => {
+    h.data.items = [device({ lastSeenAt: new Date(Date.now() - 2 * 3600_000).toISOString(), syncReportedAt: new Date(Date.now() - 2 * 3600_000).toISOString(), sync: { paused: true, pending: 3 } })];
+    render(<DevicesPanel />);
+    expect(screen.getByText("Last report 2h ago:")).toBeTruthy();
+    expect(screen.getByText("Syncing is paused").className).toContain("text-text-muted");
+    expect(screen.queryByRole("link", { name: "Open Sync health" })).toBeNull();
+  });
+
   it("requires typed confirmation before unpairing and keeps the dialog available after a failure", async () => {
     h.data.items = [device()]; h.apiCall.mockRejectedValueOnce({ message: "Try again" });
     render(<DevicesPanel />); fireEvent.click(screen.getByRole("button", { name: "Unpair" }));
