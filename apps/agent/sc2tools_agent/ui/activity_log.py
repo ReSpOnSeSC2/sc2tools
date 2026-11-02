@@ -9,7 +9,7 @@ from .log_records import LogRecord, matches, parse_chunk, read_tail
 
 
 def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
-                       open_folder, open_help, palette):
+                       open_folder, open_help, palette, copy_support=None):
     class ActivityLog(QtWidgets.QWidget):
         def __init__(self):
             super().__init__(parent)
@@ -61,6 +61,9 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
             self.copy_menu.addAction("Copy last 200 lines", self.copy_tail)
             self.copy_menu.aboutToShow.connect(lambda: self.copy_selection_action.setEnabled(self.view.textCursor().hasSelection()))
             self.copy_button.setMenu(self.copy_menu)
+            self.support_copy_button = QtWidgets.QPushButton("Copy support info")
+            self.support_copy_button.setEnabled(copy_support is not None)
+            self.support_copy_button.clicked.connect(copy_support or (lambda: None))
             layout.addWidget(self.toolbar_panel)
             self.jump_button = QtWidgets.QPushButton()
             self.jump_button.setVisible(False)
@@ -99,9 +102,9 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
                 return
             available = max(1, self.width() - self.layout().contentsMargins().left() - self.layout().contentsMargins().right())
             header = [self.header_title, self.header_help, self.filter_combo, self.open_folder_button]
-            toolbar = [self.search, self.match_count, self.follow, self.copy_button]
+            toolbar = [self.search, self.match_count, self.follow, self.copy_button, self.support_copy_button]
             header_width = sum(widget.minimumSizeHint().width() for widget in header) + 4 * max(0, self._header_layout.horizontalSpacing())
-            toolbar_width = sum(widget.minimumSizeHint().width() for widget in toolbar) + 3 * max(0, self._toolbar_layout.horizontalSpacing())
+            toolbar_width = sum(widget.minimumSizeHint().width() for widget in toolbar) + 4 * max(0, self._toolbar_layout.horizontalSpacing())
             signature = (available < header_width, available < toolbar_width)
             if signature == self._controls_signature:
                 return
@@ -126,6 +129,7 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
                 self._toolbar_layout.addWidget(self.match_count, 0, 2)
                 self._toolbar_layout.addWidget(self.follow, 1, 0, 1, 2)
                 self._toolbar_layout.addWidget(self.copy_button, 1, 2)
+                self._toolbar_layout.addWidget(self.support_copy_button, 2, 0, 1, 3)
             else:
                 for column, widget in enumerate(toolbar):
                     self._toolbar_layout.addWidget(widget, 0, column)

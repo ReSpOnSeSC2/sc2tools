@@ -207,6 +207,7 @@ class _UploadContext:
     owner: Optional[str]
     token: Optional[str]
     generation: int
+    owner_epoch: object = None
 
 
 class _FilteredOutError(TerminalUploadError):
@@ -253,10 +254,12 @@ class UploadQueue:
             Callable[[Path, CloudGame, str, Dict[str, Any]], None]
         ] = None,
         on_game_synced: Optional[Callable[[Path, Dict[str, Any]], None]] = None,
+        on_support_error: Optional[Callable] = None,
     ) -> None:
         self._connection_callback = on_connection_state or (lambda *_args: None)
         self._on_auth_failure = on_auth_failure or (lambda _exc: None)
         self._on_auth_success = on_auth_success or (lambda: None)
+        self._on_support_error = on_support_error
         self._retry_wake = threading.Event()
         self._connection_lock = threading.Lock()
         self._connection_failures = 0
@@ -1118,7 +1121,19 @@ class UploadQueue:
     def _upload_context(self):
         with _STATE_SAVE_LOCK:
             return _UploadContext(self._api, self._state.user_id,
-                                  self._state.device_token, self._api_generation)
+                                  self._state.device_token, self._api_generation,
+                                  getattr(self._state, "_owner_epoch", None))
+
+    def _report_support_error(self, context, exc):
+        if self._on_support_error is None or not self._upload_context_current(context):
+            return
+        if isinstance(exc, TerminalUploadError) and not exc.counts_as_error:
+            return
+        try:
+            from ..errors import classify
+            self._on_support_error(context, classify(exc).kind)
+        except Exception:
+            pass  # Advisory fixed-code history never changes upload behavior.
 
     def _archive_owner(self, context):
         base = self._owner_identity(context)[0]
@@ -1609,6 +1624,7 @@ class UploadQueue:
                 else:
                     self._notify_pending()
                     self._connection_success()
+                    self._report_support_error(context, exc)
                     for job in batch:
                         if not self._upload_context_current(context):
                             break
@@ -1630,6 +1646,7 @@ class UploadQueue:
                 self._shrink_batch_size_after_failure(len(batch))
                 retry_jobs = [job for job in batch if self.is_pending(job.file_path)]
                 if retry_jobs:
+                    self._report_support_error(context, exc)
                     self._defer_connection(exc)
                     for job in retry_jobs:
                         self._retry_q.put_nowait(self._queue_item(job))
@@ -1958,6 +1975,7 @@ class UploadQueue:
                 break
             log.error("upload_rejected %s: %s", job.file_path.name, err_msg)
             try:
+                self._report_support_error(context, _ServerRejectedError(err_msg))
                 self._on_failure(job.file_path, _ServerRejectedError(err_msg))
             except Exception:  # noqa: BLE001
                 log.exception(

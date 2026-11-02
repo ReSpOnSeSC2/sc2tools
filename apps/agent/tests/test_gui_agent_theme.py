@@ -11,13 +11,13 @@ def test_all_agent_pages_share_console_bezel_and_keep_existing_page_ownership(tm
         pages = [win._stack.widget(index) for index in range(win._stack.count())]
         parents = [page.parentWidget() for page in pages]
         geometry = win.geometry()
-        assert len(pages) == 6
+        assert len(pages) == 7
         assert win._agent_frame.objectName() == "agentFrame"
         assert win._agent_display.objectName() == "agentDisplay"
         assert win._sidebar.objectName() == "agentSidebar"
         assert win._sidebar.width() == 240
         for key, label in [("dashboard", "Dashboard"), ("recent", "Recent games"),
-                           ("log", "Activity log"), ("settings", "Settings"), ("streams", "Streams")]:
+                           ("log", "Activity log"), ("settings", "Settings"), ("streams", "Streams"), ("help", "Help")]:
             win._go_to_page(key)
             app.processEvents()
             assert win._PAGE_KEYS[win._stack.currentIndex()] == key
@@ -50,7 +50,7 @@ def test_all_agent_pages_share_console_bezel_and_keep_existing_page_ownership(tm
             margins = layout.contentsMargins()
             assert (margins.left(), margins.top(), margins.right(), margins.bottom()) == (0, 0, 0, 0)
         assert win.geometry() == geometry
-        assert [win._stack.widget(index) for index in range(6)] == pages
+        assert [win._stack.widget(index) for index in range(7)] == pages
         assert [page.parentWidget() for page in pages] == parents
         win._companion_page.shutdown()
         win.hide()

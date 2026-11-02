@@ -25,7 +25,7 @@ const article: HelpArticle = {
     "privacy",
     "what is sent",
   ],
-  updated: "2026-10-22",
+  updated: "2026-11-02",
   body: [
     { type: "heading", text: "Open the form" },
     {
@@ -97,7 +97,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Not signed in?" },
     {
       type: "paragraph",
-      text: "The form needs an account so we know who to reply to. Email [responsecoaching@gmail.com](mailto:responsecoaching@gmail.com) instead: say what you clicked, add the error reference if you saw one, and attach a screenshot if you can.",
+      text: "The form needs an account so we know who to reply to. Email [responsecoaching@gmail.com](mailto:responsecoaching@gmail.com) instead: say what you clicked and add the error reference if you saw one. For a desktop app issue, in SC2 Tools open **Help > Copy support info** and paste it into your report; see [Desktop support tools](/help/desktop-app-support) for version availability and reviewed bundles.",
     },
   ],
   related: ["something-went-wrong", "troubleshooting-and-support", "how-to-use-help"],

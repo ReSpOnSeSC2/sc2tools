@@ -5,6 +5,10 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 ## 0.24.8
 
 ### Changed
+- Add Help system checks, Copy support info in Help, Activity log and the
+  tray, and a reviewed local support bundle with redacted diagnostics and
+  selected logs. Keep support tasks separate from replay sync and discard
+  results when the linked account or connection changes.
 - Add an account from your private web Sync health list and retry only the
   selected skip reason on one linked PC. Prefer exact saved SC2 accounts,
   keep the sync date range and capture opt-in, and safely retire old account

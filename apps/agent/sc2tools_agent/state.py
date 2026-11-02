@@ -603,7 +603,7 @@ def _coerce_geometry(value: object) -> Optional[str]:
 
 def _coerce_window_page(value: object) -> Optional[str]:
     return value if isinstance(value, str) and value in {
-        "dashboard", "recent", "log", "settings", "streams", "companion",
+        "dashboard", "recent", "log", "settings", "streams", "companion", "help",
     } else None
 
 

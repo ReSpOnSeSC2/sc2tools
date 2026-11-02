@@ -11,9 +11,9 @@ win._set_window_size("Standard")
 win.show()
 app.processEvents()
 page = win._companion_page
-expected = ["Companion", "Dashboard", "Recent games", "Streams", "Activity log", "Settings",
-            "Border & animations…", "Help & support", "Check for updates", "Quit SC2 Tools"]
-for route in ("companion", "dashboard", "recent", "streams", "log", "settings", "companion"):
+expected = ["Companion", "Dashboard", "Recent games", "Streams", "Activity log", "Settings", "Help",
+            "Border & animations…", "Help & troubleshooting", "Check for updates", "Quit SC2 Tools"]
+for route in ("companion", "dashboard", "recent", "streams", "log", "settings", "help", "companion"):
     win._go_to_page(route)
     app.processEvents()
     button = page.agent_menu_button if route == "companion" else win._agent_menu_button
@@ -108,8 +108,10 @@ for route in ("settings", "companion"):
     assert page.console.current_route() == "settings"
     assert page.appearance_controls.isVisible()
     assert win._handle_input.text() == "Unsaved player"
-    actions["Help & support"].trigger()
-assert len(opened) == 2 and all("desktop-app-overview" in url for url in opened)
+    actions["Help & troubleshooting"].trigger()
+    app.processEvents()
+    assert win._stack.currentWidget() is win._help_page
+assert opened == []
 actions["Quit SC2 Tools"].trigger()
 assert quit_requests == [True]
 assert saved == []

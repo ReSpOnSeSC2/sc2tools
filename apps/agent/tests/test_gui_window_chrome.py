@@ -65,11 +65,21 @@ def test_standard_agent_pages_keep_navigation_drafts_and_window_controls_at_smal
         win.show()
         win._set_window_size("Standard")
         app.processEvents()
+        page_keys = ("dashboard", "recent", "log", "settings", "streams", "companion", "help")
+        assert win._PAGE_KEYS == page_keys and win._stack.count() == 7
+        pages = tuple(win._stack.widget(index) for index in range(7))
+        parents = tuple(page.parentWidget() for page in pages)
+        assert pages[5] is win._companion_page and pages[6] is win._help_page
+        geometry = win.geometry()
         win._handle_input.setText("Draft remains")
-        for page in ("dashboard", "recent", "log", "settings", "streams", "companion"):
+        win._api_input.setText("https://draft.example.test")
+        for index, page in enumerate(page_keys):
             win._go_to_page(page)
             app.processEvents()
+            assert win._PAGE_KEYS[win._stack.currentIndex()] == page and win._stack.currentWidget() is pages[index]
+            assert win._nav_group.button(index).isChecked()
             assert win.size() == QtCore.QSize(520, 480), (page, win.size())
+            assert win.geometry() == geometry, (page, win.geometry())
             assert not win._sidebar.isVisible()
             controls = win._companion_window_controls if page == "companion" else win._agent_window_controls
             for button in (controls.minimize_button, controls.maximize_button, controls.close_button):
@@ -77,9 +87,18 @@ def test_standard_agent_pages_keep_navigation_drafts_and_window_controls_at_smal
                 assert win.rect().contains(QtCore.QRect(position, button.size())), (page, position)
             if page != "companion":
                 assert win._agent_menu_button.isVisible()
-                actions = {action.text() for action in win._agent_menu_button.menu().actions()}
-                assert {"Help & support", "Check for updates", "Quit SC2 Tools"} <= actions
+                actions = {action.text(): action for action in win._agent_menu_button.menu().actions()}
+                assert {"Help", "Help & troubleshooting", "Check for updates", "Quit SC2 Tools"} <= actions.keys()
+                if page == "help":
+                    win._go_to_page("dashboard")
+                    actions["Help & troubleshooting"].trigger()
+                    app.processEvents()
+                    assert win._stack.currentWidget() is pages[6] and win._nav_group.button(6).isChecked()
+                    assert win.geometry() == geometry
             assert win._handle_input.text() == "Draft remains"
+            assert win._api_input.text() == "https://draft.example.test"
+            assert all(win._stack.widget(number) is original for number, original in enumerate(pages))
+            assert all(original.parentWidget() is owner for original, owner in zip(pages, parents))
         assert not saved
         win._companion_page.shutdown()
         win.hide()

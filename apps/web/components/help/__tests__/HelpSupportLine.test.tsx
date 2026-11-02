@@ -38,11 +38,24 @@ describe("HelpSupportLine panel (Settings → Help)", () => {
 });
 
 describe("HelpSupportLine line", () => {
-  it("is one sentence with the form link and the email", () => {
+  it("keeps the form link and the email", () => {
     render(<HelpSupportLine />);
     expect(screen.queryByRole("heading")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Report a problem" }));
     expect(screen.getByRole("dialog", { name: "Report form" })).toBeTruthy();
     expect(screen.getByText(/Still stuck\?/)).toBeTruthy();
   });
+});
+
+it.each(["line", "panel"] as const)("renders qualified desktop guidance and website-only screenshot guidance in %s", (variant) => {
+  render(<HelpSupportLine variant={variant} />);
+  const guide = screen.getByRole("link", { name: "Desktop support tools" });
+  expect(guide.getAttribute("href")).toBe("/help/desktop-app-support");
+  expect(screen.getByText("Help > Copy support info")).toBeTruthy();
+  const footer = screen.getByRole("link", { name: "responsecoaching@gmail.com" }).closest("p");
+  expect(footer?.textContent).toContain("for version availability");
+  expect(footer?.textContent).toContain("For website issues, attach a screenshot if useful");
+  expect(footer?.textContent).not.toContain("and a screenshot if you can");
+  fireEvent.click(screen.getByRole("button", { name: "Report a problem" }));
+  expect(screen.getByRole("dialog", { name: "Report form" })).toBeTruthy();
 });

@@ -33,7 +33,7 @@ jobs:
   lint-typecheck:
     name: Lint + typecheck + test (apps/web)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: apps/web

@@ -79,6 +79,9 @@ class TrayUI:
         self._site_notices = TrayNotices(notify=self.show_notice, refresh=self._refresh)
         self._on_pause_for = on_pause_for
         self._on_install_update = on_install_update
+        self._support_service = None
+        self._support_help_callback = None
+        self._support_copy_callback = None
         self._health = None  # the newest HealthSnapshot, the one the window's status card shows
         self._icon_images = {}
         self._icon_color = object()
@@ -267,6 +270,13 @@ class TrayUI:
 
     # ---------------- menu builders ----------------
 
+    def set_support_service(self, service, *, on_help=None, on_copy=None):
+        with self._lock:
+            self._support_service = service
+            self._support_help_callback = on_help
+            self._support_copy_callback = on_copy
+        self._refresh()
+
     def _build_menu(self, pystray):
         items = [pystray.MenuItem(self._title, None, enabled=False),
                  pystray.MenuItem(self._second_line, None, enabled=False),
@@ -280,6 +290,8 @@ class TrayUI:
         items.append(pystray.MenuItem("Open dashboard", self._open_dashboard))
         if self._on_build_checkin_cb:
             items.append(pystray.MenuItem("Build check-in…", self._build_checkin_clicked))
+        items.append(pystray.MenuItem("Help & troubleshooting", self._support_help_clicked))
+        items.append(pystray.MenuItem("Copy support info", self._support_copy_clicked, enabled=self._support_enabled))
         items.append(pystray.MenuItem(self._pause_label, self._toggle_pause))
         if self._on_pause_for:
             items.append(pystray.MenuItem("Pause", pystray.Menu(
@@ -342,6 +354,42 @@ class TrayUI:
         return self._log_dir is not None and Path(self._log_dir).exists()
 
     # ---------------- click handlers ----------------
+
+    def _support_enabled(self, _item):
+        service = self._support_service
+        return service is not None and not service.busy
+
+    def _support_help_clicked(self, *_args):
+        try:
+            if self._support_help_callback is not None:
+                self._support_help_callback()
+            else:
+                from .help_links import help_url
+                if not webbrowser.open(help_url(self._dashboard_url, "desktop-app-support"), new=2):
+                    self.show_notice("The support guide could not be opened.")
+        except Exception:
+            self.show_notice("The support guide could not be opened.")
+
+    def _support_copy_clicked(self, *_args):
+        service = self._support_service
+        if service is None or service.busy:
+            self.show_notice("Support tools are unavailable or still finishing a task.")
+            return
+        if self._support_copy_callback is not None:
+            self._support_copy_callback()
+            return
+
+        def delivered(result):
+            if not service.is_current(result.run_nonce):
+                return
+            from .support_actions import copy_headless
+            copied = result.snapshot is not None and copy_headless(result.snapshot,
+                is_current=lambda: service.is_current(result.run_nonce))
+            if service.is_current(result.run_nonce):
+                self.show_notice("Support info copied." if copied else "Clipboard unavailable. Open the support guide for other ways to report a problem.")
+
+        if service.copy_info(delivered) is None:
+            self.show_notice("A support task is still finishing. Try again shortly.")
 
     def _show_window_clicked(self, _icon, _item) -> None:
         if not self._on_show_window_cb:
