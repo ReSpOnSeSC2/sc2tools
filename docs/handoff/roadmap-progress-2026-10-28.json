@@ -2138,19 +2138,39 @@
         "agent-calm-sync",
         "realtime-one-connection"
       ],
-      "implemented": "Coarse native status model, recent-game/import facts, web setup-health and simple metadata heartbeat exist.",
+      "implemented": "Coarse native status model, recent-game/import facts, web setup-health and simple metadata heartbeat exist. PR861 (merged as 92f26806) adds the shared HealthMonitor, ordered rules, coalesced snapshots and classified boot failures. PR862 (merged as db1474d1) validates bounded heartbeat sync reports, counts upload rejections and serves owner-only sync health with specific Doctor reasons. PR863 (merged as 2c04d849) renders the actionable health card, keeps row buttons stable, restarts only after releasing the instance lock with the window visible, shares snapshot tray colours and clears the archive row only for a running full resync. PR864 (merged as f58eed0c) adds the lazy Settings sync-health card, count-only Devices and pill details, specific Doctor help and an old-agent state; unresolved player names stay in the owner Settings card and Report carries only codes and counts. PR865 (merged as da77a84b) produces the bounded agent heartbeat sync payload and wires the remaining runtime health facts, including unresolved-name capture without changing replay parser arity. PR866 (merged as 0c53a7c8) adds owner-scoped identity repair and reason-scoped retry actions across the API, socket, agent and web surfaces. These merged slices are contained in delivered main 0c53a7c8. No signed release or installed-agent acceptance is claimed.",
       "remainingRequirements": [
-        "Implement unified HealthMonitor/rule table and actionable headline.",
-        "Add validated<=2KiB sync payload, reject counters, /me/sync-health and specific doctor/remedy/Devices/header surfaces.",
-        "Coordinate signed native release and installed-agent acceptance; source merge does not update desktops."
+        "Coordinate signed native release and installed-agent acceptance; source merge does not update desktops. Agent 0.24.8 remains unpublished and owner-gated."
       ],
       "evidence": [
         "apps/agent/sc2tools_agent/heartbeat.py",
         "apps/agent/sc2tools_agent/status_model.py",
         "apps/web/components/analyzer/settings/SetupHealthCard.tsx",
-        "apps/api/src/services/devicePairings.js"
+        "apps/api/src/services/devicePairings.js",
+        "docs/handoff/agent-health-monitor-checkpoint.md",
+        "docs/handoff/sync-health-api-checkpoint.md",
+        "docs/handoff/sync-health-web-checkpoint.md",
+        "docs/handoff/sync-health-agent-checkpoint.md",
+        "docs/handoff/sync-health-fixes-checkpoint.md",
+        "apps/agent/sc2tools_agent/health.py",
+        "apps/agent/sc2tools_agent/runner.py",
+        "apps/api/src/services/syncReport.js",
+        "apps/api/src/services/syncHealth.js",
+        "apps/agent/sc2tools_agent/ui/health_card.py",
+        "apps/agent/sc2tools_agent/relaunch.py",
+        "apps/agent/sc2tools_agent/ui/tray.py",
+        "apps/web/lib/syncHealth.ts",
+        "apps/web/components/analyzer/settings/SyncHealthCard.tsx",
+        "apps/web/components/SyncHealthSummary.tsx"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        861,
+        862,
+        863,
+        864,
+        865,
+        866
+      ],
       "requirementSha256": "676ea89f33ea04480f7d76ff36a64cb7c110b0c208eb00d6a2bd84d54104ba84"
     },
     {
@@ -6103,6 +6123,778 @@
       ],
       "remainingCount": 69,
       "qualification": "Closed by reconciling the plan's item against the five delivered slices recorded in analysisCorpusDelivery (exact-head CI, merge commits and both production deployments of main 4bfa0daa). No new source; no latency, request-reduction or savings claim; signed-in read-only acceptance was not performed."
+    },
+    "agentHealthSyncHealthProgress0c53a7c8": {
+      "date": "2026-11-02",
+      "mergedPrs": [
+        861,
+        862,
+        863,
+        864,
+        865,
+        866
+      ],
+      "testedHeads": {
+        "861": "22bc75233f04872cfff49ab94e18836913ed6d4a",
+        "862": "d667e24eeb009d59e8ae9269b434edc1a7ae90e9",
+        "863": "c2e05ead27f7fe716e279683f8b96c52e5d293c7",
+        "864": "efb16f560e051e9be29a77cfeea136af88039c26",
+        "865": "647ee82e010e8ef367bb25db5da41f6c68a52a10",
+        "866": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd"
+      },
+      "mergeCommits": {
+        "861": "92f26806fca15b64519c6c6501ce1a9f6c11b7f8",
+        "862": "db1474d1b8d98203b4c5cbe8e268a3f24a1a3473",
+        "863": "2c04d8493ead72add1d503cfbbf0dc7894eb5792",
+        "864": "f58eed0c082fa093eac92300f51d60e706f97023",
+        "865": "da77a84b275469c46449868430388eaa00ada1d3",
+        "866": "0c53a7c872373cfc567e6bdc0b467fa79b4b6d0b"
+      },
+      "exactHeadChecks": {
+        "861": {
+          "Agent core tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125013608730,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41361805295/job/125013608730"
+          },
+          "Instant Analysis parity (CPython + Pyodide)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125013608923,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41361805295/job/125013608923"
+          },
+          "Agent ui tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125013609051,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41361805295/job/125013609051"
+          },
+          "Pytest (apps/replay-engine)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125013609118,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41361805295/job/125013609118"
+          },
+          "Responsive e2e smoke (public pages)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125013610657,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41361805308/job/125013610657"
+          },
+          "Lint + typecheck + test (apps/web)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125013610774,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41361805308/job/125013610774"
+          },
+          "Vercel Preview Comments": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125015154892,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/runs/125015154892"
+          },
+          "Pytest (apps/agent, Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125021604318,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41361805295/job/125021604318"
+          }
+        },
+        "862": {
+          "Lint + typecheck + test (apps/api)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125032592753,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41368023619/job/125032592753"
+          },
+          "Vercel Preview Comments": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125034900057,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/runs/125034900057"
+          }
+        },
+        "863": {
+          "Responsive e2e smoke (public pages)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125052545096,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41374779288/job/125052545096"
+          },
+          "Agent core tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125052545138,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41374779260/job/125052545138"
+          },
+          "Pytest (apps/replay-engine)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125052545258,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41374779260/job/125052545258"
+          },
+          "Lint + typecheck + test (apps/web)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125052545293,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41374779288/job/125052545293"
+          },
+          "Instant Analysis parity (CPython + Pyodide)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125052545312,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41374779260/job/125052545312"
+          },
+          "Agent ui tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125052545316,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41374779260/job/125052545316"
+          },
+          "Vercel Preview Comments": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125053375983,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/runs/125053375983"
+          },
+          "Pytest (apps/agent, Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125061650595,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41374779260/job/125061650595"
+          }
+        },
+        "864": {
+          "Responsive e2e smoke (public pages)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125054791954,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41375502051/job/125054791954"
+          },
+          "Lint + typecheck + test (apps/web)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125054792146,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41375502051/job/125054792146"
+          },
+          "Pytest (apps/replay-engine)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125054998910,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41375502061/job/125054998910"
+          },
+          "Agent core tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125054999076,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41375502061/job/125054999076"
+          },
+          "Agent ui tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125054999149,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41375502061/job/125054999149"
+          },
+          "Instant Analysis parity (CPython + Pyodide)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125054999156,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41375502061/job/125054999156"
+          },
+          "Vercel Preview Comments": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125055687783,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/runs/125055687783"
+          },
+          "Pytest (apps/agent, Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125063059558,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41375502061/job/125063059558"
+          }
+        },
+        "865": {
+          "Agent ui tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125091500528,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41387505027/job/125091500528"
+          },
+          "Pytest (apps/replay-engine)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125091500762,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41387505027/job/125091500762"
+          },
+          "Agent core tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125091500815,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41387505027/job/125091500815"
+          },
+          "Instant Analysis parity (CPython + Pyodide)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125091500858,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41387505027/job/125091500858"
+          },
+          "Responsive e2e smoke (public pages)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125091500953,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41387505041/job/125091500953"
+          },
+          "Lint + typecheck + test (apps/web)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125091501117,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41387505041/job/125091501117"
+          },
+          "Vercel Preview Comments": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125092731003,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/runs/125092731003"
+          },
+          "Pytest (apps/agent, Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125099028293,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41387505027/job/125099028293"
+          }
+        },
+        "866": {
+          "Lint + typecheck + test (apps/web)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125282647559,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41447045519/job/125282647559"
+          },
+          "Responsive e2e smoke (public pages)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125282647860,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41447045519/job/125282647860"
+          },
+          "Lint + typecheck + test (apps/api)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125282647900,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41447045638/job/125282647900"
+          },
+          "Instant Analysis parity (CPython + Pyodide)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125282647994,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41447045716/job/125282647994"
+          },
+          "Pytest (apps/replay-engine)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125282648257,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41447045716/job/125282648257"
+          },
+          "Agent ui tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125282648352,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41447045716/job/125282648352"
+          },
+          "Agent core tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125282648502,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41447045716/job/125282648502"
+          },
+          "Lint -- atomic-fs invariants": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125282648771,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41447045645/job/125282648771"
+          },
+          "Vercel Preview Comments": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125284451535,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/runs/125284451535"
+          },
+          "Pytest (apps/agent, Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125291043607,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41447045716/job/125291043607"
+          }
+        }
+      },
+      "documentSha256AtMerge": {
+        "861": {
+          "docs/handoff/agent-health-monitor-checkpoint.md": "87304517f1f0197434b91549463a463e12e60d5ee77473798333243683f6c649"
+        },
+        "862": {
+          "docs/handoff/sync-health-api-checkpoint.md": "eafb91b3361f0d984ffff2b698d968a105f79676c4cc7f35b82c175a80709d94"
+        },
+        "863": {
+          "docs/handoff/agent-health-monitor-checkpoint.md": "4f7eb14738a665d209c087eea04551c050f19c018ac1c1419e8294eedbb20a79"
+        },
+        "864": {
+          "docs/handoff/sync-health-web-checkpoint.md": "67f59d9bbd957ed03c1f8827fa8dc6b73b94e38d56f1c76c457d7457fbb706ce"
+        },
+        "865": {
+          "docs/handoff/sync-health-agent-checkpoint.md": "e1d325b43d3c2ab875e406ea7bfb794fce41007bd369d6a2cb5906dcc7536324"
+        },
+        "866": {
+          "docs/handoff/sync-health-fixes-checkpoint.md": "665cc4f70bab1ac0a5790433ee022eed99b5b887f2e5d0ddd9592cf2c5c6188d"
+        }
+      },
+      "localEvidence": {
+        "861": {
+          "mutationRecord": ".cache/agent-health-a1-20261101/mutation-02/MUTATION-RESULTS.json",
+          "mutationRecordSha256": "7f4aaf1d9fa3fac5bcfe33fca6f3179ba70f81d57606ccbd25b6b7bd2852bdec",
+          "mutationHead": "22bc75233f04872cfff49ab94e18836913ed6d4a",
+          "mutations": "11/11",
+          "fileHashesVerifiedAgainst": "22bc75233f04872cfff49ab94e18836913ed6d4a",
+          "tests": [],
+          "limitations": []
+        },
+        "862": {
+          "mutationRecord": ".cache/agent-health-bapi-20261101/mutation-02/MUTATION-RESULTS.json",
+          "mutationRecordSha256": "43520bade2e7d42447cbed79bcd73eb6b92cdfb896271d635315222e8ed968ac",
+          "mutationHead": "d667e24eeb009d59e8ae9269b434edc1a7ae90e9",
+          "mutations": "10/10",
+          "fileHashesVerifiedAgainst": "d667e24eeb009d59e8ae9269b434edc1a7ae90e9",
+          "tests": [],
+          "limitations": []
+        },
+        "863": {
+          "mutationRecord": ".cache/agent-health-a2-20261102/mutation-01/MUTATION-RESULTS.json",
+          "mutationRecordSha256": "ac581a6a0bfeb61a3620f8170578e0f383aa1909c26bc758b339489b55b78cd6",
+          "mutationHead": "b5af081f46fd1beabcac41c564b9fa2875f27d2c",
+          "mutations": "9/9",
+          "fileHashesVerifiedAgainst": "c2e05ead27f7fe716e279683f8b96c52e5d293c7",
+          "tests": [
+            {
+              "record": ".cache/agent-health-a2-20261102/targeted-01/RESULT.json",
+              "recordSha256": "012cb14e9c5ca6a5883afc96c1196446a71a509f07d26694434f167e2ce6ae43",
+              "capturedHead": "b5af081f46fd1beabcac41c564b9fa2875f27d2c",
+              "exitCode": 0,
+              "logSha256": "8b68aca78ff13a9689e2ea083d8e7ce401ab23917bcbe8176a0831e5b12e23c1",
+              "exactCleanHead": false,
+              "fileHashesVerifiedAgainst": "c2e05ead27f7fe716e279683f8b96c52e5d293c7"
+            },
+            {
+              "record": ".cache/agent-health-a2-20261102/web-help-01/RESULT.json",
+              "recordSha256": "bc0ceec885fc9d068b7b0c5d85e43a08b40ea16b8b90a085e678d6c4b5a3710f",
+              "capturedHead": "b5af081f46fd1beabcac41c564b9fa2875f27d2c",
+              "exitCode": 0,
+              "logSha256": "5ad470fca4a8cd66e4393a40ceba6f6d72239aa1a22301d6acd022a686398a1d",
+              "exactCleanHead": false,
+              "fileHashesVerifiedAgainst": "c2e05ead27f7fe716e279683f8b96c52e5d293c7"
+            }
+          ],
+          "limitations": [
+            {
+              "record": ".cache/agent-health-a2-20261102/full-suite-03/LIMITATION.json",
+              "recordSha256": "0668776a76640f9aec4c91fe2decf097385fdb89824f6f901b1372d36c1761f1",
+              "capturedHead": "c2e05ead27f7fe716e279683f8b96c52e5d293c7",
+              "resultRecord": ".cache/agent-health-a2-20261102/full-suite-03/RESULT.json",
+              "resultSha256": "339d8315d736a90647285d53363b002a04e2e9a96a0c064b41cae219311c0499",
+              "logSha256": "03ab896852c90a73bdeac15b3f0c39975e2d8bf6f2f42ba2d5eb8071dc5a939d",
+              "exitCode": 1,
+              "passed": 3585,
+              "skipped": 1,
+              "failed": 1,
+              "expectedFailedTest": "tests/test_replay_capture.py::test_shipped_protocol_runtime_roundtrips_observation_requests",
+              "baselineRevision": "db1474d1b8d98203b4c5cbe8e268a3f24a1a3473",
+              "unchangedTestLfSha256": "cff392f965c94baa9e40e1f9b8f78d90a8f131b80582a54a47fa65c3976e8926",
+              "dependencyLimitation": "s2clientprotocol was absent in the captured local environment.",
+              "summary": "Full local agent suite did not pass: 3585 passed, 1 skipped and 1 failed because s2clientprotocol was absent; the failed protocol test is unchanged from the handoff main baseline. Exact-head Windows CI with the declared dependencies is required."
+            }
+          ]
+        },
+        "864": {
+          "mutationRecord": ".cache/sync-health-web-20261102/mutation-01/MUTATION-RESULTS.json",
+          "mutationRecordSha256": "e6845afafabbe32650d793fbcb9a2714fdf3fe2c57b4287a206a334766c5c46d",
+          "mutationHead": "efb16f560e051e9be29a77cfeea136af88039c26",
+          "mutations": "9/9",
+          "fileHashesVerifiedAgainst": "efb16f560e051e9be29a77cfeea136af88039c26",
+          "tests": [
+            {
+              "record": ".cache/sync-health-web-20261102/full-web-wrapper-01/RESULT.json",
+              "recordSha256": "3b7fabde29c243d89cc1a044f768c1f9cbb1adcfd0cde5abd80c170f3daba698",
+              "capturedHead": "efb16f560e051e9be29a77cfeea136af88039c26",
+              "exitCode": 0,
+              "logSha256": "91f4c9fb4656b975dabf0191420369cf837f149342b2977bc5a543c68fb201c6",
+              "exactCleanHead": true,
+              "fileHashesVerifiedAgainst": "efb16f560e051e9be29a77cfeea136af88039c26"
+            },
+            {
+              "record": ".cache/sync-health-web-20261102/build-budget-wrapper-02/RESULT.json",
+              "recordSha256": "e27d9655d5354abe4c41f3c1b87080bde6b5c6d0bf0631c8a091c1d19928de3d",
+              "capturedHead": "efb16f560e051e9be29a77cfeea136af88039c26",
+              "exitCode": 0,
+              "logSha256": "5aca49681b4be94717d8f333e0382e74a6befc8fe945a912274a16729e423bac",
+              "exactCleanHead": true,
+              "fileHashesVerifiedAgainst": "efb16f560e051e9be29a77cfeea136af88039c26"
+            }
+          ],
+          "limitations": []
+        },
+        "865": {
+          "mutationRecord": ".cache/agent-sync-report-20261102/mutation-02/MUTATION-RESULTS.json",
+          "mutationRecordSha256": "dfb425d345660a13aae910e9cc1bbf4adec3cc0718dd0995907cbdf7ea66ee3e",
+          "mutationHead": "d680dcadd448712c95c92ab441ccd9d575ebbe1a",
+          "mutations": "10/10",
+          "fileHashesVerifiedAgainst": "647ee82e010e8ef367bb25db5da41f6c68a52a10",
+          "sourceAncestry": {
+            "capturedHead": "d680dcadd448712c95c92ab441ccd9d575ebbe1a",
+            "finalHead": "647ee82e010e8ef367bb25db5da41f6c68a52a10",
+            "changedGeneratedFiles": [
+              "apps/web/lib/instant/sampleAvailability.generated.ts",
+              "apps/web/public/try/sample-payloads.json"
+            ],
+            "sourceTrees": {
+              "apps/agent": {
+                "capturedTree": "a9b7448f2f778046d726449f85514cd1002fe1c7",
+                "finalTree": "a9b7448f2f778046d726449f85514cd1002fe1c7"
+              },
+              "apps/replay-engine": {
+                "capturedTree": "bd5651f5f59c8e8e67559eb587402bb488ac4403",
+                "finalTree": "bd5651f5f59c8e8e67559eb587402bb488ac4403"
+              },
+              "shared": {
+                "capturedTree": "18b3d4a98b29533abb33ce099b4977c13375b906",
+                "finalTree": "18b3d4a98b29533abb33ce099b4977c13375b906"
+              },
+              "scripts": {
+                "capturedTree": "7be56f2b64b34859a4d8b2f238373848cb9e2409",
+                "finalTree": "7be56f2b64b34859a4d8b2f238373848cb9e2409"
+              }
+            },
+            "mutationRun": {
+              "record": ".cache/agent-sync-report-20261102/mutation-wrapper-02/RESULT.json",
+              "recordSha256": "c66c3aac1c72b7741ea5ee88f9e886832409d18207d0d2a3ed6a4dc06f966b51",
+              "logSha256": "2176c6149edfaa983d1937224705ac076a12c3bf2d9a62ca2969d2558c917e2f"
+            },
+            "finalHeadWebSampleTest": {
+              "record": ".cache/agent-sync-report-20261102/final-sample-check-01/RESULT.json",
+              "recordSha256": "9713857a13c5009f8029e929ec70027d68c4128ba707124eebfec8ca205fb0b0",
+              "logSha256": "3b111091917822bf5179ce3120769270851d06c07f9fe02b2b2bf544a2eb23a4",
+              "exitCode": 0
+            },
+            "qualification": "agent inputs unchanged across generated sample refresh; agent tests ran at the captured head, while focused web sample tests and required CI passed at the final PR head"
+          },
+          "tests": [
+            {
+              "record": ".cache/agent-sync-report-20261102/targeted-03/RESULT.json",
+              "recordSha256": "19c327dc21f992a5d0032689019dda8147c2ce3e77ea6f3572cb341466736aa1",
+              "capturedHead": "d680dcadd448712c95c92ab441ccd9d575ebbe1a",
+              "exitCode": 0,
+              "logSha256": "6018bcd6ed64c3720e31c509c33ea82b976cb739a5786102990835ed44b92155",
+              "exactCleanHead": false,
+              "fileHashesVerifiedAgainst": "647ee82e010e8ef367bb25db5da41f6c68a52a10",
+              "capturedAgentHead": "d680dcadd448712c95c92ab441ccd9d575ebbe1a",
+              "sourceAncestry": {
+                "capturedHead": "d680dcadd448712c95c92ab441ccd9d575ebbe1a",
+                "finalHead": "647ee82e010e8ef367bb25db5da41f6c68a52a10",
+                "changedGeneratedFiles": [
+                  "apps/web/lib/instant/sampleAvailability.generated.ts",
+                  "apps/web/public/try/sample-payloads.json"
+                ],
+                "sourceTrees": {
+                  "apps/agent": {
+                    "capturedTree": "a9b7448f2f778046d726449f85514cd1002fe1c7",
+                    "finalTree": "a9b7448f2f778046d726449f85514cd1002fe1c7"
+                  },
+                  "apps/replay-engine": {
+                    "capturedTree": "bd5651f5f59c8e8e67559eb587402bb488ac4403",
+                    "finalTree": "bd5651f5f59c8e8e67559eb587402bb488ac4403"
+                  },
+                  "shared": {
+                    "capturedTree": "18b3d4a98b29533abb33ce099b4977c13375b906",
+                    "finalTree": "18b3d4a98b29533abb33ce099b4977c13375b906"
+                  },
+                  "scripts": {
+                    "capturedTree": "7be56f2b64b34859a4d8b2f238373848cb9e2409",
+                    "finalTree": "7be56f2b64b34859a4d8b2f238373848cb9e2409"
+                  }
+                },
+                "mutationRun": {
+                  "record": ".cache/agent-sync-report-20261102/mutation-wrapper-02/RESULT.json",
+                  "recordSha256": "c66c3aac1c72b7741ea5ee88f9e886832409d18207d0d2a3ed6a4dc06f966b51",
+                  "logSha256": "2176c6149edfaa983d1937224705ac076a12c3bf2d9a62ca2969d2558c917e2f"
+                },
+                "finalHeadWebSampleTest": {
+                  "record": ".cache/agent-sync-report-20261102/final-sample-check-01/RESULT.json",
+                  "recordSha256": "9713857a13c5009f8029e929ec70027d68c4128ba707124eebfec8ca205fb0b0",
+                  "logSha256": "3b111091917822bf5179ce3120769270851d06c07f9fe02b2b2bf544a2eb23a4",
+                  "exitCode": 0
+                },
+                "qualification": "agent inputs unchanged across generated sample refresh; agent tests ran at the captured head, while focused web sample tests and required CI passed at the final PR head"
+              },
+              "qualification": "agent inputs unchanged across generated sample refresh; this is a captured-head agent pass, not an exact-final-head local pass"
+            },
+            {
+              "record": ".cache/agent-sync-report-20261102/boot-neighbor-01/RESULT.json",
+              "recordSha256": "c8943b597f93ef493f3a2bb72cee9a0940f06d320ea1406017e0e1e13855775b",
+              "capturedHead": "d680dcadd448712c95c92ab441ccd9d575ebbe1a",
+              "exitCode": 0,
+              "logSha256": "336bc8de17582b2230c1d89c7ad2babe82bf1503b37c2bc5d55ae4992986bdea",
+              "exactCleanHead": false,
+              "fileHashesVerifiedAgainst": "647ee82e010e8ef367bb25db5da41f6c68a52a10",
+              "capturedAgentHead": "d680dcadd448712c95c92ab441ccd9d575ebbe1a",
+              "sourceAncestry": {
+                "capturedHead": "d680dcadd448712c95c92ab441ccd9d575ebbe1a",
+                "finalHead": "647ee82e010e8ef367bb25db5da41f6c68a52a10",
+                "changedGeneratedFiles": [
+                  "apps/web/lib/instant/sampleAvailability.generated.ts",
+                  "apps/web/public/try/sample-payloads.json"
+                ],
+                "sourceTrees": {
+                  "apps/agent": {
+                    "capturedTree": "a9b7448f2f778046d726449f85514cd1002fe1c7",
+                    "finalTree": "a9b7448f2f778046d726449f85514cd1002fe1c7"
+                  },
+                  "apps/replay-engine": {
+                    "capturedTree": "bd5651f5f59c8e8e67559eb587402bb488ac4403",
+                    "finalTree": "bd5651f5f59c8e8e67559eb587402bb488ac4403"
+                  },
+                  "shared": {
+                    "capturedTree": "18b3d4a98b29533abb33ce099b4977c13375b906",
+                    "finalTree": "18b3d4a98b29533abb33ce099b4977c13375b906"
+                  },
+                  "scripts": {
+                    "capturedTree": "7be56f2b64b34859a4d8b2f238373848cb9e2409",
+                    "finalTree": "7be56f2b64b34859a4d8b2f238373848cb9e2409"
+                  }
+                },
+                "mutationRun": {
+                  "record": ".cache/agent-sync-report-20261102/mutation-wrapper-02/RESULT.json",
+                  "recordSha256": "c66c3aac1c72b7741ea5ee88f9e886832409d18207d0d2a3ed6a4dc06f966b51",
+                  "logSha256": "2176c6149edfaa983d1937224705ac076a12c3bf2d9a62ca2969d2558c917e2f"
+                },
+                "finalHeadWebSampleTest": {
+                  "record": ".cache/agent-sync-report-20261102/final-sample-check-01/RESULT.json",
+                  "recordSha256": "9713857a13c5009f8029e929ec70027d68c4128ba707124eebfec8ca205fb0b0",
+                  "logSha256": "3b111091917822bf5179ce3120769270851d06c07f9fe02b2b2bf544a2eb23a4",
+                  "exitCode": 0
+                },
+                "qualification": "agent inputs unchanged across generated sample refresh; agent tests ran at the captured head, while focused web sample tests and required CI passed at the final PR head"
+              },
+              "qualification": "agent inputs unchanged across generated sample refresh; this is a captured-head agent pass, not an exact-final-head local pass"
+            },
+            {
+              "record": ".cache/agent-sync-report-20261102/full-suite-03/RESULT.json",
+              "recordSha256": "6a6f4929fd06452d6c14053ba78926aed17a0f1521228ffea5d5ff0c8b368a9f",
+              "capturedHead": "647ee82e010e8ef367bb25db5da41f6c68a52a10",
+              "exitCode": 0,
+              "logSha256": "cd8c22cc9dd19421fdadaf93989b2a433e62921cec954b14b001e91e504797ce",
+              "exactCleanHead": true,
+              "fileHashesVerifiedAgainst": "647ee82e010e8ef367bb25db5da41f6c68a52a10"
+            }
+          ],
+          "limitations": []
+        },
+        "866": {
+          "mutationRecord": ".cache/sync-health-fixes-20261102/mutation-02/MUTATION-RESULTS.json",
+          "mutationRecordSha256": "81ee2e40ce184093507049e5403d030841345ca7c7be0c1adf92cb74906ac9fe",
+          "mutationHead": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+          "mutations": "20/20",
+          "primaryMutations": "10/10",
+          "mutationRecords": [
+            {
+              "record": ".cache/sync-health-fixes-20261102/mutation-02/MUTATION-RESULTS.json",
+              "recordSha256": "81ee2e40ce184093507049e5403d030841345ca7c7be0c1adf92cb74906ac9fe",
+              "capturedHead": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+              "scriptSha256": "4af0e8fe93e554dc00d92b44e80f1688893e3fea7e238f680cc127f1163fa200",
+              "killed": 10,
+              "total": 10,
+              "fileHashesVerifiedAgainst": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+              "baselineExcludedFromMutationCount": true
+            },
+            {
+              "record": ".cache/sync-health-fixes-20261102/native-mutation-03/MUTATION-RESULTS.json",
+              "recordSha256": "c4502f547528207b6c372a05073d4bc6d13183674908270b6d3ffa398a26ae49",
+              "capturedHead": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+              "scriptSha256": "907ddeee1a3d90c7cd97871ecc21494a0af9c3e20e60547ba9ca243f19b2631b",
+              "killed": 10,
+              "total": 10,
+              "fileHashesVerifiedAgainst": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+              "baselineExcludedFromMutationCount": true
+            }
+          ],
+          "mutationTotals": {
+            "killed": 20,
+            "total": 20,
+            "runs": 2,
+            "baselinesExcluded": true
+          },
+          "fileHashesVerifiedAgainst": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+          "tests": [
+            {
+              "record": ".cache/sync-health-fixes-20261102/targeted-agent-06/RESULT.json",
+              "recordSha256": "ec16f8c885858c28ba87e55dfdf1d710a7bf178c4e52b0d3512aa2cc1cd2bbbe",
+              "capturedHead": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+              "exitCode": 0,
+              "logSha256": "284091838cad8898e4f1726b08350570c5c833fd1fab043861172394db60da65",
+              "exactCleanHead": true,
+              "fileHashesVerifiedAgainst": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd"
+            },
+            {
+              "record": ".cache/sync-health-fixes-20261102/api-targeted-wrapper-04/RESULT.json",
+              "recordSha256": "b9124aea160fb60f087af3c8eff25a46299985d1e2e54d9f4a334bb6fff5e41a",
+              "capturedHead": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+              "exitCode": 0,
+              "logSha256": "4112b2a5972e2f148ebf8d1d2fcff3284554ee2c5dd72c7068b8bef193ec341d",
+              "exactCleanHead": true,
+              "fileHashesVerifiedAgainst": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd"
+            },
+            {
+              "record": ".cache/sync-health-fixes-20261102/quality-wrapper-04/RESULT.json",
+              "recordSha256": "d85432019b2d169457cd92bcfcd51141ad09ac9507577c177ec2af2033979e58",
+              "capturedHead": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+              "exitCode": 0,
+              "logSha256": "fb85b8b336ced57515b3894cfefbb29ccf64c577425d8a7dd84164a487a1aea2",
+              "exactCleanHead": true,
+              "fileHashesVerifiedAgainst": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd"
+            },
+            {
+              "record": ".cache/sync-health-fixes-20261102/mutation-wrapper-02/RESULT.json",
+              "recordSha256": "8a4b8f09434c584b51244584b40d8505d33aa731db0169bbdc965ed8a2b84fd3",
+              "capturedHead": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+              "exitCode": 0,
+              "logSha256": "6da26238060c2714fdcd47c39d22f591ef8a966b05c5cf310d35754bf7a6871c",
+              "exactCleanHead": true,
+              "fileHashesVerifiedAgainst": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd"
+            },
+            {
+              "record": ".cache/sync-health-fixes-20261102/native-mutation-wrapper-03/RESULT.json",
+              "recordSha256": "4a10569ce5a0fb9b73db0a147a8154b1979f8ef7ae86e6e378731e463f8081d4",
+              "capturedHead": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+              "exitCode": 0,
+              "logSha256": "f39122f9ae9a11bae0db16ff99648307844e5de7517ce3939e08e428f1666697",
+              "exactCleanHead": true,
+              "fileHashesVerifiedAgainst": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd"
+            },
+            {
+              "record": ".cache/sync-health-fixes-20261102/full-agent-wrapper-02/RESULT.json",
+              "recordSha256": "df297bd342f906c0c5a4094b8b114888030a5a56528b702c772c6c380aab498f",
+              "capturedHead": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+              "exitCode": 0,
+              "logSha256": "d1f14ef795be216bd48ee816dfa9e2e0c9ca3c7b5b9afae5b7996b9455db776c",
+              "exactCleanHead": true,
+              "fileHashesVerifiedAgainst": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd"
+            },
+            {
+              "record": ".cache/sync-health-fixes-20261102/full-web-wrapper-01/RESULT.json",
+              "recordSha256": "a7166840218abf64d15a1daae39572eee7901d49ec87bbc301b2a6581b61fbc1",
+              "capturedHead": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+              "exitCode": 0,
+              "logSha256": "94159d747a57f3406ca15ca00f3edacb54726fd5799e1d6d4af5564f79b4b0f0",
+              "exactCleanHead": true,
+              "fileHashesVerifiedAgainst": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd"
+            },
+            {
+              "record": ".cache/sync-health-fixes-20261102/build-budget-wrapper-02/RESULT.json",
+              "recordSha256": "f1c9597cd01ed06b6f988367efc9397b3b472f47cda629cf80bf46268047dab4",
+              "capturedHead": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd",
+              "exitCode": 0,
+              "logSha256": "887ebab9c5f9b8d744ac6107c1783874f60891cfc30bf39070979a6d88082366",
+              "exactCleanHead": true,
+              "fileHashesVerifiedAgainst": "daaa4e1005e5e0ee03fe7d48266cdb78d1128ffd"
+            }
+          ],
+          "limitations": []
+        }
+      },
+      "localLimitations": [
+        {
+          "pr": 863,
+          "record": ".cache/agent-health-a2-20261102/full-suite-03/LIMITATION.json",
+          "recordSha256": "0668776a76640f9aec4c91fe2decf097385fdb89824f6f901b1372d36c1761f1",
+          "capturedHead": "c2e05ead27f7fe716e279683f8b96c52e5d293c7",
+          "resultRecord": ".cache/agent-health-a2-20261102/full-suite-03/RESULT.json",
+          "resultSha256": "339d8315d736a90647285d53363b002a04e2e9a96a0c064b41cae219311c0499",
+          "logSha256": "03ab896852c90a73bdeac15b3f0c39975e2d8bf6f2f42ba2d5eb8071dc5a939d",
+          "exitCode": 1,
+          "passed": 3585,
+          "skipped": 1,
+          "failed": 1,
+          "expectedFailedTest": "tests/test_replay_capture.py::test_shipped_protocol_runtime_roundtrips_observation_requests",
+          "baselineRevision": "db1474d1b8d98203b4c5cbe8e268a3f24a1a3473",
+          "unchangedTestLfSha256": "cff392f965c94baa9e40e1f9b8f78d90a8f131b80582a54a47fa65c3976e8926",
+          "dependencyLimitation": "s2clientprotocol was absent in the captured local environment.",
+          "summary": "Full local agent suite did not pass: 3585 passed, 1 skipped and 1 failed because s2clientprotocol was absent; the failed protocol test is unchanged from the handoff main baseline. Exact-head Windows CI with the declared dependencies is required."
+        }
+      ],
+      "includedSlices": [
+        "a1",
+        "api",
+        "a2",
+        "b2",
+        "b1",
+        "b3"
+      ],
+      "partialIds": [
+        "agent-health-and-sync-health"
+      ],
+      "completedIds": [],
+      "remainingCount": 69,
+      "delivery": {
+        "mainRevision": "0c53a7c872373cfc567e6bdc0b467fa79b4b6d0b",
+        "mainChecks": [
+          {
+            "name": "data-integrity",
+            "workflowRunId": 41458624236,
+            "conclusion": "success",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41458624236"
+          },
+          {
+            "name": "version-check",
+            "workflowRunId": 41458624328,
+            "conclusion": "success",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41458624328"
+          },
+          {
+            "name": "community-builds-ci",
+            "workflowRunId": 41458624251,
+            "conclusion": "success",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41458624251"
+          },
+          {
+            "name": "web-ci",
+            "workflowRunId": 41458624301,
+            "conclusion": "success",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41458624301"
+          },
+          {
+            "name": "python-tests",
+            "workflowRunId": 41458624246,
+            "conclusion": "success",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41458624246"
+          },
+          {
+            "name": "api-ci",
+            "workflowRunId": 41458624124,
+            "conclusion": "success",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41458624124"
+          }
+        ],
+        "deployments": {
+          "Production": {
+            "deploymentId": 7494274995,
+            "state": "success",
+            "statusId": 21174354022
+          },
+          "main - sc2tools-api": {
+            "deploymentId": 7494163333,
+            "state": "success",
+            "statusId": 21174122749
+          }
+        }
+      },
+      "qualification": "Merged source with verified exact-head CI, immutable local evidence and LF checkpoint hashes. Every listed main push workflow completed successfully or skipped; both exact-main production deployments succeeded. B1 and B3 requirements are retained unless their separately verified slices are included. No native build, signing, publishing, installed-agent acceptance, cache activation or savings claim is made. The recorded local full-suite dependency limitation remains an exit-1 failure and is not presented as a local pass; exact-head Windows CI passed separately."
     }
   },
   "latestImplementationRevisionQualification": "PR848/main 1fe7dc8a history-on-this-device UI delivery (AC5, tested 7e5c390a) is verified by local web types and lint, 10308 web cases, 25/25 mutations and two review workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR844/main 1d2353cc device copy clearing delivery (AC4, tested 3c36f05d) is verified by local web types and lint, 10245 web cases, 59/59 mutations and five verification workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR842/main 1c7c1974 device-kept analysis corpus delivery (AC3, tested 208598af) is verified by local API and web types and lint, 2213 API and 10191 web cases, 51/51 mutations, an independent review and two verification workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR841/main d496e3ea analysis-corpus changed-since reads delivery (AC2, tested 8be5c842) is verified by local types, configured lint, 1623 API cases, 15/15 mutations and an addressed independent review, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR840/main 901be460 analysis-corpus updatedAt stamps and index delivery (AC1, tested 7c0fc2a6) is verified by local types, configured lint, 1603 API cases, 10/10 mutations and an addressed independent review, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR837/main 55378835 owner activation-review runbook delivery (R1, docs only, citations checked at 9802bc8a) made no production read and changed no flag; both production deployments succeeded for that exact commit. The latest implementation revision stays C5's c7b5ef93. PR836/main c6e7110b opponent-MMR cache source delivery (C5, tested c7b5ef93) is verified by local types, configured lint, 1025 API and 109 web cases, 14/14 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR834/main d7b925d5 default-off chart-cache overlap guard delivery (G1, tested cc8e358c) is verified by local types, configured lint, 589 API cases, 9/9 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR833/main 261fa04d owner-run durable device-auth disable primitive (never invoked) delivery (DA4, tested 90126ee2) is verified by local types, configured lint, 180 device-auth cases, 11/11 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR832/main fe6b3d1f separate-process device-auth revocation regression (no application source) delivery (DA3, tested 6df0f447) is verified by local types, configured lint, 174 device-auth cases, 3/3 mutations, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR831/main 619d8f7f matchup time-series cache source delivery (C4, tested 000734b6) is verified by local types, configured lint, 539 API and 156 web cases, 15/15 mutations, an independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR829/main 2fabe343 random-summary cache source delivery (C3, tested 10cdb0fd) is verified by local types, configured lint, 449 API and 129 web cases, 12/12 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343 with public health checks; signed-in read-only acceptance was not performed. PR828/main d20bce90 net-MMR pair cache source delivery (C2, tested f9cc5ccc) is verified by local types, configured lint, 433 API and 119 web cases, 11/11 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR826/main 294c24ab uninjected device-auth lease probe hold-off delivery (DA2, tested 1dde734b) is verified by local types, lint, 231 device-auth cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR825/main 4a4df22f streak and Macro report cache source delivery (C1, tested 1fecfca0) is verified by local types, configured lint, 293 API and 117 web cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR824/main c790de3e serving-cohort contract (ADR 0072) delivery changes no runtime behavior and is verified by exact-head API CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks. PR822/main 27b9aeb0 opponent region/identity delivery is verified by local 3056/214 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. PR821/main de2031ad custom-build definition delivery is verified by its own local 1393/71 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. Agent0.24.7 GitHub publication is complete under the approved unsigned exception; actual API and website update availability are verified, with installed0.24.6 showing update available. No installed0.24.7 uptake, signing, cache/auth activation, full writer/fleet proof, savings or fresh all197 audit is claimed."
