@@ -35,7 +35,8 @@ function HealthRow({ row }: { row: SetupRow }) {
   const tone = row.tone === "pass" ? "text-success" : row.tone === "warn" ? "text-warning" : "text-text-muted";
   return <li className="flex flex-wrap items-start gap-3 py-3">
     <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${tone}${row.tone === "loading" ? " animate-spin" : ""}`} aria-hidden />
-    <div className="min-w-0 flex-1"><h3 className="text-caption font-semibold">{row.title}</h3><p className="break-words text-caption text-text-muted">{row.message}</p></div>
+    <div className="min-w-0 flex-1"><h3 className="text-caption font-semibold">{row.title}</h3><p className="break-words text-caption text-text-muted">{row.message}</p>
+      {row.help ? <LazyHelpLink slug={row.help.slug} anchor={row.help.anchor} className="text-caption">How to fix<span className="sr-only"> {row.title.toLowerCase()}</span></LazyHelpLink> : null}</div>
     {row.retry ? <Button variant="ghost" size="sm" aria-label={`Retry ${row.title}`} onClick={() => { void row.retry?.(); }}>Retry</Button> : row.cta ? <Link href={row.cta.href} className="inline-flex min-h-9 items-center rounded-full px-3 text-caption text-accent underline focus-visible:ring-2 focus-visible:ring-accent">{row.cta.label}</Link> : null}
   </li>;
 }

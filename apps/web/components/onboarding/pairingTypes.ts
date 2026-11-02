@@ -1,3 +1,5 @@
+import type { SyncReport } from "@/lib/syncHealth";
+
 export const PAIRING_CODE_LOCATION = "shown in the SC2 Tools window on your PC";
 export const normalizePairingCode = (value: string) => value.replace(/\D/g, "").slice(0, 6);
 
@@ -10,6 +12,9 @@ export interface PairedDevice {
   agentVersion?: string;
   createdAt: string;
   lastSeenAt: string | null;
+  /** The latest heartbeat sync report, kept even when stale; absent until a current app sends one. */
+  sync?: SyncReport;
+  syncReportedAt?: string | null;
 }
 
 export interface PairingInfo {

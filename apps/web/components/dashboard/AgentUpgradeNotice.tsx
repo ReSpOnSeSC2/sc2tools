@@ -4,6 +4,7 @@ import { LinkButton } from "@/components/ui/Button";
 import { Download, ShieldAlert } from "lucide-react";
 import { AgentLiveUpsell } from "@/components/instant/AgentLiveUpsell";
 import { useReleaseInfo } from "@/components/onboarding/useReleaseInfo";
+import type { DoctorResp } from "@/components/analyzer/DoctorBanner";
 import {
   FALLBACK_LATEST_AGENT_VERSION,
   inactiveAgentMessage,
@@ -49,6 +50,10 @@ type NoticeState =
  * agent at all may be browser-only by choice, so instead of the warning it
  * gets a soft, dismissible "Install the agent for live features" note.
  * Offline, outdated and unknown agents keep the warning.
+ *
+ * Today sits under the analyzer frame's Doctor banner. When the Doctor
+ * already reports `agent_outdated_required` (the release's version floor),
+ * the outdated state steps aside so the update prompt shows once.
  */
 export function AgentUpgradeNotice({
   initialAgent,
@@ -88,6 +93,13 @@ export function AgentUpgradeNotice({
       revalidateOnFocus: true,
     },
   );
+  // The Doctor banner's own answer, read from the shared cache: this notice
+  // never sends a Doctor request of its own.
+  const doctor = useApi<DoctorResp>("/v1/me/doctor", {
+    revalidateOnMount: false,
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+  });
 
   const state = devices.data
     ? agentUpgradeNoticeState(
@@ -102,6 +114,7 @@ export function AgentUpgradeNotice({
         : initialState;
 
   if (state.kind === "ready") return null;
+  if (state.kind === "outdated" && doctor.data?.warnings?.some((warning) => warning.id === "agent_outdated_required")) return null;
   if (showsLiveUpsell(browserImportEnabled === true, state, initialState)) {
     return (
       <AgentLiveUpsell variant="inline" dismissKey={AGENT_UPSELL_TODAY_KEY} />

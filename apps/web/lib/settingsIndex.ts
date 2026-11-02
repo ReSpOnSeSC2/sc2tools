@@ -6,6 +6,7 @@ export const SETTINGS_SECTIONS_READY_EVENT = "settings-sections-ready";
 export const SETTINGS_SECTIONS = {
   account: [
     { id: "setup-health", label: "Setup health" },
+    { id: "sync-health", label: "Sync health" },
     { id: "account-summary", label: "Account summary" },
     { id: "quick-links", label: "Quick links" },
   ],
@@ -85,6 +86,7 @@ export type SettingsFieldEntry = {
  * Their exact targets belong to the admitted panel's live section navigation. */
 export const SETTINGS_FIELDS = [
   { id: "setup-health", tab: "account", section: "setup-health", label: "Setup health", synonyms: ["desktop app", "agent connection", "diagnostics", "pairing"] },
+  { id: "sync-health", tab: "account", section: "sync-health", label: "Sync health", synonyms: ["missing games", "uploads failing", "paused syncing", "skipped replays", "rejected uploads", "sync date range"] },
   { id: "account-summary", tab: "account", section: "account-summary", label: "Account summary", synonyms: ["cloud user ID", "email", "games synced", "agent version", "latest sync"] },
   { id: "account-links", tab: "account", section: "quick-links", label: "Account quick links", synonyms: ["devices", "download agent", "build library"] },
   { id: "profile-name", tab: "profile", section: "profile-details", label: "Display name & BattleTag", synonyms: ["profile", "player name", "race", "battletag"] },

@@ -230,6 +230,38 @@ describe("AgentUpgradeNotice", () => {
   });
 });
 
+describe("AgentUpgradeNotice next to the Doctor banner", () => {
+  const outdated = { items: [{ agentVersion: "0.15.19", lastSeenAt: "2026-08-13T16:59:30Z" }] };
+  const initialAgent = { paired: true, version: "0.15.19", lastSeenAt: "2026-08-13T16:59:30Z" };
+  function answers(doctorWarnings: Array<{ id: string }>) {
+    useApiMock.mockImplementation((path: string | null) => path === "/v1/me/doctor"
+      ? { data: { ok: false, warnings: doctorWarnings.map((warning) => ({ severity: "warn", message: "", ...warning })) }, isLoading: false }
+      : { data: outdated, isLoading: false, error: null });
+  }
+
+  it("steps aside when the Doctor already shows agent_outdated_required, so Today asks once", () => {
+    answers([{ id: "agent_outdated_required" }]);
+    render(<AgentUpgradeNotice initialAgent={initialAgent} />);
+    expect(screen.queryByLabelText("Required agent update")).toBeNull();
+    // It reads the banner's cached answer and never sends a Doctor request of its own.
+    expect(useApiMock).toHaveBeenCalledWith("/v1/me/doctor", { revalidateOnMount: false, revalidateOnFocus: false, revalidateOnReconnect: false });
+  });
+
+  it("keeps its own outdated notice for any other Doctor answer", () => {
+    answers([{ id: "agent_paused" }]);
+    render(<AgentUpgradeNotice initialAgent={initialAgent} />);
+    expect(screen.getByText(/connected agent v0\.15\.19 is out of date/i)).toBeTruthy();
+  });
+
+  it("keeps the inactive-agent notice even when the Doctor reports the version floor", () => {
+    useApiMock.mockImplementation((path: string | null) => path === "/v1/me/doctor"
+      ? { data: { ok: false, warnings: [{ id: "agent_outdated_required", severity: "warn", message: "" }] } }
+      : { data: { items: [] }, isLoading: false });
+    render(<AgentUpgradeNotice initialAgent={{ paired: false, version: null, lastSeenAt: null }} />);
+    expect(screen.getByLabelText("Required agent update")).toBeTruthy();
+  });
+});
+
 describe("AgentUpgradeNotice with browser import enabled", () => {
   it("replaces the no-agent warning with the dismissible live-features upsell", async () => {
     useApiMock.mockReturnValue({ data: { items: [] }, isLoading: false });

@@ -3,7 +3,7 @@
  * failure summary for progress and import-summary views.
  *
  * Wording reuses the desktop importer's `ERROR_CODE_COPY`
- * (`components/imports/useImportStatus.ts`) where the codes overlap, so a
+ * (`lib/syncReasons.ts`) where the codes overlap, so a
  * replay that fails in the browser reads the same as one the agent skipped.
  * Copy never names a file or a player: views show counts per kind only.
  *

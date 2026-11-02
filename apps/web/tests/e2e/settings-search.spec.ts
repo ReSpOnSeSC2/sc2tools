@@ -100,9 +100,9 @@ for (const theme of ["light", "dark"] as const) {
     test(`Settings search ${theme} ${width}: real targets, conditional rails and guarded fields`, async ({ page }, info) => {
       test.setTimeout(240_000); await page.setViewportSize({ width, height: 900 });
       const evidence = await openSettingsSearchFixture(page, theme);
-      await targets(page, ["setup-health", "account-summary", "quick-links"]);
-      await choices(page, ["setup-health", "account-summary", "quick-links"]);
-      await expect.poll(() => evidence.reads.filter(row => ["/v1/me", "/v1/me/doctor", "/api/agent/version"].includes(row.path)).length).toBe(3);
+      await targets(page, ["setup-health", "sync-health", "account-summary", "quick-links"]);
+      await choices(page, ["setup-health", "sync-health", "account-summary", "quick-links"]);
+      await expect.poll(() => evidence.reads.filter(row => ["/v1/me", "/v1/me/doctor", "/api/agent/version", "/v1/me/sync-health"].includes(row.path)).length).toBe(4);
       await expect(search(page)).toHaveCount(1); await expect(search(page)).toBeVisible();
       expect((await search(page).boundingBox())!.height).toBeGreaterThanOrEqual(44);
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);

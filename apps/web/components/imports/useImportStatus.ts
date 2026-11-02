@@ -34,36 +34,9 @@ type StatusResp = Partial<ImportJob> & {
   phase?: string | null;
 };
 
-/** Human copy for the agent's skip-reason codes (shared contract with
- * apps/agent replay_pipeline SKIP_* + import_controller). */
-export const ERROR_CODE_COPY: Record<string, string> = {
-  parse_failed:
-    "File looks corrupt, cut off, or from an unsupported SC2 version.",
-  player_unresolved:
-    "Couldn't tell which player is you — set your BattleTag in Settings → Profile, then re-import.",
-  no_result: "The replay has no recorded result (left during loading?).",
-  ai_game: "Skipped — game vs the AI.",
-  resumed_replay:
-    "Skipped — a replay-resume session is not a new ladder result.",
-  filtered: "Skipped — outside your import date range.",
-  rejected_by_server: "The server rejected the upload.",
-  file_unstable:
-    "The file stayed empty or unreadable (interrupted save or cloud-sync lag?). Run Re-sync in the desktop agent to retry it.",
-  analysis_failed:
-    "The desktop agent hit an unexpected error analysing this replay. Update the agent, then run Re-sync to retry it.",
-  analyzer_unavailable: "The agent's parser couldn't load — restart the agent.",
-};
-
-/** Skip reasons that mean the importer deliberately ignored a file. */
-export const BENIGN_SKIP_CODES = new Set([
-  "ai_game",
-  "resumed_replay",
-  "filtered",
-]);
-
-export function isBenignImportSkip(code: string): boolean {
-  return BENIGN_SKIP_CODES.has(code);
-}
+// The skip-reason copy is pure (lib/syncReasons.ts), so Sync health can
+// share it without this hook's socket.
+export { BENIGN_SKIP_CODES, ERROR_CODE_COPY, isBenignImportSkip } from "@/lib/syncReasons";
 
 export type ImportStatusState = {
   error?: unknown;

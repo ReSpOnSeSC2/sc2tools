@@ -149,13 +149,6 @@
       "example": "\"fixed inset-x-0 bottom-above-chrome z-banner px-3 focus:outline-none sm:left-auto sm:right-4 sm:max-w-md sm:px-0\""
     },
     {
-      "file": "components/SyncStatus.tsx",
-      "rule": "dialog-outside-ui",
-      "signature": "9017a23364573d8faa6a067475c2cc027e105a74e80cbe83cbc130043f1a4c42",
-      "count": 1,
-      "example": "<div id={id} role=\"dialog\" aria-label=\"Desktop app details\" className=\"absolute left-0 top-full z-40 mt-1 w-[min(22rem,calc(100vw-2rem))] space-y-2 rounded-xl border border-border "
-    },
-    {
       "file": "components/analyzer/ActiveFilterChips.tsx",
       "rule": "focus-without-ring",
       "signature": "c6cb7182fe0af10b05e35c1b5adaba57dc509c299a7d10c4ea7d5a521776047c",

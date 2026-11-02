@@ -14,6 +14,7 @@ import { DestructiveConfirmDialog } from "@/components/ui/DestructiveConfirmDial
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { useApi, apiCall } from "@/lib/clientApi";
 import { fmtAgo } from "@/lib/format";
+import { deviceSyncSummary, SYNC_HEALTH_SETTINGS_HREF, type DeviceSyncSummary } from "@/lib/syncHealth";
 import { AGENT_ONLINE_WINDOW_MS, isAgentVersionAtLeast } from "@/components/dashboard/AgentUpgradeNotice";
 import { PairDeviceForm } from "@/components/onboarding/PairDeviceForm";
 import { useReleaseInfo } from "@/components/onboarding/useReleaseInfo";
@@ -78,6 +79,7 @@ function DeviceCard({ device, now, latest, onUnpair, onSaved }: { device: Paired
   const age = Math.max(now, Date.now()) - seen;
   const online = Number.isFinite(seen) && age >= 0 && age < AGENT_ONLINE_WINDOW_MS;
   const update = Boolean(latest && device.agentVersion && !isAgentVersionAtLeast(device.agentVersion, latest));
+  const sync = deviceSyncSummary(device, Math.max(now, Date.now()));
   async function save(event: React.FormEvent) {
     event.preventDefault(); if (busy) return;
     setBusy(true); setError(""); setNotice("");
@@ -92,9 +94,31 @@ function DeviceCard({ device, now, latest, onUnpair, onSaved }: { device: Paired
       <div className="flex flex-wrap gap-2"><Badge variant={online ? "success" : "neutral"}>{online ? "Online" : "Offline"}</Badge>{update ? <Link href="/download" className="text-caption text-accent underline">Update available → v{latest}</Link> : null}</div>
       <p className="break-words text-caption text-text-muted">{[device.hostname, device.agentOsRelease || device.agentOs, device.agentVersion ? `v${device.agentVersion}` : ""].filter(Boolean).join(" · ") || "Waiting for the app to check in"}</p>
       <p className="text-caption text-text-dim">Paired {fmtAgo(device.createdAt)} · {device.lastSeenAt ? `seen ${fmtAgo(device.lastSeenAt)}` : "not seen yet"}</p>
+      {sync ? <DeviceSyncLine summary={sync} /> : null}
       <form onSubmit={save} className="flex flex-wrap gap-2"><Input aria-label={`Label for ${device.hostname || "PC"}`} value={label} onChange={(event) => { dirty.current = true; setLabel(event.target.value); }} maxLength={40} disabled={busy} placeholder="Optional label" className="min-w-0 flex-1" /><Button size="sm" variant="secondary" type="submit" disabled={busy || label.trim() === (device.label || "")} loading={busy}>Save label</Button></form>
       {error ? <p role="alert" className="text-caption text-danger">{error}</p> : null}{notice ? <p role="status" className="text-caption text-success">{notice}</p> : null}
       <Button variant="ghost" size="sm" onClick={onUnpair}>Unpair</Button>
     </div>
   </Card>;
+}
+
+const SYNC_TONE = {
+  error: { text: "text-danger", dot: "bg-danger" },
+  warn: { text: "text-warning", dot: "bg-warning" },
+  info: { text: "text-text-muted", dot: "border border-text-dim" },
+  ok: { text: "text-success", dot: "bg-success" },
+} as const;
+
+/** The PC's own sync report in one line: state and counts only, never a player name. */
+function DeviceSyncLine({ summary }: { summary: DeviceSyncSummary }) {
+  const tone = SYNC_TONE[summary.tone];
+  const details = [...summary.details, summary.lastUploadAt ? `last upload ${fmtAgo(summary.lastUploadAt)}` : ""].filter(Boolean);
+  return <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-caption">
+    <span aria-hidden className={`inline-flex h-2 w-2 shrink-0 rounded-full ${tone.dot}`} />
+    <span className="sr-only">Sync health: </span>
+    {summary.stale ? <span className="text-text-muted">Last report {fmtAgo(summary.reportedAt)}:</span> : null}
+    <span className={`font-semibold ${tone.text}`}>{summary.label}</span>
+    {details.length ? <span className="text-text-muted">{details.join(" · ")}</span> : null}
+    {summary.tone === "warn" || summary.tone === "error" ? <Link href={SYNC_HEALTH_SETTINGS_HREF} className="text-accent underline">Open Sync health</Link> : null}
+  </p>;
 }
