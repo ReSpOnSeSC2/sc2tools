@@ -1,9 +1,7 @@
 """Periodic heartbeat to the cloud so the API knows this agent is alive.
 
-The agent doesn't keep a long-lived socket — it only POSTs replays —
-so without this signal the cloud can't tell "agent stopped" from
-"player isn't laddering right now". A small POST every minute is
-cheap and lets the dashboard show a green/grey dot per device.
+A small POST every minute supplies presence and current sync health even
+when the optional realtime socket is unavailable.
 
 The cloud route is ``POST /v1/devices/heartbeat`` and is authenticated
 by the device token (same as the replay upload path).
@@ -21,6 +19,7 @@ from pathlib import Path
 
 from . import __version__
 from .api_client import ApiClient
+from .sync_report import report_size, SYNC_REPORT_MAX_BYTES
 
 DEFAULT_INTERVAL_SEC = 60.0
 INITIAL_DELAY_SEC = 5.0
@@ -56,10 +55,13 @@ class Heartbeat:
         on_failure: Optional[Callable[[Exception], None]] = None,
         on_overlay_tokens: Optional[Callable] = None,
         state_dir: Optional[Path] = None,
+        sync_provider: Optional[Callable] = None,
     ) -> None:
         self._on_success = on_success or (lambda: None)
         self._on_failure = on_failure or (lambda _exc: None)
         self._on_overlay_tokens = on_overlay_tokens
+        self._sync_provider = sync_provider
+        self._sync_rejected_logged = False
         self._api = api
         if state_dir is not None:
             from .preset_policy import PresetPolicyRefresh
@@ -110,6 +112,13 @@ class Heartbeat:
         hostname = _local_hostname()
         if hostname:
             body["hostname"] = hostname
+        if self._sync_provider is not None:
+            try:
+                report = self._sync_provider()
+                if isinstance(report, dict) and report and report_size(report) < SYNC_REPORT_MAX_BYTES:
+                    body["sync"] = report
+            except Exception:  # Advisory facts must never interrupt presence or recovery.
+                self._log.debug("heartbeat_sync_unavailable")
         # Reuse the api_client request infrastructure (auth, retries,
         # backoff). Failures are logged-only — we'll try again next tick.
         try:
@@ -120,6 +129,9 @@ class Heartbeat:
             self._on_failure(exc)
             self._log.debug("heartbeat_attempt_failed: %s", exc)
             return
+        if isinstance(response, dict) and response.get("syncAccepted") is False and not self._sync_rejected_logged:
+            self._sync_rejected_logged = True
+            self._log.warning("heartbeat_sync_rejected")
         if self._on_overlay_tokens is not None:
             try:
                 receipts = response.get("overlayTokenReplacements", []) if isinstance(response, dict) else []

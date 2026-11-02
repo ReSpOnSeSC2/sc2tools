@@ -128,6 +128,7 @@ class LiveClientPoller:
         config: Optional[PollerConfig] = None,
         session: Optional[requests.Session] = None,
         user_name_hint: Optional[str] = None,
+        on_contact=None,
     ) -> None:
         self._bus = bus
         self._cfg = config or PollerConfig()
@@ -135,6 +136,7 @@ class LiveClientPoller:
         # connection to localhost is essentially free.
         self._session = session or requests.Session()
         self._user_name_hint = user_name_hint
+        self._on_contact = on_contact
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         # State carried across polls so the state machine can detect
@@ -477,6 +479,13 @@ class LiveClientPoller:
         )
 
     # ------------------------------------------------------------ helpers
+    def _contact(self):
+        if getattr(self, "_on_contact", None):
+            try:
+                self._on_contact()
+            except Exception:
+                pass  # Advisory health must never interrupt the local poller.
+
     def _fetch_ui(self) -> Optional[LiveUIState]:
         started = time.monotonic()
         try:
@@ -506,6 +515,7 @@ class LiveClientPoller:
             METRICS.incr("client_api.ui.bad_shape")
             return None
         METRICS.incr("client_api.ui.ok")
+        self._contact()
         return LiveUIState(active_screens=[str(s) for s in screens])
 
     def _fetch_game(self) -> Optional[LiveGameState]:
@@ -542,6 +552,7 @@ class LiveClientPoller:
         except (TypeError, ValueError):
             display_time = 0.0
         METRICS.incr("client_api.game.ok")
+        self._contact()
         return LiveGameState(
             display_time=display_time,
             is_replay=bool(data.get("isReplay")),

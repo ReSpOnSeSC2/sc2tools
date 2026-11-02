@@ -5,6 +5,11 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 ## 0.24.8
 
 ### Changed
+- Report current sync queues, skipped games and upload problems to your own
+  Settings Sync health card. Include frequently seen unmatched player accounts
+  there, with a small bounded report that clears resolved problems.
+- Keep the health checklist current when the website connection, StarCraft II,
+  OBS, player-name source or replay folders change.
 - Explain desktop sync health in one dashboard card, with a next step for
   each problem, help links and Restart agent for startup failures. Keep its
   action buttons steady as live counts change.
