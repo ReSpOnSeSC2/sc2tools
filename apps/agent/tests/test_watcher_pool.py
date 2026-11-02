@@ -55,7 +55,9 @@ class _FakeUploadQueue:
         self.pending_depth = 0
         self.pending_paths: set[str] = set()
 
-    def submit(self, job: UploadJob) -> bool:
+    def submit(self, job: UploadJob, *, current_guard=None) -> bool:
+        if current_guard is not None and current_guard() is False:
+            return False
         self.submitted.append(job)
         return True
 
@@ -119,6 +121,8 @@ def _make_watcher(tmp_path: Path) -> Any:
     from sc2tools_agent.watcher import ReplayWatcher
 
     state = AgentState(device_token="t")
+    from sc2tools_agent.sync_retry import replay_ticket, publish_owned_toons
+    publish_owned_toons(state, {"displayName": "Synthetic"}, replay_ticket(state))
     upload = _FakeUploadQueue()
     watcher = ReplayWatcher(cfg=_cfg(tmp_path), state=state, upload=upload)
     # Attach to the test object so tests can inspect post-hoc — and

@@ -109,11 +109,16 @@ def ensure_paired(*, cfg: AgentConfig, state: AgentState, api: ApiClient,
                     raise ValueError("pairing ready response has no token or account")
                 with _STATE_SAVE_LOCK:
                     previous = state.device_token, state.user_id, state.paired_at
+                    state._owner_epoch = object()
+                    state._owned_toons = None
+                    if state.user_id != str(user_id):
+                        from ..player_handle import write_cache
+                        write_cache(cfg.state_dir, None)
                     state.device_token, state.user_id = str(token), str(user_id)
                     state.paired_at = now().isoformat()
                     try:
                         save_state(cfg.state_dir, state)
-                    except OSError:
+                    except Exception:
                         state.device_token, state.user_id, state.paired_at = previous
                         raise
                 emit(PairingUiState("paired"))

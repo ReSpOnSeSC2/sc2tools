@@ -5,6 +5,11 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 ## 0.24.8
 
 ### Changed
+- Add an account from your private web Sync health list and retry only the
+  selected skip reason on one linked PC. Prefer exact saved SC2 accounts,
+  keep the sync date range and capture opt-in, and safely retire old account
+  work when linking changes. Preserve explicitly saved player-name overrides
+  for their own account across restarts.
 - Report current sync queues, skipped games and upload problems to your own
   Settings Sync health card. Include frequently seen unmatched player accounts
   there, with a small bounded report that clears resolved problems.

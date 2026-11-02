@@ -16,6 +16,8 @@ from sc2tools_agent import replay_pipeline, runner, watcher
 from sc2tools_agent.health import HealthFacts, HealthMonitor
 from sc2tools_agent.heartbeat import Heartbeat
 from sc2tools_agent.sync_report import MAX_UNRESOLVED_PATHS, SKIP_REASONS, SyncReportTracker, report_size
+from sc2tools_agent.state import AgentState
+from sc2tools_agent.sync_retry import replay_ticket, publish_owned_toons
 
 
 def facts(**changes):
@@ -154,13 +156,15 @@ def test_both_watcher_modes_deliver_candidates_after_current_skip_marker(mode, m
     tracker = SyncReportTracker()
     instance = watcher.ReplayWatcher.__new__(watcher.ReplayWatcher)
     instance._cfg = SimpleNamespace(state_dir=tmp_path)
-    instance._state = SimpleNamespace(uploaded={})
+    instance._state = AgentState()
+    publish_owned_toons(instance._state, {"displayName": "Synthetic"}, replay_ticket(instance._state))
+    instance._stop = threading.Event()
     instance._analyzer_unavailable = False
     instance._process_crash_strikes = 0
     instance._clear_settle_failure = Mock()
     instance._finish_replay = Mock()
     instance._notify_skipped = Mock()
-    def capture(path, entries):
+    def capture(path, entries, *, ticket=None):
         assert instance._state.uploaded[str(path)] == "skipped:player_unresolved"
         tracker.unresolved(path, entries)
     instance._on_unresolved = capture
@@ -345,15 +349,21 @@ def test_obs_health_follows_connect_auth_failure_recovery_and_disconnect():
 
 @pytest.mark.parametrize("source", ["cloud", "cache", "auto_detect", "none"])
 def test_identity_resolution_reports_source_without_changing_result(source, monkeypatch, tmp_path):
-    monkeypatch.setattr(runner, "refresh_player_handle", lambda *_: "Synthetic" if source == "cloud" else None)
+    state = AgentState()
+    def refresh(*_, **kwargs):
+        if source == "cloud":
+            kwargs["on_profile"]({"displayName": "Synthetic"})
+            return "Synthetic"
+        return None
+    monkeypatch.setattr(runner, "refresh_player_handle", refresh)
     monkeypatch.setattr(runner, "read_player_handle_cache", lambda *_: "Synthetic" if source == "cache" else None)
     monkeypatch.setattr(runner, "auto_detect_from_replays", lambda *_: "Synthetic" if source == "auto_detect" else None)
     monkeypatch.setattr(runner, "write_player_handle_cache", lambda *_: None)
     monkeypatch.setattr(runner, "resolve_player_handle", lambda *_: None)
     callback = Mock()
-    result = runner._ensure_player_handle(None, SimpleNamespace(state_dir=tmp_path), None, [], logging.getLogger("test"), on_source=callback)
+    result = runner._ensure_player_handle(None, SimpleNamespace(state_dir=tmp_path), state, [], logging.getLogger("test"), on_source=callback)
     assert result == (None if source == "none" else "Synthetic")
-    callback.assert_called_once_with(source)
+    callback.assert_called_once_with("cloud" if source == "cloud" else "none")
 
 
 def test_first_replay_cache_repair_retires_unknown_identity_on_refresh(tmp_path, monkeypatch):
@@ -365,18 +375,18 @@ def test_first_replay_cache_repair_retires_unknown_identity_on_refresh(tmp_path,
     runner._sync_report_provider(ui, SimpleNamespace(uploaded={}, replay_folders_override=[]), SimpleNamespace(state_dir=tmp_path, replay_folder=None))
     write_cache(tmp_path, "Synthetic")  # Same atomic cache write as toon-path repair.
     ui.refresh_status()
-    assert ui.health.facts().identity_source == "cache"
+    assert ui.health.facts().identity_source == "none"  # Flat cache has no owner authority.
 
 
 def test_existing_environment_identity_is_known_at_boot(tmp_path, monkeypatch):
     monkeypatch.delenv("SC2TOOLS_PLAYER_CONFIG", raising=False)
     monkeypatch.setenv("SC2TOOLS_PLAYER_HANDLE", "Synthetic")
-    monkeypatch.setattr(runner, "refresh_player_handle", lambda *_: None)
+    monkeypatch.setattr(runner, "refresh_player_handle", lambda *_, **_kwargs: None)
     monkeypatch.setattr(runner, "auto_detect_from_replays", lambda *_: None)
     callback = Mock()
-    result = runner._ensure_player_handle(None, SimpleNamespace(state_dir=tmp_path), None, [], logging.getLogger("test"), on_source=callback)
+    result = runner._ensure_player_handle(None, SimpleNamespace(state_dir=tmp_path), AgentState(), [], logging.getLogger("test"), on_source=callback)
     assert result == "Synthetic"
-    callback.assert_called_once_with("environment")
+    callback.assert_called_once_with("none")  # Unknown owner context still defers parsing.
 
 
 def test_headless_add_folder_updates_shared_health(tmp_path, monkeypatch):

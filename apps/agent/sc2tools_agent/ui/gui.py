@@ -151,6 +151,7 @@ class SettingsPayload:
         "start_minimized",
         "notify_every_game",
         "player_handle",
+        "player_handle_origin",
         "parse_concurrency",
         "upload_concurrency",
         "upload_batch_size",
@@ -184,6 +185,7 @@ class SettingsPayload:
         start_minimized: Optional[bool] = None,
         notify_every_game: Optional[bool] = None,
         player_handle: Optional[str] = None,
+        player_handle_origin=None,
         parse_concurrency: Optional[int] = None,
         upload_concurrency: Optional[int] = None,
         upload_batch_size: Optional[int] = None,
@@ -222,6 +224,7 @@ class SettingsPayload:
         # replays). ``None`` means "no change"; an empty string clears
         # the override and falls back to the cloud profile + auto-detect.
         self.player_handle = player_handle
+        self.player_handle_origin = player_handle_origin
         # How many parse threads the watcher's ThreadPoolExecutor runs.
         # ``None`` means "no change"; the runner's default is 4.
         self.parse_concurrency = parse_concurrency
@@ -325,6 +328,7 @@ class GuiUI:
         on_pairing_refresh: Optional[Callable[[], None]] = None,
         on_link_again: Optional[Callable[[], None]] = None,
         on_sync_retry: Optional[Callable[[], None]] = None,
+        settings_identity_provider: Optional[Callable] = None,
         state_dir: Optional[Path] = None,
         tray_available: bool = True,
         initial_tray_hint_shown: bool = False,
@@ -386,6 +390,7 @@ class GuiUI:
         self._initial_paused = initial_paused
         self._initial_paired = initial_paired
         self._initial_user_id = initial_user_id
+        self._settings_identity_provider = settings_identity_provider
         self._initial_settings = initial_settings
         # Authoritative "total replays synced" source. The runner wires
         # this to a count over ``state.uploaded``'s dated entries so the
@@ -1750,16 +1755,19 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             form.addRow(api_label, api_block)
 
             self._handle_input = QtWidgets.QLineEdit()
+            self._handle_edit_origin = None
+            self._handle_input.textEdited.connect(self._on_handle_edited)
             self._handle_input.setPlaceholderText(
-                "e.g. ReSpOnSe  (leave blank to auto-detect from replays)",
+                "e.g. ReSpOnSe  (leave blank to use your current profile)",
             )
             self._handle_input.setToolTip(
                 "Your in-game player name. Used to identify which player "
-                "is YOU in each replay. Leave blank to auto-detect from "
-                "the most recent replay in your watched folders. The "
-                "value can be a clan-tagged display name or just a "
-                "unique substring; the parser does a case-sensitive "
-                "substring match against in-replay player names.",
+                "is YOU when no saved account ID identifies a player. "
+                "Leave blank to refresh your current account's profile. "
+                "Saved account IDs take priority. A name must uniquely "
+                "match one replay player, including any clan tag or a "
+                "case-sensitive substring. Only an edited value is saved "
+                "as an override for the linked account.",
             )
             form.addRow("Player handle", self._handle_input)
 
@@ -2747,6 +2755,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._pairing_card.apply(state)
 
         def _on_unlinked(self):
+            self._handle_input.clear()
+            self._handle_input.setModified(False)
+            self._handle_edit_origin = None
             self._paired = False
             self._user_id = None
             self._on_recent_snapshot({"owner": None, "rows": [], "facts": {}, "today": {}, "skipped": []})
@@ -2766,6 +2777,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self.raise_()
 
         def _on_paired(self, user_id: str) -> None:
+            if self._user_id != user_id:
+                self._handle_input.clear()
+                self._handle_input.setModified(False)
+                self._handle_edit_origin = None
             was_paired = self._paired
             self._paired = True
             self._user_id = user_id
@@ -3590,7 +3605,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             checked_upload_conc = self._upload_conc_group.checkedId()
             if checked_upload_conc <= 0:
                 checked_upload_conc = self._upload_conc_last_saved
+            handle_origin = self._handle_edit_origin
             payload = SettingsPayload(
+                player_handle_origin=handle_origin,
                 background_import_speed=self._speed_combo.currentData(),
                 pause_history_in_game=self._pause_history_check.isChecked(),
                 pause_on_battery=self._battery_check.isChecked(),
@@ -3606,7 +3623,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 notify_every_game=self._game_notifications_check.isChecked(),
                 auto_update_enabled=self._autoupdate_check.isChecked(),
                 replay_capture_enabled=self._replay_capture_last_saved,
-                player_handle=self._handle_input.text().strip(),
+                player_handle=(self._handle_input.text().strip() if self._handle_input.isModified()
+                               and (ui._settings_identity_provider is None or
+                                    (handle_origin is not None and handle_origin[0] == self._user_id)) else None),
                 parse_concurrency=int(self._concurrency_slider.value()),
                 upload_concurrency=checked_upload_conc,
                 upload_batch_size=int(self._upload_batch_slider.value()),
@@ -3654,6 +3673,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             # completed Save cannot silently lose its atomic state commit.
             threading.Thread(target=persist, name="sc2tools-settings-save", daemon=False).start()
 
+        def _on_handle_edited(self, _text):
+            self._handle_edit_origin = ui._settings_identity_provider() if ui._settings_identity_provider else None
+
         def _on_settings_save_done(self, context, error):
             self._settings_save_pending = False
             self._settings_page.setEnabled(True)
@@ -3665,6 +3687,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._show_settings_toast(f"Couldn't save settings: {error}", "error")
             else:
                 self._saved_api_base = context["api_base"]
+                self._handle_input.setModified(False)
                 preset = context["preset"]
                 if context.get("externalFilter"):
                     self._filter_combo.setCurrentIndex(self._filter_combo.findData(preset))
@@ -4164,8 +4187,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._populate_obs_settings(initial)
             if initial.api_base:
                 self._api_input.setText(initial.api_base)
-            if initial.player_handle:
-                self._handle_input.setText(initial.player_handle)
+            self._handle_input.setText(initial.player_handle or "")
+            self._handle_input.setModified(False)
             if initial.parse_concurrency:
                 # Clamp into the slider's [1, cpu_max] range so a state
                 # file from a different machine (e.g. user copied their

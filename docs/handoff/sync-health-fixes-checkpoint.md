@@ -1,10 +1,11 @@
 # Sync health fix actions: checkpoint (roadmap item 76, B3)
 
-This worktree prepares the API and private Settings controls. The agent
-handler and saved-toon resolver are **not implemented by this phase**. They
-must be added after B1 (#865) merges, using its reviewed parser side channel
-and both runner modes. Old agents explicitly report unsupported through the
-API and never receive the legacy full-resync event from these buttons.
+The API, private Settings controls and native handler are implemented in this
+worktree, after B1 (#865, exact source `647ee82e`) merged as `da77a84b`.
+Native source review and combined runtime gates remain pending. Old agents
+explicitly report unsupported through the API and never receive the legacy
+full-resync event from these buttons. Agent 0.24.8 remains unpublished and
+owner-gated; this is not installed-agent acceptance.
 
 ## Owner actions
 
@@ -51,7 +52,7 @@ The server retains per-owner admission until actual settlement/deadline,
 limits pending owners to 64 and rate-limits retry to 6/minute and identity
 changes to 20/minute in cardinality-bounded stores.
 
-## Socket contract for the later agent phase
+## Socket contract and native implementation
 
 1. An agent that implements this contract advertises integer
    `syncRetryVersion: 1` in its authenticated device handshake. This is a
@@ -77,25 +78,72 @@ changes to 20/minute in cardinality-bounded stores.
    `invalid_request`, `local_error`. API strips all other ACK fields. Cache
    bounded request IDs for duplicate-command idempotency until expiry. A lost
    ACK has an unknown result; the server never automatically dispatches again.
-5. Keep socket heartbeats responsive: run profile/filesystem/queue work via
-   the existing background/thread mechanism. For `player_unresolved`, refresh
-   usable owner-saved toon identities, then use B1's scoped side channel to
-   resolve the exact saved toon and parse with that replay player's display
-   name. A stale profile display name and a second saved toon must recover in
-   both thread and process paths without changing parser signature, two-tuple
-   return or canonical Pyodide outputs.
+5. `SyncRetrySocket` runs the controller in a background thread, reserving
+   the request ID before dispatch. Exception/cancelled ACK outcomes retain a
+   fixed uncertain result, and admission stays occupied until the actual
+   thread settles. Detached exceptions are consumed without private logging;
+   proven scheduling failures release admission without repeating that ID.
+   `player_unresolved` refreshes owner identities with the existing interactive
+   API deadline. Current owner/token/epoch/namespace/stop/expiry guards run
+   after held work and at queue mutation. No guard calls queue methods.
 6. Retry only current matching local cursor records via a narrow queue policy,
    preserving successful, missing, pending, unrelated and date-filtered work.
-   Extend the existing explicit retry allowlist only for the six reasons
-   above. Preserve capture/engine opt-in. Lock state consistently with B1's
+   A separate remote retry allowlist contains only the six reasons above;
+   the existing local date-filter retry remains available. Preserve
+   capture/engine opt-in. Lock state consistently with B1's
    `_STATE_SAVE_LOCK`, avoid lock inversions, save once with rollback on failure,
    request a watcher sweep and refresh recent-history/health facts. All new
-   callbacks must survive token replacement in GUI and headless modes.
+   callbacks survive token replacement in GUI and headless modes.
 
 The ready signal is advisory; current token authentication and post-ACK
 presence are authoritative on the API. An agent must not treat ready alone
 as permission after its connection epoch changes. Test stopped/owner-changed
 fences during held refreshes, duplicate IDs and expiration before any mutation.
+
+## Native identity, owner transactions and recovery
+
+- The existing core parser has an optional ContextVar identity scope. It
+  selects one exact non-observer saved toon **before** perspective-dependent
+  deep outputs, even if a stale hint matches the opponent or both names are
+  identical. Both-owned/no-match ambiguity stays unresolved. The unscoped
+  browser/default name resolver and both parser signatures remain unchanged.
+- Thread/live/fallback submissions capture parent owner/token/epoch tickets
+  at admission; process jobs carry only bounded toons and a current hint,
+  never the parent ticket or credentials. Both paths establish/reset the
+  native scope. Native scope bypasses path recovery and flat cache promotion,
+  preventing an old owner's held parse from writing a new owner's cache.
+- Unknown identity is distinct from a current fetched profile with zero
+  toons. Unknown work defers without terminal markers or leaked inflight /
+  capture reservations. Successful contact starts at most one background
+  profile refresh, bounded by the interactive deadline and a 30-second retry
+  interval, then invalidates/wakes inventory so unchanged paths retry. Existing
+  genuine skip markers remain. Known-empty profiles use only their fresh
+  unique name hint; they cannot fall back to another owner's disk/path data.
+- Explicit native Settings intent is stored privately in the existing
+  `player_handle.json` cache with nonsecret owner/source metadata. It survives
+  a same-owner restart and takes precedence over the cloud name hint; exact
+  saved toons still take priority. Flat legacy caches have no proven owner
+  or Settings provenance and require explicit re-entry. The form prefills
+  only a proven current-owner override, sends KEEP for untouched text, and
+  binds actual edits to a form-origin owner/epoch without a credential.
+  Queued A edits cannot become B or a later A override. Explicit CLEAR
+  retires the hint and requests guarded current-profile recovery; saved
+  exact toons remain authoritative. Health reflects usable scoped identity.
+- Cursor writers in watcher, queue and runner share `_STATE_SAVE_LOCK`.
+  Queue repair/submission acquire queue lock then state lock, recheck current
+  owner/marker/pending facts and save/rollback while serialized. Filesystem
+  preflight occurs outside those locks and checkpoints each path. Queue
+  admission binds the original owner atomically, after any held parse.
+  State-only sections never call back into queue methods.
+- Owner/token replacement retires old lifetimes and publishes under the
+  state lock. Deferred automatic capture carries the original parent ticket
+  through enqueue, cancellation, reparse and final guarded submit, including
+  five-field stop cleanup. Capture remains opt-in; tests mock it entirely.
+- Diagnostic candidates are owner/epoch scoped. Actual callback publication
+  rechecks its original ticket, and report assembly rejects mismatched scope.
+  Heartbeat captures its API before requesting an API-bound report, so held
+  old reports cannot be sent under replacement credentials or update the
+  replacement account's recovery hooks.
 
 ## Private web controls
 
@@ -121,12 +169,21 @@ passed during this phase. Independent API/web source review and refuting
 verification identified existing callback warning growth, raw JSON parser
 errors and optional telemetry body capture. The capability/ready helpers,
 fixed-error pre-parser and telemetry exclusions address those findings.
-The follow-up source review is clear; final refuting follow-up and runtime
-gates remain pending. **No runtime tests, typechecks, lint, build or mutation
-checks have run for this change yet.** The root owns the serial check gate. No agent source,
-configuration flags, dependencies, infrastructure, production data or native
-process was touched by this phase. Agent 0.24.8 remains unpublished and
-owner-gated; this checkpoint is not installed-agent acceptance.
+The API/web follow-up source review is clear. Its early hosted web types,
+lint, tests, responsive checks and Vercel check passed. The early API run
+reported 8,331 passed and 9 skipped, with one legacy-device-ID metadata
+assertion failing; the root's compatibility fix then passed 20 focused local
+API tests. It preserves legacy metadata while requiring canonical IDs for
+retry support. These are **early phase results**, not final combined gates.
+
+Native source/test changes have had source AST/whitespace checks only. Final
+native reviewer/refuter passes, targeted tests, types/lint, both mutation
+phases, full agent/web suites, route budgets, build and combined-head CI
+remain pending. Official canonical metadata regeneration is still unrun;
+the root must regenerate exactly the two metadata outputs and prove all four
+games deep-equal before pinning final-head checks. No new dependency, flag,
+provider/infrastructure configuration, production read, agent/StarCraft
+launch, version bump, tag or release was performed.
 
 New tests cover real Mongo append races, cap/duplicates/legacy/profile/GDPR,
 strict owner request bodies, current session and revoked credentials, deadline
@@ -138,9 +195,15 @@ Run these plus `syncActionJson`, `privateSearchSentry`, `meProfile`,
 `dashboardMaintainedReads.replset`, Settings SyncHealthCard, syncHealth helpers,
 header/Devices/privacy/help neighbours, API/web types/lint/UI lint, full web
 gate and route budgets. Add reason/owner/session/expiry/atomic-append mutation
-checks. Agent integration needs its own review/verifier and queue/parser/
-socket/boot/parity tests after #865 merges, then combined final-head checks.
+checks. Native coverage is in `test_sync_retry`, `test_sync_retry_socket`,
+`test_sync_retry_identity`, `test_sync_retry_recovery` and
+`test_gui_sync_identity`, with queue/watcher/socket/heartbeat/runner/pairing/
+parser/capture/player-handle neighbours. Existing watcher fakes now honor
+guarded submission and declare a known synthetic profile; B1 identity facts
+tests distinguish legacy return hints from current-owner parse authority.
+No native runtime pass is claimed here yet.
 
-Preserve all 40 canonical engine inputs, seven served assets, four strict
-samples, 49 raw pins and 83 route budgets. Do not regenerate those for this
-API/web phase. Do not publish, tag or rebuild agent 0.24.7/0.24.8.
+Preserve the 40 canonical input paths, seven served assets, four strict
+samples, 49 raw pins and 83 route budgets. Only the official two-output
+metadata refresh follows the completed native source review, with all four
+games deep-equal. Do not publish, tag or rebuild agent 0.24.7/0.24.8.

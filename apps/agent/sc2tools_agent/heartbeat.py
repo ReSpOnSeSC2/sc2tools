@@ -103,6 +103,7 @@ class Heartbeat:
                 return
 
     def _send_one(self) -> None:
+        api = self._api
         body = {
             "version": __version__,
             "os": platform.system(),
@@ -114,7 +115,8 @@ class Heartbeat:
             body["hostname"] = hostname
         if self._sync_provider is not None:
             try:
-                report = self._sync_provider()
+                scoped = getattr(self._sync_provider, "__dict__", {}).get("for_api")
+                report = scoped(api) if scoped else self._sync_provider()
                 if isinstance(report, dict) and report and report_size(report) < SYNC_REPORT_MAX_BYTES:
                     body["sync"] = report
             except Exception:  # Advisory facts must never interrupt presence or recovery.
@@ -122,10 +124,13 @@ class Heartbeat:
         # Reuse the api_client request infrastructure (auth, retries,
         # backoff). Failures are logged-only — we'll try again next tick.
         try:
-            api = self._api  # Recovery may replace self._api while this request is in flight.
             response = api._post("/v1/devices/heartbeat", auth=True, body=body)
+            if api is not self._api:
+                return
             self._on_success()
         except Exception as exc:  # noqa: BLE001
+            if api is not self._api:
+                return
             self._on_failure(exc)
             self._log.debug("heartbeat_attempt_failed: %s", exc)
             return

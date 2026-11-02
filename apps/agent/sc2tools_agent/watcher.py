@@ -86,9 +86,11 @@ from .replay_pipeline import (
     AnalyzerImportError,
     parse_replay_for_cloud_ex,
     capture_unresolved_candidates,
+    owned_replay_identity,
 )
 from .game_activity import GameActivityGate, background_workers, lower_worker_priority as _lower_worker_priority, on_battery
-from .state import AgentState, save_state
+from .state import AgentState, save_state, _STATE_SAVE_LOCK
+from .sync_retry import replay_ticket
 from .sync_filter import SyncFilter
 from .uploader.queue import UploadJob, UploadQueue
 
@@ -313,13 +315,13 @@ def _install_worker_log_handler(state_dir_str: str) -> None:
     setattr(root, "_sc2tools_worker_handler", True)
 
 
-def _parse_with_candidates(parser, *args, **kwargs):
-    with capture_unresolved_candidates() as candidates:
+def _parse_with_candidates(parser, *args, owned_toons=None, owned_hint=None, **kwargs):
+    with owned_replay_identity(owned_toons, owned_hint), capture_unresolved_candidates() as candidates:
         game, reason = parser(*args, **kwargs)
     return game, reason, candidates
 
 
-def _parse_in_worker(path_str: str, state_dir_str: str) -> tuple:
+def _parse_in_worker(path_str: str, state_dir_str: str, owned_toons=None, owned_hint=None) -> tuple:
     """Top-level worker function — runs in the parse pool.
 
     Lives at module scope (not as a method) because
@@ -365,6 +367,9 @@ def _parse_in_worker(path_str: str, state_dir_str: str) -> tuple:
     from .replay_pipeline import bootstrap_analyzer_path
     bootstrap_analyzer_path()
 
+    if owned_toons == ():
+        return ("identity_pending", path_str, None)
+
     # Worker-side logging. By default the child process has no log
     # handlers configured (spawn doesn't inherit the parent's), and a
     # PyInstaller windowed exe has stderr redirected to /dev/null —
@@ -393,6 +398,8 @@ def _parse_in_worker(path_str: str, state_dir_str: str) -> tuple:
     try:
         game, reason, candidates = _parse_with_candidates(_parse_ex,
             path,
+            owned_toons=owned_toons,
+            owned_hint=owned_hint,
             state_dir=state_dir,
             resolve_pulse=False,
         )
@@ -712,13 +719,25 @@ class ReplayWatcher:
                 count += 1
         return count
 
-    def _notify_unresolved(self, path, candidates):
+    def _notify_unresolved(self, path, candidates, ticket):
         callback = getattr(self, "_on_unresolved", None)
         if callback:
             try:
-                callback(path, candidates)
+                callback(path, candidates, ticket=ticket)
             except Exception:
                 log.debug("unresolved_candidates_callback_failed")
+
+    def _ticket_current(self, ticket):
+        return not self._stop.is_set() and ticket.current(self._state)
+
+    def _mark_replay(self, path, marker, ticket):
+        # Never acquire a queue lock from this state critical section.
+        with _STATE_SAVE_LOCK:
+            key = str(path)
+            if not self._ticket_current(ticket) or key in self._state.uploaded:
+                return False
+            self._state.uploaded[key] = marker
+            return True
 
     def _notify_skipped(self, path: Path, reason: Optional[str]) -> None:
         """Invoke the optional skip observer; never let it break parsing."""
@@ -760,7 +779,7 @@ class ReplayWatcher:
         with self._capture_queue_lock:
             abandoned = self._capture_queue
             self._capture_queue = []
-        for _rank, _sequence, path, _game in abandoned:
+        for _rank, _sequence, path, _game, _ticket in abandoned:
             self._finish_replay(path)
 
     # ---------------- internals ----------------
@@ -1050,6 +1069,7 @@ class ReplayWatcher:
 
     def _drain_history_inventory(self) -> None:
         """Fill free parse slots while retaining all pressure ceilings."""
+        ticket = replay_ticket(self._state)
         if not self._history_drain_lock.acquire(blocking=False):
             return
         try:
@@ -1079,7 +1099,7 @@ class ReplayWatcher:
                 if self._upload.is_pending(path):
                     continue
                 if not self._sync_filter().mtime_in_range(mtime):
-                    self._state.uploaded[key] = "filtered"
+                    self._mark_replay(key, "filtered", ticket)
                     continue
                 with self._inflight_lock:
                     if key in self._inflight:
@@ -1146,6 +1166,14 @@ class ReplayWatcher:
         single bad replay doesn't take down parse for the rest of the
         session.
         """
+        ticket = replay_ticket(self._state)
+        if ticket.toons == ():
+            with self._inflight_lock:
+                self._inflight.discard(str(path))
+            self._release_sweep_live(path)
+            with self._history_lock:
+                self._history_refresh_generation += 1
+            return
         if live:
             with self._sweep_live_lock:
                 is_sweep_fallback = str(path) in self._sweep_live_paths
@@ -1159,6 +1187,7 @@ class ReplayWatcher:
                     self._handle_replay,
                     path,
                     priority=True,
+                    ticket=ticket,
                 )
             except RuntimeError:
                 # Shutdown raced a final watchdog/sweep event. Leave the
@@ -1179,6 +1208,8 @@ class ReplayWatcher:
                 future = executor.submit(
                     _parse_in_worker, path_str,
                     str(self._cfg.state_dir) if self._cfg.state_dir else "",
+                    ticket.toons,
+                    ticket.hint,
                 )
             except (BrokenProcessPool, RuntimeError) as exc:
                 # ``RuntimeError`` filter is narrow: only "cannot
@@ -1194,7 +1225,7 @@ class ReplayWatcher:
                     raise
                 if not self._fall_back_to_threading(reason=repr(exc)):
                     raise
-                self._executor.submit(self._handle_replay, path)
+                self._executor.submit(self._handle_replay, path, ticket=ticket)
                 return
             # Capture path_str on the callback so the inflight set is
             # cleared even when the future raises (e.g., a worker
@@ -1203,10 +1234,10 @@ class ReplayWatcher:
             # ``self._inflight`` and the same replay never gets
             # re-submitted on a subsequent sweep.
             future.add_done_callback(
-                lambda fut, _ps=path_str: self._on_worker_done(fut, _ps),
+                lambda fut, _ps=path_str, _ticket=ticket: self._on_worker_done(fut, _ps, _ticket),
             )
         else:
-            executor.submit(self._handle_replay, path)
+            executor.submit(self._handle_replay, path, ticket=ticket)
 
     def _fall_back_to_threading(self, *, reason: str) -> bool:
         """Swap the live executor for a fresh ThreadPoolExecutor.
@@ -1253,7 +1284,7 @@ class ReplayWatcher:
         )
         return True
 
-    def _on_worker_done(self, future, submitted_path_str: str) -> None:
+    def _on_worker_done(self, future, submitted_path_str: str, ticket=None) -> None:
         """Callback for ProcessPoolExecutor results.
 
         Runs on a thread inside the parent process (concurrent.futures
@@ -1267,6 +1298,7 @@ class ReplayWatcher:
         ``future.result()`` raises — without it a worker crash leaks
         a stale inflight entry and the replay never gets re-submitted.
         """
+        ticket = ticket or replay_ticket(self._state)
         deferred = False
         try:
             try:
@@ -1358,6 +1390,8 @@ class ReplayWatcher:
                     path_str,
                 )
             path = Path(path_str)
+            if not self._ticket_current(ticket) or ticket.toons == () or kind == "identity_pending":
+                return
             if kind != "settle_failed":
                 self._clear_settle_failure(path)
             if kind == "game":
@@ -1369,11 +1403,11 @@ class ReplayWatcher:
                 if not sync_filter.replay_in_range(
                     getattr(payload, "date_iso", None),
                 ):
-                    self._state.uploaded[path_str] = "filtered"
+                    self._mark_replay(path_str, "filtered", ticket)
                     return
-                deferred = self._queue_automatic_capture(path, payload)
+                deferred = self._queue_automatic_capture(path, payload, ticket=ticket)
                 if not deferred:
-                    self._upload.submit(UploadJob(file_path=path, game=payload))
+                    self._upload.submit(UploadJob(file_path=path, game=payload), current_guard=lambda: self._ticket_current(ticket))
                 # Parent-side throughput line. The matching
                 # ``replay_payload_ready`` log inside
                 # ``parse_replay_for_cloud`` runs in the WORKER
@@ -1407,18 +1441,17 @@ class ReplayWatcher:
                 # along after a colon; readers prefix-match on
                 # "skipped" so pre-reason entries stay compatible.
                 reason = payload.get("reason") if isinstance(payload, dict) else payload if isinstance(payload, str) else None
-                self._state.uploaded[path_str] = (
-                    f"skipped:{reason}" if reason else "skipped"
-                )
+                if not self._mark_replay(path_str, f"skipped:{reason}" if reason else "skipped", ticket):
+                    return
                 self._notify_skipped(path, reason)
                 if reason == "player_unresolved" and isinstance(payload, dict):
-                    self._notify_unresolved(path, payload.get("unresolved", ()))
+                    self._notify_unresolved(path, payload.get("unresolved", ()), ticket)
                 if self._analyzer_unavailable:
                     log.info("analyzer_recovered")
                     self._analyzer_unavailable = False
             elif kind == "settle_failed":
                 log.warning("file_never_settled %s", path.name)
-                self._record_settle_failure(path)
+                self._record_settle_failure(path, ticket=ticket)
             elif kind == "analysis_failed":
                 log.warning(
                     "replay_analysis_failed file=%s error=%s "
@@ -1426,7 +1459,8 @@ class ReplayWatcher:
                     path.name,
                     payload,
                 )
-                self._state.uploaded[path_str] = f"skipped:{SKIP_ANALYSIS_FAILED}"
+                if not self._mark_replay(path_str, f"skipped:{SKIP_ANALYSIS_FAILED}", ticket):
+                    return
                 self._notify_skipped(path, SKIP_ANALYSIS_FAILED)
             elif kind == "analyzer_error":
                 # Throttled — same logic as the in-thread handler.
@@ -1449,13 +1483,14 @@ class ReplayWatcher:
             if not deferred:
                 self._finish_replay(Path(submitted_path_str))
 
-    def _record_settle_failure(self, path: Path) -> None:
+    def _record_settle_failure(self, path: Path, *, ticket=None) -> None:
         """Give up on a replay that stays unreadable, visibly.
 
         Only a file observed unchanged across ``_SETTLE_FAILURE_LIMIT``
         consecutive failures is recorded as ``skipped:file_unstable``; a file
         still growing between attempts keeps being retried.
         """
+        ticket = ticket or replay_ticket(self._state)
         key = str(path)
         signature = _file_signature(path)
         with self._settle_failures_lock:
@@ -1472,8 +1507,8 @@ class ReplayWatcher:
             count,
             signature[0] if signature else "unreadable",
         )
-        self._state.uploaded[key] = f"skipped:{SKIP_FILE_UNSTABLE}"
-        self._notify_skipped(path, SKIP_FILE_UNSTABLE)
+        if self._mark_replay(key, f"skipped:{SKIP_FILE_UNSTABLE}", ticket):
+            self._notify_skipped(path, SKIP_FILE_UNSTABLE)
 
     def _clear_settle_failure(self, path: Path) -> None:
         with self._settle_failures_lock:
@@ -1495,13 +1530,14 @@ class ReplayWatcher:
             except Exception:
                 log.exception("auto_capture_notice_failed")
 
-    def _queue_automatic_capture(self, path: Path, game, *, priority: bool = False) -> bool:
+    def _queue_automatic_capture(self, path: Path, game, *, priority: bool = False, ticket=None) -> bool:
         from .replay_capture import replay_capture_enabled
+        ticket = ticket or replay_ticket(self._state)
 
         # A manually generated recording must be able to upload while its
         # website request owns the recorder lock. Cloud compaction can mark
         # that engine payload reduced-detail; it is still already recorded.
-        if (self._has_engine_playback(game, allow_reduced_legacy=True) or self._stop.is_set()
+        if (self._has_engine_playback(game, allow_reduced_legacy=True) or not self._ticket_current(ticket)
                 or self._state.replay_capture_enabled is not True
                 or not replay_capture_enabled(self._cfg.state_dir)):
             return False
@@ -1524,7 +1560,7 @@ class ReplayWatcher:
             # Fresh games jump ahead of queued history, matching the parser's
             # dedicated live lane. A running recording still finishes first.
             if retry_path != path:
-                item = (0 if priority else 1, next(self._capture_sequence), path, game)
+                item = (0 if priority else 1, next(self._capture_sequence), path, game, ticket)
                 heapq.heappush(self._capture_queue, item)
                 if not self._capture_draining:
                     self._capture_draining = True
@@ -1553,10 +1589,10 @@ class ReplayWatcher:
                 if not self._capture_queue or self._stop.is_set():
                     self._capture_draining = False
                     return
-                rank, _sequence, path, game = heapq.heappop(self._capture_queue)
+                rank, _sequence, path, game, ticket = heapq.heappop(self._capture_queue)
                 self._capture_active = True
             try:
-                self._capture_and_upload(path, game, priority=rank == 0)
+                self._capture_and_upload(path, game, priority=rank == 0, ticket=ticket)
             except Exception:
                 log.exception("automatic_replay_upload_failed path=%s", path.name)
             finally:
@@ -1564,19 +1600,20 @@ class ReplayWatcher:
                     self._capture_active = False
                 self._finish_replay(path)
 
-    def _capture_and_upload(self, path: Path, game, *, priority: bool = False) -> None:
+    def _capture_and_upload(self, path: Path, game, *, priority: bool = False, ticket=None) -> None:
         from .replay_capture import (
             capture_exact_replay, replay_capture_enabled, ReplayCaptureCancelled, ReplayCaptureDisabled,
         )
         from .socket_client import _ENGINE_REBUILD_LOCK
+        ticket = ticket or replay_ticket(self._state)
 
         def cancelled():
-            return self._stop.is_set() or bool(self._state.paused) or self._activity_gate.busy
+            return not self._ticket_current(ticket) or bool(self._state.paused) or self._activity_gate.busy
 
         if cancelled():
             return
         if not self._sync_filter().replay_in_range(getattr(game, "date_iso", None)):
-            self._state.uploaded[str(path)] = "filtered"
+            self._mark_replay(path, "filtered", ticket)
             return
         acquired = False
         try:
@@ -1594,10 +1631,14 @@ class ReplayWatcher:
                         path, self._cfg.state_dir,
                         notify_start=self._capture_notice, cancel_requested=cancelled,
                     )
+                if cancelled():
+                    return
                 # The parser discovers the atomic adjacent artifact, including
                 # a manual recording completed while this job awaited the lock.
-                recorded_game, reason = parse_replay_for_cloud_ex(
+                recorded_game, reason, _candidates = _parse_with_candidates(parse_replay_for_cloud_ex,
                     path, state_dir=self._cfg.state_dir, resolve_pulse=priority,
+                    owned_toons=ticket.toons,
+                    owned_hint=ticket.hint,
                 )
                 if automatic_enabled and recorded_game is None:
                     raise RuntimeError(f"Recorded replay analysis failed ({reason or 'unknown reason'}).")
@@ -1618,19 +1659,24 @@ class ReplayWatcher:
             if acquired:
                 _ENGINE_REBUILD_LOCK.release()
         if not cancelled():
-            self._upload.submit(UploadJob(file_path=path, game=game, priority=priority))
+            self._upload.submit(UploadJob(file_path=path, game=game, priority=priority), current_guard=lambda: self._ticket_current(ticket))
 
-    def _handle_replay(self, path: Path, *, priority: bool = False) -> None:
+    def _handle_replay(self, path: Path, *, priority: bool = False, ticket=None) -> None:
+        ticket = ticket or replay_ticket(self._state)
         deferred = False
         try:
+            if not self._ticket_current(ticket) or ticket.toons == ():
+                return
             if not _wait_for_file_ready(path, SETTLE_TIMEOUT_SEC):
                 log.warning("file_never_settled %s", path.name)
-                self._record_settle_failure(path)
+                self._record_settle_failure(path, ticket=ticket)
                 return
             self._clear_settle_failure(path)
             try:
                 game, skip_reason, candidates = _parse_with_candidates(parse_replay_for_cloud_ex,
                     path,
+                    owned_toons=ticket.toons,
+                    owned_hint=ticket.hint,
                     state_dir=self._cfg.state_dir,
                     # Fresh games benefit from immediate opponent identity.
                     # Full-history work leaves the stable toon handle for the
@@ -1677,15 +1723,16 @@ class ReplayWatcher:
                 if self._analyzer_unavailable:
                     log.info("analyzer_recovered")
                     self._analyzer_unavailable = False
+            if not self._ticket_current(ticket):
+                return
             if not game:
                 # AI / unresolved / per-file parse error — record so we
                 # don't re-attempt every sweep.
-                self._state.uploaded[str(path)] = (
-                    f"skipped:{skip_reason}" if skip_reason else "skipped"
-                )
+                if not self._mark_replay(path, f"skipped:{skip_reason}" if skip_reason else "skipped", ticket):
+                    return
                 self._notify_skipped(path, skip_reason)
                 if skip_reason == "player_unresolved":
-                    self._notify_unresolved(path, candidates)
+                    self._notify_unresolved(path, candidates, ticket)
                 return
             # Post-parse date-range check (authoritative; the mtime
             # pre-filter only catches the obvious cases). Marking
@@ -1696,16 +1743,16 @@ class ReplayWatcher:
             if not sync_filter.replay_in_range(
                 getattr(game, "date_iso", None),
             ):
-                self._state.uploaded[str(path)] = "filtered"
+                self._mark_replay(path, "filtered", ticket)
                 return
-            deferred = self._queue_automatic_capture(path, game, priority=priority)
+            deferred = self._queue_automatic_capture(path, game, priority=priority, ticket=ticket)
             if not deferred:
                 self._upload.submit(
                     UploadJob(
                         file_path=path,
                         game=game,
                         priority=priority,
-                    )
+                    ), current_guard=lambda: self._ticket_current(ticket),
                 )
         finally:
             if not deferred:

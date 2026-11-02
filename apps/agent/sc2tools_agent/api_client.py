@@ -141,7 +141,7 @@ class ApiClient:
                              attempts=1, interactive=True)
 
     # ---------------- Profile (player handle, etc.) ----------------
-    def get_profile(self) -> Dict[str, Any]:
+    def get_profile(self, *, interactive=False) -> Dict[str, Any]:
         """Fetch the per-user profile (battleTag, pulseId, region, …).
 
         The web settings page persists these via PUT /v1/me/profile;
@@ -152,7 +152,7 @@ class ApiClient:
         """
         if not self.device_token:
             raise PermissionError("agent_not_paired")
-        return self._get("/v1/me/profile", auth=True)
+        return self._interactive("GET", "/v1/me/profile") if interactive else self._get("/v1/me/profile", auth=True)
 
     def get_game_summary(self, game_id: str) -> Dict[str, Any]:
         if (not isinstance(game_id, str) or not 0 < len(game_id) <= 200

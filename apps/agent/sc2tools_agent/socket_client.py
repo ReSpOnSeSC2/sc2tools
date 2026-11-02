@@ -76,6 +76,7 @@ class SocketClient:
         overlay_token_provider: Optional[Callable[[str], Optional[str]]] = None,
         session_enabled: bool = False,
         on_connection: Optional[Callable[[bool], None]] = None,
+        on_sync_retry: Optional[Callable] = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._account_base_url = base_url
@@ -105,6 +106,9 @@ class SocketClient:
         self._overlay_token_provider = overlay_token_provider
         self._session_enabled = session_enabled is True
         self._on_connection = on_connection
+        self._on_sync_retry = on_sync_retry
+        from .sync_retry_socket import SyncRetrySocket
+        self._sync_retry = SyncRetrySocket(self, on_sync_retry)
         self._session_lock = threading.RLock()
         self._session_generation = 0
         self._session_data = None
@@ -120,7 +124,7 @@ class SocketClient:
     def with_device_token(self, token: str) -> "SocketClient":
         """Rebuild a stopped socket with its existing event handlers."""
         names = ("recompute_games", "recompute_opp_build", "full_resync", "import_scan",
-                 "import_start", "import_cancel", "import_pick_folder", "bot_lab", "obs_add", "overlay_tokens_changed", "build_intent_changed", "scouting_brief")
+                 "import_start", "import_cancel", "import_pick_folder", "bot_lab", "obs_add", "overlay_tokens_changed", "build_intent_changed", "scouting_brief", "sync_retry")
         callbacks = {"on_" + name: getattr(self, "_on_" + name) for name in names}
         return SocketClient(base_url=self._account_base_url, device_token=token,
             on_connection=self._on_connection,
@@ -198,6 +202,7 @@ class SocketClient:
         self._thread.start()
 
     def stop(self) -> None:
+        self._sync_retry.retire()
         self._stop.set()
         self._notify_connection(False)
         self._invalidate_session()
@@ -214,6 +219,10 @@ class SocketClient:
         if thr is not None:
             thr.join(timeout=3.0)
 
+    def retire_sync_requests(self):
+        """Retire before publishing replacement credentials; no I/O or locks."""
+        self._sync_retry.retire()
+
     def _notify_connection(self, connected):
         callback = getattr(self, "_on_connection", None)
         if callback:
@@ -228,6 +237,7 @@ class SocketClient:
 
         @sio.event
         async def connect() -> None:  # noqa: ARG001
+            self._sync_retry.retire()
             with self._session_lock:
                 self._device_connected = not self._stop.is_set()
                 self._invalidate_session()
@@ -236,6 +246,7 @@ class SocketClient:
 
         @sio.event
         async def disconnect() -> None:  # noqa: ARG001
+            self._sync_retry.retire()
             with self._session_lock:
                 self._device_connected = False
                 self._invalidate_session()
@@ -244,6 +255,14 @@ class SocketClient:
             if session_sio is not None:
                 await session_sio.disconnect()
             log.info("socket_client_disconnected")
+
+        @sio.on("sync:retry-ready")
+        async def _sync_ready(payload):
+            self._sync_retry.ready(payload)
+
+        @sio.on("sync:retry-request")
+        async def _sync_request(payload):
+            return await self._sync_retry.request(payload)
 
         @sio.on("bot-lab:request")
         async def _on_bot_lab(payload):
@@ -549,7 +568,8 @@ class SocketClient:
             try:
                 await sio.connect(
                     self._base_url,
-                    auth={"deviceToken": self._device_token, "obsAddSource": self.obs_capabilities()},
+                    auth={"deviceToken": self._device_token, "obsAddSource": self.obs_capabilities(),
+                          **({"syncRetryVersion": 1} if self._on_sync_retry is not None else {})},
                     transports=["websocket", "polling"],
                     wait_timeout=10,
                 )

@@ -28,11 +28,15 @@ def setup(monkeypatch, tmp_path):
     monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
     monkeypatch.setattr(watcher_module, "_wait_for_file_ready", lambda *_: True)
     state = AgentState(replay_capture_enabled=True)
+    from sc2tools_agent.sync_retry import replay_ticket, publish_owned_toons
+    publish_owned_toons(state, {"displayName": "Synthetic"}, replay_ticket(state))
     save_state(tmp_path, state)
     uploaded, notices = [], []
     uploaded_event = threading.Event()
 
-    def submit(job):
+    def submit(job, *, current_guard=None):
+        if current_guard is not None and current_guard() is False:
+            return False
         uploaded.append(job)
         uploaded_event.set()
         return True
