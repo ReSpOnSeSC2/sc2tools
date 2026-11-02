@@ -159,6 +159,7 @@ export async function openSettingsSearchFixture(page, theme, options = {}) {
       const fixed = new Map([
         ["/v1/me", { userId: owner, email: "fixture@example.invalid", isAdmin: !!options.admin, agentPaired: true, agentLastSeenAt: null, agentVersion: "0.24.7", games: { total: 0, latest: null }, onboarding: { goals: ["play"] } }],
         ["/v1/me/doctor", { warnings: [] }],
+        ["/v1/me/sync-health", { checkedAt: "2026-10-26T12:00:00.000Z", reported: false, rows: [], devices: [{ deviceId: "fixture-device", hostname: "FIXTURE-PC", agentVersion: "0.24.7", lastSeenAt: null, reported: false }], rejections: null }],
         ["/v1/me/profile", { displayName: "Synthetic player", battleTag: "Fixture#1234", pulseIds: [] }],
         ["/v1/me/player-channels", { identities: [], entries: [] }],
         ["/v1/me/public-profile", { publicDisplayName: "Synthetic player", enabled: false, legacyPublic: false, slug: "fixture-0123456789", updatedAt: null, renameAvailableAt: null, replaySharingEnabled: false, revision: 0, showReplays: false, showChannels: false, showRecentForm: false, showMmrHistory: false, showSeasons: false, showMaps: false }],

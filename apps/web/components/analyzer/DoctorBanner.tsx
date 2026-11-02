@@ -1,12 +1,14 @@
 "use client";
 
 import { LinkButton } from "@/components/ui/Button";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { useReleaseInfo } from "@/components/onboarding/useReleaseInfo";
 import {
   FALLBACK_LATEST_AGENT_VERSION,
   inactiveAgentMessage,
 } from "@/lib/agentNotice";
 import { useApi } from "@/lib/clientApi";
+import { doctorHelp } from "@/lib/syncHealth";
 
 export type DoctorResp = {
   ok: boolean;
@@ -15,6 +17,8 @@ export type DoctorResp = {
     severity: "info" | "warn" | "error";
     message: string;
     cta?: { label: string; href: string };
+    /** A help article for this warning; the Sync health ids (roadmap item 76) send one. */
+    helpSlug?: string;
   }[];
 };
 
@@ -51,11 +55,23 @@ function DoctorWarning({ warning: w }: { warning: NonNullable<DoctorResp["warnin
     w.severity === "error"
       ? "border-danger/40 bg-danger/10 text-danger"
       : "border-warning/40 bg-warning/10 text-warning";
+  // A Sync health id lands on its own section of the help article; another
+  // warning may name an article of its own.
+  const help = doctorHelp(w);
   return (
     <li
       className={`flex items-center justify-between gap-3 rounded border px-4 py-2 text-sm ${cls}`}
     >
-      <DoctorMessage warning={w} />
+      {help ? (
+        <span className="min-w-0">
+          <DoctorMessage warning={w} />{" "}
+          <LazyHelpLink slug={help.slug} anchor={help.anchor} className="whitespace-nowrap">
+            How to fix{help.title ? <span className="sr-only"> {help.title.toLowerCase()}</span> : null}
+          </LazyHelpLink>
+        </span>
+      ) : (
+        <DoctorMessage warning={w} />
+      )}
       {w.cta && (
         <LinkButton href={w.cta.href} variant="secondary" size="sm" className="shrink-0">
           {w.cta.label}

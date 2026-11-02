@@ -1,5 +1,6 @@
 import { AGENT_ONLINE_WINDOW_MS, isAgentVersionAtLeast } from "@/components/dashboard/AgentUpgradeNotice";
 import { fmtAgo } from "@/lib/format";
+import { doctorHelp, isSyncHealthCode, SYNC_REASONS } from "@/lib/syncHealth";
 import type { DoctorResp } from "../DoctorBanner";
 
 export type SetupMe = {
@@ -11,7 +12,7 @@ export type SetupMe = {
   onboarding?: { goals?: string[] } | null;
 };
 export type SetupSource<T> = { data?: T; error?: unknown; mutate: () => unknown };
-export type SetupRow = { id: string; title: string; message: string; tone: "pass" | "warn" | "info" | "loading"; cta?: { label: string; href: string }; retry?: () => unknown };
+export type SetupRow = { id: string; title: string; message: string; tone: "pass" | "warn" | "info" | "loading"; cta?: { label: string; href: string }; retry?: () => unknown; help?: { slug: string; anchor?: string } };
 type OverlayStatus = { items: { revokedAt?: string | null; lastSeenAt?: string | null }[] };
 type Sources = { me: SetupSource<SetupMe>; doctor: SetupSource<DoctorResp>; release: SetupSource<{ latest?: string }>; overlays: SetupSource<OverlayStatus>; now: number };
 
@@ -73,6 +74,11 @@ export function setupHealthRows({ me, doctor, release, overlays, now }: Sources)
   const warning = doctor.data?.warnings?.find((item) => item.id === "replay_archive_incomplete");
   rows.push(archive || { id: "archive", title: "Replay archive", message: warning?.message || "No replay archive warnings", tone: warning ? "warn" : "pass", cta: warning?.cta });
   const known = new Set(["no_profile", "no_agent", "no_games", "replay_archive_incomplete"]);
-  for (const item of doctor.data?.warnings || []) if (!known.has(item.id)) rows.push({ id: item.id, title: "Setup check", message: item.message, tone: item.severity === "info" ? "info" : "warn", cta: item.cta });
+  for (const item of doctor.data?.warnings || []) {
+    if (known.has(item.id)) continue;
+    // Sync health ids (roadmap item 76) get their own title and help section; any other id stays a generic check.
+    const help = doctorHelp(item);
+    rows.push({ id: item.id, title: isSyncHealthCode(item.id) ? SYNC_REASONS[item.id].title : "Setup check", message: item.message, tone: item.severity === "info" ? "info" : "warn", cta: item.cta, ...(help ? { help: { slug: help.slug, anchor: help.anchor } } : {}) });
+  }
   return rows;
 }

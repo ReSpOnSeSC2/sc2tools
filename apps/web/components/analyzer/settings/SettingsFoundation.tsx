@@ -16,6 +16,7 @@ import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { Section } from "@/components/ui/Section";
 import { fmtAgo } from "@/lib/format";
 import { SetupHealthCard } from "./SetupHealthCard";
+import { SyncHealthSection } from "./SyncHealthSection";
 import { CopyUserId } from "./SetupDiagnostics";
 import { SettingsSectionsReady } from "./SettingsSectionNav";
 
@@ -70,7 +71,7 @@ const QUICK_LINKS: ReadonlyArray<{
 ];
 
 export function SettingsFoundation() {
-  return <div className="space-y-6"><SetupHealthCard /><AccountSummary /></div>;
+  return <div className="space-y-6"><SetupHealthCard /><SyncHealthSection /><AccountSummary /></div>;
 }
 
 function AccountSummary() {
