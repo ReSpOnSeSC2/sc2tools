@@ -26,6 +26,7 @@ Two execution modes
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import logging
 import logging.handlers
 import os
@@ -366,6 +367,13 @@ def _run_headless(
     no_live: bool = False,
     no_obs: bool = False,
 ) -> int:
+    """Keep the public entry seam and settle support on every boot exit."""
+    with ExitStack() as support_lifetime:
+        return _run_headless_runtime(cfg, log_dir, no_live=no_live, no_obs=no_obs,
+            support_lifetime=support_lifetime)
+
+
+def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_lifetime):
     """Legacy path - console + tray. Identical to the 0.2.x runner."""
     log = logging.getLogger("sc2tools_agent")
     state = load_state(cfg.state_dir)
@@ -386,6 +394,8 @@ def _run_headless(
                 return
             stop_called["value"] = True
         stop_event.set()
+        if recovery_cell.support:
+            recovery_cell.support.cancel()
         console.request_stop()
 
     initial_replay_folders = _discover_replay_folders(cfg, state)
@@ -420,6 +430,12 @@ def _run_headless(
 
     ui = _Multiplexer(console, tray, facts=StatusFacts(paired=state.is_paired,
         paused=state.paused,folders=list(initial_replay_folders)))
+    recovery_cell.api, recovery_cell.ui = api, ui
+    recovery_cell.support = _make_support_service(cfg, state, recovery_cell, stop_event, log_dir)
+    support_lifetime.callback(recovery_cell.support.close)
+    ui._support = recovery_cell.support
+    if tray:
+        tray.set_support_service(recovery_cell.support)
     _push_feature_facts(ui, state, no_live)
     ui.on_paused(state.paused, state.paused_until)
     _start_pause_expiry(cfg, state, lambda: upload, lambda: ui, stop_event)
@@ -480,6 +496,7 @@ def _run_headless(
             import_ctl.on_upload_success(p) if import_ctl else None,
         ),
         on_failure=lambda p, exc: _desktop_upload_failed(ui, import_ctl, p, exc),
+        on_support_error=lambda context, code: recovery_cell.support.record_upload_error(context, code) if recovery_cell.support else None,
         on_pending_changed=ui.on_pending,
         on_archive_pending_changed=ui.health.set_archive_pending,
         on_game_synced=ui.on_game_synced,
@@ -519,6 +536,7 @@ def _run_headless(
     recovery_cell.updater = updater
     beat_ok, beat_failed = _health_heartbeat(ui, recovery.connected, recovery.watchdog.failure)
     heartbeat = Heartbeat(api, on_success=beat_ok, on_failure=beat_failed, state_dir=cfg.state_dir,
+                          support_error_context=lambda captured: recovery_cell.support.capture_error(captured) if recovery_cell.support else None,
                           sync_provider=_sync_report_provider(ui, state, cfg),
                           on_overlay_tokens=_obs_token_rotation_controller(cfg, state, recovery_cell).heartbeat)
     recovery_cell.watcher = watcher
@@ -585,6 +603,7 @@ def _run_headless(
     else:
         log.info("live_bridge_disabled_via_flag")
 
+    recovery_cell.live_metrics_logger = live_metrics_logger
     if live_bus is not None:
         live_bus.subscribe(activity_gate.on_event)
     obs_client, obs_scene = _build_obs_switcher(
@@ -646,6 +665,7 @@ def _run_headless(
         capture_exception(exc)
         return 1
     finally:
+        recovery_cell.support.close()
         log.info("agent_stopping")
         if stream_service:
             stream_service.close()
@@ -707,6 +727,8 @@ def _run_with_gui(
                 return
             stop_called["value"] = True
         stop_event.set()
+        if cell.support:
+            cell.support.cancel()
         if cell.gui:
             cell.gui.request_quit()
 
@@ -932,6 +954,11 @@ def _run_with_gui(
 
     multiplex = _Multiplexer(console, tray, gui)
     cell.ui = multiplex
+    cell.support = _make_support_service(cfg, state, cell, stop_event, log_dir)
+    gui.set_support_service(cell.support)
+    if tray:
+        tray.set_support_service(cell.support, on_help=gui.show_help, on_copy=gui.copy_support_info)
+    multiplex._support = cell.support
     _push_feature_facts(multiplex, state, no_live)
     active_filter=SyncFilter.from_state(preset=state.sync_filter_preset,since_iso=state.sync_filter_since,until_iso=state.sync_filter_until)
     multiplex.on_filter_label(active_filter.short_label() if active_filter.is_active() else "")
@@ -963,7 +990,10 @@ def _run_with_gui(
     if stream_service:
         stream_service.start()
 
-    rc = gui.run()
+    try:
+        rc = gui.run()
+    finally:
+        cell.support.close()
 
     log.info("agent_stopping rc=%s", rc)
     request_stop()
@@ -1075,6 +1105,7 @@ def _gui_boot_worker(
                 import_ctl.on_upload_success(p) if import_ctl else None,
             ),
             on_failure=lambda p, exc: _desktop_upload_failed(ui, import_ctl, p, exc),
+            on_support_error=lambda context, code: cell.support.record_upload_error(context, code) if cell.support else None,
             on_pending_changed=ui.on_pending,
             on_archive_pending_changed=ui.health.set_archive_pending,
             on_game_synced=ui.on_game_synced,
@@ -1123,6 +1154,7 @@ def _gui_boot_worker(
                           on_check=lambda release: _announce_updated_version(cfg,state,cell,release))
         beat_ok, beat_failed = _health_heartbeat(ui, recovery.connected, recovery.watchdog.failure)
         heartbeat = Heartbeat(api, on_success=beat_ok, on_failure=beat_failed, state_dir=cfg.state_dir,
+                              support_error_context=lambda captured: cell.support.capture_error(captured) if cell.support else None,
                               sync_provider=_sync_report_provider(ui, state, cfg),
                               on_overlay_tokens=_obs_token_rotation_controller(cfg, state, cell).heartbeat)
 
@@ -1736,6 +1768,8 @@ def _handle_choose_folder_gui(
     log: logging.Logger,
 ) -> None:
     """Same as ``_handle_choose_folder`` but updates BOTH tray and GUI."""
+    if getattr(cell, "support", None):
+        cell.support.invalidate()
     snapshot = _folder_snapshot(state)
     _handle_choose_folder(
         cfg, state, picked, cell.tray, log, upload=cell.upload,
@@ -1848,6 +1882,8 @@ def _handle_save_settings(
     log: logging.Logger,
 ) -> None:
     """Persist Settings-tab edits and apply the registry-side changes."""
+    if getattr(cell, "support", None):
+        cell.support.invalidate()
     settings_ticket = replay_ticket(state)
     folder_before = _folder_snapshot(state) if payload.replay_folders is not None else None
     if payload.background_import_speed in ("gentle","balanced","maximum"):
@@ -3571,6 +3607,50 @@ def _build_stream_service(cfg, state, *, no_obs=False):
         return None
 
 
+def _make_support_service(cfg, state, cell, stop_event, log_dir):
+    from .support_runtime import SupportService
+    return SupportService(cfg=cfg, state=state, cell=cell, stop_event=stop_event, log_dir=log_dir,
+        discover_folders=_support_folder_provider(cfg, state, cell),
+        obs_connection=lambda: _effective_obs_connection(state))
+
+
+def _support_folder_provider(cfg, state, cell):
+    cwd = os.getcwd()
+    def discover():
+        from .support_probes import FolderRoots
+        with _STATE_SAVE_LOCK:
+            configured = tuple(state.replay_folders_override[:64])
+            complete = len(state.replay_folders_override) <= 64
+            explicit = cfg.replay_folder
+            excluded = tuple(state.replay_folders_excluded[:64])
+            exclusions_complete = len(state.replay_folders_excluded) <= 64 and all(type(value) is str for value in excluded)
+            excluded_keys = {os.path.normcase(os.path.normpath(os.path.join(cwd, value)))
+                for value in excluded if type(value) is str}
+        # Only current, already-reported metadata: never restart the legacy
+        # filesystem detector from a diagnostic or clipboard request.
+        ui = cell.ui
+        facts = ui.health.facts() if ui is not None else None
+        reported = facts.folders if facts is not None else None
+        automatic_available = type(reported) in (tuple, list)
+        complete = complete and exclusions_complete and automatic_available and len(reported) <= 64
+        watched = tuple(reported[:64]) if automatic_available else ()
+        automatic = (*((explicit,) if explicit is not None else ()), *watched) if exclusions_complete else ()
+        filtered = tuple(path for path in automatic if os.path.normcase(os.path.normpath(os.path.join(cwd, os.fspath(path)))) not in excluded_keys)
+        candidates = (*configured, *filtered)
+        roots, seen = [], set()
+        for candidate in candidates:
+            path = Path(os.path.normpath(os.path.join(cwd, os.fspath(candidate))))
+            key = os.path.normcase(os.path.normpath(str(path)))
+            if key not in seen:
+                roots.append(path)
+                seen.add(key)
+            if len(roots) >= 64:
+                complete = False
+                break
+        return FolderRoots(tuple(roots), complete, automatic_available)
+    return discover
+
+
 class _RuntimeCell:
     """Mutable container shared between the GUI thread and the boot
     worker. Kept as a plain class (no dataclass) so it never tries to
@@ -3578,7 +3658,7 @@ class _RuntimeCell:
 
     __slots__ = (
         "api", "recovery", "pairing_controls", "activity_gate", "update_scheduler", "stream_service",
-        "recent_history",
+        "recent_history", "support",
         "resync_lock",
         "gui",
         "tray",
@@ -3605,6 +3685,7 @@ class _RuntimeCell:
 
     def __init__(self) -> None:
         self.recent_history = None
+        self.support = None
         self.resync_lock = threading.Lock()
         self.stream_service = None
         self.activity_gate = None
@@ -3665,6 +3746,7 @@ class _Multiplexer:
         self.sync_report = SyncReportTracker()
         self._missing_folders = lambda: ()
         self._identity_refresh = lambda: None
+        self._support = None
         self._sinks: List[Any] = [console]
         if tray:
             self._sinks.append(tray)
@@ -3753,6 +3835,8 @@ class _Multiplexer:
                 callback(state)
 
     def on_unlinked(self) -> None:
+        if self._support:
+            self._support.invalidate()
         self._change_status(unlinked=True, paired=False)
         self.health.set_pairing(False, unlinked=True)
         if self._recent_history:
@@ -3798,6 +3882,8 @@ class _Multiplexer:
             s.show_pairing_code(code)
 
     def on_paired(self, user_id: str) -> None:
+        if self._support:
+            self._support.invalidate()
         self._change_status(paired=True, unlinked=False)
         self.health.set_pairing(True)
         self.health.set_connection("online")  # a new link retires the old token's signed-out hold

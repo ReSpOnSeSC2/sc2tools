@@ -16,10 +16,25 @@ import multiprocessing
 import os
 import sys
 
-from sc2tools_agent.runner import run_agent
+def run_agent():
+    # Keep the historical monkeypatch seam, but never import normal bootstrap
+    # when a dedicated support child or packaging smoke mode was requested.
+    from sc2tools_agent.runner import run_agent as normal_run_agent
+    return normal_run_agent()
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    arguments = sys.argv[1:] if argv is None else argv
+    if arguments == ["--support-fixture-check"]:
+        # -I source execution excludes the script directory from sys.path.
+        # Add only this installed package's parent, never ambient PYTHONPATH.
+        if not __package__ and not getattr(sys, "frozen", False):
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from sc2tools_agent.support_fixture import fixture_main
+        return fixture_main()
+    if "--support-fixture-check" in arguments:
+        return 2
     # Packaging-only diagnostic: exercise the frozen Qt window without ever
     # bootstrapping user state, pairing, replay services, OBS or crash reporting.
     smoke_report = os.environ.get("SC2TOOLS_GUI_SMOKE_REPORT")

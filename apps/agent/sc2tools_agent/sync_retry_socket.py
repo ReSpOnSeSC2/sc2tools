@@ -33,6 +33,31 @@ class SyncRetrySocket:
         except Exception:
             return None
 
+    def support_scope(self, expected_token):
+        """Metadata-only private fence, including epochs while unbound/offline."""
+        epoch, binding = self.epoch, self.binding
+        if expected_token is not None and type(expected_token) is not str:
+            return epoch, None, None, None
+        sid = self.sid()
+        sid = sid if type(sid) is str and 0 < len(sid) <= 200 else None
+        device = None
+        if (type(binding) is tuple and len(binding) == 2 and type(binding[0]) is str
+            and ID.fullmatch(binding[0]) and type(binding[1]) is str and binding[1] == sid
+            and not self.client._stop.is_set() and self.client._device_connected
+            and self.client._device_token == expected_token and expected_token):
+            device = binding[0]
+        if self.epoch is not epoch or self.binding is not binding:
+            return epoch, None, None, None
+        return epoch, binding, sid, device
+
+    def support_device_id(self, expected_token, captured_scope):
+        current = self.support_scope(expected_token)
+        if (type(captured_scope) is tuple and len(captured_scope) == 4
+            and current[0] is captured_scope[0] and current[1] is captured_scope[1]
+            and current[2] == captured_scope[2] and current[3] == captured_scope[3]):
+            return current[3]
+        return None
+
     def ready(self, raw):
         if (self.callback is None or not isinstance(raw, dict) or set(raw) != {"version", "deviceId", "sessionId"}
                 or type(raw["version"]) is not int or raw["version"] != 1

@@ -170,6 +170,8 @@ def test_each_row_action_runs_its_handler(tmp_path):
     run_gui_check(tmp_path, r"""
 import threading
 from sc2tools_agent.health import ACTIONS, HealthRow, HealthSnapshot
+from sc2tools_agent.support_diagnostics import DiagnosticRow, DiagnosticSnapshot, ROW_IDS, SupportInfo, diagnostic_bytes
+from sc2tools_agent.support_runtime import SupportResult
 from sc2tools_agent.ui.health_card import ACTION_LABELS
 calls = []
 installed = threading.Event()
@@ -203,11 +205,22 @@ assert win._stack.currentIndex() == 3 and scroll.verticalScrollBar().value() > 0
 assert 0 <= card_top < scroll.viewport().height()
 click("set_player_name")
 assert win._stack.currentIndex() == 3 and win.focusWidget() is win._handle_input
-(base / "agent.log").write_text("2026-11-01T12:00:00 ERROR upload broke\n", encoding="utf-8")
+approved = DiagnosticSnapshot(SupportInfo(version="0.24.8", errors=("file",)), tuple(DiagnosticRow(key) for key in ROW_IDS))
+class Support:
+    busy = False
+    def is_current(self, nonce): return nonce == 1
+    def copy_info(self, delivered):
+        delivered(SupportResult(1, "copy", approved))
+        return 1
+    def cancel(self): pass
+ui.set_support_service(Support())
+win._help_page.poll()
+(base / "agent.log").write_text("2026-11-01T12:00:00 ERROR upload broke token=raw-owner-secret\n", encoding="utf-8")
 click("copy_details")
 details = app.clipboard().text()
-assert details.startswith("SC2 Tools test\nStatus: 10 things need attention\nwarn: Needs add_folder.\n")
-assert "upload broke" in details
+assert details == diagnostic_bytes(approved).decode("utf-8")
+assert details.startswith("SC2 Tools support diagnostics v1\n") and 'errors=["file"]' in details
+assert "upload broke" not in details and "raw-owner-secret" not in details and str(base) not in details
 win.hide()
 """)
 
@@ -231,11 +244,23 @@ win.hide()
 """)
 
 
-def test_boot_failure_offers_restart_and_copy_details(tmp_path):
+def test_boot_failure_offers_restart_and_redacted_support_info(tmp_path):
     run_gui_check(tmp_path, r"""
 from sc2tools_agent.health import BOOT_HEADLINES, HealthMonitor, classify_boot_error
+from sc2tools_agent.support_diagnostics import DiagnosticRow, DiagnosticSnapshot, ROW_IDS, SupportInfo
+from sc2tools_agent.support_runtime import SupportResult
 restarts = []
 ui, win = make_window(on_restart_agent=lambda: restarts.append(True))
+class Support:
+    busy = False
+    def is_current(self, nonce): return nonce == 1
+    def copy_info(self, delivered):
+        snapshot = DiagnosticSnapshot(SupportInfo(version="0.24.8", errors=("file",)), tuple(DiagnosticRow(key) for key in ROW_IDS))
+        delivered(SupportResult(1, "copy", snapshot))
+        return 1
+    def cancel(self): pass
+ui.set_support_service(Support())
+win._help_page.poll()
 win.show(); app.processEvents()
 monitor = HealthMonitor(schedule=lambda delay, callback: callback())
 monitor.subscribe(ui.on_health)
@@ -255,8 +280,10 @@ line.action_button.click(); assert restarts == []
 line.action_button.click(); assert restarts == [True]
 assert defaults == [QtWidgets.QMessageBox.No] * 2  # Enter never restarts by accident
 win._status_copy.click()
+app.processEvents()
 details = app.clipboard().text()
-assert details.startswith(f"SC2 Tools test\nStatus: {BOOT_HEADLINES['state_dir']}\nerror: Windows blocked a file")
-assert "agent.json" in details  # the raw error stays in Copy details for a support report
+assert details.startswith("SC2 Tools support diagnostics v1\n")
+assert 'errors=["file"]' in details
+assert "agent.json" not in details and str(base) not in details and "Permission denied" not in details
 win.hide()
 """)

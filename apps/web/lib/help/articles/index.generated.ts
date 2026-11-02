@@ -55,6 +55,7 @@ import desktopApp_desktopAppOverview from "./desktop-app/desktop-app-overview";
 import desktopApp_desktopAppPerformance from "./desktop-app/desktop-app-performance";
 import desktopApp_desktopAppRecentGames from "./desktop-app/desktop-app-recent-games";
 import desktopApp_desktopAppStatus from "./desktop-app/desktop-app-status";
+import desktopApp_desktopAppSupport from "./desktop-app/desktop-app-support";
 import desktopApp_desktopAppSyncProblems from "./desktop-app/desktop-app-sync-problems";
 import desktopApp_desktopAppSyncRange from "./desktop-app/desktop-app-sync-range";
 import desktopApp_desktopAppTray from "./desktop-app/desktop-app-tray";
@@ -155,6 +156,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   desktopApp_desktopAppPerformance,
   desktopApp_desktopAppRecentGames,
   desktopApp_desktopAppStatus,
+  desktopApp_desktopAppSupport,
   desktopApp_desktopAppSyncProblems,
   desktopApp_desktopAppSyncRange,
   desktopApp_desktopAppTray,

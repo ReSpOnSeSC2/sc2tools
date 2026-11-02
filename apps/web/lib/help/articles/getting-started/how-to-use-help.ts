@@ -9,7 +9,7 @@ const article: HelpArticle = {
   audience: "all",
   order: 2,
   keywords: ["help", "search", "find", "faq", "docs", "documentation", "guide", "link", "share", "support"],
-  updated: "2026-10-22",
+  updated: "2026-11-02",
   body: [
     {
       type: "paragraph",
@@ -45,7 +45,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Still stuck?" },
     {
       type: "paragraph",
-      text: "Help pages end with our support email, and with a **Report a problem** button when you're signed in. Inside the app, open **Help & support** (the life-buoy icon in the desktop top bar; **More → Help & support** on a phone). Tell us what you clicked and add a screenshot if you can; see [Report a problem or suggest a feature](/help/report-a-problem) for what else goes with a report.",
+      text: "Help pages end with our support email, and with a **Report a problem** button when you're signed in. On the website, open **Help & support** (the life-buoy icon in the desktop top bar; **More → Help & support** on a phone). Tell us what you clicked. For a desktop app issue, in SC2 Tools open **Help > Copy support info** and paste it into your report; see [Desktop support tools](/help/desktop-app-support) for version availability and [Report a problem or suggest a feature](/help/report-a-problem) for what else goes with a report.",
     },
   ],
   related: ["getting-started", "troubleshooting-and-support", "report-a-problem"],

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { Bug, Mail } from "lucide-react";
 import { LazyReportIssueModal } from "@/components/feedback/LazyReportIssueModal";
@@ -13,7 +14,7 @@ import { HELP_TEXT_LINK_CLASS } from "./HelpInline";
  * the in-app "Report a problem" form (the same one as the Help menu, which
  * needs an account); everyone gets the support email.
  *
- *   variant="line" (default): one sentence, for article pages and sheets.
+ *   variant="line" (default): inline guidance, for article pages and sheets.
  *   variant="panel": a "Report a problem" button with the email as the
  *     fallback line under it, for Settings → Help.
  */
@@ -33,6 +34,15 @@ export function HelpSupportLine({
     </a>
   );
   const modal = canReport ? <LazyReportIssueModal open={open} onClose={() => setOpen(false)} /> : null;
+  const guidance = (
+    <>
+      {" — include what you clicked. For desktop app issues, see "}
+      <Link href="/help/desktop-app-support" className={HELP_TEXT_LINK_CLASS}>Desktop support tools</Link>
+      {" for version availability and "}
+      <strong>Help &gt; Copy support info</strong>
+      {". For website issues, attach a screenshot if useful."}
+    </>
+  );
 
   if (variant === "panel") {
     return (
@@ -58,7 +68,7 @@ export function HelpSupportLine({
           <Mail className="mt-0.5 h-4 w-4 shrink-0 text-accent-cyan" aria-hidden />
           <span>
             {canReport ? "Or email " : "Email "}
-            {email} — include what you clicked and a screenshot if you can.
+            {email}{guidance}
           </span>
         </p>
         {modal}
@@ -86,7 +96,7 @@ export function HelpSupportLine({
         ) : (
           "Email "
         )}
-        {email} — include what you clicked and a screenshot if you can.
+        {email}{guidance}
       </p>
       {modal}
     </div>

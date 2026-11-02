@@ -65,6 +65,11 @@ def _exercise_gui(report):
             if window is None or not ui._started_event.is_set():
                 raise RuntimeError("The production GUI did not construct its window.")
             stack = window._stack
+            window._go_to_page("help")
+            app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+            if stack.currentWidget().objectName() != "agentHelpPage" or window._help_page.run_button.isEnabled():
+                raise RuntimeError("The bundled Help page is missing or attempted an unwired probe.")
+            report["help_painted"] = True
             streams_index = next(
                 (index for index in range(stack.count())
                  if stack.widget(index).objectName() == "streamStudio"), None,

@@ -25,11 +25,12 @@ const article: HelpArticle = {
     "website",
     "api",
   ],
-  updated: "2026-10-25",
+  updated: "2026-11-02",
   body: [
     {
       type: "list",
       items: [
+        "**Desktop app not syncing?** In SC2 Tools, open **Help > Run system check**, then **Copy support info** and paste it into your report. See [Desktop support tools](/help/desktop-app-support) for version availability and how to review a local support bundle.",
         "**Website or data not loading?** Open [System status](/status), also available from the website footer or **More → System status**. It works without signing in. Website and API checks run from your browser when you open the page; select **Refresh checks** to try again. **Reachable** means the public endpoint answered, **Unavailable** means it returned an HTTP error, and **Unknown** means the browser could not verify it. Check the timestamp: these checks do not measure replay processing, every feature or historical uptime.",
         '**Changes not showing in OBS?** Press Save first — widgets re-read their config within ~60 seconds. If it still looks stale, right-click the Browser Source → Interact/Refresh, or "Refresh cache of current page".',
         "**No sound or voice?** Browsers can block audio until a click — open the source with Interact and click once, then TTS/sounds run normally.",

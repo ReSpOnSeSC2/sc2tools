@@ -73,7 +73,16 @@ def test_log_search_copy_follow_and_help_navigation(tmp_path):
         for button in win.findChildren(QtWidgets.QToolButton):
             if button.objectName() == "helpLink": button.click()
         sidebar = next(button for button in win.findChildren(QtWidgets.QPushButton) if button.text() == "Help & support")
+        before_native_help = list(opened)
         sidebar.click()
+        assert win._PAGE_KEYS[win._stack.currentIndex()] == "help"
+        assert win._stack.currentWidget() is win._help_page and opened == before_native_help
+        quicklinks = {button.text(): button for button in win._help_page.findChildren(QtWidgets.QPushButton)}
+        for label, slug in (("Desktop overview", "desktop-app-overview"), ("Support guide", "desktop-app-support"),
+                            ("Missing games", "my-game-didnt-show-up"), ("Replay folders", "replay-folders"),
+                            ("Updates", "desktop-app-updates")):
+            quicklinks[label].click()
+            assert opened[-1] == f"https://example.test/help/{slug}?src=agent"
         next(button for button in win.findChildren(QtWidgets.QPushButton) if button.text() == "Import help").click()
         from sc2tools_agent.ui.help_links import AGENT_HELP_SLUGS
         import time

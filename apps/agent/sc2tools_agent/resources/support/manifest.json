@@ -1,0 +1,13 @@
+{
+  "bytes": 63353,
+  "filename": "diagnostic.SC2Replay",
+  "license_bytes": 1129,
+  "license_filename": "sc2reader-LICENSE.txt",
+  "license_sha256": "df45ac4f7de6a16f0f8c3d9a289cc6b2845445554e497126ba1be6bcb5b704b5",
+  "player_toon": "5-S2-1-526043",
+  "schema_version": 1,
+  "sha256": "4bc930864e08f1bc5de1e5ce7e2af70d4bf49f8b2c3fe1f00fef26e4e8c8fc23",
+  "upstream_commit": "e10fc9344417d0aa9649e4ed8d6423e38f6af4c9",
+  "upstream_path": "test_replays/5.0.15/96516_0.SC2Replay",
+  "upstream_repository": "ggtracker/sc2reader"
+}

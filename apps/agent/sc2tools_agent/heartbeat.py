@@ -56,11 +56,13 @@ class Heartbeat:
         on_overlay_tokens: Optional[Callable] = None,
         state_dir: Optional[Path] = None,
         sync_provider: Optional[Callable] = None,
+        support_error_context: Optional[Callable] = None,
     ) -> None:
         self._on_success = on_success or (lambda: None)
         self._on_failure = on_failure or (lambda _exc: None)
         self._on_overlay_tokens = on_overlay_tokens
         self._sync_provider = sync_provider
+        self._support_error_context = support_error_context
         self._sync_rejected_logged = False
         self._api = api
         if state_dir is not None:
@@ -104,6 +106,12 @@ class Heartbeat:
 
     def _send_one(self) -> None:
         api = self._api
+        report_support_error = None
+        if self._support_error_context is not None:
+            try:
+                report_support_error = self._support_error_context(api)
+            except Exception:
+                pass
         body = {
             "version": __version__,
             "os": platform.system(),
@@ -131,6 +139,12 @@ class Heartbeat:
         except Exception as exc:  # noqa: BLE001
             if api is not self._api:
                 return
+            if report_support_error is not None:
+                try:
+                    from .errors import classify
+                    report_support_error(classify(exc).kind)
+                except Exception:
+                    pass
             self._on_failure(exc)
             self._log.debug("heartbeat_attempt_failed: %s", exc)
             return

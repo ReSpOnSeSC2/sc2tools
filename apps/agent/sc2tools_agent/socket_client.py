@@ -223,6 +223,12 @@ class SocketClient:
         """Retire before publishing replacement credentials; no I/O or locks."""
         self._sync_retry.retire()
 
+    def support_scope(self, expected_token):
+        return self._sync_retry.support_scope(expected_token)
+
+    def support_device_id(self, expected_token, captured_scope):
+        return self._sync_retry.support_device_id(expected_token, captured_scope)
+
     def _notify_connection(self, connected):
         callback = getattr(self, "_on_connection", None)
         if callback:

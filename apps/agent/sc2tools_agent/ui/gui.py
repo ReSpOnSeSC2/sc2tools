@@ -367,6 +367,8 @@ class GuiUI:
         # whether a paint for it is already queued.
         self._health = None
         self._health_queued = False
+        self._support_service = None
+        self._support_latest = None
         self._window_geometry = window_geometry
         self._window_page = window_page
         self._on_window_state = on_window_state
@@ -453,6 +455,8 @@ class GuiUI:
             self._pending_replay_archive_status = None
         for name,args in events:
             getattr(self._signals,name).emit(*args)
+        if self._support_latest is not None:
+            self._signals.supportChanged.emit()
 
     # ---------------- public sink interface ----------------
 
@@ -500,6 +504,33 @@ class GuiUI:
             self._health_queued = True
         self._signals.healthChanged.emit()
 
+    def set_support_service(self, service):
+        with self._ui_event_lock:
+            self._support_service, self._support_latest = service, None
+
+    def on_support_result(self, result):
+        service = self._support_service
+        if service is None or not service.is_current(result.run_nonce):
+            return
+        with self._ui_event_lock:
+            if self._support_service is not service:
+                return
+            self._support_latest = result  # One safe latest result, never a private plan backlog.
+            ready = self._ui_ready and self._signals is not None
+        if ready:
+            self._signals.supportChanged.emit()
+
+    def _take_support(self):
+        with self._ui_event_lock:
+            result, self._support_latest = self._support_latest, None
+            return result
+
+    def show_help(self):
+        self._dispatch("helpRequested")
+
+    def copy_support_info(self):
+        self._dispatch("supportCopyRequested")
+
     def _take_health(self):
         with self._ui_event_lock:
             self._health_queued = False
@@ -524,6 +555,8 @@ class GuiUI:
         self._dispatch("pairingState", state)
 
     def on_unlinked(self) -> None:
+        with self._ui_event_lock:
+            self._support_latest = None
         self._dispatch("unlinked")
 
     def on_connection_state(self, kind, since, next_retry_at, waiting_count) -> None:
@@ -533,6 +566,8 @@ class GuiUI:
         self._dispatch("pairingCode", code)
 
     def on_paired(self, user_id: str) -> None:
+        with self._ui_event_lock:
+            self._support_latest = None
         self._dispatch("paired", user_id)
 
     def on_status(self, status: str) -> None:
@@ -728,6 +763,9 @@ def _make_signals():
         analyzerProbe = QtCore.Signal(bool, str)
         # A newer health snapshot is waiting; the window paints the newest.
         healthChanged = QtCore.Signal()
+        supportChanged = QtCore.Signal()
+        helpRequested = QtCore.Signal()
+        supportCopyRequested = QtCore.Signal()
         pauseChanged = QtCore.Signal(bool, float)
         transientNotice = QtCore.Signal(str)
         updateState = QtCore.Signal(object, str, str)
@@ -969,7 +1007,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         # Cap the in-memory recent uploads. Anything past this falls off
         # the table; the cloud is the source of truth for the full list.
-        _PAGE_KEYS = ("dashboard", "recent", "log", "settings", "streams", "companion")
+        _PAGE_KEYS = ("dashboard", "recent", "log", "settings", "streams", "companion", "help")
         apiTestDone = QtCore.Signal(str, int, str)
         MAX_RECENT = 200
         # Tail parsing and its record cap live in activity_log.py.
@@ -995,7 +1033,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             self._status = "starting"
             self._paused = ui._initial_paused
-            # Kept only for Copy details; the status card renders health snapshots.
+            # Startup state is local UI context; support output uses the safe service.
             self._boot_detail = ""
             self._analyzer_diag = ""
             self._paired = ui._initial_paired
@@ -1152,11 +1190,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._agent_menu_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
             self._agent_menu = QtWidgets.QMenu(self)
             menu = self._agent_menu
-            for title, route in (("Companion", "companion"), ("Dashboard", "dashboard"), ("Recent games", "recent"), ("Streams", "streams"), ("Activity log", "log"), ("Settings", "settings")):
+            for title, route in (("Companion", "companion"), ("Dashboard", "dashboard"), ("Recent games", "recent"), ("Streams", "streams"), ("Activity log", "log"), ("Settings", "settings"), ("Help", "help")):
                 menu.addAction(title, lambda _checked=False, destination=route: self._go_to_page(destination))
             menu.addSeparator()
             menu.addAction("Border & animations…", self._open_companion_appearance)
-            menu.addAction("Help & support", lambda: self._open_help("desktop-app-overview"))
+            menu.addAction("Help & troubleshooting", lambda: self._go_to_page("help"))
             self._check_updates_action = menu.addAction("Check for updates", self._check_updates_from_menu)
             menu.addSeparator()
             menu.addAction("Quit SC2 Tools", ui._on_quit)
@@ -1226,6 +1264,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 agent_menu=self._agent_menu,
             )
             self._stack.addWidget(self._companion_page)
+            from .help_page import build_help_page
+            self._help_page = build_help_page(self, QtCore=QtCore, QtWidgets=QtWidgets,
+                service=lambda: ui._support_service, deliver=ui.on_support_result,
+                open_help=self._open_help, open_settings=lambda _row: self._go_to_page("settings"),
+                link_again=self._link_pc, open_url=lambda url: webbrowser.open(url, new=2),
+                clipboard=self._support_clipboard,
+                busy_changed=self._support_busy_changed)
+            self._stack.addWidget(self._help_page)
             for index in range(self._stack.count()):
                 page = self._stack.widget(index)
                 page.setProperty("agentPage", page is not self._companion_page)
@@ -1286,7 +1332,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             for index, label in [
                 (5, "Companion"), (0, "Dashboard"), (1, "Recent games"),
-                (4, "Streams"), (2, "Activity log"), (3, "Settings"),
+                (4, "Streams"), (2, "Activity log"), (3, "Settings"), (6, "Help"),
             ]:
                 btn = QtWidgets.QPushButton(label)
                 btn.setObjectName("navItem")
@@ -1311,7 +1357,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             help_btn = QtWidgets.QPushButton("Help & support")
             help_btn.setFlat(True)
-            help_btn.clicked.connect(lambda: self._open_help("desktop-app-overview"))
+            help_btn.clicked.connect(lambda: self._go_to_page("help"))
             layout.addWidget(help_btn)
             quit_btn = QtWidgets.QPushButton("Quit SC2 Tools")
             quit_btn.setFlat(True)
@@ -1468,7 +1514,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             from .qt_helpers import build_flow_layout
             actions = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets)
             # Shown for errors, next to a boot failure's Restart agent.
-            self._status_copy = QtWidgets.QPushButton("Copy details")
+            self._status_copy = QtWidgets.QPushButton("Copy support info")
             self._status_copy.clicked.connect(self._copy_status_details)
             self._status_copy.hide()
             actions.addWidget(self._status_copy)
@@ -1660,6 +1706,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self, log_file=ui._log_file, QtCore=QtCore, QtGui=QtGui,
                 QtWidgets=QtWidgets, open_folder=self._open_log_folder,
                 open_help=lambda: self._open_help("desktop-app-activity-log"),
+                copy_support=ui.copy_support_info,
                 palette={"error": _DANGER, "warning": _WARNING,
                          "muted": _TEXT_MUTED, "text": _TEXT, "accent": _ACCENT},
             )
@@ -2702,6 +2749,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             signals.phaseChanged.connect(self._on_phase)
             signals.analyzerProbe.connect(self._on_analyzer_probe)
             signals.healthChanged.connect(self._paint_health)
+            signals.supportChanged.connect(self._paint_support, QtCore.Qt.QueuedConnection)
+            signals.helpRequested.connect(lambda: self._go_to_page("help"))
+            signals.supportCopyRequested.connect(self._copy_status_details)
             signals.pauseChanged.connect(self._on_paused)
             signals.transientNotice.connect(self._show_transient_notice)
             signals.updateState.connect(self._on_update_state)
@@ -2755,6 +2805,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._pairing_card.apply(state)
 
         def _on_unlinked(self):
+            self._help_page.clear()
             self._handle_input.clear()
             self._handle_input.setModified(False)
             self._handle_edit_origin = None
@@ -2777,6 +2828,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self.raise_()
 
         def _on_paired(self, user_id: str) -> None:
+            self._help_page.clear()
             if self._user_id != user_id:
                 self._handle_input.clear()
                 self._handle_input.setModified(False)
@@ -3275,11 +3327,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 if not self._set_window_size("Standard"):
                     return
             index = self._PAGE_KEYS.index(key) if key in self._PAGE_KEYS else 0
+            if self._stack.currentWidget() is self._help_page and key != "help":
+                self._help_page.leave()
             self._stack.setCurrentIndex(index)
             button = self._nav_group.button(index)
             if button is not None:
                 button.setChecked(True)
-            titles = {"companion": "Companion", "dashboard": "Dashboard", "recent": "Recent games", "log": "Activity log", "settings": "Settings", "streams": "Streams"}
+            titles = {"companion": "Companion", "dashboard": "Dashboard", "recent": "Recent games", "log": "Activity log", "settings": "Settings", "streams": "Streams", "help": "Help & troubleshooting"}
             self._agent_section_label.setText("Agent  /  " + titles.get(key, "Dashboard"))
             self._companion_page.set_active(key == "companion")
             self._apply_window_chrome()
@@ -3945,6 +3999,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             # Default behaviour: hide-to-tray. Quitting only happens
             # through the tray's Quit action (which calls
             # signals.quitRequested).
+            self._help_page.leave()
             self._save_window_state()
             self._window_state_timer.stop()
             if self._really_quit:
@@ -4094,20 +4149,37 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 ui._on_restart_agent()
 
         def _copy_status_details(self):
-            lines=[]
+            if ui._support_service is None or ui._support_service.busy:
+                self._show_transient_notice("Support tools are unavailable or still finishing a task.")
+                return
+            self._help_page.start("copy")
+
+        def _support_clipboard(self, text):
+            clipboard = QtWidgets.QApplication.clipboard()
+            clipboard.setText(text)
+            return clipboard.text() == text
+
+        def _support_busy_changed(self, busy):
+            self._activity_log.support_copy_button.setEnabled(not busy and ui._support_service is not None)
+            self._status_copy.setEnabled(not busy and ui._support_service is not None)
+
+        def _paint_support(self):
+            result = ui._take_support()
+            service = ui._support_service
+            if result is None:
+                return
+            if result.run_nonce != self._help_page.run_nonce:
+                return
+            if service is None or not service.is_current(result.run_nonce):
+                self._help_page.clear()
+                return
             try:
-                for line in ui._log_file.read_text(encoding="utf-8",errors="replace").splitlines():
-                    if " ERROR " in line:
-                        lines.append(line)
-                lines=lines[-20:]
-            except OSError:
-                pass
-            snapshot = self._health_view.snapshot
-            details = f"SC2 Tools {ui._version}\nStatus: {snapshot.headline}\n"
-            details += "".join(f"{row.level}: {row.sentence}\n" for row in snapshot.rows + snapshot.footer)
-            details += self._boot_detail or self._analyzer_diag
-            if lines: details += "\n" + "\n".join(lines)
-            QtWidgets.QApplication.clipboard().setText(details)
+                self._help_page.accept(result)
+                if result.kind == "copy" and self._help_page.intent == "copy" and service.is_current(result.run_nonce):
+                    self._show_transient_notice(self._help_page.status.text())
+            except Exception:
+                self._help_page.clear()
+                self._help_page.status.setText("Support output could not be shown. Try again.")
 
         def _compute_filter_label(
             self,
