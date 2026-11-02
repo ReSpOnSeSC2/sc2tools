@@ -2,10 +2,10 @@
 "use strict";
 jest.mock("@clerk/backend", () => ({ verifyToken: jest.fn(async () => ({ sub: "web" })) }));
 const { attachSocketAuth } = require("../src/socket/auth");
-function fixture(auth) {
+function fixture(auth, identity = { userId: "owner", deviceId: "a".repeat(24) }) {
   let middleware, connection;
   const io = { use: fn => { middleware = fn; }, on: (_event, fn) => { connection = fn; } };
-  attachSocketAuth(io, { secretKey: "synthetic", resolveDeviceToken: async () => ({ userId: "owner", deviceId: "a".repeat(24) }) });
+  attachSocketAuth(io, { secretKey: "synthetic", resolveDeviceToken: async () => identity });
   const handlers = {}, socket = { id: "socket-namespace-id", handshake: { auth }, data: {}, join: jest.fn(), emit: jest.fn(), on: (event, fn) => { handlers[event] = fn; } };
   return { handlers, socket, connect: async () => { await new Promise((resolve, reject) => middleware(socket, err => err ? reject(err) : resolve())); connection(socket); } };
 }
@@ -28,4 +28,14 @@ test.each([1, 0, "1", true, undefined])("retry protocol capability is strict and
   const web = fixture({ token: "synthetic-web", syncRetryVersion: 1 }); await web.connect();
   expect(web.socket.data.syncRetryVersion).toBeUndefined();
   expect(web.socket.emit).not.toHaveBeenCalledWith("sync:retry-ready", expect.anything());
+});
+
+test.each([undefined, "bad", "A".repeat(24)])("legacy/malformed stable device ID %j keeps ordinary auth but cannot advertise retry", async deviceId => {
+  const f = fixture({ deviceToken: "synthetic-device", syncRetryVersion: 1 }, { userId: "owner", deviceId });
+  await f.connect();
+  expect(f.socket.data).toMatchObject({ userId: "owner", kind: "device", syncRetryVersion: 0 });
+  expect(f.socket.data.deviceId).toBeUndefined();
+  expect(f.socket.join).toHaveBeenCalledWith("user:owner");
+  expect(f.socket.emit).toHaveBeenCalledWith("device:hello", { ok: true });
+  expect(f.socket.emit).not.toHaveBeenCalledWith("sync:retry-ready", expect.anything());
 });
